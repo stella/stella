@@ -18,13 +18,14 @@ import {
 type Sample = { value: unknown; needles: readonly string[] };
 
 const FINGERPRINT = /#[0-9a-f]{8}/u;
+/** How a string outside every closed list shows: size and fingerprint. */
+const OPAQUE = String.raw`str:\d+#[0-9a-f]{8}`;
 
 /** Every key, case and vocabulary value the allowlists can print. */
 const structuralText = (() => {
   const words: string[] = [
     ...PROTOCOL_CHANNELS,
     ...PROTOCOL_DIRECTIONS,
-    "other",
     "unlisted",
     "message",
     "not_json",
@@ -66,21 +67,53 @@ const structuralText = (() => {
 const isContent = (text: string) =>
   !structuralText.includes(text) && /[^0-9a-f]/iu.test(text);
 
-// Words too: a leak of only identifier-shaped text must fail as well.
+const word = fc.stringMatching(/^[A-Za-z][\w-]{2,10}$/u);
+
+/**
+ * Content shaped like what a log might mistake for structure: paths,
+ * credentials, dotted and dashed identifiers, versions with a suffix, and
+ * strings with no spaces at all.
+ */
+const structureShaped = fc.oneof(
+  fc
+    .tuple(word, word, word)
+    .map(([folder, file, extension]) => `${folder}/${file}.${extension}`),
+  fc.stringMatching(/^sk-(?:live|test)-[A-Za-z\d]{12,24}$/u),
+  fc.tuple(word, word).map(([left, right]) => `${left}.${right}`),
+  fc.tuple(word, word).map(([left, right]) => `${left}-${right}`),
+  fc
+    .tuple(fc.nat(99), fc.nat(99), fc.nat(999), word)
+    .map(
+      ([major, minor, patch, suffix]) =>
+        `${String(major)}.${String(minor)}.${String(patch)}-${suffix}`,
+    ),
+  fc.stringMatching(/^[a-z][\w.:/@+-]{5,23}$/u),
+);
+
 const contentString = fc
   .oneof(
     fc.string({ minLength: 6, maxLength: 24, unit: "binary" }),
-    fc.stringMatching(/^[a-z][\w.-]{5,23}$/u),
+    structureShaped,
   )
-  .filter(isContent);
-
-/** Content no name, version or instant pattern accepts. */
-const spacedContent = contentString.map((text) => `${text} x`);
+  .filter((text) => text.length >= 6 && isContent(text));
 
 const needle = (text: string): Sample => ({ value: text, needles: [text] });
 const plain = (value: unknown): Sample => ({ value, needles: [] });
 
-const contentSample = contentString.map(needle);
+/** A version with a suffix: the suffix on its own must not leak either. */
+const suffixedVersion = fc
+  .tuple(
+    fc.nat(99),
+    fc.nat(99),
+    fc.nat(999),
+    fc.stringMatching(/^[A-Za-z][\w-]{5,15}$/u).filter(isContent),
+  )
+  .map(([major, minor, patch, suffix]): Sample => {
+    const text = `${String(major)}.${String(minor)}.${String(patch)}-${suffix}`;
+    return { value: text, needles: [text, suffix] };
+  });
+
+const contentSample = fc.oneof(contentString.map(needle), suffixedVersion);
 
 /** JSON holding content anywhere: values, nested values and keys. */
 const contentJson: fc.Arbitrary<Sample> = fc.oneof(
@@ -102,28 +135,17 @@ const contentJson: fc.Arbitrary<Sample> = fc.oneof(
 const fieldSample = (rule: FieldRule): fc.Arbitrary<Sample> => {
   switch (rule.type) {
     case "vocabulary":
-      return fc.oneof(
-        fc.constantFrom(...rule.values).map(plain),
-        contentSample,
-      );
+      return rule.values.size === 0
+        ? contentSample
+        : fc.oneof(fc.constantFrom(...rule.values).map(plain), contentSample);
     case "identifier":
       return fc.oneof(contentSample, fc.integer().map(plain));
-    case "name":
-      return fc.oneof(
-        fc
-          .constantFrom("Bash", "mcp__stella__search", "gpt-5.1-codex")
-          .map(plain),
-        spacedContent.map(needle),
-      );
     case "version":
-      return fc.oneof(
-        fc.constant("2.1.309").map(plain),
-        spacedContent.map(needle),
-      );
+      return fc.oneof(fc.constant("2.1.309").map(plain), contentSample);
     case "instant":
       return fc.oneof(
         fc.constant("2026-11-11T10:00:00.000Z").map(plain),
-        spacedContent.map(needle),
+        contentSample,
       );
     case "number":
       return fc.oneof(fc.double().map(plain), contentSample);
@@ -238,7 +260,67 @@ const messageSample = fc
 
 const redact = redactProtocolMessage;
 
+/** Builds a message holding one value at one path. */
+type Leaf = (value: unknown) => Record<string, unknown>;
+
+/**
+ * Every path the allowlists keep, as minimal messages: the discriminators
+ * that select the path, and the value at its end. A discriminator is a path
+ * too, so an unknown message kind is covered.
+ */
+const leaves = ({ fields, variant }: MessageShape): Leaf[] => [
+  ...Object.entries(fields).flatMap(([key, rule]): Leaf[] => {
+    if (rule.type === "object") {
+      return leaves(rule.shape).map((inner) => (value) => ({
+        [key]: inner(value),
+      }));
+    }
+    if (rule.type === "list") {
+      return leaves(rule.shape).map((inner) => (value) => ({
+        [key]: [inner(value)],
+      }));
+    }
+    return [(value) => ({ [key]: value })];
+  }),
+  ...(variant === null
+    ? []
+    : [
+        (value: unknown) => ({ [variant.key]: value }),
+        ...Object.entries(variant.cases).flatMap(([name, shape]) =>
+          leaves(shape).map((inner): Leaf => (value) => ({
+            [variant.key]: name,
+            ...inner(value),
+          })),
+        ),
+      ]),
+];
+
+const ALL_LEAVES = PROTOCOL_CHANNELS.flatMap((channel) =>
+  PROTOCOL_DIRECTIONS.flatMap((direction) =>
+    leaves(PROTOCOL_ALLOWLISTS[channel][direction]).map((leaf) => ({
+      channel,
+      direction,
+      leaf,
+    })),
+  ),
+);
+
 describe("protocol log redaction", () => {
+  test("content at any kept path never reaches the line", () => {
+    assertProperty(
+      "protocol log keeps no content at any allowlisted path",
+      fc.property(contentSample, ({ value, needles }) => {
+        for (const { channel, direction, leaf } of ALL_LEAVES) {
+          const line = redact({ channel, direction, message: leaf(value) });
+          for (const text of needles) {
+            expect(line).not.toContain(text);
+          }
+        }
+      }),
+      { numRuns: 40 },
+    );
+  });
+
   test("no content string of any message reaches the line", () => {
     assertProperty(
       "protocol log lines carry no content string",
@@ -251,6 +333,104 @@ describe("protocol log redaction", () => {
       }),
       { numRuns: 300 },
     );
+  });
+
+  describe("values shaped like structure", () => {
+    test("a client name, version suffix or tool name outside the owned lists is fingerprinted", () => {
+      const initialize = redact({
+        channel: "codex",
+        direction: "out",
+        message: {
+          id: 1,
+          method: "initialize",
+          params: {
+            clientInfo: {
+              name: "matters/Acme/lease.docx",
+              title: "stella",
+              version: "1.2.3-clientAcme-secret123",
+            },
+          },
+        },
+      });
+      expect(initialize).toMatch(
+        new RegExp(
+          `params\\.clientInfo\\.name=${OPAQUE} params\\.clientInfo\\.title=stella params\\.clientInfo\\.version=1\\.2\\.3\\+#[0-9a-f]{8}`,
+          "u",
+        ),
+      );
+      const asked = redact({
+        channel: "claude-code",
+        direction: "in",
+        message: {
+          type: "control_request",
+          request_id: "req-1",
+          request: {
+            subtype: "can_use_tool",
+            tool_name: "sk-live-privatecredential",
+          },
+        },
+      });
+      expect(asked).toMatch(new RegExp(`request\\.tool_name=${OPAQUE}`, "u"));
+      for (const content of [
+        "matters/Acme",
+        "lease.docx",
+        "clientAcme",
+        "secret123",
+        "sk-live",
+        "privatecredential",
+      ]) {
+        expect(initialize).not.toContain(content);
+        expect(asked).not.toContain(content);
+      }
+    });
+
+    test("Stella's own names and plain versions stay readable", () => {
+      expect(
+        redact({
+          channel: "codex",
+          direction: "out",
+          message: {
+            id: 1,
+            method: "initialize",
+            params: { clientInfo: { name: "stella", version: "1.4.0" } },
+          },
+        }),
+      ).toBe(
+        "method=initialize id=1 params.clientInfo.name=stella params.clientInfo.version=1.4.0",
+      );
+      expect(
+        redact({
+          channel: "claude-code",
+          direction: "in",
+          message: {
+            type: "tool_progress",
+            tool_name: "Bash",
+            elapsed_time_seconds: 3,
+          },
+        }),
+      ).toBe("type=tool_progress tool_name=Bash elapsed_time_seconds=3");
+    });
+
+    test("an instant is rewritten from its parsed value, anything else is fingerprinted", () => {
+      const rendered = (resetsAt: string) =>
+        redact({
+          channel: "sidecar",
+          direction: "out",
+          message: {
+            type: "harness.probed",
+            outcome: { type: "limit_until", resetsAt },
+          },
+        });
+      expect(rendered("2026-11-11T10:00:00+01:00")).toContain(
+        "outcome.resetsAt=2026-11-11T09:00:00Z",
+      );
+      const garbage = rendered("2026-11-11 matters/Acme");
+      const opaqueField = new RegExp(`^outcome\\.\\w+=${OPAQUE}$`, "u");
+      expect(garbage.split(" ").some((token) => opaqueField.test(token))).toBe(
+        true,
+      );
+      expect(garbage).not.toContain("Acme");
+    });
   });
 
   describe("Claude Code", () => {
@@ -283,7 +463,7 @@ describe("protocol log redaction", () => {
       });
       expect(line).toStartWith("type=assistant session_id=#");
       expect(line).toContain("parent_tool_use_id=null");
-      expect(line).toContain("message.model=claude-sonnet-4-5");
+      expect(line).toMatch(new RegExp(`message\\.model=${OPAQUE} `, "u"));
       expect(line).toContain("message.content=arr:2");
       expect(line).toContain(
         `message.content[0].type=text message.content[0].text=str:${String(prompt.length)}`,
@@ -409,23 +589,23 @@ describe("protocol log redaction", () => {
           mcp_servers: [{ name: "stella", status: "connected" }],
         },
       });
-      expect(line).toContain("type=system subtype=init model=claude-opus-4-1");
-      expect(line).toContain("claude_code_version=2.1.309");
-      expect(line).toContain(
-        "mcp_servers[0].name=stella mcp_servers[0].status=connected",
+      expect(line).toMatch(
+        new RegExp(`^type=system subtype=init model=${OPAQUE} `, "u"),
       );
+      expect(line).toContain("claude_code_version=2.1.309");
+      expect(line).toContain("mcp_servers[0].status=connected");
       expect(line).toContain("cwd=str:");
       expect(line).not.toContain("lease-review");
     });
 
-    test("a type the allowlist does not know shows as other", () => {
+    test("a type the allowlist does not know shows its size and fingerprint", () => {
       expect(
         redact({
           channel: "claude-code",
           direction: "in",
           message: { type: "brand_new_type", text: prompt },
         }),
-      ).toBe("type=other unlisted=1");
+      ).toMatch(new RegExp(`^type=${OPAQUE} unlisted=1$`, "u"));
     });
   });
 
@@ -545,21 +725,22 @@ describe("protocol log redaction", () => {
           },
         },
       });
-      expect(line).toContain("params.model=gpt-5.1-codex");
+      expect(line).toMatch(new RegExp(`params\\.model=${OPAQUE} `, "u"));
+      expect(line).not.toContain("gpt-5.1-codex");
       expect(line).toContain("params.config=obj:1");
       expect(line).not.toContain("secret-value-123");
       expect(line).not.toContain("lease-review");
       expect(line).not.toContain(answer);
     });
 
-    test("a method the allowlist does not know shows as other", () => {
+    test("a method the allowlist does not know shows its size and fingerprint", () => {
       expect(
         redact({
           channel: "codex",
           direction: "in",
           message: { method: "item/brandNew/delta", params: { delta: answer } },
         }),
-      ).toBe("method=other unlisted=1");
+      ).toMatch(new RegExp(`^method=${OPAQUE} unlisted=1$`, "u"));
     });
   });
 
@@ -626,10 +807,8 @@ describe("protocol log redaction", () => {
       expect(line).toContain("harness=codex");
       expect(line).toContain("launch.processGrant=true");
       expect(line).toContain("launch.environment=obj:1");
-      expect(line).toContain("model=gpt-5.1-codex");
-      expect(line).toContain(
-        "mcp.serverName=stella mcp.expiresAt=2026-11-11T12:00:00.000Z",
-      );
+      expect(line).toMatch(new RegExp(` model=${OPAQUE} `, "u"));
+      expect(line).toContain("mcp.expiresAt=2026-11-11T12:00:00Z");
       expect(line).toContain("messages=arr:1");
       for (const content of [
         "secret-value-123",
@@ -676,7 +855,12 @@ describe("protocol log redaction", () => {
             runId: null,
           },
         }),
-      ).toBe("type=rejected reason=unknown_type messageType=other runId=null");
+      ).toMatch(
+        new RegExp(
+          `^type=rejected reason=unknown_type messageType=${OPAQUE} runId=null$`,
+          "u",
+        ),
+      );
     });
   });
 });

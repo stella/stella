@@ -1,17 +1,22 @@
 import { EventType } from "@tanstack/ai";
 import { panic, Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 
 import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
   DESKTOP_RUNNER_APPROVAL_MODES,
+  DESKTOP_RUNNER_CHECKPOINT_EVENT,
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
+  DESKTOP_RUNNER_OUTPUT_EVENT,
   DESKTOP_RUNNER_RUN_OUTCOMES,
 } from "@stll/api-contract/desktop-runner";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import { ASK_USER_QUESTION_TOOL } from "./harness/claude-code/items";
 import {
   CLAUDE_CONTENT_BLOCK_TYPES,
   type ClaudeControlRequestSubtype,
@@ -20,6 +25,7 @@ import {
   type ClaudeSystemSubtype,
 } from "./harness/claude-code/protocol";
 import {
+  CODEX_CLIENT_INFO,
   CODEX_ITEM_TYPES,
   CODEX_TURN_STATUSES,
   type CodexClientNotificationMethod,
@@ -27,6 +33,10 @@ import {
   type CodexNotificationMethod,
   type CodexServerRequestMethod,
 } from "./harness/codex/protocol";
+import {
+  HARNESS_CONTINUATION_EVENT,
+  harnessSessionIdEvent,
+} from "./harness/stream-chunks";
 import {
   SIDECAR_HOLDER_MODES,
   SIDECAR_HOST_MESSAGE,
@@ -44,11 +54,15 @@ import {
  * desktop and its sidecar, for diagnosing a run on the member's computer.
  *
  * A line keeps a message's structure only. Each field is kept by an
- * allowlist per message kind and rendered by its rule: vocabulary values,
- * numbers, booleans, identifier-shaped names, versions and instants as they
- * are; ids as a short fingerprint, so a request and its answer pair up; and
- * everything else (prompts, model text, tool input and output, file
- * contents, paths, commands, tokens) as its kind and length. A field the
+ * allowlist per message kind and rendered by its rule. A string is shown as
+ * it is only when it belongs to a closed list this code owns (protocol
+ * values, Stella's own tool, event and client names); any other string in
+ * such a field shows its size and fingerprint. Numbers and booleans are
+ * shown; versions are rebuilt from their numbers and instants re-serialized
+ * after parsing, so neither copies input text. Ids are short fingerprints,
+ * so a request and its answer pair up. Everything else (prompts, model
+ * text, tool input and output, file contents, paths, commands, tokens)
+ * shows as its kind and length. A field the
  * allowlist does not name is counted, never shown, so a field a harness adds
  * later stays out of the log until it is listed here.
  */
@@ -62,13 +76,17 @@ export type ProtocolDirection = (typeof PROTOCOL_DIRECTIONS)[number];
 
 /** How one field reaches the log line. */
 export type FieldRule =
-  /** A closed protocol value; anything else is shown as `other`. */
+  /**
+   * A value from a closed list this code owns (protocol values, Stella's own
+   * tool and client names); any other string is shown by size and
+   * fingerprint.
+   */
   | { type: "vocabulary"; values: ReadonlySet<string> }
   /** An id: a fingerprint for a string, the number for a JSON-RPC id. */
   | { type: "identifier" }
-  /** A name a program chose (tool, model, server), when shaped like one. */
-  | { type: "name" }
+  /** Numeric `major.minor.patch` only; a suffix is fingerprinted. */
   | { type: "version" }
+  /** Re-serialized from the parsed instant, never copied. */
   | { type: "instant" }
   | { type: "number" }
   | { type: "boolean" }
@@ -93,14 +111,9 @@ type ShapeVariant = {
 const PROTOCOL_LOG_LIST_ITEMS = 8;
 const FINGERPRINT_HEX_CHARS = 8;
 
-/** Tool, model and MCP server names, as programs spell them. */
-const NAME_PATTERN = /^[A-Za-z][\w.:/@+[\]-]{0,127}$/u;
-const VERSION_PATTERN = /^\d{1,9}\.\d{1,9}\.\d{1,9}(?:[-+][\w.+-]{1,64})?$/u;
-const INSTANT_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/u;
+const VERSION_CORE = /^(\d{1,9})\.(\d{1,9})\.(\d{1,9})/u;
 
 const IDENTIFIER = { type: "identifier" } as const satisfies FieldRule;
-const NAME = { type: "name" } as const satisfies FieldRule;
 const VERSION = { type: "version" } as const satisfies FieldRule;
 const INSTANT = { type: "instant" } as const satisfies FieldRule;
 const NUMBER = { type: "number" } as const satisfies FieldRule;
@@ -113,6 +126,12 @@ const vocabulary = (values: Iterable<string>): FieldRule => ({
   type: "vocabulary",
   values: new Set(values),
 });
+
+/**
+ * A string with no closed list, such as a model id or an MCP server's own
+ * name: always its size and fingerprint.
+ */
+const OPAQUE = vocabulary([]);
 
 const shape = (
   fields: Fields,
@@ -137,6 +156,58 @@ const casesOf = (
   );
 
 // Claude Code: stream-json on the CLI's stdin and stdout.
+
+/** The CLI's built-in tools; MCP tools (`mcp__<server>__<tool>`) are opaque. */
+const CLAUDE_TOOLS_LIST = [
+  "Bash",
+  "BashOutput",
+  "KillShell",
+  "Read",
+  "Write",
+  "Edit",
+  "MultiEdit",
+  "NotebookEdit",
+  "Glob",
+  "Grep",
+  "WebFetch",
+  "WebSearch",
+  "TodoWrite",
+  "Task",
+  "ExitPlanMode",
+  ASK_USER_QUESTION_TOOL,
+];
+const CLAUDE_TOOLS = vocabulary(CLAUDE_TOOLS_LIST);
+
+const CLAUDE_HOOK_EVENTS = vocabulary([
+  "PreToolUse",
+  "PostToolUse",
+  "PostToolUseFailure",
+  "Notification",
+  "UserPromptSubmit",
+  "SessionStart",
+  "SessionEnd",
+  "Stop",
+  "SubagentStart",
+  "SubagentStop",
+  "PreCompact",
+  "PermissionRequest",
+]);
+
+const CLAUDE_API_KEY_SOURCES = vocabulary([
+  "user",
+  "project",
+  "org",
+  "temporary",
+  "none",
+]);
+
+const MEDIA_TYPES = vocabulary([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+]);
 
 const CLAUDE_STOP_REASONS = vocabulary([
   "end_turn",
@@ -165,7 +236,7 @@ const CLAUDE_USAGE = object({
   output_tokens: NUMBER,
   cache_creation_input_tokens: NUMBER,
   cache_read_input_tokens: NUMBER,
-  service_tier: NAME,
+  service_tier: vocabulary(["standard", "priority", "batch"]),
 });
 
 /** Content blocks of assistant and user messages, both directions. */
@@ -179,7 +250,7 @@ const CLAUDE_CONTENT_BLOCK = {
     "web_search_tool_result",
   ]),
   id: IDENTIFIER,
-  name: NAME,
+  name: CLAUDE_TOOLS,
   tool_use_id: IDENTIFIER,
   is_error: BOOLEAN,
   input: SIZE,
@@ -190,7 +261,7 @@ const CLAUDE_CONTENT_BLOCK = {
   content: SIZE,
   source: object({
     type: vocabulary(["base64", "url", "text"]),
-    media_type: NAME,
+    media_type: MEDIA_TYPES,
     data: SIZE,
   }),
 } as const satisfies Fields;
@@ -213,8 +284,8 @@ const CLAUDE_TASK_FIELDS = {
 
 const CLAUDE_HOOK_FIELDS = {
   hook_id: IDENTIFIER,
-  hook_name: NAME,
-  hook_event: NAME,
+  hook_name: OPAQUE,
+  hook_event: CLAUDE_HOOK_EVENTS,
   exit_code: NUMBER,
   output: SIZE,
   stdout: SIZE,
@@ -223,14 +294,14 @@ const CLAUDE_HOOK_FIELDS = {
 
 const CLAUDE_SYSTEM_FIELDS: Readonly<Record<ClaudeSystemSubtype, Fields>> = {
   init: {
-    model: NAME,
+    model: OPAQUE,
     permissionMode: CLAUDE_PERMISSION_MODES,
     claude_code_version: VERSION,
-    apiKeySource: NAME,
+    apiKeySource: CLAUDE_API_KEY_SOURCES,
     cwd: SIZE,
     tools: SIZE,
     mcp_servers: list({
-      name: NAME,
+      name: OPAQUE,
       status: vocabulary([
         "connected",
         "failed",
@@ -262,8 +333,8 @@ const CLAUDE_SYSTEM_FIELDS: Readonly<Record<ClaudeSystemSubtype, Fields>> = {
     }),
   },
   control_request_progress: { request_id: IDENTIFIER },
-  model_refusal_fallback: { model: NAME },
-  model_refusal_no_fallback: { model: NAME },
+  model_refusal_fallback: { model: OPAQUE },
+  model_refusal_no_fallback: { model: OPAQUE },
   local_command_output: { content: SIZE },
   hook_started: CLAUDE_HOOK_FIELDS,
   hook_progress: CLAUDE_HOOK_FIELDS,
@@ -281,8 +352,8 @@ const CLAUDE_SYSTEM_FIELDS: Readonly<Record<ClaudeSystemSubtype, Fields>> = {
   notification: {},
   files_persisted: { files: SIZE, failed: SIZE },
   memory_recall: {},
-  elicitation_complete: { mcp_server_name: NAME },
-  permission_denied: { tool_name: NAME, tool_use_id: IDENTIFIER },
+  elicitation_complete: { mcp_server_name: OPAQUE },
+  permission_denied: { tool_name: CLAUDE_TOOLS, tool_use_id: IDENTIFIER },
   mirror_error: {},
   informational: {},
 };
@@ -292,7 +363,7 @@ const CLAUDE_CONTROL_REQUEST_FIELDS: Readonly<
   Record<ClaudeControlRequestSubtype | ClaudeHostControlRequest, Fields>
 > = {
   can_use_tool: {
-    tool_name: NAME,
+    tool_name: CLAUDE_TOOLS,
     tool_use_id: IDENTIFIER,
     agent_id: IDENTIFIER,
     input: SIZE,
@@ -302,13 +373,17 @@ const CLAUDE_CONTROL_REQUEST_FIELDS: Readonly<
     title: SIZE,
     description: SIZE,
   },
-  elicitation: { mcp_server_name: NAME, message: SIZE, requested_schema: SIZE },
+  elicitation: {
+    mcp_server_name: OPAQUE,
+    message: SIZE,
+    requested_schema: SIZE,
+  },
   hook_callback: {
     callback_id: IDENTIFIER,
     tool_use_id: IDENTIFIER,
     input: SIZE,
   },
-  mcp_message: { server_name: NAME, message: SIZE },
+  mcp_message: { server_name: OPAQUE, message: SIZE },
   request_user_dialog: {},
   initialize: {
     systemPrompt: SIZE,
@@ -337,10 +412,10 @@ const CLAUDE_CONTROL_RESPONSE_FIELDS = {
   commands: SIZE,
   agents: SIZE,
   account: object({
-    tokenSource: NAME,
-    apiKeySource: NAME,
-    subscriptionType: NAME,
-    apiProvider: NAME,
+    tokenSource: vocabulary(["none", "claude.ai"]),
+    apiKeySource: CLAUDE_API_KEY_SOURCES,
+    subscriptionType: vocabulary(["free", "pro", "max", "team", "enterprise"]),
+    apiProvider: vocabulary(["firstParty", "bedrock", "vertex", "foundry"]),
   }),
   claude_code_version: VERSION,
   added: SIZE,
@@ -363,7 +438,7 @@ const CLAUDE_STREAM_EVENT = object({
     "content_block_stop",
   ]),
   index: NUMBER,
-  message: object({ id: IDENTIFIER, model: NAME, usage: CLAUDE_USAGE }),
+  message: object({ id: IDENTIFIER, model: OPAQUE, usage: CLAUDE_USAGE }),
   content_block: object(CLAUDE_CONTENT_BLOCK),
   delta: object({
     type: vocabulary([
@@ -410,7 +485,7 @@ const CLAUDE_LINE_FIELDS: Readonly<Record<ClaudeLineType, MessageShape>> = {
   assistant: shape({
     message: object({
       id: IDENTIFIER,
-      model: NAME,
+      model: OPAQUE,
       stop_reason: CLAUDE_STOP_REASONS,
       content: list(CLAUDE_CONTENT_BLOCK),
       usage: CLAUDE_USAGE,
@@ -460,7 +535,7 @@ const CLAUDE_LINE_FIELDS: Readonly<Record<ClaudeLineType, MessageShape>> = {
   auth_status: shape({ isAuthenticating: BOOLEAN, output: SIZE, error: SIZE }),
   tool_progress: shape({
     tool_use_id: IDENTIFIER,
-    tool_name: NAME,
+    tool_name: CLAUDE_TOOLS,
     task_id: IDENTIFIER,
     elapsed_time_seconds: NUMBER,
   }),
@@ -482,6 +557,18 @@ const CLAUDE_LINE: MessageShape = shape(
 );
 
 // Codex: JSON-RPC over the app server's stdio, both directions.
+
+const CODEX_PLAN_TYPES = vocabulary([
+  "free",
+  "go",
+  "plus",
+  "pro",
+  "team",
+  "business",
+  "enterprise",
+  "edu",
+  "unknown",
+]);
 
 const CODEX_ERROR = object({
   message: SIZE,
@@ -524,8 +611,8 @@ const CODEX_ITEM = object({
   status: CODEX_ITEM_STATUSES,
   exitCode: NUMBER,
   durationMs: NUMBER,
-  server: NAME,
-  tool: NAME,
+  server: OPAQUE,
+  tool: OPAQUE,
   delivery: vocabulary(["async"]),
   command: SIZE,
   cwd: SIZE,
@@ -565,9 +652,14 @@ const CODEX_APPROVAL = {
 } as const satisfies Fields;
 
 const CODEX_THREAD_PARAMS = {
-  model: NAME,
-  approvalPolicy: NAME,
-  sandbox: NAME,
+  model: OPAQUE,
+  approvalPolicy: vocabulary([
+    "untrusted",
+    "on-failure",
+    "on-request",
+    "never",
+  ]),
+  sandbox: vocabulary(["read-only", "workspace-write", "danger-full-access"]),
   cwd: SIZE,
   developerInstructions: SIZE,
   config: SIZE,
@@ -591,8 +683,15 @@ const CODEX_UNCONSUMED_NOTIFICATIONS = {
   "item/commandExecution/outputDelta": CODEX_DELTA,
   "item/fileChange/outputDelta": CODEX_DELTA,
   "item/mcpToolCall/progress": { ...CODEX_ON_ITEM, message: SIZE },
-  "mcpServer/startupStatus/updated": { name: NAME, status: NAME, error: SIZE },
-  "account/updated": { authMode: NAME, planType: NAME },
+  "mcpServer/startupStatus/updated": {
+    name: OPAQUE,
+    status: vocabulary(["starting", "ready", "failed", "cancelled"]),
+    error: SIZE,
+  },
+  "account/updated": {
+    authMode: vocabulary(["apikey", "chatgpt", "chatgptAuthTokens"]),
+    planType: CODEX_PLAN_TYPES,
+  },
   deprecationNotice: { summary: SIZE, details: SIZE },
   configWarning: { summary: SIZE, details: SIZE },
 } as const satisfies Record<string, Fields>;
@@ -606,7 +705,12 @@ type CodexMethod =
 
 const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
   initialize: {
-    clientInfo: object({ name: NAME, title: NAME, version: VERSION }),
+    // A client name registered with a credential is fingerprinted.
+    clientInfo: object({
+      name: vocabulary([CODEX_CLIENT_INFO.name]),
+      title: vocabulary([CODEX_CLIENT_INFO.title]),
+      version: VERSION,
+    }),
     capabilities: object({
       experimentalApi: BOOLEAN,
       requestAttestation: BOOLEAN,
@@ -627,8 +731,8 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
   "thread/unarchive": { threadId: IDENTIFIER },
   "turn/start": {
     threadId: IDENTIFIER,
-    model: NAME,
-    effort: NAME,
+    model: OPAQUE,
+    effort: vocabulary(["none", "minimal", "low", "medium", "high", "xhigh"]),
     input: list({
       type: vocabulary(["text", "image", "localImage", "skill", "mention"]),
       text: SIZE,
@@ -655,8 +759,8 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
   "serverRequest/resolved": { threadId: IDENTIFIER, requestId: IDENTIFIER },
   "account/rateLimits/updated": {
     rateLimits: object({
-      limitId: NAME,
-      planType: NAME,
+      limitId: vocabulary(["codex"]),
+      planType: CODEX_PLAN_TYPES,
       primary: CODEX_RATE_LIMIT_WINDOW,
       secondary: CODEX_RATE_LIMIT_WINDOW,
       credits: SIZE,
@@ -686,14 +790,14 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
   },
   "mcpServer/elicitation/request": {
     ...CODEX_IN_TURN,
-    serverName: NAME,
+    serverName: OPAQUE,
     message: SIZE,
     requestedSchema: SIZE,
   },
   "item/tool/call": {
     ...CODEX_IN_TURN,
     callId: IDENTIFIER,
-    tool: NAME,
+    tool: OPAQUE,
     arguments: SIZE,
   },
   applyPatchApproval: {
@@ -710,16 +814,19 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
     cwd: SIZE,
     reason: SIZE,
   },
-  "account/chatgptAuthTokens/refresh": { reason: NAME },
+  "account/chatgptAuthTokens/refresh": { reason: vocabulary(["unauthorized"]) },
   "attestation/generate": {},
   ...CODEX_UNCONSUMED_NOTIFICATIONS,
 };
 
 /** What a response carries, whichever request it answers. */
 const CODEX_RESULT = object({
-  thread: object({ id: IDENTIFIER, modelProvider: NAME }),
+  thread: object({ id: IDENTIFIER, modelProvider: vocabulary(["openai"]) }),
   turn: CODEX_TURN,
-  account: object({ type: NAME, planType: NAME }),
+  account: object({
+    type: vocabulary(["apiKey", "chatgpt"]),
+    planType: CODEX_PLAN_TYPES,
+  }),
   requiresOpenaiAuth: BOOLEAN,
   // Stella's answers to approvals, questions and declined requests.
   decision: vocabulary([
@@ -791,13 +898,13 @@ const SIDECAR_HOST_FIELDS: Readonly<
     threadId: IDENTIFIER,
     harnessSessionId: IDENTIFIER,
     ...SIDECAR_LAUNCH,
-    model: NAME,
+    model: OPAQUE,
     policy: object({
       network: vocabulary(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: vocabulary(DESKTOP_RUNNER_FS_POLICIES),
       approvals: vocabulary(DESKTOP_RUNNER_APPROVAL_MODES),
     }),
-    mcp: object({ serverName: NAME, expiresAt: INSTANT, url: SIZE }),
+    mcp: object({ serverName: OPAQUE, expiresAt: INSTANT, url: SIZE }),
     workspaceDir: SIZE,
     cacheDir: SIZE,
     instructions: SIZE,
@@ -845,14 +952,22 @@ const SIDECAR_CHUNK = object({
   toolCallId: IDENTIFIER,
   runId: IDENTIFIER,
   threadId: IDENTIFIER,
-  toolCallName: NAME,
-  name: NAME,
-  model: NAME,
-  code: NAME,
-  finishReason: NAME,
+  toolCallName: vocabulary([
+    ...Object.values(CHAT_LOCAL_RUN_TOOL_NAMES),
+    ...CLAUDE_TOOLS_LIST,
+  ]),
+  name: vocabulary([
+    DESKTOP_RUNNER_CHECKPOINT_EVENT,
+    DESKTOP_RUNNER_OUTPUT_EVENT,
+    HARNESS_CONTINUATION_EVENT,
+    ...AGENT_HARNESSES.map(harnessSessionIdEvent),
+  ]),
+  model: OPAQUE,
+  code: OPAQUE,
+  finishReason: vocabulary(["stop", "length", "tool_calls", "content_filter"]),
   role: vocabulary(["assistant", "user", "tool"]),
   timestamp: NUMBER,
-  error: object({ code: NAME, message: SIZE }),
+  error: object({ code: OPAQUE, message: SIZE }),
   delta: SIZE,
   content: SIZE,
   value: SIZE,
@@ -954,14 +1069,41 @@ const describe = (value: unknown): string => {
 const fingerprint = (value: string) =>
   `#${sha256Hex(value).slice(0, FINGERPRINT_HEX_CHARS)}`;
 
-const matching = (value: unknown, pattern: RegExp) =>
-  typeof value === "string" && pattern.test(value) ? value : describe(value);
+/** A string outside every closed list: its size and fingerprint. */
+const opaque = (value: string) =>
+  `str:${String(value.length)}${fingerprint(value)}`;
 
 const fromVocabulary = (value: unknown, values: ReadonlySet<string>) => {
   if (typeof value !== "string") {
     return describe(value);
   }
-  return values.has(value) ? value : "other";
+  return values.has(value) ? value : opaque(value);
+};
+
+/** `major.minor.patch` rebuilt from its numbers; any suffix fingerprinted. */
+const version = (value: unknown) => {
+  if (typeof value !== "string") {
+    return describe(value);
+  }
+  const core = VERSION_CORE.exec(value);
+  if (core === null) {
+    return opaque(value);
+  }
+  const numeric = core
+    .slice(1, 4)
+    .map((part) => String(Number(part)))
+    .join(".");
+  const suffix = value.slice(core[0].length);
+  return suffix === "" ? numeric : `${numeric}+${fingerprint(suffix)}`;
+};
+
+/** The instant as Temporal writes it, so nothing of the input is copied. */
+const instant = (value: unknown) => {
+  if (typeof value !== "string") {
+    return describe(value);
+  }
+  const parsed = Result.try(() => Temporal.Instant.from(value));
+  return Result.isOk(parsed) ? parsed.value.toString() : opaque(value);
 };
 
 const identifier = (value: unknown) => {
@@ -994,12 +1136,10 @@ const scalar = (rule: FieldRule, value: unknown): string | null => {
       return fromVocabulary(value, rule.values);
     case "identifier":
       return identifier(value);
-    case "name":
-      return matching(value, NAME_PATTERN);
     case "version":
-      return matching(value, VERSION_PATTERN);
+      return version(value);
     case "instant":
-      return matching(value, INSTANT_PATTERN);
+      return instant(value);
     case "number":
       return finiteNumber(value);
     case "boolean":

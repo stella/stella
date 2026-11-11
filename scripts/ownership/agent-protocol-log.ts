@@ -8,8 +8,10 @@ export default {
   summary:
     "One allowlist per message kind decides which fields of a Claude Code, " +
     "Codex or desktop sidecar message reach `holder.log`, and how: closed " +
-    "vocabulary values, numbers and identifier-shaped names as they are, ids " +
-    "as fingerprints, and every other value as its kind and length. A field " +
+    "values from closed lists the code owns, numbers, booleans, numeric " +
+    "versions and re-serialized instants as they are; ids and any other " +
+    "string in those fields as fingerprints; and every other value as its " +
+    "kind and length. A field " +
     "the allowlist does not list is counted, never shown. The log is off " +
     "unless `STELLA_AGENT_PROTOCOL_LOG=redacted` is set in the environment " +
     "the holder starts with.",

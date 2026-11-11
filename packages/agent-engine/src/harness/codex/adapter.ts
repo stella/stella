@@ -31,6 +31,7 @@ import {
   startAppServer,
 } from "./app-server-client";
 import {
+  CODEX_CLIENT_INFO,
   CODEX_OPT_OUT_NOTIFICATIONS,
   GetAccountResponseSchema,
   InitializeResponseSchema,
@@ -101,7 +102,6 @@ const DEFAULT_CAPACITY_RETRY: CodexCapacityRetry = {
   maxDelayMs: 30_000,
 };
 
-const CLIENT_NAME = "stella";
 const MAX_MODEL_PAGES = 20;
 /** `<client name>/<version> (<platform>) ...`, as `initialize` reports it. */
 const USER_AGENT_VERSION = /^[^/\s]+\/(\S+)/u;
@@ -223,8 +223,8 @@ const connect = async ({
   }
   const initialized = await client.request("initialize", {
     clientInfo: {
-      name: options.clientName ?? CLIENT_NAME,
-      title: "stella",
+      name: options.clientName ?? CODEX_CLIENT_INFO.name,
+      title: CODEX_CLIENT_INFO.title,
       version: options.clientVersion,
     },
     capabilities: {

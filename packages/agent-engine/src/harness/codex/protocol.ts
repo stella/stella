@@ -375,6 +375,12 @@ export type CodexClientRequestMethod =
 /** The notifications Stella sends the server. */
 export type CodexClientNotificationMethod = "initialized";
 
+/**
+ * How `initialize` introduces Stella, unless a credential was registered
+ * under another client name.
+ */
+export const CODEX_CLIENT_INFO = { name: "stella", title: "stella" } as const;
+
 /** JSON-RPC "method not found". */
 export const METHOD_NOT_FOUND = -32_601;
 
