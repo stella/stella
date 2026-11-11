@@ -1758,6 +1758,28 @@
     "loadEarlierMessages": "Ältere Nachrichten laden",
     "loadEarlierMessagesError": "Ältere Nachrichten konnten nicht geladen werden",
     "loadingEarlierMessages": "Ältere Nachrichten werden geladen…",
+    "localFilesUndo": {
+      "action": "Dateiänderungen rückgängig machen",
+      "computer": {
+        "failed": "Das Rückgängigmachen wurde auf Ihrem Computer nicht abgeschlossen. Einige Dateien wurden möglicherweise schon geändert. Prüfen Sie deshalb den Ordner des Chats.",
+        "folderBusy": "Ein Lauf auf Ihrem Computer verwendet diesen Ordner. Versuchen Sie es erneut, wenn er beendet ist.",
+        "noCheckpoint": "Ihr Computer hat keine gespeicherte Kopie der Dateien von vor diesem Schritt, daher wurde nichts rückgängig gemacht.",
+        "notNewest": "Ihr Computer hat neuere Änderungen in diesem Ordner, daher wurde nichts rückgängig gemacht."
+      },
+      "confirm": "Änderungen rückgängig machen",
+      "confirmDescription": "Die Dateien, die dieser Schritt in seinem Ordner auf Ihrem Computer geändert hat, kehren in den Zustand vor dem Schritt zurück. Nur die Änderungen dieses Schritts werden rückgängig gemacht; Änderungen früherer Schritte bleiben.",
+      "confirmTitle": "Dateiänderungen dieses Schritts rückgängig machen?",
+      "expired": "Ihr Computer hat nicht rechtzeitig geantwortet. Versuchen Sie es erneut.",
+      "pending": "Dateiänderungen auf Ihrem Computer werden rückgängig gemacht",
+      "refused": {
+        "desktopOffline": "Ihr Computer ist offline. Öffnen Sie die stella-Desktop-App und versuchen Sie es erneut.",
+        "desktopUpdateRequired": "Die stella-Desktop-App auf Ihrem Computer ist zu alt, um Änderungen rückgängig zu machen. Aktualisieren Sie sie und versuchen Sie es erneut.",
+        "noCheckpoint": "Für diesen Schritt gibt es keine gespeicherte Kopie der Dateien, zu der zurückgekehrt werden kann.",
+        "notNewest": "Nur die Dateiänderungen des neuesten Schritts können rückgängig gemacht werden.",
+        "threadBusy": "Dieser Chat arbeitet noch. Versuchen Sie es erneut, wenn er fertig ist."
+      },
+      "restored": "Dateiänderungen rückgängig gemacht"
+    },
     "localRun": {
       "cloud": "stella-Cloud",
       "errorLimitReached": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Versuchen Sie es erneut, sobald das Limit zurückgesetzt ist.",

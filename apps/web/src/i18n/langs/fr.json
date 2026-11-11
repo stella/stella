@@ -1758,6 +1758,28 @@
     "loadEarlierMessages": "Charger les messages précédents",
     "loadEarlierMessagesError": "Impossible de charger les messages précédents",
     "loadingEarlierMessages": "Chargement des messages précédents…",
+    "localFilesUndo": {
+      "action": "Annuler les modifications de fichiers",
+      "computer": {
+        "failed": "L’annulation ne s’est pas terminée sur votre ordinateur. Certains fichiers ont peut-être déjà été modifiés ; vérifiez le dossier de la conversation.",
+        "folderBusy": "Une exécution sur votre ordinateur utilise ce dossier. Réessayez quand elle sera terminée.",
+        "noCheckpoint": "Votre ordinateur n’a pas de copie enregistrée des fichiers d’avant cette étape ; rien n’a été annulé.",
+        "notNewest": "Votre ordinateur a des modifications plus récentes dans ce dossier ; rien n’a été annulé."
+      },
+      "confirm": "Annuler les modifications",
+      "confirmDescription": "Les fichiers que cette étape a modifiés dans son dossier sur votre ordinateur reviennent à leur état d’avant l’étape. Seules les modifications de cette étape sont annulées ; celles des étapes précédentes restent.",
+      "confirmTitle": "Annuler les modifications de fichiers de cette étape ?",
+      "expired": "Votre ordinateur n’a pas répondu à temps. Réessayez.",
+      "pending": "Annulation des modifications de fichiers sur votre ordinateur",
+      "refused": {
+        "desktopOffline": "Votre ordinateur est hors ligne. Ouvrez l’application de bureau stella et réessayez.",
+        "desktopUpdateRequired": "L’application de bureau stella de votre ordinateur est trop ancienne pour annuler des modifications. Mettez-la à jour et réessayez.",
+        "noCheckpoint": "Cette étape n’a pas de copie enregistrée des fichiers à laquelle revenir.",
+        "notNewest": "Seules les modifications de fichiers de l’étape la plus récente peuvent être annulées.",
+        "threadBusy": "Une réponse est encore en cours dans cette conversation. Réessayez quand elle sera terminée."
+      },
+      "restored": "Modifications de fichiers annulées"
+    },
     "localRun": {
       "cloud": "Cloud stella",
       "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",

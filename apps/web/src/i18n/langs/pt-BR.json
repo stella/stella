@@ -1758,6 +1758,28 @@
     "loadEarlierMessages": "Carregar mensagens anteriores",
     "loadEarlierMessagesError": "Não foi possível carregar as mensagens anteriores",
     "loadingEarlierMessages": "Carregando mensagens anteriores…",
+    "localFilesUndo": {
+      "action": "Desfazer alterações nos arquivos",
+      "computer": {
+        "failed": "A ação de desfazer não terminou no seu computador. Alguns arquivos podem já ter sido alterados, então verifique a pasta do chat.",
+        "folderBusy": "Uma execução no seu computador está usando esta pasta. Tente novamente quando ela terminar.",
+        "noCheckpoint": "Seu computador não tem uma cópia salva dos arquivos de antes desta etapa, então nada foi desfeito.",
+        "notNewest": "Seu computador tem alterações mais recentes nesta pasta, então nada foi desfeito."
+      },
+      "confirm": "Desfazer alterações",
+      "confirmDescription": "Os arquivos que esta etapa alterou na pasta dela no seu computador voltam a ficar como estavam antes da etapa. Só as alterações desta etapa são desfeitas; as de etapas anteriores permanecem.",
+      "confirmTitle": "Desfazer as alterações nos arquivos desta etapa?",
+      "expired": "Seu computador não respondeu a tempo. Tente novamente.",
+      "pending": "Desfazendo alterações nos arquivos do seu computador",
+      "refused": {
+        "desktopOffline": "Seu computador está offline. Abra o aplicativo de desktop do stella e tente novamente.",
+        "desktopUpdateRequired": "O aplicativo de desktop do stella no seu computador é antigo demais para desfazer alterações. Atualize-o e tente novamente.",
+        "noCheckpoint": "Esta etapa não tem uma cópia salva dos arquivos para a qual voltar.",
+        "notNewest": "Só é possível desfazer as alterações nos arquivos da etapa mais recente.",
+        "threadBusy": "Este chat ainda está trabalhando. Tente novamente quando ele terminar."
+      },
+      "restored": "Alterações nos arquivos desfeitas"
+    },
     "localRun": {
       "cloud": "Nuvem da stella",
       "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",

@@ -1758,6 +1758,28 @@
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
     "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
+    "localFilesUndo": {
+      "action": "Cofnij zmiany w plikach",
+      "computer": {
+        "failed": "Cofanie zmian nie zakończyło się na Twoim komputerze. Niektóre pliki mogły już zostać zmienione, więc sprawdź folder czatu.",
+        "folderBusy": "Ten folder na Twoim komputerze jest używany przez inne uruchomienie. Spróbuj ponownie, gdy się zakończy.",
+        "noCheckpoint": "Twój komputer nie ma zapisanej kopii plików sprzed tego kroku, więc nic nie zostało cofnięte.",
+        "notNewest": "Twój komputer ma nowsze zmiany w tym folderze, więc nic nie zostało cofnięte."
+      },
+      "confirm": "Cofnij zmiany",
+      "confirmDescription": "Pliki, które ten krok zmienił w swoim folderze na Twoim komputerze, wrócą do stanu sprzed tego kroku. Cofnięte zostaną tylko zmiany z tego kroku; zmiany z wcześniejszych kroków pozostaną.",
+      "confirmTitle": "Cofnąć zmiany w plikach z tego kroku?",
+      "expired": "Twój komputer nie odpowiedział na czas. Spróbuj ponownie.",
+      "pending": "Cofanie zmian w plikach na Twoim komputerze",
+      "refused": {
+        "desktopOffline": "Twój komputer jest offline. Otwórz aplikację desktopową stella i spróbuj ponownie.",
+        "desktopUpdateRequired": "Aplikacja desktopowa stella na Twoim komputerze jest zbyt stara, aby cofać zmiany. Zaktualizuj ją i spróbuj ponownie.",
+        "noCheckpoint": "Ten krok nie ma zapisanej kopii plików, do której można wrócić.",
+        "notNewest": "Cofnąć można tylko zmiany w plikach z najnowszego kroku.",
+        "threadBusy": "Ten czat jeszcze pracuje. Spróbuj ponownie, gdy skończy."
+      },
+      "restored": "Zmiany w plikach cofnięte"
+    },
     "localRun": {
       "cloud": "Chmura stella",
       "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",

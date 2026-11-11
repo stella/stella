@@ -795,6 +795,7 @@ export const ChatThreadPage = ({
                           stickyUserMessages
                           streamdownComponents={streamdownComponents}
                           waitingForComputer={waitingForComputer}
+                          newestLocalTurn={data.newestLocalTurn}
                           threadRef={threadRef}
                           userMessageEdit={userMessageEdit}
                           workspaceId={workspaceId}
