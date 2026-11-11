@@ -266,6 +266,10 @@
       {
         "reason": "show_app joins cloud chat where the public corpus is enabled",
         "tokens": 36611
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 36907
       }
     ],
     "google/default": [
@@ -448,6 +452,10 @@
       {
         "reason": "show_app joins cloud chat where the public corpus is enabled",
         "tokens": 37353
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37656
       }
     ],
     "mistral/extended": [
@@ -510,6 +518,10 @@
       {
         "reason": "show_app joins cloud chat where the public corpus is enabled",
         "tokens": 37879
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38183
       }
     ],
     "openai/default": [
@@ -572,6 +584,10 @@
       {
         "reason": "show_app joins cloud chat where the public corpus is enabled",
         "tokens": 36929
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37232
       }
     ],
     "openai/extended": [
@@ -634,6 +650,10 @@
       {
         "reason": "show_app joins cloud chat where the public corpus is enabled",
         "tokens": 37445
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37748
       }
     ],
     "openrouter-anthropic/default": [
@@ -696,6 +716,10 @@
       {
         "reason": "show_app joins cloud chat where the public corpus is enabled",
         "tokens": 37340
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37640
       }
     ],
     "openrouter-anthropic/extended": [
@@ -758,6 +782,10 @@
       {
         "reason": "show_app joins cloud chat where the public corpus is enabled",
         "tokens": 37852
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38152
       }
     ],
     "openrouter/default": [
@@ -820,6 +848,10 @@
       {
         "reason": "show_app joins cloud chat where the public corpus is enabled",
         "tokens": 37340
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37640
       }
     ],
     "openrouter/extended": [
@@ -882,6 +914,10 @@
       {
         "reason": "show_app joins cloud chat where the public corpus is enabled",
         "tokens": 37852
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38152
       }
     ]
   },
