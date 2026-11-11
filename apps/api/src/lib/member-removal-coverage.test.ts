@@ -53,6 +53,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "account_audit_logs.request_metadata",
   "account_deletion_requests.storage_cleanup",
   "chat_message_revisions.edit",
+  "conflict_checks.parties",
+  "conflict_checks.results",
   "agent_skills.metadata",
   "anonymization_blacklist_entries.variants",
   "bilingual_translation_rows.warnings",
@@ -247,6 +249,10 @@ const RETAINED_MEMBER_COLUMNS = {
     "Assignment suggestions; accepting a suggestion validates current membership.",
   "sanctions_contact_matches.reviewed_by":
     "Screening review attribution; current membership gates review actions.",
+  "conflict_checks.run_by":
+    "Conflict-check attribution on the firm's compliance record; current membership and permissions gate every read and decision.",
+  "conflict_checks.decided_by":
+    "Decision attribution on the firm's compliance record; it grants no membership or review authority.",
   "sanctions_screening_events.reviewer_id":
     "Screening decision history; attribution grants no membership or review authority.",
   "audit_logs.user_id": "Audit performer history.",

@@ -180,6 +180,10 @@ export const ENUM_COLUMN_ROLES = {
     interaction_type: ATTRIBUTE,
     interruption_reason: ATTRIBUTE,
   },
+  conflict_checks: {
+    decision: LIFECYCLE,
+    outcome: ATTRIBUTE,
+  },
   contact_relationships: {
     relationship_type: ATTRIBUTE,
   },

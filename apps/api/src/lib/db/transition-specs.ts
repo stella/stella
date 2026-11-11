@@ -25,6 +25,7 @@ import {
   timeEntries,
   workObligations,
 } from "@/api/db/schema";
+import { CONFLICT_CHECK_DECISION_TRANSITIONS } from "@/api/lib/conflict-check/transitions";
 import {
   FLOW_RUN_STEP_TRANSITIONS_V1,
   FLOW_RUN_TRANSITIONS_V1,
@@ -474,6 +475,7 @@ export const TRANSITIONS = {
   caseLawStatuteCitationCountState: { unmanaged: UNMANAGED_REASONS.projection },
   chatThreadCompactions: { unmanaged: UNMANAGED_REASONS.workerRun },
   chatTurns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  conflictChecks: CONFLICT_CHECK_DECISION_TRANSITIONS,
   contactExtractionUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   contacts: CONTACT_MONITORING_TRANSITIONS,
   corpusIndexGenerations: { unmanaged: UNMANAGED_REASONS.projection },

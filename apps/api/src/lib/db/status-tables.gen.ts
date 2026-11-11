@@ -43,6 +43,7 @@ export const STATUS_COLUMNS = {
   caseLawWithdrawalStatus: ["status"],
   chatThreadCompactions: ["status"],
   chatTurns: ["status"],
+  conflictChecks: ["decision"],
   contactExtractionUploads: ["status"],
   corpusIndexGenerations: ["status"],
   corpusIndexGroupEnrollments: ["provisioningStatus"],
@@ -188,6 +189,7 @@ export const WRITABLE_STATUS_COLUMNS = {
   caseLawStatuteCitationCountState: ["status"],
   chatThreadCompactions: ["status"],
   chatTurns: ["status"],
+  conflictChecks: ["decision"],
   contactExtractionUploads: ["status"],
   corpusIndexGenerations: ["status"],
   corpusIndexGroupEnrollments: ["provisioningStatus"],
@@ -350,6 +352,7 @@ export const ENUM_COLUMNS = {
     "interaction_type",
     "interruption_reason",
   ],
+  conflict_checks: ["decision", "outcome"],
   contact_relationships: ["relationship_type"],
   contact_search_documents: ["contact_type"],
   contacts: [

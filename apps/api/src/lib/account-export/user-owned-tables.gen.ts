@@ -29,6 +29,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "chat_tool_grants",
   "chat_turns",
   "clauses",
+  "conflict_checks",
   "contact_extraction_uploads",
   "contact_import_requests",
   "contacts",

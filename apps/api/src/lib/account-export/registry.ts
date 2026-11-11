@@ -109,6 +109,12 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
+  // The firm's compliance record about third parties; the runner and the
+  // decider are attribution on it, not the account's own content.
+  conflict_checks: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
   contact_extraction_uploads: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,

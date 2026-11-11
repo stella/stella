@@ -487,6 +487,8 @@ export const LIMITS = {
   searchChatCandidateBytesMax: 8 * 1024 * 1024,
   savedSearchesPerUser: 100,
   savedSearchesPageSizeDefault: 50,
+  conflictChecksPageSizeDefault: 50,
+  conflictChecksPageSizeMax: 100,
   savedSearchesPageSizeMax: 100,
   savedTimeNarrativesPerUser: 100,
   /**
