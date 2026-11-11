@@ -13,6 +13,7 @@ import type { UserRealtimeEvent } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import { activeChatRunsOptions } from "@/features/chat/active-runs";
+import { chatKeys } from "@/features/chat/chat-query-contract";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { apiUrl } from "@/lib/api-url";
@@ -184,6 +185,10 @@ export const useUserEventRefreshes = ({
       userId,
     }).queryKey,
   });
+  // Rows carry the reader's read and pin states.
+  const chatThreadLists = (): UserEventRefresh => ({
+    queryKey: chatKeys.groupedThreadLists(organizationId, userId),
+  });
 
   useUserEventsSSE(organizationId, {
     onEvent: ({ type: eventType }) => {
@@ -191,7 +196,10 @@ export const useUserEventRefreshes = ({
         case REALTIME_EVENT_TYPE.NEW_NOTIFICATION:
           return [notifications()];
         case REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED:
-          return [activeChatRuns()];
+          // A run that ends with an answer makes its chat unread.
+          return [activeChatRuns(), chatThreadLists()];
+        case REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED:
+          return [chatThreadLists()];
         default:
           eventType satisfies never;
           return panic("Unhandled user realtime event");
@@ -200,6 +208,7 @@ export const useUserEventRefreshes = ({
     onResync: () => [
       notifications(),
       activeChatRuns(),
+      chatThreadLists(),
       ...organizationEventQueryKeys(
         resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.CONTACT),
         organizationId,

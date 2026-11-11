@@ -109,6 +109,8 @@ import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-tit
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
 import deleteChatThread from "@/api/handlers/chat/threads/delete";
 import listChatThreads from "@/api/handlers/chat/threads/list";
+import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
+import updateChatThreadReadState from "@/api/handlers/chat/threads/read-state/update";
 import renameChatThread from "@/api/handlers/chat/threads/rename";
 import updateChatThread from "@/api/handlers/chat/threads/update";
 import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
@@ -716,6 +718,8 @@ const readChatThreadRow = async (threadId: SafeId<"chatThread">) =>
     await testDb
       .select({
         chatModel: chatThreads.chatModel,
+        lastReadAt: chatThreads.lastReadAt,
+        pinnedAt: chatThreads.pinnedAt,
         title: chatThreads.title,
         webSearchEnabled: chatThreads.webSearchEnabled,
       })
@@ -2627,6 +2631,54 @@ const isolationCases: IsolationCase[] = [
     },
     expectPositive: (result) =>
       expect(result).toEqual({ title: chatThreadTitleB }),
+  },
+  {
+    name: "chat thread read state",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(updateChatThreadReadState, workspaceA, {
+        body: { readState: "unread" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(updateChatThreadReadState, sameUserWorkspaceB, {
+        body: { readState: "read" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      // Marking unread clears the instant; the other firm's attempt left it.
+      expect(recordField(result, "thread")).toMatchObject({
+        lastReadAt: expect.any(Date),
+      });
+    },
+    expectPositive: (result) => expect(result).toEqual({ readState: "read" }),
+  },
+  {
+    name: "chat thread pin state",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(updateChatThreadPinState, workspaceA, {
+        body: { pinState: "pinned" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(updateChatThreadPinState, sameUserWorkspaceB, {
+        body: { pinState: "unpinned" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "thread")).toMatchObject({ pinnedAt: null });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ pinState: "unpinned" }),
   },
   {
     // An upsert: a thread id the caller cannot see must neither be updated

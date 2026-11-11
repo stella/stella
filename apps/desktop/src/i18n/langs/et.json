@@ -770,7 +770,9 @@
         "notCompleted": "Sisselogimine jäi pooleli. Proovige uuesti.",
         "timedOut": "Sisselogimine võttis liiga kaua aega. Proovige uuesti.",
         "unavailable": "Claude Code’i ei õnnestunud selles arvutis käivitada. Proovige uuesti."
-      }
+      },
+      "unknown": "Claude Code'i sisselogimist ei õnnestunud kontrollida. Kontrolli hetke pärast uuesti.",
+      "checkAgain": "Kontrolli uuesti"
     },
     "install": {
       "notInstalled": "{name} ei ole sellesse arvutisse veel installitud.",

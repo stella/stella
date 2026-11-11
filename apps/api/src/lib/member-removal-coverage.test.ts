@@ -155,6 +155,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_claims.anchor",
   "legal_list_claims.refs",
   "legal_list_claims.record_conflict",
+  // A closed qualifier kind and the grader's explanation; no member id.
+  "legal_list_claims.qualifiers",
   "legal_list_generation_candidate_sources.locator",
   "legal_list_item_sources.locator",
   "legal_list_verification_runs.evidence",
@@ -388,6 +390,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "legal_list_item_sources.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_items.added_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_source_documents.updated_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_verification_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",

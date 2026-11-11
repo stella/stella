@@ -770,7 +770,9 @@
         "notCompleted": "Logowanie nie zostało dokończone. Spróbuj ponownie.",
         "timedOut": "Logowanie trwało zbyt długo. Spróbuj ponownie.",
         "unavailable": "Nie udało się uruchomić Claude Code na tym komputerze. Spróbuj ponownie."
-      }
+      },
+      "unknown": "Nie udało się sprawdzić logowania do Claude Code. Sprawdź ponownie za chwilę.",
+      "checkAgain": "Sprawdź ponownie"
     },
     "install": {
       "notInstalled": "{name} nie jest jeszcze zainstalowany na tym komputerze.",
