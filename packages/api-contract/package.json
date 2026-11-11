@@ -120,6 +120,7 @@
     "./api-oauth-resource": "./src/api-oauth-resource.ts",
     "./oauth-callback-error": "./src/oauth-callback-error.ts",
     "./mobile-updates": "./src/mobile-updates.ts",
+    "./desktop-account-link": "./src/desktop-account-link.ts",
     "./desktop-registry": "./src/desktop-registry.ts",
     "./desktop-billing-drafts": "./src/desktop-billing-drafts.ts",
     "./desktop-time-entries": "./src/desktop-time-entries.ts",
