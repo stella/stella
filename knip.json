@@ -135,6 +135,10 @@
         "src/pages/**/*.ts",
         "astro.config.*",
         "e2e/**/*.ts"
+      ],
+      "ignoreDependencies": [
+        // Starlight's bundled routes import it by bare name from the build output.
+        "js-yaml"
       ]
     },
     "apps/legal-atlas-runner": {
