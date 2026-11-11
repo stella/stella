@@ -38,7 +38,7 @@ export const RunCarryOverNote = ({
   const notCarried = carryOver.notCarried;
 
   return (
-    <span className="inline-flex flex-wrap items-center gap-x-1.5">
+    <span className="inline-flex flex-wrap items-center gap-x-3">
       <span>
         {t("avt.runs.carryOver.carried", {
           count: carryOver.carriedCount,
@@ -46,8 +46,7 @@ export const RunCarryOverNote = ({
         })}
       </span>
       {notCarried.length > 0 && (
-        <>
-          <span aria-hidden="true">·</span>
+        <span>
           <Popover onOpenChange={setOpen} open={open}>
             <PopoverTrigger
               render={<Button className="-mx-1.5" size="xs" variant="ghost" />}
@@ -78,6 +77,7 @@ export const RunCarryOverNote = ({
               </ScrollArea>
               <div className="mt-2 border-t pt-2">
                 <Button
+                  className="-ms-2.5"
                   onClick={() => {
                     setOpen(false);
                     onOpenRun(carryOver.sourceRunId);
@@ -90,7 +90,7 @@ export const RunCarryOverNote = ({
               </div>
             </PopoverPopup>
           </Popover>
-        </>
+        </span>
       )}
     </span>
   );

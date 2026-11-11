@@ -163,7 +163,7 @@ const RunBody = ({
       );
       return (
         <>
-          <div className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
+          <div className="text-muted-foreground space-y-0.5 text-xs">
             <p>
               {t("avt.runs.evidencePinned", {
                 count: run.evidence.facts.length,
