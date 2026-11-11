@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { SKILL_RESOURCE_REFUSAL_CODE } from "@stll/api-contract";
+
 import { agentSkillResources } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadSkillForNewResource } from "@/api/handlers/skills/resources/new-resource-skill";
@@ -19,11 +21,9 @@ import { fileSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { extractFileText } from "@/api/lib/search/extract-content";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
-
-const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 
 const inferBinaryUploadMimeType = ({
   file,
@@ -58,15 +58,15 @@ const uploadSkillResourceBodySchema = v.object({
     v.minLength(1),
     v.maxLength(RESOURCE_PATH_MAX_CHARS),
   ),
-  file: fileSchema({ maxBytes: UPLOAD_MAX_BYTES }),
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.skillResource }),
 });
 
 const config = {
   contract: "patch",
   description:
     "Add one file to an agent skill by uploading it. A DOCX or PDF is stored " +
-    "as its extracted text and anything else is decoded as UTF-8; content " +
-    "beyond the per-file character limit is truncated rather than rejected. " +
+    "as its extracted text and anything else is decoded as UTF-8; a file " +
+    "whose text exceeds the per-file character limit is rejected whole. " +
     "The path, duplicate, file-count, and editability rules match " +
     "skills.resources.create, which takes the text directly as JSON.",
   permissions: { agentSkill: ["update"] },
@@ -156,11 +156,20 @@ const uploadSkillResource = createSafeRootHandler(
           }),
         );
       }
-      content = extracted.slice(0, LIMITS.agentSkillResourceMaxChars);
+      content = extracted;
     } else {
-      content = new TextDecoder("utf-8", { fatal: false })
-        .decode(buffer)
-        .slice(0, LIMITS.agentSkillResourceMaxChars);
+      content = new TextDecoder("utf-8", { fatal: false }).decode(buffer);
+    }
+    // Refused whole rather than cut short: a truncated reference file would
+    // read as complete to every later reader.
+    if (content.length > LIMITS.agentSkillResourceMaxChars) {
+      return Result.err(
+        new HandlerError({
+          status: 413,
+          code: SKILL_RESOURCE_REFUSAL_CODE.tooLarge,
+          message: "This file's text exceeds the maximum resource size",
+        }),
+      );
     }
 
     const sizeBytes = new TextEncoder().encode(content).byteLength;

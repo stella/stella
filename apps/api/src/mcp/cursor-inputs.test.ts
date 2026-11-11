@@ -19,12 +19,12 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { windowBoundText } from "@/api/lib/bound-text-window";
 import {
   encodePaginationCursor,
   isIssuablePaginationCursor,
 } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
-import { windowProvisionText } from "@/api/mcp/provision-text-window";
 import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 /**
@@ -181,7 +181,7 @@ describe("MCP cursor inputs read a made-up cursor as no cursor", () => {
     // it out of the first page is the decoder, not this rule.
     expect(isIssuablePaginationCursor(TRUNCATED_REAL_CURSOR)).toBe(true);
 
-    const window = windowProvisionText({
+    const window = windowBoundText({
       limit: 1,
       subject: "fixture",
       text: "long wording",

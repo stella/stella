@@ -27,7 +27,18 @@ export const SKILL_PACKAGE_LIMITS = {
   metadataEntriesMax: 32,
   metadataKeyMaxChars: 64,
   metadataValueMaxChars: 512,
-  resourceMaxChars: 100_000,
+  /**
+   * Largest resource file a skill stores. Reads window it (see
+   * `resourceModelContextMaxChars`), so this bounds storage, not one read.
+   */
+  resourceMaxChars: 2_000_000,
+  /**
+   * Largest piece of one resource a model holds at once: the window a
+   * resource read returns, and the whole file wherever a model reads or
+   * writes it in one piece (an AI rewrite, a model-authored edit, draft
+   * context, a shipped skill served whole over MCP `resources/read`).
+   */
+  resourceModelContextMaxChars: 100_000,
   resourcePathMaxChars: 512,
   resourcesPerSkillMax: 50,
   versionMaxChars: 64,

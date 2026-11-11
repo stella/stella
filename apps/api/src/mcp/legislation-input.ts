@@ -2,13 +2,13 @@ import * as v from "valibot";
 
 import type { AgentInputNormalizationAnnotation } from "@stll/agent-input";
 
+import { isBoundTextCursor } from "@/api/lib/bound-text-window";
 import { LIMITS } from "@/api/lib/limits";
 import {
   cursorInput,
   ELI_NORMALIZATION,
   nullAsAbsent,
 } from "@/api/mcp/input-schemas";
-import { isProvisionTextCursor } from "@/api/mcp/provision-text-window";
 
 export const eliInputSchema = v.pipe(
   v.string(),
@@ -68,7 +68,7 @@ export const readProvisionHistoryArgsSchema = nullAsAbsent(
     text_cursor: cursorInput({
       description:
         "Opaque nextTextCursor from one item in the requested history page",
-      issuedBy: isProvisionTextCursor,
+      issuedBy: isBoundTextCursor,
     }),
   }),
 );

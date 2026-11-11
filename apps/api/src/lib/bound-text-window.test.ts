@@ -5,13 +5,13 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 import { sha256Base64Url } from "@stll/sha256/bun";
 
-import { windowProvisionText } from "@/api/mcp/provision-text-window";
+import { windowBoundText } from "@/api/lib/bound-text-window";
 
 const readAll = (text: string, limit: number, subject = "eli|anchor") => {
   const chunks: string[] = [];
   let cursor: string | undefined;
   for (let step = 0; step <= text.length; step += 1) {
-    const result = windowProvisionText({ cursor, limit, subject, text });
+    const result = windowBoundText({ cursor, limit, subject, text });
     expect(result.type).toBe("window");
     if (result.type !== "window") {
       return "";
@@ -29,7 +29,7 @@ const readAll = (text: string, limit: number, subject = "eli|anchor") => {
   return chunks.join("");
 };
 
-describe("provision text windows", () => {
+describe("bound text windows", () => {
   test.each(["", "abcd"])("reconstructs bounded text %p", (text) => {
     expect(readAll(text, 4)).toBe(text);
   });
@@ -65,7 +65,7 @@ describe("provision text windows", () => {
   });
 
   test("never splits surrogate pairs", () => {
-    const first = windowProvisionText({
+    const first = windowBoundText({
       limit: 2,
       subject: "subject",
       text: "a📚",
@@ -75,7 +75,7 @@ describe("provision text windows", () => {
       throw new Error("Expected another text window");
     }
     expect(
-      windowProvisionText({
+      windowBoundText({
         cursor: first.nextTextCursor,
         limit: 2,
         subject: "subject",
@@ -97,7 +97,7 @@ describe("provision text windows", () => {
         (before, point, after) => {
           const subject = "unicode|provision";
           const text = `${before}${String.fromCodePoint(point)}${after}end`;
-          const first = windowProvisionText({ limit: 2, subject, text });
+          const first = windowBoundText({ limit: 2, subject, text });
           expect(first.type).toBe("window");
           if (first.type !== "window") {
             return;
@@ -121,7 +121,7 @@ describe("provision text windows", () => {
           for (let offset = 0; offset <= text.length; offset += 1) {
             const payload = `${offset}.${binding}`;
             const cursor = `${prefix}.${payload}.${sha256Base64Url(payload)}`;
-            const result = windowProvisionText({
+            const result = windowBoundText({
               cursor,
               limit: 2,
               subject,
@@ -144,7 +144,7 @@ describe("provision text windows", () => {
   test.each(["1e0", "+1", " 1", "0x1"])(
     "refuses a rechecksummed non-decimal offset %s",
     (offset) => {
-      const first = windowProvisionText({
+      const first = windowBoundText({
         limit: 1,
         subject: "subject",
         text: "abc",
@@ -160,7 +160,7 @@ describe("provision text windows", () => {
       const payload = `${offset}.${binding}`;
       const cursor = `${prefix}.${payload}.${sha256Base64Url(payload)}`;
       expect(
-        windowProvisionText({
+        windowBoundText({
           cursor,
           limit: 1,
           subject: "subject",
@@ -171,12 +171,12 @@ describe("provision text windows", () => {
   );
 
   test("refuses tampered and foreign cursors", () => {
-    const first = windowProvisionText({ limit: 1, subject: "one", text: "ab" });
+    const first = windowBoundText({ limit: 1, subject: "one", text: "ab" });
     if (first.type !== "window" || first.nextTextCursor === null) {
       throw new Error("Expected another text window");
     }
     expect(
-      windowProvisionText({
+      windowBoundText({
         cursor: `${first.nextTextCursor}x`,
         limit: 1,
         subject: "one",
@@ -184,7 +184,7 @@ describe("provision text windows", () => {
       }),
     ).toEqual({ type: "invalid-cursor" });
     expect(
-      windowProvisionText({
+      windowBoundText({
         cursor: first.nextTextCursor,
         limit: 1,
         subject: "two",
@@ -194,12 +194,12 @@ describe("provision text windows", () => {
   });
 
   test("refuses a cursor once the same subject's text changes", () => {
-    const first = windowProvisionText({ limit: 1, subject: "one", text: "ab" });
+    const first = windowBoundText({ limit: 1, subject: "one", text: "ab" });
     if (first.type !== "window" || first.nextTextCursor === null) {
       throw new Error("Expected another text window");
     }
     expect(
-      windowProvisionText({
+      windowBoundText({
         cursor: first.nextTextCursor,
         limit: 1,
         subject: "one",

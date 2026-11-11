@@ -77,6 +77,7 @@ import * as searchInterpretation from "@/api/handlers/case-law/decisions/search-
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { windowBoundText } from "@/api/lib/bound-text-window";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
 import type {
@@ -135,7 +136,6 @@ import {
   deriveContactDisplayName,
   MATTER_TOOL_HANDLERS,
 } from "@/api/mcp/matter-tools";
-import { windowProvisionText } from "@/api/mcp/provision-text-window";
 import type { ReadCaseLawDecisionSuccess } from "@/api/mcp/public-law-handlers";
 import {
   PUBLIC_READ_CONTINUATION_LIMITS,
@@ -6403,7 +6403,7 @@ describe("OpenAI-compatible MCP tools", () => {
       createProvisionVersionRow(),
     ]);
     readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
-    const stale = windowProvisionText({
+    const stale = windowBoundText({
       limit: 3,
       subject: JSON.stringify([STATUTE_ELI, PROVISION_ANCHOR, STATUTE_ID]),
       text: "Previous provision wording",

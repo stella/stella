@@ -28,6 +28,10 @@ import { extractProvisionText } from "@/api/handlers/legislation/provision-text"
 import type { LegislationProvisionVersion } from "@/api/handlers/legislation/provision-versions";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import {
+  isBoundTextCursor,
+  windowBoundText,
+} from "@/api/lib/bound-text-window";
+import {
   READ_PROVISION_HISTORY_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
 } from "@/api/lib/chat/legislation-result-projections";
@@ -65,10 +69,6 @@ import {
   READ_PROVISION_HISTORY_INPUT_NORMALIZATION,
   readProvisionHistoryArgsSchema,
 } from "@/api/mcp/legislation-input";
-import {
-  isProvisionTextCursor,
-  windowProvisionText,
-} from "@/api/mcp/provision-text-window";
 import type { StatuteDocument } from "@/api/mcp/public-law-handlers";
 import {
   defaultListStatuteVersionsHandler,
@@ -274,7 +274,7 @@ const provisionRequestSchema = v.strictObject({
   language: v.optional(languageInputSchema),
   text_cursor: cursorInput({
     description: "Opaque nextTextCursor from this provision and consolidation",
-    issuedBy: isProvisionTextCursor,
+    issuedBy: isBoundTextCursor,
   }),
 });
 
@@ -1034,7 +1034,7 @@ const provisionItemResult = ({
         };
       }
 
-      const window = windowProvisionText({
+      const window = windowBoundText({
         ...(item.text_cursor === undefined ? {} : { cursor: item.text_cursor }),
         limit: LIMITS.legislationProvisionTextChars,
         subject: JSON.stringify([item.eli, item.anchor, String(version.id)]),
@@ -1376,7 +1376,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
         },
       };
     }
-    const window = windowProvisionText({
+    const window = windowBoundText({
       ...(textCursor === undefined ? {} : { cursor: textCursor }),
       limit: LIMITS.legislationProvisionTextChars,
       subject: JSON.stringify([eli, anchor, String(item.documentId)]),

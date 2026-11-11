@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
+import { SKILL_RESOURCE_UPLOAD_MAX_BYTES } from "@stll/api-contract/limits";
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { DocumentMark } from "@stll/ui/document-mark";
@@ -86,8 +87,6 @@ const SKILL_BODY_FILE_NAME = "SKILL.md";
 // translated default would fail validation.
 const NEW_FOLDER_BASE = "new-folder";
 
-const UPLOAD_MAX_BYTES_TEXT = 100_000;
-const UPLOAD_MAX_BYTES_BINARY = 5 * 1024 * 1024;
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const PDF_MIME = "application/pdf";
@@ -567,8 +566,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // drop, so identically named files get distinct paths instead of colliding.
   const handleUpload = async (file: File, takenPaths: Set<string>) => {
     const binary = isBinaryUpload(file);
-    const maxBytes = binary ? UPLOAD_MAX_BYTES_BINARY : UPLOAD_MAX_BYTES_TEXT;
-    if (file.size > maxBytes) {
+    if (file.size > SKILL_RESOURCE_UPLOAD_MAX_BYTES) {
       notifyUserProblem(t("common.unexpectedError"), {
         description: tSkills("uploadHelp"),
       });

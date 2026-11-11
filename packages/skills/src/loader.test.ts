@@ -8,7 +8,12 @@ import {
   readSkillDisplayName,
   SkillFileError,
 } from "./frontmatter";
-import { listSkillMetadata, loadSkill } from "./loader";
+import {
+  listSkillMetadata,
+  listSkillResources,
+  loadSkill,
+  readSkillResource,
+} from "./loader";
 import { GENERATED_SKILLS } from "./skills.gen";
 
 // Unwraps a parse for assertions; a refused file surfaces as its typed error.
@@ -470,6 +475,21 @@ describe("shipped built-in skills", () => {
       expect(skill.body.length).toBeLessThanOrEqual(
         SKILL_PACKAGE_LIMITS.bodyMaxChars,
       );
+    },
+  );
+
+  // MCP `resources/read` carries no cursor, so it serves a shipped file
+  // whole: each must fit what a model may hold at once.
+  test.each(GENERATED_SKILLS.map(({ id }) => id))(
+    "%s ships resource files a model can read whole",
+    (id) => {
+      for (const { path } of listSkillResources(id)) {
+        const resource = readSkillResource({ resourcePath: path, skillId: id });
+        expect(resource).not.toBeNull();
+        expect(resource?.content.length ?? 0).toBeLessThanOrEqual(
+          SKILL_PACKAGE_LIMITS.resourceModelContextMaxChars,
+        );
+      }
     },
   );
 
