@@ -153,9 +153,6 @@
     "packages/db-load-gate": {
       "entry": ["src/**/*.test.ts"]
     },
-    "packages/deadlines": {
-      "entry": ["src/**/*.test.ts"]
-    },
     "packages/decision-reader": {
       "entry": ["src/**/*.test.{ts,tsx}"]
     },

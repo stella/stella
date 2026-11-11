@@ -731,14 +731,6 @@ const noLlmsTxt = ([dependency, urls]: readonly [
 export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
   noLlmsTxt,
 ).concat(
-  {
-    checkedAt: "2026-11-04T00:00:00.000Z",
-    dependency: "date-holidays",
-    explanation:
-      "https://raw.githubusercontent.com/commenthol/date-holidays/master/llms.txt and https://commenthol.github.io/date-holidays/llms.txt return 404. Use the official API documentation in https://github.com/commenthol/date-holidays#api directly.",
-    expiresAt: "2026-12-04T00:00:00.000Z",
-    reason: "no-llms-txt",
-  },
   ...["@dnd-kit/core", "@dnd-kit/sortable"].map(
     (dependency) =>
       ({
