@@ -389,6 +389,7 @@
       "linkFailed": "Nie udało się powiązać faktu",
       "linked": "Powiązane fakty",
       "linkedMark": "Powiązany",
+      "linksChanged": "Powiązania zmieniły się od ostatniego sprawdzenia.",
       "noFacts": "Żaden fakt na liście nie pasuje.",
       "recheck": "Sprawdź ponownie",
       "recheckFailed": "Nie udało się ponownie sprawdzić twierdzenia",

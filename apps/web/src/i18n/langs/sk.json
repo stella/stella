@@ -389,6 +389,7 @@
       "linkFailed": "Fakt sa nepodarilo prepojiť",
       "linked": "Prepojené fakty",
       "linkedMark": "Prepojené",
+      "linksChanged": "Prepojenia sa od poslednej kontroly zmenili.",
       "noFacts": "Žiadny fakt v zozname nezodpovedá.",
       "recheck": "Skontrolovať znova",
       "recheckFailed": "Tvrdenie sa nepodarilo skontrolovať znova",

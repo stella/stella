@@ -309,6 +309,7 @@
   "avt.gap.linkFailed": "The fact could not be linked",
   "avt.gap.linked": "Linked facts",
   "avt.gap.linkedMark": "Linked",
+  "avt.gap.linksChanged": "Links changed since the last check.",
   "avt.gap.noFacts": "No fact on the list matches.",
   "avt.gap.recheck": "Re-check",
   "avt.gap.recheckFailed": "The claim could not be checked again",

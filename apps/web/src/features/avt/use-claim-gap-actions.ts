@@ -119,12 +119,10 @@ export const useClaimGapActions = ({
 
   const link = useMutation({
     mutationKey: ["avt", workspaceId, "claim-link", runId, claimId],
-    mutationFn: async (input: LinkInput) => {
-      await changeLink(input);
-      // A link or unlink changes no verdict until the claim is checked
-      // again, so every change is followed by a re-check.
-      await recheckClaim();
-    },
+    // A link or unlink only records what the reviewer points to; the grade
+    // reads as out of date until they check the claim again, the one action
+    // that calls the model.
+    mutationFn: changeLink,
     onSettled: refresh,
     onError: (error) => notifyUserError(error, t("avt.gap.linkFailed")),
   });

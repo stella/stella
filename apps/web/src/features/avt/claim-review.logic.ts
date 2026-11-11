@@ -30,6 +30,7 @@ export const EMPTY_CLAIM_REVIEW = {
   reopened: false,
   recordConflictResolution: null,
   linkedFactIds: [],
+  linksChanged: false,
   eventCount: 0,
 } as const satisfies ClaimReview;
 

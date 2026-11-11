@@ -650,7 +650,8 @@ export const LinkedFacts = ({
     listId,
     claimId: claim.id,
   });
-  if (allLinked.length === 0) {
+  const linksChanged = claim.review?.linksChanged === true;
+  if (allLinked.length === 0 && !linksChanged) {
     return null;
   }
   const names = new Map<string, ListItem["name"]>(
@@ -674,6 +675,14 @@ export const LinkedFacts = ({
           {t("avt.gap.recheck")}
         </Button>
       </div>
+      {/* The grade was given with other links: it stays as it was until the
+          claim is checked again, and says so rather than standing as
+          current support. */}
+      {linksChanged && (
+        <p className="text-muted-foreground text-xs">
+          {t("avt.gap.linksChanged")}
+        </p>
+      )}
       {/* Names come from the list: until it is read, or when it cannot be,
           no linked fact is called gone from it. */}
       {linkedIds.length > 0 && read.isPending && (

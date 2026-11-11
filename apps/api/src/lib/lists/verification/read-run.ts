@@ -54,20 +54,25 @@ import {
   contestedFactIds,
   foldClaimReview,
   gradeOf,
+  linksChangedSinceGrade,
 } from "@/api/lib/lists/verification/review-fold";
 
-/** A claim's review on the wire, with how many actions its history holds.
- *  Its latest re-check is part of the claim's grade, so the claim states it
- *  (`presentRecheck`). */
+/** A claim's review on the wire, with how many actions its history holds and
+ *  whether its links changed since its grade. Its latest re-check is part of
+ *  the claim's grade, so the claim states it (`presentRecheck`). */
 export const serializeClaimReview = ({
-  review: { recheck: _recheck, ...review },
+  review,
   eventCount,
-}: ClaimReviewRecord) => ({
-  ...review,
-  noteSavedAt: review.noteSavedAt?.toISOString() ?? null,
-  decidedAt: review.decidedAt?.toISOString() ?? null,
-  eventCount,
-});
+}: ClaimReviewRecord) => {
+  const { recheck: _onTheClaim, ...wire } = review;
+  return {
+    ...wire,
+    linksChanged: linksChangedSinceGrade(review),
+    noteSavedAt: wire.noteSavedAt?.toISOString() ?? null,
+    decidedAt: wire.decidedAt?.toISOString() ?? null,
+    eventCount,
+  };
+};
 
 type ReadClaimReviewsArgs = {
   tx: Pick<Transaction, "select">;

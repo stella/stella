@@ -389,6 +389,7 @@
       "linkFailed": "Não foi possível vincular o fato",
       "linked": "Fatos vinculados",
       "linkedMark": "Vinculado",
+      "linksChanged": "Os vínculos mudaram desde a última verificação.",
       "noFacts": "Nenhum fato da lista corresponde.",
       "recheck": "Verificar novamente",
       "recheckFailed": "Não foi possível verificar a alegação novamente",

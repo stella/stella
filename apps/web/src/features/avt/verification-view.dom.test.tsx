@@ -1678,7 +1678,7 @@ test("a list whose facts cannot be read says so with a retry, never that it has 
   expect(await screen.findByText(notice.name)).toBeTruthy();
 });
 
-test("linking a fact records the link as a review event, then re-checks the claim", async () => {
+test("linking a fact records the link as a review event and calls no model", async () => {
   const seeded = seededRun();
   const claim =
     seeded.claims.at(3) ?? panic("Missing seeded no-coverage claim");
@@ -1714,10 +1714,6 @@ test("linking a fact records the link as a review event, then re-checks the clai
           },
         }),
     ],
-    [
-      `POST ${lists}/claim-rechecks`,
-      () => Response.json({ replayed: false, claim }),
-    ],
   ]);
   const seen = answerSignedIn(answered);
   const { run } = await mount(seeded, true);
@@ -1729,22 +1725,66 @@ test("linking a fact records the link as a review event, then re-checks the clai
   // A held fact is never read by a check, so it cannot be linked.
   expect(screen.queryByText(held.name)).toBeNull();
   fireEvent.click(option);
-  await waitFor(() => expect(seen).toHaveLength(3));
+  await waitFor(() => expect(seen).toHaveLength(2));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  // The link is recorded and nothing else: checking again is its own action.
   expect(seen.map(({ method, path }) => `${method} ${path}`)).toEqual([
     `GET ${lists}/${run.evidence.listId}/items`,
     `POST ${lists}/claim-reviews`,
-    `POST ${lists}/claim-rechecks`,
   ]);
   expect(seen.at(1)?.body).toEqual({
     runId: run.id,
     claimId: claim.id,
     event: { kind: "fact-link", factEntityId: notice.id, change: "link" },
   });
-  expect(seen.at(2)?.body).toMatchObject({
-    runId: run.id,
-    claimId: claim.id,
-    requestKey: expect.any(String),
-  });
+});
+
+test("a claim whose links changed since its grade says so, and re-check is what calls the model", async () => {
+  const seeded = seededRun();
+  const notice = listFact(8, "The lender's notice letter is dated 3 June.");
+  const run = {
+    ...seeded,
+    claims: seeded.claims.map((claim, index) =>
+      index === 3
+        ? {
+            ...claim,
+            review: {
+              ...EMPTY_CLAIM_REVIEW,
+              linkedFactIds: [toSafeId<"entity">(notice.id)],
+              linksChanged: true,
+              eventCount: 1,
+            },
+          }
+        : claim,
+    ),
+  } satisfies VerificationRun;
+  const lists = `/v1/lists/${workspaceId}`;
+  const seen = answerSignedIn(
+    new Map([
+      [
+        `GET ${lists}/${seeded.evidence.listId}/items`,
+        () => Response.json({ items: [notice], nextCursor: null, limit: 100 }),
+      ],
+      [
+        `POST ${lists}/claim-rechecks`,
+        () => Response.json({ replayed: false, claim: run.claims.at(3) }),
+      ],
+    ]),
+  );
+  await mount(run, true);
+  selectClaim(4);
+  // The grade stands as it was given, and says it was given with other links.
+  expect(screen.getByText(messages.avt.gap.linksChanged)).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.recheck }),
+  );
+  await waitFor(() =>
+    expect(seen.map(({ method, path }) => `${method} ${path}`)).toContain(
+      `POST ${lists}/claim-rechecks`,
+    ),
+  );
 });
 
 test("adding a fact from a document starts from the claim's words and asks for the document", async () => {

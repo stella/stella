@@ -52,6 +52,9 @@ export type ClaimRecheck = {
   checkedAt: Date;
   /** Who asked for it; null once their account is gone. */
   checkedBy: string | null;
+  /** The facts the claim was linked to when it was graded, which the grader
+   *  was pointed at. Folded from the events before it, never stored. */
+  linkedFactIds: SafeId<"entity">[];
 };
 
 export const EMPTY_CLAIM_REVIEW: ClaimReview = {
@@ -145,6 +148,7 @@ const applyEvent = (
           modelRef: payload.modelRef,
           checkedAt: createdAt,
           checkedBy: actorId,
+          linkedFactIds: review.linkedFactIds,
         },
       };
     }
@@ -153,6 +157,24 @@ const applyEvent = (
       return panic(`Unhandled review event: ${String(payload)}`);
     }
   }
+};
+
+/**
+ * Whether the claim's links changed since the grade it is read with: the
+ * facts it is linked to now differ from those its latest re-check was
+ * pointed at, or, never re-checked, any are linked at all (the run's grade
+ * was pointed at none). Linking and unlinking change no grade; this says
+ * the grade is out of date until the claim is checked again. Derived on
+ * every read, never stored.
+ */
+export const linksChangedSinceGrade = (review: ClaimReview): boolean => {
+  const graded = new Set(
+    review.recheck === null ? [] : review.recheck.linkedFactIds,
+  );
+  return (
+    graded.size !== review.linkedFactIds.length ||
+    review.linkedFactIds.some((factId) => !graded.has(factId))
+  );
 };
 
 /** Events must arrive in `created_at, id` order, as the index returns them. */

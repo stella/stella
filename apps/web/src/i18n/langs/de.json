@@ -389,6 +389,7 @@
       "linkFailed": "Die Tatsache konnte nicht verknüpft werden",
       "linked": "Verknüpfte Tatsachen",
       "linkedMark": "Verknüpft",
+      "linksChanged": "Die Verknüpfungen haben sich seit der letzten Prüfung geändert.",
       "noFacts": "Keine Tatsache in der Liste passt.",
       "recheck": "Erneut prüfen",
       "recheckFailed": "Die Behauptung konnte nicht erneut geprüft werden",

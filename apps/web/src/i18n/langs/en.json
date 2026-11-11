@@ -389,6 +389,7 @@
       "linkFailed": "The fact could not be linked",
       "linked": "Linked facts",
       "linkedMark": "Linked",
+      "linksChanged": "Links changed since the last check.",
       "noFacts": "No fact on the list matches.",
       "recheck": "Re-check",
       "recheckFailed": "The claim could not be checked again",

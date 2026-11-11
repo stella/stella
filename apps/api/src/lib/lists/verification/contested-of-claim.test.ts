@@ -41,6 +41,7 @@ const recheckedWith = (changed: VerificationEvidenceFact[]): ClaimReview => ({
     modelRef: null,
     checkedAt: new Date(Date.UTC(2026, 10, 11, 10)),
     checkedBy: null,
+    linkedFactIds: [],
   },
 });
 

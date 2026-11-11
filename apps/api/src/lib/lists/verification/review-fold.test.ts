@@ -19,6 +19,7 @@ import {
   contestedFactIds,
   EMPTY_CLAIM_REVIEW,
   foldClaimReview,
+  linksChangedSinceGrade,
   needsAttention,
   rejectRecheck,
   rejectReviewEvent,
@@ -137,6 +138,48 @@ describe("foldClaimReview", () => {
         },
       ),
     );
+  });
+
+  test("a grade is out of date while its links differ from those it was given with", () => {
+    const recheck = {
+      kind: "recheck",
+      requestKey: "key",
+      grade: {
+        state: "supported",
+        score: 80,
+        recordConflict: null,
+        refs: [{ factEntityId: FACT_A, rel: "supports" }],
+        qualifiers: [],
+      },
+      facts: { changed: [], removed: [] },
+      modelRef: null,
+    } as const satisfies ClaimReviewEventPayload;
+    const link = (change: "link" | "unlink") =>
+      ({
+        kind: "fact-link",
+        factEntityId: FACT_A,
+        change,
+      }) as const satisfies ClaimReviewEventPayload;
+    const after = (...payloads: ClaimReviewEventPayload[]) =>
+      linksChangedSinceGrade(
+        foldClaimReview(
+          payloads.map((payload, index) => ({
+            payload,
+            actorId: "a",
+            createdAt: at(index),
+          })),
+        ),
+      );
+
+    // The run's grade was pointed at no fact.
+    expect(after()).toBe(false);
+    expect(after(link("link"))).toBe(true);
+    // Linking and unlinking again leaves what the grade was given.
+    expect(after(link("link"), link("unlink"))).toBe(false);
+    // A re-check is given the links it finds; unlinking afterwards dates it.
+    expect(after(link("link"), recheck)).toBe(false);
+    expect(after(link("link"), recheck, link("unlink"))).toBe(true);
+    expect(after(link("link"), recheck, link("unlink"), recheck)).toBe(false);
   });
 
   test("no events is the empty review", () => {
@@ -342,6 +385,7 @@ describe("foldClaimReview", () => {
         modelRef: null,
         checkedAt: at(1),
         checkedBy: "a",
+        linkedFactIds: [],
       },
     } satisfies ClaimReview;
     const gap = { state: "nocover", recordConflict: null } as const;

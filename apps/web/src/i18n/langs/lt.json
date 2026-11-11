@@ -389,6 +389,7 @@
       "linkFailed": "Fakto nepavyko susieti",
       "linked": "Susieti faktai",
       "linkedMark": "Susieta",
+      "linksChanged": "Susiejimai pasikeitė nuo paskutinio patikrinimo.",
       "noFacts": "Nė vienas sąrašo faktas netinka.",
       "recheck": "Patikrinti iš naujo",
       "recheckFailed": "Teiginio nepavyko patikrinti iš naujo",

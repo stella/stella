@@ -389,6 +389,7 @@
       "linkFailed": "Fakti ei saanud siduda",
       "linked": "Seotud faktid",
       "linkedMark": "Seotud",
+      "linksChanged": "Seosed on viimasest kontrollist saati muutunud.",
       "noFacts": "Ükski loendi fakt ei vasta.",
       "recheck": "Kontrolli uuesti",
       "recheckFailed": "Väidet ei saanud uuesti kontrollida",
