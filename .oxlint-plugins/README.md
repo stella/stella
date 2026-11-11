@@ -464,6 +464,7 @@ an autofix entry names an eligible generator in `scripts/generated-files.ts`.
 
 - [`no-hand-rolled-concurrency`](./no-hand-rolled-concurrency.ts) rejects direct promise resolver timers and the named duplicate sleep, API `chunked`, web research `chunk`, and adapter `backoffMs` helpers. The owner is private `@stll/concurrency`, through `/sleep`, `/chunk`, and `/backoff-delay`. It deliberately does not infer retry policy from arithmetic or array partitioning from generic slice loops. Native `Bun.sleep`, retained deadline timers, string/byte slices, overlapping windows, dynamic budgets, and atomic SQL retry updates retain their contracts. Exact exceptions with reasons live in [`no-hand-rolled-concurrency-exceptions.json`](./no-hand-rolled-concurrency-exceptions.json); `bun scripts/check-concurrency-exceptions.ts` prevents additions, moves, widening, and duplicate allowances after the introducing PR.
 
+- [`citation-evidence-text-fence`](./citation-evidence-text-fence.ts) (`citation-evidence-text-fence`): requires citation evidence writers to invoke the shared text revision fence and canonical graph transaction.
 - [`no-unanchored-footnotes`](./no-unanchored-footnotes.ts): source parsers resolve footnotes at paragraph references instead of reading the package collection as trailing content.
 - [`no-template-block-anchor`](./no-template-block-anchor.ts): case-law ingestion mints positional block anchors only through `positionalBlockAnchor`, the one shape `withStableBlockAnchors` replaces with stable anchors.
 

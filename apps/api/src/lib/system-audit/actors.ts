@@ -70,6 +70,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   "system:case-law-parsed-input-state-backfill": ["updatedDecisions"],
   "system:legislation-expression-id-backfill": ["claimedDocuments"],
   "system:audit-retention": ["deletedRuns"],
+  "system:case-law-citation-form-repair": ["attempted", "applied", "skipped"],
   "system:case-law-background-replay": [
     "attempted",
     "applied",

@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { REPORTED_PARTY_SUBMISSION_GROUP } from "@/api/handlers/case-law/polarity/consts";
+import {
+  POLARITY_RULE_KIND,
+  REPORTED_PARTY_SUBMISSION_GROUP,
+} from "@/api/handlers/case-law/polarity/consts";
 import {
   compileRules,
   selectCitationPolarity,
@@ -20,12 +23,14 @@ const rulesFor = (language: string) =>
       {
         pattern: `${language === "cs" ? CS_DECISION_ANCHOR : SK_DECISION_ANCHOR}\\p{L}*\\s+${WORDS_BETWEEN}(?:řeší|rieši)\\s+${WORDS_BETWEEN}odlišn\\p{L}+\\s+(?:situac|situáci)`,
         polarity: "negative",
+        kind: POLARITY_RULE_KIND.STANCE,
       } as const,
     ].map((rule, index) => ({
       id: toSafeId<"caseLawPolarityRule">(String(index)),
       pattern: rule.pattern,
       polarity: rule.polarity,
       confidence: 1,
+      kind: rule.kind,
     })),
   );
 
@@ -64,18 +69,21 @@ const scopedRules = compileRules([
     pattern: "decision differs",
     polarity: "negative",
     confidence: 0.9,
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     id: toSafeId<"caseLawPolarityRule">("reported"),
     pattern: "speaker alleges (?<reportedPartySubmission>[^.;]+)",
     polarity: "neutral",
     confidence: 0.8,
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     id: toSafeId<"caseLawPolarityRule">("supportive"),
     pattern: "see decision",
     polarity: "supportive",
     confidence: 1,
+    kind: POLARITY_RULE_KIND.STANCE,
   },
 ]);
 
@@ -136,12 +144,14 @@ test("the captured span governs only matches fully inside it", () => {
       pattern: "decision differs",
       polarity: "negative",
       confidence: 1,
+      kind: POLARITY_RULE_KIND.STANCE,
     },
     {
       id: toSafeId<"caseLawPolarityRule">("reported"),
       pattern: "decision differs (?<reportedPartySubmission>other text)",
       polarity: "neutral",
       confidence: 1,
+      kind: POLARITY_RULE_KIND.STANCE,
     },
   ]);
   expect(
@@ -156,12 +166,14 @@ test("ordinary procedural neutral cues never suppress a departure", () => {
       pattern: "decision differs",
       polarity: "negative",
       confidence: 1,
+      kind: POLARITY_RULE_KIND.STANCE,
     },
     {
       id: toSafeId<"caseLawPolarityRule">("procedural"),
       pattern: "appeal against decision",
       polarity: "neutral",
       confidence: 1,
+      kind: POLARITY_RULE_KIND.STANCE,
     },
   ]);
   expect(
@@ -268,12 +280,14 @@ test("an unmatched optional capture cannot suppress a departure", () => {
       pattern: "decision differs",
       polarity: "negative",
       confidence: 1,
+      kind: POLARITY_RULE_KIND.STANCE,
     },
     {
       id: toSafeId<"caseLawPolarityRule">("reported"),
       pattern: "speaker(?: alleges (?<reportedPartySubmission>[^.;]+))?",
       polarity: "neutral",
       confidence: 1,
+      kind: POLARITY_RULE_KIND.STANCE,
     },
   ]);
   expect(

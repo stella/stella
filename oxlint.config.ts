@@ -2197,6 +2197,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/citation-evidence-text-fence.ts",
     "./.oxlint-plugins/no-source-raw-projection.ts",
     "./.oxlint-plugins/no-unguarded-case-law-replay-write.ts",
     "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
@@ -2470,6 +2471,15 @@ const config = defineConfig({
       ],
       rules: {
         "confine-online-ddl/confine-online-ddl": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/**/*.ts",
+        ".oxlint-plugins/__fixtures__/citation-evidence-text-fence.fixture.ts",
+      ],
+      rules: {
+        "citation-evidence-text-fence/citation-evidence-text-fence": "error",
       },
     },
     {

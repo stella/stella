@@ -72,6 +72,7 @@ describe("reviewed doctrinal entry boundary", () => {
       promptVersion: "doctrine-v1",
       promptSha256: "a".repeat(64),
       evidenceSha256: sha256Hex(entry.passage),
+      textRevisionSha256: "b".repeat(64),
       runId: "doctrine-run",
       producedAt: "2026-10-07T08:00:00Z",
     };
