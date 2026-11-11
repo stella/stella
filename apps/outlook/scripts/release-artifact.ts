@@ -190,6 +190,10 @@ export const getOutlookDeploymentHeaderRules = (
       headers: { "Cache-Control": NO_CACHE_HEADER },
       path: "/assets/stella-icon-*.png",
     },
+    {
+      headers: { "Cache-Control": NO_CACHE_HEADER },
+      path: "/assets/dm-sans-*.woff2",
+    },
   ];
 };
 

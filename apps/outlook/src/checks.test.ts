@@ -4,7 +4,7 @@ import {
   extractPotentialDates,
   extractQuestions,
   hasAttachmentMention,
-  runDraftChecks,
+  runReplyChecks,
 } from "@/checks";
 import { translator } from "@/i18n";
 import type { MailSnapshot } from "@/types";
@@ -128,11 +128,12 @@ describe("extractPotentialDates", () => {
   });
 });
 
-describe("runDraftChecks", () => {
-  test("flags external recipients when domain differs from sender domain", () => {
-    const checks = runDraftChecks({
-      selectedWorkspaceId: "ws-1",
+describe("runReplyChecks", () => {
+  test("flags recipients outside the user's domain while composing", () => {
+    const checks = runReplyChecks({
+      draft: "Thanks.",
       snapshot: snapshot({
+        bcc: [{ email: "blind@external.com", name: "" }],
         mode: "compose",
         to: [
           { email: "outside@external.com", name: "" },
@@ -143,30 +144,15 @@ describe("runDraftChecks", () => {
       t: translator,
     });
     const external = checks.find((c) => c.title === "External recipients");
-    expect(external?.type).toBe("risk");
+    expect(external?.type).toBe("warning");
     expect(external?.description).toContain("outside@external.com");
+    expect(external?.description).toContain("blind@external.com");
     expect(external?.description).not.toContain("us@ours.com");
   });
 
-  test("includes BCC recipients in external-recipient checks", () => {
-    const checks = runDraftChecks({
-      selectedWorkspaceId: "ws-1",
-      snapshot: snapshot({
-        bcc: [{ email: "blind@external.com", name: "" }],
-        mode: "compose",
-        userEmail: "us@ours.com",
-      }),
-      t: translator,
-    });
-    const external = checks.find((check) =>
-      check.description.includes("blind@external.com"),
-    );
-    expect(external?.type).toBe("risk");
-  });
-
-  test("checks the actual reply recipient in read mode", () => {
-    const checks = runDraftChecks({
-      selectedWorkspaceId: "ws-1",
+  test("does not flag the sender a reply goes back to", () => {
+    const checks = runReplyChecks({
+      draft: "Thanks.",
       snapshot: snapshot({
         from: { email: "sender@external.com", name: "" },
         to: [{ email: "us@ours.com", name: "" }],
@@ -174,37 +160,12 @@ describe("runDraftChecks", () => {
       }),
       t: translator,
     });
-
-    const external = checks.find((check) =>
-      check.description.includes("sender@external.com"),
-    );
-    expect(external?.type).toBe("risk");
+    expect(checks).toEqual([]);
   });
 
-  test("skips external-recipient check when userEmail is missing", () => {
-    const checks = runDraftChecks({
-      selectedWorkspaceId: "ws-1",
-      snapshot: snapshot({
-        to: [{ email: "x@external.com", name: "" }],
-        userEmail: null,
-      }),
-      t: translator,
-    });
-    expect(checks.some((c) => c.title === "External recipients")).toBe(false);
-  });
-
-  test("flags 'attachment mentioned but missing' only when no attachments present", () => {
-    const mentioned = runDraftChecks({
-      selectedWorkspaceId: "ws-1",
-      snapshot: snapshot({ bodyText: "See attached." }),
-      t: translator,
-    });
-    expect(
-      mentioned.some((c) => c.title === "Possible missing attachment"),
-    ).toBe(true);
-
-    const withFile = runDraftChecks({
-      selectedWorkspaceId: "ws-1",
+  test("flags a draft that names an attachment the reply will not carry", () => {
+    const fromRead = runReplyChecks({
+      draft: "Please find the markup attached.",
       snapshot: snapshot({
         attachments: [
           {
@@ -215,35 +176,51 @@ describe("runDraftChecks", () => {
             size: 1,
           },
         ],
-        bodyText: "See attached.",
       }),
       t: translator,
     });
-    expect(
-      withFile.some((c) => c.title === "Possible missing attachment"),
-    ).toBe(false);
-  });
+    expect(fromRead.map((c) => c.title)).toEqual([
+      "The draft mentions an attachment",
+    ]);
 
-  test("warns when no workspace is selected", () => {
-    const checks = runDraftChecks({
-      selectedWorkspaceId: null,
-      snapshot: snapshot(),
-      t: translator,
-    });
-    expect(checks.some((c) => c.title === "No matter selected")).toBe(true);
-  });
-
-  test("returns the 'no issues' fallback when nothing fires", () => {
-    const checks = runDraftChecks({
-      selectedWorkspaceId: "ws-1",
+    const composingWithFile = runReplyChecks({
+      draft: "Please find the markup attached.",
       snapshot: snapshot({
-        bodyText: "Short note without triggers.",
-        to: [{ email: "x@ours.com", name: "" }],
-        userEmail: "y@ours.com",
+        attachments: [
+          {
+            contentType: null,
+            id: "1",
+            isInline: false,
+            name: "f.pdf",
+            size: 1,
+          },
+        ],
+        mode: "compose",
       }),
       t: translator,
     });
-    expect(checks).toHaveLength(1);
-    expect(checks[0]?.title).toBe("No issues found");
+    expect(composingWithFile).toEqual([]);
+  });
+
+  test("lists the dates the draft names", () => {
+    const checks = runReplyChecks({
+      draft: "We will come back to you by Friday, 14.11.",
+      snapshot: snapshot({ bodyText: "Can you reply by Monday?" }),
+      t: translator,
+    });
+    const dates = checks.find((c) => c.title === "Dates in the draft");
+    expect(dates?.type).toBe("info");
+    expect(dates?.description).toContain("Friday");
+    expect(dates?.description).not.toContain("Monday");
+  });
+
+  test("says nothing when nothing needs a look", () => {
+    expect(
+      runReplyChecks({
+        draft: "Thank you.",
+        snapshot: snapshot(),
+        t: translator,
+      }),
+    ).toEqual([]);
   });
 });
