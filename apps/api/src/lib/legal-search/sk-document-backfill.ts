@@ -42,6 +42,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -63,8 +64,14 @@ import {
 import { corpusStorageMode } from "@/api/env-base";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/citation-text-revision";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import {
+  replayWrite,
+  replayWriteOutcome,
+} from "@/api/lib/case-law/replay-write";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type {
@@ -150,6 +157,7 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export {
@@ -457,6 +465,58 @@ const publisherStatusPdf = (status: number): PdfFetchResult => {
     cursor: null,
     httpStatus: status,
   });
+};
+
+type ReadTransientDecisionDocumentOptions = {
+  decision: PendingDocument;
+  fetchDocument: SkDocumentFetch;
+  signal: AbortSignal;
+};
+
+/** Read a deferred document for one response without claiming or persisting it. */
+export const readTransientDecisionDocument = async ({
+  decision,
+  fetchDocument,
+  signal,
+}: ReadTransientDecisionDocumentOptions): Promise<BackfilledDocument | null> => {
+  const { documentUrl } = decision;
+  if (documentUrl === null) {
+    return null;
+  }
+
+  return await withTimeout(
+    async (operationSignal) => {
+      const fetched = await fetchPdfBytes({
+        documentUrl,
+        fetchDocument,
+        signal: operationSignal,
+      });
+      switch (fetched.type) {
+        case "absent":
+        case "failed":
+          return null;
+        case "too-large":
+          if (fetched.prefix !== null) {
+            assertPdfBody(fetched.prefix);
+          }
+          return null;
+        case "document": {
+          const parsed = await parseReadableDocument(decision, fetched.bytes);
+          return parsed.type === "parsed" ? (parsed.document ?? null) : null;
+        }
+        default:
+          fetched satisfies never;
+          return panic(
+            `Unhandled transient document download: ${String(fetched)}`,
+          );
+      }
+    },
+    {
+      label: "caseLaw.readTransientDecisionDocument",
+      timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+      signal,
+    },
+  );
 };
 
 /**
@@ -1065,6 +1125,46 @@ const storedForCorpusOutcome = (
  * idempotent and it also repairs a decision whose text landed but whose
  * index write did not.
  */
+type OwnedDecisionOptions = {
+  tx: Transaction;
+  id: SafeId<"caseLawDecision">;
+  where: SQL | undefined;
+};
+
+/**
+ * Lock the decision, then read whether the fence still owns it, so a replay
+ * write that leaves the row unchanged is told apart from a lost fence.
+ */
+const lockOwnedDecision = async ({ tx, id, where }: OwnedDecisionOptions) => {
+  await lockCaseLawDecisionRows({ tx, decisionIds: [id] });
+  return await tx
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(and(eq(caseLawDecisions.id, id), where));
+};
+
+type OwnedDecisionWriteOptions = OwnedDecisionOptions & {
+  values: PgUpdateSetSource<typeof caseLawDecisions>;
+};
+
+/** A fenced replay write; true while the fence holds, changed or not. */
+const writeOwnedDecision = async ({
+  tx,
+  id,
+  where,
+  values,
+}: OwnedDecisionWriteOptions): Promise<boolean> => {
+  const matched = await lockOwnedDecision({ tx, id, where });
+  const write = replayWrite(caseLawDecisions, values);
+  // audit: skip — queue backfill of public case-law text; no user action
+  const written = await tx
+    .update(caseLawDecisions)
+    .set(write.set)
+    .where(and(eq(caseLawDecisions.id, id), where, write.setWhere))
+    .returning({ id: caseLawDecisions.id });
+  return replayWriteOutcome(written, matched).status !== "ownership-lost";
+};
+
 const storeBackfilledDocumentOwned = async ({
   decision,
   document: uncheckedDocument,
@@ -1127,10 +1227,12 @@ const storeBackfilledDocumentOwned = async ({
       corpusPayloadDisposition({ mode, written }) === "trim"
         ? TRIMMED_CORPUS_PAYLOAD_COLUMNS
         : storedPayloadColumns;
-    // audit: skip — queue backfill of public case-law text; no user action
-    const applied = await tx
-      .update(caseLawDecisions)
-      .set({
+    // A row that already holds this payload is still stored under the fence.
+    const applied = await writeOwnedDecision({
+      tx,
+      id: decision.id,
+      where: ownerPredicate,
+      values: {
         ...payloadColumns,
         ...capturedRaw,
         parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
@@ -1139,19 +1241,18 @@ const storeBackfilledDocumentOwned = async ({
           status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
           written,
         }),
-      })
-      .where(ownerPredicate)
-      .returning({ id: caseLawDecisions.id });
-    if (applied.length > 0 && projectionLock !== null) {
+      },
+    });
+    if (applied && projectionLock !== null) {
       await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
         lock: projectionLock,
         subject: { family: "case_law", entityId: decision.id },
       });
     }
-    if (applied.length > 0) {
+    if (applied) {
       await runDecisionWriteExtension(tx, decision.id);
     }
-    return applied.length > 0;
+    return applied;
   };
 
   let stored: boolean;
@@ -1299,40 +1400,60 @@ type WriteDeferredDocumentStateOptions = {
 /**
  * The deferred queue's writer of attempts, requests and captured raw pointers.
  * These observations preserve the decision's public freshness timestamp.
- * Returns the ids it wrote.
+ * Returns the ids it changed; a row already holding the values is skipped.
  */
 const writeDeferredDocumentState = async (
   tx: Transaction,
   { set, where }: WriteDeferredDocumentStateOptions,
-): Promise<{ id: SafeId<"caseLawDecision"> }[]> =>
+): Promise<{ id: SafeId<"caseLawDecision"> }[]> => {
+  const write = replayWrite(caseLawDecisions, {
+    documentFetchRequestedAt: set.documentFetchRequestedAt,
+    documentFetchAttempts: set.documentFetchAttempts,
+    sourceRawS3Key: set.raw?.sourceRawS3Key,
+    sourceRawContentType: set.raw?.sourceRawContentType,
+    updatedAt: sql`${caseLawDecisions.updatedAt}`,
+  });
   // audit: skip — queue bookkeeping on public case-law rows; no user action
-  await tx
+  return await tx
     .update(caseLawDecisions)
-    .set({
-      documentFetchRequestedAt: set.documentFetchRequestedAt,
-      documentFetchAttempts: set.documentFetchAttempts,
-      sourceRawS3Key: set.raw?.sourceRawS3Key,
-      sourceRawContentType: set.raw?.sourceRawContentType,
-      updatedAt: sql`${caseLawDecisions.updatedAt}`,
-    })
-    .where(where)
+    .set(write.set)
+    .where(and(where, write.setWhere))
     .returning({ id: caseLawDecisions.id });
+};
 
 /**
  * Record that a reader asked for this document. Only the first request
  * is kept: the queue orders by it, and refreshing the timestamp on every
  * view would send a popular decision to the back of its own tier.
  */
-export const recordDocumentFetchRequest = async (
-  decisionId: SafeId<"caseLawDecision">,
-  scopedDb: ScopedDb,
-): Promise<void> => {
+export type DocumentFetchRequest = {
+  decisionId: SafeId<"caseLawDecision">;
+  /** The document revision and URL observed by the reader. */
+  textRevisionFingerprint: string;
+  documentUrl: string | null;
+};
+
+type RecordDocumentFetchRequestOptions = DocumentFetchRequest & {
+  scopedDb: ScopedDb;
+};
+
+export const recordDocumentFetchRequest = async ({
+  decisionId,
+  textRevisionFingerprint,
+  documentUrl,
+  scopedDb,
+}: RecordDocumentFetchRequestOptions): Promise<void> => {
   await scopedDb(
     async (tx) =>
       await writeDeferredDocumentState(tx, {
         set: { documentFetchRequestedAt: sql`now()` },
         where: and(
           eq(caseLawDecisions.id, decisionId),
+          sql`${citationTextRevisionFingerprintSql({
+            contentHash: caseLawDecisions.contentHash,
+            sections: caseLawDecisions.sections,
+          })} = ${textRevisionFingerprint}`,
+          sql`${caseLawDecisions.documentUrl} IS NOT DISTINCT FROM ${documentUrl}`,
           isNull(caseLawDecisions.redactedAt),
           isNull(caseLawDecisions.documentFetchRequestedAt),
         ),
@@ -1416,18 +1537,22 @@ const claimDocumentFetchOwned = async ({
             Math.min(nextAttempts, MAX_DOCUMENT_FETCH_ATTEMPTS - 1),
           )
         : nextAttempts;
-    // An attempt preserves the decision's public freshness timestamp.
+    // An attempt preserves the decision's public freshness timestamp. The
+    // claim predicate only admits an unclaimed or expired attempt, so the
+    // fresh attempt time always changes the row.
+    const write = replayWrite(caseLawDecisions, {
+      documentFetchAttemptedAt: sql`now()`,
+      documentFetchAttempts: countedAttempts,
+      updatedAt: sql`${caseLawDecisions.updatedAt}`,
+    });
     // audit: skip — public case-law document fetch; no user action
     const claimedRow = (
       await tx
         .update(caseLawDecisions)
-        .set({
-          documentFetchAttemptedAt: sql`now()`,
-          documentFetchAttempts: countedAttempts,
-          updatedAt: sql`${caseLawDecisions.updatedAt}`,
-        })
+        .set(write.set)
         .where(
           and(
+            write.setWhere,
             eq(caseLawDecisions.id, decisionId),
             eq(caseLawDecisions.sourceId, fence.sourceId),
             isNull(caseLawDecisions.redactedAt),
@@ -1498,19 +1623,23 @@ const markDocumentUnavailableOwned = async ({
       family: "case_law",
       entityId: decision.id,
     });
+    // The fence admits only an empty text column, so writing "" always
+    // changes the row.
+    const write = replayWrite(caseLawDecisions, {
+      fulltext: "",
+      documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${decision.attempts}::int)`,
+      ...corpusMirrorColumns({
+        status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+        written: null,
+      }),
+    });
     // audit: skip — queue backfill of public case-law text; no user action
     const updated = await tx
       .update(caseLawDecisions)
-      .set({
-        fulltext: "",
-        documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${decision.attempts}::int)`,
-        ...corpusMirrorColumns({
-          status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-          written: null,
-        }),
-      })
+      .set(write.set)
       .where(
         and(
+          write.setWhere,
           eq(caseLawDecisions.id, decision.id),
           eq(caseLawDecisions.sourceId, fence.sourceId),
           isNull(caseLawDecisions.redactedAt),
@@ -1547,22 +1676,25 @@ const parkDocumentFetchOwned = async ({
   fence: DeferredDocumentSourceFence;
 }): Promise<"parked" | "superseded"> => {
   const { scopedDb } = fence;
-  const parked = await scopedDb(
-    async (tx) =>
-      await writeDeferredDocumentState(tx, {
-        set: {
-          documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${MAX_DOCUMENT_FETCH_ATTEMPTS}::int)`,
-        },
-        where: and(
-          eq(caseLawDecisions.id, decision.id),
-          eq(caseLawDecisions.sourceId, fence.sourceId),
-          isNull(caseLawDecisions.redactedAt),
-          isNull(caseLawDecisions.fulltext),
-          holdsClaimedSource(decision.sourceHash),
-        ),
-      }),
-  );
-  return parked.length > 0 ? "parked" : "superseded";
+  const parked = await scopedDb(async (tx) => {
+    const where = and(
+      eq(caseLawDecisions.id, decision.id),
+      eq(caseLawDecisions.sourceId, fence.sourceId),
+      isNull(caseLawDecisions.redactedAt),
+      isNull(caseLawDecisions.fulltext),
+      holdsClaimedSource(decision.sourceHash),
+    );
+    const matched = await lockOwnedDecision({ tx, id: decision.id, where });
+    const written = await writeDeferredDocumentState(tx, {
+      set: {
+        documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${MAX_DOCUMENT_FETCH_ATTEMPTS}::int)`,
+      },
+      where,
+    });
+    // A decision already at the ceiling is parked all the same.
+    return replayWriteOutcome(written, matched).status !== "ownership-lost";
+  });
+  return parked ? "parked" : "superseded";
 };
 
 /**
@@ -1744,6 +1876,32 @@ type ParseFetchedDocumentResult =
   /** The source moved mid-fetch, so these bytes judge nothing. */
   | { type: "superseded" };
 
+type ReadableDocumentParse =
+  | { type: "parsed"; document: BackfilledDocument | undefined }
+  | { type: "failed"; error: StoredCorpusValidationError }
+  | { type: "unreadable"; error: unknown };
+
+/** Reader and worker share the same PDF validation and parse-failure classification. */
+const parseReadableDocument = async (
+  decision: PendingDocument,
+  bytes: Uint8Array,
+): Promise<ReadableDocumentParse> => {
+  assertPdfBody(bytes);
+  const parsed = await Result.tryPromise({
+    try: async () => await parsePendingDocument(decision, bytes),
+    catch: (error) => error,
+  });
+  if (Result.isError(parsed)) {
+    if (isUnreadablePdfError(parsed.error)) {
+      return { type: "unreadable", error: parsed.error };
+    }
+    throw parsed.error;
+  }
+  return parsed.value.isErr()
+    ? { type: "failed", error: parsed.value.error }
+    : { type: "parsed", document: parsed.value.value };
+};
+
 /**
  * Parse a download, parking the decision when libpdf reports that these
  * bytes are a PDF it cannot read: the one parse failure known to belong to
@@ -1758,27 +1916,24 @@ const parseFetchedDocument = async ({
   decision,
   fence,
 }: ParseFetchedDocumentOptions): Promise<ParseFetchedDocumentResult> => {
-  assertPdfBody(bytes);
-  const parsed = await Result.tryPromise({
-    try: async () => await parsePendingDocument(decision, bytes),
-    catch: (error) => error,
-  });
-  if (Result.isError(parsed)) {
-    if (!isUnreadablePdfError(parsed.error)) {
-      throw parsed.error;
+  const parsed = await parseReadableDocument(decision, bytes);
+  switch (parsed.type) {
+    case "parsed":
+    case "failed":
+      return parsed;
+    case "unreadable": {
+      const parked = await parkDocumentFetchOwned({
+        decision,
+        fence,
+      });
+      return parked === "parked"
+        ? { type: "parked", detail: errorTag(parsed.error) }
+        : { type: "superseded" };
     }
-    const parked = await parkDocumentFetchOwned({
-      decision,
-      fence,
-    });
-    return parked === "parked"
-      ? { type: "parked", detail: errorTag(parsed.error) }
-      : { type: "superseded" };
+    default:
+      parsed satisfies never;
+      return panic(`Unhandled document parse: ${String(parsed)}`);
   }
-  if (parsed.value.isErr()) {
-    return { type: "failed", error: parsed.value.error };
-  }
-  return { type: "parsed", document: parsed.value.value };
 };
 
 const runDecisionDocumentFetch = async ({
