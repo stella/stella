@@ -317,6 +317,8 @@ export const sharepointBrowseRefusal = ({
   retryAfterMs: unknown;
 }): SharepointBrowseRefusal => {
   switch (code) {
+    case undefined:
+      return { type: "other" };
     case SHAREPOINT_REFUSAL_CODE.notConnected:
       return { type: "not-connected" };
     case SHAREPOINT_REFUSAL_CODE.reconnectRequired:

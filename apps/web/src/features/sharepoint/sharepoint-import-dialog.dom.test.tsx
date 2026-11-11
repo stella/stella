@@ -18,6 +18,8 @@ const { cleanup, fireEvent, render, screen, waitFor, within } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { SharepointImportDialog } = await import("./sharepoint-import-dialog");
@@ -149,25 +151,29 @@ const mount = ({ connection }: { connection: Connection }) => {
   render(
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <AuthenticatedUserProvider
-          user={{
-            activeOrganizationId: "organization-fixture",
-            email: "lawyer@example.test",
-            id: "user",
-            image: null,
-            name: "Lawyer",
-            preferredName: null,
-            timezoneId: "Europe/Prague",
-            wordEditShortcut: null,
-          }}
-        >
-          <SharepointImportDialog
-            onOpenChange={() => undefined}
-            open
-            parentId={PARENT_ID}
-            workspaceId="matter-fixture"
-          />
-        </AuthenticatedUserProvider>
+        <FormattingProvider locale="en" timeZone="UTC">
+          <TooltipProvider>
+            <AuthenticatedUserProvider
+              user={{
+                activeOrganizationId: "organization-fixture",
+                email: "lawyer@example.test",
+                id: "user",
+                image: null,
+                name: "Lawyer",
+                preferredName: null,
+                timezoneId: "Europe/Prague",
+                wordEditShortcut: null,
+              }}
+            >
+              <SharepointImportDialog
+                onOpenChange={() => undefined}
+                open
+                parentId={PARENT_ID}
+                workspaceId="matter-fixture"
+              />
+            </AuthenticatedUserProvider>
+          </TooltipProvider>
+        </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
   );

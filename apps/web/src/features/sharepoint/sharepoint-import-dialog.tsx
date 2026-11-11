@@ -51,6 +51,7 @@ import {
 import { Loader } from "@stll/ui/loader";
 import { SearchField } from "@stll/ui/search-field";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -479,7 +480,7 @@ const SharepointBrowser = ({
                   <BreadcrumbItem className="min-w-0">
                     {current ? (
                       <BreadcrumbPage>
-                        <bdi className="truncate">{label}</bdi>
+                        <TruncatedText>{label}</TruncatedText>
                       </BreadcrumbPage>
                     ) : (
                       <Button
@@ -488,7 +489,7 @@ const SharepointBrowser = ({
                         size="xs"
                         variant="ghost"
                       >
-                        <bdi className="truncate">{label}</bdi>
+                        <TruncatedText>{label}</TruncatedText>
                       </Button>
                     )}
                   </BreadcrumbItem>
