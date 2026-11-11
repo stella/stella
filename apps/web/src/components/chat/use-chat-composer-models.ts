@@ -35,6 +35,10 @@ import {
   localRunnersOptions,
 } from "@/features/chat/queries";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import {
+  rememberedRunTarget,
+  rememberRunTarget,
+} from "@/lib/chat-run-on-preference-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
@@ -44,6 +48,8 @@ type StoredChatModels = {
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
   runTarget?: ChatRunTarget | undefined;
+  /** `false` for a new chat whose row the server does not hold yet. */
+  threadExists: boolean;
 };
 
 type UseChatComposerModelsOptions = {
@@ -74,10 +80,26 @@ export type ChatComposerModels = {
   >;
 };
 
-const choiceOf = (stored: StoredChatModels): ComposerChoice => ({
+/**
+ * One thread's choice owner, and where a new chat's turns start: the member's
+ * last Run on choice, read when the composer first showed the chat, until a
+ * choice of this chat is stored.
+ */
+type ThreadChoice = {
+  owner: ComposerChoiceOwner<ModelPersistError>;
+  start: ChatRunTarget | null;
+};
+
+const choiceOf = (
+  stored: StoredChatModels,
+  start: ChatRunTarget | null,
+): ComposerChoice => ({
   model: stored.model,
   reasoningEffort: stored.reasoningEffort,
-  runTarget: stored.runTarget ?? CHAT_CLOUD_RUN_TARGET,
+  runTarget:
+    !stored.threadExists && start !== null
+      ? start
+      : (stored.runTarget ?? CHAT_CLOUD_RUN_TARGET),
 });
 
 /**
@@ -87,6 +109,12 @@ const choiceOf = (stored: StoredChatModels): ComposerChoice => ({
  * whole choice and lands in the stored choice in order, and a failed write
  * shows the stored choice again. The menus stay disabled until the stored
  * choice is known, so no pick composes on a choice not yet read.
+ *
+ * A new chat starts where the member last chose to run turns, on stella or
+ * on their computer, and its first send carries that target. A computer
+ * that is offline is shown so in the bar; the turn is never moved to stella
+ * in its place. Every Run on pick, in any chat, is remembered as the member's
+ * last choice.
  */
 export const useChatComposerModels = ({
   activeOrganizationId,
@@ -114,24 +142,35 @@ export const useChatComposerModels = ({
   });
   // One owner per thread: a draft rotated by `/new` starts from its own.
   // Created once per thread and kept, as the cache of a pure lookup.
-  const [owners] = useState(
-    () => new Map<string, ComposerChoiceOwner<ModelPersistError>>(),
-  );
-  const owner =
-    owners.get(threadId) ??
+  const [threads] = useState(() => new Map<string, ThreadChoice>());
+  const thread =
+    threads.get(threadId) ??
     (() => {
-      const created = createComposerChoice<ModelPersistError>({
-        write,
-        stored: applyStored,
-        refetch,
-        failed,
-      });
-      owners.set(threadId, created);
+      const created: ThreadChoice = {
+        owner: createComposerChoice<ModelPersistError>({
+          write,
+          stored: (choice) => {
+            // The chat's own choice is stored now; it no longer starts from
+            // the member's last one.
+            created.start = null;
+            applyStored(choice);
+          },
+          refetch,
+          failed,
+        }),
+        start:
+          runOn === "choice"
+            ? (rememberedRunTarget(activeOrganizationId) ?? null)
+            : null,
+      };
+      threads.set(threadId, created);
       return created;
     })();
+  const { owner } = thread;
   const desired = useSyncExternalStore(owner.subscribe, owner.desired);
   const shown =
-    desired ?? (stored === undefined ? undefined : choiceOf(stored));
+    desired ??
+    (stored === undefined ? undefined : choiceOf(stored, thread.start));
   const choiceTarget = useEffectiveRunTarget(
     activeOrganizationId,
     runOn === "choice" ? shown?.runTarget : undefined,
@@ -143,7 +182,10 @@ export const useChatComposerModels = ({
     }
     const current = queryClient.getQueryData(queryKey);
     return effectiveRunTarget(
-      owner.desired()?.runTarget ?? current?.runTarget,
+      owner.desired()?.runTarget ??
+        (current === undefined
+          ? undefined
+          : choiceOf(current, thread.start).runTarget),
       queryClient.getQueryData(
         localRunnersOptions(activeOrganizationId).queryKey,
       ),
@@ -154,7 +196,7 @@ export const useChatComposerModels = ({
     if (current === undefined) {
       return;
     }
-    owner.pick(choiceOf(current), change);
+    owner.pick(choiceOf(current, thread.start), change);
   };
   return {
     models: {
@@ -172,6 +214,7 @@ export const useChatComposerModels = ({
               type: "choice",
               selected: runTarget,
               select: (target) => {
+                rememberRunTarget(activeOrganizationId, target);
                 pick({ runTarget: target });
               },
             }

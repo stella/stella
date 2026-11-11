@@ -1874,6 +1874,7 @@
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
       "runOn": "Käivita",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limiit täis kuni {time}",
       "stateNeedsLogin": "Vaja sisse logida",
       "stateNotInstalled": "Pole installitud",

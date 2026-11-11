@@ -1874,6 +1874,7 @@
       "refusalUnavailable": "Running chats on your computer is not available for your account.",
       "runOn": "Run on",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit reached until {time}",
       "stateNeedsLogin": "Sign-in needed",
       "stateNotInstalled": "Not installed",

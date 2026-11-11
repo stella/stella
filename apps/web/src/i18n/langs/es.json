@@ -1874,6 +1874,7 @@
       "refusalUnavailable": "Ejecutar chats en tu ordenador no está disponible para tu cuenta.",
       "runOn": "Ejecutar en",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Límite alcanzado hasta {time}",
       "stateNeedsLogin": "Hay que iniciar sesión",
       "stateNotInstalled": "No instalado",

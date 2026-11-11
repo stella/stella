@@ -43,6 +43,8 @@ const { ChatEditorProvider } =
 const { AIAvailabilityProvider } = await import("@/components/require-ai-key");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { useChatDraftStore } = await import("@/lib/chat-draft-store");
+const { rememberRunTarget, useChatRunOnPreferenceStore } =
+  await import("@/lib/chat-run-on-preference-store");
 const { getChatThreadKey, toChatThreadId } =
   await import("@/lib/chat-thread-ref");
 const { workspacesNavigationOptions } =
@@ -92,6 +94,12 @@ const READINESS: ChatLocalRunReadiness = {
   maxApprovals: "full_auto",
 };
 
+/** The same computer, not connected now: its last report still names Codex. */
+const OFFLINE: ChatLocalRunReadiness = {
+  ...READINESS,
+  runners: READINESS.runners.map((runner) => ({ ...runner, connected: false })),
+};
+
 type ThreadResponse =
   WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200];
 
@@ -135,7 +143,7 @@ const ANSWER = "Done on your computer.";
  * The server: the draft's row stores what the model menu PATCHes, every read
  * of the thread returns it, and a send answers with one short turn.
  */
-const serve = () => {
+const serve = (readiness: ChatLocalRunReadiness = READINESS) => {
   const state = {
     stored: null as ChatLocalRunTarget | null,
     threadIds: new Set<string>(),
@@ -174,7 +182,7 @@ const serve = () => {
         return Response.json(body);
       }
       if (pathname.endsWith("/chat/local-runners")) {
-        return Response.json(READINESS);
+        return Response.json(readiness);
       }
       if (pathname.endsWith("/chat") && request.method === "POST") {
         const body: unknown = await request.json();
@@ -289,6 +297,7 @@ afterEach(() => {
   clients.length = 0;
   __resetChatRequestStateForTests();
   useChatDraftStore.setState({ draftsByThreadKey: {} });
+  useChatRunOnPreferenceStore.setState({ byOrganization: {} });
   globalThis.fetch = previousFetch;
 });
 afterAll(async () => {
@@ -428,6 +437,63 @@ test("a new chat runs on the member's computer when they choose it, and its firs
   await testing.waitFor(() =>
     expect(appRouter.state.location.pathname).toMatch(/^\/chat\/[^/]+$/u),
   );
+  // The next new chat starts there.
+  expect(
+    useChatRunOnPreferenceStore.getState().byOrganization[
+      user.activeOrganizationId
+    ],
+  ).toEqual(CODEX);
+  expect(server.unexpected).toEqual([]);
+});
+
+/** Type into the new chat and send; the request the page sent. */
+const sendFirstTurn = async (
+  server: ReturnType<typeof serve>,
+  ui: Awaited<ReturnType<typeof openNewChat>>["ui"],
+) => {
+  typeDraft(server, "Run the tests");
+  const send = await ui.findByRole("button", {
+    name: messages.chat.sendPrompt,
+  });
+  await testing.waitFor(() =>
+    expect(send.hasAttribute("disabled")).toBe(false),
+  );
+  await testing.act(async () => {
+    testing.fireEvent.click(send);
+  });
+  await testing.waitFor(() => expect(server.sends).toHaveLength(1));
+  return server.sends.at(0);
+};
+
+test("a new chat opens on the member's last Run on choice, and its first send goes there", async () => {
+  rememberRunTarget(user.activeOrganizationId, CODEX);
+  const server = serve();
+  const client = createClient();
+  const { ui } = await openNewChat(client);
+
+  expect(await ui.findByRole("button", { name: CODEX_LABEL })).toBeTruthy();
+  expect(await sendFirstTurn(server, ui)).toMatchObject({
+    forwardedProps: { runTarget: CODEX },
+  });
+  // Nothing was written to start there.
+  expect(server.patches).toEqual([]);
+  expect(server.unexpected).toEqual([]);
+});
+
+test("a new chat whose remembered computer is offline says so in the bar and does not move to stella cloud", async () => {
+  rememberRunTarget(user.activeOrganizationId, CODEX);
+  const server = serve(OFFLINE);
+  const client = createClient();
+  const { ui } = await openNewChat(client);
+
+  const offline = `${CODEX_LABEL} · ${messages.chat.localRun.stateOffline}`;
+  expect(await ui.findByRole("button", { name: offline })).toBeTruthy();
+  expect(ui.queryByRole("button", { name: AUTO_LABEL })).toBeNull();
+  // A send goes to the computer, which the API refuses with its reason, and
+  // never to stella's models in its place.
+  expect(await sendFirstTurn(server, ui)).toMatchObject({
+    forwardedProps: { runTarget: CODEX },
+  });
   expect(server.unexpected).toEqual([]);
 });
 

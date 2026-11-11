@@ -21,8 +21,10 @@ import {
   type ComposerModelsMenuProps,
   EFFORT_LABEL_KEY,
 } from "@/components/chat/chat-model-options-menu";
+import { useHarnessStateLabel } from "@/components/chat/chat-run-target-menu";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
+  chatLocalHarnessOptions,
   localRunModelLabel,
 } from "@/components/chat/chat-run-target-menu.logic";
 import {
@@ -111,13 +113,17 @@ export const ChatModelSelector = ({
 
 /**
  * The harness and model a thread on the member's computer runs with, named
- * as the harness reports the model; `null` for a thread on stella's models.
+ * as the harness reports the model, and why it cannot take a turn now when
+ * the member's computers say so (offline, signed out): the bar says it
+ * rather than the turn moving to stella. `null` for a thread on stella's
+ * models.
  */
 const useLocalRunTrigger = (
   activeOrganizationId: string,
   target: ChatLocalRunTarget | null,
 ): TriggerView | null => {
   const t = useTranslations();
+  const stateLabel = useHarnessStateLabel();
   const runnersView = queryView(
     useQuery({
       ...localRunnersOptions(activeOrganizationId),
@@ -127,16 +133,31 @@ const useLocalRunTrigger = (
   if (target === null) {
     return null;
   }
-  const model =
-    localRunModelLabel(
-      runnersView.type === "items" ? runnersView.items : undefined,
-      target,
-    ) ?? target.model;
+  const readiness =
+    runnersView.type === "items" ? runnersView.items : undefined;
+  const model = localRunModelLabel(readiness, target) ?? target.model;
+  const selection = t("chat.localRun.selectionLabel", {
+    harness: CHAT_LOCAL_HARNESS_NAMES[target.harness],
+    model,
+  });
+  // Until the computers are read nothing is known against the choice.
+  const state = (() => {
+    if (readiness === undefined) {
+      return null;
+    }
+    const option = chatLocalHarnessOptions(readiness)?.find(
+      ({ harness }) => harness === target.harness,
+    );
+    // The member may no longer run turns on a computer at all.
+    return option === undefined
+      ? t("chat.localRun.stateUnavailable")
+      : stateLabel(option);
+  })();
   return {
-    label: t("chat.localRun.selectionLabel", {
-      harness: CHAT_LOCAL_HARNESS_NAMES[target.harness],
-      model,
-    }),
+    label:
+      state === null
+        ? selection
+        : t("chat.localRun.selectionStateLabel", { selection, state }),
     icon: <LaptopIcon aria-hidden="true" className="size-3.5" />,
     chosen: true,
   };

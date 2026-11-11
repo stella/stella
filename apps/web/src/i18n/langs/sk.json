@@ -1874,6 +1874,7 @@
       "refusalUnavailable": "Spúšťanie chatov vo vašom počítači nie je pre váš účet dostupné.",
       "runOn": "Spustiť na",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit vyčerpaný do {time}",
       "stateNeedsLogin": "Vyžaduje prihlásenie",
       "stateNotInstalled": "Nie je nainštalované",

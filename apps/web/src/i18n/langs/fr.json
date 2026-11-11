@@ -1874,6 +1874,7 @@
       "refusalUnavailable": "L’exécution des conversations sur votre ordinateur n’est pas disponible pour votre compte.",
       "runOn": "Exécuter sur",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limite atteinte jusqu’à {time}",
       "stateNeedsLogin": "Connexion requise",
       "stateNotInstalled": "Non installé",

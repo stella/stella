@@ -1488,6 +1488,7 @@
   "chat.localRun.refusalUnavailable": "Running chats on your computer is not available for your account.",
   "chat.localRun.runOn": "Run on",
   "chat.localRun.selectionLabel": "{harness} · {model}",
+  "chat.localRun.selectionStateLabel": "{selection} · {state}",
   "chat.localRun.stateLimitUntil": "Limit reached until {time}",
   "chat.localRun.stateNeedsLogin": "Sign-in needed",
   "chat.localRun.stateNotInstalled": "Not installed",
