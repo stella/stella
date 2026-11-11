@@ -434,7 +434,7 @@ const CarriedFromDivider = ({
               ),
             })}
       </span>
-      <span aria-hidden="true" className="bg-border h-px flex-1" />
+      <span aria-hidden="true" className="flex-1 border-t" />
     </div>
   );
 };
