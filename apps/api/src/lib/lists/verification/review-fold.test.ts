@@ -14,6 +14,8 @@ import {
   QUALIFIER_REVIEW,
 } from "@/api/lib/lists/verification/qualifiers";
 import {
+  claimDisposition,
+  claimReviewSteps,
   contestedFactIds,
   EMPTY_CLAIM_REVIEW,
   foldClaimReview,
@@ -35,20 +37,26 @@ const CONFLICT: RecordConflict = {
 
 const PAYLOADS: readonly ClaimReviewEventPayload[] = [
   { kind: "status", status: "reviewed", origin: "single" },
-  { kind: "status", status: "disputed", origin: "single" },
+  { kind: "status", status: "disputed", origin: "single", reason: "Misdated." },
+  { kind: "status", status: "needs-evidence", origin: "single" },
   { kind: "status", status: "reviewed", origin: "bulk" },
   { kind: "status", status: null, origin: "single" },
-  { kind: "override", state: "tension" },
-  { kind: "override", state: null },
+  { kind: "override", state: "tension", reason: "The diary hedges." },
+  { kind: "override", state: null, reason: "The tool was right." },
   { kind: "note", note: "Check the diary entry." },
   { kind: "note", note: "" },
-  { kind: "reopen" },
-  { kind: "record-conflict", resolution: { kind: "escalated" } },
+  { kind: "reopen", reason: "The date can be checked." },
+  {
+    kind: "record-conflict",
+    resolution: { kind: "escalated" },
+    reason: "Needs the originals.",
+  },
   {
     kind: "record-conflict",
     resolution: { kind: "governed", factEntityId: FACT_A },
+    reason: "The bank record governs.",
   },
-  { kind: "record-conflict", resolution: null },
+  { kind: "record-conflict", resolution: null, reason: "Decided too early." },
 ];
 
 const at = (index: number) => new Date(Date.UTC(2026, 8, 23, 9, 0, index));
@@ -110,6 +118,21 @@ describe("foldClaimReview", () => {
 
   test("no events is the empty review", () => {
     expect(foldClaimReview([])).toEqual(EMPTY_CLAIM_REVIEW);
+  });
+
+  test("needs-evidence is a status of its own, set by one reviewer", () => {
+    const review = foldClaimReview([
+      {
+        payload: { kind: "status", status: "needs-evidence", origin: "single" },
+        actorId: "a",
+        createdAt: at(1),
+      },
+    ]);
+    expect(review).toMatchObject({
+      status: "needs-evidence",
+      statusOrigin: "single",
+      decidedBy: "a",
+    });
   });
 
   test("a status has an origin exactly when it is set", () => {
@@ -181,6 +204,96 @@ describe("foldClaimReview", () => {
       decidedBy: "b",
       decidedAt: at(2),
     });
+  });
+});
+
+describe("claimReviewSteps", () => {
+  const CLAIMS = [
+    { state: "supported", refs: [], recordConflict: null },
+    { state: "notverifiable", refs: [], recordConflict: null },
+    {
+      state: "recordconflict",
+      refs: [{ factEntityId: FACT_A, rel: "record" }],
+      recordConflict: CONFLICT,
+    },
+  ] as const;
+
+  test("every step's before and after agree with the fold over the events up to it", () => {
+    assertProperty(
+      "every step's before and after agree with the fold over the events up to it",
+      fc.property(
+        fc.array(
+          fc.record({
+            payload: fc.constantFrom(...PAYLOADS),
+            actorId: fc.constantFrom("user-a", "user-b"),
+          }),
+          { maxLength: 30 },
+        ),
+        fc.constantFrom(...CLAIMS),
+        (drawn, claim) => {
+          const events = drawn.map((event, index) => ({
+            ...event,
+            createdAt: at(index),
+          }));
+          const steps = claimReviewSteps(events);
+          expect(steps.map((step) => step.event)).toEqual(events);
+          for (const [index, step] of steps.entries()) {
+            expect(step.before).toEqual(
+              foldClaimReview(events.slice(0, index)),
+            );
+            expect(step.after).toEqual(
+              foldClaimReview(events.slice(0, index + 1)),
+            );
+            // A disposition is read off the review, so the chain of
+            // before -> after pairs never skips or repeats a change.
+            const next = steps.at(index + 1);
+            if (next !== undefined) {
+              expect(claimDisposition(claim, next.before)).toEqual(
+                claimDisposition(claim, step.after),
+              );
+            }
+          }
+          expect(steps.at(-1)?.after ?? EMPTY_CLAIM_REVIEW).toEqual(
+            foldClaimReview(events),
+          );
+        },
+      ),
+    );
+  });
+
+  test("a step's disposition reads the verdict as reviewers see it", () => {
+    const steps = claimReviewSteps([
+      {
+        payload: {
+          kind: "record-conflict",
+          resolution: { kind: "governed", factEntityId: FACT_B },
+          reason: "The minutes govern.",
+        },
+        actorId: "a",
+        createdAt: at(1),
+      },
+      {
+        payload: { kind: "override", state: "tension", reason: "Hedged." },
+        actorId: "a",
+        createdAt: at(2),
+      },
+    ]);
+    const conflicted = CLAIMS[2];
+    expect(
+      steps.map(({ before, after }) => [
+        claimDisposition(conflicted, before),
+        claimDisposition(conflicted, after),
+      ]),
+    ).toEqual([
+      [
+        { verdict: "recordconflict", override: null, status: null },
+        { verdict: "supported", override: null, status: null },
+      ],
+      [
+        { verdict: "supported", override: null, status: null },
+        { verdict: "supported", override: "tension", status: null },
+      ],
+    ]);
   });
 });
 

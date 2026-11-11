@@ -387,6 +387,43 @@
       "optional": "Nepovinné",
       "readyToConfirm": "Pripravené na potvrdenie"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Prijaté ako bežné",
+        "conflictReopened": "Vyriešenie rozporu zrušené",
+        "escalated": "Odovzdané tímu pre dôkazy",
+        "governed": "Zvolený rozhodujúci záznam",
+        "noteCleared": "Poznámka odstránená",
+        "noteSaved": "Poznámka uložená",
+        "overridden": "Záver zmenený",
+        "overrideWithdrawn": "Zmena záveru vzatá späť",
+        "reopened": "Znovu otvorené ako overiteľné tvrdenie",
+        "statusCleared": "Stav kontroly zrušený",
+        "statusDisputed": "Označené ako spochybnené",
+        "statusNeedsEvidence": "Označené ako vyžadujúce dôkazy",
+        "statusReviewed": "Označené ako skontrolované"
+      },
+      "empty": "Zatiaľ žiadne úkony kontroly.",
+      "filters": {
+        "allKinds": "Akýkoľvek úkon",
+        "allReviewers": "Ktokoľvek z kontrolujúcich",
+        "kind": "Filtrovať podľa úkonu",
+        "reviewer": "Filtrovať podľa kontrolujúceho"
+      },
+      "formerMember": "Bývalý člen",
+      "kinds": {
+        "override": "Zmeny záveru",
+        "recordConflict": "Riešenia rozporov v záznamoch",
+        "reopen": "Opätovné otvorenia",
+        "status": "Zmeny stavu"
+      },
+      "noMatches": "Filtrom nezodpovedá žiadny úkon.",
+      "noStatus": "Bez stavu",
+      "none": "Zatiaľ žiadne úkony",
+      "reasonUnrecorded": "Dôvod nezaznamenaný: úkon prebehol skôr, než bol dôvod povinný.",
+      "runButton": "História kontroly",
+      "runTitle": "História kontroly"
+    },
     "matches": {
       "count": "{count, plural, one {# zhoda} few {# zhody} many {# zhôd} other {# zhody}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "Len bez zdroja"
       }
     },
+    "reason": {
+      "escalate": "Prečo to potrebuje tím pre dôkazy?",
+      "govern": "Prečo je rozhodujúci tento záznam?",
+      "override": "Prečo je záver „{verdict}“?",
+      "placeholder": "Uveďte dôvod; zostane v histórii tvrdenia",
+      "reopen": "Prečo sa dá toto tvrdenie overiť?",
+      "required": "Uveďte dôvod, aby sa úkon zaznamenal.",
+      "unresolveConflict": "Prečo rušíte toto vyriešenie?",
+      "withdrawOverride": "Prečo sa vraciate k záveru nástroja?"
+    },
     "review": {
-      "disputed": "Spochybnené · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Prijaté ako bežné} other {Skontrolované}} · {decidedAt}",
+      "decided": "{status, select, disputed {Spochybnené} needsEvidence {Vyžaduje dôkazy} other {{origin, select, bulk {Prijaté ako bežné} other {Skontrolované}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Spochybnené",
+        "needsEvidence": "Vyžaduje dôkazy",
+        "reviewed": "Skontrolované"
+      },
       "undo": "Vrátiť rozhodnutie"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "Prijať {count, plural, one {# bežné tvrdenie} few {# bežné tvrdenia} many {# bežných tvrdení} other {# bežného tvrdenia}}",
       "attentionComplete": "<strong>Všetky tvrdenia vyžadujúce úsudok boli vybavené.</strong> {count, plural, one {Zostávajúce # bežné posúdenie nevyžaduje samostatnú kontrolu.} few {Zostávajúce # bežné posúdenia nevyžadujú samostatnú kontrolu.} many {Zostávajúcich # bežných posúdení nevyžaduje samostatnú kontrolu.} other {Zostávajúceho # bežného posúdenia nevyžaduje samostatnú kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrdenie vyžaduje} few {# tvrdenia vyžadujú} many {# tvrdení vyžaduje} other {# tvrdenia vyžaduje}} váš úsudok</strong>: rozpory a sporné výklady. {routineCount, plural, one {Zostávajúce # je bežné a nevyžaduje samostatné schválenie.} few {Zostávajúce # sú bežné a nevyžadujú samostatné schválenie.} many {Zostávajúcich # je bežných a nevyžaduje samostatné schválenie.} other {Zostávajúceho # bežného posúdenia netreba samostatne schvaľovať.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, skontrolované} disputed {, spochybnené} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, skontrolované} disputed {, spochybnené} needsEvidence {, vyžaduje dôkazy} other {}})",
       "documentView": {
         "label": "Zobrazenie dokumentu",
         "original": "Originál",

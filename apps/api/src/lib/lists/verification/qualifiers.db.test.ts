@@ -316,6 +316,7 @@ beforeAll(async () => {
       payload: {
         kind: "record-conflict",
         resolution: { kind: "governed", factEntityId: marginNote },
+        reason: "The margin note is the later record.",
       },
       actorId: userId,
     });

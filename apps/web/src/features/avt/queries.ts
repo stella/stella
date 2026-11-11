@@ -7,7 +7,10 @@ import { panic } from "better-result";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import type { VerificationRunStatus } from "@/features/avt/types";
+import type {
+  ClaimReviewEventKind,
+  VerificationRunStatus,
+} from "@/features/avt/types";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
@@ -65,6 +68,10 @@ export const avtKeys = {
     ] as const,
   historyAll: (workspaceId: string) =>
     [...avtKeys.all(workspaceId), "history"] as const,
+  reviewHistoryOfRun: (workspaceId: string, runId: string) =>
+    [...avtKeys.all(workspaceId), "review-history", runId] as const,
+  reviewHistory: ({ workspaceId, runId, ...filter }: ReviewHistoryKey) =>
+    [...avtKeys.reviewHistoryOfRun(workspaceId, runId), filter] as const,
   history: (workspaceId: string, entityId: string, fileFieldId: string) =>
     [
       ...avtKeys.historyAll(workspaceId),
@@ -193,6 +200,48 @@ export const latestVerificationsOptions = (key: LatestVerificationsKey) =>
       }
       return false;
     },
+  });
+
+/** Which review actions to list: one claim's or the whole run's, of one
+ *  kind or one reviewer's when set. */
+export type ReviewHistoryFilter = {
+  claimId?: string;
+  kind?: ClaimReviewEventKind;
+  actorId?: string;
+};
+
+type ReviewHistoryKey = ReviewHistoryFilter & {
+  workspaceId: string;
+  runId: string;
+};
+
+const REVIEW_HISTORY_PAGE_SIZE = 50;
+
+/** A run's review actions, newest first, a page at a time. */
+export const reviewHistoryOptions = (key: ReviewHistoryKey) =>
+  infiniteQueryOptions({
+    queryKey: avtKeys.reviewHistory(key),
+    queryFn: async ({ pageParam, signal }) => {
+      const lists = api.lists({
+        workspaceId: toSafeId<"workspace">(key.workspaceId),
+      });
+      const response = await lists["claim-reviews"].get({
+        query: {
+          runId: toSafeId<"legalListVerificationRun">(key.runId),
+          limit: REVIEW_HISTORY_PAGE_SIZE,
+          ...(key.claimId !== undefined && {
+            claimId: toSafeId<"legalListClaim">(key.claimId),
+          }),
+          ...(key.kind !== undefined && { kind: key.kind }),
+          ...(key.actorId !== undefined && { actorId: key.actorId }),
+          ...(pageParam !== null && { cursor: pageParam }),
+        },
+        fetch: { signal },
+      });
+      return unwrapApiResponse(response);
+    },
+    initialPageParam: nullableStringCursorSeed(),
+    getNextPageParam: (page) => page.nextCursor,
   });
 
 const HISTORY_PAGE_SIZE = 20;

@@ -17,6 +17,7 @@ import type {
   VerificationClaim,
   VerificationRun,
 } from "@/features/avt/types";
+import { REVIEW_STATUS_META } from "@/features/avt/types";
 import type { TranslationKey } from "@/i18n/types";
 
 const CONFLICT_STATES: ReadonlySet<ClaimState> = new Set([
@@ -74,9 +75,12 @@ export const needsAttention = (
     isContested(claim, contested) ||
     judgementQualifier(claim) !== undefined);
 
-/** A claim is SETTLED once a human dispositions it either way. */
-export const isSettled = (review: ClaimReview | null): boolean =>
-  review?.status === "reviewed" || review?.status === "disputed";
+/** A claim is SETTLED once a human dispositions it either way; marking it
+ *  as needing evidence keeps it open. */
+export const isSettled = (review: ClaimReview | null): boolean => {
+  const status = review?.status ?? null;
+  return status !== null && REVIEW_STATUS_META[status].settles;
+};
 
 /**
  * The verdict a reviewer's own decisions lead to. An override stays an
@@ -283,6 +287,7 @@ export const confirmLabel = (state: ClaimState, tone: DispositionTone) =>
 
 type ClaimCounts = {
   total: number;
+  needsEvidence: number;
   byState: Record<ClaimState, number>;
   attnTotal: number;
   attnSettled: number;
@@ -306,6 +311,7 @@ export const countClaims = (
   let attnTotal = 0;
   let attnSettled = 0;
   let routineUnsettled = 0;
+  let needsEvidence = 0;
 
   for (const rawClaim of claims) {
     // Count the claim as it is displayed: reopening reclassifies a claim to
@@ -314,6 +320,9 @@ export const countClaims = (
     const claim = resolveClaimView(rawClaim);
     const state = effectiveState(claim, claim.review);
     byState[state] += 1;
+    if (claim.review?.status === "needs-evidence") {
+      needsEvidence += 1;
+    }
     const settled = isSettled(claim.review);
     if (
       needsAttention(
@@ -332,6 +341,7 @@ export const countClaims = (
 
   return {
     total: claims.length,
+    needsEvidence,
     byState,
     attnTotal,
     attnSettled,
@@ -341,7 +351,8 @@ export const countClaims = (
   };
 };
 
-/** Routine claims nobody has dispositioned yet: what "accept routine" marks. */
+/** Routine claims with no status yet: what "accept routine" marks. A claim
+ *  someone marked as needing evidence is left for them, as the server does. */
 export const routineUnsettledClaimIds = (
   claims: readonly VerificationClaim[],
   contested: ReadonlySet<FactId>,
@@ -357,7 +368,7 @@ export const routineUnsettledClaimIds = (
             qualifiers: claim.qualifiers,
           },
           contested,
-        ) && !isSettled(claim.review),
+        ) && (claim.review?.status ?? null) === null,
     )
     .map((claim) => claim.id);
 

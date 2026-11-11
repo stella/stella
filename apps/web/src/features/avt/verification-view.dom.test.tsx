@@ -20,7 +20,12 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
 
 import type { OriginalDocxHostProps } from "./original-docx-host";
-import type { ClaimState, VerificationRun } from "./types";
+import type {
+  ClaimState,
+  ReviewHistoryEntry,
+  ReviewHistoryPage,
+  VerificationRun,
+} from "./types";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -122,7 +127,9 @@ const { QueryClient, QueryClientProvider, useQuery } =
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { roleOptions } = await import("@/lib/auth-queries");
-const { avtKeys, verificationRunOptions } = await import("./queries");
+const { avtKeys, reviewHistoryOptions, verificationRunOptions } =
+  await import("./queries");
+const { toSafeId } = await import("@/lib/safe-id");
 const { fileOptions } = await import("@/lib/files/queries");
 const { useInspectorCommandStore } =
   await import("@/components/inspector/inspector-command-store");
@@ -345,6 +352,17 @@ const claimButton = (suffix: number) => {
   });
 };
 const selectClaim = (suffix: number) => fireEvent.click(claimButton(suffix));
+
+/** Type a reason into the inline field and press Enter. Shift+Enter is a
+ *  line break first, so only the plain Enter can send it. */
+const giveReason = (label: string, reason: string) => {
+  const field = screen.getByLabelText(label);
+  fireEvent.change(field, { target: { value: reason } });
+  const sent = requests.length;
+  fireEvent.keyDown(field, { key: "Enter", shiftKey: true });
+  expect(requests.length).toBe(sent);
+  fireEvent.keyDown(field, { key: "Enter" });
+};
 
 test("the reader draws each stored block with its claims marked on the stored words", async () => {
   const { run } = await mount(witnessStatementRun());
@@ -666,6 +684,18 @@ test("a governing record changes the verdict and escalation keeps the conflict o
     panic("Missing governing record action");
   }
   fireEvent.click(governingButton);
+  // Governing changes the verdict, so nothing is sent until the reviewer
+  // says why: a blank reason is refused next to the field, and Escape steps
+  // back without recording anything.
+  giveReason(messages.avt.reason.govern, "   ");
+  expect(screen.getByText(messages.avt.reason.required)).toBeTruthy();
+  fireEvent.keyDown(screen.getByLabelText(messages.avt.reason.govern), {
+    key: "Escape",
+  });
+  expect(screen.queryByLabelText(messages.avt.reason.govern)).toBeNull();
+  expect(requests).toEqual([]);
+  fireEvent.click(governingButton);
+  giveReason(messages.avt.reason.govern, "  The signed request governs. ");
   await waitFor(() =>
     expect(
       client
@@ -682,6 +712,7 @@ test("a governing record changes the verdict and escalation keeps the conflict o
       event: {
         kind: "record-conflict",
         resolution: { kind: "governed", factEntityId: factId(5) },
+        reason: "The signed request governs.",
       },
     },
   });
@@ -704,6 +735,7 @@ test("a governing record changes the verdict and escalation keeps the conflict o
       name: messages.avt.claimDetail.recordConflict.flagForEvidenceTeam,
     }),
   );
+  giveReason(messages.avt.reason.escalate, "Both records need the originals.");
   await waitFor(() =>
     expect(
       screen.getByText(messages.avt.claimDetail.recordConflict.escalatedNotice),
@@ -722,7 +754,11 @@ test("a governing record changes the verdict and escalation keeps the conflict o
     body: {
       runId: run.id,
       claimId: claim.id,
-      event: { kind: "record-conflict", resolution: { kind: "escalated" } },
+      event: {
+        kind: "record-conflict",
+        resolution: { kind: "escalated" },
+        reason: "Both records need the originals.",
+      },
     },
   });
   expect(
@@ -782,6 +818,8 @@ test("a document's record is pre-selected over a witness's account, and the revi
   } as const;
   answers.push(Response.json({ claimId: claim.id, review: governed }));
   fireEvent.click(confirm);
+  // Confirming the suggestion still sets the verdict, so it takes a reason.
+  giveReason(messages.avt.reason.govern, "The bank ledger is the record.");
   await waitFor(() =>
     expect(
       client
@@ -801,6 +839,7 @@ test("a document's record is pre-selected over a witness's account, and the revi
         event: {
           kind: "record-conflict",
           resolution: { kind: "governed", factEntityId: factId(6) },
+          reason: "The bank ledger is the record.",
         },
       },
     },
@@ -1304,4 +1343,149 @@ test("page text that cannot be read shows a retryable failure, not every claim a
   expect(screen.getByRole("alert").textContent).toContain(
     messages.avt.verification.pdfTextFailed,
   );
+});
+
+test("needs evidence keeps a claim open, gets its own queue filter, and stays out of routine acceptance", async () => {
+  const { client, run } = await mount();
+  expect(
+    screen.getByRole("button", { name: "Accept 3 routine claims" }),
+  ).toBeTruthy();
+  selectClaim(4);
+  const claim = run.claims.at(3) ?? panic("Missing seeded no-coverage claim");
+  const needsEvidence = {
+    ...EMPTY_CLAIM_REVIEW,
+    status: "needs-evidence",
+    statusOrigin: "single",
+    decidedAt: at,
+    decidedBy: actorId,
+    eventCount: 1,
+  } as const;
+  answers.push(Response.json({ claimId: claim.id, review: needsEvidence }));
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.avt.review.status.needsEvidence,
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      client
+        .getQueryData(verificationRunOptions(workspaceId, run.id).queryKey)
+        ?.claims.at(3)?.review,
+    ).toEqual(needsEvidence),
+  );
+  expect(requests.at(0)?.body).toEqual({
+    runId: run.id,
+    claimId: claim.id,
+    event: { kind: "status", status: "needs-evidence" },
+  });
+  // Not a decision: the claim is still open, so routine acceptance leaves it
+  // to whoever marked it.
+  expect(
+    screen.getByRole("button", { name: "Accept 2 routine claims" }),
+  ).toBeTruthy();
+  const filter = screen.getByRole("button", {
+    name: `${messages.avt.review.status.needsEvidence} 1`,
+  });
+  selectClaim(1);
+  fireEvent.click(filter);
+  expect(filter.getAttribute("aria-pressed")).toBe("true");
+  // The filter takes the reader to the claim it lists.
+  expect(claimButton(4).getAttribute("aria-pressed")).toBe("true");
+});
+
+test("a claim's history opens from one row and reads who did what, why, and what changed", async () => {
+  const seeded = seededRun();
+  const claimIndex = 2;
+  const target = seeded.claims.at(claimIndex) ?? panic("Missing claim");
+  const run = {
+    ...seeded,
+    claims: seeded.claims.map((claim, index) =>
+      index === claimIndex
+        ? {
+            ...claim,
+            review: {
+              ...EMPTY_CLAIM_REVIEW,
+              override: "supported",
+              decidedAt: at,
+              decidedBy: actorId,
+              eventCount: 2,
+            },
+          }
+        : claim,
+    ),
+  } satisfies VerificationRun;
+  const { client } = await mount(run);
+  const entry = (
+    id: number,
+    fields: Pick<
+      ReviewHistoryEntry,
+      "actor" | "action" | "reason" | "before" | "after"
+    >,
+  ): ReviewHistoryEntry => ({
+    id: toSafeId<"legalListClaimReviewEvent">(
+      `0199a3c4-5b6d-7e8f-9a0b-00000000710${String(id)}`,
+    ),
+    claimId: target.id,
+    kind: fields.action.kind,
+    createdAt: `2026-09-0${String(id)}T10:00:00.000Z`,
+    ...fields,
+  });
+  const page = {
+    items: [
+      entry(2, {
+        actor: {
+          type: "member",
+          id: actorId,
+          name: "Dana Reviewer",
+          image: null,
+        },
+        action: { kind: "override", state: "supported" },
+        reason: { type: "given", text: "The later ledger entry corrects it." },
+        before: { verdict: "contradicted", override: "tension", status: null },
+        after: { verdict: "contradicted", override: "supported", status: null },
+      }),
+      entry(1, {
+        actor: { type: "former" },
+        action: { kind: "override", state: "tension" },
+        reason: { type: "unrecorded" },
+        before: { verdict: "contradicted", override: null, status: null },
+        after: { verdict: "contradicted", override: "tension", status: null },
+      }),
+    ],
+    nextCursor: null,
+    limit: 50,
+    reviewers: {
+      type: "complete",
+      items: [{ id: actorId, name: "Dana Reviewer", image: null }],
+    },
+  } satisfies ReviewHistoryPage;
+  client.setQueryData(
+    reviewHistoryOptions({ workspaceId, runId: run.id, claimId: target.id })
+      .queryKey,
+    { pages: [page], pageParams: [null] },
+  );
+  selectClaim(3);
+  const toggle = screen.getByRole("button", { name: /^History/u });
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(toggle.textContent).toContain("2");
+  expect(screen.queryByText("Dana Reviewer")).toBeNull();
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByText("Dana Reviewer")).toBeTruthy();
+  expect(screen.getByText(messages.avt.history.formerMember)).toBeTruthy();
+  expect(
+    screen.getAllByText(messages.avt.history.actions.overridden),
+  ).toHaveLength(2);
+  expect(screen.getByText("The later ledger entry corrects it.")).toBeTruthy();
+  expect(screen.getByText(messages.avt.history.reasonUnrecorded)).toBeTruthy();
+  // The newest entry reads the verdict it found and the one it left.
+  const newest = screen.getByText("Dana Reviewer").closest("li");
+  const changes = within(newest ?? panic("No history entry")).getAllByText(
+    /^(In tension|Supported)$/u,
+  );
+  expect(changes.map((badge) => badge.textContent)).toEqual([
+    messages.avt.states.tension.chip,
+    messages.avt.states.supported.chip,
+  ]);
+  expect(requests).toEqual([]);
 });

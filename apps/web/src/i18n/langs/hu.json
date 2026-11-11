@@ -387,6 +387,43 @@
       "optional": "Nem kötelező",
       "readyToConfirm": "Megerősítésre kész"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Rutinként elfogadva",
+        "conflictReopened": "Az ellentmondás feloldása visszavonva",
+        "escalated": "Megjelölve a bizonyítékkezelő csapatnak",
+        "governed": "Irányadó bejegyzés kiválasztva",
+        "noteCleared": "Megjegyzés törölve",
+        "noteSaved": "Megjegyzés mentve",
+        "overridden": "Következtetés felülírva",
+        "overrideWithdrawn": "Felülírás visszavonva",
+        "reopened": "Ellenőrizhető állításként újranyitva",
+        "statusCleared": "Ellenőrzési állapot törölve",
+        "statusDisputed": "Vitatottnak jelölve",
+        "statusNeedsEvidence": "Bizonyítékra várónak jelölve",
+        "statusReviewed": "Ellenőrzöttnek jelölve"
+      },
+      "empty": "Még nincs ellenőrzési művelet.",
+      "filters": {
+        "allKinds": "Bármely művelet",
+        "allReviewers": "Bármely ellenőrző",
+        "kind": "Szűrés művelet szerint",
+        "reviewer": "Szűrés ellenőrző szerint"
+      },
+      "formerMember": "Korábbi tag",
+      "kinds": {
+        "override": "Felülírt következtetések",
+        "recordConflict": "Ellentmondások feloldásai",
+        "reopen": "Újranyitások",
+        "status": "Állapotváltozások"
+      },
+      "noMatches": "Egy művelet sem felel meg ezeknek a szűrőknek.",
+      "noStatus": "Nincs állapot",
+      "none": "Még nincs művelet",
+      "reasonUnrecorded": "Nincs rögzített indok: a művelet még azelőtt történt, hogy az indok kötelező lett.",
+      "runButton": "Ellenőrzési előzmények",
+      "runTitle": "Ellenőrzési előzmények"
+    },
     "matches": {
       "count": "{count, plural, one {# találat} other {# találat}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "Csak forrás nélkül"
       }
     },
+    "reason": {
+      "escalate": "Miért van erre szüksége a bizonyítékkezelő csapatnak?",
+      "govern": "Miért ez a bejegyzés az irányadó?",
+      "override": "Miért „{verdict}” a következtetés?",
+      "placeholder": "Adja meg az indokot; az állítás előzményeiben marad",
+      "reopen": "Miért ellenőrizhető ez az állítás?",
+      "required": "A rögzítéshez adjon meg indokot.",
+      "unresolveConflict": "Miért vonja vissza ezt a feloldást?",
+      "withdrawOverride": "Miért tér vissza az eszköz következtetéséhez?"
+    },
     "review": {
-      "disputed": "Vitatott · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Rutinként elfogadva} other {Ellenőrzött}} · {decidedAt}",
+      "decided": "{status, select, disputed {Vitatott} needsEvidence {Bizonyíték szükséges} other {{origin, select, bulk {Rutinként elfogadva} other {Ellenőrzött}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Vitatott",
+        "needsEvidence": "Bizonyíték szükséges",
+        "reviewed": "Ellenőrzött"
+      },
       "undo": "Döntés visszavonása"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "{count, plural, one {# rutinjellegű állítás} other {# rutinjellegű állítás}} elfogadása",
       "attentionComplete": "<strong>Minden mérlegelést igénylő állítás rendezve van.</strong> {count, plural, one {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.} other {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.}}",
       "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong>: ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} needsEvidence {, bizonyíték szükséges} other {}})",
       "documentView": {
         "label": "Dokumentumnézet",
         "original": "Eredeti",

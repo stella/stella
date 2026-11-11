@@ -387,6 +387,43 @@
       "optional": "Neprivaloma",
       "readyToConfirm": "Paruošta patvirtinti"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Priimta kaip įprasta",
+        "conflictReopened": "Prieštaravimo sprendimas atšauktas",
+        "escalated": "Perduota įrodymų grupei",
+        "governed": "Pasirinktas vadovaujamasis įrašas",
+        "noteCleared": "Pastaba pašalinta",
+        "noteSaved": "Pastaba išsaugota",
+        "overridden": "Išvada pakeista",
+        "overrideWithdrawn": "Išvados pakeitimas atšauktas",
+        "reopened": "Atverta iš naujo kaip patikrinamas teiginys",
+        "statusCleared": "Peržiūros būsena pašalinta",
+        "statusDisputed": "Pažymėta kaip užginčyta",
+        "statusNeedsEvidence": "Pažymėta, kad reikia įrodymų",
+        "statusReviewed": "Pažymėta kaip peržiūrėta"
+      },
+      "empty": "Peržiūros veiksmų dar nėra.",
+      "filters": {
+        "allKinds": "Bet kuris veiksmas",
+        "allReviewers": "Bet kuris peržiūrėtojas",
+        "kind": "Filtruoti pagal veiksmą",
+        "reviewer": "Filtruoti pagal peržiūrėtoją"
+      },
+      "formerMember": "Buvęs narys",
+      "kinds": {
+        "override": "Pakeistos išvados",
+        "recordConflict": "Prieštaravimų sprendimai",
+        "reopen": "Atvėrimai iš naujo",
+        "status": "Būsenos pakeitimai"
+      },
+      "noMatches": "Šiuos filtrus atitinkančių veiksmų nėra.",
+      "noStatus": "Be būsenos",
+      "none": "Veiksmų dar nėra",
+      "reasonUnrecorded": "Priežastis neįrašyta: veiksmas atliktas anksčiau, nei priežastis tapo privaloma.",
+      "runButton": "Peržiūros istorija",
+      "runTitle": "Peržiūros istorija"
+    },
     "matches": {
       "count": "{count, plural, one {# atitikmuo} few {# atitikmenys} many {# atitikmenų} other {# atitikmens}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "Tik be šaltinio"
       }
     },
+    "reason": {
+      "escalate": "Kodėl to reikia įrodymų grupei?",
+      "govern": "Kodėl šis įrašas yra vadovaujamasis?",
+      "override": "Kodėl išvada yra „{verdict}“?",
+      "placeholder": "Nurodykite priežastį; ji liks teiginio istorijoje",
+      "reopen": "Kodėl šį teiginį galima patikrinti?",
+      "required": "Kad tai būtų įrašyta, nurodykite priežastį.",
+      "unresolveConflict": "Kodėl atšaukiamas šis sprendimas?",
+      "withdrawOverride": "Kodėl grįžtama prie įrankio išvados?"
+    },
     "review": {
-      "disputed": "Užginčyta · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Priimta kaip įprasta} other {Peržiūrėta}} · {decidedAt}",
+      "decided": "{status, select, disputed {Užginčyta} needsEvidence {Reikia įrodymų} other {{origin, select, bulk {Priimta kaip įprasta} other {Peržiūrėta}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Užginčyta",
+        "needsEvidence": "Reikia įrodymų",
+        "reviewed": "Peržiūrėta"
+      },
       "undo": "Anuliuoti sprendimą"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "{count, plural, one {Priimti # įprastą teiginį} few {Priimti # įprastus teiginius} many {Priimti # įprastų teiginių} other {Priimti # įprasto teiginio}}",
       "attentionComplete": "<strong>Visi žmogaus sprendimo reikalaujantys teiginiai sutvarkyti.</strong> {count, plural, one {# įprasto sprendimo atskirai peržiūrėti nereikia.} few {# įprastų sprendimų atskirai peržiūrėti nereikia.} many {# įprastų sprendimų atskirai peržiūrėti nereikia.} other {# įprasto sprendimo atskirai peržiūrėti nereikia.}}",
       "attentionOpen": "<strong>{count, plural, one {# teiginiui reikia} few {# teiginiams reikia} many {# teiginių reikia} other {# teiginio reikia}} jūsų sprendimo</strong>: prieštaravimai ir ginčijami aiškinimai. {routineCount, plural, one {Kitas # teiginys yra įprastas ir jo nereikia atskirai patvirtinti.} few {Kiti # teiginiai yra įprasti ir jų nereikia atskirai patvirtinti.} many {Kitų # teiginių nereikia atskirai patvirtinti.} other {Kito # teiginio nereikia atskirai patvirtinti.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, ginčijama} other {}}{reviewStatus, select, reviewed {, peržiūrėta} disputed {, užginčyta} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, ginčijama} other {}}{reviewStatus, select, reviewed {, peržiūrėta} disputed {, užginčyta} needsEvidence {, reikia įrodymų} other {}})",
       "documentView": {
         "label": "Dokumento rodinys",
         "original": "Originalas",
