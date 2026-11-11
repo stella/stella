@@ -88,7 +88,7 @@ export const withSharepointGraph = async <T>({
     // token crypto's user-scoping guard receives a typed owner id.
     const connection = { ...row, userId: brandPersistedUserId(row.userId) };
 
-    const accessToken = yield* Result.await(
+    const { accessToken, accessTokenIv } = yield* Result.await(
       ensureSharepointAccessToken({ connection, safeDb }),
     );
 
@@ -97,7 +97,12 @@ export const withSharepointGraph = async <T>({
       Result.isError(result) &&
       result.error.code === SHAREPOINT_REFUSAL_CODE.reconnectRequired
     ) {
-      yield* Result.await(markReconnectRequired({ connection, safeDb }));
+      yield* Result.await(
+        markReconnectRequired({
+          connection: { ...connection, accessTokenIv },
+          safeDb,
+        }),
+      );
     }
     return result;
   });

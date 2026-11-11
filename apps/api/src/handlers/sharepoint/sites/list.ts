@@ -7,7 +7,7 @@ import { withSharepointGraph } from "@/api/handlers/sharepoint/session";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 
-const requestQuery = v.object({
+const requestQuery = v.strictObject({
   search: v.optional(
     v.pipe(
       v.string(),

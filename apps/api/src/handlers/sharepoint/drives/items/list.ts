@@ -14,12 +14,12 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
-const requestParams = v.object({
+const requestParams = v.strictObject({
   driveId: sharepointDriveIdSchema,
   itemId: sharepointFolderIdSchema,
 });
 
-const requestQuery = v.object({
+const requestQuery = v.strictObject({
   cursor: v.optional(sharepointCursorSchema),
   limit: v.optional(sharepointLimitSchema),
 });

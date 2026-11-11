@@ -16,6 +16,7 @@ import {
   listSharepointChildren,
   listSharepointSites,
   parseRetryAfterMs,
+  replayQuery,
   SHAREPOINT_ROOT_ITEM_ID,
   toSharepointDriveItem,
 } from "@/api/handlers/sharepoint/graph-client";
@@ -120,6 +121,26 @@ const pick = ({
 }) => ({
   status,
   code,
+});
+
+describe("replaying a cursor", () => {
+  test("keeps the continuation token but not a page size or selection the cursor tries to set", () => {
+    const params = replayQuery("$skiptoken=NEXT&$top=999&$select=content", {
+      $top: "25",
+      $select: "id,name",
+    });
+    expect(Object.fromEntries(params)).toEqual({
+      $skiptoken: "NEXT",
+      $top: "25",
+      $select: "id,name",
+    });
+  });
+
+  test("without a cursor the first-page query is sent as is", () => {
+    expect(replayQuery(null, { search: "litigation" }).toString()).toBe(
+      "search=litigation",
+    );
+  });
 });
 
 describe("Graph refusals", () => {

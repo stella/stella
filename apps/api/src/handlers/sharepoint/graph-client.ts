@@ -65,6 +65,11 @@ const reconnectRequiredError = (): HandlerError<409> =>
     hint: "Reconnect the Microsoft account in stella's SharePoint settings.",
   });
 
+/**
+ * Flags the connection for reconnect, but only while it still holds the
+ * access token the failing call used: a reconnect that replaced the tokens in
+ * the meantime must not be undone by a late failure of the old grant.
+ */
 export const markReconnectRequired = async ({
   connection,
   safeDb,
@@ -89,6 +94,7 @@ export const markReconnectRequired = async ({
                 connection.organizationId,
               ),
               eq(sharepointConnections.userId, connection.userId),
+              eq(sharepointConnections.accessTokenIv, connection.accessTokenIv),
             ),
           );
       }),
@@ -96,13 +102,21 @@ export const markReconnectRequired = async ({
     return Result.ok(undefined);
   });
 
+/** A usable token and the IV it is stored under, which names that grant. */
+type UsableSharepointToken = {
+  accessToken: AccessToken;
+  accessTokenIv: Buffer;
+};
+
 export const ensureSharepointAccessToken = async ({
   connection,
   safeDb,
 }: {
   connection: SharepointConnectionTokens;
   safeDb: SafeDb;
-}): Promise<Result<AccessToken, HandlerError<409 | 500 | 502> | SafeDbError>> =>
+}): Promise<
+  Result<UsableSharepointToken, HandlerError<409 | 500 | 502> | SafeDbError>
+> =>
   await Result.gen(async function* () {
     const stillValid =
       connection.status === "connected" &&
@@ -119,7 +133,10 @@ export const ensureSharepointAccessToken = async ({
         organizationId: connection.organizationId,
         userId: connection.userId,
       });
-      return Result.ok(accessToken);
+      return Result.ok({
+        accessToken,
+        accessTokenIv: connection.accessTokenIv,
+      });
     }
 
     if (!connection.refreshTokenEncrypted || !connection.refreshTokenIv) {
@@ -214,7 +231,7 @@ export const ensureSharepointAccessToken = async ({
       organizationId: connection.organizationId,
       userId: connection.userId,
     });
-    return Result.ok(accessToken);
+    return Result.ok({ accessToken, accessTokenIv: encryptedAccess.iv });
   });
 
 const meResponseSchema = v.looseObject({
@@ -360,6 +377,23 @@ export const cursorFromNextLink = (
   return Result.ok(url.search.slice(1));
 };
 
+/**
+ * The query for one page. A cursor carries Graph's continuation token, but
+ * the parameters this API chose for the first page (`$top`, `$select`, the
+ * search) are set again over it, so a client cursor cannot raise the page
+ * size past the validated limit or change what is selected.
+ */
+export const replayQuery = (
+  cursor: string | null,
+  query: Record<string, string>,
+): URLSearchParams => {
+  const params = new URLSearchParams(cursor ?? "");
+  for (const [key, value] of Object.entries(query)) {
+    params.set(key, value);
+  }
+  return params;
+};
+
 type GraphListRequest<TSchema extends v.GenericSchema> = {
   accessToken: AccessToken;
   /** Path below the Graph base URL, segments already encoded. */
@@ -382,7 +416,7 @@ const listGraphPage = async <TSchema extends v.GenericSchema>({
   Result<GraphListPage<v.InferOutput<TSchema>>, SharepointGraphError>
 > => {
   const url = new URL(`${GRAPH_API_BASE_URL}${path}`);
-  url.search = new URLSearchParams(cursor ?? query).toString();
+  url.search = replayQuery(cursor, query).toString();
 
   const response = await Result.tryPromise({
     try: async () =>

@@ -13,7 +13,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
-const requestQuery = v.object({
+const requestQuery = v.strictObject({
   siteId: v.optional(sharepointSiteIdSchema),
   cursor: v.optional(sharepointCursorSchema),
   limit: v.optional(sharepointLimitSchema),
