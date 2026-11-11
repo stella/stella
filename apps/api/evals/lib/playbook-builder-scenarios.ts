@@ -439,11 +439,13 @@ const selectionDefects = ({
     defects.push(`asked which ${subject} as a single-choice question`);
   }
   if (
-    question.options.some(
-      (option) =>
-        ALL_OPTION.test(option) &&
-        !named.some((marker) => option.includes(marker)),
-    )
+    question.options.some((option) => {
+      let rest = option;
+      for (const marker of named) {
+        rest = rest.replaceAll(marker, "");
+      }
+      return ALL_OPTION.test(rest);
+    })
   ) {
     defects.push(`offered an option for all ${subject}`);
   }

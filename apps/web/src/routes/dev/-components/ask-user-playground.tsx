@@ -4,6 +4,23 @@ import type {
   RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 
+/** The ask-user card with multiple-choice questions: chips, a checkbox list
+ *  for long options, and an answered card listing the ticked options. */
+export const AskUserPlayground = () => (
+  <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4">
+    {CASES.map(({ id, part }) => (
+      <section data-ask-user-case={id} key={id}>
+        <AskUserCard
+          isAwaitingUser
+          onEditAndRerun={noop}
+          onSubmit={noop}
+          part={part}
+        />
+      </section>
+    ))}
+  </div>
+);
+
 type AskUserPart = Extract<RegisteredChatUIToolCallPart, { name: "ask-user" }>;
 
 const noop = () => undefined;
@@ -83,20 +100,3 @@ const CASES = [
     },
   },
 ] satisfies { id: string; part: AskUserPart }[];
-
-/** The ask-user card with multiple-choice questions: chips, a checkbox list
- *  for long options, and an answered card listing the ticked options. */
-export const AskUserPlayground = () => (
-  <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4">
-    {CASES.map(({ id, part }) => (
-      <section data-ask-user-case={id} key={id}>
-        <AskUserCard
-          isAwaitingUser
-          onEditAndRerun={noop}
-          onSubmit={noop}
-          part={part}
-        />
-      </section>
-    ))}
-  </div>
-);

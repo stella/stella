@@ -112,13 +112,29 @@ const event = (
   turn: number,
   name: string,
   input: unknown = {},
-  questions: readonly string[] = [],
-  options: readonly string[] = [],
-  selection: AskUserSelection = ASK_USER_SELECTION.single,
 ): BuilderEvent => ({
   turn,
   name,
   input,
+  questions: [],
+  resentUnchanged: [],
+  error: null,
+});
+
+type AskEventOptions = {
+  turn: number;
+  questions: readonly string[];
+  options?: readonly string[];
+  selection?: AskUserSelection;
+};
+
+const askEvent = ({
+  turn,
+  questions,
+  options = [],
+  selection = ASK_USER_SELECTION.single,
+}: AskEventOptions): BuilderEvent => ({
+  ...event(turn, "ask-user"),
   questions: questions.map((question) => ({
     question,
     reason: "",
@@ -126,8 +142,6 @@ const event = (
     selection,
     default: undefined,
   })),
-  resentUnchanged: [],
-  error: null,
 });
 
 const positionsNamed = (count: number) =>
@@ -139,17 +153,22 @@ const saveOnePosition = (turn: number) =>
   event(turn, "save_playbook", { positions: positionsNamed(1) });
 
 const ask = (turn: number, ...questions: string[]) =>
-  event(turn, "ask-user", {}, questions);
+  askEvent({ turn, questions });
 /** One question answered by picking from `options`. */
 const askWith = (turn: number, question: string, options: readonly string[]) =>
-  event(turn, "ask-user", {}, [question], options);
+  askEvent({ turn, questions: [question], options });
 /** One question answered by ticking any of `options`. */
 const askSeveral = (
   turn: number,
   question: string,
   options: readonly string[],
 ) =>
-  event(turn, "ask-user", {}, [question], options, ASK_USER_SELECTION.multiple);
+  askEvent({
+    turn,
+    questions: [question],
+    options,
+    selection: ASK_USER_SELECTION.multiple,
+  });
 const WHICH_MATTERS = "Which matters should I search?";
 const WHICH_DOCUMENTS = "Which of these should I read?";
 const read = (turn: number, entityId: string) =>
@@ -272,6 +291,15 @@ describe("contracts-later scoring", () => {
     expect(score("contracts-later", events)).toEqual([
       "offered an option for all matters",
       "offered an option for all documents",
+    ]);
+    // Naming a real matter does not hide an option for all of them.
+    events[3] = askSeveral(2, WHICH_MATTERS, [
+      ...MATTER_OPTIONS,
+      `All matters, including ${MATTER_OPTIONS.join(" and ")}`,
+    ]);
+    events[5] = askSeveral(2, WHICH_DOCUMENTS, DOCUMENT_OPTIONS);
+    expect(score("contracts-later", events)).toEqual([
+      "offered an option for all matters",
     ]);
   });
 
