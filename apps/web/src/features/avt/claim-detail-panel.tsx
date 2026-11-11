@@ -858,9 +858,11 @@ const RecordConflictBlock = ({
                 : undefined
             }
           >
-            <div className="flex items-center justify-between gap-2">
+            {/* Wraps rather than squeeze the value when the badges and
+                the value do not fit on one line. */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span
-                className="text-lg font-bold"
+                className="min-w-0 text-lg font-bold"
                 dir="auto"
                 style={{ color: RECORD_CONFLICT_VAR }}
               >

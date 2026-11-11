@@ -8,7 +8,6 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { PlusIcon } from "@stll/ui/icons";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import type { FactTier } from "@/features/avt/types";
@@ -47,7 +46,7 @@ export const FactTierLabel = ({ tier, onAddSource }: FactTierLabelProps) => {
     return null;
   }
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex items-center gap-1.5">
       <Tooltip>
         <TooltipTrigger render={<span className="text-foreground" />}>
           {t(meta.labelKey)}
@@ -55,10 +54,14 @@ export const FactTierLabel = ({ tier, onAddSource }: FactTierLabelProps) => {
         <TooltipPopup className="max-w-72">{t(meta.hintKey)}</TooltipPopup>
       </Tooltip>
       {tier === "unsourced" && onAddSource !== null && (
-        <Button onClick={onAddSource} size="xs" variant="ghost">
-          <PlusIcon />
-          {t("lists.sources.add")}
-        </Button>
+        <>
+          <span aria-hidden="true">·</span>
+          {/* A word in the line, not a button beside it: most facts of a
+              fresh record have no source, so it must not shout. */}
+          <Button onClick={onAddSource} size="inline" variant="muted">
+            {t("lists.sources.add")}
+          </Button>
+        </>
       )}
     </span>
   );
