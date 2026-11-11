@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
@@ -103,8 +104,17 @@ export const CHAT_RUN_ON_CLOUD_ONLY = {
 } as const satisfies ChatRunOn;
 
 /** The target a composer's next turn runs on. */
-export const chatRunOnTarget = (runOn: ChatRunOn): ChatRunTarget =>
-  runOn.type === "choice" ? runOn.selected : CHAT_CLOUD_RUN_TARGET;
+export const chatRunOnTarget = (runOn: ChatRunOn): ChatRunTarget => {
+  switch (runOn.type) {
+    case "choice":
+      return runOn.selected;
+    case "cloud_only":
+      return CHAT_CLOUD_RUN_TARGET;
+    default:
+      runOn satisfies never;
+      return panic("Unknown Run on choice");
+  }
+};
 
 type ModelOption = {
   defaultReasoningEffort: ReasoningEffort | null;

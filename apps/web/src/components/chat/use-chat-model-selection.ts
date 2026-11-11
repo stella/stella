@@ -81,8 +81,8 @@ export const useChatModelSelection = ({
 
   const persist = async (
     selection: PersistedChatModelSelection,
+    requestId: number,
   ): Promise<Result<void, ModelPersistError>> => {
-    const requestId = ++requestIdRef.current;
     const result = await Result.tryPromise(async () => {
       const { data, error } = await api.chat
         .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
@@ -131,7 +131,14 @@ export const useChatModelSelection = ({
   };
 
   const selectModel = (selection: PersistedChatModelSelection) => {
-    const promise = persist(selection);
+    // Writes go out one after another, in the order they were chosen, so the
+    // server stores the last choice whatever order the network delivers them.
+    const previous = pendingRef.current;
+    const requestId = ++requestIdRef.current;
+    const promise = (async () => {
+      await previous;
+      return await persist(selection, requestId);
+    })();
     pendingRef.current = promise;
     detached(
       promise.finally(() => {
