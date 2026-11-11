@@ -445,7 +445,7 @@ export const VerificationView = ({
               factsById={factsById}
               key={selectedClaim.id}
               onReviewEvent={(event) => recordEvent(selectedClaim.id, event)}
-              runId={run.id}
+              run={run}
               stepper={stepper}
               workspaceId={workspaceId}
             />

@@ -34,6 +34,7 @@
     "./ai-decision-provider": "./src/ai-decision-provider.ts",
     "./review-decision": "./src/review-decision.ts",
     "./limits": "./src/limits.ts",
+    "./list-source-kinds": "./src/list-source-kinds.ts",
     "./record-cell": "./src/record-cell.ts",
     "./record-projection": "./src/record-projection.ts",
     "./record-schema": "./src/record-schema.ts",

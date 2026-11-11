@@ -27,7 +27,6 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
-  "packages/deadlines/src/**/*.ts",
   "packages/html/src/**/*.{ts,tsx}",
   "apps/api/src/lib/data-sources/**/*.ts",
   "apps/api/src/db/online-migration-entries/**/*.ts",

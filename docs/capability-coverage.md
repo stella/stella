@@ -326,6 +326,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists list` |
 | `lists.sample-case.create` | write | stella:documents_write, stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sample-case-create` |
 | `lists.sections.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sections-create` |
+| `lists.source-documents.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists source-documents-list` |
+| `lists.source-documents.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists source-documents-update` |
 | `lists.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists update` |
 | `lists.verifications.claim-comments.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-create` |
 | `lists.verifications.claim-comments.delete` | write, destructive | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-delete` |

@@ -119,6 +119,7 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
         },
       },
       qualifiers: [],
+      suggestedGoverningFactId: null,
       text,
       anchor: { type: "docx-block", blockId: "b1", start: 0, end: text.length },
       refs: [],
@@ -138,7 +139,7 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
       factStandings: [governingFactId, competingFactId].map((factEntityId) => ({
         factEntityId,
         scoring: "included",
-        sourcing: "unsourced",
+        tier: "unsourced",
       })),
       status: "completed",
       errorCode: null,
@@ -237,7 +238,9 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
 
     await page.goto(
       `/workspaces/${workspace.id}/${workspace.viewId}?run=${run.id}`,
-      { waitUntil: "commit" },
+      {
+        waitUntil: "commit",
+      },
     );
     await expect(
       page.getByText("Verdict withheld", { exact: true }),
@@ -345,6 +348,7 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
           recordConflict: null,
         },
         qualifiers: [],
+        suggestedGoverningFactId: null,
         text,
         anchor: {
           type: "pdf-page",
@@ -466,7 +470,9 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
 
     await page.goto(
       `/workspaces/${workspace.id}/${workspace.viewId}?run=${run.id}`,
-      { waitUntil: "commit" },
+      {
+        waitUntil: "commit",
+      },
     );
     await page.getByRole("tab", { name: "Original", exact: true }).click();
 

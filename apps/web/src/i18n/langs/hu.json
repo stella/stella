@@ -271,11 +271,13 @@
       "overrideTooltip": "Egy ellenőr eltérő következtetést rögzített. Az eszköz saját elemzése változatlanul látható alább.",
       "overrideVerdict": "Következtetés felülírása",
       "recordConflict": {
+        "confirmGoverningRecord": "Megerősítés irányadóként",
         "description": "Két referenciatény ugyanarra a kérdésre vonatkozik (<strong>{subject}</strong>), de ellentmond egymásnak. Mindkettő <strong>nagy bizonyosságú</strong> forrásból származik, ezért ez nem megbízhatósági probléma: maga a nyilvántartás belsőleg ellentmondásos. Az AVT nem ad következtetést és nem pontozza az állítást, mert annak eldöntése és rögzítése, hogy melyik adat legyen irányadó, az Ön mérlegelését igényli; az eszköz nem dönthet erről észrevétlenül.",
         "escalatedNotice": "Megjelölve a bizonyítékkezelő csapatnak. A nyilvántartási ellentmondás mindaddig nyitott és beleszámít az összesítésbe, amíg nincs kiválasztva az irányadó nyilvántartás.",
         "flagForEvidenceTeam": "Megjelölés a bizonyítékkezelő csapatnak",
         "governed": "<strong>{value}</strong> az irányadó: az állítást e nyilvántartás alapján ítéljük meg. A másik nyilvántartás megmarad.",
         "reconcile": "Nyilvántartási ellentmondás feloldása",
+        "suggestedNotice": "A dokumentumban rögzített adat javasolt a tanú beszámolójával szemben. Erősítse meg, vagy válassza a másik adatot.",
         "title": "Ellentmondó bizonyítékok a nyilvántartásban",
         "treatAsGoverningRecord": "Legyen irányadó"
       },
@@ -286,10 +288,6 @@
       "reopened": "Újranyitva, ellenőrzésre vár",
       "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
       "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
-      "unsourced": {
-        "hint": "Ehhez a tényhez még nincs forrásdokumentum kapcsolva; a hordozó és a dátum a bizonyítékot írja le, de nem forrás.",
-        "label": "Forrás nélkül"
-      },
       "whyVerdict": "A következtetés indoka: referenciatények"
     },
     "claimTypes": {
@@ -326,15 +324,20 @@
       "scopeMismatch": "Egy hivatkozott tény hatóköre eltér az állításétól. Mielőtt a következtetés megáll, mérlegelje, hogy eldönti-e az állítást a megfogalmazása szerint.",
       "supported": "A nyilvántartás megerősíti ezt az állítást. Jóváhagyásával azt igazolja, hogy az eszköz helyesen értelmezte; nincs szükség mérlegelésre.",
       "tension": "A nyilvántartás csak részben támasztja alá ezt az állítást. A következtetés jóváhagyása előtt mérlegelje a fenti alátámasztó és ellentmondó tényeket.",
+      "testimonyOnly": "Az iratanyag ezt alátámasztja, de egyetlen dokumentumban rögzített adat sem igazolja: tanúvallomáson alapul. Jóváhagyásával megerősíti, hogy az eszköz helyesen értelmezte; az eredmény tanúvallomáson alapulóként jelölve marad.",
       "unsourcedOnly": "A nyilvántartás ezt alátámasztja, de csak még forrás nélküli tényeken keresztül. Jóváhagyásával megerősíti, hogy az eszköz helyesen értelmezte őket; a tények forrás nélküliként jelölve maradnak."
     },
     "documents": {
       "claimSummary": "Cáfolt: {contradicted} · Részben ellentmondó: {tension} · Nyilvántartási ellentmondás: {conflicts}",
       "empty": "Töltsön fel egy iratot ehhez az ügyhöz, hogy ellenőrizhesse.",
+      "kindsLoadFailed": "Nem sikerült betölteni, hogy ezek a dokumentumok tanúvallomások-e.",
       "notVerified": "Még nincs ellenőrizve",
       "otherList": "Másik listához viszonyítva ellenőrizve",
       "sizeConfirmTitle": "Ellenőrzi ezt az iratot?",
       "statusLoadFailed": "Nem sikerült betölteni ezen iratok ellenőrzési állapotát.",
+      "testimony": "Tanúvallomás",
+      "testimonyAbout": "A tanúvallomásokról",
+      "testimonyLine": "Jelölje tanúvallomásként a tanúnyilatkozatokat, az interjújegyzeteket és az átiratokat. A belőlük vett tények egy személy beszámolójának számítanak, nem nyilvántartásnak.",
       "verifyAgain": "Ismételt ellenőrzés"
     },
     "extraction": {
@@ -368,6 +371,16 @@
       "startFailed": "A tények kinyerését nem sikerült elindítani",
       "submit": "{count, plural, =0 {Tények kinyerése} one {Tények kinyerése # iratból} other {Tények kinyerése # iratból}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Ennek a ténynek minden el nem utasított forrása tanúvallomás: tanúnyilatkozat, interjújegyzet vagy átirat.",
+        "label": "Tanúvallomás"
+      },
+      "unsourced": {
+        "hint": "Ehhez a tényhez nincs olyan forrásdokumentum kapcsolva, amelyet ne utasítottak volna el; a hordozó és a dátum a bizonyítékot írja le, de nem forrás.",
+        "label": "Forrás nélkül"
+      }
+    },
     "guidance": {
       "escalate": "Továbbítás",
       "manualJudgement": "Emberi mérlegelés",
@@ -391,6 +404,10 @@
       "scopeMismatch": {
         "hint": "Egy hivatkozott tény más időszakra, körre, helyre vagy mértékre vonatkozik, mint az állítás.",
         "label": "Eltérő hatókör"
+      },
+      "testimonyOnly": {
+        "hint": "Az eredmény alapjául szolgáló tényeket egyetlen dokumentumban rögzített adat sem támasztja alá, és legalább egyikük tanúvallomás.",
+        "label": "Csak tanúvallomás"
       },
       "unsourcedOnly": {
         "hint": "A következtetés alapjául szolgáló tények egyikének sincs még forrása.",

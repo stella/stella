@@ -34,6 +34,11 @@ export type RecordConflict = NonNullable<ClaimVerdict["recordConflict"]>;
 
 export type EvidenceFact = VerificationRun["evidence"]["facts"][number];
 export type FactId = EvidenceFact["factEntityId"];
+/** A fact's footing: a document's record, only testimony, or no source. */
+export type FactTier = VerificationRun["factStandings"][number]["tier"];
+/** What a document is to a list's facts: a record or a person's account. */
+export type SourceKind =
+  ListsRoutes["source-documents"]["patch"]["body"]["sourceKind"];
 
 export type ClaimReviewEvent =
   ListsRoutes["claim-reviews"]["post"]["body"]["event"];

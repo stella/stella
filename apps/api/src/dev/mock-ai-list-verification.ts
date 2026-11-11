@@ -8,9 +8,11 @@
 // lands on the verdicts and qualifiers a local run needs to show. A claim
 // about the author's own state of mind has no coverage and the record is
 // silent on it; one sharing too little with every fact has no coverage.
-// Otherwise it rests on the fact it shares most with: a claim that stretches
-// over a whole period is in tension with a scope mismatch, a denial is
-// contradicted, a hedged figure is in tension, and the rest are supported.
+// Otherwise it rests on the fact it shares most with: a claim naming a day
+// that another fact on the same point dates differently is withheld between
+// the two records, a claim that stretches over a whole period is in tension
+// with a scope mismatch, a denial is contradicted, a hedged figure is in
+// tension, and the rest are supported.
 
 const SENTENCES_PER_BLOCK = 2;
 const CLAIM_QUOTE_MAX = 400;
@@ -36,6 +38,11 @@ const OWN_STATE =
 const WHOLE_PERIOD = /\b(?:whole of|entire|throughout|all of)\b/iu;
 const DENIAL = /\b(?:no|never|not|did not|had no)\b/iu;
 const HEDGED = /\b(?:approximately|about|around|roughly)\b/iu;
+/** A claim that names a day: "on 10 August 2021". */
+const NAMED_DAY =
+  /\b\d{1,2} (?:January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b/u;
+/** The date a fact's detail line gives it. */
+const FACT_DATE = /\bdate=(?<date>\d{4}-\d{2}-\d{2})\b/u;
 
 const STOP_WORDS = new Set([
   "about",
@@ -125,10 +132,62 @@ const RECORD_SILENT_EXPLANATION =
 const SCOPE_MISMATCH_EXPLANATION =
   "The fact covers only part of the period the claim speaks to, so it does not settle the claim as worded.";
 
+type GradedFact = { id: string; words: Set<string>; date: string | null };
+
+type DatedConflictArgs = {
+  facts: readonly GradedFact[];
+  /** The facts covering the claim, best first. */
+  coveringIds: readonly string[];
+  claimWords: readonly string[];
+  distinctive: (word: string) => boolean;
+};
+
+/**
+ * The best dated fact covering a claim and another fact about the same
+ * point (a distinctive word of the claim both share) that dates it
+ * differently, in that order; null when no such pair exists.
+ */
+const datedConflict = ({
+  facts,
+  coveringIds,
+  claimWords,
+  distinctive,
+}: DatedConflictArgs) => {
+  for (const id of coveringIds) {
+    const covering = facts.find((fact) => fact.id === id);
+    const coveringDate = covering?.date ?? null;
+    if (covering === undefined || coveringDate === null) {
+      continue;
+    }
+    const rival = facts.find(
+      (fact) =>
+        fact.id !== covering.id &&
+        fact.date !== null &&
+        fact.date !== coveringDate &&
+        claimWords.some(
+          (word) =>
+            // A year or figure dates the point; it does not name it.
+            /\p{L}/u.test(word) &&
+            fact.words.has(word) &&
+            covering.words.has(word) &&
+            distinctive(word),
+        ),
+    );
+    if (rival?.date !== undefined && rival.date !== null) {
+      return [
+        { id: covering.id, date: coveringDate },
+        { id: rival.id, date: rival.date },
+      ];
+    }
+  }
+  return null;
+};
+
 export const mockClaimGrades = (request: string) => {
   const facts = promptItems(request, "F").map((fact) => ({
     id: fact.id,
     words: words(`${fact.text} ${fact.detail}`),
+    date: FACT_DATE.exec(fact.detail)?.groups?.["date"] ?? null,
   }));
   const factsWith = (word: string) =>
     facts.filter((fact) => fact.words.has(word)).length;
@@ -154,6 +213,14 @@ export const mockClaimGrades = (request: string) => {
       .toSorted((a, b) => b.overlap - a.overlap);
     const best = ranked.at(0);
     const silent = OWN_STATE.test(claim.text);
+    const conflict = NAMED_DAY.test(claim.text)
+      ? datedConflict({
+          facts,
+          coveringIds: ranked.map(({ id }) => id),
+          claimWords: [...weights.keys()],
+          distinctive: (word) => factsWith(word) <= DISTINCTIVE_FACTS_MAX,
+        })
+      : null;
     if (best === undefined || silent) {
       return {
         claimId: claim.id,
@@ -164,6 +231,21 @@ export const mockClaimGrades = (request: string) => {
         qualifiers: silent
           ? [{ kind: "record-silent", explanation: RECORD_SILENT_EXPLANATION }]
           : [],
+      };
+    }
+    if (conflict !== null) {
+      return {
+        claimId: claim.id,
+        verdict: "recordconflict",
+        score: null,
+        refs: conflict.map(({ id }) => ({ factId: id, rel: "record" })),
+        conflict: {
+          subject: "The date",
+          factIds: conflict.map(({ id }) => id),
+          values: conflict.map(({ date }) => date),
+          verdictIfGoverning: ["supported", "contradicted"],
+        },
+        qualifiers: [],
       };
     }
     if (WHOLE_PERIOD.test(claim.text)) {
