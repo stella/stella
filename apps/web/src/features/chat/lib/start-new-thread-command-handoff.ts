@@ -10,7 +10,15 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
 type StartNewThreadCommandHandoffArgs = {
   activeOrganizationId: string;
-  context: ChatThreadOptionsContext;
+  /**
+   * `getRunTarget` is required: a surface that starts a thread from its
+   * composer hands over where that composer's turns run (its
+   * `useChatComposerModels` getter), so the new thread starts there; one
+   * whose turns always run on stella states `undefined`.
+   */
+  context: ChatThreadOptionsContext & {
+    getRunTarget: ChatThreadOptionsContext["getRunTarget"];
+  };
   files: ChatDraftAttachment[];
   html: string;
   queryClient: QueryClient;

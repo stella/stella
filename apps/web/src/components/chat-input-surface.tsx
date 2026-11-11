@@ -89,10 +89,11 @@ type ChatInputSurfaceProps = {
    */
   onNewThread?: (() => void) | null | undefined;
   /**
-   * When provided, the (+) menu gains a Models submenu. Omit on surfaces
-   * without a model picker.
+   * The (+) menu's Models submenu, with where the thread's turns run.
+   * Required, so a composer cannot drop the Run on choice by leaving a prop
+   * out; `null` only on a surface that pins the model.
    */
-  models?: ComposerModelsMenuProps | undefined;
+  models: ComposerModelsMenuProps | null;
   /**
    * When provided, the (+) menu gains a Skills submenu, wired to this
    * surface's own editor. Omit on surfaces without skill insertion

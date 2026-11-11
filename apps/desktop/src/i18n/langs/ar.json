@@ -66,6 +66,10 @@
     "accountWindowTitle": "ربط الحساب",
     "accountTitle": "هل تريد ربط هذا الحساب؟",
     "accountSubtitle": "اربط stella desktop بهذا الحساب وهذه المؤسسة.",
+    "switchWindowTitle": "تبديل الحساب",
+    "switchTitle": "هل تريد التبديل إلى حساب آخر؟",
+    "switchSubtitle": "تطبيق stella desktop مرتبط بالحساب {currentEmail}. هل تريد فصله وربط {email} بدلاً منه؟",
+    "switchConfirm": "فصل وربط",
     "accountEmail": "الحساب",
     "organizationName": "المؤسسة",
     "allow": "السماح",
@@ -770,7 +774,9 @@
         "notCompleted": "لم يكتمل تسجيل الدخول. حاول مرة أخرى.",
         "timedOut": "استغرق تسجيل الدخول وقتًا طويلًا. حاول مرة أخرى.",
         "unavailable": "تعذّر تشغيل Claude Code على هذا الكمبيوتر. حاول مرة أخرى."
-      }
+      },
+      "unknown": "تعذر التحقق من تسجيل الدخول إلى Claude Code. تحقق مرة أخرى بعد قليل.",
+      "checkAgain": "تحقق مرة أخرى"
     },
     "install": {
       "notInstalled": "لم يُثبَّت {name} على هذا الكمبيوتر بعد.",
