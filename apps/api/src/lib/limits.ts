@@ -1006,7 +1006,7 @@ export const FILE_SIZE_LIMIT_BYTES = {
   /** Structured data imports (clause JSON, contact sheets). */
   dataImport: 10 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */
-  skillPack: 2 * 1024 * 1024,
+  skillPack: 50 * 1024 * 1024,
   /** Chat context file attachments. */
   chatContextFile: CHAT_CONTEXT_FILE_MAX_BYTES,
 } as const;

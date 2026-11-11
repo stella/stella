@@ -268,6 +268,7 @@ export const ENUM_COLUMN_ROLES = {
   },
   desktop_runner_runs: {
     harness: ATTRIBUTE,
+    lost_reason: ATTRIBUTE,
     outcome: ATTRIBUTE,
     reject_reason: ATTRIBUTE,
   },

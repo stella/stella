@@ -25,6 +25,7 @@ import {
 } from "@stll/ui/landing";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -246,9 +247,9 @@ const ScopedLawRecentList = ({
                           <span className="text-foreground block text-sm font-medium wrap-anywhere whitespace-normal">
                             {title}
                           </span>
-                          <span className="text-muted-foreground block truncate text-xs">
+                          <TruncatedText className="text-muted-foreground text-xs">
                             {relativeTime(entry.lastUsedAt)}
-                          </span>
+                          </TruncatedText>
                         </span>
                       </span>
                     ) : (

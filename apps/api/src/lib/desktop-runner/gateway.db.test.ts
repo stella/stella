@@ -216,8 +216,21 @@ const now = () => new Date(clock.now);
 let db: TestDatabase;
 let credentials: Awaited<ReturnType<typeof createRlsDesktopCredentials>>;
 let mintedTokens = 0;
+/** A mint a test holds, to act while a socket composes a page. */
+const mintGate: {
+  held: {
+    reached: PromiseWithResolvers<undefined>;
+    release: Promise<void>;
+  } | null;
+} = { held: null };
 const mintRunToken: MintRunToken = async () => {
   mintedTokens += 1;
+  const held = mintGate.held;
+  if (held !== null) {
+    mintGate.held = null;
+    held.reached.resolve(undefined);
+    await held.release;
+  }
   return await Promise.resolve({
     token: `run-token-${String(mintedTokens)}`,
     expiresAt: new Date(clock.now + 15 * 60_000),
@@ -561,6 +574,46 @@ const insertRunner = async (
     connectedAt: now(),
     lastSeenAt: now(),
   });
+};
+
+/**
+ * A runner the API counts as connected, with Codex ready, whose socket is on
+ * no task: a run assigned to it is never written to a socket.
+ */
+const insertReadyRunner = async (desktopId: string) => {
+  await db.insert(desktopRunners).values({
+    userId: owner.userId,
+    organizationId: owner.organizationId,
+    desktopId,
+    deviceJkt: credentials.a.deviceJkt,
+    keyId: credentials.a.keyId,
+    connection: "connected",
+    sessionId: Bun.randomUUIDv7(),
+    instanceId: "api-gone",
+    protocol: DESKTOP_RUNNER_PROTOCOL.current,
+    appVersion: "1.4.0",
+    sidecarVersion: "1.4.0",
+    harnesses: [
+      {
+        id: "codex",
+        state: "ready",
+        version: HARNESS_VERSION,
+        capabilities: ["approvals", "interrupt"],
+        approvalModes: ["ask"],
+        models: [{ id: MODEL, label: "GPT-5 Codex" }],
+      },
+    ],
+    connectedAt: now(),
+    lastSeenAt: now(),
+  });
+};
+
+/** Lets a row from `insertReadyRunner` make room for later installations. */
+const retireRunner = async (desktopId: string) => {
+  await db
+    .update(desktopRunners)
+    .set({ connection: "disconnected" })
+    .where(eq(desktopRunners.desktopId, desktopId));
 };
 
 const runnerRows = async (
@@ -1292,28 +1345,106 @@ describe("upgrade scaling", () => {
 });
 
 describe("runner identity", () => {
-  test("another device key naming the same installation gets its own runner and replaces nothing", async () => {
-    const other = await createRlsDesktopCredentials(db, ids);
-    const { desktopId, runId, desktop: original } = await acceptedRun(first);
-    const intruder = await openDesktop(
+  test("a relink retires the earlier key and ends the runs written to it as relinked, accepted or not", async () => {
+    const relinked = await createRlsDesktopCredentials(db, ids);
+    const desktopId = Bun.randomUUIDv7();
+    const before = await openDesktop(second, desktopId);
+    await before.hello();
+    // One run the computer took, one written to it that it never took.
+    const taken = await assignRun(desktopId);
+    await before.receive("run.start", ofRun(taken));
+    before.send({ type: "run.accepted", runId: taken });
+    before.send(textEvent(taken, 1, "Working"));
+    await before.receive("ack", ofRun(taken));
+    const untaken = await assignRun(desktopId);
+    await before.receive("run.start", ofRun(untaken));
+    // The same installation in another organization is another account's
+    // runner, which a relink here never touches.
+    const elsewhere = await openDesktop(
       second,
       desktopId,
-      await upgradeRequest(second, desktopId, other.a),
+      await upgradeRequest(second, desktopId, credentials.b),
     );
-    await intruder.hello();
-    // Still the current socket of its own key: its run's commands reach it.
-    expect((await control.interruptRun({ owner, runId })).unwrap()).toEqual({
-      type: "queued",
+    await elsewhere.hello();
+
+    const after = await openDesktop(
+      first,
+      desktopId,
+      await upgradeRequest(first, desktopId, relinked.a),
+    );
+    await after.hello();
+    expect(await runState(taken)).toMatchObject({
+      state: "lost",
+      lostReason: "computer_relinked",
     });
-    await original.receive("run.interrupt", ofRun(runId));
+    // Written to the old socket, it may have started: send it again.
+    expect(await runState(untaken)).toMatchObject({
+      state: "lost",
+      lostReason: "computer_relinked",
+    });
     const rows = (await runnerRows(owner.userId, owner.organizationId)).filter(
       (row) => row.desktopId === desktopId,
     );
-    expect(rows.map(({ deviceJkt }) => deviceJkt).toSorted()).toEqual(
-      [credentials.a.deviceJkt, other.a.deviceJkt].toSorted(),
+    expect(
+      Object.fromEntries(
+        rows.map(({ deviceJkt, connection }) => [deviceJkt, connection]),
+      ),
+    ).toEqual({
+      [credentials.a.deviceJkt]: "retired",
+      [relinked.a.deviceJkt]: "connected",
+    });
+    expect(
+      (await runnerRows(owner.userId, ids.orgB)).filter(
+        (row) => row.desktopId === desktopId,
+      ),
+    ).toEqual([
+      {
+        desktopId,
+        deviceJkt: credentials.b.deviceJkt,
+        connection: "connected",
+      },
+    ]);
+    await after.close();
+    await elsewhere.close();
+    await before.close();
+  });
+
+  test("a key claiming an installation never receives another key's runs, and a retired key cannot claim it back", async () => {
+    const claiming = await createRlsDesktopCredentials(db, ids);
+    const desktopId = Bun.randomUUIDv7();
+    const owning = await openDesktop(second, desktopId);
+    await owning.hello();
+    const runId = await assignRun(desktopId);
+    await owning.receive("run.start", ofRun(runId));
+    await owning.close();
+
+    // Another credential of the account names the same installation id.
+    const claimant = await openDesktop(
+      first,
+      desktopId,
+      await upgradeRequest(first, desktopId, claiming.a),
     );
-    await original.close();
-    await intruder.close();
+    await claimant.hello([{ runId, lastSeq: 0 }]);
+    expect(
+      claimant.received.find(
+        (message): message is Extract<typeof message, { type: "welcome" }> =>
+          message.type === "welcome",
+      )?.resume,
+    ).toEqual([]);
+    expect(claimant.received.some(ofRun(runId))).toBe(false);
+    expect((await runState(runId))?.state).toBe("lost");
+    expect((await control.interruptRun({ owner, runId })).unwrap()).toEqual({
+      type: "run_ended",
+      state: "lost",
+    });
+
+    const back = await openDesktop(second, desktopId);
+    back.send(helloFrame());
+    expect(await back.closed).toEqual({
+      code: DESKTOP_RUNNER_CLOSE.superseded.code,
+      reason: DESKTOP_RUNNER_CLOSE.superseded.reason,
+    });
+    await claimant.close();
   });
 
   test("an account at its installation cap is refused until a disconnected one without open runs makes room", async () => {
@@ -1359,6 +1490,115 @@ describe("runner identity", () => {
       [busyId, newId].toSorted(),
     );
     await admitted.close();
+  });
+  test("a relink while the earlier key's socket composes a page sends nothing of it", async () => {
+    const relinked = await createRlsDesktopCredentials(db, ids);
+    const desktopId = Bun.randomUUIDv7();
+    const before = await openDesktop(second, desktopId);
+    await before.hello();
+    const reached = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    mintGate.held = {
+      reached,
+      release: release.promise.then(() => undefined),
+    };
+    const runId = await assignRun(desktopId);
+    // The socket read the run's start and is minting its token.
+    await reached.promise;
+    const after = await openDesktop(
+      first,
+      desktopId,
+      await upgradeRequest(first, desktopId, relinked.a),
+    );
+    await after.hello();
+    release.resolve(undefined);
+    expect(await before.closed).toEqual({
+      code: DESKTOP_RUNNER_CLOSE.superseded.code,
+      reason: DESKTOP_RUNNER_CLOSE.superseded.reason,
+    });
+    expect(before.received.some(ofRun(runId))).toBe(false);
+    expect(await runState(runId)).toMatchObject({
+      state: "lost",
+      lostReason: "not_reached",
+      deliveredAt: null,
+    });
+    await after.close();
+  });
+
+  test("a run the earlier key accepted after the relink stays ended", async () => {
+    const relinked = await createRlsDesktopCredentials(db, ids);
+    const desktopId = Bun.randomUUIDv7();
+    const before = await openDesktop(second, desktopId);
+    await before.hello();
+    const runId = await assignRun(desktopId);
+    await before.receive("run.start", ofRun(runId));
+    const after = await openDesktop(
+      first,
+      desktopId,
+      await upgradeRequest(first, desktopId, relinked.a),
+    );
+    await after.hello();
+    // Written to the old socket, so the member is told to send it again.
+    expect(await runState(runId)).toMatchObject({
+      state: "lost",
+      lostReason: "computer_relinked",
+    });
+    // The old socket's acceptance arrives late: refused, the run stays ended.
+    before.send({ type: "run.accepted", runId });
+    await before.closed;
+    expect((await runState(runId))?.state).toBe("lost");
+    await after.close();
+  });
+
+  test("a relink at the installation cap is admitted: the key it replaces holds no place", async () => {
+    const relinked = await createRlsDesktopCredentials(db, ids);
+    const account = { userId: owner.userId, organizationId: ids.orgB };
+    // Nothing the cap could evict: every installation of the account counts.
+    await db
+      .update(desktopRunners)
+      .set({ connection: "connected" })
+      .where(
+        and(
+          eq(desktopRunners.userId, account.userId),
+          eq(desktopRunners.organizationId, account.organizationId),
+          eq(desktopRunners.connection, "disconnected"),
+        ),
+      );
+    const desktopId = Bun.randomUUIDv7();
+    const placed = (
+      await runnerRows(account.userId, account.organizationId)
+    ).filter(({ connection }) => connection !== "retired").length;
+    const capped = await startInstance("api-relink-cap", sharedDoorbell, {
+      limits: { maxRunnersPerAccount: placed + 1 },
+    });
+    const before = await openDesktop(
+      capped,
+      desktopId,
+      await upgradeRequest(capped, desktopId, credentials.b),
+    );
+    await before.hello();
+
+    const after = await openDesktop(
+      capped,
+      desktopId,
+      await upgradeRequest(capped, desktopId, relinked.b),
+    );
+    await after.hello();
+    expect(
+      (await runnerRows(account.userId, account.organizationId)).filter(
+        (row) => row.desktopId === desktopId,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          desktopId,
+          deviceJkt: relinked.b.deviceJkt,
+          connection: "connected",
+        },
+      ]),
+    );
+    await after.close();
+    await before.close();
   });
 });
 
@@ -1586,16 +1826,71 @@ describe("runs the API ends", () => {
     await back.close();
   });
 
-  test("a run nobody accepts ends as lost after the abandon window", async () => {
+  test("a run never written to a socket ends as lost once the unaccepted window passes", async () => {
+    // A runner the API still counts as connected whose socket is on no task:
+    // nothing ever writes the run to it.
+    const desktopId = Bun.randomUUIDv7();
+    await insertReadyRunner(desktopId);
+    const runId = await assignRun(desktopId);
+    clock.now += DESKTOP_RUNNER_LIMITS.unacceptedRunMs - 1;
+    await first.gateway.sweep();
+    // Its lease lapsed without a heartbeat, but it is still open.
+    expect((await runState(runId))?.state).toBe("waiting_for_computer");
+    clock.now += 1;
+    await first.gateway.sweep();
+    expect(await runState(runId)).toMatchObject({
+      state: "lost",
+      deliveredAt: null,
+      acceptedAt: null,
+    });
+    await retireRunner(desktopId);
+  });
+
+  test("a run written to its socket survives a drop before its acceptance and completes once the computer is back", async () => {
     const desktopId = Bun.randomUUIDv7();
     const desktop = await openDesktop(first, desktopId);
     await desktop.hello();
     const runId = await assignRun(desktopId);
+    // The desktop starts the run, and the connection drops before its
+    // acceptance reaches the API.
     await desktop.receive("run.start", ofRun(runId));
+    await desktop.close();
+    clock.now += DESKTOP_RUNNER_LIMITS.unacceptedRunMs + TIMING.leaseMs + 1;
+    await first.gateway.sweep();
+    expect(await runState(runId)).toMatchObject({
+      state: "waiting_for_computer",
+      acceptedAt: null,
+    });
+
+    const back = await openDesktop(first, desktopId);
+    await back.hello([{ runId, lastSeq: 0 }]);
+    expect((await runState(runId))?.state).toBe("running");
+    back.send({
+      type: "run.finished",
+      runId,
+      seq: 1,
+      outcome: "completed",
+      harnessSessionId: null,
+    });
+    await back.receive("ack", ofRun(runId));
+    expect(await runState(runId)).toMatchObject({
+      state: "finished",
+      outcome: "completed",
+    });
+    await back.close();
+  });
+
+  test("an accepted run whose computer is away waits the abandon window, not the unaccepted one", async () => {
+    const { runId, desktop } = await acceptedRun(first);
+    desktop.send(textEvent(runId, 1, "Working"));
+    await desktop.receive("ack");
+    await desktop.close();
+    clock.now += DESKTOP_RUNNER_LIMITS.unacceptedRunMs + TIMING.leaseMs + 1;
+    await first.gateway.sweep();
+    expect((await runState(runId))?.state).toBe("waiting_for_computer");
     clock.now += DESKTOP_RUNNER_LIMITS.abandonedRunMs + 1;
     await first.gateway.sweep();
     expect((await runState(runId))?.state).toBe("lost");
-    await desktop.close();
   });
 
   test("a heartbeat refreshes tokens only for runs that are still running", async () => {
@@ -2050,6 +2345,89 @@ describe("outbound frames", () => {
     expect(starts()).toEqual([buffered, waiting]);
     session.close(socket, 1000, "done");
     await gateway.drain();
+  });
+  test("a run.start the socket could not write keeps the pickup window", async () => {
+    // Two runs assigned while no socket wrote them: the next socket's first
+    // page holds both starts.
+    const desktopId = Bun.randomUUIDv7();
+    await insertReadyRunner(desktopId);
+    const written = await assignRun(desktopId);
+    const unwritten = await assignRun(desktopId);
+    const gateway = createDesktopRunnerGateway({
+      db: gatewayDb,
+      doorbell: sharedDoorbell,
+      instanceId: "api-partial-page",
+      authorize: authorizeRunnerWith(credentials.authorizeDesktopAccount),
+      mintRunToken,
+      now,
+      random: () => 0.5,
+      timing: TIMING,
+      isKeyLive,
+      isRunnerEnabled,
+    });
+    await gateway.start();
+    const accepted: { session: ApiSocketSession | null } = { session: null };
+    const server = asTestRaw<HttpServer>({
+      upgrade: (_request: Request, upgrade: { data: ApiSocketData }) => {
+        accepted.session = upgrade.data.session;
+        return true;
+      },
+    });
+    expect(
+      await gateway.upgrade(await upgradeRequest(first, desktopId), server),
+    ).toBeNull();
+    const session =
+      accepted.session ?? panic("the gateway took the upgrade over");
+    const starts: string[] = [];
+    const welcomed = Promise.withResolvers<undefined>();
+    const socket = asTestRaw<ApiServerWebSocket>({
+      send: (text: string) => {
+        const message = v.parse(
+          desktopRunnerServerMessageSchema,
+          JSON.parse(text),
+        );
+        if (message.type === "welcome") {
+          welcomed.resolve(undefined);
+        }
+        if (message.type !== "run.start") {
+          return 1;
+        }
+        starts.push(message.runId);
+        // Bun buffers the first start; the socket takes nothing more.
+        return -1;
+      },
+      close: () => undefined,
+      ping: () => undefined,
+    });
+    session.open(socket);
+    clock.now += 1000;
+    session.message(socket, JSON.stringify(helloFrame()));
+    await welcomed.promise;
+    await waitForExternalState({
+      description: "the first page was written",
+      read: async () => {
+        const run = await runState(written);
+        return (run?.deliveredAt ?? null) === null ? null : run;
+      },
+    });
+    expect(starts).toEqual([written]);
+    expect((await runState(unwritten))?.deliveredAt).toBeNull();
+
+    clock.now += DESKTOP_RUNNER_LIMITS.unacceptedRunMs + 1;
+    await gateway.sweep();
+    expect(await runState(unwritten)).toMatchObject({
+      state: "lost",
+      deliveredAt: null,
+    });
+    expect((await runState(written))?.state).not.toBe("lost");
+    session.close(socket, 1000, "done");
+    await gateway.drain();
+    // Ends the written run, so its installation makes room for later ones.
+    await db
+      .update(desktopRunnerRuns)
+      .set({ state: "lost" })
+      .where(eq(desktopRunnerRuns.runId, written));
+    await retireRunner(desktopId);
   });
 });
 
@@ -2531,9 +2909,16 @@ describe("chat turns on a computer", () => {
     expect(
       chunks.filter(({ type }) => type === EventType.RUN_STARTED),
     ).toHaveLength(1);
-    expect(withoutRunStarts(chunks).map(meaning)).toEqual(
-      withoutRunStarts(sent).map(meaning),
-    );
+    // The chat is told the run waits for the computer until it has it.
+    expect(chunks.filter(isComputerEvent).map(computerStatus)).toEqual([
+      "delivering",
+      "connected",
+    ]);
+    expect(
+      withoutRunStarts(chunks)
+        .filter((chunk) => !isComputerEvent(chunk))
+        .map(meaning),
+    ).toEqual(withoutRunStarts(sent).map(meaning));
     expect(chunks.at(-1)).toMatchObject({
       type: EventType.RUN_FINISHED,
       runId: "chat-run-1",
@@ -2725,8 +3110,15 @@ describe("chat turns on a computer", () => {
           ...(await harnessChunks(runId, completedTurn)),
         ]);
       });
+      // The server's own computer events pass; the forged one does not.
+      expect(chunks.filter(isComputerEvent).map(computerStatus)).toEqual([
+        "delivering",
+        "connected",
+      ]);
       const names = chunks.flatMap((chunk) =>
-        chunk.type === EventType.CUSTOM ? [chunk.name] : [],
+        chunk.type === EventType.CUSTOM && !isComputerEvent(chunk)
+          ? [chunk.name]
+          : [],
       );
       for (const { name } of forged) {
         expect(names).not.toContain(name);
@@ -4076,6 +4468,8 @@ describe("chat turns on a computer", () => {
       ["harness_needs_login", "local_runner_needs_login"],
       ["harness_unavailable", "local_runner_unavailable"],
       ["run_too_large", "local_runner_turn_too_large"],
+      // An undo of the chat's files still runs on the computer: send again.
+      ["folder_busy", "local_runner_restoring"],
     ] as const) {
       const chatThreadId = await newThread();
       const turn = collect(
@@ -4224,17 +4618,88 @@ describe("chat turns on a computer", () => {
     const output = withoutRunStarts(chunks).filter(
       (chunk) => !isComputerEvent(chunk),
     );
-    expect(told.map(({ status }) => status)).toEqual(["waiting", "connected"]);
-    expect(withoutRunStarts(chunks.slice(0, told[0]?.index))).toHaveLength(
-      withoutRunStarts(sent.slice(0, 3)).length,
-    );
+    expect(told.map(({ status }) => status)).toEqual([
+      "delivering",
+      "connected",
+      "waiting",
+      "connected",
+    ]);
+    const away = told.at(2);
+    const returned = told.at(3);
     expect(
-      withoutRunStarts(chunks.slice(told[0]?.index, told[1]?.index)).filter(
+      withoutRunStarts(chunks.slice(0, away?.index)).filter(
+        (chunk) => !isComputerEvent(chunk),
+      ),
+    ).toHaveLength(withoutRunStarts(sent.slice(0, 3)).length);
+    expect(
+      withoutRunStarts(chunks.slice(away?.index, returned?.index)).filter(
         (chunk) => !isComputerEvent(chunk),
       ),
     ).toEqual([]);
     expect(output.map(meaning)).toEqual(withoutRunStarts(sent).map(meaning));
     await back.close();
+  });
+
+  test("a turn whose run no computer picks up says it waits for the computer, then fails as not reached", async () => {
+    const chatThreadId = await newThread();
+    // A sweep with a short window of its own, so the clock moves less than
+    // the shared desktop's freshness and later turns still find it.
+    const UNACCEPTED_MS = 30_000;
+    const pickup = await startInstance("api-pickup-window", sharedDoorbell, {
+      limits: { unacceptedRunMs: UNACCEPTED_MS },
+    });
+    // A computer the API counts as connected, whose socket is on no task.
+    const desktopId = Bun.randomUUIDv7();
+    await insertReadyRunner(desktopId);
+    const context = { ...contextFor(chatThreadId), pollMs: 10 };
+    const toldDelivering = Promise.withResolvers<undefined>();
+    const turn = (async () => {
+      const chunks: PublicStreamChunk[] = [];
+      for await (const chunk of createLocalChatRun(
+        context,
+        startPlan(desktopId),
+      ).stream({
+        chatRunId: "chat-run-unreached",
+        chatTurnId: turnOf(chatThreadId),
+        messages: [{ role: "user", content: "Summarize" }],
+        instructions: "You are stella.",
+        resume: undefined,
+        abortSignal: new AbortController().signal,
+      })) {
+        chunks.push(chunk);
+        if (isComputerEvent(chunk)) {
+          toldDelivering.resolve(undefined);
+        }
+      }
+      return chunks;
+    })();
+    await toldDelivering.promise;
+    clock.now += UNACCEPTED_MS + 1;
+    await pickup.gateway.sweep();
+    const chunks = await turn;
+
+    const told: unknown[] = chunks.filter(isComputerEvent);
+    expect(told.map(computerStatus)).toEqual(["delivering"]);
+    const toldFirst = told.at(0);
+    const delivering = v.parse(
+      chatLocalRunComputerEventSchema,
+      isRecord(toldFirst) ? toldFirst["value"] : undefined,
+    );
+    expect(
+      delivering.status === "delivering" && Date.parse(delivering.since),
+    ).toBeGreaterThan(0);
+    expect(chunks.at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: AI_FAILURE_CODES.local_runner_not_reached,
+    });
+    const [run] = await db
+      .select({ runId: desktopRunnerRuns.runId })
+      .from(desktopRunnerRuns)
+      .where(eq(desktopRunnerRuns.desktopId, desktopId));
+    expect(
+      await runState(run?.runId ?? panic("the turn started no run")),
+    ).toMatchObject({ state: "lost", deliveredAt: null, acceptedAt: null });
+    await retireRunner(desktopId);
   });
 
   /** The run's commands of `kind`, as the gateway stored them. */
@@ -5914,6 +6379,39 @@ describe("undoing a turn's file changes", () => {
         return undo?.state === "sent" || undo?.state === "queued" ? null : undo;
       },
     });
+
+  test("a relink settles the undo sent to the earlier key, which then blocks no run of the thread", async () => {
+    const relinked = await createRlsDesktopCredentials(db, ids);
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    const undo = await accepted(threadId, turnId);
+    await desktop.receive("folder.restore");
+    expect((await read(threadId, turnId))?.restore?.state).toBe("sent");
+
+    const after = await openDesktop(
+      undoInstance,
+      desktopId,
+      await upgradeRequest(undoInstance, desktopId, relinked.a),
+    );
+    await after.hello();
+    expect((await read(threadId, turnId))?.restore).toEqual({
+      restoreId: undo.restoreId,
+      state: "expired",
+      reason: null,
+    });
+    const nextTurn = await newTurn(threadId);
+    expect(
+      (
+        await control.startRun({
+          ...startInput(desktopId),
+          chat: { threadId, turnId: nextTurn },
+        })
+      ).unwrap().type,
+    ).toBe("assigned");
+    await after.close();
+    await desktop.close();
+  });
 
   test("the newest turn's undo reaches its computer once, survives a reload, and the next run is told once", async () => {
     const { desktopId, desktop } = await connected();

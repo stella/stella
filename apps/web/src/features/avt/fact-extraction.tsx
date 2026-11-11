@@ -49,6 +49,7 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { SearchField } from "@stll/ui/search-field";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { DocumentIcon } from "@/components/document-icon";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -291,9 +292,9 @@ const DocumentChoices = ({
           {chosen.map((document) => (
             <li key={document.entityId}>
               <Badge tone="neutral">
-                <BidiText className="max-w-48 truncate">
+                <TruncatedText className="max-w-48" render={<BidiText />}>
                   {document.name ?? document.fileName}
-                </BidiText>
+                </TruncatedText>
                 <Button
                   aria-label={t("common.remove")}
                   disabled={disabled}

@@ -394,7 +394,7 @@ export const ENUM_COLUMNS = {
   desktop_runner_commands: ["kind"],
   desktop_runner_events: ["type"],
   desktop_runner_folder_restores: ["reason"],
-  desktop_runner_runs: ["harness", "outcome", "reject_reason"],
+  desktop_runner_runs: ["harness", "lost_reason", "outcome", "reject_reason"],
   desktop_runners: ["connection"],
   document_processing_runs: ["entity_feature_gate", "kind", "request_source"],
   document_review_findings: ["decision", "flags"],
