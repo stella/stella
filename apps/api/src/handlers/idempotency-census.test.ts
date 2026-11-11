@@ -804,6 +804,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "credential",
   },
+  "POST /v1/sharepoint/imports/:workspaceId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/signals/:signalId/acceptances": {
     type: "non-replay",
     reason: "authorization-in-handler",

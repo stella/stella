@@ -760,6 +760,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/seller-profiles/:sellerProfileId/archive": "crud",
   "POST /v1/seller-profiles/:sellerProfileId/default": "crud",
   "POST /v1/sharepoint/connect": "crud",
+  "POST /v1/sharepoint/imports/:workspaceId": "crud",
   "POST /v1/signals/:signalId/acceptances": "crud",
   "POST /v1/signals/:signalId/assignments": "crud",
   "POST /v1/signals/:signalId/dismissals": "crud",
