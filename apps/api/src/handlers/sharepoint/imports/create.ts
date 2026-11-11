@@ -73,6 +73,21 @@ const uploadFlowsFailure = failureSink({
   expected: [],
 });
 
+const startUploadFlows = (
+  args: Parameters<typeof maybeStartUploadTriggeredFlows>[0],
+): void => {
+  detached(
+    async () =>
+      maybeStartUploadTriggeredFlows(args).catch((error: unknown) => {
+        observeFailure(error, {
+          sink: uploadFlowsFailure,
+          ctx: { workspaceId: args.workspaceId },
+        });
+      }),
+    "sharepoint-import.maybe-start-upload-triggered-flows",
+  );
+};
+
 const refKey = ({ driveId, itemId }: { driveId: string; itemId: string }) =>
   `${driveId}\u0000${itemId}`;
 
@@ -103,51 +118,42 @@ const importSharepointFiles = createSafeHandler(
             const imported: SharepointImportResult[] = [];
             // db-await-in-loop: one file at a time bounds memory to a single document; the request caps files at SHAREPOINT_IMPORT_MAX_ITEMS
             for (const ref of refs) {
-              imported.push(
-                yield* Result.await(
-                  importSharepointFile({
-                    accessToken,
-                    ref,
-                    target: {
-                      safeDb,
-                      scopedDb,
-                      organizationId,
-                      workspaceId,
-                      workspace,
-                      userId: user.id,
-                      memberRole,
-                      recordAuditEvent,
-                      parentId: parentId ?? null,
-                    },
-                  }),
-                ),
+              const result = yield* Result.await(
+                importSharepointFile({
+                  accessToken,
+                  ref,
+                  target: {
+                    safeDb,
+                    scopedDb,
+                    organizationId,
+                    workspaceId,
+                    workspace,
+                    userId: user.id,
+                    memberRole,
+                    recordAuditEvent,
+                    parentId: parentId ?? null,
+                  },
+                }),
               );
+              // Started per document as it commits: a later file that ends
+              // the request (throttling, a revoked grant) must not skip the
+              // flows of documents already created, and a retry reports those
+              // as unchanged.
+              if (result.status === "created") {
+                startUploadFlows({
+                  entityId: result.entityId,
+                  fileName: result.name,
+                  organizationId,
+                  workspaceId,
+                });
+              }
+              imported.push(result);
             }
             return Result.ok(imported);
           }),
       }),
     );
 
-    for (const result of results) {
-      if (result.status !== "created") {
-        continue;
-      }
-      detached(
-        async () =>
-          maybeStartUploadTriggeredFlows({
-            entityId: result.entityId,
-            workspaceId,
-            organizationId,
-            fileName: result.name,
-          }).catch((error: unknown) => {
-            observeFailure(error, {
-              sink: uploadFlowsFailure,
-              ctx: { workspaceId },
-            });
-          }),
-        "sharepoint-import.maybe-start-upload-triggered-flows",
-      );
-    }
     if (results.some(({ status }) => status === "created")) {
       broadcastOrganizationResourceSetUpdated(
         organizationId,
@@ -162,7 +168,7 @@ const importSharepointFiles = createSafeHandler(
 declareAggregateMutation(importSharepointFiles, {
   type: "independent",
   reason:
-    "Each file is written through the document create and version owners, which lock the rows they change; a repeated import converges on the stored SharePoint ETag.",
+    "Each file is written through the document create and version owners, which lock the rows they change; a repeated import converges on the stored content digest.",
 });
 
 export default importSharepointFiles;
