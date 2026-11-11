@@ -1811,6 +1811,8 @@
         "function:public.stella_chat_run_text_boundaries():EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
         "function:public.stella_create_workspace(p_workspace_id uuid, p_client_id uuid, p_name text, p_reference text, p_billing_reference text, p_color text, p_lead_user_id text):EXECUTE:EFFECTIVE",
         "function:public.stella_create_workspace(p_workspace_id uuid, p_client_id uuid, p_name text, p_reference text, p_billing_reference text, p_color text, p_lead_user_id text):EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
+        "function:public.stella_document_review_finding_decision_history():EXECUTE:EFFECTIVE",
+        "function:public.stella_document_review_finding_decision_history():EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
         "function:public.stella_invoice_access(invoice_id uuid, org_id text, matter_id uuid, client_id uuid, source_original_id uuid):EXECUTE:EFFECTIVE",
         "function:public.stella_invoice_access(invoice_id uuid, org_id text, matter_id uuid, client_id uuid, source_original_id uuid):EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
         "function:public.stella_matter_invoice_count(matter_id uuid):EXECUTE:EFFECTIVE",
