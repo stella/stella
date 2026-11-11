@@ -207,7 +207,12 @@ export const toggleSharepointFile = (
 type ImportResult = { driveId: string; itemId: string } & (
   | { status: "created" | "versioned" | "unchanged"; name: string }
   | { status: "failed"; code: string }
+  // The request ran out of its time budget before this file; send it again.
+  | { status: "deferred" }
 );
+
+/** The code a file gets when rounds stopped while it was still deferred. */
+const UNFINISHED_IMPORT_CODE = "sharepoint_import_unfinished";
 
 export type SharepointImportOutcome = {
   key: string;
@@ -229,16 +234,36 @@ export type SharepointImportSummary = {
 const resultKey = ({ driveId, itemId }: { driveId: string; itemId: string }) =>
   `${driveId}\u0000${itemId}`;
 
+/** Each file's latest result: a later round's answer replaces a deferral. */
+const latestResults = (results: readonly ImportResult[]) =>
+  new Map(results.map((result) => [resultKey(result), result]));
+
+/**
+ * The picked files still to send: those whose latest result says the request
+ * deferred them. Results accumulate across rounds, so a re-sent file's new
+ * answer supersedes its deferral.
+ */
+export const deferredSharepointFiles = (
+  selection: readonly SharepointSelectedFile[],
+  results: readonly ImportResult[],
+): SharepointSelectedFile[] => {
+  const latest = latestResults(results);
+  return selection.filter(
+    (file) => latest.get(resultKey(file))?.status === "deferred",
+  );
+};
+
 /**
  * Per-file outcomes of one import, named after the picked files: a failed
- * result carries no name of its own. A picked file with no result is a
- * failure, never a silent success.
+ * result carries no name of its own. A picked file with no result, or one
+ * still deferred when the rounds stopped, is a failure, never a silent
+ * success.
  */
 export const summarizeSharepointImport = (
   selection: readonly SharepointSelectedFile[],
   results: readonly ImportResult[],
 ): SharepointImportSummary => {
-  const byKey = new Map(results.map((result) => [resultKey(result), result]));
+  const byKey = latestResults(results);
   const outcomes = selection.map((file): SharepointImportOutcome => {
     const key = resultKey(file);
     const result = byKey.get(key);
@@ -252,6 +277,13 @@ export const summarizeSharepointImport = (
         return { key, name: result.name, status: result.status };
       case "failed":
         return { key, name: file.name, status: "failed", code: result.code };
+      case "deferred":
+        return {
+          key,
+          name: file.name,
+          status: "failed",
+          code: UNFINISHED_IMPORT_CODE,
+        };
       default:
         result satisfies never;
         return panic("Unknown SharePoint import status");

@@ -5964,6 +5964,7 @@
       "done": "Pliki zaimportowane z usługi SharePoint",
       "failedReason": "Nie udało się skopiować pliku. Spróbuj ponownie później.",
       "partial": "Nie udało się zaimportować {failed, number} z {total, plural, one {# pliku} few {# plików} many {# plików} other {# pliku}}.",
+      "progress": "Zaimportowano {done, number} z {total, number}",
       "unchanged": "Już aktualny",
       "versioned": "Nowa wersja"
     },

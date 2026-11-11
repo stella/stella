@@ -5964,6 +5964,7 @@
       "done": "Arquivos importados do SharePoint",
       "failedReason": "Não foi possível copiar o arquivo. Tente novamente mais tarde.",
       "partial": "Falha ao importar {failed, number} de {total, plural, one {# arquivo} many {# de arquivos} other {# arquivos}}.",
+      "progress": "Importados {done, number} de {total, number}",
       "unchanged": "Já atualizado",
       "versioned": "Nova versão"
     },

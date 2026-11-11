@@ -5964,6 +5964,7 @@
       "done": "Súbory importované zo služby SharePoint",
       "failedReason": "Súbor sa nepodarilo skopírovať. Skúste to neskôr znova.",
       "partial": "Nepodarilo sa importovať {failed, number} z {total, plural, one {# súboru} few {# súborov} many {# súboru} other {# súborov}}.",
+      "progress": "Importované {done, number} z {total, number}",
       "unchanged": "Už aktuálne",
       "versioned": "Nová verzia"
     },

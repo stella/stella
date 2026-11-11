@@ -5964,6 +5964,7 @@
       "done": "تم استيراد الملفات من SharePoint",
       "failedReason": "تعذّر نسخ الملف. حاول مرة أخرى لاحقًا.",
       "partial": "تعذّر استيراد {failed, number} من أصل {total, plural, zero {# ملف} one {# ملف} two {# ملفين} few {# ملفات} many {# ملفًا} other {# ملف}}.",
+      "progress": "تم استيراد {done, number} من {total, number}",
       "unchanged": "محدّث بالفعل",
       "versioned": "إصدار جديد"
     },

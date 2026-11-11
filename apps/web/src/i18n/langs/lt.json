@@ -5964,6 +5964,7 @@
       "done": "Failai importuoti iš SharePoint",
       "failedReason": "Failo nepavyko nukopijuoti. Bandykite vėliau.",
       "partial": "Nepavyko importuoti {failed, number} iš {total, plural, one {# failo} few {# failų} many {# failo} other {# failų}}.",
+      "progress": "Importuota {done, number} iš {total, number}",
       "unchanged": "Jau naujausias",
       "versioned": "Nauja versija"
     },

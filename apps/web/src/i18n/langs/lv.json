@@ -5964,6 +5964,7 @@
       "done": "Faili importēti no SharePoint",
       "failedReason": "Failu neizdevās nokopēt. Mēģiniet vēlreiz vēlāk.",
       "partial": "Neizdevās importēt {failed, number} no {total, plural, zero {# failu} one {# faila} other {# failu}}.",
+      "progress": "Importēti {done, number} no {total, number}",
       "unchanged": "Jau aktuāls",
       "versioned": "Jauna versija"
     },

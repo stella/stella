@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/sharepoint";
 
 import {
+  deferredSharepointFiles,
   openSharepointDrive,
   openSharepointFolder,
   openSharepointSource,
@@ -257,6 +258,61 @@ describe("SharePoint import summary", () => {
     expect(
       summary.created + summary.versioned + summary.unchanged + summary.failed,
     ).toBe(summary.outcomes.length);
+  });
+});
+
+describe("SharePoint import rounds", () => {
+  const picked = [fileNumbered(1), fileNumbered(2), fileNumbered(3)];
+  const deferred = (index: number) => ({
+    driveId: drive.id,
+    itemId: `01FILE${index}`,
+    status: "deferred" as const,
+  });
+  const created = (index: number) => ({
+    driveId: drive.id,
+    itemId: `01FILE${index}`,
+    status: "created" as const,
+    name: `Statement of claim ${index}.docx`,
+  });
+
+  test("re-sends only the files the last round deferred", () => {
+    const firstRound = [created(1), deferred(2), deferred(3)];
+
+    expect(deferredSharepointFiles(picked, firstRound)).toEqual([
+      fileNumbered(2),
+      fileNumbered(3),
+    ]);
+  });
+
+  test("a later round's answer replaces a deferral", () => {
+    const rounds = [
+      created(1),
+      deferred(2),
+      deferred(3),
+      created(2),
+      deferred(3),
+      created(3),
+    ];
+
+    expect(deferredSharepointFiles(picked, rounds)).toEqual([]);
+    expect(summarizeSharepointImport(picked, rounds)).toMatchObject({
+      created: 3,
+      failed: 0,
+    });
+  });
+
+  test("a file still deferred when the rounds stop is reported as failed", () => {
+    const summary = summarizeSharepointImport(picked, [
+      created(1),
+      created(2),
+      deferred(3),
+    ]);
+
+    expect(summary.failed).toBe(1);
+    expect(summary.outcomes.at(2)).toMatchObject({
+      name: "Statement of claim 3.docx",
+      status: "failed",
+    });
   });
 });
 

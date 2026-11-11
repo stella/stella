@@ -4976,6 +4976,7 @@
   "sharepoint.import.done": "Files imported from SharePoint",
   "sharepoint.import.failedReason": "The file could not be copied. Try again later.",
   "sharepoint.import.partial": "{failed, number} of {total, plural, one {# file} other {# files}} could not be imported.",
+  "sharepoint.import.progress": "Imported {done, number} of {total, number}",
   "sharepoint.import.unchanged": "Already up to date",
   "sharepoint.import.versioned": "New version",
   "sharepoint.oauthReasons.consentDenied": "Microsoft sign-in was cancelled or access was not granted.",

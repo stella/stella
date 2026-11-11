@@ -80,6 +80,7 @@ import {
   useSharepointViewer,
 } from "./sharepoint-hooks";
 import {
+  deferredSharepointFiles,
   isSharepointFileSelected,
   openSharepointDrive,
   openSharepointFolder,
@@ -108,14 +109,11 @@ import {
 const SITE_SEARCH_DEBOUNCE_MS = 300;
 
 /**
- * The API imports the files one after another, and each one may wait on
- * Microsoft for its metadata and its download before it is scanned and
- * stored. A minute per file covers that, so the request outlives the
- * client's 30-second default.
+ * One import request stops starting files once its time budget is spent and
+ * defers the rest, so it lasts at most that budget plus the file in flight.
+ * This covers both, above the client's 30-second default.
  */
-const SHAREPOINT_IMPORT_TIMEOUT_PER_FILE_MS = 60_000;
-const SHAREPOINT_IMPORT_TIMEOUT_MS =
-  SHAREPOINT_IMPORT_MAX_ITEMS * SHAREPOINT_IMPORT_TIMEOUT_PER_FILE_MS;
+const SHAREPOINT_IMPORT_TIMEOUT_MS = 90_000;
 
 type SharepointImportDialogProps = {
   open: boolean;
@@ -308,6 +306,30 @@ const crumbLabel = (
   }
 };
 
+/** One import request: the API stores what fits its time budget and defers the rest. */
+const postImportRound = async ({
+  workspaceId,
+  parentId,
+  files,
+}: {
+  workspaceId: string;
+  parentId: string | null;
+  files: readonly SharepointSelectedFile[];
+}) => {
+  const { results } = unwrapApiResponse(
+    await api.sharepoint.imports({ workspaceId }).post(
+      {
+        items: files.map(({ driveId, itemId }) => ({ driveId, itemId })),
+        parentId,
+      },
+      { fetch: { timeoutMs: SHAREPOINT_IMPORT_TIMEOUT_MS } },
+    ),
+  );
+  return results;
+};
+
+type ImportRoundResult = Awaited<ReturnType<typeof postImportRound>>[number];
+
 const SharepointBrowser = ({
   workspaceId,
   parentId,
@@ -333,18 +355,34 @@ const SharepointBrowser = ({
   };
   const full = selection.length >= SHAREPOINT_IMPORT_MAX_ITEMS;
 
+  // How many picked files have settled while an import runs in rounds.
+  const [settledCount, setSettledCount] = useState(0);
+
   const importFiles = useMutation({
-    mutationFn: async (files: readonly SharepointSelectedFile[]) =>
-      unwrapApiResponse(
-        await api.sharepoint.imports({ workspaceId }).post(
-          {
-            items: files.map(({ driveId, itemId }) => ({ driveId, itemId })),
-            parentId,
-          },
-          { fetch: { timeoutMs: SHAREPOINT_IMPORT_TIMEOUT_MS } },
-        ),
-      ),
-    onSuccess: async ({ results }, files) => {
+    mutationFn: async (files: readonly SharepointSelectedFile[]) => {
+      const results: ImportRoundResult[] = [];
+      let pending = files;
+      setSettledCount(0);
+      while (pending.length > 0) {
+        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- each round re-sends only the files the previous round deferred, so it needs that answer first
+        const round = await postImportRound({
+          workspaceId,
+          parentId,
+          files: pending,
+        });
+        results.push(...round);
+        const deferred = deferredSharepointFiles(files, results);
+        // A round that settles nothing would repeat forever; its files stay
+        // deferred and the summary reports them as unfinished.
+        if (deferred.length >= pending.length) {
+          break;
+        }
+        pending = deferred;
+        setSettledCount(files.length - pending.length);
+      }
+      return results;
+    },
+    onSuccess: async (results, files) => {
       const summary = summarizeSharepointImport(files, results);
       if (summary.created + summary.versioned > 0) {
         await queryClient.invalidateQueries({
@@ -369,6 +407,22 @@ const SharepointBrowser = ({
       }
     },
   });
+
+  const footerStatus = () => {
+    if (importFiles.isPending) {
+      // Deferred files are still in progress, not failures: the next round
+      // sends them again.
+      return t("sharepoint.import.progress", {
+        done: settledCount,
+        total: selection.length,
+      });
+    }
+    return full
+      ? t("sharepoint.picker.selectionLimit", {
+          max: SHAREPOINT_IMPORT_MAX_ITEMS,
+        })
+      : t("sharepoint.picker.selectedCount", { count: selection.length });
+  };
 
   const toggle = (file: SharepointSelectedFile) => {
     const change = toggleSharepointFile(selection, file);
@@ -422,13 +476,7 @@ const SharepointBrowser = ({
           aria-live="polite"
           className="text-muted-foreground me-auto text-xs tabular-nums"
         >
-          {full
-            ? t("sharepoint.picker.selectionLimit", {
-                max: SHAREPOINT_IMPORT_MAX_ITEMS,
-              })
-            : t("sharepoint.picker.selectedCount", {
-                count: selection.length,
-              })}
+          {footerStatus()}
         </p>
         <DialogClose render={<Button variant="ghost" />}>
           {t("common.cancel")}

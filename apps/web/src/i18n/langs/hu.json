@@ -5964,6 +5964,7 @@
       "done": "Fájlok importálva a SharePointból",
       "failedReason": "A fájlt nem sikerült átmásolni. Próbálja újra később.",
       "partial": "{total, plural, one {# fájlból} other {# fájlból}} {failed, number} importálása sikertelen volt.",
+      "progress": "{total, number} fájlból {done, number} importálva",
       "unchanged": "Már naprakész",
       "versioned": "Új verzió"
     },

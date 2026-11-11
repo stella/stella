@@ -5964,6 +5964,7 @@
       "done": "Failid imporditud SharePointist",
       "failedReason": "Faili ei õnnestunud kopeerida. Proovige hiljem uuesti.",
       "partial": "Ei õnnestunud importida {failed, number} faili (kokku {total, plural, one {# fail} other {# faili}}).",
+      "progress": "Imporditud {done, number}/{total, number}",
       "unchanged": "Juba ajakohane",
       "versioned": "Uus versioon"
     },
