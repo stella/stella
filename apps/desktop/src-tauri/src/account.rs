@@ -1172,7 +1172,8 @@ pub async fn account_disconnect(
 ) -> Result<(), String> {
   require_account_window(&window)?;
   let _lease = lock_requests().await;
-  end_current_link(&state, &sessions).await?;
+  let account = load_account_to_disconnect(&state).await?;
+  end_link(&state, &sessions, account.as_ref()).await?;
   *BROWSER_CONNECTION
     .lock()
     .map_err(with_cause_logged("Desktop connection is unavailable"))? = None;
@@ -1180,24 +1181,32 @@ pub async fn account_disconnect(
   Ok(())
 }
 
-/// Ends the saved link the way Disconnect does: revokes every live credential
-/// generation, then removes the link and its device key. The caller holds the
-/// account request lease.
-async fn end_current_link(
+/// The saved account Disconnect ends; one already rejected or without its
+/// device key reads as none. The caller holds the account request lease.
+async fn load_account_to_disconnect(
   state: &AccountState,
-  sessions: &crate::commands::AppState,
-) -> Result<(), String> {
-  let account = match load_account_for_request(state, RecoveryMode::Disconnect).await {
-    Ok(account) => account,
+) -> Result<Option<LinkedAccount>, String> {
+  match load_account_for_request(state, RecoveryMode::Disconnect).await {
+    Ok(account) => Ok(account),
     Err(error)
       if error == crate::registry::not_connected()
         || error == crate::device_proof::RECONNECT =>
     {
-      None
+      Ok(None)
     }
-    Err(error) => return Err(error),
-  };
-  if let Some(saved) = &account {
+    Err(error) => Err(error),
+  }
+}
+
+/// Ends the saved link the way Disconnect does: revokes every live credential
+/// generation of `account`, then removes the link and its device key. The
+/// caller holds the account request lease.
+async fn end_link(
+  state: &AccountState,
+  sessions: &crate::commands::AppState,
+  account: Option<&LinkedAccount>,
+) -> Result<(), String> {
+  if let Some(saved) = account {
     let pending = state.lock().await.pending().await?;
     let mut keys = vec![saved.credential.key.clone()];
     keys.extend(pending.map(|pending| pending.successor_key));
@@ -1824,6 +1833,26 @@ pub async fn complete_browser_connection(
   result
 }
 
+impl LinkedAccount {
+  fn current_account(&self) -> crate::account_switch::CurrentAccount {
+    crate::account_switch::CurrentAccount {
+      api_base_url: self.api_base_url.clone(),
+      user_id: self.identity.user_id.clone(),
+      organization_id: self.identity.organization_id.clone(),
+    }
+  }
+}
+
+/// Whether the saved account is still the one a switch confirmation named.
+/// A rotated credential is the same account; another user, organization or
+/// server, or no account at all, is not.
+fn is_current_account(
+  saved: Option<&LinkedAccount>,
+  expected: &crate::account_switch::CurrentAccount,
+) -> bool {
+  saved.is_some_and(|saved| saved.current_account() == *expected)
+}
+
 /// How a redemption treats the account already linked here.
 enum Redemption<'a> {
   /// The approved account is the one linked here: nothing to redeem.
@@ -1835,6 +1864,7 @@ enum Redemption<'a> {
   /// A switch that replaces the linked account once the member confirms.
   Replace {
     fresh: &'a crate::device_proof::FreshDeviceKey,
+    current: crate::account_switch::CurrentAccount,
     current_email: String,
   },
 }
@@ -1858,6 +1888,7 @@ fn plan_redemption<'a>(
       Some(_) if !linked_elsewhere => Redemption::AlreadyLinked,
       Some(saved) => Redemption::Replace {
         fresh,
+        current: saved.current_account(),
         current_email: saved.account.email.clone(),
       },
     }),
@@ -1981,6 +2012,7 @@ async fn redeem_browser_connection(
   let adopt = match plan {
     Redemption::Replace {
       fresh,
+      current,
       current_email,
     } => {
       return crate::account_switch::switch_account(
@@ -1988,7 +2020,9 @@ async fn redeem_browser_connection(
           issued: &issued,
           fresh,
         },
+        &crate::account_switch::SWITCH_GATE,
         &crate::account_switch::SwitchOffer {
+          current: &current,
           current_email: &current_email,
           email: &account.email,
           organization_name: &organization_name,
@@ -2106,15 +2140,25 @@ impl crate::account_switch::SwitchHost for AccountSwitch<'_> {
   async fn end_current_link(
     &self,
     _confirmed: crate::account_switch::SwitchConfirmed,
-  ) -> Result<(), String> {
+    expected: &crate::account_switch::CurrentAccount,
+  ) -> Result<(), crate::account_switch::EndCurrentLink> {
+    use crate::account_switch::EndCurrentLink;
     use tauri::Manager;
+    let state = self.issued.app.state::<AccountState>();
+    let sessions = self.issued.app.state::<crate::commands::AppState>();
+    // The check and the revocation share one lease, so no other link can land
+    // between them.
     let _lease = lock_requests().await;
-    end_current_link(
-      &self.issued.app.state::<AccountState>(),
-      &self.issued.app.state::<crate::commands::AppState>(),
-    )
-    .await?;
-    self.fresh.adopt().await
+    let account = load_account_to_disconnect(&state)
+      .await
+      .map_err(EndCurrentLink::Failed)?;
+    if !is_current_account(account.as_ref(), expected) {
+      return Err(EndCurrentLink::Changed);
+    }
+    end_link(&state, &sessions, account.as_ref())
+      .await
+      .map_err(EndCurrentLink::Failed)?;
+    self.fresh.adopt().await.map_err(EndCurrentLink::Failed)
   }
 
   async fn link_new(&self) -> Result<(), LinkError> {
@@ -2522,6 +2566,29 @@ mod tests {
   }
 
   #[test]
+  fn a_switch_applies_only_to_the_account_its_confirmation_named() {
+    let named = fixture("stella_dr_existing", 60);
+    let expected = named.current_account();
+    let mut rotated = named.clone();
+    rotated.credential.key = "stella_dr_rotated".into();
+    assert!(is_current_account(Some(&named), &expected));
+    assert!(
+      is_current_account(Some(&rotated), &expected),
+      "a rotated credential is still the named account"
+    );
+    let mut other_user = named.clone();
+    other_user.identity.user_id = "user_other".into();
+    let mut other_organization = named.clone();
+    other_organization.identity.organization_id = "org_other".into();
+    let mut other_server = named.clone();
+    other_server.api_base_url = "https://other.example.test".into();
+    for replaced in [other_user, other_organization, other_server] {
+      assert!(!is_current_account(Some(&replaced), &expected));
+    }
+    assert!(!is_current_account(None, &expected));
+  }
+
+  #[test]
   fn only_a_switch_offers_to_replace_the_linked_account() {
     let linked = fixture("stella_dr_existing", 60);
     let switch =
@@ -2530,12 +2597,16 @@ mod tests {
       user_id: "user_other".into(),
       organization_id: "org_other".into(),
     };
-    let Ok(Redemption::Replace { current_email, .. }) =
-      plan_redemption(&switch, Some(&linked), &linked.api_base_url, &other)
+    let Ok(Redemption::Replace {
+      current,
+      current_email,
+      ..
+    }) = plan_redemption(&switch, Some(&linked), &linked.api_base_url, &other)
     else {
       panic!("a switch offers to replace another linked account");
     };
     assert_eq!(current_email, linked.account.email);
+    assert_eq!(current, linked.current_account());
     assert!(matches!(
       plan_redemption(
         &switch,
