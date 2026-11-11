@@ -77,12 +77,14 @@ export const SkillsListResponseSchema = v.object({
   ),
 });
 
-const TurnStatusSchema = v.picklist([
+export const CODEX_TURN_STATUSES = [
   "completed",
   "interrupted",
   "failed",
   "inProgress",
-]);
+] as const;
+
+const TurnStatusSchema = v.picklist(CODEX_TURN_STATUSES);
 
 const TurnErrorSchema = v.object({
   message: v.string(),
@@ -356,6 +358,22 @@ export const isCodexServerRequestMethod = (
   method: string,
 ): method is CodexServerRequestMethod =>
   Object.hasOwn(CODEX_SERVER_REQUESTS, method);
+
+/** The requests Stella sends the server. */
+export type CodexClientRequestMethod =
+  | "initialize"
+  | "account/read"
+  | "model/list"
+  | "skills/extraRoots/set"
+  | "skills/list"
+  | "thread/start"
+  | "thread/resume"
+  | "thread/unarchive"
+  | "turn/start"
+  | "turn/interrupt";
+
+/** The notifications Stella sends the server. */
+export type CodexClientNotificationMethod = "initialized";
 
 /** JSON-RPC "method not found". */
 export const METHOD_NOT_FOUND = -32_601;

@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
+import type { ProtocolLog } from "../../protocol-log";
 import {
   type HarnessAdapter,
   type HarnessAuth,
@@ -80,6 +81,8 @@ export type CodexHarnessAdapterOptions = {
   requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /** Where the app server's protocol lines go, redacted. */
+  protocolLog: ProtocolLog;
   /**
    * Called with each new process's id before it is asked anything; a
    * process it does not answer `true` for is ended unused.
@@ -187,6 +190,7 @@ const connect = async ({
 }: ConnectOptions): Promise<Result<Connection, ConnectFailure>> => {
   const started = startAppServer({
     launch: options.launch,
+    protocolLog: options.protocolLog,
     detached: createDetached(options.onBackgroundError),
     deadlines: {
       requestMs: options.requestTimeoutMs,

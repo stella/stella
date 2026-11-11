@@ -54,6 +54,7 @@ import {
   FAKE_STELLA_SERVER,
   FAKE_STELLA_STEPS,
 } from "../../../scripts/fake-stella-turn";
+import { PROTOCOL_LOG_OFF } from "../../protocol-log";
 import type { HarnessTurn, HarnessTurnInput } from "../adapter";
 import { type HarnessEvent, harnessSessionId } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
@@ -101,6 +102,7 @@ const harnessFor = (
   mkdirSync(workspaceDir);
   const adapter = createCodexHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_SERVER, scenario] },
+    protocolLog: PROTOCOL_LOG_OFF,
     codexHome,
     environment: {
       ...environment,
@@ -782,6 +784,7 @@ describe("Codex adapter over a stdio app-server", () => {
         executable: process.execPath,
         args: [FAKE_SERVER, "unresponsive"],
       },
+      protocolLog: PROTOCOL_LOG_OFF,
       detached: createDetached((error) => {
         backgroundErrors.push(error);
       }),
@@ -1142,6 +1145,7 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(() =>
       createCodexHarnessAdapter({
         launch: { executable: process.execPath, args: [] },
+        protocolLog: PROTOCOL_LOG_OFF,
         codexHome: path.join(process.env["HOME"] ?? "/", ".codex"),
         environment: {},
         clientVersion: "0.0.1",
@@ -1581,6 +1585,7 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
     mkdirSync(codexHome);
     const started = startAppServer({
       launch: { executable: codex ?? "", args: ["app-server"] },
+      protocolLog: PROTOCOL_LOG_OFF,
       detached: createDetached((error) => {
         cliErrors.push(error);
       }),
