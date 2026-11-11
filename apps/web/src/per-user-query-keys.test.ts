@@ -661,13 +661,21 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     opaqueKeys: { "searchKeys.query(params)": KEY_TYPE_HAS_USER },
     keys: () => [searchInfiniteOptions(SEARCH_PROBE).queryKey],
   },
-  "sharepoint/list-drive-root.ts": {
+  "sharepoint/drives/items/list.ts": {
     kind: "no-web-caller",
-    calls: ["api.sharepoint.drive.root.get"],
+    calls: ["api.sharepoint.drives().items().children.get"],
+  },
+  "sharepoint/drives/list.ts": {
+    kind: "no-web-caller",
+    calls: ["api.sharepoint.drives.get"],
   },
   "sharepoint/oauth-callback.ts": {
     kind: "not-per-user",
     reason: OAUTH_REDIRECT,
+  },
+  "sharepoint/sites/list.ts": {
+    kind: "no-web-caller",
+    calls: ["api.sharepoint.sites.get"],
   },
   "sharepoint/status.ts": {
     kind: "no-web-caller",
