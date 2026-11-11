@@ -5891,6 +5891,21 @@ describe("undoing a turn's file changes", () => {
       ? outcome.restore
       : panic(`the undo was refused: ${outcome.reason}`);
   };
+  /** The stored metadata of a turn's answer, as the page reads it. */
+  const storedAnswerMetadata = async (turn: Turn) => {
+    const [row] = await db
+      .select({ id: chatMessages.id, content: chatMessages.content })
+      .from(chatTurns)
+      .innerJoin(
+        chatMessages,
+        eq(chatMessages.id, chatTurns.assistantMessageId),
+      )
+      .where(eq(chatTurns.id, turn));
+    if (row === undefined) {
+      return panic("the turn has no answer");
+    }
+    return chatMessageFromPersisted({ ...row, role: "assistant" }).metadata;
+  };
   const settled = async (threadId: Thread, turnId: Turn) =>
     await waitForExternalState({
       description: "the computer's answer is stored",
@@ -6097,6 +6112,48 @@ describe("undoing a turn's file changes", () => {
       undo: { state: "queued" },
     });
     expect((await desktop.receive("folder.restore")).runId).toBe(runId);
+    await desktop.close();
+  });
+
+  test("an undone turn's answer carries the server's marker, which a newer turn leaves in place", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    const undo = await accepted(threadId, turnId);
+    await desktop.receive("folder.restore");
+    desktop.send({
+      type: "folder.restored",
+      restoreId: undo.restoreId,
+      outcome: "restored",
+    });
+    await settled(threadId, turnId);
+    // A newer turn runs and finishes; the undone one is no longer the newest.
+    const newer = await finishedTurn(desktop, desktopId, { threadId });
+
+    expect((await storedAnswerMetadata(turnId))?.localFilesUndone).toEqual({
+      at: expect.any(String),
+    });
+    expect((await storedAnswerMetadata(newer.turnId))?.localFilesUndone).toBe(
+      undefined,
+    );
+    await desktop.close();
+  });
+
+  test("a refused undo leaves the answer unmarked", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    const undo = await accepted(threadId, turnId);
+    await desktop.receive("folder.restore");
+    desktop.send({
+      type: "folder.restored",
+      restoreId: undo.restoreId,
+      outcome: "folder_busy",
+    });
+    await settled(threadId, turnId);
+    expect((await storedAnswerMetadata(turnId))?.localFilesUndone).toBe(
+      undefined,
+    );
     await desktop.close();
   });
 

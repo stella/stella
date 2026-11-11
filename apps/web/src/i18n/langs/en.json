@@ -271,11 +271,13 @@
       "overrideTooltip": "A reviewer has recorded a different verdict. The analysis below is the tool's own, unchanged.",
       "overrideVerdict": "Override verdict",
       "recordConflict": {
+        "confirmGoverningRecord": "Confirm as governing",
         "description": "Two anchor facts speak to the same point (<strong>{subject}</strong>) but disagree. Both are <strong>high-confidence</strong> sources, so this is not a reliability problem: the record itself is internally inconsistent. AVT withholds a verdict rather than score the claim, because picking one record over the other is a judgement for you to make and record, not one the tool should make silently.",
         "escalatedNotice": "Flagged for the evidence team. The record conflict stays open and counted until a governing record is chosen.",
         "flagForEvidenceTeam": "Flag for evidence team",
         "governed": "<strong>{value}</strong> governs: the claim is judged against this record. The other record stays on file.",
         "reconcile": "Reconcile the record",
+        "suggestedNotice": "A document's record is suggested over a witness's account. Confirm it, or choose the other record.",
         "title": "Conflicting evidence in the record",
         "treatAsGoverningRecord": "Treat as governing"
       },
@@ -286,10 +288,6 @@
       "reopened": "Re-opened, check pending",
       "reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.",
       "sourceCount": "{count, plural, one {# source} other {# sources}}",
-      "unsourced": {
-        "hint": "No source document is linked to this fact yet; its medium and date describe the evidence but are not a source.",
-        "label": "Unsourced"
-      },
       "whyVerdict": "Why this verdict: anchor facts"
     },
     "claimTypes": {
@@ -326,15 +324,20 @@
       "scopeMismatch": "A cited fact covers a different scope than the claim. Weigh whether it settles the claim as worded before the verdict stands.",
       "supported": "The record affirms this. Your sign-off confirms the tool read it correctly; no judgement call needed.",
       "tension": "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands.",
+      "testimonyOnly": "The record affirms this, but no document's record backs it: it rests on testimony. Your sign-off confirms the tool read it correctly; the verdict stays marked as resting on testimony.",
       "unsourcedOnly": "The record affirms this, but only through facts with no source yet. Your sign-off confirms the tool read them correctly; the facts stay marked as unsourced."
     },
     "documents": {
       "claimSummary": "Contradicted: {contradicted} · In tension: {tension} · Record conflicts: {conflicts}",
       "empty": "Upload a document to this matter to verify it.",
+      "kindsLoadFailed": "Whether these documents are testimony could not be loaded.",
       "notVerified": "Not verified yet",
       "otherList": "Checked against another list",
       "sizeConfirmTitle": "Verify this document?",
       "statusLoadFailed": "The verification status of these documents could not be loaded.",
+      "testimony": "Testimony",
+      "testimonyAbout": "About testimony",
+      "testimonyLine": "Mark witness statements, interview notes and transcripts as testimony. Facts taken from them count as a person's account, not a record.",
       "verifyAgain": "Verify again"
     },
     "extraction": {
@@ -368,11 +371,58 @@
       "startFailed": "Could not start the fact extraction",
       "submit": "{count, plural, =0 {Extract facts} one {Extract facts from # document} other {Extract facts from # documents}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Every source of this fact that has not been rejected is testimony: a witness statement, interview note or transcript.",
+        "label": "Testimony"
+      },
+      "unsourced": {
+        "hint": "No source document that has not been rejected is linked to this fact; its medium and date describe the evidence but are not a source.",
+        "label": "Unsourced"
+      }
+    },
     "guidance": {
       "escalate": "Escalate",
       "manualJudgement": "Manual judgement",
       "optional": "Optional",
       "readyToConfirm": "Ready to confirm"
+    },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Accepted as routine",
+        "conflictReopened": "Withdrew the conflict's resolution",
+        "escalated": "Flagged for the evidence team",
+        "governed": "Chose the governing record",
+        "noteCleared": "Cleared the note",
+        "noteSaved": "Saved a note",
+        "overridden": "Overrode the verdict",
+        "overrideWithdrawn": "Withdrew the override",
+        "reopened": "Re-opened as a checkable claim",
+        "statusCleared": "Cleared the review status",
+        "statusDisputed": "Marked disputed",
+        "statusNeedsEvidence": "Marked as needing evidence",
+        "statusReviewed": "Marked reviewed"
+      },
+      "empty": "No review actions yet.",
+      "filters": {
+        "allKinds": "Any action",
+        "allReviewers": "Any reviewer",
+        "kind": "Filter by action",
+        "reviewer": "Filter by reviewer"
+      },
+      "formerMember": "Former member",
+      "kinds": {
+        "override": "Verdict overrides",
+        "recordConflict": "Record conflict resolutions",
+        "reopen": "Re-openings",
+        "status": "Status changes"
+      },
+      "noMatches": "No actions match these filters.",
+      "noStatus": "No status",
+      "none": "No actions yet",
+      "reasonUnrecorded": "No reason recorded: this was done before reasons were required.",
+      "runButton": "Review history",
+      "runTitle": "Review history"
     },
     "matches": {
       "count": "{count, plural, one {# match} other {# matches}}",
@@ -392,14 +442,32 @@
         "hint": "A cited fact covers a different period, population, place or measure than the claim.",
         "label": "Scope mismatch"
       },
+      "testimonyOnly": {
+        "hint": "No document's record backs the facts this verdict rests on, and at least one of them is testimony.",
+        "label": "Testimony only"
+      },
       "unsourcedOnly": {
         "hint": "No fact this verdict rests on has a source yet.",
         "label": "Unsourced only"
       }
     },
+    "reason": {
+      "escalate": "Why does the evidence team need this?",
+      "govern": "Why does this record govern?",
+      "override": "Why is the verdict “{verdict}”?",
+      "placeholder": "Say why; it stays in the claim's history",
+      "reopen": "Why can this claim be checked?",
+      "required": "Give a reason to record this.",
+      "unresolveConflict": "Why withdraw this resolution?",
+      "withdrawOverride": "Why return to the tool's verdict?"
+    },
     "review": {
-      "disputed": "Disputed · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Accepted as routine} other {Reviewed}} · {decidedAt}",
+      "decided": "{status, select, disputed {Disputed} needsEvidence {Needs evidence} other {{origin, select, bulk {Accepted as routine} other {Reviewed}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Disputed",
+        "needsEvidence": "Needs evidence",
+        "reviewed": "Reviewed"
+      },
       "undo": "Undo decision"
     },
     "runs": {
@@ -466,7 +534,7 @@
       "acceptRoutine": "Accept {count, plural, one {# routine claim} other {# routine claims}}",
       "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}",
       "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong>: conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} needsEvidence {, needs evidence} other {}})",
       "documentView": {
         "label": "Document view",
         "original": "Original",
@@ -1758,6 +1826,28 @@
     "loadEarlierMessages": "Load earlier messages",
     "loadEarlierMessagesError": "Couldn't load earlier messages",
     "loadingEarlierMessages": "Loading earlier messages…",
+    "localFilesUndo": {
+      "action": "Undo file changes",
+      "computer": {
+        "failed": "The undo did not finish on your computer. Some files may already have changed, so check the chat's folder.",
+        "folderBusy": "A run on your computer is using this folder. Try again when it finishes.",
+        "noCheckpoint": "Your computer has no saved copy of the files from before this turn, so nothing was undone.",
+        "notNewest": "Your computer has newer changes in this folder, so nothing was undone."
+      },
+      "confirm": "Undo changes",
+      "confirmDescription": "The files this turn changed in its folder on your computer go back to how they were before the turn. Only this turn's changes are undone; earlier turns' changes stay.",
+      "confirmTitle": "Undo this turn's file changes?",
+      "expired": "Your computer did not answer in time. Try again.",
+      "pending": "Undoing file changes on your computer",
+      "refused": {
+        "desktopOffline": "Your computer is offline. Open the stella desktop app and try again.",
+        "desktopUpdateRequired": "The stella desktop app on your computer is too old to undo changes. Update it, then try again.",
+        "noCheckpoint": "This turn has no saved copy of the files to go back to.",
+        "notNewest": "Only the newest turn's file changes can be undone.",
+        "threadBusy": "This chat is still working. Try again when it finishes."
+      },
+      "restored": "File changes undone"
+    },
     "localRun": {
       "cloud": "stella cloud",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
@@ -2490,6 +2580,8 @@
     "loading": "Loading",
     "logTime": "Log time",
     "low": "Low",
+    "markAsRead": "Mark as read",
+    "markAsUnread": "Mark as unread",
     "matter": "Matter",
     "matters": "Matters",
     "medium": "Medium",
@@ -2520,6 +2612,7 @@
     "or": "Or",
     "organization": "Organization",
     "organizationName": "Organization name",
+    "organizations": "Organizations",
     "page": "Page {page}",
     "paymentRetryNotice": "Payment issue. Update your payment method by {date} to keep access.",
     "pin": "Pin",
@@ -2606,6 +2699,7 @@
     "unexpectedError": "An unexpected error occurred. Please contact support.",
     "unknownUser": "Unknown user",
     "unpin": "Unpin",
+    "unread": "Unread",
     "unsavedChanges": "Unsaved changes",
     "unsavedChangesClose": "Unsaved changes. Close again to discard",
     "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard",
@@ -2825,7 +2919,6 @@
       "vatPayerUnknown": "Unknown",
       "year": "Year of birth"
     },
-    "filterOrganizations": "Organizations",
     "filterPersons": "Persons",
     "import": {
       "confirmAction": "Confirm import",

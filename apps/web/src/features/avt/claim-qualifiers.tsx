@@ -27,7 +27,7 @@ type QualifierMeta = {
 };
 
 /** A caveat about the record reads neutral; one about the footing of the
- *  verdict itself (no source, a held fact) warns. */
+ *  verdict itself (only testimony, no source, a held fact) warns. */
 const QUALIFIER_META = {
   "record-silent": {
     labelKey: "avt.qualifiers.recordSilent.label",
@@ -38,6 +38,11 @@ const QUALIFIER_META = {
     labelKey: "avt.qualifiers.scopeMismatch.label",
     hintKey: "avt.qualifiers.scopeMismatch.hint",
     tone: "neutral",
+  },
+  "testimony-only": {
+    labelKey: "avt.qualifiers.testimonyOnly.label",
+    hintKey: "avt.qualifiers.testimonyOnly.hint",
+    tone: "warning",
   },
   "unsourced-only": {
     labelKey: "avt.qualifiers.unsourcedOnly.label",

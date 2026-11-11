@@ -76,6 +76,7 @@ import {
   resolveThreadActiveSkill,
   useThreadActiveSkill,
 } from "@/features/chat/thread-active-skill-store";
+import { useMarkChatThreadReadWhileOpen } from "@/features/chat/thread-reader-state";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -131,6 +132,10 @@ const WebSearchSeedLifecycle = ({ seed }: { seed: () => void }) => {
   });
   return null;
 };
+
+/** What the reader sees of the thread, for marking it read once per revision. */
+const latestMessageId = (messages: readonly { id: string }[]): string | null =>
+  messages.at(-1)?.id ?? null;
 
 export const ChatThreadPage = ({
   threadRef,
@@ -326,6 +331,13 @@ export const ChatThreadPage = ({
     holdQueueForMessageEdit,
     messages,
     startUserMessageEdit,
+    threadRef,
+  });
+
+  useMarkChatThreadReadWhileOpen({
+    isGenerating,
+    revision: latestMessageId(messages),
+    threadExists: data.threadExists,
     threadRef,
   });
 
@@ -783,6 +795,7 @@ export const ChatThreadPage = ({
                           stickyUserMessages
                           streamdownComponents={streamdownComponents}
                           waitingForComputer={waitingForComputer}
+                          newestLocalTurn={data.newestLocalTurn}
                           threadRef={threadRef}
                           userMessageEdit={userMessageEdit}
                           workspaceId={workspaceId}

@@ -61,6 +61,7 @@
     "apps/web/src/components/workspaces/table/workspace-table/header-cells.tsx": 1,
     "apps/web/src/components/workspaces/tasks/task-metadata.tsx": 1,
     "apps/web/src/components/workspaces/tasks/task-subtasks.tsx": 1,
+    "apps/web/src/features/avt/review-history.tsx": 2,
     "apps/web/src/features/avt/verification-view.tsx": 2,
     "apps/web/src/features/case-law/components/case-viewer/analysis/annotation-visibility-toggle.tsx": 1,
     "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx": 1,

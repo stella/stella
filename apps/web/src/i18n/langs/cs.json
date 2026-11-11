@@ -271,11 +271,13 @@
       "overrideTooltip": "Kontrolující osoba zaznamenala jiný závěr. Níže je beze změny zobrazena vlastní analýza nástroje.",
       "overrideVerdict": "Změnit závěr",
       "recordConflict": {
+        "confirmGoverningRecord": "Potvrdit jako rozhodující",
         "description": "Dva referenční fakty se týkají stejné otázky (<strong>{subject}</strong>), ale odporují si. Oba pocházejí ze zdrojů s <strong>vysokou mírou jistoty</strong>, nejde tedy o problém spolehlivosti: vnitřně rozporné jsou samotné záznamy. AVT nevydá závěr ani tvrzení neohodnotí, protože volba rozhodujícího záznamu vyžaduje váš úsudek a jeho zaznamenání; nástroj ji nesmí provést bez upozornění.",
         "escalatedNotice": "Označeno pro tým pro důkazy. Rozpor v záznamech zůstává otevřený a započítaný, dokud nebude vybrán rozhodující záznam.",
         "flagForEvidenceTeam": "Označit pro tým pro důkazy",
         "governed": "<strong>{value}</strong> je rozhodující: tvrzení se posuzuje podle tohoto záznamu. Druhý záznam zůstává evidován.",
         "reconcile": "Vyřešit rozpor v záznamech",
+        "suggestedNotice": "Záznam v dokumentu je navržen před výpovědí svědka. Potvrďte ho, nebo zvolte druhý záznam.",
         "title": "Rozporné důkazy v záznamech",
         "treatAsGoverningRecord": "Považovat za rozhodující"
       },
@@ -286,10 +288,6 @@
       "reopened": "Znovu otevřeno, čeká na kontrolu",
       "reopenedTooltip": "Kontrolující osoba překlasifikovala toto tvrzení jako ověřitelné; porovnání se živými záznamy dosud neproběhlo.",
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroje} other {# zdrojů}}",
-      "unsourced": {
-        "hint": "K tomuto faktu zatím není připojen žádný zdrojový dokument; médium a datum důkaz popisují, ale nejsou zdrojem.",
-        "label": "Bez zdroje"
-      },
       "whyVerdict": "Odůvodnění závěru: referenční fakta"
     },
     "claimTypes": {
@@ -326,15 +324,20 @@
       "scopeMismatch": "Citovaný fakt má jiný rozsah než tvrzení. Než závěr potvrdíte, zvažte, zda tvrzení v jeho znění skutečně rozhoduje.",
       "supported": "Záznamy toto tvrzení potvrzují. Svým schválením potvrdíte, že je nástroj vyložil správně; není třeba žádný hodnotící úsudek.",
       "tension": "Záznamy toto tvrzení podporují jen částečně. Než bude možné závěr potvrdit, zvažte výše uvedená podpůrná a odporující fakta.",
+      "testimonyOnly": "Záznamy toto tvrzení potvrzují, ale nepodkládá ho žádný záznam v dokumentu: opírá se o svědectví. Svým schválením potvrdíte, že ho nástroj vyložil správně; závěr zůstane označen jako opřený o svědectví.",
       "unsourcedOnly": "Záznamy toto tvrzení potvrzují, ale jen prostřednictvím faktů, které zatím nemají zdroj. Svým schválením potvrdíte, že je nástroj vyložil správně; fakta zůstanou označena jako bez zdroje."
     },
     "documents": {
       "claimSummary": "V rozporu: {contradicted} · Částečný rozpor: {tension} · Rozpor v záznamech: {conflicts}",
       "empty": "Nahrajte do tohoto spisu dokument, který chcete ověřit.",
+      "kindsLoadFailed": "Nepodařilo se načíst, zda jsou tyto dokumenty svědectví.",
       "notVerified": "Zatím neověřeno",
       "otherList": "Zkontrolováno podle jiného seznamu",
       "sizeConfirmTitle": "Ověřit tento dokument?",
       "statusLoadFailed": "Stav ověření těchto dokumentů se nepodařilo načíst.",
+      "testimony": "Svědectví",
+      "testimonyAbout": "O svědectví",
+      "testimonyLine": "Svědecké výpovědi, záznamy z pohovorů a přepisy označte jako svědectví. Fakta z nich převzatá se počítají jako něčí výpověď, ne jako záznam.",
       "verifyAgain": "Ověřit znovu"
     },
     "extraction": {
@@ -368,11 +371,58 @@
       "startFailed": "Vytěžování faktů se nepodařilo spustit",
       "submit": "{count, plural, =0 {Vytěžit fakta} one {Vytěžit fakta z # dokumentu} few {Vytěžit fakta z # dokumentů} many {Vytěžit fakta z # dokumentu} other {Vytěžit fakta z # dokumentů}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Všechny nezamítnuté zdroje tohoto faktu jsou svědectví: svědecká výpověď, záznam z pohovoru nebo přepis.",
+        "label": "Svědectví"
+      },
+      "unsourced": {
+        "hint": "K tomuto faktu není připojen žádný zdrojový dokument, který by nebyl zamítnut; médium a datum důkaz popisují, ale nejsou zdrojem.",
+        "label": "Bez zdroje"
+      }
+    },
     "guidance": {
       "escalate": "Předat dál",
       "manualJudgement": "Vyžaduje úsudek",
       "optional": "Nepovinné",
       "readyToConfirm": "Připraveno k potvrzení"
+    },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Přijato jako rutinní",
+        "conflictReopened": "Vyřešení rozporu zrušeno",
+        "escalated": "Předáno týmu pro důkazy",
+        "governed": "Zvolen rozhodující záznam",
+        "noteCleared": "Poznámka odstraněna",
+        "noteSaved": "Poznámka uložena",
+        "overridden": "Závěr změněn",
+        "overrideWithdrawn": "Změna závěru vzata zpět",
+        "reopened": "Znovu otevřeno jako ověřitelné tvrzení",
+        "statusCleared": "Stav kontroly zrušen",
+        "statusDisputed": "Označeno jako zpochybněné",
+        "statusNeedsEvidence": "Označeno jako vyžadující důkazy",
+        "statusReviewed": "Označeno jako zkontrolované"
+      },
+      "empty": "Zatím žádné úkony kontroly.",
+      "filters": {
+        "allKinds": "Jakýkoli úkon",
+        "allReviewers": "Kdokoli z kontrolujících",
+        "kind": "Filtrovat podle úkonu",
+        "reviewer": "Filtrovat podle kontrolujícího"
+      },
+      "formerMember": "Bývalý člen",
+      "kinds": {
+        "override": "Změny závěru",
+        "recordConflict": "Řešení rozporů v záznamech",
+        "reopen": "Znovuotevření",
+        "status": "Změny stavu"
+      },
+      "noMatches": "Filtrům neodpovídá žádný úkon.",
+      "noStatus": "Bez stavu",
+      "none": "Zatím žádné úkony",
+      "reasonUnrecorded": "Důvod nezaznamenán: úkon proběhl dřív, než byl důvod povinný.",
+      "runButton": "Historie kontroly",
+      "runTitle": "Historie kontroly"
     },
     "matches": {
       "count": "{count, plural, one {# shoda} few {# shody} other {# shod} many {# shody}}",
@@ -392,14 +442,32 @@
         "hint": "Citovaný fakt se týká jiného období, okruhu osob, místa nebo veličiny než tvrzení.",
         "label": "Jiný rozsah"
       },
+      "testimonyOnly": {
+        "hint": "Fakta, o která se závěr opírá, nepodkládá žádný záznam v dokumentu a alespoň jedno z nich je svědectví.",
+        "label": "Jen svědectví"
+      },
       "unsourcedOnly": {
         "hint": "Žádný fakt, o který se závěr opírá, zatím nemá zdroj.",
         "label": "Jen bez zdroje"
       }
     },
+    "reason": {
+      "escalate": "Proč to potřebuje tým pro důkazy?",
+      "govern": "Proč je rozhodující tento záznam?",
+      "override": "Proč je závěr „{verdict}“?",
+      "placeholder": "Uveďte důvod; zůstane v historii tvrzení",
+      "reopen": "Proč lze toto tvrzení ověřit?",
+      "required": "Uveďte důvod, aby se úkon zaznamenal.",
+      "unresolveConflict": "Proč rušíte toto vyřešení?",
+      "withdrawOverride": "Proč se vracíte k závěru nástroje?"
+    },
     "review": {
-      "disputed": "Zpochybněno · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Přijato jako rutinní} other {Zkontrolováno}} · {decidedAt}",
+      "decided": "{status, select, disputed {Zpochybněno} needsEvidence {Vyžaduje důkazy} other {{origin, select, bulk {Přijato jako rutinní} other {Zkontrolováno}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Zpochybněno",
+        "needsEvidence": "Vyžaduje důkazy",
+        "reviewed": "Zkontrolováno"
+      },
       "undo": "Vrátit rozhodnutí"
     },
     "runs": {
@@ -466,7 +534,7 @@
       "acceptRoutine": "Přijmout {count, plural, one {# rutinní tvrzení} few {# rutinní tvrzení} other {# rutinních tvrzení} many {# rutinního tvrzení}}",
       "attentionComplete": "<strong>Všechna tvrzení vyžadující úsudek byla vyřízena.</strong> {count, plural, one {Zbývající # rutinní závěr nevyžaduje samostatnou kontrolu.} few {Zbývající # rutinní závěry nevyžadují samostatnou kontrolu.} other {Zbývajících # rutinních závěrů nevyžaduje samostatnou kontrolu.} many {Zbývající # rutinního závěru nevyžaduje samostatnou kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje} many {# tvrzení vyžaduje}} váš úsudek</strong>: rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.} many {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} needsEvidence {, vyžaduje důkazy} other {}})",
       "documentView": {
         "label": "Zobrazení dokumentu",
         "original": "Originál",
@@ -1758,6 +1826,28 @@
     "loadEarlierMessages": "Načíst starší zprávy",
     "loadEarlierMessagesError": "Starší zprávy se nepodařilo načíst",
     "loadingEarlierMessages": "Načítání starších zpráv…",
+    "localFilesUndo": {
+      "action": "Vrátit změny souborů",
+      "computer": {
+        "failed": "Vrácení změn se ve vašem počítači nedokončilo. Některé soubory už mohly být změněny, proto zkontrolujte složku chatu.",
+        "folderBusy": "Tuto složku ve vašem počítači právě používá jiný běh. Zkuste to znovu, až skončí.",
+        "noCheckpoint": "Váš počítač nemá uloženou kopii souborů z doby před tímto krokem, takže se nic nevrátilo.",
+        "notNewest": "Váš počítač má v této složce novější změny, takže se nic nevrátilo."
+      },
+      "confirm": "Vrátit změny",
+      "confirmDescription": "Soubory, které tento krok změnil ve své složce ve vašem počítači, se vrátí do stavu před tímto krokem. Vrátí se jen změny tohoto kroku; změny dřívějších kroků zůstanou.",
+      "confirmTitle": "Vrátit změny souborů z tohoto kroku?",
+      "expired": "Váš počítač neodpověděl včas. Zkuste to znovu.",
+      "pending": "Vracení změn souborů ve vašem počítači",
+      "refused": {
+        "desktopOffline": "Váš počítač je offline. Otevřete desktopovou aplikaci stella a zkuste to znovu.",
+        "desktopUpdateRequired": "Desktopová aplikace stella ve vašem počítači je příliš stará na vrácení změn. Aktualizujte ji a zkuste to znovu.",
+        "noCheckpoint": "Tento krok nemá uloženou kopii souborů, ke které by se dalo vrátit.",
+        "notNewest": "Vrátit lze jen změny souborů z nejnovějšího kroku.",
+        "threadBusy": "Tento chat ještě pracuje. Zkuste to znovu, až skončí."
+      },
+      "restored": "Změny souborů vráceny"
+    },
     "localRun": {
       "cloud": "Cloud stella",
       "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
@@ -2490,6 +2580,8 @@
     "loading": "Načítám",
     "logTime": "Zaznamenat čas",
     "low": "Nízká",
+    "markAsRead": "Označit jako přečtené",
+    "markAsUnread": "Označit jako nepřečtené",
     "matter": "Spis",
     "matters": "Spisy",
     "medium": "Střední",
@@ -2520,6 +2612,7 @@
     "or": "Nebo",
     "organization": "Organizace",
     "organizationName": "Název organizace",
+    "organizations": "Organizace",
     "page": "Stránka {page}",
     "paymentRetryNotice": "Problém s platbou. Pro zachování přístupu aktualizujte platební metodu do {date}.",
     "pin": "Připnout",
@@ -2606,6 +2699,7 @@
     "unexpectedError": "Došlo k neočekávané chybě. Kontaktujte podporu.",
     "unknownUser": "Neznámý uživatel",
     "unpin": "Odepnout",
+    "unread": "Nepřečtené",
     "unsavedChanges": "Neuložené změny",
     "unsavedChangesClose": "Neuložené změny. Dalším zavřením je zahodíte",
     "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte",
@@ -2825,7 +2919,6 @@
       "vatPayerUnknown": "Neznámý",
       "year": "Rok"
     },
-    "filterOrganizations": "Organizace",
     "filterPersons": "Osoby",
     "import": {
       "confirmAction": "Potvrdit import",

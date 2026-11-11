@@ -271,11 +271,13 @@
       "overrideTooltip": "Ein Prüfer hat ein abweichendes Ergebnis erfasst. Die nachstehende Analyse ist die unveränderte Beurteilung des Tools.",
       "overrideVerdict": "Ergebnis ändern",
       "recordConflict": {
+        "confirmGoverningRecord": "Als maßgeblich bestätigen",
         "description": "Zwei Ankerfakten betreffen denselben Punkt – <strong>{subject}</strong> –, widersprechen sich jedoch. Beide stammen aus Quellen mit <strong>hoher Sicherheit</strong>; es handelt sich daher nicht um ein Zuverlässigkeitsproblem, sondern der Bestand selbst ist widersprüchlich. AVT hält ein Ergebnis zurück, statt die Behauptung zu bewerten, denn die Entscheidung, welcher Eintrag maßgeblich ist, müssen Sie treffen und dokumentieren – das Tool darf sie nicht stillschweigend treffen.",
         "escalatedNotice": "Für das Belegteam markiert. Der Bestandswiderspruch bleibt offen und wird weiter gezählt, bis ein maßgeblicher Eintrag ausgewählt ist.",
         "flagForEvidenceTeam": "Für das Belegteam markieren",
         "governed": "<strong>{value}</strong> ist maßgeblich: Die Behauptung wird anhand dieses Eintrags beurteilt. Der andere Eintrag bleibt erhalten.",
         "reconcile": "Bestand abgleichen",
+        "suggestedNotice": "Die Aufzeichnung eines Dokuments wird der Schilderung eines Zeugen vorgezogen. Bestätigen Sie sie oder wählen Sie die andere Aufzeichnung.",
         "title": "Widersprüchliche Belege im Bestand",
         "treatAsGoverningRecord": "Als maßgeblich behandeln"
       },
@@ -286,10 +288,6 @@
       "reopened": "Erneut geöffnet, Prüfung ausstehend",
       "reopenedTooltip": "Ein Prüfer hat dies als überprüfbaren Fakt neu klassifiziert; der Live-Abgleich mit dem Bestand steht noch aus.",
       "sourceCount": "{count, plural, one {# Quelle} other {# Quellen}}",
-      "unsourced": {
-        "hint": "Mit diesem Fakt ist noch kein Quelldokument verknüpft; Medium und Datum beschreiben den Beleg, sind aber keine Quelle.",
-        "label": "Ohne Quelle"
-      },
       "whyVerdict": "Begründung des Ergebnisses – Ankerfakten"
     },
     "claimTypes": {
@@ -326,15 +324,20 @@
       "scopeMismatch": "Ein zitierter Fakt hat einen anderen Umfang als die Behauptung. Wägen Sie ab, ob er die Behauptung in ihrem Wortlaut klärt, bevor das Ergebnis steht.",
       "supported": "Der Bestand bestätigt dies. Mit Ihrer Freigabe bestätigen Sie, dass das Tool ihn richtig gelesen hat – eine Ermessensentscheidung ist nicht erforderlich.",
       "tension": "Der Bestand stützt dies nur teilweise. Wägen Sie die oben aufgeführten stützenden und widersprechenden Fakten ab, bevor das Ergebnis Bestand hat.",
+      "testimonyOnly": "Der Bestand bestätigt dies, doch keine Aufzeichnung eines Dokuments belegt es: Es beruht auf Zeugenaussagen. Mit Ihrer Freigabe bestätigen Sie, dass das Tool sie richtig gelesen hat; das Ergebnis bleibt als auf Zeugenaussagen beruhend markiert.",
       "unsourcedOnly": "Der Bestand bestätigt dies, jedoch nur über Fakten ohne Quelle. Mit Ihrer Freigabe bestätigen Sie, dass das Tool sie richtig gelesen hat; die Fakten bleiben als ohne Quelle markiert."
     },
     "documents": {
       "claimSummary": "Widersprochen: {contradicted} · Teilweise widersprochen: {tension} · Bestandswiderspruch: {conflicts}",
       "empty": "Laden Sie ein Dokument in diese Akte hoch, um es zu prüfen.",
+      "kindsLoadFailed": "Ob diese Dokumente Zeugenaussagen sind, konnte nicht geladen werden.",
       "notVerified": "Noch nicht geprüft",
       "otherList": "Gegen eine andere Liste geprüft",
       "sizeConfirmTitle": "Dieses Dokument prüfen?",
       "statusLoadFailed": "Der Prüfstatus dieser Dokumente konnte nicht geladen werden.",
+      "testimony": "Zeugenaussage",
+      "testimonyAbout": "Über Zeugenaussagen",
+      "testimonyLine": "Markieren Sie Zeugenaussagen, Gesprächsnotizen und Transkripte als Zeugenaussage. Daraus entnommene Fakten gelten als Schilderung einer Person, nicht als Aufzeichnung.",
       "verifyAgain": "Erneut prüfen"
     },
     "extraction": {
@@ -368,11 +371,58 @@
       "startFailed": "Die Extraktion der Tatsachen konnte nicht gestartet werden",
       "submit": "{count, plural, =0 {Tatsachen extrahieren} one {Tatsachen aus # Dokument extrahieren} other {Tatsachen aus # Dokumenten extrahieren}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Jede nicht abgelehnte Quelle dieses Fakts ist eine Zeugenaussage: eine Aussage, eine Gesprächsnotiz oder ein Transkript.",
+        "label": "Zeugenaussage"
+      },
+      "unsourced": {
+        "hint": "Mit diesem Fakt ist kein Quelldokument verknüpft, das nicht abgelehnt wurde; Medium und Datum beschreiben den Beleg, sind aber keine Quelle.",
+        "label": "Ohne Quelle"
+      }
+    },
     "guidance": {
       "escalate": "Eskalieren",
       "manualJudgement": "Manuelle Entscheidung",
       "optional": "Fakultativ",
       "readyToConfirm": "Bestätigungsbereit"
+    },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Als routinemäßig übernommen",
+        "conflictReopened": "Auflösung des Widerspruchs zurückgenommen",
+        "escalated": "Für das Belegteam markiert",
+        "governed": "Maßgeblichen Eintrag gewählt",
+        "noteCleared": "Notiz entfernt",
+        "noteSaved": "Notiz gespeichert",
+        "overridden": "Ergebnis geändert",
+        "overrideWithdrawn": "Änderung des Ergebnisses zurückgenommen",
+        "reopened": "Als überprüfbare Behauptung erneut geöffnet",
+        "statusCleared": "Prüfstatus entfernt",
+        "statusDisputed": "Als beanstandet markiert",
+        "statusNeedsEvidence": "Als belegbedürftig markiert",
+        "statusReviewed": "Als geprüft markiert"
+      },
+      "empty": "Noch keine Prüfaktionen.",
+      "filters": {
+        "allKinds": "Jede Aktion",
+        "allReviewers": "Jeder Prüfer",
+        "kind": "Nach Aktion filtern",
+        "reviewer": "Nach Prüfer filtern"
+      },
+      "formerMember": "Ehemaliges Mitglied",
+      "kinds": {
+        "override": "Geänderte Ergebnisse",
+        "recordConflict": "Auflösungen von Widersprüchen",
+        "reopen": "Erneute Öffnungen",
+        "status": "Statusänderungen"
+      },
+      "noMatches": "Keine Aktionen entsprechen diesen Filtern.",
+      "noStatus": "Kein Status",
+      "none": "Noch keine Aktionen",
+      "reasonUnrecorded": "Keine Begründung erfasst: Dies geschah, bevor Begründungen erforderlich waren.",
+      "runButton": "Prüfverlauf",
+      "runTitle": "Prüfverlauf"
     },
     "matches": {
       "count": "{count, plural, one {# Treffer} other {# Treffer}}",
@@ -392,14 +442,32 @@
         "hint": "Ein zitierter Fakt betrifft einen anderen Zeitraum, Personenkreis, Ort oder eine andere Messgröße als die Behauptung.",
         "label": "Abweichender Umfang"
       },
+      "testimonyOnly": {
+        "hint": "Keine Aufzeichnung eines Dokuments belegt die Fakten, auf denen dieses Ergebnis beruht, und mindestens einer davon ist eine Zeugenaussage.",
+        "label": "Nur Zeugenaussagen"
+      },
       "unsourcedOnly": {
         "hint": "Kein Fakt, auf dem dieses Ergebnis beruht, hat bisher eine Quelle.",
         "label": "Nur ohne Quelle"
       }
     },
+    "reason": {
+      "escalate": "Warum braucht das Belegteam dies?",
+      "govern": "Warum ist dieser Eintrag maßgeblich?",
+      "override": "Warum lautet das Ergebnis „{verdict}“?",
+      "placeholder": "Begründung; sie bleibt im Verlauf der Behauptung",
+      "reopen": "Warum ist diese Behauptung überprüfbar?",
+      "required": "Geben Sie eine Begründung an, um dies festzuhalten.",
+      "unresolveConflict": "Warum diese Auflösung zurücknehmen?",
+      "withdrawOverride": "Warum zum Ergebnis des Werkzeugs zurückkehren?"
+    },
     "review": {
-      "disputed": "Beanstandet · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Als routinemäßig übernommen} other {Geprüft}} · {decidedAt}",
+      "decided": "{status, select, disputed {Beanstandet} needsEvidence {Belege fehlen} other {{origin, select, bulk {Als routinemäßig übernommen} other {Geprüft}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Beanstandet",
+        "needsEvidence": "Belege fehlen",
+        "reviewed": "Geprüft"
+      },
       "undo": "Entscheidung rückgängig machen"
     },
     "runs": {
@@ -466,7 +534,7 @@
       "acceptRoutine": "{count, plural, one {# routinemäßige Behauptung} other {# routinemäßige Behauptungen}} übernehmen",
       "attentionComplete": "<strong>Alle Behauptungen, die eine Entscheidung erfordern, wurden bearbeitet.</strong> {count, plural, one {Die # routinemäßige Feststellung muss nicht einzeln geprüft werden.} other {Die # routinemäßigen Feststellungen müssen nicht einzeln geprüft werden.}}",
       "attentionOpen": "<strong>{count, plural, one {# Behauptung erfordert} other {# Behauptungen erfordern}} Ihre Entscheidung</strong> – Widersprüche und strittige Auslegungen. {routineCount, plural, one {Die andere # ist routinemäßig und muss nicht einzeln freigegeben werden.} other {Die anderen # sind routinemäßig und müssen nicht einzeln freigegeben werden.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, strittig} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, strittig} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} needsEvidence {, Belege fehlen} other {}})",
       "documentView": {
         "label": "Dokumentansicht",
         "original": "Original",
@@ -1758,6 +1826,28 @@
     "loadEarlierMessages": "Ältere Nachrichten laden",
     "loadEarlierMessagesError": "Ältere Nachrichten konnten nicht geladen werden",
     "loadingEarlierMessages": "Ältere Nachrichten werden geladen…",
+    "localFilesUndo": {
+      "action": "Dateiänderungen rückgängig machen",
+      "computer": {
+        "failed": "Das Rückgängigmachen wurde auf Ihrem Computer nicht abgeschlossen. Einige Dateien wurden möglicherweise schon geändert. Prüfen Sie deshalb den Ordner des Chats.",
+        "folderBusy": "Ein Lauf auf Ihrem Computer verwendet diesen Ordner. Versuchen Sie es erneut, wenn er beendet ist.",
+        "noCheckpoint": "Ihr Computer hat keine gespeicherte Kopie der Dateien von vor diesem Schritt, daher wurde nichts rückgängig gemacht.",
+        "notNewest": "Ihr Computer hat neuere Änderungen in diesem Ordner, daher wurde nichts rückgängig gemacht."
+      },
+      "confirm": "Änderungen rückgängig machen",
+      "confirmDescription": "Die Dateien, die dieser Schritt in seinem Ordner auf Ihrem Computer geändert hat, kehren in den Zustand vor dem Schritt zurück. Nur die Änderungen dieses Schritts werden rückgängig gemacht; Änderungen früherer Schritte bleiben.",
+      "confirmTitle": "Dateiänderungen dieses Schritts rückgängig machen?",
+      "expired": "Ihr Computer hat nicht rechtzeitig geantwortet. Versuchen Sie es erneut.",
+      "pending": "Dateiänderungen auf Ihrem Computer werden rückgängig gemacht",
+      "refused": {
+        "desktopOffline": "Ihr Computer ist offline. Öffnen Sie die stella-Desktop-App und versuchen Sie es erneut.",
+        "desktopUpdateRequired": "Die stella-Desktop-App auf Ihrem Computer ist zu alt, um Änderungen rückgängig zu machen. Aktualisieren Sie sie und versuchen Sie es erneut.",
+        "noCheckpoint": "Für diesen Schritt gibt es keine gespeicherte Kopie der Dateien, zu der zurückgekehrt werden kann.",
+        "notNewest": "Nur die Dateiänderungen des neuesten Schritts können rückgängig gemacht werden.",
+        "threadBusy": "Dieser Chat arbeitet noch. Versuchen Sie es erneut, wenn er fertig ist."
+      },
+      "restored": "Dateiänderungen rückgängig gemacht"
+    },
     "localRun": {
       "cloud": "stella-Cloud",
       "errorLimitReached": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Versuchen Sie es erneut, sobald das Limit zurückgesetzt ist.",
@@ -2490,6 +2580,8 @@
     "loading": "Wird geladen …",
     "logTime": "Zeit erfassen",
     "low": "Niedrig",
+    "markAsRead": "Als gelesen markieren",
+    "markAsUnread": "Als ungelesen markieren",
     "matter": "Akte",
     "matters": "Akten",
     "medium": "Mittel",
@@ -2520,6 +2612,7 @@
     "or": "Oder",
     "organization": "Organisation",
     "organizationName": "Organisationsname",
+    "organizations": "Organisationen",
     "page": "Seite {page}",
     "paymentRetryNotice": "Zahlungsproblem. Aktualisieren Sie Ihre Zahlungsmethode bis zum {date}, um den Zugriff zu behalten.",
     "pin": "Anheften",
@@ -2606,6 +2699,7 @@
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
     "unknownUser": "Unbekannter Benutzer",
     "unpin": "Lösen",
+    "unread": "Ungelesen",
     "unsavedChanges": "Ungespeicherte Änderungen",
     "unsavedChangesClose": "Ungespeicherte Änderungen. Erneut schließen, um sie zu verwerfen",
     "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
@@ -2825,7 +2919,6 @@
       "vatPayerUnknown": "Unbekannt",
       "year": "Jahr"
     },
-    "filterOrganizations": "Organisationen",
     "filterPersons": "Personen",
     "import": {
       "confirmAction": "Import bestätigen",

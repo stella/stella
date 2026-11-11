@@ -271,11 +271,13 @@
       "overrideTooltip": "Un revisor ha registrado un resultado diferente. El análisis inferior es el del sistema y no se ha modificado.",
       "overrideVerdict": "Cambiar resultado",
       "recordConflict": {
+        "confirmGoverningRecord": "Confirmar como determinante",
         "description": "Dos hechos de referencia tratan el mismo punto (<strong>{subject}</strong>), pero discrepan. Ambos proceden de fuentes de <strong>alta confianza</strong>, por lo que no es un problema de fiabilidad: el propio registro es incoherente. AVT no emite un resultado ni puntúa la afirmación, porque decidir qué registro prevalece es una valoración que usted debe realizar y dejar registrada; la herramienta no debe hacerla en silencio.",
         "escalatedNotice": "Marcado para el equipo de pruebas. El conflicto del registro permanece abierto y se contabiliza hasta que se elija un registro prevalente.",
         "flagForEvidenceTeam": "Marcar para el equipo de pruebas",
         "governed": "<strong>{value}</strong> prevalece: la afirmación se valora frente a este registro. El otro registro permanece archivado.",
         "reconcile": "Conciliar el registro",
+        "suggestedNotice": "Se sugiere el registro de un documento antes que el relato de un testigo. Confírmelo o elija el otro registro.",
         "title": "Pruebas contradictorias en el registro",
         "treatAsGoverningRecord": "Considerar prevalente"
       },
@@ -286,10 +288,6 @@
       "reopened": "Reabierta, comprobación pendiente",
       "reopenedTooltip": "Un revisor la reclasificó como hecho comprobable; aún está pendiente la comprobación en vivo del registro.",
       "sourceCount": "{count, plural, one {# fuente} other {# fuentes} many {# fuentes}}",
-      "unsourced": {
-        "hint": "Este hecho aún no tiene ningún documento de origen vinculado; su soporte y su fecha describen la prueba, pero no son una fuente.",
-        "label": "Sin fuente"
-      },
       "whyVerdict": "Motivo de este resultado: hechos de referencia"
     },
     "claimTypes": {
@@ -326,15 +324,20 @@
       "scopeMismatch": "Un hecho citado tiene un alcance distinto del de la afirmación. Valore si la resuelve tal como está redactada antes de que el resultado se mantenga.",
       "supported": "El registro lo confirma. Su aprobación confirma que la herramienta lo ha interpretado correctamente; no se requiere una valoración.",
       "tension": "El registro solo respalda parcialmente la afirmación. Sopese los hechos favorables y contradictorios anteriores antes de dar por válido el resultado.",
+      "testimonyOnly": "El expediente lo confirma, pero ningún registro documental lo respalda: se basa en testimonios. Su aprobación confirma que la herramienta lo leyó correctamente; la conclusión sigue marcada como basada en testimonios.",
       "unsourcedOnly": "El registro lo confirma, pero solo mediante hechos que aún no tienen fuente. Su aprobación confirma que la herramienta los leyó correctamente; los hechos siguen marcados como sin fuente."
     },
     "documents": {
       "claimSummary": "Contradicha: {contradicted} · En tensión: {tension} · Conflicto del registro: {conflicts}",
       "empty": "Suba un documento a este asunto para verificarlo.",
+      "kindsLoadFailed": "No se pudo cargar si estos documentos son testimonios.",
       "notVerified": "Aún no verificado",
       "otherList": "Verificado con otra lista",
       "sizeConfirmTitle": "¿Verificar este documento?",
       "statusLoadFailed": "No se pudo cargar el estado de verificación de estos documentos.",
+      "testimony": "Testimonio",
+      "testimonyAbout": "Acerca de los testimonios",
+      "testimonyLine": "Marque como testimonio las declaraciones de testigos, las notas de entrevistas y las transcripciones. Los hechos extraídos de ellas cuentan como el relato de una persona, no como un registro.",
       "verifyAgain": "Volver a verificar"
     },
     "extraction": {
@@ -368,11 +371,58 @@
       "startFailed": "No se pudo iniciar la extracción de hechos",
       "submit": "{count, plural, =0 {Extraer hechos} one {Extraer hechos de # documento} many {Extraer hechos de # documentos} other {Extraer hechos de # documentos}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Todas las fuentes no rechazadas de este hecho son testimonios: una declaración de testigo, una nota de entrevista o una transcripción.",
+        "label": "Testimonio"
+      },
+      "unsourced": {
+        "hint": "Este hecho no tiene vinculado ningún documento de origen que no haya sido rechazado; su soporte y su fecha describen la prueba, pero no son una fuente.",
+        "label": "Sin fuente"
+      }
+    },
     "guidance": {
       "escalate": "Remitir",
       "manualJudgement": "Valoración manual",
       "optional": "Opcional",
       "readyToConfirm": "Listo para confirmar"
+    },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Aceptada como rutinaria",
+        "conflictReopened": "Resolución del conflicto retirada",
+        "escalated": "Marcada para el equipo de pruebas",
+        "governed": "Registro prevalente elegido",
+        "noteCleared": "Nota eliminada",
+        "noteSaved": "Nota guardada",
+        "overridden": "Resultado cambiado",
+        "overrideWithdrawn": "Cambio de resultado retirado",
+        "reopened": "Reabierta como afirmación comprobable",
+        "statusCleared": "Estado de revisión retirado",
+        "statusDisputed": "Marcada como impugnada",
+        "statusNeedsEvidence": "Marcada como pendiente de pruebas",
+        "statusReviewed": "Marcada como revisada"
+      },
+      "empty": "Aún no hay acciones de revisión.",
+      "filters": {
+        "allKinds": "Cualquier acción",
+        "allReviewers": "Cualquier revisor",
+        "kind": "Filtrar por acción",
+        "reviewer": "Filtrar por revisor"
+      },
+      "formerMember": "Antiguo miembro",
+      "kinds": {
+        "override": "Cambios de resultado",
+        "recordConflict": "Resoluciones de conflictos",
+        "reopen": "Reaperturas",
+        "status": "Cambios de estado"
+      },
+      "noMatches": "Ninguna acción coincide con estos filtros.",
+      "noStatus": "Sin estado",
+      "none": "Aún no hay acciones",
+      "reasonUnrecorded": "Sin motivo registrado: se hizo antes de que los motivos fueran obligatorios.",
+      "runButton": "Historial de revisión",
+      "runTitle": "Historial de revisión"
     },
     "matches": {
       "count": "{count, plural, one {# coincidencia} other {# coincidencias} many {# coincidencias}}",
@@ -392,14 +442,32 @@
         "hint": "Un hecho citado se refiere a un período, población, lugar o medida distintos de los de la afirmación.",
         "label": "Alcance distinto"
       },
+      "testimonyOnly": {
+        "hint": "Ningún registro documental respalda los hechos en los que se basa esta conclusión, y al menos uno de ellos es un testimonio.",
+        "label": "Solo testimonios"
+      },
       "unsourcedOnly": {
         "hint": "Ningún hecho en el que se basa este resultado tiene todavía una fuente.",
         "label": "Solo sin fuente"
       }
     },
+    "reason": {
+      "escalate": "¿Por qué lo necesita el equipo de pruebas?",
+      "govern": "¿Por qué prevalece este registro?",
+      "override": "¿Por qué el resultado es «{verdict}»?",
+      "placeholder": "Indique el motivo; quedará en el historial de la afirmación",
+      "reopen": "¿Por qué se puede comprobar esta afirmación?",
+      "required": "Indique un motivo para registrarlo.",
+      "unresolveConflict": "¿Por qué retirar esta resolución?",
+      "withdrawOverride": "¿Por qué volver al resultado de la herramienta?"
+    },
     "review": {
-      "disputed": "Impugnada · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Aceptada como rutinaria} other {Revisada}} · {decidedAt}",
+      "decided": "{status, select, disputed {Impugnada} needsEvidence {Faltan pruebas} other {{origin, select, bulk {Aceptada como rutinaria} other {Revisada}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Impugnada",
+        "needsEvidence": "Faltan pruebas",
+        "reviewed": "Revisada"
+      },
       "undo": "Deshacer decisión"
     },
     "runs": {
@@ -466,7 +534,7 @@
       "acceptRoutine": "Aceptar {count, plural, one {# afirmación rutinaria} other {# afirmaciones rutinarias} many {# afirmaciones rutinarias}}",
       "attentionComplete": "<strong>Se han resuelto todas las afirmaciones que requerían una valoración.</strong> {count, plural, one {La # determinación rutinaria no requiere revisión individual.} other {Las # determinaciones rutinarias no requieren revisión individual.} many {Las # determinaciones rutinarias no requieren revisión individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# afirmación requiere} other {# afirmaciones requieren} many {# afirmaciones requieren}} su valoración</strong>: conflictos e interpretaciones cuestionadas. {routineCount, plural, one {La otra # es rutinaria y no requiere aprobación individual.} other {Las otras # son rutinarias y no requieren aprobación individual.} many {Las otras # son rutinarias y no requieren aprobación individual.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, cuestionada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, impugnada} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, cuestionada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, impugnada} needsEvidence {, faltan pruebas} other {}})",
       "documentView": {
         "label": "Vista del documento",
         "original": "Original",
@@ -1758,6 +1826,28 @@
     "loadEarlierMessages": "Cargar mensajes anteriores",
     "loadEarlierMessagesError": "No se pudieron cargar los mensajes anteriores",
     "loadingEarlierMessages": "Cargando mensajes anteriores…",
+    "localFilesUndo": {
+      "action": "Deshacer cambios en archivos",
+      "computer": {
+        "failed": "La acción de deshacer no terminó en tu ordenador. Es posible que algunos archivos ya hayan cambiado, así que revisa la carpeta del chat.",
+        "folderBusy": "Una ejecución en tu ordenador está usando esta carpeta. Inténtalo de nuevo cuando termine.",
+        "noCheckpoint": "Tu ordenador no tiene una copia guardada de los archivos de antes de este paso, así que no se deshizo nada.",
+        "notNewest": "Tu ordenador tiene cambios más recientes en esta carpeta, así que no se deshizo nada."
+      },
+      "confirm": "Deshacer cambios",
+      "confirmDescription": "Los archivos que este paso cambió en su carpeta de tu ordenador vuelven a como estaban antes del paso. Solo se deshacen los cambios de este paso; los de pasos anteriores se mantienen.",
+      "confirmTitle": "¿Deshacer los cambios en archivos de este paso?",
+      "expired": "Tu ordenador no respondió a tiempo. Inténtalo de nuevo.",
+      "pending": "Deshaciendo cambios en archivos de tu ordenador",
+      "refused": {
+        "desktopOffline": "Tu ordenador está sin conexión. Abre la aplicación de escritorio de stella e inténtalo de nuevo.",
+        "desktopUpdateRequired": "La aplicación de escritorio de stella de tu ordenador es demasiado antigua para deshacer cambios. Actualízala e inténtalo de nuevo.",
+        "noCheckpoint": "Este paso no tiene una copia guardada de los archivos a la que volver.",
+        "notNewest": "Solo se pueden deshacer los cambios en archivos del paso más reciente.",
+        "threadBusy": "Este chat todavía está trabajando. Inténtalo de nuevo cuando termine."
+      },
+      "restored": "Cambios en archivos deshechos"
+    },
     "localRun": {
       "cloud": "Nube de stella",
       "errorLimitReached": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Vuelve a intentarlo cuando se restablezca el límite.",
@@ -2490,6 +2580,8 @@
     "loading": "Cargando",
     "logTime": "Registrar tiempo",
     "low": "Baja",
+    "markAsRead": "Marcar como leído",
+    "markAsUnread": "Marcar como no leído",
     "matter": "Asunto",
     "matters": "Asuntos",
     "medium": "Media",
@@ -2520,6 +2612,7 @@
     "or": "O",
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
+    "organizations": "Organizaciones",
     "page": "Página {page}",
     "paymentRetryNotice": "Problema con el pago. Actualiza tu método de pago antes del {date} para mantener el acceso.",
     "pin": "Fijar",
@@ -2606,6 +2699,7 @@
     "unexpectedError": "Se produjo un error inesperado. Contacte con soporte.",
     "unknownUser": "Usuario desconocido",
     "unpin": "Desfijar",
+    "unread": "No leído",
     "unsavedChanges": "Cambios sin guardar",
     "unsavedChangesClose": "Cambios sin guardar. Cierra de nuevo para descartarlos",
     "unsavedChangesEscape": "Cambios sin guardar. Pulsa Esc de nuevo para descartarlos",
@@ -2825,7 +2919,6 @@
       "vatPayerUnknown": "Desconocido",
       "year": "Año"
     },
-    "filterOrganizations": "Organizaciones",
     "filterPersons": "Personas",
     "import": {
       "confirmAction": "Confirmar importación",

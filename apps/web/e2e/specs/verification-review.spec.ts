@@ -29,6 +29,7 @@ const emptyReview = {
   decidedBy: null,
   reopened: false,
   recordConflictResolution: null,
+  eventCount: 0,
 };
 const avtLayout = {
   version: 1,
@@ -119,6 +120,7 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
         },
       },
       qualifiers: [],
+      suggestedGoverningFactId: null,
       text,
       anchor: { type: "docx-block", blockId: "b1", start: 0, end: text.length },
       refs: [],
@@ -138,7 +140,7 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
       factStandings: [governingFactId, competingFactId].map((factEntityId) => ({
         factEntityId,
         scoring: "included",
-        sourcing: "unsourced",
+        tier: "unsourced",
       })),
       status: "completed",
       errorCode: null,
@@ -205,6 +207,7 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
             ? {
                 kind: "record-conflict",
                 resolution: { kind: "governed", factEntityId: governingFactId },
+                reason: "The bank ledger is the primary record.",
               }
             : { kind: "status", status: "reviewed" };
         expect(route.request().postDataJSON()).toEqual({
@@ -224,6 +227,7 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
           ...(reviewWrites === 2
             ? ({ status: "reviewed", statusOrigin: "single" } as const)
             : {}),
+          eventCount: reviewWrites,
         };
         await route.fulfill({ json: { claimId: claim.id, review } });
         return;
@@ -237,7 +241,9 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
 
     await page.goto(
       `/workspaces/${workspace.id}/${workspace.viewId}?run=${run.id}`,
-      { waitUntil: "commit" },
+      {
+        waitUntil: "commit",
+      },
     );
     await expect(
       page.getByText("Verdict withheld", { exact: true }),
@@ -254,6 +260,16 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
       .getByRole("button", { name: "Treat as governing", exact: true })
       .first()
       .click();
+    // Choosing the governing record changes the verdict, so it is recorded
+    // only with the reviewer's reason, asked beside the choice.
+    const reason = page.getByLabel("Why does this record govern?");
+    await reason.press("Enter");
+    await expect(
+      page.getByText("Give a reason to record this.", { exact: true }),
+    ).toBeVisible();
+    expect(reviewWrites).toBe(0);
+    await reason.fill("The bank ledger is the primary record.");
+    await reason.press("Enter");
     await expect(
       page.getByText("5 July 2021 governs:", { exact: false }),
     ).toBeVisible();
@@ -345,6 +361,7 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
           recordConflict: null,
         },
         qualifiers: [],
+        suggestedGoverningFactId: null,
         text,
         anchor: {
           type: "pdf-page",
@@ -466,7 +483,9 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
 
     await page.goto(
       `/workspaces/${workspace.id}/${workspace.viewId}?run=${run.id}`,
-      { waitUntil: "commit" },
+      {
+        waitUntil: "commit",
+      },
     );
     await page.getByRole("tab", { name: "Original", exact: true }).click();
 

@@ -271,11 +271,13 @@
       "overrideTooltip": "Osoba weryfikująca zapisała inne rozstrzygnięcie. Poniżej bez zmian przedstawiono własną analizę narzędzia.",
       "overrideVerdict": "Zmień rozstrzygnięcie",
       "recordConflict": {
+        "confirmGoverningRecord": "Potwierdź jako rozstrzygający",
         "description": "Dwa fakty referencyjne dotyczą tej samej kwestii (<strong>{subject}</strong>), ale są ze sobą sprzeczne. Oba pochodzą ze źródeł o <strong>wysokim poziomie pewności</strong>, więc nie jest to problem wiarygodności: sam rejestr jest wewnętrznie niespójny. AVT wstrzymuje rozstrzygnięcie zamiast oceniać twierdzenie, ponieważ wybór nadrzędnego wpisu wymaga Twojej decyzji i jej odnotowania; narzędzie nie powinno dokonywać takiego wyboru bez informowania użytkownika.",
         "escalatedNotice": "Oznaczono dla zespołu ds. dowodów. Sprzeczność w rejestrze pozostaje otwarta i uwzględniana w zestawieniu do czasu wybrania nadrzędnego wpisu.",
         "flagForEvidenceTeam": "Oznacz dla zespołu ds. dowodów",
         "governed": "<strong>{value}</strong> jest nadrzędny: twierdzenie ocenia się względem tego wpisu. Drugi wpis pozostaje zarejestrowany.",
         "reconcile": "Rozstrzygnij sprzeczność w rejestrze",
+        "suggestedNotice": "Sugerowany jest zapis w dokumencie, a nie relacja świadka. Potwierdź go lub wybierz drugi zapis.",
         "title": "Sprzeczne dowody w rejestrze",
         "treatAsGoverningRecord": "Uznaj za nadrzędny"
       },
@@ -286,10 +288,6 @@
       "reopened": "Otwarto ponownie, oczekuje na sprawdzenie",
       "reopenedTooltip": "Osoba weryfikująca przeklasyfikowała to twierdzenie jako możliwy do sprawdzenia fakt; porównanie z rzeczywistym rejestrem nadal oczekuje na wykonanie.",
       "sourceCount": "{count, plural, one {# źródło} few {# źródła} many {# źródeł} other {# źródła}}",
-      "unsourced": {
-        "hint": "Do tego faktu nie dołączono jeszcze żadnego dokumentu źródłowego; nośnik i data opisują dowód, ale nie są źródłem.",
-        "label": "Bez źródła"
-      },
       "whyVerdict": "Uzasadnienie rozstrzygnięcia: fakty referencyjne"
     },
     "claimTypes": {
@@ -326,15 +324,20 @@
       "scopeMismatch": "Przywołany fakt ma inny zakres niż twierdzenie. Zanim rozstrzygnięcie zostanie utrzymane, oceń, czy rozstrzyga ono twierdzenie w jego brzmieniu.",
       "supported": "Rejestr potwierdza to twierdzenie. Zatwierdzenie potwierdza, że narzędzie odczytało je prawidłowo; nie jest potrzebna decyzja uznaniowa.",
       "tension": "Rejestr potwierdza to twierdzenie tylko częściowo. Przed zatwierdzeniem rozstrzygnięcia rozważ powyższe fakty potwierdzające i przeczące.",
+      "testimonyOnly": "Materiał to potwierdza, ale żaden zapis w dokumencie tego nie popiera: opiera się na zeznaniach. Twoje zatwierdzenie potwierdza, że narzędzie odczytało to poprawnie; wynik pozostaje oznaczony jako oparty na zeznaniach.",
       "unsourcedOnly": "Rejestr to potwierdza, ale tylko poprzez fakty, które nie mają jeszcze źródła. Twoje zatwierdzenie potwierdza, że narzędzie odczytało je poprawnie; fakty pozostają oznaczone jako bez źródła."
     },
     "documents": {
       "claimSummary": "Sprzeczne: {contradicted} · Częściowo sprzeczne: {tension} · Sprzeczność w rejestrze: {conflicts}",
       "empty": "Prześlij dokument do tej sprawy, aby go zweryfikować.",
+      "kindsLoadFailed": "Nie udało się wczytać, czy te dokumenty są zeznaniami.",
       "notVerified": "Jeszcze nie zweryfikowano",
       "otherList": "Zweryfikowano względem innej listy",
       "sizeConfirmTitle": "Zweryfikować ten dokument?",
       "statusLoadFailed": "Nie udało się wczytać stanu weryfikacji tych dokumentów.",
+      "testimony": "Zeznanie",
+      "testimonyAbout": "O zeznaniach",
+      "testimonyLine": "Oznacz zeznania świadków, notatki z rozmów i transkrypcje jako zeznania. Fakty z nich pochodzące liczą się jako relacja osoby, a nie zapis.",
       "verifyAgain": "Zweryfikuj ponownie"
     },
     "extraction": {
@@ -368,11 +371,58 @@
       "startFailed": "Nie udało się rozpocząć wyodrębniania faktów",
       "submit": "{count, plural, =0 {Wyodrębnij fakty} one {Wyodrębnij fakty z # dokumentu} few {Wyodrębnij fakty z # dokumentów} many {Wyodrębnij fakty z # dokumentów} other {Wyodrębnij fakty z # dokumentu}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Każde nieodrzucone źródło tego faktu to zeznanie: oświadczenie świadka, notatka z rozmowy lub transkrypcja.",
+        "label": "Zeznanie"
+      },
+      "unsourced": {
+        "hint": "Do tego faktu nie dołączono żadnego dokumentu źródłowego, który nie został odrzucony; nośnik i data opisują dowód, ale nie są źródłem.",
+        "label": "Bez źródła"
+      }
+    },
     "guidance": {
       "escalate": "Przekaż dalej",
       "manualJudgement": "Wymaga decyzji",
       "optional": "Opcjonalne",
       "readyToConfirm": "Gotowe do potwierdzenia"
+    },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Zaakceptowano jako rutynowe",
+        "conflictReopened": "Wycofano rozstrzygnięcie sprzeczności",
+        "escalated": "Oznaczono dla zespołu ds. dowodów",
+        "governed": "Wybrano wpis nadrzędny",
+        "noteCleared": "Usunięto uwagę",
+        "noteSaved": "Zapisano uwagę",
+        "overridden": "Zmieniono rozstrzygnięcie",
+        "overrideWithdrawn": "Wycofano zmianę rozstrzygnięcia",
+        "reopened": "Otwarto ponownie jako możliwe do sprawdzenia twierdzenie",
+        "statusCleared": "Usunięto status weryfikacji",
+        "statusDisputed": "Oznaczono jako zakwestionowane",
+        "statusNeedsEvidence": "Oznaczono jako wymagające dowodów",
+        "statusReviewed": "Oznaczono jako zweryfikowane"
+      },
+      "empty": "Brak działań weryfikacyjnych.",
+      "filters": {
+        "allKinds": "Dowolne działanie",
+        "allReviewers": "Dowolny weryfikujący",
+        "kind": "Filtruj według działania",
+        "reviewer": "Filtruj według weryfikującego"
+      },
+      "formerMember": "Były członek",
+      "kinds": {
+        "override": "Zmiany rozstrzygnięcia",
+        "recordConflict": "Rozstrzygnięcia sprzeczności",
+        "reopen": "Ponowne otwarcia",
+        "status": "Zmiany statusu"
+      },
+      "noMatches": "Żadne działanie nie pasuje do tych filtrów.",
+      "noStatus": "Bez statusu",
+      "none": "Brak działań",
+      "reasonUnrecorded": "Nie zapisano powodu: działanie podjęto, zanim powód stał się wymagany.",
+      "runButton": "Historia weryfikacji",
+      "runTitle": "Historia weryfikacji"
     },
     "matches": {
       "count": "{count, plural, one {# trafienie} few {# trafienia} many {# trafień} other {# trafienia}}",
@@ -392,14 +442,32 @@
         "hint": "Przywołany fakt dotyczy innego okresu, grupy, miejsca lub miary niż twierdzenie.",
         "label": "Inny zakres"
       },
+      "testimonyOnly": {
+        "hint": "Żaden zapis w dokumencie nie potwierdza faktów, na których opiera się ten wynik, a co najmniej jeden z nich jest zeznaniem.",
+        "label": "Tylko zeznania"
+      },
       "unsourcedOnly": {
         "hint": "Żaden fakt, na którym opiera się to rozstrzygnięcie, nie ma jeszcze źródła.",
         "label": "Tylko bez źródła"
       }
     },
+    "reason": {
+      "escalate": "Dlaczego potrzebuje tego zespół ds. dowodów?",
+      "govern": "Dlaczego ten wpis jest nadrzędny?",
+      "override": "Dlaczego rozstrzygnięcie to „{verdict}”?",
+      "placeholder": "Podaj powód; pozostanie w historii twierdzenia",
+      "reopen": "Dlaczego to twierdzenie można sprawdzić?",
+      "required": "Podaj powód, aby to zapisać.",
+      "unresolveConflict": "Dlaczego wycofać to rozstrzygnięcie sprzeczności?",
+      "withdrawOverride": "Dlaczego wrócić do rozstrzygnięcia narzędzia?"
+    },
     "review": {
-      "disputed": "Zakwestionowane · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Zaakceptowane jako rutynowe} other {Zweryfikowane}} · {decidedAt}",
+      "decided": "{status, select, disputed {Zakwestionowane} needsEvidence {Brak dowodów} other {{origin, select, bulk {Zaakceptowane jako rutynowe} other {Zweryfikowane}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Zakwestionowane",
+        "needsEvidence": "Brak dowodów",
+        "reviewed": "Zweryfikowane"
+      },
       "undo": "Cofnij decyzję"
     },
     "runs": {
@@ -466,7 +534,7 @@
       "acceptRoutine": "Zaakceptuj {count, plural, one {# rutynowe twierdzenie} few {# rutynowe twierdzenia} many {# rutynowych twierdzeń} other {# rutynowego twierdzenia}}",
       "attentionComplete": "<strong>Wszystkie twierdzenia wymagające oceny zostały rozpatrzone.</strong> {count, plural, one {Pozostałe # rutynowe ustalenie nie wymaga indywidualnej weryfikacji.} few {Pozostałe # rutynowe ustalenia nie wymagają indywidualnej weryfikacji.} many {Pozostałych # rutynowych ustaleń nie trzeba weryfikować indywidualnie.} other {Pozostałego # rutynowego ustalenia nie trzeba weryfikować indywidualnie.}}",
       "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong>: sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} needsEvidence {, brak dowodów} other {}})",
       "documentView": {
         "label": "Widok dokumentu",
         "original": "Oryginał",
@@ -1758,6 +1826,28 @@
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
     "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
+    "localFilesUndo": {
+      "action": "Cofnij zmiany w plikach",
+      "computer": {
+        "failed": "Cofanie zmian nie zakończyło się na Twoim komputerze. Niektóre pliki mogły już zostać zmienione, więc sprawdź folder czatu.",
+        "folderBusy": "Ten folder na Twoim komputerze jest używany przez inne uruchomienie. Spróbuj ponownie, gdy się zakończy.",
+        "noCheckpoint": "Twój komputer nie ma zapisanej kopii plików sprzed tego kroku, więc nic nie zostało cofnięte.",
+        "notNewest": "Twój komputer ma nowsze zmiany w tym folderze, więc nic nie zostało cofnięte."
+      },
+      "confirm": "Cofnij zmiany",
+      "confirmDescription": "Pliki, które ten krok zmienił w swoim folderze na Twoim komputerze, wrócą do stanu sprzed tego kroku. Cofnięte zostaną tylko zmiany z tego kroku; zmiany z wcześniejszych kroków pozostaną.",
+      "confirmTitle": "Cofnąć zmiany w plikach z tego kroku?",
+      "expired": "Twój komputer nie odpowiedział na czas. Spróbuj ponownie.",
+      "pending": "Cofanie zmian w plikach na Twoim komputerze",
+      "refused": {
+        "desktopOffline": "Twój komputer jest offline. Otwórz aplikację desktopową stella i spróbuj ponownie.",
+        "desktopUpdateRequired": "Aplikacja desktopowa stella na Twoim komputerze jest zbyt stara, aby cofać zmiany. Zaktualizuj ją i spróbuj ponownie.",
+        "noCheckpoint": "Ten krok nie ma zapisanej kopii plików, do której można wrócić.",
+        "notNewest": "Cofnąć można tylko zmiany w plikach z najnowszego kroku.",
+        "threadBusy": "Ten czat jeszcze pracuje. Spróbuj ponownie, gdy skończy."
+      },
+      "restored": "Zmiany w plikach cofnięte"
+    },
     "localRun": {
       "cloud": "Chmura stella",
       "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
@@ -2490,6 +2580,8 @@
     "loading": "Ładowanie",
     "logTime": "Zarejestruj czas",
     "low": "Niska",
+    "markAsRead": "Oznacz jako przeczytane",
+    "markAsUnread": "Oznacz jako nieprzeczytane",
     "matter": "Sprawa",
     "matters": "Sprawy",
     "medium": "Średnia",
@@ -2520,6 +2612,7 @@
     "or": "Lub",
     "organization": "Organizacja",
     "organizationName": "Nazwa organizacji",
+    "organizations": "Organizacje",
     "page": "Strona {page}",
     "paymentRetryNotice": "Problem z płatnością. Zaktualizuj metodę płatności do {date}, aby zachować dostęp.",
     "pin": "Przypnij",
@@ -2606,6 +2699,7 @@
     "unexpectedError": "Wystąpił nieoczekiwany błąd. Skontaktuj się z pomocą techniczną.",
     "unknownUser": "Nieznany użytkownik",
     "unpin": "Odepnij",
+    "unread": "Nieprzeczytane",
     "unsavedChanges": "Niezapisane zmiany",
     "unsavedChangesClose": "Niezapisane zmiany. Zamknij ponownie, aby je odrzucić",
     "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
@@ -2825,7 +2919,6 @@
       "vatPayerUnknown": "Nieznany",
       "year": "Rok"
     },
-    "filterOrganizations": "Organizacje",
     "filterPersons": "Osoby",
     "import": {
       "confirmAction": "Potwierdź import",

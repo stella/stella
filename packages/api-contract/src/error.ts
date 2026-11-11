@@ -97,6 +97,11 @@ export type ChatInputRefusalCode =
  *  stopped, superseded or already settled. */
 export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
 
+/** No chat thread of the caller under that id in the requested scope: another
+ *  person's, deleted, or a matter thread asked for without its matter. */
+export const CHAT_THREAD_NOT_FOUND_ERROR_CODE =
+  "chat_thread_not_found" as const;
+
 /**
  * Why the server refused to edit a user message and drop the turns after it.
  * After any of them the page reloads the thread as stored. Only `turnRunning`

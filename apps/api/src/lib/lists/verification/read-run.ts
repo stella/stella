@@ -7,7 +7,7 @@
  */
 
 import { panic } from "better-result";
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -15,11 +15,12 @@ import {
   legalListClaims,
   legalListFactDetails,
   legalListItems,
-  legalListItemSources,
   legalListVerificationBlocks,
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readFactTiers, readSourceKinds } from "@/api/lib/lists/fact-tiers";
+import { factTier } from "@/api/lib/lists/source-kind";
 import type {
   ClaimRef,
   ClaimState,
@@ -28,6 +29,7 @@ import type {
   VerificationEvidence,
 } from "@/api/lib/lists/verification/contract";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
+import { suggestedGoverningFactId } from "@/api/lib/lists/verification/governing-suggestion";
 import {
   claimQualifiers,
   restingFactIds,
@@ -42,10 +44,15 @@ import {
   foldClaimReview,
 } from "@/api/lib/lists/verification/review-fold";
 
-export const serializeClaimReview = (review: ClaimReview) => ({
+/** A claim's review on the wire, with how many actions its history holds. */
+export const serializeClaimReview = ({
+  review,
+  eventCount,
+}: ClaimReviewRecord) => ({
   ...review,
   noteSavedAt: review.noteSavedAt?.toISOString() ?? null,
   decidedAt: review.decidedAt?.toISOString() ?? null,
+  eventCount,
 });
 
 type ReadClaimReviewsArgs = {
@@ -56,7 +63,7 @@ type ReadClaimReviewsArgs = {
   claimIds?: readonly SafeId<"legalListClaim">[];
 };
 
-type ClaimReviewRecord = {
+export type ClaimReviewRecord = {
   review: ClaimReview;
   /** Actions recorded so far, checked against the per-claim cap. */
   eventCount: number;
@@ -249,28 +256,40 @@ type ReadFactStandingsArgs = {
 /**
  * How each fact a run pinned stands on its list now, for the qualifiers
  * computed at read time. A fact taken off the list since keeps the standing
- * the run pinned: included, with the sources the run read.
+ * the run pinned: included, with the sources the run read, each of the kind
+ * its document has on the list now.
  */
 const readFactStandings = async ({
   tx,
   workspaceId,
   evidence,
-}: ReadFactStandingsArgs): Promise<
-  ReadonlyMap<SafeId<"entity">, FactStanding>
-> => {
+}: ReadFactStandingsArgs): Promise<FactStandings> => {
+  const scope = { tx, workspaceId, listId: evidence.listId };
+  const factIds = evidence.facts.map((fact) => fact.factEntityId);
+  if (factIds.length === 0) {
+    return new Map();
+  }
+  const pinnedKinds = await readSourceKinds({
+    ...scope,
+    documentIds: evidence.facts.flatMap((fact) =>
+      fact.sources.map((source) => source.sourceEntityId),
+    ),
+  });
   const standings = new Map<SafeId<"entity">, FactStanding>(
     evidence.facts.map((fact) => [
       fact.factEntityId,
       {
         scoring: "included",
-        sourcing: fact.sources.length > 0 ? "sourced" : "unsourced",
+        tier: factTier(
+          fact.sources.map(
+            (source) =>
+              pinnedKinds.get(source.sourceEntityId) ??
+              panic("A pinned source has no kind"),
+          ),
+        ),
       },
     ]),
   );
-  const factIds = [...standings.keys()];
-  if (factIds.length === 0) {
-    return standings;
-  }
   const onList = await tx
     .select({
       factEntityId: legalListItems.entityId,
@@ -292,33 +311,47 @@ const readFactStandings = async ({
   if (onList.length === 0) {
     return standings;
   }
-  // A rejected source no longer says where a fact comes from, as when the
-  // run pinned its evidence.
-  const sourced = await tx
-    .select({ factEntityId: legalListItemSources.itemEntityId })
-    .from(legalListItemSources)
-    .where(
-      and(
-        eq(legalListItemSources.workspaceId, workspaceId),
-        inArray(
-          legalListItemSources.itemEntityId,
-          onList.map((fact) => fact.factEntityId),
-        ),
-        ne(legalListItemSources.verificationStatus, "rejected"),
-      ),
-    )
-    .groupBy(legalListItemSources.itemEntityId)
-    .limit(onList.length);
-  const sourcedIds = new Set(sourced.map((fact) => fact.factEntityId));
+  const tiers = await readFactTiers({
+    ...scope,
+    factIds: onList.map((fact) => fact.factEntityId),
+  });
   for (const { factEntityId, scoring } of onList) {
     standings.set(factEntityId, {
       // A fact nobody has described yet scores, as when a run pins it.
       scoring: scoring ?? "included",
-      sourcing: sourcedIds.has(factEntityId) ? "sourced" : "unsourced",
+      tier: tiers.get(factEntityId) ?? panic("A listed fact has no tier"),
     });
   }
   return standings;
 };
+
+/** How every fact a run pinned stands now, keyed by fact. `null` when the
+ *  workspace holds no such run. */
+export const readRunFactStandings = async (args: ReadVerificationRunArgs) => {
+  const evidence = await readRunEvidenceForGrading(args);
+  return evidence === null
+    ? null
+    : readFactStandings({
+        tx: args.tx,
+        workspaceId: args.workspaceId,
+        evidence,
+      });
+};
+
+/** The record suggested to govern a claim withheld between two facts, as
+ *  they stand now; null for any other claim. */
+export const governingSuggestionOfClaim = (
+  claim: Pick<QualifiedClaimRow, "recordConflict">,
+  standings: FactStandings,
+) =>
+  claim.recordConflict === null
+    ? null
+    : suggestedGoverningFactId({
+        conflict: claim.recordConflict,
+        tierOf: (factEntityId) =>
+          standings.get(factEntityId)?.tier ??
+          panic("A record conflict names a fact its run did not pin"),
+      });
 
 /** `null` when the workspace holds no such run. */
 export const readVerificationRun = async ({
@@ -387,7 +420,7 @@ export const readVerificationRun = async ({
     factStandings: [...standings].map(([factEntityId, standing]) => ({
       factEntityId,
       scoring: standing.scoring,
-      sourcing: standing.sourcing,
+      tier: standing.tier,
     })),
     status: run.status,
     errorCode: run.errorCode,
@@ -400,7 +433,8 @@ export const readVerificationRun = async ({
     blocks,
     claims: claims.map((claim) => {
       const verdict = toClaimVerdict(claim);
-      const review = reviews.get(claim.id)?.review ?? null;
+      const record = reviews.get(claim.id) ?? null;
+      const review = record?.review ?? null;
       return {
         id: claim.id,
         position: claim.position,
@@ -408,10 +442,13 @@ export const readVerificationRun = async ({
         framing: claim.framing,
         verdict,
         qualifiers: qualifiersOfClaim(claim, review, standings),
+        // Only a suggestion: the conflict stays open until a person names
+        // the governing record.
+        suggestedGoverningFactId: governingSuggestionOfClaim(claim, standings),
         text: claim.text,
         anchor: claim.anchor,
         refs: claim.refs,
-        review: review === null ? null : serializeClaimReview(review),
+        review: record === null ? null : serializeClaimReview(record),
       };
     }),
   };

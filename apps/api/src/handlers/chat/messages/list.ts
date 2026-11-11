@@ -18,7 +18,10 @@ import {
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
-import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
+import {
+  loadChatMessagePage,
+  readNewestChatTurnOnTx,
+} from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
 import {
   EMPTY_CHAT_THREAD_ATTACHED_FILES,
@@ -319,6 +322,17 @@ const getMessages = createSafeRootHandler(
           threadId,
           tx,
         });
+        // A thread whose turns run on the member's computer offers to undo
+        // its newest turn's file changes; the page names that turn.
+        const newestLocalTurn =
+          chatRunTargetOf(thread.chatLocalRunTarget).kind === "local"
+            ? await readNewestChatTurnOnTx({
+                tx,
+                organizationId: session.activeOrganizationId,
+                threadId,
+                userId: user.id,
+              })
+            : null;
 
         // Estimate the model context the next send would carry, mirroring the
         // send path: the active compaction summary plus the same windowed
@@ -377,6 +391,7 @@ const getMessages = createSafeRootHandler(
         return {
           kind: "ok" as const,
           attachedFiles,
+          newestLocalTurn,
           webSearchAvailable,
           modelTier,
           thread,
@@ -394,6 +409,7 @@ const getMessages = createSafeRootHandler(
         return Result.ok({
           activeSkill: null,
           activeTurnId: null,
+          newestLocalTurn: null,
           attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
           forkProvenance: { type: "none" } as const,
           messages: [],
@@ -495,6 +511,12 @@ const getMessages = createSafeRootHandler(
     return Result.ok({
       activeSkill: thread.activeSkill,
       activeTurnId: page.activeTurnId,
+      /**
+       * The member's newest turn of a thread whose turns run on their
+       * computer, whose file changes the page may offer to undo; null for a
+       * cloud thread.
+       */
+      newestLocalTurn: reads.newestLocalTurn,
       attachedFiles,
       forkProvenance: resolveForkProvenance({
         forkedFromMessageId: thread.forkedFromMessageId,

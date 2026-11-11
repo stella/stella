@@ -179,6 +179,15 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/threads/list.ts",
   },
+  // The reader's own marks on a chat in the chats list.
+  "PATCH /v1/chat/threads/:threadId/read-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/read-state/update.ts",
+  },
+  "PATCH /v1/chat/threads/:threadId/pin-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/pin-state/update.ts",
+  },
   "GET /v1/chat/threads/:threadId/messages": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/messages/list.ts",

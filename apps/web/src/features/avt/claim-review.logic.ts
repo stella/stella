@@ -5,6 +5,7 @@
  * follows the server's review fold (apps/api lib/lists/verification/
  * review-fold.ts): reopening and resolving a record conflict withdraw an
  * earlier status and override, and clearing a note keeps when one was saved.
+ * Every action adds one event to the claim's history.
  */
 
 import { panic } from "better-result";
@@ -28,6 +29,7 @@ export const EMPTY_CLAIM_REVIEW = {
   decidedBy: null,
   reopened: false,
   recordConflictResolution: null,
+  eventCount: 0,
 } as const satisfies ClaimReview;
 
 type PredictionContext = {
@@ -47,7 +49,8 @@ const predictStatus = (
       return { status: null, statusOrigin: null };
     }
     case "reviewed":
-    case "disputed": {
+    case "disputed":
+    case "needs-evidence": {
       return { status, statusOrigin: "single" };
     }
     default: {
@@ -62,7 +65,10 @@ export const predictClaimReview = (
   event: ClaimReviewEvent,
   { at, actorId }: PredictionContext,
 ): ClaimReview => {
-  const review = current ?? EMPTY_CLAIM_REVIEW;
+  const review = {
+    ...(current ?? EMPTY_CLAIM_REVIEW),
+    eventCount: (current?.eventCount ?? 0) + 1,
+  };
   const decided = { decidedAt: at, decidedBy: actorId };
   switch (event.kind) {
     case "status": {
@@ -127,6 +133,7 @@ export const predictBulkReviewed = (
     decidedBy: context.actorId,
     status: "reviewed",
     statusOrigin: "bulk",
+    eventCount: review.eventCount + 1,
   };
 };
 

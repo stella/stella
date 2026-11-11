@@ -271,11 +271,13 @@
       "overrideTooltip": "Egy ellenőr eltérő következtetést rögzített. Az eszköz saját elemzése változatlanul látható alább.",
       "overrideVerdict": "Következtetés felülírása",
       "recordConflict": {
+        "confirmGoverningRecord": "Megerősítés irányadóként",
         "description": "Két referenciatény ugyanarra a kérdésre vonatkozik (<strong>{subject}</strong>), de ellentmond egymásnak. Mindkettő <strong>nagy bizonyosságú</strong> forrásból származik, ezért ez nem megbízhatósági probléma: maga a nyilvántartás belsőleg ellentmondásos. Az AVT nem ad következtetést és nem pontozza az állítást, mert annak eldöntése és rögzítése, hogy melyik adat legyen irányadó, az Ön mérlegelését igényli; az eszköz nem dönthet erről észrevétlenül.",
         "escalatedNotice": "Megjelölve a bizonyítékkezelő csapatnak. A nyilvántartási ellentmondás mindaddig nyitott és beleszámít az összesítésbe, amíg nincs kiválasztva az irányadó nyilvántartás.",
         "flagForEvidenceTeam": "Megjelölés a bizonyítékkezelő csapatnak",
         "governed": "<strong>{value}</strong> az irányadó: az állítást e nyilvántartás alapján ítéljük meg. A másik nyilvántartás megmarad.",
         "reconcile": "Nyilvántartási ellentmondás feloldása",
+        "suggestedNotice": "A dokumentumban rögzített adat javasolt a tanú beszámolójával szemben. Erősítse meg, vagy válassza a másik adatot.",
         "title": "Ellentmondó bizonyítékok a nyilvántartásban",
         "treatAsGoverningRecord": "Legyen irányadó"
       },
@@ -286,10 +288,6 @@
       "reopened": "Újranyitva, ellenőrzésre vár",
       "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
       "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
-      "unsourced": {
-        "hint": "Ehhez a tényhez még nincs forrásdokumentum kapcsolva; a hordozó és a dátum a bizonyítékot írja le, de nem forrás.",
-        "label": "Forrás nélkül"
-      },
       "whyVerdict": "A következtetés indoka: referenciatények"
     },
     "claimTypes": {
@@ -326,15 +324,20 @@
       "scopeMismatch": "Egy hivatkozott tény hatóköre eltér az állításétól. Mielőtt a következtetés megáll, mérlegelje, hogy eldönti-e az állítást a megfogalmazása szerint.",
       "supported": "A nyilvántartás megerősíti ezt az állítást. Jóváhagyásával azt igazolja, hogy az eszköz helyesen értelmezte; nincs szükség mérlegelésre.",
       "tension": "A nyilvántartás csak részben támasztja alá ezt az állítást. A következtetés jóváhagyása előtt mérlegelje a fenti alátámasztó és ellentmondó tényeket.",
+      "testimonyOnly": "Az iratanyag ezt alátámasztja, de egyetlen dokumentumban rögzített adat sem igazolja: tanúvallomáson alapul. Jóváhagyásával megerősíti, hogy az eszköz helyesen értelmezte; az eredmény tanúvallomáson alapulóként jelölve marad.",
       "unsourcedOnly": "A nyilvántartás ezt alátámasztja, de csak még forrás nélküli tényeken keresztül. Jóváhagyásával megerősíti, hogy az eszköz helyesen értelmezte őket; a tények forrás nélküliként jelölve maradnak."
     },
     "documents": {
       "claimSummary": "Cáfolt: {contradicted} · Részben ellentmondó: {tension} · Nyilvántartási ellentmondás: {conflicts}",
       "empty": "Töltsön fel egy iratot ehhez az ügyhöz, hogy ellenőrizhesse.",
+      "kindsLoadFailed": "Nem sikerült betölteni, hogy ezek a dokumentumok tanúvallomások-e.",
       "notVerified": "Még nincs ellenőrizve",
       "otherList": "Másik listához viszonyítva ellenőrizve",
       "sizeConfirmTitle": "Ellenőrzi ezt az iratot?",
       "statusLoadFailed": "Nem sikerült betölteni ezen iratok ellenőrzési állapotát.",
+      "testimony": "Tanúvallomás",
+      "testimonyAbout": "A tanúvallomásokról",
+      "testimonyLine": "Jelölje tanúvallomásként a tanúnyilatkozatokat, az interjújegyzeteket és az átiratokat. A belőlük vett tények egy személy beszámolójának számítanak, nem nyilvántartásnak.",
       "verifyAgain": "Ismételt ellenőrzés"
     },
     "extraction": {
@@ -368,11 +371,58 @@
       "startFailed": "A tények kinyerését nem sikerült elindítani",
       "submit": "{count, plural, =0 {Tények kinyerése} one {Tények kinyerése # iratból} other {Tények kinyerése # iratból}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Ennek a ténynek minden el nem utasított forrása tanúvallomás: tanúnyilatkozat, interjújegyzet vagy átirat.",
+        "label": "Tanúvallomás"
+      },
+      "unsourced": {
+        "hint": "Ehhez a tényhez nincs olyan forrásdokumentum kapcsolva, amelyet ne utasítottak volna el; a hordozó és a dátum a bizonyítékot írja le, de nem forrás.",
+        "label": "Forrás nélkül"
+      }
+    },
     "guidance": {
       "escalate": "Továbbítás",
       "manualJudgement": "Emberi mérlegelés",
       "optional": "Nem kötelező",
       "readyToConfirm": "Megerősítésre kész"
+    },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Rutinként elfogadva",
+        "conflictReopened": "Az ellentmondás feloldása visszavonva",
+        "escalated": "Megjelölve a bizonyítékkezelő csapatnak",
+        "governed": "Irányadó bejegyzés kiválasztva",
+        "noteCleared": "Megjegyzés törölve",
+        "noteSaved": "Megjegyzés mentve",
+        "overridden": "Következtetés felülírva",
+        "overrideWithdrawn": "Felülírás visszavonva",
+        "reopened": "Ellenőrizhető állításként újranyitva",
+        "statusCleared": "Ellenőrzési állapot törölve",
+        "statusDisputed": "Vitatottnak jelölve",
+        "statusNeedsEvidence": "Bizonyítékra várónak jelölve",
+        "statusReviewed": "Ellenőrzöttnek jelölve"
+      },
+      "empty": "Még nincs ellenőrzési művelet.",
+      "filters": {
+        "allKinds": "Bármely művelet",
+        "allReviewers": "Bármely ellenőrző",
+        "kind": "Szűrés művelet szerint",
+        "reviewer": "Szűrés ellenőrző szerint"
+      },
+      "formerMember": "Korábbi tag",
+      "kinds": {
+        "override": "Felülírt következtetések",
+        "recordConflict": "Ellentmondások feloldásai",
+        "reopen": "Újranyitások",
+        "status": "Állapotváltozások"
+      },
+      "noMatches": "Egy művelet sem felel meg ezeknek a szűrőknek.",
+      "noStatus": "Nincs állapot",
+      "none": "Még nincs művelet",
+      "reasonUnrecorded": "Nincs rögzített indok: a művelet még azelőtt történt, hogy az indok kötelező lett.",
+      "runButton": "Ellenőrzési előzmények",
+      "runTitle": "Ellenőrzési előzmények"
     },
     "matches": {
       "count": "{count, plural, one {# találat} other {# találat}}",
@@ -392,14 +442,32 @@
         "hint": "Egy hivatkozott tény más időszakra, körre, helyre vagy mértékre vonatkozik, mint az állítás.",
         "label": "Eltérő hatókör"
       },
+      "testimonyOnly": {
+        "hint": "Az eredmény alapjául szolgáló tényeket egyetlen dokumentumban rögzített adat sem támasztja alá, és legalább egyikük tanúvallomás.",
+        "label": "Csak tanúvallomás"
+      },
       "unsourcedOnly": {
         "hint": "A következtetés alapjául szolgáló tények egyikének sincs még forrása.",
         "label": "Csak forrás nélkül"
       }
     },
+    "reason": {
+      "escalate": "Miért van erre szüksége a bizonyítékkezelő csapatnak?",
+      "govern": "Miért ez a bejegyzés az irányadó?",
+      "override": "Miért „{verdict}” a következtetés?",
+      "placeholder": "Adja meg az indokot; az állítás előzményeiben marad",
+      "reopen": "Miért ellenőrizhető ez az állítás?",
+      "required": "A rögzítéshez adjon meg indokot.",
+      "unresolveConflict": "Miért vonja vissza ezt a feloldást?",
+      "withdrawOverride": "Miért tér vissza az eszköz következtetéséhez?"
+    },
     "review": {
-      "disputed": "Vitatott · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Rutinként elfogadva} other {Ellenőrzött}} · {decidedAt}",
+      "decided": "{status, select, disputed {Vitatott} needsEvidence {Bizonyíték szükséges} other {{origin, select, bulk {Rutinként elfogadva} other {Ellenőrzött}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Vitatott",
+        "needsEvidence": "Bizonyíték szükséges",
+        "reviewed": "Ellenőrzött"
+      },
       "undo": "Döntés visszavonása"
     },
     "runs": {
@@ -466,7 +534,7 @@
       "acceptRoutine": "{count, plural, one {# rutinjellegű állítás} other {# rutinjellegű állítás}} elfogadása",
       "attentionComplete": "<strong>Minden mérlegelést igénylő állítás rendezve van.</strong> {count, plural, one {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.} other {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.}}",
       "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong>: ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} needsEvidence {, bizonyíték szükséges} other {}})",
       "documentView": {
         "label": "Dokumentumnézet",
         "original": "Eredeti",
@@ -1758,6 +1826,28 @@
     "loadEarlierMessages": "Korábbi üzenetek betöltése",
     "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
     "loadingEarlierMessages": "Korábbi üzenetek betöltése…",
+    "localFilesUndo": {
+      "action": "Fájlmódosítások visszavonása",
+      "computer": {
+        "failed": "A visszavonás nem fejeződött be a számítógépén. Előfordulhat, hogy néhány fájl már megváltozott, ezért ellenőrizze a csevegés mappáját.",
+        "folderBusy": "Egy futás használja ezt a mappát a számítógépén. Próbálja újra, ha befejeződött.",
+        "noCheckpoint": "A számítógépén nincs mentett másolat a fájlokról a lépés előtti állapotból, így semmi sem vonódott vissza.",
+        "notNewest": "A számítógépén újabb módosítások vannak ebben a mappában, így semmi sem vonódott vissza."
+      },
+      "confirm": "Módosítások visszavonása",
+      "confirmDescription": "Azok a fájlok, amelyeket ez a lépés a mappájában módosított a számítógépén, visszakerülnek a lépés előtti állapotukba. Csak ennek a lépésnek a módosításai vonódnak vissza; a korábbi lépések módosításai megmaradnak.",
+      "confirmTitle": "Visszavonja ennek a lépésnek a fájlmódosításait?",
+      "expired": "A számítógépe nem válaszolt időben. Próbálja újra.",
+      "pending": "Fájlmódosítások visszavonása a számítógépén",
+      "refused": {
+        "desktopOffline": "A számítógépe offline. Nyissa meg a stella asztali alkalmazást, és próbálja újra.",
+        "desktopUpdateRequired": "A számítógépén lévő stella asztali alkalmazás túl régi a módosítások visszavonásához. Frissítse, és próbálja újra.",
+        "noCheckpoint": "Ehhez a lépéshez nincs mentett másolat a fájlokról, amelyhez vissza lehetne térni.",
+        "notNewest": "Csak a legújabb lépés fájlmódosításai vonhatók vissza.",
+        "threadBusy": "Ez a csevegés még dolgozik. Próbálja újra, ha befejezte."
+      },
+      "restored": "Fájlmódosítások visszavonva"
+    },
     "localRun": {
       "cloud": "stella-felhő",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
@@ -2490,6 +2580,8 @@
     "loading": "Betöltés",
     "logTime": "Idő rögzítése",
     "low": "Alacsony",
+    "markAsRead": "Megjelölés olvasottként",
+    "markAsUnread": "Megjelölés olvasatlanként",
     "matter": "Ügy",
     "matters": "Ügyek",
     "medium": "Közepes",
@@ -2520,6 +2612,7 @@
     "or": "Vagy",
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
+    "organizations": "Szervezetek",
     "page": "{page}. oldal",
     "paymentRetryNotice": "Fizetési probléma. A hozzáférés megtartásához frissítse a fizetési módját eddig: {date}.",
     "pin": "Rögzítés",
@@ -2606,6 +2699,7 @@
     "unexpectedError": "Váratlan hiba történt. Kérjük, lépjen kapcsolatba az ügyfélszolgálattal.",
     "unknownUser": "Ismeretlen felhasználó",
     "unpin": "Rögzítés feloldása",
+    "unread": "Olvasatlan",
     "unsavedChanges": "Nem mentett módosítások",
     "unsavedChangesClose": "Nem mentett módosítások. Az elvetéshez zárja be újra",
     "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt",
@@ -2825,7 +2919,6 @@
       "vatPayerUnknown": "Ismeretlen",
       "year": "Év"
     },
-    "filterOrganizations": "Szervezetek",
     "filterPersons": "Személyek",
     "import": {
       "confirmAction": "Importálás megerősítése",

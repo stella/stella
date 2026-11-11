@@ -163,6 +163,11 @@ export type HarnessUsage = {
 export type HarnessFailure =
   | { type: "auth_required"; message: string }
   | { type: "usage_limit"; message: string; resetsAt: string | null }
+  /**
+   * The model stayed at capacity through every retry: a transient state of
+   * the provider, unlike a usage limit, which is the member's own allowance.
+   */
+  | { type: "model_at_capacity"; message: string }
   | { type: "provider_error"; message: string; code: string }
   | {
       type: "harness_exited";
@@ -209,6 +214,7 @@ export type HarnessEvent =
 export const HARNESS_FAILURE_OUTCOME = {
   auth_required: "needs_login",
   usage_limit: "limit_reached",
+  model_at_capacity: "failed",
   provider_error: "failed",
   harness_exited: "failed",
   protocol_violation: "failed",
