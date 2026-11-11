@@ -1139,6 +1139,7 @@
       "count": "{count, plural, one {# idioma} other {# idiomas} many {# idiomas}}",
       "matchedIn": "Correspondência em {language}"
     },
+    "linkedPassageGone": "O trecho vinculado não está mais neste texto.",
     "loadingMore": "Carregando mais...",
     "marginFilter": {
       "label": "Filtro de dispositivos citados",

@@ -70,6 +70,17 @@ const positionalPrefixOf = (anchorId: string): string | null => {
 export const isPositionalBlockAnchor = (anchorId: string): boolean =>
   positionalPrefixOf(anchorId) !== null;
 
+/** A stable anchor: optional prefix, `n<number>` or `x<hash>`, repeats. */
+const STABLE_ANCHOR = /^((?:.*-)?)(?:n\d+|x[0-9a-f]{10})((?:-\d+)*)$/u;
+
+/**
+ * The supplement or opinion prefix of a positional or stable anchor (`""`
+ * for the main text), or null for a publisher anchor, whose shape says
+ * nothing about where it sits.
+ */
+export const blockAnchorPrefix = (anchorId: string): string | null =>
+  positionalPrefixOf(anchorId) ?? STABLE_ANCHOR.exec(anchorId)?.[1] ?? null;
+
 /**
  * Ten hex characters (40 bits) of the SHA-256 of `text`. Two blocks of one
  * document that still collide are told apart by the repeat suffix, so the
@@ -86,7 +97,7 @@ const shortHash = (text: string): string =>
  * A block's type is not part of it: a heading read as a paragraph keeps its
  * anchor.
  */
-const anchorTextOf = (block: Block): string => {
+export const blockAnchorText = (block: Block): string => {
   switch (block.type) {
     case "heading":
     case "paragraph":
@@ -107,7 +118,7 @@ const anchorTextOf = (block: Block): string => {
 const stableBaseOf = (block: Block, prefix: string): string => {
   const number = courtParagraphNumber(block);
   return number === null
-    ? `${prefix}x${shortHash(anchorTextOf(block))}`
+    ? `${prefix}x${shortHash(blockAnchorText(block))}`
     : `${prefix}n${String(number)}`;
 };
 

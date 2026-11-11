@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { isDocumentAst } from "@stll/legal-ast/document-ast";
+
 import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -39,6 +41,7 @@ import {
 import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { writeDecisionAnchorRedirectsTx } from "@/api/lib/case-law/decision-anchor-redirects";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
@@ -567,6 +570,17 @@ export const finishRefreshedRowTx = async (
     await reconcileStableProjection(tx, write, existing.id, projectionLock);
     await recordParsedGenerationTx(tx, { write, phase: "row" });
     return DECISION_ROW_WRITE_STATUS.APPLIED;
+  }
+
+  // The document was replaced: record where the anchors it dropped went, so a
+  // link into the old document lands on the same text or reports it gone.
+  const { replacedBlockAnchors, corpusPayload } = write.plan;
+  if (replacedBlockAnchors !== null && isDocumentAst(corpusPayload.ast)) {
+    await writeDecisionAnchorRedirectsTx(tx, {
+      decisionId: existing.id,
+      replaced: replacedBlockAnchors,
+      current: corpusPayload.ast,
+    });
   }
 
   switch (citations.disposition) {

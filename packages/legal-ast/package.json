@@ -31,6 +31,10 @@
       "types": "./src/analysis.ts",
       "import": "./src/analysis.ts"
     },
+    "./anchor-redirects": {
+      "types": "./src/anchor-redirects.ts",
+      "import": "./src/anchor-redirects.ts"
+    },
     "./answer-quote": {
       "types": "./src/answer-quote.ts",
       "import": "./src/answer-quote.ts"
