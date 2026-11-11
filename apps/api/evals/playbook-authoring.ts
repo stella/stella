@@ -1591,22 +1591,24 @@ const resolveModels = async (modelIds: readonly string[]) => {
   const { resolveTanStackTextModel } =
     await import("@/api/lib/tanstack-ai-generate");
   return await Promise.all(
-    resolveModelTargets(modelIds).map(async (target) => ({
-      id: target.id,
-      model: await resolveTanStackTextModel({
-        userId: null,
-        modelId: target.id,
-        orgAIConfig:
-          target.type === "resolved"
-            ? target.orgAIConfig
-            : panic(`${target.id}: ${target.message}`),
-        dataClass: "customer",
-        managedAIResidency: "eu",
-        task: "short-text",
-        organizationId: null,
-        admission: NO_ORGANIZATION_MODEL_DISPATCH,
-      }),
-    })),
+    resolveModelTargets(modelIds).map(async (target) => {
+      if (target.type === "resolution-error") {
+        return panic(`${target.id}: ${target.message}`);
+      }
+      return {
+        id: target.id,
+        model: await resolveTanStackTextModel({
+          userId: null,
+          modelId: target.modelId,
+          orgAIConfig: target.orgAIConfig,
+          dataClass: "customer",
+          managedAIResidency: "eu",
+          task: "short-text",
+          organizationId: null,
+          admission: NO_ORGANIZATION_MODEL_DISPATCH,
+        }),
+      };
+    }),
   );
 };
 
