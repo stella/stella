@@ -262,7 +262,7 @@ test("server recent rows render known court chips, unknown decision icons and st
   const unknown = screen.getByRole("link", { name: /47 C/u });
   expect(unknown.querySelector('[data-slot="court-badge"]')).toBeNull();
   expect(unknown.querySelector("svg")).not.toBeNull();
-  const statute = screen.getByRole("link", { name: /172\/26/u });
+  const statute = screen.getByRole("link", { name: /172\/2026/u });
   const identity = statute.querySelector(
     '[data-slot="document-identity-badge"][data-kind="statute"]',
   );
@@ -287,7 +287,7 @@ test("every recent row puts its mark in one column, so titles start at the same 
     screen.getByRole("button", { name: /náhrada škody/u }),
     screen.getByRole("link", { name: /23 Cdo 1001/u }),
     screen.getByRole("link", { name: /47 C/u }),
-    screen.getByRole("link", { name: /172\/26/u }),
+    screen.getByRole("link", { name: /172\/2026/u }),
   ];
   const columns = rows.map((row) =>
     row.querySelectorAll('[data-slot="recent-mark"]'),
@@ -708,7 +708,7 @@ test("recents tabs fetch each kind beyond the newest twenty mixed entries", asyn
     ).toBe(true);
     await click(messages.statutes.title);
     await waitFor(() =>
-      expect(screen.getByRole("link", { name: /172\/26/u })).toBeTruthy(),
+      expect(screen.getByRole("link", { name: /172\/2026/u })).toBeTruthy(),
     );
     expect(screen.queryByRole("link", { name: /23 Cdo 1001/u })).toBeNull();
     expect(

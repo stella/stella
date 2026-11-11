@@ -102,6 +102,10 @@ function documentIdentityMark(
  * in the same monospace units, so no observer or per-row state is needed; a
  * label longer than its slot even in the short form truncates rather than
  * spilling over its neighbour.
+ *
+ * The visible form depends on the slot, but the accessible name is always the
+ * full label: a narrow slot shows `262/06`, and a row whose title lacks the
+ * citation still exposes `262/2006`.
  */
 function referenceLabelMark(
   labels: IdentityLabels,
@@ -115,9 +119,11 @@ function referenceLabelMark(
         labels.short.length > 7 ? "text-[9px]" : "text-[10px]",
       )}
       style={{ width: `${labels.long.length + 0.25}ch` }}
+      aria-label={labels.long}
       data-slot="document-identity-badge"
       data-kind={kind}
       dir="ltr"
+      role="img"
     >
       <bdi className={cn("min-w-0 truncate", classes.short)}>
         {labels.short}
