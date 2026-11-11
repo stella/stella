@@ -1285,8 +1285,25 @@ export type StoredRawRecaptureInput = {
  * any other row; the envelope and the decision each keep a single builder.
  */
 export type SourceRecapture = {
-  /** The slice that lists the stored row, read off what the row holds. */
-  sliceOf: (stored: StoredRawReparseInput) => string | null;
+  /**
+   * What to ask the publisher for to find the stored row, read off what the
+   * row holds: a slice where the publisher lists by slice (one request then
+   * serves every row it lists), a narrower query where a slice is too large to
+   * be served whole. Null where the row names nothing to ask for.
+   */
+  lookupOf: (stored: StoredRawReparseInput) => string | null;
+  /** One page of what the publisher lists for a lookup, keyed as the crawl keys it. */
+  listLookup: (
+    options: ReconciliationSlicePageOptions,
+  ) => Promise<ReconciliationSlicePage>;
+  /**
+   * Whether a listed item is the stored row. The adapter decides, because a
+   * row stored without the publisher's id can only be told by what it holds.
+   */
+  matchesStored: (
+    item: ReconciliationListingItem,
+    stored: StoredRawReparseInput,
+  ) => boolean;
   /**
    * The envelope for `stored` with the listed item added. Pure: the payload
    * already held is reused, never fetched again.
@@ -1998,7 +2015,9 @@ export const defineSourceAdapter = <
     reconciliation.recapture === undefined
       ? undefined
       : ({
-          sliceOf: scoped(reconciliation.recapture.sliceOf),
+          lookupOf: scoped(reconciliation.recapture.lookupOf),
+          listLookup: scoped(reconciliation.recapture.listLookup),
+          matchesStored: scoped(reconciliation.recapture.matchesStored),
           recaptureStoredRaw: scoped(
             reconciliation.recapture.recaptureStoredRaw,
           ),

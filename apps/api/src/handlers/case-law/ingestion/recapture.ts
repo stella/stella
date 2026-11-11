@@ -1,13 +1,13 @@
 /**
  * Upgrade one stored row whose payload predates a response the adapter now
- * keeps, from the publisher's own slice listing, and rebuild it.
+ * keeps, from what the publisher lists for it, and rebuild it.
  *
- * The row is looked up in the slice its stored payload names, through the
- * adapter's `listSlicePage` (the requests, retries and validation the
- * reconciliation walk uses), matched by the identity rule every ingest path
- * keys rows by, upgraded by the adapter's `recapture.recaptureStoredRaw` and
- * rebuilt by its `reparseStoredRaw`. The envelope and the decision keep their
- * single builders, so a recaptured row is the row a crawl would store today.
+ * The row is looked up with what its stored payload names (a slice, or a
+ * narrower query where the publisher cannot serve the slice whole), through
+ * the adapter's own listing reader, matched by the adapter's own rule,
+ * upgraded by the adapter's `recapture.recaptureStoredRaw` and rebuilt by its
+ * `reparseStoredRaw`. The envelope and the decision keep their single
+ * builders, so a recaptured row is the row a crawl would store today.
  *
  * Nothing is written here. The caller writes the result through
  * `processDecision` under the source's ingestion lease, as every writer does,
@@ -17,88 +17,78 @@ import { panic, Result } from "better-result";
 
 import type {
   IngestionResult,
-  ListingIdentity,
   SourceAdapter,
+  SourceRecapture,
   SourceReconciliation,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/lib/legal-search/ingestion-types";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 
 type ReparseRefusal = Exclude<StoredRawReparseOutcome, { type: "parsed" }>;
 
 export type RecaptureDecisionOutcome =
   | {
       type: "recaptured";
-      slice: string;
+      lookup: string;
       result: IngestionResult;
       /** As `StoredRawReparseOutcome`: an older spelling of the row's docket. */
       legacyCaseNumber?: string | undefined;
     }
   /** The adapter declares no recapture, or no stored-raw replay. */
   | { type: "unsupported" }
-  /** The stored payload names no slice to look the row up in. */
-  | { type: "no-slice" }
-  /** The row has no identity a listing could be matched against. */
-  | { type: "unkeyable" }
-  | { type: "not-listed"; slice: string }
-  | { type: "listing-unavailable"; slice: string; error: unknown }
-  | { type: "identity-mismatch"; slice: string; detail: string }
-  | { type: "not-recapturable"; slice: string; detail: string }
-  | { type: "reparse-refused"; slice: string; outcome: ReparseRefusal };
-
-/**
- * How the ingest keyed the stored row: by the publisher's document id where it
- * holds one, by docket otherwise, as `ListingIdentity` defines both.
- */
-const storedListingIdentity = (
-  stored: StoredRawReparseInput,
-): ListingIdentity =>
-  stored.sourceDocumentId === null
-    ? {
-        type: "case-number",
-        caseNumber: stored.caseNumber,
-        language: stored.language,
-      }
-    : { type: "document", sourceDocumentId: stored.sourceDocumentId };
+  /** The stored row names nothing to ask the publisher for. */
+  | { type: "no-lookup" }
+  | { type: "not-listed"; lookup: string }
+  | { type: "listing-unavailable"; lookup: string; error: unknown }
+  /** Reported, never written: the listing and the row disagree, or several items match. */
+  | { type: "identity-mismatch"; lookup: string; detail: string }
+  | { type: "not-recapturable"; lookup: string; detail: string }
+  | { type: "reparse-refused"; lookup: string; outcome: ReparseRefusal };
 
 type FindListedPayloadOptions = {
-  listSlicePage: SourceReconciliation["listSlicePage"];
-  slice: string;
-  identityKey: string;
+  recapture: SourceRecapture;
+  lookup: string;
+  stored: StoredRawReparseInput;
   signal?: AbortSignal | undefined;
 };
 
 type FindListedPayloadResult =
   | { type: "listed"; payload: unknown }
   | { type: "not-listed" }
+  | { type: "ambiguous"; count: number }
   | { type: "unavailable"; error: unknown };
 
 const findListedPayload = async ({
-  listSlicePage,
-  slice,
-  identityKey,
+  recapture,
+  lookup,
+  stored,
   signal,
 }: FindListedPayloadOptions): Promise<FindListedPayloadResult> => {
+  const matches: unknown[] = [];
   for (let page = 0; ; page += 1) {
-    // Pages are read in order so the walk stops at the first one listing the
-    // row; a slice is at most a few pages.
+    // Pages are read in order; a lookup is a few pages at most.
     const listed = await Result.tryPromise(
-      async () => await listSlicePage({ slice, page, signal }),
+      async () => await recapture.listLookup({ slice: lookup, page, signal }),
     );
     if (listed.isErr()) {
       return { type: "unavailable", error: listed.error };
     }
-    const item = listed.value.items.find(
-      ({ identity }) => listingIdentityKey(identity) === identityKey,
-    );
-    if (item !== undefined) {
-      return { type: "listed", payload: item.payload };
+    for (const item of listed.value.items) {
+      if (recapture.matchesStored(item, stored)) {
+        matches.push(item.payload);
+      }
     }
     if (page + 1 >= listed.value.totalPages) {
-      return { type: "not-listed" };
+      break;
     }
   }
+  const [only, ...others] = matches;
+  if (only === undefined) {
+    return { type: "not-listed" };
+  }
+  return others.length === 0
+    ? { type: "listed", payload: only }
+    : { type: "ambiguous", count: matches.length };
 };
 
 /** The two adapter capabilities a recapture uses. */
@@ -123,27 +113,24 @@ export const recaptureDecisionFromListing = async ({
   if (recapture === undefined || reparseStoredRaw === undefined) {
     return { type: "unsupported" };
   }
-  const slice = recapture.sliceOf(stored);
-  if (slice === null) {
-    return { type: "no-slice" };
+  const lookup = recapture.lookupOf(stored);
+  if (lookup === null) {
+    return { type: "no-lookup" };
   }
-  const identityKey = listingIdentityKey(storedListingIdentity(stored));
-  if (identityKey === null) {
-    return { type: "unkeyable" };
-  }
-  const listed = await findListedPayload({
-    listSlicePage: reconciliation.listSlicePage,
-    slice,
-    identityKey,
-    signal,
-  });
+  const listed = await findListedPayload({ recapture, lookup, stored, signal });
   switch (listed.type) {
     case "listed":
       break;
     case "not-listed":
-      return { type: "not-listed", slice };
+      return { type: "not-listed", lookup };
+    case "ambiguous":
+      return {
+        type: "identity-mismatch",
+        lookup,
+        detail: `${listed.count} listed items match the row`,
+      };
     case "unavailable":
-      return { type: "listing-unavailable", slice, error: listed.error };
+      return { type: "listing-unavailable", lookup, error: listed.error };
     default:
       listed satisfies never;
       return panic("Unhandled listed-payload result");
@@ -157,7 +144,7 @@ export const recaptureDecisionFromListing = async ({
       break;
     case "identity-mismatch":
     case "not-recapturable":
-      return { type: recaptured.type, slice, detail: recaptured.detail };
+      return { type: recaptured.type, lookup, detail: recaptured.detail };
     default:
       recaptured satisfies never;
       return panic("Unhandled recapture outcome");
@@ -170,9 +157,9 @@ export const recaptureDecisionFromListing = async ({
   return reparsed.type === "parsed"
     ? {
         type: "recaptured",
-        slice,
+        lookup,
         result: reparsed.result,
         legacyCaseNumber: reparsed.legacyCaseNumber,
       }
-    : { type: "reparse-refused", slice, outcome: reparsed };
+    : { type: "reparse-refused", lookup, outcome: reparsed };
 };

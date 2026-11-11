@@ -13,6 +13,7 @@ import type {
   IngestionResult,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceRecapture,
   StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
 import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
@@ -91,10 +92,16 @@ const documentOnlyRow = async (
   metadata: {},
 });
 
-const adapterServing = (
-  listSlicePage: typeof czRegionalAdapter.reconciliation.listSlicePage,
-) => ({
-  reconciliation: { ...czRegionalAdapter.reconciliation, listSlicePage },
+const declaredRecapture =
+  czRegionalAdapter.reconciliation.recapture ??
+  panic("cz-regional declares no recapture");
+
+/** The real adapter, with its lookup listing served from the recording. */
+const adapterServing = (listLookup: SourceRecapture["listLookup"]) => ({
+  reconciliation: {
+    ...czRegionalAdapter.reconciliation,
+    recapture: { ...declaredRecapture, listLookup },
+  },
   reparseStoredRaw: czRegionalAdapter.reparseStoredRaw,
 });
 
@@ -110,7 +117,7 @@ describe("recaptureDecisionFromListing", () => {
 
     expect(outcome).toMatchObject({
       type: "recaptured",
-      slice: PUBLICATION_DAY,
+      lookup: PUBLICATION_DAY,
       result: { sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE },
     });
     const result =
@@ -130,7 +137,7 @@ describe("recaptureDecisionFromListing", () => {
         adapter: adapterServing(servedDay(others)),
         stored: await documentOnlyRow(crawled),
       }),
-    ).toEqual({ type: "not-listed", slice: PUBLICATION_DAY });
+    ).toEqual({ type: "not-listed", lookup: PUBLICATION_DAY });
   });
 
   test("an unreadable listing is reported with the slice, not as absent", async () => {
@@ -146,7 +153,7 @@ describe("recaptureDecisionFromListing", () => {
 
     expect(outcome).toMatchObject({
       type: "listing-unavailable",
-      slice: PUBLICATION_DAY,
+      lookup: PUBLICATION_DAY,
     });
   });
 
@@ -166,7 +173,7 @@ describe("recaptureDecisionFromListing", () => {
       },
     });
 
-    expect(outcome).toEqual({ type: "no-slice" });
+    expect(outcome).toEqual({ type: "no-lookup" });
     expect(requests).toBe(0);
   });
 

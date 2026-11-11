@@ -338,12 +338,12 @@ describe("a document-only row is recaptured from its day listing", () => {
     });
 
     expect(
-      recapture.sliceOf(
+      recapture.lookupOf(
         documentOnlyRow(crawled, await readFixture(DISTRICT_DOCUMENT)),
       ),
     ).toBe("2025-06-11");
     expect(
-      recapture.sliceOf({
+      recapture.lookupOf({
         ...documentOnlyRow(crawled, await readFixture(DISTRICT_DOCUMENT)),
         contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       }),

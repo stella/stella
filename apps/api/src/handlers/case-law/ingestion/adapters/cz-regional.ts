@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-regional] recapture upgrades a document-only stored payload to the crawl's envelope; crawl and replay build decisions as before.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -82,6 +83,7 @@ import {
   excludedSourceSurface,
   isPersistableSourceDocumentId,
   legacyExcludedSourceField,
+  listingIdentityKey,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -96,6 +98,7 @@ import type {
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
+  ReconciliationListingItem,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
@@ -2280,7 +2283,7 @@ const PUBLICATION_DAY = /^\d{4}-\d{2}-\d{2}/u;
  * The day listing that names a document-only row: its publication day, which
  * the document payload states and the opendata endpoint is addressed by.
  */
-const czRegionalRecaptureSliceOf = (
+const czRegionalRecaptureLookupOf = (
   stored: StoredRawReparseInput,
 ): string | null => {
   if (stored.contentType !== CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE) {
@@ -2291,6 +2294,28 @@ const czRegionalRecaptureSliceOf = (
   return publishedAt === undefined
     ? null
     : (PUBLICATION_DAY.exec(publishedAt)?.[0] ?? null);
+};
+
+/**
+ * Whether a listed item is the stored row, by the identity rule the crawl and
+ * the reconciliation key rows by: the publisher's document id where the row
+ * holds one, the docket otherwise.
+ */
+const czRegionalMatchesStored = (
+  item: ReconciliationListingItem,
+  stored: StoredRawReparseInput,
+): boolean => {
+  const listed = listingIdentityKey(item.identity);
+  const held = listingIdentityKey(
+    stored.sourceDocumentId === null
+      ? {
+          type: "case-number",
+          caseNumber: stored.caseNumber,
+          language: CZ_REGIONAL_LANGUAGE,
+        }
+      : { type: "document", sourceDocumentId: stored.sourceDocumentId },
+  );
+  return listed !== null && listed === held;
 };
 
 const sameDocket = (left: string, right: string): boolean =>
@@ -2776,7 +2801,9 @@ export const czRegionalAdapter = defineSourceAdapter({
     // Rows stored before the envelope hold the document alone; the day
     // listing restates the row that keyed them.
     recapture: {
-      sliceOf: czRegionalRecaptureSliceOf,
+      lookupOf: czRegionalRecaptureLookupOf,
+      listLookup: listCzRegionalSlicePage,
+      matchesStored: czRegionalMatchesStored,
       recaptureStoredRaw: recaptureCzRegionalStoredRaw,
     },
     listSlicePage: listCzRegionalSlicePage,
