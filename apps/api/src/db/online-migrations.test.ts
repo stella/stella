@@ -1670,14 +1670,14 @@ describe("online migrations", () => {
       expect(
         indexOfStatement(harness.statements, `VALIDATE CONSTRAINT "${name}"`),
       ).toBe(-1);
-      // Deferred, not deployable: startup still refuses the NOT VALID check.
+      // Deferred, not deployable: the migrate run still owes the validation.
+      // Startup boots beside the NOT VALID check, which already enforces new
+      // writes, and reports it as regressed.
       expect(
-        String(
-          await rejectionOf(
-            reportOnlineMigrations(harness.pool, { repairs: [validation] }),
-          ),
-        ),
-      ).toContain(`Online repair ${name} introduced by`);
+        regressedOf(
+          await reportOnlineMigrations(harness.pool, { repairs: [validation] }),
+        ).map((repair) => repair.name),
+      ).toEqual([name]);
 
       expect(
         await runOnlineMigrations(harness.pool, { repairs: [validation] }),

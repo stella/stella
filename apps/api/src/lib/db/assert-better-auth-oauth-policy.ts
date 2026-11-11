@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { rootDb } from "@/api/db/root";
 import {
@@ -25,21 +25,26 @@ const OAUTH_POLICY_CENSUS_FAILED_SINK = failureSink({
  * repair refuses to finish a deploy while the census fails. So the census is
  * reported as an error for an operator, and the rest of the API keeps serving.
  */
+const ensureConfiguredBetterAuthOAuthPolicy = async (): Promise<void> => {
+  await ensureBetterAuthOAuthPolicy(rootDb, getBetterAuthOAuthResources());
+};
+
 export const assertConfiguredBetterAuthOAuthPolicy =
   async (): Promise<void> => {
     const census = await Result.tryPromise({
-      try: async () =>
-        await ensureBetterAuthOAuthPolicy(
-          rootDb,
-          getBetterAuthOAuthResources(),
-        ),
+      try: ensureConfiguredBetterAuthOAuthPolicy,
       catch: (cause) => cause,
     });
     if (Result.isOk(census)) {
       return;
     }
+    // A census that could not run at all (no connection, a broken query) is
+    // not shared state a running task already serves: it still stops boot.
     if (!(census.error instanceof BetterAuthOAuthPolicyCensusError)) {
-      throw census.error;
+      return panic(
+        "Better Auth OAuth policy census could not run",
+        census.error,
+      );
     }
     observeFailure(census.error, { sink: OAUTH_POLICY_CENSUS_FAILED_SINK });
   };
