@@ -7,7 +7,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { FACT_SCORING } from "@/api/lib/lists/fact-details";
 import { FACT_TIERS } from "@/api/lib/lists/source-kind";
-import type { FactTier } from "@/api/lib/lists/source-kind";
 import { CLAIM_STATES } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimRef,
@@ -82,53 +81,55 @@ describe("claimQualifiers", () => {
     );
   });
 
-  // Each footing qualifier names one tier; a verdict carries it exactly when
-  // every fact it rests on has that tier, so one fact of any other tier
-  // lifts it.
-  const FOOTING_QUALIFIERS = {
-    document: null,
-    testimony: "testimony-only",
-    unsourced: "unsourced-only",
-  } as const satisfies Record<FactTier, string | null>;
+  const FOOTING_QUALIFIERS = ["testimony-only", "unsourced-only"] as const;
+  const footingOf = (resting: readonly FactStanding[]) =>
+    kindsOf({ graded: [], resting }).filter((kind) =>
+      FOOTING_QUALIFIERS.some((footing) => footing === kind),
+    );
 
-  test("a footing qualifier holds exactly when every resting fact has its tier", () => {
+  test("a verdict no record backs discloses its footing exactly once", () => {
     assertProperty(
-      "a footing qualifier holds exactly when every resting fact has its tier",
+      "a verdict no record backs discloses its footing exactly once",
       fc.property(fc.array(standingArbitrary, { maxLength: 6 }), (resting) => {
-        const kinds = kindsOf({ graded: [], resting });
-        for (const [tier, kind] of Object.entries(FOOTING_QUALIFIERS)) {
-          if (kind === null) {
-            continue;
-          }
-          const every =
-            resting.length > 0 && resting.every((fact) => fact.tier === tier);
-          expect(kinds.includes(kind)).toBe(every);
+        const footing = footingOf(resting);
+        const recordBehind = resting.some((fact) => fact.tier === "document");
+        if (resting.length === 0 || recordBehind) {
+          expect(footing).toEqual([]);
+          return;
         }
+        // Any account among them makes it testimony; only when none is it
+        // knowledge without a source.
+        expect(footing).toEqual([
+          resting.some((fact) => fact.tier === "testimony")
+            ? "testimony-only"
+            : "unsourced-only",
+        ]);
       }),
     );
   });
 
-  test("one fact of better footing lifts testimony-only and unsourced-only", () => {
+  test("one document record among the resting facts lifts the disclosure", () => {
     assertProperty(
-      "one fact of better footing lifts testimony-only and unsourced-only",
+      "one document record among the resting facts lifts the disclosure",
       fc.property(
         fc.array(standingArbitrary, { minLength: 1, maxLength: 6 }),
         fc.constantFrom(...FACT_SCORING),
         (resting, scoring) => {
-          for (const tier of ["testimony", "unsourced"] as const) {
-            const uniform = resting.map((fact) => ({ ...fact, tier }));
-            const kind = FOOTING_QUALIFIERS[tier];
-            expect(kindsOf({ graded: [], resting: uniform })).toContain(kind);
-            expect(
-              kindsOf({
-                graded: [],
-                resting: [...uniform, { scoring, tier: "document" }],
-              }),
-            ).not.toContain(kind);
-          }
+          expect(
+            footingOf([...resting, { scoring, tier: "document" }]),
+          ).toEqual([]);
         },
       ),
     );
+  });
+
+  test("testimony beside an unsourced fact reads as testimony", () => {
+    expect(
+      footingOf([
+        { scoring: "included", tier: "unsourced" },
+        { scoring: "included", tier: "testimony" },
+      ]),
+    ).toEqual(["testimony-only"]);
   });
 
   test("holding any one resting fact marks the verdict, releasing all clears it", () => {

@@ -240,6 +240,7 @@ const ANSWER = {
       quote: "the board approved the discharge policy",
       fact: "The board approved the discharge policy on 9 March 2021.",
       occurredOn: "2021-03-09",
+      evidenceKind: "document",
       medium: "Board minutes",
       confidence: "high",
       contestedMeaning: null,
@@ -249,6 +250,7 @@ const ANSWER = {
       quote: "the “final” version was sent to every ward",
       fact: "The final version of the policy was sent to every ward.",
       occurredOn: null,
+      evidenceKind: "testimony",
       medium: "Witness statement",
       confidence: "medium",
       contestedMeaning:
@@ -339,7 +341,7 @@ test("a queued run stella produces leaves its facts as candidates with located s
         name: "The board approved the discharge policy on 9 March 2021.",
         itemType: "fact",
         occurredOn: "2021-03-09",
-        evidenceKind: null,
+        evidenceKind: "Document",
         confidence: "high",
         interpretationNote: null,
         scoring: "included",
@@ -349,7 +351,7 @@ test("a queued run stella produces leaves its facts as candidates with located s
         name: "The final version of the policy was sent to every ward.",
         itemType: "fact",
         occurredOn: null,
-        evidenceKind: null,
+        evidenceKind: "Testimony",
         confidence: "medium",
         interpretationNote:
           "“Final” may mean the approved policy or the last circulated draft.",

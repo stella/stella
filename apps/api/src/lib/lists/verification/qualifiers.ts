@@ -111,8 +111,9 @@ export type FactStanding = {
   tier: FactTier;
 };
 
-const everyFactIs = (facts: readonly FactStanding[], tier: FactTier) =>
-  facts.length > 0 && facts.every((fact) => fact.tier === tier);
+/** No document's record backs any fact the verdict rests on. */
+const noRecordBehind = (facts: readonly FactStanding[]) =>
+  facts.length > 0 && facts.every((fact) => fact.tier !== "document");
 
 /** Each system qualifier's rule over the facts a verdict rests on. A new
  *  system qualifier cannot be added without its rule. */
@@ -120,8 +121,13 @@ const SYSTEM_QUALIFIER_RULES = {
   // Held facts never score, so a verdict resting on one no longer has the
   // footing it was given.
   "rests-on-held": (facts) => facts.some((fact) => fact.scoring === "held"),
-  "testimony-only": (facts) => everyFactIs(facts, "testimony"),
-  "unsourced-only": (facts) => everyFactIs(facts, "unsourced"),
+  // A verdict without a record behind it discloses its footing exactly
+  // once: testimony when any of it is a person's account, otherwise
+  // knowledge without a source.
+  "testimony-only": (facts) =>
+    noRecordBehind(facts) && facts.some((fact) => fact.tier === "testimony"),
+  "unsourced-only": (facts) =>
+    noRecordBehind(facts) && facts.every((fact) => fact.tier === "unsourced"),
 } as const satisfies Record<
   SystemClaimQualifierKind,
   (facts: readonly FactStanding[]) => boolean

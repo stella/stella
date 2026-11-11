@@ -106,6 +106,7 @@ const rawFact = (overrides: Record<string, unknown>) => ({
   quote: "the board approved the discharge policy",
   fact: "The board approved the discharge policy on 9 March 2021.",
   occurredOn: "2021-03-09",
+  evidenceKind: "document",
   medium: "Board minutes",
   confidence: "high",
   contestedMeaning: null,
@@ -123,6 +124,7 @@ describe("extractFacts", () => {
             quote: "I saw the final version at a meeting",
             fact: "The witness saw the final version at the April 2021 meeting.",
             occurredOn: "2021-04",
+            evidenceKind: "testimony",
             medium: "Witness statement",
           }),
         ],
@@ -134,6 +136,7 @@ describe("extractFacts", () => {
             quote: 'I saw the "final" version at the meeting',
             fact: "The witness saw the final version at the April 2021 meeting.",
             occurredOn: "2021-04",
+            evidenceKind: "testimony",
             medium: "Witness statement",
           }),
         ],
@@ -155,16 +158,14 @@ describe("extractFacts", () => {
       {
         locator: { type: "docx-block", blockId: "b1", start: 16, end: 55 },
         quote: "the board approved the discharge policy",
-        // Testimony or record is the document's setting on the list, not the
-        // model's guess, so extraction leaves the evidence kind unset.
-        evidenceKind: null,
+        evidenceKind: "Document",
         occurredOn: { date: "2021-03-09", precision: "day" },
       },
       {
         // The quote is the document's spelling, curly quotes included.
         locator: { type: "pdf-page", pageNumber: 2, start: 0, end: 40 },
         quote: "I saw the “final” version at the meeting",
-        evidenceKind: null,
+        evidenceKind: "Testimony",
         occurredOn: { date: "2021-04-01", precision: "month" },
       },
     ]);
@@ -223,6 +224,7 @@ describe("extractFacts", () => {
           quote: "the “final” version",
           fact: "The witness saw the final version of the policy.",
           occurredOn: null,
+          evidenceKind: "testimony",
           confidence: "medium",
           contestedMeaning:
             "“Final” may mean the approved policy or the last circulated draft.",

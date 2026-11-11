@@ -518,9 +518,9 @@ test("a document marked as testimony moves every fact citing it, and the record 
     "scope-mismatch",
     "testimony-only",
   ]);
-  // Testimony beside an unsourced fact is neither only testimony nor only
-  // unsourced.
-  expect(kindsOf(claimIds.sourcedSupport)).toEqual([]);
+  // Testimony beside an unsourced fact: no record backs it, and one fact is
+  // a person's account.
+  expect(kindsOf(claimIds.sourcedSupport)).toEqual(["testimony-only"]);
   // The ledger's record is suggested over the testimony-backed transfer,
   // and the conflict stays open until someone chooses.
   const open = after.claims.get(claimIds.openConflict);
