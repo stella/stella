@@ -127,10 +127,14 @@ export const useChatComposerModels = ({
     });
     detached(
       (async () => {
-        await selection.awaitPendingSelection();
+        // Stored or refused, this choice is no longer pending: the selection
+        // reports a refused write, and the next choice composes on what the
+        // server stores.
+        const settled = await selection.awaitPendingSelection();
         if (pendingChoiceRef.current === next) {
           pendingChoiceRef.current = null;
         }
+        return settled;
       })(),
       "use-chat-composer-models.settle-choice",
     );

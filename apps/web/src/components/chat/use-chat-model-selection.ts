@@ -135,10 +135,12 @@ export const useChatModelSelection = ({
     // server stores the last choice whatever order the network delivers them.
     const previous = pendingRef.current;
     const requestId = ++requestIdRef.current;
-    const promise = (async () => {
-      await previous;
-      return await persist(selection, requestId);
-    })();
+    // The earlier write reports its own outcome; this one goes out after it
+    // either way.
+    const promise =
+      previous === null
+        ? persist(selection, requestId)
+        : previous.then(async () => await persist(selection, requestId));
     pendingRef.current = promise;
     detached(
       promise.finally(() => {
