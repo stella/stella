@@ -102,6 +102,15 @@ const refusalError = (refusal: RecheckRefusal): HandlerError => {
           "This claim is set aside as not verifiable; reopen it with lists.verifications.claim-reviews.create before re-checking it.",
       });
     }
+    case "superseded": {
+      return new HandlerError({
+        status: 409,
+        code: "claim_changed_during_recheck",
+        message:
+          "The claim's review changed while it was being checked; this result was not recorded. Check it again.",
+        retryable: true,
+      });
+    }
     case "too-many-facts": {
       return new HandlerError({
         status: 422,

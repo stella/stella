@@ -388,6 +388,7 @@
       "linkFact": "Vincular um fato",
       "linkFailed": "Não foi possível vincular o fato",
       "linked": "Fatos vinculados",
+      "linkedMark": "Vinculado",
       "noFacts": "Nenhum fato da lista corresponde.",
       "recheck": "Verificar novamente",
       "recheckFailed": "Não foi possível verificar a alegação novamente",

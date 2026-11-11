@@ -30,6 +30,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -276,6 +277,12 @@ const fakeGrader = () => {
   return { requests, generate };
 };
 
+const TEST_AI_CONFIG = {
+  providers: [{ provider: "openai", apiKey: "fixture-key" }],
+  overrideModels: null,
+  decision: null,
+} satisfies OrgAIConfig;
+
 const recheck = async (
   args: Pick<RecheckClaimArgs, "claimId" | "requestKey"> &
     Pick<RecheckClaimArgs, "generateObjectForTask">,
@@ -293,7 +300,9 @@ const recheck = async (
         organizationId,
         "list-verification.recheck",
       ),
-      orgAIConfig: null,
+      // The organization's own key: the model resolves without a deployment
+      // key, and the grader itself is the injected fake.
+      orgAIConfig: TEST_AI_CONFIG,
       managedAIResidency: "eu",
       promptCachingEnabled: false,
       recordAuditEvent: async () => undefined,
@@ -420,6 +429,34 @@ test("a fact a reviewer linked is pointed out to the grader", async () => {
     generateObjectForTask: grader.generate,
   });
   expect(grader.requests.at(0)).toContain("reviewer points to: F2");
+});
+
+test("a grade overtaken by a newer re-check is not recorded over it", async () => {
+  const later = fakeGrader();
+  // While the first grading is out, another re-check of the claim lands.
+  const overtaken = asTestRaw<typeof generateTanStackObjectForTask>(
+    async (request: unknown) => {
+      expect(
+        await recheck({
+          claimId: gapClaim,
+          requestKey: "newer",
+          generateObjectForTask: later.generate,
+        }),
+      ).toEqual({ type: "rechecked", replayed: false });
+      return await fakeGrader().generate(asTestRaw(request));
+    },
+  );
+  const count = (await recheckEvents(gapClaim)).length;
+  expect(
+    await recheck({
+      claimId: gapClaim,
+      requestKey: "older",
+      generateObjectForTask: overtaken,
+    }),
+  ).toEqual({ type: "superseded" });
+  const events = await recheckEvents(gapClaim);
+  expect(events).toHaveLength(count + 1);
+  expect(events.at(-1)?.payload).toMatchObject({ requestKey: "newer" });
 });
 
 test("an organization at its daily limit is refused before any model call", async () => {

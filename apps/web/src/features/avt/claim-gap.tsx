@@ -8,11 +8,7 @@
 
 import * as React from "react";
 
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
@@ -49,6 +45,7 @@ import {
 } from "@stll/ui/sheet";
 import { Textarea } from "@stll/ui/textarea";
 
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { MatterDocumentPicker } from "@/components/workspaces/matter-document-picker";
 import { isRecordSilent } from "@/features/avt/claim-qualifiers";
 import { STATE_COLOR } from "@/features/avt/state-chip";
@@ -59,6 +56,7 @@ import type {
   VerificationClaim,
 } from "@/features/avt/types";
 import { STATE_META } from "@/features/avt/types";
+import type { AddFactInput } from "@/features/avt/use-claim-gap-actions";
 import { useClaimGapActions } from "@/features/avt/use-claim-gap-actions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -67,10 +65,7 @@ import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { useQueryViewError } from "@/lib/use-query-view";
-import {
-  entityOptions,
-  workspaceFilesOptions,
-} from "@/lib/workspaces/queries/entities";
+import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 import { legalListItemsOptions } from "@/lib/workspaces/queries/legal-lists";
 
 /** Characters a list item's name may hold, the task endpoint's cap. */
@@ -180,6 +175,7 @@ const GapActions = ({
           await actions.addFact.mutateAsync(input);
         }}
         pending={actions.addFact.isPending}
+        resume={actions.addFactResume}
         workspaceId={workspaceId}
       />
       <div className="flex flex-wrap items-center gap-1">
@@ -271,7 +267,10 @@ const LinkFactPicker = ({
                   {t("common.loading")}
                 </p>
               ) : null}
-              {!facts.isPending && shown.length === 0 ? (
+              {facts.isError ? (
+                <FactsReadFailed onRetry={async () => await facts.refetch()} />
+              ) : null}
+              {facts.isSuccess && shown.length === 0 ? (
                 <p className="text-muted-foreground px-2 py-1.5 text-sm">
                   {t("avt.gap.noFacts")}
                 </p>
@@ -313,15 +312,34 @@ const LinkFactPicker = ({
   );
 };
 
-type AddFactInput = Parameters<
-  ReturnType<typeof useClaimGapActions>["addFact"]["mutateAsync"]
->[0];
+/** The list's facts could not be read: said so, never shown as none. */
+const FactsReadFailed = ({ onRetry }: { onRetry: () => Promise<unknown> }) => {
+  const t = useTranslations();
+  return (
+    <RecoverableErrorStatus
+      actions={
+        <Button
+          onClick={() => detached(onRetry(), "avt.list-facts-retry")}
+          size="sm"
+          variant="ghost"
+        >
+          {t("common.retry")}
+        </Button>
+      }
+      className="flex items-center justify-between gap-2 px-2 py-1.5"
+      message={t("common.loadFailed")}
+      messageClassName="text-muted-foreground text-sm"
+    />
+  );
+};
 
 type AddFactSheetProps = {
   workspaceId: string;
   claimText: string;
   disabled: boolean;
   pending: boolean;
+  /** A started addition's values, held until it finishes. */
+  resume: AddFactInput | null;
   onSubmit: (input: AddFactInput) => Promise<void>;
 };
 
@@ -335,6 +353,7 @@ const AddFactSheet = ({
   claimText,
   disabled,
   pending,
+  resume,
   onSubmit,
 }: AddFactSheetProps) => {
   const t = useTranslations();
@@ -363,6 +382,7 @@ const AddFactSheet = ({
               setOpen(false);
             }}
             pending={pending}
+            resume={resume}
             workspaceId={workspaceId}
           />
         </SheetPopup>
@@ -375,6 +395,7 @@ type AddFactFormProps = {
   workspaceId: string;
   claimText: string;
   pending: boolean;
+  resume: AddFactInput | null;
   onCancel: () => void;
   onSubmit: (input: AddFactInput) => Promise<void>;
 };
@@ -385,20 +406,28 @@ const AddFactForm = ({
   workspaceId,
   claimText,
   pending,
+  resume,
   onCancel,
   onSubmit,
 }: AddFactFormProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const queryClient = useQueryClient();
   const filesView = queryView(useQuery(workspaceFilesOptions(workspaceId)));
   useQueryViewError(filesView, "AddFactFromDocument:query");
   const files = filesView.type === "items" ? filesView.items : [];
   // Prefilled with the claim's words; the reviewer trims it to the fact.
-  const [statement, setStatement] = React.useState(claimText);
-  const [documentId, setDocumentId] = React.useState("");
-  const [page, setPage] = React.useState("");
-  const [quote, setQuote] = React.useState("");
+  const [statement, setStatement] = React.useState(
+    resume?.statement ?? claimText,
+  );
+  const [documentId, setDocumentId] = React.useState(
+    resume?.source.documentId ?? "",
+  );
+  const [page, setPage] = React.useState(
+    resume?.source.pageNumber?.toString() ?? "",
+  );
+  const [quote, setQuote] = React.useState(resume?.source.quote ?? "");
+  // A started addition already wrote these; trying again finishes it.
+  const fixed = pending || resume !== null;
   const [errors, setErrors] = React.useState<FormErrors>({});
   const isPdf =
     files.find((file) => file.entityId === documentId)?.mimeType === PDF_MIME;
@@ -431,16 +460,10 @@ const AddFactForm = ({
     if (Object.keys(found).length > 0) {
       return;
     }
-    // Resolve the live version at submission rather than a stale pick.
-    const document = await queryClient.query({
-      ...entityOptions(workspaceId, documentId),
-      staleTime: 0,
-    });
     await onSubmit({
       statement: statement.trim(),
       source: {
-        sourceEntityId: document.entityId,
-        sourceEntityVersionId: document.currentVersionId,
+        documentId,
         pageNumber: isPdf && page !== "" ? Number(page) : null,
         quote: quote.trim() === "" ? null : quote.trim(),
       },
@@ -463,7 +486,7 @@ const AddFactForm = ({
           <Field invalid={errors.statement !== undefined} name="statement">
             <FieldLabel>{t("common.fact")}</FieldLabel>
             <Textarea
-              disabled={pending}
+              disabled={fixed}
               onChange={(event) => setStatement(event.target.value)}
               value={statement}
             />
@@ -473,7 +496,7 @@ const AddFactForm = ({
           </Field>
           <Field invalid={errors.document !== undefined} name="document">
             <MatterDocumentPicker
-              disabled={pending}
+              disabled={fixed}
               label={t("common.document")}
               maxPicked={1}
               onChange={(ids) => {
@@ -492,7 +515,7 @@ const AddFactForm = ({
               <FieldLabel>{t("lists.sources.page")}</FieldLabel>
               <Input
                 dir="ltr"
-                disabled={pending}
+                disabled={fixed}
                 inputMode="numeric"
                 onChange={(event) => setPage(event.target.value)}
                 value={page}
@@ -505,7 +528,7 @@ const AddFactForm = ({
           <Field name="passage">
             <FieldLabel>{t("avt.gap.sheet.passage")}</FieldLabel>
             <Textarea
-              disabled={pending}
+              disabled={fixed}
               onChange={(event) => setQuote(event.target.value)}
               placeholder={t("avt.gap.sheet.passageHint")}
               value={quote}
@@ -530,25 +553,71 @@ const AddFactForm = ({
   );
 };
 
+type LinkedMarkProps = GapScope & {
+  claimId: string;
+  factEntityId: string;
+  factName: string;
+  disabled: boolean;
+};
+
+/** On a cited fact's card: the reviewer linked it, and can unlink it. */
+export const LinkedMark = ({
+  workspaceId,
+  runId,
+  listId,
+  claimId,
+  factEntityId,
+  factName,
+  disabled,
+}: LinkedMarkProps) => {
+  const t = useTranslations();
+  const actions = useClaimGapActions({ workspaceId, runId, listId, claimId });
+  return (
+    <span className="flex items-center gap-0.5">
+      <ReviewStatusBadge
+        icon={<LinkIcon aria-hidden="true" className="size-3" />}
+        size="sm"
+        tone="neutral"
+      >
+        {t("avt.gap.linkedMark")}
+      </ReviewStatusBadge>
+      <Button
+        aria-label={t("avt.gap.unlink", { fact: factName })}
+        disabled={disabled || actions.link.isPending}
+        onClick={() => actions.link.mutate({ factEntityId, change: "unlink" })}
+        size="icon-xs"
+        variant="ghost"
+      >
+        <XIcon />
+      </Button>
+    </span>
+  );
+};
+
 type LinkedFactsProps = GapScope & {
   claim: VerificationClaim;
+  /** Facts the verdict cites: a linked one shows on its card there. */
+  cited: ReadonlyMap<string, unknown>;
   disabled: boolean;
 };
 
 /**
- * The facts a reviewer pointed the claim at, each removable, and a re-check
- * that reads them again. Shown while any are linked, whatever the verdict.
+ * The facts a reviewer pointed the claim at that the verdict does not cite,
+ * each removable, and a re-check that reads them again. Shown while any
+ * fact is linked; with every linked fact cited it is one row.
  */
 export const LinkedFacts = ({
   workspaceId,
   runId,
   listId,
   claim,
+  cited,
   disabled,
 }: LinkedFactsProps) => {
   const t = useTranslations();
-  const linkedIds = claim.review?.linkedFactIds ?? [];
-  const { facts } = useLinkableFacts({
+  const allLinked = claim.review?.linkedFactIds ?? [];
+  const linkedIds = allLinked.filter((factId) => !cited.has(factId));
+  const { query: read, facts } = useLinkableFacts({
     workspaceId,
     listId,
     enabled: linkedIds.length > 0,
@@ -559,7 +628,7 @@ export const LinkedFacts = ({
     listId,
     claimId: claim.id,
   });
-  if (linkedIds.length === 0) {
+  if (allLinked.length === 0) {
     return null;
   }
   const names = new Map<string, ListItem["name"]>(
@@ -583,35 +652,45 @@ export const LinkedFacts = ({
           {t("avt.gap.recheck")}
         </Button>
       </div>
-      <ul className="divide-y rounded-md border">
-        {linkedIds.map((factId) => {
-          const name = names.get(factId) ?? t("avt.gap.factOffList");
-          return (
-            <li className="flex items-start gap-2 p-2 ps-3" key={factId}>
-              <span
-                className="min-w-0 flex-1 text-sm leading-relaxed"
-                dir="auto"
-              >
-                {name}
-              </span>
-              <Button
-                aria-label={t("avt.gap.unlink", { fact: name })}
-                disabled={busy}
-                onClick={() =>
-                  actions.link.mutate({
-                    factEntityId: factId,
-                    change: "unlink",
-                  })
-                }
-                size="icon-sm"
-                variant="ghost"
-              >
-                <XIcon />
-              </Button>
-            </li>
-          );
-        })}
-      </ul>
+      {/* Names come from the list: until it is read, or when it cannot be,
+          no linked fact is called gone from it. */}
+      {linkedIds.length > 0 && read.isPending && (
+        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+      )}
+      {linkedIds.length > 0 && read.isError && (
+        <FactsReadFailed onRetry={async () => await read.refetch()} />
+      )}
+      {linkedIds.length > 0 && read.isSuccess && (
+        <ul className="divide-y rounded-md border">
+          {linkedIds.map((factId) => {
+            const name = names.get(factId) ?? t("avt.gap.factOffList");
+            return (
+              <li className="flex items-start gap-2 p-2 ps-3" key={factId}>
+                <span
+                  className="min-w-0 flex-1 text-sm leading-relaxed"
+                  dir="auto"
+                >
+                  {name}
+                </span>
+                <Button
+                  aria-label={t("avt.gap.unlink", { fact: name })}
+                  disabled={busy}
+                  onClick={() =>
+                    actions.link.mutate({
+                      factEntityId: factId,
+                      change: "unlink",
+                    })
+                  }
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  <XIcon />
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 };

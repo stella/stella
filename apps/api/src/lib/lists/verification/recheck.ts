@@ -116,6 +116,7 @@ export type RecheckRefusal =
   | { type: "not-found" }
   | { type: "too-many-actions" }
   | { type: "recheck-set-aside-claim" }
+  | { type: "superseded" }
   | { type: "too-many-facts" }
   | { type: "access-revoked" }
   | { type: "run-limit"; error: ListVerificationRunCapError }
@@ -133,6 +134,9 @@ type RecheckInput = {
   blockText: string;
   anchor: ClaimAnchor;
   linkedFactIds: readonly SafeId<"entity">[];
+  /** The claim's review events when grading began; any added since (a link,
+   *  another re-check) means this grade answers a question no longer asked. */
+  eventCount: number;
 };
 
 /** Whether the claim can take one more review action now, or why not. */
@@ -152,7 +156,11 @@ const reviewAdmits = async (
   const review = record?.review ?? EMPTY_CLAIM_REVIEW;
   const rejection = rejectRecheck(claim, review);
   return rejection === null
-    ? ({ type: "admitted", review } as const)
+    ? ({
+        type: "admitted",
+        review,
+        eventCount: record?.eventCount ?? 0,
+      } as const)
     : ({ type: rejection } as const);
 };
 
@@ -197,6 +205,7 @@ const prepareRecheck = async (
         blockText: target.blockText,
         anchor: target.claim.anchor,
         linkedFactIds: admitted.review.linkedFactIds,
+        eventCount: admitted.eventCount,
       },
     } as const;
   });
@@ -322,6 +331,9 @@ const recordRecheck = async ({
     if (admitted.type !== "admitted") {
       return admitted;
     }
+    if (admitted.eventCount !== input.eventCount) {
+      return { type: "superseded" };
+    }
     const payload = {
       kind: "recheck",
       requestKey: args.requestKey,
@@ -365,6 +377,23 @@ export const recheckClaim = async (
     return Result.ok(prepared.value);
   }
   const { input } = prepared.value;
+  // The model resolves before any call, as a run's does: an organization
+  // that cannot run it is refused before grading, and the event names the
+  // model the grade came from. None is called without facts to check.
+  const modelRef =
+    input.current.length === 0
+      ? null
+      : formatModelRef(
+          getTanStackTextModelInfoForTask(
+            VERIFICATION_MODEL_TASK,
+            args.orgAIConfig,
+            {
+              dataClass: "customer",
+              organizationId: args.organizationId,
+              modelTier: args.admission.modelTier,
+            },
+          ),
+        );
 
   const readAccess = async () =>
     await args.safeDb(
@@ -400,20 +429,5 @@ export const recheckClaim = async (
   if (graded.type !== "graded") {
     return Result.ok(graded);
   }
-  // No model is called when there are no facts to check against.
-  const modelRef =
-    input.current.length === 0
-      ? null
-      : formatModelRef(
-          getTanStackTextModelInfoForTask(
-            VERIFICATION_MODEL_TASK,
-            args.orgAIConfig,
-            {
-              dataClass: "customer",
-              organizationId: args.organizationId,
-              modelTier: args.admission.modelTier,
-            },
-          ),
-        );
   return await recordRecheck({ args, input, grade: graded.grade, modelRef });
 };

@@ -388,6 +388,7 @@
       "linkFact": "Tény hozzákapcsolása",
       "linkFailed": "A tényt nem sikerült hozzákapcsolni",
       "linked": "Hozzákapcsolt tények",
+      "linkedMark": "Összekapcsolva",
       "noFacts": "Egyetlen tény sem egyezik a listán.",
       "recheck": "Újraellenőrzés",
       "recheckFailed": "Az állítást nem sikerült újra ellenőrizni",

@@ -56,6 +56,7 @@ import { ClaimComments } from "@/features/avt/claim-comments";
 import {
   GapNextSteps,
   LinkedFacts,
+  LinkedMark,
   RecheckSummary,
 } from "@/features/avt/claim-gap";
 import {
@@ -166,6 +167,16 @@ export const ClaimDetailPanel = ({
     onReviewEvent({ kind: "status", status });
   };
   const factScope = { workspaceId, listId: run.evidence.listId, runId };
+  // The facts the verdict cites, each shown once under it; a record
+  // conflict shows its facts in its own block instead.
+  const cited = new Map(
+    verdict.state === "recordconflict"
+      ? []
+      : claim.refs.flatMap((ref) => {
+          const fact = factsById.get(ref.factEntityId);
+          return fact === undefined ? [] : [[ref.factEntityId, fact] as const];
+        }),
+  );
   // Coverage the record should give leads with filling it; the review
   // decisions step back to quiet controls.
   const gap = state === "nocover" && !isRecordSilent(state, claim);
@@ -236,26 +247,20 @@ export const ClaimDetailPanel = ({
             />
           )}
 
-          {claim.refs.length > 0 && verdict.state !== "recordconflict" && (
-            <section className="space-y-2">
-              <h3 className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
-                {t("avt.claimDetail.whyVerdict")}
-              </h3>
-              {[...supports, ...conflicts].map((ref) => {
-                const fact = factsById.get(ref.factEntityId);
-                return fact === undefined ? null : (
-                  <FactCard
-                    fact={fact}
-                    key={ref.factEntityId}
-                    rel={ref.rel}
-                    scope={factScope}
-                  />
-                );
-              })}
-            </section>
-          )}
+          <VerdictFacts
+            canReview={canReview}
+            claim={claim}
+            cited={cited}
+            refs={[...supports, ...conflicts]}
+            scope={factScope}
+          />
 
-          <LinkedFacts {...factScope} claim={claim} disabled={!canReview} />
+          <LinkedFacts
+            {...factScope}
+            cited={cited}
+            claim={claim}
+            disabled={!canReview}
+          />
 
           <section className="space-y-2.5 border-t pt-3.5">
             <div className="flex items-center justify-between gap-2">
@@ -960,20 +965,76 @@ const VerdictBasis = ({
  *  that owns the fact. */
 type FactScope = { workspaceId: string; listId: string; runId: string };
 
+type VerdictFactsProps = {
+  scope: FactScope;
+  claim: VerificationClaim;
+  refs: readonly VerificationClaim["refs"][number][];
+  cited: ReadonlyMap<FactId, ShownFact>;
+  canReview: boolean;
+};
+
+/** The facts the verdict rests on. One the reviewer linked says so on its
+ *  card, where it can be unlinked, rather than appearing a second time. */
+const VerdictFacts = ({
+  scope,
+  claim,
+  refs,
+  cited,
+  canReview,
+}: VerdictFactsProps) => {
+  const t = useTranslations();
+  if (cited.size === 0) {
+    return null;
+  }
+  const linked = new Set(claim.review?.linkedFactIds);
+  return (
+    <section className="space-y-2">
+      <h3 className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
+        {t("avt.claimDetail.whyVerdict")}
+      </h3>
+      {refs.map((ref) => {
+        const fact = cited.get(ref.factEntityId);
+        return fact === undefined ? null : (
+          <FactCard
+            fact={fact}
+            key={ref.factEntityId}
+            linkedMark={
+              linked.has(ref.factEntityId) ? (
+                <LinkedMark
+                  {...scope}
+                  claimId={claim.id}
+                  disabled={!canReview}
+                  factEntityId={ref.factEntityId}
+                  factName={fact.text}
+                />
+              ) : null
+            }
+            rel={ref.rel}
+            scope={scope}
+          />
+        );
+      })}
+    </section>
+  );
+};
+
 const FactCard = ({
   scope,
   fact,
   rel,
+  linkedMark = null,
 }: {
   scope: FactScope;
   fact: ShownFact;
   rel: ClaimFactRelation;
+  /** That the reviewer linked this fact, with its unlink action. */
+  linkedMark?: React.ReactNode;
 }) => {
   const t = useTranslations();
   const supports = rel === "supports";
   return (
     <article className="overflow-hidden rounded-lg border">
-      <div className="bg-muted flex items-center justify-between gap-2 border-b px-3 py-2">
+      <div className="bg-muted flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
         <ReviewStatusBadge
           icon={
             supports ? (
@@ -992,7 +1053,10 @@ const FactCard = ({
               : "avt.claimDetail.relation.conflicts",
           )}
         </ReviewStatusBadge>
-        <ConfBadge level={fact.confidence} />
+        <div className="ms-auto flex flex-wrap items-center justify-end gap-1.5">
+          {linkedMark}
+          <ConfBadge level={fact.confidence} />
+        </div>
       </div>
       <FactBody fact={fact} scope={scope} />
     </article>

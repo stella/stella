@@ -132,6 +132,8 @@ const { avtKeys, reviewHistoryOptions, verificationRunOptions } =
   await import("./queries");
 const { toSafeId } = await import("@/lib/safe-id");
 const { fileOptions } = await import("@/lib/files/queries");
+const { workspaceFilesOptions } =
+  await import("@/lib/workspaces/queries/entities");
 const { useInspectorCommandStore } =
   await import("@/components/inspector/inspector-command-store");
 const { PDF_CLAIM_BOX_ATTRIBUTE } = await import("./original-pdf-claim-box");
@@ -1607,6 +1609,75 @@ test("a gap claim leads with adding or linking a fact; a silent one offers that 
   expect(requests).toEqual([]);
 });
 
+/**
+ * Answers this flow's requests and records them. The signed-in view also
+ * reads per viewer (each claim's comments, the organization's settings);
+ * those are answered as empty and not recorded.
+ */
+const answerSignedIn = (answered: ReadonlyMap<string, () => Response>) => {
+  const seen: RecordedRequest[] = [];
+  const product = fetchBoundary.getMockImplementation();
+  fetchBoundary.mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const { pathname } = new URL(request.url);
+        if (pathname.endsWith("/claim-comments")) {
+          return Response.json({ items: [], limit: 100, nextCursor: null });
+        }
+        if (pathname === "/v1/organization-settings") {
+          return Response.json({
+            declaredFeatureIds: [],
+            deploymentFeatures: { legalLists: false },
+            capabilities: {},
+          });
+        }
+        const answer = answered.get(`${request.method} ${pathname}`);
+        if (answer === undefined) {
+          return await (product ?? panic("No fetch boundary"))(input, init);
+        }
+        const text = await request.text();
+        seen.push({
+          method: request.method,
+          path: pathname,
+          body: text === "" ? null : JSON.parse(text),
+        });
+        return answer();
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+  return seen;
+};
+
+test("a list whose facts cannot be read says so with a retry, never that it has none", async () => {
+  const seeded = seededRun();
+  const notice = listFact(8, "The lender's notice letter is dated 3 June.");
+  let reads = 0;
+  answerSignedIn(
+    new Map([
+      [
+        `GET /v1/lists/${workspaceId}/${seeded.evidence.listId}/items`,
+        () => {
+          reads += 1;
+          return reads === 1
+            ? Response.json({ error: "unavailable" }, { status: 500 })
+            : Response.json({ items: [notice], nextCursor: null, limit: 100 });
+        },
+      ],
+    ]),
+  );
+  await mount(seeded, true);
+  selectClaim(4);
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.linkFact }),
+  );
+  expect(await screen.findByText(messages.common.loadFailed)).toBeTruthy();
+  expect(screen.queryByText(messages.avt.gap.noFacts)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
+  expect(await screen.findByText(notice.name)).toBeTruthy();
+});
+
 test("linking a fact records the link as a review event, then re-checks the claim", async () => {
   const seeded = seededRun();
   const claim =
@@ -1648,41 +1719,7 @@ test("linking a fact records the link as a review event, then re-checks the clai
       () => Response.json({ replayed: false, claim }),
     ],
   ]);
-  // The signed-in view also reads per viewer (each claim's comments, the
-  // organization's settings); those are answered as empty, and only this
-  // flow's requests are recorded.
-  const seen: RecordedRequest[] = [];
-  const product = fetchBoundary.getMockImplementation();
-  fetchBoundary.mockImplementation(
-    Object.assign(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        const request = new Request(input, init);
-        const { pathname } = new URL(request.url);
-        if (pathname.endsWith("/claim-comments")) {
-          return Response.json({ items: [], limit: 100, nextCursor: null });
-        }
-        if (pathname === "/v1/organization-settings") {
-          return Response.json({
-            declaredFeatureIds: [],
-            deploymentFeatures: { legalLists: false },
-            capabilities: {},
-          });
-        }
-        const answer = answered.get(`${request.method} ${pathname}`);
-        if (answer === undefined) {
-          return await (product ?? panic("No fetch boundary"))(input, init);
-        }
-        const text = await request.text();
-        seen.push({
-          method: request.method,
-          path: pathname,
-          body: text === "" ? null : JSON.parse(text),
-        });
-        return answer();
-      },
-      { preconnect: () => undefined },
-    ),
-  );
+  const seen = answerSignedIn(answered);
   const { run } = await mount(seeded, true);
   selectClaim(4);
   fireEvent.click(
@@ -1731,6 +1768,113 @@ test("adding a fact from a document starts from the claim's words and asks for t
   expect(requests).toEqual([]);
 });
 
+test("an addition that failed midway finishes as first submitted, its fields held", async () => {
+  const seeded = seededRun();
+  const documentId = "0199a3c4-5b6d-7e8f-9a0b-000000009201";
+  const versionId = "0199a3c4-5b6d-7e8f-9a0b-000000009202";
+  const addedFactId = "0199a3c4-5b6d-7e8f-9a0b-000000009203";
+  const lists = `/v1/lists/${workspaceId}`;
+  let sourceWrites = 0;
+  const seen = answerSignedIn(
+    new Map([
+      [
+        `GET /v1/entities/${workspaceId}/entity/${documentId}`,
+        () =>
+          Response.json({ entityId: documentId, currentVersionId: versionId }),
+      ],
+      [
+        `PUT /v1/tasks/${workspaceId}`,
+        () => Response.json({ entityId: addedFactId }),
+      ],
+      [
+        `POST ${lists}/item-sources`,
+        () => {
+          sourceWrites += 1;
+          return sourceWrites === 1
+            ? Response.json({ error: "unavailable" }, { status: 503 })
+            : Response.json({ id: "0199a3c4-5b6d-7e8f-9a0b-000000009204" });
+        },
+      ],
+      [
+        `POST ${lists}/claim-reviews`,
+        () =>
+          Response.json({
+            claimId: seeded.claims.at(3)?.id,
+            review: { ...EMPTY_CLAIM_REVIEW, linkedFactIds: [addedFactId] },
+          }),
+      ],
+      [
+        `POST ${lists}/claim-rechecks`,
+        () => Response.json({ replayed: false, claim: seeded.claims.at(3) }),
+      ],
+    ]),
+  );
+  const { client } = await mount(seeded, true);
+  client.setQueryData(workspaceFilesOptions(workspaceId).queryKey, [
+    {
+      entityId: documentId,
+      fieldId: "0199a3c4-5b6d-7e8f-9a0b-000000009205",
+      name: "Lender's notice",
+      fileName: "notice.docx",
+      parentId: null,
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      sizeBytes: 12_000,
+    },
+  ]);
+  selectClaim(4);
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.addFact }),
+  );
+  const sheet = await screen.findByRole("dialog", {
+    name: messages.avt.gap.sheet.title,
+  });
+  const picker = within(sheet).getByRole("combobox", {
+    name: messages.common.document,
+  });
+  await act(async () => {
+    picker.focus();
+    fireEvent.input(picker, {
+      target: { value: "notice" },
+      inputType: "insertText",
+    });
+  });
+  fireEvent.click(
+    await screen.findByRole("option", { name: "Lender's notice" }),
+  );
+  const save = within(sheet).getByRole("button", {
+    name: messages.avt.gap.sheet.submit,
+  });
+  fireEvent.click(save);
+  await waitFor(() => expect(sourceWrites).toBe(1));
+  // The fact exists; what it was submitted with is held for the retry.
+  await waitFor(() =>
+    expect(within(sheet).getByLabelText(messages.common.fact)).toHaveProperty(
+      "disabled",
+      true,
+    ),
+  );
+  expect(picker).toHaveProperty("disabled", true);
+  fireEvent.click(save);
+  await waitFor(() =>
+    expect(seen.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      `PUT /v1/tasks/${workspaceId}`,
+      `GET /v1/entities/${workspaceId}/entity/${documentId}`,
+      `POST ${lists}/item-sources`,
+      `GET /v1/entities/${workspaceId}/entity/${documentId}`,
+      `POST ${lists}/item-sources`,
+      `POST ${lists}/claim-reviews`,
+      `POST ${lists}/claim-rechecks`,
+    ]),
+  );
+  // The fact was added once, and sourced from the document first chosen.
+  expect(seen.at(4)?.body).toMatchObject({
+    itemEntityId: addedFactId,
+    sourceEntityId: documentId,
+    sourceEntityVersionId: versionId,
+  });
+});
+
 test("a re-checked claim reads its new verdict beside the run's, and names a fact the run never pinned", async () => {
   const seeded = seededRun();
   const later = makeFact(7, {
@@ -1752,6 +1896,11 @@ test("a re-checked claim reads its new verdict beside the run's, and names a fac
             ...claim,
             verdict: supported(86),
             refs: [{ factEntityId: later.factEntityId, rel: "supports" }],
+            review: {
+              ...EMPTY_CLAIM_REVIEW,
+              linkedFactIds: [later.factEntityId],
+              eventCount: 2,
+            },
             recheck: {
               checkedAt: "2026-11-11T10:00:00.000Z",
               checkedBy: actorId,
@@ -1777,7 +1926,20 @@ test("a re-checked claim reads its new verdict beside the run's, and names a fac
     messages.avt.states.nocover.chip,
     messages.avt.states.supported.chip,
   ]);
-  expect(screen.getByText(later.text)).toBeTruthy();
+  // The linked fact the verdict cites shows once, on its card, marked as
+  // linked and unlinkable there; the linked list keeps only its re-check.
+  expect(screen.getAllByText(later.text)).toHaveLength(1);
+  expect(screen.getByText(messages.avt.gap.linkedMark)).toBeTruthy();
+  expect(
+    screen.getByRole("button", {
+      name: messages.avt.gap.unlink.replace("{fact}", () => later.text),
+    }),
+  ).toBeTruthy();
+  expect(screen.getByText(messages.avt.gap.linked)).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: messages.avt.gap.recheck }),
+  ).toBeTruthy();
+  expect(screen.queryAllByRole("listitem")).toHaveLength(0);
   // The verdict moved off the gap, so its next steps are gone.
   expect(
     screen.queryByRole("button", { name: messages.avt.gap.addFact }),

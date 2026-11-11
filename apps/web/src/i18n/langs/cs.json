@@ -388,6 +388,7 @@
       "linkFact": "Propojit fakt",
       "linkFailed": "Fakt se nepodařilo propojit",
       "linked": "Propojené fakty",
+      "linkedMark": "Propojeno",
       "noFacts": "Žádný fakt v seznamu neodpovídá.",
       "recheck": "Zkontrolovat znovu",
       "recheckFailed": "Tvrzení se nepodařilo zkontrolovat znovu",

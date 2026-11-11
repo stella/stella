@@ -388,6 +388,7 @@
       "linkFact": "Lier un fait",
       "linkFailed": "Le fait n’a pas pu être lié",
       "linked": "Faits liés",
+      "linkedMark": "Lié",
       "noFacts": "Aucun fait de la liste ne correspond.",
       "recheck": "Revérifier",
       "recheckFailed": "L’affirmation n’a pas pu être revérifiée",

@@ -19,6 +19,7 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
+import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
 
 type GapScope = {
@@ -28,19 +29,19 @@ type GapScope = {
   claimId: string;
 };
 
-/** Where a new fact comes from: a document, a page of it, and the words. */
+/** Where a new fact comes from: a document, a page of it, and the words.
+ *  The document's live version is read when the source is written. */
 export type FactSourceInput = {
-  sourceEntityId: string;
-  sourceEntityVersionId: string;
+  documentId: string;
   pageNumber: number | null;
   quote: string | null;
 };
 
-type AddFactInput = { statement: string; source: FactSourceInput };
+export type AddFactInput = { statement: string; source: FactSourceInput };
 
 /** How far adding a fact got: added to the list, sourced, linked. */
 type AddedFact = {
-  statement: string;
+  input: AddFactInput;
   entityId: string;
   step: "added" | "sourced" | "linked";
 };
@@ -129,12 +130,15 @@ export const useClaimGapActions = ({
   // The steps a failed attempt already took, so trying again neither adds
   // the fact twice nor sources it twice.
   const added = React.useRef<AddedFact | null>(null);
+  // What a started addition wrote, which the sheet holds fixed until it
+  // finishes: trying again completes that fact, never a changed one.
+  const [resume, setResume] = React.useState<AddFactInput | null>(null);
 
   const addFact = useMutation({
     mutationKey: ["avt", workspaceId, "claim-add-fact", runId, claimId],
-    mutationFn: async ({ statement, source }: AddFactInput) => {
-      const previous =
-        added.current?.statement === statement ? added.current : null;
+    mutationFn: async (submitted: AddFactInput) => {
+      const previous = added.current;
+      const { statement, source } = previous?.input ?? submitted;
       // The task endpoint takes no idempotency key; the capability header
       // declares the write.
       const entityId =
@@ -155,17 +159,28 @@ export const useClaimGapActions = ({
             ),
           )
         ).entityId;
-      added.current = { statement, entityId, step: previous?.step ?? "added" };
+      added.current = {
+        input: { statement, source },
+        entityId,
+        step: previous?.step ?? "added",
+      };
+      setResume(added.current.input);
       if (added.current.step === "added") {
+        // The live version at submission rather than a stale pick, read
+        // inside the attempt so the sheet stays busy until it is written.
+        const document = await queryClient.query({
+          ...entityOptions(workspaceId, source.documentId),
+          staleTime: 0,
+        });
         unwrapApiResponse(
           await submit.run({
             operation: `list-source-create:${workspaceId}`,
             body: {
               listId: toSafeId<"legalList">(listId),
               itemEntityId: toSafeId<"entity">(entityId),
-              sourceEntityId: toSafeId<"entity">(source.sourceEntityId),
+              sourceEntityId: toSafeId<"entity">(document.entityId),
               sourceEntityVersionId: toSafeId<"entityVersion">(
-                source.sourceEntityVersionId,
+                document.currentVersionId,
               ),
               locator:
                 source.pageNumber === null
@@ -187,10 +202,11 @@ export const useClaimGapActions = ({
       }
       await recheckClaim();
       added.current = null;
+      setResume(null);
     },
     onSettled: refresh,
     onError: (error) => notifyUserError(error, t("avt.gap.addFactFailed")),
   });
 
-  return { recheck, link, addFact };
+  return { recheck, link, addFact, addFactResume: resume };
 };

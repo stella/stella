@@ -388,6 +388,7 @@
       "linkFact": "Tatsache verknüpfen",
       "linkFailed": "Die Tatsache konnte nicht verknüpft werden",
       "linked": "Verknüpfte Tatsachen",
+      "linkedMark": "Verknüpft",
       "noFacts": "Keine Tatsache in der Liste passt.",
       "recheck": "Erneut prüfen",
       "recheckFailed": "Die Behauptung konnte nicht erneut geprüft werden",
