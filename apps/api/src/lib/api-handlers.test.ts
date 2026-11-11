@@ -1295,9 +1295,18 @@ describe("a request its caller cancelled", () => {
         cacheable: () => false,
         run: async (signal) =>
           await new Promise<{ hits: number }>((_resolve, reject) => {
-            signal.addEventListener("abort", () => reject(signal.reason), {
-              once: true,
-            });
+            signal.addEventListener(
+              "abort",
+              () => {
+                const reason: unknown = signal.reason;
+                reject(
+                  reason instanceof Error
+                    ? reason
+                    : new Error("Search aborted", { cause: reason }),
+                );
+              },
+              { once: true },
+            );
           }),
       });
       caller.abort();

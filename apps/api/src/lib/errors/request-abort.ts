@@ -38,6 +38,11 @@ export const requestAbortRefusal = (
   }
   // The DOM types the reason as any; read it as unknown.
   const reason: unknown = signal.reason;
+  // A reason that is already a typed refusal carries its own status and
+  // message; the handler's error resolution answers it as that refusal.
+  if (reason instanceof HandlerError) {
+    return null;
+  }
   const visited = new Set<unknown>();
   let current: unknown = error;
   for (

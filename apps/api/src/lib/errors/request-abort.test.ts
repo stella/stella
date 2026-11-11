@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { readFailureBrand } from "@stll/errors";
 
 import { requestAbortRefusal } from "@/api/lib/errors/request-abort";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 describe("requestAbortRefusal", () => {
   test("a failure carrying the request's own abort reason is the caller's", () => {
@@ -47,6 +48,20 @@ describe("requestAbortRefusal", () => {
       ),
     ).toBeNull();
   });
+
+  test.each([400, 409, 429] as const)(
+    "a cancellation whose reason is a typed %s refusal keeps that refusal",
+    (status) => {
+      const controller = new AbortController();
+      controller.abort(new HandlerError({ status, message: "Disconnected" }));
+      expect(
+        requestAbortRefusal(
+          controller.signal,
+          new UnhandledException({ cause: controller.signal.reason }),
+        ),
+      ).toBeNull();
+    },
+  );
 
   test("a cause cycle ends the walk", () => {
     const controller = new AbortController();
