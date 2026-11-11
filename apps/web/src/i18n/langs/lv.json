@@ -1274,6 +1274,7 @@
       "count": "{count, plural, zero {# valodu} one {# valoda} other {# valodas}}",
       "matchedIn": "Atbilstība valodā: {language}"
     },
+    "linkedPassageGone": "Saistītā fragmenta šajā tekstā vairs nav.",
     "loadingMore": "Ielādē vairāk...",
     "marginFilter": {
       "label": "Citēto normu filtrs",
@@ -1853,6 +1854,9 @@
       "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",
       "errorLimitResetsAt": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Vēlreiz mēģināt varēsiet pēc {time}.",
       "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
+      "errorNotReached": "Jūsu dators nepārņēma šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
+      "errorRelinked": "stella desktop jūsu datorā tika saistīts no jauna, tāpēc šī atbilde apstājās. Nosūtiet to vēlreiz.",
+      "errorRestoring": "Jūsu dators vēl atsauc failu izmaiņas. Pēc brīža nosūtiet to vēlreiz.",
       "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
       "filesNotShared": "Faili, kurus neizdevās kopīgot, paliek jūsu datorā: {fileNames}",
       "onThisComputer": "{harness} šajā datorā",
@@ -1880,7 +1884,9 @@
       "stateOffline": "Dators ir bezsaistē",
       "stateUnavailable": "Pašlaik nav pieejams",
       "stateUnsupported": "Šī versija netiek atbalstīta",
-      "waitingForComputer": "Gaida, līdz jūsu dators atkal izveidos savienojumu…"
+      "waitingForComputer": "Gaida, līdz jūsu dators atkal izveidos savienojumu…",
+      "waitingForPickup": "Gaida, līdz jūsu dators pārņems šo atbildi…",
+      "waitingSentAt": "Nosūtīts {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Izvēlieties visus atbilstošos",
@@ -4214,6 +4220,7 @@
       "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",
       "documentCutNotice": "<strong>Dokuments {documentName} nav izlasīts pilnībā.</strong> Šim modelim tas ir pārāk garš, tāpēc aptuveni {percent} teksta tika izlaisti. Pozīcija bez atbildes tiek atzīmēta pārskatīšanai, jo atbilde var būt izlaistajā daļā.",
       "documentTooLarge": "Šis dokuments ir pārāk garš, lai šis modelis varētu izlasīt pietiekamu tā daļu. Izmēģiniet modeli ar lielāku konteksta logu.",
+      "documentsTooLarge": "Šie dokumenti ir pārāk gari, lai šis modelis tos varētu izlasīt kopā. Izmantojiet mazāk vai īsākus dokumentus vai izmēģiniet modeli ar lielāku konteksta logu.",
       "export": {
         "counterparty": "Lejupielādēt pretpusei",
         "counterpartyFailed": "Neizdevās eksportēt dokumentu",
@@ -5504,6 +5511,7 @@
       "deleteAccountWarning": "Dzēšana ir neatgriezeniska. Pieteikšanās dati un privātie konta dati tiks noņemti.",
       "deleteAccountWarningExplanation": "Mēs nosūtīsim apstiprinājuma kodu uz jūsu e-pasta adresi, lai apstiprinātu šo pieprasījumu. Pabeigtā darba vietu vēsture paliks piesaistīta jūsu dzēstajam kontam.",
       "desktop": "Datorlietotne",
+      "desktopAccountConflict": "stella desktop šajā datorā ir savienots ar citu stella kontu. Pirms pārslēgšanas stella desktop lūgs to apstiprināt.",
       "desktopAppDescription": "Atrodiet visu kopēto un atveriet stella dokumentus jau izmantotajās datora lietotnēs.",
       "desktopCardApproveDetail": "Apstipriniet, lai saistītu šo datoru ar <bdi>{identity}</bdi> serverī {host}.",
       "desktopCardApproveTitle": "stella desktop lūdz savienojumu",
@@ -5518,6 +5526,7 @@
       "desktopCardOutdatedTitle": "stella desktop jāatjaunina",
       "desktopClipboardDescription": "Atveriet, meklējiet, kārtojiet un atkārtoti izmantojiet tekstu, kas kopēts no jebkuras lietotnes.",
       "desktopClipboardTitle": "Meklējama starpliktuves vēsture",
+      "desktopConnectDeclined": "Savienojums tika atcelts lietotnē stella desktop.",
       "desktopConnectFailed": "Neizdevās izveidot savienojumu ar stella desktop.",
       "desktopConnectInstalled": "Ir instalēts, savienot",
       "desktopConnectedAs": "Savienots kā <bdi>{email}</bdi>",
@@ -5533,11 +5542,13 @@
       "desktopInstallOpenStep": "Vienreiz atveriet stella desktop. Starpliktuve parādīsies uzreiz un turpmāk būs pieejama macOS izvēļņu joslā vai Windows sistēmas teknē.",
       "desktopInstallTitle": "Instalēšana un atvēršana",
       "desktopInstallWindowsStep": "Palaidiet instalētāju un izpildiet norādījumus.",
+      "desktopKeptAccount": "stella desktop paturēja pašreizējo kontu.",
       "desktopOpenApp": "Atvērt stella desktop",
       "desktopPrivacyDescription": "Starpliktuves vēsture tiek šifrēta un glabāta šajā ierīcē.",
       "desktopPrivacyTitle": "Privāts pēc noklusējuma",
       "desktopSelfHostDescription": "Uzticieties šim stella URL parakstītajā desktop lietotnē, lai šīs instalācijas dokumentus varētu atvērt lokāli.",
       "desktopSelfHostTitle": "Desktop rediģēšana self-hosting videi",
+      "desktopSwitchAccount": "Pārslēgt stella desktop uz šo kontu",
       "displayNameDescription": "Tā kolēģi jūs redz lietās, komentāros un aktivitātēs.",
       "displayNameRequired": "Ievadiet attēlojamo vārdu.",
       "displayNameSaved": "Attēlojamais vārds atjaunināts",

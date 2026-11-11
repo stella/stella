@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# language} other {# languages}}",
       "matchedIn": "Matched in {language}"
     },
+    "linkedPassageGone": "The linked passage is no longer in this text.",
     "loadingMore": "Loading more...",
     "marginFilter": {
       "label": "Cited provisions filter",
@@ -1853,6 +1854,9 @@
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
       "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
+      "errorNotReached": "Your computer did not pick up this turn. Make sure stella desktop is open and connected, then try again.",
+      "errorRelinked": "stella desktop was linked again on your computer, so this turn stopped. Send it again.",
+      "errorRestoring": "Your computer is still undoing file changes. Send this again in a moment.",
       "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
       "filesNotShared": "Files that could not be shared stay on your computer: {fileNames}",
       "onThisComputer": "{harness} on this computer",
@@ -1880,7 +1884,9 @@
       "stateOffline": "Computer offline",
       "stateUnavailable": "Not available right now",
       "stateUnsupported": "This version is not supported",
-      "waitingForComputer": "Waiting for your computer to reconnect…"
+      "waitingForComputer": "Waiting for your computer to reconnect…",
+      "waitingForPickup": "Waiting for your computer to pick up this turn…",
+      "waitingSentAt": "Sent at {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Choose any that apply",
@@ -4214,6 +4220,7 @@
       "documentChanged": "This document changed after this review.",
       "documentCutNotice": "<strong>{documentName} was not read in full.</strong> It is too long for this model, so about {percent} of its text was left out. A position with no answer is flagged for review, because the answer may be in the part left out.",
       "documentTooLarge": "This document is too long for this model to read enough of it. Try a model with a larger context window.",
+      "documentsTooLarge": "These documents are too long for this model to read together. Use fewer or shorter documents, or try a model with a larger context window.",
       "export": {
         "counterparty": "Download for counterparty",
         "counterpartyFailed": "Could not export the document",
@@ -5504,6 +5511,7 @@
       "deleteAccountWarning": "Deletion is irreversible. Your login and private account data will be removed.",
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.",
       "desktop": "Desktop",
+      "desktopAccountConflict": "stella desktop on this computer is connected to another stella account. Switching asks you to confirm in stella desktop first.",
       "desktopAppDescription": "Recall anything you copy, and open stella documents in the desktop apps you already use.",
       "desktopCardApproveDetail": "Approve to link this computer to <bdi>{identity}</bdi> on {host}.",
       "desktopCardApproveTitle": "stella desktop is asking to connect",
@@ -5518,6 +5526,7 @@
       "desktopCardOutdatedTitle": "stella desktop needs an update",
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.",
       "desktopClipboardTitle": "Searchable clipboard history",
+      "desktopConnectDeclined": "The connection was cancelled in stella desktop.",
       "desktopConnectFailed": "Could not connect stella desktop.",
       "desktopConnectInstalled": "It's installed, connect",
       "desktopConnectedAs": "Connected as <bdi>{email}</bdi>",
@@ -5533,11 +5542,13 @@
       "desktopInstallOpenStep": "Open stella desktop once. Clipboard appears immediately and remains available from the macOS menu bar or Windows system tray.",
       "desktopInstallTitle": "Install and open",
       "desktopInstallWindowsStep": "Run the installer and follow the prompts.",
+      "desktopKeptAccount": "stella desktop kept its current account.",
       "desktopOpenApp": "Open stella desktop",
       "desktopPrivacyDescription": "Clipboard history is encrypted and stored on this device.",
       "desktopPrivacyTitle": "Private by default",
       "desktopSelfHostDescription": "Trust this stella URL in the signed desktop app so documents from this install can open locally.",
       "desktopSelfHostTitle": "Self-hosted desktop editing",
+      "desktopSwitchAccount": "Switch stella desktop to this account",
       "displayNameDescription": "How your colleagues see you across matters, comments, and activity.",
       "displayNameRequired": "Enter a display name.",
       "displayNameSaved": "Display name updated",

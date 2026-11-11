@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazykov} many {# jazyka}}",
       "matchedIn": "Zhoda v jazyku {language}"
     },
+    "linkedPassageGone": "Odkazovaná pasáž sa už v tomto texte nenachádza.",
     "loadingMore": "Načítavajú sa ďalšie...",
     "marginFilter": {
       "label": "Filter citovaných ustanovení",
@@ -1853,6 +1854,9 @@
       "errorLimitReached": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Skúste to znova, keď sa limit obnoví.",
       "errorLimitResetsAt": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Znova to môžete skúsiť po {time}.",
       "errorNeedsLogin": "Programovací agent vo vašom počítači vyžaduje nové prihlásenie. Prihláste sa cez stella desktop a skúste to znova.",
+      "errorNotReached": "Váš počítač túto odpoveď neprevzal. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
+      "errorRelinked": "stella desktop bol vo vašom počítači znova prepojený, takže sa táto odpoveď zastavila. Odošlite ju znova.",
+      "errorRestoring": "Váš počítač ešte vracia zmeny súborov. Odošlite to znova o chvíľu.",
       "errorUnavailable": "Váš počítač prestal túto odpoveď spracúvať. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
       "filesNotShared": "Súbory, ktoré sa nepodarilo zdieľať, zostávajú vo vašom počítači: {fileNames}",
       "onThisComputer": "{harness} v tomto počítači",
@@ -1880,7 +1884,9 @@
       "stateOffline": "Počítač je offline",
       "stateUnavailable": "Momentálne nedostupné",
       "stateUnsupported": "Táto verzia nie je podporovaná",
-      "waitingForComputer": "Čaká sa, kým sa váš počítač znova pripojí…"
+      "waitingForComputer": "Čaká sa, kým sa váš počítač znova pripojí…",
+      "waitingForPickup": "Čaká sa, kým túto odpoveď prevezme váš počítač…",
+      "waitingSentAt": "Odoslané o {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Vyberte všetko, čo platí",
@@ -4214,6 +4220,7 @@
       "documentChanged": "Dokument sa od tejto kontroly zmenil.",
       "documentCutNotice": "<strong>Dokument {documentName} nebol prečítaný celý.</strong> Pre tento model je príliš dlhý, preto bolo vynechaných približne {percent} jeho textu. Pozícia bez odpovede je označená na kontrolu, pretože odpoveď môže byť vo vynechanej časti.",
       "documentTooLarge": "Tento dokument je príliš dlhý na to, aby z neho tento model prečítal dostatočnú časť. Skúste model s väčším kontextovým oknom.",
+      "documentsTooLarge": "Tieto dokumenty sú príliš dlhé na to, aby ich tento model prečítal spoločne. Použite menej dokumentov alebo kratšie dokumenty, prípadne skúste model s väčším kontextovým oknom.",
       "export": {
         "counterparty": "Stiahnuť pre protistranu",
         "counterpartyFailed": "Dokument sa nepodarilo exportovať",
@@ -5504,6 +5511,7 @@
       "deleteAccountWarning": "Vymazanie je nezvratný krok. Prihlasovacie údaje a súkromné údaje účtu budú odstránené.",
       "deleteAccountWarningExplanation": "Na vašu e-mailovú adresu pošleme overovací kód na potvrdenie tejto požiadavky. Dokončená história pracovných priestorov zostane priradená k vymazanému účtu.",
       "desktop": "Aplikácia pre počítač",
+      "desktopAccountConflict": "Aplikácia stella desktop na tomto počítači je pripojená k inému účtu stella. Pred prepnutím vás požiada o potvrdenie.",
       "desktopAppDescription": "Vráťte sa ku všetkému, čo skopírujete, a otvárajte dokumenty zo stelly v aplikáciách, ktoré už používate.",
       "desktopCardApproveDetail": "Schváľte prepojenie tohto počítača s účtom <bdi>{identity}</bdi> na {host}.",
       "desktopCardApproveTitle": "stella desktop žiada o pripojenie",
@@ -5518,6 +5526,7 @@
       "desktopCardOutdatedTitle": "stella desktop potrebuje aktualizáciu",
       "desktopClipboardDescription": "Otvárajte, prehľadávajte, usporadúvajte a znova používajte text skopírovaný z ľubovoľnej aplikácie.",
       "desktopClipboardTitle": "Prehľadávateľná história schránky",
+      "desktopConnectDeclined": "Pripojenie bolo v aplikácii stella desktop zrušené.",
       "desktopConnectFailed": "Aplikáciu stella desktop sa nepodarilo pripojiť.",
       "desktopConnectInstalled": "Je nainštalovaný, pripojiť",
       "desktopConnectedAs": "Pripojené ako <bdi>{email}</bdi>",
@@ -5533,11 +5542,13 @@
       "desktopInstallOpenStep": "Raz otvorte stella desktop. Schránka sa zobrazí okamžite a zostane dostupná z panela ponúk systému macOS alebo z oblasti oznámení systému Windows.",
       "desktopInstallTitle": "Inštalácia a otvorenie",
       "desktopInstallWindowsStep": "Spustite inštalátor a postupujte podľa pokynov.",
+      "desktopKeptAccount": "Aplikácia stella desktop si ponechala súčasný účet.",
       "desktopOpenApp": "Otvoriť stella desktop",
       "desktopPrivacyDescription": "História schránky je šifrovaná a uložená v tomto zariadení.",
       "desktopPrivacyTitle": "Predvolene súkromné",
       "desktopSelfHostDescription": "Dôverujte tejto URL stella v podpísanej desktopovej aplikácii, aby sa dokumenty z tejto inštalácie mohli otvárať lokálne.",
       "desktopSelfHostTitle": "Desktopové úpravy pre self-hosting",
+      "desktopSwitchAccount": "Prepnúť stella desktop na tento účet",
       "displayNameDescription": "Takto vás vidia kolegovia v spisoch, komentároch a aktivite.",
       "displayNameRequired": "Zadajte zobrazované meno.",
       "displayNameSaved": "Zobrazované meno aktualizované",

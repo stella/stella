@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# langue} other {# langues} many {# langues}}",
       "matchedIn": "Correspondance en {language}"
     },
+    "linkedPassageGone": "Le passage lié ne figure plus dans ce texte.",
     "loadingMore": "Chargement en cours…",
     "marginFilter": {
       "label": "Filtre des dispositions citées",
@@ -1853,6 +1854,9 @@
       "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
       "errorLimitResetsAt": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Vous pourrez réessayer à partir du {time}.",
       "errorNeedsLogin": "L’agent de code de votre ordinateur vous demande de vous reconnecter. Connectez-vous depuis stella desktop, puis réessayez.",
+      "errorNotReached": "Votre ordinateur n'a pas pris en charge cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
+      "errorRelinked": "stella desktop a été associé à nouveau sur votre ordinateur, cette réponse s'est donc arrêtée. Renvoyez-la.",
+      "errorRestoring": "Votre ordinateur annule encore des modifications de fichiers. Renvoyez ceci dans un instant.",
       "errorUnavailable": "Votre ordinateur a cessé de traiter cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
       "filesNotShared": "Les fichiers qui n'ont pas pu être partagés restent sur votre ordinateur : {fileNames}",
       "onThisComputer": "{harness} sur cet ordinateur",
@@ -1880,7 +1884,9 @@
       "stateOffline": "Ordinateur hors ligne",
       "stateUnavailable": "Indisponible pour le moment",
       "stateUnsupported": "Cette version n’est pas prise en charge",
-      "waitingForComputer": "En attente de la reconnexion de votre ordinateur…"
+      "waitingForComputer": "En attente de la reconnexion de votre ordinateur…",
+      "waitingForPickup": "En attente de la prise en charge de cette réponse par votre ordinateur…",
+      "waitingSentAt": "Envoyé à {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Choisissez toutes les réponses qui s’appliquent",
@@ -4214,6 +4220,7 @@
       "documentChanged": "Ce document a changé depuis cette révision.",
       "documentCutNotice": "<strong>{documentName} n’a pas été lu en entier.</strong> Il est trop long pour ce modèle : environ {percent} du texte a donc été omis. Une position sans réponse est signalée pour vérification, car la réponse peut se trouver dans la partie omise.",
       "documentTooLarge": "Ce document est trop long pour que ce modèle en lise une part suffisante. Essayez un modèle doté d’une fenêtre de contexte plus grande.",
+      "documentsTooLarge": "Ces documents sont trop longs pour que ce modèle les lise ensemble. Utilisez des documents moins nombreux ou plus courts, ou essayez un modèle doté d’une fenêtre de contexte plus grande.",
       "export": {
         "counterparty": "Télécharger pour la contrepartie",
         "counterpartyFailed": "Impossible d'exporter le document",
@@ -5504,6 +5511,7 @@
       "deleteAccountWarning": "La suppression est irréversible. Vos identifiants de connexion et données privées du compte seront supprimés.",
       "deleteAccountWarningExplanation": "Nous enverrons un code de vérification à votre adresse e-mail pour confirmer cette demande. L'historique terminé de l'espace de travail restera attribué à votre compte supprimé.",
       "desktop": "Bureau",
+      "desktopAccountConflict": "Sur cet ordinateur, stella desktop est connecté à un autre compte stella. Avant de changer de compte, stella desktop vous demande de confirmer.",
       "desktopAppDescription": "Retrouvez tout ce que vous copiez et ouvrez les documents stella dans les applications que vous utilisez déjà.",
       "desktopCardApproveDetail": "Approuvez pour lier cet ordinateur à <bdi>{identity}</bdi> sur {host}.",
       "desktopCardApproveTitle": "stella desktop demande à se connecter",
@@ -5518,6 +5526,7 @@
       "desktopCardOutdatedTitle": "stella desktop doit être mis à jour",
       "desktopClipboardDescription": "Ouvrez, recherchez, organisez et réutilisez le texte copié depuis n’importe quelle application.",
       "desktopClipboardTitle": "Historique du presse-papiers consultable",
+      "desktopConnectDeclined": "La connexion a été annulée dans stella desktop.",
       "desktopConnectFailed": "Impossible de connecter stella desktop.",
       "desktopConnectInstalled": "Déjà installé, connecter",
       "desktopConnectedAs": "Connecté en tant que <bdi>{email}</bdi>",
@@ -5533,11 +5542,13 @@
       "desktopInstallOpenStep": "Ouvrez stella desktop une fois. Le presse-papiers apparaît immédiatement et reste accessible depuis la barre des menus de macOS ou la zone de notification de Windows.",
       "desktopInstallTitle": "Installer et ouvrir",
       "desktopInstallWindowsStep": "Lancez le programme d’installation et suivez les instructions.",
+      "desktopKeptAccount": "stella desktop conserve le compte actuel.",
       "desktopOpenApp": "Ouvrir stella desktop",
       "desktopPrivacyDescription": "L’historique du presse-papiers est chiffré et stocké sur cet appareil.",
       "desktopPrivacyTitle": "Confidentiel par défaut",
       "desktopSelfHostDescription": "Approuvez cette URL stella dans l'application desktop signée afin que les documents de cette installation puissent s'ouvrir localement.",
       "desktopSelfHostTitle": "Édition desktop pour self-hosting",
+      "desktopSwitchAccount": "Passer stella desktop sur ce compte",
       "displayNameDescription": "Ce que vos collègues voient dans les dossiers, les commentaires et l'activité.",
       "displayNameRequired": "Saisissez un nom affiché.",
       "displayNameSaved": "Nom affiché mis à jour",

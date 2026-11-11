@@ -20,6 +20,7 @@ export const FAILURE_TAGS = [
   "ApnsTransportError",
   "AppServerRequestError",
   "AppleSignInConfigError",
+  "ArtefactProvenanceDecodeError",
   "ArtefactSourceLimitError",
   "AttachmentCopyFailed",
   "AuthorizedWorkspaceReadError",

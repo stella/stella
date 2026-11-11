@@ -290,15 +290,12 @@ const buildSavePlaybookRows = ({
         Array.isArray(removed) && removed.length > 0 ? `${removed.length}` : "",
     },
   ];
+  // Untruncated: the approver must see every position the call touches.
   for (const { key, value } of changes) {
     if (value.length === 0) {
       continue;
     }
-    rows.push({
-      key,
-      label: humanizeIdentifier(key),
-      value: formatReadableInputValue({ emptyLabel, value }),
-    });
+    rows.push({ key, label: humanizeIdentifier(key), value });
   }
   return rows;
 };

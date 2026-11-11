@@ -142,6 +142,9 @@ jobs:
           tail -200 /tmp/web-workspace-replay.log || true
           exit 1
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Explore workspace interactions
         timeout-minutes: 15
         if: steps.e2e-stack.outcome == 'success'
@@ -267,6 +270,9 @@ jobs:
           cp .env.example .env
           cd ../web
           cp .env.example .env
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Full test suite
         env:
@@ -439,6 +445,9 @@ jobs:
         # the case-law ingestion role/policy migrations.
         run: bun run src/db/migrate.ts
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Run Postgres-gated API suites
         working-directory: apps/api
         env:
@@ -488,6 +497,9 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Run Valkey-gated API suites
         working-directory: apps/api
         env:
@@ -522,6 +534,9 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run live CJEU smoke suite
         working-directory: apps/api
@@ -601,6 +616,9 @@ jobs:
         run: |
           bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
           bash scripts/configure-test-postgres.sh "${{ job.services.postgres-clean.id }}" stella_owner
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Test exact-base rehearsal contracts
         run: bun test scripts/migration-catalog.test.ts scripts/rehearse-exact-base-upgrade.test.ts

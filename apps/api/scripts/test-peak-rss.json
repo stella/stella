@@ -7232,14 +7232,6 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/chat/thread-title.test.ts": {
-      "peakMb": 184,
-      "baselineMb": 184,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-1"
-      }
-    },
     "src/handlers/chat/threads/list.integration.test.ts": {
       "peakMb": 945,
       "baselineMb": 179,
@@ -12670,6 +12662,14 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-2"
+      }
+    },
+    "src/lib/ai-generation/thread-title.test.ts": {
+      "peakMb": 184,
+      "baselineMb": 184,
+      "source": {
+        "runId": "42807986206",
+        "job": "measure-1"
       }
     },
     "src/lib/ai-provider-probe.test.ts": {

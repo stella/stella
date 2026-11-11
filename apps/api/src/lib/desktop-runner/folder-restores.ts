@@ -455,6 +455,47 @@ const ofComputer = (binding: RunnerBinding): SQL =>
   ) ?? panic("A computer's restores are named by its binding");
 
 /**
+ * The restores of device keys a relink retired, queued or sent, end as
+ * expired: no socket of those keys takes or answers one again, and a sent
+ * one would otherwise block the thread's runs on that computer forever.
+ */
+export const expireFolderRestoresOfKeys = async (
+  tx: Parameters<typeof transitionLifecycleBatch>[0]["tx"] &
+    Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    desktopId,
+    deviceJkts,
+    now,
+  }: {
+    owner: RunOwner;
+    desktopId: string;
+    deviceJkts: readonly string[];
+    now: Date;
+  },
+) => {
+  const ofKeys = and(
+    eq(restores.userId, owner.userId),
+    eq(restores.organizationId, owner.organizationId),
+    eq(restores.desktopId, desktopId),
+    inArray(restores.deviceJkt, [...deviceJkts]),
+  );
+  const unsettled = await tx
+    .select({ id: restores.id })
+    .from(restores)
+    .where(and(ofKeys, inArray(restores.state, ["queued", "sent"])));
+  await transitionLifecycleBatch({
+    tx,
+    spec: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+    ids: unsettled.map(({ id }) => id),
+    moves: { state: { from: ["queued", "sent"], to: "expired" } },
+    guard: ofKeys ?? panic("A key's restores are named by its account"),
+    set: { settledAt: now },
+    recordTransitionAuditEvent: skipRestoreAudit,
+  });
+};
+
+/**
  * The restores this socket sends now: queued ones still in time, marked sent
  * before they go out, and on a new socket the sent ones not answered yet. A
  * queued one past its time is expired instead. Only the computer's current
