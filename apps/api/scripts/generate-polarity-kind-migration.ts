@@ -13,7 +13,7 @@ export const renderCitationEvidenceWindowCheck = () =>
 
 if (import.meta.main && process.argv.includes("--write-window-check")) {
   const file = new URL(
-    "../drizzle/20261111140100_case_law_polarity_kind_evidence/migration.sql",
+    "../drizzle/20261111160100_case_law_polarity_kind_evidence/migration.sql",
     import.meta.url,
   );
   const source = await Bun.file(file).text();
