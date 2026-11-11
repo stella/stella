@@ -327,8 +327,8 @@ if (!databaseUrl || !runPostgres) {
 
         // The table holds only the closed kinds, one row per document per
         // list, and goes with its list.
-        const insertKind = (kind: string) =>
-          db
+        const insertKind = async (kind: string) =>
+          await db
             .execute(
               sql`INSERT INTO ${legalListSourceDocuments} (workspace_id, list_id, document_entity_id, source_kind, entity_feature_gate) VALUES (${workspaceId}, ${listId}, ${minutesId}, ${kind}, 'open')`,
             )
