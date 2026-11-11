@@ -295,9 +295,9 @@ const createClaimReview = createSafeHandler(
           runId,
           claimIds: [claimId],
         });
-        const review =
+        const recorded =
           after.get(claimId) ?? panic("A claim with a new event has no review");
-        return { type: "recorded", review } as const;
+        return { type: "recorded", review: recorded } as const;
       }),
     );
 

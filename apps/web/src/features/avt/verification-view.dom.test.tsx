@@ -1529,6 +1529,7 @@ const listFact = (suffix: number, name: string): ListItem => ({
   updatedAt: "2026-10-01T12:00:00Z",
   customFields: [],
   firstSource: null,
+  sourceTier: "unsourced",
   factDetails: null,
 });
 
@@ -1591,16 +1592,9 @@ test("a gap claim leads with adding or linking a fact; a silent one offers that 
 });
 
 test("linking a fact records the link as a review event, then re-checks the claim", async () => {
-  // Each claim shown reads its comments as the viewer: the first claim in
-  // reading order, then the one selected.
-  const noComments = () =>
-    Response.json({ items: [], limit: 100, nextCursor: null });
-  answers.push(noComments(), noComments());
-  const { run } = await mount(seededRun(), true);
-  selectClaim(4);
-  await waitFor(() => expect(answers).toHaveLength(0));
-  requests.length = 0;
-  const claim = run.claims.at(3) ?? panic("Missing seeded no-coverage claim");
+  const seeded = seededRun();
+  const claim =
+    seeded.claims.at(3) ?? panic("Missing seeded no-coverage claim");
   const notice = listFact(8, "The lender's notice letter is dated 3 June.");
   const held = {
     ...listFact(9, "A held note about the notice."),
@@ -1614,18 +1608,67 @@ test("linking a fact records the link as a review event, then re-checks the clai
       scoring: "held",
     },
   } satisfies ListItem;
-  answers.push(
-    Response.json({ items: [notice, held], nextCursor: null, limit: 100 }),
-    Response.json({
-      claimId: claim.id,
-      review: {
-        ...EMPTY_CLAIM_REVIEW,
-        linkedFactIds: [notice.id],
-        eventCount: 1,
+  const lists = `/v1/lists/${workspaceId}`;
+  const answered = new Map<string, () => Response>([
+    [
+      `GET ${lists}/${seeded.evidence.listId}/items`,
+      () =>
+        Response.json({ items: [notice, held], nextCursor: null, limit: 100 }),
+    ],
+    [
+      `POST ${lists}/claim-reviews`,
+      () =>
+        Response.json({
+          claimId: claim.id,
+          review: {
+            ...EMPTY_CLAIM_REVIEW,
+            linkedFactIds: [notice.id],
+            eventCount: 1,
+          },
+        }),
+    ],
+    [
+      `POST ${lists}/claim-rechecks`,
+      () => Response.json({ replayed: false, claim }),
+    ],
+  ]);
+  // The signed-in view also reads per viewer (each claim's comments, the
+  // organization's settings); those are answered as empty, and only this
+  // flow's requests are recorded.
+  const seen: RecordedRequest[] = [];
+  const product = fetchBoundary.getMockImplementation();
+  fetchBoundary.mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const { pathname } = new URL(request.url);
+        if (pathname.endsWith("/claim-comments")) {
+          return Response.json({ items: [], limit: 100, nextCursor: null });
+        }
+        if (pathname === "/v1/organization-settings") {
+          return Response.json({
+            declaredFeatureIds: [],
+            deploymentFeatures: { legalLists: false },
+            capabilities: {},
+          });
+        }
+        const answer = answered.get(`${request.method} ${pathname}`);
+        if (answer === undefined) {
+          return await (product ?? panic("No fetch boundary"))(input, init);
+        }
+        const text = await request.text();
+        seen.push({
+          method: request.method,
+          path: pathname,
+          body: text === "" ? null : JSON.parse(text),
+        });
+        return answer();
       },
-    }),
-    Response.json({ replayed: false, claim }),
+      { preconnect: () => undefined },
+    ),
   );
+  const { run } = await mount(seeded, true);
+  selectClaim(4);
   fireEvent.click(
     screen.getByRole("button", { name: messages.avt.gap.linkFact }),
   );
@@ -1633,18 +1676,18 @@ test("linking a fact records the link as a review event, then re-checks the clai
   // A held fact is never read by a check, so it cannot be linked.
   expect(screen.queryByText(held.name)).toBeNull();
   fireEvent.click(option);
-  await waitFor(() => expect(requests).toHaveLength(3));
-  expect(requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
-    `GET /v1/lists/${workspaceId}/${run.evidence.listId}/items`,
-    `POST /v1/lists/${workspaceId}/claim-reviews`,
-    `POST /v1/lists/${workspaceId}/claim-rechecks`,
+  await waitFor(() => expect(seen).toHaveLength(3));
+  expect(seen.map(({ method, path }) => `${method} ${path}`)).toEqual([
+    `GET ${lists}/${run.evidence.listId}/items`,
+    `POST ${lists}/claim-reviews`,
+    `POST ${lists}/claim-rechecks`,
   ]);
-  expect(requests.at(1)?.body).toEqual({
+  expect(seen.at(1)?.body).toEqual({
     runId: run.id,
     claimId: claim.id,
     event: { kind: "fact-link", factEntityId: notice.id, change: "link" },
   });
-  expect(requests.at(2)?.body).toMatchObject({
+  expect(seen.at(2)?.body).toMatchObject({
     runId: run.id,
     claimId: claim.id,
     requestKey: expect.any(String),
