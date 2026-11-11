@@ -4390,7 +4390,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Izveidojiet līgumu pārbaudes ceļvedi pozīciju pa pozīcijai, balstoties uz iepriekš parakstītajiem līgumiem, īsu interviju un tirgū ierastajiem standartiem.",
-          "name": "Izveidot pārbaudes ceļvedi"
+          "name": "Izveidot pārbaudes ceļvedi",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pievieno pozīcijas vienam no maniem esošajiem pārbaudes ceļvežiem.",
+              "name": "Papildināt pārbaudes ceļvedi"
+            },
+            "fromContracts": {
+              "body": "Izveido konfidencialitātes līgumu pārbaudes ceļvedi, balstoties uz maniem iepriekš parakstītajiem līgumiem.",
+              "name": "Sākt ar iepriekšējiem līgumiem"
+            },
+            "fromMarketStandards": {
+              "body": "Izveido piegādes līgumu pārbaudes ceļvedi, sākot ar tirgū ierastajām pozīcijām.",
+              "name": "Sākt ar tirgus standartiem"
+            }
+          }
         }
       },
       "builtInSection": "Iebūvētās prasmes",

@@ -4390,7 +4390,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Hozzon létre szerződés-felülvizsgálati playbookot álláspontról álláspontra, a korábban aláírt szerződései, egy rövid interjú és a szokásos piaci standardok alapján.",
-          "name": "Playbook létrehozása"
+          "name": "Playbook létrehozása",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Adj hozzá álláspontokat az egyik meglévő playbookomhoz.",
+              "name": "Playbook bővítése"
+            },
+            "fromContracts": {
+              "body": "Készíts playbookot titoktartási megállapodásokhoz a korábban aláírt megállapodásaim alapján.",
+              "name": "Kiindulás korábbi szerződésekből"
+            },
+            "fromMarketStandards": {
+              "body": "Készíts playbookot beszállítói szerződésekhez a szokásos piaci álláspontokból kiindulva.",
+              "name": "Kiindulás a piaci standardokból"
+            }
+          }
         }
       },
       "builtInSection": "Beépített készségek",

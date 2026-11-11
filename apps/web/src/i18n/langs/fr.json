@@ -4390,7 +4390,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Créez un playbook de revue de contrats critère par critère, à partir de vos contrats déjà signés, d’un court entretien et des usages du marché.",
-          "name": "Créer un playbook"
+          "name": "Créer un playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Ajoute des critères à l’un de mes playbooks existants.",
+              "name": "Compléter un playbook"
+            },
+            "fromContracts": {
+              "body": "Crée un playbook pour les accords de confidentialité à partir de mes accords déjà signés.",
+              "name": "Partir de contrats passés"
+            },
+            "fromMarketStandards": {
+              "body": "Crée un playbook pour les contrats fournisseurs en partant des critères conformes aux usages du marché.",
+              "name": "Partir des usages du marché"
+            }
+          }
         }
       },
       "builtInSection": "Compétences intégrées",

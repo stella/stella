@@ -4390,7 +4390,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Crea un playbook de revisión de contratos posición por posición, a partir de tus contratos firmados anteriormente, una breve entrevista y los estándares habituales del mercado.",
-          "name": "Crear un playbook"
+          "name": "Crear un playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Añade posiciones a uno de mis playbooks existentes.",
+              "name": "Ampliar un playbook"
+            },
+            "fromContracts": {
+              "body": "Crea un playbook para acuerdos de confidencialidad a partir de mis acuerdos firmados anteriormente.",
+              "name": "Partir de contratos anteriores"
+            },
+            "fromMarketStandards": {
+              "body": "Crea un playbook para contratos con proveedores partiendo de las posiciones habituales del mercado.",
+              "name": "Partir de los estándares del mercado"
+            }
+          }
         }
       },
       "builtInSection": "Habilidades integradas",

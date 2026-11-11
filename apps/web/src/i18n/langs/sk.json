@@ -4390,7 +4390,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Vytvorte playbook na kontrolu zmlúv pozíciu po pozícii na základe vašich predtým podpísaných zmlúv, krátkeho rozhovoru a bežných trhových štandardov.",
-          "name": "Vytvoriť playbook"
+          "name": "Vytvoriť playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pridaj pozície do jedného z mojich existujúcich playbookov.",
+              "name": "Rozšíriť playbook"
+            },
+            "fromContracts": {
+              "body": "Vytvor playbook pre dohody o mlčanlivosti z mojich predtým podpísaných dohôd.",
+              "name": "Začať z predošlých zmlúv"
+            },
+            "fromMarketStandards": {
+              "body": "Vytvor playbook pre dodávateľské zmluvy a vychádzaj z bežných trhových pozícií.",
+              "name": "Začať z trhových štandardov"
+            }
+          }
         }
       },
       "builtInSection": "Vstavané zručnosti",
