@@ -432,6 +432,10 @@ export const buildSearchPreviewQuery = ({
         LIMIT 1
       `;
     case "case-law":
+      // A point read by id. The hit came from the corpus search engine, whose
+      // matching (an any-word top-up, legal alternatives) is not this
+      // tsquery's, so the decision is not asked to match it again; the query
+      // still picks the passage the preview opens on.
       return sql`
         SELECT ${previewContent({
           body: sql`clsd.searchable_text`,
@@ -453,7 +457,6 @@ export const buildSearchPreviewQuery = ({
           table: "case-law",
         })}
         WHERE clsd.decision_id = ${resultId}
-          ${previewTextFilter(sql`clsd.tsv`, tsQuery)}
         LIMIT 1
       `;
     case "chat": {

@@ -22760,14 +22760,6 @@
         "job": "measure-1"
       }
     },
-    "src/lib/search/index-global-case-law.db.test.ts": {
-      "peakMb": 700,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
-      }
-    },
     "src/lib/search/index-global-filter-only.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
@@ -26670,14 +26662,6 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-1"
-      }
-    },
-    "src/tests/query-perf/case-law-search-fixture.test.ts": {
-      "peakMb": 179,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
       }
     },
     "src/tests/query-perf/coverage.test.ts": {

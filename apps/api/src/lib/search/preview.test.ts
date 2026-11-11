@@ -253,5 +253,8 @@ describe("search preview authorization scope", () => {
     expect(compiled.sql).toContain("allowsRedistribution");
     expect(compiled.sql).not.toContain("organization_id");
     expect(compiled.sql).not.toContain("workspace_id");
+    // The hit came from the corpus search engine: the decision is read by id
+    // and not asked to match the global tsquery again.
+    expect(compiled.sql).not.toContain("clsd.tsv @@");
   });
 });
