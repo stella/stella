@@ -7,7 +7,7 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { FileCheckIcon, PlayIcon } from "@stll/ui/icons";
+import { FileCheckIcon, InfoIcon, PlayIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { Switch } from "@stll/ui/switch";
@@ -71,9 +71,10 @@ export const DocumentVerifications = ({
 
   // A document can hold several files; its kind belongs to the document.
   const documentIds = [...new Set(files.map((file) => file.entityId))];
-  const kindsView = queryView(
-    useQuery(sourceKindsOptions({ workspaceId, listId, documentIds })),
+  const kindsQuery = useQuery(
+    sourceKindsOptions({ workspaceId, listId, documentIds }),
   );
+  const kindsView = queryView(kindsQuery);
   useQueryViewError(kindsView, "DocumentVerifications:source-kinds");
   const kinds = kindsView.type === "items" ? kindsView.items : undefined;
   const setKind = useSetSourceKind({ workspaceId, listId });
@@ -114,14 +115,27 @@ export const DocumentVerifications = ({
           </Button>
         </div>
       )}
-      <p className="text-muted-foreground mb-3 text-xs text-pretty">
-        {t("avt.documents.testimonyLine")}
-      </p>
+      {kindsView.type === "error" && (
+        <div className="text-muted-foreground mb-3 flex flex-wrap items-center gap-2 text-sm">
+          <span>{t("avt.documents.kindsLoadFailed")}</span>
+          <Button
+            loading={kindsQuery.isRefetching}
+            onClick={() => {
+              detached(kindsQuery.refetch(), "avt.refetch-source-kinds");
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      )}
       <ul className="divide-y rounded-xl border">
-        {files.map((file) => (
+        {files.map((file, index) => (
           <DocumentRow
             file={file}
             key={`${file.entityId}:${file.fieldId}`}
+            explainsTestimony={index === 0}
             onSourceKindChange={(sourceKind) =>
               setKind.mutate({ documentId: file.entityId, sourceKind })
             }
@@ -186,6 +200,8 @@ const latestLoadState = ({
 
 type DocumentRowProps = {
   latest: VerificationRunSummary | null;
+  /** The first row says once what marking a document as testimony means. */
+  explainsTestimony: boolean;
   /** Undefined until the list's kinds have loaded; a failed read is
    *  reported once and leaves the switches disabled. */
   sourceKind: SourceKind | undefined;
@@ -200,6 +216,7 @@ type DocumentRowProps = {
 
 const DocumentRow = ({
   latest,
+  explainsTestimony,
   sourceKind,
   onSourceKindChange,
   statusLoad,
@@ -235,6 +252,16 @@ const DocumentRow = ({
           />
           {t("avt.documents.testimony")}
         </Label>
+        {explainsTestimony && (
+          <Button
+            aria-label={t("avt.documents.testimonyAbout")}
+            size="icon-xs"
+            tooltip={t("avt.documents.testimonyLine")}
+            variant="ghost"
+          >
+            <InfoIcon />
+          </Button>
+        )}
         {latest !== null && (
           <Button
             onClick={() => onOpenRun(latest.id)}

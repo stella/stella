@@ -324,17 +324,19 @@
       "scopeMismatch": "Przywołany fakt ma inny zakres niż twierdzenie. Zanim rozstrzygnięcie zostanie utrzymane, oceń, czy rozstrzyga ono twierdzenie w jego brzmieniu.",
       "supported": "Rejestr potwierdza to twierdzenie. Zatwierdzenie potwierdza, że narzędzie odczytało je prawidłowo; nie jest potrzebna decyzja uznaniowa.",
       "tension": "Rejestr potwierdza to twierdzenie tylko częściowo. Przed zatwierdzeniem rozstrzygnięcia rozważ powyższe fakty potwierdzające i przeczące.",
-      "testimonyOnly": "Materiał to potwierdza, ale wyłącznie poprzez zeznania. Twoje zatwierdzenie potwierdza, że narzędzie odczytało je poprawnie; wynik pozostaje oznaczony jako oparty na zeznaniach.",
+      "testimonyOnly": "Materiał to potwierdza, ale żaden zapis w dokumencie tego nie popiera: opiera się na zeznaniach. Twoje zatwierdzenie potwierdza, że narzędzie odczytało to poprawnie; wynik pozostaje oznaczony jako oparty na zeznaniach.",
       "unsourcedOnly": "Rejestr to potwierdza, ale tylko poprzez fakty, które nie mają jeszcze źródła. Twoje zatwierdzenie potwierdza, że narzędzie odczytało je poprawnie; fakty pozostają oznaczone jako bez źródła."
     },
     "documents": {
       "claimSummary": "Sprzeczne: {contradicted} · Częściowo sprzeczne: {tension} · Sprzeczność w rejestrze: {conflicts}",
       "empty": "Prześlij dokument do tej sprawy, aby go zweryfikować.",
+      "kindsLoadFailed": "Nie udało się wczytać, czy te dokumenty są zeznaniami.",
       "notVerified": "Jeszcze nie zweryfikowano",
       "otherList": "Zweryfikowano względem innej listy",
       "sizeConfirmTitle": "Zweryfikować ten dokument?",
       "statusLoadFailed": "Nie udało się wczytać stanu weryfikacji tych dokumentów.",
       "testimony": "Zeznanie",
+      "testimonyAbout": "O zeznaniach",
       "testimonyLine": "Oznacz zeznania świadków, notatki z rozmów i transkrypcje jako zeznania. Fakty z nich pochodzące liczą się jako relacja osoby, a nie zapis.",
       "verifyAgain": "Zweryfikuj ponownie"
     },
@@ -404,7 +406,7 @@
         "label": "Inny zakres"
       },
       "testimonyOnly": {
-        "hint": "Wszystkie fakty, na których opiera się ten wynik, pochodzą z zeznań, a nie z zapisu w dokumencie.",
+        "hint": "Żaden zapis w dokumencie nie potwierdza faktów, na których opiera się ten wynik, a co najmniej jeden z nich jest zeznaniem.",
         "label": "Tylko zeznania"
       },
       "unsourcedOnly": {

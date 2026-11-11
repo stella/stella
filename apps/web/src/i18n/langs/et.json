@@ -324,17 +324,19 @@
       "scopeMismatch": "Viidatud fakti ulatus erineb väite omast. Enne kui otsus jääb kehtima, kaaluge, kas see lahendab väite selle sõnastuses.",
       "supported": "Register kinnitab seda väidet. Teie kinnitus näitab, et tööriist tõlgendas seda õigesti; kaalutlusotsust pole vaja.",
       "tension": "Register toetab seda vaid osaliselt. Enne otsuse kinnitamist kaaluge eespool toodud toetavaid ja vastuolulisi fakte.",
-      "testimonyOnly": "Materjal kinnitab seda, kuid ainult ütluste kaudu. Kinnitusega kinnitate, et tööriist luges neid õigesti; tulemus jääb märgituks ütlustel põhinevana.",
+      "testimonyOnly": "Materjal kinnitab seda, kuid ükski dokumendi kirje seda ei toeta: see põhineb ütlustel. Kinnitusega kinnitate, et tööriist luges seda õigesti; tulemus jääb märgituks ütlustel põhinevana.",
       "unsourcedOnly": "Register kinnitab seda, kuid ainult faktide kaudu, millel pole veel allikat. Teie kinnitus näitab, et tööriist luges neid õigesti; faktid jäävad allikata märgituks."
     },
     "documents": {
       "claimSummary": "Vastuolus: {contradicted} · Osaliselt vastuolus: {tension} · Registri vastuolu: {conflicts}",
       "empty": "Laadige dokument selle kontrollimiseks toimikusse üles.",
+      "kindsLoadFailed": "Ei õnnestunud laadida, kas need dokumendid on ütlused.",
       "notVerified": "Veel kontrollimata",
       "otherList": "Kontrollitud teise loendi alusel",
       "sizeConfirmTitle": "Kas kontrollida seda dokumenti?",
       "statusLoadFailed": "Nende dokumentide kontrolli olekut ei õnnestunud laadida.",
       "testimony": "Ütlus",
+      "testimonyAbout": "Ütlustest",
       "testimonyLine": "Märkige tunnistajate ütlused, vestlusmärkmed ja ärakirjad ütlusteks. Neist võetud faktid loetakse inimese kirjelduseks, mitte dokumenteeritud andmeteks.",
       "verifyAgain": "Kontrolli uuesti"
     },
@@ -404,7 +406,7 @@
         "label": "Erinev ulatus"
       },
       "testimonyOnly": {
-        "hint": "Kõik faktid, millel see tulemus põhineb, pärinevad ütlustest, mitte dokumendi andmetest.",
+        "hint": "Ükski dokumendi kirje ei toeta fakte, millel see tulemus põhineb, ja vähemalt üks neist on ütlus.",
         "label": "Ainult ütlused"
       },
       "unsourcedOnly": {

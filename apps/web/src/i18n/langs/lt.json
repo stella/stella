@@ -324,17 +324,19 @@
       "scopeMismatch": "Cituojamo fakto apimtis skiriasi nuo teiginio. Prieš patvirtindami išvadą įvertinkite, ar jis išsprendžia teiginį taip, kaip jis suformuluotas.",
       "supported": "Registras tai patvirtina. Jūsų patvirtinimas rodo, kad įrankis perskaitė teisingai; vertinamojo sprendimo nereikia.",
       "tension": "Registras tai patvirtina tik iš dalies. Prieš patvirtindami išvadą įvertinkite aukščiau pateiktus patvirtinančius ir prieštaraujančius faktus.",
-      "testimonyOnly": "Medžiaga tai patvirtina, bet tik per parodymus. Jūsų patvirtinimas reiškia, kad įrankis juos perskaitė teisingai; išvada lieka pažymėta kaip grindžiama parodymais.",
+      "testimonyOnly": "Medžiaga tai patvirtina, bet jokio dokumento įrašas to nepagrindžia: išvada grindžiama parodymais. Jūsų patvirtinimas reiškia, kad įrankis tai perskaitė teisingai; išvada lieka pažymėta kaip grindžiama parodymais.",
       "unsourcedOnly": "Registras tai patvirtina, bet tik faktais, kurie dar neturi šaltinio. Jūsų patvirtinimas reiškia, kad įrankis juos perskaitė teisingai; faktai lieka pažymėti kaip be šaltinio."
     },
     "documents": {
       "claimSummary": "Prieštarauja: {contradicted} · Nevisiškai sutampa: {tension} · Registro prieštaravimas: {conflicts}",
       "empty": "Įkelkite į šią bylą dokumentą, kad jį patikrintumėte.",
+      "kindsLoadFailed": "Nepavyko įkelti, ar šie dokumentai yra parodymai.",
       "notVerified": "Dar nepatikrinta",
       "otherList": "Patikrinta pagal kitą sąrašą",
       "sizeConfirmTitle": "Patikrinti šį dokumentą?",
       "statusLoadFailed": "Nepavyko įkelti šių dokumentų tikrinimo būsenos.",
       "testimony": "Parodymai",
+      "testimonyAbout": "Apie parodymus",
       "testimonyLine": "Liudytojų parodymus, pokalbių užrašus ir stenogramas pažymėkite kaip parodymus. Iš jų paimti faktai laikomi asmens pasakojimu, o ne įrašu.",
       "verifyAgain": "Tikrinti iš naujo"
     },
@@ -404,7 +406,7 @@
         "label": "Kita apimtis"
       },
       "testimonyOnly": {
-        "hint": "Visi faktai, kuriais grindžiama ši išvada, gauti iš parodymų, o ne iš dokumento įrašo.",
+        "hint": "Jokio dokumento įrašas nepagrindžia faktų, kuriais grindžiama ši išvada, ir bent vienas iš jų yra parodymai.",
         "label": "Tik parodymai"
       },
       "unsourcedOnly": {

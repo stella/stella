@@ -35,7 +35,7 @@ export const tierIsLabelled = (tier: FactTier): boolean =>
 type FactTierLabelProps = {
   tier: FactTier;
   /** Opens the add-source form for the fact; null when the viewer cannot
-   *  add one. */
+   *  add one or the surface offers it elsewhere (a row's menu). */
   onAddSource: (() => void) | null;
 };
 

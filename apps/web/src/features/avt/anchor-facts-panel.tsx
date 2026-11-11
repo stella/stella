@@ -377,7 +377,6 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
               </ListItemStatus>
             )
           }
-          onAddSource={canAddSource ? () => setAddingSource(true) : null}
           workspaceId={workspaceId}
         />
         {!canEdit && (
@@ -526,24 +525,19 @@ const FactMeta = ({
   workspaceId,
   fact,
   status,
-  onAddSource,
 }: {
   workspaceId: string;
   fact: ListItem;
   /** Leads the line below `sm`, where the row has no room to trail it. */
   status: React.ReactNode;
-  /** Opens the fact's add-source form; null when the viewer cannot. */
-  onAddSource: (() => void) | null;
 }) => {
   const details = fact.factDetails;
   const parts: React.ReactElement[] = [];
   if (fact.sourceTier !== null && tierIsLabelled(fact.sourceTier)) {
     parts.push(
-      <FactTierLabel
-        key="tier"
-        onAddSource={onAddSource}
-        tier={fact.sourceTier}
-      />,
+      // Add source lives in the row's menu: most facts of a fresh record
+      // have no source, and a repeated action on every row is noise.
+      <FactTierLabel key="tier" onAddSource={null} tier={fact.sourceTier} />,
     );
   }
   if (details !== null && details.confidence !== null) {

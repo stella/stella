@@ -324,17 +324,19 @@
       "scopeMismatch": "Citētā fakta tvērums atšķiras no apgalvojuma. Pirms slēdziens tiek apstiprināts, izvērtējiet, vai tas izšķir apgalvojumu tā formulējumā.",
       "supported": "Reģistrs to apstiprina. Jūsu apstiprinājums apliecina, ka rīks to nolasīja pareizi; vērtējošs lēmums nav vajadzīgs.",
       "tension": "Reģistrs to pamato tikai daļēji. Pirms slēdziena apstiprināšanas izvērtējiet iepriekš minētos pamatojošos un pretrunīgos faktus.",
-      "testimonyOnly": "Materiāli to apstiprina, taču tikai ar liecībām. Jūsu apstiprinājums apliecina, ka rīks tās nolasīja pareizi; secinājums paliek atzīmēts kā balstīts uz liecībām.",
+      "testimonyOnly": "Materiāli to apstiprina, taču neviens dokumenta ieraksts to nepamato: tas balstās uz liecībām. Jūsu apstiprinājums apliecina, ka rīks to nolasīja pareizi; secinājums paliek atzīmēts kā balstīts uz liecībām.",
       "unsourcedOnly": "Reģistrs to apstiprina, bet tikai ar faktiem, kuriem vēl nav avota. Jūsu apstiprinājums apliecina, ka rīks tos izlasīja pareizi; fakti paliek atzīmēti kā bez avota."
     },
     "documents": {
       "claimSummary": "Pretrunā: {contradicted} · Daļēji pretrunā: {tension} · Reģistra pretruna: {conflicts}",
       "empty": "Augšupielādējiet dokumentu šajā lietā, lai to pārbaudītu.",
+      "kindsLoadFailed": "Neizdevās ielādēt, vai šie dokumenti ir liecības.",
       "notVerified": "Vēl nav pārbaudīts",
       "otherList": "Pārbaudīts pret citu sarakstu",
       "sizeConfirmTitle": "Vai pārbaudīt šo dokumentu?",
       "statusLoadFailed": "Neizdevās ielādēt šo dokumentu pārbaudes statusu.",
       "testimony": "Liecība",
+      "testimonyAbout": "Par liecībām",
       "testimonyLine": "Atzīmējiet liecinieku liecības, sarunu piezīmes un atšifrējumus kā liecības. No tām ņemtie fakti tiek uzskatīti par personas stāstījumu, nevis ierakstu.",
       "verifyAgain": "Pārbaudīt vēlreiz"
     },
@@ -404,7 +406,7 @@
         "label": "Cits tvērums"
       },
       "testimonyOnly": {
-        "hint": "Visi fakti, uz kuriem balstās šis secinājums, nāk no liecībām, nevis no dokumenta ieraksta.",
+        "hint": "Neviens dokumenta ieraksts nepamato faktus, uz kuriem balstās šis secinājums, un vismaz viens no tiem ir liecība.",
         "label": "Tikai liecības"
       },
       "unsourcedOnly": {

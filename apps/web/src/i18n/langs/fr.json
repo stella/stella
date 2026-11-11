@@ -324,17 +324,19 @@
       "scopeMismatch": "Un fait cité a une portée différente de celle de l’affirmation. Appréciez s’il tranche l’affirmation telle qu’elle est formulée avant que le verdict ne soit retenu.",
       "supported": "Le dossier confirme cette affirmation. Votre validation atteste que l’outil l’a bien lue ; aucun jugement à rendre.",
       "tension": "Le dossier n’étaye cette affirmation qu’en partie. Pesez les faits favorables et contraires ci-dessus avant que le verdict soit retenu.",
-      "testimonyOnly": "Le dossier le confirme, mais uniquement par des témoignages. Votre validation confirme que l’outil les a lus correctement ; le verdict reste signalé comme reposant sur des témoignages.",
+      "testimonyOnly": "Le dossier le confirme, mais aucun document probant ne l’étaie : il repose sur des témoignages. Votre validation confirme que l’outil l’a lu correctement ; le verdict reste signalé comme reposant sur des témoignages.",
       "unsourcedOnly": "Le dossier l’affirme, mais seulement au moyen de faits encore sans source. Votre validation confirme que l’outil les a bien lus ; les faits restent marqués sans source."
     },
     "documents": {
       "claimSummary": "Contredite : {contradicted} · En tension : {tension} · Conflit de dossier : {conflicts}",
       "empty": "Téléversez un document dans ce dossier pour le vérifier.",
+      "kindsLoadFailed": "Impossible de charger si ces documents sont des témoignages.",
       "notVerified": "Pas encore vérifié",
       "otherList": "Vérifié par rapport à une autre liste",
       "sizeConfirmTitle": "Vérifier ce document ?",
       "statusLoadFailed": "Impossible de charger l’état de vérification de ces documents.",
       "testimony": "Témoignage",
+      "testimonyAbout": "À propos des témoignages",
       "testimonyLine": "Marquez comme témoignage les déclarations de témoins, les notes d’entretien et les transcriptions. Les faits qui en sont tirés comptent comme le récit d’une personne, non comme un document probant.",
       "verifyAgain": "Vérifier à nouveau"
     },
@@ -404,7 +406,7 @@
         "label": "Portée différente"
       },
       "testimonyOnly": {
-        "hint": "Tous les faits sur lesquels repose ce verdict proviennent de témoignages, non d’un document probant.",
+        "hint": "Aucun document probant n’étaie les faits sur lesquels repose ce verdict, et au moins l’un d’eux est un témoignage.",
         "label": "Témoignages seulement"
       },
       "unsourcedOnly": {

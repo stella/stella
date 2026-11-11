@@ -50,7 +50,8 @@ import {
   QualifierNotes,
   VerdictChip,
 } from "@/features/avt/claim-qualifiers";
-import { FactDate } from "@/features/avt/fact-date";
+import { readConflictValue } from "@/features/avt/conflict-value.logic";
+import { FactDate, useFactDateText } from "@/features/avt/fact-date";
 import { EvidenceFactSource } from "@/features/avt/fact-source";
 import { evidenceQuoteSource } from "@/features/avt/fact-source.logic";
 import { FactTierLabel } from "@/features/avt/fact-tier";
@@ -803,9 +804,18 @@ const RecordConflictBlock = ({
   const resolution = review?.recordConflictResolution ?? null;
   const governingId =
     resolution?.kind === "governed" ? resolution.factEntityId : null;
+  const dateText = useFactDateText();
+  // A date the grader gives as ISO reads in the locale's format; any other
+  // value as written.
+  const valueText = (value: string) => {
+    const read = readConflictValue(value);
+    return read.type === "date"
+      ? dateText(read.occurredOn, read.precision)
+      : read.text;
+  };
   const records = conflict.factEntityIds.map((factEntityId, index) => ({
     factEntityId,
-    value: conflict.values.at(index) ?? "",
+    value: valueText(conflict.values.at(index) ?? ""),
     fact: factsById.get(factEntityId),
   }));
   const governing = records.find(
@@ -849,25 +859,20 @@ const RecordConflictBlock = ({
           <div
             className={cn(
               "space-y-2 rounded-lg p-3",
-              highlightedId === record.factEntityId ? "border-2" : "border",
+              // The conflict's accent stays on its header; the chosen or
+              // suggested record is marked by weight alone.
+              highlightedId === record.factEntityId
+                ? "border-primary border-2"
+                : "border",
             )}
             key={record.factEntityId}
-            style={
-              highlightedId === record.factEntityId
-                ? { borderColor: RECORD_CONFLICT_VAR }
-                : undefined
-            }
           >
             {/* Wraps rather than squeeze the value when the badges and
                 the value do not fit on one line. */}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span
-                className="min-w-0 text-lg font-bold"
-                dir="auto"
-                style={{ color: RECORD_CONFLICT_VAR }}
-              >
+              <h4 className="min-w-0 text-sm font-semibold" dir="auto">
                 {record.value}
-              </span>
+              </h4>
               <div className="flex items-center gap-1.5">
                 {preselectedId === record.factEntityId && (
                   <ReviewStatusBadge size="sm" tone="neutral">

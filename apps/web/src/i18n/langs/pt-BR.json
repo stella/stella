@@ -324,17 +324,19 @@
       "scopeMismatch": "Um fato citado tem escopo diferente do da alegação. Avalie se ele resolve a alegação tal como está redigida antes que o veredito prevaleça.",
       "supported": "O registro confirma esta alegação. Sua aprovação atesta que a ferramenta a leu corretamente; nenhum julgamento é necessário.",
       "tension": "O registro sustenta esta alegação apenas em parte. Pese os fatos favoráveis e conflitantes acima antes que o veredito seja mantido.",
-      "testimonyOnly": "O acervo confirma isto, mas apenas por meio de testemunhos. Sua aprovação confirma que a ferramenta os leu corretamente; a conclusão continua marcada como baseada em testemunhos.",
+      "testimonyOnly": "O acervo confirma isto, mas nenhum registro documental o sustenta: baseia-se em testemunhos. Sua aprovação confirma que a ferramenta o leu corretamente; a conclusão continua marcada como baseada em testemunhos.",
       "unsourcedOnly": "O registro confirma isto, mas apenas por meio de fatos ainda sem fonte. Sua aprovação confirma que a ferramenta os leu corretamente; os fatos continuam marcados como sem fonte."
     },
     "documents": {
       "claimSummary": "Contradita: {contradicted} · Em tensão: {tension} · Conflito no registro: {conflicts}",
       "empty": "Envie um documento para este caso para verificá-lo.",
+      "kindsLoadFailed": "Não foi possível carregar se estes documentos são testemunhos.",
       "notVerified": "Ainda não verificado",
       "otherList": "Verificado em relação a outra lista",
       "sizeConfirmTitle": "Verificar este documento?",
       "statusLoadFailed": "Não foi possível carregar o status de verificação destes documentos.",
       "testimony": "Testemunho",
+      "testimonyAbout": "Sobre testemunhos",
       "testimonyLine": "Marque como testemunho declarações de testemunhas, anotações de entrevistas e transcrições. Os fatos extraídos delas contam como o relato de uma pessoa, não como um registro.",
       "verifyAgain": "Verificar novamente"
     },
@@ -404,7 +406,7 @@
         "label": "Escopo divergente"
       },
       "testimonyOnly": {
-        "hint": "Todos os fatos em que esta conclusão se baseia vêm de testemunhos, não do registro de um documento.",
+        "hint": "Nenhum registro documental sustenta os fatos em que esta conclusão se baseia, e ao menos um deles é um testemunho.",
         "label": "Apenas testemunhos"
       },
       "unsourcedOnly": {

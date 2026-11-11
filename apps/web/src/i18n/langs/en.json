@@ -324,17 +324,19 @@
       "scopeMismatch": "A cited fact covers a different scope than the claim. Weigh whether it settles the claim as worded before the verdict stands.",
       "supported": "The record affirms this. Your sign-off confirms the tool read it correctly; no judgement call needed.",
       "tension": "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands.",
-      "testimonyOnly": "The record affirms this, but only through testimony. Your sign-off confirms the tool read it correctly; the verdict stays marked as resting on testimony.",
+      "testimonyOnly": "The record affirms this, but no document's record backs it: it rests on testimony. Your sign-off confirms the tool read it correctly; the verdict stays marked as resting on testimony.",
       "unsourcedOnly": "The record affirms this, but only through facts with no source yet. Your sign-off confirms the tool read them correctly; the facts stay marked as unsourced."
     },
     "documents": {
       "claimSummary": "Contradicted: {contradicted} · In tension: {tension} · Record conflicts: {conflicts}",
       "empty": "Upload a document to this matter to verify it.",
+      "kindsLoadFailed": "Whether these documents are testimony could not be loaded.",
       "notVerified": "Not verified yet",
       "otherList": "Checked against another list",
       "sizeConfirmTitle": "Verify this document?",
       "statusLoadFailed": "The verification status of these documents could not be loaded.",
       "testimony": "Testimony",
+      "testimonyAbout": "About testimony",
       "testimonyLine": "Mark witness statements, interview notes and transcripts as testimony. Facts taken from them count as a person's account, not a record.",
       "verifyAgain": "Verify again"
     },
@@ -404,7 +406,7 @@
         "label": "Scope mismatch"
       },
       "testimonyOnly": {
-        "hint": "Every fact this verdict rests on comes from testimony, not from a document's record.",
+        "hint": "No document's record backs the facts this verdict rests on, and at least one of them is testimony.",
         "label": "Testimony only"
       },
       "unsourcedOnly": {

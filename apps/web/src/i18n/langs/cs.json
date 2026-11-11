@@ -324,17 +324,19 @@
       "scopeMismatch": "Citovaný fakt má jiný rozsah než tvrzení. Než závěr potvrdíte, zvažte, zda tvrzení v jeho znění skutečně rozhoduje.",
       "supported": "Záznamy toto tvrzení potvrzují. Svým schválením potvrdíte, že je nástroj vyložil správně; není třeba žádný hodnotící úsudek.",
       "tension": "Záznamy toto tvrzení podporují jen částečně. Než bude možné závěr potvrdit, zvažte výše uvedená podpůrná a odporující fakta.",
-      "testimonyOnly": "Záznamy toto tvrzení potvrzují, ale jen prostřednictvím svědectví. Svým schválením potvrdíte, že je nástroj vyložil správně; závěr zůstane označen jako opřený o svědectví.",
+      "testimonyOnly": "Záznamy toto tvrzení potvrzují, ale nepodkládá ho žádný záznam v dokumentu: opírá se o svědectví. Svým schválením potvrdíte, že ho nástroj vyložil správně; závěr zůstane označen jako opřený o svědectví.",
       "unsourcedOnly": "Záznamy toto tvrzení potvrzují, ale jen prostřednictvím faktů, které zatím nemají zdroj. Svým schválením potvrdíte, že je nástroj vyložil správně; fakta zůstanou označena jako bez zdroje."
     },
     "documents": {
       "claimSummary": "V rozporu: {contradicted} · Částečný rozpor: {tension} · Rozpor v záznamech: {conflicts}",
       "empty": "Nahrajte do tohoto spisu dokument, který chcete ověřit.",
+      "kindsLoadFailed": "Nepodařilo se načíst, zda jsou tyto dokumenty svědectví.",
       "notVerified": "Zatím neověřeno",
       "otherList": "Zkontrolováno podle jiného seznamu",
       "sizeConfirmTitle": "Ověřit tento dokument?",
       "statusLoadFailed": "Stav ověření těchto dokumentů se nepodařilo načíst.",
       "testimony": "Svědectví",
+      "testimonyAbout": "O svědectví",
       "testimonyLine": "Svědecké výpovědi, záznamy z pohovorů a přepisy označte jako svědectví. Fakta z nich převzatá se počítají jako něčí výpověď, ne jako záznam.",
       "verifyAgain": "Ověřit znovu"
     },
@@ -404,7 +406,7 @@
         "label": "Jiný rozsah"
       },
       "testimonyOnly": {
-        "hint": "Všechna fakta, o která se závěr opírá, pocházejí ze svědectví, ne ze záznamu v dokumentu.",
+        "hint": "Fakta, o která se závěr opírá, nepodkládá žádný záznam v dokumentu a alespoň jedno z nich je svědectví.",
         "label": "Jen svědectví"
       },
       "unsourcedOnly": {

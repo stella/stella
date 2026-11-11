@@ -324,17 +324,19 @@
       "scopeMismatch": "Egy hivatkozott tény hatóköre eltér az állításétól. Mielőtt a következtetés megáll, mérlegelje, hogy eldönti-e az állítást a megfogalmazása szerint.",
       "supported": "A nyilvántartás megerősíti ezt az állítást. Jóváhagyásával azt igazolja, hogy az eszköz helyesen értelmezte; nincs szükség mérlegelésre.",
       "tension": "A nyilvántartás csak részben támasztja alá ezt az állítást. A következtetés jóváhagyása előtt mérlegelje a fenti alátámasztó és ellentmondó tényeket.",
-      "testimonyOnly": "Az iratanyag ezt alátámasztja, de csak tanúvallomások révén. Jóváhagyásával megerősíti, hogy az eszköz helyesen értelmezte őket; az eredmény tanúvallomáson alapulóként jelölve marad.",
+      "testimonyOnly": "Az iratanyag ezt alátámasztja, de egyetlen dokumentumban rögzített adat sem igazolja: tanúvallomáson alapul. Jóváhagyásával megerősíti, hogy az eszköz helyesen értelmezte; az eredmény tanúvallomáson alapulóként jelölve marad.",
       "unsourcedOnly": "A nyilvántartás ezt alátámasztja, de csak még forrás nélküli tényeken keresztül. Jóváhagyásával megerősíti, hogy az eszköz helyesen értelmezte őket; a tények forrás nélküliként jelölve maradnak."
     },
     "documents": {
       "claimSummary": "Cáfolt: {contradicted} · Részben ellentmondó: {tension} · Nyilvántartási ellentmondás: {conflicts}",
       "empty": "Töltsön fel egy iratot ehhez az ügyhöz, hogy ellenőrizhesse.",
+      "kindsLoadFailed": "Nem sikerült betölteni, hogy ezek a dokumentumok tanúvallomások-e.",
       "notVerified": "Még nincs ellenőrizve",
       "otherList": "Másik listához viszonyítva ellenőrizve",
       "sizeConfirmTitle": "Ellenőrzi ezt az iratot?",
       "statusLoadFailed": "Nem sikerült betölteni ezen iratok ellenőrzési állapotát.",
       "testimony": "Tanúvallomás",
+      "testimonyAbout": "A tanúvallomásokról",
       "testimonyLine": "Jelölje tanúvallomásként a tanúnyilatkozatokat, az interjújegyzeteket és az átiratokat. A belőlük vett tények egy személy beszámolójának számítanak, nem nyilvántartásnak.",
       "verifyAgain": "Ismételt ellenőrzés"
     },
@@ -404,7 +406,7 @@
         "label": "Eltérő hatókör"
       },
       "testimonyOnly": {
-        "hint": "Minden tény, amelyen ez az eredmény alapul, tanúvallomásból származik, nem dokumentumban rögzített adatból.",
+        "hint": "Az eredmény alapjául szolgáló tényeket egyetlen dokumentumban rögzített adat sem támasztja alá, és legalább egyikük tanúvallomás.",
         "label": "Csak tanúvallomás"
       },
       "unsourcedOnly": {

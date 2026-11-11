@@ -324,17 +324,19 @@
       "scopeMismatch": "Un hecho citado tiene un alcance distinto del de la afirmación. Valore si la resuelve tal como está redactada antes de que el resultado se mantenga.",
       "supported": "El registro lo confirma. Su aprobación confirma que la herramienta lo ha interpretado correctamente; no se requiere una valoración.",
       "tension": "El registro solo respalda parcialmente la afirmación. Sopese los hechos favorables y contradictorios anteriores antes de dar por válido el resultado.",
-      "testimonyOnly": "El expediente lo confirma, pero solo mediante testimonios. Su aprobación confirma que la herramienta los leyó correctamente; la conclusión sigue marcada como basada en testimonios.",
+      "testimonyOnly": "El expediente lo confirma, pero ningún registro documental lo respalda: se basa en testimonios. Su aprobación confirma que la herramienta lo leyó correctamente; la conclusión sigue marcada como basada en testimonios.",
       "unsourcedOnly": "El registro lo confirma, pero solo mediante hechos que aún no tienen fuente. Su aprobación confirma que la herramienta los leyó correctamente; los hechos siguen marcados como sin fuente."
     },
     "documents": {
       "claimSummary": "Contradicha: {contradicted} · En tensión: {tension} · Conflicto del registro: {conflicts}",
       "empty": "Suba un documento a este asunto para verificarlo.",
+      "kindsLoadFailed": "No se pudo cargar si estos documentos son testimonios.",
       "notVerified": "Aún no verificado",
       "otherList": "Verificado con otra lista",
       "sizeConfirmTitle": "¿Verificar este documento?",
       "statusLoadFailed": "No se pudo cargar el estado de verificación de estos documentos.",
       "testimony": "Testimonio",
+      "testimonyAbout": "Acerca de los testimonios",
       "testimonyLine": "Marque como testimonio las declaraciones de testigos, las notas de entrevistas y las transcripciones. Los hechos extraídos de ellas cuentan como el relato de una persona, no como un registro.",
       "verifyAgain": "Volver a verificar"
     },
@@ -404,7 +406,7 @@
         "label": "Alcance distinto"
       },
       "testimonyOnly": {
-        "hint": "Todos los hechos en los que se basa esta conclusión proceden de testimonios, no del registro de un documento.",
+        "hint": "Ningún registro documental respalda los hechos en los que se basa esta conclusión, y al menos uno de ellos es un testimonio.",
         "label": "Solo testimonios"
       },
       "unsourcedOnly": {

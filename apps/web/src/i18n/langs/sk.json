@@ -324,17 +324,19 @@
       "scopeMismatch": "Citovaný fakt má iný rozsah než tvrdenie. Skôr než záver potvrdíte, zvážte, či tvrdenie v jeho znení skutočne rozhoduje.",
       "supported": "Záznamy toto tvrdenie potvrdzujú. Svojím schválením potvrdíte, že ich nástroj vyložil správne; nie je potrebný žiadny hodnotiaci úsudok.",
       "tension": "Záznamy toto tvrdenie podporujú len čiastočne. Pred potvrdením záveru zvážte vyššie uvedené podporné a odporujúce fakty.",
-      "testimonyOnly": "Záznamy toto tvrdenie potvrdzujú, ale len prostredníctvom svedectva. Svojím schválením potvrdíte, že ho nástroj vyložil správne; záver zostane označený ako opretý o svedectvo.",
+      "testimonyOnly": "Záznamy toto tvrdenie potvrdzujú, ale nepodkladá ho žiadny záznam v dokumente: opiera sa o svedectvo. Svojím schválením potvrdíte, že ho nástroj vyložil správne; záver zostane označený ako opretý o svedectvo.",
       "unsourcedOnly": "Záznamy toto tvrdenie potvrdzujú, ale len prostredníctvom faktov, ktoré zatiaľ nemajú zdroj. Svojím schválením potvrdíte, že ich nástroj vyložil správne; fakty zostanú označené ako bez zdroja."
     },
     "documents": {
       "claimSummary": "V rozpore: {contradicted} · V napätí: {tension} · Rozpor v záznamoch: {conflicts}",
       "empty": "Nahrajte do tohto spisu dokument, ktorý chcete overiť.",
+      "kindsLoadFailed": "Nepodarilo sa načítať, či sú tieto dokumenty svedectvo.",
       "notVerified": "Zatiaľ neoverené",
       "otherList": "Skontrolované podľa iného zoznamu",
       "sizeConfirmTitle": "Overiť tento dokument?",
       "statusLoadFailed": "Stav overenia týchto dokumentov sa nepodarilo načítať.",
       "testimony": "Svedectvo",
+      "testimonyAbout": "O svedectve",
       "testimonyLine": "Svedecké výpovede, záznamy z pohovorov a prepisy označte ako svedectvo. Fakty z nich prevzaté sa počítajú ako niečia výpoveď, nie ako záznam.",
       "verifyAgain": "Overiť znova"
     },
@@ -404,7 +406,7 @@
         "label": "Iný rozsah"
       },
       "testimonyOnly": {
-        "hint": "Všetky fakty, o ktoré sa záver opiera, pochádzajú zo svedectva, nie zo záznamu v dokumente.",
+        "hint": "Fakty, o ktoré sa záver opiera, nepodkladá žiadny záznam v dokumente a aspoň jeden z nich je svedectvo.",
         "label": "Len svedectvo"
       },
       "unsourcedOnly": {

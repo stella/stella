@@ -36,6 +36,8 @@ const { workspaceFilesOptions } =
 const { DocumentVerifications } = await import("./document-verifications");
 const { sourceKindsOptions } = await import("./use-source-kinds");
 const kindWrites: unknown[] = [];
+/** Kind reads fail while this is above zero, one failure per read. */
+let failingKindReads = 0;
 const workspaceId = "019a0000-0000-7000-8000-000000000001";
 const listId = "019a0000-0000-7000-8000-000000000002";
 const document = {
@@ -52,6 +54,7 @@ const clients: InstanceType<typeof QueryClient>[] = [];
 const mountDocuments = (
   files: WorkspaceFile[],
   role: "admin" | "external" | "intern" | "member" | "owner" = "admin",
+  kinds: "seeded" | "read" = "seeded",
 ) => {
   const client = new QueryClient({
     defaultOptions: {
@@ -64,10 +67,12 @@ const mountDocuments = (
   // Every document starts as a record; the kind read is not what these
   // tests are about.
   const documentIds = files.map((file) => file.entityId);
-  client.setQueryData(
-    sourceKindsOptions({ workspaceId, listId, documentIds }).queryKey,
-    new Map(documentIds.map((id) => [id, "document" as const])),
-  );
+  if (kinds === "seeded") {
+    client.setQueryData(
+      sourceKindsOptions({ workspaceId, listId, documentIds }).queryKey,
+      new Map(documentIds.map((id) => [id, "document" as const])),
+    );
+  }
   return render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
@@ -109,6 +114,13 @@ beforeEach(() => {
           request.method === "POST" &&
           new URL(request.url).pathname.endsWith("/source-documents/kinds")
         ) {
+          if (failingKindReads > 0) {
+            failingKindReads -= 1;
+            return Response.json(
+              { message: "Kind read failed" },
+              { status: 500 },
+            );
+          }
           // Read back after a write: what was last set, else a record.
           const { documentEntityIds } = v.parse(
             v.object({ documentEntityIds: v.array(v.string()) }),
@@ -150,6 +162,7 @@ afterEach(() => {
   }
   fetchBoundary.mockClear();
   kindWrites.length = 0;
+  failingKindReads = 0;
   respondLatest = () => {
     throw new TypeError("Unexpected status request");
   };
@@ -298,4 +311,24 @@ test("a document is marked as testimony through its switch", async () => {
       .getByRole("switch", { name: messages.avt.documents.testimony })
       .getAttribute("aria-checked"),
   ).toBe("true");
+});
+
+test("a failed kind read says so where the switches are and recovers on retry", async () => {
+  answerLatest(() => Response.json({ runs: [] }));
+  failingKindReads = 1;
+  const view = mountDocuments([document], "admin", "read");
+  await waitFor(() =>
+    expect(view.getByText(messages.avt.documents.kindsLoadFailed)).toBeTruthy(),
+  );
+  const toggle = () =>
+    view.getByRole("switch", { name: messages.avt.documents.testimony });
+  expect(Object.hasOwn(toggle().dataset, "disabled")).toBe(true);
+  fireEvent.click(view.getByRole("button", { name: messages.common.retry }));
+  await waitFor(() =>
+    expect(view.queryByText(messages.avt.documents.kindsLoadFailed)).toBeNull(),
+  );
+  await waitFor(() =>
+    expect(Object.hasOwn(toggle().dataset, "disabled")).toBe(false),
+  );
+  expect(toggle().getAttribute("aria-checked")).toBe("false");
 });

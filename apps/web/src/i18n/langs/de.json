@@ -324,17 +324,19 @@
       "scopeMismatch": "Ein zitierter Fakt hat einen anderen Umfang als die Behauptung. Wägen Sie ab, ob er die Behauptung in ihrem Wortlaut klärt, bevor das Ergebnis steht.",
       "supported": "Der Bestand bestätigt dies. Mit Ihrer Freigabe bestätigen Sie, dass das Tool ihn richtig gelesen hat – eine Ermessensentscheidung ist nicht erforderlich.",
       "tension": "Der Bestand stützt dies nur teilweise. Wägen Sie die oben aufgeführten stützenden und widersprechenden Fakten ab, bevor das Ergebnis Bestand hat.",
-      "testimonyOnly": "Der Bestand bestätigt dies, jedoch nur über Zeugenaussagen. Mit Ihrer Freigabe bestätigen Sie, dass das Tool sie richtig gelesen hat; das Ergebnis bleibt als auf Zeugenaussagen beruhend markiert.",
+      "testimonyOnly": "Der Bestand bestätigt dies, doch keine Aufzeichnung eines Dokuments belegt es: Es beruht auf Zeugenaussagen. Mit Ihrer Freigabe bestätigen Sie, dass das Tool sie richtig gelesen hat; das Ergebnis bleibt als auf Zeugenaussagen beruhend markiert.",
       "unsourcedOnly": "Der Bestand bestätigt dies, jedoch nur über Fakten ohne Quelle. Mit Ihrer Freigabe bestätigen Sie, dass das Tool sie richtig gelesen hat; die Fakten bleiben als ohne Quelle markiert."
     },
     "documents": {
       "claimSummary": "Widersprochen: {contradicted} · Teilweise widersprochen: {tension} · Bestandswiderspruch: {conflicts}",
       "empty": "Laden Sie ein Dokument in diese Akte hoch, um es zu prüfen.",
+      "kindsLoadFailed": "Ob diese Dokumente Zeugenaussagen sind, konnte nicht geladen werden.",
       "notVerified": "Noch nicht geprüft",
       "otherList": "Gegen eine andere Liste geprüft",
       "sizeConfirmTitle": "Dieses Dokument prüfen?",
       "statusLoadFailed": "Der Prüfstatus dieser Dokumente konnte nicht geladen werden.",
       "testimony": "Zeugenaussage",
+      "testimonyAbout": "Über Zeugenaussagen",
       "testimonyLine": "Markieren Sie Zeugenaussagen, Gesprächsnotizen und Transkripte als Zeugenaussage. Daraus entnommene Fakten gelten als Schilderung einer Person, nicht als Aufzeichnung.",
       "verifyAgain": "Erneut prüfen"
     },
@@ -404,7 +406,7 @@
         "label": "Abweichender Umfang"
       },
       "testimonyOnly": {
-        "hint": "Jeder Fakt, auf dem dieses Ergebnis beruht, stammt aus Zeugenaussagen, nicht aus der Aufzeichnung eines Dokuments.",
+        "hint": "Keine Aufzeichnung eines Dokuments belegt die Fakten, auf denen dieses Ergebnis beruht, und mindestens einer davon ist eine Zeugenaussage.",
         "label": "Nur Zeugenaussagen"
       },
       "unsourcedOnly": {
