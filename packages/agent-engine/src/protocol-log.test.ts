@@ -10,6 +10,7 @@ import {
   PROTOCOL_ALLOWLISTS,
   PROTOCOL_CHANNELS,
   PROTOCOL_DIRECTIONS,
+  PROTOCOL_LOG_KEY_BYTES,
   protocolTap,
   redactProtocolMessage,
 } from "./protocol-log";
@@ -19,7 +20,7 @@ type Sample = { value: unknown; needles: readonly string[] };
 
 const FINGERPRINT = /#[0-9a-f]{8}/u;
 /** How a string outside every closed list shows: size and fingerprint. */
-const OPAQUE = String.raw`str:\d+#[0-9a-f]{8}`;
+const OPAQUE = String.raw`str:(?:0|\d+-\d+)#[0-9a-f]{8}`;
 
 /** Every key, case and vocabulary value the allowlists can print. */
 const structuralText = (() => {
@@ -61,11 +62,11 @@ const structuralText = (() => {
 
 /**
  * A string a member could have written: long enough to recognise, not part
- * of the log's own vocabulary, and not made only of hex digits, which a
- * fingerprint or a number could spell by chance.
+ * of the log's own vocabulary, and not made only of what a fingerprint, a
+ * number, a size band or a version could spell by chance.
  */
 const isContent = (text: string) =>
-  !structuralText.includes(text) && /[^0-9a-f]/iu.test(text);
+  !structuralText.includes(text) && /[^0-9a-f.:#+-]/iu.test(text);
 
 const word = fc.stringMatching(/^[A-Za-z][\w-]{2,10}$/u);
 
@@ -258,7 +259,12 @@ const messageSample = fc
       .map((sample) => ({ channel, direction, sample })),
   );
 
-const redact = redactProtocolMessage;
+/** A fixed key keeps the tests deterministic; a holder draws a random one. */
+const KEY = new Uint8Array(PROTOCOL_LOG_KEY_BYTES);
+
+const redact = (
+  options: Omit<Parameters<typeof redactProtocolMessage>[0], "fingerprintKey">,
+) => redactProtocolMessage({ ...options, fingerprintKey: KEY });
 
 /** Builds a message holding one value at one path. */
 type Leaf = (value: unknown) => Record<string, unknown>;
@@ -332,6 +338,42 @@ describe("protocol log redaction", () => {
         }
       }),
       { numRuns: 300 },
+    );
+  });
+
+  test("fingerprints pair up under one key and differ under another", () => {
+    const otherKey = new Uint8Array(PROTOCOL_LOG_KEY_BYTES).fill(1);
+    const fingerprintOf = (fingerprintKey: Uint8Array, id: string) =>
+      FINGERPRINT.exec(
+        redactProtocolMessage({
+          channel: "sidecar",
+          direction: "in",
+          message: { type: "run.cancel", runId: id },
+          fingerprintKey,
+        }),
+      )?.[0];
+    expect(fingerprintOf(KEY, "1234")).toBeDefined();
+    expect(fingerprintOf(KEY, "1234")).toBe(fingerprintOf(KEY, "1234"));
+    expect(fingerprintOf(KEY, "1234")).not.toBe(fingerprintOf(KEY, "1235"));
+    expect(fingerprintOf(KEY, "1234")).not.toBe(
+      fingerprintOf(otherKey, "1234"),
+    );
+  });
+
+  test("string lengths show as power-of-two bands", () => {
+    const lengths = [0, 1, 2, 3, 4, 7, 8, 1000];
+    expect(
+      lengths.map((length) =>
+        redact({
+          channel: "sidecar",
+          direction: "in",
+          message: { type: "run.answer", answers: "x".repeat(length) },
+        }),
+      ),
+    ).toEqual(
+      ["0", "1-1", "2-3", "2-3", "4-7", "4-7", "8-15", "512-1023"].map(
+        (band) => `type=run.answer answers=str:${band}`,
+      ),
     );
   });
 
@@ -466,7 +508,7 @@ describe("protocol log redaction", () => {
       expect(line).toMatch(new RegExp(`message\\.model=${OPAQUE} `, "u"));
       expect(line).toContain("message.content=arr:2");
       expect(line).toContain(
-        `message.content[0].type=text message.content[0].text=str:${String(prompt.length)}`,
+        "message.content[0].type=text message.content[0].text=str:32-63",
       );
       expect(line).toContain("message.content[1].name=Bash");
       expect(line).toContain("message.content[1].input=obj:1");
@@ -572,7 +614,7 @@ describe("protocol log redaction", () => {
         },
       });
       expect(line).toBe(
-        `type=result subtype=success is_error=false num_turns=3 total_cost_usd=0.042 result=str:${String(prompt.length)} unlisted=1`,
+        `type=result subtype=success is_error=false num_turns=3 total_cost_usd=0.042 result=str:32-63 unlisted=1`,
       );
     });
 
@@ -627,7 +669,7 @@ describe("protocol log redaction", () => {
         },
       });
       expect(line).toMatch(
-        /^method=turn\/start id=7 params\.threadId=#[0-9a-f]{8} params\.input=arr:1 params\.input\[0\]\.type=text params\.input\[0\]\.text=str:\d+$/u,
+        /^method=turn\/start id=7 params\.threadId=#[0-9a-f]{8} params\.input=arr:1 params\.input\[0\]\.type=text params\.input\[0\]\.text=str:\d+-\d+$/u,
       );
       expect(line).not.toContain(answer);
     });
@@ -656,9 +698,7 @@ describe("protocol log redaction", () => {
       expect(line).toContain("params.item.type=commandExecution");
       expect(line).toContain("params.item.status=completed");
       expect(line).toContain("params.item.exitCode=0");
-      expect(line).toContain(
-        `params.item.command=str:${String(command.length)}`,
-      );
+      expect(line).toContain("params.item.command=str:32-63");
       expect(line).not.toContain(command);
       expect(line).not.toContain(answer);
       expect(line).not.toContain("lease-review");
@@ -701,9 +741,7 @@ describe("protocol log redaction", () => {
           direction: "in",
           message: { id: 4, error: { code: -32_601, message: answer } },
         }),
-      ).toBe(
-        `id=4 error.code=-32601 error.message=str:${String(answer.length)}`,
-      );
+      ).toBe("id=4 error.code=-32601 error.message=str:32-63");
     });
 
     test("thread/start keeps the model, never the MCP token in its config", () => {
@@ -763,7 +801,7 @@ describe("protocol log redaction", () => {
           },
         }),
       ).toBe(
-        "type=hello protocol=4 appVersion=1.4.0 apiOrigin=str:24 resume=arr:0 unlisted=1",
+        "type=hello protocol=4 appVersion=1.4.0 apiOrigin=str:16-31 resume=arr:0 unlisted=1",
       );
     });
 
@@ -839,7 +877,7 @@ describe("protocol log redaction", () => {
           },
         }),
       ).toMatch(
-        /^type=run\.event runId=#[0-9a-f]{8} seq=12 chunk\.type=TEXT_MESSAGE_CONTENT chunk\.messageId=#[0-9a-f]{8} chunk\.delta=str:\d+$/u,
+        /^type=run\.event runId=#[0-9a-f]{8} seq=12 chunk\.type=TEXT_MESSAGE_CONTENT chunk\.messageId=#[0-9a-f]{8} chunk\.delta=str:\d+-\d+$/u,
       );
     });
 
@@ -874,6 +912,7 @@ describe("protocol tap", () => {
         log: (line) => {
           lines.push(line);
         },
+        fingerprintKey: KEY,
       },
       { channel: "sidecar", source: "connection=1" },
     );
@@ -882,14 +921,11 @@ describe("protocol tap", () => {
     tap("out", "Přehled {not json");
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatch(
-      new RegExp(
-        `^protocol sidecar connection=1 in type=ack runId=#[0-9a-f]{8} seq=3 bytes=${String(message.length)}$`,
-        "u",
-      ),
+      /^protocol sidecar connection=1 in type=ack runId=#[0-9a-f]{8} seq=3 bytes=32-63$/u,
     );
-    // Bytes, not characters: the size the line had on the wire.
+    // The line's size on the wire, as a band.
     expect(lines[1]).toBe(
-      "protocol sidecar connection=1 out not_json bytes=18",
+      "protocol sidecar connection=1 out not_json bytes=16-31",
     );
   });
 
@@ -900,6 +936,7 @@ describe("protocol tap", () => {
         log: () => {
           panic("disk full");
         },
+        fingerprintKey: KEY,
       },
       { channel: "codex", source: "pid=7" },
     );

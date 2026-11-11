@@ -10,8 +10,9 @@ export default {
     "Codex or desktop sidecar message reach `holder.log`, and how: closed " +
     "values from closed lists the code owns, numbers, booleans, numeric " +
     "versions and re-serialized instants as they are; ids and any other " +
-    "string in those fields as fingerprints; and every other value as its " +
-    "kind and length. A field " +
+    "string in those fields as HMAC fingerprints under a random key each " +
+    "holder keeps in memory; and every other value as its kind and a " +
+    "power-of-two size band. A field " +
     "the allowlist does not list is counted, never shown. The log is off " +
     "unless `STELLA_AGENT_PROTOCOL_LOG=redacted` is set in the environment " +
     "the holder starts with.",

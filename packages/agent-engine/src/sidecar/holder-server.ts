@@ -15,6 +15,7 @@ import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
 
 import {
+  PROTOCOL_LOG_KEY_BYTES,
   PROTOCOL_LOG_OFF,
   type ProtocolLog,
   protocolTap,
@@ -163,7 +164,15 @@ const openProtocolLog = (
           return PROTOCOL_LOG_OFF;
         case "redacted":
           log("the protocol log is on: message structure only, no content");
-          return { type: "redacted", log };
+          // Fresh per holder and held in memory only: never logged, written
+          // or derived from anything stable.
+          return {
+            type: "redacted",
+            log,
+            fingerprintKey: crypto.getRandomValues(
+              new Uint8Array(PROTOCOL_LOG_KEY_BYTES),
+            ),
+          };
         default:
           setting.setting satisfies never;
           return panic("Unhandled protocol log setting");

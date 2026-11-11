@@ -14,7 +14,7 @@ import {
   DESKTOP_RUNNER_OUTPUT_EVENT,
   DESKTOP_RUNNER_RUN_OUTCOMES,
 } from "@stll/api-contract/desktop-runner";
-import { sha256Hex } from "@stll/sha256/bun";
+import { hmacSha256Hex } from "@stll/sha256/bun";
 
 import { ASK_USER_QUESTION_TOOL } from "./harness/claude-code/items";
 import {
@@ -59,10 +59,11 @@ import {
  * values, Stella's own tool, event and client names); any other string in
  * such a field shows its size and fingerprint. Numbers and booleans are
  * shown; versions are rebuilt from their numbers and instants re-serialized
- * after parsing, so neither copies input text. Ids are short fingerprints,
- * so a request and its answer pair up. Everything else (prompts, model
- * text, tool input and output, file contents, paths, commands, tokens)
- * shows as its kind and length. A field the
+ * after parsing, so neither copies input text. Ids are short keyed
+ * fingerprints, so a request and its answer pair up within one holder's
+ * log. Everything else (prompts, model text, tool input and output, file
+ * contents, paths, commands, tokens) shows as its kind and size. String
+ * lengths and line sizes are power-of-two bands, never exact. A field the
  * allowlist does not name is counted, never shown, so a field a harness adds
  * later stays out of the log until it is listed here.
  */
@@ -90,7 +91,7 @@ export type FieldRule =
   | { type: "instant" }
   | { type: "number" }
   | { type: "boolean" }
-  /** The value's kind and length only. */
+  /** The value's kind and size only. */
   | { type: "size" }
   | { type: "object"; shape: MessageShape }
   /** The item count, then the first items by `shape`. */
@@ -1046,10 +1047,25 @@ type JsonObject = Readonly<Record<string, unknown>>;
 const isObject = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** A value's kind and length, never its content. */
+/**
+ * A length as the power-of-two band it falls in (`8-15`): enough to tell a
+ * short value from a long one, without the exact size.
+ */
+const band = (length: number) => {
+  if (length === 0) {
+    return "0";
+  }
+  let low = 1;
+  while (low * 2 <= length) {
+    low *= 2;
+  }
+  return `${String(low)}-${String(low * 2 - 1)}`;
+};
+
+/** A value's kind and size, never its content. */
 const describe = (value: unknown): string => {
   if (typeof value === "string") {
-    return `str:${String(value.length)}`;
+    return `str:${band(value.length)}`;
   }
   if (Array.isArray(value)) {
     return `arr:${String(value.length)}`;
@@ -1066,28 +1082,37 @@ const describe = (value: unknown): string => {
   return value === null ? "null" : "unknown";
 };
 
-const fingerprint = (value: string) =>
-  `#${sha256Hex(value).slice(0, FINGERPRINT_HEX_CHARS)}`;
+/** A keyed fingerprint: equal within one key, no oracle without it. */
+type Fingerprint = (value: string) => string;
+
+const keyedFingerprint =
+  (key: Uint8Array): Fingerprint =>
+  (value) =>
+    `#${hmacSha256Hex(key, value).slice(0, FINGERPRINT_HEX_CHARS)}`;
 
 /** A string outside every closed list: its size and fingerprint. */
-const opaque = (value: string) =>
-  `str:${String(value.length)}${fingerprint(value)}`;
+const opaque = (value: string, fingerprint: Fingerprint) =>
+  `${describe(value)}${fingerprint(value)}`;
 
-const fromVocabulary = (value: unknown, values: ReadonlySet<string>) => {
+const fromVocabulary = (
+  value: unknown,
+  values: ReadonlySet<string>,
+  fingerprint: Fingerprint,
+) => {
   if (typeof value !== "string") {
     return describe(value);
   }
-  return values.has(value) ? value : opaque(value);
+  return values.has(value) ? value : opaque(value, fingerprint);
 };
 
 /** `major.minor.patch` rebuilt from its numbers; any suffix fingerprinted. */
-const version = (value: unknown) => {
+const version = (value: unknown, fingerprint: Fingerprint) => {
   if (typeof value !== "string") {
     return describe(value);
   }
   const core = VERSION_CORE.exec(value);
   if (core === null) {
-    return opaque(value);
+    return opaque(value, fingerprint);
   }
   const numeric = core
     .slice(1, 4)
@@ -1098,15 +1123,17 @@ const version = (value: unknown) => {
 };
 
 /** The instant as Temporal writes it, so nothing of the input is copied. */
-const instant = (value: unknown) => {
+const instant = (value: unknown, fingerprint: Fingerprint) => {
   if (typeof value !== "string") {
     return describe(value);
   }
   const parsed = Result.try(() => Temporal.Instant.from(value));
-  return Result.isOk(parsed) ? parsed.value.toString() : opaque(value);
+  return Result.isOk(parsed)
+    ? parsed.value.toString()
+    : opaque(value, fingerprint);
 };
 
-const identifier = (value: unknown) => {
+const identifier = (value: unknown, fingerprint: Fingerprint) => {
   if (typeof value === "string") {
     return fingerprint(value);
   }
@@ -1126,20 +1153,29 @@ const flag = (value: unknown) =>
 const joinPath = (prefix: string, key: string) =>
   prefix === "" ? key : `${prefix}.${key}`;
 
-type Rendering = { value: unknown; path: string; out: string[] };
-type ShapeRendering = { value: JsonObject; path: string; out: string[] };
+type Rendering = {
+  value: unknown;
+  path: string;
+  out: string[];
+  fingerprint: Fingerprint;
+};
+type ShapeRendering = Omit<Rendering, "value"> & { value: JsonObject };
 
 /** A field's rendering when it is a single token. */
-const scalar = (rule: FieldRule, value: unknown): string | null => {
+const scalar = (
+  rule: FieldRule,
+  value: unknown,
+  fingerprint: Fingerprint,
+): string | null => {
   switch (rule.type) {
     case "vocabulary":
-      return fromVocabulary(value, rule.values);
+      return fromVocabulary(value, rule.values, fingerprint);
     case "identifier":
-      return identifier(value);
+      return identifier(value, fingerprint);
     case "version":
-      return version(value);
+      return version(value, fingerprint);
     case "instant":
-      return instant(value);
+      return instant(value, fingerprint);
     case "number":
       return finiteNumber(value);
     case "boolean":
@@ -1156,14 +1192,15 @@ const scalar = (rule: FieldRule, value: unknown): string | null => {
   }
 };
 
-const renderField = (rule: FieldRule, { value, path, out }: Rendering) => {
-  const token = scalar(rule, value);
+const renderField = (rule: FieldRule, rendering: Rendering) => {
+  const { value, path, out } = rendering;
+  const token = scalar(rule, value, rendering.fingerprint);
   if (token !== null) {
     out.push(`${path}=${token}`);
     return;
   }
   if (rule.type === "object" && isObject(value)) {
-    renderShape(rule.shape, { value, path, out });
+    renderShape(rule.shape, { ...rendering, value });
     return;
   }
   out.push(`${path}=${describe(value)}`);
@@ -1173,9 +1210,9 @@ const renderField = (rule: FieldRule, { value, path, out }: Rendering) => {
       .slice(0, PROTOCOL_LOG_LIST_ITEMS)
       .entries()) {
       renderField(item, {
+        ...rendering,
         value: entry,
         path: `${path}[${String(index)}]`,
-        out,
       });
     }
   }
@@ -1194,22 +1231,31 @@ const selectedCase = (
 
 const renderShape = (
   { fields, variant }: MessageShape,
-  { value, path, out }: ShapeRendering,
+  rendering: ShapeRendering,
 ) => {
+  const { value, path } = rendering;
   if (variant !== null && Object.hasOwn(value, variant.key)) {
     renderField(
       { type: "vocabulary", values: new Set(Object.keys(variant.cases)) },
-      { value: value[variant.key], path: joinPath(path, variant.key), out },
+      {
+        ...rendering,
+        value: value[variant.key],
+        path: joinPath(path, variant.key),
+      },
     );
   }
   for (const [key, rule] of Object.entries(fields)) {
     if (Object.hasOwn(value, key)) {
-      renderField(rule, { value: value[key], path: joinPath(path, key), out });
+      renderField(rule, {
+        ...rendering,
+        value: value[key],
+        path: joinPath(path, key),
+      });
     }
   }
   const selected = variant === null ? null : selectedCase(variant, value);
   if (selected !== null) {
-    renderShape(selected, { value, path, out });
+    renderShape(selected, rendering);
   }
 };
 
@@ -1233,6 +1279,8 @@ type RedactOptions = {
   direction: ProtocolDirection;
   /** One parsed protocol message. */
   message: unknown;
+  /** The holder's fingerprint key (`ProtocolLog`). */
+  fingerprintKey: Uint8Array;
 };
 
 /**
@@ -1243,13 +1291,19 @@ export const redactProtocolMessage = ({
   channel,
   direction,
   message,
+  fingerprintKey,
 }: RedactOptions): string => {
   if (!isObject(message)) {
     return `message=${describe(message)}`;
   }
   const allowlist = PROTOCOL_ALLOWLISTS[channel][direction];
   const out: string[] = [];
-  renderShape(allowlist, { value: message, path: "", out });
+  renderShape(allowlist, {
+    value: message,
+    path: "",
+    out,
+    fingerprint: keyedFingerprint(fingerprintKey),
+  });
   const listed = listedKeys(allowlist, message);
   const unlisted = Object.keys(message).filter((key) => !listed.has(key));
   if (unlisted.length > 0) {
@@ -1258,9 +1312,22 @@ export const redactProtocolMessage = ({
   return out.join(" ");
 };
 
-/** Where protocol lines go: nowhere unless the member turned the log on. */
+/** Bytes of a fingerprint key. */
+export const PROTOCOL_LOG_KEY_BYTES = 32;
+
+/**
+ * Where protocol lines go: nowhere unless the member turned the log on. The
+ * fingerprint key is random per holder process and kept in memory only, so
+ * fingerprints pair up within one holder's log and nobody holding the log
+ * can test a guessed value against them.
+ */
 export type ProtocolLog =
-  { type: "off" } | { type: "redacted"; log: (line: string) => void };
+  | { type: "off" }
+  | {
+      type: "redacted";
+      log: (line: string) => void;
+      fingerprintKey: Uint8Array;
+    };
 
 export const PROTOCOL_LOG_OFF = { type: "off" } as const satisfies ProtocolLog;
 
@@ -1287,9 +1354,14 @@ export const protocolTap = (
         const text = line.endsWith("\n") ? line.slice(0, -1) : line;
         const parsed = Result.try((): unknown => JSON.parse(text));
         const fields = Result.isOk(parsed)
-          ? redactProtocolMessage({ channel, direction, message: parsed.value })
+          ? redactProtocolMessage({
+              channel,
+              direction,
+              message: parsed.value,
+              fingerprintKey: protocolLog.fingerprintKey,
+            })
           : "not_json";
-        const entry = `protocol ${channel} ${source} ${direction} ${fields} bytes=${String(Buffer.byteLength(text))}`;
+        const entry = `protocol ${channel} ${source} ${direction} ${fields} bytes=${band(Buffer.byteLength(text))}`;
         // A log that cannot be written has nowhere to report it, and a
         // diagnostic line must never change how a run goes.
         Result.try(() => {
