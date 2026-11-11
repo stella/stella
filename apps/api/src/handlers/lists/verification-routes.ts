@@ -10,6 +10,7 @@ import listClaimComments from "@/api/handlers/lists/verifications/claim-comments
 import updateClaimComment from "@/api/handlers/lists/verifications/claim-comments/update";
 import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
+import listClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/list";
 import createVerification from "@/api/handlers/lists/verifications/create";
 import readVerification from "@/api/handlers/lists/verifications/get";
 import readLatestVerifications from "@/api/handlers/lists/verifications/latest/list";
@@ -27,7 +28,7 @@ export const createListVerificationRoutes = (
       "/item-fact-details": { PUT: updateFactDetails },
       "/source-documents": { PATCH: updateSourceDocumentKind },
       "/source-documents/kinds": { POST: readSourceDocumentKinds },
-      "/claim-reviews": { POST: createClaimReview },
+      "/claim-reviews": { GET: listClaimReviews, POST: createClaimReview },
       "/claim-reviews/bulk": { POST: createBulkClaimReviews },
       "/claim-comments": { GET: listClaimComments, POST: createClaimComment },
       "/claim-comments/:annotationId": {

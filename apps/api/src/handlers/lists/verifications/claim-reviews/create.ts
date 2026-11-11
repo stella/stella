@@ -18,6 +18,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   CLAIM_OVERRIDE_STATES,
+  CLAIM_REVIEW_REASON_RULE,
   CLAIM_REVIEW_STATUSES,
   VERIFICATION_LIMITS,
 } from "@/api/lib/lists/verification/contract";
@@ -38,22 +39,42 @@ import {
 // `v.picklist` over the const tuples keeps the literal unions in the
 // inferred body type, which the web client reads its types from.
 
+const reasonSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(VERIFICATION_LIMITS.NOTE_MAX),
+);
+
+/** The reason entry each kind's rule asks for. */
+const REASON_ENTRIES = {
+  required: { reason: reasonSchema },
+  optional: { reason: v.exactOptional(reasonSchema) },
+  none: {},
+} as const;
+
 /** Events are stored as sent and never rewritten, so a key the schema does
  *  not name is refused rather than kept. */
-const eventSchema = v.union([
+export const claimReviewEventSchema = v.union([
   v.strictObject({
     kind: v.literal("status"),
     status: v.nullable(v.picklist(CLAIM_REVIEW_STATUSES)),
+    ...REASON_ENTRIES[CLAIM_REVIEW_REASON_RULE.status],
   }),
   v.strictObject({
     kind: v.literal("override"),
     state: v.nullable(v.picklist(CLAIM_OVERRIDE_STATES)),
+    ...REASON_ENTRIES[CLAIM_REVIEW_REASON_RULE.override],
   }),
   v.strictObject({
     kind: v.literal("note"),
     note: v.pipe(v.string(), v.maxLength(VERIFICATION_LIMITS.NOTE_MAX)),
+    ...REASON_ENTRIES[CLAIM_REVIEW_REASON_RULE.note],
   }),
-  v.strictObject({ kind: v.literal("reopen") }),
+  v.strictObject({
+    kind: v.literal("reopen"),
+    ...REASON_ENTRIES[CLAIM_REVIEW_REASON_RULE.reopen],
+  }),
   v.strictObject({
     kind: v.literal("record-conflict"),
     resolution: v.nullable(
@@ -65,13 +86,14 @@ const eventSchema = v.union([
         v.strictObject({ kind: v.literal("escalated") }),
       ]),
     ),
+    ...REASON_ENTRIES[CLAIM_REVIEW_REASON_RULE["record-conflict"]],
   }),
 ]);
 
 const bodySchema = v.object({
   runId: resourceIdSchema("legalListVerificationRun"),
   claimId: resourceIdSchema("legalListClaim"),
-  event: eventSchema,
+  event: claimReviewEventSchema,
 });
 
 const config = {
@@ -80,16 +102,19 @@ const config = {
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Record one reviewer action on a claim of a list verification and return " +
-    "the claim's review after it. `status` marks the claim reviewed or " +
-    "disputed (null clears it); `override` annotates the verdict with the " +
+    "the claim's review after it. `status` marks the claim reviewed, " +
+    "disputed, or needs-evidence (open until the record can answer it; " +
+    "null clears it); `override` annotates the verdict with the " +
     "reviewer's own state, beside the tool's, never replacing it; `note` sets " +
     "the review note; `reopen` reclassifies a set-aside claim as checkable; " +
     "`record-conflict` resolves a claim withheld between two records by " +
     "naming the governing fact or escalating it; the event also keeps which " +
     "record was suggested to govern then (a document's record over a " +
     "witness's account; see suggestedGoverningFactId in " +
-    "lists.verifications.get). Reopening and resolving a conflict withdraw " +
-    "an earlier status and override.",
+    "lists.verifications.get). `override`, `reopen` and `record-conflict` " +
+    "change the verdict and require `reason` (the reviewer's words, kept in " +
+    "the claim's history); `status` takes an optional `reason`. Reopening " +
+    "and resolving a conflict withdraw an earlier status and override.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -121,7 +146,7 @@ const REJECTION_MESSAGES = {
  * to govern, so history can tell a confirmed suggestion from another choice.
  */
 const storedPayload = (
-  event: v.InferOutput<typeof eventSchema>,
+  event: v.InferOutput<typeof claimReviewEventSchema>,
   suggestedFactEntityId: SafeId<"entity"> | null,
 ): ClaimReviewEventPayload => {
   switch (event.kind) {
@@ -132,6 +157,7 @@ const storedPayload = (
       return {
         kind: event.kind,
         resolution: event.resolution,
+        reason: event.reason,
         suggestedFactEntityId,
       };
     }
@@ -211,13 +237,17 @@ const createClaimReview = createSafeHandler(
           action: AUDIT_ACTION.REVIEW,
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
           resourceId: runId,
-          // The note itself stays in the event row, which lives and dies with
-          // the matter; the audit log keeps only what kind of action it was.
+          // The note and the reason stay in the event row, which lives and
+          // dies with the matter; the audit log keeps only what kind of
+          // action it was.
           metadata: {
             claimId,
             eventId,
             kind: payload.kind,
             ...(payload.kind === "note" && { noteLength: payload.note.length }),
+            ...(payload.reason !== undefined && {
+              reasonLength: payload.reason.length,
+            }),
           },
         });
 
@@ -228,8 +258,7 @@ const createClaimReview = createSafeHandler(
           claimIds: [claimId],
         });
         const review =
-          after.get(claimId)?.review ??
-          panic("A claim with a new event has no review");
+          after.get(claimId) ?? panic("A claim with a new event has no review");
         return { type: "recorded", review } as const;
       }),
     );

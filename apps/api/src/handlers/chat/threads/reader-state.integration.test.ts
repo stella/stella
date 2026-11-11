@@ -3,12 +3,18 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
+  mock,
+  spyOn,
   test,
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import fc from "fast-check";
 
+import { chatThreadsChangedRealtimeEvent } from "@stll/api-contract";
+import type { UserRealtimeEvent } from "@stll/api-contract";
 import {
   CHAT_THREAD_PIN_STATE,
   CHAT_THREAD_READ_STATE,
@@ -17,6 +23,7 @@ import type {
   ChatThreadPinState,
   ChatThreadReadState,
 } from "@stll/api-contract/chat";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
@@ -28,6 +35,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import * as sseModule from "@/api/lib/sse";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { seedChatTurns } from "@/api/tests/read-scaling/chat-active-runs";
@@ -74,7 +82,31 @@ const cleanUp = async () => {
   }
 };
 
-afterEach(cleanUp);
+type Ping = {
+  event: UserRealtimeEvent;
+  organizationId: string;
+  userId: string;
+};
+
+/** Every user broadcast sent since the test began. */
+const pings: Ping[] = [];
+
+/** The pings sent since the last call, in order. */
+const takePings = (): Ping[] => pings.splice(0);
+
+beforeEach(() => {
+  pings.length = 0;
+  spyOn(sseModule, "broadcastToUser").mockImplementation(
+    (userId, organizationId, event) => {
+      pings.push({ event, organizationId, userId });
+    },
+  );
+});
+
+afterEach(async () => {
+  mock.restore();
+  await cleanUp();
+});
 
 afterAll(async () => {
   await cleanUp();
@@ -399,6 +431,134 @@ describe("a chat's pin state", () => {
   });
 });
 
+const storedPinnedAt = async (threadId: SafeId<"chatThread">) => {
+  const [row] = await testDb
+    .select({ pinnedAt: chatThreads.pinnedAt })
+    .from(chatThreads)
+    .where(eq(chatThreads.id, threadId));
+  return row === undefined ? panic("the thread is stored") : row.pinnedAt;
+};
+
+/** The one broadcast a state change sends: to the reader's own devices. */
+const readerPing = (): Ping => ({
+  event: chatThreadsChangedRealtimeEvent(),
+  organizationId: ids.orgA,
+  userId: ids.userA1,
+});
+
+type ReaderRequest =
+  | { kind: "read"; readState: ChatThreadReadState }
+  | { kind: "pin"; pinState: ChatThreadPinState };
+
+const READER_REQUESTS: readonly ReaderRequest[] = [
+  { kind: "read", readState: CHAT_THREAD_READ_STATE.read },
+  { kind: "read", readState: CHAT_THREAD_READ_STATE.unread },
+  { kind: "pin", pinState: CHAT_THREAD_PIN_STATE.pinned },
+  { kind: "pin", pinState: CHAT_THREAD_PIN_STATE.unpinned },
+];
+
+const send = async (
+  threadId: SafeId<"chatThread">,
+  request: ReaderRequest,
+): Promise<unknown> =>
+  request.kind === "read"
+    ? await markRead({ readState: request.readState, threadId })
+    : await pin({ pinState: request.pinState, threadId });
+
+const bodyOf = (request: ReaderRequest) =>
+  request.kind === "read"
+    ? { readState: request.readState }
+    : { pinState: request.pinState };
+
+describe("a request for the state a chat already has", () => {
+  test("succeeds with the same answer, writes nothing and tells no device", async () => {
+    const threadId = await seedAnsweredThread({ title: "Settled" });
+    // Seeded threads start read and unpinned; each request first changes
+    // the state, then asks for it again.
+    for (const request of [
+      { kind: "read", readState: CHAT_THREAD_READ_STATE.unread },
+      { kind: "read", readState: CHAT_THREAD_READ_STATE.read },
+      { kind: "pin", pinState: CHAT_THREAD_PIN_STATE.pinned },
+      { kind: "pin", pinState: CHAT_THREAD_PIN_STATE.unpinned },
+    ] satisfies ReaderRequest[]) {
+      // db-await-in-loop: four requests, each a state change then a repeat
+      expect(await send(threadId, request)).toEqual(bodyOf(request));
+      expect(takePings()).toEqual([readerPing()]);
+      // db-await-in-loop: the repeat of the request just sent
+      expect(await send(threadId, request)).toEqual(bodyOf(request));
+      expect(takePings()).toEqual([]);
+    }
+  });
+
+  test("re-pinning keeps the chat's place among the pinned ones", async () => {
+    const threadId = await seedAnsweredThread({ title: "Pinned first" });
+    await pin({ pinState: CHAT_THREAD_PIN_STATE.pinned, threadId });
+    const pinnedAt = await storedPinnedAt(threadId);
+    expect(pinnedAt).not.toBeNull();
+    await pin({ pinState: CHAT_THREAD_PIN_STATE.pinned, threadId });
+    expect(await storedPinnedAt(threadId)).toEqual(pinnedAt);
+  });
+
+  test("marking unread a chat a newer answer already made unread changes nothing", async () => {
+    const threadId = await seedAnsweredThread({ title: "Newer answer" });
+    // Last open before the answer settled: unread with a stored marker.
+    await setLastReadAt(threadId, at(0));
+    expect(
+      await markRead({ readState: CHAT_THREAD_READ_STATE.unread, threadId }),
+    ).toEqual({ readState: CHAT_THREAD_READ_STATE.unread });
+    expect(takePings()).toEqual([]);
+    expect((await listedThread(threadId)).readState).toBe(
+      CHAT_THREAD_READ_STATE.unread,
+    );
+  });
+
+  test("tells the reader's devices once per state change over any sequence of requests", async () => {
+    const threadId = await seedAnsweredThread({ title: "Sequenced" });
+    await assertProperty(
+      "tells the reader's devices once per state change over any sequence of requests",
+      fc.asyncProperty(
+        fc.array(fc.constantFrom(...READER_REQUESTS), {
+          maxLength: 8,
+          minLength: 1,
+        }),
+        async (requests) => {
+          // Every run starts from a read, unpinned chat.
+          await setLastReadAt(threadId, at(SETTLE_DELAY_S));
+          await testDb
+            .update(chatThreads)
+            .set({ pinnedAt: null, updatedAt: sql`${chatThreads.updatedAt}` })
+            .where(eq(chatThreads.id, threadId));
+          takePings();
+          let readState: ChatThreadReadState = CHAT_THREAD_READ_STATE.read;
+          let pinState: ChatThreadPinState = CHAT_THREAD_PIN_STATE.unpinned;
+          let changes = 0;
+          for (const request of requests) {
+            // db-await-in-loop: the sequence is the property's input, in order
+            expect(await send(threadId, request)).toEqual(bodyOf(request));
+            if (request.kind === "read" && request.readState !== readState) {
+              readState = request.readState;
+              changes += 1;
+            }
+            if (request.kind === "pin" && request.pinState !== pinState) {
+              pinState = request.pinState;
+              changes += 1;
+            }
+          }
+          expect(takePings()).toEqual(
+            Array.from({ length: changes }, readerPing),
+          );
+          const listed = await listedThread(threadId);
+          expect({
+            pinState: listed.pinState,
+            readState: listed.readState,
+          }).toEqual({ pinState, readState });
+        },
+      ),
+      propertyConfig({ numRuns: 20 }),
+    );
+  });
+});
+
 describe("only the chat's own reader, in its own scope, changes its states", () => {
   test("a colleague, a wrong scope or an unreachable matter is not found and changes nothing", async () => {
     const globalThread = await seedAnsweredThread({ title: "Global" });
@@ -444,6 +604,7 @@ describe("only the chat's own reader, in its own scope, changes its states", () 
       expect(row.lastReadAt).not.toBeNull();
       expect(row.pinnedAt).toBeNull();
     }
+    expect(takePings()).toEqual([]);
 
     // The reader in the right scope succeeds.
     expect(

@@ -2,7 +2,9 @@
  * AVT claim detail: the verdict with its qualifiers, the facts it rests on,
  * the confidence signal, record-conflict resolution, and the human-review
  * layer. A verdict shows as its category only; its 0-100 score stays in the
- * API and exports. Every reviewer action is recorded against the claim on the server.
+ * API and exports. Every reviewer action is recorded against the claim on the
+ * server; an action that changes the verdict asks for its reason inline, and
+ * the claim's history lists every action with the reason given.
  */
 
 import * as React from "react";
@@ -18,6 +20,7 @@ import {
   CheckCircle2Icon,
   CheckIcon,
   CircleDashedIcon,
+  FileSearchIcon,
   FlagIcon,
   HistoryIcon,
   PenIcon,
@@ -56,6 +59,8 @@ import { EvidenceFactSource } from "@/features/avt/fact-source";
 import { evidenceQuoteSource } from "@/features/avt/fact-source.logic";
 import { FactTierLabel } from "@/features/avt/fact-tier";
 import { avtKeys } from "@/features/avt/queries";
+import { ReasonField } from "@/features/avt/reason-field";
+import { ClaimHistory } from "@/features/avt/review-history";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   ConfBadge,
@@ -81,7 +86,11 @@ import type {
   VerificationClaim,
   VerificationRun,
 } from "@/features/avt/types";
-import { CLAIM_OVERRIDE_STATES, STATE_META } from "@/features/avt/types";
+import {
+  CLAIM_OVERRIDE_STATES,
+  REVIEW_STATUS_META,
+  STATE_META,
+} from "@/features/avt/types";
 import { useClaimSaveState } from "@/features/avt/use-claim-review-actions";
 import type { DispositionTone, ShownFact } from "@/features/avt/verdict";
 import {
@@ -93,6 +102,7 @@ import {
 } from "@/features/avt/verdict";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
@@ -143,8 +153,9 @@ export const ClaimDetailPanel = ({
   const DispositionIcon = DISPOSITION_TONE_STYLE[guidance.tone].icon;
   const override = review?.override ?? null;
 
-  const setStatus = (status: ClaimReviewStatus | null) =>
+  const setStatus = (status: ClaimReviewStatus | null) => {
     onReviewEvent({ kind: "status", status });
+  };
   const factScope = { workspaceId, listId: run.evidence.listId, runId };
 
   return (
@@ -229,8 +240,8 @@ export const ClaimDetailPanel = ({
               conflict={verdict.recordConflict}
               disabled={!canReview}
               factsById={factsById}
-              onResolve={(resolution) =>
-                onReviewEvent({ kind: "record-conflict", resolution })
+              onResolve={(resolution, reason) =>
+                onReviewEvent({ kind: "record-conflict", resolution, reason })
               }
               review={review}
               scope={factScope}
@@ -294,25 +305,22 @@ export const ClaimDetailPanel = ({
                 {t(guidance.askKey)}
               </p>
             )}
-            <div className="flex flex-wrap items-center gap-2">
-              <DecisionStatus review={review} />
-              <ReviewDecisionActions
-                acceptLabel={t(confirmLabel(state, guidance.tone))}
-                disabled={isEscalated || !canReview}
-                onAccept={() => setStatus("reviewed")}
-                onReject={() => setStatus("disputed")}
-                onReopen={() => setStatus(null)}
-                rejectLabel={t("avt.claimDetail.flagDispute")}
-                reopenLabel={t("avt.review.undo")}
-                state={decisionState(review)}
-              />
-            </div>
+            <DecisionRow
+              acceptLabel={t(confirmLabel(state, guidance.tone))}
+              disabled={isEscalated || !canReview}
+              onStatus={setStatus}
+              review={review}
+            />
 
             {isScoredState(verdict.state) && (
               <OverrideControl
                 disabled={isEscalated || !canReview}
-                onOverride={(overrideState) =>
-                  onReviewEvent({ kind: "override", state: overrideState })
+                onOverride={(overrideState, reason) =>
+                  onReviewEvent({
+                    kind: "override",
+                    state: overrideState,
+                    reason,
+                  })
                 }
                 override={override}
                 toolState={verdict.state}
@@ -320,21 +328,10 @@ export const ClaimDetailPanel = ({
             )}
 
             {verdict.state === "notverifiable" && (
-              <div className="bg-muted space-y-2 rounded-md border p-3">
-                <p className="text-xs leading-relaxed">
-                  {t.rich("avt.claimDetail.notVerifiable.reopenExplanation", {
-                    strong: (chunks) => <b>{chunks}</b>,
-                  })}
-                </p>
-                <Button
-                  disabled={review?.reopened === true || !canReview}
-                  onClick={() => onReviewEvent({ kind: "reopen" })}
-                  size="sm"
-                >
-                  <SearchIcon />
-                  {t("avt.claimDetail.notVerifiable.reopen")}
-                </Button>
-              </div>
+              <ReopenControl
+                disabled={review?.reopened === true || !canReview}
+                onReopen={(reason) => onReviewEvent({ kind: "reopen", reason })}
+              />
             )}
             {review?.reopened === true && (
               <p className="text-muted-foreground text-2xs leading-relaxed">
@@ -350,6 +347,8 @@ export const ClaimDetailPanel = ({
               review={review}
             />
           </section>
+
+          <ClaimHistory claim={claim} runId={runId} workspaceId={workspaceId} />
 
           {/* Keyed by the claim, so a comment being written on one claim is
               discarded rather than saved onto the next one selected. */}
@@ -378,10 +377,14 @@ type OverrideControlProps = {
   toolState: ScoredState;
   override: ClaimOverrideState | null;
   disabled: boolean;
-  onOverride: (state: ClaimOverrideState | null) => void;
+  onOverride: (state: ClaimOverrideState | null, reason: string) => void;
 };
 
-/** An override annotates the tool's verdict; picking the tool's own clears it. */
+/**
+ * An override annotates the tool's verdict; picking the tool's own clears it.
+ * Either changes the verdict a reviewer reads, so the pick waits for its
+ * reason beside the control before it is recorded.
+ */
 const OverrideControl = ({
   toolState,
   override,
@@ -389,32 +392,155 @@ const OverrideControl = ({
   onOverride,
 }: OverrideControlProps) => {
   const t = useTranslations();
+  const current = override ?? toolState;
+  const [picked, setPicked] = React.useState<ClaimOverrideState | null>(null);
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-muted-foreground text-xs">
-        {t("avt.claimDetail.overrideVerdict")}
-      </span>
-      <Select
-        disabled={disabled}
-        onValueChange={(value) => {
-          if (value === null) {
-            return;
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground text-xs">
+          {t("avt.claimDetail.overrideVerdict")}
+        </span>
+        <OverrideSelect
+          disabled={disabled}
+          onPick={(value) => setPicked(value === current ? null : value)}
+          value={picked ?? current}
+        />
+      </div>
+      {picked !== null && (
+        <ReasonField
+          disabled={disabled}
+          label={
+            picked === toolState
+              ? t("avt.reason.withdrawOverride")
+              : t("avt.reason.override", {
+                  verdict: t(STATE_META[picked].chipKey),
+                })
           }
-          onOverride(value === toolState ? null : value);
-        }}
-        value={override ?? toolState}
-      >
-        <SelectTrigger size="sm">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectPopup>
-          {CLAIM_OVERRIDE_STATES.map((overrideState) => (
-            <SelectItem key={overrideState} value={overrideState}>
-              {t(STATE_META[overrideState].chipKey)}
-            </SelectItem>
-          ))}
-        </SelectPopup>
-      </Select>
+          onCancel={() => setPicked(null)}
+          onSubmit={(reason) => {
+            onOverride(picked === toolState ? null : picked, reason);
+            setPicked(null);
+          }}
+          submitLabel={t("common.save")}
+        />
+      )}
+    </div>
+  );
+};
+
+type OverrideSelectProps = {
+  value: ClaimOverrideState;
+  disabled: boolean;
+  onPick: (value: ClaimOverrideState) => void;
+};
+
+const OverrideSelect = ({ value, disabled, onPick }: OverrideSelectProps) => {
+  const t = useTranslations();
+  return (
+    <Select
+      disabled={disabled}
+      onValueChange={(next) => {
+        if (next !== null) {
+          onPick(next);
+        }
+      }}
+      value={value}
+    >
+      <SelectTrigger size="sm">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectPopup>
+        {CLAIM_OVERRIDE_STATES.map((overrideState) => (
+          <SelectItem key={overrideState} value={overrideState}>
+            {t(STATE_META[overrideState].chipKey)}
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
+  );
+};
+
+type ReopenControlProps = {
+  disabled: boolean;
+  onReopen: (reason: string) => void;
+};
+
+/** Reclassifying a set-aside claim as checkable, with the reviewer's reason. */
+const ReopenControl = ({ disabled, onReopen }: ReopenControlProps) => {
+  const t = useTranslations();
+  const [asking, setAsking] = React.useState(false);
+  return (
+    <div className="bg-muted space-y-2 rounded-md border p-3">
+      <p className="text-xs leading-relaxed">
+        {t.rich("avt.claimDetail.notVerifiable.reopenExplanation", {
+          strong: (chunks) => <b>{chunks}</b>,
+        })}
+      </p>
+      {asking ? (
+        <ReasonField
+          disabled={disabled}
+          label={t("avt.reason.reopen")}
+          onCancel={() => setAsking(false)}
+          onSubmit={(reason) => {
+            onReopen(reason);
+            setAsking(false);
+          }}
+          submitLabel={t("avt.claimDetail.notVerifiable.reopen")}
+        />
+      ) : (
+        <Button disabled={disabled} onClick={() => setAsking(true)} size="sm">
+          <SearchIcon />
+          {t("avt.claimDetail.notVerifiable.reopen")}
+        </Button>
+      )}
+    </div>
+  );
+};
+
+type DecisionRowProps = {
+  review: ClaimReview | null;
+  acceptLabel: string;
+  disabled: boolean;
+  onStatus: (status: ClaimReviewStatus | null) => void;
+};
+
+/** The claim's status, the decision pair, and, while undecided, marking it
+ *  as needing evidence: open until the record can answer it, so it stays in
+ *  the queue and out of routine acceptance. */
+const DecisionRow = ({
+  review,
+  acceptLabel,
+  disabled,
+  onStatus,
+}: DecisionRowProps) => {
+  const t = useTranslations();
+  const state = decisionState(review);
+  const needsEvidence = review?.status === "needs-evidence";
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <DecisionStatus review={review} />
+      <ReviewDecisionActions
+        acceptLabel={acceptLabel}
+        disabled={disabled}
+        onAccept={() => onStatus("reviewed")}
+        onReject={() => onStatus("disputed")}
+        onReopen={() => onStatus(null)}
+        rejectLabel={t("avt.claimDetail.flagDispute")}
+        reopenLabel={t("avt.review.undo")}
+        state={state}
+      />
+      {state === "pending" && (
+        <Button
+          aria-pressed={needsEvidence}
+          disabled={disabled}
+          onClick={() => onStatus(needsEvidence ? null : "needs-evidence")}
+          size="sm"
+          variant={needsEvidence ? "secondary" : "ghost"}
+        >
+          <FileSearchIcon />
+          {t(REVIEW_STATUS_META["needs-evidence"].labelKey)}
+        </Button>
+      )}
     </div>
   );
 };
@@ -430,6 +556,10 @@ const decisionState = (review: ClaimReview | null): ReviewDecisionState => {
     }
     case "disputed": {
       return "rejected";
+    }
+    // Open until the record answers it; the decision is still to make.
+    case "needs-evidence": {
+      return "pending";
     }
     default: {
       status satisfies never;
@@ -453,15 +583,14 @@ const DecisionStatus = ({ review }: { review: ClaimReview | null }) => {
   return (
     <ReviewStatusBadge
       size="sm"
-      tone={status === "reviewed" ? "success" : "destructive"}
+      tone={REVIEW_STATUS_META[status].tone}
       variant="solid"
     >
-      {status === "reviewed"
-        ? t("avt.review.reviewed", {
-            origin: review?.statusOrigin ?? "single",
-            decidedAt,
-          })
-        : t("avt.review.disputed", { decidedAt })}
+      {t("avt.review.decided", {
+        status: REVIEW_STATUS_META[status].selectKey,
+        origin: review?.statusOrigin ?? "single",
+        decidedAt,
+      })}
     </ReviewStatusBadge>
   );
 };
@@ -783,12 +912,27 @@ type RecordConflictBlockProps = {
   conflict: RecordConflict;
   review: ClaimReview | null;
   factsById: ReadonlyMap<FactId, ShownFact>;
-  onResolve: (
-    resolution: Extract<
-      ClaimReviewEvent,
-      { kind: "record-conflict" }
-    >["resolution"],
-  ) => void;
+  onResolve: (resolution: RecordConflictResolution, reason: string) => void;
+};
+
+type RecordConflictResolution = Extract<
+  ClaimReviewEvent,
+  { kind: "record-conflict" }
+>["resolution"];
+
+const RESOLUTION_REASON_LABEL_KEYS = {
+  governed: "avt.reason.govern",
+  escalated: "avt.reason.escalate",
+} as const satisfies Record<
+  NonNullable<RecordConflictResolution>["kind"],
+  TranslationKey
+>;
+
+/** A resolution the reviewer picked and still has to give a reason for,
+ *  asked beside the control it came from (a record, or the escalation). */
+type PendingResolution = {
+  control: FactId | "escalation";
+  resolution: RecordConflictResolution;
 };
 
 const RecordConflictBlock = ({
@@ -812,6 +956,29 @@ const RecordConflictBlock = ({
     return read.type === "date"
       ? dateText(read.occurredOn, read.precision)
       : read.text;
+  };
+  const [pending, setPending] = React.useState<PendingResolution | null>(null);
+  const reasonFor = (control: PendingResolution["control"]) => {
+    if (pending?.control !== control) {
+      return null;
+    }
+    const next = pending.resolution;
+    return (
+      <ReasonField
+        disabled={disabled}
+        label={t(
+          next === null
+            ? "avt.reason.unresolveConflict"
+            : RESOLUTION_REASON_LABEL_KEYS[next.kind],
+        )}
+        onCancel={() => setPending(null)}
+        onSubmit={(reason) => {
+          onResolve(next, reason);
+          setPending(null);
+        }}
+        submitLabel={t("common.save")}
+      />
+    );
   };
   const records = conflict.factEntityIds.map((factEntityId, index) => ({
     factEntityId,
@@ -888,11 +1055,16 @@ const RecordConflictBlock = ({
             <Button
               disabled={disabled}
               onClick={() =>
-                onResolve(
-                  governingId === record.factEntityId
-                    ? null
-                    : { kind: "governed", factEntityId: record.factEntityId },
-                )
+                setPending({
+                  control: record.factEntityId,
+                  resolution:
+                    governingId === record.factEntityId
+                      ? null
+                      : {
+                          kind: "governed",
+                          factEntityId: record.factEntityId,
+                        },
+                })
               }
               size="sm"
               variant={
@@ -906,6 +1078,7 @@ const RecordConflictBlock = ({
                   : "avt.claimDetail.recordConflict.treatAsGoverningRecord",
               )}
             </Button>
+            {reasonFor(record.factEntityId)}
           </div>
         ))}
       </div>
@@ -917,15 +1090,18 @@ const RecordConflictBlock = ({
         <Button
           disabled={disabled}
           onClick={() =>
-            onResolve(
-              resolution?.kind === "escalated" ? null : { kind: "escalated" },
-            )
+            setPending({
+              control: "escalation",
+              resolution:
+                resolution?.kind === "escalated" ? null : { kind: "escalated" },
+            })
           }
           variant={resolution?.kind === "escalated" ? "destructive" : "outline"}
         >
           <FlagIcon />
           {t("avt.claimDetail.recordConflict.flagForEvidenceTeam")}
         </Button>
+        {reasonFor("escalation")}
         {governing !== undefined && (
           <p className="bg-muted text-muted-foreground rounded-md px-2.5 py-2 text-xs leading-relaxed">
             {t.rich("avt.claimDetail.recordConflict.governed", {

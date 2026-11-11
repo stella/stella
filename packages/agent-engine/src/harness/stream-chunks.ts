@@ -50,6 +50,10 @@ import { shownToolInput, shownToolResult } from "./tool-parts";
 /** CUSTOM event reporting how the turn's context was established. */
 export const HARNESS_CONTINUATION_EVENT = "harness.continuation";
 
+/** CUSTOM event carrying the harness's native session id. */
+export const harnessSessionIdEvent = (harness: AgentHarness) =>
+  `${harness}.session-id`;
+
 /** Tool name for a harness question, matching Codex's native item name. */
 export const HARNESS_QUESTION_TOOL = CHAT_LOCAL_RUN_QUESTION_TOOL;
 
@@ -159,7 +163,7 @@ class ChunkMapper {
         this.push(
           {
             type: EventType.CUSTOM,
-            name: `${this.context.harness}.session-id`,
+            name: harnessSessionIdEvent(this.context.harness),
             value: { sessionId: event.sessionId },
           },
           {

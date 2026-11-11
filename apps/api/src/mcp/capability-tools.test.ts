@@ -376,6 +376,10 @@ describe("list verification access grants across MCP tools", () => {
       params,
       body: { runId: resourceId, claimIds: [resourceId] },
     },
+    "lists.verifications.claim-reviews.list": {
+      params,
+      query: { runId: resourceId, claimId: resourceId },
+    },
     "lists.verifications.claim-comments.create": {
       params,
       body: { runId: resourceId, claimId: resourceId, body: "Synthetic note" },
@@ -552,6 +556,18 @@ describe("list verification access grants across MCP tools", () => {
             return undefined;
           },
         },
+      },
+      // The review history names its run's reviewers; none here.
+      selectDistinct: () => {
+        resourceLookups += 1;
+        const query: unknown[] = [];
+        return Object.assign(query, {
+          from: () => query,
+          innerJoin: () => query,
+          where: () => query,
+          orderBy: () => query,
+          limit: () => query,
+        });
       },
       selectDistinctOn: () => {
         resourceLookups += 1;
@@ -1026,7 +1042,8 @@ describe("list verification access grants across MCP tools", () => {
       expect(fixture.mutations()).toBe(0);
       if (
         capability === "lists.verifications.list" ||
-        capability === "lists.verifications.claim-comments.list"
+        capability === "lists.verifications.claim-comments.list" ||
+        capability === "lists.verifications.claim-reviews.list"
       ) {
         expect(result.isError).not.toBe(true);
         expect(

@@ -387,6 +387,43 @@
       "optional": "Optional",
       "readyToConfirm": "Ready to confirm"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Accepted as routine",
+        "conflictReopened": "Withdrew the conflict's resolution",
+        "escalated": "Flagged for the evidence team",
+        "governed": "Chose the governing record",
+        "noteCleared": "Cleared the note",
+        "noteSaved": "Saved a note",
+        "overridden": "Overrode the verdict",
+        "overrideWithdrawn": "Withdrew the override",
+        "reopened": "Re-opened as a checkable claim",
+        "statusCleared": "Cleared the review status",
+        "statusDisputed": "Marked disputed",
+        "statusNeedsEvidence": "Marked as needing evidence",
+        "statusReviewed": "Marked reviewed"
+      },
+      "empty": "No review actions yet.",
+      "filters": {
+        "allKinds": "Any action",
+        "allReviewers": "Any reviewer",
+        "kind": "Filter by action",
+        "reviewer": "Filter by reviewer"
+      },
+      "formerMember": "Former member",
+      "kinds": {
+        "override": "Verdict overrides",
+        "recordConflict": "Record conflict resolutions",
+        "reopen": "Re-openings",
+        "status": "Status changes"
+      },
+      "noMatches": "No actions match these filters.",
+      "noStatus": "No status",
+      "none": "No actions yet",
+      "reasonUnrecorded": "No reason recorded: this was done before reasons were required.",
+      "runButton": "Review history",
+      "runTitle": "Review history"
+    },
     "matches": {
       "count": "{count, plural, one {# match} other {# matches}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "Unsourced only"
       }
     },
+    "reason": {
+      "escalate": "Why does the evidence team need this?",
+      "govern": "Why does this record govern?",
+      "override": "Why is the verdict “{verdict}”?",
+      "placeholder": "Say why; it stays in the claim's history",
+      "reopen": "Why can this claim be checked?",
+      "required": "Give a reason to record this.",
+      "unresolveConflict": "Why withdraw this resolution?",
+      "withdrawOverride": "Why return to the tool's verdict?"
+    },
     "review": {
-      "disputed": "Disputed · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Accepted as routine} other {Reviewed}} · {decidedAt}",
+      "decided": "{status, select, disputed {Disputed} needsEvidence {Needs evidence} other {{origin, select, bulk {Accepted as routine} other {Reviewed}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Disputed",
+        "needsEvidence": "Needs evidence",
+        "reviewed": "Reviewed"
+      },
       "undo": "Undo decision"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "Accept {count, plural, one {# routine claim} other {# routine claims}}",
       "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}",
       "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong>: conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} needsEvidence {, needs evidence} other {}})",
       "documentView": {
         "label": "Document view",
         "original": "Original",
@@ -2561,6 +2612,7 @@
     "or": "Or",
     "organization": "Organization",
     "organizationName": "Organization name",
+    "organizations": "Organizations",
     "page": "Page {page}",
     "paymentRetryNotice": "Payment issue. Update your payment method by {date} to keep access.",
     "pin": "Pin",
@@ -2867,7 +2919,6 @@
       "vatPayerUnknown": "Unknown",
       "year": "Year of birth"
     },
-    "filterOrganizations": "Organizations",
     "filterPersons": "Persons",
     "import": {
       "confirmAction": "Confirm import",

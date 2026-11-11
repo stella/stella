@@ -387,6 +387,43 @@
       "optional": "Opcjonalne",
       "readyToConfirm": "Gotowe do potwierdzenia"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Zaakceptowano jako rutynowe",
+        "conflictReopened": "Wycofano rozstrzygnięcie sprzeczności",
+        "escalated": "Oznaczono dla zespołu ds. dowodów",
+        "governed": "Wybrano wpis nadrzędny",
+        "noteCleared": "Usunięto uwagę",
+        "noteSaved": "Zapisano uwagę",
+        "overridden": "Zmieniono rozstrzygnięcie",
+        "overrideWithdrawn": "Wycofano zmianę rozstrzygnięcia",
+        "reopened": "Otwarto ponownie jako możliwe do sprawdzenia twierdzenie",
+        "statusCleared": "Usunięto status weryfikacji",
+        "statusDisputed": "Oznaczono jako zakwestionowane",
+        "statusNeedsEvidence": "Oznaczono jako wymagające dowodów",
+        "statusReviewed": "Oznaczono jako zweryfikowane"
+      },
+      "empty": "Brak działań weryfikacyjnych.",
+      "filters": {
+        "allKinds": "Dowolne działanie",
+        "allReviewers": "Dowolny weryfikujący",
+        "kind": "Filtruj według działania",
+        "reviewer": "Filtruj według weryfikującego"
+      },
+      "formerMember": "Były członek",
+      "kinds": {
+        "override": "Zmiany rozstrzygnięcia",
+        "recordConflict": "Rozstrzygnięcia sprzeczności",
+        "reopen": "Ponowne otwarcia",
+        "status": "Zmiany statusu"
+      },
+      "noMatches": "Żadne działanie nie pasuje do tych filtrów.",
+      "noStatus": "Bez statusu",
+      "none": "Brak działań",
+      "reasonUnrecorded": "Nie zapisano powodu: działanie podjęto, zanim powód stał się wymagany.",
+      "runButton": "Historia weryfikacji",
+      "runTitle": "Historia weryfikacji"
+    },
     "matches": {
       "count": "{count, plural, one {# trafienie} few {# trafienia} many {# trafień} other {# trafienia}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "Tylko bez źródła"
       }
     },
+    "reason": {
+      "escalate": "Dlaczego potrzebuje tego zespół ds. dowodów?",
+      "govern": "Dlaczego ten wpis jest nadrzędny?",
+      "override": "Dlaczego rozstrzygnięcie to „{verdict}”?",
+      "placeholder": "Podaj powód; pozostanie w historii twierdzenia",
+      "reopen": "Dlaczego to twierdzenie można sprawdzić?",
+      "required": "Podaj powód, aby to zapisać.",
+      "unresolveConflict": "Dlaczego wycofać to rozstrzygnięcie sprzeczności?",
+      "withdrawOverride": "Dlaczego wrócić do rozstrzygnięcia narzędzia?"
+    },
     "review": {
-      "disputed": "Zakwestionowane · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Zaakceptowane jako rutynowe} other {Zweryfikowane}} · {decidedAt}",
+      "decided": "{status, select, disputed {Zakwestionowane} needsEvidence {Brak dowodów} other {{origin, select, bulk {Zaakceptowane jako rutynowe} other {Zweryfikowane}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Zakwestionowane",
+        "needsEvidence": "Brak dowodów",
+        "reviewed": "Zweryfikowane"
+      },
       "undo": "Cofnij decyzję"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "Zaakceptuj {count, plural, one {# rutynowe twierdzenie} few {# rutynowe twierdzenia} many {# rutynowych twierdzeń} other {# rutynowego twierdzenia}}",
       "attentionComplete": "<strong>Wszystkie twierdzenia wymagające oceny zostały rozpatrzone.</strong> {count, plural, one {Pozostałe # rutynowe ustalenie nie wymaga indywidualnej weryfikacji.} few {Pozostałe # rutynowe ustalenia nie wymagają indywidualnej weryfikacji.} many {Pozostałych # rutynowych ustaleń nie trzeba weryfikować indywidualnie.} other {Pozostałego # rutynowego ustalenia nie trzeba weryfikować indywidualnie.}}",
       "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong>: sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} needsEvidence {, brak dowodów} other {}})",
       "documentView": {
         "label": "Widok dokumentu",
         "original": "Oryginał",
@@ -2561,6 +2612,7 @@
     "or": "Lub",
     "organization": "Organizacja",
     "organizationName": "Nazwa organizacji",
+    "organizations": "Organizacje",
     "page": "Strona {page}",
     "paymentRetryNotice": "Problem z płatnością. Zaktualizuj metodę płatności do {date}, aby zachować dostęp.",
     "pin": "Przypnij",
@@ -2867,7 +2919,6 @@
       "vatPayerUnknown": "Nieznany",
       "year": "Rok"
     },
-    "filterOrganizations": "Organizacje",
     "filterPersons": "Osoby",
     "import": {
       "confirmAction": "Potwierdź import",

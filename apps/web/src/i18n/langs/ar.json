@@ -387,6 +387,43 @@
       "optional": "اختياري",
       "readyToConfirm": "جاهز للتأكيد"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "قُبل باعتباره روتينيًا",
+        "conflictReopened": "سُحب حل التعارض",
+        "escalated": "أُحيل إلى فريق الأدلة",
+        "governed": "اختير السجل الحاكم",
+        "noteCleared": "حُذفت الملاحظة",
+        "noteSaved": "حُفظت ملاحظة",
+        "overridden": "استُبدلت النتيجة",
+        "overrideWithdrawn": "سُحب استبدال النتيجة",
+        "reopened": "أُعيد فتحه بصفته ادعاءً قابلًا للفحص",
+        "statusCleared": "أُزيلت حالة المراجعة",
+        "statusDisputed": "وُضعت علامة «متنازع عليه»",
+        "statusNeedsEvidence": "وُضعت علامة «يحتاج إلى أدلة»",
+        "statusReviewed": "وُضعت علامة «روجع»"
+      },
+      "empty": "لا إجراءات مراجعة بعد.",
+      "filters": {
+        "allKinds": "أي إجراء",
+        "allReviewers": "أي مراجع",
+        "kind": "التصفية حسب الإجراء",
+        "reviewer": "التصفية حسب المراجع"
+      },
+      "formerMember": "عضو سابق",
+      "kinds": {
+        "override": "استبدالات النتيجة",
+        "recordConflict": "حلول التعارضات",
+        "reopen": "مرات إعادة الفتح",
+        "status": "تغييرات الحالة"
+      },
+      "noMatches": "لا إجراءات تطابق عوامل التصفية هذه.",
+      "noStatus": "بلا حالة",
+      "none": "لا إجراءات بعد",
+      "reasonUnrecorded": "لم يُسجَّل سبب: اتُّخذ هذا الإجراء قبل أن يصبح ذكر السبب إلزاميًا.",
+      "runButton": "سجل المراجعة",
+      "runTitle": "سجل المراجعة"
+    },
     "matches": {
       "count": "{count, plural, zero {لا مطابقات} one {مطابقة واحدة} two {مطابقتان} few {# مطابقات} many {# مطابقة} other {# مطابقة}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "بلا مصدر فقط"
       }
     },
+    "reason": {
+      "escalate": "لماذا يحتاج فريق الأدلة إلى هذا؟",
+      "govern": "لماذا يكون هذا السجل هو الحاكم؟",
+      "override": "لماذا النتيجة «{verdict}»؟",
+      "placeholder": "اذكر السبب؛ سيبقى في سجل الادعاء",
+      "reopen": "لماذا يمكن فحص هذا الادعاء؟",
+      "required": "اذكر سببًا لتسجيل هذا الإجراء.",
+      "unresolveConflict": "لماذا سحب هذا الحل؟",
+      "withdrawOverride": "لماذا العودة إلى نتيجة الأداة؟"
+    },
     "review": {
-      "disputed": "متنازع عليه · {decidedAt}",
-      "reviewed": "{origin, select, bulk {قُبل باعتباره روتينيًا} other {روجع}} · {decidedAt}",
+      "decided": "{status, select, disputed {متنازع عليه} needsEvidence {يحتاج إلى أدلة} other {{origin, select, bulk {قُبل باعتباره روتينيًا} other {روجع}}}} · {decidedAt}",
+      "status": {
+        "disputed": "متنازع عليه",
+        "needsEvidence": "يحتاج إلى أدلة",
+        "reviewed": "روجع"
+      },
       "undo": "التراجع عن القرار"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "{count, plural, zero {قبول الادعاءات الروتينية} one {قبول ادعاء روتيني واحد} two {قبول ادعاءين روتينيين} few {قبول # ادعاءات روتينية} many {قبول # ادعاءً روتينيًا} other {قبول # ادعاء روتيني}}",
       "attentionComplete": "<strong>تم التعامل مع كل ادعاء يحتاج إلى قرار.</strong> {count, plural, zero {لا توجد نتائج روتينية تتطلب مراجعة فردية.} one {النتيجة الروتينية الواحدة لا تتطلب مراجعة فردية.} two {النتيجتان الروتينيتان لا تتطلبان مراجعة فردية.} few {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} many {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} other {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.}}",
       "attentionOpen": "<strong>{count, plural, zero {لا توجد ادعاءات تحتاج إلى} one {ادعاء واحد يحتاج إلى} two {ادعاءان يحتاجان إلى} few {# ادعاءات تحتاج إلى} many {# ادعاءً يحتاج إلى} other {# ادعاء يحتاج إلى}} قرارك</strong>؛ تعارضات وتفسيرات محل نزاع. {routineCount, plural, zero {لا توجد ادعاءات روتينية أخرى تحتاج إلى اعتماد فردي.} one {الادعاء الآخر روتيني ولا يحتاج إلى اعتماد فردي.} two {الادعاءان الآخران روتينيان ولا يحتاجان إلى اعتماد فردي.} few {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} many {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} other {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {، محل نزاع} other {}}{reviewStatus, select, reviewed {، روجع} disputed {، متنازع عليه} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {، محل نزاع} other {}}{reviewStatus, select, reviewed {، روجع} disputed {، متنازع عليه} needsEvidence {، يحتاج إلى أدلة} other {}})",
       "documentView": {
         "label": "عرض المستند",
         "original": "الأصل",
@@ -2561,6 +2612,7 @@
     "or": "أو",
     "organization": "المؤسسة",
     "organizationName": "اسم المؤسسة",
+    "organizations": "المؤسسات",
     "page": "الصفحة {page}",
     "paymentRetryNotice": "هناك مشكلة في الدفع. حدّث طريقة الدفع بحلول {date} للحفاظ على إمكانية الوصول.",
     "pin": "تثبيت",
@@ -2867,7 +2919,6 @@
       "vatPayerUnknown": "غير معروف",
       "year": "السنة"
     },
-    "filterOrganizations": "المؤسسات",
     "filterPersons": "الأشخاص",
     "import": {
       "confirmAction": "تأكيد الاستيراد",

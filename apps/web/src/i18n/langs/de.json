@@ -387,6 +387,43 @@
       "optional": "Fakultativ",
       "readyToConfirm": "Bestätigungsbereit"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Als routinemäßig übernommen",
+        "conflictReopened": "Auflösung des Widerspruchs zurückgenommen",
+        "escalated": "Für das Belegteam markiert",
+        "governed": "Maßgeblichen Eintrag gewählt",
+        "noteCleared": "Notiz entfernt",
+        "noteSaved": "Notiz gespeichert",
+        "overridden": "Ergebnis geändert",
+        "overrideWithdrawn": "Änderung des Ergebnisses zurückgenommen",
+        "reopened": "Als überprüfbare Behauptung erneut geöffnet",
+        "statusCleared": "Prüfstatus entfernt",
+        "statusDisputed": "Als beanstandet markiert",
+        "statusNeedsEvidence": "Als belegbedürftig markiert",
+        "statusReviewed": "Als geprüft markiert"
+      },
+      "empty": "Noch keine Prüfaktionen.",
+      "filters": {
+        "allKinds": "Jede Aktion",
+        "allReviewers": "Jeder Prüfer",
+        "kind": "Nach Aktion filtern",
+        "reviewer": "Nach Prüfer filtern"
+      },
+      "formerMember": "Ehemaliges Mitglied",
+      "kinds": {
+        "override": "Geänderte Ergebnisse",
+        "recordConflict": "Auflösungen von Widersprüchen",
+        "reopen": "Erneute Öffnungen",
+        "status": "Statusänderungen"
+      },
+      "noMatches": "Keine Aktionen entsprechen diesen Filtern.",
+      "noStatus": "Kein Status",
+      "none": "Noch keine Aktionen",
+      "reasonUnrecorded": "Keine Begründung erfasst: Dies geschah, bevor Begründungen erforderlich waren.",
+      "runButton": "Prüfverlauf",
+      "runTitle": "Prüfverlauf"
+    },
     "matches": {
       "count": "{count, plural, one {# Treffer} other {# Treffer}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "Nur ohne Quelle"
       }
     },
+    "reason": {
+      "escalate": "Warum braucht das Belegteam dies?",
+      "govern": "Warum ist dieser Eintrag maßgeblich?",
+      "override": "Warum lautet das Ergebnis „{verdict}“?",
+      "placeholder": "Begründung; sie bleibt im Verlauf der Behauptung",
+      "reopen": "Warum ist diese Behauptung überprüfbar?",
+      "required": "Geben Sie eine Begründung an, um dies festzuhalten.",
+      "unresolveConflict": "Warum diese Auflösung zurücknehmen?",
+      "withdrawOverride": "Warum zum Ergebnis des Werkzeugs zurückkehren?"
+    },
     "review": {
-      "disputed": "Beanstandet · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Als routinemäßig übernommen} other {Geprüft}} · {decidedAt}",
+      "decided": "{status, select, disputed {Beanstandet} needsEvidence {Belege fehlen} other {{origin, select, bulk {Als routinemäßig übernommen} other {Geprüft}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Beanstandet",
+        "needsEvidence": "Belege fehlen",
+        "reviewed": "Geprüft"
+      },
       "undo": "Entscheidung rückgängig machen"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "{count, plural, one {# routinemäßige Behauptung} other {# routinemäßige Behauptungen}} übernehmen",
       "attentionComplete": "<strong>Alle Behauptungen, die eine Entscheidung erfordern, wurden bearbeitet.</strong> {count, plural, one {Die # routinemäßige Feststellung muss nicht einzeln geprüft werden.} other {Die # routinemäßigen Feststellungen müssen nicht einzeln geprüft werden.}}",
       "attentionOpen": "<strong>{count, plural, one {# Behauptung erfordert} other {# Behauptungen erfordern}} Ihre Entscheidung</strong> – Widersprüche und strittige Auslegungen. {routineCount, plural, one {Die andere # ist routinemäßig und muss nicht einzeln freigegeben werden.} other {Die anderen # sind routinemäßig und müssen nicht einzeln freigegeben werden.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, strittig} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, strittig} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} needsEvidence {, Belege fehlen} other {}})",
       "documentView": {
         "label": "Dokumentansicht",
         "original": "Original",
@@ -2561,6 +2612,7 @@
     "or": "Oder",
     "organization": "Organisation",
     "organizationName": "Organisationsname",
+    "organizations": "Organisationen",
     "page": "Seite {page}",
     "paymentRetryNotice": "Zahlungsproblem. Aktualisieren Sie Ihre Zahlungsmethode bis zum {date}, um den Zugriff zu behalten.",
     "pin": "Anheften",
@@ -2867,7 +2919,6 @@
       "vatPayerUnknown": "Unbekannt",
       "year": "Jahr"
     },
-    "filterOrganizations": "Organisationen",
     "filterPersons": "Personen",
     "import": {
       "confirmAction": "Import bestätigen",
