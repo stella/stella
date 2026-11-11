@@ -430,8 +430,8 @@
         "statusNeedsEvidence": "Pažymėta, kad reikia įrodymų",
         "statusReviewed": "Pažymėta kaip peržiūrėta"
       },
-      "carriedFrom": "Perkelta iš {date} tikrinimo",
-      "carriedFromEarlier": "Perkelta iš ankstesnio tikrinimo",
+      "carriedFrom": "Iš {date} tikrinimo",
+      "carriedFromEarlier": "Iš ankstesnio tikrinimo",
       "empty": "Peržiūros veiksmų dar nėra.",
       "filters": {
         "allKinds": "Bet kuris veiksmas",
@@ -509,13 +509,17 @@
     "runs": {
       "back": "Visi dokumentai",
       "carryOver": {
-        "carried": "Peržiūros, perkeltos iš {date} tikrinimo: {count, number}",
-        "notCarried": "Neperkelta: {count, number}",
         "openSource": "Atidaryti {date} tikrinimą",
         "outcomes": {
           "ambiguous": "Keli galimi atitikmenys",
           "unmatched": "Atitinkamo teiginio nėra",
           "verdictChanged": "Išvada pasikeitė"
+        },
+        "summary": {
+          "carried": "Perkelta: {count, number}",
+          "carriedAndMissed": "Perkelta: {carried, number} · ne: {missed, number}",
+          "label": "Peržiūros iš {date} tikrinimo: perkelta {carried, number}, neperkelta {missed, number}",
+          "missed": "Neperkelta: {count, number}"
         }
       },
       "errors": {

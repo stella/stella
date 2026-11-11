@@ -430,8 +430,8 @@
         "statusNeedsEvidence": "Marquée comme nécessitant des preuves",
         "statusReviewed": "Marquée comme examinée"
       },
-      "carriedFrom": "Repris de la vérification du {date}",
-      "carriedFromEarlier": "Repris d’une vérification antérieure",
+      "carriedFrom": "De la vérification du {date}",
+      "carriedFromEarlier": "D’une vérification antérieure",
       "empty": "Aucune action d’examen pour l’instant.",
       "filters": {
         "allKinds": "Toute action",
@@ -509,13 +509,17 @@
     "runs": {
       "back": "Tous les documents",
       "carryOver": {
-        "carried": "Examens repris de la vérification du {date} : {count, number}",
-        "notCarried": "Non repris : {count, number}",
         "openSource": "Ouvrir la vérification du {date}",
         "outcomes": {
           "ambiguous": "Plusieurs correspondances possibles",
           "unmatched": "Aucune affirmation correspondante",
           "verdictChanged": "Le verdict a changé"
+        },
+        "summary": {
+          "carried": "{count, number} repris",
+          "carriedAndMissed": "{carried, number} repris · {missed, number} non",
+          "label": "Examens de la vérification du {date} : {carried, number} repris, {missed, number} non repris",
+          "missed": "{count, number} non repris"
         }
       },
       "errors": {

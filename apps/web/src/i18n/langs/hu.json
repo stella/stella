@@ -430,8 +430,8 @@
         "statusNeedsEvidence": "Bizonyítékra várónak jelölve",
         "statusReviewed": "Ellenőrzöttnek jelölve"
       },
-      "carriedFrom": "Átvéve a(z) {date} ellenőrzésből",
-      "carriedFromEarlier": "Átvéve egy korábbi ellenőrzésből",
+      "carriedFrom": "A(z) {date} ellenőrzésből",
+      "carriedFromEarlier": "Egy korábbi ellenőrzésből",
       "empty": "Még nincs ellenőrzési művelet.",
       "filters": {
         "allKinds": "Bármely művelet",
@@ -509,13 +509,17 @@
     "runs": {
       "back": "Összes irat",
       "carryOver": {
-        "carried": "A(z) {date} ellenőrzésből átvett ellenőrzések: {count, number}",
-        "notCarried": "Nem átvett: {count, number}",
         "openSource": "A(z) {date} ellenőrzés megnyitása",
         "outcomes": {
           "ambiguous": "Több lehetséges egyezés",
           "unmatched": "Nincs megfelelő állítás",
           "verdictChanged": "A következtetés megváltozott"
+        },
+        "summary": {
+          "carried": "{count, number} átvéve",
+          "carriedAndMissed": "{carried, number} átvéve · {missed, number} nem",
+          "label": "A(z) {date} ellenőrzés ellenőrzései: {carried, number} átvéve, {missed, number} nem átvéve",
+          "missed": "{count, number} nem átvéve"
         }
       },
       "errors": {

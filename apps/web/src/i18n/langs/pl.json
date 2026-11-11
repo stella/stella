@@ -430,8 +430,8 @@
         "statusNeedsEvidence": "Oznaczono jako wymagające dowodów",
         "statusReviewed": "Oznaczono jako zweryfikowane"
       },
-      "carriedFrom": "Przeniesiono z przebiegu z {date}",
-      "carriedFromEarlier": "Przeniesiono z wcześniejszego przebiegu",
+      "carriedFrom": "Z przebiegu z {date}",
+      "carriedFromEarlier": "Z wcześniejszego przebiegu",
       "empty": "Brak działań weryfikacyjnych.",
       "filters": {
         "allKinds": "Dowolne działanie",
@@ -509,13 +509,17 @@
     "runs": {
       "back": "Wszystkie dokumenty",
       "carryOver": {
-        "carried": "Weryfikacje przeniesione z przebiegu z {date}: {count, number}",
-        "notCarried": "Nieprzeniesione: {count, number}",
         "openSource": "Otwórz przebieg z {date}",
         "outcomes": {
           "ambiguous": "Kilka możliwych dopasowań",
           "unmatched": "Brak pasującego twierdzenia",
           "verdictChanged": "Rozstrzygnięcie się zmieniło"
+        },
+        "summary": {
+          "carried": "Przeniesione: {count, number}",
+          "carriedAndMissed": "Przeniesione: {carried, number} · nie: {missed, number}",
+          "label": "Weryfikacje z przebiegu z {date}: przeniesione {carried, number}, nieprzeniesione {missed, number}",
+          "missed": "Nieprzeniesione: {count, number}"
         }
       },
       "errors": {

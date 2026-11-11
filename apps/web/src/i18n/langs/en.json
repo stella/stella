@@ -430,8 +430,8 @@
         "statusNeedsEvidence": "Marked as needing evidence",
         "statusReviewed": "Marked reviewed"
       },
-      "carriedFrom": "Carried from the run of {date}",
-      "carriedFromEarlier": "Carried from an earlier run",
+      "carriedFrom": "From the run of {date}",
+      "carriedFromEarlier": "From an earlier run",
       "empty": "No review actions yet.",
       "filters": {
         "allKinds": "Any action",
@@ -509,13 +509,17 @@
     "runs": {
       "back": "All documents",
       "carryOver": {
-        "carried": "Reviews carried from the run of {date}: {count, number}",
-        "notCarried": "Not carried: {count, number}",
         "openSource": "Open the run of {date}",
         "outcomes": {
           "ambiguous": "Several possible matches",
           "unmatched": "No matching claim",
           "verdictChanged": "Verdict changed"
+        },
+        "summary": {
+          "carried": "{count, number} carried",
+          "carriedAndMissed": "{carried, number} carried · {missed, number} not",
+          "label": "Reviews from the run of {date}: {carried, number} carried, {missed, number} not carried",
+          "missed": "{count, number} not carried"
         }
       },
       "errors": {

@@ -1516,7 +1516,7 @@ test("a claim's history opens from one row and reads who did what, why, and what
   expect(requests).toEqual([]);
 });
 
-test("a decision carried from the previous run names that run in the claim's history", async () => {
+test("decisions carried from the previous run sit under one divider naming that run", async () => {
   const seeded = seededRun();
   const target = seeded.claims.at(0) ?? panic("Missing claim");
   const run = {
@@ -1592,20 +1592,22 @@ test("a decision carried from the previous run names that run in the claim's his
   );
   selectClaim(1);
   fireEvent.click(screen.getByRole("button", { name: /^History/u }));
-  const carried = screen
-    .getByText(messages.avt.history.actions.statusReviewed)
-    .closest("li");
-  const own = screen
-    .getByText(messages.avt.history.actions.noteSaved)
-    .closest("li");
-  // The run picker's own name for that run.
+  // One divider, named as the run picker names that run, over the carried
+  // entry only; each entry keeps its one-line action.
+  const dividers = screen.getAllByText(/^From the run of /u);
+  expect(dividers.map((divider) => divider.textContent)).toEqual([
+    expect.stringMatching(/^From the run of Aug 19, 2026\D+9:30\sAM$/u),
+  ]);
+  const carriedGroup = (dividers[0] ?? panic("No divider")).closest("section");
   expect(
-    within(carried ?? panic("No carried entry")).getByText(
-      /^Carried from the run of Aug 19, 2026\D+9:30\sAM$/u,
+    within(carriedGroup ?? panic("No carried group")).getByText(
+      messages.avt.history.actions.statusReviewed,
     ),
   ).toBeTruthy();
   expect(
-    within(own ?? panic("No entry of this run")).queryByText(/^Carried from/u),
+    within(carriedGroup ?? panic("No carried group")).queryByText(
+      messages.avt.history.actions.noteSaved,
+    ),
   ).toBeNull();
   expect(requests).toEqual([]);
 });

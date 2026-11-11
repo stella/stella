@@ -430,8 +430,8 @@
         "statusNeedsEvidence": "Märgitud tõendeid vajavaks",
         "statusReviewed": "Märgitud kontrollituks"
       },
-      "carriedFrom": "Üle toodud kontrollist {date}",
-      "carriedFromEarlier": "Üle toodud varasemast kontrollist",
+      "carriedFrom": "Kontrollist {date}",
+      "carriedFromEarlier": "Varasemast kontrollist",
       "empty": "Kontrollitoiminguid veel pole.",
       "filters": {
         "allKinds": "Mis tahes toiming",
@@ -509,13 +509,17 @@
     "runs": {
       "back": "Kõik dokumendid",
       "carryOver": {
-        "carried": "Kontrollist {date} üle toodud kontrollid: {count, number}",
-        "notCarried": "Üle toomata: {count, number}",
         "openSource": "Ava kontroll {date}",
         "outcomes": {
           "ambiguous": "Mitu võimalikku vastet",
           "unmatched": "Vastavat väidet pole",
           "verdictChanged": "Otsus muutus"
+        },
+        "summary": {
+          "carried": "Üle toodud: {count, number}",
+          "carriedAndMissed": "Üle toodud: {carried, number} · ei: {missed, number}",
+          "label": "Kontrollid kontrollist {date}: üle toodud {carried, number}, üle toomata {missed, number}",
+          "missed": "Üle toomata: {count, number}"
         }
       },
       "errors": {

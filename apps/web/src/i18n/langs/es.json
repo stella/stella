@@ -430,8 +430,8 @@
         "statusNeedsEvidence": "Marcada como pendiente de pruebas",
         "statusReviewed": "Marcada como revisada"
       },
-      "carriedFrom": "Trasladado de la verificación del {date}",
-      "carriedFromEarlier": "Trasladado de una verificación anterior",
+      "carriedFrom": "De la verificación del {date}",
+      "carriedFromEarlier": "De una verificación anterior",
       "empty": "Aún no hay acciones de revisión.",
       "filters": {
         "allKinds": "Cualquier acción",
@@ -509,13 +509,17 @@
     "runs": {
       "back": "Todos los documentos",
       "carryOver": {
-        "carried": "Revisiones trasladadas de la verificación del {date}: {count, number}",
-        "notCarried": "No trasladadas: {count, number}",
         "openSource": "Abrir la verificación del {date}",
         "outcomes": {
           "ambiguous": "Varias coincidencias posibles",
           "unmatched": "Ninguna afirmación coincidente",
           "verdictChanged": "El resultado cambió"
+        },
+        "summary": {
+          "carried": "{count, number} trasladadas",
+          "carriedAndMissed": "{carried, number} trasladadas · {missed, number} no",
+          "label": "Revisiones de la verificación del {date}: {carried, number} trasladadas, {missed, number} no trasladadas",
+          "missed": "{count, number} no trasladadas"
         }
       },
       "errors": {

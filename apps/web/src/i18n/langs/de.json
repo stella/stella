@@ -430,8 +430,8 @@
         "statusNeedsEvidence": "Als belegbedürftig markiert",
         "statusReviewed": "Als geprüft markiert"
       },
-      "carriedFrom": "Übernommen aus der Prüfung vom {date}",
-      "carriedFromEarlier": "Übernommen aus einer früheren Prüfung",
+      "carriedFrom": "Aus der Prüfung vom {date}",
+      "carriedFromEarlier": "Aus einer früheren Prüfung",
       "empty": "Noch keine Prüfaktionen.",
       "filters": {
         "allKinds": "Jede Aktion",
@@ -509,13 +509,17 @@
     "runs": {
       "back": "Alle Dokumente",
       "carryOver": {
-        "carried": "Aus der Prüfung vom {date} übernommene Prüfungen: {count, number}",
-        "notCarried": "Nicht übernommen: {count, number}",
         "openSource": "Prüfung vom {date} öffnen",
         "outcomes": {
           "ambiguous": "Mehrere mögliche Treffer",
           "unmatched": "Keine passende Behauptung",
           "verdictChanged": "Ergebnis hat sich geändert"
+        },
+        "summary": {
+          "carried": "{count, number} übernommen",
+          "carriedAndMissed": "{carried, number} übernommen · {missed, number} nicht",
+          "label": "Prüfungen aus der Prüfung vom {date}: {carried, number} übernommen, {missed, number} nicht übernommen",
+          "missed": "{count, number} nicht übernommen"
         }
       },
       "errors": {

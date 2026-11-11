@@ -430,8 +430,8 @@
         "statusNeedsEvidence": "Atzīmēts, ka vajag pierādījumus",
         "statusReviewed": "Atzīmēts kā pārskatīts"
       },
-      "carriedFrom": "Pārnests no {date} pārbaudes",
-      "carriedFromEarlier": "Pārnests no agrākas pārbaudes",
+      "carriedFrom": "No {date} pārbaudes",
+      "carriedFromEarlier": "No agrākas pārbaudes",
       "empty": "Pārskatīšanas darbību vēl nav.",
       "filters": {
         "allKinds": "Jebkura darbība",
@@ -509,13 +509,17 @@
     "runs": {
       "back": "Visi dokumenti",
       "carryOver": {
-        "carried": "Pārskatīšanas, pārnestas no {date} pārbaudes: {count, number}",
-        "notCarried": "Nav pārnestas: {count, number}",
         "openSource": "Atvērt {date} pārbaudi",
         "outcomes": {
           "ambiguous": "Vairākas iespējamas atbilstības",
           "unmatched": "Nav atbilstoša apgalvojuma",
           "verdictChanged": "Slēdziens mainījies"
+        },
+        "summary": {
+          "carried": "Pārnests: {count, number}",
+          "carriedAndMissed": "Pārnests: {carried, number} · nav: {missed, number}",
+          "label": "Pārskatīšanas no {date} pārbaudes: pārnestas {carried, number}, nav pārnestas {missed, number}",
+          "missed": "Nav pārnests: {count, number}"
         }
       },
       "errors": {

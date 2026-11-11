@@ -430,8 +430,8 @@
         "statusNeedsEvidence": "Označené ako vyžadujúce dôkazy",
         "statusReviewed": "Označené ako skontrolované"
       },
-      "carriedFrom": "Prevzaté z overenia z {date}",
-      "carriedFromEarlier": "Prevzaté zo skoršieho overenia",
+      "carriedFrom": "Z overenia z {date}",
+      "carriedFromEarlier": "Zo skoršieho overenia",
       "empty": "Zatiaľ žiadne úkony kontroly.",
       "filters": {
         "allKinds": "Akýkoľvek úkon",
@@ -509,13 +509,17 @@
     "runs": {
       "back": "Všetky dokumenty",
       "carryOver": {
-        "carried": "Kontroly prevzaté z overenia z {date}: {count, number}",
-        "notCarried": "Neprevzaté: {count, number}",
         "openSource": "Otvoriť overenie z {date}",
         "outcomes": {
           "ambiguous": "Viac možných zhôd",
           "unmatched": "Žiadne zodpovedajúce tvrdenie",
           "verdictChanged": "Záver sa zmenil"
+        },
+        "summary": {
+          "carried": "{count, number} prevzaté",
+          "carriedAndMissed": "{carried, number} prevzaté · {missed, number} nie",
+          "label": "Kontroly z overenia z {date}: prevzaté {carried, number}, neprevzaté {missed, number}",
+          "missed": "{count, number} neprevzaté"
         }
       },
       "errors": {

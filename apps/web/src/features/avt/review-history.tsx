@@ -38,6 +38,7 @@ import { UserIdentity } from "@/components/user-avatar";
 import { reviewHistoryOptions } from "@/features/avt/queries";
 import type { ReviewHistoryFilter } from "@/features/avt/queries";
 import {
+  groupHistoryByOrigin,
   historyActionKey,
   historyChanges,
 } from "@/features/avt/review-history.logic";
@@ -299,16 +300,23 @@ const HistoryEntries = ({
       return (
         <div className="space-y-2">
           <QueryViewFeedback view={view} />
-          <ol className="divide-y">
-            {entries.map((entry) => (
-              <HistoryEntryRow
-                claimText={claimText?.get(entry.claimId) ?? null}
-                entry={entry}
-                key={entry.id}
-                onShowClaim={onShowClaim}
-              />
-            ))}
-          </ol>
+          {groupHistoryByOrigin(entries).map((group) => (
+            <section key={group.key}>
+              {group.carriedFrom !== null && (
+                <CarriedFromDivider carriedFrom={group.carriedFrom} />
+              )}
+              <ol className="divide-y">
+                {group.entries.map((entry) => (
+                  <HistoryEntryRow
+                    claimText={claimText?.get(entry.claimId) ?? null}
+                    entry={entry}
+                    key={entry.id}
+                    onShowClaim={onShowClaim}
+                  />
+                ))}
+              </ol>
+            </section>
+          ))}
           {history.hasNextPage && (
             <Button
               className="w-full"
@@ -377,15 +385,7 @@ const HistoryEntryRow = ({
           {at}
         </time>
       </div>
-      <p className="text-xs font-medium">
-        {t(historyActionKey(entry))}
-        {entry.carriedFrom !== null && (
-          <span className="text-muted-foreground font-normal">
-            {" · "}
-            <CarriedFrom carriedFrom={entry.carriedFrom} />
-          </span>
-        )}
-      </p>
+      <p className="text-xs font-medium">{t(historyActionKey(entry))}</p>
       {claimText !== null && onShowClaim !== undefined && (
         <Button
           className="max-w-full"
@@ -412,9 +412,9 @@ const HistoryEntryRow = ({
   );
 };
 
-/** Where a carried action was first taken: the earlier run of the document,
- *  named as the run picker names it. */
-const CarriedFrom = ({
+/** One divider over the actions carried from an earlier run of the
+ *  document, named as the run picker names that run. */
+const CarriedFromDivider = ({
   carriedFrom,
 }: {
   carriedFrom: NonNullable<ReviewHistoryEntry["carriedFrom"]>;
@@ -422,16 +422,20 @@ const CarriedFrom = ({
   const t = useTranslations();
   const format = useFormatter();
   return (
-    <span>
-      {carriedFrom.runCreatedAt === null
-        ? t("avt.history.carriedFromEarlier")
-        : t("avt.history.carriedFrom", {
-            date: format.dateTime(
-              Temporal.Instant.from(carriedFrom.runCreatedAt).epochMilliseconds,
-              MEDIUM_DATE_SHORT_TIME_FORMAT,
-            ),
-          })}
-    </span>
+    <div className="text-muted-foreground text-2xs flex items-center gap-2 pt-2 pb-1">
+      <span className="shrink-0">
+        {carriedFrom.runCreatedAt === null
+          ? t("avt.history.carriedFromEarlier")
+          : t("avt.history.carriedFrom", {
+              date: format.dateTime(
+                Temporal.Instant.from(carriedFrom.runCreatedAt)
+                  .epochMilliseconds,
+                MEDIUM_DATE_SHORT_TIME_FORMAT,
+              ),
+            })}
+      </span>
+      <span aria-hidden="true" className="bg-border h-px flex-1" />
+    </div>
   );
 };
 
