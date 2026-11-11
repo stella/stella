@@ -1125,6 +1125,17 @@ const webUseIntlLocaleImport = {
     "Read the UI language with useMessageLocale from '@/i18n/message-locale', or the formatting locale with useFormattingLocale from '@/i18n/formatting-context'.",
 };
 
+// The mobile app draws over every screen through one owner: on iOS it is
+// FullWindowOverlay, the window layer above the native stack's bars, modals
+// and sheets; elsewhere a view after the stack. A view placed beside the stack
+// is drawn under them on iOS.
+const mobileFullWindowOverlayImport = {
+  name: "react-native-screens",
+  importNames: ["FullWindowOverlay"],
+  message:
+    "Draw over every screen through WindowOverlay from '@/components/window-overlay'.",
+};
+
 // The package formats in the host's formatting locale, which reaches it
 // through WorkspaceUiFormattingProvider; use-intl's formatter and locale are
 // the UI language.
@@ -3476,6 +3487,27 @@ const config = defineConfig({
       rules: {
         "unicorn/no-array-sort": "off",
         "unicorn/no-array-reverse": "off",
+      },
+    },
+    {
+      // Only WindowOverlay reaches the window layer above the native stack.
+      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      excludeFiles: ["apps/mobile/src/components/window-overlay.tsx"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noFastXmlParserImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
+              ...noReactEmailImports,
+              mobileFullWindowOverlayImport,
+            ],
+          },
+        ],
       },
     },
     {
