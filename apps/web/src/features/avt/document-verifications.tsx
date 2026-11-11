@@ -253,7 +253,10 @@ const DocumentRow = ({
           </Button>
         )}
         <Label variant="choice">
+          {/* The switch is not a labelable element, so the label's text
+              does not name it on its own. */}
           <Switch
+            aria-label={t("avt.documents.testimony")}
             checked={sourceKind === "testimony"}
             disabled={!canVerify || sourceKind === undefined}
             onCheckedChange={(checked) =>

@@ -120,6 +120,18 @@ beforeEach(() => {
           return Response.json({ runs: [] });
         }
         if (
+          request.method === "POST" &&
+          new URL(request.url).pathname.endsWith("/source-documents/kinds")
+        ) {
+          // Every document is a record; the kind read is not what these
+          // tests are about.
+          return Response.json({
+            documents: [
+              { documentEntityId: target.entityId, sourceKind: "document" },
+            ],
+          });
+        }
+        if (
           request.method !== "POST" ||
           !new URL(request.url).pathname.endsWith("/verifications")
         ) {
