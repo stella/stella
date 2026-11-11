@@ -65,7 +65,12 @@
     "sendFileRefused": "Üht faili ei saanud saata, seega sõnumit ei saadetud. Eemalda fail ja proovi uuesti.",
     "sendFileNotAnonymizable": "See vestlus on anonüümitud ja stella ei saanud üht faili anonüümida, seega midagi ei saadetud. Eemalda fail ja proovi uuesti.",
     "pickTitle": "Vali vestlus",
-    "pickDescription": "Vali loendist lõim või alusta uut nupuga +."
+    "pickDescription": "Vali loendist lõim või alusta uut nupuga +.",
+    "runBanner": {
+      "needsYou": "Ootab teid",
+      "finished": "Valmis",
+      "openHint": "Avab vestluse"
+    }
   },
   "tasks": {
     "emptyTitle": "Avatud ülesandeid pole",

@@ -65,7 +65,12 @@
     "sendFileRefused": "No se pudo enviar un archivo, así que el mensaje no se envió. Quita el archivo e inténtalo de nuevo.",
     "sendFileNotAnonymizable": "Esta conversación está anonimizada y stella no pudo anonimizar uno de los archivos, así que no se envió nada. Quita el archivo e inténtalo de nuevo.",
     "pickTitle": "Elija una conversación",
-    "pickDescription": "Elija un hilo de la lista o empiece uno nuevo con +."
+    "pickDescription": "Elija un hilo de la lista o empiece uno nuevo con +.",
+    "runBanner": {
+      "needsYou": "Espera su respuesta",
+      "finished": "Ha terminado",
+      "openHint": "Abre la conversación"
+    }
   },
   "tasks": {
     "emptyTitle": "No hay tareas abiertas",

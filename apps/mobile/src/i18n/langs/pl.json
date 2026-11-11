@@ -65,7 +65,12 @@
     "sendFileRefused": "Nie udało się wysłać pliku, więc wiadomość nie została wysłana. Usuń plik i spróbuj ponownie.",
     "sendFileNotAnonymizable": "Ta rozmowa jest anonimizowana, a stella nie mogła zanonimizować jednego z plików, więc nic nie wysłano. Usuń plik i spróbuj ponownie.",
     "pickTitle": "Wybierz rozmowę",
-    "pickDescription": "Wybierz wątek z listy lub rozpocznij nowy przyciskiem +."
+    "pickDescription": "Wybierz wątek z listy lub rozpocznij nowy przyciskiem +.",
+    "runBanner": {
+      "needsYou": "Czeka na Ciebie",
+      "finished": "Zakończono",
+      "openHint": "Otwiera rozmowę"
+    }
   },
   "tasks": {
     "emptyTitle": "Brak otwartych zadań",

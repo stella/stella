@@ -65,7 +65,12 @@
     "sendFileRefused": "Não foi possível enviar um arquivo, então a mensagem não foi enviada. Remova o arquivo e tente novamente.",
     "sendFileNotAnonymizable": "Esta conversa é anonimizada e a stella não conseguiu anonimizar um dos arquivos, então nada foi enviado. Remova o arquivo e tente novamente.",
     "pickTitle": "Escolha uma conversa",
-    "pickDescription": "Escolha uma conversa da lista ou comece uma nova com +."
+    "pickDescription": "Escolha uma conversa da lista ou comece uma nova com +.",
+    "runBanner": {
+      "needsYou": "Aguardando você",
+      "finished": "Concluído",
+      "openHint": "Abre a conversa"
+    }
   },
   "tasks": {
     "emptyTitle": "Nenhuma tarefa em aberto",

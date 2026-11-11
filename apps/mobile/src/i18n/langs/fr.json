@@ -65,7 +65,12 @@
     "sendFileRefused": "Un fichier n’a pas pu être envoyé, donc le message n’a pas été envoyé. Retirez le fichier et réessayez.",
     "sendFileNotAnonymizable": "Cette conversation est anonymisée et stella n’a pas pu anonymiser l’un des fichiers, donc rien n’a été envoyé. Retirez le fichier et réessayez.",
     "pickTitle": "Choisissez une conversation",
-    "pickDescription": "Choisissez un fil dans la liste ou démarrez-en un avec +."
+    "pickDescription": "Choisissez un fil dans la liste ou démarrez-en un avec +.",
+    "runBanner": {
+      "needsYou": "En attente de votre réponse",
+      "finished": "Terminé",
+      "openHint": "Ouvre la conversation"
+    }
   },
   "tasks": {
     "emptyTitle": "Aucune tâche en cours",

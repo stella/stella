@@ -65,7 +65,12 @@
     "sendFileRefused": "Neizdevās nosūtīt failu, tāpēc ziņa netika nosūtīta. Noņemiet failu un mēģiniet vēlreiz.",
     "sendFileNotAnonymizable": "Šī saruna ir anonimizēta, un stella nevarēja anonimizēt vienu no failiem, tāpēc nekas netika nosūtīts. Noņemiet failu un mēģiniet vēlreiz.",
     "pickTitle": "Izvēlieties sarunu",
-    "pickDescription": "Izvēlieties pavedienu no saraksta vai sāciet jaunu ar +."
+    "pickDescription": "Izvēlieties pavedienu no saraksta vai sāciet jaunu ar +.",
+    "runBanner": {
+      "needsYou": "Gaida jūs",
+      "finished": "Pabeigts",
+      "openHint": "Atver sarunu"
+    }
   },
   "tasks": {
     "emptyTitle": "Nav atvērtu uzdevumu",

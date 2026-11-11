@@ -1,4 +1,3 @@
-import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
@@ -7,6 +6,7 @@ import { MatterIcon } from "@stll/ui/matter-icon";
 import { RunStateMark } from "@stll/ui/run-state-mark";
 import { Text } from "@stll/ui/text";
 
+import { useOpenThread } from "@/components/open-thread";
 import { useLayout, useSelection } from "@/components/selection";
 import type {
   ChatThreadSection,
@@ -38,7 +38,7 @@ export const ChatThreadRow = ({
       ? format.dateTime(updatedAt, { hour: "numeric", minute: "2-digit" })
       : format.dateTime(updatedAt, { day: "numeric", month: "short" });
   const title = thread.title.trim() === "" ? t("untitled") : thread.title;
-  const router = useRouter();
+  const openThread = useOpenThread();
   const layout = useLayout();
   const selection = useSelection();
   const open = layout.usesSplitView && selection.thread?.threadId === thread.id;
@@ -49,24 +49,7 @@ export const ChatThreadRow = ({
       accessibilityState={{ selected: open }}
       className={`border-border active:bg-accent gap-0.5 border-b py-3 ${open ? "bg-accent" : ""}`}
       onPress={() => {
-        if (layout.usesSplitView) {
-          selection.select("thread", {
-            matterId: thread.matterId,
-            threadId: thread.id,
-            title,
-          });
-          return;
-        }
-        router.push({
-          pathname: "/thread/[threadId]",
-          params: {
-            threadId: thread.id,
-            title,
-            ...(thread.matterId === undefined
-              ? {}
-              : { matterId: thread.matterId }),
-          },
-        });
+        openThread({ matterId: thread.matterId, threadId: thread.id, title });
       }}
     >
       <View className="flex-row items-start gap-3">
