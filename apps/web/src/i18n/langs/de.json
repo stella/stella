@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# Sprache} other {# Sprachen}}",
       "matchedIn": "Treffer auf {language}"
     },
+    "linkedPassageGone": "Die verlinkte Textstelle ist in diesem Text nicht mehr enthalten.",
     "loadingMore": "Weitere werden geladen…",
     "marginFilter": {
       "label": "Filter für zitierte Vorschriften",
@@ -1853,6 +1854,9 @@
       "errorLimitReached": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Versuchen Sie es erneut, sobald das Limit zurückgesetzt ist.",
       "errorLimitResetsAt": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Sie können es ab {time} erneut versuchen.",
       "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
+      "errorNotReached": "Ihr Computer hat diese Antwort nicht übernommen. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
+      "errorRelinked": "stella desktop wurde auf Ihrem Computer neu verknüpft, daher wurde diese Antwort angehalten. Senden Sie sie erneut.",
+      "errorRestoring": "Ihr Computer macht noch Dateiänderungen rückgängig. Senden Sie dies gleich noch einmal.",
       "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "filesNotShared": "Dateien, die nicht geteilt werden konnten, bleiben auf Ihrem Computer: {fileNames}",
       "onThisComputer": "{harness} auf diesem Computer",
@@ -1880,7 +1884,9 @@
       "stateOffline": "Computer nicht verbunden",
       "stateUnavailable": "Derzeit nicht verfügbar",
       "stateUnsupported": "Diese Version wird nicht unterstützt",
-      "waitingForComputer": "Warten, bis sich Ihr Computer wieder verbindet…"
+      "waitingForComputer": "Warten, bis sich Ihr Computer wieder verbindet…",
+      "waitingForPickup": "Warten, bis Ihr Computer diese Antwort übernimmt…",
+      "waitingSentAt": "Gesendet um {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Alles Zutreffende auswählen",
@@ -5504,6 +5510,7 @@
       "deleteAccountWarning": "Die Löschung ist endgültig. Ihre Anmeldedaten und privaten Kontodaten werden entfernt.",
       "deleteAccountWarningExplanation": "Wir senden einen Bestätigungscode an Ihre E-Mail-Adresse, um diese Anfrage zu bestätigen. Abgeschlossene Arbeitsbereichshistorie bleibt Ihrem gelöschten Konto zugeordnet.",
       "desktop": "Desktop",
+      "desktopAccountConflict": "stella desktop ist auf diesem Computer mit einem anderen stella-Konto verbunden. Vor dem Wechsel bittet stella desktop Sie um eine Bestätigung.",
       "desktopAppDescription": "Rufen Sie kopierte Inhalte wieder auf und öffnen Sie stella-Dokumente in den Desktop-Apps, die Sie bereits verwenden.",
       "desktopCardApproveDetail": "Bestätigen Sie, um diesen Computer mit <bdi>{identity}</bdi> auf {host} zu verknüpfen.",
       "desktopCardApproveTitle": "stella desktop möchte sich verbinden",
@@ -5518,6 +5525,7 @@
       "desktopCardOutdatedTitle": "stella desktop braucht ein Update",
       "desktopClipboardDescription": "Öffnen, durchsuchen, organisieren und verwenden Sie kopierten Text aus jeder App erneut.",
       "desktopClipboardTitle": "Durchsuchbarer Zwischenablageverlauf",
+      "desktopConnectDeclined": "Die Verbindung wurde in stella desktop abgebrochen.",
       "desktopConnectFailed": "Die Verbindung zu stella desktop ist fehlgeschlagen.",
       "desktopConnectInstalled": "Ist installiert, verbinden",
       "desktopConnectedAs": "Verbunden als <bdi>{email}</bdi>",
@@ -5533,11 +5541,13 @@
       "desktopInstallOpenStep": "Öffnen Sie stella desktop einmal. Die Zwischenablage erscheint sofort und bleibt über die macOS-Menüleiste oder den Windows-Infobereich verfügbar.",
       "desktopInstallTitle": "Installieren und öffnen",
       "desktopInstallWindowsStep": "Starten Sie das Installationsprogramm und folgen Sie den Anweisungen.",
+      "desktopKeptAccount": "stella desktop behält das aktuelle Konto.",
       "desktopOpenApp": "stella desktop öffnen",
       "desktopPrivacyDescription": "Der Zwischenablageverlauf wird verschlüsselt auf diesem Gerät gespeichert.",
       "desktopPrivacyTitle": "Standardmäßig privat",
       "desktopSelfHostDescription": "Vertrauen Sie dieser stella-URL in der signierten Desktop-App, damit Dokumente aus dieser Installation lokal geöffnet werden können.",
       "desktopSelfHostTitle": "Desktop-Bearbeitung für Self-Hosting",
+      "desktopSwitchAccount": "stella desktop zu diesem Konto wechseln",
       "displayNameDescription": "So sehen Ihre Kolleginnen und Kollegen Sie in Akten, Kommentaren und Aktivitäten.",
       "displayNameRequired": "Geben Sie einen Anzeigenamen ein.",
       "displayNameSaved": "Anzeigename aktualisiert",

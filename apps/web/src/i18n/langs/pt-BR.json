@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# idioma} other {# idiomas} many {# idiomas}}",
       "matchedIn": "Correspondência em {language}"
     },
+    "linkedPassageGone": "O trecho vinculado não está mais neste texto.",
     "loadingMore": "Carregando mais...",
     "marginFilter": {
       "label": "Filtro de dispositivos citados",
@@ -1853,6 +1854,9 @@
       "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",
       "errorLimitResetsAt": "O agente de programação do seu computador atingiu o limite de uso. Você poderá tentar novamente a partir de {time}.",
       "errorNeedsLogin": "O agente de programação do seu computador precisa que você entre novamente. Entre pelo stella desktop e tente de novo.",
+      "errorNotReached": "Seu computador não assumiu esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
+      "errorRelinked": "O stella desktop foi vinculado de novo no seu computador, então esta resposta parou. Envie-a de novo.",
+      "errorRestoring": "Seu computador ainda está desfazendo alterações de arquivos. Envie isto de novo em instantes.",
       "errorUnavailable": "Seu computador parou de processar esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
       "filesNotShared": "Os arquivos que não puderam ser compartilhados continuam no seu computador: {fileNames}",
       "onThisComputer": "{harness} neste computador",
@@ -1880,7 +1884,9 @@
       "stateOffline": "Computador offline",
       "stateUnavailable": "Indisponível no momento",
       "stateUnsupported": "Esta versão não é compatível",
-      "waitingForComputer": "Aguardando seu computador se reconectar…"
+      "waitingForComputer": "Aguardando seu computador se reconectar…",
+      "waitingForPickup": "Aguardando seu computador assumir esta resposta…",
+      "waitingSentAt": "Enviado às {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Escolha todas as que se aplicam",
@@ -5504,6 +5510,7 @@
       "deleteAccountWarning": "A exclusão é irreversível. Seus dados de login e dados privados da conta serão removidos.",
       "deleteAccountWarningExplanation": "Enviaremos um código de verificação para o seu endereço de e-mail para confirmar esta solicitação. O histórico concluído do espaço de trabalho permanecerá atribuído à sua conta excluída.",
       "desktop": "Área de trabalho",
+      "desktopAccountConflict": "O stella desktop neste computador está conectado a outra conta do stella. Antes de trocar, o stella desktop pede sua confirmação.",
       "desktopAppDescription": "Recupere tudo o que copiar e abra documentos da stella nos aplicativos que você já usa no computador.",
       "desktopCardApproveDetail": "Aprove para vincular este computador a <bdi>{identity}</bdi> em {host}.",
       "desktopCardApproveTitle": "stella desktop está pedindo para conectar",
@@ -5518,6 +5525,7 @@
       "desktopCardOutdatedTitle": "stella desktop precisa de atualização",
       "desktopClipboardDescription": "Abra, pesquise, organize e reutilize textos copiados de qualquer aplicativo.",
       "desktopClipboardTitle": "Histórico pesquisável da área de transferência",
+      "desktopConnectDeclined": "A conexão foi cancelada no stella desktop.",
       "desktopConnectFailed": "Não foi possível conectar o stella desktop.",
       "desktopConnectInstalled": "Já está instalado, conectar",
       "desktopConnectedAs": "Conectado como <bdi>{email}</bdi>",
@@ -5533,11 +5541,13 @@
       "desktopInstallOpenStep": "Abra o stella desktop uma vez. A área de transferência aparece na hora e continua disponível pela barra de menus do macOS ou pela bandeja do sistema do Windows.",
       "desktopInstallTitle": "Instalar e abrir",
       "desktopInstallWindowsStep": "Execute o instalador e siga as instruções.",
+      "desktopKeptAccount": "O stella desktop manteve a conta atual.",
       "desktopOpenApp": "Abrir stella desktop",
       "desktopPrivacyDescription": "O histórico da área de transferência é criptografado e armazenado neste dispositivo.",
       "desktopPrivacyTitle": "Privado por padrão",
       "desktopSelfHostDescription": "Confie nesta URL da stella no app desktop assinado para abrir localmente os documentos desta instalação.",
       "desktopSelfHostTitle": "Edição desktop para self-hosting",
+      "desktopSwitchAccount": "Trocar o stella desktop para esta conta",
       "displayNameDescription": "É assim que seus colegas veem você nos casos, comentários e atividades.",
       "displayNameRequired": "Informe um nome de exibição.",
       "displayNameSaved": "Nome de exibição atualizado",

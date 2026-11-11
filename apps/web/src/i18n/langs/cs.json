@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazyků} many {# jazyka}}",
       "matchedIn": "Shoda v jazyce {language}"
     },
+    "linkedPassageGone": "Odkazovaná pasáž už v tomto textu není.",
     "loadingMore": "Načítání dalších...",
     "marginFilter": {
       "label": "Filtr citovaných ustanovení",
@@ -1853,6 +1854,9 @@
       "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
       "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
       "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",
+      "errorNotReached": "Váš počítač tuto odpověď nepřevzal. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
+      "errorRelinked": "stella desktop byl ve vašem počítači znovu propojen, takže se tato odpověď zastavila. Odešlete ji znovu.",
+      "errorRestoring": "Váš počítač ještě vrací změny souborů. Odešlete to znovu za chvíli.",
       "errorUnavailable": "Váš počítač přestal tuto odpověď zpracovávat. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
       "filesNotShared": "Soubory, které se nepodařilo sdílet, zůstávají ve vašem počítači: {fileNames}",
       "onThisComputer": "{harness} v tomto počítači",
@@ -1880,7 +1884,9 @@
       "stateOffline": "Počítač je offline",
       "stateUnavailable": "Momentálně nedostupné",
       "stateUnsupported": "Tato verze není podporována",
-      "waitingForComputer": "Čeká se, až se váš počítač znovu připojí…"
+      "waitingForComputer": "Čeká se, až se váš počítač znovu připojí…",
+      "waitingForPickup": "Čeká se, až tuto odpověď převezme váš počítač…",
+      "waitingSentAt": "Odesláno v {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Vyberte vše, co platí",
@@ -5504,6 +5510,7 @@
       "deleteAccountWarning": "Smazání je nezvratný krok. Přihlašovací údaje a soukromá data účtu budou odstraněny.",
       "deleteAccountWarningExplanation": "Na vaši e-mailovou adresu zašleme ověřovací kód pro potvrzení tohoto požadavku. Dokončená historie pracovních prostorů zůstane přiřazená ke smazanému účtu.",
       "desktop": "Aplikace pro počítač",
+      "desktopAccountConflict": "Aplikace stella desktop na tomto počítači je připojená k jinému účtu stella. Před přepnutím vás požádá o potvrzení.",
       "desktopAppDescription": "Vraťte se k čemukoli, co zkopírujete, a otevírejte dokumenty ze stelly v aplikacích, které už používáte.",
       "desktopCardApproveDetail": "Schvalte propojení tohoto počítače s účtem <bdi>{identity}</bdi> na {host}.",
       "desktopCardApproveTitle": "stella desktop žádá o připojení",
@@ -5518,6 +5525,7 @@
       "desktopCardOutdatedTitle": "stella desktop potřebuje aktualizaci",
       "desktopClipboardDescription": "Otevírejte, prohledávejte, třiďte a znovu používejte text zkopírovaný v libovolné aplikaci.",
       "desktopClipboardTitle": "Vyhledávání v historii schránky",
+      "desktopConnectDeclined": "Připojení bylo v aplikaci stella desktop zrušeno.",
       "desktopConnectFailed": "Aplikaci stella desktop se nepodařilo připojit.",
       "desktopConnectInstalled": "Je nainstalovaný, připojit",
       "desktopConnectedAs": "Připojeno jako <bdi>{email}</bdi>",
@@ -5533,11 +5541,13 @@
       "desktopInstallOpenStep": "Jednou otevřete stella desktop. Schránka se zobrazí hned a poté zůstane dostupná v řádku nabídek macOS nebo v oznamovací oblasti Windows.",
       "desktopInstallTitle": "Instalace a spuštění",
       "desktopInstallWindowsStep": "Spusťte instalační program a postupujte podle pokynů.",
+      "desktopKeptAccount": "Aplikace stella desktop si ponechala současný účet.",
       "desktopOpenApp": "Otevřít stella desktop",
       "desktopPrivacyDescription": "Historie schránky je šifrovaná a uložená v tomto zařízení.",
       "desktopPrivacyTitle": "Soukromí ve výchozím nastavení",
       "desktopSelfHostDescription": "Důvěřujte této URL stella v podepsané desktopové aplikaci, aby se dokumenty z této instalace mohly otevírat lokálně.",
       "desktopSelfHostTitle": "Desktopové úpravy pro self-hosting",
+      "desktopSwitchAccount": "Přepnout stella desktop na tento účet",
       "displayNameDescription": "Takto vás vidí kolegové ve spisech, komentářích a aktivitě.",
       "displayNameRequired": "Zadejte zobrazované jméno.",
       "displayNameSaved": "Zobrazované jméno aktualizováno",

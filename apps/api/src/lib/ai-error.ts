@@ -85,6 +85,9 @@ const LOCAL_RUNNER_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
   [AI_FAILURE_CODES.local_runner_limit_reached, "local_runner_limit_reached"],
   [AI_FAILURE_CODES.local_runner_unavailable, "local_runner_unavailable"],
   [AI_FAILURE_CODES.local_runner_turn_too_large, "local_runner_turn_too_large"],
+  [AI_FAILURE_CODES.local_runner_not_reached, "local_runner_not_reached"],
+  [AI_FAILURE_CODES.local_runner_relinked, "local_runner_relinked"],
+  [AI_FAILURE_CODES.local_runner_restoring, "local_runner_restoring"],
   [AI_FAILURE_CODES.provider_unavailable, "provider_unavailable"],
 ]);
 
@@ -756,6 +759,9 @@ const aiKindHandlerError = (
     case "local_runner_limit_reached":
     case "local_runner_unavailable":
     case "local_runner_turn_too_large":
+    case "local_runner_not_reached":
+    case "local_runner_relinked":
+    case "local_runner_restoring":
     case "unknown":
       return new HandlerError({ ...fallback, code, cause: error });
     default: {

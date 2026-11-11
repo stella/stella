@@ -34,6 +34,7 @@ export const TAGGED_FAILURE_REASON = {
   ApnsProviderTokenError: "tagged_failure",
   ApnsTransportError: "upstream_unavailable",
   AppleSignInConfigError: "tagged_failure",
+  ArtefactProvenanceDecodeError: "tagged_failure",
   ArtefactSourceLimitError: "tagged_failure",
   AuthorizedWorkspaceReadError: "tagged_failure",
   BackfillFailedError: "tagged_failure",

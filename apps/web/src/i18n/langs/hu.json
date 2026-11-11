@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# nyelv} other {# nyelv}}",
       "matchedIn": "Találat {language} nyelven"
     },
+    "linkedPassageGone": "A hivatkozott szövegrész már nem szerepel ebben a szövegben.",
     "loadingMore": "Betöltés folyamatban...",
     "marginFilter": {
       "label": "Hivatkozott rendelkezések szűrője",
@@ -1853,6 +1854,9 @@
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
       "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
       "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
+      "errorNotReached": "A számítógépe nem vette át ezt a választ. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
+      "errorRelinked": "A stella desktop újra lett kapcsolva a számítógépén, ezért ez a válasz leállt. Küldje el újra.",
+      "errorRestoring": "A számítógépe még visszavonja a fájlmódosításokat. Néhány pillanat múlva küldje el újra.",
       "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "filesNotShared": "A meg nem osztható fájlok a számítógépén maradnak: {fileNames}",
       "onThisComputer": "{harness} ezen a számítógépen",
@@ -1880,7 +1884,9 @@
       "stateOffline": "A számítógép offline",
       "stateUnavailable": "Jelenleg nem érhető el",
       "stateUnsupported": "Ez a verzió nem támogatott",
-      "waitingForComputer": "Várakozás a számítógép újracsatlakozására…"
+      "waitingForComputer": "Várakozás a számítógép újracsatlakozására…",
+      "waitingForPickup": "Várakozás, hogy a számítógépe átvegye ezt a választ…",
+      "waitingSentAt": "Elküldve: {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Jelölje be az összes megfelelőt",
@@ -5504,6 +5510,7 @@
       "deleteAccountWarning": "A törlés visszafordíthatatlan. Bejelentkezési adatai és a fiók privát adatai törlődnek.",
       "deleteAccountWarningExplanation": "A kérés megerősítéséhez ellenőrző kódot küldünk az e-mail címére. A befejezett munkaterületi előzmények a törölt fiókjához rendelve maradnak.",
       "desktop": "Asztali alkalmazás",
+      "desktopAccountConflict": "Ezen a számítógépen a stella desktop egy másik stella-fiókhoz csatlakozik. Váltás előtt a stella desktop megerősítést kér.",
       "desktopAppDescription": "Találjon meg újra bármit, amit másolt, és nyissa meg a stella dokumentumait a már használt asztali alkalmazásokban.",
       "desktopCardApproveDetail": "Hagyja jóvá, hogy ez a számítógép összekapcsolódjon ezzel: <bdi>{identity}</bdi> · {host}.",
       "desktopCardApproveTitle": "A stella desktop csatlakozást kér",
@@ -5518,6 +5525,7 @@
       "desktopCardOutdatedTitle": "A stella desktop frissítésre szorul",
       "desktopClipboardDescription": "Nyissa meg, keresse, rendszerezze és használja újra a bármely alkalmazásból másolt szöveget.",
       "desktopClipboardTitle": "Kereshető vágólapelőzmények",
+      "desktopConnectDeclined": "A csatlakozást a stella desktopban megszakították.",
       "desktopConnectFailed": "A stella desktop csatlakoztatása nem sikerült.",
       "desktopConnectInstalled": "Telepítve van, csatlakozás",
       "desktopConnectedAs": "Csatlakozva mint <bdi>{email}</bdi>",
@@ -5533,11 +5541,13 @@
       "desktopInstallOpenStep": "Nyissa meg egyszer a stella desktop alkalmazást. A vágólap azonnal megjelenik, később pedig a macOS menüsorából vagy a Windows értesítési területéről érhető el.",
       "desktopInstallTitle": "Telepítés és megnyitás",
       "desktopInstallWindowsStep": "Indítsa el a telepítőt, és kövesse az utasításokat.",
+      "desktopKeptAccount": "A stella desktop megtartotta a jelenlegi fiókot.",
       "desktopOpenApp": "stella desktop megnyitása",
       "desktopPrivacyDescription": "A vágólapelőzmények titkosítva, ezen az eszközön tárolódnak.",
       "desktopPrivacyTitle": "Alapértelmezetten privát",
       "desktopSelfHostDescription": "Bízzon meg ebben a stella URL-ben az aláírt desktop appban, hogy a telepítés dokumentumai helyben nyílhassanak meg.",
       "desktopSelfHostTitle": "Desktop szerkesztés self-hostinghoz",
+      "desktopSwitchAccount": "A stella desktop átváltása erre a fiókra",
       "displayNameDescription": "Így látják Önt a kollégái az ügyekben, a megjegyzésekben és a tevékenységeknél.",
       "displayNameRequired": "Adjon meg egy megjelenített nevet.",
       "displayNameSaved": "Megjelenített név frissítve",

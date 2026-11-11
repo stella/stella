@@ -1539,6 +1539,9 @@ const TemplateStudioChatInner = ({
           canSubmitNow={canSubmitWithCurrentSnapshot}
           context={{ activeOrganizationId, threadRef }}
           editorController={editorController}
+          // The Studio pins its model and runs on stella: its turns place
+          // fields through this page's editor bridge.
+          models={null}
           emptyPlaceholder={
             <span
               className={cn(
@@ -1601,6 +1604,7 @@ const TemplateStudioChatInner = ({
           dock={
             <ChatComposerDock
               data={data}
+              models={null}
               onNewThread={hasMessages ? startNewThread : null}
               status="ready"
               threadRef={threadRef}

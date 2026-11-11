@@ -66,6 +66,10 @@
     "accountWindowTitle": "Prijungti paskyrą",
     "accountTitle": "Prijungti šią paskyrą?",
     "accountSubtitle": "Prijunkite stella desktop prie šios paskyros ir organizacijos.",
+    "switchWindowTitle": "Keisti paskyrą",
+    "switchTitle": "Pereiti prie kitos paskyros?",
+    "switchSubtitle": "„stella desktop“ prijungta prie paskyros {currentEmail}. Atsieti ją ir vietoj jos prijungti {email}?",
+    "switchConfirm": "Atsieti ir prijungti",
     "accountEmail": "Paskyra",
     "organizationName": "Organizacija",
     "allow": "Leisti",
@@ -770,7 +774,9 @@
         "notCompleted": "Prisijungimas nebuvo baigtas. Bandykite dar kartą.",
         "timedOut": "Prisijungimas užtruko per ilgai. Bandykite dar kartą.",
         "unavailable": "Šiame kompiuteryje nepavyko paleisti Claude Code. Bandykite dar kartą."
-      }
+      },
+      "unknown": "Nepavyko patikrinti prisijungimo prie Claude Code. Po akimirkos patikrinkite dar kartą.",
+      "checkAgain": "Tikrinti dar kartą"
     },
     "install": {
       "notInstalled": "{name} šiame kompiuteryje dar neįdiegtas.",

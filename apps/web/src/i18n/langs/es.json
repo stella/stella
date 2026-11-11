@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# idioma} other {# idiomas} many {# idiomas}}",
       "matchedIn": "Coincidencia en {language}"
     },
+    "linkedPassageGone": "El pasaje enlazado ya no está en este texto.",
     "loadingMore": "Cargando más...",
     "marginFilter": {
       "label": "Filtro de disposiciones citadas",
@@ -1853,6 +1854,9 @@
       "errorLimitReached": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Vuelve a intentarlo cuando se restablezca el límite.",
       "errorLimitResetsAt": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Puedes volver a intentarlo a partir del {time}.",
       "errorNeedsLogin": "El agente de programación de tu ordenador necesita que vuelvas a iniciar sesión. Inicia sesión desde stella desktop y vuelve a intentarlo.",
+      "errorNotReached": "Tu ordenador no recibió esta respuesta. Comprueba que stella desktop esté abierto y conectado, y vuelve a intentarlo.",
+      "errorRelinked": "stella desktop se volvió a vincular en tu ordenador, así que esta respuesta se detuvo. Vuelve a enviarla.",
+      "errorRestoring": "Tu ordenador aún está deshaciendo cambios en archivos. Vuelve a enviarlo en un momento.",
       "errorUnavailable": "Tu ordenador dejó de procesar esta respuesta. Comprueba que stella desktop esté abierto y conectado, y vuelve a intentarlo.",
       "filesNotShared": "Los archivos que no se pudieron compartir siguen en tu ordenador: {fileNames}",
       "onThisComputer": "{harness} en este ordenador",
@@ -1880,7 +1884,9 @@
       "stateOffline": "Ordenador sin conexión",
       "stateUnavailable": "No disponible por ahora",
       "stateUnsupported": "Esta versión no es compatible",
-      "waitingForComputer": "Esperando a que tu ordenador se vuelva a conectar…"
+      "waitingForComputer": "Esperando a que tu ordenador se vuelva a conectar…",
+      "waitingForPickup": "Esperando a que tu ordenador reciba esta respuesta…",
+      "waitingSentAt": "Enviado a las {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Elija todas las que correspondan",
@@ -5504,6 +5510,7 @@
       "deleteAccountWarning": "La eliminación es irreversible. Se eliminarán sus datos de inicio de sesión y los datos privados de la cuenta.",
       "deleteAccountWarningExplanation": "Enviaremos un código de verificación a su dirección de correo electrónico para confirmar esta solicitud. El historial completado del espacio de trabajo seguirá atribuido a su cuenta eliminada.",
       "desktop": "Escritorio",
+      "desktopAccountConflict": "stella desktop en este equipo está conectado a otra cuenta de stella. Antes de cambiar, stella desktop te pedirá que lo confirmes.",
       "desktopAppDescription": "Recupera todo lo que copies y abre documentos de stella en las aplicaciones de escritorio que ya utilizas.",
       "desktopCardApproveDetail": "Aprueba para vincular este equipo a <bdi>{identity}</bdi> en {host}.",
       "desktopCardApproveTitle": "stella desktop pide conectarse",
@@ -5518,6 +5525,7 @@
       "desktopCardOutdatedTitle": "stella desktop necesita una actualización",
       "desktopClipboardDescription": "Abre, busca, organiza y reutiliza texto copiado desde cualquier aplicación.",
       "desktopClipboardTitle": "Historial del portapapeles con búsqueda",
+      "desktopConnectDeclined": "La conexión se canceló en stella desktop.",
       "desktopConnectFailed": "No se pudo conectar con stella desktop.",
       "desktopConnectInstalled": "Ya está instalado, conectar",
       "desktopConnectedAs": "Conectado como <bdi>{email}</bdi>",
@@ -5533,11 +5541,13 @@
       "desktopInstallOpenStep": "Abre stella desktop una vez. El portapapeles aparece de inmediato y queda disponible en la barra de menús de macOS o en la bandeja del sistema de Windows.",
       "desktopInstallTitle": "Instalar y abrir",
       "desktopInstallWindowsStep": "Ejecuta el instalador y sigue las instrucciones.",
+      "desktopKeptAccount": "stella desktop mantiene la cuenta actual.",
       "desktopOpenApp": "Abrir stella desktop",
       "desktopPrivacyDescription": "El historial del portapapeles se cifra y se guarda en este dispositivo.",
       "desktopPrivacyTitle": "Privado de forma predeterminada",
       "desktopSelfHostDescription": "Confía en esta URL de stella en la app de escritorio firmada para abrir localmente los documentos de esta instalación.",
       "desktopSelfHostTitle": "Edición de escritorio para self-hosting",
+      "desktopSwitchAccount": "Cambiar stella desktop a esta cuenta",
       "displayNameDescription": "Así te ven tus colegas en los asuntos, los comentarios y la actividad.",
       "displayNameRequired": "Introduce un nombre visible.",
       "displayNameSaved": "Nombre visible actualizado",
