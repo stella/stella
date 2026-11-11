@@ -126,6 +126,7 @@ import {
   MatterMenuItems,
   useMatterActions,
 } from "@/components/workspaces/matter-context-menu";
+import { isTaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
 import { activeChatRunsOptions } from "@/features/chat/active-runs";
 import { matterRunStatusByWorkspace } from "@/features/chat/active-runs.logic";
 import type { MatterRunStatus } from "@/features/chat/active-runs.logic";
@@ -1891,6 +1892,11 @@ export const MatterActivityList = ({
                 name={title}
                 onOpen={() =>
                   detached(openEntity(item), "app-sidebar.open-entity")
+                }
+                taskStatus={
+                  item.entityKind === "task" && isTaskStatus(item.status)
+                    ? item.status
+                    : null
                 }
                 workspaceId={workspaceId}
                 userId={userId}
