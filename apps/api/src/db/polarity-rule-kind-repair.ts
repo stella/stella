@@ -1,5 +1,5 @@
 /**
- * Online repair behind migration 20261110170000_case_law_polarity_kind_evidence,
+ * Online repair behind migration 20261111140100_case_law_polarity_kind_evidence,
  * which gave polarity rules a `kind` defaulting to `stance`. Each registered
  * seed rule (`SEED_RULES`) stored before then takes its typed kind here; a
  * citation-form rule also takes the neutral polarity its kind requires, in
@@ -146,7 +146,7 @@ const correctUntilEmpty = async (
 const createPolarityRuleKindRepair = (
   options: RepairRuntimeOptions = {},
 ): OnlineRepair => ({
-  introducedBy: "20261110170000_case_law_polarity_kind_evidence",
+  introducedBy: "20261111140100_case_law_polarity_kind_evidence",
   name: POLARITY_RULE_KIND_REPAIR_NAME,
   readCompletion,
   repair: async (connection) => {

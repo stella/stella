@@ -6,7 +6,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 const migration = readFileSync(
   new URL(
-    "../../drizzle/20261110170000_case_law_polarity_kind_evidence/migration.sql",
+    "../../drizzle/20261111140100_case_law_polarity_kind_evidence/migration.sql",
     import.meta.url,
   ),
   "utf-8",
@@ -34,7 +34,7 @@ test("rule inserts without kind retain the stance default during rollout", async
 
 const reviewRevisionMigration = readFileSync(
   new URL(
-    "../../drizzle/20261110170100_case_law_review_text_revision/migration.sql",
+    "../../drizzle/20261111140200_case_law_review_text_revision/migration.sql",
     import.meta.url,
   ),
   "utf-8",

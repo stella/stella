@@ -1,4 +1,4 @@
--- requires: 20261110170000_case_law_polarity_kind_evidence
+-- requires: 20261111140100_case_law_polarity_kind_evidence
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
