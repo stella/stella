@@ -133,6 +133,10 @@ const WebSearchSeedLifecycle = ({ seed }: { seed: () => void }) => {
   return null;
 };
 
+/** What the reader sees of the thread, for marking it read once per revision. */
+const latestMessageId = (messages: readonly { id: string }[]): string | null =>
+  messages.at(-1)?.id ?? null;
+
 export const ChatThreadPage = ({
   threadRef,
   workspaceId,
@@ -332,6 +336,7 @@ export const ChatThreadPage = ({
 
   useMarkChatThreadReadWhileOpen({
     isGenerating,
+    revision: latestMessageId(messages),
     threadExists: data.threadExists,
     threadRef,
   });

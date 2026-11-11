@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import {
   useInfiniteQuery,
   useMutation,
@@ -138,6 +140,11 @@ export const useSetChatThreadReadState = () => {
 type MarkReadWhileOpenOptions = {
   /** An answer still streams: it is read once it has settled. */
   isGenerating: boolean;
+  /**
+   * What the reader sees of the thread, such as its latest message id; null
+   * before it has any. Each revision is marked at most once.
+   */
+  revision: string | null;
   /** A draft thread has no row to mark yet. */
   threadExists: boolean;
   threadRef: ChatThreadRef;
@@ -146,16 +153,21 @@ type MarkReadWhileOpenOptions = {
 /**
  * Keep the open chat read: whenever the tab shows it with no answer
  * streaming, and the reader's cached list does not already say it is read,
- * mark it read. An answer that settles while it is open turns the cached row
- * unread on the next list refresh, which marks it read again; a chat open in
- * a hidden tab waits until the tab is shown. A chat no cached list holds is
- * marked on every open, since its state is unknown.
+ * mark it read. A chat no cached list holds is marked too, since its state is
+ * unknown; a chat open in a hidden tab waits until the tab is shown.
+ *
+ * Each opened revision is marked at most once, whatever the outcome: a failed
+ * mark is captured, and the list refresh that restores the unread row does not
+ * send it again. A new answer (a new revision) or reopening the chat (a new
+ * mount) marks it again.
  */
 export const useMarkChatThreadReadWhileOpen = ({
   isGenerating,
+  revision,
   threadExists,
   threadRef,
 }: MarkReadWhileOpenOptions) => {
+  const markedRevision = useRef<string | null>(null);
   const analytics = useAnalytics();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   // Primitives, so a caller's fresh ref object each render marks nothing.
@@ -185,15 +197,18 @@ export const useMarkChatThreadReadWhileOpen = ({
 
   useExternalSyncEffect(() => {
     const controller = new AbortController();
+    const revisionKey = JSON.stringify([workspaceId, threadId, revision]);
     if (
       isGenerating ||
       !threadExists ||
-      cachedReadState === CHAT_THREAD_READ_STATE.read
+      cachedReadState === CHAT_THREAD_READ_STATE.read ||
+      markedRevision.current === revisionKey
     ) {
       return () => controller.abort();
     }
     const mark = () => {
       controller.abort();
+      markedRevision.current = revisionKey;
       markRead({
         readState: CHAT_THREAD_READ_STATE.read,
         threadRef:
@@ -220,6 +235,7 @@ export const useMarkChatThreadReadWhileOpen = ({
     cachedReadState,
     isGenerating,
     markRead,
+    revision,
     threadExists,
     threadId,
     workspaceId,

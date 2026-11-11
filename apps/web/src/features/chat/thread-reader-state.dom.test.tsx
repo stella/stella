@@ -54,13 +54,18 @@ const slice = (readState: ThreadSlice["readState"]): ThreadSlice => ({
 
 const marks: unknown[] = [];
 
-const serve = () => {
+/** How the server answers each read mark. */
+type MarkAnswer = "ok" | "fail";
+
+const serve = (answer: MarkAnswer) => {
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request = new Request(input, init);
       const body: unknown = await request.json();
       marks.push(body);
-      return Response.json(body);
+      return answer === "ok"
+        ? Response.json(body)
+        : Response.json({ message: "Server error" }, { status: 500 });
     },
     { preconnect: previousFetch.preconnect },
   );
@@ -86,15 +91,19 @@ type Mount = {
   /** The reader's cached history, as the sidebar fetched it; none when absent. */
   cached?: ThreadSlice["readState"] | undefined;
   isGenerating?: boolean;
+  markAnswer?: MarkAnswer;
   threadExists?: boolean;
 };
+
+type HookProps = { isGenerating: boolean; revision: string | null };
 
 const mount = ({
   cached,
   isGenerating = false,
+  markAnswer = "ok",
   threadExists = true,
 }: Mount) => {
-  serve();
+  serve(markAnswer);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -102,22 +111,27 @@ const mount = ({
     activeOrganizationId: user.activeOrganizationId,
     userId: user.id,
   }).queryKey;
-  if (cached !== undefined) {
+  /** The list as a refetch from the server would leave it. */
+  const serveList = (readState: ThreadSlice["readState"]) => {
     client.setQueryData(listKey, {
       pageParams: [""],
-      pages: [{ global: [slice(cached)], nextCursor: null, workspaces: [] }],
+      pages: [{ global: [slice(readState)], nextCursor: null, workspaces: [] }],
     });
+  };
+  if (cached !== undefined) {
+    serveList(cached);
   }
   const hook = testing.renderHook(
-    (props: { isGenerating: boolean }) => {
+    (props: HookProps) => {
       useMarkChatThreadReadWhileOpen({
         isGenerating: props.isGenerating,
+        revision: props.revision,
         threadExists,
         threadRef,
       });
     },
     {
-      initialProps: { isGenerating },
+      initialProps: { isGenerating, revision: "message-1" },
       wrapper: ({ children }) => (
         <AnalyticsContext value={noopAnalytics}>
           <QueryClientProvider client={client}>
@@ -136,7 +150,9 @@ const mount = ({
   // A mark is built into the mutation cache the moment the effect asks for
   // it, so an empty cache right after a render means nothing was asked.
   const marksAsked = () => client.getMutationCache().getAll().length;
-  return { cachedState, hook, marksAsked };
+  const lastMarkStatus = () =>
+    client.getMutationCache().getAll().at(-1)?.state.status;
+  return { cachedState, hook, lastMarkStatus, marksAsked, serveList };
 };
 
 const READ = { readState: "read" };
@@ -169,7 +185,7 @@ test("a streaming answer waits until it has settled", async () => {
   });
   expect(marksAsked()).toBe(0);
   testing.act(() => {
-    hook.rerender({ isGenerating: false });
+    hook.rerender({ isGenerating: false, revision: "message-1" });
   });
   await sentOneRead();
 });
@@ -187,4 +203,25 @@ test("a chat open in a hidden tab is marked once the tab is shown", async () => 
     setVisibility("visible");
   });
   await sentOneRead();
+});
+
+test("a failed mark is not sent again when the list refresh restores the unread row", async () => {
+  const { hook, lastMarkStatus, marksAsked, serveList } = mount({
+    cached: "unread",
+    markAnswer: "fail",
+  });
+  await sentOneRead();
+  await testing.waitFor(() => expect(lastMarkStatus()).toBe("error"));
+  // The refetch after the failure brings the server's unread row back.
+  testing.act(() => {
+    serveList("unread");
+  });
+  expect(marks).toEqual([READ]);
+  expect(marksAsked()).toBe(1);
+
+  // A new answer is a new revision: it is marked again.
+  testing.act(() => {
+    hook.rerender({ isGenerating: false, revision: "message-2" });
+  });
+  await testing.waitFor(() => expect(marks).toEqual([READ, READ]));
 });

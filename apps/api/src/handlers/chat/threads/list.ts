@@ -124,10 +124,11 @@ const config = {
     "threads belonging to a matter that is being deleted, are left out. " +
     "Each thread carries a bounded preview of its context: the matters and " +
     "files it drew on, with their total counts, and the case-law decision " +
-    "the chat is about, if any, whether you have read its latest answer " +
-    "(readState) and whether you pinned it (pinState). pinState keeps only " +
-    "your pinned or only your unpinned threads, so a list can show the " +
-    "pinned ones first. search matches the thread " +
+    "the chat is about, if any. Each thread also says whether you have read " +
+    "its latest answer (readState) and whether you pinned it (pinState). " +
+    "The pinState filter keeps only your pinned or only your unpinned " +
+    "threads, so a list can show the pinned ones first. search matches the " +
+    "thread " +
     "title, the matter it lives in, or a matter pinned to it; matterId " +
     "keeps only the threads that live in that matter (not global threads " +
     "that merely pinned it) and is not found when you cannot open the " +
