@@ -793,7 +793,7 @@ mechanics, and similar), not gaps in coverage.
 | mcp_transport | 12 |
 | native_device | 5 |
 | native_tool_ui | 10 |
-| provider_secret | 34 |
+| provider_secret | 36 |
 | public_indexing | 9 |
 | realtime_stream | 9 |
 | search_ui | 20 |
