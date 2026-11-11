@@ -6208,14 +6208,6 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/chat/browser-snapshot-history.test.ts": {
-      "peakMb": 336,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
-      }
-    },
     "src/handlers/chat/chat-message-parts-older-rows.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
