@@ -30,8 +30,50 @@
     "wave": "stored-document-objects-dry-run"
   },
   {
+    "source": "pl-courts",
+    "parserVersion": 33,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-kio",
+    "parserVersion": 28,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-kis",
+    "parserVersion": 30,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-ncourt",
+    "parserVersion": 33,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-sn",
+    "parserVersion": 28,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-uokik",
+    "parserVersion": 32,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
     "source": "hu-bhgy",
     "parserVersion": 29,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "hu-bhgy",
+    "parserVersion": 30,
     "type": "pending-enrolment-wave",
     "wave": "stored-document-objects-dry-run"
   },

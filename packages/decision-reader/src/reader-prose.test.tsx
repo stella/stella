@@ -8,7 +8,7 @@ import type {
 import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 
-import { renderReaderFixture } from "./decision-text.test";
+import { renderReaderFixture } from "../tests/reader-adapters";
 import {
   BlockRenderer,
   FulltextFallback,

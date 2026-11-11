@@ -430,6 +430,51 @@ const sectionHeadingIn = (key: string): SectionHeading | null =>
   ) ?? null;
 
 /**
+ * A title the court prints inside its reasons, whatever its wording.
+ *
+ * Courts title the parts of their reasons in their own words (`Kereset`,
+ * `Az alperes döntése`, `A törvényszék döntése és jogi indokai`, `Záró rész,
+ * perköltség, illeték`), and the DOCX states no style that marks them, so no
+ * list of wordings can be complete. What a title has and a reasons paragraph
+ * lacks is its shape: it is short, opens with a capital, cites no number or
+ * section, and ends without the punctuation every sentence and every
+ * introduction to a list ends with. Read only under the reasons heading,
+ * where every paragraph the court numbers is `[N]`; the summary and
+ * applied-legislation sections list acts by name and are left alone.
+ *
+ * Shape alone also fits the opening words of a sentence the next paragraph
+ * finishes (`A bíróság a keresetet` / `elutasította.`), so a title must also
+ * be followed by what a title heads and no broken sentence runs on into: the
+ * court's next numbered paragraph, or the decision's closing place and date.
+ */
+const PRINTED_SUBHEADING_FORBIDDEN = /[\p{N}§\n]/u;
+const PRINTED_SUBHEADING_START = /^\p{Lu}/u;
+const PRINTED_SUBHEADING_UNFINISHED_END = /[.:;,!?…"'”»)\]-]$/u;
+
+const isPrintedSubheading = (text: string): boolean => {
+  const line = text.trim();
+  return (
+    line.length > 0 &&
+    line.length <= HEADING_LINE_MAX &&
+    PRINTED_SUBHEADING_START.test(line) &&
+    !PRINTED_SUBHEADING_FORBIDDEN.test(line) &&
+    !PRINTED_SUBHEADING_UNFINISHED_END.test(line)
+  );
+};
+
+/**
+ * How a finished reasons paragraph ends. A paragraph that ends otherwise ("…
+ * jogszabálysértő, mert") runs on into the next one, so a short capitalised
+ * line after it (`Magyarország Alaptörvénye`) is the rest of that sentence,
+ * not a title, unless the court sets it apart in bold. A colon or semicolon introduces what follows, so it does not
+ * finish the paragraph either.
+ */
+const SENTENCE_FINISHED_END = /[.!?…"'”»)\]]$/u;
+
+/** The level-1 section under which the court titles its own parts. */
+const REASONS_HEADING_KEY = "indokolás";
+
+/**
  * The operative part's own introduction, which courts set as a centred, spaced
  * line rather than as a heading: `Í T É L E T E T :`, `v é g z é s t :`.
  *
@@ -1067,6 +1112,107 @@ const inlinesOf = (runs: readonly DocRun[]): Inline[] =>
 /** `[1]`, `[42]`: the number the court itself cites its paragraphs by. */
 const COURT_PARAGRAPH_NUMBER = /^\[(?<number>\d{1,4})\]\s*/u;
 
+/**
+ * What the next line of the body is, as evidence for the line before it: a
+ * title heads the court's next numbered paragraph, or the closing part when
+ * the court titles that too (`Záró rész` before the place and date).
+ */
+type NextBodyLine = "numbered-paragraph" | "closing" | "other";
+
+/**
+ * The next body line after `index`, past the notes and blank lines between.
+ * A table is not a numbered paragraph, nor is the end of the document.
+ */
+const nextBodyLineAfter = (
+  items: readonly DocItem[],
+  index: number,
+): NextBodyLine => {
+  for (let next = index + 1; next < items.length; next += 1) {
+    const item = items[next];
+    if (item === undefined || item.type === "table") {
+      return "other";
+    }
+    if (item.line.kind === "note") {
+      continue;
+    }
+    const text = item.line.value.text.trim();
+    if (text.length === 0) {
+      continue;
+    }
+    if (COURT_PARAGRAPH_NUMBER.test(text)) {
+      return "numbered-paragraph";
+    }
+    return closingDateFrom(text) === undefined ? "other" : "closing";
+  }
+  return "other";
+};
+
+type RunWeight = "bold" | "regular";
+
+/** Bold when every visible character of the line is set in bold. */
+const weightOf = (runs: readonly DocRun[]): RunWeight => {
+  const visible = runs.filter(({ text }) => text.trim().length > 0);
+  return visible.length > 0 && visible.every(({ bold }) => bold)
+    ? "bold"
+    : "regular";
+};
+
+/**
+ * How the last body paragraph ended. One that runs on may continue in the
+ * next line, so only a line its weight sets apart can be a title after it.
+ */
+type PreviousParagraph =
+  | { readonly type: "finished" }
+  | { readonly type: "runs-on"; readonly weight: RunWeight };
+
+const FINISHED_PARAGRAPH: PreviousParagraph = { type: "finished" };
+
+type TitleBeforeSoftBreak = {
+  readonly title: readonly DocRun[];
+  readonly rest: readonly DocRun[];
+};
+
+/**
+ * A title the court sets on the first line of a paragraph and then, after a
+ * soft break, the numbered paragraph it heads (`Kereset` + `w:br` + `[2] …`).
+ * Splits the runs there, so each part keeps its own formatting; null when the
+ * line after the first break does not open a numbered paragraph.
+ */
+const titleBeforeSoftBreak = (
+  runs: readonly DocRun[],
+): TitleBeforeSoftBreak | null => {
+  const text = runs.map((run) => run.text).join("");
+  const breakAt = text.indexOf("\n");
+  if (
+    breakAt <= 0 ||
+    !COURT_PARAGRAPH_NUMBER.test(text.slice(breakAt + 1).trimStart())
+  ) {
+    return null;
+  }
+  const title: DocRun[] = [];
+  const rest: DocRun[] = [];
+  let start = 0;
+  for (const run of runs) {
+    const end = start + run.text.length;
+    if (end <= breakAt) {
+      title.push(run);
+    } else if (start > breakAt) {
+      rest.push(run);
+    } else {
+      const head = run.text.slice(0, breakAt - start);
+      const tail = run.text.slice(breakAt - start + 1);
+      if (head.length > 0) {
+        title.push({ ...run, text: head });
+      }
+      if (tail.length > 0) {
+        rest.push({ ...run, text: tail });
+      }
+    }
+    start = end;
+  }
+  return { title, rest };
+};
+
 // ── Parse ────────────────────────────────────────────────
 
 export type ParseHuBhgyInput = {
@@ -1195,6 +1341,9 @@ export const parseHuBhgyDecision = (
   /** The header label the lines below a labelled one still belong to. */
   let continuedRole: ParagraphRole | null = null;
   let region: Region = "front";
+  /** Whether the last level-1 heading was the reasons' own (`Indokolás`). */
+  let underReasonsHeading = false;
+  let previousParagraph: PreviousParagraph = FINISHED_PARAGRAPH;
   /**
    * Read through a call: the line handlers move `region`, and a direct
    * comparison after them would still see the value narrowed before them.
@@ -1212,7 +1361,97 @@ export const parseHuBhgyDecision = (
   /** Lines before the first section heading, where the kind is printed. */
   const titleLines: string[] = [];
 
-  const classifyBodyLine = (body: BodyDocumentLine<DocLineData>): void => {
+  /**
+   * Whether a line of the reasons is a title the court prints there. Besides
+   * its shape, a title heads the court's next numbered paragraph or the
+   * closing part; after a paragraph that runs on, it must also be set apart
+   * in bold, since a plain line there may finish that paragraph's sentence.
+   */
+  const opensTitle = (runs: readonly DocRun[], next: NextBodyLine): boolean => {
+    if (
+      region !== "reasoning" ||
+      !underReasonsHeading ||
+      next === "other" ||
+      !isPrintedSubheading(normalizeInlineLine(inlinesOf(runs)).plainText)
+    ) {
+      return false;
+    }
+    switch (previousParagraph.type) {
+      case "finished":
+        return true;
+      case "runs-on":
+        return (
+          previousParagraph.weight === "regular" && weightOf(runs) === "bold"
+        );
+      default:
+        previousParagraph satisfies never;
+        return panic("Unhandled paragraph ending");
+    }
+  };
+
+  const emitTitle = (runs: readonly DocRun[]): void => {
+    const normalized = normalizeInlineLine(inlinesOf(runs));
+    previousParagraph = FINISHED_PARAGRAPH;
+    builder.heading({
+      type: "heading",
+      level: 2,
+      role: HEADING_ROLE_BY_LEVEL[2],
+      inlines: normalized.inlines,
+      plainText: normalized.plainText,
+    });
+  };
+
+  /**
+   * A body line of the decision's own text: a court-numbered paragraph, an
+   * unnumbered one, or a title the court prints inside its reasons, on a line
+   * of its own or before a soft break.
+   */
+  const emitBodyText = (runs: readonly DocRun[], next: NextBodyLine): void => {
+    const split = titleBeforeSoftBreak(runs);
+    if (split !== null && opensTitle(split.title, "numbered-paragraph")) {
+      emitTitle(split.title);
+      emitBodyText(split.rest, next);
+      return;
+    }
+    const normalized = normalizeInlineLine(inlinesOf(runs));
+    const { match: numbered, line: unnumbered } = stripInlineLinePrefix(
+      normalized,
+      COURT_PARAGRAPH_NUMBER,
+    );
+    const number = numbered?.groups?.["number"];
+    const role: ParagraphRole = BODY_ROLE[region];
+    if (number === undefined && opensTitle(runs, next)) {
+      emitTitle(runs);
+      return;
+    }
+    previousParagraph = SENTENCE_FINISHED_END.test(normalized.plainText.trim())
+      ? FINISHED_PARAGRAPH
+      : { type: "runs-on", weight: weightOf(runs) };
+    if (number === undefined) {
+      builder.paragraph({
+        type: "paragraph",
+        role,
+        inlines: normalized.inlines,
+        plainText: normalized.plainText,
+      });
+      return;
+    }
+    // The bracketed number is the citable paragraph number, so it is kept as
+    // structure: a citation names `[31]`, and a prefix inside the text would
+    // make every search for the paragraph's words find the number too.
+    builder.paragraph({
+      type: "paragraph",
+      role,
+      number: Number(number),
+      inlines: unnumbered.inlines,
+      plainText: unnumbered.plainText,
+    });
+  };
+
+  const classifyBodyLine = (
+    body: BodyDocumentLine<DocLineData>,
+    next: NextBodyLine,
+  ): void => {
     const line = body.value;
     const key = headingKey(line.text);
     const precedingDate = dateBeforeSignature;
@@ -1257,6 +1496,10 @@ export const parseHuBhgyDecision = (
     const heading = sectionHeadingIn(key);
     if (heading !== null) {
       region = heading.region ?? region;
+      if (heading.level === 1) {
+        underReasonsHeading = heading.key === REASONS_HEADING_KEY;
+      }
+      previousParagraph = FINISHED_PARAGRAPH;
       builder.heading({
         type: "heading",
         level: heading.level,
@@ -1276,6 +1519,7 @@ export const parseHuBhgyDecision = (
       )
     ) {
       region = "operative";
+      underReasonsHeading = false;
       builder.heading({
         type: "heading",
         level: 1,
@@ -1372,42 +1616,17 @@ export const parseHuBhgyDecision = (
     // A footnote returned above, so a note's date-shaped line never dates the
     // decision; nor does the kiadmány's, which opens the closing region first.
     softBreakDate ??= closingDateAfterSoftBreak(line.text);
-    const normalized = normalizeInlineLine(inlinesOf(line.runs));
-    const { match: numbered, line: unnumbered } = stripInlineLinePrefix(
-      normalized,
-      COURT_PARAGRAPH_NUMBER,
-    );
-    const number = numbered?.groups?.["number"];
-    const role: ParagraphRole = BODY_ROLE[region];
-    if (number === undefined) {
-      builder.paragraph({
-        type: "paragraph",
-        role,
-        inlines: normalized.inlines,
-        plainText: normalized.plainText,
-      });
-      return;
-    }
-    // The bracketed number is the citable paragraph number, so it is kept as
-    // structure: a citation names `[31]`, and a prefix inside the text would
-    // make every search for the paragraph's words find the number too.
-    builder.paragraph({
-      type: "paragraph",
-      role,
-      number: Number(number),
-      inlines: unnumbered.inlines,
-      plainText: unnumbered.plainText,
-    });
+    emitBodyText(line.runs, next);
   };
 
-  const emitLine = (line: DocLine): void => {
+  const emitLine = (line: DocLine, next: NextBodyLine): void => {
     const value = line.kind === "body" ? line.value : line.note.value;
     if (value.text.trim().length === 0) {
       return;
     }
     lineTexts.push(value.text);
     if (line.kind === "body") {
-      classifyBodyLine(line);
+      classifyBodyLine(line, next);
       // Certification can begin after a soft break and continue in later
       // paragraphs; keep the date found before it, but read no date past it.
       if (
@@ -1429,9 +1648,9 @@ export const parseHuBhgyDecision = (
     });
   };
 
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     if (item.type === "line") {
-      emitLine(item.line);
+      emitLine(item.line, nextBodyLineAfter(items, index));
       continue;
     }
     dateBeforeSignature = undefined;
@@ -1448,6 +1667,8 @@ export const parseHuBhgyDecision = (
       continue;
     }
     lineTexts.push(plainText);
+    // A sentence does not run on through a table into a line after it.
+    previousParagraph = FINISHED_PARAGRAPH;
     if (inFrontMatter()) {
       for (const row of item.table.rows) {
         const labelled = huBhgyHeaderLabelIn(

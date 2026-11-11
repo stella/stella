@@ -1451,6 +1451,36 @@
   },
   {
     "schema": "public",
+    "table": "case_law_decision_anchor_redirects",
+    "policy": "case_law_global_access",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "case_law_decision_anchor_redirects",
+    "policy": "case_law_ingestion_access",
+    "command": "ALL",
+    "roles": ["stella_ingestion"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "case_law_decision_anchor_redirects",
+    "policy": "public_law_reader_access",
+    "command": "SELECT",
+    "roles": ["stella_public_law_reader"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "case_law_decision_citation_stats",
     "policy": "case_law_global_access",
     "command": "SELECT",
@@ -4831,6 +4861,26 @@
   },
   {
     "schema": "public",
+    "table": "desktop_runner_folder_restores",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "desktop_runner_folder_restores",
+    "policy": "desktop_runner_folder_restores_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_folder_restores'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_folder_restores'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "desktop_runner_runs",
     "policy": "auth_no_stella_access",
     "command": "ALL",
@@ -7376,7 +7426,7 @@
     "command": "DELETE",
     "roles": ["stella"],
     "permissive": "PERMISSIVE",
-    "using": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND",
+    "using": "(\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND AND ((organization_id IS NULL) OR ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))))",
     "withCheck": null
   },
   {
@@ -7387,7 +7437,7 @@
     "roles": ["stella"],
     "permissive": "PERMISSIVE",
     "using": null,
-    "withCheck": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND"
+    "withCheck": "(\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))"
   },
   {
     "schema": "public",
@@ -7396,7 +7446,7 @@
     "command": "SELECT",
     "roles": ["stella"],
     "permissive": "PERMISSIVE",
-    "using": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND",
+    "using": "(\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND AND ((organization_id IS NULL) OR ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))))",
     "withCheck": null
   },
   {
@@ -7406,7 +7456,7 @@
     "command": "UPDATE",
     "roles": ["stella"],
     "permissive": "PERMISSIVE",
-    "using": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND",
+    "using": "(\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND AND ((organization_id IS NULL) OR ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))))",
     "withCheck": null
   },
   {
@@ -7822,6 +7872,76 @@
   {
     "schema": "public",
     "table": "legal_list_sections",
+    "policy": "workspace_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "legal_list_source_documents",
+    "policy": "entity_feature_gate_maintenance",
+    "command": "ALL",
+    "roles": ["stella_entity_gate"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "legal_list_source_documents",
+    "policy": "legal_list_source_documents_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('legal_list_source_documents'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('legal_list_source_documents'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "legal_list_source_documents",
+    "policy": "workspace_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "legal_list_source_documents",
+    "policy": "workspace_entity_feature",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "RESTRICTIVE",
+    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
+    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+  },
+  {
+    "schema": "public",
+    "table": "legal_list_source_documents",
+    "policy": "workspace_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND"
+  },
+  {
+    "schema": "public",
+    "table": "legal_list_source_documents",
+    "policy": "workspace_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "legal_list_source_documents",
     "policy": "workspace_update",
     "command": "UPDATE",
     "roles": ["stella"],

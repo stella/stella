@@ -1300,10 +1300,6 @@
     "reason": "Existing MARKDOWN_EXTENSIONS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/lib/desktop-bridge.test.ts::<module>::domain:[\"pending\",\"connected\",\"failed\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/lib/dynamic-validation.test.ts::nameSchema::minLength:1::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },

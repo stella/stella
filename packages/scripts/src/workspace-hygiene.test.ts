@@ -759,6 +759,89 @@ describe("workspace hygiene", () => {
     });
   });
 
+  test("rejects lint scripts that run oxlint directly", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: { turbo: "2.10.3" },
+        scripts: {
+          "lint:profile": "bun --bun oxlint -c oxlint.config.ts apps/web",
+        },
+      },
+      webPackageJson: {
+        name: "@stll/web",
+        scripts: {
+          lint: "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware apps/web",
+          "lint:fix":
+            "cd ../.. && ./node_modules/.bin/oxlint -c oxlint.config.ts --fix apps/web",
+          "lint:rules": "bunx oxlint --rules",
+        },
+      },
+    });
+
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual(
+      expect.arrayContaining([
+        {
+          message:
+            "scripts.lint:profile runs oxlint directly; lint through `bun scripts/lint.ts <paths>` from the repository root",
+          path: "package.json",
+        },
+        {
+          message:
+            "scripts.lint runs oxlint directly; lint through `bun scripts/lint.ts <paths>` from the repository root",
+          path: "apps/web/package.json",
+        },
+        {
+          message:
+            "scripts.lint:fix runs oxlint directly; lint through `bun scripts/lint.ts <paths>` from the repository root",
+          path: "apps/web/package.json",
+        },
+        {
+          message:
+            "scripts.lint:rules runs oxlint directly; lint through `bun scripts/lint.ts <paths>` from the repository root",
+          path: "apps/web/package.json",
+        },
+        {
+          message:
+            "scripts.lint must lint through `bun scripts/lint.ts <paths>`; found cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware apps/web",
+          path: "apps/web/package.json",
+        },
+        {
+          message:
+            "scripts.lint:fix must lint through `bun scripts/lint.ts --fix <paths>`; found cd ../.. && ./node_modules/.bin/oxlint -c oxlint.config.ts --fix apps/web",
+          path: "apps/web/package.json",
+        },
+      ]),
+    );
+  });
+
+  test("accepts lint scripts that go through the lint entry script", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: { turbo: "2.10.3" },
+        scripts: {
+          "check:docs": "bun scripts/lint.ts --no-type-aware docs.ts",
+          "typecheck:plugins":
+            "bun check --no-pretty --all --project=tsconfig.oxlint-plugins.json",
+        },
+      },
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+        scripts: {
+          lint: 'cd ../.. && ([ -n "$TURBO_HASH" ] || bun run generate) && bun scripts/lint.ts apps/web',
+          "lint:fix": "cd ../.. && bun scripts/lint.ts --fix apps/web",
+          "test:rules": "bun test .oxlint-plugins/__tests__",
+        },
+      },
+    });
+
+    expect(
+      (await validateWorkspaceRoot(rootDir, LOCAL)).filter(({ message }) =>
+        message.includes("lint"),
+      ),
+    ).toEqual([]);
+  });
+
   test("rejects a stale centralized lint configuration", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {

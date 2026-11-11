@@ -45,7 +45,11 @@ import {
   isActivityDaySnapshot,
 } from "./activity-types";
 import type { ActivityDaySnapshot } from "./activity-types";
-import { CaptureDetailsControl } from "./ActivityCaptureDetails";
+import { BrowserQuestion, useBrowserQuestion } from "./ActivityBrowserQuestion";
+import {
+  CaptureDetailsControl,
+  TitlesAccessStrip,
+} from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import "./activity-calendar.css";
 import { ActivityDayCalendar } from "./ActivityDayCalendar";
@@ -55,7 +59,9 @@ import type {
 } from "./ActivityDayCalendar";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import "./welcome-preview.css";
+import type { CaptureModeCommand } from "./capture-modes";
 import previewApps from "./preview-apps.json" with { type: "json" };
+import { titlesNeedAccessibility } from "./title-capture-logic";
 import { useDurationLabel } from "./use-duration-label";
 
 type ActivityView =
@@ -65,6 +71,7 @@ type ActivityView =
 
 type ActivityCommand =
   | CaptureDetailsCommand
+  | CaptureModeCommand["command"]
   | "activity_copy_text"
   | "activity_open_settings"
   | "activity_set_recording_status";
@@ -451,6 +458,8 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
 };
 
 type DayContentProps = {
+  /** The day's one-time question about a browser, if any. */
+  browserQuestion: React.ReactNode;
   header: React.ReactNode;
   preferences: ActivityCalendarPreferences;
   onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
@@ -461,6 +470,7 @@ type DayContentProps = {
 };
 
 const DayContent = ({
+  browserQuestion,
   header,
   preferences,
   onPreferencesChange,
@@ -470,10 +480,18 @@ const DayContent = ({
   onReviewStatusChange,
 }: DayContentProps) => {
   const t = useTranslations("activity");
+  // One notice at a time: without Accessibility no title is recorded, so a
+  // question about a browser's titles waits until access is fixed.
+  const notice = titlesNeedAccessibility(snapshot) ? (
+    <TitlesAccessStrip onCommand={onCommand} />
+  ) : (
+    browserQuestion
+  );
   if (snapshot.unreadable && !reviewVisible) {
     return (
       <>
         {header}
+        {notice}
         <p className="text-muted-foreground text-sm">{t("unreadableDay")}</p>
       </>
     );
@@ -482,6 +500,7 @@ const DayContent = ({
     return (
       <>
         {header}
+        {notice}
         <p className="text-muted-foreground text-sm">{t("empty")}</p>
       </>
     );
@@ -491,6 +510,8 @@ const DayContent = ({
       key={snapshot.date}
       onReviewStatusChange={onReviewStatusChange}
       header={header}
+      notice={notice}
+      onCaptureCommand={onCommand}
       snapshot={snapshot}
       preferences={preferences}
       onPreferencesChange={onPreferencesChange}
@@ -638,6 +659,7 @@ const ActivityApp = () => {
   const [reviewStatus, setReviewStatus] =
     useState<ActivityReviewStatus>("editing");
   const view = useActivityDay(date, setError);
+  const browserQuestion = useBrowserQuestion();
   const [preferences, setPreferences] = useState<ActivityCalendarPreferences>({
     granularity: 30,
   });
@@ -732,6 +754,13 @@ const ActivityApp = () => {
         onPreferencesChange={setPreferences}
         reviewVisible={reviewVisible}
         onReviewStatusChange={setReviewStatus}
+        browserQuestion={
+          <BrowserQuestion
+            onCommand={runCommand}
+            snapshot={snapshot}
+            state={browserQuestion}
+          />
+        }
         header={
           <DayHeader
             navigationDisabled={reviewStatus === "submitting"}

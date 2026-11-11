@@ -4,15 +4,21 @@
 //!
 //! A folder's last use is written beside it rather than inside it, where the
 //! harness would see it, and rather than read from the folder's own modified
-//! time, which a change deeper in the folder does not move.
+//! time, which a change deeper in the folder does not move. The checkpoints the
+//! sidecar saves of a folder sit beside it too ([`checkpoint_store`]) and go
+//! with it.
 
 use std::{
-  path::Path,
+  collections::HashSet,
+  ffi::OsString,
+  path::{Path, PathBuf},
   sync::{Mutex, PoisonError},
   time::{SystemTime, UNIX_EPOCH},
 };
 
 use uuid::Uuid;
+
+use crate::harness_sidecar::CHECKPOINT_STORE_SUFFIX;
 
 const LOG_TARGET: &str = "desktop_runner::host";
 const KEPT_FOR_SECONDS: u64 = 30 * 24 * 60 * 60;
@@ -20,6 +26,28 @@ const KEPT_FOR_SECONDS: u64 = 30 * 24 * 60 * 60;
 const USED_EXTENSION: &str = "used";
 /// A folder being removed, out of reach of a run that starts meanwhile.
 const LEAVING_EXTENSION: &str = "leaving";
+
+/// Beside a folder, the checkpoints the sidecar saved of it: the folder's name
+/// with the suffix the sidecar protocol names.
+pub(super) fn checkpoint_store(dir: &Path) -> PathBuf {
+  let mut name = OsString::from(dir.as_os_str());
+  name.push(CHECKPOINT_STORE_SUFFIX);
+  PathBuf::from(name)
+}
+
+/// A name the sweep removes whatever an earlier pass left of it.
+fn leaving_name(path: &Path) -> PathBuf {
+  let mut name = OsString::from(path.as_os_str());
+  name.push(".");
+  name.push(LEAVING_EXTENSION);
+  PathBuf::from(name)
+}
+
+/// The folder a checkpoint store belongs to, when `name` is one of ours.
+fn store_owner(folders: &Path, name: &str) -> Option<PathBuf> {
+  let id = name.strip_suffix(CHECKPOINT_STORE_SUFFIX)?;
+  Uuid::parse_str(id).ok().map(|_| folders.join(id))
+}
 
 fn seconds(time: SystemTime) -> Option<u64> {
   time
@@ -69,9 +97,31 @@ fn remove_folder(dir: &Path) {
   }
 }
 
-/// Remove the folders no run has used for too long, and any an earlier pass
-/// left half removed. Only a folder named by a UUID is one of ours.
-pub(super) fn remove_idle(folders: &Path, now: SystemTime, lock: &Mutex<()>) {
+/// Move a checkpoint store out of reach and return where it went; `None`
+/// when there is none. Called under the folders lock.
+fn take_store(store: &Path) -> Option<PathBuf> {
+  if !std::fs::symlink_metadata(store).is_ok_and(|metadata| metadata.is_dir()) {
+    return None;
+  }
+  let leaving = leaving_name(store);
+  match crate::local_store::publish_directory(store, &leaving) {
+    Ok(()) => Some(leaving),
+    Err(error) => {
+      tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "a run folder's checkpoints were not removed");
+      None
+    }
+  }
+}
+
+/// The folders being restored, held while a run starts in a folder or a
+/// folder is removed: neither happens to a folder in the set.
+pub(super) type FolderLock = Mutex<HashSet<Uuid>>;
+
+/// Remove the folders no run has used for too long, with their checkpoints,
+/// checkpoints whose folder is gone, and anything an earlier pass left half
+/// removed. Only a folder named by a UUID, and its store, are ours; one being
+/// restored is left for a later pass.
+pub(super) fn remove_idle(folders: &Path, now: SystemTime, lock: &FolderLock) {
   let Ok(entries) = std::fs::read_dir(folders) else {
     return;
   };
@@ -82,28 +132,76 @@ pub(super) fn remove_idle(folders: &Path, now: SystemTime, lock: &Mutex<()>) {
       remove_folder(&path);
       continue;
     }
-    let names_a_folder = extension.is_none()
-      && path
+    let owner = path
+      .file_name()
+      .and_then(|name| name.to_str())
+      .and_then(|name| store_owner(folders, name));
+    if let Some(owner) = owner {
+      // A store outlives its folder only when an earlier pass stopped
+      // between the two; a folder is always made before its store. A store
+      // whose folder is being restored stays: the restore puts the folder
+      // back from it.
+      let owner_id = owner
         .file_name()
         .and_then(|name| name.to_str())
-        .is_some_and(|name| Uuid::parse_str(name).is_ok());
-    if !names_a_folder || !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+        .and_then(|name| Uuid::parse_str(name).ok());
+      let taken = {
+        let held = lock.lock().unwrap_or_else(PoisonError::into_inner);
+        let restoring = owner_id.is_some_and(|id| held.contains(&id));
+        let taken = if restoring || std::fs::symlink_metadata(&owner).is_ok() {
+          None
+        } else {
+          take_store(&path)
+        };
+        // Held until the store is taken, so no run makes the folder between.
+        drop(held);
+        taken
+      };
+      if let Some(taken) = taken {
+        remove_folder(&taken);
+      }
+      continue;
+    }
+    let folder_id = if extension.is_none() {
+      path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| Uuid::parse_str(name).ok())
+    } else {
+      None
+    };
+    let Some(folder_id) = folder_id else {
+      continue;
+    };
+    if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
       continue;
     }
     let leaving = path.with_extension(LEAVING_EXTENSION);
     // The check and the move are one step against `open`: a run starting now
     // finds its folder recorded as used, or finds no folder and makes one.
-    let moved = {
-      let _held = lock.lock().unwrap_or_else(PoisonError::into_inner);
-      let moved = is_idle(&path, now)
+    let (moved, store) = {
+      let held = lock.lock().unwrap_or_else(PoisonError::into_inner);
+      let moved = !held.contains(&folder_id)
+        && is_idle(&path, now)
         && crate::local_store::publish_directory(&path, &leaving).is_ok();
       if moved {
         drop(std::fs::remove_file(path.with_extension(USED_EXTENSION)));
       }
-      moved
+      // Its checkpoints go with it, before a run can make the folder again.
+      let store = if moved {
+        take_store(&checkpoint_store(&path))
+      } else {
+        None
+      };
+      // Held until the folder and its store are both gone.
+      drop(held);
+      (moved, store)
     };
     if moved {
       remove_folder(&leaving);
+    }
+    if let Some(store) = store {
+      remove_folder(&store);
     }
   }
 }
@@ -158,7 +256,7 @@ mod tests {
   #[test]
   fn only_a_folder_idle_past_the_limit_is_removed_with_its_record() {
     let place = Place::new();
-    let lock = Mutex::new(());
+    let lock = Mutex::new(HashSet::new());
     let idle = place.folder();
     let recent = place.folder();
     open(&idle, at(0)).unwrap();
@@ -169,10 +267,98 @@ mod tests {
     assert!(recent.exists());
   }
 
+  /// A checkpoint store as the sidecar lays one out.
+  fn store_of(folder: &Path) -> PathBuf {
+    let store = checkpoint_store(folder);
+    std::fs::create_dir_all(store.join("objects").join("ab")).unwrap();
+    std::fs::create_dir_all(store.join("manifests")).unwrap();
+    std::fs::write(store.join("objects").join("ab").join("abcd"), "saved").unwrap();
+    store
+  }
+
+  #[test]
+  fn a_folder_and_its_checkpoints_are_removed_together() {
+    let place = Place::new();
+    let lock = Mutex::new(HashSet::new());
+    let idle = place.folder();
+    let recent = place.folder();
+    open(&idle, at(0)).unwrap();
+    open(&recent, at(10)).unwrap();
+    let idle_store = store_of(&idle);
+    let recent_store = store_of(&recent);
+    assert_eq!(
+      idle_store,
+      place.0.join(format!(
+        "{}.checkpoints",
+        idle.file_name().unwrap().to_string_lossy()
+      ))
+    );
+    remove_idle(&place.0, at(30), &lock);
+    assert!(!idle.exists());
+    assert!(!idle_store.exists());
+    assert!(recent.exists());
+    assert!(recent_store.exists());
+    let left: Vec<_> = std::fs::read_dir(&place.0)
+      .unwrap()
+      .flatten()
+      .map(|entry| entry.file_name())
+      .collect();
+    assert_eq!(left.len(), 3, "{left:?}");
+  }
+
+  #[test]
+  fn checkpoints_whose_folder_is_gone_are_removed_and_others_stay() {
+    let place = Place::new();
+    let lock = Mutex::new(HashSet::new());
+    let gone = place.folder();
+    let orphan = store_of(&gone);
+    let half_removed = leaving_name(&checkpoint_store(&place.folder()));
+    std::fs::create_dir_all(half_removed.join("objects")).unwrap();
+    let not_ours = place.0.join("notes.checkpoints");
+    std::fs::create_dir_all(&not_ours).unwrap();
+    remove_idle(&place.0, at(0), &lock);
+    assert!(!orphan.exists());
+    assert!(!half_removed.exists());
+    assert!(not_ours.exists());
+  }
+
+  #[test]
+  fn a_folder_being_restored_is_not_removed_with_its_checkpoints() {
+    let place = Place::new();
+    let idle = place.folder();
+    open(&idle, at(0)).unwrap();
+    let store = store_of(&idle);
+    let folder_id =
+      Uuid::parse_str(idle.file_name().unwrap().to_str().unwrap()).unwrap();
+    let lock = Mutex::new(HashSet::from([folder_id]));
+    remove_idle(&place.0, at(30), &lock);
+    assert!(idle.exists());
+    assert!(store.exists());
+    lock.lock().unwrap().clear();
+    remove_idle(&place.0, at(30), &lock);
+    assert!(!idle.exists());
+    assert!(!store.exists());
+  }
+
+  #[test]
+  fn checkpoints_of_a_gone_folder_being_restored_stay() {
+    let place = Place::new();
+    let gone = place.folder();
+    let store = store_of(&gone);
+    let folder_id =
+      Uuid::parse_str(gone.file_name().unwrap().to_str().unwrap()).unwrap();
+    let lock = Mutex::new(HashSet::from([folder_id]));
+    remove_idle(&place.0, at(0), &lock);
+    assert!(store.exists());
+    lock.lock().unwrap().clear();
+    remove_idle(&place.0, at(0), &lock);
+    assert!(!store.exists());
+  }
+
   #[test]
   fn a_new_use_keeps_a_folder_past_the_limit_of_its_first() {
     let place = Place::new();
-    let lock = Mutex::new(());
+    let lock = Mutex::new(HashSet::new());
     let folder = place.folder();
     open(&folder, at(0)).unwrap();
     open(&folder, at(29)).unwrap();
@@ -183,7 +369,7 @@ mod tests {
   #[test]
   fn a_half_removed_folder_goes_and_anything_not_ours_stays() {
     let place = Place::new();
-    let lock = Mutex::new(());
+    let lock = Mutex::new(HashSet::new());
     let leaving = place.folder().with_extension(LEAVING_EXTENSION);
     std::fs::create_dir_all(leaving.join("left")).unwrap();
     let other = place.0.join("not-a-run-folder");
@@ -196,7 +382,7 @@ mod tests {
   #[test]
   fn a_folder_with_no_record_is_kept_while_its_own_time_is_recent() {
     let place = Place::new();
-    let lock = Mutex::new(());
+    let lock = Mutex::new(HashSet::new());
     let folder = place.folder();
     std::fs::create_dir_all(&folder).unwrap();
     let made = std::fs::metadata(&folder).unwrap().modified().unwrap();

@@ -42,7 +42,14 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
   EU: [
     {
       canonical: "C-9999/99 P",
-      variants: ["case c‑9999/99 p", " C−9999/99 P "],
+      variants: [
+        "case c‑9999/99 p",
+        " C−9999/99 P ",
+        "C-9999/99",
+        "C-9999/99 P(I)",
+        "c-9999/99 p(r)",
+        "C-9999/99P",
+      ],
     },
   ],
   GBR: [

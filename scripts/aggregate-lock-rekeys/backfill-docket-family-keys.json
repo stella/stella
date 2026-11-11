@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/scripts/backfill-citation-keys.ts",
+    "from": "56d03fa605856c62c913f88011db622573779889bfe620510396a0410108512a",
+    "to": "f60d34cadf241689187c23d1ebf6d827627487da041239c252cf07b6a8b5cc7f",
+    "reason": "The citation key backfill's batch read also selects a decision's country and case-file key and visits rows missing either key; the same rows stay locked, once per batch."
+  }
+]
