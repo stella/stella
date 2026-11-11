@@ -3851,6 +3851,8 @@
   "knowledge.playbooks.optionPlaceholder": "Option value",
   "knowledge.playbooks.optionsLabel": "Options",
   "knowledge.playbooks.outline": "Outline",
+  "knowledge.playbooks.pendingPane.description": "Answer the questions in the chat. After you approve the first save, the playbook opens here and you can edit it next to the conversation.",
+  "knowledge.playbooks.pendingPane.title": "Your playbook will appear here",
   "knowledge.playbooks.positionOfTotal": "Position {index} of {total}",
   "knowledge.playbooks.positionRemoved": "Position removed",
   "knowledge.playbooks.positions": "Positions",

@@ -4641,6 +4641,10 @@
       "optionPlaceholder": "Optionswert",
       "optionsLabel": "Optionen",
       "outline": "Gliederung",
+      "pendingPane": {
+        "description": "Beantworten Sie die Fragen im Chat. Sobald Sie das erste Speichern freigeben, öffnet sich das Playbook hier, und Sie können es neben der Unterhaltung bearbeiten.",
+        "title": "Ihr Playbook erscheint hier"
+      },
       "positionOfTotal": "Standpunkt {index} von {total}",
       "positionRemoved": "Standpunkt entfernt",
       "positions": "Standpunkte",

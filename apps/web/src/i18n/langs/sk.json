@@ -4641,6 +4641,10 @@
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",
+      "pendingPane": {
+        "description": "Odpovedzte na otázky v chate. Keď schválite prvé uloženie, playbook sa otvorí tu a môžete ho upravovať popri konverzácii.",
+        "title": "Váš playbook sa zobrazí tu"
+      },
       "positionOfTotal": "Pozícia {index} z {total}",
       "positionRemoved": "Pozícia odstránená",
       "positions": "Pozície",

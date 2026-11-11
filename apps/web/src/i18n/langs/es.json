@@ -4641,6 +4641,10 @@
       "optionPlaceholder": "Valor de la opción",
       "optionsLabel": "Opciones",
       "outline": "Esquema",
+      "pendingPane": {
+        "description": "Responde a las preguntas del chat. Cuando apruebes el primer guardado, el playbook se abrirá aquí y podrás editarlo junto a la conversación.",
+        "title": "Tu playbook aparecerá aquí"
+      },
       "positionOfTotal": "Posición {index} de {total}",
       "positionRemoved": "Posición eliminada",
       "positions": "Posiciones",

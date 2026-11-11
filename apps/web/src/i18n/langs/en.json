@@ -4641,6 +4641,10 @@
       "optionPlaceholder": "Option value",
       "optionsLabel": "Options",
       "outline": "Outline",
+      "pendingPane": {
+        "description": "Answer the questions in the chat. After you approve the first save, the playbook opens here and you can edit it next to the conversation.",
+        "title": "Your playbook will appear here"
+      },
       "positionOfTotal": "Position {index} of {total}",
       "positionRemoved": "Position removed",
       "positions": "Positions",

@@ -4641,6 +4641,10 @@
       "optionPlaceholder": "Lehetőség értéke",
       "optionsLabel": "Lehetőségek",
       "outline": "Vázlat",
+      "pendingPane": {
+        "description": "Válaszoljon a kérdésekre a csevegésben. Miután jóváhagyta az első mentést, a playbook itt nyílik meg, és a beszélgetés mellett szerkesztheti.",
+        "title": "A playbook itt fog megjelenni"
+      },
       "positionOfTotal": "{index}. álláspont, összesen {total}",
       "positionRemoved": "Álláspont eltávolítva",
       "positions": "Álláspontok",

@@ -4641,6 +4641,10 @@
       "optionPlaceholder": "Parinkties reikšmė",
       "optionsLabel": "Parinktys",
       "outline": "Struktūra",
+      "pendingPane": {
+        "description": "Atsakykite į klausimus pokalbyje. Kai patvirtinsite pirmąjį išsaugojimą, peržiūros vadovas atsidarys čia ir galėsite jį redaguoti šalia pokalbio.",
+        "title": "Jūsų peržiūros vadovas atsiras čia"
+      },
       "positionOfTotal": "Pozicija {index} iš {total}",
       "positionRemoved": "Pozicija pašalinta",
       "positions": "Pozicijos",

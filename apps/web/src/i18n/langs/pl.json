@@ -4641,6 +4641,10 @@
       "optionPlaceholder": "Wartość opcji",
       "optionsLabel": "Opcje",
       "outline": "Spis treści",
+      "pendingPane": {
+        "description": "Odpowiedz na pytania na czacie. Gdy zatwierdzisz pierwszy zapis, playbook otworzy się tutaj i będzie można go edytować obok rozmowy.",
+        "title": "Twój playbook pojawi się tutaj"
+      },
       "positionOfTotal": "Stanowisko {index} z {total}",
       "positionRemoved": "Stanowisko usunięte",
       "positions": "Stanowiska",

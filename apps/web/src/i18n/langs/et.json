@@ -4641,6 +4641,10 @@
       "optionPlaceholder": "Valiku väärtus",
       "optionsLabel": "Valikud",
       "outline": "Struktuur",
+      "pendingPane": {
+        "description": "Vasta vestluses küsimustele. Kui kinnitad esimese salvestamise, avaneb playbook siin ja saad seda vestluse kõrval muuta.",
+        "title": "Sinu playbook ilmub siia"
+      },
       "positionOfTotal": "Seisukoht {index}/{total}",
       "positionRemoved": "Seisukoht eemaldatud",
       "positions": "Seisukohad",

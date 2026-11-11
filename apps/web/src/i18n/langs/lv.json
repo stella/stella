@@ -4641,6 +4641,10 @@
       "optionPlaceholder": "Iespējas vērtība",
       "optionsLabel": "Iespējas",
       "outline": "Struktūra",
+      "pendingPane": {
+        "description": "Atbildiet uz jautājumiem tērzēšanā. Kad apstiprināsiet pirmo saglabāšanu, pārbaudes ceļvedis tiks atvērts šeit, un to varēsiet rediģēt līdzās sarunai.",
+        "title": "Jūsu pārbaudes ceļvedis parādīsies šeit"
+      },
       "positionOfTotal": "Pozīcija {index} no {total}",
       "positionRemoved": "Pozīcija noņemta",
       "positions": "Pozīcijas",

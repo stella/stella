@@ -4641,6 +4641,10 @@
       "optionPlaceholder": "Valor da opção",
       "optionsLabel": "Opções",
       "outline": "Esquema",
+      "pendingPane": {
+        "description": "Responda às perguntas no chat. Depois que você aprovar o primeiro salvamento, o playbook abre aqui e você pode editá-lo ao lado da conversa.",
+        "title": "Seu playbook aparecerá aqui"
+      },
       "positionOfTotal": "Posição {index} de {total}",
       "positionRemoved": "Posição removida",
       "positions": "Posições",
