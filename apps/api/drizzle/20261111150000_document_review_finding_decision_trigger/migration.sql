@@ -1,5 +1,6 @@
-SET lock_timeout = '3s';
-SET statement_timeout = '30s';
+SET LOCAL lock_timeout = '3s';--> statement-breakpoint
+SET LOCAL statement_timeout = '30s';
+--> statement-breakpoint
 
 -- The decision history is written by the database, not by each writer: every
 -- path that changes a finding's decision (the decide handler, a staged
@@ -43,16 +44,20 @@ BEGIN
   RETURN NULL;
 END
 $function$;
+--> statement-breakpoint
 
 CREATE TRIGGER document_review_findings_decision_history
 AFTER UPDATE OF decision ON public.document_review_findings
 FOR EACH ROW WHEN (OLD.decision IS DISTINCT FROM NEW.decision)
 EXECUTE FUNCTION public.stella_document_review_finding_decision_history();
+--> statement-breakpoint
 
 CREATE TRIGGER document_review_findings_decision_history_insert
 AFTER INSERT ON public.document_review_findings
 FOR EACH ROW WHEN (NEW.decision <> 'open')
 EXECUTE FUNCTION public.stella_document_review_finding_decision_history();
+--> statement-breakpoint
 
 REVOKE ALL ON FUNCTION public.stella_document_review_finding_decision_history() FROM PUBLIC;
+--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.stella_document_review_finding_decision_history() TO stella;
