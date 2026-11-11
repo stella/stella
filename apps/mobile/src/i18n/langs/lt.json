@@ -15,6 +15,7 @@
     "noMatchesDescription": "Nė vieno pokalbio pavadinime ar byloje nėra „{search}“.",
     "search": "Ieškoti pokalbių",
     "loadFailed": "Nepavyko įkelti jūsų pokalbių.",
+    "runsLoadFailed": "Nepavyko patikrinti, kurie pokalbiai laukia jūsų.",
     "retry": "Bandyti dar kartą",
     "untitled": "Pokalbis be pavadinimo",
     "loadMoreFailed": "Įkelti daugiau",
@@ -25,6 +26,8 @@
     "greeting": "Prie ko norėtumėte dirbti?",
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "sections": {
+      "needsYou": "Laukia jūsų",
+      "working": "Vykdoma",
       "today": "Šiandien",
       "yesterday": "Vakar",
       "week": "Paskutinės 7 dienos",

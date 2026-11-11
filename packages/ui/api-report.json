@@ -11048,6 +11048,48 @@
         }
       ]
     },
+    "./run-state-mark [default]": {
+      "type": "module",
+      "file": "./src/components/run-state-mark.d.ts",
+      "exports": [
+        {
+          "name": "RunMarkSize",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RunMarkState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RunStateMark",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./run-state-mark [react-native]": {
+      "type": "module",
+      "file": "./src/components/run-state-mark.native.d.ts",
+      "exports": [
+        {
+          "name": "RunMarkSize",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RunMarkState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RunStateMark",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
     "./scroll-area": {
       "type": "module",
       "file": "./src/components/scroll-area.d.ts",
@@ -11845,6 +11887,11 @@
           "space": "type"
         },
         {
+          "name": "sansFontFamily",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "textFontFamily",
           "kind": "variable",
           "space": "value"
@@ -12423,6 +12470,9 @@
     "./src/components/preview-card.d.ts": "import type React from \"react\";\nimport { PreviewCard as PreviewCardPrimitive } from \"@base-ui/react/preview-card\";\nexport declare const PreviewCard: typeof PreviewCardPrimitive.Root;\nexport declare const PreviewCardTrigger: ({ ...props }: PreviewCardPrimitive.Trigger.Props) => React.ReactElement;\nexport declare const PreviewCardPopup: ({ className, children, align, sideOffset, anchor, ...props }: PreviewCardPrimitive.Popup.Props & {\n    align?: PreviewCardPrimitive.Positioner.Props[\"align\"];\n    anchor?: PreviewCardPrimitive.Positioner.Props[\"anchor\"];\n    sideOffset?: PreviewCardPrimitive.Positioner.Props[\"sideOffset\"];\n}) => React.ReactElement;\nexport { PreviewCardPrimitive, PreviewCard as HoverCard, PreviewCardTrigger as HoverCardTrigger, PreviewCardPopup as HoverCardContent, };\n",
     "./src/components/preview-pane.d.ts": "import type * as React from \"react\";\ntype MenuPreviewLayoutProps = React.PropsWithChildren<{\n    className?: string;\n    preview: React.ReactNode;\n    previewWidth?: \"fixed\" | \"remaining\";\n}>;\ndeclare const MenuPreviewLayout: ({ children, preview, className, previewWidth, }: MenuPreviewLayoutProps) => React.JSX.Element;\ntype PreviewPaneOverflow = \"clip\" | \"scroll\";\ntype PreviewPaneProps = React.ComponentProps<\"div\"> & {\n    overflow?: PreviewPaneOverflow;\n    size?: \"default\" | \"thumbnail\";\n};\ndeclare const PreviewPane: ({ children, className, overflow, size, ...props }: PreviewPaneProps) => React.JSX.Element;\nexport { MenuPreviewLayout, PreviewPane };\n",
     "./src/components/prose.d.ts": "import type * as React from \"react\";\nimport type { VariantProps } from \"class-variance-authority\";\nexport declare const LEGAL_TEXT_CLASS_NAME = \"hyphens-manual wrap-anywhere\";\ndeclare const proseVariants: (props?: ({\n    size?: \"default\" | \"lede\" | \"sm\" | null | undefined;\n    tone?: \"default\" | \"muted\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\nexport declare const Prose: ({ className, size, tone, ...props }: React.ComponentProps<\"p\"> & VariantProps<typeof proseVariants>) => React.JSX.Element;\nexport {};\n",
+    "./src/components/run-state-mark.native.d.ts": "import { type RunStateMarkContract } from \"./run-state-mark.shared\";\nexport declare const RunStateMark: ({ size, state }: RunStateMarkContract) => import(\"react\").JSX.Element;\nexport type { RunMarkSize, RunMarkState } from \"./run-state-mark.shared\";\n",
+    "./src/components/run-state-mark.shared.d.ts": "export declare const RUN_MARK_TONES: {\n    readonly muted: {\n        readonly textClass: \"text-muted-foreground\";\n        readonly variable: \"--color-muted-foreground\";\n    };\n    readonly warning: {\n        readonly textClass: \"text-warning-foreground\";\n        readonly variable: \"--color-warning-foreground\";\n    };\n};\nexport declare const RUN_STATE_MARKS: {\n    readonly \"needs-you\": {\n        readonly glyph: \"attention\";\n        readonly tone: \"warning\";\n    };\n    readonly working: {\n        readonly glyph: \"running\";\n        readonly tone: \"muted\";\n    };\n};\nexport type RunMarkState = keyof typeof RUN_STATE_MARKS;\nexport declare const RUN_MARK_SIZES: {\n    readonly badge: {\n        readonly glyphClass: \"text-3xs\";\n        readonly markClass: \"size-2.5\";\n        readonly px: 10;\n    };\n    readonly row: {\n        readonly glyphClass: \"text-xs\";\n        readonly markClass: \"size-3\";\n        readonly px: 12;\n    };\n};\nexport type RunMarkSize = keyof typeof RUN_MARK_SIZES;\nexport type RunStateMarkContract = {\n    size?: RunMarkSize;\n    state: RunMarkState;\n};\n",
+    "./src/components/run-state-mark.d.ts": "import { type RunStateMarkContract } from \"./run-state-mark.shared\";\nexport declare const RunStateMark: ({ size, state }: RunStateMarkContract) => import(\"react\").JSX.Element;\nexport type { RunMarkSize, RunMarkState } from \"./run-state-mark.shared\";\n",
     "./src/components/scroll-area.d.ts": "import type { Ref } from \"react\";\nimport { ScrollArea as ScrollAreaPrimitive } from \"@base-ui/react/scroll-area\";\ntype ScrollAreaAxis = \"both\" | \"vertical\";\ndeclare const ScrollArea: ({ axis, className, children, scrollFade, scrollbarClassName, scrollbarGutter, viewportRef, ...props }: ScrollAreaPrimitive.Root.Props & {\n    axis?: ScrollAreaAxis;\n    scrollFade?: boolean;\n    scrollbarClassName?: string;\n    scrollbarGutter?: boolean;\n    viewportRef?: Ref<HTMLDivElement>;\n}) => import(\"react\").JSX.Element;\ndeclare const ScrollBar: ({ className, orientation, ...props }: ScrollAreaPrimitive.Scrollbar.Props) => import(\"react\").JSX.Element;\nexport { ScrollArea, ScrollBar };\n",
     "./src/components/scroll-to-top.d.ts": "import { type RefObject } from \"react\";\nexport type ScrollToTopProps = {\n    className?: string;\n    label?: string;\n    scrollContainerRef: RefObject<HTMLElement | null>;\n    threshold?: number;\n};\nexport declare const ScrollToTop: ({ scrollContainerRef, threshold, label, className, }: ScrollToTopProps) => import(\"react\").JSX.Element;\n",
     "./src/components/search-field.d.ts": "import type * as React from \"react\";\nimport { InputGroupInput } from \"./input-group\";\ntype SearchFieldProps = Omit<React.ComponentProps<typeof InputGroupInput>, \"onChange\" | \"type\" | \"value\"> & {\n    clearLabel: string;\n    groupClassName?: string;\n    onValueChange: (value: string) => void;\n    value: string;\n};\ndeclare const SearchField: ({ value, onValueChange, clearLabel, groupClassName, className, onKeyDown, ...props }: SearchFieldProps) => React.JSX.Element;\nexport { SearchField };\nexport type { SearchFieldProps };\n",
@@ -12452,7 +12502,7 @@
     "./src/components/table-chart.d.ts": "export type TableChartKind = \"bar\" | \"line\" | \"pie\" | \"scatter\";\nexport type TableChartPoint = {\n    label: string;\n    series?: string;\n    x: number;\n    y: number;\n};\nexport type TableChartProps = {\n    formatNumber: (value: number) => string;\n    kind: TableChartKind;\n    points: readonly TableChartPoint[];\n    summary: string;\n    title: string;\n    xLabel?: string | undefined;\n    xMode?: \"category\" | \"numeric\";\n    yLabel?: string | undefined;\n};\nexport declare const TableChart: ({ kind, points, title, summary, xLabel, yLabel, xMode, formatNumber, }: TableChartProps) => import(\"react\").JSX.Element;\n",
     "./src/components/table.d.ts": "import type * as React from \"react\";\ntype TableInset = \"card\" | \"default\";\ntype TableScroll = \"parent\" | \"self\";\ntype TableDensity = \"compact\" | \"default\";\ntype TableProps = React.ComponentProps<\"table\"> & {\n    density?: TableDensity;\n    inset?: TableInset;\n    scroll?: TableScroll;\n};\ndeclare const Table: ({ className, density, inset, scroll, ...props }: TableProps) => React.JSX.Element;\ntype TableHeaderProps = React.ComponentProps<\"thead\"> & {\n    sticky?: boolean;\n    surface?: \"muted\" | \"plain\";\n};\ndeclare const TableHeader: ({ className, surface, sticky, ...props }: TableHeaderProps) => React.JSX.Element;\ndeclare const TableBody: ({ className, ...props }: React.ComponentProps<\"tbody\">) => React.JSX.Element;\ndeclare const TableFooter: ({ className, ...props }: React.ComponentProps<\"tfoot\">) => React.JSX.Element;\ntype TableTone = \"default\" | \"muted\";\ndeclare const TableRow: ({ className, tone, ...props }: React.ComponentProps<\"tr\"> & {\n    tone?: TableTone | undefined;\n}) => React.JSX.Element;\ntype TableAlign = \"center\" | \"end\" | \"start\";\ntype TableHeadProps = Omit<React.ComponentProps<\"th\">, \"align\"> & {\n    align?: TableAlign | undefined;\n    numeric?: boolean | undefined;\n};\ndeclare const TableHead: ({ className, align, numeric, ...props }: TableHeadProps) => React.JSX.Element;\ntype TableCellProps = Omit<React.ComponentProps<\"td\">, \"align\"> & {\n    align?: TableAlign | undefined;\n    flush?: boolean;\n    numeric?: boolean | undefined;\n    tone?: TableTone | undefined;\n    truncate?: boolean;\n};\ndeclare const TableCell: ({ className, align, tone, numeric, truncate, flush, ...props }: TableCellProps) => React.JSX.Element;\ntype SortDirection = \"asc\" | \"desc\" | null;\ntype SortableHeadProps = Omit<TableHeadProps, \"onClick\"> & {\n    onSort: () => void;\n    sortDirection?: SortDirection;\n    trailing?: React.ReactNode;\n};\ndeclare const SortableHead: ({ children, sortDirection, onSort, trailing, className, align, numeric, ...props }: SortableHeadProps) => React.JSX.Element;\ndeclare const TableCaption: ({ className, ...props }: React.ComponentProps<\"caption\">) => React.JSX.Element;\nexport { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption, SortableHead, };\nexport type { SortDirection, TableAlign, TableDensity, TableHeadProps, TableCellProps, TableHeaderProps, TableInset, TableProps, TableScroll, TableTone, };\n",
     "./src/components/tabs.d.ts": "import { Tabs as TabsPrimitive } from \"@base-ui/react/tabs\";\ntype TabsVariant = \"default\" | \"underline\";\ndeclare const Tabs: ({ className, ...props }: TabsPrimitive.Root.Props) => import(\"react\").JSX.Element;\ndeclare const TabsList: ({ variant, className, children, ref, ...props }: TabsPrimitive.List.Props & {\n    variant?: TabsVariant;\n}) => import(\"react\").JSX.Element;\ndeclare const TabsTab: ({ className, ...props }: TabsPrimitive.Tab.Props) => import(\"react\").JSX.Element;\ndeclare const TabsPanel: ({ className, ...props }: TabsPrimitive.Panel.Props) => import(\"react\").JSX.Element;\nexport { Tabs, TabsList, TabsTab, TabsTab as TabsTrigger, TabsPanel, TabsPanel as TabsContent, };\n",
-    "./src/components/text.native.d.ts": "import type { TextProps } from \"react-native\";\nimport { type TextContract } from \"./text.shared\";\nexport declare const textFontFamily: (variant: TextContract[\"variant\"]) => string;\nexport declare const Text: ({ className, style, variant, ...props }: Omit<TextProps, keyof TextContract> & TextContract & {\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport type { TextVariant } from \"./text.shared\";\n",
+    "./src/components/text.native.d.ts": "import type { TextProps } from \"react-native\";\nimport { type TextContract, type TextFace } from \"./text.shared\";\nexport declare const sansFontFamily: (weight: TextFace[\"weight\"]) => string;\nexport declare const textFontFamily: (variant: TextContract[\"variant\"]) => string;\nexport declare const Text: ({ className, style, variant, ...props }: Omit<TextProps, keyof TextContract> & TextContract & {\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport type { TextVariant } from \"./text.shared\";\n",
     "./src/components/text.shared.d.ts": "import type { ReactNode } from \"react\";\nexport declare const TEXT_VARIANT_CLASS_NAMES: {\n    readonly badge: \"text-[10px] uppercase tracking-[1px] text-muted-foreground\";\n    readonly body: \"text-base\";\n    readonly button: \"text-base\";\n    readonly caption: \"text-sm text-muted-foreground\";\n    readonly display: \"text-[32px] leading-[37px] tracking-tight\";\n    readonly error: \"text-sm text-destructive-foreground\";\n    readonly headline: \"text-lg\";\n    readonly label: \"text-sm\";\n    readonly link: \"text-sm text-muted-foreground underline\";\n    readonly rowTitle: \"text-base\";\n    readonly section: \"text-xs uppercase text-muted-foreground\";\n    readonly title: \"text-2xl\";\n};\nexport type TextVariant = keyof typeof TEXT_VARIANT_CLASS_NAMES;\nexport type TextFace = {\n    readonly weight: \"bold\" | \"light\" | \"medium\" | \"regular\" | \"semibold\";\n};\nexport declare const TEXT_VARIANT_FACES: {\n    readonly badge: TextFace;\n    readonly body: TextFace;\n    readonly button: TextFace;\n    readonly caption: TextFace;\n    readonly display: TextFace;\n    readonly error: TextFace;\n    readonly headline: TextFace;\n    readonly label: TextFace;\n    readonly link: TextFace;\n    readonly rowTitle: TextFace;\n    readonly section: TextFace;\n    readonly title: TextFace;\n};\nexport type TextContract = {\n    children?: ReactNode;\n    variant?: TextVariant;\n};\n",
     "./src/components/text.d.ts": "import type { ComponentProps } from \"react\";\nimport { type TextContract } from \"./text.shared\";\ndeclare const Text: ({ className, variant, ...props }: Omit<ComponentProps<\"span\">, keyof TextContract> & TextContract) => import(\"react\").JSX.Element;\nexport { Text };\nexport type { TextVariant } from \"./text.shared\";\n",
     "./src/components/textarea.native.d.ts": "import type { ComponentProps } from \"react\";\nimport { NativeField } from \"./input.native\";\nexport declare const Textarea: ({ size, unstyled, ...props }: Omit<ComponentProps<typeof NativeField>, \"box\" | \"multiline\">) => import(\"react\").JSX.Element;\n",

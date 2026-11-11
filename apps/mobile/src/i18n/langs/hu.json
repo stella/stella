@@ -15,6 +15,7 @@
     "noMatchesDescription": "Egyik csevegés címe vagy ügy sem tartalmazza ezt: „{search}”.",
     "search": "Csevegések keresése",
     "loadFailed": "A beszélgetéseit nem sikerült betölteni.",
+    "runsLoadFailed": "Nem sikerült ellenőrizni, mely beszélgetések várnak Önre.",
     "retry": "Újrapróbálás",
     "untitled": "Névtelen beszélgetés",
     "loadMoreFailed": "Továbbiak betöltése",
@@ -25,6 +26,8 @@
     "greeting": "Min szeretne dolgozni?",
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "sections": {
+      "needsYou": "Önre várnak",
+      "working": "Folyamatban",
       "today": "Ma",
       "yesterday": "Tegnap",
       "week": "Előző 7 nap",
