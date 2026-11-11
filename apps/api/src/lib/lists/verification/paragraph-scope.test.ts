@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import {
+  passageContext,
   resolveParagraphScope,
   scopePassages,
 } from "@/api/lib/lists/verification/paragraph-scope";
@@ -104,6 +105,31 @@ describe("resolveParagraphScope", () => {
       type: "not-found",
       missing: [5],
     });
+  });
+});
+
+describe("passageContext", () => {
+  test("the grader reads the claim's passage, never the rest of its page", () => {
+    const page =
+      "81. Outside, before.\n82. I agreed the plan on 2 April.\n83. Outside, after.";
+    const block: VerificationBlock = {
+      id: "P4",
+      text: page,
+      source: { type: "pdf-page", pageNumber: 4 },
+    };
+    const start = page.indexOf("82.");
+    const end = page.indexOf("83.");
+    const claimStart = page.indexOf("I agreed");
+    const claimEnd = claimStart + "I agreed the plan on 2 April".length;
+    const context = passageContext(
+      { block, start, end },
+      { start: claimStart, end: claimEnd },
+    );
+    expect(context.text).toBe("82. I agreed the plan on 2 April.\n");
+    expect(context.text).not.toContain("Outside");
+    expect(context.text.slice(context.anchor.start, context.anchor.end)).toBe(
+      "I agreed the plan on 2 April",
+    );
   });
 });
 

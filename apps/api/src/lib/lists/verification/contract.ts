@@ -154,8 +154,6 @@ export type ParagraphNumbering = (typeof PARAGRAPH_NUMBERINGS)[number];
  *  under, and a UTF-16 offset into that block's text. */
 export type VerificationScopeEdge = { blockId: string; offset: number };
 
-export const VERIFICATION_SCOPE_KINDS = ["whole", "paragraphs"] as const;
-
 /**
  * What a run checks: the whole document, or an inclusive range of its
  * paragraphs. A range is resolved once, when the run starts, to the text

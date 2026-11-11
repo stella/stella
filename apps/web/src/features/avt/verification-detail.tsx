@@ -18,7 +18,7 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
-import { ScopeMark } from "@/features/avt/paragraph-scope";
+import { ScopeMark, ScopeRefusalMessage } from "@/features/avt/paragraph-scope";
 import { scopeParagraphs } from "@/features/avt/paragraph-scope.logic";
 import { verificationRunOptions } from "@/features/avt/queries";
 import { RunCarryOverControl } from "@/features/avt/run-carry-over";
@@ -261,6 +261,9 @@ const VerifyAgain = ({
         <PlayIcon />
         {t("avt.documents.verifyAgain")}
       </Button>
+      {verification.scopeRefusal !== null && (
+        <ScopeRefusalMessage refusal={verification.scopeRefusal.code} />
+      )}
       <RunSizeConfirmDialog
         confirmLabel={t("common.verify")}
         detail={confirmation}

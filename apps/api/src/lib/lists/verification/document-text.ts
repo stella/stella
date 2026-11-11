@@ -29,7 +29,7 @@ type VerificationBlockSource =
  * `82.` is not in its text) and whether it is a heading, or a PDF page's line
  * boxes, one per line of its text. Never sent to the model, never stored.
  */
-export type VerificationBlockStructure =
+type VerificationBlockStructure =
   | { type: "docx-paragraph"; label: string | null; heading: boolean }
   | { type: "pdf-lines"; boxes: readonly PdfLineBox[] | null };
 

@@ -55,7 +55,10 @@ import {
   VERIFICATION_MODEL_TASK,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
-import { scopePassages } from "@/api/lib/lists/verification/paragraph-scope";
+import {
+  passageContext,
+  scopePassages,
+} from "@/api/lib/lists/verification/paragraph-scope";
 import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
 import {
   checkVerificationDispatchBudget,
@@ -781,14 +784,11 @@ const executeRun = async ({
             {
               key: String(position),
               text: claim.text,
-              context: {
-                text:
-                  passages.at(claim.blockIndex)?.block.text ??
-                  panic(
-                    "An extracted claim names a block outside the document",
-                  ),
-                anchor: claim.anchor,
-              },
+              context: passageContext(
+                passages.at(claim.blockIndex) ??
+                  panic("An extracted claim names a block outside the run"),
+                claim.anchor,
+              ),
               // A new run's claims have no reviewer yet.
               linkedFactIds: [],
             },

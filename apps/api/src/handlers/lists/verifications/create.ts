@@ -10,6 +10,7 @@ import * as v from "valibot";
 
 import { decisionParagraphRangeSchema } from "@stll/api-contract/decision-paragraph-range";
 import { VERIFICATION_SCOPE_REFUSALS } from "@stll/api-contract/verification-scope";
+import type { ParagraphRange } from "@stll/legal-ast/paragraph-range";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { legalListVerificationRuns } from "@/api/db/schema";
@@ -39,10 +40,7 @@ import {
   resolveParagraphScope,
   scopePassages,
 } from "@/api/lib/lists/verification/paragraph-scope";
-import type {
-  ParagraphRange,
-  ParagraphScopeRefusal,
-} from "@/api/lib/lists/verification/paragraph-scope";
+import type { ParagraphScopeRefusal } from "@/api/lib/lists/verification/paragraph-scope";
 import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import { enqueueListVerificationRun } from "@/api/lib/lists/verification/run-queue";
 import { startVerificationRun } from "@/api/lib/lists/verification/start-run";
@@ -80,6 +78,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Reads the document to find a paragraph range; returns a run id, never file bytes.",
+  },
   mcp: {
     type: "capability",
     reason: "document_processing",

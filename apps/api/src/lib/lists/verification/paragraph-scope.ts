@@ -27,6 +27,7 @@ import {
   LINE_CONTINUATION_SEPARATOR,
   LINE_JOIN,
 } from "@stll/legal-ast/line-wrap";
+import type { ParagraphRange } from "@stll/legal-ast/paragraph-range";
 import { readPrintedLabel } from "@stll/legal-ast/printed-paragraph-labels";
 
 import { readPdfLineJoins } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
@@ -38,10 +39,7 @@ import type {
 } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 
-/** An inclusive range of paragraph numbers, as a reviewer asks for it. */
-export type ParagraphRange = { from: number; to: number };
-
-export type ParagraphScope = Extract<VerificationScope, { kind: "paragraphs" }>;
+type ParagraphScope = Extract<VerificationScope, { kind: "paragraphs" }>;
 
 /** A point in the blocks a run reads. */
 type TextPoint = { blockIndex: number; offset: number };
@@ -229,7 +227,7 @@ type ParagraphCount =
     };
 
 /** How the document counts its paragraphs, read once. */
-export const countParagraphs = (
+const countParagraphs = (
   blocks: readonly VerificationBlock[],
 ): ParagraphCount => {
   const paragraphs = documentParagraphs(blocks);
@@ -310,6 +308,19 @@ export type VerificationPassage = {
   start: number;
   end: number;
 };
+
+/**
+ * The text around a claim the grader reads: the passage the run read, never
+ * the rest of its block, so no text outside a range reaches the model. The
+ * anchor is moved from whole-block offsets to the passage's own.
+ */
+export const passageContext = (
+  { block, start, end }: VerificationPassage,
+  anchor: { start: number; end: number },
+) => ({
+  text: block.text.slice(start, end),
+  anchor: { start: anchor.start - start, end: anchor.end - start },
+});
 
 /** Every block, whole: what a run over the whole document reads. */
 export const wholeDocumentPassages = (

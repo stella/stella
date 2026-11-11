@@ -45,6 +45,13 @@ const REFUSAL_KEYS = {
   [VERIFICATION_SCOPE_REFUSALS.noText]: "avt.runs.errors.noText",
 } as const satisfies Record<VerificationScopeRefusal, TranslationKey>;
 
+/** Every message the field can show: a narrow union keeps `t` cheap to
+ *  type-check. */
+type ScopeErrorKey =
+  | (typeof INPUT_ERROR_KEYS)[keyof typeof INPUT_ERROR_KEYS]
+  | (typeof REFUSAL_KEYS)[keyof typeof REFUSAL_KEYS]
+  | "avt.scope.errors.required";
+
 type ParagraphRangeStartProps = {
   disabled: boolean;
   starting: boolean;
@@ -70,7 +77,7 @@ export const ParagraphRangeStart = ({
   const [value, setValue] = React.useState("");
   const [submitted, setSubmitted] = React.useState(false);
   const input = readParagraphRangeInput(value);
-  const errorKey = ((): TranslationKey | null => {
+  const errorKey = ((): ScopeErrorKey | null => {
     if (input.type === "invalid") {
       return INPUT_ERROR_KEYS[input.reason];
     }
@@ -141,6 +148,21 @@ export const ParagraphRangeStart = ({
         </Form>
       </PopoverPopup>
     </Popover>
+  );
+};
+
+/** Why the server refused a range, where the range was asked for again
+ *  without its field (verifying a failed range run again). */
+export const ScopeRefusalMessage = ({
+  refusal,
+}: {
+  refusal: VerificationScopeRefusal;
+}) => {
+  const t = useTranslations();
+  return (
+    <p className="text-destructive-foreground text-xs" role="alert">
+      {t(REFUSAL_KEYS[refusal])}
+    </p>
   );
 };
 
