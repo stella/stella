@@ -25,7 +25,7 @@ BEGIN
        SELECT 1 FROM public.document_review_finding_decisions AS event
         WHERE event.finding_id = OLD.id
      )
-    ON CONFLICT (id) DO NOTHING;
+    ON CONFLICT ON CONSTRAINT document_review_finding_decisions_pkey DO NOTHING;
   END IF;
   INSERT INTO public.document_review_finding_decisions
     (id, workspace_id, finding_id, decision, reason, actor_id, created_at)
