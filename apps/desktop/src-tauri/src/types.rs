@@ -201,6 +201,41 @@ pub enum DesktopAccountSnapshot {
   },
 }
 
+// Why linking an account from the browser ended without a link. The page that
+// approved it reads the reason over the loopback bridge and names the next
+// step; `unavailable` is every failure the app does not classify.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "snake_case")]
+pub enum DesktopLinkFailure {
+  AccountConflict,
+  SwitchDeclined,
+  Declined,
+  UpdateRequired,
+  Unavailable,
+}
+
+impl DesktopLinkFailure {
+  #[cfg(test)]
+  pub const ALL: [Self; 5] = [
+    Self::AccountConflict,
+    Self::SwitchDeclined,
+    Self::Declined,
+    Self::UpdateRequired,
+    Self::Unavailable,
+  ];
+
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::AccountConflict => "account_conflict",
+      Self::SwitchDeclined => "switch_declined",
+      Self::Declined => "declined",
+      Self::UpdateRequired => "update_required",
+      Self::Unavailable => "unavailable",
+    }
+  }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
@@ -728,6 +763,7 @@ mod rpc_codegen_tests {
   type DesktopRpcContract = (
     AppSnapshot,
     DesktopAccountSnapshot,
+    DesktopLinkFailure,
     LinkAccountRequest,
     OpenFileRequest,
     OpenFileResponse,
