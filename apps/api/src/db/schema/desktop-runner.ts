@@ -139,6 +139,13 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     }),
     /** The harness session a later run on this desktop may resume. */
     harnessSessionId: p.varchar("harness_session_id", { length: 256 }),
+    /**
+     * When `run.start` was first written to one of the computer's sockets;
+     * absent while it never was. A run never written ends after the short
+     * unaccepted window, one that was keeps the recovery window, since its
+     * computer may be running it.
+     */
+    deliveredAt: timestamptz("delivered_at"),
     /** When the desktop accepted `run.start`; absent while it never has. */
     acceptedAt: timestamptz("accepted_at"),
     /** Highest position of the run's desktop messages persisted without a gap. */

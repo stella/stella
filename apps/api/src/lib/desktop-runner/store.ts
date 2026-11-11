@@ -1040,13 +1040,15 @@ type ExpireAbandonedOptions = {
 };
 
 /**
- * End runs no computer accepted within the unaccepted window, and accepted
- * runs whose computer has not come back within the abandon window, as `lost`.
- * A run is never handed to another computer, so this is how the API ends one
- * its desktop no longer serves. A run is counted from its creation while it
- * is unaccepted: a heartbeat renews its lease, and however its delivery went
- * (a lost ring, a socket that never read it), the turn learns in bounded time
- * that its computer did not pick it up.
+ * End runs never written to a socket within the unaccepted window, and the
+ * others whose computer has not taken or come back to them within the
+ * abandon window, as `lost`. A run is never handed to another computer, so
+ * this is how the API ends one its desktop no longer serves. A run never
+ * written is counted from its creation: a heartbeat renews its lease, and
+ * however its delivery failed (a lost ring, a key the computer no longer
+ * connects with), the turn learns in bounded time that its computer did not
+ * pick it up. A run that was written keeps the longer window, since the
+ * desktop starts a run before its acceptance reaches the API.
  */
 export const expireAbandonedRuns = async (
   db: DesktopRunnerDb,
@@ -1056,14 +1058,20 @@ export const expireAbandonedRuns = async (
   const unacceptedBefore = new Date(now.getTime() - unacceptedMs);
   const ended = () =>
     or(
+      // Never written to a socket: no computer can be running it.
       and(
         inArray(runs.state, ["assigned", "waiting_for_computer"]),
-        isNull(runs.acceptedAt),
+        isNull(runs.deliveredAt),
         sql`${runs.createdAt} <= ${unacceptedBefore}::timestamptz`,
+      ),
+      // Written to a socket but never accepted: its computer may be running
+      // it and lost the connection before the acceptance arrived.
+      and(
+        eq(runs.state, "assigned"),
+        sql`${runs.createdAt} <= ${abandonedBefore}::timestamptz`,
       ),
       and(
         eq(runs.state, "waiting_for_computer"),
-        isNotNull(runs.acceptedAt),
         sql`${runs.updatedAt} <= ${abandonedBefore}::timestamptz`,
       ),
     );
@@ -1234,6 +1242,24 @@ export const readPendingCommands = async (
       workspaceIds: row.workspaceIds.map(brandPersistedWorkspaceId),
     })),
   };
+};
+
+/**
+ * Record that a run's `run.start` is being written to this socket, before it
+ * is: from then on its computer may be running it, so it keeps the recovery
+ * window rather than the unaccepted one. The first write is kept.
+ */
+export const recordRunDelivered = async (
+  db: DesktopRunnerDb,
+  { binding, runId, now }: { binding: RunnerBinding; runId: string; now: Date },
+) => {
+  // audit: skip - runner socket bookkeeping; the run's caller audits the work
+  await db
+    .update(runs)
+    .set({
+      deliveredAt: sql`coalesce(${runs.deliveredAt}, ${now}::timestamptz)`,
+    })
+    .where(and(eq(runs.runId, runId), boundTo(binding)));
 };
 
 type QueuedCommandsOptions = {
@@ -1666,6 +1692,8 @@ export type DesktopRunnerRunView = {
   readonly ackSeq: number;
   readonly leaseExpiresAt: Date;
   readonly createdAt: Date;
+  /** When `run.start` was first written to a socket; `null` while never. */
+  readonly deliveredAt: Date | null;
   /** When the computer accepted the run; `null` while none picked it up. */
   readonly acceptedAt: Date | null;
 };
@@ -1689,6 +1717,7 @@ export const readRun = async (
         ackSeq: runs.ackSeq,
         leaseExpiresAt: runs.leaseExpiresAt,
         createdAt: runs.createdAt,
+        deliveredAt: runs.deliveredAt,
         acceptedAt: runs.acceptedAt,
       })
       .from(runs)

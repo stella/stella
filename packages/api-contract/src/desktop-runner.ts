@@ -63,14 +63,15 @@ export type DesktopRunnerLimits = {
   /** Installations (installation id and device key) per account and organization. */
   readonly maxRunnersPerAccount: number;
   /**
-   * How long a run the computer accepted may wait for it to return before the
-   * API ends it as lost.
+   * How long a run written to its computer's socket may wait to be accepted,
+   * or for its computer to return, before the API ends it as lost.
    */
   readonly abandonedRunMs: number;
   /**
-   * How long a run may wait for its computer to accept it before the API ends
-   * it as lost: a computer that did not pick it up by then is not connected,
-   * and the turn says so rather than waiting on.
+   * How long a run never written to a socket may wait before the API ends it
+   * as lost: its computer is not connected, and the turn says so rather than
+   * waiting on. A run once written keeps `abandonedRunMs`, since the desktop
+   * starts a run before its acceptance reaches the API.
    */
   readonly unacceptedRunMs: number;
   /** Sequenced messages (events, approval requests, the final one) one run may store. */

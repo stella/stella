@@ -900,10 +900,10 @@ const caughtUpStep = (
     case "lost":
       return {
         type: "fail",
-        // No computer picked the run up in time, or the one that took it
-        // never came back.
+        // The run never reached a socket in time, or the computer it
+        // reached never came back to it.
         code:
-          run.acceptedAt === null
+          run.deliveredAt === null
             ? AI_FAILURE_CODES.local_runner_not_reached
             : AI_FAILURE_CODES.local_runner_unavailable,
       };
@@ -913,7 +913,7 @@ const caughtUpStep = (
     case "waiting_for_computer":
       // Until a computer accepts the run (an assigned one never was), the
       // turn waits for one to pick it up, counted from the run's creation;
-      // the gateway ends it as lost once none did in time
+      // the gateway ends it as lost once it reached no socket in time
       // (`unacceptedRunMs`). A computer that took it and is away resumes it
       // when it reconnects.
       return run.acceptedAt === null

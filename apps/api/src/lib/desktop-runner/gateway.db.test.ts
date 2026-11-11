@@ -563,6 +563,46 @@ const insertRunner = async (
   });
 };
 
+/**
+ * A runner the API counts as connected, with Codex ready, whose socket is on
+ * no task: a run assigned to it is never written to a socket.
+ */
+const insertReadyRunner = async (desktopId: string) => {
+  await db.insert(desktopRunners).values({
+    userId: owner.userId,
+    organizationId: owner.organizationId,
+    desktopId,
+    deviceJkt: credentials.a.deviceJkt,
+    keyId: credentials.a.keyId,
+    connection: "connected",
+    sessionId: Bun.randomUUIDv7(),
+    instanceId: "api-gone",
+    protocol: DESKTOP_RUNNER_PROTOCOL.current,
+    appVersion: "1.4.0",
+    sidecarVersion: "1.4.0",
+    harnesses: [
+      {
+        id: "codex",
+        state: "ready",
+        version: HARNESS_VERSION,
+        capabilities: ["approvals", "interrupt"],
+        approvalModes: ["ask"],
+        models: [{ id: MODEL, label: "GPT-5 Codex" }],
+      },
+    ],
+    connectedAt: now(),
+    lastSeenAt: now(),
+  });
+};
+
+/** Lets a row from `insertReadyRunner` make room for later installations. */
+const retireRunner = async (desktopId: string) => {
+  await db
+    .update(desktopRunners)
+    .set({ connection: "disconnected" })
+    .where(eq(desktopRunners.desktopId, desktopId));
+};
+
 const runnerRows = async (
   userId: (typeof desktopRunners.$inferSelect)["userId"],
   organizationId: (typeof desktopRunners.$inferSelect)["organizationId"],
@@ -1675,12 +1715,12 @@ describe("runs the API ends", () => {
     await back.close();
   });
 
-  test("a run no computer accepts ends as lost once the unaccepted window passes, though its socket stays", async () => {
+  test("a run never written to a socket ends as lost once the unaccepted window passes", async () => {
+    // A runner the API still counts as connected whose socket is on no task:
+    // nothing ever writes the run to it.
     const desktopId = Bun.randomUUIDv7();
-    const desktop = await openDesktop(first, desktopId);
-    await desktop.hello();
+    await insertReadyRunner(desktopId);
     const runId = await assignRun(desktopId);
-    await desktop.receive("run.start", ofRun(runId));
     clock.now += DESKTOP_RUNNER_LIMITS.unacceptedRunMs - 1;
     await first.gateway.sweep();
     // Its lease lapsed without a heartbeat, but it is still open.
@@ -1689,9 +1729,44 @@ describe("runs the API ends", () => {
     await first.gateway.sweep();
     expect(await runState(runId)).toMatchObject({
       state: "lost",
+      deliveredAt: null,
       acceptedAt: null,
     });
+    await retireRunner(desktopId);
+  });
+
+  test("a run written to its socket survives a drop before its acceptance and completes once the computer is back", async () => {
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(first, desktopId);
+    await desktop.hello();
+    const runId = await assignRun(desktopId);
+    // The desktop starts the run, and the connection drops before its
+    // acceptance reaches the API.
+    await desktop.receive("run.start", ofRun(runId));
     await desktop.close();
+    clock.now += DESKTOP_RUNNER_LIMITS.unacceptedRunMs + TIMING.leaseMs + 1;
+    await first.gateway.sweep();
+    expect(await runState(runId)).toMatchObject({
+      state: "waiting_for_computer",
+      acceptedAt: null,
+    });
+
+    const back = await openDesktop(first, desktopId);
+    await back.hello([{ runId, lastSeq: 0 }]);
+    expect((await runState(runId))?.state).toBe("running");
+    back.send({
+      type: "run.finished",
+      runId,
+      seq: 1,
+      outcome: "completed",
+      harnessSessionId: null,
+    });
+    await back.receive("ack", ofRun(runId));
+    expect(await runState(runId)).toMatchObject({
+      state: "finished",
+      outcome: "completed",
+    });
+    await back.close();
   });
 
   test("an accepted run whose computer is away waits the abandon window, not the unaccepted one", async () => {
@@ -4377,7 +4452,9 @@ describe("chat turns on a computer", () => {
     const pickup = await startInstance("api-pickup-window", sharedDoorbell, {
       limits: { unacceptedRunMs: UNACCEPTED_MS },
     });
-    const { desktopId, desktop } = shared();
+    // A computer the API counts as connected, whose socket is on no task.
+    const desktopId = Bun.randomUUIDv7();
+    await insertReadyRunner(desktopId);
     const context = { ...contextFor(chatThreadId), pollMs: 10 };
     const toldDelivering = Promise.withResolvers<undefined>();
     const turn = (async () => {
@@ -4400,8 +4477,6 @@ describe("chat turns on a computer", () => {
       }
       return chunks;
     })();
-    // The run reaches the socket, but nothing on the computer takes it up.
-    const start = await desktop.receive("run.start");
     await toldDelivering.promise;
     clock.now += UNACCEPTED_MS + 1;
     await pickup.gateway.sweep();
@@ -4421,10 +4496,14 @@ describe("chat turns on a computer", () => {
       type: EventType.RUN_ERROR,
       code: AI_FAILURE_CODES.local_runner_not_reached,
     });
-    expect(await runState(start.runId)).toMatchObject({
-      state: "lost",
-      acceptedAt: null,
-    });
+    const [run] = await db
+      .select({ runId: desktopRunnerRuns.runId })
+      .from(desktopRunnerRuns)
+      .where(eq(desktopRunnerRuns.desktopId, desktopId));
+    expect(
+      await runState(run?.runId ?? panic("the turn started no run")),
+    ).toMatchObject({ state: "lost", deliveredAt: null, acceptedAt: null });
+    await retireRunner(desktopId);
   });
 
   /** The run's commands of `kind`, as the gateway stored them. */

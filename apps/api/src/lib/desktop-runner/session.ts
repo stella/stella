@@ -42,6 +42,7 @@ import {
   readPendingCommands,
   recordHarnessStatus,
   recordRunAccepted,
+  recordRunDelivered,
   recordRunRejected,
   releaseRunnerSession,
   renewRunnerSession,
@@ -486,6 +487,15 @@ const deliverPending = async (
       const resend =
         command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runStart ||
         !held.has(command.runId);
+      if (resend && command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runStart) {
+        // Recorded before the frame goes out: once it may have, the
+        // computer may be running the run.
+        await recordRunDelivered(state.context.db, {
+          binding: state.binding,
+          runId: command.runId,
+          now: state.context.now(),
+        });
+      }
       const sent = resend
         ? send(state, await outgoing(state, command))
         : "sent";

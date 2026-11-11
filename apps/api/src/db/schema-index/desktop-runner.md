@@ -42,76 +42,77 @@ desktop_runner_runs.state               text                not null          de
 desktop_runner_runs.outcome             text                null              desktop-runner.ts:135  Set with `finished`: how the run ended, as the desktop reported.
 desktop_runner_runs.reject_reason       text                null              desktop-runner.ts:137  Set with `rejected`: why the desktop refused the run.
 desktop_runner_runs.harness_session_id  varchar             null              desktop-runner.ts:141  The harness session a later run on this desktop may resume.
-desktop_runner_runs.accepted_at         timestamptz         null              desktop-runner.ts:143  When the desktop accepted `run.start`; absent while it never has.
-desktop_runner_runs.ack_seq             bigint              default,not null  desktop-runner.ts:145  Highest position of the run's desktop messages persisted without a gap.
-desktop_runner_runs.message_bytes       bigint              default,not null  desktop-runner.ts:147  UTF-8 bytes of the run's stored messages, bounded per run.
-desktop_runner_runs.lease_expires_at    timestamptz         not null          desktop-runner.ts:151
-desktop_runner_runs.chat_thread_id      uuid                fk,null           desktop-runner.ts:156  The chat thread whose turn started the run; null for runs started outside chat.
-desktop_runner_runs.chat_turn_id        uuid                fk,null           desktop-runner.ts:163  The chat turn that reads the run; null for runs started outside chat, and for a chat run whose turn was deleted.
-desktop_runner_runs.chat_read_seq       bigint              default,not null  desktop-runner.ts:168  Last position of the run's messages a chat turn consumed.
-desktop_runner_runs.created_at          timestamptz         default,not null  desktop-runner.ts:172
-desktop_runner_runs.updated_at          timestamptz         default,not null  desktop-runner.ts:173
+desktop_runner_runs.delivered_at        timestamptz         null              desktop-runner.ts:148  When `run.start` was first written to one of the computer's sockets; absent while it never was.
+desktop_runner_runs.accepted_at         timestamptz         null              desktop-runner.ts:150  When the desktop accepted `run.start`; absent while it never has.
+desktop_runner_runs.ack_seq             bigint              default,not null  desktop-runner.ts:152  Highest position of the run's desktop messages persisted without a gap.
+desktop_runner_runs.message_bytes       bigint              default,not null  desktop-runner.ts:154  UTF-8 bytes of the run's stored messages, bounded per run.
+desktop_runner_runs.lease_expires_at    timestamptz         not null          desktop-runner.ts:158
+desktop_runner_runs.chat_thread_id      uuid                fk,null           desktop-runner.ts:163  The chat thread whose turn started the run; null for runs started outside chat.
+desktop_runner_runs.chat_turn_id        uuid                fk,null           desktop-runner.ts:170  The chat turn that reads the run; null for runs started outside chat, and for a chat run whose turn was deleted.
+desktop_runner_runs.chat_read_seq       bigint              default,not null  desktop-runner.ts:175  Last position of the run's messages a chat turn consumed.
+desktop_runner_runs.created_at          timestamptz         default,not null  desktop-runner.ts:179
+desktop_runner_runs.updated_at          timestamptz         default,not null  desktop-runner.ts:180
 ```
 
-## desktop_runner_commands · `desktopRunnerCommands` · desktop-runner.ts:263 · rls
+## desktop_runner_commands · `desktopRunnerCommands` · desktop-runner.ts:270 · rls
 
 Commands for a run, in the order they were queued.
 
 ```text
-desktop_runner_commands.id           bigint       generated,not null  desktop-runner.ts:266
-desktop_runner_commands.run_id       uuid         fk,not null         desktop-runner.ts:269
-desktop_runner_commands.kind         text         not null            desktop-runner.ts:273
-desktop_runner_commands.command_key  uuid         not null            desktop-runner.ts:275  The id the command is idempotent on.
-desktop_runner_commands.payload      jsonb        not null            desktop-runner.ts:280  The server message as sent, without a token; a `run.answer` holds its answers sealed (`sealedAnswers`), never as plain text.
-desktop_runner_commands.created_at   timestamptz  default,not null    desktop-runner.ts:281
+desktop_runner_commands.id           bigint       generated,not null  desktop-runner.ts:273
+desktop_runner_commands.run_id       uuid         fk,not null         desktop-runner.ts:276
+desktop_runner_commands.kind         text         not null            desktop-runner.ts:280
+desktop_runner_commands.command_key  uuid         not null            desktop-runner.ts:282  The id the command is idempotent on.
+desktop_runner_commands.payload      jsonb        not null            desktop-runner.ts:287  The server message as sent, without a token; a `run.answer` holds its answers sealed (`sealedAnswers`), never as plain text.
+desktop_runner_commands.created_at   timestamptz  default,not null    desktop-runner.ts:288
 ```
 
-## desktop_runner_events · `desktopRunnerEvents` · desktop-runner.ts:305 · rls
+## desktop_runner_events · `desktopRunnerEvents` · desktop-runner.ts:312 · rls
 
 The desktop messages of a run that take a position in its sequence (events, approval requests, the final message), each stored once and acknowledged only after…
 
 ```text
-desktop_runner_events.run_id      uuid         fk,not null       desktop-runner.ts:308
-desktop_runner_events.seq         bigint       not null          desktop-runner.ts:312
-desktop_runner_events.type        text         not null          desktop-runner.ts:313
-desktop_runner_events.request_id  uuid         null              desktop-runner.ts:319  The request an answer is matched to: set on an approval request, and on an event whose chunk pauses the run for a blocking question (the id of the question's i…
-desktop_runner_events.message     jsonb        not null          desktop-runner.ts:321  The desktop message as validated.
-desktop_runner_events.created_at  timestamptz  default,not null  desktop-runner.ts:322
+desktop_runner_events.run_id      uuid         fk,not null       desktop-runner.ts:315
+desktop_runner_events.seq         bigint       not null          desktop-runner.ts:319
+desktop_runner_events.type        text         not null          desktop-runner.ts:320
+desktop_runner_events.request_id  uuid         null              desktop-runner.ts:326  The request an answer is matched to: set on an approval request, and on an event whose chunk pauses the run for a blocking question (the id of the question's i…
+desktop_runner_events.message     jsonb        not null          desktop-runner.ts:328  The desktop message as validated.
+desktop_runner_events.created_at  timestamptz  default,not null  desktop-runner.ts:329
 ```
 
-## desktop_runner_app_calls · `desktopRunnerAppCalls` · desktop-runner.ts:361 · rls
+## desktop_runner_app_calls · `desktopRunnerAppCalls` · desktop-runner.ts:368 · rls
 
 The calls a run's MCP token made to a stella tool that one of chat's apps presents, in the order the server answered them: what the tool returned to that run,…
 
 ```text
-desktop_runner_app_calls.id                   bigint       generated,not null  desktop-runner.ts:365  Orders a run's answers as the server gave them.
-desktop_runner_app_calls.run_id               uuid         fk,not null         desktop-runner.ts:366
-desktop_runner_app_calls.tool_name            varchar      not null            desktop-runner.ts:370
-desktop_runner_app_calls.arguments_hash       varchar      not null            desktop-runner.ts:372  SHA-256 of the call's arguments as the server received them.
-desktop_runner_app_calls.resource_uri         varchar      not null            desktop-runner.ts:373
-desktop_runner_app_calls.result               jsonb        not null            desktop-runner.ts:375  The tool's `structuredContent`, as the server answered the run.
-desktop_runner_app_calls.paired_tool_call_id  varchar      null                desktop-runner.ts:377  The chat call this row was paired with; null while it is unpaired.
-desktop_runner_app_calls.created_at           timestamptz  default,not null    desktop-runner.ts:378
+desktop_runner_app_calls.id                   bigint       generated,not null  desktop-runner.ts:372  Orders a run's answers as the server gave them.
+desktop_runner_app_calls.run_id               uuid         fk,not null         desktop-runner.ts:373
+desktop_runner_app_calls.tool_name            varchar      not null            desktop-runner.ts:377
+desktop_runner_app_calls.arguments_hash       varchar      not null            desktop-runner.ts:379  SHA-256 of the call's arguments as the server received them.
+desktop_runner_app_calls.resource_uri         varchar      not null            desktop-runner.ts:380
+desktop_runner_app_calls.result               jsonb        not null            desktop-runner.ts:382  The tool's `structuredContent`, as the server answered the run.
+desktop_runner_app_calls.paired_tool_call_id  varchar      null                desktop-runner.ts:384  The chat call this row was paired with; null while it is unpaired.
+desktop_runner_app_calls.created_at           timestamptz  default,not null    desktop-runner.ts:385
 ```
 
-## desktop_runner_folder_restores · `desktopRunnerFolderRestores` · desktop-runner.ts:412 · rls
+## desktop_runner_folder_restores · `desktopRunnerFolderRestores` · desktop-runner.ts:419 · rls
 
 A member's request to undo the file changes of a chat turn run on their computer: the chat's folder goes back to the checkpoint the run took before it started.
 
 ```text
-desktop_runner_folder_restores.id               uuid                not null          desktop-runner.ts:415
-desktop_runner_folder_restores.user_id          text                fk,not null       desktop-runner.ts:416
-desktop_runner_folder_restores.organization_id  safeOrganizationId  fk,not null       desktop-runner.ts:417
-desktop_runner_folder_restores.chat_thread_id   uuid                fk,not null       desktop-runner.ts:418
-desktop_runner_folder_restores.chat_turn_id     uuid                fk,not null       desktop-runner.ts:419
-desktop_runner_folder_restores.run_id           uuid                fk,not null       desktop-runner.ts:421  The run whose checkpoint the folder goes back to.
-desktop_runner_folder_restores.desktop_id       uuid                fk,not null       desktop-runner.ts:423  The run's computer and device key; only that socket is sent it.
-desktop_runner_folder_restores.device_jkt       text                fk,not null       desktop-runner.ts:424
-desktop_runner_folder_restores.state            text                not null          desktop-runner.ts:425
-desktop_runner_folder_restores.reason           text                null              desktop-runner.ts:427  Set with `refused`: why the computer refused it.
-desktop_runner_folder_restores.created_at       timestamptz         default,not null  desktop-runner.ts:428
-desktop_runner_folder_restores.expires_at       timestamptz         not null          desktop-runner.ts:430  A `queued` request not sent by then is never sent.
-desktop_runner_folder_restores.settled_at       timestamptz         null              desktop-runner.ts:432  When it was restored, refused or expired.
-desktop_runner_folder_restores.noted_run_id     uuid                fk,null           desktop-runner.ts:437  The latest run whose request carried the note that the folder went back; it is told once the computer accepts that run.
-desktop_runner_folder_restores.noted_at         timestamptz         null              desktop-runner.ts:439  When an accepted run of the chat was told the folder went back.
+desktop_runner_folder_restores.id               uuid                not null          desktop-runner.ts:422
+desktop_runner_folder_restores.user_id          text                fk,not null       desktop-runner.ts:423
+desktop_runner_folder_restores.organization_id  safeOrganizationId  fk,not null       desktop-runner.ts:424
+desktop_runner_folder_restores.chat_thread_id   uuid                fk,not null       desktop-runner.ts:425
+desktop_runner_folder_restores.chat_turn_id     uuid                fk,not null       desktop-runner.ts:426
+desktop_runner_folder_restores.run_id           uuid                fk,not null       desktop-runner.ts:428  The run whose checkpoint the folder goes back to.
+desktop_runner_folder_restores.desktop_id       uuid                fk,not null       desktop-runner.ts:430  The run's computer and device key; only that socket is sent it.
+desktop_runner_folder_restores.device_jkt       text                fk,not null       desktop-runner.ts:431
+desktop_runner_folder_restores.state            text                not null          desktop-runner.ts:432
+desktop_runner_folder_restores.reason           text                null              desktop-runner.ts:434  Set with `refused`: why the computer refused it.
+desktop_runner_folder_restores.created_at       timestamptz         default,not null  desktop-runner.ts:435
+desktop_runner_folder_restores.expires_at       timestamptz         not null          desktop-runner.ts:437  A `queued` request not sent by then is never sent.
+desktop_runner_folder_restores.settled_at       timestamptz         null              desktop-runner.ts:439  When it was restored, refused or expired.
+desktop_runner_folder_restores.noted_run_id     uuid                fk,null           desktop-runner.ts:444  The latest run whose request carried the note that the folder went back; it is told once the computer accepts that run.
+desktop_runner_folder_restores.noted_at         timestamptz         null              desktop-runner.ts:446  When an accepted run of the chat was told the folder went back.
 ```
