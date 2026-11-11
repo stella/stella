@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { isDocumentAst } from "@stll/legal-ast/document-ast";
+import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -267,6 +267,37 @@ export const lostRowWriteStatus = async (
  * and (unless guarded) payload, fenced on this observation still owning the
  * row. Reads the state it replaces, under a row lock; the caller runs it.
  */
+type PlannedPayloadFenceOptions = {
+  existing: ExistingDecision;
+  replacesDocumentWithRedirects: boolean;
+  storedPayloadUnchanged: boolean;
+};
+
+/**
+ * The payload this write planned against must still be the row's. A write
+ * that keeps the stored payload compares its pointers; one that records
+ * anchor redirects compares the document they were planned from, so a write
+ * that replaced it in between makes this one plan again rather than leave
+ * that document's anchors unrecorded.
+ */
+const plannedPayloadFence = ({
+  existing,
+  replacesDocumentWithRedirects,
+  storedPayloadUnchanged,
+}: PlannedPayloadFenceOptions): SQL | undefined => {
+  if (storedPayloadUnchanged) {
+    return and(
+      sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${existing.contentHash}`,
+      sql`${caseLawDecisions.textS3Key} IS NOT DISTINCT FROM ${existing.textS3Key}`,
+      sql`${caseLawDecisions.normalizedS3Key} IS NOT DISTINCT FROM ${existing.normalizedS3Key}`,
+      sql`${caseLawDecisions.astS3Key} IS NOT DISTINCT FROM ${existing.astS3Key}`,
+    );
+  }
+  return replacesDocumentWithRedirects
+    ? sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${existing.contentHash}`
+    : undefined;
+};
+
 export const describeRowUpdateTx = async (
   tx: CitationGraphTransaction<Transaction>,
   write: DecisionRowWrite,
@@ -290,6 +321,7 @@ export const describeRowUpdateTx = async (
       payloadColumns,
       pendingMirrorPayload,
       preparedMetadata,
+      replacedBlockAnchors,
       reusedCitationScopeEnvelope,
       storedPayloadUnchanged,
     },
@@ -429,14 +461,11 @@ export const describeRowUpdateTx = async (
           CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
         )
       : undefined,
-    storedPayloadUnchanged
-      ? and(
-          sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${existing.contentHash}`,
-          sql`${caseLawDecisions.textS3Key} IS NOT DISTINCT FROM ${existing.textS3Key}`,
-          sql`${caseLawDecisions.normalizedS3Key} IS NOT DISTINCT FROM ${existing.normalizedS3Key}`,
-          sql`${caseLawDecisions.astS3Key} IS NOT DISTINCT FROM ${existing.astS3Key}`,
-        )
-      : undefined,
+    plannedPayloadFence({
+      existing,
+      replacesDocumentWithRedirects: replacedBlockAnchors !== null,
+      storedPayloadUnchanged,
+    }),
     pendingMirrorPayload === null
       ? undefined
       : and(
@@ -575,7 +604,12 @@ export const finishRefreshedRowTx = async (
   // The document was replaced: record where the anchors it dropped went, so a
   // link into the old document lands on the same text or reports it gone.
   const { replacedBlockAnchors, corpusPayload } = write.plan;
-  if (replacedBlockAnchors !== null && isDocumentAst(corpusPayload.ast)) {
+  // Late head matter is stored, so the replacement is read in any block
+  // order, as the replaced document was.
+  if (
+    replacedBlockAnchors !== null &&
+    isDocumentAstInAnyBlockOrder(corpusPayload.ast)
+  ) {
     await writeDecisionAnchorRedirectsTx(tx, {
       decisionId: existing.id,
       replaced: replacedBlockAnchors,

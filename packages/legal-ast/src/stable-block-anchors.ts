@@ -70,8 +70,12 @@ const positionalPrefixOf = (anchorId: string): string | null => {
 export const isPositionalBlockAnchor = (anchorId: string): boolean =>
   positionalPrefixOf(anchorId) !== null;
 
-/** A stable anchor: optional prefix, `n<number>` or `x<hash>`, repeats. */
-const STABLE_ANCHOR = /^((?:.*-)?)(?:n\d+|x[0-9a-f]{10})((?:-\d+)*)$/u;
+/**
+ * A stable anchor: optional prefix, `n<number>` (with `x<hash>` when the
+ * number repeats) or `x<hash>`, repeats.
+ */
+const STABLE_ANCHOR =
+  /^((?:.*-)?)(?:n\d+(?:x[0-9a-f]{10})?|x[0-9a-f]{10})((?:-\d+)*)$/u;
 
 /**
  * The supplement or opinion prefix of a positional or stable anchor (`""`
@@ -115,11 +119,30 @@ export const blockAnchorText = (block: Block): string => {
   }
 };
 
-const stableBaseOf = (block: Block, prefix: string): string => {
+/** The court-numbered group a block belongs to, or null for an unnumbered one. */
+const numberedGroupOf = (block: Block, prefix: string): string | null => {
   const number = courtParagraphNumber(block);
-  return number === null
-    ? `${prefix}x${shortHash(blockAnchorText(block))}`
-    : `${prefix}n${String(number)}`;
+  return number === null ? null : `${prefix}n${String(number)}`;
+};
+
+/**
+ * A number the court printed once is the anchor itself. A number it printed
+ * more than once (numbering restarted without a prefix) cannot tell its
+ * blocks apart by position without handing one block's anchor to another
+ * when a block is inserted, so every block of that group adds its words.
+ */
+const stableBaseOf = (
+  block: Block,
+  prefix: string,
+  repeatedGroups: ReadonlySet<string>,
+): string => {
+  const group = numberedGroupOf(block, prefix);
+  if (group === null) {
+    return `${prefix}x${shortHash(blockAnchorText(block))}`;
+  }
+  return repeatedGroups.has(group)
+    ? `${group}x${shortHash(blockAnchorText(block))}`
+    : group;
 };
 
 const remapHref = (
@@ -194,9 +217,9 @@ const remapBlockInlines = (
  * The document with every positional anchor replaced by a stable one, and
  * every in-document `#anchor` link following its target.
  *
- * Stable anchors that repeat (two identical paragraphs, numbering restarted
- * without a prefix) take `-2`, `-3` in document order, never a value another
- * block already holds. A document with no positional anchor comes back as
+ * A court number printed more than once adds each block's words. Stable
+ * anchors that still repeat (identical paragraphs) take `-2`, `-3` in
+ * document order, never a value another block already holds. A document with no positional anchor comes back as
  * the same object.
  */
 export const withStableBlockAnchors = (ast: DocumentAst): DocumentAst => {
@@ -213,6 +236,16 @@ export const withStableBlockAnchors = (ast: DocumentAst): DocumentAst => {
       prefix === null ? [block.anchorId] : [],
     ),
   );
+  const groupSizes = new Map<string, number>();
+  for (const { block, prefix } of read) {
+    const group = prefix === null ? null : numberedGroupOf(block, prefix);
+    if (group !== null) {
+      groupSizes.set(group, (groupSizes.get(group) ?? 0) + 1);
+    }
+  }
+  const repeatedGroups = new Set(
+    [...groupSizes].flatMap(([group, size]) => (size > 1 ? [group] : [])),
+  );
   const renamed = new Map<string, string>();
   const claim = (base: string): string => {
     let candidate = base;
@@ -226,7 +259,7 @@ export const withStableBlockAnchors = (ast: DocumentAst): DocumentAst => {
     if (prefix === null) {
       return block;
     }
-    const anchorId = claim(stableBaseOf(block, prefix));
+    const anchorId = claim(stableBaseOf(block, prefix, repeatedGroups));
     renamed.set(block.anchorId, anchorId);
     return { ...block, anchorId };
   });

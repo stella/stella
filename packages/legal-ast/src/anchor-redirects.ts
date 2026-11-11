@@ -33,9 +33,13 @@ const MIN_PARTIAL_MATCH_LENGTH = 12;
 
 type CurrentBlock = { anchorId: string; text: string; prefix: string | null };
 
-/** Whether `target` may receive an anchor from a block with `prefix`. */
+/**
+ * Whether `target` may receive an anchor from a block with `prefix`. A block
+ * whose place is known (main decision, an opinion, a supplement) moves only
+ * within it; a publisher anchor carries no place, so it never receives one.
+ */
 const samePlace = (prefix: string | null, target: CurrentBlock): boolean =>
-  prefix === null || target.prefix === null || prefix === target.prefix;
+  prefix === null || prefix === target.prefix;
 
 const onlyMatch = (
   candidates: readonly CurrentBlock[],

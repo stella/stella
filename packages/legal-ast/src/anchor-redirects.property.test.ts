@@ -163,6 +163,36 @@ describe("anchor redirects", () => {
     );
   });
 
+  test("an opinion anchor never moves into a block whose place is unknown", () => {
+    const words = "Odlišné stanovisko soudce k výroku o nákladech řízení";
+    const opinion: Block = {
+      id: "b1",
+      anchorId: "op1-p-1",
+      type: "paragraph",
+      inlines: [{ type: "text", text: words }],
+      plainText: words,
+    };
+    const replaced = { ...parse([]), blocks: [opinion] };
+    // The main decision now quotes the opinion's words in a block the
+    // publisher anchored; the opinion block itself is gone.
+    const quoting = `${words} a k důvodům rozhodnutí.`;
+    const current: DocumentAst = {
+      ...parse([]),
+      blocks: [
+        {
+          id: "b2",
+          anchorId: "point12",
+          type: "paragraph",
+          inlines: [{ type: "text", text: quoting }],
+          plainText: quoting,
+        },
+      ],
+    };
+    expect([
+      ...planAnchorRedirects(replacedBlockAnchorsOf(replaced), current),
+    ]).toEqual([["op1-p-1", null]]);
+  });
+
   test("anchor redirects stay one hop across successive writes", () => {
     assertProperty(
       "anchor redirects stay one hop across successive writes",

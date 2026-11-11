@@ -113,6 +113,33 @@ describe("stable block anchors", () => {
     );
   });
 
+  test("a repeated court number keeps each block's anchor when another joins the group", () => {
+    const numbered = (text: string) =>
+      ({ text, kind: "paragraph", number: 1, publisherAnchor: null }) as const;
+    const before = withStableBlockAnchors(
+      parse([numbered("První odstavec výroku."), numbered("Druhý odstavec.")]),
+    );
+    const after = withStableBlockAnchors(
+      parse([
+        numbered("Vložený odstavec."),
+        numbered("První odstavec výroku."),
+        numbered("Druhý odstavec."),
+      ]),
+    );
+    const anchorOf = (ast: DocumentAst, text: string) =>
+      ast.blocks.find((block) => block.plainText === text)?.anchorId;
+    for (const text of ["První odstavec výroku.", "Druhý odstavec."]) {
+      expect(anchorOf(after, text)).toBe(anchorOf(before, text));
+    }
+    // No block of a repeated group holds the bare number another could take.
+    expect(after.blocks.some(({ anchorId }) => anchorId === "n1")).toBe(false);
+    // A number printed once is still the anchor itself.
+    expect(
+      withStableBlockAnchors(parse([numbered("Jediný odstavec.")])).blocks.at(0)
+        ?.anchorId,
+    ).toBe("n1");
+  });
+
   test("an in-document link follows its renamed target", () => {
     const ast = parse([
       {

@@ -121,6 +121,9 @@ export function PublicDecisionViewer({
     detached(
       replaceRouteHash({
         to: ".",
+        // Only the fragment moves; the page's search (case-file notice,
+        // initial query) stays.
+        search: true,
         hash: movedRouteAnchor,
         replace: true,
         resetScroll: false,

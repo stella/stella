@@ -130,24 +130,43 @@ const input = (
   });
 
 let order = 0n;
+
+type IngestAtOptions = {
+  documentId: string;
+  texts: readonly string[];
+  observationOrder: bigint;
+  corpus: CaseLawCorpusDependencies;
+};
+
+const ingestAt = async ({
+  documentId,
+  texts,
+  observationOrder,
+  corpus,
+}: IngestAtOptions) => {
+  const outcome = (
+    await processDecision({
+      input: input(documentId, `raw-${String(observationOrder)}`, texts),
+      sourceId,
+      scopedDb,
+      observedAt: new Date(
+        Date.UTC(2026, 10, 10, 12, 0, Number(observationOrder)),
+      ),
+      observationOrder,
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus,
+    })
+  ).unwrap();
+  expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+};
+
 const ingest = async (
   documentId: string,
   texts: readonly string[],
   corpus: CaseLawCorpusDependencies = inlineCorpus,
 ) => {
   order += 1n;
-  const outcome = (
-    await processDecision({
-      input: input(documentId, `raw-${String(order)}`, texts),
-      sourceId,
-      scopedDb,
-      observedAt: new Date(Date.UTC(2026, 10, 10, 12, 0, Number(order))),
-      observationOrder: order,
-      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-      corpus,
-    })
-  ).unwrap();
-  expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+  await ingestAt({ documentId, texts, observationOrder: order, corpus });
 };
 
 const decisionIdOf = async (
@@ -349,6 +368,58 @@ test("a canonical row's replaced document is read from object storage", async ()
 
   expect(await redirectsOf(decisionId)).toEqual(
     new Map([[anchorOf(v1, B), anchorOf(v2, reworded)]]),
+  );
+});
+
+test("a document replaced while a write plans is planned again, so its anchors are redirected too", async () => {
+  const documentId = createSafeId<"caseLawDecision">();
+  const between = `${B} Mezitím doplněno o náklady.`;
+  const latest = `${between} Konečné znění odůvodnění.`;
+  await ingest(documentId, [A, B, C], packedCorpus);
+  const decisionId = await decisionIdOf(documentId);
+  const base = order;
+  order += 2n;
+
+  // While the later write reads the document it replaces, an earlier
+  // observation still newer than the stored row replaces it first.
+  let raced = false;
+  let betweenDocument: DocumentAst | undefined;
+  const racingCorpus = {
+    ...packedCorpus,
+    readBytes: {
+      readRange: async (request) => {
+        if (!raced) {
+          raced = true;
+          await ingestAt({
+            documentId,
+            texts: [A, between, C],
+            observationOrder: base + 1n,
+            corpus: packedCorpus,
+          });
+          betweenDocument = await packedDocument(decisionId);
+        }
+        return await packedCorpus.readBytes.readRange(request);
+      },
+    },
+  } satisfies CaseLawCorpusDependencies;
+
+  await ingestAt({
+    documentId,
+    texts: [A, latest, C],
+    observationOrder: base + 2n,
+    corpus: racingCorpus,
+  });
+  const current = await packedDocument(decisionId);
+
+  expect(raced).toBe(true);
+  if (betweenDocument === undefined) {
+    throw new Error("the racing write stored no document");
+  }
+  // The anchor only the intervening document held lands on the same text.
+  const redirects = await redirectsOf(decisionId);
+  expect(redirects.has(anchorOf(betweenDocument, between))).toBe(true);
+  expect(redirects.get(anchorOf(betweenDocument, between))).toBe(
+    anchorOf(current, latest),
   );
 });
 
