@@ -77,7 +77,10 @@ export const IdentityText = ({ children, className }: IdentityTextProps) => {
       >
         {name}
       </TooltipTrigger>
-      <TooltipPopup className="max-w-sm" role="tooltip">
+      {/* Beside the name, never above or below it: clipped names sit in
+          stacked rows, and a popup over the next row hides the row the
+          pointer is heading to. */}
+      <TooltipPopup className="max-w-sm" role="tooltip" side="inline-end">
         <span className="block max-w-sm wrap-break-word" dir="auto">
           {name}
         </span>
