@@ -281,6 +281,36 @@ test("server recent rows render known court chips, unknown decision icons and st
   }
 });
 
+test("every recent row puts its mark in one column, so titles start at the same edge", async () => {
+  await mount();
+  const rows = [
+    screen.getByRole("button", { name: /náhrada škody/u }),
+    screen.getByRole("link", { name: /23 Cdo 1001/u }),
+    screen.getByRole("link", { name: /47 C/u }),
+    screen.getByRole("link", { name: /172\/26/u }),
+  ];
+  const columns = rows.map((row) =>
+    row.querySelectorAll('[data-slot="recent-mark"]'),
+  );
+
+  expect(columns.map((found) => found.length)).toEqual([1, 1, 1, 1]);
+  const columnClasses = new Set(
+    columns.map((found) => found[0]?.className ?? ""),
+  );
+  expect(columnClasses.size).toBe(1);
+  expect([...columnClasses][0]).toMatch(/(^| )w-\S+( |$)/u);
+  // The mark sits inside the column, never beside it where its own width
+  // would push the title.
+  expect(
+    columns.map(
+      (found) =>
+        found[0]?.querySelector(
+          '[data-slot="document-identity-badge"], svg',
+        ) !== null,
+    ),
+  ).toEqual([true, true, true, true]);
+});
+
 test("server recents filter, reopen queries and delete their server entry id", async () => {
   const calls = await mount();
   await click(messages.lawHome.recentSearchFilter);

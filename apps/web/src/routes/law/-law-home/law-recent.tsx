@@ -51,7 +51,7 @@ type HistoryEntry = Extract<
   ReturnType<typeof useLawHistory>["list"],
   { status: "ready" }
 >["entries"][number];
-const recentEntryIcon = (entry: HistoryEntry) => {
+const recentEntryMark = (entry: HistoryEntry) => {
   switch (entry.kind) {
     case "search":
       return <SearchIcon className="size-4" />;
@@ -63,6 +63,17 @@ const recentEntryIcon = (entry: HistoryEntry) => {
       return panic("Unhandled law history kind");
   }
 };
+
+/** Every row's mark sits in one fixed-width column, so all titles start at
+ * the same edge whether the mark is the search icon, a court chip or a
+ * statute number. The column fits a four-letter court chip and a short
+ * statute number; a statute number wider than it shows its short form
+ * (`262/06`), which the badge picks by container query. */
+const recentEntryIcon = (entry: HistoryEntry) => (
+  <span className="flex w-11 shrink-0 justify-start" data-slot="recent-mark">
+    {recentEntryMark(entry)}
+  </span>
+);
 
 type LawRecentProps = {
   onSearch: (query: string) => void;
@@ -216,7 +227,9 @@ const ScopedLawRecentList = ({
                 className="flex items-start gap-2 px-2 py-1.5"
                 key={index}
               >
-                <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
+                <span className="flex w-11 shrink-0">
+                  <Skeleton className="mt-0.5 size-4 rounded-sm" />
+                </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <Skeleton className="h-4 w-3/5" />
                   <Skeleton className="h-3 w-2/5" />
