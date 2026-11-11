@@ -347,7 +347,7 @@ const placeColumn = <Node extends { id: string }>(
  * The layered layout: documents, their claims, the facts, the sources, from
  * the reading start. Deterministic, so the same graph is the same picture:
  * claims keep their document's reading order, a document spans its claims,
- * facts sit by the claims that link them, sources by their facts.
+ * facts sit by the claims that link them, sources by the first fact that cites them.
  */
 export const layoutGraph = (model: GraphModel): GraphLayout => {
   const { claimHeight, factHeight, sourceHeight, gap, groupGap } =
@@ -419,7 +419,12 @@ export const layoutGraph = (model: GraphModel): GraphLayout => {
   }
   const sources = placeColumn(
     model.sources,
-    (source) => mean(sourceLinks.get(source.id) ?? []),
+    // A document many facts cite sits by the first of them, so the column
+    // reads from the top rather than drifting to the middle of a long list.
+    (source) => {
+      const centres = sourceLinks.get(source.id) ?? [];
+      return centres.length === 0 ? null : Math.min(...centres);
+    },
     sourceHeight,
   );
   for (const source of sources.order) {
