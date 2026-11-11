@@ -1,12 +1,16 @@
 import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
 import {
   CHAT_THREAD_ORIGIN,
+  CHAT_THREAD_PIN_STATE,
+  CHAT_THREAD_READ_STATE,
   type ChatThreadOrigin,
+  type ChatThreadPinState,
+  type ChatThreadReadState,
 } from "@stll/api-contract/chat";
 import { numberFromString } from "@stll/api-contract/http-input";
 import { classifyFailure } from "@stll/errors";
@@ -28,6 +32,10 @@ import {
   readChatThreadContexts,
 } from "@/api/handlers/chat/threads/list-context";
 import type { ChatThreadContext } from "@/api/handlers/chat/threads/list-context";
+import {
+  LATEST_ANSWER,
+  UNREAD_BESIDE_LATEST_ANSWER,
+} from "@/api/handlers/chat/threads/reader-state";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -44,6 +52,7 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 /** The matters a thread's pinned or embedded matter ids name, for search. */
@@ -65,6 +74,8 @@ type ChatThreadListItem = {
   decision: ChatThreadDecision | null;
   id: string;
   origin: ChatThreadOrigin;
+  pinState: ChatThreadPinState;
+  readState: ChatThreadReadState;
   title: string;
   createdAt: Date;
   updatedAt: Date;
@@ -116,7 +127,11 @@ const config = {
     "threads belonging to a matter that is being deleted, are left out. " +
     "Each thread carries a bounded preview of its context: the matters and " +
     "files it drew on, with their total counts, and the case-law decision " +
-    "the chat is about, if any. search matches the thread " +
+    "the chat is about, if any. Each thread also says whether you have read " +
+    "its latest answer (readState) and whether you pinned it (pinState). " +
+    "The pinState filter keeps only your pinned or only your unpinned " +
+    "threads, so a list can show the pinned ones first. search matches the " +
+    "thread " +
     "title, the matter it lives in, or a matter pinned to it; matterId " +
     "keeps only the threads that live in that matter (not global threads " +
     "that merely pinned it) and is not found when you cannot open the " +
@@ -136,6 +151,7 @@ const config = {
       v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),
     ),
     workspaceId: v.optional(resourceIdSchema("workspace")),
+    pinState: v.optional(v.picklist(Object.values(CHAT_THREAD_PIN_STATE))),
     limit: v.optional(
       numberFromString(
         v.pipe(
@@ -149,10 +165,27 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
+const readerStatesOf = ({
+  pinnedAt,
+  unread,
+}: {
+  pinnedAt: Date | null;
+  unread: boolean;
+}): Pick<ChatThreadListItem, "pinState" | "readState"> => ({
+  pinState:
+    pinnedAt === null
+      ? CHAT_THREAD_PIN_STATE.unpinned
+      : CHAT_THREAD_PIN_STATE.pinned,
+  readState: unread
+    ? CHAT_THREAD_READ_STATE.unread
+    : CHAT_THREAD_READ_STATE.read,
+});
+
 const THREAD_LIST_PROJECTION = {
   createdAt: chatThreads.createdAt,
   forkedFromMessageId: chatThreads.forkedFromMessageId,
   id: chatThreads.id,
+  pinnedAt: chatThreads.pinnedAt,
   subjectDecisionId: chatThreads.subjectDecisionId,
   title: chatThreads.title,
   titleSource: chatThreads.titleSource,
@@ -252,6 +285,53 @@ type GetThreadsDependencies = {
   readCopies?: typeof readWithdrawnCopyProjection;
 };
 
+type ListedThreadItem = {
+  item: ChatThreadListItem;
+  workspaceId: string | null;
+  workspaceName: string | null;
+};
+
+type WorkspaceThreadGroup = {
+  workspaceId: string;
+  workspaceName: string;
+  threads: ChatThreadListItem[];
+};
+
+// Global threads stay in page order; matter threads group under their matter,
+// most recently updated matter first. A matter thread whose matter name is
+// unreadable is left out.
+const groupListedThreads = (listed: readonly ListedThreadItem[]) => {
+  const global: ChatThreadListItem[] = [];
+  const groupedWorkspaceThreads = new Map<string, WorkspaceThreadGroup>();
+  for (const { item, workspaceId, workspaceName } of listed) {
+    if (workspaceId === null) {
+      global.push(item);
+      continue;
+    }
+    if (workspaceName === null) {
+      continue;
+    }
+    const existingGroup = groupedWorkspaceThreads.get(workspaceId);
+    if (existingGroup) {
+      existingGroup.threads.push(item);
+      continue;
+    }
+    groupedWorkspaceThreads.set(workspaceId, {
+      workspaceId,
+      workspaceName,
+      threads: [item],
+    });
+  }
+  const workspaces = Array.from(groupedWorkspaceThreads.values()).toSorted(
+    (left, right) => {
+      const leftUpdatedAt = left.threads.at(0)?.updatedAt.getTime() ?? 0;
+      const rightUpdatedAt = right.threads.at(0)?.updatedAt.getTime() ?? 0;
+      return rightUpdatedAt - leftUpdatedAt;
+    },
+  );
+  return { global, workspaces };
+};
+
 const GET_THREADS_DEPENDENCIES = {
   readDecisionBadges: readPublicDecisionBadges,
 };
@@ -299,6 +379,13 @@ export const createGetThreads = ({
       if (scope.scope === "workspace") {
         conditions.push(eq(chatThreads.workspaceId, scope.workspaceId));
       }
+      if (query.pinState !== undefined) {
+        conditions.push(
+          query.pinState === CHAT_THREAD_PIN_STATE.pinned
+            ? isNotNull(chatThreads.pinnedAt)
+            : isNull(chatThreads.pinnedAt),
+        );
+      }
       const search = query.search?.trim();
       const searchPattern = search ? `%${escapeLike(search)}%` : null;
       // Membership-mode RLS filters workspace-scoped threads and verifies every
@@ -342,12 +429,17 @@ export const createGetThreads = ({
 
           const readBatch = async (after: typeof cursor) => {
             let listQuery = tx
-              .select({ ...THREAD_LIST_PROJECTION, matterMatched: matterMatch })
+              .select({
+                ...THREAD_LIST_PROJECTION,
+                matterMatched: matterMatch,
+                unread: UNREAD_BESIDE_LATEST_ANSWER,
+              })
               .from(chatThreads)
               .leftJoin(
                 workspacesTable,
                 eq(workspacesTable.id, chatThreads.workspaceId),
               )
+              .leftJoinLateral(LATEST_ANSWER, sql`true`)
               .$dynamic();
             if (contextMatterMatch !== null) {
               listQuery = listQuery.leftJoinLateral(
@@ -411,17 +503,7 @@ export const createGetThreads = ({
       const withdrawal = yield* Result.await(
         Result.tryPromise(async () => readCopies({ values: page })),
       );
-      const global: ChatThreadListItem[] = [];
-
-      const groupedWorkspaceThreads = new Map<
-        string,
-        {
-          workspaceId: string;
-          workspaceName: string;
-          threads: ChatThreadListItem[];
-        }
-      >();
-
+      const listed: ListedThreadItem[] = [];
       for (const thread of page) {
         const origin =
           thread.forkedFromMessageId === null
@@ -429,62 +511,29 @@ export const createGetThreads = ({
             : CHAT_THREAD_ORIGIN.fork;
         const context = contexts.get(thread.id) ?? EMPTY_CHAT_THREAD_CONTEXT;
         const decision = decisionOf(thread.subjectDecisionId);
-        if (thread.workspaceId === null) {
-          global.push({
-            context,
-            decision,
-            id: thread.id,
-            origin,
-            title: withdrawal.thread(thread).title,
-            createdAt: thread.createdAt,
-            updatedAt: thread.updatedAt,
-            usedAnonymization: thread.usedAnonymization,
-          });
-          continue;
-        }
-
-        if (thread.workspaceName === null) {
-          continue;
-        }
-
-        const slice = {
+        const item = {
           context,
           decision,
           id: thread.id,
           origin,
+          ...readerStatesOf(thread),
           title: withdrawal.thread(thread).title,
           createdAt: thread.createdAt,
           updatedAt: thread.updatedAt,
           usedAnonymization: thread.usedAnonymization,
         };
-
-        const existingGroup = groupedWorkspaceThreads.get(thread.workspaceId);
-        if (existingGroup) {
-          existingGroup.threads.push(slice);
-          continue;
-        }
-
-        groupedWorkspaceThreads.set(thread.workspaceId, {
+        const slice = item satisfies AssertNoExtraFields<
+          typeof item,
+          ChatThreadListItem
+        >;
+        listed.push({
+          item: slice,
           workspaceId: thread.workspaceId,
           workspaceName: thread.workspaceName,
-          threads: [slice],
         });
       }
 
-      const workspaceGroups = Array.from(
-        groupedWorkspaceThreads.values(),
-      ).toSorted((left, right) => {
-        const leftUpdatedAt = left.threads.at(0)?.updatedAt.getTime() ?? 0;
-        const rightUpdatedAt = right.threads.at(0)?.updatedAt.getTime() ?? 0;
-
-        return rightUpdatedAt - leftUpdatedAt;
-      });
-
-      return Result.ok({
-        global,
-        nextCursor,
-        workspaces: workspaceGroups,
-      });
+      return Result.ok({ ...groupListedThreads(listed), nextCursor });
     },
   );
 

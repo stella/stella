@@ -221,6 +221,25 @@ export const CHAT_ACTIVE_RUN_STATE = {
 export type ChatActiveRunState =
   (typeof CHAT_ACTIVE_RUN_STATE)[keyof typeof CHAT_ACTIVE_RUN_STATE];
 
+/**
+ * Whether the reader has seen a chat's latest answer: `unread` once an answer
+ * settles after they last had the chat open, or after they marked it unread.
+ */
+export const CHAT_THREAD_READ_STATE = {
+  read: "read",
+  unread: "unread",
+} as const;
+export type ChatThreadReadState =
+  (typeof CHAT_THREAD_READ_STATE)[keyof typeof CHAT_THREAD_READ_STATE];
+
+/** Whether the reader pinned a chat to the top of their list. */
+export const CHAT_THREAD_PIN_STATE = {
+  pinned: "pinned",
+  unpinned: "unpinned",
+} as const;
+export type ChatThreadPinState =
+  (typeof CHAT_THREAD_PIN_STATE)[keyof typeof CHAT_THREAD_PIN_STATE];
+
 /** One unfinished chat run of the caller, as the active-runs read lists it. */
 export type ChatActiveRun = {
   threadId: string;

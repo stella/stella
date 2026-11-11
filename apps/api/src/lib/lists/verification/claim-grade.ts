@@ -31,6 +31,12 @@ import type {
 } from "@/api/lib/lists/verification/contract";
 import { createVerificationCall } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
+import {
+  CLAIM_QUALIFIER_EXPLANATION_MAX,
+  GRADER_CLAIM_QUALIFIERS,
+  graderQualifierFits,
+} from "@/api/lib/lists/verification/qualifiers";
+import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
 
 /** Claims per grading call: the facts dominate the variable part of the
  *  prompt, so a batch amortises them without letting one failure take the
@@ -65,6 +71,12 @@ const rawGradeSchema = v.strictObject({
       verdictIfGoverning: v.array(v.picklist(SCORED_CLAIM_STATES)),
     }),
   ),
+  qualifiers: v.array(
+    v.strictObject({
+      kind: v.picklist(GRADER_CLAIM_QUALIFIERS),
+      explanation: v.string(),
+    }),
+  ),
 });
 
 /** Read by the structured-output role contract test. @public */
@@ -74,7 +86,11 @@ export const gradingSchema = v.strictObject({
 
 type RawGrade = v.InferOutput<typeof rawGradeSchema>;
 
-export type ClaimGrade = ClaimVerdict & { refs: ClaimRef[] };
+type GradedVerdict = ClaimVerdict & { refs: ClaimRef[] };
+
+export type ClaimGrade = GradedVerdict & {
+  qualifiers: GraderClaimQualifier[];
+};
 
 /**
  * The type a graded claim is stored with. Extraction sets aside the claims it
@@ -104,6 +120,11 @@ For each claim choose a verdict:
 
 score is how strongly the facts support the claim, 0 to 100, for supported, tension and contradicted only; null otherwise. refs lists the facts the verdict rests on by factId, with rel supports, conflicts, or record (relevant context that neither supports nor conflicts). supported, tension and contradicted must cite at least one fact.
 
+qualifiers lists caveats on the verdict, usually none; each has a kind and a one-sentence explanation of what the record does and does not say:
+- record-silent: only with nocover, when the record is not expected to speak to the point at all (background, framing, the author's own state of mind), so the missing coverage is not a gap in the evidence.
+- scope-mismatch: the fact the verdict turns on is about a different period, population, place, measure or unit than the claim.
+A difference in scope alone never makes a claim contradicted: when the only conflicting fact differs in scope, grade on what the record says about the claim's own scope (usually nocover or tension) and add scope-mismatch.
+
 For recordconflict, fill conflict: subject (the disputed point, in a few words), factIds (exactly the two conflicting facts), values (what each of those facts says on the point, in the same order), and verdictIfGoverning (the verdict the claim would get if that fact governed, in the same order: supported, tension or contradicted). Otherwise conflict is null.
 
 A fact's confidence says how unambiguous its meaning is and an interpretation note says where its meaning is contested; weigh them, but do not treat a low-confidence fact as absent. Use only the facts supplied. Answer every claim exactly once, preserving its claimId. Each claim comes with the passage it sits in: that passage says what the claim means and is never evidence.`;
@@ -125,11 +146,11 @@ const factLine = (id: string, fact: VerificationEvidenceFact): string => {
 
 type Violation = { claimId: string; reason: string };
 
-/** Hold one answer to the verdict rules, or say which one it breaks. */
-const normalizeGrade = (
+/** Hold one answer's verdict to the verdict rules, or say which it breaks. */
+const normalizeVerdict = (
   raw: RawGrade,
   factIdByPromptId: ReadonlyMap<string, SafeId<"entity">>,
-): Result<ClaimGrade, string> => {
+): Result<GradedVerdict, string> => {
   const refs: ClaimRef[] = [];
   const seen = new Set<string>();
   for (const ref of raw.refs) {
@@ -217,6 +238,49 @@ const normalizeGrade = (
   }
 };
 
+/** Hold one answer's qualifiers to the pairing rules, or say which it
+ *  breaks. */
+const normalizeQualifiers = (
+  raw: RawGrade["qualifiers"],
+  state: ClaimVerdict["state"],
+): Result<GraderClaimQualifier[], string> => {
+  const qualifiers: GraderClaimQualifier[] = [];
+  for (const { kind, explanation } of raw) {
+    if (!graderQualifierFits(kind, state)) {
+      return Result.err(`gives ${kind} with a ${state} verdict`);
+    }
+    if (qualifiers.some((qualifier) => qualifier.kind === kind)) {
+      return Result.err(`gives ${kind} more than once`);
+    }
+    const trimmed = explanation.trim();
+    if (trimmed === "") {
+      return Result.err(`gives ${kind} without an explanation`);
+    }
+    qualifiers.push({
+      kind,
+      explanation: trimmed.slice(0, CLAIM_QUALIFIER_EXPLANATION_MAX),
+    });
+  }
+  return Result.ok(qualifiers);
+};
+
+/** Hold one answer to the verdict and qualifier rules, or say which one it
+ *  breaks. */
+const normalizeGrade = (
+  raw: RawGrade,
+  factIdByPromptId: ReadonlyMap<string, SafeId<"entity">>,
+): Result<ClaimGrade, string> => {
+  const verdict = normalizeVerdict(raw, factIdByPromptId);
+  if (Result.isError(verdict)) {
+    return verdict;
+  }
+  const qualifiers = normalizeQualifiers(raw.qualifiers, verdict.value.state);
+  if (Result.isError(qualifiers)) {
+    return qualifiers;
+  }
+  return Result.ok({ ...verdict.value, qualifiers: qualifiers.value });
+};
+
 const repairMessage = (violations: readonly Violation[]) =>
   `Some answers break the rules or are missing. Answer only these claims again:\n${violations
     .map(({ claimId, reason }) => `- ${claimId}: ${reason}`)
@@ -250,7 +314,13 @@ export const gradeClaims = async ({
       grades: new Map(
         claims.map((claim) => [
           claim.key,
-          { state: "nocover", score: null, recordConflict: null, refs: [] },
+          {
+            state: "nocover",
+            score: null,
+            recordConflict: null,
+            refs: [],
+            qualifiers: [],
+          },
         ]),
       ),
     });

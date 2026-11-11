@@ -116,6 +116,8 @@ export const readEditableMessageOnTx = async ({
       compactionAttemptedAt: row.thread.compactionAttemptedAt,
       compactionAttempts: row.thread.compactionAttempts,
       compactionEpoch: row.thread.compactionEpoch,
+      lastReadAt: row.thread.lastReadAt,
+      pinnedAt: row.thread.pinnedAt,
       createdAt: row.thread.createdAt,
       updatedAt: row.thread.updatedAt,
     },

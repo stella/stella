@@ -3,6 +3,7 @@ import type {
   CSSProperties,
   KeyboardEvent,
   PointerEvent,
+  PropsWithChildren,
   ReactElement,
   ReactNode,
 } from "react";
@@ -10,7 +11,13 @@ import type {
 import { panic } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/tooltip";
+import { Popover, PopoverPopup, PopoverTrigger } from "../components/popover";
+import {
+  Tooltip,
+  TOOLTIP_OPEN_DELAY_MS,
+  TooltipPopup,
+  TooltipTrigger,
+} from "../components/tooltip";
 import { resolveMatterColor } from "../lib/matter-colors";
 import { cn } from "../lib/utils";
 import {
@@ -53,14 +60,22 @@ export type DayCalendarTone =
  */
 export type DayCalendarEntryState = "draft" | "final" | "suggestion";
 
+/**
+ * What a block shows on hover, for example the apps a `mixed` block merged.
+ * `actions` holds controls: it is a popover that also opens on focus or
+ * press and stays open while the pointer is on it, so its block is a button.
+ */
+export type DayCalendarBlockTooltip =
+  | { content: ReactNode; type: "actions" }
+  | { content: ReactNode; type: "text" };
+
 type DayCalendarBlockFields = DayCalendarRange & {
   accessibleLabel: string;
   caption?: ReactNode;
   id: string;
   title: ReactNode;
   tone: DayCalendarTone;
-  /** Shown on hover, for example the apps a `mixed` block merged. */
-  tooltip?: ReactNode;
+  tooltip?: DayCalendarBlockTooltip;
 };
 
 export type DayCalendarBlock =
@@ -68,10 +83,12 @@ export type DayCalendarBlock =
       kind: "entry";
       state: Exclude<DayCalendarEntryState, "suggestion">;
     })
-  | (DayCalendarBlockFields & {
+  | (Omit<DayCalendarBlockFields, "tooltip"> & {
       kind: "entry";
       onActivate: () => void;
       state: "suggestion";
+      /** A suggestion is already a button; its hover only describes it. */
+      tooltip?: Extract<DayCalendarBlockTooltip, { type: "text" }>;
     })
   | (DayCalendarBlockFields & { kind: "mixed" })
   | (DayCalendarBlockFields & { kind: "segment" });
@@ -266,7 +283,7 @@ export const DayCalendar = ({
     columnId: string,
     event: PointerEvent<HTMLElement>,
   ) => {
-    if (event.button !== 0) {
+    if (event.button !== 0 || !isWithinColumn(event)) {
       return;
     }
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -327,6 +344,10 @@ export const DayCalendar = ({
     columnId: string,
     event: KeyboardEvent<HTMLElement>,
   ) => {
+    // Keys from a block or its popover are not the column's.
+    if (event.target !== event.currentTarget) {
+      return;
+    }
     const current = draft?.columnId === columnId ? draft : null;
     switch (event.key) {
       case "ArrowDown":
@@ -570,6 +591,18 @@ const ColumnBlocks = ({
   });
 };
 
+/** A block's popover is portalled out of the column, yet its events still
+ * bubble to the column through React. */
+function isWithinColumn({
+  currentTarget,
+  target,
+}: {
+  currentTarget: HTMLElement;
+  target: EventTarget;
+}) {
+  return target instanceof Node && currentTarget.contains(target);
+}
+
 /** Below this height a block puts its title and caption on one line. */
 const TWO_LINE_BLOCK_MIN_PX = 40;
 
@@ -611,11 +644,12 @@ const DayCalendarBlockView = ({
     insetBlockStart: top,
     insetInlineStart: `${String((lane.lane * 100) / lane.laneCount)}%`,
   } satisfies CSSProperties;
+  const oneLine = blockSize < TWO_LINE_BLOCK_MIN_PX;
   const className = cn(
-    "text-foreground flex h-full w-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
-    blockSize < TWO_LINE_BLOCK_MIN_PX
-      ? "flex-row items-center gap-2"
-      : "flex-col gap-0.5 py-1",
+    // A size container: the block's width is set by its placement, never by
+    // its content, so a label can adapt to it with a container query.
+    "text-foreground @container flex h-full w-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
+    oneLine ? "flex-row items-center gap-2" : "flex-col gap-0.5 py-1",
     BLOCK_KIND_CLASSES[block.kind],
     block.kind === "entry" && ENTRY_STATE_CLASSES[block.state],
     block.tone.type === "matter" && "border-s-[3px]",
@@ -624,11 +658,23 @@ const DayCalendarBlockView = ({
   const content =
     blockSize < DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX ? null : (
       <>
-        <span className="min-w-0 shrink-0 truncate font-medium">
+        {/* On one line the caption gives way first, then the title ends in
+            an ellipsis rather than being cut at the block's edge. */}
+        <span
+          className={cn(
+            "min-w-0 truncate font-medium",
+            oneLine ? "shrink" : "shrink-0",
+          )}
+        >
           {block.title}
         </span>
         {block.caption === undefined ? null : (
-          <span className="text-muted-foreground min-w-0 truncate tabular-nums">
+          <span
+            className={cn(
+              "text-muted-foreground min-w-0 truncate tabular-nums",
+              oneLine && "shrink-[999]",
+            )}
+          >
             {block.caption}
           </span>
         )}
@@ -642,29 +688,6 @@ const DayCalendarBlockView = ({
     "data-slot": "day-calendar-block",
     style: blockSurfaceStyle(block),
   };
-  const surface =
-    block.kind === "entry" && block.state === "suggestion" ? (
-      <button
-        {...shared}
-        data-state={block.state}
-        onClick={block.onActivate}
-        // A suggestion is acted on, not dragged across: the column's range
-        // selection must not start under it, and its keys must not reach the
-        // column's range slider (Enter would commit a keyboard range).
-        onKeyDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        type="button"
-      >
-        {content}
-      </button>
-    ) : (
-      <article
-        {...shared}
-        data-state={block.kind === "entry" ? block.state : undefined}
-      >
-        {content}
-      </article>
-    );
 
   return (
     <div
@@ -676,15 +699,119 @@ const DayCalendarBlockView = ({
       )}
       style={placement}
     >
-      {block.tooltip === undefined ? (
-        surface
-      ) : (
-        <Tooltip>
-          <TooltipTrigger render={surface} />
-          <TooltipPopup className="max-w-72">{block.tooltip}</TooltipPopup>
-        </Tooltip>
-      )}
+      <BlockSurface block={block} content={content} shared={shared} />
     </div>
+  );
+};
+
+type BlockSurfaceProps = {
+  block: DayCalendarBlock;
+  content: ReactNode;
+  shared: {
+    "aria-label": string;
+    className: string;
+    "data-block-id": string;
+    "data-kind": DayCalendarBlock["kind"];
+    "data-slot": string;
+    style: CSSProperties;
+  };
+};
+
+/** A block whose hover holds actions answers hover, focus and an open
+ * popover like a suggestion does. */
+const ACTIONS_BLOCK_CLASSES =
+  "focus-visible:ring-ring data-popup-open:ring-ring/50 hover:ring-ring/50 outline-none hover:ring-1 focus-visible:ring-2 data-popup-open:ring-1";
+
+type ActionsPopoverProps = PropsWithChildren<{
+  trigger: ReactElement;
+}>;
+
+/** A block's actions, opened by hover, focus or press. Once something in
+ * them is pressed they stay open until dismissed: a press can move the
+ * layout under a pointer that never moved (a notice above the calendar
+ * goes away), and a hover popover would close as if the pointer had left,
+ * taking the action's confirmation with it. */
+const ActionsPopover = ({ children, trigger }: ActionsPopoverProps) => {
+  const [open, setOpen] = useState(false);
+  const [held, setHeld] = useState(false);
+  return (
+    <Popover
+      onOpenChange={(next, { reason }) => {
+        if (!next && held && reason === "trigger-hover") {
+          return;
+        }
+        setOpen(next);
+        if (!next) {
+          setHeld(false);
+        }
+      }}
+      open={open}
+    >
+      <PopoverTrigger
+        delay={TOOLTIP_OPEN_DELAY_MS}
+        openOnHover
+        render={trigger}
+      />
+      <PopoverPopup
+        className="max-w-72"
+        onPointerDown={() => setHeld(true)}
+        side="top"
+        tooltipStyle
+      >
+        {children}
+      </PopoverPopup>
+    </Popover>
+  );
+};
+
+/** A block whose hover holds actions is a button that opens them; a
+ * suggestion is a button the caller acts on; any other block is read. */
+const BlockSurface = ({ block, content, shared }: BlockSurfaceProps) => {
+  const state = block.kind === "entry" ? block.state : undefined;
+  if (block.tooltip?.type === "actions") {
+    const trigger = (
+      <button
+        {...shared}
+        className={cn(shared.className, ACTIONS_BLOCK_CLASSES)}
+        data-state={state}
+        // Pressing the block opens its actions; it must not start a range.
+        onPointerDown={(event) => event.stopPropagation()}
+        type="button"
+      >
+        {content}
+      </button>
+    );
+    return (
+      <ActionsPopover trigger={trigger}>{block.tooltip.content}</ActionsPopover>
+    );
+  }
+  const surface =
+    block.kind === "entry" && block.state === "suggestion" ? (
+      <button
+        {...shared}
+        data-state={state}
+        onClick={block.onActivate}
+        // A suggestion is acted on, not dragged across: the column's range
+        // selection must not start under it, and its keys must not reach the
+        // column's range slider (Enter would commit a keyboard range).
+        onKeyDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        type="button"
+      >
+        {content}
+      </button>
+    ) : (
+      <article {...shared} data-state={state}>
+        {content}
+      </article>
+    );
+  return block.tooltip === undefined ? (
+    surface
+  ) : (
+    <Tooltip>
+      <TooltipTrigger render={surface} />
+      <TooltipPopup className="max-w-72">{block.tooltip.content}</TooltipPopup>
+    </Tooltip>
   );
 };
 

@@ -634,6 +634,28 @@ const withPrDepthCheckoutRef = (step: Step): Step => {
   }
   return { ...step, with: { ...inputs, ref: PR_DEPTH_CHECKOUT_REF } };
 };
+// A blobless checkout moved to the shared action that retries it: the same
+// inputs, with the filter now owned by the action. Any other change to the
+// checkout stays significant.
+const withSharedPartialCloneCheckout = (step: Step): Step => {
+  if (usesOf(step) !== "actions/checkout@<pinned>") {
+    return step;
+  }
+  const inputs = v.parse(
+    v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
+    step,
+  ).with;
+  if (inputs?.["filter"] !== "blob:none") {
+    return step;
+  }
+  return {
+    ...step,
+    uses: "stella/.github/actions/partial-clone-checkout@<pinned>",
+    with: Object.fromEntries(
+      Object.entries(inputs).filter(([key]) => key !== "filter"),
+    ),
+  };
+};
 const ownedInstallFlags = '["--frozen-lockfile","--ignore-scripts"]';
 const scopedInstallActions = new Set([
   "./.github/actions/ci-install",
@@ -1663,6 +1685,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     const originalSetup = setupSteps(originalSteps)
       .map(withTaskResultCacheSetup)
       .map(withPrDepthCheckoutRef)
+      .map(withSharedPartialCloneCheckout)
       .map((step) => withInstallCache(step, base))
       .map((step) => {
         if (

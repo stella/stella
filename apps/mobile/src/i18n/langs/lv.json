@@ -15,6 +15,7 @@
     "noMatchesDescription": "Neviens tērzēšanas nosaukums vai lieta nesatur “{search}”.",
     "search": "Meklēt tērzēšanas",
     "loadFailed": "Jūsu sarunas neizdevās ielādēt.",
+    "runsLoadFailed": "Neizdevās pārbaudīt, kuras sarunas gaida jūs.",
     "retry": "Mēģināt vēlreiz",
     "untitled": "Saruna bez nosaukuma",
     "loadMoreFailed": "Ielādēt vairāk",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "Šo sarunu neizdevās ielādēt.",
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
+    "markRead": "Izlasīts",
+    "markUnread": "Neizlasīts",
+    "pin": "Piespraust",
+    "unpin": "Atspraust",
+    "unread": "Neizlasīta",
+    "markReadFailed": "Sarunu neizdevās atzīmēt kā izlasītu.",
+    "markUnreadFailed": "Sarunu neizdevās atzīmēt kā neizlasītu.",
+    "pinFailed": "Sarunu neizdevās piespraust.",
+    "unpinFailed": "Sarunu neizdevās atspraust.",
     "sections": {
+      "needsYou": "Gaida jūs",
+      "working": "Notiek",
+      "pinned": "Piespraustās",
       "today": "Šodien",
       "yesterday": "Vakar",
       "week": "Pēdējās 7 dienas",
@@ -62,7 +75,12 @@
     "sendFileRefused": "Neizdevās nosūtīt failu, tāpēc ziņa netika nosūtīta. Noņemiet failu un mēģiniet vēlreiz.",
     "sendFileNotAnonymizable": "Šī saruna ir anonimizēta, un stella nevarēja anonimizēt vienu no failiem, tāpēc nekas netika nosūtīts. Noņemiet failu un mēģiniet vēlreiz.",
     "pickTitle": "Izvēlieties sarunu",
-    "pickDescription": "Izvēlieties pavedienu no saraksta vai sāciet jaunu ar +."
+    "pickDescription": "Izvēlieties pavedienu no saraksta vai sāciet jaunu ar +.",
+    "runBanner": {
+      "needsYou": "Gaida jūs",
+      "finished": "Pabeigts",
+      "openHint": "Atver sarunu"
+    }
   },
   "tasks": {
     "emptyTitle": "Nav atvērtu uzdevumu",
@@ -151,7 +169,11 @@
     "scanDocument": "Skenēt dokumentu",
     "newTask": "Jauns uzdevums",
     "uploadDocument": "Augšupielādēt dokumentu",
-    "uploadFailed": "Dokumentu neizdevās augšupielādēt. Mēģiniet vēlreiz."
+    "uploadFailed": "Dokumentu neizdevās augšupielādēt. Mēģiniet vēlreiz.",
+    "startTimer": "Sākt taimeri",
+    "pauseTimer": "Apturēt taimeri",
+    "resumeTimer": "Turpināt taimeri",
+    "timerRunning": "Taimeris darbojas"
   },
   "entity": {
     "type": "Veids",

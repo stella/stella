@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "A chat's read marker is written each time its own reader opens it and changes no content, scope or access; an audit row per open would be noise. It follows the notification read-state write, which skips audit for the same reason. Pin changes stay audited."
+}

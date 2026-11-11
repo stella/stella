@@ -76,13 +76,16 @@ const INCOMPLETE_STREAM_CODES: ReadonlySet<string> = new Set([
 
 /**
  * The run error codes a local chat turn ends with when the computer it ran on
- * reports why it stopped (`local-run-chunks.ts`), by the kind each names.
+ * reports why it stopped (`local-run-chunks.ts`), by the kind each names. A
+ * model at capacity is the provider's outage, reported under its own code by
+ * the harness (`@stll/agent-engine` stream chunks).
  */
 const LOCAL_RUNNER_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
   [AI_FAILURE_CODES.local_runner_needs_login, "local_runner_needs_login"],
   [AI_FAILURE_CODES.local_runner_limit_reached, "local_runner_limit_reached"],
   [AI_FAILURE_CODES.local_runner_unavailable, "local_runner_unavailable"],
   [AI_FAILURE_CODES.local_runner_turn_too_large, "local_runner_turn_too_large"],
+  [AI_FAILURE_CODES.provider_unavailable, "provider_unavailable"],
 ]);
 
 /**

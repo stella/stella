@@ -413,11 +413,10 @@ jobs:
       # merge group validates the queued tree, so it needs no patch identity.
       - name: Checkout patch-id inputs
         if: (github.event_name == 'pull_request' && github.event.action != 'enqueued') || github.event_name == 'merge_group'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
 
       # Only pull requests and merge groups have a base, and both fetched their
@@ -922,10 +921,9 @@ jobs:
         # are enough to list changed paths, and git fetches any other blob a
         # step reads (a `git show <base>:<file>`, say) on first access. Jobs
         # that never look past HEAD keep the default shallow checkout.
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
@@ -1775,10 +1773,9 @@ jobs:
     steps:
       &quick-checks-steps # parser-version-guard reads Git history, so the checkout is full.
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: ${{ needs.ci-plan.outputs.docs_checks_required == 'true' }}
@@ -2185,10 +2182,9 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -2484,10 +2480,9 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -2675,10 +2670,9 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -3429,10 +3423,9 @@ jobs:
     steps:
       - &full_checkout_input_sha
         name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: true
@@ -3696,10 +3689,9 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -3877,10 +3869,9 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -4018,7 +4009,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -4045,7 +4036,7 @@ jobs:
         ports:
           - 5433:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -4268,7 +4259,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -4469,7 +4460,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -4645,7 +4636,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -7134,6 +7125,8 @@ jobs:
           # runner; stella does not link, bundle, modify, or distribute it in
           # product artifacts. Workflow uses must remain pinned to immutable
           # commit SHAs and receive normal dependency-update review.
+          # date-holidays ships its holiday data under CC-BY-3.0, which only
+          # requires attribution.
           # Keep these exceptions package-scoped; do not add namespace/group
           # exceptions.
           allow-dependencies-licenses: >-
@@ -7184,6 +7177,7 @@ jobs:
             pkg:npm/better-result,
             pkg:npm/client-zip,
             pkg:npm/crossws,
+            pkg:npm/date-holidays,
             pkg:npm/jszip,
             pkg:npm/marked,
             pkg:npm/posthog-js,
