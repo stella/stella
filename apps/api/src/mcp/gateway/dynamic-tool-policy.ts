@@ -3,15 +3,15 @@ import * as v from "valibot";
 import { AGENT_SKILL_ORIGINS } from "@/api/db/schema";
 import { SKILL_RESOURCE_WINDOW_CHARS } from "@/api/lib/agent-skills/resource-window";
 import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
-import {
-  BOUND_TEXT_CURSOR_MAX_CHARS,
-  isBoundTextCursor,
-} from "@/api/lib/bound-text-window";
 import { LIMITS } from "@/api/lib/limits";
 import {
   type DynamicToolNamespace,
   dynamicToolNamespaceOf,
 } from "@/api/lib/mcp-upstream/namespace";
+import {
+  BOUND_TEXT_CURSOR_MAX_CHARS,
+  isBoundTextCursor,
+} from "@/api/mcp/bound-text-window";
 import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
 import type {
   McpToolAnnotations,

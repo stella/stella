@@ -9,10 +9,6 @@ import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 
 import { CONTACT_DISPLAY_NAME_MAX_LENGTH } from "@/api/handlers/contacts/list-query";
 import { encodeVersionCursor } from "@/api/handlers/entities/version-cursor";
-import {
-  isBoundTextCursor,
-  windowBoundText,
-} from "@/api/lib/bound-text-window";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
@@ -30,6 +26,10 @@ import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
 import { encodeCursor } from "@/api/lib/search/cursor";
 import { encodeGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  isBoundTextCursor,
+  windowBoundText,
+} from "@/api/mcp/bound-text-window";
 import { encodeCourtCursor } from "@/api/mcp/case-law-court-catalog-tool";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";

@@ -25360,7 +25360,7 @@
         "job": "measure-1"
       }
     },
-    "src/lib/bound-text-window.test.ts": {
+    "src/mcp/bound-text-window.test.ts": {
       "peakMb": 179,
       "baselineMb": 179,
       "source": {

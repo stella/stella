@@ -2,8 +2,8 @@ import * as v from "valibot";
 
 import type { AgentInputNormalizationAnnotation } from "@stll/agent-input";
 
-import { isBoundTextCursor } from "@/api/lib/bound-text-window";
 import { LIMITS } from "@/api/lib/limits";
+import { isBoundTextCursor } from "@/api/mcp/bound-text-window";
 import {
   cursorInput,
   ELI_NORMALIZATION,

@@ -5,7 +5,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 import { sha256Base64Url } from "@stll/sha256/bun";
 
-import { windowBoundText } from "@/api/lib/bound-text-window";
+import { windowBoundText } from "@/api/mcp/bound-text-window";
 
 const readAll = (text: string, limit: number, subject = "eli|anchor") => {
   const chunks: string[] = [];

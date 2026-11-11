@@ -30,7 +30,6 @@ import {
 } from "@/api/lib/agent-skills/skills";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { BOUND_TEXT_CURSOR_MAX_CHARS } from "@/api/lib/bound-text-window";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
 import type { ChatToolSetPurpose } from "@/api/lib/chat/chat-tool-types";
@@ -39,6 +38,7 @@ import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
+import { BOUND_TEXT_CURSOR_MAX_CHARS } from "@/api/mcp/bound-text-window";
 
 import { auditedSkillBody } from "./audited-body";
 import {

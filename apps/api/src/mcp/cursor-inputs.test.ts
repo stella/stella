@@ -19,12 +19,12 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { windowBoundText } from "@/api/lib/bound-text-window";
 import {
   encodePaginationCursor,
   isIssuablePaginationCursor,
 } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
+import { windowBoundText } from "@/api/mcp/bound-text-window";
 import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 /**

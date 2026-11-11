@@ -1,6 +1,6 @@
-import { windowBoundText } from "@/api/lib/bound-text-window";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { windowBoundText } from "@/api/mcp/bound-text-window";
 
 /**
  * Characters of one skill resource a read returns. A resource may be stored

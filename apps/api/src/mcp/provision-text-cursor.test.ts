@@ -2,11 +2,11 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { isRecord } from "@/api/lib/type-guards";
 import {
   isBoundTextCursor,
   windowBoundText,
-} from "@/api/lib/bound-text-window";
-import { isRecord } from "@/api/lib/type-guards";
+} from "@/api/mcp/bound-text-window";
 import { LEGISLATION_TOOL_SET } from "@/api/mcp/legislation-tools";
 
 const ELI = "https://www.e-sbirka.cz/eli/cz/sb/2012/89";

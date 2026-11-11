@@ -28,10 +28,6 @@ import { extractProvisionText } from "@/api/handlers/legislation/provision-text"
 import type { LegislationProvisionVersion } from "@/api/handlers/legislation/provision-versions";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import {
-  isBoundTextCursor,
-  windowBoundText,
-} from "@/api/lib/bound-text-window";
-import {
   READ_PROVISION_HISTORY_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
 } from "@/api/lib/chat/legislation-result-projections";
@@ -51,6 +47,10 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import {
+  isBoundTextCursor,
+  windowBoundText,
+} from "@/api/mcp/bound-text-window";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   continuationTokenInput,
