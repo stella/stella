@@ -14,7 +14,7 @@ import {
   DESKTOP_RUNNER_OUTPUT_EVENT,
   DESKTOP_RUNNER_RUN_OUTCOMES,
 } from "@stll/api-contract/desktop-runner";
-import { hmacSha256Hex } from "@stll/sha256/bun";
+import { hmacSha256Hex } from "@stll/sha256/hmac";
 
 import { ASK_USER_QUESTION_TOOL } from "./harness/claude-code/items";
 import {

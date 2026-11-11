@@ -15,7 +15,3 @@ export const sha256Base64Url = (input: Sha256Input): string =>
 
 export const sha256Bytes = (input: Sha256Input): Buffer =>
   createSha256().update(input).digest();
-
-/** HMAC-SHA-256 under `key`, as hex. */
-export const hmacSha256Hex = (key: Uint8Array, input: Sha256Input): string =>
-  new Bun.CryptoHasher("sha256", key).update(input).digest("hex");
