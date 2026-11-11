@@ -387,6 +387,43 @@
       "optional": "Vabatahtlik",
       "readyToConfirm": "Kinnitamiseks valmis"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Tavapärasena kinnitatud",
+        "conflictReopened": "Vastuolu lahendus võetud tagasi",
+        "escalated": "Edastatud tõendite töörühmale",
+        "governed": "Aluseks olev kirje valitud",
+        "noteCleared": "Märkus eemaldatud",
+        "noteSaved": "Märkus salvestatud",
+        "overridden": "Otsus asendatud",
+        "overrideWithdrawn": "Asendus võetud tagasi",
+        "reopened": "Uuesti avatud kontrollitava väitena",
+        "statusCleared": "Kontrolli olek eemaldatud",
+        "statusDisputed": "Märgitud vaidlustatuks",
+        "statusNeedsEvidence": "Märgitud tõendeid vajavaks",
+        "statusReviewed": "Märgitud kontrollituks"
+      },
+      "empty": "Kontrollitoiminguid veel pole.",
+      "filters": {
+        "allKinds": "Mis tahes toiming",
+        "allReviewers": "Mis tahes kontrollija",
+        "kind": "Filtreeri toimingu järgi",
+        "reviewer": "Filtreeri kontrollija järgi"
+      },
+      "formerMember": "Endine liige",
+      "kinds": {
+        "override": "Asendatud otsused",
+        "recordConflict": "Vastuolude lahendused",
+        "reopen": "Uuesti avamised",
+        "status": "Oleku muudatused"
+      },
+      "noMatches": "Ükski toiming ei vasta nendele filtritele.",
+      "noStatus": "Olek puudub",
+      "none": "Toiminguid veel pole",
+      "reasonUnrecorded": "Põhjust pole salvestatud: toiming tehti enne, kui põhjus muutus kohustuslikuks.",
+      "runButton": "Kontrolli ajalugu",
+      "runTitle": "Kontrolli ajalugu"
+    },
     "matches": {
       "count": "{count, plural, one {# vaste} other {# vastet}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "Ainult allikata"
       }
     },
+    "reason": {
+      "escalate": "Miks vajab seda tõendite töörühm?",
+      "govern": "Miks on see kirje aluseks?",
+      "override": "Miks on otsus „{verdict}“?",
+      "placeholder": "Märkige põhjus; see jääb väite ajalukku",
+      "reopen": "Miks saab seda väidet kontrollida?",
+      "required": "Salvestamiseks märkige põhjus.",
+      "unresolveConflict": "Miks see lahendus tagasi võtta?",
+      "withdrawOverride": "Miks naasta tööriista otsuse juurde?"
+    },
     "review": {
-      "disputed": "Vaidlustatud · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Tavapärasena kinnitatud} other {Kontrollitud}} · {decidedAt}",
+      "decided": "{status, select, disputed {Vaidlustatud} needsEvidence {Vajab tõendeid} other {{origin, select, bulk {Tavapärasena kinnitatud} other {Kontrollitud}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Vaidlustatud",
+        "needsEvidence": "Vajab tõendeid",
+        "reviewed": "Kontrollitud"
+      },
       "undo": "Võta otsus tagasi"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "{count, plural, one {Kinnita # tavapärane väide} other {Kinnita # tavapärast väidet}}",
       "attentionComplete": "<strong>Kõik inimese otsust nõudvad väited on käsitletud.</strong> {count, plural, one {# tavapärast otsustust ei pea eraldi üle vaatama.} other {# tavapärast otsustust ei pea eraldi üle vaatama.}}",
       "attentionOpen": "<strong>{count, plural, one {# väide vajab} other {# väidet vajavad}} teie otsust</strong>: vastuolud ja vaidlustatud tõlgendused. {routineCount, plural, one {Ülejäänud # väide on tavapärane ega vaja eraldi kinnitamist.} other {Ülejäänud # väidet on tavapärased ega vaja eraldi kinnitamist.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, vaidlustatud} other {}}{reviewStatus, select, reviewed {, kontrollitud} disputed {, vaidlustatud} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, vaidlustatud} other {}}{reviewStatus, select, reviewed {, kontrollitud} disputed {, vaidlustatud} needsEvidence {, vajab tõendeid} other {}})",
       "documentView": {
         "label": "Dokumendivaade",
         "original": "Originaal",

@@ -387,6 +387,43 @@
       "optional": "Nav obligāti",
       "readyToConfirm": "Gatavs apstiprināšanai"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Pieņemts kā standarta",
+        "conflictReopened": "Pretrunas atrisinājums atsaukts",
+        "escalated": "Nodots pierādījumu komandai",
+        "governed": "Izvēlēts noteicošais ieraksts",
+        "noteCleared": "Piezīme noņemta",
+        "noteSaved": "Piezīme saglabāta",
+        "overridden": "Slēdziens mainīts",
+        "overrideWithdrawn": "Slēdziena maiņa atsaukta",
+        "reopened": "Atvērts vēlreiz kā pārbaudāms apgalvojums",
+        "statusCleared": "Pārskatīšanas statuss noņemts",
+        "statusDisputed": "Atzīmēts kā apstrīdēts",
+        "statusNeedsEvidence": "Atzīmēts, ka vajag pierādījumus",
+        "statusReviewed": "Atzīmēts kā pārskatīts"
+      },
+      "empty": "Pārskatīšanas darbību vēl nav.",
+      "filters": {
+        "allKinds": "Jebkura darbība",
+        "allReviewers": "Jebkurš pārskatītājs",
+        "kind": "Filtrēt pēc darbības",
+        "reviewer": "Filtrēt pēc pārskatītāja"
+      },
+      "formerMember": "Bijušais dalībnieks",
+      "kinds": {
+        "override": "Mainīti slēdzieni",
+        "recordConflict": "Pretrunu atrisinājumi",
+        "reopen": "Atvēršanas vēlreiz",
+        "status": "Statusa izmaiņas"
+      },
+      "noMatches": "Šiem filtriem neatbilst neviena darbība.",
+      "noStatus": "Nav statusa",
+      "none": "Darbību vēl nav",
+      "reasonUnrecorded": "Iemesls nav ierakstīts: darbība veikta, pirms iemesls kļuva obligāts.",
+      "runButton": "Pārskatīšanas vēsture",
+      "runTitle": "Pārskatīšanas vēsture"
+    },
     "matches": {
       "count": "{count, plural, zero {# atbilstību} one {# atbilstība} other {# atbilstības}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "Tikai bez avota"
       }
     },
+    "reason": {
+      "escalate": "Kāpēc tas vajadzīgs pierādījumu komandai?",
+      "govern": "Kāpēc šis ieraksts ir noteicošais?",
+      "override": "Kāpēc slēdziens ir “{verdict}”?",
+      "placeholder": "Norādiet iemeslu; tas paliks apgalvojuma vēsturē",
+      "reopen": "Kāpēc šo apgalvojumu var pārbaudīt?",
+      "required": "Lai to ierakstītu, norādiet iemeslu.",
+      "unresolveConflict": "Kāpēc atsaukt šo atrisinājumu?",
+      "withdrawOverride": "Kāpēc atgriezties pie rīka slēdziena?"
+    },
     "review": {
-      "disputed": "Apstrīdēts · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Pieņemts kā standarta} other {Pārskatīts}} · {decidedAt}",
+      "decided": "{status, select, disputed {Apstrīdēts} needsEvidence {Vajag pierādījumus} other {{origin, select, bulk {Pieņemts kā standarta} other {Pārskatīts}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Apstrīdēts",
+        "needsEvidence": "Vajag pierādījumus",
+        "reviewed": "Pārskatīts"
+      },
       "undo": "Atsaukt lēmumu"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "{count, plural, zero {Pieņemt # standarta apgalvojumu} one {Pieņemt # standarta apgalvojumu} other {Pieņemt # standarta apgalvojumus}}",
       "attentionComplete": "<strong>Visi apgalvojumi, kuriem vajadzīgs cilvēka lēmums, ir apstrādāti.</strong> {count, plural, zero {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.} one {# standarta vērtējumam nav vajadzīga individuāla pārskatīšana.} other {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.}}",
       "attentionOpen": "<strong>{count, plural, zero {# apgalvojumiem vajadzīgs} one {# apgalvojumam vajadzīgs} other {# apgalvojumiem vajadzīgs}} jūsu lēmums</strong>: pretrunas un apstrīdētas interpretācijas. {routineCount, plural, zero {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.} one {Pārējais # apgalvojums ir standarta, un tam nav vajadzīgs individuāls apstiprinājums.} other {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, apstrīdēts} other {}}{reviewStatus, select, reviewed {, pārskatīts} disputed {, apstrīdēts} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, apstrīdēts} other {}}{reviewStatus, select, reviewed {, pārskatīts} disputed {, apstrīdēts} needsEvidence {, vajag pierādījumus} other {}})",
       "documentView": {
         "label": "Dokumenta skats",
         "original": "Oriģināls",

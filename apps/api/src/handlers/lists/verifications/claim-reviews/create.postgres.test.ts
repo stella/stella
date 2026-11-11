@@ -275,6 +275,7 @@ if (!databaseUrl || !runPostgres) {
           await record({
             kind: "record-conflict",
             resolution: { kind: "governed", factEntityId: recalledFactId },
+            reason: "The witness saw the transfer.",
           }),
         ).toMatchObject({
           claimId,
@@ -309,6 +310,7 @@ if (!databaseUrl || !runPostgres) {
           {
             kind: "record-conflict",
             resolution: { kind: "governed", factEntityId: recalledFactId },
+            reason: "The witness saw the transfer.",
             suggestedFactEntityId: recordedFactId,
           },
           // Only a record-conflict event carries a suggestion.

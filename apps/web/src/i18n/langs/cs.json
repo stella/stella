@@ -387,6 +387,43 @@
       "optional": "Nepovinné",
       "readyToConfirm": "Připraveno k potvrzení"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Přijato jako rutinní",
+        "conflictReopened": "Vyřešení rozporu zrušeno",
+        "escalated": "Předáno týmu pro důkazy",
+        "governed": "Zvolen rozhodující záznam",
+        "noteCleared": "Poznámka odstraněna",
+        "noteSaved": "Poznámka uložena",
+        "overridden": "Závěr změněn",
+        "overrideWithdrawn": "Změna závěru vzata zpět",
+        "reopened": "Znovu otevřeno jako ověřitelné tvrzení",
+        "statusCleared": "Stav kontroly zrušen",
+        "statusDisputed": "Označeno jako zpochybněné",
+        "statusNeedsEvidence": "Označeno jako vyžadující důkazy",
+        "statusReviewed": "Označeno jako zkontrolované"
+      },
+      "empty": "Zatím žádné úkony kontroly.",
+      "filters": {
+        "allKinds": "Jakýkoli úkon",
+        "allReviewers": "Kdokoli z kontrolujících",
+        "kind": "Filtrovat podle úkonu",
+        "reviewer": "Filtrovat podle kontrolujícího"
+      },
+      "formerMember": "Bývalý člen",
+      "kinds": {
+        "override": "Změny závěru",
+        "recordConflict": "Řešení rozporů v záznamech",
+        "reopen": "Znovuotevření",
+        "status": "Změny stavu"
+      },
+      "noMatches": "Filtrům neodpovídá žádný úkon.",
+      "noStatus": "Bez stavu",
+      "none": "Zatím žádné úkony",
+      "reasonUnrecorded": "Důvod nezaznamenán: úkon proběhl dřív, než byl důvod povinný.",
+      "runButton": "Historie kontroly",
+      "runTitle": "Historie kontroly"
+    },
     "matches": {
       "count": "{count, plural, one {# shoda} few {# shody} other {# shod} many {# shody}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "Jen bez zdroje"
       }
     },
+    "reason": {
+      "escalate": "Proč to potřebuje tým pro důkazy?",
+      "govern": "Proč je rozhodující tento záznam?",
+      "override": "Proč je závěr „{verdict}“?",
+      "placeholder": "Uveďte důvod; zůstane v historii tvrzení",
+      "reopen": "Proč lze toto tvrzení ověřit?",
+      "required": "Uveďte důvod, aby se úkon zaznamenal.",
+      "unresolveConflict": "Proč rušíte toto vyřešení?",
+      "withdrawOverride": "Proč se vracíte k závěru nástroje?"
+    },
     "review": {
-      "disputed": "Zpochybněno · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Přijato jako rutinní} other {Zkontrolováno}} · {decidedAt}",
+      "decided": "{status, select, disputed {Zpochybněno} needsEvidence {Vyžaduje důkazy} other {{origin, select, bulk {Přijato jako rutinní} other {Zkontrolováno}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Zpochybněno",
+        "needsEvidence": "Vyžaduje důkazy",
+        "reviewed": "Zkontrolováno"
+      },
       "undo": "Vrátit rozhodnutí"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "Přijmout {count, plural, one {# rutinní tvrzení} few {# rutinní tvrzení} other {# rutinních tvrzení} many {# rutinního tvrzení}}",
       "attentionComplete": "<strong>Všechna tvrzení vyžadující úsudek byla vyřízena.</strong> {count, plural, one {Zbývající # rutinní závěr nevyžaduje samostatnou kontrolu.} few {Zbývající # rutinní závěry nevyžadují samostatnou kontrolu.} other {Zbývajících # rutinních závěrů nevyžaduje samostatnou kontrolu.} many {Zbývající # rutinního závěru nevyžaduje samostatnou kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje} many {# tvrzení vyžaduje}} váš úsudek</strong>: rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.} many {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} needsEvidence {, vyžaduje důkazy} other {}})",
       "documentView": {
         "label": "Zobrazení dokumentu",
         "original": "Originál",
