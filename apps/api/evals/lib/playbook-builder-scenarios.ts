@@ -698,7 +698,7 @@ const commonDefects = ({
   const [first, ...later] = events
     .filter(isSave)
     .map(({ input }) => positionCount(input));
-  if (first !== undefined && first > 1) {
+  if (first !== undefined && first !== 1) {
     defects.push(
       `first save carried ${String(first)} positions; the skill starts with one`,
     );

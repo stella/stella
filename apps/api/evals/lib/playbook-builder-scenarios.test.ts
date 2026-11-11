@@ -127,6 +127,14 @@ const event = (
   error: null,
 });
 
+const positionsNamed = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    issue: `Position ${String(index + 1)}`,
+  }));
+
+const saveOnePosition = (turn: number) =>
+  event(turn, "save_playbook", { positions: positionsNamed(1) });
+
 const ask = (turn: number, ...questions: string[]) =>
   event(turn, "ask-user", {}, questions);
 /** One question answered by picking from `options`. */
@@ -151,22 +159,17 @@ const readChosenMatter = (turn: number): BuilderEvent[] => [
   ),
   read(turn, keller),
   read(turn, brandt),
-  event(turn, "save_playbook"),
+  saveOnePosition(turn),
 ];
 
 /** The run the `contracts-later` scenario describes, on the MCP surface. */
 const contractsLaterRun = (): BuilderEvent[] => [
   ask(1, ...OPENING_QUESTIONS),
-  event(1, "save_playbook"),
+  saveOnePosition(1),
   event(2, "list_matters"),
   askWith(2, WHICH_MATTERS, MATTER_OPTIONS),
   ...readChosenMatter(2),
 ];
-
-const positionsNamed = (count: number) =>
-  Array.from({ length: count }, (_, index) => ({
-    issue: `Position ${String(index + 1)}`,
-  }));
 
 const score = (
   id: string,
@@ -286,6 +289,14 @@ describe("contracts-later scoring", () => {
       "first save carried 2 positions; the skill starts with one",
     ]);
   });
+
+  test("a first save without positions is a defect", () => {
+    const events = contractsLaterRun();
+    events[1] = event(1, "save_playbook", { positions: [] });
+    expect(score("contracts-later", events)).toEqual([
+      "first save carried 0 positions; the skill starts with one",
+    ]);
+  });
 });
 
 /**
@@ -371,7 +382,7 @@ describe("perspective scoring", () => {
         "Which governing law applies?",
         "What language should the playbook use?",
       ),
-      event(1, "save_playbook"),
+      saveOnePosition(1),
     ];
     expect(
       scoreScenario(scenario("no-documents"), {
@@ -395,7 +406,7 @@ const GROUNDING_OPTIONS = [
 ];
 const groundingLaterRun = (): BuilderEvent[] => [
   ask(1, ...OPENING_QUESTIONS),
-  event(1, "save_playbook"),
+  saveOnePosition(1),
   event(1, "save_playbook"),
   askWith(1, GROUNDING_QUESTION, GROUNDING_OPTIONS),
   event(1, "list_matters"),
