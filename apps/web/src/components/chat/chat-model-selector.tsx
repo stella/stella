@@ -17,6 +17,7 @@ import { AIProviderIcon } from "@/components/ai-provider-icons";
 import {
   CHAT_MODEL_MENU_POPUP_CLASS_NAME,
   ChatModelOptionsMenu,
+  chatRunOnTarget,
   type ComposerModelsMenuProps,
   EFFORT_LABEL_KEY,
 } from "@/components/chat/chat-model-options-menu";
@@ -52,10 +53,10 @@ export const ChatModelSelector = ({
 }: ChatModelSelectorProps) => {
   const [open, setOpen] = useState(false);
   const [detailsRequested, setDetailsRequested] = useState(false);
-  const selectedTarget = models.runTarget?.selected;
+  const selectedTarget = chatRunOnTarget(models.runTarget);
   const localTrigger = useLocalRunTrigger(
     models.activeOrganizationId,
-    selectedTarget?.kind === "local" ? selectedTarget : null,
+    selectedTarget.kind === "local" ? selectedTarget : null,
   );
   // stella's models are read only for a thread that runs on them.
   const cloudTrigger = useCloudModelTrigger(
@@ -76,7 +77,8 @@ export const ChatModelSelector = ({
                 ? "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5"
                 : "text-muted-foreground hover:text-foreground gap-1.5",
             )}
-            disabled={disabled}
+            // Until the stored choice is known, nothing can be picked on it.
+            disabled={disabled || models.state === "loading"}
             onFocus={() => setDetailsRequested(true)}
             onMouseEnter={() => setDetailsRequested(true)}
             size="xs"

@@ -318,6 +318,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   "review-severity-dot": noNative("a review severity marker"),
   "review-status-badge": noNative("a review status badge"),
   "review-word-diff": notComponent("word diff computation"),
+  "run-state-mark": owned(
+    "no-hand-drawn-run-state/no-hand-drawn-run-state",
+    "a run state drawn outside the mark is reported there",
+  ),
   "scroll-area": owned(
     OVERFLOW_RULE,
     "raw overflow scrolling is reported there",

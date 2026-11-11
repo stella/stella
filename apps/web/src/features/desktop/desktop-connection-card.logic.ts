@@ -82,6 +82,7 @@ function linkingCardState({
         : null;
     case "idle":
     case "update-required":
+    case "refused":
     case "error":
       return null;
     default:
