@@ -27,7 +27,8 @@ describe("sandboxReads", () => {
     const reads = sandboxReads({
       unreadable: [RUNS, DATA, SSH],
       workspace: OWN,
-      needed: [CACHE, `${DATA}/harness/bun/1.4.4/package/bin`],
+      cache: CACHE,
+      needed: [`${DATA}/harness/bun/1.4.4/package/bin`],
     });
     expect(reads).toEqual({
       deny: [RUNS, DATA, SSH],
@@ -39,6 +40,8 @@ describe("sandboxReads", () => {
     const reads = sandboxReads({
       unreadable: [RUNS, DATA],
       workspace: OWN,
+      // Misplaced on purpose: a cache that holds every chat's folder.
+      cache: RUNS,
       needed: [
         RUNS,
         DATA,
@@ -55,10 +58,28 @@ describe("sandboxReads", () => {
     expect(commandReads(reads, `${OTHER}.used`)).toBe(false);
   });
 
+  test("a chat's own cache beside its folder is readable, another chat's is not", () => {
+    const reads = sandboxReads({
+      unreadable: [RUNS, DATA],
+      workspace: OWN,
+      cache: `${OWN}.cache`,
+      needed: [`${OTHER}.cache`, `${DATA}/harness/bun/1.4.4/package/bin`],
+    });
+    expect(reads.allow).toEqual([
+      OWN,
+      `${OWN}.cache`,
+      `${DATA}/harness/bun/1.4.4/package/bin`,
+    ]);
+    expect(commandReads(reads, `${OWN}.cache/bun/x.tgz`)).toBe(true);
+    expect(commandReads(reads, `${OTHER}.cache/bun/x.tgz`)).toBe(false);
+    expect(commandReads(reads, `${OTHER}/brief.docx`)).toBe(false);
+  });
+
   test("a folder whose name only starts like the run's own is another folder", () => {
     const reads = sandboxReads({
       unreadable: [RUNS],
       workspace: OWN,
+      cache: CACHE,
       needed: [],
     });
     expect(commandReads(reads, `${OWN}-copy/brief.docx`)).toBe(false);
@@ -69,19 +90,21 @@ describe("sandboxReads", () => {
     const reads = sandboxReads({
       unreadable: [RUNS, DATA],
       workspace: OWN,
+      cache: CACHE,
       needed: ["/usr/local/bin", "/home/member/skills/lease"],
     });
-    expect(reads.allow).toEqual([OWN]);
+    expect(reads.allow).toEqual([OWN, CACHE]);
   });
 
   test("a needed path that holds a denied one is left out", () => {
     const reads = sandboxReads({
-      unreadable: [DATA, SSH],
+      unreadable: [RUNS, DATA, SSH],
       workspace: OWN,
+      cache: CACHE,
       needed: [`${DATA}/harness`, "/home/member"],
     });
     // The home folder is not denied, and re-opening it would re-open `.ssh`.
-    expect(reads.allow).toEqual([OWN, `${DATA}/harness`]);
+    expect(reads.allow).toEqual([OWN, CACHE, `${DATA}/harness`]);
     expect(commandReads(reads, `${SSH}/id_ed25519`)).toBe(false);
   });
 
@@ -89,6 +112,7 @@ describe("sandboxReads", () => {
     const reads = sandboxReads({
       unreadable: [OWN],
       workspace: OWN,
+      cache: CACHE,
       needed: [],
     });
     expect(reads).toEqual({ deny: [OWN], allow: [] });
@@ -98,6 +122,7 @@ describe("sandboxReads", () => {
     const reads = sandboxReads({
       unreadable: [`${RUNS}/`, RUNS, `${DATA}/./`],
       workspace: `${OWN}/`,
+      cache: `${CACHE}/`,
       needed: [`${CACHE}/`, CACHE],
     });
     expect(reads).toEqual({ deny: [RUNS, DATA], allow: [OWN, CACHE] });
@@ -105,7 +130,12 @@ describe("sandboxReads", () => {
 
   test("with nothing denied nothing is re-opened", () => {
     expect(
-      sandboxReads({ unreadable: [], workspace: OWN, needed: [CACHE] }),
+      sandboxReads({
+        unreadable: [],
+        workspace: OWN,
+        cache: CACHE,
+        needed: [],
+      }),
     ).toEqual({ deny: [], allow: [] });
   });
 });

@@ -18,26 +18,31 @@ const resolved = (entries: readonly string[]) => [
 
 /**
  * The reads of a turn. Everything `unreadable` names is denied. Inside it,
- * the turn's own `workspace` and the paths it `needs` are re-opened, with two
- * limits:
+ * the turn's own `workspace` and `cache` and the other paths it `needs` are
+ * re-opened, with two limits:
  *
  * - A path that is a denied one, or holds one, is left out: re-opening it
  *   would re-open everything under it.
  * - Inside the innermost denied path holding the workspace, the folder that
- *   holds every chat's folder, only the workspace is re-opened, so no other
- *   chat's folder becomes readable through a path the turn was handed.
+ *   holds every chat's folder, only the workspace and the run's cache are
+ *   re-opened, so no other chat's folder or cache becomes readable through
+ *   a path the turn was handed.
  */
 export const sandboxReads = ({
   unreadable,
   workspace,
+  cache,
   needed,
 }: {
   unreadable: readonly string[];
   workspace: string;
+  /** The run's own cache, which may sit beside its folder. */
+  cache: string;
   needed: readonly string[];
 }): SandboxReads => {
   const deny = resolved(unreadable);
   const own = path.resolve(workspace);
+  const owned = new Set([own, path.resolve(cache)]);
   // Every denied path holding the workspace is an ancestor of it, so the
   // longest is the innermost.
   let chats: string | null = null;
@@ -49,11 +54,11 @@ export const sandboxReads = ({
       chats = denied;
     }
   }
-  const allow = resolved([own, ...needed]).filter(
+  const allow = resolved([...owned, ...needed]).filter(
     (entry) =>
       deny.some((denied) => isPathInside(denied, entry)) &&
       !deny.some((denied) => isPathInside(entry, denied)) &&
-      (entry === own || chats === null || !isPathInside(chats, entry)),
+      (owned.has(entry) || chats === null || !isPathInside(chats, entry)),
   );
   return { deny, allow };
 };

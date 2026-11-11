@@ -217,8 +217,8 @@ const SANDBOX_PLATFORMS: ReadonlySet<NodeJS.Platform> = new Set(["darwin"]);
 const SHELL_SNAPSHOTS_FOLDER = "shell-snapshots";
 
 /**
- * What the turn's commands read, besides its own folder, inside the paths
- * the desktop keeps unreadable: the package cache, the managed tools, the
+ * What the turn's commands read, besides its own folder and cache, inside
+ * the paths the desktop keeps unreadable: the managed tools, the
  * CLI's own release (its bundled ripgrep), its shell snapshots and the
  * turn's skill plugin, whose links lead to the skill folders.
  */
@@ -227,7 +227,6 @@ const neededReads = (
   input: HarnessTurnInput,
   skills: SkillPlugin | null,
 ) => [
-  input.cacheDir,
   ...input.toolPath,
   path.dirname(options.launch.executable),
   path.join(options.claudeConfigDir, SHELL_SNAPSHOTS_FOLDER),
@@ -257,6 +256,7 @@ const sandboxSettings = (
   const reads = sandboxReads({
     unreadable: input.unreadablePaths,
     workspace: input.workspaceDir,
+    cache: input.cacheDir,
     needed: neededReads(options, input, skills),
   });
   return {
