@@ -78,7 +78,10 @@ const mount = async (
   client.setQueryData(roleOptions.queryKey, "owner");
   client.setQueryData(
     verificationGraphOptions({ workspaceId, listId: page.listId }).queryKey,
-    { pages: [page], pageParams: [null] },
+    {
+      pages: [page],
+      pageParams: [null],
+    },
   );
   const run = firstStatementRun();
   client.setQueryData(
@@ -226,7 +229,12 @@ test("clicking a claim opens the review's claim panel for it", async () => {
 test("the filters narrow the claims and hide held facts", async () => {
   await mount("graph");
   fireEvent.click(
-    screen.getByRole("button", { name: messages.avt.graph.filters.conflicts }),
+    screen.getByRole("combobox", { name: messages.avt.graph.filters.verdict }),
+  );
+  fireEvent.click(
+    await screen.findByRole("option", {
+      name: messages.avt.graph.filters.conflicts,
+    }),
   );
   await waitFor(() => {
     expect(nodeOrNull(`claim:${graphClaimId(1)}`)).toBeNull();
@@ -237,7 +245,7 @@ test("the filters narrow the claims and hide held facts", async () => {
   expect(nodeOrNull(`fact:${graphFactId(1)}`)).toBeNull();
 
   fireEvent.click(
-    screen.getByRole("button", { name: messages.avt.graph.filters.heldFacts }),
+    screen.getByRole("switch", { name: messages.avt.graph.filters.heldFacts }),
   );
   await waitFor(() => {
     expect(nodeOrNull(`fact:${graphFactId(5)}`)).toBeNull();

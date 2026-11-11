@@ -15,6 +15,7 @@ import * as React from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, FileTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -56,10 +57,10 @@ const OVERSCAN = 480;
 const HEADER_HEIGHT = 32;
 
 const COLUMN_SHARES = {
-  statement: 0.17,
-  claim: 0.31,
-  fact: 0.33,
-  source: 0.19,
+  statement: 0.15,
+  claim: 0.3,
+  fact: 0.32,
+  source: 0.23,
 } as const;
 
 type Column = { x: number; width: number };
@@ -272,9 +273,12 @@ export const GraphCanvas = ({
                   !lit(key) && "opacity-25",
                 )}
               >
-                <span className="line-clamp-2 font-medium [overflow-wrap:anywhere]">
+                <BidiText
+                  as="span"
+                  className="line-clamp-2 font-medium [overflow-wrap:anywhere]"
+                >
                   {statement.name}
-                </span>
+                </BidiText>
                 <span className="text-muted-foreground tabular-nums">
                   {t("avt.graph.claimCount", { count: statement.claimCount })}
                 </span>
@@ -316,9 +320,12 @@ export const GraphCanvas = ({
               borderInlineStartColor: stateHue(claim.state),
             }}
           >
-            <span className="line-clamp-2 leading-snug [overflow-wrap:anywhere]">
+            <BidiText
+              as="span"
+              className="line-clamp-2 leading-snug [overflow-wrap:anywhere]"
+            >
               {claim.text}
-            </span>
+            </BidiText>
             {settled && (
               <CheckIcon
                 aria-hidden="true"
@@ -359,7 +366,8 @@ export const GraphCanvas = ({
               !fact.listed && "border-dashed",
             )}
           >
-            <span
+            <BidiText
+              as="span"
               className={cn(
                 "leading-snug [overflow-wrap:anywhere]",
                 notes.length === 0 && date === null
@@ -369,7 +377,7 @@ export const GraphCanvas = ({
               )}
             >
               {fact.text}
-            </span>
+            </BidiText>
             {(date !== null || notes.length > 0) && (
               <span className="text-muted-foreground truncate">
                 {[date, ...notes].filter((part) => part !== null).join(" · ")}
@@ -401,7 +409,9 @@ export const GraphCanvas = ({
               aria-hidden="true"
               className="text-muted-foreground size-3.5 shrink-0"
             />
-            <span className="truncate">{source.name}</span>
+            <BidiText as="span" className="truncate">
+              {source.name}
+            </BidiText>
           </GraphNode>
         );
       })}

@@ -13,6 +13,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { FilterXIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   Select,
@@ -22,6 +23,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Switch } from "@stll/ui/switch";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 
@@ -357,18 +359,17 @@ type GraphFilterBarProps = {
   onChange: (next: GraphFilters) => void;
 };
 
-/** One quiet row: the verdict, its two common views, the footing, and
- *  whether held facts are drawn. */
+/** One quiet row: the verdict (all, the conflicts, no coverage, or one
+ *  verdict), the footing, and whether held facts are drawn. */
 const GraphFilterBar = ({ filters, onChange }: GraphFilterBarProps) => {
   const t = useTranslations();
   const set = (patch: Partial<GraphFilters>) =>
     onChange({ ...filters, ...patch });
-  const toggleVerdict = (verdict: VerdictFilter) =>
-    set({ verdict: filters.verdict === verdict ? ALL : verdict });
   return (
     <div
       aria-label={t("common.filters")}
-      className="flex flex-wrap items-center gap-1.5"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2"
+      data-testid="avt-graph-filters"
       role="group"
     >
       <Select
@@ -393,31 +394,18 @@ const GraphFilterBar = ({ filters, onChange }: GraphFilterBarProps) => {
           <SelectItem value="conflicts">
             {t("avt.graph.filters.conflicts")}
           </SelectItem>
-          {VERDICT_OPTIONS.map((state) => (
-            <SelectItem key={state} value={state}>
-              {t(STATE_META[state].chipKey)}
-            </SelectItem>
-          ))}
+          <SelectItem value="nocover">
+            {t(STATE_META.nocover.chipKey)}
+          </SelectItem>
+          {VERDICT_OPTIONS.filter((state) => state !== "nocover").map(
+            (state) => (
+              <SelectItem key={state} value={state}>
+                {t(STATE_META[state].chipKey)}
+              </SelectItem>
+            ),
+          )}
         </SelectPopup>
       </Select>
-      <Button
-        aria-pressed={filters.verdict === "conflicts"}
-        onClick={() => toggleVerdict("conflicts")}
-        selected={filters.verdict === "conflicts"}
-        size="sm"
-        variant="ghost"
-      >
-        {t("avt.graph.filters.conflicts")}
-      </Button>
-      <Button
-        aria-pressed={filters.verdict === "nocover"}
-        onClick={() => toggleVerdict("nocover")}
-        selected={filters.verdict === "nocover"}
-        size="sm"
-        variant="ghost"
-      >
-        {t(STATE_META.nocover.chipKey)}
-      </Button>
       <Select
         onValueChange={(value) => {
           if (value !== null && isTierFilter(value)) {
@@ -445,15 +433,17 @@ const GraphFilterBar = ({ filters, onChange }: GraphFilterBarProps) => {
           </SelectItem>
         </SelectPopup>
       </Select>
-      <Button
-        aria-pressed={filters.showHeld}
-        onClick={() => set({ showHeld: !filters.showHeld })}
-        selected={filters.showHeld}
-        size="sm"
-        variant="ghost"
-      >
+      <Label variant="choice">
+        {/* The switch is not a labelable element, so the label's text
+            does not name it on its own. */}
+        <Switch
+          aria-label={t("avt.graph.filters.heldFacts")}
+          checked={filters.showHeld}
+          onCheckedChange={(showHeld) => set({ showHeld })}
+          size="sm"
+        />
         {t("avt.graph.filters.heldFacts")}
-      </Button>
+      </Label>
       {isFiltered(filters) && (
         <Button
           onClick={() => onChange(DEFAULT_GRAPH_FILTERS)}

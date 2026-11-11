@@ -6,6 +6,7 @@
 
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
@@ -79,7 +80,7 @@ export const GraphList = ({
                 className="min-w-0 text-sm font-medium [overflow-wrap:anywhere]"
                 id={headingId}
               >
-                {statement.name}
+                <BidiText>{statement.name}</BidiText>
               </h3>
               <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
                 {t("avt.graph.claimCount", { count: statement.claimCount })}
@@ -106,7 +107,7 @@ export const GraphList = ({
                           <span className="sr-only">
                             {t(STATE_META[claim.state].chipKey)}:{" "}
                           </span>
-                          {claim.text}
+                          <BidiText>{claim.text}</BidiText>
                         </span>
                       </span>
                     </Button>
@@ -115,7 +116,7 @@ export const GraphList = ({
                         aria-label={t("avt.graph.linkedFacts", {
                           count: links.length,
                         })}
-                        className="flex flex-wrap gap-1.5 ps-5"
+                        className="flex flex-col items-start gap-1.5 ps-5"
                       >
                         {links.map(({ edge, fact }) => (
                           <FactChip edge={edge} fact={fact} key={fact.id} />
@@ -169,7 +170,7 @@ const FactChip = ({
   return (
     <li
       className={cn(
-        "bg-card flex max-w-full min-w-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs",
+        "bg-card flex max-w-full min-w-0 items-baseline gap-1.5 rounded-md border px-2 py-1 text-xs",
         (fact.held || !fact.listed) && "border-dashed",
       )}
     >
@@ -177,7 +178,7 @@ const FactChip = ({
         <>
           <span
             aria-hidden="true"
-            className="h-0.5 w-2.5 shrink-0 rounded-full"
+            className="h-0.5 w-2.5 shrink-0 self-center rounded-full"
             style={{ backgroundColor: citationStroke(edge).color }}
           />
           <span className="text-muted-foreground shrink-0">
@@ -185,14 +186,15 @@ const FactChip = ({
           </span>
         </>
       )}
-      <span
+      <BidiText
+        as="span"
         className={cn(
-          "line-clamp-1 min-w-0 [overflow-wrap:anywhere]",
+          "line-clamp-2 min-w-0 [overflow-wrap:anywhere]",
           fact.held && "text-muted-foreground",
         )}
       >
         {fact.text}
-      </span>
+      </BidiText>
       {notes.length > 0 && (
         <span className="text-muted-foreground shrink-0">
           · {notes.join(" · ")}

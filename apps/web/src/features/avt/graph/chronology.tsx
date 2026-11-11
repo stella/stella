@@ -9,6 +9,7 @@ import * as React from "react";
 
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
@@ -203,14 +204,15 @@ const ChronologyItem = ({
         {date ?? t("avt.chronology.undated")}
       </span>
       <div className="flex min-w-0 flex-col gap-1.5">
-        <span
+        <BidiText
+          as="span"
           className={cn(
             "text-sm [overflow-wrap:anywhere]",
             fact.held && "text-muted-foreground",
           )}
         >
           {fact.text}
-        </span>
+        </BidiText>
         {(source !== undefined || notes.length > 0) && (
           <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs">
             {notes.length > 0 && <span>{notes.join(" · ")}</span>}
@@ -242,7 +244,7 @@ const ChronologyItem = ({
             {shownClaims.map((claim) => (
               <li className="max-w-full min-w-0" key={claim.id}>
                 <Button
-                  className="block max-w-72 min-w-0"
+                  className="block max-w-md min-w-0"
                   onClick={() => onOpenClaim(claim)}
                   variant="plain"
                 >
@@ -251,9 +253,12 @@ const ChronologyItem = ({
                     <span className="shrink-0 font-medium">
                       {t(STATE_META[claim.state].chipKey)}
                     </span>
-                    <span className="text-muted-foreground truncate">
+                    <BidiText
+                      as="span"
+                      className="text-muted-foreground truncate"
+                    >
                       {claim.text}
-                    </span>
+                    </BidiText>
                   </span>
                 </Button>
               </li>
