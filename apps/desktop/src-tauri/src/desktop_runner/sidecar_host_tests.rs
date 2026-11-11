@@ -952,3 +952,59 @@ fn a_restarted_app_ends_a_journaled_run_the_holder_no_longer_has_as_failed() {
   });
   stop_holders(&place);
 }
+
+#[test]
+fn a_restore_asked_again_by_a_new_socket_while_it_runs_ends_restored_on_that_socket() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    let restore_id = run_id();
+    let restore = json!({
+      "type": "folder.restore",
+      "restoreId": restore_id,
+      "folderId": run_id(),
+      "runId": run_id(),
+    });
+    connection.send(restore.clone()).await;
+    until("the holder was asked to restore", || {
+      place.received("folder.restore").len() == 1
+    })
+    .await;
+
+    // The socket drops while the holder still writes the folder; the API
+    // sends the same restore on the next socket. It is the restore already
+    // going, not another one: no refusal, and the holder is not asked again.
+    runner.stop().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    connection.send(restore).await;
+    until("the host was handed the resend", || {
+      host.restores_asked() == 2
+    })
+    .await;
+    assert_eq!(place.received("folder.restore").len(), 1);
+
+    // The holder's link drops too; the supervisor asks it again by the same
+    // request, and its answer goes out on the socket that is up now.
+    let _intruder = place.fixture.replace_holder_connection("1.4.0");
+    let answered = loop {
+      let message = connection.receive().await;
+      if message["type"] == "folder.restored" {
+        break message;
+      }
+    };
+    assert_eq!(
+      answered,
+      json!({"type": "folder.restored", "restoreId": restore_id, "outcome": "restored"})
+    );
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  let asked = place.received("folder.restore");
+  assert_eq!(asked.len(), 2);
+  assert_eq!(asked[0]["requestId"], asked[1]["requestId"]);
+}

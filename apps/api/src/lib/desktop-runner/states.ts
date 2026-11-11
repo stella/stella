@@ -15,10 +15,15 @@ type Same<TLeft, TRight> = [TLeft] extends [TRight]
 type DesktopMessageOf<TType extends DesktopRunnerDesktopMessage["type"]> =
   Extract<DesktopRunnerDesktopMessage, { type: TType }>;
 
-/** Whether a desktop's latest runner socket is open. */
+/**
+ * Whether a desktop's latest runner socket is open. `retired` is a device key
+ * a newer key of the same account replaced on the installation (a relink):
+ * it is never routed to again and can never claim the installation back.
+ */
 export const DESKTOP_RUNNER_CONNECTIONS = [
   "connected",
   "disconnected",
+  "retired",
 ] as const;
 
 /**
@@ -41,6 +46,19 @@ export const DESKTOP_RUNNER_RUN_STATES = [
   "lost",
 ] as const;
 export type DesktopRunnerRunState = (typeof DESKTOP_RUNNER_RUN_STATES)[number];
+
+/**
+ * Why the API ended a run as `lost`, where it knows more than that its
+ * computer did not keep it: `not_reached`, no computer picked it up;
+ * `computer_relinked`, the computer was linked again under a new device key,
+ * which can never continue a run of the old one.
+ */
+export const DESKTOP_RUNNER_LOST_REASONS = [
+  "not_reached",
+  "computer_relinked",
+] as const;
+export type DesktopRunnerLostReason =
+  (typeof DESKTOP_RUNNER_LOST_REASONS)[number];
 
 /** States in which a run is still bound to its desktop and takes commands. */
 export const DESKTOP_RUNNER_OPEN_RUN_STATES = [
@@ -82,6 +100,7 @@ export const DESKTOP_RUNNER_STORED_REJECT_REASONS = [
   "at_capacity",
   "run_too_large",
   "unknown_run",
+  "folder_busy",
 ] as const;
 true satisfies Same<
   (typeof DESKTOP_RUNNER_STORED_REJECT_REASONS)[number],
@@ -104,7 +123,12 @@ true satisfies Same<
   (typeof DESKTOP_RUNNER_COMMAND_KINDS)[number],
   Exclude<
     DesktopRunnerServerMessage["type"],
-    "welcome" | "upgrade_required" | "reconnect" | "run.token" | "ack"
+    | "welcome"
+    | "upgrade_required"
+    | "reconnect"
+    | "run.token"
+    | "ack"
+    | "folder.restore"
   >
 >;
 export type DesktopRunnerCommandKind =

@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import type { ProtocolLog } from "../../protocol-log";
 import {
   type HarnessProcessDeadlines,
   startHarnessProcess,
@@ -8,6 +9,7 @@ import {
 import type { HarnessSpawnError } from "../process-tree";
 import type { Detached, HarnessExit } from "../turn-lifecycle";
 import {
+  type ClaudeHostControlRequest,
   ClaudeOutputEnvelopeSchema,
   ControlCancelRequestSchema,
   ControlRequestSchema,
@@ -49,6 +51,7 @@ export type ClaudeCliLaunch = {
 
 type StartClaudeCliOptions = {
   launch: ClaudeCliLaunch;
+  protocolLog: ProtocolLog;
   args: readonly string[];
   detached: Detached;
   deadlines: HarnessProcessDeadlines;
@@ -60,7 +63,7 @@ type StartClaudeCliOptions = {
 export type ClaudeCliClient = {
   /** Sends a control request and settles with its response payload. */
   request: (
-    subtype: string,
+    subtype: ClaudeHostControlRequest,
     fields?: Record<string, unknown>,
   ) => Promise<Result<unknown, ClaudeCliRequestError>>;
   /** Writes a conversation message, such as the turn's user message. */
@@ -77,6 +80,7 @@ export type ClaudeCliClient = {
 
 export const startClaudeCli = ({
   launch,
+  protocolLog,
   args,
   detached,
   deadlines,
@@ -153,6 +157,7 @@ export const startClaudeCli = ({
     detached,
     deadlines,
     name: "claude-cli",
+    protocol: { channel: "claude-code", log: protocolLog },
     unanswered: (reason, message) =>
       new ClaudeCliRequestError({ reason, message }),
     message: dispatch,

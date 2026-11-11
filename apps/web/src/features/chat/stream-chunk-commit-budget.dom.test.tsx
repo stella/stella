@@ -533,6 +533,7 @@ const Composer = ({
       controller={controller}
       context={COMPOSER_CONTEXT}
       isGenerating={isGenerating}
+      models={null}
       skillsOrganizationId={ORGANIZATION_ID}
       reservedCommands={
         messages.length > 0

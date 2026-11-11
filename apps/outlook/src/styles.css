@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@import "@stll/ui/theme.css";
+
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+@source "../**/*.{ts,tsx}";
+
+/* The Outlook task pane can dock to a narrow column; keep a floor so the
+   single-column layout never collapses below a usable width. */
+body {
+  min-width: 300px;
+}

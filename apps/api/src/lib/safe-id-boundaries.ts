@@ -243,6 +243,11 @@ export const brandPersistedLegalReaderAnnotationId = (
 ): SafeId<"legalReaderAnnotation"> =>
   toSafeId<"legalReaderAnnotation">(legalReaderAnnotationId);
 
+export const brandPersistedLegalListClaimReviewEventId = (
+  legalListClaimReviewEventId: string,
+): SafeId<"legalListClaimReviewEvent"> =>
+  toSafeId<"legalListClaimReviewEvent">(legalListClaimReviewEventId);
+
 export const brandPersistedCaseLawCitationId = (
   caseLawCitationId: string,
 ): SafeId<"caseLawCitation"> => toSafeId<"caseLawCitation">(caseLawCitationId);

@@ -17,6 +17,7 @@ import {
   CheckIcon,
   CircleAlertIcon,
   EyeIcon,
+  FileSearchIcon,
   FilterIcon,
   FlagIcon,
 } from "@stll/ui/icons";
@@ -25,13 +26,19 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { textMarkClass } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { ClaimDetailPanel } from "@/features/avt/claim-detail-panel";
+import {
+  isRecordSilent,
+  useQualifierAnnouncement,
+} from "@/features/avt/claim-qualifiers";
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import type { OriginalScrollTarget } from "@/features/avt/original-docx-view";
 import { isPdfClaimBoxDrawn } from "@/features/avt/original-pdf-claim-box";
+import { RunHistorySheet } from "@/features/avt/review-history";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   MatchStepper,
@@ -45,7 +52,7 @@ import type {
   VerificationClaim,
   VerificationRun,
 } from "@/features/avt/types";
-import { STATE_META } from "@/features/avt/types";
+import { REVIEW_STATUS_META, STATE_META } from "@/features/avt/types";
 import { useClaimReviewActions } from "@/features/avt/use-claim-review-actions";
 import {
   contestedFactIds,
@@ -83,7 +90,12 @@ const OriginalPdfView = React.lazy(async () => {
 type DocumentView = "reading" | "original";
 
 type VerdictFilter =
-  "all" | "conflicts" | "needsreview" | "reviewed" | ClaimState;
+  | "all"
+  | "conflicts"
+  | "needsreview"
+  | "needsevidence"
+  | "reviewed"
+  | ClaimState;
 
 type VerificationViewProps = {
   workspaceId: string;
@@ -128,7 +140,7 @@ export const VerificationView = ({
   const claims = run.claims.map(resolveClaimView);
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
   const contested = contestedFactIds(run.evidence.facts);
-  const factsById = evidenceFactsById(run.evidence);
+  const factsById = evidenceFactsById(run);
   const presentation = selectClaimPresentation(run.blocks, claims);
   const readingOrder = presentation.readingOrder;
   const counts = countClaims(run.claims, contested);
@@ -344,46 +356,21 @@ export const VerificationView = ({
         ))}
       </div>
 
-      <div className="bg-muted flex flex-wrap items-center gap-2.5 rounded-lg border px-3 py-2 text-xs">
-        <FilterIcon aria-hidden="true" className="size-3.5 shrink-0" />
-        <span className="min-w-0 flex-1">
-          {counts.attnOpen > 0
-            ? t.rich("avt.verification.attentionOpen", {
-                count: counts.attnOpen,
-                routineCount: counts.routineTotal,
-                strong: (chunks) => <b>{chunks}</b>,
-              })
-            : t.rich("avt.verification.attentionComplete", {
-                count: counts.routineTotal,
-                strong: (chunks) => <b>{chunks}</b>,
-              })}
-        </span>
-        {counts.attnOpen > 0 && (
-          <Button
-            onClick={() =>
-              applyFilter(filter === "needsreview" ? "all" : "needsreview")
-            }
-            size="sm"
-            variant="link"
-          >
-            {filter === "needsreview"
-              ? t("common.showAll")
-              : t("avt.verification.showQueue")}
-          </Button>
-        )}
-        {routineIds.length > 0 && (
-          <Button
-            disabled={!canReview}
-            onClick={() => acceptRoutine(routineIds)}
-            size="sm"
-            variant="outline"
-          >
-            <CheckIcon />
-            {t("avt.verification.acceptRoutine", { count: routineIds.length })}
-          </Button>
-        )}
-      </div>
-
+      <AttentionBar
+        canReview={canReview}
+        counts={counts}
+        filter={filter}
+        onAcceptRoutine={() => acceptRoutine(routineIds)}
+        onFilter={applyFilter}
+        routineCount={routineIds.length}
+      >
+        <RunHistorySheet
+          claims={claims}
+          onShowClaim={goToMatch}
+          runId={run.id}
+          workspaceId={workspaceId}
+        />
+      </AttentionBar>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-5">
         <div className="flex h-96 flex-col overflow-hidden rounded-xl border md:col-span-3 md:h-auto md:min-h-0">
           {(hasOriginal || stepper.total > 0) && (
@@ -441,13 +428,110 @@ export const VerificationView = ({
               factsById={factsById}
               key={selectedClaim.id}
               onReviewEvent={(event) => recordEvent(selectedClaim.id, event)}
-              runId={run.id}
+              run={run}
               stepper={stepper}
               workspaceId={workspaceId}
             />
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+type AttentionBarProps = {
+  counts: ReturnType<typeof countClaims>;
+  filter: VerdictFilter;
+  routineCount: number;
+  canReview: boolean;
+  onFilter: (next: VerdictFilter) => void;
+  onAcceptRoutine: () => void;
+  /** The run's review history, opened from the same bar. */
+  children: React.ReactNode;
+};
+
+/** Where the triage stands, the queue filters, the run's history, and the
+ *  bulk acceptance of routine claims. */
+const AttentionBar = ({
+  counts,
+  filter,
+  routineCount,
+  canReview,
+  onFilter,
+  onAcceptRoutine,
+  children,
+}: AttentionBarProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const toggle = (next: VerdictFilter) => {
+    onFilter(filter === next ? "all" : next);
+  };
+  const sentence =
+    counts.attnOpen > 0
+      ? t.rich("avt.verification.attentionOpen", {
+          count: counts.attnOpen,
+          routineCount: counts.routineTotal,
+          strong: (chunks) => <b>{chunks}</b>,
+        })
+      : t.rich("avt.verification.attentionComplete", {
+          count: counts.routineTotal,
+          strong: (chunks) => <b>{chunks}</b>,
+        });
+  return (
+    <div className="bg-muted flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-lg border px-3 py-2 text-xs">
+      <FilterIcon aria-hidden="true" className="size-3.5 shrink-0" />
+      {/* One line, whatever the width: the full sentence is in the tooltip
+          and stays in the text a screen reader reads. */}
+      <Tooltip>
+        <TooltipTrigger
+          render={<span className="line-clamp-1 min-w-0 flex-1 basis-48" />}
+        >
+          {sentence}
+        </TooltipTrigger>
+        <TooltipPopup className="max-w-80">{sentence}</TooltipPopup>
+      </Tooltip>
+      {/* The queue's views are quiet; accepting routine claims is the bar's
+          one accent. */}
+      <div className="flex flex-wrap items-center gap-1">
+        {counts.attnOpen > 0 && (
+          <Button
+            onClick={() => toggle("needsreview")}
+            size="sm"
+            variant="ghost"
+          >
+            {filter === "needsreview"
+              ? t("common.showAll")
+              : t("avt.verification.showQueue")}
+          </Button>
+        )}
+        {(counts.needsEvidence > 0 || filter === "needsevidence") && (
+          <Button
+            aria-pressed={filter === "needsevidence"}
+            onClick={() => toggle("needsevidence")}
+            selected={filter === "needsevidence"}
+            size="sm"
+            variant="ghost"
+          >
+            <FileSearchIcon />
+            {t(REVIEW_STATUS_META["needs-evidence"].labelKey)}
+            <span className="tabular-nums">
+              {format.number(counts.needsEvidence)}
+            </span>
+          </Button>
+        )}
+        {children}
+      </div>
+      {routineCount > 0 && (
+        <Button
+          disabled={!canReview}
+          onClick={onAcceptRoutine}
+          size="sm"
+          variant="outline"
+        >
+          <CheckIcon />
+          {t("avt.verification.acceptRoutine", { count: routineCount })}
+        </Button>
+      )}
     </div>
   );
 };
@@ -592,12 +676,17 @@ const claimMatchesFilter = (
     }
     case "needsreview": {
       return (
-        needsAttention({ state, refs: claim.refs }, contested) &&
-        !isSettled(claim.review)
+        needsAttention(
+          { state, refs: claim.refs, qualifiers: claim.qualifiers },
+          contested,
+        ) && !isSettled(claim.review)
       );
     }
     case "reviewed": {
       return isSettled(claim.review);
+    }
+    case "needsevidence": {
+      return claim.review?.status === "needs-evidence";
     }
     case "supported":
     case "tension":
@@ -692,8 +781,10 @@ const ClaimSpan = ({
   children,
 }: ClaimSpanProps) => {
   const t = useTranslations();
+  const announceQualifiers = useQualifierAnnouncement();
   const reviewStatus = claim.review?.status ?? null;
   const { mark, markTextClass } = STATE_COLOR[state];
+  const qualifierAnnouncement = announceQualifiers(claim);
   return (
     // The claim's look is the review text mark, drawn by the span; the plain
     // button only makes the run of evidence a control.
@@ -711,7 +802,9 @@ const ClaimSpan = ({
             ...mark,
             state: claimMarkState({ selected, highlight }),
           }),
-          markTextClass,
+          isRecordSilent(state, claim)
+            ? "text-muted-foreground"
+            : markTextClass,
           dim && "opacity-40",
         )}
       >
@@ -734,14 +827,24 @@ const ClaimSpan = ({
             className="text-destructive-foreground ms-0.5 inline-block size-3 align-middle"
           />
         )}
+        {reviewStatus === "needs-evidence" && (
+          <FileSearchIcon
+            aria-hidden="true"
+            className="text-warning ms-0.5 inline-block size-3 align-middle"
+          />
+        )}
         {/* The verdict colour, the underline and each marker are visual only;
             a screen-reader user hears the verdict and markers here. */}
         <span className="sr-only">
           {t("avt.verification.claimAnnouncement", {
             state: t(STATE_META[state].chipKey),
             contested: String(contested),
-            reviewStatus: reviewStatus ?? "none",
+            reviewStatus:
+              reviewStatus === null
+                ? "none"
+                : REVIEW_STATUS_META[reviewStatus].selectKey,
           })}
+          {qualifierAnnouncement !== null && ` ${qualifierAnnouncement}`}
         </span>
       </span>
     </Button>

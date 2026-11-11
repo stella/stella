@@ -1,5 +1,5 @@
 import type { Buffer } from "node:buffer";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 
 import type { Sha256Hasher, Sha256Input } from "./types.ts";
 
@@ -16,3 +16,7 @@ export const sha256Base64Url = (input: Sha256Input): string =>
 
 export const sha256Bytes = (input: Sha256Input): Buffer =>
   createSha256().update(input).digest();
+
+/** HMAC-SHA-256 of `input` under `key`, as hex. */
+export const hmacSha256Hex = (key: Uint8Array, input: Sha256Input): string =>
+  createHmac("sha256", key).update(input).digest("hex");

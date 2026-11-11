@@ -275,8 +275,12 @@ type PromptBarProps = {
    * Only meaningful together with `attachmentsEnabled` (the (+) menu
    * renders inside that block). The Skills/Context submenus are wired to
    * this bar's own editor, so their props omit `editor` (supplied here).
+   *
+   * `models` is required: a bar that starts or continues a thread states its
+   * model menu (with where its turns run), or `null` when the surface pins
+   * the model, so none can drop the Run on choice by leaving a prop out.
    */
-  models?: ComposerModelsMenuProps | undefined;
+  models: ComposerModelsMenuProps | null;
   /**
    * The (+) menu's leading "New chat" row: the same action the dock's
    * new-chat button carries. `null` hides the row (nothing to leave yet).

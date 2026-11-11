@@ -46,6 +46,7 @@ import {
 } from "../harness/events";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
+import type { ProtocolLog } from "../protocol-log";
 import { copyAttachments } from "./attachments";
 import {
   captureCheckpoint,
@@ -115,6 +116,8 @@ export type SidecarHostOptions = {
   send: (message: SidecarHostOutput) => boolean;
   /** One line in the holder's log. Never passed tokens, prompts or outputs. */
   log: (line: string) => void;
+  /** Where each harness process's protocol lines go, redacted. */
+  protocolLog: ProtocolLog;
   /** The harness's environment; `CODEX_HOME` and the like are set per run. */
   environment: Readonly<Record<string, string>>;
   /**
@@ -193,6 +196,7 @@ const ADAPTERS = {
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
+      protocolLog: options.protocolLog,
       ...(options.onProcess === null ? {} : { onProcess: options.onProcess }),
       ...(launch.launch.clientName === null
         ? {}
@@ -215,6 +219,7 @@ const ADAPTERS = {
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
+      protocolLog: options.protocolLog,
       platform: process.platform,
     });
   },
@@ -227,6 +232,7 @@ const ADAPTERS = {
 type AdapterOptions = {
   environment: Readonly<Record<string, string>>;
   onBackgroundError: (error: unknown, context: string) => void;
+  protocolLog: ProtocolLog;
   /** Waits for the desktop's grant of a new harness process; `null` without one. */
   onProcess: ((pid: number) => Promise<boolean>) | null;
 };
@@ -337,8 +343,15 @@ export class SidecarHost {
   private readonly finished = new Set<Promise<void>>();
   /** Harness processes waiting for the desktop's grant, by run or probe id. */
   private readonly grants = new Map<string, (granted: boolean) => void>();
-  /** Run folders being restored, resolved: no run starts in one meanwhile. */
-  private readonly restoring = new Set<string>();
+  /**
+   * Run folders being restored, resolved, with the run whose checkpoint each
+   * goes back to and how it ends: no run starts in one meanwhile, and the
+   * same restore asked again waits for that one.
+   */
+  private readonly restoring = new Map<
+    string,
+    { runId: string; ended: Promise<SidecarRestoreOutcome> }
+  >();
   private stopping = false;
   private readonly detached: ReturnType<typeof createDetached>;
 
@@ -536,6 +549,7 @@ export class SidecarHost {
           onBackgroundError: (_error, context) => {
             this.options.log(`harness background work failed: ${context}`);
           },
+          protocolLog: this.options.protocolLog,
           onProcess: launch.launch.processGrant
             ? async (pid) => this.awaitGrant(id, pid)
             : null,
@@ -617,9 +631,12 @@ export class SidecarHost {
 
   /**
    * Put a run's folder back as its checkpoint saved it, unless a run uses the
-   * folder or another restore does. Both are checked and the folder claimed
-   * before the first await, so a `run.start` handled after this one finds the
-   * folder taken. Tracked: the holder does not exit halfway through.
+   * folder or a restore to another run's checkpoint does. Both are checked
+   * and the folder claimed before the first await, so a `run.start` handled
+   * after this one finds the folder taken. The same restore asked again while
+   * it runs, as after the desktop's connection dropped, is answered when that
+   * one ends; asked after, the run is already undone and answers `restored`.
+   * Tracked: the holder does not exit halfway through.
    */
   private async restoreFolder(message: SidecarFolderRestore) {
     const workspaceDir = path.resolve(message.workspaceDir);
@@ -631,16 +648,20 @@ export class SidecarHost {
         outcome,
       });
     };
+    const going = this.restoring.get(workspaceDir);
+    if (going?.runId === message.runId) {
+      answer(await going.ended);
+      return;
+    }
     const busy =
       this.stopping ||
-      this.restoring.has(workspaceDir) ||
+      going !== undefined ||
       [...this.runs.values()].some((run) => run.workspaceDir === workspaceDir);
     if (busy) {
       answer("folder_busy");
       return;
     }
-    this.restoring.add(workspaceDir);
-    try {
+    const ended = (async () => {
       const restored = await restoreCheckpoint({
         workspaceDir,
         runId: message.runId,
@@ -649,7 +670,11 @@ export class SidecarHost {
       if (restored.detail !== null) {
         this.options.log(`a folder restore: ${restored.detail}`);
       }
-      answer(restored.outcome);
+      return restored.outcome;
+    })();
+    this.restoring.set(workspaceDir, { runId: message.runId, ended });
+    try {
+      answer(await ended);
     } finally {
       this.restoring.delete(workspaceDir);
     }
