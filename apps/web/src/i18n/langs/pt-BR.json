@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "O veredito está limpo, mas a interpretação de um fato contribuinte está contestada; merece a sua atenção antes da aprovação.",
       "contradicted": "O registro diverge desta alegação. É preciso uma decisão humana antes que este veredito seja mantido.",
-      "nocover": "Adicione o fato a partir de um documento, vincule um que já esteja na lista ou indique que faltam evidências.",
+      "nocover": "Nenhum fato da lista cobre esta alegação ainda.",
       "notverifiable": "Deixada de lado como não verificável; a aprovação é opcional. Reabra abaixo se ela for de fato verificável.",
       "recordconflict": "Dois documentos no registro divergem. Resolva acima qual prevalece ou sinalize para a equipe de evidências; a ferramenta não escolherá por você.",
       "restsOnHeld": "Um fato em que este veredito se baseia está retido para revisão; confirme que o veredito se sustenta sem ele ou verifique a alegação novamente quando o fato estiver resolvido.",
@@ -393,10 +393,8 @@
       "recheckFailed": "Não foi possível verificar a alegação novamente",
       "searchFacts": "Pesquisar os fatos da lista",
       "sheet": {
-        "description": "O fato entra na lista com a passagem de que provém, é vinculado a esta alegação e a alegação é verificada novamente.",
         "passage": "Passagem",
         "passageHint": "As palavras do documento que estabelecem o fato.",
-        "statementHint": "Começa com as palavras da alegação; mantenha apenas o que o documento estabelece.",
         "statementRequired": "Escreva o fato.",
         "statementTooLong": "Um fato admite no máximo {limit} caracteres.",
         "submit": "Adicionar e verificar novamente",
@@ -407,7 +405,6 @@
     },
     "guidance": {
       "escalate": "Escalar",
-      "gap": "Falta um fato",
       "manualJudgement": "Julgamento manual",
       "optional": "Opcional",
       "readyToConfirm": "Pronta para confirmar"
@@ -537,7 +534,6 @@
       "failed": "Não salvo",
       "failedTitle": "Sua alteração não foi salva"
     },
-    "sourceMediumTooltip": "Meio da fonte: um descritor neutro. Por si só, não reduz a confiança.",
     "states": {
       "contradicted": {
         "chip": "Contradita",

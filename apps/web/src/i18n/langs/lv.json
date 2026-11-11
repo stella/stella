@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Slēdziens ir skaidrs, taču viena saistītā fakta interpretācija ir apstrīdēta; pirms apstiprināšanas pārskatiet to.",
       "contradicted": "Reģistrs neatbilst šim apgalvojumam. Pirms slēdziena apstiprināšanas tas jāizvērtē cilvēkam.",
-      "nocover": "Pievienojiet faktu no dokumenta, sasaistiet jau sarakstā esošu faktu vai atzīmējiet, ka vajadzīgi pierādījumi.",
+      "nocover": "Neviens saraksta fakts vēl neattiecas uz šo apgalvojumu.",
       "notverifiable": "Atlikts kā nepārbaudāms; apstiprināšana nav obligāta. Ja apgalvojumu patiesībā var pārbaudīt, atveriet to vēlreiz tālāk.",
       "recordconflict": "Divi pierādījumi reģistrā ir pretrunā. Iepriekš izlemiet, kurš ir noteicošais, vai nododiet jautājumu pierādījumu komandai; rīks neizvēlēsies jūsu vietā.",
       "restsOnHeld": "Fakts, uz kuru balstās šis slēdziens, ir aizturēts pārskatīšanai; apstipriniet, ka slēdziens ir spēkā arī bez tā, vai pārbaudiet apgalvojumu vēlreiz, kad fakts būs noskaidrots.",
@@ -393,10 +393,8 @@
       "recheckFailed": "Apgalvojumu neizdevās pārbaudīt vēlreiz",
       "searchFacts": "Meklēt saraksta faktos",
       "sheet": {
-        "description": "Fakts tiek pievienots sarakstam kopā ar fragmentu, no kura tas izriet, sasaistīts ar šo apgalvojumu, un apgalvojums tiek pārbaudīts vēlreiz.",
         "passage": "Fragments",
         "passageHint": "Dokumenta vārdi, kas pierāda faktu.",
-        "statementHint": "Sākotnēji tas ir apgalvojuma formulējums; atstājiet tikai to, ko dokuments pierāda.",
         "statementRequired": "Uzrakstiet faktu.",
         "statementTooLong": "Fakts var būt ne garāks par {limit} rakstzīmēm.",
         "submit": "Pievienot un pārbaudīt vēlreiz",
@@ -407,7 +405,6 @@
     },
     "guidance": {
       "escalate": "Nodot tālāk",
-      "gap": "Vajag faktu",
       "manualJudgement": "Cilvēka lēmums",
       "optional": "Nav obligāti",
       "readyToConfirm": "Gatavs apstiprināšanai"
@@ -537,7 +534,6 @@
       "failed": "Nav saglabāts",
       "failedTitle": "Jūsu izmaiņas netika saglabātas"
     },
-    "sourceMediumTooltip": "Avota nesējs ir neitrāls raksturojums. Tas pats par sevi nemazina ticamību.",
     "states": {
       "contradicted": {
         "chip": "Pretrunā",

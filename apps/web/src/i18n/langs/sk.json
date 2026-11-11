@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Záver je jednoznačný, ale výklad jedného z použitých faktov je sporný; pred schválením si zaslúži vašu pozornosť.",
       "contradicted": "Záznamy sa od tohto tvrdenia odchyľujú. Pred potvrdením záveru musí rozhodnúť človek.",
-      "nocover": "Pridajte fakt z dokumentu, prepojte fakt, ktorý už je v zozname, alebo označte, že tvrdenie vyžaduje dôkazy.",
+      "nocover": "Toto tvrdenie zatiaľ nepokrýva žiadny fakt zo zoznamu.",
       "notverifiable": "Odložené ako neoveriteľné; schválenie je nepovinné. Ak sa tvrdenie v skutočnosti dá overiť, znovu ho otvorte nižšie.",
       "recordconflict": "Dva dôkazné materiály v spise si odporujú. Vyššie určte, ktorý je rozhodujúci, alebo vec označte pre tím pre dôkazy; nástroj nerozhodne za vás.",
       "restsOnHeld": "Fakt, o ktorý sa tento záver opiera, je pozastavený na kontrolu; potvrďte, že záver platí aj bez neho, alebo tvrdenie po vyriešení faktu overte znova.",
@@ -393,10 +393,8 @@
       "recheckFailed": "Tvrdenie sa nepodarilo skontrolovať znova",
       "searchFacts": "Hľadať medzi faktmi v zozname",
       "sheet": {
-        "description": "Fakt sa pridá do zoznamu spolu s pasážou, z ktorej vychádza, prepojí sa s týmto tvrdením a tvrdenie sa skontroluje znova.",
         "passage": "Pasáž",
         "passageHint": "Slová v dokumente, ktoré fakt preukazujú.",
-        "statementHint": "Východiskový text je znenie tvrdenia; ponechajte len to, čo dokument preukazuje.",
         "statementRequired": "Napíšte fakt.",
         "statementTooLong": "Fakt môže mať najviac {limit} znakov.",
         "submit": "Pridať a skontrolovať znova",
@@ -407,7 +405,6 @@
     },
     "guidance": {
       "escalate": "Postúpiť ďalej",
-      "gap": "Chýba fakt",
       "manualJudgement": "Vyžaduje úsudok",
       "optional": "Nepovinné",
       "readyToConfirm": "Pripravené na potvrdenie"
@@ -537,7 +534,6 @@
       "failed": "Neuložené",
       "failedTitle": "Vaša zmena sa neuložila"
     },
-    "sourceMediumTooltip": "Médium zdroja: neutrálny opis. Samo osebe neznižuje mieru istoty.",
     "states": {
       "contradicted": {
         "chip": "V rozpore",

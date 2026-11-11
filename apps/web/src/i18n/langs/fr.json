@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Le verdict est net, mais l’interprétation d’un fait contributif est contestée ; un coup d’œil s’impose avant validation.",
       "contradicted": "Le dossier s’écarte de cette affirmation. Une décision humaine est nécessaire avant que ce verdict soit retenu.",
-      "nocover": "Ajoutez le fait à partir d’un document, liez-en un déjà présent dans la liste ou indiquez que des preuves sont requises.",
+      "nocover": "Aucun fait de la liste ne couvre encore cette affirmation.",
       "notverifiable": "Écartée comme non vérifiable ; la validation est facultative. Rouvrez-la ci-dessous si elle est en réalité vérifiable.",
       "recordconflict": "Deux pièces du dossier se contredisent. Déterminez ci-dessus laquelle fait foi, ou signalez-le à l’équipe chargée des preuves ; l’outil ne choisira pas à votre place.",
       "restsOnHeld": "Un fait sur lequel repose ce verdict est en attente de vérification ; confirmez que le verdict tient sans lui, ou revérifiez l’affirmation une fois le fait tranché.",
@@ -393,10 +393,8 @@
       "recheckFailed": "L’affirmation n’a pas pu être revérifiée",
       "searchFacts": "Rechercher dans les faits de la liste",
       "sheet": {
-        "description": "Le fait est ajouté à la liste avec le passage dont il provient, lié à cette affirmation, puis l’affirmation est revérifiée.",
         "passage": "Extrait",
         "passageHint": "Les mots du document qui établissent le fait.",
-        "statementHint": "Reprend d’abord les termes de l’affirmation ; ne conservez que ce que le document établit.",
         "statementRequired": "Rédigez le fait.",
         "statementTooLong": "Un fait ne peut pas dépasser {limit} caractères.",
         "submit": "Ajouter et revérifier",
@@ -407,7 +405,6 @@
     },
     "guidance": {
       "escalate": "Faire remonter",
-      "gap": "Fait manquant",
       "manualJudgement": "Jugement manuel",
       "optional": "Facultatif",
       "readyToConfirm": "Prête à confirmer"
@@ -537,7 +534,6 @@
       "failed": "Non enregistré",
       "failedTitle": "Votre modification n’a pas été enregistrée"
     },
-    "sourceMediumTooltip": "Support de la source : un descripteur neutre. Il n’abaisse pas la confiance à lui seul.",
     "states": {
       "contradicted": {
         "chip": "Contredite",

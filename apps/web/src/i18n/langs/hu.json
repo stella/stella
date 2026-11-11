@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "A következtetés egyértelmű, de az egyik figyelembe vett tény értelmezése vitatott; jóváhagyás előtt érdemes átnézni.",
       "contradicted": "A nyilvántartás eltér ettől az állítástól. A következtetés jóváhagyásához emberi döntés szükséges.",
-      "nocover": "Vegye fel a tényt egy dokumentumból, kapcsoljon hozzá egy már a listán lévő tényt, vagy jelölje meg, hogy bizonyíték szükséges.",
+      "nocover": "A lista egyik ténye sem fedi még le ezt az állítást.",
       "notverifiable": "Nem ellenőrizhetőként félretéve; a jóváhagyás nem kötelező. Ha mégis ellenőrizhető, nyissa újra alább.",
       "recordconflict": "Az ügyirat két bizonyítéka ellentmond egymásnak. Fent válassza ki az irányadó bizonyítékot, vagy jelezze a bizonyítékkezelő csapatnak; az eszköz nem dönt Ön helyett.",
       "restsOnHeld": "A következtetés alapjául szolgáló egyik tény felülvizsgálatra vár; erősítse meg, hogy a következtetés nélküle is megáll, vagy ellenőrizze újra az állítást, miután a tény tisztázódott.",
@@ -393,10 +393,8 @@
       "recheckFailed": "Az állítást nem sikerült újra ellenőrizni",
       "searchFacts": "Keresés a lista tényei között",
       "sheet": {
-        "description": "A tény a belőle származó szövegrésszel együtt kerül a listára, hozzákapcsolódik ehhez az állításhoz, és az állítást újra ellenőrizzük.",
         "passage": "Szövegrész",
         "passageHint": "A dokumentum szavai, amelyek megállapítják a tényt.",
-        "statementHint": "Az állítás szövegével indul; csak azt tartsa meg, amit a dokumentum megállapít.",
         "statementRequired": "Írja le a tényt.",
         "statementTooLong": "Egy tény legfeljebb {limit} karakterből állhat.",
         "submit": "Hozzáadás és újraellenőrzés",
@@ -407,7 +405,6 @@
     },
     "guidance": {
       "escalate": "Továbbítás",
-      "gap": "Tény szükséges",
       "manualJudgement": "Emberi mérlegelés",
       "optional": "Nem kötelező",
       "readyToConfirm": "Megerősítésre kész"
@@ -537,7 +534,6 @@
       "failed": "Nincs mentve",
       "failedTitle": "A módosítás mentése sikertelen volt"
     },
-    "sourceMediumTooltip": "A forrás adathordozója: semleges leíró adat. Önmagában nem csökkenti a bizonyosságot.",
     "states": {
       "contradicted": {
         "chip": "Cáfolt",

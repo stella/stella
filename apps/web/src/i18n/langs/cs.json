@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Závěr je jednoznačný, ale výklad jednoho z použitých faktů je sporný; před schválením si zaslouží vaši pozornost.",
       "contradicted": "Záznamy se od tohoto tvrzení odchylují. Než bude možné závěr potvrdit, musí rozhodnout člověk.",
-      "nocover": "Přidejte fakt z dokumentu, propojte fakt, který už je v seznamu, nebo označte, že tvrzení vyžaduje důkazy.",
+      "nocover": "Toto tvrzení zatím nepokrývá žádný fakt ze seznamu.",
       "notverifiable": "Odloženo jako neověřitelné; schválení je nepovinné. Pokud lze tvrzení ve skutečnosti ověřit, znovu je otevřete níže.",
       "recordconflict": "Dva důkazní materiály ve spise si odporují. Výše určete, který je rozhodující, nebo věc označte pro tým pro důkazy; nástroj nerozhodne za vás.",
       "restsOnHeld": "Fakt, o který se tento závěr opírá, je pozastaven ke kontrole; potvrďte, že závěr platí i bez něj, nebo tvrzení po vyřešení faktu ověřte znovu.",
@@ -393,10 +393,8 @@
       "recheckFailed": "Tvrzení se nepodařilo zkontrolovat znovu",
       "searchFacts": "Hledat mezi fakty v seznamu",
       "sheet": {
-        "description": "Fakt se přidá do seznamu spolu s pasáží, z níž vychází, propojí se s tímto tvrzením a tvrzení se zkontroluje znovu.",
         "passage": "Pasáž",
         "passageHint": "Slova v dokumentu, která fakt prokazují.",
-        "statementHint": "Výchozí text je znění tvrzení; ponechte jen to, co dokument prokazuje.",
         "statementRequired": "Napište fakt.",
         "statementTooLong": "Fakt může mít nejvýše {limit} znaků.",
         "submit": "Přidat a zkontrolovat znovu",
@@ -407,7 +405,6 @@
     },
     "guidance": {
       "escalate": "Předat dál",
-      "gap": "Chybí fakt",
       "manualJudgement": "Vyžaduje úsudek",
       "optional": "Nepovinné",
       "readyToConfirm": "Připraveno k potvrzení"
@@ -537,7 +534,6 @@
       "failed": "Neuloženo",
       "failedTitle": "Vaše změna nebyla uložena"
     },
-    "sourceMediumTooltip": "Médium zdroje: neutrální popis. Samo o sobě nesnižuje míru jistoty.",
     "states": {
       "contradicted": {
         "chip": "V rozporu",

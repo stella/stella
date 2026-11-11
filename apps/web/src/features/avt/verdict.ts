@@ -156,15 +156,19 @@ export const resolveClaimView = (
 export type DispositionTone =
   "ready" | "manual" | "escalate" | "gap" | "routine";
 
+/** The badge each tone shows. A gap shows none: its next steps are the
+ *  guide, and its one line says what is missing. */
 const GUIDANCE_KEYS = {
   ready: "avt.guidance.readyToConfirm",
   manual: "avt.guidance.manualJudgement",
   escalate: "avt.guidance.escalate",
-  gap: "avt.guidance.gap",
+  gap: null,
   routine: "avt.guidance.optional",
-} as const satisfies Record<DispositionTone, TranslationKey>;
+} as const satisfies Record<DispositionTone, TranslationKey | null>;
 
-type DispositionGuideKey = (typeof GUIDANCE_KEYS)[keyof typeof GUIDANCE_KEYS];
+type DispositionGuideKey = NonNullable<
+  (typeof GUIDANCE_KEYS)[keyof typeof GUIDANCE_KEYS]
+>;
 
 const DISPOSITION_COPY = {
   supported: "avt.disposition.supported",
@@ -212,7 +216,7 @@ const supportedAsk = (claim: Pick<TriageTarget, "qualifiers">) => {
 
 export type DispositionGuidance = {
   tone: DispositionTone;
-  guideKey: DispositionGuideKey;
+  guideKey: DispositionGuideKey | null;
   askKey: DispositionAskKey;
 };
 

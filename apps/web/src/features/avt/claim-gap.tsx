@@ -26,16 +26,12 @@ import {
   CommandList,
 } from "@stll/ui/command";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "@stll/ui/field";
+import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import {
   ArrowRightIcon,
   FilePlusIcon,
+  FileSearchIcon,
   LinkIcon,
   RefreshCwIcon,
   XIcon,
@@ -45,7 +41,6 @@ import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import {
   Sheet,
-  SheetDescription,
   SheetFooter,
   SheetHeader,
   SheetPanel,
@@ -120,6 +115,12 @@ const useLinkableFacts = ({
 type GapActionsProps = GapScope & {
   claim: VerificationClaim;
   disabled: boolean;
+  /** Marking the claim as needing evidence, offered here on a gap; null
+   *  where the review decisions offer it instead. */
+  needsEvidence: {
+    marked: boolean;
+    onChange: (marked: boolean) => void;
+  } | null;
 };
 
 /**
@@ -144,15 +145,17 @@ export const GapNextSteps = (props: GapActionsProps) => {
   );
 };
 
-/** The ways to fill a gap, as one row under the reviewer's prompt; marking
- *  it as needing evidence sits with the review decisions below. */
+/** The ways out of a gap, under its one line: adding the fact leads, and
+ *  linking one or marking the claim as needing evidence follow quietly. */
 const GapActions = ({
   workspaceId,
   runId,
   listId,
   claim,
   disabled,
+  needsEvidence,
 }: GapActionsProps) => {
+  const t = useTranslations();
   const actions = useClaimGapActions({
     workspaceId,
     runId,
@@ -186,6 +189,18 @@ const GapActions = ({
         pending={actions.link.isPending}
         workspaceId={workspaceId}
       />
+      {needsEvidence !== null && (
+        <Button
+          aria-pressed={needsEvidence.marked}
+          disabled={disabled}
+          onClick={() => needsEvidence.onChange(!needsEvidence.marked)}
+          size="sm"
+          variant={needsEvidence.marked ? "secondary" : "ghost"}
+        >
+          <FileSearchIcon />
+          {t("avt.review.status.needsEvidence")}
+        </Button>
+      )}
     </div>
   );
 };
@@ -325,7 +340,6 @@ const AddFactSheet = ({
         loading={pending}
         onClick={() => setOpen(true)}
         size="sm"
-        variant="outline"
       >
         <FilePlusIcon />
         {t("avt.gap.addFact")}
@@ -334,9 +348,6 @@ const AddFactSheet = ({
         <SheetPopup side="inline-end">
           <SheetHeader>
             <SheetTitle>{t("avt.gap.sheet.title")}</SheetTitle>
-            <SheetDescription>
-              {t("avt.gap.sheet.description")}
-            </SheetDescription>
           </SheetHeader>
           <AddFactForm
             claimText={claimText}
@@ -450,9 +461,6 @@ const AddFactForm = ({
               onChange={(event) => setStatement(event.target.value)}
               value={statement}
             />
-            <FieldDescription>
-              {t("avt.gap.sheet.statementHint")}
-            </FieldDescription>
             <FieldError match={errors.statement !== undefined} role="alert">
               {errors.statement}
             </FieldError>
@@ -493,11 +501,9 @@ const AddFactForm = ({
             <Textarea
               disabled={pending}
               onChange={(event) => setQuote(event.target.value)}
+              placeholder={t("avt.gap.sheet.passageHint")}
               value={quote}
             />
-            <FieldDescription>
-              {t("avt.gap.sheet.passageHint")}
-            </FieldDescription>
           </Field>
         </div>
       </SheetPanel>

@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Rozstrzygnięcie jest jednoznaczne, ale interpretacja jednego z uwzględnionych faktów jest sporna; warto ją sprawdzić przed zatwierdzeniem.",
       "contradicted": "Rejestr odbiega od tego twierdzenia. Zanim rozstrzygnięcie zostanie zatwierdzone, potrzebna jest decyzja człowieka.",
-      "nocover": "Dodaj fakt z dokumentu, powiąż fakt, który już jest na liście, albo oznacz, że twierdzenie wymaga dowodów.",
+      "nocover": "Żaden fakt z listy nie obejmuje jeszcze tego twierdzenia.",
       "notverifiable": "Odłożone jako niemożliwe do zweryfikowania; zatwierdzenie jest opcjonalne. Jeśli twierdzenie można jednak sprawdzić, otwórz je ponownie poniżej.",
       "recordconflict": "Dwa materiały dowodowe w aktach są ze sobą sprzeczne. Powyżej wskaż, który jest nadrzędny, albo oznacz sprawę dla zespołu ds. dowodów; narzędzie nie dokona wyboru za Ciebie.",
       "restsOnHeld": "Fakt, na którym opiera się to rozstrzygnięcie, jest wstrzymany do weryfikacji; potwierdź, że rozstrzygnięcie obowiązuje również bez niego, albo sprawdź twierdzenie ponownie po wyjaśnieniu faktu.",
@@ -393,10 +393,8 @@
       "recheckFailed": "Nie udało się ponownie sprawdzić twierdzenia",
       "searchFacts": "Szukaj wśród faktów na liście",
       "sheet": {
-        "description": "Fakt trafia na listę razem z fragmentem, z którego pochodzi, zostaje powiązany z tym twierdzeniem, a twierdzenie jest sprawdzane ponownie.",
         "passage": "Fragment",
         "passageHint": "Słowa w dokumencie, które ustalają fakt.",
-        "statementHint": "Punktem wyjścia jest brzmienie twierdzenia; zostaw tylko to, co wynika z dokumentu.",
         "statementRequired": "Wpisz fakt.",
         "statementTooLong": "Fakt może mieć najwyżej {limit} znaków.",
         "submit": "Dodaj i sprawdź ponownie",
@@ -407,7 +405,6 @@
     },
     "guidance": {
       "escalate": "Przekaż dalej",
-      "gap": "Brak faktu",
       "manualJudgement": "Wymaga decyzji",
       "optional": "Opcjonalne",
       "readyToConfirm": "Gotowe do potwierdzenia"
@@ -537,7 +534,6 @@
       "failed": "Nie zapisano",
       "failedTitle": "Twoja zmiana nie została zapisana"
     },
-    "sourceMediumTooltip": "Nośnik źródła: neutralny opis. Sam w sobie nie obniża poziomu pewności.",
     "states": {
       "contradicted": {
         "chip": "Sprzeczne",

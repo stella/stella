@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Išvada aiški, tačiau vieno susijusio fakto aiškinimas ginčijamas; prieš patvirtindami jį peržiūrėkite.",
       "contradicted": "Registras šio teiginio nepatvirtina. Prieš patvirtinant išvadą ją turi įvertinti žmogus.",
-      "nocover": "Pridėkite faktą iš dokumento, susiekite sąraše jau esantį faktą arba pažymėkite, kad reikia įrodymų.",
+      "nocover": "Joks sąrašo faktas dar neapima šio teiginio.",
       "notverifiable": "Atidėta kaip nepatikrinama; patvirtinti neprivaloma. Jei teiginį iš tiesų galima patikrinti, atverkite jį iš naujo toliau.",
       "recordconflict": "Du registro įrodymai prieštarauja vienas kitam. Aukščiau nuspręskite, kuris yra vadovaujamasis, arba perduokite įrodymų grupei; įrankis už jus nepasirinks.",
       "restsOnHeld": "Faktas, kuriuo grindžiama ši išvada, sulaikytas peržiūrai; patvirtinkite, kad išvada galioja ir be jo, arba patikrinkite teiginį iš naujo, kai faktas bus išspręstas.",
@@ -393,10 +393,8 @@
       "recheckFailed": "Teiginio nepavyko patikrinti iš naujo",
       "searchFacts": "Ieškoti sąrašo faktų",
       "sheet": {
-        "description": "Faktas įtraukiamas į sąrašą kartu su ištrauka, iš kurios jis paimtas, susiejamas su šiuo teiginiu, o teiginys patikrinamas iš naujo.",
         "passage": "Ištrauka",
         "passageHint": "Dokumento žodžiai, kurie nustato faktą.",
-        "statementHint": "Pradinis tekstas yra teiginio formuluotė; palikite tik tai, ką nustato dokumentas.",
         "statementRequired": "Įrašykite faktą.",
         "statementTooLong": "Faktą gali sudaryti ne daugiau kaip {limit} simbolių.",
         "submit": "Pridėti ir patikrinti iš naujo",
@@ -407,7 +405,6 @@
     },
     "guidance": {
       "escalate": "Perduoti",
-      "gap": "Reikia fakto",
       "manualJudgement": "Žmogaus sprendimas",
       "optional": "Neprivaloma",
       "readyToConfirm": "Paruošta patvirtinti"
@@ -537,7 +534,6 @@
       "failed": "Neišsaugota",
       "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas"
     },
-    "sourceMediumTooltip": "Šaltinio laikmena yra neutralus apibūdinimas. Ji savaime nemažina patikimumo.",
     "states": {
       "contradicted": {
         "chip": "Prieštarauja",

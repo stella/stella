@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Das Ergebnis ist eindeutig, doch die Auslegung eines beitragenden Fakts ist strittig – vor der Freigabe sollten Sie dies prüfen.",
       "contradicted": "Der Bestand weicht von dieser Behauptung ab. Bevor dieses Ergebnis Bestand hat, ist eine menschliche Entscheidung erforderlich.",
-      "nocover": "Fügen Sie die Tatsache aus einem Dokument hinzu, verknüpfen Sie eine bereits in der Liste vorhandene oder markieren Sie, dass Belege erforderlich sind.",
+      "nocover": "Noch deckt keine Tatsache der Liste diese Behauptung ab.",
       "notverifiable": "Als nicht überprüfbar zurückgestellt – die Freigabe ist optional. Öffnen Sie die Behauptung unten erneut, falls sie doch überprüfbar ist.",
       "recordconflict": "Zwei Anlagen im Bestand widersprechen sich. Klären Sie oben, welche maßgeblich ist, oder markieren Sie den Fall für das Belegteam – das Tool entscheidet nicht für Sie.",
       "restsOnHeld": "Ein Fakt, auf dem dieses Ergebnis beruht, ist zur Prüfung zurückgestellt; bestätigen Sie, dass das Ergebnis auch ohne ihn trägt, oder prüfen Sie die Behauptung erneut, sobald der Fakt geklärt ist.",
@@ -393,10 +393,8 @@
       "recheckFailed": "Die Behauptung konnte nicht erneut geprüft werden",
       "searchFacts": "Tatsachen der Liste durchsuchen",
       "sheet": {
-        "description": "Die Tatsache wird mit der Textstelle, aus der sie stammt, in die Liste aufgenommen, mit dieser Behauptung verknüpft und die Behauptung erneut geprüft.",
         "passage": "Textstelle",
         "passageHint": "Der Wortlaut im Dokument, der die Tatsache belegt.",
-        "statementHint": "Ausgangspunkt ist der Wortlaut der Behauptung; behalten Sie nur, was das Dokument belegt.",
         "statementRequired": "Geben Sie die Tatsache ein.",
         "statementTooLong": "Eine Tatsache darf höchstens {limit} Zeichen enthalten.",
         "submit": "Hinzufügen und erneut prüfen",
@@ -407,7 +405,6 @@
     },
     "guidance": {
       "escalate": "Eskalieren",
-      "gap": "Tatsache fehlt",
       "manualJudgement": "Manuelle Entscheidung",
       "optional": "Fakultativ",
       "readyToConfirm": "Bestätigungsbereit"
@@ -537,7 +534,6 @@
       "failed": "Nicht gespeichert",
       "failedTitle": "Ihre Änderung wurde nicht gespeichert"
     },
-    "sourceMediumTooltip": "Quellenmedium – eine neutrale Beschreibung. Es mindert die Sicherheit nicht von sich aus.",
     "states": {
       "contradicted": {
         "chip": "Widersprochen",

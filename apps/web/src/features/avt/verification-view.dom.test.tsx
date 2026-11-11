@@ -462,9 +462,7 @@ test("all verdicts expose their evidence and basis in the real detail panel, nev
       ).toBeTruthy();
     }
     if (suffix === 4) {
-      expect(
-        screen.getByText("No anchor fact covers this claim."),
-      ).toBeTruthy();
+      expect(screen.getByText(messages.avt.disposition.nocover)).toBeTruthy();
     }
     if (suffix === 6) {
       expect(screen.getByText("Not a verifiable assertion.")).toBeTruthy();
@@ -564,17 +562,17 @@ test("a claim's qualifiers show beside its verdict and in its detail, and a sile
       "The witness's own expectation; no minute would record it.",
     ),
   ).toBeTruthy();
-  expect(screen.queryByText("No anchor fact covers this claim.")).toBeNull();
+  expect(screen.queryByText(messages.avt.disposition.nocover)).toBeNull();
 
-  // Plain missing coverage is a gap at full strength.
+  // Plain missing coverage is a gap at full strength, said in one line.
   expect(mark(gap.text).firstElementChild?.className).not.toContain(
     "text-muted-foreground",
   );
   fireEvent.click(mark(gap.text));
-  expect(screen.getByText("No anchor fact covers this claim.")).toBeTruthy();
+  expect(screen.getByText(messages.avt.disposition.nocover)).toBeTruthy();
 
-  // Every other qualifier is a chip beside the verdict, and the detail says
-  // what each one means: the grader's words, or the rule that set it.
+  // Every other qualifier is a chip beside the verdict. The detail adds a
+  // line only for what the grader said; a rule is its chip's tooltip.
   fireEvent.click(mark(widenedText));
   for (const label of [
     messages.avt.qualifiers.scopeMismatch.label,
@@ -590,11 +588,11 @@ test("a claim's qualifiers show beside its verdict and in its detail, and a sile
     within(notes).getByText("The calendar covers 2 to 20 August only."),
   ).toBeTruthy();
   expect(
-    within(notes).getByText(messages.avt.qualifiers.unsourcedOnly.hint),
-  ).toBeTruthy();
+    within(notes).queryByText(messages.avt.qualifiers.unsourcedOnly.hint),
+  ).toBeNull();
   expect(
-    within(notes).getByText(messages.avt.qualifiers.restsOnHeld.hint),
-  ).toBeTruthy();
+    within(notes).queryByText(messages.avt.qualifiers.restsOnHeld.hint),
+  ).toBeNull();
   expect(screen.queryByText("48")).toBeNull();
   // The fact card shows the same footing: it has no linked source, whatever
   // its medium says.
@@ -919,9 +917,10 @@ test("a verdict resting only on testimony says so beside it and in its sign-off"
   expect(
     screen.getAllByText(messages.avt.qualifiers.testimonyOnly.label).length,
   ).toBeGreaterThan(0);
+  // Its rule is the chip's tooltip, not a line in the panel.
   expect(
-    screen.getByText(messages.avt.qualifiers.testimonyOnly.hint),
-  ).toBeTruthy();
+    screen.queryByText(messages.avt.qualifiers.testimonyOnly.hint),
+  ).toBeNull();
   expect(screen.getByText(messages.avt.disposition.testimonyOnly)).toBeTruthy();
   // The fact card names its footing.
   expect(screen.getByText(messages.avt.factTier.testimony.label)).toBeTruthy();

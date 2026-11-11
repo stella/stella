@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "El resultado es claro, pero se cuestiona la interpretación de un hecho relacionado; conviene revisarlo antes de aprobar.",
       "contradicted": "El registro difiere de esta afirmación. Hace falta una decisión humana antes de dar por válido el resultado.",
-      "nocover": "Añada el hecho desde un documento, vincule uno que ya esté en la lista o indique que faltan pruebas.",
+      "nocover": "Ningún hecho de la lista cubre todavía esta afirmación.",
       "notverifiable": "Reservada como no verificable; la aprobación es opcional. Reábrala abajo si realmente puede comprobarse.",
       "recordconflict": "Dos documentos del registro discrepan. Resuelva arriba cuál prevalece o avise al equipo de pruebas; la herramienta no decidirá por usted.",
       "restsOnHeld": "Un hecho en el que se basa este resultado está retenido para revisión; confirme que el resultado se sostiene sin él o vuelva a verificar la afirmación cuando el hecho esté resuelto.",
@@ -393,10 +393,8 @@
       "recheckFailed": "No se pudo volver a comprobar la afirmación",
       "searchFacts": "Buscar en los hechos de la lista",
       "sheet": {
-        "description": "El hecho se incorpora a la lista con el pasaje del que procede, se vincula a esta afirmación y la afirmación se vuelve a comprobar.",
         "passage": "Pasaje",
         "passageHint": "Las palabras del documento que acreditan el hecho.",
-        "statementHint": "Parte de las palabras de la afirmación; conserve solo lo que el documento acredita.",
         "statementRequired": "Redacte el hecho.",
         "statementTooLong": "Un hecho admite como máximo {limit} caracteres.",
         "submit": "Añadir y volver a comprobar",
@@ -407,7 +405,6 @@
     },
     "guidance": {
       "escalate": "Remitir",
-      "gap": "Falta un hecho",
       "manualJudgement": "Valoración manual",
       "optional": "Opcional",
       "readyToConfirm": "Listo para confirmar"
@@ -537,7 +534,6 @@
       "failed": "No guardado",
       "failedTitle": "No se guardó su cambio"
     },
-    "sourceMediumTooltip": "Formato de la fuente: descriptor neutro. Por sí solo no reduce la confianza.",
     "states": {
       "contradicted": {
         "chip": "Contradicha",
