@@ -214,9 +214,12 @@ const SingleDocumentPicker = ({
           <ComboboxList>
             {(item: DocumentOption) => (
               <ComboboxItem key={item.entityId} value={item}>
-                <BidiText as="span" className="min-w-0 truncate">
+                <TruncatedText
+                  className="min-w-0"
+                  render={<BidiText as="span" />}
+                >
                   {item.label}
-                </BidiText>
+                </TruncatedText>
               </ComboboxItem>
             )}
           </ComboboxList>

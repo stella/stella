@@ -46,6 +46,7 @@ import {
   SheetTitle,
 } from "@stll/ui/sheet";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { MatterDocumentPicker } from "@/components/workspaces/matter-document-picker";
@@ -283,9 +284,9 @@ const LinkFactPicker = ({
                   }}
                   value={fact.id}
                 >
-                  <span className="line-clamp-2 min-w-0" dir="auto">
+                  <TruncatedText className="min-w-0" dir="auto" lines={2}>
                     {fact.name}
-                  </span>
+                  </TruncatedText>
                 </CommandItem>
               ))}
               {facts.hasNextPage ? (
