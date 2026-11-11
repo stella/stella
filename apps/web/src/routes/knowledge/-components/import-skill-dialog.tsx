@@ -35,6 +35,7 @@ import { FileDropZone } from "@/components/file-drop-zone";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
@@ -245,10 +246,12 @@ const ImportSkillDialogBody = ({
   const uploadPack = useMutation({
     onMutate: () => onBusyChange(true),
     onSettled: () => onBusyChange(false),
-    mutationFn: async (file: File) => {
-      const response = await api.skills.upload.post({ file, scope });
-      return unwrapApiResponse(response);
-    },
+    mutationFn: async (file: File) =>
+      await invokeCapability("skills.upload", async (request) =>
+        unwrapApiResponse(
+          await api.skills.upload.post({ file, scope }, request),
+        ),
+      ),
     onSuccess: (result) => {
       onImported();
       stellaToast.add({
