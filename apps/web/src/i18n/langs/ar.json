@@ -1274,6 +1274,7 @@
       "count": "{count, plural, zero {لا توجد لغات} one {لغة واحدة} two {لغتان} few {# لغات} many {# لغة} other {# لغة}}",
       "matchedIn": "تطابق باللغة {language}"
     },
+    "linkedPassageGone": "المقطع المرتبط لم يعد موجودًا في هذا النص.",
     "loadingMore": "جارٍ تحميل المزيد...",
     "marginFilter": {
       "label": "تصفية الأحكام المستشهد بها",

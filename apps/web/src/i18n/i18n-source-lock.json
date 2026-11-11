@@ -1001,6 +1001,7 @@
   "caseLaw.filters.showInCountry": "Show {filter} in {country}",
   "caseLaw.languages.count": "{count, plural, one {# language} other {# languages}}",
   "caseLaw.languages.matchedIn": "Matched in {language}",
+  "caseLaw.linkedPassageGone": "The linked passage is no longer in this text.",
   "caseLaw.loadingMore": "Loading more...",
   "caseLaw.marginFilter.label": "Cited provisions filter",
   "caseLaw.marginFilter.paragraph": "{count, plural, one {# provision cited in ¶{paragraph}} other {# provisions cited in ¶{paragraph}}}",

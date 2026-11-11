@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# keel} other {# keelt}}",
       "matchedIn": "Vaste keeles: {language}"
     },
+    "linkedPassageGone": "Lingitud lõiku selles tekstis enam ei ole.",
     "loadingMore": "Laadib rohkem...",
     "marginFilter": {
       "label": "Viidatud sätete filter",

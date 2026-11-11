@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# język} few {# języki} many {# języków} other {# języka}}",
       "matchedIn": "Dopasowanie w języku {language}"
     },
+    "linkedPassageGone": "Wskazanego fragmentu nie ma już w tym tekście.",
     "loadingMore": "Ładowanie kolejnych...",
     "marginFilter": {
       "label": "Filtr przywołanych przepisów",

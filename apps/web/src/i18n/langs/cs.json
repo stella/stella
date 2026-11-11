@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazyků} many {# jazyka}}",
       "matchedIn": "Shoda v jazyce {language}"
     },
+    "linkedPassageGone": "Odkazovaná pasáž už v tomto textu není.",
     "loadingMore": "Načítání dalších...",
     "marginFilter": {
       "label": "Filtr citovaných ustanovení",

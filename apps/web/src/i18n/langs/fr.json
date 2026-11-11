@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# langue} other {# langues} many {# langues}}",
       "matchedIn": "Correspondance en {language}"
     },
+    "linkedPassageGone": "Le passage lié ne figure plus dans ce texte.",
     "loadingMore": "Chargement en cours…",
     "marginFilter": {
       "label": "Filtre des dispositions citées",

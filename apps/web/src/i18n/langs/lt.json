@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# kalba} few {# kalbos} many {# kalbos} other {# kalbų}}",
       "matchedIn": "Atitikmuo {language} kalba"
     },
+    "linkedPassageGone": "Susietos ištraukos šiame tekste nebėra.",
     "loadingMore": "Kraunama daugiau...",
     "marginFilter": {
       "label": "Cituojamų nuostatų filtras",
