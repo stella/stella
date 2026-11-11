@@ -1,23 +1,24 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, isNotNull, isNull, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import {
-  CHAT_THREAD_NOT_FOUND_ERROR_CODE,
-  chatThreadsChangedRealtimeEvent,
-} from "@stll/api-contract";
+import { chatThreadsChangedRealtimeEvent } from "@stll/api-contract";
 import { CHAT_THREAD_PIN_STATE } from "@stll/api-contract/chat";
 import type { ChatThreadPinState } from "@stll/api-contract/chat";
 
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import {
+  readerThreadNotFoundError,
+  readerThreadPredicate,
+  writeReaderState,
+} from "@/api/handlers/chat/threads/reader-state";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { broadcastToUser } from "@/api/lib/sse";
 
@@ -25,8 +26,10 @@ const config = {
   contract: "patch",
   description:
     "Pin one of your own chat threads to the top of your chat list, or " +
-    "unpin it. Idempotent: pinning a pinned thread changes nothing. A thread that does not exist in the requested scope is a 404: " +
-    "this never creates one.",
+    "unpin it. Idempotent: pinning a pinned thread, or unpinning an " +
+    "unpinned one, changes nothing, keeps its place among your pinned " +
+    "chats and notifies none of your devices. A thread that does not exist " +
+    "in the requested scope is a 404: this never creates one.",
   permissions: { chat: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -89,60 +92,54 @@ const updateChatThreadPinState = createSafeRootHandler(
       getWorkspaceAccess,
       workspaceId,
     });
-    const scopedWorkspaceId =
-      scope.scope === "workspace" ? scope.workspaceId : null;
+    const thread = readerThreadPredicate({
+      organizationId: session.activeOrganizationId,
+      scope,
+      threadId: params.threadId,
+      userId: user.id,
+    });
+    const transition = pinTransitionTo(pinState);
 
-    const updated = yield* Result.await(
-      safeDb(async (tx) => {
-        const threadPredicate = and(
-          eq(chatThreads.id, params.threadId),
-          eq(chatThreads.organizationId, session.activeOrganizationId),
-          eq(chatThreads.userId, user.id),
-          scopedWorkspaceId === null
-            ? isNull(chatThreads.workspaceId)
-            : eq(chatThreads.workspaceId, scopedWorkspaceId),
-        );
-        const transition = pinTransitionTo(pinState);
-        const changed = await tx
-          .update(chatThreads)
-          .set({
-            pinnedAt: transition.pinnedAt,
-            // Pinning a chat does not make it recently active.
-            updatedAt: sql`${chatThreads.updatedAt}`,
-          })
-          .where(and(threadPredicate, transition.replaces))
-          .returning({ id: chatThreads.id });
-        if (changed.length === 0) {
-          const [existing] = await tx
-            .select({ id: chatThreads.id })
-            .from(chatThreads)
-            .where(threadPredicate)
-            .limit(1);
-          return existing === undefined ? null : "unchanged";
-        }
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-          resourceId: params.threadId,
-          workspaceId: scopedWorkspaceId,
-          changes: { pinState: { old: transition.previous, new: pinState } },
-        });
-        return "changed";
-      }, defaultDatabaseRetry),
+    const written = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await writeReaderState({
+            thread,
+            transition: async () => {
+              const changed = await tx
+                .update(chatThreads)
+                .set({
+                  pinnedAt: transition.pinnedAt,
+                  // Pinning a chat does not make it recently active.
+                  updatedAt: sql`${chatThreads.updatedAt}`,
+                })
+                .where(and(thread, transition.replaces))
+                .returning({ id: chatThreads.id });
+              if (changed.length > 0) {
+                await recordAuditEvent(tx, {
+                  action: AUDIT_ACTION.UPDATE,
+                  resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+                  resourceId: params.threadId,
+                  workspaceId:
+                    scope.scope === "workspace" ? scope.workspaceId : null,
+                  changes: {
+                    pinState: { old: transition.previous, new: pinState },
+                  },
+                });
+              }
+              return changed;
+            },
+            tx,
+          }),
+        defaultDatabaseRetry,
+      ),
     );
 
-    if (updated === null) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          code: CHAT_THREAD_NOT_FOUND_ERROR_CODE,
-          message: "Chat thread not found",
-          hint: "List your chats with chat.threads.list and pass a matter chat's matterId with it.",
-        }),
-      );
+    if (written === "missing") {
+      return Result.err(readerThreadNotFoundError());
     }
 
-    if (updated === "changed") {
+    if (written === "changed") {
       // After the commit, so the reader's other devices re-read the new state.
       broadcastToUser(
         user.id,
