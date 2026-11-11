@@ -96,6 +96,7 @@ const DEFAULT_CAPACITY_RETRY: CodexCapacityRetry = {
   maxAttempts: 5,
   baseDelayMs: 2000,
   maxDelayMs: 30_000,
+  sleep: Bun.sleep,
 };
 
 const CLIENT_NAME = "stella";
