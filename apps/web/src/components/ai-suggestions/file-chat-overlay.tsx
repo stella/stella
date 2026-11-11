@@ -31,7 +31,6 @@ import {
  * proposes edits via a `propose-suggestion` tool, the frontend
  * extracts and renders accept/reject cards). That work is Phase E.
  */
-import { CHAT_CLOUD_RUN_TARGET } from "@stll/api-contract/chat-run-target";
 import {
   createEditorRefBridge,
   executeFolioToolCall,
@@ -130,6 +129,10 @@ import {
 } from "@/components/chat/chat-edit-mode-menu";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
+import {
+  CHAT_RUN_ON_CLOUD_ONLY,
+  chatRunOnTarget,
+} from "@/components/chat/chat-model-options-menu";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
   isApprovalPart,
@@ -1501,6 +1504,16 @@ const FileChatOverlayInner = ({
     },
     threadRef,
   });
+  // A file chat's turns edit the open document through this page's review
+  // queue, which only stella's own models drive, so it offers no Run on.
+  const composerModels = {
+    activeOrganizationId,
+    threadRef,
+    selectedModel: data.model,
+    selectedReasoningEffort: data.reasoningEffort,
+    selectModel: modelSelection.selectModel,
+    runTarget: CHAT_RUN_ON_CLOUD_ONLY,
+  };
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: chatThreadContext,
@@ -2738,13 +2751,7 @@ const FileChatOverlayInner = ({
           })}
           editorController={editorController}
           mcpOrganizationId={activeOrganizationId}
-          models={{
-            activeOrganizationId,
-            threadRef,
-            selectedModel: data.model,
-            selectedReasoningEffort: data.reasoningEffort,
-            selectModel: modelSelection.selectModel,
-          }}
+          models={composerModels}
           onNewThread={newThreadAction}
           reservedCommands={{ hasPersistedThread: hasMessages }}
           skillChat={{
@@ -2761,7 +2768,7 @@ const FileChatOverlayInner = ({
                   },
                 }
               : {}),
-            runTarget: CHAT_CLOUD_RUN_TARGET,
+            runTarget: chatRunOnTarget(composerModels.runTarget),
             threadRef,
             webSearch: {
               available: data.webSearchAvailable,
@@ -2799,13 +2806,7 @@ const FileChatOverlayInner = ({
           dock={
             <ChatComposerDock
               data={data}
-              models={{
-                activeOrganizationId,
-                threadRef,
-                selectedModel: data.model,
-                selectedReasoningEffort: data.reasoningEffort,
-                selectModel: modelSelection.selectModel,
-              }}
+              models={composerModels}
               onNewThread={newThreadAction}
               newThreadPrompt={
                 newThreadPromptStatus !== null

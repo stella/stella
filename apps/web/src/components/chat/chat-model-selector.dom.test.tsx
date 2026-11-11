@@ -114,6 +114,7 @@ const renderSelector = (selected: ChatRunTarget) => {
               selectedReasoningEffort: null,
               selectModel: () => undefined,
               runTarget: {
+                type: "choice",
                 selected: target,
                 select: (next) => {
                   chosen.push(next);

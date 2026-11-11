@@ -23,11 +23,11 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -67,7 +67,7 @@ import {
   PromptBarPlaceholderContent,
 } from "@/components/chat/docked-composer";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
-import { useEffectiveRunTarget } from "@/components/chat/use-effective-run-target";
+import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import {
   boundLegalDocumentLabel,
@@ -252,18 +252,22 @@ export const ChatTabPanel = ({
     getContextMatterIds,
     getSendMode,
   };
-  const { data } = useSuspenseQuery(
-    chatThreadOptions({
-      activeOrganizationId,
-      key: threadRef,
-      context: chatThreadContext,
-    }),
-  );
-  // Read at send time, so a follow-up carries the thread's stored target as
-  // the chat page sends it. The cache key never depends on it, so the
-  // runtime addresses the entry read above.
-  const runTarget = useEffectiveRunTarget(activeOrganizationId, data.runTarget);
-  const getRunTarget = useLatestCallback((): ChatRunTarget => runTarget);
+  const threadQueryOptions = chatThreadOptions({
+    activeOrganizationId,
+    key: threadRef,
+    context: chatThreadContext,
+  });
+  const { data } = useSuspenseQuery(threadQueryOptions);
+  // The same model menu and Run on choice the chat page offers. The target
+  // is read at send time; the cache key never depends on it, so the runtime
+  // addresses the entry read above.
+  const composerModels = useChatComposerModels({
+    activeOrganizationId,
+    threadRef,
+    stored: data,
+    queryKey: threadQueryOptions.queryKey,
+  });
+  const { getRunTarget } = composerModels;
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: { ...chatThreadContext, getRunTarget },
@@ -345,6 +349,11 @@ export const ChatTabPanel = ({
     }): Promise<ChatSendOutcome> => {
       try {
         if (!(await ensureAIAvailable())) {
+          return CHAT_SEND_KEPT;
+        }
+        // A model or Run on choice may still be landing; the send waits so
+        // it never runs on the previous one. A failure was already toasted.
+        if (Result.isError(await composerModels.awaitPendingSelection())) {
           return CHAT_SEND_KEPT;
         }
 
@@ -612,6 +621,9 @@ export const ChatTabPanel = ({
       if (!(await ensureAIAvailable())) {
         return CHAT_SEND_KEPT;
       }
+      if (Result.isError(await composerModels.awaitPendingSelection())) {
+        return CHAT_SEND_KEPT;
+      }
       const newThreadId = createChatThreadId();
       const newThreadRef: ChatThreadRef =
         tabWorkspaceId === undefined
@@ -820,10 +832,11 @@ export const ChatTabPanel = ({
             pendingCount={0}
             queueWhileGenerating
             reservedCommands={{ hasPersistedThread: hasThreadMessages }}
+            models={composerModels.models}
             skillChat={{
               contextMatterIds: tab.contextMatterIds,
               document: null,
-              runTarget,
+              runTarget: composerModels.runTarget,
               threadRef,
               webSearch: {
                 available: data.webSearchAvailable,
@@ -835,6 +848,7 @@ export const ChatTabPanel = ({
             dock={
               <ChatComposerDock
                 data={data}
+                models={composerModels.models}
                 leadingContext={
                   <ChatMatterPicker
                     matterIds={tab.contextMatterIds}
@@ -1083,6 +1097,8 @@ export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
         dock={
           <ChatComposerDock
             leadingContext={<ChatMatterPickerPending />}
+            // The live panel's menu replaces this once the thread is read.
+            models={null}
             status="pending"
             threadRef={threadRef}
           />

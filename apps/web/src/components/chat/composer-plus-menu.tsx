@@ -166,7 +166,7 @@ type ComposerPlusMenuProps = {
    *  (a thread with nothing to leave, or a rotation under way), mirroring
    *  the dock's own new-chat button which keeps the same action. */
   onNewThread?: (() => void) | null | undefined;
-  models?: ComposerModelsMenuProps | undefined;
+  models?: ComposerModelsMenuProps | null | undefined;
   /** Enables the Edit mode submenu (how AI edits land in the open DOCX).
    *  Lives only here, never in the dock; omit on surfaces without a
    *  selectable edit mode. */

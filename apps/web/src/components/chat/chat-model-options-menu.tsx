@@ -4,7 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_CLOUD_RUN_TARGET,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import { groupReasoningEfforts } from "@stll/chat/model-selector";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -75,15 +78,33 @@ export type ComposerModelsMenuProps = {
     model: string | null;
     reasoningEffort: ReasoningEffort | null;
   }) => void;
-  /**
-   * Where the thread's turns run. Absent on surfaces whose turns always run
-   * on stella's own models; the menu then offers no Run on choice.
-   */
-  runTarget?: {
-    selected: ChatRunTarget;
-    select: (target: ChatRunTarget) => void;
-  };
+  /** Where the thread's turns run; see `ChatRunOn`. */
+  runTarget: ChatRunOn;
 };
+
+/**
+ * Where a composer's turns run, as its model menu offers it. Required on
+ * every menu, so a surface that starts or continues a thread cannot drop
+ * the Run on choice by leaving a prop out: it takes the choice from
+ * `useChatComposerModels`, or states `cloud_only` because its turns depend
+ * on tools only stella's own models drive in this page (the live document
+ * editor's suggestions, say).
+ */
+export type ChatRunOn =
+  | {
+      type: "choice";
+      selected: ChatRunTarget;
+      select: (target: ChatRunTarget) => void;
+    }
+  | { type: "cloud_only" };
+
+export const CHAT_RUN_ON_CLOUD_ONLY = {
+  type: "cloud_only",
+} as const satisfies ChatRunOn;
+
+/** The target a composer's next turn runs on. */
+export const chatRunOnTarget = (runOn: ChatRunOn): ChatRunTarget =>
+  runOn.type === "choice" ? runOn.selected : CHAT_CLOUD_RUN_TARGET;
 
 type ModelOption = {
   defaultReasoningEffort: ReasoningEffort | null;
@@ -117,7 +138,7 @@ export const ChatModelOptionsMenu = ({
   open,
 }: ChatModelOptionsMenuProps) => (
   <>
-    {models.runTarget && (
+    {models.runTarget.type === "choice" && (
       <ChatRunTargetMenu
         activeOrganizationId={models.activeOrganizationId}
         enabled={enabled}
@@ -125,7 +146,7 @@ export const ChatModelOptionsMenu = ({
         selected={models.runTarget.selected}
       />
     )}
-    {models.runTarget?.selected.kind !== "local" && (
+    {chatRunOnTarget(models.runTarget).kind !== "local" && (
       <CloudModelOptions enabled={enabled} models={models} open={open} />
     )}
   </>
