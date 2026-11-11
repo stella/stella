@@ -1341,40 +1341,45 @@ export const markRunStartsSending = async (
     eq(runner.sessionId, sessionId),
     eq(runner.connection, "connected"),
   );
+  // A page without a start has nothing to fence: its read matched this
+  // socket's connected session already.
+  if (runIds.length === 0) {
+    return { type: "current", open: new Set<string>() };
+  }
   // A relink ends the run's row in its own transaction; this update waits
   // for that row and then finds it ended, so no ended run is marked.
-  const marked =
-    runIds.length === 0
-      ? []
-      : // audit: skip - runner socket bookkeeping; the run's caller audits the work
-        await db
-          .update(runs)
-          .set({
-            deliveredAt: sql`coalesce(${runs.deliveredAt}, ${now}::timestamptz)`,
-          })
-          .where(
-            and(
-              inArray(runs.runId, [...runIds]),
-              boundTo(binding),
-              inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
-              exists(
-                db
-                  .select({ one: sql`1` })
-                  .from(runner)
-                  .where(current),
-              ),
-            ),
-          )
-          .returning({ runId: runs.runId });
+  // audit: skip - runner socket bookkeeping; the run's caller audits the work
+  const marked = await db
+    .update(runs)
+    .set({
+      deliveredAt: sql`coalesce(${runs.deliveredAt}, ${now}::timestamptz)`,
+    })
+    .where(
+      and(
+        inArray(runs.runId, [...runIds]),
+        boundTo(binding),
+        inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(runner)
+            .where(current),
+        ),
+      ),
+    )
+    .returning({ runId: runs.runId });
+  const open = new Set(marked.map(({ runId }) => runId));
+  if (open.size === runIds.length) {
+    return { type: "current", open };
+  }
+  // Some start was not marked: its run ended, or this socket is no longer
+  // current; the runner row says which.
   const [row] = await db
     .select({ sessionId: runner.sessionId })
     .from(runner)
     .where(current)
     .limit(1);
-  if (row === undefined) {
-    return { type: "superseded" };
-  }
-  return { type: "current", open: new Set(marked.map(({ runId }) => runId)) };
+  return row === undefined ? { type: "superseded" } : { type: "current", open };
 };
 
 /**

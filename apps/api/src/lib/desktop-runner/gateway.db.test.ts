@@ -2407,7 +2407,7 @@ describe("outbound frames", () => {
       description: "the first page was written",
       read: async () => {
         const run = await runState(written);
-        return run === null || run.deliveredAt === null ? null : run;
+        return (run?.deliveredAt ?? null) === null ? null : run;
       },
     });
     expect(starts).toEqual([written]);
