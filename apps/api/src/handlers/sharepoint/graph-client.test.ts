@@ -461,5 +461,39 @@ describe("downloading a file", () => {
       1024,
     );
     expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.code).toBe(SHAREPOINT_REFUSAL_CODE.fileTooLarge);
+    }
+  });
+
+  test("a refusal from the file host fails the file but not the Microsoft grant", async () => {
+    const { result } = await download((url) =>
+      url.hostname === "graph.microsoft.com"
+        ? new Response(null, {
+            status: 302,
+            headers: {
+              Location:
+                "https://contoso.sharepoint.com/download.aspx?tempauth=x",
+            },
+          })
+        : new Response(null, { status: 401 }),
+    );
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.code).not.toBe(
+        SHAREPOINT_REFUSAL_CODE.reconnectRequired,
+      );
+      expect(result.error.status).toBe(502);
+    }
+  });
+
+  test("a 401 from Graph itself still asks for a reconnect", async () => {
+    const { result } = await download(
+      () => new Response(null, { status: 401 }),
+    );
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.code).toBe(SHAREPOINT_REFUSAL_CODE.reconnectRequired);
+    }
   });
 });

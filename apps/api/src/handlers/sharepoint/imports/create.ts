@@ -27,10 +27,10 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { broadcastOrganizationResourceSetUpdated } from "@/api/lib/resource-realtime";
 
-const requestBody = v.object({
+const requestBody = v.strictObject({
   items: v.pipe(
     v.array(
-      v.object({
+      v.strictObject({
         driveId: sharepointDriveIdSchema,
         itemId: sharepointFileIdSchema,
       }),
@@ -154,10 +154,10 @@ const importSharepointFiles = createSafeHandler(
                   },
                 }),
               );
-              // Started per document as it commits: a later file that ends
-              // the request (throttling, a revoked grant) must not skip the
-              // flows of documents already created, and a retry reports those
-              // as unchanged.
+              // Flows and the matter-list update start per document as it
+              // commits: a later file that ends the request (throttling, a
+              // revoked grant) must not skip them for documents already
+              // created, and a retry reports those as unchanged.
               if (result.status === "created") {
                 startUploadFlows({
                   entityId: result.entityId,
@@ -165,6 +165,10 @@ const importSharepointFiles = createSafeHandler(
                   organizationId,
                   workspaceId,
                 });
+                broadcastOrganizationResourceSetUpdated(
+                  organizationId,
+                  RESOURCE_TYPE.WORKSPACE,
+                );
               }
               imported.push(result);
             }
@@ -172,13 +176,6 @@ const importSharepointFiles = createSafeHandler(
           }),
       }),
     );
-
-    if (results.some(({ status }) => status === "created")) {
-      broadcastOrganizationResourceSetUpdated(
-        organizationId,
-        RESOURCE_TYPE.WORKSPACE,
-      );
-    }
 
     return Result.ok({ results });
   },

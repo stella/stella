@@ -52,6 +52,8 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 const GENERIC_MIME_TYPE = "application/octet-stream";
@@ -232,6 +234,43 @@ const storeFailure = (
   }
 };
 
+const storeThrewFailure = failureSink({
+  event: "sharepoint_import.store_threw",
+  expected: [],
+});
+
+const STORE_THREW = Symbol("store-threw");
+
+/**
+ * Runs one document write. A writer that throws (object storage, a lost
+ * connection) has failed this file only: it is observed and reported for
+ * this file, and the files after it are still imported.
+ */
+const storeOrFail = async <T>(
+  write: () => Promise<T>,
+): Promise<T | typeof STORE_THREW> => {
+  const written = await Result.tryPromise(write);
+  if (Result.isError(written)) {
+    observeFailure(written.error, { sink: storeThrewFailure });
+    return STORE_THREW;
+  }
+  return written.value;
+};
+
+const storeThrew = ({
+  driveId,
+  itemId,
+}: {
+  driveId: string;
+  itemId: string;
+}): SharepointImportResult => ({
+  driveId,
+  itemId,
+  status: "failed",
+  code: "store_failed",
+  message: "The document could not be stored; import the file again",
+});
+
 /** Bytes checked like an upload: scanned, then their encryption detected. */
 const inspectBytes = async ({
   bytes,
@@ -397,20 +436,25 @@ export const importSharepointFile = async ({
 
   switch (plan.type) {
     case "create": {
-      const created = await createEntityFromBuffer({
-        scopedDb: target.scopedDb,
-        organizationId: target.organizationId,
-        workspaceId: target.workspaceId,
-        userId: target.userId,
-        recordAuditEvent: target.recordAuditEvent,
-        buffer: scanned.bytes,
-        fileName: name,
-        mimeType,
-        encryption,
-        parentId: target.parentId,
-        scanWarnings: scanned.scanWarnings ?? undefined,
-        source,
-      });
+      const created = await storeOrFail(async () =>
+        createEntityFromBuffer({
+          scopedDb: target.scopedDb,
+          organizationId: target.organizationId,
+          workspaceId: target.workspaceId,
+          userId: target.userId,
+          recordAuditEvent: target.recordAuditEvent,
+          buffer: scanned.bytes,
+          fileName: name,
+          mimeType,
+          encryption,
+          parentId: target.parentId,
+          scanWarnings: scanned.scanWarnings ?? undefined,
+          source,
+        }),
+      );
+      if (created === STORE_THREW) {
+        return Result.ok(storeThrew(ref));
+      }
       return Result.ok(
         Result.isError(created)
           ? failed(ref, storeFailure(created.error))
@@ -445,21 +489,26 @@ export const importSharepointFile = async ({
           ? Result.ok(failed(ref, storeFailure(authorized.error)))
           : Result.err(authorized.error);
       }
-      const versioned = await createEntityVersionFromBuffer({
-        safeDb: target.safeDb,
-        organizationId: target.organizationId,
-        workspaceId: target.workspaceId,
-        entityId: plan.entityId,
-        userId: target.userId,
-        recordAuditEvent: target.recordAuditEvent,
-        buffer: scanned.bytes,
-        fileName: name,
-        mimeType,
-        encryption,
-        source,
-        writePolicy: { type: "replace-current-file" },
-        scanWarnings: scanned.scanWarnings ?? undefined,
-      });
+      const versioned = await storeOrFail(async () =>
+        createEntityVersionFromBuffer({
+          safeDb: target.safeDb,
+          organizationId: target.organizationId,
+          workspaceId: target.workspaceId,
+          entityId: plan.entityId,
+          userId: target.userId,
+          recordAuditEvent: target.recordAuditEvent,
+          buffer: scanned.bytes,
+          fileName: name,
+          mimeType,
+          encryption,
+          source,
+          writePolicy: { type: "replace-current-file" },
+          scanWarnings: scanned.scanWarnings ?? undefined,
+        }),
+      );
+      if (versioned === STORE_THREW) {
+        return Result.ok(storeThrew(ref));
+      }
       return Result.ok(
         Result.isError(versioned)
           ? failed(ref, storeFailure(versioned.error))

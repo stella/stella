@@ -20,6 +20,7 @@ import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { SHAREPOINT_REFUSAL_CODE } from "@stll/api-contract/sharepoint";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
+  BodyByteLimitError,
   readBodyJsonWithIdleDeadline,
   readBodyWithIdleDeadline,
 } from "@stll/fetch/body-reader";
@@ -284,7 +285,7 @@ const RETRY_AFTER_DEFAULT_MS = 5000;
 const RETRY_AFTER_MAX_MS = 120_000;
 
 export type SharepointGraphError = HandlerError<
-  400 | 403 | 404 | 409 | 429 | 502
+  400 | 403 | 404 | 409 | 413 | 429 | 502
 >;
 
 /**
@@ -809,6 +810,7 @@ export const downloadSharepointFile = async ({
   }
 
   let response = first.value;
+  let redirected = false;
   if (REDIRECT_STATUSES.has(response.status)) {
     await Promise.allSettled([response.body?.cancel()]);
     const location = URL.parse(response.headers.get("location") ?? "");
@@ -831,10 +833,20 @@ export const downloadSharepointFile = async ({
       return downloaded;
     }
     response = downloaded.value;
+    redirected = true;
   }
 
   if (!response.ok) {
     await Promise.allSettled([response.body?.cancel()]);
+    // The file host answers for a short-lived pre-authenticated link, not
+    // for the stored grant: its refusal fails this file, never the grant.
+    if (redirected && (response.status === 401 || response.status === 403)) {
+      return Result.err(
+        upstreamError(
+          `The SharePoint download link was refused (HTTP ${response.status})`,
+        ),
+      );
+    }
     return Result.err(
       graphRefusal({
         status: response.status,
@@ -850,6 +862,12 @@ export const downloadSharepointFile = async ({
         maxBytes,
       }),
     catch: (cause) =>
-      upstreamError("Failed to read the SharePoint file", cause),
+      BodyByteLimitError.is(cause)
+        ? new HandlerError({
+            status: 413,
+            code: SHAREPOINT_REFUSAL_CODE.fileTooLarge,
+            message: "The file exceeds the document size limit",
+          })
+        : upstreamError("Failed to read the SharePoint file", cause),
   });
 };
