@@ -254,7 +254,7 @@ const listItemDescriptionVariants = cva("text-muted-foreground text-xs", {
 const ListItemDescription = ({
   className,
   variant,
-  lines = variant === "paragraph" ? 2 : 1,
+  lines,
   ...props
 }: React.ComponentProps<"span"> &
   VariantProps<typeof listItemDescriptionVariants> & {
@@ -264,7 +264,7 @@ const ListItemDescription = ({
     className={cn(listItemDescriptionVariants({ variant }), className)}
     data-slot="list-item-description"
     dir={variant === "code" ? "ltr" : "auto"}
-    lines={lines}
+    lines={lines ?? (variant === "paragraph" ? 2 : 1)}
     {...props}
   />
 );
