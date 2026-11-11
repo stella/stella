@@ -271,11 +271,13 @@
       "overrideTooltip": "Kontrollija on salvestanud teistsuguse otsuse. Allpool kuvatakse tööriista enda muutmata analüüs.",
       "overrideVerdict": "Asenda otsus",
       "recordConflict": {
+        "confirmGoverningRecord": "Kinnita määravana",
         "description": "Kaks ankurfakti käsitlevad sama asjaolu, <strong>{subject}</strong>, kuid on omavahel vastuolus. Mõlemad pärinevad <strong>suure kindlusega</strong> allikatest, seega pole küsimus usaldusväärsuses: register ise on vastuoluline. AVT jätab otsuse tegemata ega hinda väidet, sest ühe kande eelistamine teisele on otsustus, mille peate ise tegema ja dokumenteerima; tööriist ei tohi seda teha vaikimisi.",
         "escalatedNotice": "Edastatud tõendite töörühmale. Registri vastuolu jääb avatuks ja arvestusse, kuni valitakse aluseks olev kanne.",
         "flagForEvidenceTeam": "Edasta tõendite töörühmale",
         "governed": "<strong>{value}</strong> on aluseks: väidet hinnatakse selle kande põhjal. Teine kanne jääb registrisse alles.",
         "reconcile": "Kooskõlasta register",
+        "suggestedNotice": "Dokumendi andmeid soovitatakse eelistada tunnistaja kirjeldusele. Kinnitage need või valige teine kirje.",
         "title": "Vastuolulised tõendid registris",
         "treatAsGoverningRecord": "Käsita aluseks olevana"
       },
@@ -286,10 +288,6 @@
       "reopened": "Uuesti avatud, kontroll ootel",
       "reopenedTooltip": "Kontrollija liigitas selle uuesti kontrollitavaks faktiks; reaalajas registrikontroll on veel ootel.",
       "sourceCount": "{count, plural, one {# allikas} other {# allikat}}",
-      "unsourced": {
-        "hint": "Selle faktiga pole veel seotud ühtegi allikdokumenti; meedium ja kuupäev kirjeldavad tõendit, kuid ei ole allikas.",
-        "label": "Allikata"
-      },
       "whyVerdict": "Otsuse põhjendus: ankurfaktid"
     },
     "claimTypes": {
@@ -326,15 +324,20 @@
       "scopeMismatch": "Viidatud fakti ulatus erineb väite omast. Enne kui otsus jääb kehtima, kaaluge, kas see lahendab väite selle sõnastuses.",
       "supported": "Register kinnitab seda väidet. Teie kinnitus näitab, et tööriist tõlgendas seda õigesti; kaalutlusotsust pole vaja.",
       "tension": "Register toetab seda vaid osaliselt. Enne otsuse kinnitamist kaaluge eespool toodud toetavaid ja vastuolulisi fakte.",
+      "testimonyOnly": "Materjal kinnitab seda, kuid ükski dokumendi kirje seda ei toeta: see põhineb ütlustel. Kinnitusega kinnitate, et tööriist luges seda õigesti; tulemus jääb märgituks ütlustel põhinevana.",
       "unsourcedOnly": "Register kinnitab seda, kuid ainult faktide kaudu, millel pole veel allikat. Teie kinnitus näitab, et tööriist luges neid õigesti; faktid jäävad allikata märgituks."
     },
     "documents": {
       "claimSummary": "Vastuolus: {contradicted} · Osaliselt vastuolus: {tension} · Registri vastuolu: {conflicts}",
       "empty": "Laadige dokument selle kontrollimiseks toimikusse üles.",
+      "kindsLoadFailed": "Ei õnnestunud laadida, kas need dokumendid on ütlused.",
       "notVerified": "Veel kontrollimata",
       "otherList": "Kontrollitud teise loendi alusel",
       "sizeConfirmTitle": "Kas kontrollida seda dokumenti?",
       "statusLoadFailed": "Nende dokumentide kontrolli olekut ei õnnestunud laadida.",
+      "testimony": "Ütlus",
+      "testimonyAbout": "Ütlustest",
+      "testimonyLine": "Märkige tunnistajate ütlused, vestlusmärkmed ja ärakirjad ütlusteks. Neist võetud faktid loetakse inimese kirjelduseks, mitte dokumenteeritud andmeteks.",
       "verifyAgain": "Kontrolli uuesti"
     },
     "extraction": {
@@ -368,6 +371,16 @@
       "startFailed": "Faktide eraldamist ei õnnestunud käivitada",
       "submit": "{count, plural, =0 {Eralda faktid} one {Eralda faktid # dokumendist} other {Eralda faktid # dokumendist}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Selle fakti kõik tagasi lükkamata allikad on ütlused: tunnistaja ütlus, vestlusmärge või ärakiri.",
+        "label": "Ütlus"
+      },
+      "unsourced": {
+        "hint": "Selle faktiga pole seotud ühtegi tagasi lükkamata allikdokumenti; meedium ja kuupäev kirjeldavad tõendit, kuid ei ole allikas.",
+        "label": "Allikata"
+      }
+    },
     "guidance": {
       "escalate": "Edasta edasi",
       "manualJudgement": "Inimese otsustus",
@@ -391,6 +404,10 @@
       "scopeMismatch": {
         "hint": "Viidatud fakt käsitleb väitest erinevat ajavahemikku, rühma, kohta või mõõdikut.",
         "label": "Erinev ulatus"
+      },
+      "testimonyOnly": {
+        "hint": "Ükski dokumendi kirje ei toeta fakte, millel see tulemus põhineb, ja vähemalt üks neist on ütlus.",
+        "label": "Ainult ütlused"
       },
       "unsourcedOnly": {
         "hint": "Ühelgi faktil, millele see otsus tugineb, pole veel allikat.",

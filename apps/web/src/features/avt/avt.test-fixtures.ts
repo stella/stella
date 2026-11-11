@@ -44,6 +44,7 @@ type MakeClaimArgs = {
   refs?: VerificationClaim["refs"];
   review?: ClaimReview | null;
   anchor?: VerificationClaim["anchor"];
+  suggestedGoverningFactId?: VerificationClaim["suggestedGoverningFactId"];
 };
 
 export const makeClaim = ({
@@ -59,6 +60,7 @@ export const makeClaim = ({
     start: 0,
     end: 10,
   },
+  suggestedGoverningFactId = null,
 }: MakeClaimArgs): VerificationClaim => ({
   id: claimId(suffix),
   position: suffix,
@@ -66,6 +68,7 @@ export const makeClaim = ({
   framing: "asserted",
   verdict,
   qualifiers,
+  suggestedGoverningFactId,
   text: `Claim ${String(suffix)}`,
   anchor,
   refs,
@@ -84,8 +87,8 @@ export const makeRun = (
   factStandings: facts.map((fact) => ({
     factEntityId: fact.factEntityId,
     scoring: "included" as const,
-    sourcing:
-      fact.sources.length > 0 ? ("sourced" as const) : ("unsourced" as const),
+    tier:
+      fact.sources.length > 0 ? ("document" as const) : ("unsourced" as const),
   })),
   status: "completed",
   errorCode: null,

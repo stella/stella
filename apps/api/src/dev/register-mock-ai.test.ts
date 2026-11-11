@@ -311,6 +311,43 @@ describe("mockStructuredData", () => {
     });
   }
 
+  // The sample statement's disclosure date is recorded twice, differently;
+  // a local run withholds that claim between the two records.
+  test("withholds a dated claim between two records that date its point differently", () => {
+    const request = [
+      "Facts:",
+      "- F1: Email from E. Whitfield to Compliance disclosing the arrangement, header timestamp 10 Aug 2021.",
+      "  date=2021-08-10 (day); kind=Email",
+      "- F2: Compliance case-management log records the same disclosure as received on 17 Aug 2021.",
+      "  date=2021-08-17 (day); kind=System log",
+      "- F3: Engagement letter bearing E. Whitfield's signature, dated 14 June 2021.",
+      "  date=2021-06-14 (day); kind=Document",
+      "Claims:",
+      "- C1: I notified compliance of the arrangement on 10 August 2021.",
+      "- C2: I signed the engagement letter on 14 June 2021.",
+    ].join("\n");
+    const grading = mockStructuredData(
+      structuredOutputSchemaFor(claimGradingSchema, "openai"),
+      [{ role: "user", content: request }],
+    );
+    const { grades } = v.parse(claimGradingSchema, grading);
+    expect(
+      grades.map(({ verdict, conflict }) => ({
+        verdict,
+        factIds: conflict?.factIds ?? null,
+        values: conflict?.values ?? null,
+      })),
+    ).toEqual([
+      {
+        verdict: "recordconflict",
+        factIds: ["F1", "F2"],
+        values: ["2021-08-10", "2021-08-17"],
+      },
+      // One record dates the signing, so nothing conflicts.
+      { verdict: "supported", factIds: null, values: null },
+    ]);
+  });
+
   test("keeps the curated templates/prefill fixture", () => {
     const data = mockStructuredData(
       structuredOutputSchemaFor(prefillOutputSchema, "openai"),

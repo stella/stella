@@ -53,8 +53,9 @@ type LatestVerificationsKey = {
 
 export const avtKeys = {
   all: (workspaceId: string) => ["avt", workspaceId] as const,
+  runs: (workspaceId: string) => [...avtKeys.all(workspaceId), "run"] as const,
   run: (workspaceId: string, runId: string) =>
-    [...avtKeys.all(workspaceId), "run", runId] as const,
+    [...avtKeys.runs(workspaceId), runId] as const,
   latestAll: (workspaceId: string) =>
     [...avtKeys.all(workspaceId), "latest"] as const,
   latest: ({ workspaceId, documents }: LatestVerificationsKey) =>

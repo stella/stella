@@ -271,11 +271,13 @@
       "overrideTooltip": "Um revisor registrou um veredito diferente. A análise abaixo é a da própria ferramenta, sem alterações.",
       "overrideVerdict": "Substituir veredito",
       "recordConflict": {
+        "confirmGoverningRecord": "Confirmar como determinante",
         "description": "Dois fatos-âncora tratam do mesmo ponto (<strong>{subject}</strong>), mas divergem. Ambos são fontes de <strong>alta confiança</strong>, então não se trata de um problema de confiabilidade: o próprio registro é internamente inconsistente. O AVT retém o veredito em vez de pontuar a alegação, porque escolher um registro em detrimento do outro é um julgamento que cabe a você fazer e registrar, não algo que a ferramenta deva fazer silenciosamente.",
         "escalatedNotice": "Sinalizado para a equipe de evidências. O conflito no registro permanece aberto e contabilizado até que um registro prevalecente seja escolhido.",
         "flagForEvidenceTeam": "Sinalizar para a equipe de evidências",
         "governed": "<strong>{value}</strong> prevalece: a alegação é julgada em relação a este registro. O outro registro permanece arquivado.",
         "reconcile": "Reconciliar o registro",
+        "suggestedNotice": "O registro de um documento é sugerido em vez do relato de uma testemunha. Confirme-o ou escolha o outro registro.",
         "title": "Evidências conflitantes no registro",
         "treatAsGoverningRecord": "Tratar como prevalecente"
       },
@@ -286,10 +288,6 @@
       "reopened": "Reaberta, verificação pendente",
       "reopenedTooltip": "Um revisor reclassificou isto como um fato verificável; uma verificação ativa contra o registro ainda está pendente.",
       "sourceCount": "{count, plural, one {# fonte} other {# fontes} many {# fontes}}",
-      "unsourced": {
-        "hint": "Nenhum documento de origem está vinculado a este fato ainda; o meio e a data descrevem a prova, mas não são uma fonte.",
-        "label": "Sem fonte"
-      },
       "whyVerdict": "Por que este veredito: fatos-âncora"
     },
     "claimTypes": {
@@ -326,15 +324,20 @@
       "scopeMismatch": "Um fato citado tem escopo diferente do da alegação. Avalie se ele resolve a alegação tal como está redigida antes que o veredito prevaleça.",
       "supported": "O registro confirma esta alegação. Sua aprovação atesta que a ferramenta a leu corretamente; nenhum julgamento é necessário.",
       "tension": "O registro sustenta esta alegação apenas em parte. Pese os fatos favoráveis e conflitantes acima antes que o veredito seja mantido.",
+      "testimonyOnly": "O acervo confirma isto, mas nenhum registro documental o sustenta: baseia-se em testemunhos. Sua aprovação confirma que a ferramenta o leu corretamente; a conclusão continua marcada como baseada em testemunhos.",
       "unsourcedOnly": "O registro confirma isto, mas apenas por meio de fatos ainda sem fonte. Sua aprovação confirma que a ferramenta os leu corretamente; os fatos continuam marcados como sem fonte."
     },
     "documents": {
       "claimSummary": "Contradita: {contradicted} · Em tensão: {tension} · Conflito no registro: {conflicts}",
       "empty": "Envie um documento para este caso para verificá-lo.",
+      "kindsLoadFailed": "Não foi possível carregar se estes documentos são testemunhos.",
       "notVerified": "Ainda não verificado",
       "otherList": "Verificado em relação a outra lista",
       "sizeConfirmTitle": "Verificar este documento?",
       "statusLoadFailed": "Não foi possível carregar o status de verificação destes documentos.",
+      "testimony": "Testemunho",
+      "testimonyAbout": "Sobre testemunhos",
+      "testimonyLine": "Marque como testemunho declarações de testemunhas, anotações de entrevistas e transcrições. Os fatos extraídos delas contam como o relato de uma pessoa, não como um registro.",
       "verifyAgain": "Verificar novamente"
     },
     "extraction": {
@@ -368,6 +371,16 @@
       "startFailed": "Não foi possível iniciar a extração de fatos",
       "submit": "{count, plural, =0 {Extrair fatos} one {Extrair fatos de # documento} many {Extrair fatos de # documentos} other {Extrair fatos de # documentos}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Todas as fontes não rejeitadas deste fato são testemunhos: uma declaração de testemunha, uma anotação de entrevista ou uma transcrição.",
+        "label": "Testemunho"
+      },
+      "unsourced": {
+        "hint": "Nenhum documento de origem não rejeitado está vinculado a este fato; o meio e a data descrevem a prova, mas não são uma fonte.",
+        "label": "Sem fonte"
+      }
+    },
     "guidance": {
       "escalate": "Escalar",
       "manualJudgement": "Julgamento manual",
@@ -391,6 +404,10 @@
       "scopeMismatch": {
         "hint": "Um fato citado trata de período, população, local ou medida diferentes dos da alegação.",
         "label": "Escopo divergente"
+      },
+      "testimonyOnly": {
+        "hint": "Nenhum registro documental sustenta os fatos em que esta conclusão se baseia, e ao menos um deles é um testemunho.",
+        "label": "Apenas testemunhos"
       },
       "unsourcedOnly": {
         "hint": "Nenhum fato em que este veredito se baseia tem fonte ainda.",

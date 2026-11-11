@@ -556,9 +556,7 @@ test("a claim's qualifiers show beside its verdict and in its detail, and a sile
   expect(screen.queryByText("48")).toBeNull();
   // The fact card shows the same footing: it has no linked source, whatever
   // its medium says.
-  expect(
-    screen.getByText(messages.avt.claimDetail.unsourced.label),
-  ).toBeTruthy();
+  expect(screen.getByText(messages.avt.factTier.unsourced.label)).toBeTruthy();
   // What a claim type means is a tooltip on its chip, not panel prose.
   expect(screen.queryByText(messages.avt.claimTypes.fact.hint)).toBeNull();
   expect(requests).toEqual([]);
@@ -739,6 +737,132 @@ test("a governing record changes the verdict and escalation keeps the conflict o
   ).toBeTruthy();
   expect(screen.getByText("5 July 2021")).toBeTruthy();
   expect(screen.getByText("28 July 2021")).toBeTruthy();
+});
+
+test("a document's record is pre-selected over a witness's account, and the reviewer still confirms it", async () => {
+  const run = seededRun();
+  const withSuggestion = {
+    ...run,
+    claims: run.claims.map((claim) =>
+      claim.position === 5
+        ? { ...claim, suggestedGoverningFactId: factId(6) }
+        : claim,
+    ),
+  };
+  const { client } = await mount(withSuggestion);
+  selectClaim(5);
+  const claim = withSuggestion.claims.at(4);
+  if (claim === undefined) {
+    panic("Missing seeded record conflict claim");
+  }
+
+  // The suggestion is shown, not applied: the verdict stays withheld and
+  // nothing is sent until the reviewer confirms.
+  expect(
+    screen.getByText(messages.avt.claimDetail.recordConflict.suggestedNotice),
+  ).toBeTruthy();
+  expect(screen.getByText(messages.common.suggested)).toBeTruthy();
+  expect(claimButton(5).textContent).toContain("Record conflict");
+  expect(requests).toEqual([]);
+  const confirm = screen.getByRole("button", {
+    name: messages.avt.claimDetail.recordConflict.confirmGoverningRecord,
+  });
+  // The other record keeps its plain action.
+  expect(
+    screen.getAllByRole("button", {
+      name: messages.avt.claimDetail.recordConflict.treatAsGoverningRecord,
+    }),
+  ).toHaveLength(1);
+
+  const governed = {
+    ...EMPTY_CLAIM_REVIEW,
+    recordConflictResolution: { kind: "governed", factEntityId: factId(6) },
+    decidedAt: at,
+    decidedBy: actorId,
+  } as const;
+  answers.push(Response.json({ claimId: claim.id, review: governed }));
+  fireEvent.click(confirm);
+  await waitFor(() =>
+    expect(
+      client
+        .getQueryData(
+          verificationRunOptions(workspaceId, withSuggestion.id).queryKey,
+        )
+        ?.claims.at(4)?.review,
+    ).toEqual(governed),
+  );
+  expect(requests).toEqual([
+    {
+      method: "POST",
+      path: `/v1/lists/${workspaceId}/claim-reviews`,
+      body: {
+        runId: withSuggestion.id,
+        claimId: claim.id,
+        event: {
+          kind: "record-conflict",
+          resolution: { kind: "governed", factEntityId: factId(6) },
+        },
+      },
+    },
+  ]);
+  // Once chosen, the suggestion is no longer shown as one.
+  expect(
+    screen.queryByText(messages.avt.claimDetail.recordConflict.suggestedNotice),
+  ).toBeNull();
+});
+
+test("a verdict resting only on testimony says so beside it and in its sign-off", async () => {
+  const text = "The ward was told of the change on 3 May.";
+  const claim = {
+    ...makeClaim({
+      suffix: 1,
+      verdict: supported(),
+      refs: [{ factEntityId: factId(1), rel: "supports" }],
+      qualifiers: [
+        { kind: "testimony-only", explanation: null, review: "routine" },
+      ],
+    }),
+    text,
+    anchor: {
+      type: "docx-block",
+      blockId: "b1",
+      start: 0,
+      end: text.length,
+    } as const,
+  };
+  const run = makeRun([claim], [makeFact(1, { text: "Told on 3 May." })]);
+  await mount({
+    ...run,
+    factStandings: [
+      {
+        factEntityId: factId(1),
+        scoring: "included" as const,
+        tier: "testimony" as const,
+      },
+    ],
+    blocks: [
+      {
+        ordinal: 1,
+        blockId: "b1",
+        kind: "docx-block" as const,
+        pageNumber: null,
+        text,
+      },
+    ],
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: (name) => name.startsWith(text) }),
+  );
+  expect(
+    screen.getAllByText(messages.avt.qualifiers.testimonyOnly.label).length,
+  ).toBeGreaterThan(0);
+  expect(
+    screen.getByText(messages.avt.qualifiers.testimonyOnly.hint),
+  ).toBeTruthy();
+  expect(screen.getByText(messages.avt.disposition.testimonyOnly)).toBeTruthy();
+  // The fact card names its footing.
+  expect(screen.getByText(messages.avt.factTier.testimony.label)).toBeTruthy();
+  expect(requests).toEqual([]);
 });
 
 test("a rejected review restores the claim and attention queue and surfaces the failed save", async () => {

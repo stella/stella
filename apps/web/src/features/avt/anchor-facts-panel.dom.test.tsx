@@ -50,6 +50,7 @@ const fact = {
   customFields: [],
   firstSource: null,
   factDetails: null,
+  sourceTier: "unsourced",
 } as const satisfies ListItem;
 const clients: InstanceType<typeof QueryClient>[] = [];
 const spies: { mockRestore: () => void }[] = [];
@@ -78,6 +79,7 @@ type MountFactOptions = {
   name?: string;
   statement?: string;
   factDetails?: ListItem["factDetails"];
+  sourceTier?: ListItem["sourceTier"];
   role?: "owner" | "intern";
 };
 
@@ -85,6 +87,7 @@ const mountFact = ({
   name = fact.name,
   statement = name,
   factDetails = null,
+  sourceTier = fact.sourceTier,
   role = "owner",
 }: MountFactOptions = {}) => {
   const client = new QueryClient({
@@ -102,7 +105,11 @@ const mountFact = ({
   }).queryKey;
   client.setQueryData(itemsKey, {
     pages: [
-      { items: [{ ...fact, name, factDetails }], nextCursor: null, limit: 100 },
+      {
+        items: [{ ...fact, name, factDetails, sourceTier }],
+        nextCursor: null,
+        limit: 100,
+      },
     ],
     pageParams: [null],
   });
@@ -405,3 +412,24 @@ test("a held fact shows its status and is included from its actions", async () =
     ]);
   });
 });
+
+const TIER_CASES = [
+  { sourceTier: "document", label: null },
+  { sourceTier: "testimony", label: messages.avt.factTier.testimony.label },
+  { sourceTier: "unsourced", label: messages.avt.factTier.unsourced.label },
+] as const satisfies readonly {
+  sourceTier: NonNullable<ListItem["sourceTier"]>;
+  label: string | null;
+}[];
+
+test.each(TIER_CASES)(
+  "a $sourceTier fact names its footing only when no document records it",
+  ({ sourceTier, label }) => {
+    mountFact({ sourceTier });
+    for (const { label: other } of TIER_CASES) {
+      if (other !== null) {
+        expect(screen.queryByText(other) !== null).toBe(other === label);
+      }
+    }
+  },
+);

@@ -417,6 +417,18 @@ describe("list verification access grants across MCP tools", () => {
       params,
       body: { filePropertyName: "Documents" },
     },
+    "lists.source-documents.list": {
+      params,
+      body: { listId: resourceId, documentEntityIds: [resourceId] },
+    },
+    "lists.source-documents.update": {
+      params,
+      body: {
+        listId: resourceId,
+        documentEntityId: resourceId,
+        sourceKind: "testimony",
+      },
+    },
   } as const;
   // Irreversible capabilities only run, or validate, once the human confirmed.
   const confirmation = (capability: string) =>
@@ -556,9 +568,16 @@ describe("list verification access grants across MCP tools", () => {
         resourceLookups += 1;
         return aggregateExecutionRows(statement, false);
       },
-      // Writes land nowhere; the only insert here is a history append.
+      // Writes land nowhere: a history append, and a document's source kind
+      // upserted on its list, which counts as the write it is.
       insert: () => ({
-        values: () => ({ onConflictDoNothing: async () => [] }),
+        values: () => ({
+          onConflictDoNothing: async () => [],
+          onConflictDoUpdate: async () => {
+            mutations += 1;
+            return [];
+          },
+        }),
       }),
       // A reader comment is written through its own guarded predicate; no
       // stored comment has the synthetic id, so the write reaches no row.
@@ -991,6 +1010,18 @@ describe("list verification access grants across MCP tools", () => {
         expect(fixture.mutations()).toBe(1);
         continue;
       }
+      // The fixture holds the list and document every id probe asks for,
+      // and no classified document, so the document reads as a record.
+      if (capability === "lists.source-documents.update") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          listId: resourceId,
+          documentEntityId: resourceId,
+          sourceKind: "testimony",
+        });
+        expect(fixture.mutations()).toBe(1);
+        continue;
+      }
       expect(fixture.resourceLookups()).toBeGreaterThan(0);
       expect(fixture.mutations()).toBe(0);
       if (
@@ -1002,6 +1033,11 @@ describe("list verification access grants across MCP tools", () => {
           asTestRaw<{ items: unknown[] }>(parseToolPayload(result)),
         ).toMatchObject({
           items: [],
+        });
+      } else if (capability === "lists.source-documents.list") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          documents: [{ documentEntityId: resourceId, sourceKind: "document" }],
         });
       } else if (capability === "lists.verifications.latest.list") {
         expect(result.isError).not.toBe(true);

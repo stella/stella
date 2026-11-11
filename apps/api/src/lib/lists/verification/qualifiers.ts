@@ -15,6 +15,7 @@ import { panic } from "better-result";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FactScoring } from "@/api/lib/lists/fact-details";
+import type { FactTier } from "@/api/lib/lists/source-kind";
 import { CLAIM_STATES } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimRef,
@@ -31,7 +32,11 @@ export const GRADER_CLAIM_QUALIFIERS = [
 export type GraderClaimQualifierKind = (typeof GRADER_CLAIM_QUALIFIERS)[number];
 
 /** Computed at read time; never stored. */
-const SYSTEM_CLAIM_QUALIFIERS = ["unsourced-only", "rests-on-held"] as const;
+const SYSTEM_CLAIM_QUALIFIERS = [
+  "testimony-only",
+  "unsourced-only",
+  "rests-on-held",
+] as const;
 type SystemClaimQualifierKind = (typeof SYSTEM_CLAIM_QUALIFIERS)[number];
 
 export const CLAIM_QUALIFIERS = [
@@ -48,15 +53,17 @@ type QualifierReview = (typeof QUALIFIER_REVIEWS)[number];
 
 /**
  * The review each qualifier asks for, total so a new qualifier cannot slip
- * into the routine claims unnoticed. A silent record and unsourced facts are
- * disclosed, not doubted: knowledge without a source is allowed, so the
- * verdict stays routine and its copy names the caveat. A cited fact of a
+ * into the routine claims unnoticed. A silent record, testimony and
+ * unsourced facts are disclosed, not doubted: a person's account and
+ * knowledge without a source are both allowed, so the verdict stays routine
+ * and its copy names the caveat. A cited fact of a
  * different scope, or one now held out of scoring, leaves the verdict on
  * footing a person has to weigh.
  */
 export const QUALIFIER_REVIEW = {
   "record-silent": "routine",
   "scope-mismatch": "needs-judgement",
+  "testimony-only": "routine",
   "unsourced-only": "routine",
   "rests-on-held": "needs-judgement",
 } as const satisfies Record<ClaimQualifierKind, QualifierReview>;
@@ -98,14 +105,15 @@ export const graderQualifierFits = (
   return states.includes(state);
 };
 
-/** Whether a fact currently has a source that has not been rejected. */
-type FactSourcing = "sourced" | "unsourced";
-
 /** What the system qualifiers read of one fact, as it stands now. */
 export type FactStanding = {
   scoring: FactScoring;
-  sourcing: FactSourcing;
+  tier: FactTier;
 };
+
+/** No document's record backs any fact the verdict rests on. */
+const noRecordBehind = (facts: readonly FactStanding[]) =>
+  facts.length > 0 && facts.every((fact) => fact.tier !== "document");
 
 /** Each system qualifier's rule over the facts a verdict rests on. A new
  *  system qualifier cannot be added without its rule. */
@@ -113,8 +121,13 @@ const SYSTEM_QUALIFIER_RULES = {
   // Held facts never score, so a verdict resting on one no longer has the
   // footing it was given.
   "rests-on-held": (facts) => facts.some((fact) => fact.scoring === "held"),
+  // A verdict without a record behind it discloses its footing exactly
+  // once: testimony when any of it is a person's account, otherwise
+  // knowledge without a source.
+  "testimony-only": (facts) =>
+    noRecordBehind(facts) && facts.some((fact) => fact.tier === "testimony"),
   "unsourced-only": (facts) =>
-    facts.length > 0 && facts.every((fact) => fact.sourcing === "unsourced"),
+    noRecordBehind(facts) && facts.every((fact) => fact.tier === "unsourced"),
 } as const satisfies Record<
   SystemClaimQualifierKind,
   (facts: readonly FactStanding[]) => boolean

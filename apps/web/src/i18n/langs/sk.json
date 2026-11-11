@@ -271,11 +271,13 @@
       "overrideTooltip": "Kontrolujúca osoba zaznamenala iný záver. Nižšie je bez zmeny zobrazená vlastná analýza nástroja.",
       "overrideVerdict": "Zmeniť záver",
       "recordConflict": {
+        "confirmGoverningRecord": "Potvrdiť ako rozhodujúci",
         "description": "Dva referenčné fakty sa týkajú rovnakej otázky (<strong>{subject}</strong>), ale odporujú si. Oba pochádzajú zo zdrojov s <strong>vysokou mierou istoty</strong>, nejde teda o problém spoľahlivosti: vnútorne rozporné sú samotné záznamy. AVT nevydá záver ani tvrdenie neohodnotí, pretože výber rozhodujúceho záznamu vyžaduje váš úsudok a jeho zaznamenanie; nástroj ho nesmie vykonať bez upozornenia.",
         "escalatedNotice": "Označené pre tím pre dôkazy. Rozpor v záznamoch zostáva otvorený a započítaný, kým sa nevyberie rozhodujúci záznam.",
         "flagForEvidenceTeam": "Označiť pre tím pre dôkazy",
         "governed": "<strong>{value}</strong> je rozhodujúci: tvrdenie sa posudzuje podľa tohto záznamu. Druhý záznam zostáva evidovaný.",
         "reconcile": "Vyriešiť rozpor v záznamoch",
+        "suggestedNotice": "Záznam v dokumente je navrhnutý pred výpoveďou svedka. Potvrďte ho, alebo zvoľte druhý záznam.",
         "title": "Rozporné dôkazy v záznamoch",
         "treatAsGoverningRecord": "Považovať za rozhodujúci"
       },
@@ -286,10 +288,6 @@
       "reopened": "Znovu otvorené, čaká na kontrolu",
       "reopenedTooltip": "Kontrolujúca osoba preklasifikovala toto tvrdenie ako overiteľný fakt; porovnanie so živými záznamami zatiaľ neprebehlo.",
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdrojov} other {# zdroja}}",
-      "unsourced": {
-        "hint": "K tomuto faktu zatiaľ nie je pripojený žiadny zdrojový dokument; médium a dátum dôkaz opisujú, ale nie sú zdrojom.",
-        "label": "Bez zdroja"
-      },
       "whyVerdict": "Odôvodnenie záveru: referenčné fakty"
     },
     "claimTypes": {
@@ -326,15 +324,20 @@
       "scopeMismatch": "Citovaný fakt má iný rozsah než tvrdenie. Skôr než záver potvrdíte, zvážte, či tvrdenie v jeho znení skutočne rozhoduje.",
       "supported": "Záznamy toto tvrdenie potvrdzujú. Svojím schválením potvrdíte, že ich nástroj vyložil správne; nie je potrebný žiadny hodnotiaci úsudok.",
       "tension": "Záznamy toto tvrdenie podporujú len čiastočne. Pred potvrdením záveru zvážte vyššie uvedené podporné a odporujúce fakty.",
+      "testimonyOnly": "Záznamy toto tvrdenie potvrdzujú, ale nepodkladá ho žiadny záznam v dokumente: opiera sa o svedectvo. Svojím schválením potvrdíte, že ho nástroj vyložil správne; záver zostane označený ako opretý o svedectvo.",
       "unsourcedOnly": "Záznamy toto tvrdenie potvrdzujú, ale len prostredníctvom faktov, ktoré zatiaľ nemajú zdroj. Svojím schválením potvrdíte, že ich nástroj vyložil správne; fakty zostanú označené ako bez zdroja."
     },
     "documents": {
       "claimSummary": "V rozpore: {contradicted} · V napätí: {tension} · Rozpor v záznamoch: {conflicts}",
       "empty": "Nahrajte do tohto spisu dokument, ktorý chcete overiť.",
+      "kindsLoadFailed": "Nepodarilo sa načítať, či sú tieto dokumenty svedectvo.",
       "notVerified": "Zatiaľ neoverené",
       "otherList": "Skontrolované podľa iného zoznamu",
       "sizeConfirmTitle": "Overiť tento dokument?",
       "statusLoadFailed": "Stav overenia týchto dokumentov sa nepodarilo načítať.",
+      "testimony": "Svedectvo",
+      "testimonyAbout": "O svedectve",
+      "testimonyLine": "Svedecké výpovede, záznamy z pohovorov a prepisy označte ako svedectvo. Fakty z nich prevzaté sa počítajú ako niečia výpoveď, nie ako záznam.",
       "verifyAgain": "Overiť znova"
     },
     "extraction": {
@@ -368,6 +371,16 @@
       "startFailed": "Vyťažovanie faktov sa nepodarilo spustiť",
       "submit": "{count, plural, =0 {Vyťažiť fakty} one {Vyťažiť fakty z # dokumentu} few {Vyťažiť fakty z # dokumentov} many {Vyťažiť fakty z # dokumentu} other {Vyťažiť fakty z # dokumentov}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Všetky nezamietnuté zdroje tohto faktu sú svedectvo: svedecká výpoveď, záznam z pohovoru alebo prepis.",
+        "label": "Svedectvo"
+      },
+      "unsourced": {
+        "hint": "K tomuto faktu nie je pripojený žiadny zdrojový dokument, ktorý by nebol zamietnutý; médium a dátum dôkaz opisujú, ale nie sú zdrojom.",
+        "label": "Bez zdroja"
+      }
+    },
     "guidance": {
       "escalate": "Postúpiť ďalej",
       "manualJudgement": "Vyžaduje úsudok",
@@ -391,6 +404,10 @@
       "scopeMismatch": {
         "hint": "Citovaný fakt sa týka iného obdobia, okruhu osôb, miesta alebo veličiny než tvrdenie.",
         "label": "Iný rozsah"
+      },
+      "testimonyOnly": {
+        "hint": "Fakty, o ktoré sa záver opiera, nepodkladá žiadny záznam v dokumente a aspoň jeden z nich je svedectvo.",
+        "label": "Len svedectvo"
       },
       "unsourcedOnly": {
         "hint": "Žiadny fakt, o ktorý sa záver opiera, zatiaľ nemá zdroj.",
