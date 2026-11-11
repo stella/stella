@@ -73,7 +73,9 @@ export const createComposerChoice = <E>(deps: ComposerChoiceDeps<E>) => {
       const queuedIn = epoch;
       const previous = tail;
       tail = (async (): Promise<Result<void, E | ComposerChoiceSuperseded>> => {
-        await previous;
+        // Only the order matters here: an earlier write reports its own
+        // outcome, and a failure moves the epoch on.
+        await previous.then(() => null);
         if (epoch !== queuedIn) {
           return Result.err(
             new ComposerChoiceSuperseded({
