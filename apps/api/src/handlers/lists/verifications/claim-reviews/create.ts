@@ -17,6 +17,7 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
+  CLAIM_FACT_LINK_CHANGES,
   CLAIM_OVERRIDE_STATES,
   CLAIM_REVIEW_REASON_RULE,
   CLAIM_REVIEW_STATUSES,
@@ -28,11 +29,14 @@ import {
   readClaimForReview,
   readClaimReviews,
   readRunFactStandings,
+  rejectLinkedFact,
   serializeClaimReview,
 } from "@/api/lib/lists/verification/read-run";
+import type { LinkableFactRejection } from "@/api/lib/lists/verification/read-run";
 import type { ClaimReviewEventRejection } from "@/api/lib/lists/verification/review-fold";
 import {
   EMPTY_CLAIM_REVIEW,
+  gradeOf,
   rejectReviewEvent,
 } from "@/api/lib/lists/verification/review-fold";
 
@@ -88,6 +92,12 @@ export const claimReviewEventSchema = v.union([
     ),
     ...REASON_ENTRIES[CLAIM_REVIEW_REASON_RULE["record-conflict"]],
   }),
+  v.strictObject({
+    kind: v.literal("fact-link"),
+    factEntityId: resourceIdSchema("entity"),
+    change: v.picklist(CLAIM_FACT_LINK_CHANGES),
+    ...REASON_ENTRIES[CLAIM_REVIEW_REASON_RULE["fact-link"]],
+  }),
 ]);
 
 const bodySchema = v.object({
@@ -111,10 +121,14 @@ const config = {
     "naming the governing fact or escalating it; the event also keeps which " +
     "record was suggested to govern then (a document's record over a " +
     "witness's account; see suggestedGoverningFactId in " +
-    "lists.verifications.get). `override`, `reopen` and `record-conflict` " +
-    "change the verdict and require `reason` (the reviewer's words, kept in " +
-    "the claim's history); `status` takes an optional `reason`. Reopening " +
-    "and resolving a conflict withdraw an earlier status and override.",
+    "lists.verifications.get); `fact-link` points the claim at a fact of " +
+    "the verified list (`link`) or takes that back (`unlink`), which " +
+    "changes no verdict until the claim is re-checked with " +
+    "lists.verifications.claim-rechecks.create. `override`, `reopen` and " +
+    "`record-conflict` change the verdict and require `reason` (the " +
+    "reviewer's words, kept in the claim's history); `status` and " +
+    "`fact-link` take an optional `reason`. Reopening and resolving a " +
+    "conflict withdraw an earlier status and override.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -135,8 +149,15 @@ const REJECTION_MESSAGES = {
   "no-record-conflict": "This claim is not withheld between two records.",
   "governing-fact-not-in-conflict":
     "The governing fact must be one of the two records in conflict.",
+  "fact-already-linked": "This fact is already linked to the claim.",
+  "fact-not-linked": "This fact is not linked to the claim.",
+  "recheck-set-aside-claim":
+    "A set-aside claim is reopened before it is re-checked.",
+  "fact-not-on-list": "Only a fact of the verified list can be linked.",
+  "fact-held":
+    "A held fact is left out of every check; include it before linking it.",
 } as const satisfies Record<
-  ClaimReviewEventRejection | "too-many-actions",
+  ClaimReviewEventRejection | LinkableFactRejection | "too-many-actions",
   string
 >;
 
@@ -163,7 +184,8 @@ const storedPayload = (
     }
     case "override":
     case "note":
-    case "reopen": {
+    case "reopen":
+    case "fact-link": {
       return event;
     }
     default: {
@@ -189,18 +211,6 @@ const createClaimReview = createSafeHandler(
         if (claim === undefined) {
           return { type: "not-found" } as const;
         }
-        // Read only for a record-conflict event; a claim without a conflict
-        // is refused below, before anything is stored.
-        const suggestedFactEntityId =
-          body.event.kind === "record-conflict" && claim.recordConflict !== null
-            ? governingSuggestionOfClaim(
-                claim,
-                (await readRunFactStandings({ tx, workspaceId, runId })) ??
-                  panic("A claim's run has no evidence"),
-              )
-            : null;
-        const payload = storedPayload(body.event, suggestedFactEntityId);
-
         const before = await readClaimReviews({
           tx,
           workspaceId,
@@ -208,19 +218,43 @@ const createClaimReview = createSafeHandler(
           claimIds: [claimId],
         });
         const record = before.get(claimId);
+        const review = record?.review ?? EMPTY_CLAIM_REVIEW;
+        // Read only for a record-conflict event, on the grade the claim is
+        // read with; a claim without a conflict is refused below, before
+        // anything is stored.
+        const suggestedFactEntityId =
+          body.event.kind === "record-conflict" &&
+          gradeOf(claim, review).recordConflict !== null
+            ? governingSuggestionOfClaim(
+                claim,
+                review,
+                (await readRunFactStandings({ tx, workspaceId, runId })) ??
+                  panic("A claim's run has no evidence"),
+              )
+            : null;
+        const payload = storedPayload(body.event, suggestedFactEntityId);
+
         if (
           (record?.eventCount ?? 0) >=
           VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX
         ) {
           return { type: "rejected", rejection: "too-many-actions" } as const;
         }
-        const rejection = rejectReviewEvent(
-          claim,
-          record?.review ?? EMPTY_CLAIM_REVIEW,
-          payload,
-        );
+        const rejection = rejectReviewEvent(claim, review, payload);
         if (rejection !== null) {
           return { type: "rejected", rejection } as const;
+        }
+        const factRejection =
+          payload.kind === "fact-link" && payload.change === "link"
+            ? await rejectLinkedFact({
+                tx,
+                workspaceId,
+                runId,
+                factEntityId: payload.factEntityId,
+              })
+            : null;
+        if (factRejection !== null) {
+          return { type: "rejected", rejection: factRejection } as const;
         }
 
         const eventId = createSafeId<"legalListClaimReviewEvent">();
@@ -245,6 +279,10 @@ const createClaimReview = createSafeHandler(
             eventId,
             kind: payload.kind,
             ...(payload.kind === "note" && { noteLength: payload.note.length }),
+            ...(payload.kind === "fact-link" && {
+              factEntityId: payload.factEntityId,
+              change: payload.change,
+            }),
             ...(payload.reason !== undefined && {
               reasonLength: payload.reason.length,
             }),

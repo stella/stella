@@ -24,8 +24,8 @@ import {
 } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimAnchor,
+  ClaimGrade,
   ClaimRef,
-  ClaimType,
   ClaimVerdict,
   VerificationEvidenceFact,
 } from "@/api/lib/lists/verification/contract";
@@ -88,24 +88,13 @@ type RawGrade = v.InferOutput<typeof rawGradeSchema>;
 
 type GradedVerdict = ClaimVerdict & { refs: ClaimRef[] };
 
-export type ClaimGrade = GradedVerdict & {
-  qualifiers: GraderClaimQualifier[];
-};
-
-/**
- * The type a graded claim is stored with. Extraction sets aside the claims it
- * recognises as untestable, but the grader can still find that one taken for
- * a fact cannot be tested; that claim is stored as unverifiable, the only type
- * the state may carry.
- */
-export const gradedClaimType = (grade: ClaimGrade): ClaimType =>
-  grade.state === "notverifiable" ? "unverifiable" : "fact";
-
-/** A claim to grade, with the text of the block it sits in for meaning. */
+/** A claim to grade, with the text of the block it sits in for meaning and
+ *  the facts a reviewer pointed it at, if any. */
 type GradeableClaim = {
   key: string;
   text: string;
   context: { text: string; anchor: Pick<ClaimAnchor, "start" | "end"> };
+  linkedFactIds: readonly SafeId<"entity">[];
 };
 
 const SYSTEM_PROMPT = `You check claims from a legal document against a record of evidence (the facts), one claim at a time.
@@ -127,7 +116,7 @@ A difference in scope alone never makes a claim contradicted: when the only conf
 
 For recordconflict, fill conflict: subject (the disputed point, in a few words), factIds (exactly the two conflicting facts), values (what each of those facts says on the point, in the same order), and verdictIfGoverning (the verdict the claim would get if that fact governed, in the same order: supported, tension or contradicted). Otherwise conflict is null.
 
-A fact's confidence says how unambiguous its meaning is and an interpretation note says where its meaning is contested; weigh them, but do not treat a low-confidence fact as absent. Use only the facts supplied. Answer every claim exactly once, preserving its claimId. Each claim comes with the passage it sits in: that passage says what the claim means and is never evidence.`;
+A fact's confidence says how unambiguous its meaning is and an interpretation note says where its meaning is contested; weigh them, but do not treat a low-confidence fact as absent. A claim may name facts a reviewer points to as bearing on it: read those first, but grade on what they say; being pointed to is not support. Use only the facts supplied. Answer every claim exactly once, preserving its claimId. Each claim comes with the passage it sits in: that passage says what the claim means and is never evidence.`;
 
 const factLine = (id: string, fact: VerificationEvidenceFact): string => {
   const detail = [
@@ -142,6 +131,20 @@ const factLine = (id: string, fact: VerificationEvidenceFact): string => {
       : `interpretation note=${fact.interpretationNote}`,
   ].filter((part) => part !== null);
   return `- ${id}: ${fact.text}${detail.length === 0 ? "" : `\n  ${detail.join("; ")}`}`;
+};
+
+/** The facts a reviewer pointed the claim at, by prompt id. A pointed fact
+ *  the grading does not carry (held since) is left out. */
+const pointedLine = (
+  claim: GradeableClaim,
+  promptIdByFactId: ReadonlyMap<SafeId<"entity">, string>,
+): string => {
+  const pointed = claim.linkedFactIds.flatMap(
+    (factId) => promptIdByFactId.get(factId) ?? [],
+  );
+  return pointed.length === 0
+    ? ""
+    : `\n  reviewer points to: ${pointed.join(", ")}`;
 };
 
 type Violation = { claimId: string; reason: string };
@@ -329,6 +332,9 @@ export const gradeClaims = async ({
   const factIdByPromptId = new Map(
     facts.map((fact, index) => [`F${String(index + 1)}`, fact.factEntityId]),
   );
+  const promptIdByFactId = new Map(
+    [...factIdByPromptId].map(([promptId, factId]) => [factId, promptId]),
+  );
   const factsPart = `Facts:\n${facts
     .map((fact, index) => factLine(`F${String(index + 1)}`, fact))
     .join("\n")}`;
@@ -361,7 +367,7 @@ export const gradeClaims = async ({
               `Claims:\n${batch
                 .map(
                   ({ promptId, claim }) =>
-                    `- ${promptId}: ${claim.text}\n  passage: ${claimPassage(claim.context.text, claim.context.anchor)}`,
+                    `- ${promptId}: ${claim.text}\n  passage: ${claimPassage(claim.context.text, claim.context.anchor)}${pointedLine(claim, promptIdByFactId)}`,
                 )
                 .join("\n")}`,
             );
