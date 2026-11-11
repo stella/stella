@@ -929,19 +929,33 @@ describe("protocol tap", () => {
     );
   });
 
-  test("a log that cannot be written leaves the message flowing", () => {
+  test("a log that cannot be written leaves the message flowing, and says so later", () => {
+    const lines: string[] = [];
+    const state = { full: true };
     const tap = protocolTap(
       {
         type: "redacted",
-        log: () => {
-          panic("disk full");
+        log: (line) => {
+          if (state.full) {
+            panic("disk full");
+          }
+          lines.push(line);
         },
         fingerprintKey: KEY,
       },
       { channel: "codex", source: "pid=7" },
     );
+    const initialized = JSON.stringify({ method: "initialized" });
     expect(() => {
-      tap("out", JSON.stringify({ method: "initialized" }));
+      tap("out", initialized);
+      tap("out", initialized);
     }).not.toThrow();
+    state.full = false;
+    tap("out", initialized);
+    tap("out", initialized);
+    expect(lines).toEqual([
+      "protocol codex pid=7 out method=initialized bytes=16-31 dropped=2",
+      "protocol codex pid=7 out method=initialized bytes=16-31",
+    ]);
   });
 });

@@ -14,7 +14,7 @@ import {
   DESKTOP_RUNNER_OUTPUT_EVENT,
   DESKTOP_RUNNER_RUN_OUTCOMES,
 } from "@stll/api-contract/desktop-runner";
-import { hmacSha256Hex } from "@stll/sha256/hmac";
+import { hmacSha256Hex } from "@stll/sha256/node";
 
 import { ASK_USER_QUESTION_TOOL } from "./harness/claude-code/items";
 import {
@@ -1349,7 +1349,9 @@ export const protocolTap = (
   switch (protocolLog.type) {
     case "off":
       return ignore;
-    case "redacted":
+    case "redacted": {
+      // Lines the log could not take, reported on the next one it takes.
+      const state = { dropped: 0 };
       return (direction, line) => {
         const text = line.endsWith("\n") ? line.slice(0, -1) : line;
         const parsed = Result.try((): unknown => JSON.parse(text));
@@ -1362,12 +1364,18 @@ export const protocolTap = (
             })
           : "not_json";
         const entry = `protocol ${channel} ${source} ${direction} ${fields} bytes=${band(Buffer.byteLength(text))}`;
-        // A log that cannot be written has nowhere to report it, and a
-        // diagnostic line must never change how a run goes.
-        Result.try(() => {
-          protocolLog.log(entry);
+        // A diagnostic line must never change how a run goes: a failed
+        // write is counted and reported once the log takes a line again.
+        const written = Result.try(() => {
+          protocolLog.log(
+            state.dropped === 0
+              ? entry
+              : `${entry} dropped=${String(state.dropped)}`,
+          );
         });
+        state.dropped = Result.isOk(written) ? 0 : state.dropped + 1;
       };
+    }
     default:
       protocolLog satisfies never;
       return panic("A protocol log setting without a tap");
