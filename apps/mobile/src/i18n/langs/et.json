@@ -221,7 +221,6 @@
     }
   },
   "signIn": {
-    "beta": "Beeta",
     "headline": "Selgus igas asjas.",
     "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
     "submit": "Logi sisse",
