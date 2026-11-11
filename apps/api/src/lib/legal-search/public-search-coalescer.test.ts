@@ -1,8 +1,12 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createPublicSearchCoalescer } from "@/api/lib/legal-search/public-search-coalescer";
+import { gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { SHADOW_SINKS } from "@/api/lib/observability/failure-shadow";
 
 type Answer = { value: number; complete: boolean };
 
@@ -21,6 +25,12 @@ const createCoalescer = (
 const cacheable = (answer: Answer) => answer.complete;
 
 const deferred = <T>() => Promise.withResolvers<T>();
+
+const abortedBy = (message: string) => ({
+  code: "request_aborted",
+  status: 400,
+  cause: { message },
+});
 
 describe("public search coalescer", () => {
   test("N identical concurrent searches run once and all get the answer", async () => {
@@ -153,9 +163,7 @@ describe("public search coalescer", () => {
     });
     const staying = coalescer.search({ key: "k", cacheable, run });
     left.abort(new Error("caller left"));
-    expect(await rejectionOf(leaving)).toMatchObject({
-      message: "caller left",
-    });
+    expect(await rejectionOf(leaving)).toMatchObject(abortedBy("caller left"));
     expect(readAborted).toBe(false);
     gate.resolve({ value: 5, complete: true });
     expect((await staying).value).toBe(5);
@@ -187,10 +195,10 @@ describe("public search coalescer", () => {
       run,
     });
     first.abort(new Error("first left"));
-    expect(await rejectionOf(one)).toMatchObject({ message: "first left" });
+    expect(await rejectionOf(one)).toMatchObject(abortedBy("first left"));
     expect(abortReason).toBeUndefined();
     second.abort(new Error("second left"));
-    expect(await rejectionOf(two)).toMatchObject({ message: "second left" });
+    expect(await rejectionOf(two)).toMatchObject(abortedBy("second left"));
     expect(abortReason).toBeDefined();
   });
 
@@ -211,8 +219,32 @@ describe("public search coalescer", () => {
           },
         }),
       ),
-    ).toMatchObject({ message: "gone" });
+    ).toMatchObject(abortedBy("gone"));
     expect(runs).toBe(0);
+  });
+
+  test("a caller that leaves is graded as a client disconnect, not a defect", async () => {
+    const coalescer = createCoalescer();
+    const gate = deferred<Answer>();
+    const left = new AbortController();
+    const leaving = Result.tryPromise(
+      async () =>
+        await coalescer.search({
+          key: "k",
+          signal: left.signal,
+          cacheable,
+          run: async () => await gate.promise,
+        }),
+    );
+    left.abort(new DOMException("The operation was aborted.", "AbortError"));
+    const settled = await leaving;
+    gate.resolve({ value: 1, complete: true });
+    const refusal = Result.isError(settled) ? settled.error : undefined;
+    expect(refusal).toBeDefined();
+    const grading = gradeFailure(readEvidence(refusal), SHADOW_SINKS.handler, {
+      requestAborted: true,
+    });
+    expect(grading.reason).toBe("client_disconnected");
   });
 
   test("the entry bound evicts the least recently used answer", async () => {

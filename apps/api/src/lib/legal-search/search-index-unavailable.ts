@@ -43,6 +43,18 @@ export const searchIndexUnavailableError = (
     cause,
   });
 
+/** The refusal a search answers a caller that cancelled its own request. */
+export const requestAbortedRefusal = (cause: unknown): HandlerError<400> =>
+  classifyFailure(
+    new HandlerError({
+      status: 400,
+      code: "request_aborted",
+      message: "Request aborted",
+      cause,
+    }),
+    "client_disconnected",
+  );
+
 /**
  * The refusal a failed corpus index read answers with, total over what the
  * client knows of the failure (`CorpusIndexError.reach`), so no caller can
@@ -64,15 +76,7 @@ export const corpusIndexReadRefusal = <TStatus extends HandlerErrorStatusCode>(
     case "index_missing":
       return searchIndexUnavailableError(error);
     case "caller_aborted":
-      return classifyFailure(
-        new HandlerError({
-          status: 400,
-          code: "request_aborted",
-          message: "Request aborted",
-          cause: error,
-        }),
-        "client_disconnected",
-      );
+      return requestAbortedRefusal(error);
     case "answered":
       return answered(error);
     default:
