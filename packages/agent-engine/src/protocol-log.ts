@@ -112,7 +112,7 @@ type ShapeVariant = {
 const PROTOCOL_LOG_LIST_ITEMS = 8;
 const FINGERPRINT_HEX_CHARS = 8;
 
-const VERSION_CORE = /^(\d{1,9})\.(\d{1,9})\.(\d{1,9})/u;
+const VERSION_CORE = /^\d{1,9}\.\d{1,9}\.\d{1,9}/u;
 
 const IDENTIFIER = { type: "identifier" } as const satisfies FieldRule;
 const VERSION = { type: "version" } as const satisfies FieldRule;
@@ -1105,20 +1105,19 @@ const fromVocabulary = (
   return values.has(value) ? value : opaque(value, fingerprint);
 };
 
-/** `major.minor.patch` rebuilt from its numbers; any suffix fingerprinted. */
+/**
+ * The leading `major.minor.patch`, which the pattern admits as ASCII digits
+ * and dots only; any suffix is fingerprinted.
+ */
 const version = (value: unknown, fingerprint: Fingerprint) => {
   if (typeof value !== "string") {
     return describe(value);
   }
-  const core = VERSION_CORE.exec(value);
-  if (core === null) {
+  const [numeric] = VERSION_CORE.exec(value) ?? [];
+  if (numeric === undefined) {
     return opaque(value, fingerprint);
   }
-  const numeric = core
-    .slice(1, 4)
-    .map((part) => String(Number(part)))
-    .join(".");
-  const suffix = value.slice(core[0].length);
+  const suffix = value.slice(numeric.length);
   return suffix === "" ? numeric : `${numeric}+${fingerprint(suffix)}`;
 };
 

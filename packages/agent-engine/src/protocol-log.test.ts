@@ -314,7 +314,7 @@ const ALL_LEAVES = PROTOCOL_CHANNELS.flatMap((channel) =>
 describe("protocol log redaction", () => {
   test("content at any kept path never reaches the line", () => {
     assertProperty(
-      "protocol log keeps no content at any allowlisted path",
+      "content at any kept path never reaches the line",
       fc.property(contentSample, ({ value, needles }) => {
         for (const { channel, direction, leaf } of ALL_LEAVES) {
           const line = redact({ channel, direction, message: leaf(value) });
@@ -329,7 +329,7 @@ describe("protocol log redaction", () => {
 
   test("no content string of any message reaches the line", () => {
     assertProperty(
-      "protocol log lines carry no content string",
+      "no content string of any message reaches the line",
       fc.property(messageSample, ({ channel, direction, sample }) => {
         const line = redact({ channel, direction, message: sample.value });
         expect(line).not.toContain("\n");
