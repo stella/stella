@@ -3,9 +3,12 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import {
+  CHAT_CLOUD_RUN_TARGET,
+  CHAT_RUN_TARGET_KIND,
+  chatLocalRunTargetSchema,
   type ChatRunTarget,
-  chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
+import { DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE } from "@stll/api-contract/desktop-runner";
 
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
@@ -16,9 +19,20 @@ import {
 /** Longer than any organization id: such a key names none. */
 const ORGANIZATION_ID_MAX_LENGTH = 64;
 
+/**
+ * Where the member last chose to run turns: stella cloud, or a harness and
+ * model on their computer. Never how much a run may do without asking: a
+ * permission is granted to one chat, and a new chat asks again.
+ */
+const runOnPreferenceSchema = v.variant("kind", [
+  v.strictObject({ kind: v.literal(CHAT_RUN_TARGET_KIND.cloud) }),
+  v.omit(chatLocalRunTargetSchema, ["approvals"]),
+]);
+type RunOnPreference = v.InferOutput<typeof runOnPreferenceSchema>;
+
 type PersistedRunOnPreference = {
   /** The member's last Run on choice in each organization they chat in. */
-  byOrganization: Record<string, ChatRunTarget>;
+  byOrganization: Record<string, RunOnPreference>;
 };
 
 type ChatRunOnPreferenceStore = PersistedRunOnPreference & {
@@ -39,8 +53,8 @@ const readPersistedState = (persisted: unknown): PersistedRunOnPreference => {
   return {
     byOrganization: Object.fromEntries(
       Object.entries(persisted.byOrganization).flatMap(
-        ([organizationId, target]) => {
-          const parsed = v.safeParse(chatRunTargetSchema, target);
+        ([organizationId, preference]) => {
+          const parsed = v.safeParse(runOnPreferenceSchema, preference);
           return organizationId.length <= ORGANIZATION_ID_MAX_LENGTH &&
             parsed.success
             ? [[organizationId, parsed.output]]
@@ -51,11 +65,17 @@ const readPersistedState = (persisted: unknown): PersistedRunOnPreference => {
   };
 };
 
+/** What of a chosen target is remembered: where it runs, not its permission. */
+const preferenceOf = (target: ChatRunTarget): RunOnPreference =>
+  target.kind === "local"
+    ? { kind: target.kind, harness: target.harness, model: target.model }
+    : CHAT_CLOUD_RUN_TARGET;
+
 /**
  * The member's last Run on choice, per organization, which a new chat starts
- * from: stella cloud, or a harness and model on their computer. Kept in the
- * browser for this member alone, as the web-search default is; each chat
- * stores its own choice on its row, and this only seeds a chat that has none.
+ * from. Kept in the browser for this member alone, as the web-search default
+ * is; each chat stores its own choice on its row, and this only seeds a chat
+ * that has none.
  */
 export const useChatRunOnPreferenceStore = create<ChatRunOnPreferenceStore>()(
   persist(
@@ -63,7 +83,10 @@ export const useChatRunOnPreferenceStore = create<ChatRunOnPreferenceStore>()(
       byOrganization: {},
       remember: (organizationId, target) => {
         set((state) => ({
-          byOrganization: { ...state.byOrganization, [organizationId]: target },
+          byOrganization: {
+            ...state.byOrganization,
+            [organizationId]: preferenceOf(target),
+          },
         }));
       },
     }),
@@ -85,12 +108,22 @@ export const useChatRunOnPreferenceStore = create<ChatRunOnPreferenceStore>()(
 
 followStorageOwner(useChatRunOnPreferenceStore);
 
-/** The member's last Run on choice in the organization, if they made one. */
+/**
+ * Where a new chat in the organization starts, if the member chose before:
+ * on their computer always with the default permission, never one granted
+ * to an earlier chat.
+ */
 export const rememberedRunTarget = (
   organizationId: string,
-): ChatRunTarget | undefined =>
-  useChatRunOnPreferenceStore.getState().byOrganization[organizationId];
+): ChatRunTarget | undefined => {
+  const preference =
+    useChatRunOnPreferenceStore.getState().byOrganization[organizationId];
+  return preference?.kind === "local"
+    ? { ...preference, approvals: DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE }
+    : preference;
+};
 
+/** Remember where `target` runs as the member's last Run on choice. */
 export const rememberRunTarget = (
   organizationId: string,
   target: ChatRunTarget,

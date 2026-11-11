@@ -43,6 +43,8 @@ const { ChatEditorProvider } =
 const { AIAvailabilityProvider } = await import("@/components/require-ai-key");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { useChatDraftStore } = await import("@/lib/chat-draft-store");
+const { useChatWebSearchPreferenceStore } =
+  await import("@/lib/chat-web-search-store");
 const { rememberRunTarget, useChatRunOnPreferenceStore } =
   await import("@/features/chat/run-on-preference-store");
 const { getChatThreadKey, toChatThreadId } =
@@ -104,7 +106,17 @@ type ThreadResponse =
   WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200];
 
 /** A thread nobody has written to yet, as the server reads a new chat's draft. */
-const draftThread = (runTarget: ChatLocalRunTarget | null): ThreadResponse => ({
+const draftThread = ({
+  runTarget,
+  exists,
+  webSearchAvailable,
+  webSearchEnabled,
+}: {
+  runTarget: ChatLocalRunTarget | null;
+  exists: boolean;
+  webSearchAvailable: boolean;
+  webSearchEnabled: boolean;
+}): ThreadResponse => ({
   activeSkill: null,
   activeTurnId: null,
   newestLocalTurn: null,
@@ -130,11 +142,11 @@ const draftThread = (runTarget: ChatLocalRunTarget | null): ThreadResponse => ({
   olderCursor: null,
   reasoningEffort: null,
   ...(runTarget === null ? {} : { runTarget }),
-  threadExists: runTarget !== null,
+  threadExists: exists,
   threadRevision: "2026-10-10T12:00:00.000Z",
   usedAnonymization: false,
-  webSearchAvailable: false,
-  webSearchEnabled: false,
+  webSearchAvailable,
+  webSearchEnabled,
 });
 
 const ANSWER = "Done on your computer.";
@@ -143,9 +155,18 @@ const ANSWER = "Done on your computer.";
  * The server: the draft's row stores what the model menu PATCHes, every read
  * of the thread returns it, and a send answers with one short turn.
  */
-const serve = (readiness: ChatLocalRunReadiness = READINESS) => {
+const serve = ({
+  readiness = READINESS,
+  webSearchAvailable = false,
+}: {
+  readiness?: ChatLocalRunReadiness;
+  webSearchAvailable?: boolean;
+} = {}) => {
   const state = {
     stored: null as ChatLocalRunTarget | null,
+    /** Whether a write created the draft's row. */
+    exists: false,
+    webSearchEnabled: false,
     threadIds: new Set<string>(),
     patches: [] as unknown[],
     sends: [] as unknown[],
@@ -158,7 +179,27 @@ const serve = (readiness: ChatLocalRunReadiness = READINESS) => {
       const read = /\/chat\/threads\/([^/]+)\/messages$/u.exec(pathname);
       if (read?.[1] !== undefined) {
         state.threadIds.add(read[1]);
-        return Response.json(draftThread(state.stored));
+        return Response.json(
+          draftThread({
+            runTarget: state.stored,
+            exists: state.exists,
+            webSearchAvailable,
+            webSearchEnabled: state.webSearchEnabled,
+          }),
+        );
+      }
+      // Web search turned on creates the draft's row, with no run target.
+      if (
+        /\/chat\/threads\/[^/]+$/u.test(pathname) &&
+        request.method === "PATCH"
+      ) {
+        const body = v.parse(
+          v.object({ webSearchEnabled: v.boolean() }),
+          await request.json(),
+        );
+        state.exists = true;
+        state.webSearchEnabled = body.webSearchEnabled;
+        return Response.json({ webSearchEnabled: body.webSearchEnabled });
       }
       if (
         /\/chat\/threads\/[^/]+\/model$/u.test(pathname) &&
@@ -173,6 +214,7 @@ const serve = (readiness: ChatLocalRunReadiness = READINESS) => {
         if (!patch.success) {
           throw new TypeError("Expected the page to PATCH a run target");
         }
+        state.exists = true;
         if (patch.output.runTarget !== undefined) {
           state.stored =
             patch.output.runTarget.kind === "local"
@@ -298,6 +340,7 @@ afterEach(() => {
   __resetChatRequestStateForTests();
   useChatDraftStore.setState({ draftsByThreadKey: {} });
   useChatRunOnPreferenceStore.setState({ byOrganization: {} });
+  useChatWebSearchPreferenceStore.setState({ enabledPreference: false });
   globalThis.fetch = previousFetch;
 });
 afterAll(async () => {
@@ -442,7 +485,7 @@ test("a new chat runs on the member's computer when they choose it, and its firs
     useChatRunOnPreferenceStore.getState().byOrganization[
       user.activeOrganizationId
     ],
-  ).toEqual(CODEX);
+  ).toEqual({ kind: "local", harness: "codex", model: CODEX.model });
   expect(server.unexpected).toEqual([]);
 });
 
@@ -482,7 +525,7 @@ test("a new chat opens on the member's last Run on choice, and its first send go
 
 test("a new chat whose remembered computer is offline says so in the bar and does not move to stella cloud", async () => {
   rememberRunTarget(user.activeOrganizationId, CODEX);
-  const server = serve(OFFLINE);
+  const server = serve({ readiness: OFFLINE });
   const client = createClient();
   const { ui } = await openNewChat(client);
 
@@ -519,5 +562,21 @@ test("a new chat left on stella cloud sends its first turn without a computer", 
     forwardedProps: { runTarget: expect.anything() },
   });
   expect(server.patches).toEqual([]);
+  expect(server.unexpected).toEqual([]);
+});
+
+test("a new chat with web search on by default still sends its first turn to the remembered computer", async () => {
+  rememberRunTarget(user.activeOrganizationId, CODEX);
+  useChatWebSearchPreferenceStore.setState({ enabledPreference: true });
+  const server = serve({ webSearchAvailable: true });
+  const client = createClient();
+  const { ui } = await openNewChat(client);
+
+  // Turning web search on creates the draft's row before the first send.
+  await testing.waitFor(() => expect(server.exists).toBe(true));
+  expect(await ui.findByRole("button", { name: CODEX_LABEL })).toBeTruthy();
+  expect(await sendFirstTurn(server, ui)).toMatchObject({
+    forwardedProps: { runTarget: CODEX },
+  });
   expect(server.unexpected).toEqual([]);
 });

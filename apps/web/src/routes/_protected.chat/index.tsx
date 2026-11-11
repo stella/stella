@@ -287,6 +287,7 @@ function ChatIndex() {
     threadRef,
     stored: chatDraftMeta,
     queryKey: draftMetaQueryKey,
+    startsOnLastChoice: true,
   });
   const { getRunTarget } = composerModels;
   // The capability set `ChatThreadPage` passes, so the runtime the first

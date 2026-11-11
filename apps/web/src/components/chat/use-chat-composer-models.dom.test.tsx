@@ -111,6 +111,7 @@ const storedReads = new Map<string, Promise<StoredChoice>>();
 /** The composer over a thread whose stored choice the query reads. */
 const renderComposer = (
   initial: Promise<StoredChoice> = Promise.resolve(AUTO_ON_STELLA),
+  { startsOnLastChoice = false }: { startsOnLastChoice?: boolean } = {},
 ) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -122,7 +123,7 @@ const renderComposer = (
     queryFn: async ({ queryKey }): Promise<StoredChoice> =>
       await (storedReads.get(queryKey[2]) ?? Promise.resolve(AUTO_ON_STELLA)),
   });
-  return renderHook(
+  const view = renderHook(
     () => {
       const { data } = useQuery(stored);
       return useChatComposerModels({
@@ -130,6 +131,7 @@ const renderComposer = (
         threadRef,
         stored: data,
         queryKey: stored.queryKey,
+        startsOnLastChoice,
       });
     },
     {
@@ -142,7 +144,12 @@ const renderComposer = (
       ),
     },
   );
+  return Object.assign(view, { queryClient, queryKey: stored.queryKey });
 };
+
+/** A new chat's composer, on a surface that opens new chats. */
+const renderNewChat = () =>
+  renderComposer(Promise.resolve(NEW_CHAT), { startsOnLastChoice: true });
 
 /** The composer once its stored choice is read. */
 const renderReadyComposer = async () => {
@@ -239,7 +246,7 @@ test("a menu opened while the computer is being written shows the computer", asy
 test("a new chat starts on the member's last Run on choice, and a send carries it", async () => {
   const server = serve();
   rememberRunTarget(ORGANIZATION_ID, CODEX);
-  const { result } = renderComposer(Promise.resolve(NEW_CHAT));
+  const { result } = renderNewChat();
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
 
   expect(result.current.runTarget).toEqual(CODEX);
@@ -252,7 +259,7 @@ test("a new chat starts on the member's last Run on choice, and a send carries i
 test("a model picked on a new chat stores the remembered target with it, and the chat keeps it", async () => {
   const server = serve();
   rememberRunTarget(ORGANIZATION_ID, CODEX);
-  const { result } = renderComposer(Promise.resolve(NEW_CHAT));
+  const { result } = renderNewChat();
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
 
   act(() => {
@@ -278,7 +285,10 @@ test("a model picked on a new chat stores the remembered target with it, and the
 test("a chat the server holds runs where it stored, whatever the member chose last", async () => {
   serve();
   rememberRunTarget(ORGANIZATION_ID, CODEX);
-  const { result } = await renderReadyComposer();
+  const { result } = renderComposer(Promise.resolve(AUTO_ON_STELLA), {
+    startsOnLastChoice: true,
+  });
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
 
   expect(result.current.runTarget).toEqual({ kind: "cloud" });
   expect(result.current.getRunTarget()).toEqual({ kind: "cloud" });
@@ -297,7 +307,63 @@ test("a Run on pick is remembered as the member's last choice", async () => {
   await server.releaseNext();
   (await result.current.awaitPendingSelection()).unwrap();
 
+  // Where it runs and on which model; the permission stays with the chat.
   expect(
     useChatRunOnPreferenceStore.getState().byOrganization[ORGANIZATION_ID],
-  ).toEqual(CODEX);
+  ).toEqual({ kind: "local", harness: "codex", model: CODEX.model });
+});
+
+const FULL_AUTO: ChatLocalRunTarget = { ...CODEX, approvals: "full_auto" };
+
+test("a new chat starts on the remembered computer with Ask, never a permission granted before", async () => {
+  serve();
+  rememberRunTarget(ORGANIZATION_ID, FULL_AUTO);
+  const { result } = renderNewChat();
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+
+  expect(result.current.runTarget).toEqual(CODEX);
+  expect(result.current.getRunTarget()).toEqual(CODEX);
+});
+
+test("full auto picked in one chat does not reach the start of another", async () => {
+  const server = serve();
+  const first = await renderReadyComposer();
+  const runOn = first.result.current.models.runTarget;
+  if (runOn.type !== "choice") {
+    throw new Error("The composer offers no Run on choice");
+  }
+  act(() => {
+    runOn.select(FULL_AUTO);
+  });
+  await server.releaseNext();
+  (await first.result.current.awaitPendingSelection()).unwrap();
+  expect(first.result.current.getRunTarget()).toEqual(FULL_AUTO);
+
+  const next = renderNewChat();
+  await waitFor(() => expect(next.result.current.models.state).toBe("ready"));
+  expect(next.result.current.getRunTarget()).toEqual(CODEX);
+});
+
+test("a new chat keeps its start when another write creates its row", async () => {
+  serve();
+  rememberRunTarget(ORGANIZATION_ID, CODEX);
+  const { result, queryClient, queryKey } = renderNewChat();
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+
+  // Web search turned on creates the row; it reads back with no run target.
+  act(() => {
+    queryClient.setQueryData(queryKey, { ...AUTO_ON_STELLA });
+  });
+
+  expect(result.current.runTarget).toEqual(CODEX);
+  expect(result.current.getRunTarget()).toEqual(CODEX);
+});
+
+test("a thread page shows what its thread stores, whatever the member chose last", async () => {
+  serve();
+  rememberRunTarget(ORGANIZATION_ID, CODEX);
+  const { result } = renderComposer(Promise.resolve(NEW_CHAT));
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+
+  expect(result.current.getRunTarget()).toEqual({ kind: "cloud" });
 });
