@@ -197,6 +197,8 @@ const LEGAL_FORMS: readonly (readonly string[])[] = [
   ["eingetragener", "verein"],
   ["eingetragene", "genossenschaft"],
   ["haftungsbeschrankt"],
+  // "PartG mbB" tokenises as two words; the run-together form is an abbreviation.
+  ["partg", "mbb"],
   ["verejna", "obchodni", "spolecnost"],
   ["komanditni", "spolecnost"],
   ["statni", "podnik"],
