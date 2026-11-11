@@ -59,15 +59,20 @@ const config = {
       "Copies SharePoint files into documents without returning stored-file bytes.",
   },
   description:
-    "Copy SharePoint or OneDrive files into a matter as documents, read with " +
-    "the caller's own Microsoft grant. Each file is a one-way snapshot: " +
+    "Copy SharePoint or OneDrive files (driveId and itemId from " +
+    "sharepoint.drives.items.list) into a matter as documents, read with the " +
+    "caller's own Microsoft account. Each file is a one-way snapshot: " +
     "importing it again adds a version only when its content changed in " +
     "SharePoint, otherwise it is a no-op. Returns one result per file; a " +
     "failed file does not stop the others, and files the request had no " +
     "time left for come back deferred: send those again.",
   permissions: { workspace: ["read"], entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "provider_secret" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   body: requestBody,
 } satisfies WorkspaceHandlerConfig;
 
