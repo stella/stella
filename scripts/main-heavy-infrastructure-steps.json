@@ -683,6 +683,7 @@
       "Check route network baseline",
       "Checkout",
       "Configure flaky-test quarantine",
+      "Configure flaky-test quarantine for phone layouts",
       "Explain network baseline failure",
       "Install dependencies",
       "Login to GitHub Container Registry for browser images",
