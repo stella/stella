@@ -770,7 +770,9 @@
         "notCompleted": "Pierakstīšanās netika pabeigta. Mēģiniet vēlreiz.",
         "timedOut": "Pierakstīšanās ilga pārāk ilgi. Mēģiniet vēlreiz.",
         "unavailable": "Claude Code šajā datorā neizdevās palaist. Mēģiniet vēlreiz."
-      }
+      },
+      "unknown": "Neizdevās pārbaudīt pierakstīšanos Claude Code. Pēc brīža pārbaudiet vēlreiz.",
+      "checkAgain": "Pārbaudīt vēlreiz"
     },
     "install": {
       "notInstalled": "{name} šajā datorā vēl nav instalēts.",

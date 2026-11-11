@@ -770,7 +770,9 @@
         "notCompleted": "A bejelentkezés nem fejeződött be. Próbálja újra.",
         "timedOut": "A bejelentkezés túl sokáig tartott. Próbálja újra.",
         "unavailable": "A Claude Code nem indítható el ezen a számítógépen. Próbálja újra."
-      }
+      },
+      "unknown": "Nem sikerült ellenőrizni a Claude Code-bejelentkezést. Néhány pillanat múlva ellenőrizze újra.",
+      "checkAgain": "Újbóli ellenőrzés"
     },
     "install": {
       "notInstalled": "A {name} még nincs telepítve ezen a számítógépen.",

@@ -770,7 +770,9 @@
         "notCompleted": "Die Anmeldung wurde nicht abgeschlossen. Versuchen Sie es erneut.",
         "timedOut": "Die Anmeldung hat zu lange gedauert. Versuchen Sie es erneut.",
         "unavailable": "Claude Code konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut."
-      }
+      },
+      "unknown": "Die Anmeldung bei Claude Code konnte nicht geprüft werden. Prüfen Sie es gleich noch einmal.",
+      "checkAgain": "Erneut prüfen"
     },
     "install": {
       "notInstalled": "{name} ist auf diesem Computer noch nicht installiert.",
