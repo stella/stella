@@ -20,6 +20,7 @@ CREATE TABLE "case_law_decision_anchor_redirects" (
 );--> statement-breakpoint
 
 ALTER TABLE "case_law_decision_anchor_redirects" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "case_law_decision_anchor_redirects" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "case_law_ingestion_access" ON "case_law_decision_anchor_redirects"
   AS PERMISSIVE FOR ALL TO stella_ingestion USING (true) WITH CHECK (true);--> statement-breakpoint
 CREATE POLICY "case_law_global_access" ON "case_law_decision_anchor_redirects"
