@@ -234,6 +234,7 @@ import type {
   generateTanStackTextForTask,
 } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { grantedConflictCheckSnapshot } from "@/api/tests/helpers/conflict-check-access";
 import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -1851,10 +1852,18 @@ const isolationCases: IsolationCase[] = [
     name: "conflict check list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listConflictChecks, workspaceA, {
+        featureAccessSnapshot: grantedConflictCheckSnapshot({
+          organizationId: workspaceA.session.activeOrganizationId,
+          userId: workspaceA.user.id,
+        }),
         query: { limit: 100 },
       }),
     runBPositive: async ({ workspaceB }) =>
       await runHandler(listConflictChecks, workspaceB, {
+        featureAccessSnapshot: grantedConflictCheckSnapshot({
+          organizationId: workspaceB.session.activeOrganizationId,
+          userId: workspaceB.user.id,
+        }),
         query: { limit: 100 },
       }),
     expectDenied: (result) => expectPageExcludesId(result, conflictCheckB),

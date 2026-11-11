@@ -25,6 +25,8 @@ const config = {
   idempotency: { type: "replay" },
   permissions: { conflictCheck: ["run"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  access: "write",
+  featureAccess: { featureId: "conflict-check", type: "required" },
   mcp: {
     type: "capability",
     reason: "contact_directory",

@@ -112,8 +112,6 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
         "apps/api/src/lib/conflict-check/party-index.ts",
         "apps/api/src/lib/conflict-check/project.ts",
         "apps/api/src/lib/conflict-check/screen.ts",
-        "apps/api/src/lib/conflict-check/stored-results.ts",
-        "apps/api/src/lib/conflict-check/transitions.ts",
       ],
     },
   },

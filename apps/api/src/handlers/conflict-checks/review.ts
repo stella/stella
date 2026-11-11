@@ -18,6 +18,8 @@ const config = {
     "check, and any waiver, need an owner or administrator and a note.",
   permissions: { conflictCheck: ["run"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  access: "write",
+  featureAccess: { featureId: "conflict-check", type: "required" },
   mcp: {
     type: "capability",
     reason: "contact_directory",

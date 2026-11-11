@@ -1,8 +1,8 @@
 import createConflictCheck from "@/api/handlers/conflict-checks/create";
-import decideConflictCheck from "@/api/handlers/conflict-checks/decide";
 import getConflictCheck from "@/api/handlers/conflict-checks/get";
-import linkConflictCheckMatter from "@/api/handlers/conflict-checks/link-matter";
+import linkConflictCheckMatter from "@/api/handlers/conflict-checks/link";
 import listConflictChecks from "@/api/handlers/conflict-checks/list";
+import reviewConflictCheck from "@/api/handlers/conflict-checks/review";
 import { routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
@@ -16,7 +16,7 @@ export const conflictChecksRoute = routes(
   {
     "/": { GET: listConflictChecks, POST: createConflictCheck },
     "/:checkId": { GET: getConflictCheck },
-    "/:checkId/decision": { POST: decideConflictCheck },
+    "/:checkId/decision": { POST: reviewConflictCheck },
     "/:checkId/matter/:workspaceId": { PUT: linkConflictCheckMatter },
   },
   {

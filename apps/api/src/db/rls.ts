@@ -1404,7 +1404,7 @@ const organizationManagementRoleValues = sql.raw(
 );
 
 /** The session user holds a management role in the session organization. */
-const organizationManagerCheck = sql`EXISTS (
+export const organizationManagerCheck = sql`EXISTS (
   SELECT 1
   FROM member m
   WHERE m.organization_id = (SELECT current_setting(
@@ -1415,68 +1415,6 @@ const organizationManagerCheck = sql`EXISTS (
     ))
     AND m.role IN (${organizationManagementRoleValues})
 )`;
-
-const conflictCheckRunnerCheck = sql`run_by =
-  (SELECT current_setting(
-    '${sql.raw(SETTING_USER_ID)}', true
-  ))`;
-
-// A check names a prospective client before the firm has taken the matter, so
-// it is not organization-wide: its author, the reviewers, and the members of
-// the matter it was run for read it. The link table is matter-scoped, so the
-// subquery sees only links to matters the session may open.
-// sql-perf-allow: bounded by one check row; the member probe uses the member primary lookup and the link probe uses conflict_check_matters_check_uidx
-const conflictCheckReadCheck = sql`(
-  ${organizationCheck} AND (
-    ${conflictCheckRunnerCheck}
-    OR ${organizationManagerCheck}
-    OR EXISTS (
-      SELECT 1
-      FROM public.conflict_check_matters link
-      WHERE link.conflict_check_id = conflict_checks.id
-        AND link.organization_id = conflict_checks.organization_id
-    )
-  )
-)`;
-
-const conflictCheckWriteCheck = sql`(
-  ${organizationCheck} AND (
-    ${conflictCheckRunnerCheck} OR ${organizationManagerCheck}
-  )
-)`;
-
-const conflictCheckOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.conflict_checks'::regclass)`;
-
-export const conflictCheckPolicies = () => [
-  // The owner connection (organization reset and deletion) reaches every row.
-  p.pgPolicy("conflict_check_owner", {
-    for: "all",
-    to: "public",
-    using: conflictCheckOwnerCheck,
-    withCheck: conflictCheckOwnerCheck,
-  }),
-  p.pgPolicy("conflict_check_select", {
-    for: "select",
-    to: stella,
-    using: conflictCheckReadCheck,
-  }),
-  p.pgPolicy("conflict_check_insert", {
-    for: "insert",
-    to: stella,
-    withCheck: sql`(${organizationCheck} AND ${conflictCheckRunnerCheck})`,
-  }),
-  p.pgPolicy("conflict_check_update", {
-    for: "update",
-    to: stella,
-    using: conflictCheckWriteCheck,
-    withCheck: conflictCheckWriteCheck,
-  }),
-  p.pgPolicy("conflict_check_delete", {
-    for: "delete",
-    to: stella,
-    using: sql`(${organizationCheck} AND ${organizationManagerCheck})`,
-  }),
-];
 
 export const billingGuidelinePolicies = () => [
   p.pgPolicy("organization_select", {

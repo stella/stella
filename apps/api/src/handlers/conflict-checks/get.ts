@@ -14,6 +14,7 @@ const config = {
     "and for any other matter only a count, a severity and whom to ask.",
   permissions: { conflictCheck: ["run"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "conflict-check", type: "required" },
   access: "read",
   mcp: {
     type: "capability",

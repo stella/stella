@@ -12,6 +12,7 @@ import {
   runWithMeasuredQueryCounter,
 } from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { grantedConflictCheckSnapshot } from "@/api/tests/helpers/conflict-check-access";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   type TestDatabase,
@@ -105,6 +106,10 @@ const context = (fixture: ConflictChecksFixture, route: string) => ({
   session: { activeOrganizationId: fixture.organizationId },
   user: { id: fixture.userId },
   memberRole: sessionMemberRole("member"),
+  featureAccessSnapshot: grantedConflictCheckSnapshot({
+    organizationId: fixture.organizationId,
+    userId: fixture.userId,
+  }),
 });
 
 export const conflictCheckListScalingScenario = {

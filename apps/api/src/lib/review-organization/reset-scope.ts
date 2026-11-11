@@ -123,7 +123,6 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "clause_variants",
   "clause_versions",
   "clauses",
-  "conflict_checks",
   "contact_extraction_uploads",
   "contact_import_requests",
   "contact_relationships",

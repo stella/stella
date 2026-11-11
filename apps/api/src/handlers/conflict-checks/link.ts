@@ -13,6 +13,8 @@ const config = {
     "able to open the matter; a check links to one matter at most.",
   permissions: { conflictCheck: ["run"], workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  access: "write",
+  featureAccess: { featureId: "conflict-check", type: "required" },
   mcp: {
     type: "capability",
     reason: "contact_directory",

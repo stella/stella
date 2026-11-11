@@ -23,6 +23,7 @@ const config = {
     "matter the caller can open.",
   permissions: { conflictCheck: ["run"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "conflict-check", type: "required" },
   access: "read",
   mcp: {
     type: "capability",
