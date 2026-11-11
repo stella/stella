@@ -923,7 +923,6 @@ const mockExtractedFacts = (messages: readonly ModelMessage[]) => {
       quote: sentence,
       fact: rule.fact,
       occurredOn: mockDateIn(sentence),
-      evidenceKind: rule.kind,
       medium: rule.medium,
       confidence: rule.kind === "testimony" ? "medium" : "high",
       contestedMeaning:

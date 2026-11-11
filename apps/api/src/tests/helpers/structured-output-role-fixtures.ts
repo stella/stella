@@ -360,7 +360,7 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       outputSchema: "factExtractionSchema",
       schema: factExtractionSchema,
       answer:
-        '{"facts":[{"blockId":"b3","quote":"the board approved the discharge policy","fact":"The board approved the discharge policy on 9 March 2021.","occurredOn":"2021-03-09","evidenceKind":"document","medium":"Board minutes","confidence":"high","contestedMeaning":null},{"blockId":"b7","quote":"the final version was sent to every ward","fact":"The final version of the policy was sent to every ward.","occurredOn":null,"evidenceKind":"testimony","medium":"Witness statement","confidence":"medium","contestedMeaning":"Final may mean the approved policy or the last circulated draft."}]}',
+        '{"facts":[{"blockId":"b3","quote":"the board approved the discharge policy","fact":"The board approved the discharge policy on 9 March 2021.","occurredOn":"2021-03-09","medium":"Board minutes","confidence":"high","contestedMeaning":null},{"blockId":"b7","quote":"the final version was sent to every ward","fact":"The final version of the policy was sent to every ward.","occurredOn":null,"medium":"Witness statement","confidence":"medium","contestedMeaning":"Final may mean the approved policy or the last circulated draft."}]}',
     },
     {
       file: "lib/lists/verification/claim-extract.ts",

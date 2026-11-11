@@ -10,6 +10,9 @@
  * correction; one that still cannot be found is dropped, since nothing could
  * point a reviewer at it.
  *
+ * A fact's footing (a document's record or a person's account) is not read
+ * here: it comes from what the reviewer marked the document as on the list.
+ *
  * A fact lands `included` with the model's confidence in its meaning. Only
  * when the words genuinely support more than one materially different
  * reading does it land `held`, with a note saying what the readings are, so
@@ -48,22 +51,11 @@ const WINDOW_BLOCKS = 40;
 const CONTEXT_BLOCKS = 3;
 const CONCURRENCY = 3;
 
-/**
- * What carries a fact, as stored on the fact. Testimony is a person's account
- * (a witness statement, an affidavit, an interview); a document records the
- * fact itself. A method may weigh testimony below a record.
- */
-const EXTRACTED_EVIDENCE_KIND = {
-  document: "Document",
-  testimony: "Testimony",
-} as const;
-
 const rawFactSchema = v.strictObject({
   blockId: v.string(),
   quote: v.string(),
   fact: v.string(),
   occurredOn: v.nullable(v.string()),
-  evidenceKind: v.picklist(["document", "testimony"]),
   medium: v.nullable(v.string()),
   confidence: v.picklist(FACT_CONFIDENCES),
   contestedMeaning: v.nullable(v.string()),
@@ -97,7 +89,6 @@ For each fact give:
 - quote: the words that establish the fact, copied character for character from that block. Quote the shortest passage that does, never a paraphrase and never text from another block.
 - fact: the fact as one sentence of at most 200 characters.
 - occurredOn: when it happened or was the case, as YYYY-MM-DD, YYYY-MM or YYYY, stating only as much as the document does; null when the document gives no date for it.
-- evidenceKind: testimony when the source is a person's own account of what they saw, did or remember (a witness statement, an affidavit, an interview, a deposition); document when the document itself records the fact (a letter, an email, minutes, a policy, a contract, a register).
 - medium: what carries the fact, in a few words, such as "Email", "Board minutes" or "Witness statement"; null when unclear.
 - confidence: how unambiguous the fact's meaning is as the document states it: high when it reads only one way, medium when a reader needs some context to read it right, low when the wording is vague. It is about meaning, not about whether the source is believable.
 - contestedMeaning: null, unless the words genuinely support more than one materially different reading of the fact; then one sentence naming the readings. Ordinary vagueness, or doubt about whether a source is telling the truth, is not a contested meaning.
@@ -171,7 +162,10 @@ const factDetails = (raw: RawFact): CandidateFactDetails => {
   );
   return {
     occurredOn: parseOccurredOn(raw.occurredOn),
-    evidenceKind: EXTRACTED_EVIDENCE_KIND[raw.evidenceKind],
+    // Whether the document is testimony is the reviewer's setting for it on
+    // the list, which every source citing it inherits; the model does not
+    // guess it.
+    evidenceKind: null,
     medium: nonEmpty(raw.medium, FACT_DETAIL_LIMITS.MEDIUM_MAX),
     confidence: raw.confidence,
     interpretationNote: contested,

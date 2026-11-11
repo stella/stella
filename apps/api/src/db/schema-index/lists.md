@@ -4,222 +4,237 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## legal_lists · `legalLists` · lists.ts:172
+## legal_lists · `legalLists` · lists.ts:175
 
 ```text
-legal_lists.id            pUuid            pk,not null       lists.ts:175
-legal_lists.workspace_id  safeWorkspaceId  fk,not null       lists.ts:176
-legal_lists.name          varchar          not null          lists.ts:179
-legal_lists.description   text             null              lists.ts:180
-legal_lists.sample_case   jsonb            null              lists.ts:182  Receipt of the atomically loaded AVT sample; independent of its name.
-legal_lists.status        text             default,not null  lists.ts:183
-legal_lists.created_by    text             fk,null           lists.ts:187
-legal_lists.created_at    timestamptz      default,not null  lists.ts:190
-legal_lists.updated_at    timestamptz      default,not null  lists.ts:191
+legal_lists.id            pUuid            pk,not null       lists.ts:178
+legal_lists.workspace_id  safeWorkspaceId  fk,not null       lists.ts:179
+legal_lists.name          varchar          not null          lists.ts:182
+legal_lists.description   text             null              lists.ts:183
+legal_lists.sample_case   jsonb            null              lists.ts:185  Receipt of the atomically loaded AVT sample; independent of its name.
+legal_lists.status        text             default,not null  lists.ts:186
+legal_lists.created_by    text             fk,null           lists.ts:190
+legal_lists.created_at    timestamptz      default,not null  lists.ts:193
+legal_lists.updated_at    timestamptz      default,not null  lists.ts:194
 ```
 
-## legal_list_sections · `legalListSections` · lists.ts:210
+## legal_list_sections · `legalListSections` · lists.ts:213
 
 ```text
-legal_list_sections.id            pUuid            pk,not null       lists.ts:213
-legal_list_sections.workspace_id  safeWorkspaceId  fk,not null       lists.ts:214
-legal_list_sections.list_id       safeUuid         fk,not null       lists.ts:215
-legal_list_sections.name          varchar          not null          lists.ts:216
-legal_list_sections.position      varchar          not null          lists.ts:217
-legal_list_sections.created_at    timestamptz      default,not null  lists.ts:218
-legal_list_sections.updated_at    timestamptz      default,not null  lists.ts:219
+legal_list_sections.id            pUuid            pk,not null       lists.ts:216
+legal_list_sections.workspace_id  safeWorkspaceId  fk,not null       lists.ts:217
+legal_list_sections.list_id       safeUuid         fk,not null       lists.ts:218
+legal_list_sections.name          varchar          not null          lists.ts:219
+legal_list_sections.position      varchar          not null          lists.ts:220
+legal_list_sections.created_at    timestamptz      default,not null  lists.ts:221
+legal_list_sections.updated_at    timestamptz      default,not null  lists.ts:222
 ```
 
-## legal_list_columns · `legalListColumns` · lists.ts:239
+## legal_list_columns · `legalListColumns` · lists.ts:242
 
 ```text
-legal_list_columns.id            pUuid            pk,not null       lists.ts:242
-legal_list_columns.workspace_id  safeWorkspaceId  fk,not null       lists.ts:243
-legal_list_columns.list_id       safeUuid         fk,not null       lists.ts:244
-legal_list_columns.property_id   safeUuid         fk,not null       lists.ts:245
-legal_list_columns.position      integer          not null          lists.ts:246
-legal_list_columns.required      boolean          default,not null  lists.ts:247
-legal_list_columns.created_at    timestamptz      default,not null  lists.ts:248
+legal_list_columns.id            pUuid            pk,not null       lists.ts:245
+legal_list_columns.workspace_id  safeWorkspaceId  fk,not null       lists.ts:246
+legal_list_columns.list_id       safeUuid         fk,not null       lists.ts:247
+legal_list_columns.property_id   safeUuid         fk,not null       lists.ts:248
+legal_list_columns.position      integer          not null          lists.ts:249
+legal_list_columns.required      boolean          default,not null  lists.ts:250
+legal_list_columns.created_at    timestamptz      default,not null  lists.ts:251
 ```
 
-## legal_list_items · `legalListItems` · lists.ts:275
+## legal_list_items · `legalListItems` · lists.ts:278
 
 ```text
-legal_list_items.{...entityFeatureGateColumns()}  spread                             lists.ts:278
-legal_list_items.entity_id                        safeUuid         pk,fk,not null    lists.ts:279
-legal_list_items.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:280
-legal_list_items.list_id                          safeUuid         fk,not null       lists.ts:281
-legal_list_items.section_id                       safeUuid         fk,null           lists.ts:282
-legal_list_items.position                         varchar          not null          lists.ts:283
-legal_list_items.description                      text             null              lists.ts:284
-legal_list_items.review_status                    text             default,not null  lists.ts:285
-legal_list_items.added_by                         text             fk,null           lists.ts:289
-legal_list_items.created_at                       timestamptz      default,not null  lists.ts:292
-legal_list_items.updated_at                       timestamptz      default,not null  lists.ts:293
+legal_list_items.{...entityFeatureGateColumns()}  spread                             lists.ts:281
+legal_list_items.entity_id                        safeUuid         pk,fk,not null    lists.ts:282
+legal_list_items.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:283
+legal_list_items.list_id                          safeUuid         fk,not null       lists.ts:284
+legal_list_items.section_id                       safeUuid         fk,null           lists.ts:285
+legal_list_items.position                         varchar          not null          lists.ts:286
+legal_list_items.description                      text             null              lists.ts:287
+legal_list_items.review_status                    text             default,not null  lists.ts:288
+legal_list_items.added_by                         text             fk,null           lists.ts:292
+legal_list_items.created_at                       timestamptz      default,not null  lists.ts:295
+legal_list_items.updated_at                       timestamptz      default,not null  lists.ts:296
 ```
 
-## legal_list_fact_details · `legalListFactDetails` · lists.ts:357 · rls
+## legal_list_fact_details · `legalListFactDetails` · lists.ts:360 · rls
 
 Evidential detail of a fact item, one row per fact.
 
 ```text
-legal_list_fact_details.{...entityFeatureGateColumns()}  spread                             lists.ts:360
-legal_list_fact_details.item_entity_id                   safeUuid         pk,fk,not null    lists.ts:361
-legal_list_fact_details.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:362
-legal_list_fact_details.list_id                          safeUuid         fk,not null       lists.ts:363
-legal_list_fact_details.occurred_on                      date             null              lists.ts:364
-legal_list_fact_details.occurred_on_precision            text             null              lists.ts:365
-legal_list_fact_details.evidence_kind                    varchar          null              lists.ts:368
-legal_list_fact_details.medium                           varchar          null              lists.ts:371
-legal_list_fact_details.confidence                       text             null              lists.ts:373  Null means the interpretive confidence has not been stated.
-legal_list_fact_details.interpretation_note              varchar          null              lists.ts:376  Set only where the meaning is genuinely contested; its presence is what makes a claim citing this fact need a human.
-legal_list_fact_details.scoring                          text             default,not null  lists.ts:379
-legal_list_fact_details.updated_by                       text             fk,null           lists.ts:383
-legal_list_fact_details.created_at                       timestamptz      default,not null  lists.ts:386
-legal_list_fact_details.updated_at                       timestamptz      default,not null  lists.ts:387
+legal_list_fact_details.{...entityFeatureGateColumns()}  spread                             lists.ts:363
+legal_list_fact_details.item_entity_id                   safeUuid         pk,fk,not null    lists.ts:364
+legal_list_fact_details.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:365
+legal_list_fact_details.list_id                          safeUuid         fk,not null       lists.ts:366
+legal_list_fact_details.occurred_on                      date             null              lists.ts:367
+legal_list_fact_details.occurred_on_precision            text             null              lists.ts:368
+legal_list_fact_details.evidence_kind                    varchar          null              lists.ts:371
+legal_list_fact_details.medium                           varchar          null              lists.ts:374
+legal_list_fact_details.confidence                       text             null              lists.ts:376  Null means the interpretive confidence has not been stated.
+legal_list_fact_details.interpretation_note              varchar          null              lists.ts:379  Set only where the meaning is genuinely contested; its presence is what makes a claim citing this fact need a human.
+legal_list_fact_details.scoring                          text             default,not null  lists.ts:382
+legal_list_fact_details.updated_by                       text             fk,null           lists.ts:386
+legal_list_fact_details.created_at                       timestamptz      default,not null  lists.ts:389
+legal_list_fact_details.updated_at                       timestamptz      default,not null  lists.ts:390
 ```
 
-## legal_list_item_sources · `legalListItemSources` · lists.ts:440 · rls
+## legal_list_item_sources · `legalListItemSources` · lists.ts:443 · rls
 
 ```text
-legal_list_item_sources.{...entityFeatureGateColumns()}  spread                             lists.ts:443
-legal_list_item_sources.id                               pUuid            pk,not null       lists.ts:444
-legal_list_item_sources.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:445
-legal_list_item_sources.list_id                          safeUuid         fk,not null       lists.ts:446
-legal_list_item_sources.item_entity_id                   safeUuid         fk,not null       lists.ts:447
-legal_list_item_sources.source_entity_id                 safeUuid         fk,not null       lists.ts:448
-legal_list_item_sources.source_entity_version_id         safeUuid         fk,not null       lists.ts:449
-legal_list_item_sources.locator                          jsonb            not null          lists.ts:452
-legal_list_item_sources.quote                            text             null              lists.ts:453
-legal_list_item_sources.verification_status              text             default,not null  lists.ts:454
-legal_list_item_sources.verified_by                      text             fk,null           lists.ts:460
-legal_list_item_sources.verified_at                      timestamptz      null              lists.ts:463
-legal_list_item_sources.created_by                       text             fk,null           lists.ts:464
-legal_list_item_sources.created_at                       timestamptz      default,not null  lists.ts:467
-legal_list_item_sources.updated_at                       timestamptz      default,not null  lists.ts:468
+legal_list_item_sources.{...entityFeatureGateColumns()}  spread                             lists.ts:446
+legal_list_item_sources.id                               pUuid            pk,not null       lists.ts:447
+legal_list_item_sources.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:448
+legal_list_item_sources.list_id                          safeUuid         fk,not null       lists.ts:449
+legal_list_item_sources.item_entity_id                   safeUuid         fk,not null       lists.ts:450
+legal_list_item_sources.source_entity_id                 safeUuid         fk,not null       lists.ts:451
+legal_list_item_sources.source_entity_version_id         safeUuid         fk,not null       lists.ts:452
+legal_list_item_sources.locator                          jsonb            not null          lists.ts:455
+legal_list_item_sources.quote                            text             null              lists.ts:456
+legal_list_item_sources.verification_status              text             default,not null  lists.ts:457
+legal_list_item_sources.verified_by                      text             fk,null           lists.ts:463
+legal_list_item_sources.verified_at                      timestamptz      null              lists.ts:466
+legal_list_item_sources.created_by                       text             fk,null           lists.ts:467
+legal_list_item_sources.created_at                       timestamptz      default,not null  lists.ts:470
+legal_list_item_sources.updated_at                       timestamptz      default,not null  lists.ts:471
 ```
 
-## legal_list_item_source_decisions · `legalListItemSourceDecisions` · lists.ts:561 · rls
+## legal_list_item_source_decisions · `legalListItemSourceDecisions` · lists.ts:564 · rls
 
 Immutable history of human verification decisions for a list source.
 
 ```text
-legal_list_item_source_decisions.{...entityFeatureGateColumns()}           spread                             lists.ts:564
-legal_list_item_source_decisions.{...entityFeatureWorkspaceGateColumns()}  spread                             lists.ts:565
-legal_list_item_source_decisions.id                                        pUuid            pk,not null       lists.ts:566
-legal_list_item_source_decisions.workspace_id                              safeWorkspaceId  not null          lists.ts:567
-legal_list_item_source_decisions.source_id                                 safeUuid         fk,not null       lists.ts:568
-legal_list_item_source_decisions.decision                                  text             null              lists.ts:569
-legal_list_item_source_decisions.reason                                    text             null              lists.ts:570
-legal_list_item_source_decisions.actor_id                                  text             fk,null           lists.ts:571
-legal_list_item_source_decisions.created_at                                timestamptz      default,not null  lists.ts:574
+legal_list_item_source_decisions.{...entityFeatureGateColumns()}           spread                             lists.ts:567
+legal_list_item_source_decisions.{...entityFeatureWorkspaceGateColumns()}  spread                             lists.ts:568
+legal_list_item_source_decisions.id                                        pUuid            pk,not null       lists.ts:569
+legal_list_item_source_decisions.workspace_id                              safeWorkspaceId  not null          lists.ts:570
+legal_list_item_source_decisions.source_id                                 safeUuid         fk,not null       lists.ts:571
+legal_list_item_source_decisions.decision                                  text             null              lists.ts:572
+legal_list_item_source_decisions.reason                                    text             null              lists.ts:573
+legal_list_item_source_decisions.actor_id                                  text             fk,null           lists.ts:574
+legal_list_item_source_decisions.created_at                                timestamptz      default,not null  lists.ts:577
 ```
 
-## legal_list_generation_runs · `legalListGenerationRuns` · lists.ts:645 · rls
+## legal_list_source_documents · `legalListSourceDocuments` · lists.ts:657 · rls
+
+What a document is to one list's facts, as a reviewer classified it: a record of what happened or a person's account of it.
 
 ```text
-legal_list_generation_runs.id               pUuid               pk,not null       lists.ts:648
-legal_list_generation_runs.workspace_id     safeWorkspaceId     fk,not null       lists.ts:649
-legal_list_generation_runs.list_id          safeUuid            fk,not null       lists.ts:650
-legal_list_generation_runs.status           text                default,not null  lists.ts:651
-legal_list_generation_runs.instruction      varchar             not null          lists.ts:655
-legal_list_generation_runs.producer         text                default,not null  lists.ts:658  Who writes the candidates.
-legal_list_generation_runs.organization_id  safeOrganizationId  fk,null           lists.ts:665  The worker rebuilds its tenant scope from the row, so the organization is recorded rather than looked up.
-legal_list_generation_runs.item_type        text                null              lists.ts:667  The one item type a `stella` run proposes; external runs may mix types.
-legal_list_generation_runs.error_code       text                null              lists.ts:668
-legal_list_generation_runs.requested_by     text                fk,null           lists.ts:671
-legal_list_generation_runs.error            text                null              lists.ts:674
-legal_list_generation_runs.created_at       timestamptz         default,not null  lists.ts:675
-legal_list_generation_runs.updated_at       timestamptz         default,not null  lists.ts:676
-legal_list_generation_runs.started_at       timestamptz         null              lists.ts:677
-legal_list_generation_runs.completed_at     timestamptz         null              lists.ts:678
+legal_list_source_documents.{...entityFeatureGateColumns()}  spread                             lists.ts:660
+legal_list_source_documents.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:661
+legal_list_source_documents.list_id                          safeUuid         fk,not null       lists.ts:662
+legal_list_source_documents.document_entity_id               safeUuid         fk,not null       lists.ts:663
+legal_list_source_documents.source_kind                      text             not null          lists.ts:664
+legal_list_source_documents.updated_by                       text             fk,null           lists.ts:665
+legal_list_source_documents.created_at                       timestamptz      default,not null  lists.ts:668
+legal_list_source_documents.updated_at                       timestamptz      default,not null  lists.ts:669
 ```
 
-## legal_list_generation_sources · `legalListGenerationSources` · lists.ts:740 · rls
+## legal_list_generation_runs · `legalListGenerationRuns` · lists.ts:713 · rls
 
 ```text
-legal_list_generation_sources.{...entityFeatureGateColumns()}  spread                             lists.ts:743
-legal_list_generation_sources.id                               pUuid            pk,not null       lists.ts:744
-legal_list_generation_sources.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:745
-legal_list_generation_sources.list_id                          safeUuid         fk,not null       lists.ts:746
-legal_list_generation_sources.run_id                           safeUuid         fk,not null       lists.ts:747
-legal_list_generation_sources.source_entity_id                 safeUuid         fk,not null       lists.ts:748
-legal_list_generation_sources.source_entity_version_id         safeUuid         fk,not null       lists.ts:749
-legal_list_generation_sources.created_at                       timestamptz      default,not null  lists.ts:752
+legal_list_generation_runs.id               pUuid               pk,not null       lists.ts:716
+legal_list_generation_runs.workspace_id     safeWorkspaceId     fk,not null       lists.ts:717
+legal_list_generation_runs.list_id          safeUuid            fk,not null       lists.ts:718
+legal_list_generation_runs.status           text                default,not null  lists.ts:719
+legal_list_generation_runs.instruction      varchar             not null          lists.ts:723
+legal_list_generation_runs.producer         text                default,not null  lists.ts:726  Who writes the candidates.
+legal_list_generation_runs.organization_id  safeOrganizationId  fk,null           lists.ts:733  The worker rebuilds its tenant scope from the row, so the organization is recorded rather than looked up.
+legal_list_generation_runs.item_type        text                null              lists.ts:735  The one item type a `stella` run proposes; external runs may mix types.
+legal_list_generation_runs.error_code       text                null              lists.ts:736
+legal_list_generation_runs.requested_by     text                fk,null           lists.ts:739
+legal_list_generation_runs.error            text                null              lists.ts:742
+legal_list_generation_runs.created_at       timestamptz         default,not null  lists.ts:743
+legal_list_generation_runs.updated_at       timestamptz         default,not null  lists.ts:744
+legal_list_generation_runs.started_at       timestamptz         null              lists.ts:745
+legal_list_generation_runs.completed_at     timestamptz         null              lists.ts:746
 ```
 
-## legal_list_generation_candidates · `legalListGenerationCandidates` · lists.ts:836
+## legal_list_generation_sources · `legalListGenerationSources` · lists.ts:808 · rls
 
 ```text
-legal_list_generation_candidates.{...entityFeatureGateColumns()}           spread                             lists.ts:839
-legal_list_generation_candidates.{...entityFeatureWorkspaceGateColumns()}  spread                             lists.ts:840
-legal_list_generation_candidates.id                                        pUuid            pk,not null       lists.ts:841
-legal_list_generation_candidates.workspace_id                              safeWorkspaceId  fk,not null       lists.ts:842
-legal_list_generation_candidates.list_id                                   safeUuid         fk,not null       lists.ts:843
-legal_list_generation_candidates.run_id                                    safeUuid         fk,not null       lists.ts:844
-legal_list_generation_candidates.position                                  integer          not null          lists.ts:845
-legal_list_generation_candidates.name                                      varchar          not null          lists.ts:846
-legal_list_generation_candidates.description                               text             null              lists.ts:847
-legal_list_generation_candidates.item_type                                 text             not null          lists.ts:848
-legal_list_generation_candidates.item_status                               text             null              lists.ts:849
-legal_list_generation_candidates.priority                                  text             null              lists.ts:852
-legal_list_generation_candidates.due_date                                  date             null              lists.ts:855
-legal_list_generation_candidates.suggested_assignee_user_ids               jsonb            default,not null  lists.ts:856
-legal_list_generation_candidates.occurred_on                               date             null              lists.ts:863  The proposed `legal_list_fact_details` of a fact candidate, written onto the item when it is accepted.
-legal_list_generation_candidates.occurred_on_precision                     text             null              lists.ts:864
-legal_list_generation_candidates.evidence_kind                             varchar          null              lists.ts:867
-legal_list_generation_candidates.medium                                    varchar          null              lists.ts:870
-legal_list_generation_candidates.confidence                                text             null              lists.ts:871
-legal_list_generation_candidates.interpretation_note                       varchar          null              lists.ts:872
-legal_list_generation_candidates.scoring                                   text             null              lists.ts:876  Null means not stated; acceptance then writes `included`.
-legal_list_generation_candidates.status                                    text             default,not null  lists.ts:877
-legal_list_generation_candidates.accepted_entity_id                        safeUuid         fk,null           lists.ts:881
-legal_list_generation_candidates.accepted_entity_workspace_id              safeWorkspaceId  fk,null           lists.ts:882
-legal_list_generation_candidates.reserved_entity_id                        safeUuid         null              lists.ts:883
-legal_list_generation_candidates.created_at                                timestamptz      default,not null  lists.ts:884
-legal_list_generation_candidates.updated_at                                timestamptz      default,not null  lists.ts:885
+legal_list_generation_sources.{...entityFeatureGateColumns()}  spread                             lists.ts:811
+legal_list_generation_sources.id                               pUuid            pk,not null       lists.ts:812
+legal_list_generation_sources.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:813
+legal_list_generation_sources.list_id                          safeUuid         fk,not null       lists.ts:814
+legal_list_generation_sources.run_id                           safeUuid         fk,not null       lists.ts:815
+legal_list_generation_sources.source_entity_id                 safeUuid         fk,not null       lists.ts:816
+legal_list_generation_sources.source_entity_version_id         safeUuid         fk,not null       lists.ts:817
+legal_list_generation_sources.created_at                       timestamptz      default,not null  lists.ts:820
 ```
 
-## legal_list_generation_candidate_sources · `legalListGenerationCandidateSources` · lists.ts:975 · rls
+## legal_list_generation_candidates · `legalListGenerationCandidates` · lists.ts:904
 
 ```text
-legal_list_generation_candidate_sources.{...entityFeatureGateColumns()}           spread                             lists.ts:978
-legal_list_generation_candidate_sources.{...entityFeatureWorkspaceGateColumns()}  spread                             lists.ts:979
-legal_list_generation_candidate_sources.id                                        pUuid            pk,not null       lists.ts:980
-legal_list_generation_candidate_sources.workspace_id                              safeWorkspaceId  fk,not null       lists.ts:981
-legal_list_generation_candidate_sources.list_id                                   safeUuid         fk,not null       lists.ts:982
-legal_list_generation_candidate_sources.run_id                                    safeUuid         fk,not null       lists.ts:983
-legal_list_generation_candidate_sources.candidate_id                              safeUuid         fk,not null       lists.ts:984
-legal_list_generation_candidate_sources.source_entity_id                          safeUuid         fk,not null       lists.ts:986
-legal_list_generation_candidate_sources.source_entity_version_id                  safeUuid         fk,not null       lists.ts:987
-legal_list_generation_candidate_sources.locator                                   jsonb            not null          lists.ts:990
-legal_list_generation_candidate_sources.quote                                     text             null              lists.ts:991
-legal_list_generation_candidate_sources.created_at                                timestamptz      default,not null  lists.ts:992
+legal_list_generation_candidates.{...entityFeatureGateColumns()}           spread                             lists.ts:907
+legal_list_generation_candidates.{...entityFeatureWorkspaceGateColumns()}  spread                             lists.ts:908
+legal_list_generation_candidates.id                                        pUuid            pk,not null       lists.ts:909
+legal_list_generation_candidates.workspace_id                              safeWorkspaceId  fk,not null       lists.ts:910
+legal_list_generation_candidates.list_id                                   safeUuid         fk,not null       lists.ts:911
+legal_list_generation_candidates.run_id                                    safeUuid         fk,not null       lists.ts:912
+legal_list_generation_candidates.position                                  integer          not null          lists.ts:913
+legal_list_generation_candidates.name                                      varchar          not null          lists.ts:914
+legal_list_generation_candidates.description                               text             null              lists.ts:915
+legal_list_generation_candidates.item_type                                 text             not null          lists.ts:916
+legal_list_generation_candidates.item_status                               text             null              lists.ts:917
+legal_list_generation_candidates.priority                                  text             null              lists.ts:920
+legal_list_generation_candidates.due_date                                  date             null              lists.ts:923
+legal_list_generation_candidates.suggested_assignee_user_ids               jsonb            default,not null  lists.ts:924
+legal_list_generation_candidates.occurred_on                               date             null              lists.ts:931  The proposed `legal_list_fact_details` of a fact candidate, written onto the item when it is accepted.
+legal_list_generation_candidates.occurred_on_precision                     text             null              lists.ts:932
+legal_list_generation_candidates.evidence_kind                             varchar          null              lists.ts:935
+legal_list_generation_candidates.medium                                    varchar          null              lists.ts:938
+legal_list_generation_candidates.confidence                                text             null              lists.ts:939
+legal_list_generation_candidates.interpretation_note                       varchar          null              lists.ts:940
+legal_list_generation_candidates.scoring                                   text             null              lists.ts:944  Null means not stated; acceptance then writes `included`.
+legal_list_generation_candidates.status                                    text             default,not null  lists.ts:945
+legal_list_generation_candidates.accepted_entity_id                        safeUuid         fk,null           lists.ts:949
+legal_list_generation_candidates.accepted_entity_workspace_id              safeWorkspaceId  fk,null           lists.ts:950
+legal_list_generation_candidates.reserved_entity_id                        safeUuid         null              lists.ts:951
+legal_list_generation_candidates.created_at                                timestamptz      default,not null  lists.ts:952
+legal_list_generation_candidates.updated_at                                timestamptz      default,not null  lists.ts:953
 ```
 
-## legal_list_item_comments · `legalListItemComments` · lists.ts:1094
+## legal_list_generation_candidate_sources · `legalListGenerationCandidateSources` · lists.ts:1043 · rls
 
 ```text
-legal_list_item_comments.{...entityFeatureGateColumns()}  spread                             lists.ts:1097
-legal_list_item_comments.id                               pUuid            pk,not null       lists.ts:1098
-legal_list_item_comments.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:1099
-legal_list_item_comments.list_id                          safeUuid         fk,not null       lists.ts:1100
-legal_list_item_comments.item_entity_id                   safeUuid         fk,not null       lists.ts:1101
-legal_list_item_comments.body                             varchar          not null          lists.ts:1102
-legal_list_item_comments.author_id                        text             fk,null           lists.ts:1103
-legal_list_item_comments.created_at                       timestamptz      default,not null  lists.ts:1106
+legal_list_generation_candidate_sources.{...entityFeatureGateColumns()}           spread                             lists.ts:1046
+legal_list_generation_candidate_sources.{...entityFeatureWorkspaceGateColumns()}  spread                             lists.ts:1047
+legal_list_generation_candidate_sources.id                                        pUuid            pk,not null       lists.ts:1048
+legal_list_generation_candidate_sources.workspace_id                              safeWorkspaceId  fk,not null       lists.ts:1049
+legal_list_generation_candidate_sources.list_id                                   safeUuid         fk,not null       lists.ts:1050
+legal_list_generation_candidate_sources.run_id                                    safeUuid         fk,not null       lists.ts:1051
+legal_list_generation_candidate_sources.candidate_id                              safeUuid         fk,not null       lists.ts:1052
+legal_list_generation_candidate_sources.source_entity_id                          safeUuid         fk,not null       lists.ts:1054
+legal_list_generation_candidate_sources.source_entity_version_id                  safeUuid         fk,not null       lists.ts:1055
+legal_list_generation_candidate_sources.locator                                   jsonb            not null          lists.ts:1058
+legal_list_generation_candidate_sources.quote                                     text             null              lists.ts:1059
+legal_list_generation_candidate_sources.created_at                                timestamptz      default,not null  lists.ts:1060
 ```
 
-## legal_list_item_reviews · `legalListItemReviews` · lists.ts:1134 · rls
+## legal_list_item_comments · `legalListItemComments` · lists.ts:1162
 
 ```text
-legal_list_item_reviews.{...entityFeatureGateColumns()}  spread                             lists.ts:1137
-legal_list_item_reviews.id                               pUuid            pk,not null       lists.ts:1138
-legal_list_item_reviews.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:1139
-legal_list_item_reviews.list_id                          safeUuid         fk,not null       lists.ts:1140
-legal_list_item_reviews.item_entity_id                   safeUuid         fk,not null       lists.ts:1141
-legal_list_item_reviews.decision                         text             not null          lists.ts:1142
-legal_list_item_reviews.note                             varchar          null              lists.ts:1145
-legal_list_item_reviews.reviewer_id                      text             fk,null           lists.ts:1146
-legal_list_item_reviews.created_at                       timestamptz      default,not null  lists.ts:1149
+legal_list_item_comments.{...entityFeatureGateColumns()}  spread                             lists.ts:1165
+legal_list_item_comments.id                               pUuid            pk,not null       lists.ts:1166
+legal_list_item_comments.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:1167
+legal_list_item_comments.list_id                          safeUuid         fk,not null       lists.ts:1168
+legal_list_item_comments.item_entity_id                   safeUuid         fk,not null       lists.ts:1169
+legal_list_item_comments.body                             varchar          not null          lists.ts:1170
+legal_list_item_comments.author_id                        text             fk,null           lists.ts:1171
+legal_list_item_comments.created_at                       timestamptz      default,not null  lists.ts:1174
+```
+
+## legal_list_item_reviews · `legalListItemReviews` · lists.ts:1202 · rls
+
+```text
+legal_list_item_reviews.{...entityFeatureGateColumns()}  spread                             lists.ts:1205
+legal_list_item_reviews.id                               pUuid            pk,not null       lists.ts:1206
+legal_list_item_reviews.workspace_id                     safeWorkspaceId  fk,not null       lists.ts:1207
+legal_list_item_reviews.list_id                          safeUuid         fk,not null       lists.ts:1208
+legal_list_item_reviews.item_entity_id                   safeUuid         fk,not null       lists.ts:1209
+legal_list_item_reviews.decision                         text             not null          lists.ts:1210
+legal_list_item_reviews.note                             varchar          null              lists.ts:1213
+legal_list_item_reviews.reviewer_id                      text             fk,null           lists.ts:1214
+legal_list_item_reviews.created_at                       timestamptz      default,not null  lists.ts:1217
 ```

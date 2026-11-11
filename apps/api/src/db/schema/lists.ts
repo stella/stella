@@ -19,6 +19,7 @@ import {
   LIST_GENERATION_PRODUCERS,
   LIST_GENERATION_RUN_ERROR_CODES,
 } from "../../lib/lists/generation/contract";
+import { SOURCE_KINDS } from "../../lib/lists/source-kind";
 import type { LegalListSourceLocator } from "../../lib/lists/types";
 import {
   entityFeatureGateChecks,
@@ -145,6 +146,8 @@ const LIST_ITEM_TYPE_SQL_VALUES = LIST_ITEM_TYPES.map((itemType) =>
 const FACT_CONFIDENCE_SQL_VALUES = FACT_CONFIDENCES.map((confidence) =>
   sql.raw(`'${confidence}'`),
 );
+
+const SOURCE_KIND_SQL_VALUES = SOURCE_KINDS.map((kind) => sql.raw(`'${kind}'`));
 
 const FACT_SCORING_SQL_VALUES = FACT_SCORING.map((scoring) =>
   sql.raw(`'${scoring}'`),
@@ -639,6 +642,71 @@ export const legalListItemSourceDecisions = p.pgTable(
       to: stella,
       using: sql`false`,
     }),
+  ],
+);
+
+/**
+ * What a document is to one list's facts, as a reviewer classified it: a
+ * record of what happened or a person's account of it. One row per document
+ * a reviewer has classified on the list; every source of the list citing
+ * the document inherits its kind, and an unclassified document is
+ * `document` (`lib/lists/source-kind.ts`). Kept per list because the
+ * classification is part of one evidence list's method, not a property of
+ * the file.
+ */
+export const legalListSourceDocuments = p.pgTable(
+  "legal_list_source_documents",
+  {
+    ...entityFeatureGateColumns(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    listId: safeUuid<"legalList">("list_id").notNull(),
+    documentEntityId: safeUuid<"entity">("document_entity_id").notNull(),
+    sourceKind: p.text("source_kind", { enum: SOURCE_KINDS }).notNull(),
+    updatedBy: p.text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "legal_list_source_documents_pkey",
+      columns: [table.listId, table.documentEntityId],
+    }),
+    ...entityFeatureGateChecks(table),
+    p
+      .foreignKey({
+        name: "legal_list_source_documents_list_fk",
+        columns: [table.listId, table.workspaceId],
+        foreignColumns: [legalLists.id, legalLists.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "legal_list_source_documents_document_fk",
+        columns: [table.documentEntityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "legal_list_source_documents_source_kind_check",
+      sql`${table.sourceKind} in (${sql.join(SOURCE_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    p.pgPolicy("legal_list_source_documents_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_source_documents'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_source_documents'::regclass)`,
+    }),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.documentEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
+    p
+      .index("legal_list_source_documents_ef_document_entity_id_idx")
+      .on(table.workspaceId, table.documentEntityId),
   ],
 );
 

@@ -461,6 +461,7 @@ export const ENUM_COLUMNS = {
   legal_list_item_source_decisions: ["entity_feature_gate"],
   legal_list_item_sources: ["entity_feature_gate"],
   legal_list_items: ["entity_feature_gate"],
+  legal_list_source_documents: ["entity_feature_gate", "source_kind"],
   legal_list_verification_blocks: ["entity_feature_gate", "kind"],
   legal_list_verification_read_receipts: ["entity_feature_gate"],
   legal_list_verification_runs: ["entity_feature_gate", "error_code"],
