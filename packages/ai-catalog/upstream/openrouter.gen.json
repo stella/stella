@@ -157,6 +157,18 @@
       }
     },
     {
+      "id": "baidu/ernie-5.5-flash-preview",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "baidu/ernie-light-dt-1.0-intl",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
       "id": "bytedance-seed/seed-2.0-code",
       "reasoning": {
         "default_effort": "medium"
@@ -374,6 +386,18 @@
     },
     {
       "id": "google/gemini-4-argon:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-4-carbon",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-4-carbon:batch",
       "reasoning": {
         "default_effort": "medium"
       }
