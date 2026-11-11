@@ -4392,6 +4392,7 @@
       "discoveredSkills": "{count, plural, one {Leiti # oskus} other {Leiti # oskust}}",
       "discoveryEmpty": "Sellest hoidlast või kaustast ei leitud ühtegi oskust.",
       "discoverySkippedInvalid": "{count, plural, one {# vigane oskus jäeti vahele} other {# vigast oskust jäeti vahele}}",
+      "dropPack": "Lohistage siia .zip või SKILL.md, et oskus importida",
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
       "fileExists": "Selle teega fail on juba olemas",
@@ -4449,6 +4450,7 @@
         }
       },
       "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
+      "uploadPack": "Laadi üles .zip või SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"
     },

@@ -4392,6 +4392,7 @@
       "discoveredSkills": "{count, plural, one {# skill found} other {# skills found}}",
       "discoveryEmpty": "No skills were found at this repository or folder.",
       "discoverySkippedInvalid": "{count, plural, one {# invalid skill was skipped} other {# invalid skills were skipped}}",
+      "dropPack": "Drop a .zip or SKILL.md to import the skill",
       "editSkill": "Edit skill",
       "enableSkill": "Enable skill",
       "fileExists": "A file with this path already exists",
@@ -4449,6 +4450,7 @@
         }
       },
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.",
+      "uploadPack": "Upload .zip or SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "Version: {version}"
     },

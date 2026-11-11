@@ -4392,6 +4392,7 @@
       "discoveredSkills": "{count, plural, zero {Atrastas # prasmes} one {Atrasta # prasme} other {Atrastas # prasmes}}",
       "discoveryEmpty": "Šajā repozitorijā vai mapē prasmes netika atrastas.",
       "discoverySkippedInvalid": "{count, plural, zero {Izlaistas # nederīgas prasmes} one {Izlaista # nederīga prasme} other {Izlaistas # nederīgas prasmes}}",
+      "dropPack": "Nometiet .zip vai SKILL.md failu, lai importētu prasmi",
       "editSkill": "Rediģēt prasmi",
       "enableSkill": "Iespējot prasmi",
       "fileExists": "Fails ar šādu ceļu jau pastāv",
@@ -4449,6 +4450,7 @@
         }
       },
       "uploadHelp": "Izmantojiet SKILL.md failu vai .zip mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
+      "uploadPack": "Augšupielādēt .zip vai SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",
       "version": "Versija: {version}"
     },
