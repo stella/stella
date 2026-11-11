@@ -373,11 +373,11 @@
     },
     "factTier": {
       "testimony": {
-        "hint": "Toutes les sources de ce fait sont des témoignages : une déclaration de témoin, une note d’entretien ou une transcription.",
+        "hint": "Toutes les sources non rejetées de ce fait sont des témoignages : une déclaration de témoin, une note d’entretien ou une transcription.",
         "label": "Témoignage"
       },
       "unsourced": {
-        "hint": "Aucun document source n’est encore lié à ce fait ; son support et sa date décrivent la preuve, mais ne constituent pas une source.",
+        "hint": "Aucun document source non rejeté n’est lié à ce fait ; son support et sa date décrivent la preuve, mais ne constituent pas une source.",
         "label": "Sans source"
       }
     },

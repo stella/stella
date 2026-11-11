@@ -373,11 +373,11 @@
     },
     "factTier": {
       "testimony": {
-        "hint": "Visi šī fakta avoti ir liecības: liecinieka liecība, sarunas piezīmes vai atšifrējums.",
+        "hint": "Visi šī fakta nenoraidītie avoti ir liecības: liecinieka liecība, sarunas piezīmes vai atšifrējums.",
         "label": "Liecība"
       },
       "unsourced": {
-        "hint": "Šim faktam vēl nav piesaistīts neviens avota dokuments; nesējs un datums apraksta pierādījumu, taču nav avots.",
+        "hint": "Šim faktam nav piesaistīts neviens avota dokuments, kas nav noraidīts; nesējs un datums apraksta pierādījumu, taču nav avots.",
         "label": "Bez avota"
       }
     },

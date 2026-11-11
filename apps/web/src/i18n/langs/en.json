@@ -373,11 +373,11 @@
     },
     "factTier": {
       "testimony": {
-        "hint": "Every source of this fact is testimony: a witness statement, interview note or transcript.",
+        "hint": "Every source of this fact that has not been rejected is testimony: a witness statement, interview note or transcript.",
         "label": "Testimony"
       },
       "unsourced": {
-        "hint": "No source document is linked to this fact yet; its medium and date describe the evidence but are not a source.",
+        "hint": "No source document that has not been rejected is linked to this fact; its medium and date describe the evidence but are not a source.",
         "label": "Unsourced"
       }
     },

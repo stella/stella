@@ -373,11 +373,11 @@
     },
     "factTier": {
       "testimony": {
-        "hint": "Jede Quelle dieses Fakts ist eine Zeugenaussage: eine Aussage, eine Gesprächsnotiz oder ein Transkript.",
+        "hint": "Jede nicht abgelehnte Quelle dieses Fakts ist eine Zeugenaussage: eine Aussage, eine Gesprächsnotiz oder ein Transkript.",
         "label": "Zeugenaussage"
       },
       "unsourced": {
-        "hint": "Mit diesem Fakt ist noch kein Quelldokument verknüpft; Medium und Datum beschreiben den Beleg, sind aber keine Quelle.",
+        "hint": "Mit diesem Fakt ist kein Quelldokument verknüpft, das nicht abgelehnt wurde; Medium und Datum beschreiben den Beleg, sind aber keine Quelle.",
         "label": "Ohne Quelle"
       }
     },

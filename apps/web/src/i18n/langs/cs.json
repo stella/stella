@@ -373,11 +373,11 @@
     },
     "factTier": {
       "testimony": {
-        "hint": "Všechny zdroje tohoto faktu jsou svědectví: svědecká výpověď, záznam z pohovoru nebo přepis.",
+        "hint": "Všechny nezamítnuté zdroje tohoto faktu jsou svědectví: svědecká výpověď, záznam z pohovoru nebo přepis.",
         "label": "Svědectví"
       },
       "unsourced": {
-        "hint": "K tomuto faktu zatím není připojen žádný zdrojový dokument; médium a datum důkaz popisují, ale nejsou zdrojem.",
+        "hint": "K tomuto faktu není připojen žádný zdrojový dokument, který by nebyl zamítnut; médium a datum důkaz popisují, ale nejsou zdrojem.",
         "label": "Bez zdroje"
       }
     },

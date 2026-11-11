@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { LIST_SOURCE_KINDS } from "@stll/api-contract/list-source-kinds";
 import {
   REVIEW_DECISION,
   type ReviewDecision,
@@ -19,7 +20,6 @@ import {
   LIST_GENERATION_PRODUCERS,
   LIST_GENERATION_RUN_ERROR_CODES,
 } from "../../lib/lists/generation/contract";
-import { SOURCE_KINDS } from "../../lib/lists/source-kind";
 import type { LegalListSourceLocator } from "../../lib/lists/types";
 import {
   entityFeatureGateChecks,
@@ -147,7 +147,9 @@ const FACT_CONFIDENCE_SQL_VALUES = FACT_CONFIDENCES.map((confidence) =>
   sql.raw(`'${confidence}'`),
 );
 
-const SOURCE_KIND_SQL_VALUES = SOURCE_KINDS.map((kind) => sql.raw(`'${kind}'`));
+const SOURCE_KIND_SQL_VALUES = LIST_SOURCE_KINDS.map((kind) =>
+  sql.raw(`'${kind}'`),
+);
 
 const FACT_SCORING_SQL_VALUES = FACT_SCORING.map((scoring) =>
   sql.raw(`'${scoring}'`),
@@ -661,7 +663,7 @@ export const legalListSourceDocuments = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     listId: safeUuid<"legalList">("list_id").notNull(),
     documentEntityId: safeUuid<"entity">("document_entity_id").notNull(),
-    sourceKind: p.text("source_kind", { enum: SOURCE_KINDS }).notNull(),
+    sourceKind: p.text("source_kind", { enum: LIST_SOURCE_KINDS }).notNull(),
     updatedBy: p.text("updated_by").references(() => user.id, {
       onDelete: "set null",
     }),

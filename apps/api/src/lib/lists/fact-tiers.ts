@@ -7,6 +7,8 @@
 import { panic } from "better-result";
 import { and, eq, inArray, ne } from "drizzle-orm";
 
+import { LIST_SOURCE_KINDS } from "@stll/api-contract/list-source-kinds";
+
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
@@ -15,11 +17,7 @@ import {
   legalListSourceDocuments,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  factTier,
-  SOURCE_KINDS,
-  sourceKindOrDefault,
-} from "@/api/lib/lists/source-kind";
+import { factTier, sourceKindOrDefault } from "@/api/lib/lists/source-kind";
 import type { FactTier, SourceKind } from "@/api/lib/lists/source-kind";
 
 type ListScope = {
@@ -160,7 +158,7 @@ export const readFactTiers = async ({
             legalListItemSources.itemEntityId,
             legalListSourceDocuments.sourceKind,
           )
-          .limit(unique.length * (SOURCE_KINDS.length + 1));
+          .limit(unique.length * (LIST_SOURCE_KINDS.length + 1));
   const kindsByFact = new Map<SafeId<"entity">, SourceKind[]>(
     unique.map((id) => [id, []]),
   );

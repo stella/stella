@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { LIST_SOURCE_KINDS } from "@stll/api-contract/list-source-kinds";
+
 import { legalListSourceDocuments } from "@/api/db/schema";
 import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -15,10 +17,7 @@ import {
   readListSourceScope,
   readSourceKinds,
 } from "@/api/lib/lists/fact-tiers";
-import {
-  SOURCE_KIND_SET_OPERATION,
-  SOURCE_KINDS,
-} from "@/api/lib/lists/source-kind";
+import { SOURCE_KIND_SET_OPERATION } from "@/api/lib/lists/source-kind";
 
 // `v.picklist` over the const tuple keeps the literal union in the inferred
 // body type, which the web client reads its types from.
@@ -26,7 +25,7 @@ import {
 const bodySchema = v.object({
   listId: resourceIdSchema("legalList"),
   documentEntityId: resourceIdSchema("entity"),
-  sourceKind: v.picklist(SOURCE_KINDS),
+  sourceKind: v.picklist(LIST_SOURCE_KINDS),
 });
 
 const config = {

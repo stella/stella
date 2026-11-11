@@ -13,6 +13,7 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { LIST_SOURCE_KINDS } from "@stll/api-contract/list-source-kinds";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { avtKeys } from "@/features/avt/queries";
@@ -21,6 +22,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useObservedMutationState } from "@/lib/idempotency/use-observed-mutation-state";
 import { toSafeId } from "@/lib/safe-id";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
 
@@ -45,6 +47,9 @@ const sourceKindKeys = {
   documents: ({ documentIds, ...scope }: SourceKindsKey) =>
     [...sourceKindKeys.list(scope), documentIds.toSorted()] as const,
 };
+
+const setKindMutationKey = (scope: ListScope) =>
+  [...sourceKindKeys.list(scope), "set"] as const;
 
 /** The kind of each named document on the list, keyed by document id. */
 export const sourceKindsOptions = (key: SourceKindsKey) =>
@@ -85,6 +90,38 @@ export const sourceKindOf = (
 
 type SetKindVariables = { documentId: string; sourceKind: SourceKind };
 
+const isSourceKind = (value: unknown): value is SourceKind =>
+  LIST_SOURCE_KINDS.some((kind) => kind === value);
+
+/** A kind change's variables, read back from the mutation cache. */
+const readSetKindVariables = (variables: unknown): SetKindVariables | null =>
+  typeof variables === "object" &&
+  variables !== null &&
+  "documentId" in variables &&
+  typeof variables.documentId === "string" &&
+  "sourceKind" in variables &&
+  isSourceKind(variables.sourceKind)
+    ? { documentId: variables.documentId, sourceKind: variables.sourceKind }
+    : null;
+
+/**
+ * The kind each document is being set to while its change is in flight,
+ * for every document at once; the latest change per document wins.
+ */
+export const usePendingSourceKinds = (
+  scope: ListScope,
+): ReadonlyMap<string, SourceKind> => {
+  const pending = useObservedMutationState({
+    filters: { mutationKey: setKindMutationKey(scope), status: "pending" },
+    select: (state) => readSetKindVariables(state.variables),
+  });
+  return new Map(
+    pending
+      .filter((change) => change !== null)
+      .map(({ documentId, sourceKind }) => [documentId, sourceKind]),
+  );
+};
+
 /**
  * Set one document's kind. A switch shows the kind being set while the
  * request is in flight (the mutation's variables); every fact citing the document
@@ -98,7 +135,7 @@ export const useSetSourceKind = (scope: ListScope) => {
   const listKey = sourceKindKeys.list(scope);
 
   return useMutation({
-    mutationKey: [...listKey, "set"],
+    mutationKey: setKindMutationKey(scope),
     mutationFn: async ({ documentId, sourceKind }: SetKindVariables) =>
       unwrapApiResponse(
         await sourceDocumentsApi(scope.workspaceId).patch({

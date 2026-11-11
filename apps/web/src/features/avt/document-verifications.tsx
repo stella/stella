@@ -3,6 +3,8 @@
  * one against the view's list, and whether the list reads it as testimony.
  */
 
+import { useId } from "react";
+
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -22,6 +24,7 @@ import { RUN_STATUS_LABEL_KEYS, RUN_STATUS_TONES } from "@/features/avt/types";
 import {
   sourceKindOf,
   sourceKindsOptions,
+  usePendingSourceKinds,
   useSetSourceKind,
 } from "@/features/avt/use-source-kinds";
 import type { VerificationTarget } from "@/features/avt/use-start-verification";
@@ -78,13 +81,11 @@ export const DocumentVerifications = ({
   useQueryViewError(kindsView, "DocumentVerifications:source-kinds");
   const kinds = kindsView.type === "items" ? kindsView.items : undefined;
   const setKind = useSetSourceKind({ workspaceId, listId });
+  const pendingKinds = usePendingSourceKinds({ workspaceId, listId });
   // While a change is in flight the switch shows where it is going.
-  const kindOf = (documentId: string): SourceKind | undefined => {
-    if (setKind.isPending && setKind.variables.documentId === documentId) {
-      return setKind.variables.sourceKind;
-    }
-    return kinds === undefined ? undefined : sourceKindOf(kinds, documentId);
-  };
+  const kindOf = (documentId: string): SourceKind | undefined =>
+    pendingKinds.get(documentId) ??
+    (kinds === undefined ? undefined : sourceKindOf(kinds, documentId));
 
   if (files.length === 0) {
     return (
@@ -140,6 +141,9 @@ export const DocumentVerifications = ({
               setKind.mutate({ documentId: file.entityId, sourceKind })
             }
             sourceKind={kindOf(file.entityId)}
+            // One change per document at a time, so two clicks cannot race
+            // to the server and land out of order.
+            sourceKindPending={pendingKinds.has(file.entityId)}
             latest={
               latestByFile?.get(
                 documentFileKey({
@@ -205,6 +209,7 @@ type DocumentRowProps = {
   /** Undefined until the list's kinds have loaded; a failed read is
    *  reported once and leaves the switches disabled. */
   sourceKind: SourceKind | undefined;
+  sourceKindPending: boolean;
   onSourceKindChange: (sourceKind: SourceKind) => void;
   statusLoad: StatusLoad;
   listId: string;
@@ -218,6 +223,7 @@ const DocumentRow = ({
   latest,
   explainsTestimony,
   sourceKind,
+  sourceKindPending,
   onSourceKindChange,
   statusLoad,
   listId,
@@ -228,12 +234,14 @@ const DocumentRow = ({
 }: DocumentRowProps) => {
   const t = useTranslations();
   const canVerify = usePermissions({ entity: ["update"] });
+  // Every row's switch is called Testimony; the document's name says which.
+  const nameId = useId();
   const active = latest?.status === "queued" || latest?.status === "running";
 
   return (
     <li className="flex flex-col gap-2 p-3 md:flex-row md:items-center">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium" dir="auto">
+        <p className="truncate text-sm font-medium" dir="auto" id={nameId}>
           {file.name ?? file.fileName}
         </p>
         {statusLoad === "loaded" && (
@@ -258,7 +266,10 @@ const DocumentRow = ({
           <Switch
             aria-label={t("avt.documents.testimony")}
             checked={sourceKind === "testimony"}
-            disabled={!canVerify || sourceKind === undefined}
+            aria-describedby={nameId}
+            disabled={
+              !canVerify || sourceKind === undefined || sourceKindPending
+            }
             onCheckedChange={(checked) =>
               onSourceKindChange(checked ? "testimony" : "document")
             }

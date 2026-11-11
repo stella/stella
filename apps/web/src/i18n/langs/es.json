@@ -373,11 +373,11 @@
     },
     "factTier": {
       "testimony": {
-        "hint": "Todas las fuentes de este hecho son testimonios: una declaración de testigo, una nota de entrevista o una transcripción.",
+        "hint": "Todas las fuentes no rechazadas de este hecho son testimonios: una declaración de testigo, una nota de entrevista o una transcripción.",
         "label": "Testimonio"
       },
       "unsourced": {
-        "hint": "Este hecho aún no tiene ningún documento de origen vinculado; su soporte y su fecha describen la prueba, pero no son una fuente.",
+        "hint": "Este hecho no tiene vinculado ningún documento de origen que no haya sido rechazado; su soporte y su fecha describen la prueba, pero no son una fuente.",
         "label": "Sin fuente"
       }
     },

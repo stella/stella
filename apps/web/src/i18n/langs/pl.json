@@ -373,11 +373,11 @@
     },
     "factTier": {
       "testimony": {
-        "hint": "Każde źródło tego faktu to zeznanie: oświadczenie świadka, notatka z rozmowy lub transkrypcja.",
+        "hint": "Każde nieodrzucone źródło tego faktu to zeznanie: oświadczenie świadka, notatka z rozmowy lub transkrypcja.",
         "label": "Zeznanie"
       },
       "unsourced": {
-        "hint": "Do tego faktu nie dołączono jeszcze żadnego dokumentu źródłowego; nośnik i data opisują dowód, ale nie są źródłem.",
+        "hint": "Do tego faktu nie dołączono żadnego dokumentu źródłowego, który nie został odrzucony; nośnik i data opisują dowód, ale nie są źródłem.",
         "label": "Bez źródła"
       }
     },

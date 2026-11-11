@@ -1,17 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { LIST_SOURCE_KINDS } from "@stll/api-contract/list-source-kinds";
 import { assertProperty } from "@stll/property-testing";
 
 import {
   DEFAULT_SOURCE_KIND,
   FACT_TIERS,
   factTier,
-  SOURCE_KINDS,
   sourceKindOrDefault,
 } from "@/api/lib/lists/source-kind";
 
-const kindsArbitrary = fc.array(fc.constantFrom(...SOURCE_KINDS), {
+const kindsArbitrary = fc.array(fc.constantFrom(...LIST_SOURCE_KINDS), {
   maxLength: 8,
 });
 
@@ -62,7 +62,7 @@ describe("sourceKindOrDefault", () => {
   test("an unclassified document is a record; a classified one keeps its kind", () => {
     expect(DEFAULT_SOURCE_KIND).toBe("document");
     expect(sourceKindOrDefault(null)).toBe("document");
-    for (const kind of SOURCE_KINDS) {
+    for (const kind of LIST_SOURCE_KINDS) {
       expect(sourceKindOrDefault(kind)).toBe(kind);
     }
   });

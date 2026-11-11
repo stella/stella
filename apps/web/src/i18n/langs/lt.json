@@ -373,11 +373,11 @@
     },
     "factTier": {
       "testimony": {
-        "hint": "Visi šio fakto šaltiniai yra parodymai: liudytojo parodymai, pokalbio užrašai arba stenograma.",
+        "hint": "Visi neatmesti šio fakto šaltiniai yra parodymai: liudytojo parodymai, pokalbio užrašai arba stenograma.",
         "label": "Parodymai"
       },
       "unsourced": {
-        "hint": "Prie šio fakto dar nepridėtas joks šaltinio dokumentas; laikmena ir data apibūdina įrodymą, bet nėra šaltinis.",
+        "hint": "Prie šio fakto nepridėtas joks neatmestas šaltinio dokumentas; laikmena ir data apibūdina įrodymą, bet nėra šaltinis.",
         "label": "Be šaltinio"
       }
     },

@@ -373,11 +373,11 @@
     },
     "factTier": {
       "testimony": {
-        "hint": "Ennek a ténynek minden forrása tanúvallomás: tanúnyilatkozat, interjújegyzet vagy átirat.",
+        "hint": "Ennek a ténynek minden el nem utasított forrása tanúvallomás: tanúnyilatkozat, interjújegyzet vagy átirat.",
         "label": "Tanúvallomás"
       },
       "unsourced": {
-        "hint": "Ehhez a tényhez még nincs forrásdokumentum kapcsolva; a hordozó és a dátum a bizonyítékot írja le, de nem forrás.",
+        "hint": "Ehhez a tényhez nincs olyan forrásdokumentum kapcsolva, amelyet ne utasítottak volna el; a hordozó és a dátum a bizonyítékot írja le, de nem forrás.",
         "label": "Forrás nélkül"
       }
     },

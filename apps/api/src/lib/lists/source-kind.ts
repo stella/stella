@@ -8,9 +8,11 @@
 // Dependency-light on purpose: the database schema derives its CHECK from
 // these consts.
 
+import { LIST_SOURCE_KINDS } from "@stll/api-contract/list-source-kinds";
+import type { ListSourceKind } from "@stll/api-contract/list-source-kinds";
+
 /** What a source document is to a list's facts. */
-export const SOURCE_KINDS = ["document", "testimony"] as const;
-export type SourceKind = (typeof SOURCE_KINDS)[number];
+export type SourceKind = ListSourceKind;
 
 /** A document nobody has classified records what it says: testimony is the
  *  exception a reviewer marks. */
@@ -22,7 +24,7 @@ export const sourceKindOrDefault = (kind: SourceKind | null): SourceKind =>
 
 /** A fact's footing: the best kind among its sources, or unsourced when no
  *  source that has not been rejected is linked. */
-export const FACT_TIERS = [...SOURCE_KINDS, "unsourced"] as const;
+export const FACT_TIERS = [...LIST_SOURCE_KINDS, "unsourced"] as const;
 export type FactTier = (typeof FACT_TIERS)[number];
 
 /** Lower ranks are better footing; a record outranks an account of it. */

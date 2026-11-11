@@ -373,11 +373,11 @@
     },
     "factTier": {
       "testimony": {
-        "hint": "Selle fakti kõik allikad on ütlused: tunnistaja ütlus, vestlusmärge või ärakiri.",
+        "hint": "Selle fakti kõik tagasi lükkamata allikad on ütlused: tunnistaja ütlus, vestlusmärge või ärakiri.",
         "label": "Ütlus"
       },
       "unsourced": {
-        "hint": "Selle faktiga pole veel seotud ühtegi allikdokumenti; meedium ja kuupäev kirjeldavad tõendit, kuid ei ole allikas.",
+        "hint": "Selle faktiga pole seotud ühtegi tagasi lükkamata allikdokumenti; meedium ja kuupäev kirjeldavad tõendit, kuid ei ole allikas.",
         "label": "Allikata"
       }
     },
