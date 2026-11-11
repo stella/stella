@@ -214,7 +214,10 @@ pub(super) fn remove_idle(folders: &Path, now: SystemTime, lock: &FolderLock) {
       // Its checkpoints and cache go with it, before a run can make the
       // folder again.
       let stores: Vec<PathBuf> = if moved {
-        siblings(&path).iter().filter_map(|sibling| take_store(sibling)).collect()
+        siblings(&path)
+          .iter()
+          .filter_map(|sibling| take_store(sibling))
+          .collect()
       } else {
         Vec::new()
       };
