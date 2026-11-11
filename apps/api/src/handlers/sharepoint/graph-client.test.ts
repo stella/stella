@@ -11,6 +11,7 @@ import {
 } from "@/api/handlers/sharepoint/browse-input";
 import {
   cursorFromNextLink,
+  downloadSharepointFile,
   type GraphDriveItem,
   graphRefusal,
   listSharepointChildren,
@@ -386,5 +387,79 @@ describe("listing through Graph", () => {
     if (Result.isError(result)) {
       expect(result.error.status).toBe(502);
     }
+  });
+});
+
+describe("downloading a file", () => {
+  const download = async (respond: (url: URL) => Response, maxBytes = 1024) => {
+    const requests: RecordedRequest[] = [];
+    const result = await withTestFetch(
+      graphFetch(respond, requests),
+      async () =>
+        await downloadSharepointFile({
+          accessToken,
+          driveId: "b!drive",
+          itemId: "01FILE",
+          maxBytes,
+        }),
+    );
+    return { requests, result };
+  };
+
+  test("follows Graph's redirect without sending the bearer token on", async () => {
+    const { requests, result } = await download((url) =>
+      url.hostname === "graph.microsoft.com"
+        ? new Response(null, {
+            status: 302,
+            headers: {
+              Location:
+                "https://contoso.sharepoint.com/download.aspx?tempauth=x",
+            },
+          })
+        : new Response("file bytes"),
+    );
+
+    expect(new TextDecoder().decode(result.unwrap())).toBe("file bytes");
+    expect(
+      requests.map(({ url, authorization }) => [url.host, authorization]),
+    ).toEqual([
+      ["graph.microsoft.com", "Bearer graph-access-token"],
+      ["contoso.sharepoint.com", null],
+    ]);
+    expect(requests.at(0)?.url.pathname).toBe(
+      "/v1.0/drives/b!drive/items/01FILE/content",
+    );
+  });
+
+  test("follows a download link only over HTTPS to a Microsoft file host", async () => {
+    for (const location of [
+      "http://contoso.sharepoint.com/download.aspx",
+      "https://contoso.sharepoint.com:8443/download.aspx",
+      "https://evil.example/download.aspx",
+      "https://sharepoint.com.evil.example/download.aspx",
+      "https://169.254.169.254/latest/meta-data",
+      "not a url",
+    ]) {
+      const { requests, result } = await download(
+        () =>
+          new Response(null, {
+            status: 302,
+            headers: { Location: location },
+          }),
+      );
+      expect({ location, refused: Result.isError(result) }).toEqual({
+        location,
+        refused: true,
+      });
+      expect(requests).toHaveLength(1);
+    }
+  });
+
+  test("a body over the size limit fails instead of truncating", async () => {
+    const { result } = await download(
+      () => new Response(new Uint8Array(2048)),
+      1024,
+    );
+    expect(Result.isError(result)).toBe(true);
   });
 });

@@ -16,11 +16,14 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { AccessToken } from "@/api/lib/secret-brands";
 
-type WithSharepointGraphOptions<T> = {
+type WithSharepointGraphOptions<T, E> = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   safeDb: SafeDb;
-  call: (accessToken: AccessToken) => Promise<Result<T, SharepointGraphError>>;
+  /** `E` covers the caller's own failures beside Graph's, such as storage. */
+  call: (
+    accessToken: AccessToken,
+  ) => Promise<Result<T, SharepointGraphError | E>>;
 };
 
 /**
@@ -30,15 +33,16 @@ type WithSharepointGraphOptions<T> = {
  * no longer accepts the token (a revoked grant), the connection is marked for
  * reconnect so the status endpoint reports it.
  */
-export const withSharepointGraph = async <T>({
+export const withSharepointGraph = async <T, E = never>({
   organizationId,
   userId,
   safeDb,
   call,
-}: WithSharepointGraphOptions<T>): Promise<
+}: WithSharepointGraphOptions<T, E>): Promise<
   Result<
     T,
     | SharepointGraphError
+    | E
     | HandlerError<403 | 404 | 409 | 500 | 502>
     | SafeDbError
   >
@@ -95,6 +99,7 @@ export const withSharepointGraph = async <T>({
     const result = await call(accessToken);
     if (
       Result.isError(result) &&
+      HandlerError.is(result.error) &&
       result.error.code === SHAREPOINT_REFUSAL_CODE.reconnectRequired
     ) {
       yield* Result.await(
