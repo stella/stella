@@ -17,9 +17,30 @@ import { useSession } from "@/connection/session-provider";
 import type { ApiError, Load } from "@/state/api-request";
 import { inboxSections } from "@/state/chat-runs";
 import type { ActiveRunsState } from "@/state/chat-runs";
-import { appendThreadsPage, listChatThreads } from "@/state/chat-threads";
-import type { ChatThreadsPage } from "@/state/chat-threads";
+import {
+  appendThreadsPage,
+  listChatThreads,
+  nextChatsPage,
+} from "@/state/chat-threads";
+import type {
+  ChatListCursors,
+  ChatListPage,
+  ChatThreadSummary,
+} from "@/state/chat-threads";
 import { useAppColors } from "@/theme";
+
+const NO_MORE_PAGES: ChatListCursors = { pinned: null, unpinned: null };
+
+/** The threads one load has shown so far, and where it continues. */
+type Timeline = {
+  readonly loadedAt: number;
+  readonly threads: readonly ChatThreadSummary[];
+  readonly cursors: ChatListCursors;
+  readonly more: PagingState;
+};
+
+/** One load of the chats list, with the text its threads match; later pages ask for it too. */
+export type ChatsLoad = Load<ChatListPage> & { readonly search: string };
 
 /** The first page of threads, or why it could not load, with pull-to-refresh either way. */
 export const LoadedChats = ({
@@ -28,20 +49,17 @@ export const LoadedChats = ({
   onRetryRuns,
   refreshing,
   runs,
-  search,
   source,
 }: {
-  load: Promise<Load<ChatThreadsPage>>;
+  load: Promise<ChatsLoad>;
   onReload: () => void;
   onRetryRuns: () => void;
   refreshing: boolean;
   /** The person's unfinished runs, which lift their chats to the top. */
   runs: ActiveRunsState;
-  /** The text this load's threads match; later pages ask for it too. */
-  search: string;
   source: AccessTokenSource;
 }) => {
-  const { loadedAt, result } = use(load);
+  const { loadedAt, result, search } = use(load);
 
   // The session provider is already returning to sign-in.
   if (Result.isError(result) && result.error._tag === "SignedOutError") {
@@ -52,8 +70,6 @@ export const LoadedChats = ({
     <ThreadTimeline
       failure={Result.isError(result) ? result.error : undefined}
       firstPage={Result.isOk(result) ? result.value : undefined}
-      // A refresh starts the timeline over from its new first page.
-      key={loadedAt}
       loadedAt={loadedAt}
       onReload={onReload}
       onRetryRuns={onRetryRuns}
@@ -77,7 +93,7 @@ const ThreadTimeline = ({
   source,
 }: {
   failure: ApiError | undefined;
-  firstPage: ChatThreadsPage | undefined;
+  firstPage: ChatListPage | undefined;
   loadedAt: number;
   onReload: () => void;
   onRetryRuns: () => void;
@@ -90,27 +106,57 @@ const ThreadTimeline = ({
   const colors = useAppColors();
   const { end } = useSession();
   const timeZone = useTimeZone() ?? "UTC";
-  const [threads, setThreads] = useState(firstPage?.threads ?? []);
-  const [cursor, setCursor] = useState(firstPage?.nextCursor ?? null);
-  const [more, setMore] = useState<PagingState>("idle");
+  // The pages read past the load's first ones belong to that load: a new
+  // load, such as the one a chat marked here starts, shows from its own
+  // first pages again, in place, so the list keeps its scroll.
+  const [paged, setPaged] = useState<Timeline | null>(null);
+  const timeline: Timeline =
+    paged?.loadedAt === loadedAt
+      ? paged
+      : {
+          cursors: firstPage?.cursors ?? NO_MORE_PAGES,
+          loadedAt,
+          more: "idle",
+          threads: firstPage?.threads ?? [],
+        };
+  const { more, threads } = timeline;
+  /** Changes this load's timeline; a newer load's is never overwritten by an older one's page. */
+  const update = (change: (current: Timeline) => Timeline) => {
+    setPaged((current) => {
+      if (current !== null && current.loadedAt > loadedAt) {
+        return current;
+      }
+      return change(current?.loadedAt === loadedAt ? current : timeline);
+    });
+  };
 
   const loadMore = async () => {
-    if (cursor === null || more === "loading") {
+    const page = nextChatsPage(timeline.cursors);
+    if (page === null || more === "loading") {
       return;
     }
-    setMore("loading");
-    const next = await listChatThreads({ cursor, fetch, search, source });
+    update((current) => ({ ...current, more: "loading" }));
+    const next = await listChatThreads({
+      cursor: page.cursor,
+      fetch,
+      pinState: page.pinState,
+      search,
+      source,
+    });
     if (Result.isOk(next)) {
-      setThreads((loaded) => appendThreadsPage(loaded, next.value.threads));
-      setCursor(next.value.nextCursor);
-      setMore("idle");
+      update((current) => ({
+        cursors: page.after(next.value.nextCursor),
+        loadedAt: current.loadedAt,
+        more: "idle",
+        threads: appendThreadsPage(current.threads, next.value.threads),
+      }));
       return;
     }
     if (next.error._tag === "SignedOutError") {
       end(source);
       return;
     }
-    setMore("failed");
+    update((current) => ({ ...current, more: "failed" }));
   };
 
   const sections = inboxSections({
@@ -166,9 +212,7 @@ const ThreadTimeline = ({
           tintColor={colors.muted}
         />
       }
-      renderItem={({ item: { day, runState, thread } }) => (
-        <ChatThreadRow day={day} runState={runState} thread={thread} />
-      )}
+      renderItem={({ item }) => <ChatThreadRow row={item} source={source} />}
       renderSectionHeader={({ section }) => (
         <View className="pt-4 pb-1">
           <Text variant="section">{t(`sections.${section.key}`)}</Text>

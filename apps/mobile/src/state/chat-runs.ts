@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
+import {
+  CHAT_ACTIVE_RUN_STATE,
+  CHAT_THREAD_PIN_STATE,
+} from "@stll/api-contract/chat";
 import type { ChatActiveRunState } from "@stll/api-contract/chat";
 
 import type { Fetch } from "@/connection/http";
@@ -10,6 +13,7 @@ import { ApiRequestError, requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 import { sectionThreads, threadDay } from "@/state/chat-threads";
 import type {
+  ChatThreadHeading,
   ChatThreadSection,
   ChatThreadSummary,
 } from "@/state/chat-threads";
@@ -150,23 +154,36 @@ export const runsByThread = (
   return threads;
 };
 
-/** A row of the chats list: the thread, its day, and its open run, if any. */
-type InboxThread = {
-  readonly thread: ChatThreadSummary;
-  readonly day: ChatThreadSection["key"];
-  readonly runState: ChatActiveRunState | undefined;
-};
+/**
+ * A row of the chats list: the thread, its day, and its open run, if any.
+ * A thread the list read says how the reader marked it; one only an open
+ * run names, older than the threads loaded so far, does not.
+ */
+export type InboxThread =
+  | {
+      readonly type: "listed";
+      readonly thread: ChatThreadSummary;
+      readonly day: ChatThreadSection["key"];
+      readonly runState: ChatActiveRunState | undefined;
+    }
+  | {
+      readonly type: "run-only";
+      readonly thread: ChatThreadHeading;
+      readonly day: ChatThreadSection["key"];
+      readonly runState: ChatActiveRunState;
+    };
 
 type InboxSection = {
-  readonly key: "needsYou" | "working" | ChatThreadSection["key"];
+  readonly key: "needsYou" | "working" | "pinned" | ChatThreadSection["key"];
   readonly data: readonly InboxThread[];
 };
 
 /**
  * The chats list as an inbox: chats waiting on the person, then chats
- * working, then the rest under their day headings. A searched list lifts
- * only threads the search found; an unsearched one lifts every open run,
- * even one older than the threads loaded so far.
+ * working, then the ones they pinned, then the rest under their day
+ * headings; each chat once, in the first of these it belongs to. A
+ * searched list lifts only threads the search found; an unsearched one
+ * lifts every open run, even one older than the threads loaded so far.
  */
 export const inboxSections = ({
   now,
@@ -189,18 +206,23 @@ export const inboxSections = ({
         : [[matterId, matterName] as const],
     ),
   );
-  const row = (thread: ChatThreadSummary, runState?: ChatActiveRunState) => ({
-    day: threadDay({ now, timeZone, updatedAt: thread.updatedAt }),
-    runState,
-    thread,
-  });
+  const day = (thread: ChatThreadHeading) =>
+    threadDay({ now, timeZone, updatedAt: thread.updatedAt });
+  const listed = (
+    thread: ChatThreadSummary,
+    runState?: ChatActiveRunState,
+  ): InboxThread => ({ type: "listed", day: day(thread), runState, thread });
   const lifted = new Map<string, InboxThread>();
   for (const run of runsByThread(runs).values()) {
     const known = loaded.get(run.threadId);
-    if (searching && known === undefined) {
+    if (known !== undefined) {
+      lifted.set(run.threadId, listed(known, run.state));
       continue;
     }
-    const thread = known ?? {
+    if (searching) {
+      continue;
+    }
+    const thread = {
       id: run.threadId,
       title: run.threadTitle,
       updatedAt: run.since,
@@ -208,21 +230,33 @@ export const inboxSections = ({
       matterName:
         run.matterId === undefined ? undefined : matterNames.get(run.matterId),
     };
-    lifted.set(run.threadId, row(thread, run.state));
+    lifted.set(run.threadId, {
+      type: "run-only",
+      day: day(thread),
+      runState: run.state,
+      thread,
+    });
   }
   const inState = (state: ChatActiveRunState) =>
     [...lifted.values()].filter(({ runState }) => runState === state);
-  const open = [
+  const left = threads.filter((thread) => !lifted.has(thread.id));
+  const lead = [
     { key: "needsYou", data: inState(CHAT_ACTIVE_RUN_STATE.needsYou) },
     { key: "working", data: inState(CHAT_ACTIVE_RUN_STATE.working) },
+    {
+      key: "pinned",
+      data: left
+        .filter(({ pinState }) => pinState === CHAT_THREAD_PIN_STATE.pinned)
+        .map((thread) => listed(thread)),
+    },
   ] as const satisfies readonly InboxSection[];
   const rest = sectionThreads(
-    threads.filter((thread) => !lifted.has(thread.id)),
+    left.filter(({ pinState }) => pinState === CHAT_THREAD_PIN_STATE.unpinned),
     now,
     timeZone,
   ).map(({ data, key }) => ({
     key,
-    data: data.map((thread) => row(thread)),
+    data: data.map((thread) => listed(thread)),
   }));
-  return [...open.filter(({ data }) => data.length > 0), ...rest];
+  return [...lead.filter(({ data }) => data.length > 0), ...rest];
 };

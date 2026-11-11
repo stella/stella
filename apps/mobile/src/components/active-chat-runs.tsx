@@ -16,6 +16,7 @@ import type { UserRealtimeEvent } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { sleep } from "@stll/concurrency/sleep";
 
+import { useChanged } from "@/components/changes";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
@@ -81,7 +82,8 @@ const unread = (source: AccessTokenSource | undefined): Reading => ({
 /**
  * The person's unfinished chat runs, kept fresh without polling: read each
  * time their event stream opens (once anyway if it cannot), and again
- * whenever it says the runs changed. The stream closes while the app is in
+ * whenever it says the runs changed; when it says a chat was marked read,
+ * unread or pinned, the chats lists load again. The stream closes while the app is in
  * the background and reopens when it returns. Each read is compared with
  * the one before for banners; the first read after the app returns from
  * the background only sets what later reads are compared with, so what
@@ -93,6 +95,7 @@ const useRunsStream = (
   source: AccessTokenSource | undefined,
 ): ActiveChatRuns => {
   const { end } = useSession();
+  const changed = useChanged();
   const [stored, setReading] = useState(() => unread(source));
   const reading = stored.source === source ? stored : unread(source);
   /** Changes what this sign-in has read, from scratch if it read nothing yet. */
@@ -170,8 +173,9 @@ const useRunsStream = (
       // The app hears of notifications through push.
       case REALTIME_EVENT_TYPE.NEW_NOTIFICATION:
         return;
-      // The chats inbox has no read or pin state to refresh yet.
+      // A chat was marked read or unread, or pinned, here or elsewhere.
       case REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED:
+        changed("chats");
         return;
       default:
         eventType satisfies never;
@@ -179,6 +183,9 @@ const useRunsStream = (
     }
   });
   const onResync = useEffectEvent(reread);
+  const onReopen = useEffectEvent(() => {
+    changed("chats");
+  });
   const signOut = useEffectEvent((refused: AccessTokenSource) => {
     end(refused);
   });
@@ -190,6 +197,9 @@ const useRunsStream = (
     let connection: AbortController | null = null;
     // Whether this sign-in has asked for the runs at all yet.
     const asked = { runs: false };
+    // Whether its stream has opened before: chats marked while it was
+    // closed sent events no one heard, so a later open reads them again.
+    const stream = { opened: false };
     const resync = () => {
       asked.runs = true;
       onResync();
@@ -206,6 +216,10 @@ const useRunsStream = (
         onOpen: () => {
           heard = true;
           resync();
+          if (stream.opened) {
+            onReopen();
+          }
+          stream.opened = true;
         },
         signal,
         source,
