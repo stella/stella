@@ -72,7 +72,7 @@ const FIXED_PERMISSION_KEY = {
  * Why a harness cannot take a turn now, as the Run on menu and the composer
  * bar both say it; `null` while it can.
  */
-export const useHarnessStateLabel = () => {
+const useHarnessStateLabel = () => {
   const t = useTranslations();
   const format = useFormatter();
   return (option: ChatLocalHarnessOption): string | null => {
