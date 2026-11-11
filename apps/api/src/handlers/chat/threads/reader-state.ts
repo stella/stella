@@ -61,10 +61,12 @@ export const UNREAD_BESIDE_LATEST_ANSWER = unreadGiven(LATEST_ANSWER.settledAt);
 export const UNREAD = unreadGiven(latestAnswer);
 
 type ReaderThread = {
-  organizationId: string;
-  scope: { scope: "global" } | { scope: "workspace"; workspaceId: string };
+  organizationId: SafeId<"organization">;
+  scope:
+    | { scope: "global" }
+    | { scope: "workspace"; workspaceId: SafeId<"workspace"> };
   threadId: SafeId<"chatThread">;
-  userId: string;
+  userId: SafeId<"user">;
 };
 
 /** The reader's own thread, in the scope the request named. */
