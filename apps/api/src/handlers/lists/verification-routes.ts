@@ -15,6 +15,7 @@ import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/
 import listClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/list";
 import createVerification from "@/api/handlers/lists/verifications/create";
 import readVerification from "@/api/handlers/lists/verifications/get";
+import readVerificationGraph from "@/api/handlers/lists/verifications/graph/get";
 import readLatestVerifications from "@/api/handlers/lists/verifications/latest/list";
 import readVerifications from "@/api/handlers/lists/verifications/list";
 import { routes } from "@/api/http/route";
@@ -46,6 +47,7 @@ export const createListVerificationRoutes = (
         POST: createVerification,
       },
       "/verifications/latest": { POST: readLatestVerifications },
+      "/verifications/graph": { GET: readVerificationGraph },
       "/verifications/:runId": { GET: readVerification },
     },
     { middleware: [featureAccessGate("list-verification", dependencies)] },

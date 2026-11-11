@@ -360,6 +360,10 @@ describe("list verification access grants across MCP tools", () => {
       query: { entityId: resourceId, fileFieldId: resourceId },
     },
     "lists.verifications.get": { params: { ...params, runId: resourceId } },
+    "lists.verifications.graph.get": {
+      params,
+      query: { listId: resourceId },
+    },
     "lists.verifications.latest.list": {
       params,
       body: { documents: [{ entityId: resourceId, fileFieldId: resourceId }] },

@@ -17,6 +17,7 @@ import review from "@/api/handlers/lists/verifications/claim-reviews/create";
 import listReviews from "@/api/handlers/lists/verifications/claim-reviews/list";
 import create from "@/api/handlers/lists/verifications/create";
 import get from "@/api/handlers/lists/verifications/get";
+import graph from "@/api/handlers/lists/verifications/graph/get";
 import latest from "@/api/handlers/lists/verifications/latest/list";
 import list from "@/api/handlers/lists/verifications/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -60,6 +61,7 @@ const endpoints = {
   create,
   list,
   get,
+  graph,
   latest,
   review,
   bulkReview,

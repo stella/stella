@@ -241,6 +241,13 @@
       "showSources": "Show sources",
       "title": "Anchor facts"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# claim rests on this fact} other {# claims rest on this fact}}",
+      "empty": "This list has no facts yet.",
+      "moreClaims": "{count, plural, one {# more claim} other {# more claims}}",
+      "moreSources": "{count, plural, one {+# source} other {+# sources}}",
+      "undated": "Undated"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Anchor facts disagree",
@@ -405,6 +412,41 @@
       "showNextSteps": "Show next steps",
       "unlink": "Unlink {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# claim} other {# claims}}",
+      "claimTitle": "Claim",
+      "columns": {
+        "claims": "Claims",
+        "sources": "Source documents",
+        "statements": "Statements"
+      },
+      "empty": "This list has no facts or verified documents yet.",
+      "factOverflow": "Showing the first {count} facts of this list.",
+      "filters": {
+        "allVerdicts": "All verdicts",
+        "anyFooting": "Any footing",
+        "conflicts": "Conflicts",
+        "footing": "Footing",
+        "heldFacts": "Held facts",
+        "verdict": "Filter by verdict"
+      },
+      "held": "Held",
+      "linkedFacts": "{count, plural, one {# linked fact} other {# linked facts}}",
+      "listLabel": "Graph as a list",
+      "loadMore": "Load more documents",
+      "noMatch": "Nothing matches these filters.",
+      "noStatements": "No document has been verified against this list yet.",
+      "offList": "No longer on the list",
+      "relation": {
+        "conflicts": "Conflicts",
+        "governs": "Governs",
+        "record": "On the record",
+        "recordConflict": "Conflicting record",
+        "supports": "Supports"
+      },
+      "unlinked": "Facts no claim rests on",
+      "verifyInReview": "Verify a document"
+    },
     "guidance": {
       "escalate": "Escalate",
       "manualJudgement": "Manual judgement",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# match} other {# matches}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronology",
+      "graph": "Graph",
+      "label": "Show the list as",
+      "review": "Review"
     },
     "qualifiers": {
       "heading": "Caveats",

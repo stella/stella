@@ -241,6 +241,13 @@
       "showSources": "Források megjelenítése",
       "title": "Referenciatények"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# állítás alapul ezen a tényen} other {# állítás alapul ezen a tényen}}",
+      "empty": "Ez a lista még nem tartalmaz tényeket.",
+      "moreClaims": "{count, plural, one {még # állítás} other {még # állítás}}",
+      "moreSources": "{count, plural, one {+# forrás} other {+# forrás}}",
+      "undated": "Dátum nélkül"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "A referenciatények ellentmondanak egymásnak",
@@ -405,6 +412,41 @@
       "showNextSteps": "További lépések megjelenítése",
       "unlink": "{fact} leválasztása"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# állítás} other {# állítás}}",
+      "claimTitle": "Állítás",
+      "columns": {
+        "claims": "Állítások",
+        "sources": "Forrásdokumentumok",
+        "statements": "Nyilatkozatok"
+      },
+      "empty": "Ez a lista még nem tartalmaz tényeket vagy ellenőrzött iratokat.",
+      "factOverflow": "A lista első {count} ténye látható.",
+      "filters": {
+        "allVerdicts": "Minden következtetés",
+        "anyFooting": "Bármely alap",
+        "conflicts": "Ellentmondások",
+        "footing": "Alap",
+        "heldFacts": "Visszatartott tények",
+        "verdict": "Szűrés következtetés szerint"
+      },
+      "held": "Visszatartva",
+      "linkedFacts": "{count, plural, one {# hozzákapcsolt tény} other {# hozzákapcsolt tény}}",
+      "listLabel": "Gráf listaként",
+      "loadMore": "További iratok betöltése",
+      "noMatch": "Semmi sem felel meg ezeknek a szűrőknek.",
+      "noStatements": "Ezzel a listával még egyetlen iratot sem ellenőriztek.",
+      "offList": "Már nincs a listán",
+      "relation": {
+        "conflicts": "Ellentmond",
+        "governs": "Irányadó",
+        "record": "A nyilvántartásban",
+        "recordConflict": "Ellentmondó adat",
+        "supports": "Alátámasztja"
+      },
+      "unlinked": "Tények, amelyeken egyetlen állítás sem alapul",
+      "verifyInReview": "Irat ellenőrzése"
+    },
     "guidance": {
       "escalate": "Továbbítás",
       "manualJudgement": "Emberi mérlegelés",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# találat} other {# találat}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Kronológia",
+      "graph": "Gráf",
+      "label": "A lista megjelenítése",
+      "review": "Ellenőrzés"
     },
     "qualifiers": {
       "heading": "Fenntartások",

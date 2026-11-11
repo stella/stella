@@ -72,6 +72,7 @@ import {
 } from "./surface";
 import { timeEntryReportScalingScenario } from "./time-entry-report";
 import { suggestionRangeScalingScenario } from "./time-suggestion-range";
+import { verificationGraphScalingScenarios } from "./verification-graph";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -98,6 +99,7 @@ const measuredApiScenarios = [
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   ...reviewHistoryScalingScenarios,
+  ...verificationGraphScalingScenarios,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,

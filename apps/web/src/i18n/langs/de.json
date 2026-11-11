@@ -241,6 +241,13 @@
       "showSources": "Quellen anzeigen",
       "title": "Ankerfakten"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# Behauptung beruht auf diesem Fakt} other {# Behauptungen beruhen auf diesem Fakt}}",
+      "empty": "Diese Liste enthält noch keine Fakten.",
+      "moreClaims": "{count, plural, one {# weitere Behauptung} other {# weitere Behauptungen}}",
+      "moreSources": "{count, plural, one {+# Quelle} other {+# Quellen}}",
+      "undated": "Ohne Datum"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Ankerfakten widersprechen sich",
@@ -405,6 +412,41 @@
       "showNextSteps": "Nächste Schritte anzeigen",
       "unlink": "Verknüpfung mit {fact} aufheben"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# Behauptung} other {# Behauptungen}}",
+      "claimTitle": "Behauptung",
+      "columns": {
+        "claims": "Behauptungen",
+        "sources": "Quelldokumente",
+        "statements": "Erklärungen"
+      },
+      "empty": "Diese Liste enthält noch keine Fakten oder geprüften Dokumente.",
+      "factOverflow": "Die ersten {count} Fakten dieser Liste werden angezeigt.",
+      "filters": {
+        "allVerdicts": "Alle Ergebnisse",
+        "anyFooting": "Jede Grundlage",
+        "conflicts": "Widersprüche",
+        "footing": "Grundlage",
+        "heldFacts": "Zurückgestellte Fakten",
+        "verdict": "Nach Ergebnis filtern"
+      },
+      "held": "Zurückgestellt",
+      "linkedFacts": "{count, plural, one {# verknüpfter Fakt} other {# verknüpfte Fakten}}",
+      "listLabel": "Graph als Liste",
+      "loadMore": "Weitere Dokumente laden",
+      "noMatch": "Nichts entspricht diesen Filtern.",
+      "noStatements": "Bisher wurde kein Dokument anhand dieser Liste geprüft.",
+      "offList": "Nicht mehr auf der Liste",
+      "relation": {
+        "conflicts": "Widerspricht",
+        "governs": "Maßgeblich",
+        "record": "Im Bestand",
+        "recordConflict": "Widersprüchlicher Eintrag",
+        "supports": "Stützt"
+      },
+      "unlinked": "Fakten, auf denen keine Behauptung beruht",
+      "verifyInReview": "Dokument prüfen"
+    },
     "guidance": {
       "escalate": "Eskalieren",
       "manualJudgement": "Manuelle Entscheidung",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# Treffer} other {# Treffer}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologie",
+      "graph": "Graph",
+      "label": "Liste anzeigen als",
+      "review": "Prüfung"
     },
     "qualifiers": {
       "heading": "Vorbehalte",

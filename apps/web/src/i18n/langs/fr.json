@@ -241,6 +241,13 @@
       "showSources": "Afficher les sources",
       "title": "Faits d’ancrage"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# affirmation repose sur ce fait} many {# affirmations reposent sur ce fait} other {# affirmations reposent sur ce fait}}",
+      "empty": "Cette liste ne contient encore aucun fait.",
+      "moreClaims": "{count, plural, one {# autre affirmation} many {# autres affirmations} other {# autres affirmations}}",
+      "moreSources": "{count, plural, one {+# source} many {+# sources} other {+# sources}}",
+      "undated": "Non daté"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
@@ -405,6 +412,41 @@
       "showNextSteps": "Afficher les prochaines étapes",
       "unlink": "Dissocier {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# affirmation} many {# affirmations} other {# affirmations}}",
+      "claimTitle": "Affirmation",
+      "columns": {
+        "claims": "Affirmations",
+        "sources": "Documents sources",
+        "statements": "Déclarations"
+      },
+      "empty": "Cette liste ne contient encore aucun fait ni document vérifié.",
+      "factOverflow": "Affichage des {count} premiers faits de cette liste.",
+      "filters": {
+        "allVerdicts": "Tous les verdicts",
+        "anyFooting": "Tout fondement",
+        "conflicts": "Conflits",
+        "footing": "Fondement",
+        "heldFacts": "Faits en attente de relecture",
+        "verdict": "Filtrer par verdict"
+      },
+      "held": "En attente de relecture",
+      "linkedFacts": "{count, plural, one {# fait lié} many {# faits liés} other {# faits liés}}",
+      "listLabel": "Graphe sous forme de liste",
+      "loadMore": "Charger plus de documents",
+      "noMatch": "Aucun élément ne correspond à ces filtres.",
+      "noStatements": "Aucun document n’a encore été vérifié par rapport à cette liste.",
+      "offList": "N’est plus dans la liste",
+      "relation": {
+        "conflicts": "Contredit",
+        "governs": "Fait foi",
+        "record": "Au dossier",
+        "recordConflict": "Enregistrement contradictoire",
+        "supports": "Étaye"
+      },
+      "unlinked": "Faits sur lesquels ne repose aucune affirmation",
+      "verifyInReview": "Vérifier un document"
+    },
     "guidance": {
       "escalate": "Faire remonter",
       "manualJudgement": "Jugement manuel",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# correspondance} other {# correspondances} many {# correspondances}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologie",
+      "graph": "Graphe",
+      "label": "Afficher la liste en",
+      "review": "Examen"
     },
     "qualifiers": {
       "heading": "Réserves",

@@ -241,6 +241,13 @@
       "showSources": "Mostrar fontes",
       "title": "Fatos-âncora"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# alegação se baseia neste fato} many {# alegações se baseiam neste fato} other {# alegações se baseiam neste fato}}",
+      "empty": "Esta lista ainda não tem fatos.",
+      "moreClaims": "{count, plural, one {mais # alegação} many {mais # alegações} other {mais # alegações}}",
+      "moreSources": "{count, plural, one {+# fonte} many {+# fontes} other {+# fontes}}",
+      "undated": "Sem data"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Fatos-âncora divergem",
@@ -405,6 +412,41 @@
       "showNextSteps": "Mostrar próximos passos",
       "unlink": "Desvincular {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# alegação} many {# alegações} other {# alegações}}",
+      "claimTitle": "Alegação",
+      "columns": {
+        "claims": "Alegações",
+        "sources": "Documentos de origem",
+        "statements": "Declarações"
+      },
+      "empty": "Esta lista ainda não tem fatos nem documentos verificados.",
+      "factOverflow": "Mostrando os primeiros {count} fatos desta lista.",
+      "filters": {
+        "allVerdicts": "Todos os vereditos",
+        "anyFooting": "Qualquer base",
+        "conflicts": "Conflitos",
+        "footing": "Base",
+        "heldFacts": "Fatos em espera para revisão",
+        "verdict": "Filtrar por veredito"
+      },
+      "held": "Em espera para revisão",
+      "linkedFacts": "{count, plural, one {# fato vinculado} many {# fatos vinculados} other {# fatos vinculados}}",
+      "listLabel": "Grafo em forma de lista",
+      "loadMore": "Carregar mais documentos",
+      "noMatch": "Nada corresponde a estes filtros.",
+      "noStatements": "Ainda nenhum documento foi verificado com base nesta lista.",
+      "offList": "Não está mais na lista",
+      "relation": {
+        "conflicts": "Contradiz",
+        "governs": "Prevalece",
+        "record": "No registro",
+        "recordConflict": "Registro conflitante",
+        "supports": "Sustenta"
+      },
+      "unlinked": "Fatos em que nenhuma alegação se baseia",
+      "verifyInReview": "Verificar um documento"
+    },
     "guidance": {
       "escalate": "Escalar",
       "manualJudgement": "Julgamento manual",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# correspondência} other {# correspondências} many {# correspondências}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Cronologia",
+      "graph": "Grafo",
+      "label": "Mostrar a lista como",
+      "review": "Revisão"
     },
     "qualifiers": {
       "heading": "Ressalvas",

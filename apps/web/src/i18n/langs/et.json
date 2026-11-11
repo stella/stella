@@ -241,6 +241,13 @@
       "showSources": "Näita allikaid",
       "title": "Ankurfaktid"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# väide tugineb sellele faktile} other {# väidet tugineb sellele faktile}}",
+      "empty": "Selles loendis pole veel fakte.",
+      "moreClaims": "{count, plural, one {veel # väide} other {veel # väidet}}",
+      "moreSources": "{count, plural, one {+# allikas} other {+# allikat}}",
+      "undated": "Kuupäevata"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Ankurfaktid on vastuolus",
@@ -405,6 +412,41 @@
       "showNextSteps": "Näita järgmisi samme",
       "unlink": "Tühista seos: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# väide} other {# väidet}}",
+      "claimTitle": "Väide",
+      "columns": {
+        "claims": "Väited",
+        "sources": "Allikdokumendid",
+        "statements": "Avaldused"
+      },
+      "empty": "Selles loendis pole veel fakte ega kontrollitud dokumente.",
+      "factOverflow": "Kuvatakse selle loendi esimesed {count} fakti.",
+      "filters": {
+        "allVerdicts": "Kõik otsused",
+        "anyFooting": "Mis tahes alus",
+        "conflicts": "Vastuolud",
+        "footing": "Alus",
+        "heldFacts": "Kontrolli ootel faktid",
+        "verdict": "Filtreeri otsuse järgi"
+      },
+      "held": "Kontrolli ootel",
+      "linkedFacts": "{count, plural, one {# seotud fakt} other {# seotud fakti}}",
+      "listLabel": "Graaf loendina",
+      "loadMore": "Laadi rohkem dokumente",
+      "noMatch": "Nende filtritega ei leitud midagi.",
+      "noStatements": "Selle loendi alusel pole veel ühtegi dokumenti kontrollitud.",
+      "offList": "Pole enam loendis",
+      "relation": {
+        "conflicts": "On vastuolus",
+        "governs": "Aluseks",
+        "record": "Registris",
+        "recordConflict": "Vastuoluline kanne",
+        "supports": "Toetab"
+      },
+      "unlinked": "Faktid, millele ükski väide ei tugine",
+      "verifyInReview": "Kontrolli dokumenti"
+    },
     "guidance": {
       "escalate": "Edasta edasi",
       "manualJudgement": "Inimese otsustus",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# vaste} other {# vastet}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Kronoloogia",
+      "graph": "Graaf",
+      "label": "Näita loendit kujul",
+      "review": "Kontroll"
     },
     "qualifiers": {
       "heading": "Reservatsioonid",
