@@ -36,7 +36,7 @@ export const FactSource = ({
   return (
     <Button
       className="min-w-0 justify-start"
-      size="xs"
+      size="inline"
       onClick={() => openSourceDocument(documentId, sourceLocatorPage(locator))}
       variant="link"
     >

@@ -125,6 +125,7 @@ Project: root
 - cobe 2.0.1 — MIT
 - crossws 0.4.17 — MIT
 - d3-scale 4.0.2 — ISC
+- date-holidays 3.37.0 — (ISC AND CC-BY-3.0)
 - diff 9.0.0 — BSD-3-Clause
 - disposable-email-domains-js 1.26.0 — CC0-1.0
 - domhandler 5.0.3 — BSD-2-Clause

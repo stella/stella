@@ -143,6 +143,10 @@ const UNEXPORTED_CHAT_THREAD_COLUMNS = [
   "compactionAttemptedAt",
   "compactionAttempts",
   "compactionEpoch",
+  // The reader's list state (read marker, pin): how the list shows the
+  // thread, not authored content.
+  "lastReadAt",
+  "pinnedAt",
 ] as const satisfies readonly (keyof ChatThreadRow)[];
 
 // Totality guard, bidirectional: every schema column must be exported or

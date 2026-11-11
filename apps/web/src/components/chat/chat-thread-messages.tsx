@@ -112,6 +112,7 @@ import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
   canRetryChatRequest,
+  canUndoLocalFilesOf,
   finalChatRefusalKey,
   isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
@@ -163,6 +164,7 @@ import {
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
+import type { NewestLocalTurn } from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
@@ -356,6 +358,37 @@ const ActiveTurnStatus = memo(
   },
 );
 
+/** What the thread knows about undoing its local turns' file changes. */
+type LocalFilesUndoFacts = {
+  generationActive: boolean;
+  messages: ChatUIMessage[];
+  newestLocalTurn: NewestLocalTurn | null | undefined;
+};
+
+/**
+ * The undo props of `message`'s actions: the turn it may undo (only the
+ * newest turn's answer), whether a new undo may be asked now, and whether
+ * its turn was undone already, as the server marked the answer.
+ */
+const localFilesUndoPropsFor = (
+  { generationActive, messages, newestLocalTurn }: LocalFilesUndoFacts,
+  { id: messageId, metadata }: ChatUIMessage,
+) => {
+  const turn =
+    newestLocalTurn?.assistantMessageId === messageId ? newestLocalTurn : null;
+  return {
+    localFilesUndoTurnId: turn?.id ?? null,
+    localFilesUndoOffered:
+      turn !== null &&
+      canUndoLocalFilesOf({
+        isGenerating: generationActive,
+        messageId,
+        messages,
+      }),
+    localFilesUndone: metadata?.localFilesUndone !== undefined,
+  };
+};
+
 export const ChatThreadMessages = ({
   activitySession,
   activeFileName,
@@ -385,6 +418,7 @@ export const ChatThreadMessages = ({
   showToolCalls,
   stickyUserMessages = false,
   waitingForComputer = false,
+  newestLocalTurn,
   queuedMessages,
   queuedMessageActions,
   streamdownComponents,
@@ -403,6 +437,7 @@ export const ChatThreadMessages = ({
     [messages],
   );
   const generationActive = error === undefined && isGenerating;
+  const undo = { generationActive, messages, newestLocalTurn };
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
     [messages],
@@ -460,6 +495,7 @@ export const ChatThreadMessages = ({
                 ? findCreateDocumentArtifactForMessage(messages, index)
                 : null
             }
+            {...localFilesUndoPropsFor(undo, message)}
             message={message}
             threadRef={messageActionsThreadRef(message, threadRef)}
           >
@@ -1508,6 +1544,11 @@ type ChatThreadMessagesProps = {
   /** The turn runs on the member's computer, which is away until it
    *  reconnects; the turn shows the wait in place of its live status. */
   waitingForComputer?: boolean | undefined;
+  /**
+   * The newest turn of a chat that runs on the member's computer: the
+   * message that answered it offers to undo its file changes.
+   */
+  newestLocalTurn?: NewestLocalTurn | null | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**

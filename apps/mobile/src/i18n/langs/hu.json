@@ -15,6 +15,7 @@
     "noMatchesDescription": "Egyik csevegés címe vagy ügy sem tartalmazza ezt: „{search}”.",
     "search": "Csevegések keresése",
     "loadFailed": "A beszélgetéseit nem sikerült betölteni.",
+    "runsLoadFailed": "Nem sikerült ellenőrizni, mely beszélgetések várnak Önre.",
     "retry": "Újrapróbálás",
     "untitled": "Névtelen beszélgetés",
     "loadMoreFailed": "Továbbiak betöltése",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "Ezt a beszélgetést nem sikerült betölteni.",
     "greeting": "Min szeretne dolgozni?",
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
+    "markRead": "Olvasott",
+    "markUnread": "Olvasatlan",
+    "pin": "Rögzítés",
+    "unpin": "Rögzítés feloldása",
+    "unread": "Olvasatlan",
+    "markReadFailed": "A beszélgetést nem sikerült olvasottként megjelölni.",
+    "markUnreadFailed": "A beszélgetést nem sikerült olvasatlanként megjelölni.",
+    "pinFailed": "A beszélgetést nem sikerült rögzíteni.",
+    "unpinFailed": "A beszélgetés rögzítését nem sikerült feloldani.",
     "sections": {
+      "needsYou": "Önre várnak",
+      "working": "Folyamatban",
+      "pinned": "Rögzített",
       "today": "Ma",
       "yesterday": "Tegnap",
       "week": "Előző 7 nap",
@@ -62,7 +75,12 @@
     "sendFileRefused": "Egy fájlt nem sikerült elküldeni, ezért az üzenet nem lett elküldve. Távolítsa el a fájlt, és próbálja újra.",
     "sendFileNotAnonymizable": "Ez a beszélgetés anonimizált, és a stella nem tudta anonimizálni az egyik fájlt, ezért semmi sem lett elküldve. Távolítsa el a fájlt, és próbálja újra.",
     "pickTitle": "Válasszon beszélgetést",
-    "pickDescription": "Válasszon szálat a listából, vagy kezdjen újat a + gombbal."
+    "pickDescription": "Válasszon szálat a listából, vagy kezdjen újat a + gombbal.",
+    "runBanner": {
+      "needsYou": "Önre vár",
+      "finished": "Befejeződött",
+      "openHint": "Megnyitja a beszélgetést"
+    }
   },
   "tasks": {
     "emptyTitle": "Nincsenek nyitott feladatok",

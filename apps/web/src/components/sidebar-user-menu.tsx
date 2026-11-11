@@ -15,6 +15,7 @@ import {
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
+  PlusIcon,
   SunIcon,
 } from "@stll/ui/icons";
 import {
@@ -324,8 +325,9 @@ type OrganizationMenuSectionProps = {
   userId: string;
 };
 
-/** Active organization block at the top of the user menu: a plain label for
- * single-organization users, a switcher sub-menu for everyone else.
+/** Organization block at the top of the user menu: every organization the user
+ * belongs to in one list, the active one checked, then the create action. One
+ * shape for one organization or many, so the list never reads as a header.
  *
  * Owns the organization list query rather than taking it as a prop so the
  * sidebar reads the active organization and the switchable ones from one cache
@@ -380,66 +382,37 @@ const OrganizationMenuSection = ({
     return null;
   }
 
-  if (organizations.length < 2) {
-    return (
-      <>
-        <QueryViewFeedback view={organizationsView} />
-        <MenuGroup>
-          <MenuGroupLabel className="flex min-w-0 items-center gap-1.5 text-sm">
-            <TruncatedText render={<BidiText as="span" />}>
-              {activeOrganization.name}
-            </TruncatedText>
-            <OrganizationRoleBadge role={role} />
-          </MenuGroupLabel>
-        </MenuGroup>
-        <MenuItem onClick={onCreate}>
-          <BuildingIcon />
-          {t("organization.newOrganization")}
-        </MenuItem>
-        <MenuSeparator />
-      </>
-    );
-  }
-
   return (
     <>
       <QueryViewFeedback view={organizationsView} />
-      <MenuSub>
-        <MenuSubTrigger>
-          <BuildingIcon />
-          <TruncatedText render={<BidiText as="span" />}>
-            {activeOrganization.name}
-          </TruncatedText>
-          <OrganizationRoleBadge role={role} />
-        </MenuSubTrigger>
-        <MenuSubPopup>
-          <MenuGroup>
-            <MenuGroupLabel>
-              {t("organization.switchOrganization")}
-            </MenuGroupLabel>
-            <MenuRadioGroup value={activeOrganizationId}>
-              {organizations.map((organization) => (
-                <MenuRadioItem
-                  key={organization.id}
-                  disabled={isSwitchPending}
-                  onClick={() => {
-                    if (organization.id !== activeOrganizationId) {
-                      switchOrganization(organization.id);
-                    }
-                  }}
-                  value={organization.id}
-                >
-                  <TruncatedText render={<BidiText as="span" />}>
-                    {organization.name}
-                  </TruncatedText>
-                </MenuRadioItem>
-              ))}
-            </MenuRadioGroup>
-          </MenuGroup>
-        </MenuSubPopup>
-      </MenuSub>
+      <MenuGroup>
+        <MenuGroupLabel>{t("common.organizations")}</MenuGroupLabel>
+        <MenuRadioGroup value={activeOrganizationId}>
+          {organizations.map((organization) => (
+            <MenuRadioItem
+              key={organization.id}
+              disabled={isSwitchPending}
+              onClick={() => {
+                if (organization.id !== activeOrganizationId) {
+                  switchOrganization(organization.id);
+                }
+              }}
+              value={organization.id}
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <TruncatedText render={<BidiText as="span" />}>
+                  {organization.name}
+                </TruncatedText>
+                {organization.id === activeOrganization.id && (
+                  <OrganizationRoleBadge role={role} />
+                )}
+              </span>
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+      </MenuGroup>
       <MenuItem onClick={onCreate}>
-        <BuildingIcon />
+        <PlusIcon />
         {t("organization.newOrganization")}
       </MenuItem>
       <MenuSeparator />

@@ -131,6 +131,7 @@ rebuild_paths=(
   "packages/portable-path/"
   "packages/sha256/"
   "packages/api-contract/src/agent-harness.ts"
+  "packages/api-contract/src/ai-errors.ts"
   "packages/api-contract/src/api-date.ts"
   "packages/api-contract/src/api-version.ts"
   "packages/api-contract/src/chat-local-run-tool.ts"

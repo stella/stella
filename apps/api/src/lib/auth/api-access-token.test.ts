@@ -269,6 +269,8 @@ describe("which routes an API access token opens", () => {
       Object.keys(API_OAUTH_ROUTES).filter((key) => key.includes(" /v1/chat")),
     ).toEqual([
       "GET /v1/chat/threads",
+      "PATCH /v1/chat/threads/:threadId/read-state",
+      "PATCH /v1/chat/threads/:threadId/pin-state",
       "GET /v1/chat/threads/:threadId/messages",
       "GET /v1/chat/threads/:threadId/messages/older",
       "POST /v1/chat",
@@ -290,6 +292,28 @@ describe("which routes an API access token opens", () => {
         scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
       }),
     ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("the reader's read and pin marks on a chat open at the chat scope", () => {
+    for (const route of [
+      "/v1/chat/threads/:threadId/read-state",
+      "/v1/chat/threads/:threadId/pin-state",
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "PATCH",
+          route,
+          scopes: ["stella:chat"],
+        }),
+      ).toEqual({ admitted: true });
+      expect(
+        admitApiAccessTokenRoute({
+          method: "PATCH",
+          route,
+          scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+    }
   });
 
   test("the person's event stream opens at the read scope, its siblings never", () => {

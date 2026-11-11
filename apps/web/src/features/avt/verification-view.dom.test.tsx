@@ -20,7 +20,12 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
 
 import type { OriginalDocxHostProps } from "./original-docx-host";
-import type { ClaimState, VerificationRun } from "./types";
+import type {
+  ClaimState,
+  ReviewHistoryEntry,
+  ReviewHistoryPage,
+  VerificationRun,
+} from "./types";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -122,7 +127,9 @@ const { QueryClient, QueryClientProvider, useQuery } =
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { roleOptions } = await import("@/lib/auth-queries");
-const { avtKeys, verificationRunOptions } = await import("./queries");
+const { avtKeys, reviewHistoryOptions, verificationRunOptions } =
+  await import("./queries");
+const { toSafeId } = await import("@/lib/safe-id");
 const { fileOptions } = await import("@/lib/files/queries");
 const { useInspectorCommandStore } =
   await import("@/components/inspector/inspector-command-store");
@@ -346,6 +353,17 @@ const claimButton = (suffix: number) => {
 };
 const selectClaim = (suffix: number) => fireEvent.click(claimButton(suffix));
 
+/** Type a reason into the inline field and press Enter. Shift+Enter is a
+ *  line break first, so only the plain Enter can send it. */
+const giveReason = (label: string, reason: string) => {
+  const field = screen.getByLabelText(label);
+  fireEvent.change(field, { target: { value: reason } });
+  const sent = requests.length;
+  fireEvent.keyDown(field, { key: "Enter", shiftKey: true });
+  expect(requests.length).toBe(sent);
+  fireEvent.keyDown(field, { key: "Enter" });
+};
+
 test("the reader draws each stored block with its claims marked on the stored words", async () => {
   const { run } = await mount(witnessStatementRun());
   const marks = run.claims.map((claim) => {
@@ -394,7 +412,7 @@ test("the reader draws each stored block with its claims marked on the stored wo
   expect(requests).toEqual([]);
 });
 
-test("all verdicts expose their evidence and score explanations in the real detail panel", async () => {
+test("all verdicts expose their evidence and basis in the real detail panel, never a score", async () => {
   const { run } = await mount();
   const seededStates: string[] = run.claims.map(({ verdict }) => verdict.state);
   expect(seededStates.toSorted()).toEqual(Object.keys(STATE_META).toSorted());
@@ -410,8 +428,9 @@ test("all verdicts expose their evidence and score explanations in the real deta
       panic("Missing selected detail heading");
     }
     expect(within(quote.parentElement).getByText(label)).toBeTruthy();
+    // The verdict shows as its category only; the score stays in the API.
     if (claim.verdict.score !== null) {
-      expect(screen.getByText(String(claim.verdict.score))).toBeTruthy();
+      expect(screen.queryByText(String(claim.verdict.score))).toBeNull();
     }
     if (suffix === 1) {
       expect(
@@ -419,19 +438,145 @@ test("all verdicts expose their evidence and score explanations in the real deta
       ).toBeTruthy();
     }
     if (suffix === 4) {
-      expect(screen.getByText("The record is silent.")).toBeTruthy();
+      expect(
+        screen.getByText("No anchor fact covers this claim."),
+      ).toBeTruthy();
     }
     if (suffix === 6) {
       expect(screen.getByText("Not a verifiable assertion.")).toBeTruthy();
     }
     if (suffix === 5) {
       expect(
-        screen.getByText(messages.avt.claimDetail.score.verdictWithheld),
+        screen.getByText(messages.avt.claimDetail.basis.verdictWithheld),
       ).toBeTruthy();
       expect(screen.getByText("5 July 2021")).toBeTruthy();
       expect(screen.getByText("28 July 2021")).toBeTruthy();
     }
   }
+  expect(requests).toEqual([]);
+});
+
+test("a claim's qualifiers show beside its verdict and in its detail, and a silent record reads muted", async () => {
+  const silentText = "I would have expected the board to minute it.";
+  const widenedText = "I was on leave for the whole of August 2021.";
+  const silent = {
+    ...makeClaim({
+      suffix: 1,
+      verdict: noCover,
+      qualifiers: [
+        {
+          kind: "record-silent",
+          explanation:
+            "The witness's own expectation; no minute would record it.",
+          review: "routine",
+        },
+      ],
+    }),
+    text: silentText,
+  };
+  const widened = {
+    ...makeClaim({
+      suffix: 2,
+      verdict: { state: "tension", score: 48, recordConflict: null },
+      refs: [{ factEntityId: factId(1), rel: "conflicts" }],
+      qualifiers: [
+        {
+          kind: "scope-mismatch",
+          explanation: "The calendar covers 2 to 20 August only.",
+          review: "needs-judgement",
+        },
+        { kind: "unsourced-only", explanation: null, review: "routine" },
+        { kind: "rests-on-held", explanation: null, review: "needs-judgement" },
+      ],
+    }),
+    text: widenedText,
+  };
+  const gap = {
+    ...makeClaim({ suffix: 3, verdict: noCover }),
+    text: "The lender delivered written notice in June.",
+  };
+  const claims = [silent, widened, gap].map((claim) => ({
+    ...claim,
+    anchor: {
+      type: "docx-block",
+      blockId: `b${String(claim.position)}`,
+      start: 0,
+      end: claim.text.length,
+    } as const,
+  }));
+  await mount({
+    ...makeRun(claims, [makeFact(1, { text: "Leave 2–20 August 2021." })]),
+    blocks: claims.map(({ position, text }) => ({
+      ordinal: position,
+      blockId: `b${String(position)}`,
+      kind: "docx-block" as const,
+      pageNumber: null,
+      text,
+    })),
+  });
+  const mark = (text: string) =>
+    screen.getByRole("button", { name: (name) => name.startsWith(text) });
+  const detail = () => {
+    const heading = screen
+      .getAllByText((_, node) => node?.tagName === "BLOCKQUOTE")
+      .at(0)?.parentElement;
+    return heading ?? panic("Missing detail heading");
+  };
+
+  // The silent record reads muted in the document and its chip says why;
+  // it is not offered as a gap to fill.
+  expect(mark(silentText).firstElementChild?.className).toContain(
+    "text-muted-foreground",
+  );
+  expect(mark(silentText).textContent).toContain(
+    messages.avt.qualifiers.recordSilent.label,
+  );
+  fireEvent.click(mark(silentText));
+  expect(
+    within(detail()).getByText(messages.avt.states.nocover.silentChip),
+  ).toBeTruthy();
+  expect(
+    screen.getByText(
+      "The witness's own expectation; no minute would record it.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByText("No anchor fact covers this claim.")).toBeNull();
+
+  // Plain missing coverage is a gap at full strength.
+  expect(mark(gap.text).firstElementChild?.className).not.toContain(
+    "text-muted-foreground",
+  );
+  fireEvent.click(mark(gap.text));
+  expect(screen.getByText("No anchor fact covers this claim.")).toBeTruthy();
+
+  // Every other qualifier is a chip beside the verdict, and the detail says
+  // what each one means: the grader's words, or the rule that set it.
+  fireEvent.click(mark(widenedText));
+  for (const label of [
+    messages.avt.qualifiers.scopeMismatch.label,
+    messages.avt.qualifiers.unsourcedOnly.label,
+    messages.avt.qualifiers.restsOnHeld.label,
+  ]) {
+    expect(within(detail()).getAllByText(label).length).toBeGreaterThan(0);
+  }
+  const notes = screen.getByRole("list", {
+    name: messages.avt.qualifiers.heading,
+  });
+  expect(
+    within(notes).getByText("The calendar covers 2 to 20 August only."),
+  ).toBeTruthy();
+  expect(
+    within(notes).getByText(messages.avt.qualifiers.unsourcedOnly.hint),
+  ).toBeTruthy();
+  expect(
+    within(notes).getByText(messages.avt.qualifiers.restsOnHeld.hint),
+  ).toBeTruthy();
+  expect(screen.queryByText("48")).toBeNull();
+  // The fact card shows the same footing: it has no linked source, whatever
+  // its medium says.
+  expect(screen.getByText(messages.avt.factTier.unsourced.label)).toBeTruthy();
+  // What a claim type means is a tooltip on its chip, not panel prose.
+  expect(screen.queryByText(messages.avt.claimTypes.fact.hint)).toBeNull();
   expect(requests).toEqual([]);
 });
 
@@ -539,6 +684,18 @@ test("a governing record changes the verdict and escalation keeps the conflict o
     panic("Missing governing record action");
   }
   fireEvent.click(governingButton);
+  // Governing changes the verdict, so nothing is sent until the reviewer
+  // says why: a blank reason is refused next to the field, and Escape steps
+  // back without recording anything.
+  giveReason(messages.avt.reason.govern, "   ");
+  expect(screen.getByText(messages.avt.reason.required)).toBeTruthy();
+  fireEvent.keyDown(screen.getByLabelText(messages.avt.reason.govern), {
+    key: "Escape",
+  });
+  expect(screen.queryByLabelText(messages.avt.reason.govern)).toBeNull();
+  expect(requests).toEqual([]);
+  fireEvent.click(governingButton);
+  giveReason(messages.avt.reason.govern, "  The signed request governs. ");
   await waitFor(() =>
     expect(
       client
@@ -555,13 +712,14 @@ test("a governing record changes the verdict and escalation keeps the conflict o
       event: {
         kind: "record-conflict",
         resolution: { kind: "governed", factEntityId: factId(5) },
+        reason: "The signed request governs.",
       },
     },
   });
   expect(claimButton(5).textContent).toContain("Supported");
   expect(screen.getByText("0/2")).toBeTruthy();
   expect(
-    screen.getByText(messages.avt.claimDetail.score.verdictWithheld),
+    screen.getByText(messages.avt.claimDetail.basis.verdictWithheld),
   ).toBeTruthy();
   expect(screen.getAllByText("5 July 2021").length).toBeGreaterThan(0);
   expect(screen.getByText("28 July 2021")).toBeTruthy();
@@ -577,6 +735,7 @@ test("a governing record changes the verdict and escalation keeps the conflict o
       name: messages.avt.claimDetail.recordConflict.flagForEvidenceTeam,
     }),
   );
+  giveReason(messages.avt.reason.escalate, "Both records need the originals.");
   await waitFor(() =>
     expect(
       screen.getByText(messages.avt.claimDetail.recordConflict.escalatedNotice),
@@ -595,7 +754,11 @@ test("a governing record changes the verdict and escalation keeps the conflict o
     body: {
       runId: run.id,
       claimId: claim.id,
-      event: { kind: "record-conflict", resolution: { kind: "escalated" } },
+      event: {
+        kind: "record-conflict",
+        resolution: { kind: "escalated" },
+        reason: "Both records need the originals.",
+      },
     },
   });
   expect(
@@ -606,10 +769,139 @@ test("a governing record changes the verdict and escalation keeps the conflict o
   expect(claimButton(5).textContent).toContain("Record conflict");
   expect(screen.getByText("0/3")).toBeTruthy();
   expect(
-    screen.getByText(messages.avt.claimDetail.score.verdictWithheld),
+    screen.getByText(messages.avt.claimDetail.basis.verdictWithheld),
   ).toBeTruthy();
   expect(screen.getByText("5 July 2021")).toBeTruthy();
   expect(screen.getByText("28 July 2021")).toBeTruthy();
+});
+
+test("a document's record is pre-selected over a witness's account, and the reviewer still confirms it", async () => {
+  const run = seededRun();
+  const withSuggestion = {
+    ...run,
+    claims: run.claims.map((claim) =>
+      claim.position === 5
+        ? { ...claim, suggestedGoverningFactId: factId(6) }
+        : claim,
+    ),
+  };
+  const { client } = await mount(withSuggestion);
+  selectClaim(5);
+  const claim = withSuggestion.claims.at(4);
+  if (claim === undefined) {
+    panic("Missing seeded record conflict claim");
+  }
+
+  // The suggestion is shown, not applied: the verdict stays withheld and
+  // nothing is sent until the reviewer confirms.
+  expect(
+    screen.getByText(messages.avt.claimDetail.recordConflict.suggestedNotice),
+  ).toBeTruthy();
+  expect(screen.getByText(messages.common.suggested)).toBeTruthy();
+  expect(claimButton(5).textContent).toContain("Record conflict");
+  expect(requests).toEqual([]);
+  const confirm = screen.getByRole("button", {
+    name: messages.avt.claimDetail.recordConflict.confirmGoverningRecord,
+  });
+  // The other record keeps its plain action.
+  expect(
+    screen.getAllByRole("button", {
+      name: messages.avt.claimDetail.recordConflict.treatAsGoverningRecord,
+    }),
+  ).toHaveLength(1);
+
+  const governed = {
+    ...EMPTY_CLAIM_REVIEW,
+    recordConflictResolution: { kind: "governed", factEntityId: factId(6) },
+    decidedAt: at,
+    decidedBy: actorId,
+  } as const;
+  answers.push(Response.json({ claimId: claim.id, review: governed }));
+  fireEvent.click(confirm);
+  // Confirming the suggestion still sets the verdict, so it takes a reason.
+  giveReason(messages.avt.reason.govern, "The bank ledger is the record.");
+  await waitFor(() =>
+    expect(
+      client
+        .getQueryData(
+          verificationRunOptions(workspaceId, withSuggestion.id).queryKey,
+        )
+        ?.claims.at(4)?.review,
+    ).toEqual(governed),
+  );
+  expect(requests).toEqual([
+    {
+      method: "POST",
+      path: `/v1/lists/${workspaceId}/claim-reviews`,
+      body: {
+        runId: withSuggestion.id,
+        claimId: claim.id,
+        event: {
+          kind: "record-conflict",
+          resolution: { kind: "governed", factEntityId: factId(6) },
+          reason: "The bank ledger is the record.",
+        },
+      },
+    },
+  ]);
+  // Once chosen, the suggestion is no longer shown as one.
+  expect(
+    screen.queryByText(messages.avt.claimDetail.recordConflict.suggestedNotice),
+  ).toBeNull();
+});
+
+test("a verdict resting only on testimony says so beside it and in its sign-off", async () => {
+  const text = "The ward was told of the change on 3 May.";
+  const claim = {
+    ...makeClaim({
+      suffix: 1,
+      verdict: supported(),
+      refs: [{ factEntityId: factId(1), rel: "supports" }],
+      qualifiers: [
+        { kind: "testimony-only", explanation: null, review: "routine" },
+      ],
+    }),
+    text,
+    anchor: {
+      type: "docx-block",
+      blockId: "b1",
+      start: 0,
+      end: text.length,
+    } as const,
+  };
+  const run = makeRun([claim], [makeFact(1, { text: "Told on 3 May." })]);
+  await mount({
+    ...run,
+    factStandings: [
+      {
+        factEntityId: factId(1),
+        scoring: "included" as const,
+        tier: "testimony" as const,
+      },
+    ],
+    blocks: [
+      {
+        ordinal: 1,
+        blockId: "b1",
+        kind: "docx-block" as const,
+        pageNumber: null,
+        text,
+      },
+    ],
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: (name) => name.startsWith(text) }),
+  );
+  expect(
+    screen.getAllByText(messages.avt.qualifiers.testimonyOnly.label).length,
+  ).toBeGreaterThan(0);
+  expect(
+    screen.getByText(messages.avt.qualifiers.testimonyOnly.hint),
+  ).toBeTruthy();
+  expect(screen.getByText(messages.avt.disposition.testimonyOnly)).toBeTruthy();
+  // The fact card names its footing.
+  expect(screen.getByText(messages.avt.factTier.testimony.label)).toBeTruthy();
+  expect(requests).toEqual([]);
 });
 
 test("a rejected review restores the claim and attention queue and surfaces the failed save", async () => {
@@ -1051,4 +1343,149 @@ test("page text that cannot be read shows a retryable failure, not every claim a
   expect(screen.getByRole("alert").textContent).toContain(
     messages.avt.verification.pdfTextFailed,
   );
+});
+
+test("needs evidence keeps a claim open, gets its own queue filter, and stays out of routine acceptance", async () => {
+  const { client, run } = await mount();
+  expect(
+    screen.getByRole("button", { name: "Accept 3 routine claims" }),
+  ).toBeTruthy();
+  selectClaim(4);
+  const claim = run.claims.at(3) ?? panic("Missing seeded no-coverage claim");
+  const needsEvidence = {
+    ...EMPTY_CLAIM_REVIEW,
+    status: "needs-evidence",
+    statusOrigin: "single",
+    decidedAt: at,
+    decidedBy: actorId,
+    eventCount: 1,
+  } as const;
+  answers.push(Response.json({ claimId: claim.id, review: needsEvidence }));
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.avt.review.status.needsEvidence,
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      client
+        .getQueryData(verificationRunOptions(workspaceId, run.id).queryKey)
+        ?.claims.at(3)?.review,
+    ).toEqual(needsEvidence),
+  );
+  expect(requests.at(0)?.body).toEqual({
+    runId: run.id,
+    claimId: claim.id,
+    event: { kind: "status", status: "needs-evidence" },
+  });
+  // Not a decision: the claim is still open, so routine acceptance leaves it
+  // to whoever marked it.
+  expect(
+    screen.getByRole("button", { name: "Accept 2 routine claims" }),
+  ).toBeTruthy();
+  const filter = screen.getByRole("button", {
+    name: `${messages.avt.review.status.needsEvidence} 1`,
+  });
+  selectClaim(1);
+  fireEvent.click(filter);
+  expect(filter.getAttribute("aria-pressed")).toBe("true");
+  // The filter takes the reader to the claim it lists.
+  expect(claimButton(4).getAttribute("aria-pressed")).toBe("true");
+});
+
+test("a claim's history opens from one row and reads who did what, why, and what changed", async () => {
+  const seeded = seededRun();
+  const claimIndex = 2;
+  const target = seeded.claims.at(claimIndex) ?? panic("Missing claim");
+  const run = {
+    ...seeded,
+    claims: seeded.claims.map((claim, index) =>
+      index === claimIndex
+        ? {
+            ...claim,
+            review: {
+              ...EMPTY_CLAIM_REVIEW,
+              override: "supported",
+              decidedAt: at,
+              decidedBy: actorId,
+              eventCount: 2,
+            },
+          }
+        : claim,
+    ),
+  } satisfies VerificationRun;
+  const { client } = await mount(run);
+  const entry = (
+    id: number,
+    fields: Pick<
+      ReviewHistoryEntry,
+      "actor" | "action" | "reason" | "before" | "after"
+    >,
+  ): ReviewHistoryEntry => ({
+    id: toSafeId<"legalListClaimReviewEvent">(
+      `0199a3c4-5b6d-7e8f-9a0b-00000000710${String(id)}`,
+    ),
+    claimId: target.id,
+    kind: fields.action.kind,
+    createdAt: `2026-09-0${String(id)}T10:00:00.000Z`,
+    ...fields,
+  });
+  const page = {
+    items: [
+      entry(2, {
+        actor: {
+          type: "member",
+          id: actorId,
+          name: "Dana Reviewer",
+          image: null,
+        },
+        action: { kind: "override", state: "supported" },
+        reason: { type: "given", text: "The later ledger entry corrects it." },
+        before: { verdict: "contradicted", override: "tension", status: null },
+        after: { verdict: "contradicted", override: "supported", status: null },
+      }),
+      entry(1, {
+        actor: { type: "former" },
+        action: { kind: "override", state: "tension" },
+        reason: { type: "unrecorded" },
+        before: { verdict: "contradicted", override: null, status: null },
+        after: { verdict: "contradicted", override: "tension", status: null },
+      }),
+    ],
+    nextCursor: null,
+    limit: 50,
+    reviewers: {
+      type: "complete",
+      items: [{ id: actorId, name: "Dana Reviewer", image: null }],
+    },
+  } satisfies ReviewHistoryPage;
+  client.setQueryData(
+    reviewHistoryOptions({ workspaceId, runId: run.id, claimId: target.id })
+      .queryKey,
+    { pages: [page], pageParams: [null] },
+  );
+  selectClaim(3);
+  const toggle = screen.getByRole("button", { name: /^History/u });
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(toggle.textContent).toContain("2");
+  expect(screen.queryByText("Dana Reviewer")).toBeNull();
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByText("Dana Reviewer")).toBeTruthy();
+  expect(screen.getByText(messages.avt.history.formerMember)).toBeTruthy();
+  expect(
+    screen.getAllByText(messages.avt.history.actions.overridden),
+  ).toHaveLength(2);
+  expect(screen.getByText("The later ledger entry corrects it.")).toBeTruthy();
+  expect(screen.getByText(messages.avt.history.reasonUnrecorded)).toBeTruthy();
+  // The newest entry reads the verdict it found and the one it left.
+  const newest = screen.getByText("Dana Reviewer").closest("li");
+  const changes = within(newest ?? panic("No history entry")).getAllByText(
+    /^(In tension|Supported)$/u,
+  );
+  expect(changes.map((badge) => badge.textContent)).toEqual([
+    messages.avt.states.tension.chip,
+    messages.avt.states.supported.chip,
+  ]);
+  expect(requests).toEqual([]);
 });

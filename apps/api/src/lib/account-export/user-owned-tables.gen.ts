@@ -68,6 +68,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "legal_list_item_source_decisions",
   "legal_list_item_sources",
   "legal_list_items",
+  "legal_list_source_documents",
   "legal_list_verification_read_receipts",
   "legal_list_verification_runs",
   "legal_lists",

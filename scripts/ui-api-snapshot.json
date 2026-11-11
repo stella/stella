@@ -1723,6 +1723,7 @@
     ],
     "./review-status-badge": ["ReviewStatusBadge"],
     "./review-word-diff": ["diffWords"],
+    "./run-state-mark": ["RunStateMark"],
     "./scroll-area": ["ScrollArea", "ScrollBar"],
     "./scroll-edge-fade": [
       "SCROLL_EDGE_FADE_CLASS",
@@ -2075,9 +2076,10 @@
     "Label.variant": ["choice", "choice-card", "default", "muted"],
     "LandingItemText.iconTone": ["matter", "muted"],
     "LandingRowIcon.tone": ["matter", "muted"],
-    "ListItemDescription.variant": ["code", "text"],
+    "ListItemDescription.variant": ["code", "paragraph", "text"],
     "ListItemMedia.variant": ["icon", "initial"],
     "ListItemStatus.tone": ["destructive", "neutral", "success", "warning"],
+    "ListItemTitle.variant": ["name", "statement"],
     "Loader.animation": ["none", "spin"],
     "Loader.size": ["lg", "md", "sm"],
     "Loader.variant": ["decorative", "status"],
@@ -2109,6 +2111,7 @@
     "PreviewPane.size": ["default", "thumbnail"],
     "Prose.size": ["default", "lede", "sm"],
     "Prose.tone": ["default", "muted"],
+    "ReviewDecisionActions.emphasis": ["primary", "quiet"],
     "ReviewDecisionActions.size": ["sm", "xs"],
     "ReviewDecisionActions.state": [
       "accepted",
@@ -2135,6 +2138,8 @@
       "success",
       "warning"
     ],
+    "RunStateMark.size": ["badge", "row"],
+    "RunStateMark.state": ["needs-you", "working"],
     "ScrollArea.axis": ["both", "vertical"],
     "SegmentedIconToggle.size": ["compact", "touch"],
     "SelectTrigger.align": ["center", "start"],

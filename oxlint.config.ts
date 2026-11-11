@@ -640,6 +640,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
+  fixtureRuleOverride("no-hand-drawn-run-state.fixture.tsx", [
+    "no-hand-drawn-run-state/no-hand-drawn-run-state",
+  ]),
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
@@ -2141,6 +2144,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-person-select.ts",
     "./.oxlint-plugins/searchable-long-select.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
+    "./.oxlint-plugins/no-hand-drawn-run-state.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
     "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
@@ -4362,6 +4366,22 @@ const config = defineConfig({
       ],
       rules: {
         "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "off",
+      },
+    },
+    {
+      // A run state (a chat waiting on the reader, a chat working) is drawn
+      // by `RunStateMark` from `@stll/ui/run-state-mark`, on the web and the
+      // phone alike; its shared table is the one place a state gets a look.
+      files: [...productUiFiles, "apps/mobile/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "packages/ui/src/components/run-state-mark.tsx",
+        "packages/ui/src/components/run-state-mark.native.tsx",
+        "packages/ui/src/components/run-state-mark.shared.ts",
+      ],
+      rules: {
+        "no-hand-drawn-run-state/no-hand-drawn-run-state": "error",
       },
     },
     {

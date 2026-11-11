@@ -44,6 +44,7 @@ import {
   FAKE_STELLA_ANSWER,
   FAKE_STELLA_SERVER,
 } from "../../../scripts/fake-stella-turn";
+import { PROTOCOL_LOG_OFF } from "../../protocol-log";
 import type { HarnessTurn, HarnessTurnInput } from "../adapter";
 import { createCodexHarnessAdapter } from "../codex/adapter";
 import {
@@ -131,6 +132,7 @@ const harnessFor = (
   mkdirSync(workspaceDir);
   const adapter = createClaudeCodeHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_CLI, scenario] },
+    protocolLog: PROTOCOL_LOG_OFF,
     claudeConfigDir,
     environment: {
       ...STRAY_ENVIRONMENT,
@@ -288,6 +290,7 @@ const codexEvents = async (scenario: FakeCodexScenario) => {
   mkdirSync(codexHome);
   const adapter = createCodexHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_CODEX, scenario] },
+    protocolLog: PROTOCOL_LOG_OFF,
     codexHome,
     environment: {
       FAKE_HARNESS_LOG: path.join(root, "fake.log"),
@@ -1141,6 +1144,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
     );
     const harness = createClaudeCodeHarnessAdapter({
       launch: { executable: "/nonexistent/claude", args: [] },
+      protocolLog: PROTOCOL_LOG_OFF,
       claudeConfigDir,
       environment: {},
       gracePeriodMs: 100,
@@ -1172,6 +1176,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(() =>
       createClaudeCodeHarnessAdapter({
         launch: { executable: process.execPath, args: [] },
+        protocolLog: PROTOCOL_LOG_OFF,
         claudeConfigDir: path.join(process.env["HOME"] ?? "/", ".claude"),
         environment: {},
         gracePeriodMs: 10,

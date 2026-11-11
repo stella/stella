@@ -15,6 +15,7 @@
     "noMatchesDescription": "Aucun titre de conversation ni dossier ne contient « {search} ».",
     "search": "Rechercher des conversations",
     "loadFailed": "Vos conversations n’ont pas pu être chargées.",
+    "runsLoadFailed": "Impossible de vérifier quelles conversations attendent votre réponse.",
     "retry": "Réessayer",
     "untitled": "Conversation sans titre",
     "loadMoreFailed": "Charger plus",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "Cette conversation n’a pas pu être chargée.",
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
+    "markRead": "Lu",
+    "markUnread": "Non lu",
+    "pin": "Épingler",
+    "unpin": "Désépingler",
+    "unread": "Non lue",
+    "markReadFailed": "La conversation n’a pas pu être marquée comme lue.",
+    "markUnreadFailed": "La conversation n’a pas pu être marquée comme non lue.",
+    "pinFailed": "La conversation n’a pas pu être épinglée.",
+    "unpinFailed": "La conversation n’a pas pu être désépinglée.",
     "sections": {
+      "needsYou": "En attente de votre réponse",
+      "working": "En cours",
+      "pinned": "Épinglées",
       "today": "Aujourd’hui",
       "yesterday": "Hier",
       "week": "7 derniers jours",
@@ -62,7 +75,12 @@
     "sendFileRefused": "Un fichier n’a pas pu être envoyé, donc le message n’a pas été envoyé. Retirez le fichier et réessayez.",
     "sendFileNotAnonymizable": "Cette conversation est anonymisée et stella n’a pas pu anonymiser l’un des fichiers, donc rien n’a été envoyé. Retirez le fichier et réessayez.",
     "pickTitle": "Choisissez une conversation",
-    "pickDescription": "Choisissez un fil dans la liste ou démarrez-en un avec +."
+    "pickDescription": "Choisissez un fil dans la liste ou démarrez-en un avec +.",
+    "runBanner": {
+      "needsYou": "En attente de votre réponse",
+      "finished": "Terminé",
+      "openHint": "Ouvre la conversation"
+    }
   },
   "tasks": {
     "emptyTitle": "Aucune tâche en cours",
