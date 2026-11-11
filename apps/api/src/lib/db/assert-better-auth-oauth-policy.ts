@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { rootDb } from "@/api/db/root";
 import {
   BetterAuthOAuthPolicyCensusError,
@@ -25,12 +27,19 @@ const OAUTH_POLICY_CENSUS_FAILED_SINK = failureSink({
  */
 export const assertConfiguredBetterAuthOAuthPolicy =
   async (): Promise<void> => {
-    try {
-      await ensureBetterAuthOAuthPolicy(rootDb, getBetterAuthOAuthResources());
-    } catch (error: unknown) {
-      if (!(error instanceof BetterAuthOAuthPolicyCensusError)) {
-        throw error;
-      }
-      observeFailure(error, { sink: OAUTH_POLICY_CENSUS_FAILED_SINK });
+    const census = await Result.tryPromise({
+      try: async () =>
+        await ensureBetterAuthOAuthPolicy(
+          rootDb,
+          getBetterAuthOAuthResources(),
+        ),
+      catch: (cause) => cause,
+    });
+    if (Result.isOk(census)) {
+      return;
     }
+    if (!(census.error instanceof BetterAuthOAuthPolicyCensusError)) {
+      throw census.error;
+    }
+    observeFailure(census.error, { sink: OAUTH_POLICY_CENSUS_FAILED_SINK });
   };
