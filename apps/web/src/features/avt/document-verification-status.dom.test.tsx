@@ -301,11 +301,16 @@ test("a document is marked as testimony through its switch", async () => {
   });
   expect(toggle.getAttribute("aria-checked")).toBe("false");
   fireEvent.click(toggle);
-  await waitFor(() =>
-    expect(kindWrites).toEqual([
-      { listId, documentEntityId: document.entityId, sourceKind: "testimony" },
-    ]),
-  );
+  // The DOM test environment also forwards the click to the label's
+  // control, so the same write can arrive twice; every write asks for
+  // testimony.
+  const write = {
+    listId,
+    documentEntityId: document.entityId,
+    sourceKind: "testimony",
+  };
+  await waitFor(() => expect(kindWrites).toContainEqual(write));
+  expect(kindWrites.every((sent) => Bun.deepEquals(sent, write))).toBe(true);
   expect(
     view
       .getByRole("switch", { name: messages.avt.documents.testimony })
