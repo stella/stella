@@ -1,6 +1,6 @@
 /**
- * The matter's documents, each with its latest verification and a way to
- * start one against the view's list.
+ * The matter's documents, each with its latest verification, a way to start
+ * one against the view's list, and whether the list reads it as testimony.
  */
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
@@ -8,20 +8,29 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { FileCheckIcon, PlayIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { Switch } from "@stll/ui/switch";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import {
   documentFileKey,
   latestVerificationsOptions,
 } from "@/features/avt/queries";
-import type { VerificationRunSummary } from "@/features/avt/types";
+import type { SourceKind, VerificationRunSummary } from "@/features/avt/types";
 import { RUN_STATUS_LABEL_KEYS, RUN_STATUS_TONES } from "@/features/avt/types";
+import {
+  sourceKindOf,
+  sourceKindsOptions,
+  useSetSourceKind,
+} from "@/features/avt/use-source-kinds";
 import type { VerificationTarget } from "@/features/avt/use-start-verification";
 import { useStartVerification } from "@/features/avt/use-start-verification";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import type { WorkspaceFile } from "@/lib/workspaces/queries/entities";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
@@ -60,6 +69,22 @@ export const DocumentVerifications = ({
     }),
   );
 
+  // A document can hold several files; its kind belongs to the document.
+  const documentIds = [...new Set(files.map((file) => file.entityId))];
+  const kindsView = queryView(
+    useQuery(sourceKindsOptions({ workspaceId, listId, documentIds })),
+  );
+  useQueryViewError(kindsView, "DocumentVerifications:source-kinds");
+  const kinds = kindsView.type === "items" ? kindsView.items : undefined;
+  const setKind = useSetSourceKind({ workspaceId, listId });
+  // While a change is in flight the switch shows where it is going.
+  const kindOf = (documentId: string): SourceKind | undefined => {
+    if (setKind.isPending && setKind.variables.documentId === documentId) {
+      return setKind.variables.sourceKind;
+    }
+    return kinds === undefined ? undefined : sourceKindOf(kinds, documentId);
+  };
+
   if (files.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
@@ -89,11 +114,18 @@ export const DocumentVerifications = ({
           </Button>
         </div>
       )}
+      <p className="text-muted-foreground mb-3 text-xs text-pretty">
+        {t("avt.documents.testimonyLine")}
+      </p>
       <ul className="divide-y rounded-xl border">
         {files.map((file) => (
           <DocumentRow
             file={file}
             key={`${file.entityId}:${file.fieldId}`}
+            onSourceKindChange={(sourceKind) =>
+              setKind.mutate({ documentId: file.entityId, sourceKind })
+            }
+            sourceKind={kindOf(file.entityId)}
             latest={
               latestByFile?.get(
                 documentFileKey({
@@ -154,6 +186,10 @@ const latestLoadState = ({
 
 type DocumentRowProps = {
   latest: VerificationRunSummary | null;
+  /** Undefined until the list's kinds have loaded; a failed read is
+   *  reported once and leaves the switches disabled. */
+  sourceKind: SourceKind | undefined;
+  onSourceKindChange: (sourceKind: SourceKind) => void;
   statusLoad: StatusLoad;
   listId: string;
   file: WorkspaceFile;
@@ -164,6 +200,8 @@ type DocumentRowProps = {
 
 const DocumentRow = ({
   latest,
+  sourceKind,
+  onSourceKindChange,
   statusLoad,
   listId,
   file,
@@ -185,7 +223,18 @@ const DocumentRow = ({
           <LatestRunSummary latest={latest} listId={listId} />
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <Label variant="choice">
+          <Switch
+            checked={sourceKind === "testimony"}
+            disabled={!canVerify || sourceKind === undefined}
+            onCheckedChange={(checked) =>
+              onSourceKindChange(checked ? "testimony" : "document")
+            }
+            size="sm"
+          />
+          {t("avt.documents.testimony")}
+        </Label>
         {latest !== null && (
           <Button
             onClick={() => onOpenRun(latest.id)}

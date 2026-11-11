@@ -271,11 +271,13 @@
       "overrideTooltip": "A reviewer has recorded a different verdict. The analysis below is the tool's own, unchanged.",
       "overrideVerdict": "Override verdict",
       "recordConflict": {
+        "confirmGoverningRecord": "Confirm as governing",
         "description": "Two anchor facts speak to the same point (<strong>{subject}</strong>) but disagree. Both are <strong>high-confidence</strong> sources, so this is not a reliability problem: the record itself is internally inconsistent. AVT withholds a verdict rather than score the claim, because picking one record over the other is a judgement for you to make and record, not one the tool should make silently.",
         "escalatedNotice": "Flagged for the evidence team. The record conflict stays open and counted until a governing record is chosen.",
         "flagForEvidenceTeam": "Flag for evidence team",
         "governed": "<strong>{value}</strong> governs: the claim is judged against this record. The other record stays on file.",
         "reconcile": "Reconcile the record",
+        "suggestedNotice": "A document's record is suggested over a witness's account. Confirm it, or choose the other record.",
         "title": "Conflicting evidence in the record",
         "treatAsGoverningRecord": "Treat as governing"
       },
@@ -286,10 +288,6 @@
       "reopened": "Re-opened, check pending",
       "reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.",
       "sourceCount": "{count, plural, one {# source} other {# sources}}",
-      "unsourced": {
-        "hint": "No source document is linked to this fact yet; its medium and date describe the evidence but are not a source.",
-        "label": "Unsourced"
-      },
       "whyVerdict": "Why this verdict: anchor facts"
     },
     "claimTypes": {
@@ -326,6 +324,7 @@
       "scopeMismatch": "A cited fact covers a different scope than the claim. Weigh whether it settles the claim as worded before the verdict stands.",
       "supported": "The record affirms this. Your sign-off confirms the tool read it correctly; no judgement call needed.",
       "tension": "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands.",
+      "testimonyOnly": "The record affirms this, but only through testimony. Your sign-off confirms the tool read it correctly; the verdict stays marked as resting on testimony.",
       "unsourcedOnly": "The record affirms this, but only through facts with no source yet. Your sign-off confirms the tool read them correctly; the facts stay marked as unsourced."
     },
     "documents": {
@@ -335,6 +334,8 @@
       "otherList": "Checked against another list",
       "sizeConfirmTitle": "Verify this document?",
       "statusLoadFailed": "The verification status of these documents could not be loaded.",
+      "testimony": "Testimony",
+      "testimonyLine": "Mark witness statements, interview notes and transcripts as testimony. Facts taken from them count as a person's account, not a record.",
       "verifyAgain": "Verify again"
     },
     "extraction": {
@@ -368,6 +369,16 @@
       "startFailed": "Could not start the fact extraction",
       "submit": "{count, plural, =0 {Extract facts} one {Extract facts from # document} other {Extract facts from # documents}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Every source of this fact is testimony: a witness statement, interview note or transcript.",
+        "label": "Testimony"
+      },
+      "unsourced": {
+        "hint": "No source document is linked to this fact yet; its medium and date describe the evidence but are not a source.",
+        "label": "Unsourced"
+      }
+    },
     "guidance": {
       "escalate": "Escalate",
       "manualJudgement": "Manual judgement",
@@ -391,6 +402,10 @@
       "scopeMismatch": {
         "hint": "A cited fact covers a different period, population, place or measure than the claim.",
         "label": "Scope mismatch"
+      },
+      "testimonyOnly": {
+        "hint": "Every fact this verdict rests on comes from testimony, not from a document's record.",
+        "label": "Testimony only"
       },
       "unsourcedOnly": {
         "hint": "No fact this verdict rests on has a source yet.",

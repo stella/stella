@@ -271,11 +271,13 @@
       "overrideTooltip": "Ein Prüfer hat ein abweichendes Ergebnis erfasst. Die nachstehende Analyse ist die unveränderte Beurteilung des Tools.",
       "overrideVerdict": "Ergebnis ändern",
       "recordConflict": {
+        "confirmGoverningRecord": "Als maßgeblich bestätigen",
         "description": "Zwei Ankerfakten betreffen denselben Punkt – <strong>{subject}</strong> –, widersprechen sich jedoch. Beide stammen aus Quellen mit <strong>hoher Sicherheit</strong>; es handelt sich daher nicht um ein Zuverlässigkeitsproblem, sondern der Bestand selbst ist widersprüchlich. AVT hält ein Ergebnis zurück, statt die Behauptung zu bewerten, denn die Entscheidung, welcher Eintrag maßgeblich ist, müssen Sie treffen und dokumentieren – das Tool darf sie nicht stillschweigend treffen.",
         "escalatedNotice": "Für das Belegteam markiert. Der Bestandswiderspruch bleibt offen und wird weiter gezählt, bis ein maßgeblicher Eintrag ausgewählt ist.",
         "flagForEvidenceTeam": "Für das Belegteam markieren",
         "governed": "<strong>{value}</strong> ist maßgeblich: Die Behauptung wird anhand dieses Eintrags beurteilt. Der andere Eintrag bleibt erhalten.",
         "reconcile": "Bestand abgleichen",
+        "suggestedNotice": "Die Aufzeichnung eines Dokuments wird der Schilderung eines Zeugen vorgezogen. Bestätigen Sie sie oder wählen Sie die andere Aufzeichnung.",
         "title": "Widersprüchliche Belege im Bestand",
         "treatAsGoverningRecord": "Als maßgeblich behandeln"
       },
@@ -286,10 +288,6 @@
       "reopened": "Erneut geöffnet, Prüfung ausstehend",
       "reopenedTooltip": "Ein Prüfer hat dies als überprüfbaren Fakt neu klassifiziert; der Live-Abgleich mit dem Bestand steht noch aus.",
       "sourceCount": "{count, plural, one {# Quelle} other {# Quellen}}",
-      "unsourced": {
-        "hint": "Mit diesem Fakt ist noch kein Quelldokument verknüpft; Medium und Datum beschreiben den Beleg, sind aber keine Quelle.",
-        "label": "Ohne Quelle"
-      },
       "whyVerdict": "Begründung des Ergebnisses – Ankerfakten"
     },
     "claimTypes": {
@@ -326,6 +324,7 @@
       "scopeMismatch": "Ein zitierter Fakt hat einen anderen Umfang als die Behauptung. Wägen Sie ab, ob er die Behauptung in ihrem Wortlaut klärt, bevor das Ergebnis steht.",
       "supported": "Der Bestand bestätigt dies. Mit Ihrer Freigabe bestätigen Sie, dass das Tool ihn richtig gelesen hat – eine Ermessensentscheidung ist nicht erforderlich.",
       "tension": "Der Bestand stützt dies nur teilweise. Wägen Sie die oben aufgeführten stützenden und widersprechenden Fakten ab, bevor das Ergebnis Bestand hat.",
+      "testimonyOnly": "Der Bestand bestätigt dies, jedoch nur über Zeugenaussagen. Mit Ihrer Freigabe bestätigen Sie, dass das Tool sie richtig gelesen hat; das Ergebnis bleibt als auf Zeugenaussagen beruhend markiert.",
       "unsourcedOnly": "Der Bestand bestätigt dies, jedoch nur über Fakten ohne Quelle. Mit Ihrer Freigabe bestätigen Sie, dass das Tool sie richtig gelesen hat; die Fakten bleiben als ohne Quelle markiert."
     },
     "documents": {
@@ -335,6 +334,8 @@
       "otherList": "Gegen eine andere Liste geprüft",
       "sizeConfirmTitle": "Dieses Dokument prüfen?",
       "statusLoadFailed": "Der Prüfstatus dieser Dokumente konnte nicht geladen werden.",
+      "testimony": "Zeugenaussage",
+      "testimonyLine": "Markieren Sie Zeugenaussagen, Gesprächsnotizen und Transkripte als Zeugenaussage. Daraus entnommene Fakten gelten als Schilderung einer Person, nicht als Aufzeichnung.",
       "verifyAgain": "Erneut prüfen"
     },
     "extraction": {
@@ -368,6 +369,16 @@
       "startFailed": "Die Extraktion der Tatsachen konnte nicht gestartet werden",
       "submit": "{count, plural, =0 {Tatsachen extrahieren} one {Tatsachen aus # Dokument extrahieren} other {Tatsachen aus # Dokumenten extrahieren}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Jede Quelle dieses Fakts ist eine Zeugenaussage: eine Aussage, eine Gesprächsnotiz oder ein Transkript.",
+        "label": "Zeugenaussage"
+      },
+      "unsourced": {
+        "hint": "Mit diesem Fakt ist noch kein Quelldokument verknüpft; Medium und Datum beschreiben den Beleg, sind aber keine Quelle.",
+        "label": "Ohne Quelle"
+      }
+    },
     "guidance": {
       "escalate": "Eskalieren",
       "manualJudgement": "Manuelle Entscheidung",
@@ -391,6 +402,10 @@
       "scopeMismatch": {
         "hint": "Ein zitierter Fakt betrifft einen anderen Zeitraum, Personenkreis, Ort oder eine andere Messgröße als die Behauptung.",
         "label": "Abweichender Umfang"
+      },
+      "testimonyOnly": {
+        "hint": "Jeder Fakt, auf dem dieses Ergebnis beruht, stammt aus Zeugenaussagen, nicht aus der Aufzeichnung eines Dokuments.",
+        "label": "Nur Zeugenaussagen"
       },
       "unsourcedOnly": {
         "hint": "Kein Fakt, auf dem dieses Ergebnis beruht, hat bisher eine Quelle.",

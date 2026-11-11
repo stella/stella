@@ -271,11 +271,13 @@
       "overrideTooltip": "Osoba weryfikująca zapisała inne rozstrzygnięcie. Poniżej bez zmian przedstawiono własną analizę narzędzia.",
       "overrideVerdict": "Zmień rozstrzygnięcie",
       "recordConflict": {
+        "confirmGoverningRecord": "Potwierdź jako rozstrzygający",
         "description": "Dwa fakty referencyjne dotyczą tej samej kwestii (<strong>{subject}</strong>), ale są ze sobą sprzeczne. Oba pochodzą ze źródeł o <strong>wysokim poziomie pewności</strong>, więc nie jest to problem wiarygodności: sam rejestr jest wewnętrznie niespójny. AVT wstrzymuje rozstrzygnięcie zamiast oceniać twierdzenie, ponieważ wybór nadrzędnego wpisu wymaga Twojej decyzji i jej odnotowania; narzędzie nie powinno dokonywać takiego wyboru bez informowania użytkownika.",
         "escalatedNotice": "Oznaczono dla zespołu ds. dowodów. Sprzeczność w rejestrze pozostaje otwarta i uwzględniana w zestawieniu do czasu wybrania nadrzędnego wpisu.",
         "flagForEvidenceTeam": "Oznacz dla zespołu ds. dowodów",
         "governed": "<strong>{value}</strong> jest nadrzędny: twierdzenie ocenia się względem tego wpisu. Drugi wpis pozostaje zarejestrowany.",
         "reconcile": "Rozstrzygnij sprzeczność w rejestrze",
+        "suggestedNotice": "Sugerowany jest zapis w dokumencie, a nie relacja świadka. Potwierdź go lub wybierz drugi zapis.",
         "title": "Sprzeczne dowody w rejestrze",
         "treatAsGoverningRecord": "Uznaj za nadrzędny"
       },
@@ -286,10 +288,6 @@
       "reopened": "Otwarto ponownie, oczekuje na sprawdzenie",
       "reopenedTooltip": "Osoba weryfikująca przeklasyfikowała to twierdzenie jako możliwy do sprawdzenia fakt; porównanie z rzeczywistym rejestrem nadal oczekuje na wykonanie.",
       "sourceCount": "{count, plural, one {# źródło} few {# źródła} many {# źródeł} other {# źródła}}",
-      "unsourced": {
-        "hint": "Do tego faktu nie dołączono jeszcze żadnego dokumentu źródłowego; nośnik i data opisują dowód, ale nie są źródłem.",
-        "label": "Bez źródła"
-      },
       "whyVerdict": "Uzasadnienie rozstrzygnięcia: fakty referencyjne"
     },
     "claimTypes": {
@@ -326,6 +324,7 @@
       "scopeMismatch": "Przywołany fakt ma inny zakres niż twierdzenie. Zanim rozstrzygnięcie zostanie utrzymane, oceń, czy rozstrzyga ono twierdzenie w jego brzmieniu.",
       "supported": "Rejestr potwierdza to twierdzenie. Zatwierdzenie potwierdza, że narzędzie odczytało je prawidłowo; nie jest potrzebna decyzja uznaniowa.",
       "tension": "Rejestr potwierdza to twierdzenie tylko częściowo. Przed zatwierdzeniem rozstrzygnięcia rozważ powyższe fakty potwierdzające i przeczące.",
+      "testimonyOnly": "Materiał to potwierdza, ale wyłącznie poprzez zeznania. Twoje zatwierdzenie potwierdza, że narzędzie odczytało je poprawnie; wynik pozostaje oznaczony jako oparty na zeznaniach.",
       "unsourcedOnly": "Rejestr to potwierdza, ale tylko poprzez fakty, które nie mają jeszcze źródła. Twoje zatwierdzenie potwierdza, że narzędzie odczytało je poprawnie; fakty pozostają oznaczone jako bez źródła."
     },
     "documents": {
@@ -335,6 +334,8 @@
       "otherList": "Zweryfikowano względem innej listy",
       "sizeConfirmTitle": "Zweryfikować ten dokument?",
       "statusLoadFailed": "Nie udało się wczytać stanu weryfikacji tych dokumentów.",
+      "testimony": "Zeznanie",
+      "testimonyLine": "Oznacz zeznania świadków, notatki z rozmów i transkrypcje jako zeznania. Fakty z nich pochodzące liczą się jako relacja osoby, a nie zapis.",
       "verifyAgain": "Zweryfikuj ponownie"
     },
     "extraction": {
@@ -368,6 +369,16 @@
       "startFailed": "Nie udało się rozpocząć wyodrębniania faktów",
       "submit": "{count, plural, =0 {Wyodrębnij fakty} one {Wyodrębnij fakty z # dokumentu} few {Wyodrębnij fakty z # dokumentów} many {Wyodrębnij fakty z # dokumentów} other {Wyodrębnij fakty z # dokumentu}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Każde źródło tego faktu to zeznanie: oświadczenie świadka, notatka z rozmowy lub transkrypcja.",
+        "label": "Zeznanie"
+      },
+      "unsourced": {
+        "hint": "Do tego faktu nie dołączono jeszcze żadnego dokumentu źródłowego; nośnik i data opisują dowód, ale nie są źródłem.",
+        "label": "Bez źródła"
+      }
+    },
     "guidance": {
       "escalate": "Przekaż dalej",
       "manualJudgement": "Wymaga decyzji",
@@ -391,6 +402,10 @@
       "scopeMismatch": {
         "hint": "Przywołany fakt dotyczy innego okresu, grupy, miejsca lub miary niż twierdzenie.",
         "label": "Inny zakres"
+      },
+      "testimonyOnly": {
+        "hint": "Wszystkie fakty, na których opiera się ten wynik, pochodzą z zeznań, a nie z zapisu w dokumencie.",
+        "label": "Tylko zeznania"
       },
       "unsourcedOnly": {
         "hint": "Żaden fakt, na którym opiera się to rozstrzygnięcie, nie ma jeszcze źródła.",

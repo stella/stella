@@ -171,6 +171,7 @@ const DISPOSITION_COPY = {
 const QUALIFIER_ASK = {
   "record-silent": "avt.qualifiers.recordSilent.hint",
   "scope-mismatch": "avt.disposition.scopeMismatch",
+  "testimony-only": "avt.disposition.testimonyOnly",
   "unsourced-only": "avt.disposition.unsourcedOnly",
   "rests-on-held": "avt.disposition.restsOnHeld",
 } as const satisfies Record<
@@ -187,6 +188,18 @@ const hasQualifier = (
   { qualifiers }: Pick<TriageTarget, "qualifiers">,
   kind: keyof typeof QUALIFIER_ASK,
 ) => qualifiers.some((qualifier) => qualifier.kind === kind);
+
+/** What signing off a supported claim confirms, naming its footing when
+ *  that is testimony or no source at all. */
+const supportedAsk = (claim: Pick<TriageTarget, "qualifiers">) => {
+  if (hasQualifier(claim, "testimony-only")) {
+    return QUALIFIER_ASK["testimony-only"];
+  }
+  if (hasQualifier(claim, "unsourced-only")) {
+    return QUALIFIER_ASK["unsourced-only"];
+  }
+  return DISPOSITION_COPY.supported;
+};
 
 export type DispositionGuidance = {
   tone: DispositionTone;
@@ -232,13 +245,12 @@ export const dispositionGuidance = (
     };
   }
   if (claim.state === "supported") {
-    // Knowledge without a source is allowed; the sign-off copy discloses it.
+    // A person's account and knowledge without a source are both allowed;
+    // the sign-off copy discloses which the verdict rests on.
     return {
       tone: "ready",
       guideKey: GUIDANCE_KEYS.ready,
-      askKey: hasQualifier(claim, "unsourced-only")
-        ? QUALIFIER_ASK["unsourced-only"]
-        : DISPOSITION_COPY.supported,
+      askKey: supportedAsk(claim),
     };
   }
   return {
@@ -361,9 +373,9 @@ export const evidenceFactsById = (
   run: Pick<VerificationRun, "evidence" | "factStandings">,
 ): ReadonlyMap<FactId, ShownFact> => {
   const standings = new Map(
-    run.factStandings.map(({ factEntityId, scoring, sourcing }) => [
+    run.factStandings.map(({ factEntityId, scoring, tier }) => [
       factEntityId,
-      { scoring, sourcing },
+      { scoring, tier },
     ]),
   );
   return new Map(

@@ -271,11 +271,13 @@
       "overrideTooltip": "Pārbaudītājs ir reģistrējis citu slēdzienu. Tālāk ir redzama paša rīka nemainītā analīze.",
       "overrideVerdict": "Mainīt slēdzienu",
       "recordConflict": {
+        "confirmGoverningRecord": "Apstiprināt kā noteicošo",
         "description": "Divi enkurfakti attiecas uz vienu un to pašu jautājumu, <strong>{subject}</strong>, taču ir pretrunā. Abi ir <strong>augstas ticamības</strong> avoti, tāpēc tā nav uzticamības problēma: pats reģistrs ir iekšēji pretrunīgs. AVT nesniedz slēdzienu un nevērtē apgalvojumu, jo izvēle starp ierakstiem ir lēmums, kas jāpieņem un jāreģistrē jums; rīks nedrīkst to izdarīt klusējot.",
         "escalatedNotice": "Atzīmēts pierādījumu komandai. Reģistra pretruna paliek atvērta un uzskaitīta, līdz tiek izvēlēts noteicošais ieraksts.",
         "flagForEvidenceTeam": "Nodot pierādījumu komandai",
         "governed": "<strong>{value}</strong> ir noteicošais: apgalvojums tiek vērtēts pret šo ierakstu. Otrs ieraksts paliek reģistrā.",
         "reconcile": "Saskaņot reģistru",
+        "suggestedNotice": "Ieteikts dot priekšroku dokumenta ierakstam, nevis liecinieka stāstījumam. Apstipriniet to vai izvēlieties otru ierakstu.",
         "title": "Pretrunīgi pierādījumi reģistrā",
         "treatAsGoverningRecord": "Uzskatīt par noteicošo"
       },
@@ -286,10 +288,6 @@
       "reopened": "Atvērts vēlreiz, gaida pārbaudi",
       "reopenedTooltip": "Pārbaudītājs to pārklasificēja par pārbaudāmu faktu; tiešā pārbaude pret reģistru vēl nav veikta.",
       "sourceCount": "{count, plural, zero {# avotu} one {# avots} other {# avoti}}",
-      "unsourced": {
-        "hint": "Šim faktam vēl nav piesaistīts neviens avota dokuments; nesējs un datums apraksta pierādījumu, taču nav avots.",
-        "label": "Bez avota"
-      },
       "whyVerdict": "Slēdziena pamatojums: enkurfakti"
     },
     "claimTypes": {
@@ -326,6 +324,7 @@
       "scopeMismatch": "Citētā fakta tvērums atšķiras no apgalvojuma. Pirms slēdziens tiek apstiprināts, izvērtējiet, vai tas izšķir apgalvojumu tā formulējumā.",
       "supported": "Reģistrs to apstiprina. Jūsu apstiprinājums apliecina, ka rīks to nolasīja pareizi; vērtējošs lēmums nav vajadzīgs.",
       "tension": "Reģistrs to pamato tikai daļēji. Pirms slēdziena apstiprināšanas izvērtējiet iepriekš minētos pamatojošos un pretrunīgos faktus.",
+      "testimonyOnly": "Materiāli to apstiprina, taču tikai ar liecībām. Jūsu apstiprinājums apliecina, ka rīks tās nolasīja pareizi; secinājums paliek atzīmēts kā balstīts uz liecībām.",
       "unsourcedOnly": "Reģistrs to apstiprina, bet tikai ar faktiem, kuriem vēl nav avota. Jūsu apstiprinājums apliecina, ka rīks tos izlasīja pareizi; fakti paliek atzīmēti kā bez avota."
     },
     "documents": {
@@ -335,6 +334,8 @@
       "otherList": "Pārbaudīts pret citu sarakstu",
       "sizeConfirmTitle": "Vai pārbaudīt šo dokumentu?",
       "statusLoadFailed": "Neizdevās ielādēt šo dokumentu pārbaudes statusu.",
+      "testimony": "Liecība",
+      "testimonyLine": "Atzīmējiet liecinieku liecības, sarunu piezīmes un atšifrējumus kā liecības. No tām ņemtie fakti tiek uzskatīti par personas stāstījumu, nevis ierakstu.",
       "verifyAgain": "Pārbaudīt vēlreiz"
     },
     "extraction": {
@@ -368,6 +369,16 @@
       "startFailed": "Neizdevās sākt faktu izgūšanu",
       "submit": "{count, plural, =0 {Izgūt faktus} zero {Izgūt faktus no # dokumentiem} one {Izgūt faktus no # dokumenta} other {Izgūt faktus no # dokumentiem}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Visi šī fakta avoti ir liecības: liecinieka liecība, sarunas piezīmes vai atšifrējums.",
+        "label": "Liecība"
+      },
+      "unsourced": {
+        "hint": "Šim faktam vēl nav piesaistīts neviens avota dokuments; nesējs un datums apraksta pierādījumu, taču nav avots.",
+        "label": "Bez avota"
+      }
+    },
     "guidance": {
       "escalate": "Nodot tālāk",
       "manualJudgement": "Cilvēka lēmums",
@@ -391,6 +402,10 @@
       "scopeMismatch": {
         "hint": "Citētais fakts attiecas uz citu periodu, personu loku, vietu vai mērījumu nekā apgalvojums.",
         "label": "Cits tvērums"
+      },
+      "testimonyOnly": {
+        "hint": "Visi fakti, uz kuriem balstās šis secinājums, nāk no liecībām, nevis no dokumenta ieraksta.",
+        "label": "Tikai liecības"
       },
       "unsourcedOnly": {
         "hint": "Nevienam faktam, uz kuru balstās šis slēdziens, vēl nav avota.",

@@ -271,11 +271,13 @@
       "overrideTooltip": "Kontrolující osoba zaznamenala jiný závěr. Níže je beze změny zobrazena vlastní analýza nástroje.",
       "overrideVerdict": "Změnit závěr",
       "recordConflict": {
+        "confirmGoverningRecord": "Potvrdit jako rozhodující",
         "description": "Dva referenční fakty se týkají stejné otázky (<strong>{subject}</strong>), ale odporují si. Oba pocházejí ze zdrojů s <strong>vysokou mírou jistoty</strong>, nejde tedy o problém spolehlivosti: vnitřně rozporné jsou samotné záznamy. AVT nevydá závěr ani tvrzení neohodnotí, protože volba rozhodujícího záznamu vyžaduje váš úsudek a jeho zaznamenání; nástroj ji nesmí provést bez upozornění.",
         "escalatedNotice": "Označeno pro tým pro důkazy. Rozpor v záznamech zůstává otevřený a započítaný, dokud nebude vybrán rozhodující záznam.",
         "flagForEvidenceTeam": "Označit pro tým pro důkazy",
         "governed": "<strong>{value}</strong> je rozhodující: tvrzení se posuzuje podle tohoto záznamu. Druhý záznam zůstává evidován.",
         "reconcile": "Vyřešit rozpor v záznamech",
+        "suggestedNotice": "Záznam v dokumentu je navržen před výpovědí svědka. Potvrďte ho, nebo zvolte druhý záznam.",
         "title": "Rozporné důkazy v záznamech",
         "treatAsGoverningRecord": "Považovat za rozhodující"
       },
@@ -286,10 +288,6 @@
       "reopened": "Znovu otevřeno, čeká na kontrolu",
       "reopenedTooltip": "Kontrolující osoba překlasifikovala toto tvrzení jako ověřitelné; porovnání se živými záznamy dosud neproběhlo.",
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroje} other {# zdrojů}}",
-      "unsourced": {
-        "hint": "K tomuto faktu zatím není připojen žádný zdrojový dokument; médium a datum důkaz popisují, ale nejsou zdrojem.",
-        "label": "Bez zdroje"
-      },
       "whyVerdict": "Odůvodnění závěru: referenční fakta"
     },
     "claimTypes": {
@@ -326,6 +324,7 @@
       "scopeMismatch": "Citovaný fakt má jiný rozsah než tvrzení. Než závěr potvrdíte, zvažte, zda tvrzení v jeho znění skutečně rozhoduje.",
       "supported": "Záznamy toto tvrzení potvrzují. Svým schválením potvrdíte, že je nástroj vyložil správně; není třeba žádný hodnotící úsudek.",
       "tension": "Záznamy toto tvrzení podporují jen částečně. Než bude možné závěr potvrdit, zvažte výše uvedená podpůrná a odporující fakta.",
+      "testimonyOnly": "Záznamy toto tvrzení potvrzují, ale jen prostřednictvím svědectví. Svým schválením potvrdíte, že je nástroj vyložil správně; závěr zůstane označen jako opřený o svědectví.",
       "unsourcedOnly": "Záznamy toto tvrzení potvrzují, ale jen prostřednictvím faktů, které zatím nemají zdroj. Svým schválením potvrdíte, že je nástroj vyložil správně; fakta zůstanou označena jako bez zdroje."
     },
     "documents": {
@@ -335,6 +334,8 @@
       "otherList": "Zkontrolováno podle jiného seznamu",
       "sizeConfirmTitle": "Ověřit tento dokument?",
       "statusLoadFailed": "Stav ověření těchto dokumentů se nepodařilo načíst.",
+      "testimony": "Svědectví",
+      "testimonyLine": "Svědecké výpovědi, záznamy z pohovorů a přepisy označte jako svědectví. Fakta z nich převzatá se počítají jako něčí výpověď, ne jako záznam.",
       "verifyAgain": "Ověřit znovu"
     },
     "extraction": {
@@ -368,6 +369,16 @@
       "startFailed": "Vytěžování faktů se nepodařilo spustit",
       "submit": "{count, plural, =0 {Vytěžit fakta} one {Vytěžit fakta z # dokumentu} few {Vytěžit fakta z # dokumentů} many {Vytěžit fakta z # dokumentu} other {Vytěžit fakta z # dokumentů}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Všechny zdroje tohoto faktu jsou svědectví: svědecká výpověď, záznam z pohovoru nebo přepis.",
+        "label": "Svědectví"
+      },
+      "unsourced": {
+        "hint": "K tomuto faktu zatím není připojen žádný zdrojový dokument; médium a datum důkaz popisují, ale nejsou zdrojem.",
+        "label": "Bez zdroje"
+      }
+    },
     "guidance": {
       "escalate": "Předat dál",
       "manualJudgement": "Vyžaduje úsudek",
@@ -391,6 +402,10 @@
       "scopeMismatch": {
         "hint": "Citovaný fakt se týká jiného období, okruhu osob, místa nebo veličiny než tvrzení.",
         "label": "Jiný rozsah"
+      },
+      "testimonyOnly": {
+        "hint": "Všechna fakta, o která se závěr opírá, pocházejí ze svědectví, ne ze záznamu v dokumentu.",
+        "label": "Jen svědectví"
       },
       "unsourcedOnly": {
         "hint": "Žádný fakt, o který se závěr opírá, zatím nemá zdroj.",

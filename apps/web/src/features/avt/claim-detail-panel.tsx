@@ -7,6 +7,7 @@
 
 import * as React from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -41,6 +42,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
+import { ListSourceForm } from "@/components/workspaces/list-source-form";
 import { ClaimComments } from "@/features/avt/claim-comments";
 import {
   isRecordSilent,
@@ -51,6 +53,8 @@ import {
 import { FactDate } from "@/features/avt/fact-date";
 import { EvidenceFactSource } from "@/features/avt/fact-source";
 import { evidenceQuoteSource } from "@/features/avt/fact-source.logic";
+import { FactTierLabel } from "@/features/avt/fact-tier";
+import { avtKeys } from "@/features/avt/queries";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   ConfBadge,
@@ -74,6 +78,7 @@ import type {
   FactId,
   RecordConflict,
   VerificationClaim,
+  VerificationRun,
 } from "@/features/avt/types";
 import { CLAIM_OVERRIDE_STATES, STATE_META } from "@/features/avt/types";
 import { useClaimSaveState } from "@/features/avt/use-claim-review-actions";
@@ -87,11 +92,16 @@ import {
 } from "@/features/avt/verdict";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+import { detached } from "@/lib/detached";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
 type ClaimDetailPanelProps = {
   workspaceId: string;
-  runId: string;
+  /** The run, and the list it checked against, which owns its facts'
+   *  sources. */
+  run: Pick<VerificationRun, "id" | "evidence">;
   /** The claim as displayed (see `resolveClaimView`). */
   claim: VerificationClaim;
   factsById: ReadonlyMap<FactId, ShownFact>;
@@ -102,7 +112,7 @@ type ClaimDetailPanelProps = {
 
 export const ClaimDetailPanel = ({
   workspaceId,
-  runId,
+  run,
   claim,
   factsById,
   contested,
@@ -110,6 +120,7 @@ export const ClaimDetailPanel = ({
   onReviewEvent,
 }: ClaimDetailPanelProps) => {
   const t = useTranslations();
+  const runId = run.id;
   const saveState = useClaimSaveState({ workspaceId, runId }, claim.id);
   // Recording a review changes the document's record, so it needs the same
   // permission the server checks for every review action.
@@ -133,6 +144,7 @@ export const ClaimDetailPanel = ({
 
   const setStatus = (status: ClaimReviewStatus | null) =>
     onReviewEvent({ kind: "status", status });
+  const factScope = { workspaceId, listId: run.evidence.listId, runId };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -220,7 +232,8 @@ export const ClaimDetailPanel = ({
                 onReviewEvent({ kind: "record-conflict", resolution })
               }
               review={review}
-              workspaceId={workspaceId}
+              scope={factScope}
+              suggestedFactId={claim.suggestedGoverningFactId}
             />
           )}
 
@@ -236,7 +249,7 @@ export const ClaimDetailPanel = ({
                     fact={fact}
                     key={ref.factEntityId}
                     rel={ref.rel}
-                    workspaceId={workspaceId}
+                    scope={factScope}
                   />
                 );
               })}
@@ -643,12 +656,16 @@ const VerdictBasis = ({
   }
 };
 
+/** Where a fact card's actions act: the run it was pinned on and the list
+ *  that owns the fact. */
+type FactScope = { workspaceId: string; listId: string; runId: string };
+
 const FactCard = ({
-  workspaceId,
+  scope,
   fact,
   rel,
 }: {
-  workspaceId: string;
+  scope: FactScope;
   fact: ShownFact;
   rel: ClaimFactRelation;
 }) => {
@@ -677,19 +694,18 @@ const FactCard = ({
         </ReviewStatusBadge>
         <ConfBadge level={fact.confidence} />
       </div>
-      <FactBody fact={fact} workspaceId={workspaceId} />
+      <FactBody fact={fact} scope={scope} />
     </article>
   );
 };
 
-const FactBody = ({
-  workspaceId,
-  fact,
-}: {
-  workspaceId: string;
-  fact: ShownFact;
-}) => {
+const FactBody = ({ scope, fact }: { scope: FactScope; fact: ShownFact }) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
+  const canUpdate = usePermissions({ entity: ["update"] });
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
+  const [addingSource, setAddingSource] = React.useState(false);
+  const { workspaceId } = scope;
   const source = evidenceQuoteSource(fact.sources);
   const quote = source?.quote ?? null;
   return (
@@ -717,16 +733,12 @@ const FactBody = ({
             {t("avt.anchorFacts.heldForReview")}
           </span>
         )}
-        {fact.standing.sourcing === "unsourced" && (
-          <Tooltip>
-            <TooltipTrigger render={<span />}>
-              {t("avt.claimDetail.unsourced.label")}
-            </TooltipTrigger>
-            <TooltipPopup className="max-w-72">
-              {t("avt.claimDetail.unsourced.hint")}
-            </TooltipPopup>
-          </Tooltip>
-        )}
+        <FactTierLabel
+          onAddSource={
+            canUpdate && legalListsEnabled ? () => setAddingSource(true) : null
+          }
+          tier={fact.standing.tier}
+        />
         <EvidenceFactSource source={source} workspaceId={workspaceId} />
         {fact.evidenceKind !== null && <span>{fact.evidenceKind}</span>}
         <FactDate
@@ -739,13 +751,34 @@ const FactBody = ({
           </span>
         )}
       </div>
+      {addingSource && (
+        <ListSourceForm
+          itemEntityId={fact.factEntityId}
+          listId={scope.listId}
+          onClose={() => setAddingSource(false)}
+          onCreated={() => {
+            // The fact's tier and the claim's qualifiers are read with the
+            // run, so it is read again to show the new footing.
+            detached(
+              queryClient.invalidateQueries({
+                queryKey: avtKeys.run(workspaceId, scope.runId),
+              }),
+              "claim-detail.refresh-run",
+            );
+          }}
+          workspaceId={workspaceId}
+        />
+      )}
     </div>
   );
 };
 
 type RecordConflictBlockProps = {
-  workspaceId: string;
+  scope: FactScope;
   disabled: boolean;
+  /** The record suggested to govern (a document's record over a person's
+   *  account); null when neither is. */
+  suggestedFactId: FactId | null;
   conflict: RecordConflict;
   review: ClaimReview | null;
   factsById: ReadonlyMap<FactId, ShownFact>;
@@ -758,7 +791,8 @@ type RecordConflictBlockProps = {
 };
 
 const RecordConflictBlock = ({
-  workspaceId,
+  scope,
+  suggestedFactId,
   conflict,
   disabled,
   review,
@@ -777,6 +811,10 @@ const RecordConflictBlock = ({
   const governing = records.find(
     (record) => record.factEntityId === governingId,
   );
+  // Until someone resolves the conflict, the suggested record is shown
+  // selected; confirming it is still the reviewer's own action.
+  const preselectedId = resolution === null ? suggestedFactId : null;
+  const highlightedId = governingId ?? preselectedId;
 
   return (
     <section className="space-y-3">
@@ -800,16 +838,22 @@ const RecordConflictBlock = ({
         </p>
       </div>
 
+      {preselectedId !== null && (
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("avt.claimDetail.recordConflict.suggestedNotice")}
+        </p>
+      )}
+
       <div className="space-y-2">
         {records.map((record) => (
           <div
             className={cn(
               "space-y-2 rounded-lg p-3",
-              governingId === record.factEntityId ? "border-2" : "border",
+              highlightedId === record.factEntityId ? "border-2" : "border",
             )}
             key={record.factEntityId}
             style={
-              governingId === record.factEntityId
+              highlightedId === record.factEntityId
                 ? { borderColor: RECORD_CONFLICT_VAR }
                 : undefined
             }
@@ -822,10 +866,17 @@ const RecordConflictBlock = ({
               >
                 {record.value}
               </span>
-              <ConfBadge level={record.fact?.confidence ?? null} />
+              <div className="flex items-center gap-1.5">
+                {preselectedId === record.factEntityId && (
+                  <ReviewStatusBadge size="sm" tone="neutral">
+                    {t("common.suggested")}
+                  </ReviewStatusBadge>
+                )}
+                <ConfBadge level={record.fact?.confidence ?? null} />
+              </div>
             </div>
             {record.fact !== undefined && (
-              <FactBody fact={record.fact} workspaceId={workspaceId} />
+              <FactBody fact={record.fact} scope={scope} />
             )}
             <Button
               disabled={disabled}
@@ -838,11 +889,15 @@ const RecordConflictBlock = ({
               }
               size="sm"
               variant={
-                governingId === record.factEntityId ? "default" : "outline"
+                highlightedId === record.factEntityId ? "default" : "outline"
               }
             >
               <CheckIcon />
-              {t("avt.claimDetail.recordConflict.treatAsGoverningRecord")}
+              {t(
+                preselectedId === record.factEntityId
+                  ? "avt.claimDetail.recordConflict.confirmGoverningRecord"
+                  : "avt.claimDetail.recordConflict.treatAsGoverningRecord",
+              )}
             </Button>
           </div>
         ))}

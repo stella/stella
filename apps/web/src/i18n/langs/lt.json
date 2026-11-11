@@ -271,11 +271,13 @@
       "overrideTooltip": "Tikrintojas įrašė kitą išvadą. Toliau rodoma nepakeista paties įrankio analizė.",
       "overrideVerdict": "Pakeisti išvadą",
       "recordConflict": {
+        "confirmGoverningRecord": "Patvirtinti kaip lemiamą",
         "description": "Du atraminiai faktai susiję su tuo pačiu dalyku, <strong>{subject}</strong>, tačiau vienas kitam prieštarauja. Abu yra <strong>didelio patikimumo</strong> šaltiniai, todėl tai nėra patikimumo problema: pats registras yra vidujai prieštaringas. AVT nepateikia išvados ir nevertina teiginio, nes pasirinkti vieną įrašą vietoj kito turite jūs ir šį pasirinkimą turite užfiksuoti; įrankis neturėtų to daryti neatsiklausęs.",
         "escalatedNotice": "Pažymėta įrodymų grupei. Registro prieštaravimas lieka atviras ir skaičiuojamas, kol pasirenkamas vadovaujamasis įrašas.",
         "flagForEvidenceTeam": "Perduoti įrodymų grupei",
         "governed": "<strong>{value}</strong> yra vadovaujamasis: teiginys vertinamas pagal šį įrašą. Kitas įrašas lieka registre.",
         "reconcile": "Suderinti registrą",
+        "suggestedNotice": "Siūloma dokumento įrašui teikti pirmenybę prieš liudytojo pasakojimą. Patvirtinkite jį arba pasirinkite kitą įrašą.",
         "title": "Prieštaringi įrodymai registre",
         "treatAsGoverningRecord": "Laikyti vadovaujamuoju"
       },
@@ -286,10 +288,6 @@
       "reopened": "Atverta iš naujo, laukiama patikros",
       "reopenedTooltip": "Tikrintojas perklasifikavo tai kaip patikrinamą faktą; tiesioginė patikra pagal registrą dar neatlikta.",
       "sourceCount": "{count, plural, one {# šaltinis} few {# šaltiniai} many {# šaltinių} other {# šaltinio}}",
-      "unsourced": {
-        "hint": "Prie šio fakto dar nepridėtas joks šaltinio dokumentas; laikmena ir data apibūdina įrodymą, bet nėra šaltinis.",
-        "label": "Be šaltinio"
-      },
       "whyVerdict": "Išvados pagrindimas: atraminiai faktai"
     },
     "claimTypes": {
@@ -326,6 +324,7 @@
       "scopeMismatch": "Cituojamo fakto apimtis skiriasi nuo teiginio. Prieš patvirtindami išvadą įvertinkite, ar jis išsprendžia teiginį taip, kaip jis suformuluotas.",
       "supported": "Registras tai patvirtina. Jūsų patvirtinimas rodo, kad įrankis perskaitė teisingai; vertinamojo sprendimo nereikia.",
       "tension": "Registras tai patvirtina tik iš dalies. Prieš patvirtindami išvadą įvertinkite aukščiau pateiktus patvirtinančius ir prieštaraujančius faktus.",
+      "testimonyOnly": "Medžiaga tai patvirtina, bet tik per parodymus. Jūsų patvirtinimas reiškia, kad įrankis juos perskaitė teisingai; išvada lieka pažymėta kaip grindžiama parodymais.",
       "unsourcedOnly": "Registras tai patvirtina, bet tik faktais, kurie dar neturi šaltinio. Jūsų patvirtinimas reiškia, kad įrankis juos perskaitė teisingai; faktai lieka pažymėti kaip be šaltinio."
     },
     "documents": {
@@ -335,6 +334,8 @@
       "otherList": "Patikrinta pagal kitą sąrašą",
       "sizeConfirmTitle": "Patikrinti šį dokumentą?",
       "statusLoadFailed": "Nepavyko įkelti šių dokumentų tikrinimo būsenos.",
+      "testimony": "Parodymai",
+      "testimonyLine": "Liudytojų parodymus, pokalbių užrašus ir stenogramas pažymėkite kaip parodymus. Iš jų paimti faktai laikomi asmens pasakojimu, o ne įrašu.",
       "verifyAgain": "Tikrinti iš naujo"
     },
     "extraction": {
@@ -368,6 +369,16 @@
       "startFailed": "Nepavyko pradėti faktų išgavimo",
       "submit": "{count, plural, =0 {Išgauti faktus} one {Išgauti faktus iš # dokumento} few {Išgauti faktus iš # dokumentų} many {Išgauti faktus iš # dokumento} other {Išgauti faktus iš # dokumentų}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Visi šio fakto šaltiniai yra parodymai: liudytojo parodymai, pokalbio užrašai arba stenograma.",
+        "label": "Parodymai"
+      },
+      "unsourced": {
+        "hint": "Prie šio fakto dar nepridėtas joks šaltinio dokumentas; laikmena ir data apibūdina įrodymą, bet nėra šaltinis.",
+        "label": "Be šaltinio"
+      }
+    },
     "guidance": {
       "escalate": "Perduoti",
       "manualJudgement": "Žmogaus sprendimas",
@@ -391,6 +402,10 @@
       "scopeMismatch": {
         "hint": "Cituojamas faktas apima kitą laikotarpį, asmenų grupę, vietą ar matą nei teiginys.",
         "label": "Kita apimtis"
+      },
+      "testimonyOnly": {
+        "hint": "Visi faktai, kuriais grindžiama ši išvada, gauti iš parodymų, o ne iš dokumento įrašo.",
+        "label": "Tik parodymai"
       },
       "unsourcedOnly": {
         "hint": "Nė vienas faktas, kuriuo grindžiama ši išvada, dar neturi šaltinio.",

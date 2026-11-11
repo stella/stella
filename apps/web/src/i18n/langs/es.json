@@ -271,11 +271,13 @@
       "overrideTooltip": "Un revisor ha registrado un resultado diferente. El análisis inferior es el del sistema y no se ha modificado.",
       "overrideVerdict": "Cambiar resultado",
       "recordConflict": {
+        "confirmGoverningRecord": "Confirmar como determinante",
         "description": "Dos hechos de referencia tratan el mismo punto (<strong>{subject}</strong>), pero discrepan. Ambos proceden de fuentes de <strong>alta confianza</strong>, por lo que no es un problema de fiabilidad: el propio registro es incoherente. AVT no emite un resultado ni puntúa la afirmación, porque decidir qué registro prevalece es una valoración que usted debe realizar y dejar registrada; la herramienta no debe hacerla en silencio.",
         "escalatedNotice": "Marcado para el equipo de pruebas. El conflicto del registro permanece abierto y se contabiliza hasta que se elija un registro prevalente.",
         "flagForEvidenceTeam": "Marcar para el equipo de pruebas",
         "governed": "<strong>{value}</strong> prevalece: la afirmación se valora frente a este registro. El otro registro permanece archivado.",
         "reconcile": "Conciliar el registro",
+        "suggestedNotice": "Se sugiere el registro de un documento antes que el relato de un testigo. Confírmelo o elija el otro registro.",
         "title": "Pruebas contradictorias en el registro",
         "treatAsGoverningRecord": "Considerar prevalente"
       },
@@ -286,10 +288,6 @@
       "reopened": "Reabierta, comprobación pendiente",
       "reopenedTooltip": "Un revisor la reclasificó como hecho comprobable; aún está pendiente la comprobación en vivo del registro.",
       "sourceCount": "{count, plural, one {# fuente} other {# fuentes} many {# fuentes}}",
-      "unsourced": {
-        "hint": "Este hecho aún no tiene ningún documento de origen vinculado; su soporte y su fecha describen la prueba, pero no son una fuente.",
-        "label": "Sin fuente"
-      },
       "whyVerdict": "Motivo de este resultado: hechos de referencia"
     },
     "claimTypes": {
@@ -326,6 +324,7 @@
       "scopeMismatch": "Un hecho citado tiene un alcance distinto del de la afirmación. Valore si la resuelve tal como está redactada antes de que el resultado se mantenga.",
       "supported": "El registro lo confirma. Su aprobación confirma que la herramienta lo ha interpretado correctamente; no se requiere una valoración.",
       "tension": "El registro solo respalda parcialmente la afirmación. Sopese los hechos favorables y contradictorios anteriores antes de dar por válido el resultado.",
+      "testimonyOnly": "El expediente lo confirma, pero solo mediante testimonios. Su aprobación confirma que la herramienta los leyó correctamente; la conclusión sigue marcada como basada en testimonios.",
       "unsourcedOnly": "El registro lo confirma, pero solo mediante hechos que aún no tienen fuente. Su aprobación confirma que la herramienta los leyó correctamente; los hechos siguen marcados como sin fuente."
     },
     "documents": {
@@ -335,6 +334,8 @@
       "otherList": "Verificado con otra lista",
       "sizeConfirmTitle": "¿Verificar este documento?",
       "statusLoadFailed": "No se pudo cargar el estado de verificación de estos documentos.",
+      "testimony": "Testimonio",
+      "testimonyLine": "Marque como testimonio las declaraciones de testigos, las notas de entrevistas y las transcripciones. Los hechos extraídos de ellas cuentan como el relato de una persona, no como un registro.",
       "verifyAgain": "Volver a verificar"
     },
     "extraction": {
@@ -368,6 +369,16 @@
       "startFailed": "No se pudo iniciar la extracción de hechos",
       "submit": "{count, plural, =0 {Extraer hechos} one {Extraer hechos de # documento} many {Extraer hechos de # documentos} other {Extraer hechos de # documentos}}"
     },
+    "factTier": {
+      "testimony": {
+        "hint": "Todas las fuentes de este hecho son testimonios: una declaración de testigo, una nota de entrevista o una transcripción.",
+        "label": "Testimonio"
+      },
+      "unsourced": {
+        "hint": "Este hecho aún no tiene ningún documento de origen vinculado; su soporte y su fecha describen la prueba, pero no son una fuente.",
+        "label": "Sin fuente"
+      }
+    },
     "guidance": {
       "escalate": "Remitir",
       "manualJudgement": "Valoración manual",
@@ -391,6 +402,10 @@
       "scopeMismatch": {
         "hint": "Un hecho citado se refiere a un período, población, lugar o medida distintos de los de la afirmación.",
         "label": "Alcance distinto"
+      },
+      "testimonyOnly": {
+        "hint": "Todos los hechos en los que se basa esta conclusión proceden de testimonios, no del registro de un documento.",
+        "label": "Solo testimonios"
       },
       "unsourcedOnly": {
         "hint": "Ningún hecho en el que se basa este resultado tiene todavía una fuente.",
