@@ -95,6 +95,7 @@ export const GraphClaimPane = ({
     <aside
       aria-label={t("avt.graph.claimTitle")}
       className="bg-background relative flex h-[calc(100dvh-13rem)] min-h-64 w-[min(28rem,40%)] shrink-0 flex-col overflow-hidden rounded-xl border"
+      data-testid="avt-graph-claim-pane"
     >
       <Button
         aria-label={t("common.close")}
