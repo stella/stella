@@ -1,3 +1,4 @@
+// parser-output-unchanged: [sk-us] locating a stored row in its month's listing changes no parsed decision.
 // parser-output-unchanged: source-fields-sk: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -2875,6 +2876,53 @@ const reparseStoredRaw = async (
   };
 };
 
+// ── Locating a stored row in the listing ─────────────────
+
+const DECISION_MONTH = /^(\d{4}-\d{2})-\d{2}$/u;
+
+/**
+ * The month the search lists a stored row under: the listing is ranged by the
+ * decision date, which every row this adapter wrote states.
+ */
+const skUsLookupOf = (stored: StoredRawReparseInput): string | null =>
+  stored.decisionDate === null
+    ? null
+    : (DECISION_MONTH.exec(stored.decisionDate)?.[1] ?? null);
+
+/**
+ * The publisher's document id a stored row is keyed by: the id it holds, or
+ * for a row written before it held one, the id its `docDownload/{id}` URL
+ * names (the same rule `legacySourceUrls` re-keys such rows by).
+ */
+const storedSkUsDocumentId = (
+  stored: StoredRawReparseInput,
+): string | undefined => {
+  if (stored.sourceDocumentId !== null) {
+    return stored.sourceDocumentId;
+  }
+  const prefix = `${DOC_DOWNLOAD_URL}/`;
+  const url = [stored.documentUrl, stored.sourceUrl].find(
+    (candidate) => candidate?.startsWith(prefix) === true,
+  );
+  const id = url?.slice(prefix.length);
+  return id === undefined || id.length === 0 || id.includes("/")
+    ? undefined
+    : id;
+};
+
+/** A listed item is the stored row when it states the row's document id. */
+const skUsMatchesStored = (
+  { identity }: ReconciliationListingItem,
+  stored: StoredRawReparseInput,
+): boolean => {
+  const held = storedSkUsDocumentId(stored);
+  return (
+    held !== undefined &&
+    identity.type === "document" &&
+    identity.sourceDocumentId === held
+  );
+};
+
 // ── Adapter ──────────────────────────────────────────────
 
 /**
@@ -3072,6 +3120,14 @@ export const skUsAdapter = defineSourceAdapter({
     recheckHeld: {
       metadataKey: SK_US_PART_READ_METADATA_KEY,
       values: [SK_US_PART_READ_STATE.WITHHELD],
+    },
+    // A row stored as the document file alone holds no search row and no
+    // rendition this adapter reads text from, so it is located in its month
+    // and re-observed rather than upgraded from the bytes it holds.
+    recapture: {
+      lookupOf: skUsLookupOf,
+      listLookup: listSkUsSlicePage,
+      matchesStored: skUsMatchesStored,
     },
     listSlicePage: listSkUsSlicePage,
     buildDecision: buildSkUsFromPayload,
