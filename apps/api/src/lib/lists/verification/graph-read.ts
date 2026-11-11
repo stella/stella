@@ -18,14 +18,9 @@ import { panic } from "better-result";
 import { and, asc, desc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
-
 import type { Transaction } from "@/api/db/root";
 import {
-  entities,
   legalListClaims,
-  legalListFactDetails,
-  legalListItems,
   legalLists,
   legalListVerificationRuns,
 } from "@/api/db/schema";
@@ -35,7 +30,10 @@ import type {
   VerificationEvidenceFact,
 } from "@/api/lib/lists/verification/contract";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
-import { readFactSources } from "@/api/lib/lists/verification/evidence";
+import {
+  readFactSources,
+  readListFactRows,
+} from "@/api/lib/lists/verification/evidence";
 import { buildVerificationGraph } from "@/api/lib/lists/verification/graph";
 import type {
   GraphClaimInput,
@@ -266,63 +264,99 @@ const planPage = async ({
   const totals = new Map(counted.map((row) => [row.runId, row.total]));
   const remainingOf = new Map(counted.map((row) => [row.runId, row.remaining]));
 
-  const statements: StatementRow[] = [];
-  const ranges: ClaimRange[] = [];
+  const fit = fitBudget({
+    candidates,
+    remainingOf,
+    resumeRun,
+    resumeAfter,
+    limit,
+  });
+  const statements = fit.whole.map(({ row }) => row);
+  const ranges: ClaimRange[] = fit.whole.map(({ row, after }) => ({
+    runId: row.runId,
+    after,
+    upTo: null,
+  }));
+  if (fit.split === null) {
+    const last = statements.at(-1) ?? panic("A page planned no rows");
+    return {
+      statements,
+      ranges,
+      totals,
+      next:
+        fit.more || rows.length > candidates.length
+          ? { ...last, afterPosition: null }
+          : null,
+    };
+  }
+  // The document does not fit: take what is left of the budget and continue
+  // inside it on the next page.
+  const { row, after, take } = fit.split;
+  const cut = (
+    await tx
+      .select({ position: legalListClaims.position })
+      .from(legalListClaims)
+      .where(
+        and(
+          eq(legalListClaims.workspaceId, workspaceId),
+          eq(legalListClaims.runId, row.runId),
+          after === null ? undefined : gt(legalListClaims.position, after),
+        ),
+      )
+      .orderBy(asc(legalListClaims.position))
+      .offset(take - 1)
+      .limit(1)
+  ).at(0);
+  const upTo = cut?.position ?? panic("A counted document lost its claims");
+  return {
+    statements: [...statements, row],
+    ranges: [...ranges, { runId: row.runId, after, upTo }],
+    totals,
+    next: { ...row, afterPosition: upTo },
+  };
+};
+
+type FitBudgetArgs = {
+  candidates: readonly StatementRow[];
+  remainingOf: ReadonlyMap<RunId, number>;
+  resumeRun: RunId | null;
+  resumeAfter: number | null;
+  limit: number;
+};
+
+type Fitted = { row: StatementRow; after: number | null };
+
+/**
+ * The documents a page carries whole, and the one it splits (taking `take`
+ * claims) when the next does not fit; `more` says whether documents are
+ * left after the whole ones without a split.
+ */
+const fitBudget = ({
+  candidates,
+  remainingOf,
+  resumeRun,
+  resumeAfter,
+  limit,
+}: FitBudgetArgs): {
+  whole: Fitted[];
+  split: (Fitted & { take: number }) | null;
+  more: boolean;
+} => {
+  const whole: Fitted[] = [];
   let budget = limit;
   for (const row of candidates) {
     const after = row.runId === resumeRun ? resumeAfter : null;
     const remaining = remainingOf.get(row.runId) ?? 0;
     if (remaining <= budget) {
-      statements.push(row);
-      ranges.push({ runId: row.runId, after, upTo: null });
+      whole.push({ row, after });
       budget -= remaining;
       continue;
     }
-    if (budget === 0) {
-      const previous = statements.at(-1) ?? panic("A page planned no rows");
-      return {
-        statements,
-        ranges,
-        totals,
-        next: { ...previous, afterPosition: null },
-      };
-    }
-    // The document does not fit: take what is left of the budget and
-    // continue inside it on the next page.
-    // db-await-in-loop: runs at most once per page; the loop returns right after it.
-    const cut = (
-      await tx
-        .select({ position: legalListClaims.position })
-        .from(legalListClaims)
-        .where(
-          and(
-            eq(legalListClaims.workspaceId, workspaceId),
-            eq(legalListClaims.runId, row.runId),
-            after === null ? undefined : gt(legalListClaims.position, after),
-          ),
-        )
-        .orderBy(asc(legalListClaims.position))
-        .offset(budget - 1)
-        .limit(1)
-    ).at(0);
-    const upTo = cut?.position ?? panic("A counted document lost its claims");
-    statements.push(row);
-    ranges.push({ runId: row.runId, after, upTo });
-    return {
-      statements,
-      ranges,
-      totals,
-      next: { ...row, afterPosition: upTo },
-    };
+    return budget === 0
+      ? { whole, split: null, more: true }
+      : { whole, split: { row, after, take: budget }, more: true };
   }
-  const more = rows.length > candidates.length;
-  const last = statements.at(-1) ?? panic("A page planned no rows");
-  return {
-    statements,
-    ranges,
-    totals,
-    next: more ? { ...last, afterPosition: null } : null,
-  };
+  return { whole, split: null, more: false };
 };
 
 const rangeCondition = ({ runId, after, upTo }: ClaimRange) =>
@@ -338,38 +372,13 @@ const readListFacts = async ({
   workspaceId,
   listId,
 }: Pick<ReadVerificationGraphArgs, "tx" | "workspaceId" | "listId">) => {
-  const rows = await tx
-    .select({
-      factEntityId: legalListItems.entityId,
-      text: entities.name,
-      occurredOn: legalListFactDetails.occurredOn,
-      occurredOnPrecision: legalListFactDetails.occurredOnPrecision,
-      evidenceKind: legalListFactDetails.evidenceKind,
-      medium: legalListFactDetails.medium,
-      confidence: legalListFactDetails.confidence,
-      interpretationNote: legalListFactDetails.interpretationNote,
-    })
-    .from(legalListItems)
-    .innerJoin(
-      entities,
-      and(
-        eq(entities.id, legalListItems.entityId),
-        eq(entities.workspaceId, legalListItems.workspaceId),
-      ),
-    )
-    .leftJoin(
-      legalListFactDetails,
-      eq(legalListFactDetails.itemEntityId, legalListItems.entityId),
-    )
-    .where(
-      and(
-        eq(legalListItems.workspaceId, workspaceId),
-        eq(legalListItems.listId, listId),
-        eq(entities.listItemType, LIST_ITEM_TYPE.FACT),
-      ),
-    )
-    .orderBy(asc(legalListItems.position), asc(legalListItems.entityId))
-    .limit(VERIFICATION_LIMITS.GRAPH_FACTS_MAX + 1);
+  const rows = await readListFactRows({
+    tx,
+    workspaceId,
+    listId,
+    held: "included",
+    limit: VERIFICATION_LIMITS.GRAPH_FACTS_MAX + 1,
+  });
   const listed = rows.slice(0, VERIFICATION_LIMITS.GRAPH_FACTS_MAX);
   const sources = await readFactSources({
     tx,
@@ -495,7 +504,9 @@ const graphFacts = ({
   const linked = new Set<FactId>(
     claims.flatMap((claim) => [
       ...claim.refs.map((ref) => ref.factEntityId),
-      ...(claim.recordConflict?.factEntityIds ?? []),
+      ...(claim.recordConflict === null
+        ? []
+        : claim.recordConflict.factEntityIds),
     ]),
   );
   const offList = [...linked]

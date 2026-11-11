@@ -50,7 +50,7 @@ export const TIER_LABEL_KEYS = {
 const GUTTER = 64;
 /** Below this the columns stop shrinking and the canvas scrolls sideways
  *  inside its frame; narrower screens get the list form instead. */
-export const CANVAS_MIN_WIDTH = 880;
+const CANVAS_MIN_WIDTH = 880;
 /** Rows drawn above and below the visible part of a long column. */
 const OVERSCAN = 480;
 /** The column labels' row, above the first node. */
@@ -67,7 +67,7 @@ type Column = { x: number; width: number };
 type Columns = Record<keyof typeof COLUMN_SHARES, Column> & { total: number };
 
 /** Where each column starts and how wide it is, from the reading start. */
-export const columnsFor = (available: number): Columns => {
+const columnsFor = (available: number): Columns => {
   const total = Math.max(available, CANVAS_MIN_WIDTH);
   const content = total - 3 * GUTTER;
   let x = 0;
@@ -459,7 +459,7 @@ const GraphNode = ({
   >
     <span
       className={cn(
-        "bg-card relative flex size-full min-w-0 flex-col justify-center overflow-hidden rounded-md border px-2.5 text-start text-xs shadow-xs transition-[opacity,border-color,box-shadow] duration-150 select-none",
+        "bg-card relative flex size-full min-w-0 flex-col justify-center overflow-hidden rounded-md border px-2.5 text-start text-xs shadow-xs transition-opacity duration-150 select-none",
         "hover:border-ring",
         dimmed && "opacity-25",
         focused && "border-ring ring-ring/40 ring-2",

@@ -11,10 +11,10 @@ import { panic } from "better-result";
 import type { ClaimState, VerificationGraphPage } from "@/features/avt/types";
 import { isConflictState } from "@/features/avt/verdict";
 
-export type GraphStatement = VerificationGraphPage["statements"][number];
+type GraphStatement = VerificationGraphPage["statements"][number];
 export type GraphClaim = VerificationGraphPage["claims"][number];
 export type GraphFact = VerificationGraphPage["facts"][number];
-export type GraphSource = VerificationGraphPage["sources"][number];
+type GraphSource = VerificationGraphPage["sources"][number];
 export type GraphCitation = VerificationGraphPage["citations"][number];
 export type GraphProvenance = VerificationGraphPage["provenance"][number];
 export type GraphFactTier = GraphFact["tier"];
@@ -29,6 +29,10 @@ export type GraphModel = {
   /** The list holds more facts than the graph carries. */
   factOverflow: boolean;
 };
+
+/** Facts on the list sort before facts only a run still pins. */
+const listedRank = (fact: Pick<GraphFact, "listed">): number =>
+  fact.listed ? 0 : 1;
 
 const provenanceKey = (edge: GraphProvenance) =>
   `${edge.factId}|${edge.sourceId}|${JSON.stringify(edge.locator)}`;
@@ -86,7 +90,7 @@ export const mergeGraphPages = (
     ),
     // Facts on the list first, in list order, as the server sends them.
     facts: [...facts.values()].toSorted(
-      (a, b) => Number(b.listed) - Number(a.listed),
+      (a, b) => listedRank(a) - listedRank(b),
     ),
     sources: [...sources.values()],
     citations: [...citations.values()],
@@ -192,7 +196,7 @@ export const filterGraph = (
   };
 };
 
-export type GraphNodeKind = "statement" | "claim" | "fact" | "source";
+type GraphNodeKind = "statement" | "claim" | "fact" | "source";
 export type GraphNodeRef = { kind: GraphNodeKind; id: string };
 
 export const nodeKey = ({ kind, id }: GraphNodeRef) => `${kind}:${id}`;
@@ -301,6 +305,26 @@ export type GraphLayout = {
   height: number;
 };
 
+/** The centres each node links to, by node; a node linking nothing drawn
+ *  has no entry. */
+const collectCentres = (
+  links: readonly { key: string; centre: number | undefined }[],
+): ReadonlyMap<string, readonly number[]> => {
+  const centres = new Map<string, number[]>();
+  for (const { key, centre } of links) {
+    if (centre === undefined) {
+      continue;
+    }
+    const known = centres.get(key);
+    if (known === undefined) {
+      centres.set(key, [centre]);
+    } else {
+      known.push(centre);
+    }
+  }
+  return centres;
+};
+
 const mean = (values: readonly number[]): number | null =>
   values.length === 0
     ? null
@@ -382,19 +406,18 @@ export const layoutGraph = (model: GraphModel): GraphLayout => {
   }
   const claimsBottom = cursor;
 
-  const factLinks = new Map<string, number[]>();
-  for (const edge of model.citations) {
-    const centre = claimCentre.get(edge.claimId);
-    if (centre !== undefined) {
-      factLinks.set(edge.factId, [
-        ...(factLinks.get(edge.factId) ?? []),
-        centre,
-      ]);
-    }
-  }
+  const factLinks = collectCentres(
+    model.citations.map((edge) => ({
+      key: edge.factId,
+      centre: claimCentre.get(edge.claimId),
+    })),
+  );
   const facts = placeColumn(
     model.facts,
-    (fact) => mean(factLinks.get(fact.id) ?? []),
+    (fact) => {
+      const centres = factLinks.get(fact.id);
+      return centres === undefined ? null : mean(centres);
+    },
     factHeight,
   );
   const factCentre = new Map<string, number>();
@@ -407,23 +430,19 @@ export const layoutGraph = (model: GraphModel): GraphLayout => {
     factCentre.set(fact.id, top + factHeight / 2);
   }
 
-  const sourceLinks = new Map<string, number[]>();
-  for (const edge of model.provenance) {
-    const centre = factCentre.get(edge.factId);
-    if (centre !== undefined) {
-      sourceLinks.set(edge.sourceId, [
-        ...(sourceLinks.get(edge.sourceId) ?? []),
-        centre,
-      ]);
-    }
-  }
+  const sourceLinks = collectCentres(
+    model.provenance.map((edge) => ({
+      key: edge.sourceId,
+      centre: factCentre.get(edge.factId),
+    })),
+  );
   const sources = placeColumn(
     model.sources,
     // A document many facts cite sits by the first of them, so the column
     // reads from the top rather than drifting to the middle of a long list.
     (source) => {
-      const centres = sourceLinks.get(source.id) ?? [];
-      return centres.length === 0 ? null : Math.min(...centres);
+      const centres = sourceLinks.get(source.id);
+      return centres === undefined ? null : Math.min(...centres);
     },
     sourceHeight,
   );

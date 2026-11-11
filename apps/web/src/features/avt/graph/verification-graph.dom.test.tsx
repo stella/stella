@@ -206,7 +206,7 @@ test("focusing a fact keeps its claims and sources and dims the rest", async () 
 test("a record conflict draws both records from its claim", async () => {
   await mount("graph");
   const edges = [...canvas().querySelectorAll<SVGPathElement>("[data-edge]")]
-    .map((edge) => edge.dataset.edge)
+    .map((edge) => edge.dataset["edge"])
     .filter((key) => key?.startsWith(graphClaimId(2)) === true);
   expect(edges.toSorted()).toEqual(
     [

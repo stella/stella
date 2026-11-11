@@ -49,42 +49,13 @@ export const readVerificationEvidence = async ({
   listId,
 }: ReadEvidenceArgs): Promise<ReadEvidenceOutcome> => {
   // One more than the cap, so an oversized list is reported, not truncated.
-  const facts = await tx
-    .select({
-      factEntityId: legalListItems.entityId,
-      text: entities.name,
-      occurredOn: legalListFactDetails.occurredOn,
-      occurredOnPrecision: legalListFactDetails.occurredOnPrecision,
-      evidenceKind: legalListFactDetails.evidenceKind,
-      medium: legalListFactDetails.medium,
-      confidence: legalListFactDetails.confidence,
-      interpretationNote: legalListFactDetails.interpretationNote,
-    })
-    .from(legalListItems)
-    .innerJoin(
-      entities,
-      and(
-        eq(entities.id, legalListItems.entityId),
-        eq(entities.workspaceId, legalListItems.workspaceId),
-      ),
-    )
-    .leftJoin(
-      legalListFactDetails,
-      eq(legalListFactDetails.itemEntityId, legalListItems.entityId),
-    )
-    .where(
-      and(
-        eq(legalListItems.workspaceId, workspaceId),
-        eq(legalListItems.listId, listId),
-        eq(entities.listItemType, LIST_ITEM_TYPE.FACT),
-        or(
-          isNull(legalListFactDetails.scoring),
-          ne(legalListFactDetails.scoring, "held"),
-        ),
-      ),
-    )
-    .orderBy(asc(legalListItems.position), asc(legalListItems.entityId))
-    .limit(VERIFICATION_LIMITS.FACTS_PER_RUN_MAX + 1);
+  const facts = await readListFactRows({
+    tx,
+    workspaceId,
+    listId,
+    held: "left-out",
+    limit: VERIFICATION_LIMITS.FACTS_PER_RUN_MAX + 1,
+  });
   if (facts.length > VERIFICATION_LIMITS.FACTS_PER_RUN_MAX) {
     return { type: "too-many-facts", count: facts.length };
   }
@@ -115,6 +86,62 @@ export const readVerificationEvidence = async ({
     },
   };
 };
+
+type ReadListFactRowsArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  listId: SafeId<"legalList">;
+  /** A run leaves held facts out; the list's graph draws them. */
+  held: "left-out" | "included";
+  limit: number;
+};
+
+/** The list's facts with their details, in list order, up to `limit`. */
+export const readListFactRows = async ({
+  tx,
+  workspaceId,
+  listId,
+  held,
+  limit,
+}: ReadListFactRowsArgs) =>
+  await tx
+    .select({
+      factEntityId: legalListItems.entityId,
+      text: entities.name,
+      occurredOn: legalListFactDetails.occurredOn,
+      occurredOnPrecision: legalListFactDetails.occurredOnPrecision,
+      evidenceKind: legalListFactDetails.evidenceKind,
+      medium: legalListFactDetails.medium,
+      confidence: legalListFactDetails.confidence,
+      interpretationNote: legalListFactDetails.interpretationNote,
+    })
+    .from(legalListItems)
+    .innerJoin(
+      entities,
+      and(
+        eq(entities.id, legalListItems.entityId),
+        eq(entities.workspaceId, legalListItems.workspaceId),
+      ),
+    )
+    .leftJoin(
+      legalListFactDetails,
+      eq(legalListFactDetails.itemEntityId, legalListItems.entityId),
+    )
+    .where(
+      and(
+        eq(legalListItems.workspaceId, workspaceId),
+        eq(legalListItems.listId, listId),
+        eq(entities.listItemType, LIST_ITEM_TYPE.FACT),
+        held === "included"
+          ? undefined
+          : or(
+              isNull(legalListFactDetails.scoring),
+              ne(legalListFactDetails.scoring, "held"),
+            ),
+      ),
+    )
+    .orderBy(asc(legalListItems.position), asc(legalListItems.entityId))
+    .limit(limit);
 
 type ReadFactSourcesArgs = {
   tx: Pick<Transaction, "select">;

@@ -29,7 +29,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 
 /** How a chip names the link: what the fact does for the claim. */
-const relationKey = (edge: GraphCitation): TranslationKey => {
+const relationKey = (edge: GraphCitation) => {
   if (edge.type === "record-conflict") {
     return edge.governs
       ? "avt.graph.relation.governs"

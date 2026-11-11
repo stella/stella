@@ -55,7 +55,7 @@ export type GraphClaimInput = {
   qualifiers: readonly ClaimQualifier["kind"][];
 };
 
-export type GraphSourceInput = {
+type GraphSourceInput = {
   documentId: DocumentId;
   documentName: string;
   locator: LegalListSourceLocator;
@@ -85,7 +85,7 @@ export type GraphInput = {
  * withheld verdict sits between, each drawn, never one for the pair. A fact
  * both cited and in conflict is one edge, the conflict.
  */
-export type GraphCitation =
+type GraphCitation =
   | {
       type: "cites";
       claimId: ClaimId;
@@ -103,7 +103,7 @@ export type GraphCitation =
     };
 
 /** Where a fact comes from: a document, at a place in it. */
-export type GraphProvenance = {
+type GraphProvenance = {
   factId: FactId;
   sourceId: DocumentId;
   locator: LegalListSourceLocator;
@@ -273,5 +273,3 @@ export const buildVerificationGraph = ({
     provenance,
   };
 };
-
-export type VerificationGraph = ReturnType<typeof buildVerificationGraph>;

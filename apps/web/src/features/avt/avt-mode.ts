@@ -5,7 +5,7 @@
  * Kept free of imports so the route's search schema reads it without
  * loading the view.
  */
-export const AVT_MODE = {
+const AVT_MODE = {
   graph: "graph",
   chronology: "chronology",
 } as const;
