@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "Spúšťanie chatov vo vašom počítači nie je pre váš účet dostupné.",
       "runOn": "Spustiť na",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit vyčerpaný do {time}",
+      "stateModelUnavailable": "Model už nie je k dispozícii",
       "stateNeedsLogin": "Vyžaduje prihlásenie",
       "stateNotInstalled": "Nie je nainštalované",
       "stateOffline": "Počítač je offline",
@@ -4399,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {Nájdená # zručnosť} few {Nájdené # zručnosti} other {Nájdených # zručností} many {Nájdené # zručnosti}}",
       "discoveryEmpty": "V tomto repozitári ani priečinku sa nenašli žiadne zručnosti.",
       "discoverySkippedInvalid": "{count, plural, one {# neplatná zručnosť bola preskočená} few {# neplatné zručnosti boli preskočené} other {# neplatných zručností bolo preskočených} many {# neplatnej zručnosti bolo preskočené}}",
+      "dropPack": "Presuňte sem .zip alebo SKILL.md a zručnosť sa naimportuje",
       "editSkill": "Upraviť zručnosť",
       "enableSkill": "Zapnúť zručnosť",
       "fileExists": "Súbor s touto cestou už existuje",
@@ -4456,6 +4459,7 @@
         }
       },
       "uploadHelp": "Použite súbor SKILL.md alebo priečinok .zip obsahujúci SKILL.md a voliteľné zdroje iba na čítanie.",
+      "uploadPack": "Nahrať .zip alebo SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/zrucnosti",
       "version": "Verzia: {version}"
     },

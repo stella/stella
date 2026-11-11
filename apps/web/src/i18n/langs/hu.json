@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
       "runOn": "Futtatás itt",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Korlát elérve eddig: {time}",
+      "stateModelUnavailable": "A modell már nem érhető el",
       "stateNeedsLogin": "Bejelentkezés szükséges",
       "stateNotInstalled": "Nincs telepítve",
       "stateOffline": "A számítógép offline",
@@ -4399,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {# készség található} other {# készség található}}",
       "discoveryEmpty": "Ebben a tárolóban vagy mappában nem található készség.",
       "discoverySkippedInvalid": "{count, plural, one {# érvénytelen készség kihagyva} other {# érvénytelen készség kihagyva}}",
+      "dropPack": "Húzzon ide egy .zip vagy SKILL.md fájlt a készség importálásához",
       "editSkill": "Készség szerkesztése",
       "enableSkill": "Készség bekapcsolása",
       "fileExists": "Ezen az útvonalon már létezik fájl",
@@ -4456,6 +4459,7 @@
         }
       },
       "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
+      "uploadPack": ".zip vagy SKILL.md feltöltése",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"
     },

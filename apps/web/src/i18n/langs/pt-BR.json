@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "Executar chats no seu computador não está disponível para sua conta.",
       "runOn": "Executar em",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limite atingido até {time}",
+      "stateModelUnavailable": "Modelo não está mais disponível",
       "stateNeedsLogin": "É preciso entrar",
       "stateNotInstalled": "Não instalado",
       "stateOffline": "Computador offline",
@@ -4399,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {# habilidade encontrada} other {# habilidades encontradas} many {# habilidades encontradas}}",
       "discoveryEmpty": "Nenhuma habilidade foi encontrada neste repositório ou pasta.",
       "discoverySkippedInvalid": "{count, plural, one {# habilidade inválida foi ignorada} other {# habilidades inválidas foram ignoradas} many {# habilidades inválidas foram ignoradas}}",
+      "dropPack": "Solte um .zip ou SKILL.md para importar a habilidade",
       "editSkill": "Editar habilidade",
       "enableSkill": "Ativar habilidade",
       "fileExists": "Já existe um arquivo com este caminho",
@@ -4456,6 +4459,7 @@
         }
       },
       "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip contendo SKILL.md e recursos opcionais somente leitura.",
+      "uploadPack": "Enviar .zip ou SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"
     },

@@ -65,9 +65,13 @@ export const COMPOSER_LARGE_TEXT_WELL_CLASS = "ps-3 pe-3 pt-2 pb-1";
 /** The `large` editable element's stature: three lines before it grows. */
 export const COMPOSER_LARGE_EDITOR_CLASS = "min-h-15";
 
-/** The placeholder painted over an empty editor, in either stature. */
+/**
+ * The placeholder painted over an empty editor, in either stature.
+ * `ComposerPlaceholder` cuts its text through TruncatedText; a row that wears
+ * this class around other content cuts its own text the same way.
+ */
 export const COMPOSER_PLACEHOLDER_CLASS =
-  "text-foreground-placeholder pointer-events-none absolute truncate text-sm";
+  "text-foreground-placeholder pointer-events-none absolute text-sm";
 
 /** The `large` action row under the text well: leading controls, trailing send. */
 export const COMPOSER_LARGE_ACTION_ROW_CLASS =

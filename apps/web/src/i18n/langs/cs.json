@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "Spouštění chatů ve vašem počítači není pro váš účet dostupné.",
       "runOn": "Spustit na",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit vyčerpán do {time}",
+      "stateModelUnavailable": "Model už není k dispozici",
       "stateNeedsLogin": "Vyžaduje přihlášení",
       "stateNotInstalled": "Není nainstalováno",
       "stateOffline": "Počítač je offline",
@@ -4399,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {Nalezena # dovednost} few {Nalezeny # dovednosti} other {Nalezeno # dovedností} many {Nalezeno # dovednosti}}",
       "discoveryEmpty": "V tomto repozitáři ani složce nebyly nalezeny žádné dovednosti.",
       "discoverySkippedInvalid": "{count, plural, one {# neplatná dovednost byla přeskočena} few {# neplatné dovednosti byly přeskočeny} other {# neplatných dovedností bylo přeskočeno} many {# neplatné dovednosti bylo přeskočeno}}",
+      "dropPack": "Přetáhněte sem .zip nebo SKILL.md a dovednost se naimportuje",
       "editSkill": "Upravit dovednost",
       "enableSkill": "Zapnout dovednost",
       "fileExists": "Soubor s touto cestou již existuje",
@@ -4456,6 +4459,7 @@
         }
       },
       "uploadHelp": "Použijte soubor SKILL.md nebo složku .zip obsahující SKILL.md a volitelné zdroje jen pro čtení.",
+      "uploadPack": "Nahrát .zip nebo SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/dovednosti",
       "version": "Verze: {version}"
     },

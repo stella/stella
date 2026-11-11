@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
       "runOn": "Paleisti",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limitas pasiektas iki {time}",
+      "stateModelUnavailable": "Modelis nebepasiekiamas",
       "stateNeedsLogin": "Reikia prisijungti",
       "stateNotInstalled": "Neįdiegta",
       "stateOffline": "Kompiuteris neprisijungęs",
@@ -4399,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {Rastas # įgūdis} few {Rasti # įgūdžiai} other {Rasta # įgūdžių} many {Rasta # įgūdžių}}",
       "discoveryEmpty": "Šioje saugykloje ar aplanke įgūdžių nerasta.",
       "discoverySkippedInvalid": "{count, plural, one {Praleistas # netinkamas įgūdis} few {Praleisti # netinkami įgūdžiai} other {Praleista # netinkamų įgūdžių} many {Praleista # netinkamų įgūdžių}}",
+      "dropPack": "Vilkite .zip arba SKILL.md failą, kad importuotumėte įgūdį",
       "editSkill": "Redaguoti įgūdį",
       "enableSkill": "Įjungti įgūdį",
       "fileExists": "Failas šiuo keliu jau yra",
@@ -4456,6 +4459,7 @@
         }
       },
       "uploadHelp": "Naudokite SKILL.md failą arba .zip aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
+      "uploadPack": "Įkelti .zip arba SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"
     },

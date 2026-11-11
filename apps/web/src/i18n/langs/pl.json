@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
       "runOn": "Uruchom na",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit wyczerpany do {time}",
+      "stateModelUnavailable": "Model nie jest już dostępny",
       "stateNeedsLogin": "Wymaga zalogowania",
       "stateNotInstalled": "Nie zainstalowano",
       "stateOffline": "Komputer offline",
@@ -4399,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {Znaleziono # umiejętność} few {Znaleziono # umiejętności} many {Znaleziono # umiejętności} other {Znaleziono # umiejętności}}",
       "discoveryEmpty": "W tym repozytorium lub folderze nie znaleziono umiejętności.",
       "discoverySkippedInvalid": "{count, plural, one {Pominięto # nieprawidłową umiejętność} few {Pominięto # nieprawidłowe umiejętności} many {Pominięto # nieprawidłowych umiejętności} other {Pominięto # nieprawidłowych umiejętności}}",
+      "dropPack": "Upuść plik .zip lub SKILL.md, aby zaimportować umiejętność",
       "editSkill": "Edytuj umiejętność",
       "enableSkill": "Włącz umiejętność",
       "fileExists": "Plik o tej ścieżce już istnieje",
@@ -4456,6 +4459,7 @@
         }
       },
       "uploadHelp": "Użyj pliku SKILL.md lub folderu .zip zawierającego SKILL.md i opcjonalne zasoby tylko do odczytu.",
+      "uploadPack": "Prześlij .zip lub SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/sciezka/do/umiejetnosci",
       "version": "Wersja: {version}"
     },
