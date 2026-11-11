@@ -124,7 +124,8 @@ theirs. A customer is not a buyer and a supplier is not a seller: a
 customer, supplier, recipient, discloser, controller, or processor gets no
 `scope.perspective`. Keep the
 returned `playbook_id` and `updatedAt`. The user sees the playbook fill in
-as you save, so do not hold positions back to save them all at the end.
+as you save, so keep saving as positions settle and do not hold them back to
+save them all at the end.
 
 ## 4. Build positions
 
@@ -163,10 +164,13 @@ them.
 
 ## Saving rules
 
-- Save each position when it settles, one position per call, written in the
-  playbook's language; never put several positions in one call, not even
-  the first. After the first save, pass `playbook_id` and the latest
-  `updatedAt` as `expected_updated_at`.
+- The first save carries one position. After it, save the positions that
+  settled since your last save together in one call, at most 5 positions
+  per call: for example after a round of the user's answers, or after
+  reading their contracts. Every save asks the user for approval, so
+  group settled positions instead of saving them one by one. Write them in
+  the playbook's language. After the first save, pass `playbook_id` and the
+  latest `updatedAt` as `expected_updated_at`.
 - Send only positions that are new or changed. Never resend the playbook or a
   position you did not change.
 - To change a stored position, pass its `sourceId` as `source_id`; to add one,
