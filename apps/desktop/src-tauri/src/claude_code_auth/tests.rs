@@ -689,3 +689,25 @@ fn the_backoff_doubles_from_its_first_wait_up_to_its_ceiling() {
   assert_eq!(waits, [15, 30, 60, 100, 100, 100]);
   assert_eq!(config.backoff(u32::MAX).as_secs(), 100);
 }
+
+#[test]
+fn a_sign_in_cancelled_after_its_login_stored_shows_the_new_sign_in() {
+  run(|| async {
+    let (fixture, auth) =
+      cached_fixture(Duration::from_secs(10), Duration::from_secs(60));
+    // Read and kept before the sign-in starts.
+    assert_eq!(auth.status().await, ClaudeCodeStatus::SignedOut);
+    auth.start();
+    page_shown(&auth).await;
+    fixture.mark("status-stall");
+    fixture.mark("approve");
+    written(&fixture, "status-pid").await;
+    // The login stored the sign-in; its own read is still pending.
+    auth.cancel();
+    tokio::time::timeout(Duration::from_secs(5), auth.settled())
+      .await
+      .expect("the cancelled sign-in kept the sign-in busy");
+    std::fs::remove_file(fixture.home().join("status-stall")).unwrap();
+    assert!(signed_in(&auth.status().await));
+  });
+}

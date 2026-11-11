@@ -358,7 +358,8 @@ impl ClaudeCodeAuth {
     });
   }
 
-  /// Stops the sign-in in progress, if any; its CLI is killed.
+  /// Stops the sign-in in progress, if any; its CLI is killed. The login may
+  /// already have stored a sign-in, so the next status reads the CLI again.
   pub(crate) fn cancel(&self) {
     let cancelled = self
       .0
@@ -366,6 +367,7 @@ impl ClaudeCodeAuth {
       .lock()
       .is_ok_and(|mut attempt| attempt.take().is_some());
     if cancelled {
+      self.invalidate();
       (self.0.hooks.changed)();
     }
   }
