@@ -232,6 +232,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PATCH /v1/chat/threads/:threadId/pin-state": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/chat/threads/:threadId/read-state": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PATCH /v1/chat/threads/:threadId/title": {
     type: "non-replay",
     reason: "current-state",

@@ -8,6 +8,7 @@ import type {
 import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
@@ -256,11 +257,13 @@ export const fetchOlderMessages = async ({
 
 const fetchGroupedChatThreads = async ({
   cursor,
+  pinState,
   search,
   signal,
   workspaceId,
 }: {
   cursor?: string | undefined;
+  pinState?: ChatThreadPinState | undefined;
   search?: string | undefined;
   signal?: AbortSignal | undefined;
   workspaceId?: string | undefined;
@@ -270,6 +273,7 @@ const fetchGroupedChatThreads = async ({
     query: {
       limit: CHAT_THREADS_PAGE_SIZE,
       ...(cursor !== undefined && { cursor }),
+      ...(pinState !== undefined && { pinState }),
       ...(search !== undefined && { search }),
       ...(workspaceId !== undefined && {
         workspaceId: toSafeId<"workspace">(workspaceId),
@@ -1082,6 +1086,7 @@ export const localRunnersOptions = (activeOrganizationId: string) =>
 
 export const groupedChatThreadsOptions = ({
   activeOrganizationId,
+  pinState,
   search,
   userId,
   workspaceId,
@@ -1090,6 +1095,7 @@ export const groupedChatThreadsOptions = ({
   return infiniteQueryOptions({
     queryKey: chatKeys.groupedThreads({
       activeOrganizationId,
+      pinState,
       search: normalizedSearch,
       userId,
       workspaceId,
@@ -1099,6 +1105,7 @@ export const groupedChatThreadsOptions = ({
     queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
       await fetchGroupedChatThreads({
         cursor: pageParam,
+        pinState,
         search: normalizedSearch,
         signal,
         workspaceId,

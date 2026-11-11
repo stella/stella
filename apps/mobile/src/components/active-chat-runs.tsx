@@ -170,6 +170,9 @@ const useRunsStream = (
       // The app hears of notifications through push.
       case REALTIME_EVENT_TYPE.NEW_NOTIFICATION:
         return;
+      // The chats inbox has no read or pin state to refresh yet.
+      case REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED:
+        return;
       default:
         eventType satisfies never;
         panic("Unhandled user realtime event");
