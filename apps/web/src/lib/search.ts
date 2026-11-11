@@ -137,6 +137,15 @@ const searchKeys = {
         limit: params.limit,
       },
     ] as const,
+  caseLawSection: (params: CaseLawSectionParams) =>
+    [
+      ...searchKeys.owner(params),
+      "case-law-section",
+      {
+        query: normalizeSearchQuery(params.query),
+        limit: params.limit,
+      },
+    ] as const,
   preview: ({
     organizationId,
     userId,
@@ -219,6 +228,42 @@ export const searchInfiniteOptions = (params: SearchParams) =>
           mimeTypes: params.mimeTypes,
           ...(params.updatedFrom ? { updatedFrom: params.updatedFrom } : {}),
           ...(params.updatedTo ? { updatedTo: params.updatedTo } : {}),
+          ...(pageParam ? { cursor: pageParam } : {}),
+          ...(params.limit !== undefined ? { limit: params.limit } : {}),
+        },
+        { fetch: { signal } },
+      );
+
+      return unwrapApiResponse(response);
+    },
+    initialPageParam: stringCursorSeed(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    placeholderData: (previousData, previousQuery) =>
+      belongsToSearchOwner(previousQuery?.queryKey, params)
+        ? previousData
+        : undefined,
+    enabled: params.enabled,
+  });
+
+export type CaseLawSectionParams = SearchOwner & {
+  /** UI-owned gate: the query is typed and settled. */
+  enabled: boolean;
+  query: string;
+  limit?: number | undefined;
+};
+
+/**
+ * The palette's case-law section. The public corpus is answered by its own
+ * search engine (per country, the organization's practised ones first), not by
+ * the matter search above, so the matter filters do not apply to it.
+ */
+export const caseLawSectionInfiniteOptions = (params: CaseLawSectionParams) =>
+  infiniteQueryOptions({
+    queryKey: searchKeys.caseLawSection(params),
+    queryFn: async ({ signal, pageParam }) => {
+      const response = await api.search["case-law"].post(
+        {
+          query: normalizeSearchQuery(params.query),
           ...(pageParam ? { cursor: pageParam } : {}),
           ...(params.limit !== undefined ? { limit: params.limit } : {}),
         },

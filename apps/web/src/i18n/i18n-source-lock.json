@@ -4484,8 +4484,6 @@
   "routeError.title": "This page couldn’t be opened",
   "search.aiRefine": "Improve query with AI",
   "search.caseLawEmptyState": "Start typing to search court decisions.",
-  "search.caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
-  "search.caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",
   "search.chatCoveragePartial": "Not every chat was searched in full.",
   "search.continueInChat": "Continue in chat",
   "search.dateFrom": "From",
