@@ -15,7 +15,7 @@ const SEVERITY_RANK = {
 } as const satisfies Record<ConflictSeverity, number>;
 
 /** The more severe of two severities. */
-export const moreSevere = (
+const moreSevere = (
   left: ConflictSeverity,
   right: ConflictSeverity,
 ): ConflictSeverity =>

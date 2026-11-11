@@ -24,10 +24,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
  * near its ceiling while unrelated names rarely reach it. A missed conflict
  * costs more than a false hit, so the check does not raise it.
  */
-export const CONFLICT_MATCH_CUTOFF = DEFAULT_CUTOFF;
+const CONFLICT_MATCH_CUTOFF = DEFAULT_CUTOFF;
 const STRONG_NAME_SCORE = 0.95;
 
-export type PartyMatch = {
+type PartyMatch = {
   contact: ScreenedContact;
   tier: ConflictMatchTier;
   score: number;
@@ -74,7 +74,7 @@ const queries = (party: ConflictParty): ScreeningQuery[] => {
           }
         }
       };
-      return [name, ...(party.aliases ?? [])].map((each): ScreeningQuery => ({
+      return [name, ...party.aliases].map((each): ScreeningQuery => ({
         name: each,
         entityType: "person",
         ...birthDate(),
@@ -89,13 +89,11 @@ const queries = (party: ConflictParty): ScreeningQuery[] => {
       ].flatMap((value) =>
         value === undefined ? [] : identifierVariants(value),
       );
-      return [party.name, ...(party.aliases ?? [])].map(
-        (each): ScreeningQuery => ({
-          name: each,
-          entityType: "organisation",
-          identifiers,
-        }),
-      );
+      return [party.name, ...party.aliases].map((each): ScreeningQuery => ({
+        name: each,
+        entityType: "organisation",
+        identifiers,
+      }));
     }
     default: {
       party satisfies never;

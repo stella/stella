@@ -96,11 +96,13 @@ export const CONFLICT_CHECK_REFUSAL_CODE = {
   decisionChanged: "conflict_check_decision_changed",
 } as const;
 
-const aliasesSchema = v.exactOptional(
+// Former and trading names; an omitted list is an empty one.
+const aliasesSchema = v.optional(
   v.pipe(
     v.array(displayNameSchema({ maxLength: 512 })),
     v.maxLength(CONFLICT_CHECK_LIMITS.aliasesPerParty),
   ),
+  [],
 );
 
 const identifierSchema = v.exactOptional(

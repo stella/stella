@@ -102,7 +102,9 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     deploymentFeature: "FEATURE_CONFLICT_CHECK",
     ownership: {
       handlerDirectories: ["apps/api/src/handlers/conflict-checks"],
-      tableSchemaFiles: ["apps/api/src/db/schema/conflict-checks.ts"],
+      // The tables stay unowned: organization reset, account export and the
+      // status inventory name them, and none of those reads a check.
+      tableSchemaFiles: [],
       coreModules: [
         "apps/api/src/lib/conflict-check/decision.ts",
         "apps/api/src/lib/conflict-check/identifiers.ts",

@@ -9,7 +9,9 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { runConflictCheck } from "@/api/lib/conflict-check/operation";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   contract: "patch",
@@ -26,6 +28,10 @@ const config = {
   permissions: { conflictCheck: ["run"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
+  // No web view lists conflict checks yet; the caller reads its own result.
+  realtime: noResourceSetUpdates(
+    "conflict checks have no open-tab list to refresh",
+  ),
   featureAccess: { featureId: "conflict-check", type: "required" },
   mcp: {
     type: "capability",
@@ -56,5 +62,11 @@ const createConflictCheck = createSafeRootHandler(
   },
   { authorize: authorizeOrganizationReplay },
 );
+
+declareAggregateMutation(createConflictCheck, {
+  type: "independent",
+  reason:
+    "Each run inserts its own check row; the decision on it is a separate expected-state transition.",
+});
 
 export default createConflictCheck;

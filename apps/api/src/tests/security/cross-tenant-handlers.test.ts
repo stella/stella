@@ -3354,7 +3354,12 @@ testState.beforeAll(async () => {
     runBy: ids.userB1,
     title: "Workspace B intake",
     parties: [
-      { type: "organization", role: "client", name: "Firm B prospect" },
+      {
+        type: "organization",
+        role: "client",
+        name: "Firm B prospect",
+        aliases: [],
+      },
     ],
     results: { version: 1, contactsScreened: 0, gaps: [], parties: [] },
     outcome: "no_matches",

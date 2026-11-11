@@ -20,7 +20,7 @@ import { LIMITS } from "@/api/lib/limits";
  * `LIMITS.contactsCount`, so a check normally reads all of it; a firm over the
  * cap gets a check that says so (`contacts_over_cap`), never a silent subset.
  */
-export const CONFLICT_CHECK_CONTACT_CAP = LIMITS.contactsCount;
+const CONFLICT_CHECK_CONTACT_CAP = LIMITS.contactsCount;
 
 /** Contact ids are UUIDs: code-unit order is a stable, locale-free tie-break. */
 export const compareContactIds = (left: string, right: string): number => {
@@ -109,8 +109,8 @@ const names = (row: ContactRow): string[] => {
   ];
 };
 
-/** One contact as the matcher reads it. Exported for the matcher's tests. */
-export const screenedContactParty = (
+/** One contact as the matcher reads it. */
+const screenedContactParty = (
   row: ContactRow,
 ): ScreenedParty<ScreenedContact> => {
   const dataBoxes = v.safeParse(dataBoxesSchema, row.dataBoxes);
@@ -126,8 +126,8 @@ export const screenedContactParty = (
         : identifier("registration", "Company ID", row.registrationNumber)),
       ...(row.taxId === null ? [] : identifier("tax", "Tax ID", row.taxId)),
       ...(row.vatId === null ? [] : identifier("tax", "VAT ID", row.vatId)),
-      ...(dataBoxes.success
-        ? (dataBoxes.output ?? []).flatMap((box) =>
+      ...(dataBoxes.success && dataBoxes.output !== null
+        ? dataBoxes.output.flatMap((box) =>
             identifier("other", "Data box", box.id),
           )
         : []),

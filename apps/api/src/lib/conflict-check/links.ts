@@ -13,6 +13,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { StoredConflictLink } from "@/api/lib/conflict-check/stored-results";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { typedPgArray } from "@/api/lib/search/sql";
 
@@ -58,7 +59,11 @@ export const readConflictContactLinks = async ({
   partyRole: ConflictPartyRole;
   contactIds: readonly SafeId<"contact">[];
 }): Promise<Map<SafeId<"contact">, StoredConflictLink[]>> => {
-  const links = new Map<SafeId<"contact">, StoredConflictLink[]>();
+  // Every requested contact gets an entry: no row means an address-book
+  // contact linked to no matter.
+  const links = new Map<SafeId<"contact">, StoredConflictLink[]>(
+    contactIds.map((contactId) => [contactId, []]),
+  );
   if (contactIds.length === 0) {
     return links;
   }
@@ -71,7 +76,7 @@ export const readConflictContactLinks = async ({
     )
     ORDER BY contact_id, workspace_id
   `);
-  for (const raw of rows) {
+  for (const raw of executedRows(rows)) {
     const parsed = v.safeParse(linkRowSchema, raw);
     if (!parsed.success) {
       return panic("The conflict link routine returned an unexpected row");
@@ -91,7 +96,10 @@ export const readConflictContactLinks = async ({
           workspaceId: row.workspace_id,
           severity: row.severity,
         };
-    links.set(row.contact_id, [...(links.get(row.contact_id) ?? []), link]);
+    const contactLinks =
+      links.get(row.contact_id) ??
+      panic("The conflict link routine returned an unrequested contact");
+    contactLinks.push(link);
   }
   return links;
 };
@@ -133,7 +141,7 @@ export const readConflictMatterAccess = async ({
       ${typedPgArray(workspaceIds, "uuid")}
     )
   `);
-  for (const raw of rows) {
+  for (const raw of executedRows(rows)) {
     const parsed = v.safeParse(matterRowSchema, raw);
     if (!parsed.success) {
       return panic("The conflict matter routine returned an unexpected row");

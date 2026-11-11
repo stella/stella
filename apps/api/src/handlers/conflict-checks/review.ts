@@ -7,7 +7,9 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { decideConflictCheck } from "@/api/lib/conflict-check/operation";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   contract: "patch",
@@ -19,6 +21,10 @@ const config = {
   permissions: { conflictCheck: ["run"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
+  // No web view lists conflict checks yet; the caller reads its own result.
+  realtime: noResourceSetUpdates(
+    "conflict checks have no open-tab list to refresh",
+  ),
   featureAccess: { featureId: "conflict-check", type: "required" },
   mcp: {
     type: "capability",
@@ -57,5 +63,11 @@ const decideConflictCheckHandler = createSafeRootHandler(
     return Result.ok(view);
   },
 );
+
+declareAggregateMutation(decideConflictCheckHandler, {
+  type: "independent",
+  reason:
+    "A decision moves one check row from the decision the caller read; a concurrent decision fails that expected-state predicate.",
+});
 
 export default decideConflictCheckHandler;

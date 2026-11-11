@@ -5,12 +5,14 @@ import type { SQL } from "drizzle-orm";
 import {
   CONFLICT_CHECK_REFUSAL_CODE,
   CONFLICT_COVERAGE_GAPS,
+  CONFLICT_PARTY_ROLES,
 } from "@stll/api-contract/conflict-checks";
 import type {
   ConflictCheckDecisionInput,
   ConflictCheckListItem,
   ConflictCheckView,
   ConflictParty,
+  ConflictPartyRole,
 } from "@stll/api-contract/conflict-checks";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -38,6 +40,7 @@ import type {
 import { CONFLICT_CHECK_DECISION_TRANSITIONS } from "@/api/lib/conflict-check/transitions";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type { AuditRecorder } from "@/api/lib/db/audit-recording";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -104,7 +107,7 @@ const readRow = async (
       .limit(1)
   ).at(0);
   if (row === undefined) {
-    throw checkNotFound();
+    return abortTransaction(checkNotFound());
   }
   return row;
 };
@@ -127,41 +130,65 @@ const requireOpenableMatter = async (
     )
     .limit(1);
   if (found.length === 0) {
-    throw matterNotFound();
+    abortTransaction(matterNotFound());
   }
 };
 
-const storedParty = async ({
+type ScreenedParty = { party: ConflictParty; screening: PartyScreening };
+
+/**
+ * Every party's matches with their matter links. The links are read once per
+ * party role (three at most), each read covering every contact matched for
+ * that role.
+ */
+const storedParties = async ({
   tx,
   organizationId,
-  party,
-  screening,
+  screened,
 }: Organization & {
   tx: Transaction;
-  party: ConflictParty;
-  screening: PartyScreening;
-}): Promise<StoredConflictPartyResult> => {
-  const links = await readConflictContactLinks({
-    tx,
-    organizationId,
-    partyRole: party.role,
-    contactIds: screening.matches.map((match) => match.contact.id),
+  screened: readonly ScreenedParty[];
+}): Promise<StoredConflictPartyResult[]> => {
+  const linksByRole = new Map<
+    ConflictPartyRole,
+    Awaited<ReturnType<typeof readConflictContactLinks>>
+  >();
+  for (const partyRole of CONFLICT_PARTY_ROLES) {
+    linksByRole.set(
+      partyRole,
+      await readConflictContactLinks({
+        tx,
+        organizationId,
+        partyRole,
+        contactIds: screened
+          .filter(({ party }) => party.role === partyRole)
+          .flatMap(({ screening }) =>
+            screening.matches.map((match) => match.contact.id),
+          ),
+      }),
+    );
+  }
+  return screened.map(({ party, screening }) => {
+    const links =
+      linksByRole.get(party.role) ?? panic("Links missing for a party role");
+    return {
+      hits: screening.matches.map((match) => ({
+        contactId: match.contact.id,
+        contactName: match.contact.name,
+        contactType: match.contact.type,
+        tier: match.tier,
+        score: match.score,
+        matchedName: match.matchedName,
+        evidence: match.evidence,
+        links:
+          links.get(match.contact.id) ??
+          panic("Links missing for a matched contact"),
+      })),
+      totalMatches: screening.totalMatches,
+      truncated: screening.truncated,
+      incomplete: screening.incomplete,
+    };
   });
-  return {
-    hits: screening.matches.map((match) => ({
-      contactId: match.contact.id,
-      contactName: match.contact.name,
-      contactType: match.contact.type,
-      tier: match.tier,
-      score: match.score,
-      matchedName: match.matchedName,
-      evidence: match.evidence,
-      links: links.get(match.contact.id) ?? [],
-    })),
-    totalMatches: screening.totalMatches,
-    truncated: screening.truncated,
-    incomplete: screening.incomplete,
-  };
 };
 
 export type RunConflictCheckOptions = Organization & {
@@ -202,27 +229,21 @@ export const runConflictCheck = async ({
     return Result.err(loaded.error);
   }
   const { index, screened, overCap } = loaded.value;
-  const screenings: PartyScreening[] = [];
+  const screenedParties: ScreenedParty[] = [];
   for (const [partyIndex, party] of parties.entries()) {
     const screening = screenConflictParty({ index, party, partyIndex });
     if (screening.isErr()) {
       return Result.err(screening.error);
     }
-    screenings.push(screening.value);
+    screenedParties.push({ party, screening: screening.value });
   }
 
   return await abortableTx(safeDb, async (tx) => {
-    const partyResults: StoredConflictPartyResult[] = [];
-    for (const [partyIndex, party] of parties.entries()) {
-      partyResults.push(
-        await storedParty({
-          tx,
-          organizationId,
-          party,
-          screening: screenings[partyIndex] ?? panic("Missing party screening"),
-        }),
-      );
-    }
+    const partyResults = await storedParties({
+      tx,
+      organizationId,
+      screened: screenedParties,
+    });
     const results: StoredConflictResults = {
       version: 1,
       contactsScreened: screened,
@@ -421,7 +442,7 @@ export const decideConflictCheck = async ({
       isReviewer,
     });
     if (refusal.isErr()) {
-      throw refusal.error;
+      return abortTransaction(refusal.error);
     }
     const decidedAt = now();
     const changed = await transitionScopedBatch({
@@ -451,12 +472,14 @@ export const decideConflictCheck = async ({
       },
     });
     if (changed.length === 0) {
-      throw new HandlerError({
-        status: 409,
-        code: CONFLICT_CHECK_REFUSAL_CODE.decisionChanged,
-        message: "The check's decision changed since it was read",
-        hint: "Read the check again and decide on what it now says.",
-      });
+      return abortTransaction(
+        new HandlerError({
+          status: 409,
+          code: CONFLICT_CHECK_REFUSAL_CODE.decisionChanged,
+          message: "The check's decision changed since it was read",
+          hint: "Read the check again and decide on what it now says.",
+        }),
+      );
     }
     const updated = await readRow(tx, { organizationId, checkId });
     return await projectConflictCheck({

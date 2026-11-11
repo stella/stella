@@ -44,6 +44,7 @@ const check = (
       type: "organization" as const,
       role: "client" as const,
       name: `Prospect ${String(index)} s.r.o.`,
+      aliases: [],
     },
   ],
   results: {

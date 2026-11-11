@@ -71,6 +71,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/bilingual-translations/**/*.ts",
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
+  "apps/api/src/handlers/conflict-checks/**/*.ts",
+  "apps/api/src/lib/conflict-check/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
   "apps/api/src/handlers/client-invoices/**/*.ts",
   "apps/api/src/handlers/desktop-feature-access/**/*.ts",

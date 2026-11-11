@@ -28,8 +28,16 @@ import {
   readConflictCheck,
   runConflictCheck,
 } from "@/api/lib/conflict-check/operation";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  CONFLICT_CHECKS_PAGE,
+  conflictCheckListScalingScenario,
+  conflictCheckReadScalingScenario,
+  seedConflictChecksScaling,
+} from "@/api/tests/read-scaling/conflict-checks";
+import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -97,6 +105,7 @@ const ACME_ADVERSE: ConflictParty = {
   type: "organization",
   role: "adverse",
   name: "ACME HOLDING a.s.",
+  aliases: [],
 };
 
 beforeAll(async () => {
@@ -227,7 +236,7 @@ describe("conflict check against walled matters", () => {
           )
         `),
     );
-    expect(rows.isOk() && [...rows.value]).toEqual([
+    expect(rows.isOk() && executedRows(rows.value)).toEqual([
       {
         accessible: false,
         relation: null,
@@ -263,6 +272,7 @@ describe("conflict check against walled matters", () => {
           firstName: "Novak",
           lastName: "Jan",
           dateOfBirth: { precision: "day", year: 1971, month: 4, day: 12 },
+          aliases: [],
         },
       ]),
       novakId,
@@ -284,7 +294,14 @@ describe("conflict check against walled matters", () => {
     const view = expectOk(
       await run(
         ids.userA2,
-        [{ type: "organization", role: "client", name: "Zzyzx Unmatched Ltd" }],
+        [
+          {
+            type: "organization",
+            role: "client",
+            name: "Zzyzx Unmatched Ltd",
+            aliases: [],
+          },
+        ],
         1,
       ),
     );
@@ -375,5 +392,40 @@ describe("conflict check records and decisions", () => {
           event.action === "review",
       ),
     ).toHaveLength(1);
+  });
+});
+
+describe("conflict check read scaling", () => {
+  test("lists and reads the same work for the member's checks whatever a colleague holds", async () => {
+    const seedAt = async (size: number) =>
+      await seedConflictChecksScaling(testDb, {
+        organizationId: ids.orgA,
+        otherUserId: ids.userA2,
+        userId: ids.userA1,
+        size,
+      });
+    const small = await seedAt(10);
+    try {
+      const list10 = await conflictCheckListScalingScenario.measure(small);
+      const read10 = await conflictCheckReadScalingScenario.measure(small);
+      await small.cleanup();
+      const large = await seedAt(200);
+      try {
+        const list200 = await conflictCheckListScalingScenario.measure(large);
+        const read200 = await conflictCheckReadScalingScenario.measure(large);
+        expect(list10.rows).toBe(CONFLICT_CHECKS_PAGE);
+        expect(list200.rows).toBe(CONFLICT_CHECKS_PAGE);
+        expect(
+          readScalingViolations({ small: list10, large: list200 }),
+        ).toEqual([]);
+        expect(
+          readScalingViolations({ small: read10, large: read200 }),
+        ).toEqual([]);
+      } finally {
+        await large.cleanup();
+      }
+    } finally {
+      await small.cleanup();
+    }
   });
 });
