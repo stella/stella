@@ -8,7 +8,6 @@ import type {
 
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { loadMatterSearchContexts } from "@/api/handlers/search/ai";
-import type { MatterSearchContext } from "@/api/handlers/search/ai";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
@@ -61,6 +60,10 @@ export type AskPassage = EmailAskPassage & { hit: EntityGlobalSearchHit };
  * rank order. Contacts, case law and the matter record itself are left out:
  * an answer about an email cites the matter's files.
  */
+type MatterSearchContext = Awaited<
+  ReturnType<typeof loadMatterSearchContexts>
+>[number];
+
 export const toAskPassages = (
   contexts: readonly MatterSearchContext[],
   workspaceId: SafeId<"workspace">,

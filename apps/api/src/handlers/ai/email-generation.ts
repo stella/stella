@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { classifyFailure } from "@stll/errors";
 
@@ -182,9 +183,13 @@ export const citedPassageNumbers = (
 ): number[] => {
   const cited: number[] = [];
   for (const match of answer.matchAll(CITATION_MARKER)) {
-    const number = Number(match[1]);
-    if (number >= 1 && number <= passageCount && !cited.includes(number)) {
-      cited.push(number);
+    const parsed = parseIntegerToken(match[1], {
+      sign: "unsigned",
+      min: 1,
+      max: passageCount,
+    });
+    if (parsed.isOk() && !cited.includes(parsed.value)) {
+      cited.push(parsed.value);
     }
   }
   return cited;
