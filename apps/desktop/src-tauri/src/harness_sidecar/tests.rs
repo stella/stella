@@ -111,6 +111,7 @@ impl Fixture {
         initial: Duration::from_millis(20),
         max: Duration::from_millis(100),
       },
+      retired_dirs: Vec::new(),
     }
   }
 

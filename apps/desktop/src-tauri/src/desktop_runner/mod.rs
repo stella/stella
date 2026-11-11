@@ -305,8 +305,8 @@ fn journal_backing(namespace: &str) -> JournalBacking {
 const HOLDER_DIRECTORY: &str = "agent-holder";
 const RUNS_DIRECTORY: &str = "agent-runs";
 /// Where every run on this computer once shared one cache. Each chat has its
-/// own beside its folder now; what is left here is removed when the host
-/// starts.
+/// own beside its folder now; what is left here is removed once no holder of
+/// an earlier version, whose runs may still use it, is left.
 const RETIRED_PACKAGE_CACHE_DIRECTORY: &str = "agent-package-cache";
 
 /// The folders on this computer every run writes to, which a skill folder must
@@ -331,7 +331,6 @@ fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
     return None;
   };
   let data = data.join(crate::config::APP_DATA_DIR_NAME);
-  remove_retired_package_cache(&data.join(RETIRED_PACKAGE_CACHE_DIRECTORY));
   let launch = std::env::current_exe()
     .ok()
     .and_then(|executable| SidecarLaunch::for_app(&executable))?;
@@ -350,24 +349,13 @@ fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
         start_timeout: Duration::from_secs(20),
         shutdown_grace: Duration::from_secs(10),
         backoff: ReconnectBackoff::DEFAULT,
+        retired_dirs: vec![data.join(RETIRED_PACKAGE_CACHE_DIRECTORY)],
       },
       workspaces: data.join(RUNS_DIRECTORY),
       probe_interval: sidecar_host::PROBE_INTERVAL,
     },
     Arc::new(ManagedHarnesses { app: app.clone() }),
   ))
-}
-
-/// Remove the cache runs on this computer once shared: what a run left there
-/// must not reach another chat's run.
-fn remove_retired_package_cache(dir: &std::path::Path) {
-  match std::fs::remove_dir_all(dir) {
-    Ok(()) => {}
-    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-    Err(error) => {
-      tracing::warn!(kind = ?error.kind(), "the retired shared run cache was not removed");
-    }
-  }
 }
 
 /// The CLIs the installer manages, and Codex on the user's ChatGPT plan when
