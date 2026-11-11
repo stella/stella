@@ -637,6 +637,9 @@ export const ChatTabPanel = ({
         activeOrganizationId,
         context: {
           ...chatThreadContext,
+          // The new thread starts where this chat's turns run, as the chat
+          // page's `/new` does.
+          getRunTarget: composerModels.getRunTarget,
           getSendMode: () => getChatSendMode(newThreadRef),
         },
         files,

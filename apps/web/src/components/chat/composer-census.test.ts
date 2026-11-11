@@ -91,10 +91,17 @@ const sendEntryPoints = {
 const runOnPatterns = {
   cloudOnly: /\bCHAT_RUN_ON_CLOUD_ONLY\b/gu,
   noModels: /\bmodels=\{null\}/gu,
+  // A `/new` handoff that starts its thread on stella.
+  newThreadOnStella: /\bgetRunTarget: undefined\b/gu,
 };
 const runOnDeclines = {
   // The file chat edits the open document through the page's review queue.
-  "components/ai-suggestions/file-chat-overlay.tsx": { cloudOnly: 2 },
+  "components/ai-suggestions/file-chat-overlay.tsx": {
+    cloudOnly: 2,
+    newThreadOnStella: 1,
+  },
+  // Ask AI from search has no composer to choose in.
+  "components/search-dialog.tsx": { newThreadOnStella: 1 },
   // Its definition.
   "components/chat/chat-model-options-menu.tsx": { cloudOnly: 1 },
   // The placeholder shown until the live panel has read its thread.

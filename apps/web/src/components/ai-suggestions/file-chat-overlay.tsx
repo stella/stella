@@ -2273,6 +2273,8 @@ const FileChatOverlayInner = ({
       activeOrganizationId,
       context: {
         ...chatThreadContext,
+        // A file chat runs on stella (see `composerModels`).
+        getRunTarget: undefined,
         getSendMode: () => getChatSendMode(newThreadRef),
       },
       files,
