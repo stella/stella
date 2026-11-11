@@ -70,7 +70,7 @@ describe("which countries the palette asks", () => {
         ],
         ADMITTED,
       ),
-    ).toEqual(["SVK", "POL"]);
+    ).toEqual(["SVK", "POL"].map(country));
   });
 
   test("every admitted country, in admitted order, when none is recorded", () => {
@@ -141,7 +141,7 @@ describe("one page across countries", () => {
       outcome.type === "page"
         ? outcome.countries.map(({ country: code }) => code)
         : [],
-    ).toEqual(["CZE", "SVK", "POL"]);
+    ).toEqual(["CZE", "SVK", "POL"].map(country));
   });
 
   test("a country whose pages ended is not asked again and stays ended", async () => {
@@ -199,7 +199,7 @@ describe("one page across countries", () => {
       search,
     });
 
-    expect(outcome).toEqual({
+    expect(asTestRaw<unknown>(outcome)).toEqual({
       type: "failed",
       country: "SVK",
       answer: refusal,

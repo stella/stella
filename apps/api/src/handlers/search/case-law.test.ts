@@ -88,7 +88,7 @@ const body = (overrides: Record<string, unknown> = {}) =>
 
 describe("the palette's case-law section", () => {
   test("asks only the countries the organization practises in", async () => {
-    expect(PUBLIC_CASE_LAW_COUNTRIES).toContain("CZE");
+    expect(PUBLIC_CASE_LAW_COUNTRIES.map(String)).toContain("CZE");
     const { calls, search } = corpus();
     await searchCaseLawSectionHandler({
       body: body(),
@@ -220,7 +220,7 @@ describe("the palette's case-law section", () => {
       loadJurisdictions: practising([{ countryCode: "CZ", isPrimary: true }]),
     });
 
-    expect(answer).toBe(refusal);
+    expect(asTestRaw<unknown>(answer)).toBe(refusal);
   });
 
   test("refuses a cursor it did not mint", async () => {
