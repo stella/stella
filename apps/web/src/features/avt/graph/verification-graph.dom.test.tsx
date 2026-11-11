@@ -88,7 +88,6 @@ const mount = async (
     verificationRunOptions(workspaceId, run.id).queryKey,
     run,
   );
-  const reviews: string[] = [];
   const root = createRootRoute({ component: Outlet });
   const protectedRoute = createRoute({
     getParentRoute: () => root,
@@ -103,7 +102,7 @@ const mount = async (
       view === "graph" ? (
         <VerificationGraph
           listId={page.listId}
-          onReview={() => reviews.push("review")}
+          onReview={() => undefined}
           workspaceId={workspaceId}
         />
       ) : (
@@ -124,15 +123,12 @@ const mount = async (
       </FormattingProvider>
     </IntlProvider>,
   );
-  return { reviews };
 };
 
 const canvas = () => screen.getByTestId("avt-graph-canvas");
 const node = (key: string) =>
   canvas().querySelector<HTMLElement>(`[data-node="${key}"]`) ??
   panic(`No graph node ${key}`);
-const nodeOrNull = (key: string) =>
-  canvas().querySelector<HTMLElement>(`[data-node="${key}"]`);
 const dimmed = (element: HTMLElement) => element.dataset["dimmed"] === "true";
 
 beforeEach(() => {
@@ -226,8 +222,16 @@ test("clicking a claim opens the review's claim panel for it", async () => {
   ).toBeGreaterThan(0);
 });
 
+// The filters narrow one model, which the list form draws without the
+// canvas's scroll frame (whose measuring happy-dom cannot lay out).
 test("the filters narrow the claims and hide held facts", async () => {
+  narrow = true;
   await mount("graph");
+  const list = () =>
+    screen.getByRole("region", { name: messages.avt.graph.listLabel });
+  const claimShown = (text: string) =>
+    within(list()).queryByRole("button", { name: new RegExp(text, "u") }) !==
+    null;
   const verdict = screen.getByRole("combobox", {
     name: messages.avt.graph.filters.verdict,
   });
@@ -242,26 +246,33 @@ test("the filters narrow the claims and hide held facts", async () => {
     fireEvent.click(conflicts);
   });
   await waitFor(() => {
-    expect(nodeOrNull(`claim:${graphClaimId(1)}`)).toBeNull();
+    expect(claimShown(GRAPH_TEXT.board)).toBe(false);
   });
-  expect(nodeOrNull(`claim:${graphClaimId(2)}`)).not.toBeNull();
-  expect(nodeOrNull(`claim:${graphClaimId(4)}`)).not.toBeNull();
+  expect(claimShown(GRAPH_TEXT.payment)).toBe(true);
+  expect(claimShown(GRAPH_TEXT.meeting)).toBe(true);
   // The supporting fact only the supported claim linked goes with it.
-  expect(nodeOrNull(`fact:${graphFactId(1)}`)).toBeNull();
+  expect(within(list()).queryByText(GRAPH_TEXT.minutes)).toBeNull();
+  expect(within(list()).getByText(GRAPH_TEXT.heldNote)).toBeTruthy();
 
-  fireEvent.click(
-    screen.getByRole("switch", { name: messages.avt.graph.filters.heldFacts }),
-  );
-  await waitFor(() => {
-    expect(nodeOrNull(`fact:${graphFactId(5)}`)).toBeNull();
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("switch", {
+        name: messages.avt.graph.filters.heldFacts,
+      }),
+    );
   });
-  expect(nodeOrNull(`claim:${graphClaimId(4)}`)).not.toBeNull();
-
-  fireEvent.click(
-    screen.getByRole("button", { name: messages.common.clearFilters }),
-  );
   await waitFor(() => {
-    expect(nodeOrNull(`claim:${graphClaimId(1)}`)).not.toBeNull();
+    expect(within(list()).queryByText(GRAPH_TEXT.heldNote)).toBeNull();
+  });
+  expect(claimShown(GRAPH_TEXT.meeting)).toBe(true);
+
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.clearFilters }),
+    );
+  });
+  await waitFor(() => {
+    expect(claimShown(GRAPH_TEXT.board)).toBe(true);
   });
 });
 
