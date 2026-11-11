@@ -228,14 +228,19 @@ test("clicking a claim opens the review's claim panel for it", async () => {
 
 test("the filters narrow the claims and hide held facts", async () => {
   await mount("graph");
-  fireEvent.click(
-    screen.getByRole("combobox", { name: messages.avt.graph.filters.verdict }),
-  );
-  fireEvent.click(
-    await screen.findByRole("option", {
-      name: messages.avt.graph.filters.conflicts,
-    }),
-  );
+  const verdict = screen.getByRole("combobox", {
+    name: messages.avt.graph.filters.verdict,
+  });
+  await act(async () => {
+    fireEvent.mouseDown(verdict, { button: 0 });
+  });
+  const conflicts = await screen.findByRole("option", {
+    name: messages.avt.graph.filters.conflicts,
+  });
+  await act(async () => {
+    fireEvent.pointerDown(conflicts, { pointerType: "mouse", button: 0 });
+    fireEvent.click(conflicts);
+  });
   await waitFor(() => {
     expect(nodeOrNull(`claim:${graphClaimId(1)}`)).toBeNull();
   });

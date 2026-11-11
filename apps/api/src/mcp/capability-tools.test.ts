@@ -1082,6 +1082,15 @@ describe("list verification access grants across MCP tools", () => {
         ).toEqual({
           runs: [],
         });
+      } else if (capability === "lists.verifications.graph.get") {
+        // The fixture's list holds nothing verified yet.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toMatchObject({
+          listId: resourceId,
+          statements: [],
+          claims: [],
+          nextCursor: null,
+        });
       } else {
         expect(errorEnvelope(result).code).toBe("not_found");
         expect(errorEnvelope(result).message).toContain("not found");

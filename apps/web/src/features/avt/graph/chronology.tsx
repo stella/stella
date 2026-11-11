@@ -29,6 +29,7 @@ import {
 } from "@/features/avt/graph/verification-graph";
 import { StateSwatch } from "@/features/avt/state-chip";
 import { STATE_META } from "@/features/avt/types";
+import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 
 /** Claims a row names before folding the rest behind "N more". */
@@ -41,6 +42,7 @@ type ChronologyProps = {
 
 export const Chronology = ({ workspaceId, listId }: ChronologyProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const { query, model } = useVerificationGraphModel({ workspaceId, listId });
   const claimPanel = useOpenedClaim(workspaceId);
 
@@ -105,6 +107,13 @@ export const Chronology = ({ workspaceId, listId }: ChronologyProps) => {
             </ol>
           </section>
         ),
+      )}
+      {model.factOverflow && (
+        <p className="text-muted-foreground text-xs">
+          {t("avt.graph.factOverflow", {
+            count: format.number(model.facts.length),
+          })}
+        </p>
       )}
       {query.hasNextPage && (
         <div>

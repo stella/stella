@@ -10,6 +10,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
+import { FactSource } from "@/features/avt/fact-source";
 import {
   citationStroke,
   TIER_LABEL_KEYS,
@@ -48,12 +49,22 @@ const RELATION_KEYS = {
 >;
 
 type GraphListProps = {
+  workspaceId: string;
   model: GraphModel;
   onOpenClaim: (claim: { statementId: string; id: string }) => void;
   className?: string;
 };
 
+/** Where a chip's fact comes from: its first source, opening at the place
+ *  it cites, as the canvas's source column does. */
+type ChipSource = {
+  documentId: string;
+  documentName: string;
+  locator: GraphModel["provenance"][number]["locator"];
+};
+
 export const GraphList = ({
+  workspaceId,
   model,
   onOpenClaim,
   className,
@@ -61,6 +72,28 @@ export const GraphList = ({
   const t = useTranslations();
   const format = useFormatter();
   const unlinked = unlinkedFacts(model);
+  const sourceNames = new Map(
+    model.sources.map((source) => [source.id, source.name]),
+  );
+  const firstSource = new Map<string, ChipSource>();
+  for (const edge of model.provenance) {
+    if (!firstSource.has(edge.factId)) {
+      firstSource.set(edge.factId, {
+        documentId: edge.sourceId,
+        documentName: sourceNames.get(edge.sourceId) ?? "",
+        locator: edge.locator,
+      });
+    }
+  }
+  const chip = (edge: GraphCitation | null, fact: GraphFact) => (
+    <FactChip
+      edge={edge}
+      fact={fact}
+      key={fact.id}
+      source={firstSource.get(fact.id) ?? null}
+      workspaceId={workspaceId}
+    />
+  );
   return (
     <div
       aria-label={t("avt.graph.listLabel")}
@@ -118,9 +151,7 @@ export const GraphList = ({
                         })}
                         className="flex flex-col items-start gap-1.5 ps-5"
                       >
-                        {links.map(({ edge, fact }) => (
-                          <FactChip edge={edge} fact={fact} key={fact.id} />
-                        ))}
+                        {links.map(({ edge, fact }) => chip(edge, fact))}
                       </ul>
                     )}
                   </li>
@@ -144,9 +175,7 @@ export const GraphList = ({
             </span>
           </div>
           <ul className="flex flex-wrap gap-1.5">
-            {unlinked.map((fact) => (
-              <FactChip edge={null} fact={fact} key={fact.id} />
-            ))}
+            {unlinked.map((fact) => chip(null, fact))}
           </ul>
         </section>
       )}
@@ -154,13 +183,14 @@ export const GraphList = ({
   );
 };
 
-const FactChip = ({
-  edge,
-  fact,
-}: {
+type FactChipProps = {
+  workspaceId: string;
   edge: GraphCitation | null;
   fact: GraphFact;
-}) => {
+  source: ChipSource | null;
+};
+
+const FactChip = ({ workspaceId, edge, fact, source }: FactChipProps) => {
   const t = useTranslations();
   const notes = [
     fact.tier === "document" ? null : t(TIER_LABEL_KEYS[fact.tier]),
@@ -170,34 +200,44 @@ const FactChip = ({
   return (
     <li
       className={cn(
-        "bg-card flex max-w-full min-w-0 items-baseline gap-1.5 rounded-md border px-2 py-1 text-xs",
+        "bg-card flex max-w-full min-w-0 flex-col gap-0.5 rounded-md border px-2 py-1 text-xs",
         (fact.held || !fact.listed) && "border-dashed",
       )}
     >
-      {edge !== null && (
-        <>
-          <span
-            aria-hidden="true"
-            className="h-0.5 w-2.5 shrink-0 self-center rounded-full"
-            style={{ backgroundColor: citationStroke(edge).color }}
-          />
-          <span className="text-muted-foreground shrink-0">
-            {t(relationKey(edge))}
-          </span>
-        </>
-      )}
-      <BidiText
-        as="span"
-        className={cn(
-          "line-clamp-2 min-w-0 [overflow-wrap:anywhere]",
-          fact.held && "text-muted-foreground",
+      <span className="flex min-w-0 items-baseline gap-1.5">
+        {edge !== null && (
+          <>
+            <span
+              aria-hidden="true"
+              className="h-0.5 w-2.5 shrink-0 self-center rounded-full"
+              style={{ backgroundColor: citationStroke(edge).color }}
+            />
+            <span className="text-muted-foreground shrink-0">
+              {t(relationKey(edge))}
+            </span>
+          </>
         )}
-      >
-        {fact.text}
-      </BidiText>
-      {notes.length > 0 && (
-        <span className="text-muted-foreground shrink-0">
-          · {notes.join(" · ")}
+        <BidiText
+          as="span"
+          className={cn(
+            "line-clamp-2 min-w-0 [overflow-wrap:anywhere]",
+            fact.held && "text-muted-foreground",
+          )}
+        >
+          {fact.text}
+        </BidiText>
+      </span>
+      {(notes.length > 0 || source !== null) && (
+        <span className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1.5">
+          {notes.length > 0 && <span>{notes.join(" · ")}</span>}
+          {source !== null && (
+            <FactSource
+              documentId={source.documentId}
+              documentName={source.documentName}
+              locator={source.locator}
+              workspaceId={workspaceId}
+            />
+          )}
         </span>
       )}
     </li>

@@ -276,7 +276,11 @@ const GraphBody = ({
         </div>
       )}
       {!nothingShown && isMobile && (
-        <GraphList model={shown} onOpenClaim={onOpenClaim} />
+        <GraphList
+          model={shown}
+          onOpenClaim={onOpenClaim}
+          workspaceId={workspaceId}
+        />
       )}
       {!nothingShown && !isMobile && (
         <>
@@ -308,6 +312,7 @@ const GraphBody = ({
             className="sr-only focus-within:not-sr-only"
             model={shown}
             onOpenClaim={onOpenClaim}
+            workspaceId={workspaceId}
           />
         </>
       )}
