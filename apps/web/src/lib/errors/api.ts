@@ -408,7 +408,9 @@ const isUsageRejectionReason = (
  * per-item result of a batch), or `undefined` when the code has no message.
  */
 export const apiCodeMessage = (code: string): string | undefined =>
-  isKnownErrorCode(code) ? translateError(CODE_ERROR_KEYS[code]) : undefined;
+  Object.hasOwn(CODE_ERROR_KEYS, code) && isKnownErrorCode(code)
+    ? translateError(CODE_ERROR_KEYS[code])
+    : undefined;
 
 /** The message for the first field a rejected request named. */
 const validationIssueMessage = (issue: ApiValidationIssue): string => {

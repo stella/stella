@@ -6,6 +6,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
@@ -49,7 +50,9 @@ export const useSharepointConnect = () => {
   const analytics = useAnalytics();
   return useMutation({
     mutationFn: async () =>
-      unwrapApiResponse(await api.sharepoint.connect.post()),
+      await invokeAppOnlyWrite("sharepoint.connect", async () =>
+        unwrapApiResponse(await api.sharepoint.connect.post()),
+      ),
     onSuccess: ({ authorizeUrl }) => {
       window.location.assign(authorizeUrl);
     },
@@ -71,7 +74,9 @@ export const useSharepointDisconnect = () => {
   const viewer = useSharepointViewer();
   return useMutation({
     mutationFn: async () =>
-      unwrapApiResponse(await api.sharepoint.connection.delete()),
+      await invokeAppOnlyWrite("sharepoint.connection.delete", async () =>
+        unwrapApiResponse(await api.sharepoint.connection.delete()),
+      ),
     onSuccess: async () => {
       stellaToast.add({ title: t("sharepoint.disconnected"), type: "success" });
       await queryClient.invalidateQueries({

@@ -13,6 +13,7 @@ import { useSharepointAccess } from "@/features/sharepoint/sharepoint-hooks";
 import { sharepointKeys } from "@/features/sharepoint/sharepoint-queries";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
@@ -65,10 +66,16 @@ const SharepointEnablement = ({ enabled }: { enabled: boolean }) => {
       handlerId: "SharepointEnablement.update:failure",
     },
     mutationFn: async (next: boolean) =>
-      unwrapApiResponse(await api.sharepoint.enablement.put({ enabled: next })),
+      await invokeAppOnlyWrite("sharepoint.enablement.update", async () =>
+        unwrapApiResponse(
+          await api.sharepoint.enablement.put({ enabled: next }),
+        ),
+      ),
     invalidate: sharepointKeys.root(),
     errorToast: { title: t("errors.actionFailed") },
   });
+  // The dialog awaits this and stays open when the write fails.
+  const confirmDisable = async () => await mutation.mutateAsync(false);
 
   return (
     <section className="flex flex-col gap-3">
@@ -108,7 +115,7 @@ const SharepointEnablement = ({ enabled }: { enabled: boolean }) => {
           confirmation: DISABLE_CONFIRMATION,
         })}
         loading={mutation.isPending}
-        onConfirm={async () => await mutation.mutateAsync(false)}
+        onConfirm={confirmDisable}
         onOpenChange={setConfirmingDisable}
         open={confirmingDisable}
         title={t("sharepoint.admin.disableTitle")}

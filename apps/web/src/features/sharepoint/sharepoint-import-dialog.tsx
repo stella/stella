@@ -57,6 +57,7 @@ import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import {
   apiCodeMessage,
@@ -316,19 +317,64 @@ const postImportRound = async ({
   parentId: string | null;
   files: readonly SharepointSelectedFile[];
 }) => {
-  const { results } = unwrapApiResponse(
-    await api.sharepoint.imports({ workspaceId }).post(
-      {
-        items: files.map(({ driveId, itemId }) => ({ driveId, itemId })),
-        parentId,
-      },
-      { fetch: { timeoutMs: SHAREPOINT_IMPORT_TIMEOUT_MS } },
-    ),
+  const { results } = await invokeAppOnlyWrite(
+    "sharepoint.imports.create",
+    async () =>
+      unwrapApiResponse(
+        await api.sharepoint.imports({ workspaceId }).post(
+          {
+            items: files.map(({ driveId, itemId }) => ({ driveId, itemId })),
+            parentId,
+          },
+          { fetch: { timeoutMs: SHAREPOINT_IMPORT_TIMEOUT_MS } },
+        ),
+      ),
   );
   return results;
 };
 
 type ImportRoundResult = Awaited<ReturnType<typeof postImportRound>>[number];
+
+type ImportRoundsInput = {
+  workspaceId: string;
+  parentId: string | null;
+  /** Every picked file, in pick order. */
+  files: readonly SharepointSelectedFile[];
+  /** The files this round sends. */
+  pending: readonly SharepointSelectedFile[];
+  /** Every result the earlier rounds returned. */
+  results: readonly ImportRoundResult[];
+  onProgress: (settled: number) => void;
+};
+
+/**
+ * Sends rounds until no file is deferred. Each round sends only the files the
+ * one before deferred, so it needs that answer first. A round that settles
+ * nothing ends the run: its files stay deferred and the summary reports them
+ * as unfinished, so a stuck budget cannot repeat forever.
+ */
+const importInRounds = async ({
+  pending,
+  results,
+  ...input
+}: ImportRoundsInput): Promise<readonly ImportRoundResult[]> => {
+  const round = await postImportRound({
+    workspaceId: input.workspaceId,
+    parentId: input.parentId,
+    files: pending,
+  });
+  const settled = [...results, ...round];
+  const deferred = deferredSharepointFiles(input.files, settled);
+  if (deferred.length === 0 || deferred.length >= pending.length) {
+    return settled;
+  }
+  input.onProgress(input.files.length - deferred.length);
+  return await importInRounds({
+    ...input,
+    pending: deferred,
+    results: settled,
+  });
+};
 
 const SharepointBrowser = ({
   workspaceId,
@@ -360,27 +406,15 @@ const SharepointBrowser = ({
 
   const importFiles = useMutation({
     mutationFn: async (files: readonly SharepointSelectedFile[]) => {
-      const results: ImportRoundResult[] = [];
-      let pending = files;
       setSettledCount(0);
-      while (pending.length > 0) {
-        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- each round re-sends only the files the previous round deferred, so it needs that answer first
-        const round = await postImportRound({
-          workspaceId,
-          parentId,
-          files: pending,
-        });
-        results.push(...round);
-        const deferred = deferredSharepointFiles(files, results);
-        // A round that settles nothing would repeat forever; its files stay
-        // deferred and the summary reports them as unfinished.
-        if (deferred.length >= pending.length) {
-          break;
-        }
-        pending = deferred;
-        setSettledCount(files.length - pending.length);
-      }
-      return results;
+      return await importInRounds({
+        workspaceId,
+        parentId,
+        files,
+        pending: files,
+        results: [],
+        onProgress: setSettledCount,
+      });
     },
     onSuccess: async (results, files) => {
       const summary = summarizeSharepointImport(files, results);
@@ -579,15 +613,16 @@ const ListFailure = ({
   }
 };
 
-type PagedList<TItem> = {
-  status: "pending" | "error" | "success";
-  error: unknown;
-  items: readonly TItem[];
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
-  fetchNextPage: () => Promise<unknown>;
-  refetch: () => Promise<unknown>;
-};
+type PagedList<TItem> =
+  | { status: "pending" }
+  | { status: "error"; error: unknown; refetch: () => Promise<unknown> }
+  | {
+      status: "success";
+      items: readonly TItem[];
+      hasNextPage: boolean;
+      isFetchingNextPage: boolean;
+      fetchNextPage: () => Promise<unknown>;
+    };
 
 /** The shared frame of every listing: loading, failure, rows, load more. */
 const PagedRows = <TItem,>({
@@ -637,7 +672,7 @@ const PagedRows = <TItem,>({
         </div>
       );
     default:
-      list.status satisfies never;
+      list satisfies never;
       return panic("Unknown listing status");
   }
 };
@@ -650,15 +685,27 @@ const pagedList = <TItem,>(query: {
   isFetchingNextPage: boolean;
   fetchNextPage: () => Promise<unknown>;
   refetch: () => Promise<unknown>;
-}): PagedList<TItem> => ({
-  status: query.status,
-  error: query.error,
-  items: query.data?.pages.flatMap((page) => page.items) ?? [],
-  hasNextPage: query.hasNextPage,
-  isFetchingNextPage: query.isFetchingNextPage,
-  fetchNextPage: query.fetchNextPage,
-  refetch: query.refetch,
-});
+}): PagedList<TItem> => {
+  switch (query.status) {
+    case "pending":
+      return { status: "pending" };
+    case "error":
+      return { status: "error", error: query.error, refetch: query.refetch };
+    case "success":
+      return query.data === undefined
+        ? panic("A settled listing carries its pages")
+        : {
+            status: "success",
+            items: query.data.pages.flatMap((page) => page.items),
+            hasNextPage: query.hasNextPage,
+            isFetchingNextPage: query.isFetchingNextPage,
+            fetchNextPage: query.fetchNextPage,
+          };
+    default:
+      query.status satisfies never;
+      return panic("Unknown listing status");
+  }
+};
 
 const NavigationRow = ({
   icon,
