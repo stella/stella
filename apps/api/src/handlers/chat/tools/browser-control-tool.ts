@@ -3,7 +3,7 @@ import { toolDefinition } from "@tanstack/ai";
 import {
   BROWSER_CONTROL_TOOL_NAME,
   browserControlCommandSchema,
-  browserControlResultSchema,
+  browserControlRetainedResultSchema,
 } from "@stll/api-contract/browser-control";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -46,6 +46,8 @@ export const createBrowserControlTool = () => ({
       "and MFA remain manual. Use `go-back` for history. Downloads are blocked in your tabs; file uploads, " +
       "cookies, hidden DOM, CAPTCHA solving, and arbitrary JavaScript are unavailable, so never claim them.",
     inputSchema: toTanStackToolSchema(browserControlCommandSchema),
-    outputSchema: toTanStackToolSchema(browserControlResultSchema),
+    // Chat keeps an earlier page read as its superseded projection
+    // (`chat-tool-result-retention`), so a stored call holds either shape.
+    outputSchema: toTanStackToolSchema(browserControlRetainedResultSchema),
   }),
 });
