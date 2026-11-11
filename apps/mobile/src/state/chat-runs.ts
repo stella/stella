@@ -133,6 +133,23 @@ export type ActiveRunsState =
   | { readonly status: "loaded"; readonly runs: readonly ActiveChatRun[] }
   | { readonly status: "failed"; readonly error: ApiError };
 
+/**
+ * Each thread's run as the app shows it: the first one listed, which the
+ * server orders waiting first, so a thread with several runs waits on the
+ * person when any of them does. Keyed in listing order.
+ */
+export const runsByThread = (
+  runs: readonly ActiveChatRun[],
+): ReadonlyMap<string, ActiveChatRun> => {
+  const threads = new Map<string, ActiveChatRun>();
+  for (const run of runs) {
+    if (!threads.has(run.threadId)) {
+      threads.set(run.threadId, run);
+    }
+  }
+  return threads;
+};
+
 /** A row of the chats list: the thread, its day, and its open run, if any. */
 type InboxThread = {
   readonly thread: ChatThreadSummary;
@@ -178,9 +195,9 @@ export const inboxSections = ({
     thread,
   });
   const lifted = new Map<string, InboxThread>();
-  for (const run of runs) {
+  for (const run of runsByThread(runs).values()) {
     const known = loaded.get(run.threadId);
-    if (lifted.has(run.threadId) || (searching && known === undefined)) {
+    if (searching && known === undefined) {
       continue;
     }
     const thread = known ?? {

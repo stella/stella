@@ -5,9 +5,9 @@ import { ActivityIndicator } from "react-native";
 
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 
+import { useActiveChatRuns } from "@/components/active-chat-runs";
 import { useHeaderSearch } from "@/components/header-search";
 import { LoadedChats } from "@/components/loaded-chats";
-import { useActiveChatRuns } from "@/components/use-active-chat-runs";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -28,7 +28,7 @@ export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
   const { settledQuery } = useHeaderSearch();
   const searched = settledQuery.slice(0, SEARCH_QUERY_MAX_LENGTH);
   const { end } = useSession();
-  const activeRuns = useActiveChatRuns(source);
+  const activeRuns = useActiveChatRuns();
   const loadThreads = async (
     search: string,
   ): Promise<Load<ChatThreadsPage>> => {

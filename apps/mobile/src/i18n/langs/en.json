@@ -65,7 +65,12 @@
     "sendFileRefused": "A file could not be sent, so the message was not sent. Remove the file and try again.",
     "sendFileNotAnonymizable": "This conversation is anonymized, and stella could not anonymize one of the files, so nothing was sent. Remove the file and try again.",
     "pickTitle": "Pick a conversation",
-    "pickDescription": "Choose a thread from the list, or start a new one with +."
+    "pickDescription": "Choose a thread from the list, or start a new one with +.",
+    "runBanner": {
+      "needsYou": "Waiting for you",
+      "finished": "Finished",
+      "openHint": "Opens the conversation"
+    }
   },
   "tasks": {
     "emptyTitle": "No open tasks",

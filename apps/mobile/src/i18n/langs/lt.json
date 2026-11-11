@@ -65,7 +65,12 @@
     "sendFileRefused": "Nepavyko išsiųsti failo, todėl žinutė nebuvo išsiųsta. Pašalinkite failą ir bandykite dar kartą.",
     "sendFileNotAnonymizable": "Šis pokalbis anonimizuotas, o stella nepavyko anonimizuoti vieno iš failų, todėl niekas nebuvo išsiųsta. Pašalinkite failą ir bandykite dar kartą.",
     "pickTitle": "Pasirinkite pokalbį",
-    "pickDescription": "Pasirinkite giją iš sąrašo arba pradėkite naują mygtuku +."
+    "pickDescription": "Pasirinkite giją iš sąrašo arba pradėkite naują mygtuku +.",
+    "runBanner": {
+      "needsYou": "Laukia jūsų",
+      "finished": "Baigta",
+      "openHint": "Atveria pokalbį"
+    }
   },
   "tasks": {
     "emptyTitle": "Atvirų užduočių nėra",

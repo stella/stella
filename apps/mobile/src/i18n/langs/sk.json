@@ -65,7 +65,12 @@
     "sendFileRefused": "Súbor sa nepodarilo odoslať, takže sa správa neodoslala. Odstráňte súbor a skúste to znova.",
     "sendFileNotAnonymizable": "Táto konverzácia je anonymizovaná a stella nedokázala anonymizovať jeden zo súborov, takže sa nič neodoslalo. Odstráňte súbor a skúste to znova.",
     "pickTitle": "Vyberte konverzáciu",
-    "pickDescription": "Vyberte vlákno zo zoznamu alebo začnite nové tlačidlom +."
+    "pickDescription": "Vyberte vlákno zo zoznamu alebo začnite nové tlačidlom +.",
+    "runBanner": {
+      "needsYou": "Čaká na vás",
+      "finished": "Dokončené",
+      "openHint": "Otvorí konverzáciu"
+    }
   },
   "tasks": {
     "emptyTitle": "Žiadne otvorené úlohy",
