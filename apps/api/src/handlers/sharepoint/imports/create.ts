@@ -101,7 +101,7 @@ const importSharepointFiles = createSafeHandler(
         call: async (accessToken) =>
           await Result.gen(async function* () {
             const imported: SharepointImportResult[] = [];
-            // One file at a time bounds memory to a single document.
+            // db-await-in-loop: one file at a time bounds memory to a single document; the request caps files at SHAREPOINT_IMPORT_MAX_ITEMS
             for (const ref of refs) {
               imported.push(
                 yield* Result.await(
