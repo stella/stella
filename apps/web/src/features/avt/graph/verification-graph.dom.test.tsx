@@ -254,13 +254,16 @@ test("the filters narrow the claims and hide held facts", async () => {
   expect(within(list()).queryByText(GRAPH_TEXT.minutes)).toBeNull();
   expect(within(list()).getByText(GRAPH_TEXT.heldNote)).toBeTruthy();
 
-  await act(async () => {
-    fireEvent.click(
-      screen.getByRole("switch", {
-        name: messages.avt.graph.filters.heldFacts,
-      }),
-    );
+  const held = screen.getByRole("switch", {
+    name: messages.avt.graph.filters.heldFacts,
   });
+  expect(held.getAttribute("aria-checked")).toBe("true");
+  // The label is what a pointer clicks; the DOM test environment forwards
+  // a click on the switch itself to the label's control a second time.
+  await act(async () => {
+    fireEvent.click(screen.getByText(messages.avt.graph.filters.heldFacts));
+  });
+  expect(held.getAttribute("aria-checked")).toBe("false");
   await waitFor(() => {
     expect(within(list()).queryByText(GRAPH_TEXT.heldNote)).toBeNull();
   });
