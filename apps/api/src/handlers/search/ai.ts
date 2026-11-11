@@ -994,6 +994,52 @@ const loadSummaryContexts = async ({
   });
 };
 
+/** A matter search hit with the clipped content the search summary reads. */
+export type MatterSearchContext = SearchResultContext;
+
+/**
+ * The search summary's sources, scoped to one matter the caller already
+ * holds: the same ranked search, the same citable kinds and the same content
+ * budget. Callers authorize `workspaceId` before calling.
+ */
+export const loadMatterSearchContexts = async ({
+  accessibleWorkspaceIds,
+  grantedScopes,
+  organizationId,
+  query,
+  scopedDb,
+  userId,
+  workspaceId,
+  search = searchGlobal,
+}: {
+  accessibleWorkspaceIds: SafeId<"workspace">[];
+  grantedScopes: readonly string[] | undefined;
+  organizationId: SafeId<"organization">;
+  query: string;
+  scopedDb: ScopedDb;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+  search?: typeof searchGlobal;
+}): Promise<MatterSearchContext[]> =>
+  await loadSummaryContexts({
+    accessibleWorkspaceIds,
+    grantedScopes,
+    filters: {
+      editedByUserIds: [],
+      limit: SEARCH_SUMMARY_RESULT_LIMIT,
+      mimeTypes: [],
+      query: query.slice(0, LIMITS.searchQueryMaxLength),
+      types: [],
+      updatedFrom: undefined,
+      updatedTo: undefined,
+    },
+    organizationId,
+    userId,
+    search,
+    selectedWorkspaceIds: [workspaceId],
+    scopedDb,
+  });
+
 const toModelSearchResultContext = (context: SearchResultContext) => ({
   number: context.number,
   id: context.id,
