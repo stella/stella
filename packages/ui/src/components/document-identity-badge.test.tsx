@@ -39,9 +39,10 @@ describe("document identity badge", () => {
   ] as const)(
     "%j is named by its full label whichever form the slot shows",
     (identity, long) => {
-      const opening = markup(identity).match(
-        /<span[^>]*data-slot="document-identity-badge"[^>]*>/u,
-      )?.[0];
+      const opening =
+        /<span[^>]*data-slot="document-identity-badge"[^>]*>/u.exec(
+          markup(identity),
+        )?.[0];
 
       expect(opening).toContain('role="img"');
       expect(opening).toContain(`aria-label="${long}"`);
