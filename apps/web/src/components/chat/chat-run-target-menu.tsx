@@ -20,6 +20,7 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   CHAT_LOCAL_HARNESS_NAMES,
@@ -158,9 +159,9 @@ export const ChatRunTargetMenu = ({
             return (
               <MenuItem disabled key={option.harness}>
                 <span className="flex min-w-0 flex-col py-0.5">
-                  <BidiText as="span" className="truncate">
+                  <TruncatedText render={<BidiText as="span" />}>
                     {name}
-                  </BidiText>
+                  </TruncatedText>
                   <span className="text-muted-foreground text-2xs">
                     {stateLabel(option)}
                   </span>
@@ -173,9 +174,9 @@ export const ChatRunTargetMenu = ({
           return (
             <MenuSub key={option.harness}>
               <MenuSubTrigger data-checked={harnessSelected || undefined}>
-                <BidiText as="span" className="truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {name}
-                </BidiText>
+                </TruncatedText>
               </MenuSubTrigger>
               <MenuSubPopup className="w-64">
                 <MenuRadioGroup value={value}>
@@ -192,9 +193,9 @@ export const ChatRunTargetMenu = ({
                         onClick={() => choose(target)}
                         value={runTargetValue(target)}
                       >
-                        <BidiText as="span" className="truncate">
+                        <TruncatedText render={<BidiText as="span" />}>
                           {model.label}
-                        </BidiText>
+                        </TruncatedText>
                       </MenuRadioItem>
                     );
                   })}

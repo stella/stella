@@ -25,6 +25,7 @@ import {
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import { questionAiCellState } from "@/components/workspaces/ai-cell-state.logic";
@@ -119,8 +120,8 @@ export const QuestionColumnPopover = ({
             type={question.content.type}
           />
           <Tooltip>
-            <TooltipTrigger render={<span className="w-0 flex-1 truncate" />}>
-              {question.question}
+            <TooltipTrigger render={<span className="w-0 min-w-0 flex-1" />}>
+              <TruncatedText hint={false}>{question.question}</TruncatedText>
             </TooltipTrigger>
             <TooltipPopup>{question.question}</TooltipPopup>
           </Tooltip>
