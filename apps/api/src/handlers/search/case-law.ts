@@ -69,7 +69,7 @@ type SearchCaseLawSectionBody = v.InferOutput<
 >;
 
 /** A corpus hit in the shape every global-search hit has. */
-export const toCaseLawSectionHit = (
+const toCaseLawSectionHit = (
   hit: CaseLawSearchHit,
 ): CaseLawGlobalSearchHit => ({
   ...globalSearchIdentity(

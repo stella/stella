@@ -4,6 +4,7 @@ import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { api } from "@/lib/api";
 import type { EntityKind, GlobalSearchResultType } from "@/lib/api-contract";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -260,18 +261,21 @@ export type CaseLawSectionParams = SearchOwner & {
 export const caseLawSectionInfiniteOptions = (params: CaseLawSectionParams) =>
   infiniteQueryOptions({
     queryKey: searchKeys.caseLawSection(params),
-    queryFn: async ({ signal, pageParam }) => {
-      const response = await api.search["case-law"].post(
-        {
-          query: normalizeSearchQuery(params.query),
-          ...(pageParam ? { cursor: pageParam } : {}),
-          ...(params.limit !== undefined ? { limit: params.limit } : {}),
-        },
-        { fetch: { signal } },
-      );
-
-      return unwrapApiResponse(response);
-    },
+    // A read posted as a search body, like the matter search: the palette's
+    // own surface, with no automation capability behind it.
+    queryFn: async ({ signal, pageParam }) =>
+      await invokeAppOnlyWrite("search.case-law-section.list", async () =>
+        unwrapApiResponse(
+          await api.search["case-law"].post(
+            {
+              query: normalizeSearchQuery(params.query),
+              ...(pageParam ? { cursor: pageParam } : {}),
+              ...(params.limit !== undefined ? { limit: params.limit } : {}),
+            },
+            { fetch: { signal } },
+          ),
+        ),
+      ),
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     placeholderData: (previousData, previousQuery) =>

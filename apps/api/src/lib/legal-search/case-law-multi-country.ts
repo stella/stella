@@ -11,7 +11,6 @@ import type { RegistryRequestObservation } from "@stll/business-registries/share
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { PracticeJurisdiction } from "@/api/db/schema";
-import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import {
@@ -221,7 +220,7 @@ export const CASE_LAW_COUNTRIES_CURSOR_MAX_LENGTH =
 export const hasMoreCountryPages = (cursors: CorpusSubCursors): boolean =>
   Object.values(cursors).some((cursor) => cursor !== null);
 
-export type CaseLawCountrySearch = typeof searchDecisionsHandler;
+export type CaseLawCountrySearch = typeof defaultSearchDecisionsHandler;
 
 type CaseLawCountryAnswer = Awaited<ReturnType<CaseLawCountrySearch>>;
 
