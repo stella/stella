@@ -10,6 +10,10 @@ import {
 } from "./frontmatter";
 import type { ParsedSkillMetadata, SkillMetadata } from "./frontmatter";
 import {
+  readSkillNetworkHosts,
+  SKILL_NETWORK_HOSTS_MAX,
+} from "./network-hosts";
+import {
   readSkillRequiredTools,
   SKILL_REQUIRED_TOOLS_MAX,
 } from "./required-tools";
@@ -17,8 +21,8 @@ import {
 export const SKILL_FILE_NAME = "SKILL.md";
 
 export const SKILL_PACKAGE_LIMITS = {
-  archiveFilesMax: 100,
-  archiveUncompressedMaxBytes: 6 * 1024 * 1024,
+  archiveFilesMax: 1000,
+  archiveUncompressedMaxBytes: 50 * 1024 * 1024,
   bodyMaxChars: 80_000,
   compatibilityMaxChars: 500,
   descriptionMaxChars: 1024,
@@ -29,7 +33,7 @@ export const SKILL_PACKAGE_LIMITS = {
   metadataValueMaxChars: 512,
   resourceMaxChars: 100_000,
   resourcePathMaxChars: 512,
-  resourcesPerSkillMax: 50,
+  resourcesPerSkillMax: 500,
   versionMaxChars: 64,
 } as const;
 
@@ -72,6 +76,8 @@ export const SKILL_METADATA_REGISTRY = {
       ? []
       : [value];
   },
+  "stella-network-hosts": ({ metadata }: SkillMetadata) =>
+    readSkillNetworkHosts(metadata) ?? [],
   "stella-required-tools": ({ metadata }: SkillMetadata) =>
     readSkillRequiredTools(metadata),
 } as const satisfies Record<
@@ -303,6 +309,16 @@ export const validateSkillPackage = ({
   }
 
   validateMetadataEntries(metadata, diagnostics);
+  if (
+    (readSkillNetworkHosts(metadata.metadata)?.length ?? 0) >
+    SKILL_NETWORK_HOSTS_MAX
+  ) {
+    diagnostics.push({
+      type: "limit_exceeded",
+      field: "metadata.stella-network-hosts",
+      limit: SKILL_NETWORK_HOSTS_MAX,
+    });
+  }
   const required = readSkillRequiredTools(metadata.metadata);
   if (required.length > SKILL_REQUIRED_TOOLS_MAX) {
     diagnostics.push({

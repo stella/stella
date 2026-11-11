@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
       "runOn": "Käivita",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limiit täis kuni {time}",
+      "stateModelUnavailable": "Mudel pole enam saadaval",
       "stateNeedsLogin": "Vaja sisse logida",
       "stateNotInstalled": "Pole installitud",
       "stateOffline": "Arvuti pole võrgus",
@@ -4220,6 +4222,7 @@
       "documentChanged": "See dokument on pärast seda ülevaatust muutunud.",
       "documentCutNotice": "<strong>Dokumenti {documentName} ei loetud täielikult.</strong> See on selle mudeli jaoks liiga pikk, seega jäeti välja umbes {percent} selle tekstist. Vastuseta seisukoht märgitakse ülevaatamiseks, sest vastus võib olla väljajäetud osas.",
       "documentTooLarge": "See dokument on liiga pikk, et see mudel saaks sellest piisavalt lugeda. Proovige suurema kontekstiaknaga mudelit.",
+      "documentsTooLarge": "Need dokumendid on liiga pikad, et see mudel saaks neid korraga lugeda. Kasutage vähem või lühemaid dokumente või proovige suurema kontekstiaknaga mudelit.",
       "export": {
         "counterparty": "Laadi vastaspoole jaoks alla",
         "counterpartyFailed": "Dokumendi eksportimine ebaõnnestus",
@@ -4398,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {Leiti # oskus} other {Leiti # oskust}}",
       "discoveryEmpty": "Sellest hoidlast või kaustast ei leitud ühtegi oskust.",
       "discoverySkippedInvalid": "{count, plural, one {# vigane oskus jäeti vahele} other {# vigast oskust jäeti vahele}}",
+      "dropPack": "Lohistage siia .zip või SKILL.md, et oskus importida",
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
       "fileExists": "Selle teega fail on juba olemas",
@@ -4455,6 +4459,7 @@
         }
       },
       "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
+      "uploadPack": "Laadi üles .zip või SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"
     },

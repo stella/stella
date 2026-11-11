@@ -31,6 +31,25 @@ describe("document identity badge", () => {
   });
 
   test.each([
+    [STATUTE, "172/2026"],
+    [
+      { kind: "caseNumber", caseNumber: "25 Cdo 1234/2019" },
+      "25 Cdo 1234/2019",
+    ],
+  ] as const)(
+    "%j is named by its full label whichever form the slot shows",
+    (identity, long) => {
+      const opening =
+        /<span[^>]*data-slot="document-identity-badge"[^>]*>/u.exec(
+          markup(identity),
+        )?.[0];
+
+      expect(opening).toContain('role="img"');
+      expect(opening).toContain(`aria-label="${long}"`);
+    },
+  );
+
+  test.each([
     [{ kind: "statute", number: "172", year: null }, "172"],
     [{ kind: "statute", number: null, year: "2026" }, "2026"],
   ] as const)("retains partial statute identity %j", (identity, label) => {

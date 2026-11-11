@@ -1,5 +1,29 @@
 # @stll/cli
 
+## 6.10.0
+
+### Minor Changes
+
+- [#5730](https://github.com/stella/stella/pull/5730) [`bb3c063`](https://github.com/stella/stella/commit/bb3c0631575a9cb18be3688c80fbb16819802dfd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read and update organization-wide AI instructions, including the `--ai-instructions` option for organization settings.
+
+### Patch Changes
+
+- [#8290](https://github.com/stella/stella/pull/8290) [`ceb5745`](https://github.com/stella/stella/commit/ceb5745c39fd4dc6676676cdc797dc5dafc1dc54) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `chat.threads.read-state.update` and `chat.threads.pin-state.update`: mark one of your chats read or unread, and pin it to the top of your list or unpin it. `chat.threads.list` now says, for each chat, whether you have read its latest answer and whether you pinned it, and takes `pinState` to list only pinned or only unpinned chats.
+
+- [#8317](https://github.com/stella/stella/pull/8317) [`4571450`](https://github.com/stella/stella/commit/4571450505b901883f85e9d5ff68de355bd0c986) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `chat.threads.read-state.update` and `chat.threads.pin-state.update` describe that asking for the state a chat already has changes nothing and notifies none of your devices.
+
+- [#8282](https://github.com/stella/stella/pull/8282) [`fdc86ae`](https://github.com/stella/stella/commit/fdc86ae113bd086fda0d174b200f59dce7abeaa1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `entities.files.list` returns each file's size in bytes.
+
+- [#8283](https://github.com/stella/stella/pull/8283) [`b387911`](https://github.com/stella/stella/commit/b3879115ee4a9517c74c212325165bb9cd7409da) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.get` returns each claim's qualifiers: caveats beside its verdict that never change it (the record is not expected to speak to the point, a cited fact has a different scope, every fact it rests on is unsourced, or it rests on a held fact).
+
+- [#8309](https://github.com/stella/stella/pull/8309) [`7813e23`](https://github.com/stella/stella/commit/7813e230de265794852ca9147146bc21f49b792b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.claim-reviews.create` requires `reason` on `override`, `reopen` and `record-conflict` actions and takes an optional one on `status`, which can now also be `needs-evidence` (open until the record can answer it; never accepted in bulk). `lists.verifications.claim-reviews.list` reads a verification's review history, newest first: who acted, when, the action, its reason, and the claim's disposition just before and after, filterable by claim, action kind and reviewer.
+
+- [#8243](https://github.com/stella/stella/pull/8243) [`aa71bbb`](https://github.com/stella/stella/commit/aa71bbba70829a96ad63d85d42d94c0a60578d24) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `lists.fact-extractions.create`: stella reads evidence documents and proposes their facts, each citing the passage it comes from, as generation candidates to accept or reject.
+
+- [#8236](https://github.com/stella/stella/pull/8236) [`efafd07`](https://github.com/stella/stella/commit/efafd0742a3e6818cc18113f060d2e01c2dd8956) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Generation candidates of fact items carry their proposed fact details: submitting accepts them, listing returns them, and accepting a fact writes them onto the item. Generation runs list who produced them. A candidate name is held to the task name bound and a source quote to 2,000 characters.
+
+- [#8305](https://github.com/stella/stella/pull/8305) [`05f2f90`](https://github.com/stella/stella/commit/05f2f9073e6eb927ca6bb2a9a120970f6124359a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.source-documents.update` marks a document as testimony (a witness statement, interview note or transcript) or a record for one list's facts, and `lists.source-documents.list` reads the kind of each named document. `lists.items.list` returns each fact's tier (`document`, `testimony` or `unsourced`); `lists.verifications.get` returns the tier of each pinned fact in place of `sourcing`, the `testimony-only` qualifier, and for a record conflict the fact suggested to govern it.
+
 ## 6.9.0
 
 ### Minor Changes

@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -129,7 +130,7 @@ export const TemplateCategorySidebar = ({
               size="row"
               variant="ghost"
             >
-              <span className="truncate">{tag}</span>
+              <TruncatedText>{tag}</TruncatedText>
             </Button>
           ))}
         </>

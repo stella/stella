@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "تشغيل الدردشات على حاسوبك غير متاح لحسابك.",
       "runOn": "التشغيل على",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "تم بلوغ الحد حتى {time}",
+      "stateModelUnavailable": "النموذج لم يعد متاحًا",
       "stateNeedsLogin": "يلزم تسجيل الدخول",
       "stateNotInstalled": "غير مثبّت",
       "stateOffline": "الحاسوب غير متصل",
@@ -4220,6 +4222,7 @@
       "documentChanged": "تغيّر هذا المستند بعد هذه المراجعة.",
       "documentCutNotice": "<strong>لم تتم قراءة {documentName} بالكامل.</strong> المستند طويل جدًا بالنسبة إلى هذا النموذج، لذا استُبعد نحو {percent} من نصه. وتُحال كل نقطة لا جواب لها إلى المراجعة، لأن الجواب قد يكون في الجزء المستبعد.",
       "documentTooLarge": "هذا المستند طويل جدًا بحيث لا يستطيع هذا النموذج قراءة قدر كافٍ منه. جرّب نموذجًا ذا نافذة سياق أكبر.",
+      "documentsTooLarge": "هذه المستندات طويلة جدًا بحيث لا يستطيع هذا النموذج قراءتها معًا. استخدم عددًا أقل من المستندات أو مستندات أقصر، أو جرّب نموذجًا ذا نافذة سياق أكبر.",
       "export": {
         "counterparty": "تنزيل للطرف المقابل",
         "counterpartyFailed": "تعذّر تصدير المستند",
@@ -4398,6 +4401,7 @@
       "discoveredSkills": "{count, plural, zero {لم يُعثر على أي مهارات} one {تم العثور على مهارة واحدة} two {تم العثور على مهارتين} few {تم العثور على # مهارات} many {تم العثور على # مهارة} other {تم العثور على # مهارة}}",
       "discoveryEmpty": "لم يُعثر على أي مهارات في هذا المستودع أو المجلد.",
       "discoverySkippedInvalid": "{count, plural, zero {لم يتم تخطي أي مهارات غير صالحة} one {تم تخطي مهارة واحدة غير صالحة} two {تم تخطي مهارتين غير صالحتين} few {تم تخطي # مهارات غير صالحة} many {تم تخطي # مهارة غير صالحة} other {تم تخطي # مهارة غير صالحة}}",
+      "dropPack": "أفلِت ملف .zip أو SKILL.md هنا لاستيراد المهارة",
       "editSkill": "تعديل المهارة",
       "enableSkill": "تفعيل المهارة",
       "fileExists": "يوجد ملف بهذا المسار بالفعل",
@@ -4455,6 +4459,7 @@
         }
       },
       "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
+      "uploadPack": "رفع ملف .zip أو SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "الإصدار: {version}"
     },

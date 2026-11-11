@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "Ejecutar chats en tu ordenador no está disponible para tu cuenta.",
       "runOn": "Ejecutar en",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Límite alcanzado hasta {time}",
+      "stateModelUnavailable": "El modelo ya no está disponible",
       "stateNeedsLogin": "Hay que iniciar sesión",
       "stateNotInstalled": "No instalado",
       "stateOffline": "Ordenador sin conexión",
@@ -4220,6 +4222,7 @@
       "documentChanged": "Este documento cambió después de esta revisión.",
       "documentCutNotice": "<strong>{documentName} no se leyó por completo.</strong> Es demasiado largo para este modelo, por lo que se omitió aproximadamente el {percent} del texto. Una posición sin respuesta se marca para revisión, porque la respuesta puede estar en la parte omitida.",
       "documentTooLarge": "Este documento es demasiado largo para que este modelo lea una parte suficiente. Pruebe con un modelo con una ventana de contexto mayor.",
+      "documentsTooLarge": "Estos documentos son demasiado largos para que este modelo los lea juntos. Use menos documentos o documentos más cortos, o pruebe con un modelo con una ventana de contexto mayor.",
       "export": {
         "counterparty": "Descargar para la contraparte",
         "counterpartyFailed": "No se pudo exportar el documento",
@@ -4398,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {# habilidad encontrada} other {# habilidades encontradas} many {# habilidades encontradas}}",
       "discoveryEmpty": "No se encontraron habilidades en este repositorio o carpeta.",
       "discoverySkippedInvalid": "{count, plural, one {Se omitió # habilidad no válida} other {Se omitieron # habilidades no válidas} many {Se omitieron # habilidades no válidas}}",
+      "dropPack": "Suelte un .zip o SKILL.md para importar la habilidad",
       "editSkill": "Editar habilidad",
       "enableSkill": "Activar habilidad",
       "fileExists": "Ya existe un archivo con esta ruta",
@@ -4455,6 +4459,7 @@
         }
       },
       "uploadHelp": "Usa un archivo SKILL.md o una carpeta .zip que contenga SKILL.md y recursos opcionales de solo lectura.",
+      "uploadPack": "Subir .zip o SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/ruta/a/la/habilidad",
       "version": "Versión: {version}"
     },

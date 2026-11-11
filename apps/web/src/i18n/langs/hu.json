@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
       "runOn": "Futtatás itt",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Korlát elérve eddig: {time}",
+      "stateModelUnavailable": "A modell már nem érhető el",
       "stateNeedsLogin": "Bejelentkezés szükséges",
       "stateNotInstalled": "Nincs telepítve",
       "stateOffline": "A számítógép offline",
@@ -4220,6 +4222,7 @@
       "documentChanged": "A dokumentum az ellenőrzés óta megváltozott.",
       "documentCutNotice": "<strong>A(z) {documentName} dokumentumot nem sikerült teljes egészében elolvasni.</strong> Ehhez a modellhez túl hosszú, ezért a szöveg körülbelül {percent}-a kimaradt. A válasz nélküli pozíció ellenőrzésre jelölve jelenik meg, mert a válasz a kimaradt részben is lehet.",
       "documentTooLarge": "Ez a dokumentum túl hosszú ahhoz, hogy ez a modell elegendő részét elolvassa. Próbáljon nagyobb kontextusablakkal rendelkező modellt.",
+      "documentsTooLarge": "Ezek a dokumentumok túl hosszúak ahhoz, hogy ez a modell együtt elolvassa őket. Használjon kevesebb vagy rövidebb dokumentumot, vagy próbáljon nagyobb kontextusablakkal rendelkező modellt.",
       "export": {
         "counterparty": "Letöltés az ellenfélnek",
         "counterpartyFailed": "A dokumentumot nem sikerült exportálni",
@@ -4398,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {# készség található} other {# készség található}}",
       "discoveryEmpty": "Ebben a tárolóban vagy mappában nem található készség.",
       "discoverySkippedInvalid": "{count, plural, one {# érvénytelen készség kihagyva} other {# érvénytelen készség kihagyva}}",
+      "dropPack": "Húzzon ide egy .zip vagy SKILL.md fájlt a készség importálásához",
       "editSkill": "Készség szerkesztése",
       "enableSkill": "Készség bekapcsolása",
       "fileExists": "Ezen az útvonalon már létezik fájl",
@@ -4455,6 +4459,7 @@
         }
       },
       "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
+      "uploadPack": ".zip vagy SKILL.md feltöltése",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"
     },

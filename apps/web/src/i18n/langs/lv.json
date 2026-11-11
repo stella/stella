@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
       "runOn": "Palaist",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limits sasniegts līdz {time}",
+      "stateModelUnavailable": "Modelis vairs nav pieejams",
       "stateNeedsLogin": "Jāpiesakās",
       "stateNotInstalled": "Nav instalēts",
       "stateOffline": "Dators ir bezsaistē",
@@ -4220,6 +4222,7 @@
       "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",
       "documentCutNotice": "<strong>Dokuments {documentName} nav izlasīts pilnībā.</strong> Šim modelim tas ir pārāk garš, tāpēc aptuveni {percent} teksta tika izlaisti. Pozīcija bez atbildes tiek atzīmēta pārskatīšanai, jo atbilde var būt izlaistajā daļā.",
       "documentTooLarge": "Šis dokuments ir pārāk garš, lai šis modelis varētu izlasīt pietiekamu tā daļu. Izmēģiniet modeli ar lielāku konteksta logu.",
+      "documentsTooLarge": "Šie dokumenti ir pārāk gari, lai šis modelis tos varētu izlasīt kopā. Izmantojiet mazāk vai īsākus dokumentus vai izmēģiniet modeli ar lielāku konteksta logu.",
       "export": {
         "counterparty": "Lejupielādēt pretpusei",
         "counterpartyFailed": "Neizdevās eksportēt dokumentu",
@@ -4398,6 +4401,7 @@
       "discoveredSkills": "{count, plural, zero {Atrastas # prasmes} one {Atrasta # prasme} other {Atrastas # prasmes}}",
       "discoveryEmpty": "Šajā repozitorijā vai mapē prasmes netika atrastas.",
       "discoverySkippedInvalid": "{count, plural, zero {Izlaistas # nederīgas prasmes} one {Izlaista # nederīga prasme} other {Izlaistas # nederīgas prasmes}}",
+      "dropPack": "Nometiet .zip vai SKILL.md failu, lai importētu prasmi",
       "editSkill": "Rediģēt prasmi",
       "enableSkill": "Iespējot prasmi",
       "fileExists": "Fails ar šādu ceļu jau pastāv",
@@ -4455,6 +4459,7 @@
         }
       },
       "uploadHelp": "Izmantojiet SKILL.md failu vai .zip mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
+      "uploadPack": "Augšupielādēt .zip vai SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",
       "version": "Versija: {version}"
     },

@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "Running chats on your computer is not available for your account.",
       "runOn": "Run on",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit reached until {time}",
+      "stateModelUnavailable": "Model no longer available",
       "stateNeedsLogin": "Sign-in needed",
       "stateNotInstalled": "Not installed",
       "stateOffline": "Computer offline",
@@ -4220,6 +4222,7 @@
       "documentChanged": "This document changed after this review.",
       "documentCutNotice": "<strong>{documentName} was not read in full.</strong> It is too long for this model, so about {percent} of its text was left out. A position with no answer is flagged for review, because the answer may be in the part left out.",
       "documentTooLarge": "This document is too long for this model to read enough of it. Try a model with a larger context window.",
+      "documentsTooLarge": "These documents are too long for this model to read together. Use fewer or shorter documents, or try a model with a larger context window.",
       "export": {
         "counterparty": "Download for counterparty",
         "counterpartyFailed": "Could not export the document",
@@ -4398,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {# skill found} other {# skills found}}",
       "discoveryEmpty": "No skills were found at this repository or folder.",
       "discoverySkippedInvalid": "{count, plural, one {# invalid skill was skipped} other {# invalid skills were skipped}}",
+      "dropPack": "Drop a .zip or SKILL.md to import the skill",
       "editSkill": "Edit skill",
       "enableSkill": "Enable skill",
       "fileExists": "A file with this path already exists",
@@ -4455,6 +4459,7 @@
         }
       },
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.",
+      "uploadPack": "Upload .zip or SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "Version: {version}"
     },

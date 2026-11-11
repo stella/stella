@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
       "runOn": "Ausführen auf",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit erreicht bis {time}",
+      "stateModelUnavailable": "Modell nicht mehr verfügbar",
       "stateNeedsLogin": "Anmeldung erforderlich",
       "stateNotInstalled": "Nicht installiert",
       "stateOffline": "Computer nicht verbunden",
@@ -4220,6 +4222,7 @@
       "documentChanged": "Dieses Dokument hat sich seit dieser Prüfung geändert.",
       "documentCutNotice": "<strong>{documentName} wurde nicht vollständig gelesen.</strong> Das Dokument ist für dieses Modell zu lang, daher wurden etwa {percent} des Textes ausgelassen. Eine Position ohne Antwort wird zur Prüfung markiert, weil die Antwort im ausgelassenen Teil stehen kann.",
       "documentTooLarge": "Dieses Dokument ist zu lang, als dass dieses Modell genug davon lesen könnte. Versuchen Sie ein Modell mit einem größeren Kontextfenster.",
+      "documentsTooLarge": "Diese Dokumente sind zu lang, als dass dieses Modell sie zusammen lesen könnte. Verwenden Sie weniger oder kürzere Dokumente oder versuchen Sie ein Modell mit einem größeren Kontextfenster.",
       "export": {
         "counterparty": "Für die Gegenpartei herunterladen",
         "counterpartyFailed": "Das Dokument konnte nicht exportiert werden",
@@ -4398,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {# Skill gefunden} other {# Skills gefunden}}",
       "discoveryEmpty": "In diesem Repository oder Ordner wurden keine Skills gefunden.",
       "discoverySkippedInvalid": "{count, plural, one {# ungültiger Skill wurde übersprungen} other {# ungültige Skills wurden übersprungen}}",
+      "dropPack": ".zip oder SKILL.md hier ablegen, um den Skill zu importieren",
       "editSkill": "Skill bearbeiten",
       "enableSkill": "Skill aktivieren",
       "fileExists": "Eine Datei mit diesem Pfad existiert bereits",
@@ -4455,6 +4459,7 @@
         }
       },
       "uploadHelp": "Verwenden Sie eine SKILL.md-Datei oder einen .zip-Ordner mit SKILL.md und optionalen schreibgeschützten Ressourcen.",
+      "uploadPack": ".zip oder SKILL.md hochladen",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/pfad/zum/skill",
       "version": "Version: {version}"
     },

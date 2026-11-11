@@ -1878,7 +1878,9 @@
       "refusalUnavailable": "L’exécution des conversations sur votre ordinateur n’est pas disponible pour votre compte.",
       "runOn": "Exécuter sur",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limite atteinte jusqu’à {time}",
+      "stateModelUnavailable": "Modèle plus disponible",
       "stateNeedsLogin": "Connexion requise",
       "stateNotInstalled": "Non installé",
       "stateOffline": "Ordinateur hors ligne",
@@ -4220,6 +4222,7 @@
       "documentChanged": "Ce document a changé depuis cette révision.",
       "documentCutNotice": "<strong>{documentName} n’a pas été lu en entier.</strong> Il est trop long pour ce modèle : environ {percent} du texte a donc été omis. Une position sans réponse est signalée pour vérification, car la réponse peut se trouver dans la partie omise.",
       "documentTooLarge": "Ce document est trop long pour que ce modèle en lise une part suffisante. Essayez un modèle doté d’une fenêtre de contexte plus grande.",
+      "documentsTooLarge": "Ces documents sont trop longs pour que ce modèle les lise ensemble. Utilisez des documents moins nombreux ou plus courts, ou essayez un modèle doté d’une fenêtre de contexte plus grande.",
       "export": {
         "counterparty": "Télécharger pour la contrepartie",
         "counterpartyFailed": "Impossible d'exporter le document",
@@ -4398,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {# compétence trouvée} other {# compétences trouvées} many {# compétences trouvées}}",
       "discoveryEmpty": "Aucune compétence n’a été trouvée dans ce dépôt ou ce dossier.",
       "discoverySkippedInvalid": "{count, plural, one {# compétence non valide a été ignorée} other {# compétences non valides ont été ignorées} many {# compétences non valides ont été ignorées}}",
+      "dropPack": "Déposez un .zip ou SKILL.md pour importer la compétence",
       "editSkill": "Modifier la compétence",
       "enableSkill": "Activer la compétence",
       "fileExists": "Un fichier avec ce chemin existe déjà",
@@ -4455,6 +4459,7 @@
         }
       },
       "uploadHelp": "Utilisez un fichier SKILL.md ou un dossier .zip contenant SKILL.md et des ressources facultatives en lecture seule.",
+      "uploadPack": "Importer un .zip ou SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/chemin/vers/competence",
       "version": "Version : {version}"
     },

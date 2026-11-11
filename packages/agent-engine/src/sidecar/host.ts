@@ -44,6 +44,7 @@ import {
   type HarnessFailure,
   harnessSessionId,
 } from "../harness/events";
+import { readSkillFolderNetworkHosts } from "../harness/skill-network-hosts";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import type { ProtocolLog } from "../protocol-log";
@@ -833,6 +834,12 @@ export class SidecarHost {
     for (const reason of input.skipped) {
       this.options.log(`an attached file stays a path only: ${reason}`);
     }
+    const declared = await readSkillFolderNetworkHosts(message.skillFolders);
+    for (const skill of declared.unreadable) {
+      this.options.log(
+        `a skill's network hosts could not be read and add none: ${skill}`,
+      );
+    }
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -840,6 +847,7 @@ export class SidecarHost {
       cacheDir: message.cacheDir,
       unreadablePaths: message.unreadablePaths,
       skillFolders: message.skillFolders,
+      networkHosts: declared.hosts,
       toolPath: message.toolPath,
       model: message.model,
       instructions: message.instructions,
