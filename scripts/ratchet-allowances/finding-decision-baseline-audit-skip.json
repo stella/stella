@@ -1,0 +1,6 @@
+{
+  "metric": "audit-skip-directives",
+  "file": "apps/api/src/lib/document-review/finding-decision-history.ts",
+  "delta": 1,
+  "reason": "The baseline decision event restates a decision that was already audited when the reviewer took it; writing it again records no new reviewer action, so a second audit row would describe an act nobody took."
+}
