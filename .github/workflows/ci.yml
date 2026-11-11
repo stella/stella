@@ -5339,6 +5339,14 @@ jobs:
         run: |
           echo "::error::Network baseline failed. Fix unintended regressions; for intentional route changes, add the baseline:record label to this PR, then review the recorded budgets and resolve the recorder's review thread."
 
+      # The phone run follows the stack, not the checkout, so it gets its own
+      # quarantine setup under the same condition.
+      - name: Configure flaky-test quarantine for phone layouts
+        if: >-
+          !cancelled()
+          && steps.e2e-stack.outcome == 'success'
+        uses: ./.github/actions/flaky-test-quarantine
+
       # Same stack and route table, on the narrowest current iPhone in WebKit.
       - name: Check phone layouts
         if: >-
