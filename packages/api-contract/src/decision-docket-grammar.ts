@@ -631,6 +631,7 @@ const EU_DOCKET_PATTERNS = [
  * so `C-121/25 P` keys as the case its judgment is stored under, `C-121/25`.
  */
 const EU_APPEAL_MARK_RE = / ?p(?:\([ir]\))?$/iu;
+// parser-output-unchanged: [pl-uokik] pl-uokik reads only the POL grammar; this changes the EU grammar.
 /**
  * A case the Court of Justice numbered before the Court of First Instance
  * was set up in 1989 carries no court letter (`120/78`). Bare, that is any
