@@ -4399,6 +4399,7 @@
       "discoveredSkills": "{count, plural, one {# compétence trouvée} other {# compétences trouvées} many {# compétences trouvées}}",
       "discoveryEmpty": "Aucune compétence n’a été trouvée dans ce dépôt ou ce dossier.",
       "discoverySkippedInvalid": "{count, plural, one {# compétence non valide a été ignorée} other {# compétences non valides ont été ignorées} many {# compétences non valides ont été ignorées}}",
+      "dropPack": "Déposez un .zip ou SKILL.md pour importer la compétence",
       "editSkill": "Modifier la compétence",
       "enableSkill": "Activer la compétence",
       "fileExists": "Un fichier avec ce chemin existe déjà",
@@ -4456,6 +4457,7 @@
         }
       },
       "uploadHelp": "Utilisez un fichier SKILL.md ou un dossier .zip contenant SKILL.md et des ressources facultatives en lecture seule.",
+      "uploadPack": "Importer un .zip ou SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/chemin/vers/competence",
       "version": "Version : {version}"
     },
