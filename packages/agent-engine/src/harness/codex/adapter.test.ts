@@ -176,6 +176,7 @@ const turnInput = (
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
   skillFolders: [],
+  networkHosts: [],
   toolPath: [],
   ...overrides,
 });
