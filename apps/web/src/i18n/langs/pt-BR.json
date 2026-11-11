@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "O veredito está limpo, mas a interpretação de um fato contribuinte está contestada; merece a sua atenção antes da aprovação.",
       "contradicted": "O registro diverge desta alegação. É preciso uma decisão humana antes que este veredito seja mantido.",
-      "nocover": "Nenhum fato-âncora trata desta alegação, então não há contra o que confirmá-la. A aprovação é opcional.",
+      "nocover": "Adicione o fato a partir de um documento, vincule um que já esteja na lista ou indique que faltam evidências.",
       "notverifiable": "Deixada de lado como não verificável; a aprovação é opcional. Reabra abaixo se ela for de fato verificável.",
       "recordconflict": "Dois documentos no registro divergem. Resolva acima qual prevalece ou sinalize para a equipe de evidências; a ferramenta não escolherá por você.",
       "restsOnHeld": "Um fato em que este veredito se baseia está retido para revisão; confirme que o veredito se sustenta sem ele ou verifique a alegação novamente quando o fato estiver resolvido.",
@@ -381,8 +381,33 @@
         "label": "Sem fonte"
       }
     },
+    "gap": {
+      "addFact": "Adicionar fato a partir de um documento",
+      "addFactFailed": "Não foi possível adicionar o fato",
+      "factOffList": "Um fato que não está mais na lista",
+      "linkFact": "Vincular um fato",
+      "linkFailed": "Não foi possível vincular o fato",
+      "linked": "Fatos vinculados",
+      "noFacts": "Nenhum fato da lista corresponde.",
+      "recheck": "Verificar novamente",
+      "recheckFailed": "Não foi possível verificar a alegação novamente",
+      "searchFacts": "Pesquisar os fatos da lista",
+      "sheet": {
+        "description": "O fato entra na lista com a passagem de que provém, é vinculado a esta alegação e a alegação é verificada novamente.",
+        "passage": "Passagem",
+        "passageHint": "As palavras do documento que estabelecem o fato.",
+        "statementHint": "Começa com as palavras da alegação; mantenha apenas o que o documento estabelece.",
+        "statementRequired": "Escreva o fato.",
+        "statementTooLong": "Um fato admite no máximo {limit} caracteres.",
+        "submit": "Adicionar e verificar novamente",
+        "title": "Adicionar fato a partir de um documento"
+      },
+      "showNextSteps": "Mostrar próximos passos",
+      "unlink": "Desvincular {fact}"
+    },
     "guidance": {
       "escalate": "Escalar",
+      "gap": "Falta um fato",
       "manualJudgement": "Julgamento manual",
       "optional": "Opcional",
       "readyToConfirm": "Pronta para confirmar"
@@ -392,11 +417,14 @@
         "acceptedRoutine": "Aceita como rotina",
         "conflictReopened": "Resolução do conflito retirada",
         "escalated": "Sinalizada para a equipe de evidências",
+        "factLinked": "Fato vinculado",
+        "factUnlinked": "Fato desvinculado",
         "governed": "Registro prevalecente escolhido",
         "noteCleared": "Nota removida",
         "noteSaved": "Nota salva",
         "overridden": "Veredito substituído",
         "overrideWithdrawn": "Substituição do veredito retirada",
+        "rechecked": "Alegação verificada novamente",
         "reopened": "Reaberta como alegação verificável",
         "statusCleared": "Status da revisão removido",
         "statusDisputed": "Marcada como em disputa",
@@ -412,7 +440,9 @@
       },
       "formerMember": "Ex-membro",
       "kinds": {
+        "factLink": "Vínculos de fatos",
         "override": "Vereditos substituídos",
+        "recheck": "Novas verificações",
         "recordConflict": "Resoluções de conflitos",
         "reopen": "Reaberturas",
         "status": "Mudanças de status"
@@ -460,6 +490,11 @@
       "required": "Informe um motivo para registrar isto.",
       "unresolveConflict": "Por que retirar esta resolução?",
       "withdrawOverride": "Por que voltar ao veredito da ferramenta?"
+    },
+    "recheck": {
+      "currentVerdict": "Veredito após a nova verificação",
+      "runVerdict": "Veredito da execução",
+      "summary": "Verificada novamente em {checkedAt} com base em {count, plural, one {# fato} other {# fatos} many {# fatos}}."
     },
     "review": {
       "decided": "{status, select, disputed {Em disputa} needsEvidence {Faltam evidências} other {{origin, select, bulk {Aceita como rotina} other {Revisada}}}} · {decidedAt}",

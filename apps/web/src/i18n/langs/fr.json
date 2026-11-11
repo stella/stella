@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Le verdict est net, mais l’interprétation d’un fait contributif est contestée ; un coup d’œil s’impose avant validation.",
       "contradicted": "Le dossier s’écarte de cette affirmation. Une décision humaine est nécessaire avant que ce verdict soit retenu.",
-      "nocover": "Aucun fait d’ancrage ne traite de cette affirmation ; il n’y a donc rien pour la confirmer. La validation est facultative.",
+      "nocover": "Ajoutez le fait à partir d’un document, liez-en un déjà présent dans la liste ou indiquez que des preuves sont requises.",
       "notverifiable": "Écartée comme non vérifiable ; la validation est facultative. Rouvrez-la ci-dessous si elle est en réalité vérifiable.",
       "recordconflict": "Deux pièces du dossier se contredisent. Déterminez ci-dessus laquelle fait foi, ou signalez-le à l’équipe chargée des preuves ; l’outil ne choisira pas à votre place.",
       "restsOnHeld": "Un fait sur lequel repose ce verdict est en attente de vérification ; confirmez que le verdict tient sans lui, ou revérifiez l’affirmation une fois le fait tranché.",
@@ -381,8 +381,33 @@
         "label": "Sans source"
       }
     },
+    "gap": {
+      "addFact": "Ajouter un fait depuis un document",
+      "addFactFailed": "Le fait n’a pas pu être ajouté",
+      "factOffList": "Un fait qui ne figure plus dans la liste",
+      "linkFact": "Lier un fait",
+      "linkFailed": "Le fait n’a pas pu être lié",
+      "linked": "Faits liés",
+      "noFacts": "Aucun fait de la liste ne correspond.",
+      "recheck": "Revérifier",
+      "recheckFailed": "L’affirmation n’a pas pu être revérifiée",
+      "searchFacts": "Rechercher dans les faits de la liste",
+      "sheet": {
+        "description": "Le fait est ajouté à la liste avec le passage dont il provient, lié à cette affirmation, puis l’affirmation est revérifiée.",
+        "passage": "Extrait",
+        "passageHint": "Les mots du document qui établissent le fait.",
+        "statementHint": "Reprend d’abord les termes de l’affirmation ; ne conservez que ce que le document établit.",
+        "statementRequired": "Rédigez le fait.",
+        "statementTooLong": "Un fait ne peut pas dépasser {limit} caractères.",
+        "submit": "Ajouter et revérifier",
+        "title": "Ajouter un fait depuis un document"
+      },
+      "showNextSteps": "Afficher les prochaines étapes",
+      "unlink": "Dissocier {fact}"
+    },
     "guidance": {
       "escalate": "Faire remonter",
+      "gap": "Fait manquant",
       "manualJudgement": "Jugement manuel",
       "optional": "Facultatif",
       "readyToConfirm": "Prête à confirmer"
@@ -392,11 +417,14 @@
         "acceptedRoutine": "Acceptée de routine",
         "conflictReopened": "Résolution de la contradiction retirée",
         "escalated": "Signalée à l’équipe chargée des preuves",
+        "factLinked": "Fait lié",
+        "factUnlinked": "Fait dissocié",
         "governed": "Élément faisant foi choisi",
         "noteCleared": "Note supprimée",
         "noteSaved": "Note enregistrée",
         "overridden": "Verdict remplacé",
         "overrideWithdrawn": "Remplacement du verdict retiré",
+        "rechecked": "Affirmation revérifiée",
         "reopened": "Rouverte en tant qu’affirmation vérifiable",
         "statusCleared": "Statut d’examen retiré",
         "statusDisputed": "Désaccord signalé",
@@ -412,7 +440,9 @@
       },
       "formerMember": "Ancien membre",
       "kinds": {
+        "factLink": "Liens de faits",
         "override": "Verdicts remplacés",
+        "recheck": "Revérifications",
         "recordConflict": "Résolutions de contradictions",
         "reopen": "Réouvertures",
         "status": "Changements de statut"
@@ -460,6 +490,11 @@
       "required": "Indiquez une raison pour l’enregistrer.",
       "unresolveConflict": "Pourquoi retirer cette résolution ?",
       "withdrawOverride": "Pourquoi revenir au verdict de l’outil ?"
+    },
+    "recheck": {
+      "currentVerdict": "Verdict après la revérification",
+      "runVerdict": "Verdict de l’analyse",
+      "summary": "Revérifiée le {checkedAt} par rapport à {count, plural, one {# fait} other {# faits} many {# faits}}."
     },
     "review": {
       "decided": "{status, select, disputed {Désaccord signalé} needsEvidence {Preuves requises} other {{origin, select, bulk {Acceptée de routine} other {Examinée}}}} · {decidedAt}",

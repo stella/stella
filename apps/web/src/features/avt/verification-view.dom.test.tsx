@@ -22,6 +22,7 @@ import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
 import type { OriginalDocxHostProps } from "./original-docx-host";
 import type {
   ClaimState,
+  ListItem,
   ReviewHistoryEntry,
   ReviewHistoryPage,
   VerificationRun,
@@ -152,8 +153,20 @@ const {
   witnessStatementRun,
 } = await import("./avt.test-fixtures");
 const messages = (await import("@/i18n/langs/en.json")).default;
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
 const workspaceId = "0199a3c4-5b6d-7e8f-9a0b-000000009099";
 const actorId = "0199a3c4-5b6d-7e8f-9a0b-000000009098";
+const viewer = {
+  id: actorId,
+  activeOrganizationId: "organization",
+  email: "reviewer@example.test",
+  image: null,
+  name: "Reviewer",
+  preferredName: null,
+  timezoneId: "UTC",
+  wordEditShortcut: null,
+};
 const at = "2026-09-01T10:00:00Z";
 const clients: InstanceType<typeof QueryClient>[] = [];
 beforeEach(() => {
@@ -296,7 +309,9 @@ const SeededVerification = ({ runId }: { runId: string }) => {
   );
 };
 
-const mount = async (run: VerificationRun = seededRun()) => {
+/** `signedIn` mounts the view with its viewer, so the reads made per
+ *  viewer (comments, the list's facts) run as they do in the app. */
+const mount = async (run: VerificationRun = seededRun(), signedIn = false) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { enabled: false, retry: false },
@@ -326,14 +341,23 @@ const mount = async (run: VerificationRun = seededRun()) => {
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   await router.load();
+  const view = (
+    <QueryClientProvider client={client}>
+      <OriginalDocxHostContext value={renderFakeFolioHost}>
+        <RouterProvider router={router} />
+      </OriginalDocxHostContext>
+    </QueryClientProvider>
+  );
   render(
     <IntlProvider locale="en" messages={messages}>
       <FormattingProvider locale="en" timeZone="UTC">
-        <QueryClientProvider client={client}>
-          <OriginalDocxHostContext value={renderFakeFolioHost}>
-            <RouterProvider router={router} />
-          </OriginalDocxHostContext>
-        </QueryClientProvider>
+        {signedIn ? (
+          <AuthenticatedUserProvider user={viewer}>
+            {view}
+          </AuthenticatedUserProvider>
+        ) : (
+          view
+        )}
       </FormattingProvider>
     </IntlProvider>,
   );
@@ -1487,5 +1511,217 @@ test("a claim's history opens from one row and reads who did what, why, and what
     messages.avt.states.tension.chip,
     messages.avt.states.supported.chip,
   ]);
+  expect(requests).toEqual([]);
+});
+
+const listFact = (suffix: number, name: string): ListItem => ({
+  id: factId(suffix),
+  name,
+  itemType: "fact",
+  status: "open",
+  priority: "none",
+  dueDate: null,
+  sectionId: null,
+  position: `a${String(suffix)}`,
+  description: null,
+  reviewStatus: "unreviewed",
+  createdAt: "2026-10-01T12:00:00Z",
+  updatedAt: "2026-10-01T12:00:00Z",
+  customFields: [],
+  firstSource: null,
+  factDetails: null,
+});
+
+test("a gap claim leads with adding or linking a fact; a silent one offers that only once opened", async () => {
+  const seeded = seededRun();
+  const silentText = "I would have expected the board to minute it.";
+  const run = {
+    ...seeded,
+    claims: seeded.claims.map((claim, index) =>
+      index === 1
+        ? {
+            ...claim,
+            verdict: noCover,
+            refs: [],
+            text: silentText,
+            qualifiers: [
+              {
+                kind: "record-silent",
+                explanation: "The witness's own expectation.",
+                review: "routine",
+              },
+            ],
+          }
+        : claim,
+    ),
+  } satisfies VerificationRun;
+  await mount(run);
+  selectClaim(4);
+  expect(screen.getByText(messages.avt.disposition.nocover)).toBeTruthy();
+  expect(screen.queryByText(/Sign-off is optional/u)).toBeNull();
+  expect(
+    screen.getByRole("button", { name: messages.avt.gap.addFact }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: messages.avt.gap.linkFact }),
+  ).toBeTruthy();
+  // Needs evidence is one of the three next steps, offered once.
+  expect(
+    screen.getAllByRole("button", {
+      name: messages.avt.review.status.needsEvidence,
+    }),
+  ).toHaveLength(1);
+
+  selectClaim(2);
+  expect(
+    screen
+      .getAllByText(silentText)
+      .some((node) => node.tagName === "BLOCKQUOTE"),
+  ).toBe(true);
+  expect(
+    screen.queryByRole("button", { name: messages.avt.gap.addFact }),
+  ).toBeNull();
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.showNextSteps }),
+  );
+  expect(
+    screen.getByRole("button", { name: messages.avt.gap.addFact }),
+  ).toBeTruthy();
+  expect(requests).toEqual([]);
+});
+
+test("linking a fact records the link as a review event, then re-checks the claim", async () => {
+  // Each claim shown reads its comments as the viewer: the first claim in
+  // reading order, then the one selected.
+  const noComments = () =>
+    Response.json({ items: [], limit: 100, nextCursor: null });
+  answers.push(noComments(), noComments());
+  const { run } = await mount(seededRun(), true);
+  selectClaim(4);
+  await waitFor(() => expect(answers).toHaveLength(0));
+  requests.length = 0;
+  const claim = run.claims.at(3) ?? panic("Missing seeded no-coverage claim");
+  const notice = listFact(8, "The lender's notice letter is dated 3 June.");
+  const held = {
+    ...listFact(9, "A held note about the notice."),
+    factDetails: {
+      occurredOn: null,
+      occurredOnPrecision: null,
+      evidenceKind: null,
+      medium: null,
+      confidence: null,
+      interpretationNote: null,
+      scoring: "held",
+    },
+  } satisfies ListItem;
+  answers.push(
+    Response.json({ items: [notice, held], nextCursor: null, limit: 100 }),
+    Response.json({
+      claimId: claim.id,
+      review: {
+        ...EMPTY_CLAIM_REVIEW,
+        linkedFactIds: [notice.id],
+        eventCount: 1,
+      },
+    }),
+    Response.json({ replayed: false, claim }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.linkFact }),
+  );
+  const option = await screen.findByText(notice.name);
+  // A held fact is never read by a check, so it cannot be linked.
+  expect(screen.queryByText(held.name)).toBeNull();
+  fireEvent.click(option);
+  await waitFor(() => expect(requests).toHaveLength(3));
+  expect(requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
+    `GET /v1/lists/${workspaceId}/${run.evidence.listId}/items`,
+    `POST /v1/lists/${workspaceId}/claim-reviews`,
+    `POST /v1/lists/${workspaceId}/claim-rechecks`,
+  ]);
+  expect(requests.at(1)?.body).toEqual({
+    runId: run.id,
+    claimId: claim.id,
+    event: { kind: "fact-link", factEntityId: notice.id, change: "link" },
+  });
+  expect(requests.at(2)?.body).toMatchObject({
+    runId: run.id,
+    claimId: claim.id,
+    requestKey: expect.any(String),
+  });
+});
+
+test("adding a fact from a document starts from the claim's words and asks for the document", async () => {
+  const { run } = await mount();
+  selectClaim(4);
+  const claim = run.claims.at(3) ?? panic("Missing seeded no-coverage claim");
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.addFact }),
+  );
+  const sheet = await screen.findByRole("dialog", {
+    name: messages.avt.gap.sheet.title,
+  });
+  const statement = within(sheet).getByLabelText(messages.common.fact);
+  expect(statement).toHaveProperty("value", claim.text);
+  fireEvent.click(
+    within(sheet).getByRole("button", { name: messages.avt.gap.sheet.submit }),
+  );
+  expect(
+    await within(sheet).findByText(messages.lists.sources.documentRequired),
+  ).toBeTruthy();
+  expect(requests).toEqual([]);
+});
+
+test("a re-checked claim reads its new verdict beside the run's, and names a fact the run never pinned", async () => {
+  const seeded = seededRun();
+  const later = makeFact(7, {
+    text: "The lender's notice letter is dated 3 June 2021.",
+  });
+  const run = {
+    ...seeded,
+    factStandings: [
+      ...seeded.factStandings,
+      {
+        factEntityId: later.factEntityId,
+        scoring: "included",
+        tier: "unsourced",
+      },
+    ],
+    claims: seeded.claims.map((claim, index) =>
+      index === 3
+        ? {
+            ...claim,
+            verdict: supported(86),
+            refs: [{ factEntityId: later.factEntityId, rel: "supports" }],
+            recheck: {
+              checkedAt: "2026-11-11T10:00:00.000Z",
+              checkedBy: actorId,
+              modelRef: null,
+              factCount: 5,
+              facts: [later],
+              original: { verdict: noCover, refs: [], qualifiers: [] },
+            },
+          }
+        : claim,
+    ),
+  } satisfies VerificationRun;
+  await mount(run);
+  selectClaim(4);
+  const summary =
+    screen.getByText(/^Re-checked .* against 5 facts\.$/u).parentElement ??
+    panic("No re-check summary");
+  expect(
+    within(summary)
+      .getAllByText(/^(No coverage|Supported)$/u)
+      .map((badge) => badge.textContent),
+  ).toEqual([
+    messages.avt.states.nocover.chip,
+    messages.avt.states.supported.chip,
+  ]);
+  expect(screen.getByText(later.text)).toBeTruthy();
+  // The verdict moved off the gap, so its next steps are gone.
+  expect(
+    screen.queryByRole("button", { name: messages.avt.gap.addFact }),
+  ).toBeNull();
   expect(requests).toEqual([]);
 });

@@ -48,6 +48,11 @@ import { cn } from "@stll/ui/utils";
 import { ListSourceForm } from "@/components/workspaces/list-source-form";
 import { ClaimComments } from "@/features/avt/claim-comments";
 import {
+  GapNextSteps,
+  LinkedFacts,
+  RecheckSummary,
+} from "@/features/avt/claim-gap";
+import {
   isRecordSilent,
   QualifierChips,
   QualifierNotes,
@@ -111,7 +116,7 @@ import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 type ClaimDetailPanelProps = {
   workspaceId: string;
   /** The run, and the list it checked against, which owns its facts'
-   *  sources. */
+   *  sources and is where a gap's fact is added or linked from. */
   run: Pick<VerificationRun, "id" | "evidence">;
   /** The claim as displayed (see `resolveClaimView`). */
   claim: VerificationClaim;
@@ -227,6 +232,9 @@ export const ClaimDetailPanel = ({
           conflictCount={conflicts.length}
           supportCount={supports.length}
         />
+        {claim.recheck !== null && (
+          <RecheckSummary recheck={claim.recheck} state={state} />
+        )}
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
@@ -268,6 +276,8 @@ export const ClaimDetailPanel = ({
             </section>
           )}
 
+          <LinkedFacts {...factScope} claim={claim} disabled={!canReview} />
+
           <section className="space-y-2.5 border-t pt-3.5">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
@@ -304,6 +314,9 @@ export const ClaimDetailPanel = ({
                 />
                 {t(guidance.askKey)}
               </p>
+            )}
+            {state === "nocover" && (
+              <GapNextSteps {...factScope} claim={claim} disabled={!canReview} />
             )}
             <DecisionRow
               acceptLabel={t(confirmLabel(state, guidance.tone))}
@@ -690,7 +703,8 @@ type DispositionToneStyle = {
 
 /**
  * Disposition-guidance tone: ready = supported, manual = tension,
- * escalate = record conflict, routine = neutral.
+ * escalate = record conflict, gap = missing coverage to fill,
+ * routine = neutral.
  */
 const DISPOSITION_TONE_STYLE: Record<DispositionTone, DispositionToneStyle> = {
   ready: {
@@ -708,6 +722,11 @@ const DISPOSITION_TONE_STYLE: Record<DispositionTone, DispositionToneStyle> = {
     textClass: "",
     textStyle: { color: RECORD_CONFLICT_VAR },
     icon: SplitIcon,
+  },
+  gap: {
+    tone: "neutral",
+    textClass: "text-foreground",
+    icon: SearchIcon,
   },
   routine: {
     tone: "neutral",

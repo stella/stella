@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Otsus on selge, kuid ühe aluseks oleva fakti tõlgendus on vaidlustatud; vaadake see enne kinnitamist üle.",
       "contradicted": "Register ei toeta seda väidet. Enne otsuse kinnitamist peab inimene selle üle vaatama.",
-      "nocover": "Ükski ankurfakt ei käsitle seda väidet, seega pole seda millegi põhjal kontrollida. Kinnitamine on vabatahtlik.",
+      "nocover": "Lisage fakt dokumendist, siduge loendis juba olev fakt või märkige, et väide vajab tõendeid.",
       "notverifiable": "Kõrvale jäetud kui kontrollimatu; kinnitamine on vabatahtlik. Kui väidet saab tegelikult kontrollida, avage see allpool uuesti.",
       "recordconflict": "Registri kaks tõendit on vastuolus. Otsustage eespool, kumb on aluseks, või edastage asi tõendite töörühmale; tööriist ei vali teie eest.",
       "restsOnHeld": "Fakt, millele see otsus tugineb, on ülevaatuseks peatatud; kinnitage, et otsus kehtib ka ilma selleta, või kontrollige väidet uuesti, kui fakt on selgunud.",
@@ -381,8 +381,33 @@
         "label": "Allikata"
       }
     },
+    "gap": {
+      "addFact": "Lisa fakt dokumendist",
+      "addFactFailed": "Fakti ei saanud lisada",
+      "factOffList": "Fakt, mida loendis enam ei ole",
+      "linkFact": "Seo fakt",
+      "linkFailed": "Fakti ei saanud siduda",
+      "linked": "Seotud faktid",
+      "noFacts": "Ükski loendi fakt ei vasta.",
+      "recheck": "Kontrolli uuesti",
+      "recheckFailed": "Väidet ei saanud uuesti kontrollida",
+      "searchFacts": "Otsi loendi fakte",
+      "sheet": {
+        "description": "Fakt lisatakse loendisse koos lõiguga, millest see pärineb, seotakse selle väitega ja väide kontrollitakse uuesti.",
+        "passage": "Lõik",
+        "passageHint": "Dokumendi sõnad, mis fakti tõendavad.",
+        "statementHint": "Algtekstiks on väite sõnastus; jätke alles ainult see, mida dokument tõendab.",
+        "statementRequired": "Kirjutage fakt.",
+        "statementTooLong": "Fakt võib olla kuni {limit} märki pikk.",
+        "submit": "Lisa ja kontrolli uuesti",
+        "title": "Lisa fakt dokumendist"
+      },
+      "showNextSteps": "Näita järgmisi samme",
+      "unlink": "Tühista seos: {fact}"
+    },
     "guidance": {
       "escalate": "Edasta edasi",
+      "gap": "Vajab fakti",
       "manualJudgement": "Inimese otsustus",
       "optional": "Vabatahtlik",
       "readyToConfirm": "Kinnitamiseks valmis"
@@ -392,11 +417,14 @@
         "acceptedRoutine": "Tavapärasena kinnitatud",
         "conflictReopened": "Vastuolu lahendus võetud tagasi",
         "escalated": "Edastatud tõendite töörühmale",
+        "factLinked": "Fakt seotud",
+        "factUnlinked": "Fakti seos tühistatud",
         "governed": "Aluseks olev kirje valitud",
         "noteCleared": "Märkus eemaldatud",
         "noteSaved": "Märkus salvestatud",
         "overridden": "Otsus asendatud",
         "overrideWithdrawn": "Asendus võetud tagasi",
+        "rechecked": "Väide kontrollitud uuesti",
         "reopened": "Uuesti avatud kontrollitava väitena",
         "statusCleared": "Kontrolli olek eemaldatud",
         "statusDisputed": "Märgitud vaidlustatuks",
@@ -412,7 +440,9 @@
       },
       "formerMember": "Endine liige",
       "kinds": {
+        "factLink": "Faktiseosed",
         "override": "Asendatud otsused",
+        "recheck": "Korduskontrollid",
         "recordConflict": "Vastuolude lahendused",
         "reopen": "Uuesti avamised",
         "status": "Oleku muudatused"
@@ -460,6 +490,11 @@
       "required": "Salvestamiseks märkige põhjus.",
       "unresolveConflict": "Miks see lahendus tagasi võtta?",
       "withdrawOverride": "Miks naasta tööriista otsuse juurde?"
+    },
+    "recheck": {
+      "currentVerdict": "Otsus pärast uuesti kontrollimist",
+      "runVerdict": "Kontrollkäigu otsus",
+      "summary": "Kontrollitud uuesti {checkedAt} {count, plural, one {# fakti} other {# fakti}} alusel."
     },
     "review": {
       "decided": "{status, select, disputed {Vaidlustatud} needsEvidence {Vajab tõendeid} other {{origin, select, bulk {Tavapärasena kinnitatud} other {Kontrollitud}}}} · {decidedAt}",

@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Záver je jednoznačný, ale výklad jedného z použitých faktov je sporný; pred schválením si zaslúži vašu pozornosť.",
       "contradicted": "Záznamy sa od tohto tvrdenia odchyľujú. Pred potvrdením záveru musí rozhodnúť človek.",
-      "nocover": "Žiadny referenčný fakt sa tohto tvrdenia netýka, takže ho nemožno s ničím porovnať. Schválenie je nepovinné.",
+      "nocover": "Pridajte fakt z dokumentu, prepojte fakt, ktorý už je v zozname, alebo označte, že tvrdenie vyžaduje dôkazy.",
       "notverifiable": "Odložené ako neoveriteľné; schválenie je nepovinné. Ak sa tvrdenie v skutočnosti dá overiť, znovu ho otvorte nižšie.",
       "recordconflict": "Dva dôkazné materiály v spise si odporujú. Vyššie určte, ktorý je rozhodujúci, alebo vec označte pre tím pre dôkazy; nástroj nerozhodne za vás.",
       "restsOnHeld": "Fakt, o ktorý sa tento záver opiera, je pozastavený na kontrolu; potvrďte, že záver platí aj bez neho, alebo tvrdenie po vyriešení faktu overte znova.",
@@ -381,8 +381,33 @@
         "label": "Bez zdroja"
       }
     },
+    "gap": {
+      "addFact": "Pridať fakt z dokumentu",
+      "addFactFailed": "Fakt sa nepodarilo pridať",
+      "factOffList": "Fakt, ktorý už nie je v zozname",
+      "linkFact": "Prepojiť fakt",
+      "linkFailed": "Fakt sa nepodarilo prepojiť",
+      "linked": "Prepojené fakty",
+      "noFacts": "Žiadny fakt v zozname nezodpovedá.",
+      "recheck": "Skontrolovať znova",
+      "recheckFailed": "Tvrdenie sa nepodarilo skontrolovať znova",
+      "searchFacts": "Hľadať medzi faktmi v zozname",
+      "sheet": {
+        "description": "Fakt sa pridá do zoznamu spolu s pasážou, z ktorej vychádza, prepojí sa s týmto tvrdením a tvrdenie sa skontroluje znova.",
+        "passage": "Pasáž",
+        "passageHint": "Slová v dokumente, ktoré fakt preukazujú.",
+        "statementHint": "Východiskový text je znenie tvrdenia; ponechajte len to, čo dokument preukazuje.",
+        "statementRequired": "Napíšte fakt.",
+        "statementTooLong": "Fakt môže mať najviac {limit} znakov.",
+        "submit": "Pridať a skontrolovať znova",
+        "title": "Pridať fakt z dokumentu"
+      },
+      "showNextSteps": "Zobraziť ďalšie kroky",
+      "unlink": "Zrušiť prepojenie: {fact}"
+    },
     "guidance": {
       "escalate": "Postúpiť ďalej",
+      "gap": "Chýba fakt",
       "manualJudgement": "Vyžaduje úsudok",
       "optional": "Nepovinné",
       "readyToConfirm": "Pripravené na potvrdenie"
@@ -392,11 +417,14 @@
         "acceptedRoutine": "Prijaté ako bežné",
         "conflictReopened": "Vyriešenie rozporu zrušené",
         "escalated": "Odovzdané tímu pre dôkazy",
+        "factLinked": "Prepojený fakt",
+        "factUnlinked": "Zrušené prepojenie faktu",
         "governed": "Zvolený rozhodujúci záznam",
         "noteCleared": "Poznámka odstránená",
         "noteSaved": "Poznámka uložená",
         "overridden": "Záver zmenený",
         "overrideWithdrawn": "Zmena záveru vzatá späť",
+        "rechecked": "Tvrdenie znova skontrolované",
         "reopened": "Znovu otvorené ako overiteľné tvrdenie",
         "statusCleared": "Stav kontroly zrušený",
         "statusDisputed": "Označené ako spochybnené",
@@ -412,7 +440,9 @@
       },
       "formerMember": "Bývalý člen",
       "kinds": {
+        "factLink": "Prepojenia faktov",
         "override": "Zmeny záveru",
+        "recheck": "Opakované kontroly",
         "recordConflict": "Riešenia rozporov v záznamoch",
         "reopen": "Opätovné otvorenia",
         "status": "Zmeny stavu"
@@ -460,6 +490,11 @@
       "required": "Uveďte dôvod, aby sa úkon zaznamenal.",
       "unresolveConflict": "Prečo rušíte toto vyriešenie?",
       "withdrawOverride": "Prečo sa vraciate k záveru nástroja?"
+    },
+    "recheck": {
+      "currentVerdict": "Záver po opakovanej kontrole",
+      "runVerdict": "Záver kontroly",
+      "summary": "Znova skontrolované {checkedAt} voči {count, plural, one {# faktu} few {# faktom} many {# faktu} other {# faktom}}."
     },
     "review": {
       "decided": "{status, select, disputed {Spochybnené} needsEvidence {Vyžaduje dôkazy} other {{origin, select, bulk {Prijaté ako bežné} other {Skontrolované}}}} · {decidedAt}",

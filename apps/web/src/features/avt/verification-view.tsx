@@ -55,10 +55,10 @@ import type {
 import { REVIEW_STATUS_META, STATE_META } from "@/features/avt/types";
 import { useClaimReviewActions } from "@/features/avt/use-claim-review-actions";
 import {
+  claimFactsById,
   contestedFactIds,
   countClaims,
   effectiveState,
-  evidenceFactsById,
   isConflictState,
   isContested,
   isSettled,
@@ -139,8 +139,11 @@ export const VerificationView = ({
   // and the detail panel agree about what each claim currently is.
   const claims = run.claims.map(resolveClaimView);
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
-  const contested = contestedFactIds(run.evidence.facts);
-  const factsById = evidenceFactsById(run);
+  // A re-check can rest a claim on a fact the run never pinned.
+  const contested = contestedFactIds([
+    ...run.evidence.facts,
+    ...run.claims.flatMap((claim) => claim.recheck?.facts ?? []),
+  ]);
   const presentation = selectClaimPresentation(run.blocks, claims);
   const readingOrder = presentation.readingOrder;
   const counts = countClaims(run.claims, contested);
@@ -425,7 +428,7 @@ export const VerificationView = ({
             <ClaimDetailPanel
               claim={selectedClaim}
               contested={contested}
-              factsById={factsById}
+              factsById={claimFactsById(run, selectedClaim)}
               key={selectedClaim.id}
               onReviewEvent={(event) => recordEvent(selectedClaim.id, event)}
               run={run}

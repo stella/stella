@@ -149,15 +149,18 @@ export const resolveClaimView = (
     anchor: claim.anchor,
     refs: [],
     review: claim.review,
+    recheck: claim.recheck,
   };
 };
 
-export type DispositionTone = "ready" | "manual" | "escalate" | "routine";
+export type DispositionTone =
+  "ready" | "manual" | "escalate" | "gap" | "routine";
 
 const GUIDANCE_KEYS = {
   ready: "avt.guidance.readyToConfirm",
   manual: "avt.guidance.manualJudgement",
   escalate: "avt.guidance.escalate",
+  gap: "avt.guidance.gap",
   routine: "avt.guidance.optional",
 } as const satisfies Record<DispositionTone, TranslationKey>;
 
@@ -259,13 +262,26 @@ export const dispositionGuidance = (
       askKey: supportedAsk(claim),
     };
   }
+  if (claim.state === "nocover" && hasQualifier(claim, "record-silent")) {
+    return {
+      tone: "routine",
+      guideKey: GUIDANCE_KEYS.routine,
+      askKey: QUALIFIER_ASK["record-silent"],
+    };
+  }
+  // Missing coverage the record should have is a gap to fill, not a
+  // verdict to sign off: its next steps are adding or linking a fact.
+  if (claim.state === "nocover") {
+    return {
+      tone: "gap",
+      guideKey: GUIDANCE_KEYS.gap,
+      askKey: DISPOSITION_COPY.nocover,
+    };
+  }
   return {
     tone: "routine",
     guideKey: GUIDANCE_KEYS.routine,
-    askKey:
-      claim.state === "nocover" && hasQualifier(claim, "record-silent")
-        ? QUALIFIER_ASK["record-silent"]
-        : DISPOSITION_COPY[claim.state],
+    askKey: DISPOSITION_COPY[claim.state],
   };
 };
 
@@ -402,4 +418,34 @@ export const evidenceFactsById = (
       },
     ]),
   );
+};
+
+/**
+ * The facts a claim's detail can name: the run's pinned facts, with the
+ * facts its latest re-check read in their place (a fact added after the run
+ * is known only from the re-check).
+ */
+export const claimFactsById = (
+  run: Pick<VerificationRun, "evidence" | "factStandings">,
+  claim: Pick<VerificationClaim, "recheck">,
+): ReadonlyMap<FactId, ShownFact> => {
+  const facts = new Map(evidenceFactsById(run));
+  if (claim.recheck === null) {
+    return facts;
+  }
+  const standings = new Map(
+    run.factStandings.map(({ factEntityId, scoring, tier }) => [
+      factEntityId,
+      { scoring, tier },
+    ]),
+  );
+  for (const fact of claim.recheck.facts) {
+    facts.set(fact.factEntityId, {
+      ...fact,
+      standing:
+        standings.get(fact.factEntityId) ??
+        panic("A re-checked fact has no standing in the run read"),
+    });
+  }
+  return facts;
 };

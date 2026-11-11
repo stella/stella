@@ -42,7 +42,10 @@ export type SourceKind =
 
 export type ClaimReviewEvent =
   ListsRoutes["claim-reviews"]["post"]["body"]["event"];
-export type ClaimReviewEventKind = ClaimReviewEvent["kind"];
+/** A claim's latest re-check, beside the grade it replaced. */
+export type ClaimRecheck = NonNullable<VerificationClaim["recheck"]>;
+export type ClaimRecheckResult =
+  ListsRoutes["claim-rechecks"]["post"]["response"][200];
 export type ClaimReviewStatus = NonNullable<ClaimReview["status"]>;
 export type ClaimOverrideState = NonNullable<ClaimReview["override"]>;
 
@@ -50,6 +53,9 @@ export type ReviewHistoryPage =
   ListsRoutes["claim-reviews"]["get"]["response"][200];
 export type ReviewHistoryEntry = ReviewHistoryPage["items"][number];
 export type ClaimDisposition = ReviewHistoryEntry["before"];
+/** Every kind of action a claim's history holds: the reviewer actions sent
+ *  as review events, and re-checks. */
+export type ClaimReviewEventKind = ReviewHistoryEntry["kind"];
 
 type ReviewStatusMeta = {
   labelKey: TranslationKey;
@@ -88,6 +94,8 @@ export const REVIEW_EVENT_KIND_LABEL_KEYS = {
   note: "common.notes",
   reopen: "avt.history.kinds.reopen",
   "record-conflict": "avt.history.kinds.recordConflict",
+  "fact-link": "avt.history.kinds.factLink",
+  recheck: "avt.history.kinds.recheck",
 } as const satisfies Record<ClaimReviewEventKind, TranslationKey>;
 
 export const isReviewEventKind = (

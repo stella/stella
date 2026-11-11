@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "A következtetés egyértelmű, de az egyik figyelembe vett tény értelmezése vitatott; jóváhagyás előtt érdemes átnézni.",
       "contradicted": "A nyilvántartás eltér ettől az állítástól. A következtetés jóváhagyásához emberi döntés szükséges.",
-      "nocover": "Egyetlen referenciatény sem foglalkozik ezzel az állítással, ezért nincs mihez viszonyítani. A jóváhagyás nem kötelező.",
+      "nocover": "Vegye fel a tényt egy dokumentumból, kapcsoljon hozzá egy már a listán lévő tényt, vagy jelölje meg, hogy bizonyíték szükséges.",
       "notverifiable": "Nem ellenőrizhetőként félretéve; a jóváhagyás nem kötelező. Ha mégis ellenőrizhető, nyissa újra alább.",
       "recordconflict": "Az ügyirat két bizonyítéka ellentmond egymásnak. Fent válassza ki az irányadó bizonyítékot, vagy jelezze a bizonyítékkezelő csapatnak; az eszköz nem dönt Ön helyett.",
       "restsOnHeld": "A következtetés alapjául szolgáló egyik tény felülvizsgálatra vár; erősítse meg, hogy a következtetés nélküle is megáll, vagy ellenőrizze újra az állítást, miután a tény tisztázódott.",
@@ -381,8 +381,33 @@
         "label": "Forrás nélkül"
       }
     },
+    "gap": {
+      "addFact": "Tény hozzáadása dokumentumból",
+      "addFactFailed": "A tényt nem sikerült hozzáadni",
+      "factOffList": "Tény, amely már nincs a listán",
+      "linkFact": "Tény hozzákapcsolása",
+      "linkFailed": "A tényt nem sikerült hozzákapcsolni",
+      "linked": "Hozzákapcsolt tények",
+      "noFacts": "Egyetlen tény sem egyezik a listán.",
+      "recheck": "Újraellenőrzés",
+      "recheckFailed": "Az állítást nem sikerült újra ellenőrizni",
+      "searchFacts": "Keresés a lista tényei között",
+      "sheet": {
+        "description": "A tény a belőle származó szövegrésszel együtt kerül a listára, hozzákapcsolódik ehhez az állításhoz, és az állítást újra ellenőrizzük.",
+        "passage": "Szövegrész",
+        "passageHint": "A dokumentum szavai, amelyek megállapítják a tényt.",
+        "statementHint": "Az állítás szövegével indul; csak azt tartsa meg, amit a dokumentum megállapít.",
+        "statementRequired": "Írja le a tényt.",
+        "statementTooLong": "Egy tény legfeljebb {limit} karakterből állhat.",
+        "submit": "Hozzáadás és újraellenőrzés",
+        "title": "Tény hozzáadása dokumentumból"
+      },
+      "showNextSteps": "További lépések megjelenítése",
+      "unlink": "{fact} leválasztása"
+    },
     "guidance": {
       "escalate": "Továbbítás",
+      "gap": "Tény szükséges",
       "manualJudgement": "Emberi mérlegelés",
       "optional": "Nem kötelező",
       "readyToConfirm": "Megerősítésre kész"
@@ -392,11 +417,14 @@
         "acceptedRoutine": "Rutinként elfogadva",
         "conflictReopened": "Az ellentmondás feloldása visszavonva",
         "escalated": "Megjelölve a bizonyítékkezelő csapatnak",
+        "factLinked": "Tény hozzákapcsolva",
+        "factUnlinked": "Tény leválasztva",
         "governed": "Irányadó bejegyzés kiválasztva",
         "noteCleared": "Megjegyzés törölve",
         "noteSaved": "Megjegyzés mentve",
         "overridden": "Következtetés felülírva",
         "overrideWithdrawn": "Felülírás visszavonva",
+        "rechecked": "Állítás újraellenőrizve",
         "reopened": "Ellenőrizhető állításként újranyitva",
         "statusCleared": "Ellenőrzési állapot törölve",
         "statusDisputed": "Vitatottnak jelölve",
@@ -412,7 +440,9 @@
       },
       "formerMember": "Korábbi tag",
       "kinds": {
+        "factLink": "Tény-hozzákapcsolások",
         "override": "Felülírt következtetések",
+        "recheck": "Újraellenőrzések",
         "recordConflict": "Ellentmondások feloldásai",
         "reopen": "Újranyitások",
         "status": "Állapotváltozások"
@@ -460,6 +490,11 @@
       "required": "A rögzítéshez adjon meg indokot.",
       "unresolveConflict": "Miért vonja vissza ezt a feloldást?",
       "withdrawOverride": "Miért tér vissza az eszköz következtetéséhez?"
+    },
+    "recheck": {
+      "currentVerdict": "Az újraellenőrzés utáni következtetés",
+      "runVerdict": "Az ellenőrzés következtetése",
+      "summary": "Újraellenőrizve: {checkedAt}, {count, plural, one {# tény} other {# tény}} alapján."
     },
     "review": {
       "decided": "{status, select, disputed {Vitatott} needsEvidence {Bizonyíték szükséges} other {{origin, select, bulk {Rutinként elfogadva} other {Ellenőrzött}}}} · {decidedAt}",

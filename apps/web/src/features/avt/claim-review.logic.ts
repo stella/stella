@@ -29,6 +29,7 @@ export const EMPTY_CLAIM_REVIEW = {
   decidedBy: null,
   reopened: false,
   recordConflictResolution: null,
+  linkedFactIds: [],
   eventCount: 0,
 } as const satisfies ClaimReview;
 
@@ -109,6 +110,20 @@ export const predictClaimReview = (
         status: null,
         statusOrigin: null,
         override: null,
+      };
+    }
+    // A link decides nothing; the claim's grade moves only once it is
+    // checked again.
+    case "fact-link": {
+      const others = review.linkedFactIds.filter(
+        (id) => id !== event.factEntityId,
+      );
+      return {
+        ...review,
+        linkedFactIds:
+          event.change === "link"
+            ? [...others, toSafeId(event.factEntityId)]
+            : others,
       };
     }
     default: {

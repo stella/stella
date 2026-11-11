@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Závěr je jednoznačný, ale výklad jednoho z použitých faktů je sporný; před schválením si zaslouží vaši pozornost.",
       "contradicted": "Záznamy se od tohoto tvrzení odchylují. Než bude možné závěr potvrdit, musí rozhodnout člověk.",
-      "nocover": "Žádný referenční fakt se tohoto tvrzení netýká, takže je nelze s ničím porovnat. Schválení je nepovinné.",
+      "nocover": "Přidejte fakt z dokumentu, propojte fakt, který už je v seznamu, nebo označte, že tvrzení vyžaduje důkazy.",
       "notverifiable": "Odloženo jako neověřitelné; schválení je nepovinné. Pokud lze tvrzení ve skutečnosti ověřit, znovu je otevřete níže.",
       "recordconflict": "Dva důkazní materiály ve spise si odporují. Výše určete, který je rozhodující, nebo věc označte pro tým pro důkazy; nástroj nerozhodne za vás.",
       "restsOnHeld": "Fakt, o který se tento závěr opírá, je pozastaven ke kontrole; potvrďte, že závěr platí i bez něj, nebo tvrzení po vyřešení faktu ověřte znovu.",
@@ -381,8 +381,33 @@
         "label": "Bez zdroje"
       }
     },
+    "gap": {
+      "addFact": "Přidat fakt z dokumentu",
+      "addFactFailed": "Fakt se nepodařilo přidat",
+      "factOffList": "Fakt, který už v seznamu není",
+      "linkFact": "Propojit fakt",
+      "linkFailed": "Fakt se nepodařilo propojit",
+      "linked": "Propojené fakty",
+      "noFacts": "Žádný fakt v seznamu neodpovídá.",
+      "recheck": "Zkontrolovat znovu",
+      "recheckFailed": "Tvrzení se nepodařilo zkontrolovat znovu",
+      "searchFacts": "Hledat mezi fakty v seznamu",
+      "sheet": {
+        "description": "Fakt se přidá do seznamu spolu s pasáží, z níž vychází, propojí se s tímto tvrzením a tvrzení se zkontroluje znovu.",
+        "passage": "Pasáž",
+        "passageHint": "Slova v dokumentu, která fakt prokazují.",
+        "statementHint": "Výchozí text je znění tvrzení; ponechte jen to, co dokument prokazuje.",
+        "statementRequired": "Napište fakt.",
+        "statementTooLong": "Fakt může mít nejvýše {limit} znaků.",
+        "submit": "Přidat a zkontrolovat znovu",
+        "title": "Přidat fakt z dokumentu"
+      },
+      "showNextSteps": "Zobrazit další kroky",
+      "unlink": "Zrušit propojení: {fact}"
+    },
     "guidance": {
       "escalate": "Předat dál",
+      "gap": "Chybí fakt",
       "manualJudgement": "Vyžaduje úsudek",
       "optional": "Nepovinné",
       "readyToConfirm": "Připraveno k potvrzení"
@@ -392,11 +417,14 @@
         "acceptedRoutine": "Přijato jako rutinní",
         "conflictReopened": "Vyřešení rozporu zrušeno",
         "escalated": "Předáno týmu pro důkazy",
+        "factLinked": "Propojen fakt",
+        "factUnlinked": "Zrušeno propojení faktu",
         "governed": "Zvolen rozhodující záznam",
         "noteCleared": "Poznámka odstraněna",
         "noteSaved": "Poznámka uložena",
         "overridden": "Závěr změněn",
         "overrideWithdrawn": "Změna závěru vzata zpět",
+        "rechecked": "Tvrzení znovu zkontrolováno",
         "reopened": "Znovu otevřeno jako ověřitelné tvrzení",
         "statusCleared": "Stav kontroly zrušen",
         "statusDisputed": "Označeno jako zpochybněné",
@@ -412,7 +440,9 @@
       },
       "formerMember": "Bývalý člen",
       "kinds": {
+        "factLink": "Propojení faktů",
         "override": "Změny závěru",
+        "recheck": "Opakované kontroly",
         "recordConflict": "Řešení rozporů v záznamech",
         "reopen": "Znovuotevření",
         "status": "Změny stavu"
@@ -460,6 +490,11 @@
       "required": "Uveďte důvod, aby se úkon zaznamenal.",
       "unresolveConflict": "Proč rušíte toto vyřešení?",
       "withdrawOverride": "Proč se vracíte k závěru nástroje?"
+    },
+    "recheck": {
+      "currentVerdict": "Závěr po opakované kontrole",
+      "runVerdict": "Závěr kontroly",
+      "summary": "Znovu zkontrolováno {checkedAt} proti {count, plural, one {# faktu} few {# faktům} many {# faktu} other {# faktům}}."
     },
     "review": {
       "decided": "{status, select, disputed {Zpochybněno} needsEvidence {Vyžaduje důkazy} other {{origin, select, bulk {Přijato jako rutinní} other {Zkontrolováno}}}} · {decidedAt}",

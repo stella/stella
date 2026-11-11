@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Das Ergebnis ist eindeutig, doch die Auslegung eines beitragenden Fakts ist strittig – vor der Freigabe sollten Sie dies prüfen.",
       "contradicted": "Der Bestand weicht von dieser Behauptung ab. Bevor dieses Ergebnis Bestand hat, ist eine menschliche Entscheidung erforderlich.",
-      "nocover": "Kein Ankerfakt betrifft diese Behauptung; sie kann daher mit nichts abgeglichen werden. Die Freigabe ist optional.",
+      "nocover": "Fügen Sie die Tatsache aus einem Dokument hinzu, verknüpfen Sie eine bereits in der Liste vorhandene oder markieren Sie, dass Belege erforderlich sind.",
       "notverifiable": "Als nicht überprüfbar zurückgestellt – die Freigabe ist optional. Öffnen Sie die Behauptung unten erneut, falls sie doch überprüfbar ist.",
       "recordconflict": "Zwei Anlagen im Bestand widersprechen sich. Klären Sie oben, welche maßgeblich ist, oder markieren Sie den Fall für das Belegteam – das Tool entscheidet nicht für Sie.",
       "restsOnHeld": "Ein Fakt, auf dem dieses Ergebnis beruht, ist zur Prüfung zurückgestellt; bestätigen Sie, dass das Ergebnis auch ohne ihn trägt, oder prüfen Sie die Behauptung erneut, sobald der Fakt geklärt ist.",
@@ -381,8 +381,33 @@
         "label": "Ohne Quelle"
       }
     },
+    "gap": {
+      "addFact": "Tatsache aus einem Dokument hinzufügen",
+      "addFactFailed": "Die Tatsache konnte nicht hinzugefügt werden",
+      "factOffList": "Eine Tatsache, die nicht mehr in der Liste steht",
+      "linkFact": "Tatsache verknüpfen",
+      "linkFailed": "Die Tatsache konnte nicht verknüpft werden",
+      "linked": "Verknüpfte Tatsachen",
+      "noFacts": "Keine Tatsache in der Liste passt.",
+      "recheck": "Erneut prüfen",
+      "recheckFailed": "Die Behauptung konnte nicht erneut geprüft werden",
+      "searchFacts": "Tatsachen der Liste durchsuchen",
+      "sheet": {
+        "description": "Die Tatsache wird mit der Textstelle, aus der sie stammt, in die Liste aufgenommen, mit dieser Behauptung verknüpft und die Behauptung erneut geprüft.",
+        "passage": "Textstelle",
+        "passageHint": "Der Wortlaut im Dokument, der die Tatsache belegt.",
+        "statementHint": "Ausgangspunkt ist der Wortlaut der Behauptung; behalten Sie nur, was das Dokument belegt.",
+        "statementRequired": "Geben Sie die Tatsache ein.",
+        "statementTooLong": "Eine Tatsache darf höchstens {limit} Zeichen enthalten.",
+        "submit": "Hinzufügen und erneut prüfen",
+        "title": "Tatsache aus einem Dokument hinzufügen"
+      },
+      "showNextSteps": "Nächste Schritte anzeigen",
+      "unlink": "Verknüpfung mit {fact} aufheben"
+    },
     "guidance": {
       "escalate": "Eskalieren",
+      "gap": "Tatsache fehlt",
       "manualJudgement": "Manuelle Entscheidung",
       "optional": "Fakultativ",
       "readyToConfirm": "Bestätigungsbereit"
@@ -392,11 +417,14 @@
         "acceptedRoutine": "Als routinemäßig übernommen",
         "conflictReopened": "Auflösung des Widerspruchs zurückgenommen",
         "escalated": "Für das Belegteam markiert",
+        "factLinked": "Tatsache verknüpft",
+        "factUnlinked": "Verknüpfung mit Tatsache aufgehoben",
         "governed": "Maßgeblichen Eintrag gewählt",
         "noteCleared": "Notiz entfernt",
         "noteSaved": "Notiz gespeichert",
         "overridden": "Ergebnis geändert",
         "overrideWithdrawn": "Änderung des Ergebnisses zurückgenommen",
+        "rechecked": "Behauptung erneut geprüft",
         "reopened": "Als überprüfbare Behauptung erneut geöffnet",
         "statusCleared": "Prüfstatus entfernt",
         "statusDisputed": "Als beanstandet markiert",
@@ -412,7 +440,9 @@
       },
       "formerMember": "Ehemaliges Mitglied",
       "kinds": {
+        "factLink": "Faktenverknüpfungen",
         "override": "Geänderte Ergebnisse",
+        "recheck": "Erneute Prüfungen",
         "recordConflict": "Auflösungen von Widersprüchen",
         "reopen": "Erneute Öffnungen",
         "status": "Statusänderungen"
@@ -460,6 +490,11 @@
       "required": "Geben Sie eine Begründung an, um dies festzuhalten.",
       "unresolveConflict": "Warum diese Auflösung zurücknehmen?",
       "withdrawOverride": "Warum zum Ergebnis des Werkzeugs zurückkehren?"
+    },
+    "recheck": {
+      "currentVerdict": "Ergebnis nach der erneuten Prüfung",
+      "runVerdict": "Ergebnis des Prüflaufs",
+      "summary": "Erneut geprüft {checkedAt} anhand von {count, plural, one {# Tatsache} other {# Tatsachen}}."
     },
     "review": {
       "decided": "{status, select, disputed {Beanstandet} needsEvidence {Belege fehlen} other {{origin, select, bulk {Als routinemäßig übernommen} other {Geprüft}}}} · {decidedAt}",
