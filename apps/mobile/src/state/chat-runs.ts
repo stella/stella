@@ -6,7 +6,7 @@ import type { ChatActiveRunState } from "@stll/api-contract/chat";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
-import { requestApi } from "@/state/api-request";
+import { ApiRequestError, requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 import { sectionThreads, threadDay } from "@/state/chat-threads";
 import type {
@@ -91,7 +91,9 @@ const readRunsPage = async ({
 
 /**
  * Every page of the person's unfinished runs. The server lists waiting runs
- * first, so stopping at one page could hide the working ones.
+ * first, so stopping at one page could hide the working ones. A cursor the
+ * server already gave fails the read rather than asking for that page again
+ * without end.
  */
 export const listActiveChatRuns = async ({
   fetch,
@@ -99,8 +101,19 @@ export const listActiveChatRuns = async ({
 }: ListActiveChatRunsArgs): Promise<Result<ActiveChatRun[], ApiError>> =>
   await Result.gen(async function* () {
     const runs: ActiveChatRun[] = [];
+    const followed = new Set<string>();
     let cursor: string | null = null;
     do {
+      if (cursor !== null) {
+        if (followed.has(cursor)) {
+          return Result.err(
+            new ApiRequestError({
+              message: "The list of unfinished runs repeated a page cursor.",
+            }),
+          );
+        }
+        followed.add(cursor);
+      }
       // Typed: the loop reads `cursor` from the page it fetched.
       const page: RunsPage = yield* Result.await(
         readRunsPage({ cursor, fetch, source }),

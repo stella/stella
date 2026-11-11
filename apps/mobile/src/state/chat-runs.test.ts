@@ -250,6 +250,20 @@ describe("reading unfinished runs", () => {
     ]);
   });
 
+  test("a cursor the server already gave fails the read instead of looping", async () => {
+    let calls = 0;
+    const fetch: Fetch = async () => {
+      calls += 1;
+      return Response.json({
+        items: [],
+        nextCursor: "page 2",
+      });
+    };
+    const read = await listActiveChatRuns({ fetch, source: sourceFor(fetch) });
+    expect(Result.isError(read)).toBe(true);
+    expect(calls).toBe(2);
+  });
+
   test("a refused read is a failure, not an empty list", async () => {
     const fetch: Fetch = async () =>
       Response.json({ message: "Forbidden" }, { status: 403 });
