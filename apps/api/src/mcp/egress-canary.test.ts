@@ -297,6 +297,7 @@ const buildContext = ({
           status: "available" as const,
           readBlocks: async () => await Promise.resolve([]),
           readTextPieces: async () => await Promise.resolve([]),
+          resolveHeldAnchors: async () => await Promise.resolve(new Map()),
         }),
     },
     safeDb,

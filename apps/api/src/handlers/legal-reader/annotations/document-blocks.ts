@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import {
+  DECISION_ANCHOR_REDIRECT_MAX_ANCHORS,
+  DECISION_ANCHOR_RESOLUTION,
+  resolveDecisionAnchor,
+} from "@stll/api-contract/case-law-anchor-redirects";
 import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-annotations";
 import {
   readerAnchorPiecesOf,
@@ -17,8 +22,10 @@ import {
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import { decisionAnnotationTextPieces } from "@/api/handlers/legal-reader/annotations/decision-text-pieces";
+import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import { readDecisionAnchorRedirects } from "@/api/lib/case-law/decision-anchor-redirects";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import {
   readCorpusText,
@@ -50,6 +57,9 @@ type AnnotationTarget = {
  * mark does not resolve the document twice: `readBlocks` is the anchored
  * text an agent writes a mark on, `readTextPieces` every run of text the
  * reader draws marks in, where a stored mark is placed.
+ * `resolveHeldAnchors` maps a block anchor an earlier version of the
+ * document held to the anchor holding its text now, for anchors the current
+ * blocks lack and a reparse moved; anything else is left out.
  */
 type AnnotationTargetAccess =
   | { status: "not_found" }
@@ -58,7 +68,15 @@ type AnnotationTargetAccess =
       status: "available";
       readBlocks: () => Promise<readonly Block[]>;
       readTextPieces: () => Promise<readonly ReaderTextPiece[]>;
+      resolveHeldAnchors: (
+        anchors: readonly string[],
+        currentAnchors: ReadonlySet<string>,
+      ) => Promise<ReadonlyMap<string, string>>;
     };
+
+/** A document whose anchors a reparse never moves holds nothing to resolve. */
+const NO_HELD_ANCHORS = async (): Promise<ReadonlyMap<string, string>> =>
+  await Promise.resolve(new Map());
 
 const resolveDecision = async (
   decisionId: string,
@@ -140,7 +158,57 @@ const resolveDecision = async (
         metadata: row.metadata,
       });
     },
+    resolveHeldAnchors: async (anchors, currentAnchors) =>
+      await resolveMovedDecisionAnchors({
+        decisionId: row.id,
+        anchors,
+        currentAnchors,
+      }),
   };
+};
+
+type ResolveMovedDecisionAnchorsOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  anchors: readonly string[];
+  currentAnchors: ReadonlySet<string>;
+};
+
+/** Held anchors a reparse moved, to the anchor holding their text now. */
+const resolveMovedDecisionAnchors = async ({
+  decisionId,
+  anchors,
+  currentAnchors,
+}: ResolveMovedDecisionAnchorsOptions): Promise<
+  ReadonlyMap<string, string>
+> => {
+  const unknown = [
+    ...new Set(anchors.filter((anchor) => !currentAnchors.has(anchor))),
+  ].slice(0, DECISION_ANCHOR_REDIRECT_MAX_ANCHORS);
+  if (unknown.length === 0) {
+    return new Map();
+  }
+  const items = await withRedistributableSubject(
+    caseLawPublicReadDb,
+    "search",
+    { kind: "id", id: decisionId },
+    async ({ id, tx }) =>
+      await readDecisionAnchorRedirects(tx, {
+        decisionId: id,
+        anchors: unknown,
+      }),
+  );
+  const moved = new Map<string, string>();
+  for (const { anchor, redirect } of items ?? []) {
+    const resolution = resolveDecisionAnchor({
+      anchor,
+      currentAnchors,
+      redirect,
+    });
+    if (resolution.type === DECISION_ANCHOR_RESOLUTION.MOVED) {
+      moved.set(anchor, resolution.anchorId);
+    }
+  }
+  return moved;
 };
 
 const resolveStatute = async (
@@ -189,6 +257,8 @@ const resolveStatute = async (
     // The statute reader draws marks in its blocks' anchored text alone.
     readTextPieces: async () =>
       (await readStatuteBlocks()).flatMap(readerAnchorPiecesOf),
+    // Statute anchors name provisions, which a reparse does not renumber.
+    resolveHeldAnchors: NO_HELD_ANCHORS,
   };
 };
 

@@ -1139,6 +1139,7 @@
       "count": "{count, plural, one {# idioma} other {# idiomas} many {# idiomas}}",
       "matchedIn": "Coincidencia en {language}"
     },
+    "linkedPassageGone": "El pasaje enlazado ya no está en este texto.",
     "loadingMore": "Cargando más...",
     "marginFilter": {
       "label": "Filtro de disposiciones citadas",

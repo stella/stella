@@ -1139,6 +1139,7 @@
       "count": "{count, plural, one {# language} other {# languages}}",
       "matchedIn": "Matched in {language}"
     },
+    "linkedPassageGone": "The linked passage is no longer in this text.",
     "loadingMore": "Loading more...",
     "marginFilter": {
       "label": "Cited provisions filter",

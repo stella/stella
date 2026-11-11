@@ -1139,6 +1139,7 @@
       "count": "{count, plural, one {# Sprache} other {# Sprachen}}",
       "matchedIn": "Treffer auf {language}"
     },
+    "linkedPassageGone": "Die verlinkte Textstelle ist in diesem Text nicht mehr enthalten.",
     "loadingMore": "Weitere werden geladen…",
     "marginFilter": {
       "label": "Filter für zitierte Vorschriften",
