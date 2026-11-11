@@ -417,6 +417,18 @@ describe("list verification access grants across MCP tools", () => {
       params,
       body: { filePropertyName: "Documents" },
     },
+    "lists.source-documents.list": {
+      params,
+      body: { listId: resourceId, documentEntityIds: [resourceId] },
+    },
+    "lists.source-documents.update": {
+      params,
+      body: {
+        listId: resourceId,
+        documentEntityId: resourceId,
+        sourceKind: "testimony",
+      },
+    },
   } as const;
   // Irreversible capabilities only run, or validate, once the human confirmed.
   const confirmation = (capability: string) =>

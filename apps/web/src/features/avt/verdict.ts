@@ -139,6 +139,8 @@ export const resolveClaimView = (
     // The server read the claim's qualifiers against the verdict it has
     // until it is checked again, so they are kept unchanged.
     qualifiers: claim.qualifiers,
+    // Missing coverage has no conflict to suggest a record for.
+    suggestedGoverningFactId: null,
     text: claim.text,
     anchor: claim.anchor,
     refs: [],

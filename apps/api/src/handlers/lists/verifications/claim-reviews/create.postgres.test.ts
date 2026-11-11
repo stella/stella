@@ -25,7 +25,7 @@ import {
   legalListVerificationRuns,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -218,26 +218,36 @@ if (!databaseUrl || !runPostgres) {
           },
           status: "completed",
         });
-        await db.insert(legalListClaims).values({
-          id: claimId,
-          workspaceId,
-          runId,
-          position: 0,
-          type: "fact",
-          text: "The payment was made on 23 August.",
-          anchor: { type: "docx-block", blockId: "p1", start: 0, end: 10 },
-          state: "recordconflict",
-          score: null,
-          refs: [],
-          // The account is listed first, so the suggestion is not simply
-          // the first record.
-          recordConflict: {
-            subject: "The payment date",
-            factEntityIds: [recalledFactId, recordedFactId],
-            values: ["2021-08-30", "2021-08-23"],
-            governingStates: ["contradicted", "supported"],
-          },
-        });
+        // Claims carry the organization gate, so they are written as a
+        // member of the matter, as the engine writes them.
+        await createScopedDb(
+          db,
+          [workspaceId],
+          organizationId,
+          userId,
+        )(
+          async (tx) =>
+            await tx.insert(legalListClaims).values({
+              id: claimId,
+              workspaceId,
+              runId,
+              position: 0,
+              type: "fact",
+              text: "The payment was made on 23 August.",
+              anchor: { type: "docx-block", blockId: "p1", start: 0, end: 10 },
+              state: "recordconflict",
+              score: null,
+              refs: [],
+              // The account is listed first, so the suggestion is not simply
+              // the first record.
+              recordConflict: {
+                subject: "The payment date",
+                factEntityIds: [recalledFactId, recordedFactId],
+                values: ["2021-08-30", "2021-08-23"],
+                governingStates: ["contradicted", "supported"],
+              },
+            }),
+        );
 
         const safeDb = createSafeDb(db, [workspaceId], organizationId, userId);
         const record = async (
@@ -277,16 +287,24 @@ if (!databaseUrl || !runPostgres) {
         });
         await record({ kind: "note", note: "The ledger was corrected later." });
 
-        const events = await db
-          .select({ payload: legalListClaimReviewEvents.payload })
-          .from(legalListClaimReviewEvents)
-          .where(
-            and(
-              eq(legalListClaimReviewEvents.workspaceId, workspaceId),
-              eq(legalListClaimReviewEvents.claimId, claimId),
-            ),
-          )
-          .orderBy(legalListClaimReviewEvents.createdAt);
+        const events = await createScopedDb(
+          db,
+          [workspaceId],
+          organizationId,
+          userId,
+        )(
+          async (tx) =>
+            await tx
+              .select({ payload: legalListClaimReviewEvents.payload })
+              .from(legalListClaimReviewEvents)
+              .where(
+                and(
+                  eq(legalListClaimReviewEvents.workspaceId, workspaceId),
+                  eq(legalListClaimReviewEvents.claimId, claimId),
+                ),
+              )
+              .orderBy(legalListClaimReviewEvents.createdAt),
+        );
         expect(events.map(({ payload }) => payload)).toEqual([
           {
             kind: "record-conflict",
