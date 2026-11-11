@@ -102,6 +102,8 @@ import type {
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
+  StoredRawRecaptureInput,
+  StoredRawRecaptureOutcome,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -2267,6 +2269,112 @@ const reparseCzRegionalStoredRaw = (
 };
 
 /**
+ * The media type rows carried before this adapter stored an envelope: the
+ * document payload alone, without the listing row that keyed it.
+ */
+const CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE = "application/json";
+
+const PUBLICATION_DAY = /^\d{4}-\d{2}-\d{2}/u;
+
+/**
+ * The day listing that names a document-only row: its publication day, which
+ * the document payload states and the opendata endpoint is addressed by.
+ */
+const czRegionalRecaptureSliceOf = (
+  stored: StoredRawReparseInput,
+): string | null => {
+  if (stored.contentType !== CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE) {
+    return null;
+  }
+  const document = readCzRegionalDocument(new TextDecoder().decode(stored.raw));
+  const publishedAt = toOptionalValue(document.parsed?.metadata?.publishedAt);
+  return publishedAt === undefined
+    ? null
+    : (PUBLICATION_DAY.exec(publishedAt)?.[0] ?? null);
+};
+
+const sameDocket = (left: string, right: string): boolean =>
+  left.toLocaleLowerCase("cs") === right.toLocaleLowerCase("cs");
+
+/**
+ * Upgrade a document-only row to the envelope the crawl stores today, from the
+ * day listing's own row for it.
+ *
+ * The envelope comes out of {@link assembleCzRegionalDecision}, the builder the
+ * crawl uses, so a recaptured row and a freshly crawled one store the same
+ * bytes. The listed row has to name the decision the held document is: its
+ * document id is the row's and the document's own, and its docket is the
+ * row's. Anything else is reported rather than written.
+ */
+const recaptureCzRegionalStoredRaw = ({
+  listingPayload,
+  stored,
+}: StoredRawRecaptureInput): StoredRawRecaptureOutcome => {
+  if (stored.contentType !== CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE) {
+    return {
+      type: "not-recapturable",
+      detail: `stored under ${stored.contentType ?? "no content type"}, which keeps its listing row already or holds no document`,
+    };
+  }
+  const read = readCzRegionalListingItem(listingPayload);
+  if (read.type === "unidentifiable") {
+    return {
+      type: "not-recapturable",
+      detail: "the listed item states no docket and court",
+    };
+  }
+  const document = readCzRegionalDocument(new TextDecoder().decode(stored.raw));
+  const listedDocumentId = documentIdFromLink(toOptionalValue(read.item.odkaz));
+  const heldDocumentId = toOptionalValue(document.parsed?.uuid);
+  if (
+    listedDocumentId !== undefined &&
+    stored.sourceDocumentId !== null &&
+    listedDocumentId !== stored.sourceDocumentId
+  ) {
+    return {
+      type: "identity-mismatch",
+      detail: `the listing links ${listedDocumentId}, the row ${stored.sourceDocumentId}`,
+    };
+  }
+  if (
+    listedDocumentId !== undefined &&
+    heldDocumentId !== undefined &&
+    listedDocumentId !== heldDocumentId
+  ) {
+    return {
+      type: "identity-mismatch",
+      detail: `the listing links ${listedDocumentId}, the held document is ${heldDocumentId}`,
+    };
+  }
+  const built = assembleCzRegionalDecision({
+    item: read.item,
+    rawListing: listingPayload,
+    document,
+    chain: null,
+  });
+  if (built.type === "unkeyable") {
+    return {
+      type: "not-recapturable",
+      detail: "the listed item and the held document name no court decision",
+    };
+  }
+  const { decision } = built;
+  if (!sameDocket(decision.caseNumber, stored.caseNumber)) {
+    return {
+      type: "identity-mismatch",
+      detail: `the listing states ${decision.caseNumber}, the row ${stored.caseNumber}`,
+    };
+  }
+  return decision.sourceRaw === undefined
+    ? panic("The regional assembler built a decision without its envelope")
+    : {
+        type: "recaptured",
+        raw: decision.sourceRaw,
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      };
+};
+
+/**
  * Every payload this service serves for one decision, and whether the row
  * keeps it.
  *
@@ -2665,6 +2773,12 @@ export const czRegionalAdapter = defineSourceAdapter({
     // for is not marked and stays held: there is nothing left to ask for, and
     // re-listing it on every pass would never let the day settle.
     heldRequiresDetail: true,
+    // Rows stored before the envelope hold the document alone; the day
+    // listing restates the row that keyed them.
+    recapture: {
+      sliceOf: czRegionalRecaptureSliceOf,
+      recaptureStoredRaw: recaptureCzRegionalStoredRaw,
+    },
     listSlicePage: listCzRegionalSlicePage,
     buildDecision: buildCzRegionalFromPayload,
   },

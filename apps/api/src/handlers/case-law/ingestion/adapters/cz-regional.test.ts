@@ -57,7 +57,10 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
 } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   faultedResponse,
@@ -269,6 +272,129 @@ describe("the stored payload is an envelope of every response read", () => {
       type: "rejected",
       rejection: "unsupported-content",
     });
+  });
+});
+
+/** A row written by the previous adapter: the document payload alone. */
+const documentOnlyRow = (
+  decision: IngestionResult,
+  documentRaw: string,
+): StoredRawReparseInput => ({
+  raw: new TextEncoder().encode(documentRaw),
+  contentType: "application/json",
+  caseNumber: decision.caseNumber,
+  sourceDocumentId: decision.sourceDocumentId ?? null,
+  language: decision.language,
+  court: decision.court,
+  ecli: decision.ecli ?? null,
+  decisionDate: decision.decisionDate ?? null,
+  decisionType: decision.decisionType ?? null,
+  sourceUrl: decision.sourceUrl ?? null,
+  documentUrl: decision.documentUrl ?? null,
+  metadata: {},
+});
+
+const recapture =
+  czRegionalAdapter.reconciliation.recapture ??
+  panic("cz-regional declares no recapture");
+
+describe("a document-only row is recaptured from its day listing", () => {
+  test("the recaptured row is the row a crawl stores, and replays to it", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+    const stored = documentOnlyRow(
+      crawled,
+      await readFixture(DISTRICT_DOCUMENT),
+    );
+
+    const recaptured = recapture.recaptureStoredRaw({
+      listingPayload: await itemByDocket(LISTING, DISTRICT_DOCKET),
+      stored,
+    });
+
+    expect(recaptured).toEqual({
+      type: "recaptured",
+      raw: crawled.sourceRaw ?? panic("crawl stored no envelope"),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    });
+    const raw =
+      recaptured.type === "recaptured" ? recaptured.raw : panic("unreachable");
+    const replayed = await czRegionalAdapter.reparseStoredRaw?.({
+      ...stored,
+      raw: new TextEncoder().encode(raw),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    });
+    expect(replayed).toEqual({ type: "parsed", result: crawled });
+  });
+
+  test("the row is looked up on its publication day", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+
+    expect(
+      recapture.sliceOf(
+        documentOnlyRow(crawled, await readFixture(DISTRICT_DOCUMENT)),
+      ),
+    ).toBe("2025-06-11");
+    expect(
+      recapture.sliceOf({
+        ...documentOnlyRow(crawled, await readFixture(DISTRICT_DOCUMENT)),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      }),
+    ).toBeNull();
+  });
+
+  test("a listing row for another decision is reported, not merged", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+    const stored = documentOnlyRow(
+      crawled,
+      await readFixture(DISTRICT_DOCUMENT),
+    );
+
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: await itemByDocket(LISTING, APPELLATE_DOCKET),
+        stored,
+      }),
+    ).toMatchObject({ type: "identity-mismatch" });
+    // The listing names the row, but the held document is another decision.
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: await itemByDocket(LISTING, DISTRICT_DOCKET),
+        stored: {
+          ...stored,
+          raw: new TextEncoder().encode(await readFixture(APPELLATE_DOCUMENT)),
+        },
+      }),
+    ).toMatchObject({ type: "identity-mismatch" });
+  });
+
+  test("a row that already keeps its listing row is not recaptured", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: await itemByDocket(LISTING, DISTRICT_DOCKET),
+        stored: {
+          ...documentOnlyRow(crawled, crawled.sourceRaw ?? ""),
+          contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        },
+      }),
+    ).toMatchObject({ type: "not-recapturable" });
   });
 });
 

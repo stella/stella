@@ -1253,10 +1253,56 @@ export type HeldRowRules = {
 };
 
 /**
+ * What recapturing one stored row's missing publisher responses produced.
+ *
+ * `identity-mismatch` is a finding, not a failure to retry: the listed item and
+ * the payload already held describe different decisions, and neither is
+ * written over the other.
+ */
+export type StoredRawRecaptureOutcome =
+  | {
+      type: "recaptured";
+      /** The envelope the crawl would have stored for this row. */
+      raw: string;
+      contentType: string;
+    }
+  | { type: "identity-mismatch"; detail: string }
+  | { type: "not-recapturable"; detail: string };
+
+export type StoredRawRecaptureInput = {
+  /** One item exactly as the slice listing serves it. */
+  listingPayload: unknown;
+  stored: StoredRawReparseInput;
+};
+
+/**
+ * Re-reading the publisher responses an older stored payload never kept.
+ *
+ * A row the crawl wrote before the adapter stored a response (most often the
+ * listing row) cannot be replayed: the replay rebuilds from retained bytes
+ * alone. The listing is cheap to ask again, so the row is upgraded to the
+ * envelope a crawl writes today and then rebuilt by `reparseStoredRaw` like
+ * any other row; the envelope and the decision each keep a single builder.
+ */
+export type SourceRecapture = {
+  /** The slice that lists the stored row, read off what the row holds. */
+  sliceOf: (stored: StoredRawReparseInput) => string | null;
+  /**
+   * The envelope for `stored` with the listed item added. Pure: the payload
+   * already held is reused, never fetched again.
+   */
+  recaptureStoredRaw: (
+    input: StoredRawRecaptureInput,
+  ) => StoredRawRecaptureOutcome;
+};
+
+/**
  * The capability that makes a source reconcilable: the publisher can be asked
  * what it holds for a slice, independently of the cursor the crawl advanced.
  */
 export type SourceReconciliation = SourceSliceWalk & {
+  /** Present where rows stored without a listing can be upgraded from it. */
+  recapture?: SourceRecapture | undefined;
   /**
    * Per-record content/identity signal, excluding listing coordinates and corpus-wide revisions.
    * Classify each new payload field as content/identity (include it) or traversal/repair metadata (exclude it).
@@ -1948,6 +1994,15 @@ export const defineSourceAdapter = <
             return inspectBuild(createSliceBuildDecision.call(this));
           }),
   } satisfies ScopedCallbacks<SourceReconciliation>;
+  const recapture =
+    reconciliation.recapture === undefined
+      ? undefined
+      : ({
+          sliceOf: scoped(reconciliation.recapture.sliceOf),
+          recaptureStoredRaw: scoped(
+            reconciliation.recapture.recaptureStoredRaw,
+          ),
+        } satisfies SourceRecapture);
   const sourceFieldCallbacks = {
     listSourceFields: scoped(adapter.sourceFields.listSourceFields),
   } satisfies ScopedCallbacks<SourceFieldInventory>;
@@ -1986,6 +2041,7 @@ export const defineSourceAdapter = <
       ...reconciliation,
       ...reconciliationCallbacks,
       textlessHeldRecheck: textless,
+      recapture,
     },
   };
 };
