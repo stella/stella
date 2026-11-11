@@ -1853,6 +1853,7 @@
       "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
       "errorLimitResetsAt": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Vous pourrez réessayer à partir du {time}.",
       "errorNeedsLogin": "L’agent de code de votre ordinateur vous demande de vous reconnecter. Connectez-vous depuis stella desktop, puis réessayez.",
+      "errorNotReached": "Votre ordinateur n'a pas pris en charge cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
       "errorUnavailable": "Votre ordinateur a cessé de traiter cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
       "filesNotShared": "Les fichiers qui n'ont pas pu être partagés restent sur votre ordinateur : {fileNames}",
       "onThisComputer": "{harness} sur cet ordinateur",
@@ -1880,7 +1881,8 @@
       "stateOffline": "Ordinateur hors ligne",
       "stateUnavailable": "Indisponible pour le moment",
       "stateUnsupported": "Cette version n’est pas prise en charge",
-      "waitingForComputer": "En attente de la reconnexion de votre ordinateur…"
+      "waitingForComputer": "En attente de la reconnexion de votre ordinateur…",
+      "waitingForPickup": "En attente de la prise en charge de cette réponse par votre ordinateur…"
     },
     "localRunQuestion": {
       "chooseSeveral": "Choisissez toutes les réponses qui s’appliquent",

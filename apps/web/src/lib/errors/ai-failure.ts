@@ -30,6 +30,7 @@ export const AI_FAILURE_ERROR_KEYS = {
   // The same refusal as a turn the API finds too long before it starts.
   [AI_FAILURE_CODES.local_runner_turn_too_large]:
     "chat.localRun.refusalTooLarge",
+  [AI_FAILURE_CODES.local_runner_not_reached]: "chat.localRun.errorNotReached",
   [AI_FAILURE_CODES.unknown]: "errors.apiCodes.aiUnknown",
   [AI_FAILURE_CODES.role_not_configured]: "capabilityActions.aiMissing",
   [AI_FAILURE_CODES.own_key_required]: "capabilityActions.aiMissing",

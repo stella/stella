@@ -282,7 +282,7 @@ export const ChatThreadPage = ({
     isGenerating,
     reconnecting,
     turnAbandoned,
-    waitingForComputer,
+    computerWait,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -794,7 +794,7 @@ export const ChatThreadPage = ({
                           queuedMessages={queuedMessages}
                           stickyUserMessages
                           streamdownComponents={streamdownComponents}
-                          waitingForComputer={waitingForComputer}
+                          computerWait={computerWait}
                           newestLocalTurn={data.newestLocalTurn}
                           threadRef={threadRef}
                           userMessageEdit={userMessageEdit}

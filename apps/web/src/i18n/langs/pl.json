@@ -1853,6 +1853,7 @@
       "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
       "errorLimitResetsAt": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Możesz spróbować ponownie po {time}.",
       "errorNeedsLogin": "Agent programistyczny na Twoim komputerze wymaga ponownego zalogowania. Zaloguj się w stella desktop i spróbuj ponownie.",
+      "errorNotReached": "Twój komputer nie przejął tej odpowiedzi. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
       "errorUnavailable": "Twój komputer przestał przetwarzać tę odpowiedź. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
       "filesNotShared": "Pliki, których nie udało się udostępnić, pozostają na Twoim komputerze: {fileNames}",
       "onThisComputer": "{harness} na tym komputerze",
@@ -1880,7 +1881,8 @@
       "stateOffline": "Komputer offline",
       "stateUnavailable": "Chwilowo niedostępne",
       "stateUnsupported": "Ta wersja nie jest obsługiwana",
-      "waitingForComputer": "Oczekiwanie na ponowne połączenie Twojego komputera…"
+      "waitingForComputer": "Oczekiwanie na ponowne połączenie Twojego komputera…",
+      "waitingForPickup": "Oczekiwanie, aż Twój komputer przejmie tę odpowiedź…"
     },
     "localRunQuestion": {
       "chooseSeveral": "Wybierz wszystkie pasujące",
