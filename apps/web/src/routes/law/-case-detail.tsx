@@ -96,13 +96,13 @@ export function PublicDecisionViewer({
   // A fragment a reparse moved is replaced in place, so the address bar,
   // a copied link and the back button name the block it lands on now.
   const routeBlockAnchor = fragmentBlockAnchor(routeAnchorId);
+  // A decision without a document holds no anchors of its own.
+  const shownAst = parseDocumentAst(decision.documentAst);
   const resolveRouteAnchor = useHeldDecisionAnchors({
     decisionId: decision.id,
     anchors: routeBlockAnchor === undefined ? [] : [routeBlockAnchor],
     currentAnchors: new Set(
-      (parseDocumentAst(decision.documentAst)?.blocks ?? []).map(
-        ({ anchorId }) => anchorId,
-      ),
+      shownAst === null ? [] : shownAst.blocks.map(({ anchorId }) => anchorId),
     ),
   });
   const routeAnchorResolution =

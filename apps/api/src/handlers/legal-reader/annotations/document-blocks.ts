@@ -198,7 +198,11 @@ const resolveMovedDecisionAnchors = async ({
       }),
   );
   const moved = new Map<string, string>();
-  for (const { anchor, redirect } of items ?? []) {
+  // Null: the decision is gone or not public, so it has no redirect to read.
+  if (items === null) {
+    return moved;
+  }
+  for (const { anchor, redirect } of items) {
     const resolution = resolveDecisionAnchor({
       anchor,
       currentAnchors,
