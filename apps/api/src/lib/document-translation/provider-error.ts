@@ -42,6 +42,7 @@ export const documentTranslationProviderErrorCode = (
     case "local_runner_unavailable":
     case "local_runner_turn_too_large":
     case "local_runner_not_reached":
+    case "local_runner_relinked":
     case "unknown":
       return "translation_failed";
     default: {

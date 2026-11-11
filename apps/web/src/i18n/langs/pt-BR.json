@@ -1854,6 +1854,7 @@
       "errorLimitResetsAt": "O agente de programação do seu computador atingiu o limite de uso. Você poderá tentar novamente a partir de {time}.",
       "errorNeedsLogin": "O agente de programação do seu computador precisa que você entre novamente. Entre pelo stella desktop e tente de novo.",
       "errorNotReached": "Seu computador não assumiu esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
+      "errorRelinked": "O stella desktop foi vinculado de novo no seu computador, então esta resposta parou. Envie-a de novo.",
       "errorUnavailable": "Seu computador parou de processar esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
       "filesNotShared": "Os arquivos que não puderam ser compartilhados continuam no seu computador: {fileNames}",
       "onThisComputer": "{harness} neste computador",
@@ -1882,7 +1883,8 @@
       "stateUnavailable": "Indisponível no momento",
       "stateUnsupported": "Esta versão não é compatível",
       "waitingForComputer": "Aguardando seu computador se reconectar…",
-      "waitingForPickup": "Aguardando seu computador assumir esta resposta…"
+      "waitingForPickup": "Aguardando seu computador assumir esta resposta…",
+      "waitingSentAt": "Enviado às {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Escolha todas as que se aplicam",

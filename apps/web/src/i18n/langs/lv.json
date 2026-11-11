@@ -1854,6 +1854,7 @@
       "errorLimitResetsAt": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Vēlreiz mēģināt varēsiet pēc {time}.",
       "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
       "errorNotReached": "Jūsu dators nepārņēma šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
+      "errorRelinked": "stella desktop jūsu datorā tika saistīts no jauna, tāpēc šī atbilde apstājās. Nosūtiet to vēlreiz.",
       "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
       "filesNotShared": "Faili, kurus neizdevās kopīgot, paliek jūsu datorā: {fileNames}",
       "onThisComputer": "{harness} šajā datorā",
@@ -1882,7 +1883,8 @@
       "stateUnavailable": "Pašlaik nav pieejams",
       "stateUnsupported": "Šī versija netiek atbalstīta",
       "waitingForComputer": "Gaida, līdz jūsu dators atkal izveidos savienojumu…",
-      "waitingForPickup": "Gaida, līdz jūsu dators pārņems šo atbildi…"
+      "waitingForPickup": "Gaida, līdz jūsu dators pārņems šo atbildi…",
+      "waitingSentAt": "Nosūtīts {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Izvēlieties visus atbilstošos",

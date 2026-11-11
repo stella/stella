@@ -10,6 +10,7 @@ import {
   isNull,
   lt,
   max,
+  ne,
   notExists,
   or,
   type SQL,
@@ -54,6 +55,7 @@ import {
 import { questionPauseOf } from "@/api/lib/desktop-runner/chunk";
 import {
   carryFolderRestoreNotes,
+  expireFolderRestoresOfKeys,
   hasPendingFolderRestore,
   hasUnnotedFolderRestore,
   markFolderRestoreNotesTold,
@@ -64,6 +66,7 @@ import {
   DESKTOP_RUNNER_OPEN_RUN_STATES,
   type DesktopRunnerCommandKind,
   type DesktopRunnerEventType,
+  type DesktopRunnerLostReason,
   type DesktopRunnerRunState,
 } from "@/api/lib/desktop-runner/states";
 import {
@@ -181,10 +184,13 @@ type ClaimSessionResult =
       held: HeldRun[];
     }
   /** The account holds its maximum of installations and none could go. */
-  | { type: "too_many_runners" };
+  | { type: "too_many_runners" }
+  /** A newer key of the account replaced this one on the installation. */
+  | { type: "retired" };
 
 type AccountScope = Pick<RunnerBinding, "userId" | "organizationId">;
 
+/** The account's installations; a retired key holds no place. */
 const countRunners = async (tx: Transaction, scope: AccountScope) =>
   (
     await tx
@@ -194,6 +200,7 @@ const countRunners = async (tx: Transaction, scope: AccountScope) =>
         and(
           eq(runner.userId, scope.userId),
           eq(runner.organizationId, scope.organizationId),
+          ne(runner.connection, "retired"),
         ),
       )
   ).at(0)?.count ?? 0;
@@ -234,42 +241,70 @@ const evictIdleRunners = async (
 
 /**
  * The account's other device keys naming this installation, retired once a
- * socket of the installation claims it under a new key (a relink): their
- * runners stop taking runs, a socket still open under one is closed at its
- * next heartbeat as superseded, and their open runs move to the claiming key.
- * The reconciliation that follows then offers again what no computer
- * accepted and settles what one did, so no run waits on a key the computer
- * no longer connects with. Another account naming the same installation is
- * never touched: an installation id is the desktop's own claim.
+ * socket claims it under a new key (a relink). A retired key is never routed
+ * to again, its socket is superseded at its next heartbeat, and it can never
+ * claim the installation back. Its open runs end at once: the installation
+ * id is the desktop's own claim, so no run moves to the claiming key, whose
+ * socket would then receive another computer's work. A run no computer
+ * accepted ends as not reached; an accepted one as ended by the relink,
+ * since the new key can never continue it. Its folder restores expire, so
+ * none blocks the thread. Another account naming the installation is never
+ * touched.
  */
 const retireEarlierDeviceKeys = async (
   tx: Transaction,
   binding: RunnerBinding,
+  now: Date,
 ) => {
-  const openStates = sql.join(
-    DESKTOP_RUNNER_OPEN_RUN_STATES.map((state) => sql`${state}`),
-    sql`, `,
-  );
-  // One statement: a data-modifying CTE runs whether or not it is read.
   // audit: skip - runner socket bookkeeping; the run's caller audits the work
-  await tx.execute(sql`
-    WITH retired AS (
-      UPDATE ${runner}
-      SET connection = 'disconnected'
-      WHERE user_id = ${binding.userId}
-        AND organization_id = ${binding.organizationId}
-        AND desktop_id = ${binding.desktopId}
-        AND device_jkt <> ${binding.deviceJkt}
-        AND connection = 'connected'
-      RETURNING 1
+  const retired = await tx
+    .update(runner)
+    .set({ connection: "retired" })
+    .where(
+      and(
+        eq(runner.userId, binding.userId),
+        eq(runner.organizationId, binding.organizationId),
+        eq(runner.desktopId, binding.desktopId),
+        ne(runner.deviceJkt, binding.deviceJkt),
+        ne(runner.connection, "retired"),
+      ),
     )
-    UPDATE ${runs}
-    SET device_jkt = ${binding.deviceJkt}
-    WHERE user_id = ${binding.userId}
-      AND organization_id = ${binding.organizationId}
-      AND desktop_id = ${binding.desktopId}
-      AND device_jkt <> ${binding.deviceJkt}
-      AND state IN (${openStates})`);
+    .returning({ deviceJkt: runner.deviceJkt });
+  if (retired.length === 0) {
+    return;
+  }
+  const deviceJkts = retired.map(({ deviceJkt }) => deviceJkt);
+  const ofRetired = and(
+    eq(runs.userId, binding.userId),
+    eq(runs.organizationId, binding.organizationId),
+    eq(runs.desktopId, binding.desktopId),
+    inArray(runs.deviceJkt, deviceJkts),
+  );
+  // An account holds few installations and keys, each with few open runs.
+  const open = await tx
+    .select({ runId: runs.runId, acceptedAt: runs.acceptedAt })
+    .from(runs)
+    .where(and(ofRetired, inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES)));
+  for (const [lostReason, ids] of [
+    ["not_reached", open.filter(({ acceptedAt }) => acceptedAt === null)],
+    ["computer_relinked", open.filter(({ acceptedAt }) => acceptedAt !== null)],
+  ] as const) {
+    await transitionLifecycleBatch({
+      tx,
+      spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+      ids: ids.map(({ runId }) => runId),
+      moves: { state: { from: DESKTOP_RUNNER_OPEN_RUN_STATES, to: "lost" } },
+      guard: guarded(ofRetired),
+      set: { lostReason, updatedAt: now },
+      recordTransitionAuditEvent: skipRunAudit,
+    });
+  }
+  await expireFolderRestoresOfKeys(tx, {
+    owner: binding,
+    desktopId: binding.desktopId,
+    deviceJkts,
+    now,
+  });
 };
 
 /**
@@ -310,6 +345,11 @@ export const claimRunnerSession = async (
       .from(runner)
       .where(runnerKey(binding))
       .limit(1);
+    if (existing?.connection === "retired") {
+      return { type: "retired" };
+    }
+    // Before the cap is read: the keys a relink replaces hold no place.
+    await retireEarlierDeviceKeys(tx, binding, now);
     if (existing === undefined) {
       const registered = await countRunners(tx, binding);
       if (registered >= limits.maxRunnersPerAccount) {
@@ -354,7 +394,6 @@ export const claimRunnerSession = async (
         ],
         set: values,
       });
-    await retireEarlierDeviceKeys(tx, binding);
     const heldIds = new Set(hello.activeRuns.map(({ runId }) => runId));
     const openIds = (
       await tx
@@ -492,6 +531,8 @@ export const releaseRevokedRunners = async (
           ? undefined
           : eq(runner.organizationId, organizationId),
         keyId === undefined ? undefined : eq(runner.keyId, keyId),
+        // A retired key stays retired.
+        ne(runner.connection, "retired"),
       ),
     );
 };
@@ -505,7 +546,14 @@ export const releaseRunnerSession = async (
   await db
     .update(runner)
     .set({ connection: "disconnected" })
-    .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)));
+    .where(
+      and(
+        runnerKey(binding),
+        eq(runner.sessionId, sessionId),
+        // A retired key stays retired when its socket closes.
+        eq(runner.connection, "connected"),
+      ),
+    );
 };
 
 type RenewOptions = SessionOptions & { now: Date; leaseMs: number };
@@ -1183,9 +1231,35 @@ export type PendingCommand = {
   readonly workspaceIds: readonly SafeId<"workspace">[];
 };
 
+/**
+ * Record that these runs' `run.start` is being written to this socket, before
+ * it is: from then on their computer may be running them, so they keep the
+ * recovery window rather than the unaccepted one. The first write is kept.
+ */
+const recordRunsDelivered = async (
+  db: DesktopRunnerDb,
+  {
+    binding,
+    runIds,
+    now,
+  }: { binding: RunnerBinding; runIds: readonly string[]; now: Date },
+) => {
+  if (runIds.length === 0) {
+    return;
+  }
+  // audit: skip - runner socket bookkeeping; the run's caller audits the work
+  await db
+    .update(runs)
+    .set({
+      deliveredAt: sql`coalesce(${runs.deliveredAt}, ${now}::timestamptz)`,
+    })
+    .where(and(inArray(runs.runId, [...runIds]), boundTo(binding)));
+};
+
 type PendingCommandsOptions = SessionOptions & {
   afterId: number;
   limit: number;
+  now: Date;
 };
 
 type PendingCommandsResult =
@@ -1193,14 +1267,16 @@ type PendingCommandsResult =
 
 /**
  * Commands queued after `afterId` for the open runs bound to this socket, in
- * queue order. A socket that is no longer the desktop's current one gets none:
- * the commands are read in the same statement that matches this socket's
- * session on the runner row, so a takeover committed at any point leaves the
- * superseded socket without them.
+ * queue order, taken to be written to it: each run whose `run.start` is among
+ * them records that it was delivered before any frame goes out, since its
+ * computer may be running it from then on. A socket that is no longer the
+ * desktop's current one gets none: the commands are read in the same
+ * statement that matches this socket's session on the runner row, so a
+ * takeover committed at any point leaves the superseded socket without them.
  */
-export const readPendingCommands = async (
+export const takePendingCommands = async (
   db: DesktopRunnerDb,
-  { binding, sessionId, afterId, limit }: PendingCommandsOptions,
+  { binding, sessionId, afterId, limit, now }: PendingCommandsOptions,
 ): Promise<PendingCommandsResult> => {
   const rows = await db
     .select({
@@ -1234,6 +1310,13 @@ export const readPendingCommands = async (
       return { type: "superseded" };
     }
   }
+  await recordRunsDelivered(db, {
+    binding,
+    runIds: rows
+      .filter(({ kind }) => kind === "run.start")
+      .map(({ runId }) => runId),
+    now,
+  });
   return {
     type: "current",
     commands: rows.map((row) => ({
@@ -1241,24 +1324,6 @@ export const readPendingCommands = async (
       workspaceIds: row.workspaceIds.map(brandPersistedWorkspaceId),
     })),
   };
-};
-
-/**
- * Record that a run's `run.start` is being written to this socket, before it
- * is: from then on its computer may be running it, so it keeps the recovery
- * window rather than the unaccepted one. The first write is kept.
- */
-export const recordRunDelivered = async (
-  db: DesktopRunnerDb,
-  { binding, runId, now }: { binding: RunnerBinding; runId: string; now: Date },
-) => {
-  // audit: skip - runner socket bookkeeping; the run's caller audits the work
-  await db
-    .update(runs)
-    .set({
-      deliveredAt: sql`coalesce(${runs.deliveredAt}, ${now}::timestamptz)`,
-    })
-    .where(and(eq(runs.runId, runId), boundTo(binding)));
 };
 
 type QueuedCommandsOptions = {
@@ -1693,6 +1758,8 @@ export type DesktopRunnerRunView = {
   readonly createdAt: Date;
   /** When `run.start` was first written to a socket; `null` while never. */
   readonly deliveredAt: Date | null;
+  /** Why the API ended it as `lost`, where it knows. */
+  readonly lostReason: DesktopRunnerLostReason | null;
   /** When the computer accepted the run; `null` while none picked it up. */
   readonly acceptedAt: Date | null;
 };
@@ -1717,6 +1784,7 @@ export const readRun = async (
         leaseExpiresAt: runs.leaseExpiresAt,
         createdAt: runs.createdAt,
         deliveredAt: runs.deliveredAt,
+        lostReason: runs.lostReason,
         acceptedAt: runs.acceptedAt,
       })
       .from(runs)
@@ -1855,6 +1923,7 @@ export const readMemberRunners = async (
       and(
         eq(runner.userId, owner.userId),
         eq(runner.organizationId, owner.organizationId),
+        ne(runner.connection, "retired"),
       ),
     )
     .orderBy(desc(runner.lastSeenAt), asc(runner.desktopId))

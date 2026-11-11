@@ -210,7 +210,8 @@ type LocalRunFailure =
   | typeof AI_FAILURE_CODES.local_runner_limit_reached
   | typeof AI_FAILURE_CODES.local_runner_unavailable
   | typeof AI_FAILURE_CODES.local_runner_turn_too_large
-  | typeof AI_FAILURE_CODES.local_runner_not_reached;
+  | typeof AI_FAILURE_CODES.local_runner_not_reached
+  | typeof AI_FAILURE_CODES.local_runner_relinked;
 
 const FAILURE_MESSAGE = {
   [AI_FAILURE_CODES.local_runner_needs_login]:
@@ -223,6 +224,8 @@ const FAILURE_MESSAGE = {
     "The conversation is too long to hand to the computer.",
   [AI_FAILURE_CODES.local_runner_not_reached]:
     "The computer did not pick up the turn; it is not connected.",
+  [AI_FAILURE_CODES.local_runner_relinked]:
+    "The computer was linked again, so the run of its previous link stopped.",
 } as const satisfies Record<LocalRunFailure, string>;
 
 type StoredOutcome = Extract<
@@ -875,6 +878,27 @@ const finishedRunChunks = ({
 export const LOCAL_RUN_OUTPUTS_INSTRUCTIONS = `Files meant for the member go in the outputs/ folder of your working folder, as ${RUN_OUTPUT_FILE_EXTENSIONS.join(", ")}: when your turn ends, the chat shows what you wrote there. Everything else in the working folder, scratch files and caches included, stays on this computer.`;
 
 /**
+ * Why a lost run ended the turn: its computer was linked again under a new
+ * key, which can never continue it; it never reached a computer (or the
+ * relink ended it before one accepted it); or its computer never came back.
+ */
+const lostRunFailure = (run: DesktopRunnerRunView): LocalRunFailure => {
+  switch (run.lostReason) {
+    case "computer_relinked":
+      return AI_FAILURE_CODES.local_runner_relinked;
+    case "not_reached":
+      return AI_FAILURE_CODES.local_runner_not_reached;
+    case null:
+      return run.deliveredAt === null
+        ? AI_FAILURE_CODES.local_runner_not_reached
+        : AI_FAILURE_CODES.local_runner_unavailable;
+    default:
+      run.lostReason satisfies never;
+      return panic("Unknown lost reason");
+  }
+};
+
+/**
  * What an open read does once it has caught up: wait for more (with the
  * computer there or away), read the final message the run stored with its
  * transition, or end the turn with why the gateway gave the run up.
@@ -898,15 +922,7 @@ const caughtUpStep = (
             : LOCAL_RUN_REJECTION[run.rejectReason],
       };
     case "lost":
-      return {
-        type: "fail",
-        // The run never reached a socket in time, or the computer it
-        // reached never came back to it.
-        code:
-          run.deliveredAt === null
-            ? AI_FAILURE_CODES.local_runner_not_reached
-            : AI_FAILURE_CODES.local_runner_unavailable,
-      };
+      return { type: "fail", code: lostRunFailure(run) };
     case "finished":
       return { type: "read" };
     case "assigned":

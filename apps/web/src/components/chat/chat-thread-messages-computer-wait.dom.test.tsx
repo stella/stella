@@ -130,8 +130,18 @@ test("a turn its computer has not picked up yet says so, with the time since it 
     isGenerating: true,
     computerWait: { status: "delivering", since: "2026-01-01T00:00:00.000Z" },
   });
+  // The live region announces the wait only; the count beside it is shown
+  // but hidden from assistive technology, which reads when it was sent.
   const status = screen.getByText(PICKUP).closest("[role='status']");
-  expect(status?.textContent).toMatch(/^.+…\d[\d,]*s$/u);
+  expect(status?.textContent).toBe(PICKUP);
+  const row = status?.parentElement;
+  const count = row?.querySelector(":scope > [aria-hidden='true']");
+  expect(count?.textContent).toMatch(/^\d[\d,]*s$/u);
+  expect(
+    screen
+      .getByText((text) => text.startsWith("Sent at "))
+      .closest("[role='status']"),
+  ).toBeNull();
   expect(screen.queryByText(WAITING)).toBeNull();
   expect(document.querySelector("[data-turn-live-status]")).toBeNull();
 });

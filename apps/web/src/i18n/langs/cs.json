@@ -1854,6 +1854,7 @@
       "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
       "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",
       "errorNotReached": "Váš počítač tuto odpověď nepřevzal. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
+      "errorRelinked": "stella desktop byl ve vašem počítači znovu propojen, takže se tato odpověď zastavila. Odešlete ji znovu.",
       "errorUnavailable": "Váš počítač přestal tuto odpověď zpracovávat. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
       "filesNotShared": "Soubory, které se nepodařilo sdílet, zůstávají ve vašem počítači: {fileNames}",
       "onThisComputer": "{harness} v tomto počítači",
@@ -1882,7 +1883,8 @@
       "stateUnavailable": "Momentálně nedostupné",
       "stateUnsupported": "Tato verze není podporována",
       "waitingForComputer": "Čeká se, až se váš počítač znovu připojí…",
-      "waitingForPickup": "Čeká se, až tuto odpověď převezme váš počítač…"
+      "waitingForPickup": "Čeká se, až tuto odpověď převezme váš počítač…",
+      "waitingSentAt": "Odesláno v {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Vyberte vše, co platí",

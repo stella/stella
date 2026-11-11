@@ -12,6 +12,7 @@ import {
   DESKTOP_RUNNER_CONNECTIONS,
   DESKTOP_RUNNER_EVENT_TYPES,
   DESKTOP_RUNNER_LEASED_RUN_STATES,
+  DESKTOP_RUNNER_LOST_REASONS,
   DESKTOP_RUNNER_RUN_STATES,
   DESKTOP_RUNNER_STORED_OUTCOMES,
   DESKTOP_RUNNER_STORED_REJECT_REASONS,
@@ -137,6 +138,8 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     rejectReason: p.text("reject_reason", {
       enum: DESKTOP_RUNNER_STORED_REJECT_REASONS,
     }),
+    /** Set with `lost` where the API knows why (`DESKTOP_RUNNER_LOST_REASONS`). */
+    lostReason: p.text("lost_reason", { enum: DESKTOP_RUNNER_LOST_REASONS }),
     /** The harness session a later run on this desktop may resume. */
     harnessSessionId: p.varchar("harness_session_id", { length: 256 }),
     /**
@@ -244,6 +247,10 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     p.check(
       "desktop_runner_runs_reject_reason_check",
       sql`(${table.state} = 'rejected') = (${table.rejectReason} IS NOT NULL) AND (${table.rejectReason} IS NULL OR ${table.rejectReason} IN (${sqlValues(DESKTOP_RUNNER_STORED_REJECT_REASONS)}))`,
+    ),
+    p.check(
+      "desktop_runner_runs_lost_reason_check",
+      sql`(${table.lostReason} IS NULL OR ${table.state} = 'lost') AND (${table.lostReason} IS NULL OR ${table.lostReason} IN (${sqlValues(DESKTOP_RUNNER_LOST_REASONS)}))`,
     ),
     p.check(
       "desktop_runner_runs_ack_seq_check",

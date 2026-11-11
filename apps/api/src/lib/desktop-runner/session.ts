@@ -39,10 +39,8 @@ import {
   type DesktopRunnerDb,
   type PendingCommand,
   persistRunMessage,
-  readPendingCommands,
   recordHarnessStatus,
   recordRunAccepted,
-  recordRunDelivered,
   recordRunRejected,
   releaseRunnerSession,
   renewRunnerSession,
@@ -50,6 +48,7 @@ import {
   type RunnerBinding,
   type RunTransition,
   type SequencedRunMessage,
+  takePendingCommands,
 } from "@/api/lib/desktop-runner/store";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -473,11 +472,12 @@ const deliverPending = async (
       return;
     }
     // db-await-in-loop: keyset page per iteration; the page is the batch
-    const pending = await readPendingCommands(state.context.db, {
+    const pending = await takePendingCommands(state.context.db, {
       binding: state.binding,
       sessionId: state.sessionId,
       afterId: state.deliveredThrough,
       limit: COMMAND_PAGE_SIZE,
+      now: state.context.now(),
     });
     if (pending.type === "superseded") {
       close(state, DESKTOP_RUNNER_CLOSE.superseded);
@@ -487,15 +487,6 @@ const deliverPending = async (
       const resend =
         command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runStart ||
         !held.has(command.runId);
-      if (resend && command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runStart) {
-        // Recorded before the frame goes out: once it may have, the
-        // computer may be running the run.
-        await recordRunDelivered(state.context.db, {
-          binding: state.binding,
-          runId: command.runId,
-          now: state.context.now(),
-        });
-      }
       const sent = resend
         ? send(state, await outgoing(state, command))
         : "sent";
@@ -684,6 +675,12 @@ const onHello = async (
   });
   if (claim.type === "too_many_runners") {
     close(state, DESKTOP_RUNNER_CLOSE.tooManyRunners);
+    return;
+  }
+  // A newer key of the account replaced this one on the installation; the
+  // desktop holding it stops rather than take the installation back.
+  if (claim.type === "retired") {
+    close(state, DESKTOP_RUNNER_CLOSE.superseded);
     return;
   }
   // Claimed, so the closing socket's release marks the runner disconnected.

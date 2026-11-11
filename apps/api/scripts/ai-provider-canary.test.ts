@@ -714,6 +714,7 @@ describe("AI provider canary retry contract", () => {
       local_runner_unavailable: false,
       local_runner_turn_too_large: false,
       local_runner_not_reached: false,
+      local_runner_relinked: false,
       unknown: false,
     } as const satisfies Record<AIErrorKind, boolean>;
 

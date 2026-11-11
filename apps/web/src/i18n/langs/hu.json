@@ -1854,6 +1854,7 @@
       "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
       "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
       "errorNotReached": "A számítógépe nem vette át ezt a választ. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
+      "errorRelinked": "A stella desktop újra lett kapcsolva a számítógépén, ezért ez a válasz leállt. Küldje el újra.",
       "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "filesNotShared": "A meg nem osztható fájlok a számítógépén maradnak: {fileNames}",
       "onThisComputer": "{harness} ezen a számítógépen",
@@ -1882,7 +1883,8 @@
       "stateUnavailable": "Jelenleg nem érhető el",
       "stateUnsupported": "Ez a verzió nem támogatott",
       "waitingForComputer": "Várakozás a számítógép újracsatlakozására…",
-      "waitingForPickup": "Várakozás, hogy a számítógépe átvegye ezt a választ…"
+      "waitingForPickup": "Várakozás, hogy a számítógépe átvegye ezt a választ…",
+      "waitingSentAt": "Elküldve: {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Jelölje be az összes megfelelőt",

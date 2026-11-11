@@ -1240,27 +1240,28 @@ const ComputerWaitIndicator = ({
   return (
     <Message from="assistant">
       <MessageContent>
-        <div
-          className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums"
-          role="status"
-        >
-          <StatusMark status="pending" />
+        <div className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums">
+          {/* Only the wait is announced: the count would be read out every
+              second, so it is shown but hidden from assistive technology,
+              which reads when the turn was sent instead. */}
+          <span className="flex items-center gap-2" role="status">
+            <StatusMark status="pending" />
+            {wait.status === "delivering"
+              ? t("chat.localRun.waitingForPickup")
+              : t("chat.localRun.waitingForComputer")}
+          </span>
           {wait.status === "delivering" ? (
-            <>
-              <span>{t("chat.localRun.waitingForPickup")}</span>
-              <ElapsedSince since={wait.since} />
-            </>
-          ) : (
-            <span>{t("chat.localRun.waitingForComputer")}</span>
-          )}
+            <ElapsedSince since={wait.since} />
+          ) : null}
         </div>
       </MessageContent>
     </Message>
   );
 };
 
-/** Whole seconds since `since`, counted live. */
+/** Whole seconds since `since`, counted live, and when that was. */
 const ElapsedSince = ({ since }: { since: string }) => {
+  const t = useTranslations();
   const format = useFormatter();
   const sinceMs = Temporal.Instant.from(since).epochMilliseconds;
   const [nowMs, setNowMs] = useState(
@@ -1274,13 +1275,20 @@ const ElapsedSince = ({ since }: { since: string }) => {
     return () => clearInterval(interval);
   }, [sinceMs]);
   return (
-    <span>
-      {format.number(Math.max(0, Math.floor((nowMs - sinceMs) / 1000)), {
-        style: "unit",
-        unit: "second",
-        unitDisplay: "narrow",
-      })}
-    </span>
+    <>
+      <span aria-hidden="true">
+        {format.number(Math.max(0, Math.floor((nowMs - sinceMs) / 1000)), {
+          style: "unit",
+          unit: "second",
+          unitDisplay: "narrow",
+        })}
+      </span>
+      <span className="sr-only">
+        {t("chat.localRun.waitingSentAt", {
+          time: format.dateTime(new Date(sinceMs), { timeStyle: "medium" }),
+        })}
+      </span>
+    </>
   );
 };
 

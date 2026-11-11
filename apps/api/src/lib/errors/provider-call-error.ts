@@ -83,6 +83,7 @@ export const PROVIDER_CALL_FAILURE_REASON = {
   local_runner_unavailable: "provider_unavailable",
   local_runner_turn_too_large: "request_invalid",
   local_runner_not_reached: "provider_unavailable",
+  local_runner_relinked: "provider_unavailable",
   unknown: "unclassified",
 } as const satisfies Record<AIErrorKind, FailureReason>;
 

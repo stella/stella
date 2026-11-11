@@ -1854,6 +1854,7 @@
       "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
       "errorNotReached": "Your computer did not pick up this turn. Make sure stella desktop is open and connected, then try again.",
+      "errorRelinked": "stella desktop was linked again on your computer, so this turn stopped. Send it again.",
       "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
       "filesNotShared": "Files that could not be shared stay on your computer: {fileNames}",
       "onThisComputer": "{harness} on this computer",
@@ -1882,7 +1883,8 @@
       "stateUnavailable": "Not available right now",
       "stateUnsupported": "This version is not supported",
       "waitingForComputer": "Waiting for your computer to reconnect…",
-      "waitingForPickup": "Waiting for your computer to pick up this turn…"
+      "waitingForPickup": "Waiting for your computer to pick up this turn…",
+      "waitingSentAt": "Sent at {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Choose any that apply",

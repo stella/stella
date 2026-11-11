@@ -1854,6 +1854,7 @@
       "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",
       "errorNotReached": "Jūsų kompiuteris neperėmė šio atsakymo. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
+      "errorRelinked": "stella desktop jūsų kompiuteryje buvo susietas iš naujo, todėl šis atsakymas sustojo. Išsiųskite jį dar kartą.",
       "errorUnavailable": "Jūsų kompiuteris nustojo apdoroti šį atsakymą. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
       "filesNotShared": "Failai, kurių nepavyko bendrinti, lieka jūsų kompiuteryje: {fileNames}",
       "onThisComputer": "{harness} šiame kompiuteryje",
@@ -1882,7 +1883,8 @@
       "stateUnavailable": "Šiuo metu nepasiekiama",
       "stateUnsupported": "Ši versija nepalaikoma",
       "waitingForComputer": "Laukiama, kol jūsų kompiuteris vėl prisijungs…",
-      "waitingForPickup": "Laukiama, kol jūsų kompiuteris perims šį atsakymą…"
+      "waitingForPickup": "Laukiama, kol jūsų kompiuteris perims šį atsakymą…",
+      "waitingSentAt": "Išsiųsta {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Pasirinkite visus tinkamus",
