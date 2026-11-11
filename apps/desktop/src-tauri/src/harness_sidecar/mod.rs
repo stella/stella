@@ -1775,59 +1775,6 @@ pub(crate) fn remove_retired_dirs_when_alone(
   }
 }
 
-#[cfg(test)]
-#[allow(
-  clippy::disallowed_methods,
-  reason = "tests construct local file fixtures"
-)]
-mod retired_dir_tests {
-  use super::*;
-
-  struct Place(PathBuf);
-
-  impl Place {
-    fn new() -> Self {
-      let root =
-        std::env::temp_dir().join(format!("retired-dirs-{}", uuid::Uuid::new_v4()));
-      std::fs::create_dir_all(root.join("holders/1.5.0")).unwrap();
-      std::fs::create_dir_all(root.join("shared-cache/xdg")).unwrap();
-      Self(root)
-    }
-  }
-
-  impl Drop for Place {
-    fn drop(&mut self) {
-      drop(std::fs::remove_dir_all(&self.0));
-    }
-  }
-
-  #[test]
-  fn a_retired_folder_stays_while_an_older_holder_is_left_and_goes_after() {
-    let place = Place::new();
-    let holders = place.0.join("holders");
-    let current = holders.join("1.5.0");
-    let retired = vec![place.0.join("shared-cache")];
-    std::fs::create_dir_all(holders.join("1.4.0")).unwrap();
-    remove_retired_dirs_when_alone(&holders, &current, &retired);
-    assert!(retired[0].join("xdg").is_dir());
-    std::fs::remove_dir_all(holders.join("1.4.0")).unwrap();
-    remove_retired_dirs_when_alone(&holders, &current, &retired);
-    assert!(!retired[0].exists());
-  }
-
-  #[test]
-  fn a_retired_folder_goes_when_no_holder_ever_ran() {
-    let place = Place::new();
-    let retired = vec![place.0.join("shared-cache")];
-    remove_retired_dirs_when_alone(
-      &place.0.join("no-holders"),
-      &place.0.join("no-holders/1.5.0"),
-      &retired,
-    );
-    assert!(!retired[0].exists());
-  }
-}
-
 fn remove_holder_dir(dir: &Path) {
   if let Err(error) = std::fs::remove_dir_all(dir) {
     tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "an old harness holder folder was not removed");
@@ -1909,4 +1856,57 @@ async fn read_messages<R: AsyncRead + Unpin>(
     }
   }
   let _delivered = send(LinkEvent::Closed).await;
+}
+
+#[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
+mod retired_dir_tests {
+  use super::*;
+
+  struct Place(PathBuf);
+
+  impl Place {
+    fn new() -> Self {
+      let root =
+        std::env::temp_dir().join(format!("retired-dirs-{}", uuid::Uuid::new_v4()));
+      std::fs::create_dir_all(root.join("holders/1.5.0")).unwrap();
+      std::fs::create_dir_all(root.join("shared-cache/xdg")).unwrap();
+      Self(root)
+    }
+  }
+
+  impl Drop for Place {
+    fn drop(&mut self) {
+      drop(std::fs::remove_dir_all(&self.0));
+    }
+  }
+
+  #[test]
+  fn a_retired_folder_stays_while_an_older_holder_is_left_and_goes_after() {
+    let place = Place::new();
+    let holders = place.0.join("holders");
+    let current = holders.join("1.5.0");
+    let retired = vec![place.0.join("shared-cache")];
+    std::fs::create_dir_all(holders.join("1.4.0")).unwrap();
+    remove_retired_dirs_when_alone(&holders, &current, &retired);
+    assert!(retired[0].join("xdg").is_dir());
+    std::fs::remove_dir_all(holders.join("1.4.0")).unwrap();
+    remove_retired_dirs_when_alone(&holders, &current, &retired);
+    assert!(!retired[0].exists());
+  }
+
+  #[test]
+  fn a_retired_folder_goes_when_no_holder_ever_ran() {
+    let place = Place::new();
+    let retired = vec![place.0.join("shared-cache")];
+    remove_retired_dirs_when_alone(
+      &place.0.join("no-holders"),
+      &place.0.join("no-holders/1.5.0"),
+      &retired,
+    );
+    assert!(!retired[0].exists());
+  }
 }
