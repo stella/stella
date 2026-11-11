@@ -1571,6 +1571,23 @@ test("a gap claim leads with adding or linking a fact; a silent one offers that 
       name: messages.avt.review.status.needsEvidence,
     }),
   ).toHaveLength(1);
+  // The decision pair waits behind one quiet menu, so nothing out-weighs it.
+  expect(
+    screen.queryByRole("button", {
+      name: messages.avt.claimDetail.flagDispute,
+    }),
+  ).toBeNull();
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.actions }),
+  );
+  expect(
+    await screen.findByRole("menuitem", {
+      name: messages.avt.claimDetail.flagDispute,
+    }),
+  ).toBeTruthy();
+  fireEvent.keyDown(document.activeElement ?? document.body, {
+    key: "Escape",
+  });
 
   selectClaim(2);
   expect(

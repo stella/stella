@@ -192,7 +192,7 @@ const SingleDocumentPicker = ({
   const selected =
     options.find((option) => option.entityId === pickedEntityId) ?? null;
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex w-full flex-col gap-1.5">
       <Label htmlFor={id}>{label}</Label>
       <Combobox<DocumentOption>
         autoHighlight
@@ -205,6 +205,7 @@ const SingleDocumentPicker = ({
         value={selected}
       >
         <ComboboxInput
+          className="w-full"
           id={id}
           placeholder={t("common.search")}
           showClear={selected !== null}

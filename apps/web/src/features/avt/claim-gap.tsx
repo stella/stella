@@ -121,6 +121,8 @@ type GapActionsProps = GapScope & {
     marked: boolean;
     onChange: (marked: boolean) => void;
   } | null;
+  /** Further quiet controls at the end of the row, if any. */
+  more: React.ReactNode;
 };
 
 /**
@@ -154,6 +156,7 @@ const GapActions = ({
   claim,
   disabled,
   needsEvidence,
+  more,
 }: GapActionsProps) => {
   const t = useTranslations();
   const actions = useClaimGapActions({
@@ -169,7 +172,7 @@ const GapActions = ({
     actions.link.isPending ||
     actions.recheck.isPending;
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col items-start gap-1.5">
       <AddFactSheet
         claimText={claim.text}
         disabled={busy}
@@ -179,28 +182,31 @@ const GapActions = ({
         pending={actions.addFact.isPending}
         workspaceId={workspaceId}
       />
-      <LinkFactPicker
-        disabled={busy}
-        linked={linked}
-        listId={listId}
-        onPick={(factEntityId) =>
-          actions.link.mutate({ factEntityId, change: "link" })
-        }
-        pending={actions.link.isPending}
-        workspaceId={workspaceId}
-      />
-      {needsEvidence !== null && (
-        <Button
-          aria-pressed={needsEvidence.marked}
-          disabled={disabled}
-          onClick={() => needsEvidence.onChange(!needsEvidence.marked)}
-          size="sm"
-          variant={needsEvidence.marked ? "secondary" : "ghost"}
-        >
-          <FileSearchIcon />
-          {t("avt.review.status.needsEvidence")}
-        </Button>
-      )}
+      <div className="flex flex-wrap items-center gap-1">
+        <LinkFactPicker
+          disabled={busy}
+          linked={linked}
+          listId={listId}
+          onPick={(factEntityId) =>
+            actions.link.mutate({ factEntityId, change: "link" })
+          }
+          pending={actions.link.isPending}
+          workspaceId={workspaceId}
+        />
+        {needsEvidence !== null && (
+          <Button
+            aria-pressed={needsEvidence.marked}
+            disabled={disabled}
+            onClick={() => needsEvidence.onChange(!needsEvidence.marked)}
+            size="sm"
+            variant={needsEvidence.marked ? "secondary" : "ghost"}
+          >
+            <FileSearchIcon />
+            {t("avt.review.status.needsEvidence")}
+          </Button>
+        )}
+        {more}
+      </div>
     </div>
   );
 };

@@ -23,11 +23,14 @@ import {
   FileSearchIcon,
   FlagIcon,
   HistoryIcon,
+  MoreHorizontalIcon,
   PenIcon,
   SearchIcon,
   SplitIcon,
   XCircleIcon,
+  XIcon,
 } from "@stll/ui/icons";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import type {
   ReviewDecisionEmphasis,
   ReviewDecisionState,
@@ -272,29 +275,15 @@ export const ClaimDetailPanel = ({
               escalated={isEscalated}
               guidance={guidance}
             />
-            {state === "nocover" && (
-              <GapNextSteps
-                {...factScope}
-                claim={claim}
-                disabled={!canReview}
-                needsEvidence={
-                  gap
-                    ? {
-                        marked: review?.status === "needs-evidence",
-                        onChange: (marked) =>
-                          setStatus(marked ? "needs-evidence" : null),
-                      }
-                    : null
-                }
-              />
-            )}
-            <DecisionRow
+            <ReviewActions
               acceptLabel={t(confirmLabel(state, guidance.tone))}
-              disabled={isEscalated || !canReview}
-              emphasis={gap ? "quiet" : "primary"}
-              needsEvidenceControl={!gap}
+              canReview={canReview}
+              claim={claim}
+              escalated={isEscalated}
+              gap={gap}
               onStatus={setStatus}
-              review={review}
+              scope={factScope}
+              state={state}
             />
 
             {isScoredState(verdict.state) && (
@@ -561,6 +550,111 @@ const ReopenControl = ({ disabled, onReopen }: ReopenControlProps) => {
         </Button>
       )}
     </div>
+  );
+};
+
+type ReviewActionsProps = {
+  scope: { workspaceId: string; listId: string; runId: string };
+  claim: VerificationClaim;
+  state: ClaimState;
+  /** Coverage the record should give: its next steps lead. */
+  gap: boolean;
+  acceptLabel: string;
+  canReview: boolean;
+  escalated: boolean;
+  onStatus: (status: ClaimReviewStatus | null) => void;
+};
+
+/**
+ * What a reviewer can do with the claim. A gap leads with adding the
+ * missing fact; while it is undecided, the decision pair folds into the
+ * next steps' menu so nothing out-weighs that.
+ */
+const ReviewActions = ({
+  scope,
+  claim,
+  state,
+  gap,
+  acceptLabel,
+  canReview,
+  escalated,
+  onStatus,
+}: ReviewActionsProps) => {
+  const { review } = claim;
+  const decisionDisabled = escalated || !canReview;
+  const folded = gap && decisionState(review) === "pending";
+  return (
+    <>
+      {state === "nocover" && (
+        <GapNextSteps
+          {...scope}
+          claim={claim}
+          disabled={!canReview}
+          more={
+            folded ? (
+              <DecisionMenu
+                acceptLabel={acceptLabel}
+                disabled={decisionDisabled}
+                onStatus={onStatus}
+              />
+            ) : null
+          }
+          needsEvidence={
+            gap
+              ? {
+                  marked: review?.status === "needs-evidence",
+                  onChange: (marked) =>
+                    onStatus(marked ? "needs-evidence" : null),
+                }
+              : null
+          }
+        />
+      )}
+      {!folded && (
+        <DecisionRow
+          acceptLabel={acceptLabel}
+          disabled={decisionDisabled}
+          emphasis={gap ? "quiet" : "primary"}
+          needsEvidenceControl={!gap}
+          onStatus={onStatus}
+          review={review}
+        />
+      )}
+    </>
+  );
+};
+
+/** The decision pair behind one quiet control. */
+const DecisionMenu = ({
+  acceptLabel,
+  disabled,
+  onStatus,
+}: {
+  acceptLabel: string;
+  disabled: boolean;
+  onStatus: (status: ClaimReviewStatus) => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={t("common.actions")}
+        disabled={disabled}
+        render={<Button size="icon-sm" variant="ghost" />}
+      >
+        <MoreHorizontalIcon />
+      </MenuTrigger>
+      <MenuPopup>
+        <MenuItem onClick={() => onStatus("reviewed")}>
+          <CheckIcon />
+          {acceptLabel}
+        </MenuItem>
+        <MenuItem onClick={() => onStatus("disputed")}>
+          <XIcon />
+          {t("avt.claimDetail.flagDispute")}
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
   );
 };
 
