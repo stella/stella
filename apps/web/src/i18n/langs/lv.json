@@ -1139,6 +1139,7 @@
       "count": "{count, plural, zero {# valodu} one {# valoda} other {# valodas}}",
       "matchedIn": "Atbilstība valodā: {language}"
     },
+    "linkedPassageGone": "Saistītā fragmenta šajā tekstā vairs nav.",
     "loadingMore": "Ielādē vairāk...",
     "marginFilter": {
       "label": "Citēto normu filtrs",
