@@ -148,7 +148,7 @@ describe("stable block anchors", () => {
     });
   });
 
-  test("anchors are unique, never positional, and keep publisher anchors", () => {
+  test("stable block anchors are unique, never positional, and keep publisher anchors", () => {
     assertProperty(
       "stable block anchors are unique, never positional, and keep publisher anchors",
       fc.property(drafts, (input) => {
@@ -170,7 +170,7 @@ describe("stable block anchors", () => {
     );
   });
 
-  test("assigning twice is assigning once", () => {
+  test("stable block anchors are a fixed point", () => {
     assertProperty(
       "stable block anchors are a fixed point",
       fc.property(drafts, (input) => {
@@ -181,7 +181,7 @@ describe("stable block anchors", () => {
     );
   });
 
-  test("an anchor survives blocks inserted, removed or reclassified elsewhere", () => {
+  test("stable block anchors survive unrelated insertions, removals and reclassification", () => {
     assertProperty(
       "stable block anchors survive unrelated insertions, removals and reclassification",
       fc.property(
@@ -204,7 +204,7 @@ describe("stable block anchors", () => {
           // or the other way round; its words are unchanged.
           const flipIndex = flipAt % edited.length;
           const flipped = edited[flipIndex];
-          if (flipped !== undefined && flipped.number === null) {
+          if (flipped?.number === null) {
             edited[flipIndex] = {
               ...flipped,
               kind: flipped.kind === "heading" ? "paragraph" : "heading",

@@ -12,7 +12,8 @@
 // a kind letter held in a constant (`${KIND}-${n}`) is outside it.
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { isAstNode } from "./utils.ts";
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
+import { filenameForContext, isAstNode } from "./utils.ts";
 
 const POSITIONAL_KIND_BEFORE_INTERPOLATION = /(?:^|-)[pht]-?$/u;
 
@@ -60,7 +61,16 @@ export default eslintCompatPlugin({
                   POSITIONAL_KIND_BEFORE_INTERPOLATION.test(text)
                 );
               });
-            if (minted) {
+            // The changed-lines rollout reports a site only on a line this
+            // change touches; after it expires every site counts.
+            if (
+              minted &&
+              guardEnforcesLine({
+                guard: "no-template-block-anchor",
+                file: filenameForContext(context),
+                line: context.sourceCode.getLocFromIndex(node.range[0]).line,
+              })
+            ) {
               context.report({ node, messageId: "positional" });
             }
           },

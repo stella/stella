@@ -110,7 +110,7 @@ const applyEdits = (input: readonly string[], list: readonly Edit[]) => {
 };
 
 describe("anchor redirects", () => {
-  test("a redirect never lands on other text", () => {
+  test("anchor redirects land on the same text or report the anchor gone", () => {
     assertProperty(
       "anchor redirects land on the same text or report the anchor gone",
       fc.property(texts, edits, fc.boolean(), (input, list, legacy) => {
@@ -163,7 +163,7 @@ describe("anchor redirects", () => {
     );
   });
 
-  test("chains are flattened and every target is current", () => {
+  test("anchor redirects stay one hop across successive writes", () => {
     assertProperty(
       "anchor redirects stay one hop across successive writes",
       fc.property(texts, edits, edits, (input, first, second) => {
