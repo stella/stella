@@ -41,6 +41,7 @@ import {
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   ONLINE_MIGRATION_REPAIRS,
+  type OnlineMigrationStartupReport,
   type OnlineRepairOptions,
   type RegressedOnlineRepair,
   reportOnlineMigrations as reportOnlineMigrationsWithOwnership,
@@ -122,9 +123,14 @@ const runOnlineMigrations = async (
     reserveObserver: reserveHealthyObserver,
   });
 
+/** A startup report; `regressed` is present only when something regressed. */
+type StartupReport = Omit<OnlineMigrationStartupReport, "regressed"> & {
+  regressed?: RegressedOnlineRepair[];
+};
+
 const reportOnlineMigrations = async (
   ...args: Parameters<typeof reportOnlineMigrationsWithOwnership>
-) => {
+): Promise<StartupReport> => {
   const outcome = await reportOnlineMigrationsWithOwnership(...args);
   switch (outcome.type) {
     case "validated": {
@@ -141,10 +147,8 @@ const reportOnlineMigrations = async (
 };
 
 /** The repairs a startup report says regressed, none when it says nothing. */
-const regressedOf = (
-  report: Awaited<ReturnType<typeof reportOnlineMigrations>>,
-): readonly RegressedOnlineRepair[] =>
-  "regressed" in report ? report.regressed : [];
+const regressedOf = (report: StartupReport): readonly RegressedOnlineRepair[] =>
+  report.regressed ?? [];
 
 const CREATE_INDEX_FRAGMENT = "CREATE INDEX CONCURRENTLY";
 const DROP_INDEX_FRAGMENT = "DROP INDEX CONCURRENTLY";
