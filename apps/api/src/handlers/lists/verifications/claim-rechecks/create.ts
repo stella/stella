@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
@@ -211,5 +212,11 @@ const createClaimRecheck = createSafeHandler(
     return Result.ok({ replayed: outcome.replayed, claim });
   },
 );
+
+declareAggregateMutation(createClaimRecheck, {
+  type: "independent",
+  reason:
+    "Appends one review event to one claim; the claim's row lock serializes its events, and the request key, the action cap and the review the grade answered are re-read under it before the insert. No aggregate state spans claims.",
+});
 
 export default createClaimRecheck;

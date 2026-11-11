@@ -31,7 +31,7 @@ type GapScope = {
 
 /** Where a new fact comes from: a document, a page of it, and the words.
  *  The document's live version is read when the source is written. */
-export type FactSourceInput = {
+type FactSourceInput = {
   documentId: string;
   pageNumber: number | null;
   quote: string | null;
@@ -82,11 +82,15 @@ export const useClaimGapActions = ({
       await submit.run({
         operation: `claim-recheck:${runId}:${claimId}`,
         body: ids,
-        send: async (body, request) =>
-          lists["claim-rechecks"].post({
-            ...body,
-            requestKey: request.headers["Idempotency-Key"],
-          }),
+        send: async (body, replay) =>
+          await invokeCapability(
+            "lists.verifications.claim-rechecks.create",
+            async (request) =>
+              lists["claim-rechecks"].post(
+                { ...body, requestKey: replay.headers["Idempotency-Key"] },
+                request,
+              ),
+          ),
       }),
     );
 
@@ -102,8 +106,18 @@ export const useClaimGapActions = ({
             change,
           },
         },
-        send: async (body, request) =>
-          lists["claim-reviews"].post(body, request),
+        send: async (body, replay) =>
+          await invokeCapability(
+            "lists.verifications.claim-reviews.create",
+            async (request) =>
+              lists["claim-reviews"].post(body, {
+                ...request,
+                headers: {
+                  "Idempotency-Key": replay.headers["Idempotency-Key"],
+                  ...request.headers,
+                },
+              }),
+          ),
       }),
     );
 
@@ -191,7 +205,11 @@ export const useClaimGapActions = ({
                     },
               quote: source.quote,
             },
-            send: async (body) => lists["item-sources"].post(body),
+            send: async (body) =>
+              await invokeCapability(
+                "lists.items.sources.create",
+                async (request) => lists["item-sources"].post(body, request),
+              ),
           }),
         );
         added.current = { ...added.current, step: "sourced" };

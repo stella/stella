@@ -11,6 +11,7 @@ import * as React from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 import { Temporal } from "@stll/time";
@@ -48,6 +49,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { MatterDocumentPicker } from "@/components/workspaces/matter-document-picker";
 import { isRecordSilent } from "@/features/avt/claim-qualifiers";
+import { EMPTY_CLAIM_REVIEW } from "@/features/avt/claim-review.logic";
 import { STATE_COLOR } from "@/features/avt/state-chip";
 import type {
   ClaimRecheck,
@@ -97,7 +99,9 @@ const useLinkableFacts = ({
     }),
     enabled: enabled && user !== null,
   });
-  const facts = (query.data?.pages ?? [])
+  // Until the first page is read there are no facts to offer.
+  const pages = query.data === undefined ? [] : query.data.pages;
+  const facts = pages
     .flatMap((page) => page.items)
     .filter(
       (item) =>
@@ -171,9 +175,7 @@ const GapActions = ({
       <AddFactSheet
         claimText={claim.text}
         disabled={busy}
-        onSubmit={async (input) => {
-          await actions.addFact.mutateAsync(input);
-        }}
+        onSubmit={actions.addFact.mutateAsync}
         pending={actions.addFact.isPending}
         resume={actions.addFactResume}
         workspaceId={workspaceId}
@@ -267,9 +269,7 @@ const LinkFactPicker = ({
                   {t("common.loading")}
                 </p>
               ) : null}
-              {facts.isError ? (
-                <FactsReadFailed onRetry={async () => await facts.refetch()} />
-              ) : null}
+              {facts.isError ? <FactsReadFailed query={facts} /> : null}
               {facts.isSuccess && shown.length === 0 ? (
                 <p className="text-muted-foreground px-2 py-1.5 text-sm">
                   {t("avt.gap.noFacts")}
@@ -313,13 +313,17 @@ const LinkFactPicker = ({
 };
 
 /** The list's facts could not be read: said so, never shown as none. */
-const FactsReadFailed = ({ onRetry }: { onRetry: () => Promise<unknown> }) => {
+const FactsReadFailed = ({
+  query,
+}: {
+  query: { refetch: () => Promise<unknown> };
+}) => {
   const t = useTranslations();
   return (
     <RecoverableErrorStatus
       actions={
         <Button
-          onClick={() => detached(onRetry(), "avt.list-facts-retry")}
+          onClick={() => detached(query.refetch(), "avt.list-facts-retry")}
           size="sm"
           variant="ghost"
         >
@@ -358,6 +362,10 @@ const AddFactSheet = ({
 }: AddFactSheetProps) => {
   const t = useTranslations();
   const [open, setOpen] = React.useState(false);
+  const submitAndClose = async (input: AddFactInput) => {
+    await onSubmit(input);
+    setOpen(false);
+  };
   return (
     <Sheet onOpenChange={setOpen} open={open}>
       <Button
@@ -377,10 +385,7 @@ const AddFactSheet = ({
           <AddFactForm
             claimText={claimText}
             onCancel={() => setOpen(false)}
-            onSubmit={async (input) => {
-              await onSubmit(input);
-              setOpen(false);
-            }}
+            onSubmit={submitAndClose}
             pending={pending}
             resume={resume}
             workspaceId={workspaceId}
@@ -431,6 +436,13 @@ const AddFactForm = ({
   const [errors, setErrors] = React.useState<FormErrors>({});
   const isPdf =
     files.find((file) => file.entityId === documentId)?.mimeType === PDF_MIME;
+  // A page is a whole number from 1; blank means the whole document.
+  const pageNumber =
+    page === ""
+      ? null
+      : parseIntegerToken(page, { sign: "unsigned", min: 1 }).unwrapOr(
+          undefined,
+        );
 
   const validate = (): FormErrors => {
     const trimmed = statement.trim();
@@ -447,8 +459,7 @@ const AddFactForm = ({
         document: t("lists.sources.documentRequired"),
       }),
       ...(isPdf &&
-        page !== "" &&
-        !(Number.isSafeInteger(Number(page)) && Number(page) >= 1) && {
+        pageNumber === undefined && {
           page: t("lists.sources.invalidPage"),
         }),
     };
@@ -464,7 +475,7 @@ const AddFactForm = ({
       statement: statement.trim(),
       source: {
         documentId,
-        pageNumber: isPdf && page !== "" ? Number(page) : null,
+        pageNumber: isPdf && pageNumber !== undefined ? pageNumber : null,
         quote: quote.trim() === "" ? null : quote.trim(),
       },
     });
@@ -615,7 +626,7 @@ export const LinkedFacts = ({
   disabled,
 }: LinkedFactsProps) => {
   const t = useTranslations();
-  const allLinked = claim.review?.linkedFactIds ?? [];
+  const allLinked = (claim.review ?? EMPTY_CLAIM_REVIEW).linkedFactIds;
   const linkedIds = allLinked.filter((factId) => !cited.has(factId));
   const { query: read, facts } = useLinkableFacts({
     workspaceId,
@@ -657,9 +668,7 @@ export const LinkedFacts = ({
       {linkedIds.length > 0 && read.isPending && (
         <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
       )}
-      {linkedIds.length > 0 && read.isError && (
-        <FactsReadFailed onRetry={async () => await read.refetch()} />
-      )}
+      {linkedIds.length > 0 && read.isError && <FactsReadFailed query={read} />}
       {linkedIds.length > 0 && read.isSuccess && (
         <ul className="divide-y rounded-md border">
           {linkedIds.map((factId) => {

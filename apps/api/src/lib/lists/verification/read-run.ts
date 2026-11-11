@@ -310,7 +310,9 @@ const presentRecheck = ({ claim, recheck, pinned }: PresentRecheckArgs) => {
   const read = applyFactChanges(pinned, recheck.facts);
   const cited = new Set<SafeId<"entity">>([
     ...recheck.grade.refs.map((ref) => ref.factEntityId),
-    ...(recheck.grade.recordConflict?.factEntityIds ?? []),
+    ...(recheck.grade.recordConflict === null
+      ? []
+      : recheck.grade.recordConflict.factEntityIds),
   ]);
   return {
     checkedAt: recheck.checkedAt.toISOString(),

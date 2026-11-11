@@ -44,8 +44,6 @@ export type ClaimReviewEvent =
   ListsRoutes["claim-reviews"]["post"]["body"]["event"];
 /** A claim's latest re-check, beside the grade it replaced. */
 export type ClaimRecheck = NonNullable<VerificationClaim["recheck"]>;
-export type ClaimRecheckResult =
-  ListsRoutes["claim-rechecks"]["post"]["response"][200];
 export type ClaimReviewStatus = NonNullable<ClaimReview["status"]>;
 export type ClaimOverrideState = NonNullable<ClaimReview["override"]>;
 

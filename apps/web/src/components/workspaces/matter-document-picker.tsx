@@ -57,8 +57,6 @@ export const MatterDocumentPicker = ({
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
   const filesView = queryView(filesQuery);
   useQueryViewError(filesView, "MatterDocumentPicker:query");
-  const files = filesView.type === "items" ? filesView.items : undefined;
-
   switch (filesView.type) {
     case "pending":
     case "error":
@@ -70,6 +68,8 @@ export const MatterDocumentPicker = ({
       filesView satisfies never;
       return panic("Unhandled matter document query state");
   }
+  // Read: an empty matter has no files, not a missing answer.
+  const files = filesView.type === "items" ? filesView.items : [];
 
   const formState = (
     <DialogFormState
@@ -91,7 +91,7 @@ export const MatterDocumentPicker = ({
         {formState}
         <SingleDocumentPicker
           disabled={disabled}
-          documents={pickableDocuments(files ?? [])}
+          documents={pickableDocuments(files)}
           label={heading}
           onChange={(entityId) => onChange(entityId === null ? [] : [entityId])}
           pickedEntityId={pickedEntityIds.at(0) ?? null}
@@ -100,7 +100,7 @@ export const MatterDocumentPicker = ({
     );
   }
 
-  const documents = filterVisibleDocuments(files ?? [], search);
+  const documents = filterVisibleDocuments(files, search);
   const toggle = (entityId: string) => {
     if (pickedEntityIds.includes(entityId)) {
       onChange(pickedEntityIds.filter((id) => id !== entityId));

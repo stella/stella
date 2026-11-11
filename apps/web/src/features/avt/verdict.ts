@@ -402,7 +402,7 @@ type FactStanding = Omit<
 export type ShownFact = EvidenceFact & { standing: FactStanding };
 
 /** Pinned evidence facts by id, for the detail panel's fact cards. */
-export const evidenceFactsById = (
+const evidenceFactsById = (
   run: Pick<VerificationRun, "evidence" | "factStandings">,
 ): ReadonlyMap<FactId, ShownFact> => {
   const standings = new Map(

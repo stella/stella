@@ -139,9 +139,11 @@ const pointedLine = (
   claim: GradeableClaim,
   promptIdByFactId: ReadonlyMap<SafeId<"entity">, string>,
 ): string => {
-  const pointed = claim.linkedFactIds.flatMap(
-    (factId) => promptIdByFactId.get(factId) ?? [],
-  );
+  // A linked fact the check does not read has no prompt id to point at.
+  const pointed = claim.linkedFactIds.flatMap((factId) => {
+    const promptId = promptIdByFactId.get(factId);
+    return promptId === undefined ? [] : [promptId];
+  });
   return pointed.length === 0
     ? ""
     : `\n  reviewer points to: ${pointed.join(", ")}`;

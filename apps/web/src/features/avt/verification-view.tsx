@@ -142,7 +142,9 @@ export const VerificationView = ({
   // A re-check can rest a claim on a fact the run never pinned.
   const contested = contestedFactIds([
     ...run.evidence.facts,
-    ...run.claims.flatMap((claim) => claim.recheck?.facts ?? []),
+    ...run.claims.flatMap((claim) =>
+      claim.recheck === null ? [] : claim.recheck.facts,
+    ),
   ]);
   const presentation = selectClaimPresentation(run.blocks, claims);
   const readingOrder = presentation.readingOrder;
