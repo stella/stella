@@ -14,6 +14,7 @@ import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
+  legalListClaimCarryOutcomes,
   legalListClaimReviewEvents,
   legalListClaims,
   legalListFactDetails,
@@ -570,6 +571,72 @@ export const readVerifiedClaim = async ({
   });
 };
 
+/**
+ * What the run carried from the previous run of its document: the run it
+ * read, how many reviewed claims came across whole, and the ones that did
+ * not (their words as that run has them, why, and the claim they matched
+ * when one did). `null` when nothing was there to carry.
+ */
+const readCarryOver = async ({
+  tx,
+  workspaceId,
+  runId,
+}: ReadVerificationRunArgs) => {
+  const outcomes = legalListClaimCarryOutcomes;
+  const rows = await tx
+    .select({
+      sourceRunId: outcomes.sourceRunId,
+      sourceRunCreatedAt: legalListVerificationRuns.createdAt,
+      sourceClaimId: outcomes.sourceClaimId,
+      outcome: outcomes.outcome,
+      targetClaimId: outcomes.targetClaimId,
+      text: legalListClaims.text,
+    })
+    .from(outcomes)
+    .innerJoin(
+      legalListClaims,
+      and(
+        eq(legalListClaims.id, outcomes.sourceClaimId),
+        eq(legalListClaims.runId, outcomes.sourceRunId),
+        eq(legalListClaims.workspaceId, workspaceId),
+      ),
+    )
+    .innerJoin(
+      legalListVerificationRuns,
+      and(
+        eq(legalListVerificationRuns.id, outcomes.sourceRunId),
+        eq(legalListVerificationRuns.workspaceId, workspaceId),
+      ),
+    )
+    .where(
+      and(eq(outcomes.workspaceId, workspaceId), eq(outcomes.runId, runId)),
+    )
+    .orderBy(asc(legalListClaims.position))
+    // One outcome per claim of the previous run.
+    .limit(VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX);
+  const [first] = rows;
+  if (first === undefined) {
+    return null;
+  }
+  return {
+    sourceRunId: first.sourceRunId,
+    sourceRunCreatedAt: first.sourceRunCreatedAt.toISOString(),
+    carriedCount: rows.filter((row) => row.outcome === "carried").length,
+    notCarried: rows.flatMap((row) =>
+      row.outcome === "carried"
+        ? []
+        : [
+            {
+              sourceClaimId: row.sourceClaimId,
+              text: row.text,
+              outcome: row.outcome,
+              targetClaimId: row.targetClaimId,
+            },
+          ],
+    ),
+  };
+};
+
 /** `null` when the workspace holds no such run. */
 export const readVerificationRun = async ({
   tx,
@@ -648,6 +715,7 @@ export const readVerificationRun = async ({
     startedAt: run.startedAt?.toISOString() ?? null,
     finishedAt: run.finishedAt?.toISOString() ?? null,
     blocks,
+    carryOver: await readCarryOver({ tx, workspaceId, runId }),
     claims: claims.map((claim) =>
       presentClaim({
         claim,

@@ -238,6 +238,50 @@ export const CLAIM_REVIEW_REASON_RULE = {
   recheck: "none",
 } as const satisfies Record<ClaimReviewEventKind, ClaimReviewReasonRule>;
 
+const CLAIM_REVIEW_CARRY_RULES = ["always", "same-verdict", "never"] as const;
+export type ClaimReviewCarryRule = (typeof CLAIM_REVIEW_CARRY_RULES)[number];
+
+/**
+ * Which reviewer actions on a run follow a claim to the next run of the same
+ * document (`carry-over.ts`). A note and a fact link say what the reviewer
+ * knows about the words, so they always follow. A status, an override, a
+ * record conflict's resolution and a reopening were decided on the verdict
+ * the claim had, so they follow only to a claim the new run gives that same
+ * verdict; on any other they are withdrawn, as a re-check withdraws them. A
+ * re-check never follows: the new run is itself a fresh grade.
+ */
+export const CLAIM_REVIEW_CARRY_RULE = {
+  status: "same-verdict",
+  override: "same-verdict",
+  note: "always",
+  reopen: "same-verdict",
+  "record-conflict": "same-verdict",
+  "fact-link": "always",
+  recheck: "never",
+} as const satisfies Record<ClaimReviewEventKind, ClaimReviewCarryRule>;
+
+/**
+ * What became of one claim's review when the next run of its document
+ * completed. Only claims with at least one action that can follow are
+ * recorded. `carried`: every decision followed; `verdict-changed`: the new
+ * run gave the matching claim another verdict, so the decisions taken on
+ * the old one were withdrawn (notes and links still followed); `unmatched`:
+ * no claim of the new run matches; `ambiguous`: more than one could.
+ */
+export const CLAIM_CARRY_OUTCOMES = [
+  "carried",
+  "verdict-changed",
+  "unmatched",
+  "ambiguous",
+] as const;
+export type ClaimCarryOutcome = (typeof CLAIM_CARRY_OUTCOMES)[number];
+
+/** Outcomes that leave the new run with a matching claim. */
+export const MATCHED_CLAIM_CARRY_OUTCOMES = [
+  "carried",
+  "verdict-changed",
+] as const satisfies readonly ClaimCarryOutcome[];
+
 /** How a record conflict was resolved: a fact governs (the claim adopts its
  *  verdict), or it went to the evidence team without picking a side. */
 export type RecordConflictResolution =

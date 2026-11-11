@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Pažymėta, kad reikia įrodymų",
         "statusReviewed": "Pažymėta kaip peržiūrėta"
       },
+      "carriedFrom": "Perkelta iš {date} tikrinimo",
+      "carriedFromEarlier": "Perkelta iš ankstesnio tikrinimo",
       "empty": "Peržiūros veiksmų dar nėra.",
       "filters": {
         "allKinds": "Bet kuris veiksmas",
@@ -506,6 +508,16 @@
     },
     "runs": {
       "back": "Visi dokumentai",
+      "carryOver": {
+        "carried": "Peržiūros, perkeltos iš {date} tikrinimo: {count, number}",
+        "notCarried": "Neperkelta: {count, number}",
+        "openSource": "Atidaryti {date} tikrinimą",
+        "outcomes": {
+          "ambiguous": "Keli galimi atitikmenys",
+          "unmatched": "Atitinkamo teiginio nėra",
+          "verdictChanged": "Išvada pasikeitė"
+        }
+      },
       "errors": {
         "accessRevoked": "Tikrinimas sustabdytas, nes prieiga nepasiekiama.",
         "aiUnavailable": "Dokumentams tikrinti nėra prieinamo DI modelio. Patikrinkite organizacijos DI nustatymus.",

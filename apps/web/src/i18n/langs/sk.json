@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Označené ako vyžadujúce dôkazy",
         "statusReviewed": "Označené ako skontrolované"
       },
+      "carriedFrom": "Prevzaté z overenia z {date}",
+      "carriedFromEarlier": "Prevzaté zo skoršieho overenia",
       "empty": "Zatiaľ žiadne úkony kontroly.",
       "filters": {
         "allKinds": "Akýkoľvek úkon",
@@ -506,6 +508,16 @@
     },
     "runs": {
       "back": "Všetky dokumenty",
+      "carryOver": {
+        "carried": "Kontroly prevzaté z overenia z {date}: {count, number}",
+        "notCarried": "Neprevzaté: {count, number}",
+        "openSource": "Otvoriť overenie z {date}",
+        "outcomes": {
+          "ambiguous": "Viac možných zhôd",
+          "unmatched": "Žiadne zodpovedajúce tvrdenie",
+          "verdictChanged": "Záver sa zmenil"
+        }
+      },
       "errors": {
         "accessRevoked": "Overovanie bolo zastavené, pretože prístup nie je dostupný.",
         "aiUnavailable": "Na overenie dokumentov nie je dostupný žiadny model AI. Skontrolujte nastavenia AI organizácie.",

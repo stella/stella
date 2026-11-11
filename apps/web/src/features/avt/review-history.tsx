@@ -377,7 +377,15 @@ const HistoryEntryRow = ({
           {at}
         </time>
       </div>
-      <p className="text-xs font-medium">{t(historyActionKey(entry))}</p>
+      <p className="text-xs font-medium">
+        {t(historyActionKey(entry))}
+        {entry.carriedFrom !== null && (
+          <span className="text-muted-foreground font-normal">
+            {" · "}
+            <CarriedFrom carriedFrom={entry.carriedFrom} />
+          </span>
+        )}
+      </p>
       {claimText !== null && onShowClaim !== undefined && (
         <Button
           className="max-w-full"
@@ -401,6 +409,29 @@ const HistoryEntryRow = ({
       )}
       <EntryReason entry={entry} />
     </li>
+  );
+};
+
+/** Where a carried action was first taken: the earlier run of the document,
+ *  named as the run picker names it. */
+const CarriedFrom = ({
+  carriedFrom,
+}: {
+  carriedFrom: NonNullable<ReviewHistoryEntry["carriedFrom"]>;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <span>
+      {carriedFrom.runCreatedAt === null
+        ? t("avt.history.carriedFromEarlier")
+        : t("avt.history.carriedFrom", {
+            date: format.dateTime(
+              Temporal.Instant.from(carriedFrom.runCreatedAt).epochMilliseconds,
+              MEDIUM_DATE_SHORT_TIME_FORMAT,
+            ),
+          })}
+    </span>
   );
 };
 

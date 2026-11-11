@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Oznaczono jako wymagające dowodów",
         "statusReviewed": "Oznaczono jako zweryfikowane"
       },
+      "carriedFrom": "Przeniesiono z przebiegu z {date}",
+      "carriedFromEarlier": "Przeniesiono z wcześniejszego przebiegu",
       "empty": "Brak działań weryfikacyjnych.",
       "filters": {
         "allKinds": "Dowolne działanie",
@@ -506,6 +508,16 @@
     },
     "runs": {
       "back": "Wszystkie dokumenty",
+      "carryOver": {
+        "carried": "Weryfikacje przeniesione z przebiegu z {date}: {count, number}",
+        "notCarried": "Nieprzeniesione: {count, number}",
+        "openSource": "Otwórz przebieg z {date}",
+        "outcomes": {
+          "ambiguous": "Kilka możliwych dopasowań",
+          "unmatched": "Brak pasującego twierdzenia",
+          "verdictChanged": "Rozstrzygnięcie się zmieniło"
+        }
+      },
       "errors": {
         "accessRevoked": "Weryfikacja została zatrzymana, ponieważ dostęp jest niedostępny.",
         "aiUnavailable": "Do weryfikacji dokumentów nie jest dostępny żaden model AI. Sprawdź ustawienia AI organizacji.",

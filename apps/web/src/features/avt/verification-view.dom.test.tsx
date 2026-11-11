@@ -1453,6 +1453,7 @@ test("a claim's history opens from one row and reads who did what, why, and what
     claimId: target.id,
     kind: fields.action.kind,
     createdAt: `2026-09-0${String(id)}T10:00:00.000Z`,
+    carriedFrom: null,
     ...fields,
   });
   const page = {
@@ -1512,6 +1513,100 @@ test("a claim's history opens from one row and reads who did what, why, and what
     messages.avt.states.tension.chip,
     messages.avt.states.supported.chip,
   ]);
+  expect(requests).toEqual([]);
+});
+
+test("a decision carried from the previous run names that run in the claim's history", async () => {
+  const seeded = seededRun();
+  const target = seeded.claims.at(0) ?? panic("Missing claim");
+  const run = {
+    ...seeded,
+    claims: seeded.claims.map((claim) =>
+      claim.id === target.id
+        ? {
+            ...claim,
+            review: {
+              ...EMPTY_CLAIM_REVIEW,
+              status: "reviewed",
+              statusOrigin: "single",
+              decidedAt: at,
+              decidedBy: actorId,
+              eventCount: 2,
+            },
+          }
+        : claim,
+    ),
+  } satisfies VerificationRun;
+  const { client } = await mount(run);
+  const previousRunId = toSafeId<"legalListVerificationRun">(
+    "0199a3c4-5b6d-7e8f-9a0b-000000008001",
+  );
+  const member = {
+    type: "member",
+    id: actorId,
+    name: "Dana Reviewer",
+    image: null,
+  } as const;
+  const page = {
+    items: [
+      {
+        id: toSafeId<"legalListClaimReviewEvent">(
+          "0199a3c4-5b6d-7e8f-9a0b-000000007202",
+        ),
+        claimId: target.id,
+        kind: "note",
+        actor: member,
+        createdAt: "2026-09-02T10:00:00.000Z",
+        action: { kind: "note", note: "Written on this run." },
+        reason: { type: "none" },
+        before: { verdict: "supported", override: null, status: "reviewed" },
+        after: { verdict: "supported", override: null, status: "reviewed" },
+        carriedFrom: null,
+      },
+      {
+        id: toSafeId<"legalListClaimReviewEvent">(
+          "0199a3c4-5b6d-7e8f-9a0b-000000007201",
+        ),
+        claimId: target.id,
+        kind: "status",
+        actor: member,
+        createdAt: "2026-08-20T10:00:00.000Z",
+        action: { kind: "status", status: "reviewed", origin: "single" },
+        reason: { type: "none" },
+        before: { verdict: "supported", override: null, status: null },
+        after: { verdict: "supported", override: null, status: "reviewed" },
+        carriedFrom: {
+          runId: previousRunId,
+          runCreatedAt: "2026-08-19T09:30:00.000Z",
+        },
+      },
+    ],
+    nextCursor: null,
+    limit: 50,
+    reviewers: { type: "complete", items: [member] },
+  } satisfies ReviewHistoryPage;
+  client.setQueryData(
+    reviewHistoryOptions({ workspaceId, runId: run.id, claimId: target.id })
+      .queryKey,
+    { pages: [page], pageParams: [null] },
+  );
+  selectClaim(1);
+  fireEvent.click(screen.getByRole("button", { name: /^History/u }));
+  const carried = screen
+    .getByText(messages.avt.history.actions.statusReviewed)
+    .closest("li");
+  const own = screen
+    .getByText(messages.avt.history.actions.noteSaved)
+    .closest("li");
+  // The run picker's own name for that run.
+  expect(
+    within(carried ?? panic("No carried entry")).getByText(
+      /^Carried from the run of Aug 19, 2026\D+9:30\sAM$/u,
+    ),
+  ).toBeTruthy();
+  expect(
+    within(own ?? panic("No entry of this run")).queryByText(/^Carried from/u),
+  ).toBeNull();
   expect(requests).toEqual([]);
 });
 

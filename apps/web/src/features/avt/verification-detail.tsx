@@ -17,6 +17,7 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { verificationRunOptions } from "@/features/avt/queries";
+import { RunCarryOverNote } from "@/features/avt/run-carry-over";
 import { RunHistoryPicker } from "@/features/avt/run-history-picker";
 import type { VerificationRun } from "@/features/avt/types";
 import { RUN_ERROR_KEYS } from "@/features/avt/types";
@@ -162,12 +163,20 @@ const RunBody = ({
       );
       return (
         <>
-          <p className="text-muted-foreground text-xs">
-            {t("avt.runs.evidencePinned", {
-              count: run.evidence.facts.length,
-              checkedAt,
-            })}
-          </p>
+          <div className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
+            <p>
+              {t("avt.runs.evidencePinned", {
+                count: run.evidence.facts.length,
+                checkedAt,
+              })}
+            </p>
+            {run.carryOver !== null && (
+              <RunCarryOverNote
+                carryOver={run.carryOver}
+                onOpenRun={onOpenRun}
+              />
+            )}
+          </div>
           {run.claims.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               {t("avt.runs.noClaims")}

@@ -26,7 +26,14 @@ const config = {
     "it rests on a held fact), the facts it " +
     "rests on, for a record conflict the fact suggested to govern it (the " +
     "document's record over a witness's account; null when neither), and " +
-    "the claim's current review (null while nobody has acted on it).",
+    "the claim's current review (null while nobody has acted on it). " +
+    "`carryOver` says what the run took from the previous run of the same " +
+    "document and list: reviewer decisions follow a claim with the same " +
+    "words, or edited words in the same paragraph or page; notes and fact " +
+    "links always, other decisions only when the verdict is unchanged. It " +
+    "counts the reviewed claims that came across whole and lists the rest " +
+    "(`verdict-changed`, `unmatched`, `ambiguous`); null when there was " +
+    "nothing to carry.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
