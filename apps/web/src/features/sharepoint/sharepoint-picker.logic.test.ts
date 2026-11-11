@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -30,7 +31,7 @@ const folderAt = (
   location: SharepointPickerLocation,
 ): Extract<SharepointPickerLocation, { type: "folder" }> => {
   if (location.type !== "folder") {
-    throw new TypeError(`Expected a folder, got ${location.type}`);
+    return panic(`Expected a folder, got ${location.type}`);
   }
   return location;
 };
@@ -39,7 +40,7 @@ const drivesAt = (
   location: SharepointPickerLocation,
 ): Extract<SharepointPickerLocation, { type: "drives" }> => {
   if (location.type !== "drives") {
-    throw new TypeError(`Expected drives, got ${location.type}`);
+    return panic(`Expected drives, got ${location.type}`);
   }
   return location;
 };
@@ -141,7 +142,7 @@ const selectAll = (files: readonly SharepointSelectedFile[]) => {
   for (const file of files) {
     const change = toggleSharepointFile(selection, file);
     if (change.type !== "changed") {
-      throw new TypeError(`Unexpected refusal for ${file.itemId}`);
+      return panic(`Unexpected refusal for ${file.itemId}`);
     }
     selection = change.selection;
   }

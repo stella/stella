@@ -204,9 +204,7 @@ test("browses OneDrive, imports picked files into the open folder and lists each
   const failedRow = results.closest("li");
   expect(failedRow).not.toBeNull();
   expect(
-    within(failedRow ?? document.body).getByText(
-      messages.sharepoint.import.failed,
-    ),
+    within(failedRow ?? document.body).getByText(messages.common.failed),
   ).toBeDefined();
   expect(screen.getByText(messages.sharepoint.import.created)).toBeDefined();
 });

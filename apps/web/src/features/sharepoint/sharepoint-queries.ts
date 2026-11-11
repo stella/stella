@@ -3,6 +3,7 @@ import {
   type QueryClient,
   queryOptions,
 } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import { SHAREPOINT_ROOT_ITEM_ID } from "@stll/api-contract/sharepoint";
 
@@ -10,6 +11,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { prefetchRouteQuery } from "@/lib/react-query";
 
@@ -55,14 +57,12 @@ export const sharepointAccessOptions = ({
         fetch: { signal },
       });
       if (response.error) {
+        const failure = toAPIError(response.error);
         const gate = sharepointAccessFromRefusal({
-          status: response.error.status,
-          transport: response.error.kind !== undefined,
+          status: failure.status,
+          transport: failure.transportKind !== undefined,
         });
-        if (gate === null) {
-          throw toAPIError(response.error);
-        }
-        return gate;
+        return gate ?? readQueryResult(Result.err(failure));
       }
       return {
         type: SHAREPOINT_ACCESS.enabled,
