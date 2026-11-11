@@ -17,12 +17,21 @@ export const useScrollViewport = () => {
     if (node === null) {
       return undefined;
     }
+    // An unchanged band keeps the same state, so an observer that fires on
+    // every layout (as the canvas redraws) cannot feed itself.
     const measure = () => {
-      setViewport({
+      const next = {
         top: node.scrollTop,
         width: node.clientWidth,
         height: node.clientHeight,
-      });
+      };
+      setViewport((current) =>
+        current.top === next.top &&
+        current.width === next.width &&
+        current.height === next.height
+          ? current
+          : next,
+      );
     };
     node.addEventListener("scroll", measure, { passive: true });
     const observer =
