@@ -1,8 +1,13 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
+import {
+  CHAT_ACTIVE_RUN_STATE,
+  CHAT_THREAD_PIN_STATE,
+  CHAT_THREAD_READ_STATE,
+} from "@stll/api-contract/chat";
+import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import { assertProperty } from "@stll/property-testing";
 
 import type { Fetch } from "@/connection/http";
@@ -51,13 +56,21 @@ const NOW = Date.parse("2026-11-10T09:00:00.000Z");
 const summary = (
   id: string,
   updatedAt: string,
-  matter?: { id: string; name: string },
+  {
+    matter,
+    pinState = CHAT_THREAD_PIN_STATE.unpinned,
+  }: {
+    matter?: { id: string; name: string };
+    pinState?: ChatThreadPinState;
+  } = {},
 ): ChatThreadSummary => ({
   id,
   title: `Thread ${id}`,
   updatedAt,
   matterId: matter?.id,
   matterName: matter?.name,
+  pinState,
+  readState: CHAT_THREAD_READ_STATE.read,
 });
 
 const run = (
@@ -79,7 +92,8 @@ const shape = (sections: ReturnType<typeof inboxSections>) =>
   ]);
 
 describe("the chats list as an inbox", () => {
-  test("lists chats waiting on the person, then working ones, then the rest by day", () => {
+  test("lists chats waiting on the person, then working ones, then pinned ones, then the rest by day", () => {
+    const pinned = { pinState: CHAT_THREAD_PIN_STATE.pinned };
     const sections = inboxSections({
       now: NOW,
       runs: [
@@ -88,7 +102,8 @@ describe("the chats list as an inbox", () => {
       ],
       searching: false,
       threads: [
-        summary("busy", "2026-11-10T08:30:00.000Z"),
+        summary("kept", "2026-10-01T07:00:00.000Z", pinned),
+        summary("busy", "2026-11-10T08:30:00.000Z", pinned),
         summary("quiet", "2026-11-10T07:00:00.000Z"),
         summary("waiting", "2026-11-01T07:00:00.000Z"),
       ],
@@ -97,6 +112,7 @@ describe("the chats list as an inbox", () => {
     expect(shape(sections)).toEqual([
       ["needsYou", [["waiting", "needs-you"]]],
       ["working", [["busy", "working"]]],
+      ["pinned", [["kept", null]]],
       ["today", [["quiet", null]]],
     ]);
     // A lifted thread keeps its own day, so its row still shows a date.
@@ -109,9 +125,11 @@ describe("the chats list as an inbox", () => {
       now: NOW,
       runs: [run("older", CHAT_ACTIVE_RUN_STATE.needsYou, matter.id)],
       searching: false,
-      threads: [summary("recent", "2026-11-10T07:00:00.000Z", matter)],
+      threads: [summary("recent", "2026-11-10T07:00:00.000Z", { matter })],
       timeZone: TIME_ZONE,
     });
+    // Its marks are not known, so the row offers none.
+    expect(sections[0]?.data[0]?.type).toBe("run-only");
     expect(sections[0]?.data[0]?.thread).toEqual({
       id: "older",
       title: "Thread older",
@@ -135,12 +153,18 @@ describe("the chats list as an inbox", () => {
     expect(shape(sections)).toEqual([["working", [["found", "working"]]]]);
   });
 
-  test("shows every loaded thread exactly once, open runs first", () => {
+  test("shows every loaded thread exactly once, open runs first, then pinned ones", () => {
     const ids = ["a", "b", "c", "d", "e", "f"] as const;
     assertProperty(
-      "shows every loaded thread exactly once, open runs first",
+      "shows every loaded thread exactly once, open runs first, then pinned ones",
       fc.property(
-        fc.uniqueArray(fc.constantFrom(...ids)),
+        fc.uniqueArray(
+          fc.record({
+            id: fc.constantFrom(...ids),
+            pinState: fc.constantFrom(...Object.values(CHAT_THREAD_PIN_STATE)),
+          }),
+          { selector: ({ id }) => id },
+        ),
         fc.array(
           fc.record({
             threadId: fc.constantFrom(...ids),
@@ -149,9 +173,12 @@ describe("the chats list as an inbox", () => {
         ),
         fc.boolean(),
         fc.integer({ min: 0, max: 30 * 24 * 60 }),
-        (loadedIds, runs, searching, minutesAgo) => {
-          const threads = loadedIds.map((id) =>
-            summary(id, new Date(NOW - minutesAgo * 60_000).toISOString()),
+        (loaded, runs, searching, minutesAgo) => {
+          const loadedIds = loaded.map(({ id }) => id);
+          const threads = loaded.map(({ id, pinState }) =>
+            summary(id, new Date(NOW - minutesAgo * 60_000).toISOString(), {
+              pinState,
+            }),
           );
           const sections = inboxSections({
             now: NOW,
@@ -179,15 +206,46 @@ describe("the chats list as an inbox", () => {
             ),
           ]);
           expect(new Set(shown)).toEqual(expected);
-          const firstRest = sections.findIndex(
-            ({ key }) => key !== "needsYou" && key !== "working",
-          );
-          for (const [index, { data, key }] of sections.entries()) {
-            const isOpen = key === "needsYou" || key === "working";
-            expect(isOpen).toBe(firstRest === -1 || index < firstRest);
-            for (const { runState, thread } of data) {
+          // Sections come in one order: open runs, pinned, then by day.
+          const rank = (key: (typeof sections)[number]["key"]) => {
+            switch (key) {
+              case "needsYou":
+              case "working":
+                return 0;
+              case "pinned":
+                return 1;
+              case "today":
+              case "yesterday":
+              case "week":
+              case "earlier":
+                return 2;
+              default:
+                key satisfies never;
+                return panic("unknown inbox section");
+            }
+          };
+          const ranks = sections.map(({ key }) => rank(key));
+          expect(ranks).toEqual(ranks.toSorted((left, right) => left - right));
+          const isPinned = (threadId: string) =>
+            loaded.some(
+              ({ id, pinState }) =>
+                id === threadId && pinState === CHAT_THREAD_PIN_STATE.pinned,
+            );
+          for (const { data, key } of sections) {
+            for (const row of data) {
+              const { runState, thread } = row;
+              const open = stateOf.get(thread.id);
               expect(runState ?? null).toBe(
-                isOpen ? (stateOf.get(thread.id) ?? null) : null,
+                rank(key) === 0 ? (open ?? null) : null,
+              );
+              // A chat with an open run heads the list even when pinned;
+              // otherwise a pinned chat is under Pinned and nowhere else.
+              expect(key === "pinned").toBe(
+                open === undefined && isPinned(thread.id),
+              );
+              // Only a thread the list did not read is shown without marks.
+              expect(row.type === "run-only").toBe(
+                !loadedIds.some((id) => id === thread.id),
               );
             }
           }
