@@ -212,6 +212,7 @@
         "./capabilities/lists.verifications.claim-comments.update.json",
         "./capabilities/lists.verifications.claim-reviews.bulk.create.json",
         "./capabilities/lists.verifications.claim-reviews.create.json",
+        "./capabilities/lists.verifications.claim-reviews.list.json",
         "./capabilities/lists.verifications.create.json",
         "./capabilities/lists.verifications.get.json",
         "./capabilities/lists.verifications.latest.list.json",

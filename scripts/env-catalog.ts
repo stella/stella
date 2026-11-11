@@ -1403,6 +1403,10 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "RECONCILIATION_FETCH_DELAY_MS",
   "SK_DOCUMENT_BACKFILL_ENABLED",
   "SK_DOCUMENT_FETCH_DELAY_MS",
+  // Desktop agent sidecar, local only: `redacted` writes the redacted
+  // harness and sidecar protocol log to holder.log; unset or `off` (the
+  // default) writes none. packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_AGENT_PROTOCOL_LOG",
   "STELLA_API_KEY",
   "STELLA_DESKTOP_ALLOWED_API_BASE_URLS",
   "STELLA_DESKTOP_ALLOWED_ORIGINS",

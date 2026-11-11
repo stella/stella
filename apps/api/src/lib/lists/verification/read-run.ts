@@ -44,10 +44,15 @@ import {
   foldClaimReview,
 } from "@/api/lib/lists/verification/review-fold";
 
-export const serializeClaimReview = (review: ClaimReview) => ({
+/** A claim's review on the wire, with how many actions its history holds. */
+export const serializeClaimReview = ({
+  review,
+  eventCount,
+}: ClaimReviewRecord) => ({
   ...review,
   noteSavedAt: review.noteSavedAt?.toISOString() ?? null,
   decidedAt: review.decidedAt?.toISOString() ?? null,
+  eventCount,
 });
 
 type ReadClaimReviewsArgs = {
@@ -58,7 +63,7 @@ type ReadClaimReviewsArgs = {
   claimIds?: readonly SafeId<"legalListClaim">[];
 };
 
-type ClaimReviewRecord = {
+export type ClaimReviewRecord = {
   review: ClaimReview;
   /** Actions recorded so far, checked against the per-claim cap. */
   eventCount: number;
@@ -428,7 +433,8 @@ export const readVerificationRun = async ({
     blocks,
     claims: claims.map((claim) => {
       const verdict = toClaimVerdict(claim);
-      const review = reviews.get(claim.id)?.review ?? null;
+      const record = reviews.get(claim.id) ?? null;
+      const review = record?.review ?? null;
       return {
         id: claim.id,
         position: claim.position,
@@ -442,7 +448,7 @@ export const readVerificationRun = async ({
         text: claim.text,
         anchor: claim.anchor,
         refs: claim.refs,
-        review: review === null ? null : serializeClaimReview(review),
+        review: record === null ? null : serializeClaimReview(record),
       };
     }),
   };

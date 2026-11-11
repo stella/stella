@@ -387,6 +387,43 @@
       "optional": "Opcional",
       "readyToConfirm": "Pronta para confirmar"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Aceita como rotina",
+        "conflictReopened": "Resolução do conflito retirada",
+        "escalated": "Sinalizada para a equipe de evidências",
+        "governed": "Registro prevalecente escolhido",
+        "noteCleared": "Nota removida",
+        "noteSaved": "Nota salva",
+        "overridden": "Veredito substituído",
+        "overrideWithdrawn": "Substituição do veredito retirada",
+        "reopened": "Reaberta como alegação verificável",
+        "statusCleared": "Status da revisão removido",
+        "statusDisputed": "Marcada como em disputa",
+        "statusNeedsEvidence": "Marcada como precisando de evidências",
+        "statusReviewed": "Marcada como revisada"
+      },
+      "empty": "Nenhuma ação de revisão ainda.",
+      "filters": {
+        "allKinds": "Qualquer ação",
+        "allReviewers": "Qualquer revisor",
+        "kind": "Filtrar por ação",
+        "reviewer": "Filtrar por revisor"
+      },
+      "formerMember": "Ex-membro",
+      "kinds": {
+        "override": "Vereditos substituídos",
+        "recordConflict": "Resoluções de conflitos",
+        "reopen": "Reaberturas",
+        "status": "Mudanças de status"
+      },
+      "noMatches": "Nenhuma ação corresponde a estes filtros.",
+      "noStatus": "Sem status",
+      "none": "Nenhuma ação ainda",
+      "reasonUnrecorded": "Nenhum motivo registrado: isto foi feito antes de os motivos serem obrigatórios.",
+      "runButton": "Histórico da revisão",
+      "runTitle": "Histórico da revisão"
+    },
     "matches": {
       "count": "{count, plural, one {# correspondência} other {# correspondências} many {# correspondências}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "Somente sem fonte"
       }
     },
+    "reason": {
+      "escalate": "Por que a equipe de evidências precisa disto?",
+      "govern": "Por que este registro prevalece?",
+      "override": "Por que o veredito é “{verdict}”?",
+      "placeholder": "Informe o motivo; ele fica no histórico da alegação",
+      "reopen": "Por que esta alegação pode ser verificada?",
+      "required": "Informe um motivo para registrar isto.",
+      "unresolveConflict": "Por que retirar esta resolução?",
+      "withdrawOverride": "Por que voltar ao veredito da ferramenta?"
+    },
     "review": {
-      "disputed": "Em disputa · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Aceita como rotina} other {Revisada}} · {decidedAt}",
+      "decided": "{status, select, disputed {Em disputa} needsEvidence {Faltam evidências} other {{origin, select, bulk {Aceita como rotina} other {Revisada}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Em disputa",
+        "needsEvidence": "Faltam evidências",
+        "reviewed": "Revisada"
+      },
       "undo": "Desfazer decisão"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "Aceitar {count, plural, one {# alegação de rotina} other {# alegações de rotina} many {# alegações de rotina}}",
       "attentionComplete": "<strong>Todas as alegações que exigiam julgamento foram decididas.</strong> {count, plural, one {A # determinação de rotina não requer revisão individual.} other {As # determinações de rotina não requerem revisão individual.} many {As # determinações de rotina não requerem revisão individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# alegação precisa} other {# alegações precisam} many {# alegações precisam}} do seu julgamento</strong>: conflitos e interpretações contestadas. {routineCount, plural, one {A outra # é de rotina e não precisa de aprovação individual.} other {As outras # são de rotina e não precisam de aprovação individual.} many {As outras # são de rotina e não precisam de aprovação individual.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, contestada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, em disputa} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, contestada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, em disputa} needsEvidence {, faltam evidências} other {}})",
       "documentView": {
         "label": "Visualização do documento",
         "original": "Original",

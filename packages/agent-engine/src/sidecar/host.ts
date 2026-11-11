@@ -46,6 +46,7 @@ import {
 } from "../harness/events";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
+import type { ProtocolLog } from "../protocol-log";
 import { copyAttachments } from "./attachments";
 import {
   captureCheckpoint,
@@ -115,6 +116,8 @@ export type SidecarHostOptions = {
   send: (message: SidecarHostOutput) => boolean;
   /** One line in the holder's log. Never passed tokens, prompts or outputs. */
   log: (line: string) => void;
+  /** Where each harness process's protocol lines go, redacted. */
+  protocolLog: ProtocolLog;
   /** The harness's environment; `CODEX_HOME` and the like are set per run. */
   environment: Readonly<Record<string, string>>;
   /**
@@ -193,6 +196,7 @@ const ADAPTERS = {
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
+      protocolLog: options.protocolLog,
       ...(options.onProcess === null ? {} : { onProcess: options.onProcess }),
       ...(launch.launch.clientName === null
         ? {}
@@ -215,6 +219,7 @@ const ADAPTERS = {
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
+      protocolLog: options.protocolLog,
       platform: process.platform,
     });
   },
@@ -227,6 +232,7 @@ const ADAPTERS = {
 type AdapterOptions = {
   environment: Readonly<Record<string, string>>;
   onBackgroundError: (error: unknown, context: string) => void;
+  protocolLog: ProtocolLog;
   /** Waits for the desktop's grant of a new harness process; `null` without one. */
   onProcess: ((pid: number) => Promise<boolean>) | null;
 };
@@ -543,6 +549,7 @@ export class SidecarHost {
           onBackgroundError: (_error, context) => {
             this.options.log(`harness background work failed: ${context}`);
           },
+          protocolLog: this.options.protocolLog,
           onProcess: launch.launch.processGrant
             ? async (pid) => this.awaitGrant(id, pid)
             : null,

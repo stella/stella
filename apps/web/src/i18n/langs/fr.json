@@ -387,6 +387,43 @@
       "optional": "Facultatif",
       "readyToConfirm": "Prête à confirmer"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Acceptée de routine",
+        "conflictReopened": "Résolution de la contradiction retirée",
+        "escalated": "Signalée à l’équipe chargée des preuves",
+        "governed": "Élément faisant foi choisi",
+        "noteCleared": "Note supprimée",
+        "noteSaved": "Note enregistrée",
+        "overridden": "Verdict remplacé",
+        "overrideWithdrawn": "Remplacement du verdict retiré",
+        "reopened": "Rouverte en tant qu’affirmation vérifiable",
+        "statusCleared": "Statut d’examen retiré",
+        "statusDisputed": "Désaccord signalé",
+        "statusNeedsEvidence": "Marquée comme nécessitant des preuves",
+        "statusReviewed": "Marquée comme examinée"
+      },
+      "empty": "Aucune action d’examen pour l’instant.",
+      "filters": {
+        "allKinds": "Toute action",
+        "allReviewers": "Tout examinateur",
+        "kind": "Filtrer par action",
+        "reviewer": "Filtrer par examinateur"
+      },
+      "formerMember": "Ancien membre",
+      "kinds": {
+        "override": "Verdicts remplacés",
+        "recordConflict": "Résolutions de contradictions",
+        "reopen": "Réouvertures",
+        "status": "Changements de statut"
+      },
+      "noMatches": "Aucune action ne correspond à ces filtres.",
+      "noStatus": "Aucun statut",
+      "none": "Aucune action pour l’instant",
+      "reasonUnrecorded": "Aucune raison enregistrée : l’action date d’avant l’obligation de motiver.",
+      "runButton": "Historique de l’examen",
+      "runTitle": "Historique de l’examen"
+    },
     "matches": {
       "count": "{count, plural, one {# correspondance} other {# correspondances} many {# correspondances}}",
       "position": "{current}/{total}"
@@ -414,9 +451,23 @@
         "label": "Uniquement sans source"
       }
     },
+    "reason": {
+      "escalate": "Pourquoi l’équipe chargée des preuves en a-t-elle besoin ?",
+      "govern": "Pourquoi cet élément fait-il foi ?",
+      "override": "Pourquoi le verdict est-il « {verdict} » ?",
+      "placeholder": "Indiquez la raison ; elle reste dans l’historique de l’affirmation",
+      "reopen": "Pourquoi cette affirmation est-elle vérifiable ?",
+      "required": "Indiquez une raison pour l’enregistrer.",
+      "unresolveConflict": "Pourquoi retirer cette résolution ?",
+      "withdrawOverride": "Pourquoi revenir au verdict de l’outil ?"
+    },
     "review": {
-      "disputed": "Désaccord signalé · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Acceptée de routine} other {Examinée}} · {decidedAt}",
+      "decided": "{status, select, disputed {Désaccord signalé} needsEvidence {Preuves requises} other {{origin, select, bulk {Acceptée de routine} other {Examinée}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Désaccord signalé",
+        "needsEvidence": "Preuves requises",
+        "reviewed": "Examinée"
+      },
       "undo": "Annuler la décision"
     },
     "runs": {
@@ -483,7 +534,7 @@
       "acceptRoutine": "Accepter {count, plural, one {# affirmation de routine} other {# affirmations de routine} many {# affirmations de routine}}",
       "attentionComplete": "<strong>Toutes les affirmations nécessitant un jugement ont été traitées.</strong> {count, plural, one {La # détermination de routine ne nécessite pas d’examen individuel.} other {Les # déterminations de routine ne nécessitent pas d’examen individuel.} many {Les # déterminations de routine ne nécessitent pas d’examen individuel.}}",
       "attentionOpen": "<strong>{count, plural, one {# affirmation requiert} other {# affirmations requièrent} many {# affirmations requièrent}} votre jugement</strong> : contradictions et interprétations contestées. {routineCount, plural, one {L’autre # est de routine et ne nécessite pas de validation individuelle.} other {Les # autres sont de routine et ne nécessitent pas de validation individuelle.} many {Les # autres sont de routine et ne nécessitent pas de validation individuelle.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, contestée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, contestée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} needsEvidence {, preuves requises} other {}})",
       "documentView": {
         "label": "Affichage du document",
         "original": "Original",
