@@ -1052,7 +1052,7 @@ describe("property sort order", () => {
       if (rows.length < pageSize || last === undefined) {
         return names;
       }
-      cursor = result.value.cursorValuesByEntityId.get(last.id);
+      cursor = result.value.cursorValuesByEntityId.get(last.entityId);
     }
     return panic("Paging did not terminate");
   };
