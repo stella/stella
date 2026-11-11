@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "Desktop runner socket bookkeeping, like the gateway's existing run writes: a socket's claim retires the account's earlier device keys for its installation and moves their open runs to the claiming key in one statement, and a run records when its run.start is first written to a socket. The chat turn that started the run audits the work; an event per delivery or per relink claim would only repeat it."
+}

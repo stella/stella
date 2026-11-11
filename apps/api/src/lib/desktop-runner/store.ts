@@ -10,7 +10,6 @@ import {
   isNull,
   lt,
   max,
-  ne,
   notExists,
   or,
   type SQL,
@@ -247,30 +246,30 @@ const retireEarlierDeviceKeys = async (
   tx: Transaction,
   binding: RunnerBinding,
 ) => {
-  const earlier = and(
-    eq(runner.userId, binding.userId),
-    eq(runner.organizationId, binding.organizationId),
-    eq(runner.desktopId, binding.desktopId),
-    ne(runner.deviceJkt, binding.deviceJkt),
+  const openStates = sql.join(
+    DESKTOP_RUNNER_OPEN_RUN_STATES.map((state) => sql`${state}`),
+    sql`, `,
   );
+  // One statement: a data-modifying CTE runs whether or not it is read.
   // audit: skip - runner socket bookkeeping; the run's caller audits the work
-  await tx
-    .update(runner)
-    .set({ connection: "disconnected" })
-    .where(and(earlier, eq(runner.connection, "connected")));
-  // audit: skip - runner socket bookkeeping; the run's caller audits the work
-  await tx
-    .update(runs)
-    .set({ deviceJkt: binding.deviceJkt })
-    .where(
-      and(
-        eq(runs.userId, binding.userId),
-        eq(runs.organizationId, binding.organizationId),
-        eq(runs.desktopId, binding.desktopId),
-        ne(runs.deviceJkt, binding.deviceJkt),
-        inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
-      ),
-    );
+  await tx.execute(sql`
+    WITH retired AS (
+      UPDATE ${runner}
+      SET connection = 'disconnected'
+      WHERE user_id = ${binding.userId}
+        AND organization_id = ${binding.organizationId}
+        AND desktop_id = ${binding.desktopId}
+        AND device_jkt <> ${binding.deviceJkt}
+        AND connection = 'connected'
+      RETURNING 1
+    )
+    UPDATE ${runs}
+    SET device_jkt = ${binding.deviceJkt}
+    WHERE user_id = ${binding.userId}
+      AND organization_id = ${binding.organizationId}
+      AND desktop_id = ${binding.desktopId}
+      AND device_jkt <> ${binding.deviceJkt}
+      AND state IN (${openStates})`);
 };
 
 /**
