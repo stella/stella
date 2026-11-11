@@ -51,6 +51,7 @@ import {
   scenarioMembershipViolations,
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
+import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
@@ -102,6 +103,7 @@ const measuredApiScenarios = [
   organizationAuditExportScalingScenario,
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
+  ...sharepointBrowseScalingScenarios,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

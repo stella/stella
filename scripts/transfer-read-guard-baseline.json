@@ -770,20 +770,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
-    "function": "module/listDriveRootChildren",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
-    "function": "module/listDriveRootChildren",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "apps/api/src/handlers/sharepoint/graph-oauth.ts",
     "function": "module/requestToken",
     "kind": "numeric-timeout",
