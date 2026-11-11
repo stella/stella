@@ -21,6 +21,8 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
+import type { ChatLocalRunComputerWait } from "@stll/api-contract/chat-run-target";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -416,7 +418,7 @@ export const ChatThreadMessages = ({
   showToolCallDetails,
   showToolCalls,
   stickyUserMessages = false,
-  waitingForComputer = false,
+  computerWait = null,
   newestLocalTurn,
   queuedMessages,
   queuedMessageActions,
@@ -640,7 +642,7 @@ export const ChatThreadMessages = ({
           )?.message;
           const active = generationActive && turnIndex === turns.length - 1;
           const status =
-            active && !waitingForComputer ? (
+            active && computerWait === null ? (
               <ActiveTurnStatus assistant={assistant} />
             ) : null;
           if (turn.type === "orphan") {
@@ -684,7 +686,9 @@ export const ChatThreadMessages = ({
             onSendWithoutAnonymization={onSendWithoutAnonymization}
           />
         )}
-        {generationActive && waitingForComputer && <ComputerWaitingIndicator />}
+        {generationActive && computerWait !== null && (
+          <ComputerWaitIndicator wait={computerWait} />
+        )}
         {queuedMessageActions &&
           queuedMessages !== undefined &&
           queuedMessages.length > 0 && (
@@ -1222,22 +1226,69 @@ const MessageRenderFallback = ({ message }: { message: ChatUIMessage }) => {
   );
 };
 
-/** The turn's computer went away mid-turn; the turn goes on once it is back. */
-const ComputerWaitingIndicator = () => {
+/**
+ * The turn waits on its computer: for it to pick the run up, with the time
+ * since the turn was sent, or to come back after it went away mid-turn.
+ */
+const ComputerWaitIndicator = ({
+  wait,
+}: {
+  wait: ChatLocalRunComputerWait;
+}) => {
   const t = useTranslations();
 
   return (
     <Message from="assistant">
       <MessageContent>
-        <div
-          className="text-muted-foreground flex items-center gap-2 text-xs"
-          role="status"
-        >
-          <StatusMark status="pending" />
-          <span>{t("chat.localRun.waitingForComputer")}</span>
+        <div className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums">
+          {/* Only the wait is announced: the count would be read out every
+              second, so it is shown but hidden from assistive technology,
+              which reads when the turn was sent instead. */}
+          <span className="flex items-center gap-2" role="status">
+            <StatusMark status="pending" />
+            {wait.status === "delivering"
+              ? t("chat.localRun.waitingForPickup")
+              : t("chat.localRun.waitingForComputer")}
+          </span>
+          {wait.status === "delivering" ? (
+            <ElapsedSince since={wait.since} />
+          ) : null}
         </div>
       </MessageContent>
     </Message>
+  );
+};
+
+/** Whole seconds since `since`, counted live, and when that was. */
+const ElapsedSince = ({ since }: { since: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const sinceMs = Temporal.Instant.from(since).epochMilliseconds;
+  const [nowMs, setNowMs] = useState(
+    () => Temporal.Now.instant().epochMilliseconds,
+  );
+  useExternalSyncEffect(() => {
+    const interval = setInterval(
+      () => setNowMs(Temporal.Now.instant().epochMilliseconds),
+      1000,
+    );
+    return () => clearInterval(interval);
+  }, [sinceMs]);
+  return (
+    <>
+      <span aria-hidden="true">
+        {format.number(Math.max(0, Math.floor((nowMs - sinceMs) / 1000)), {
+          style: "unit",
+          unit: "second",
+          unitDisplay: "narrow",
+        })}
+      </span>
+      <span className="sr-only">
+        {t("chat.localRun.waitingSentAt", {
+          time: format.dateTime(new Date(sinceMs), { timeStyle: "medium" }),
+        })}
+      </span>
+    </>
   );
 };
 
@@ -1540,9 +1591,10 @@ type ChatThreadMessagesProps = {
       { entityId: string }
     >,
   ) => Promise<void> | void;
-  /** The turn runs on the member's computer, which is away until it
-   *  reconnects; the turn shows the wait in place of its live status. */
-  waitingForComputer?: boolean | undefined;
+  /** The turn runs on the member's computer and waits on it (to pick the
+   *  run up, or to come back); the turn shows the wait in place of its live
+   *  status. */
+  computerWait?: ChatLocalRunComputerWait | null | undefined;
   /**
    * The newest turn of a chat that runs on the member's computer: the
    * message that answered it offers to undo its file changes.

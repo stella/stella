@@ -1853,6 +1853,9 @@
       "errorLimitReached": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Versuchen Sie es erneut, sobald das Limit zurückgesetzt ist.",
       "errorLimitResetsAt": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Sie können es ab {time} erneut versuchen.",
       "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
+      "errorNotReached": "Ihr Computer hat diese Antwort nicht übernommen. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
+      "errorRelinked": "stella desktop wurde auf Ihrem Computer neu verknüpft, daher wurde diese Antwort angehalten. Senden Sie sie erneut.",
+      "errorRestoring": "Ihr Computer macht noch Dateiänderungen rückgängig. Senden Sie dies gleich noch einmal.",
       "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "filesNotShared": "Dateien, die nicht geteilt werden konnten, bleiben auf Ihrem Computer: {fileNames}",
       "onThisComputer": "{harness} auf diesem Computer",
@@ -1880,7 +1883,9 @@
       "stateOffline": "Computer nicht verbunden",
       "stateUnavailable": "Derzeit nicht verfügbar",
       "stateUnsupported": "Diese Version wird nicht unterstützt",
-      "waitingForComputer": "Warten, bis sich Ihr Computer wieder verbindet…"
+      "waitingForComputer": "Warten, bis sich Ihr Computer wieder verbindet…",
+      "waitingForPickup": "Warten, bis Ihr Computer diese Antwort übernimmt…",
+      "waitingSentAt": "Gesendet um {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Alles Zutreffende auswählen",

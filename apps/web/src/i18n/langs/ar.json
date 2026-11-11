@@ -1853,6 +1853,9 @@
       "errorLimitReached": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. حاول مرة أخرى بعد إعادة ضبط الحد.",
       "errorLimitResetsAt": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. يمكنك المحاولة مرة أخرى بعد {time}.",
       "errorNeedsLogin": "يطلب وكيل البرمجة على حاسوبك تسجيل الدخول مجددًا. سجّل الدخول عبر stella desktop ثم حاول مرة أخرى.",
+      "errorNotReached": "لم يستلم حاسوبك هذا الرد. تأكد من أن stella desktop مفتوح ومتصل، ثم حاول مرة أخرى.",
+      "errorRelinked": "أُعيد ربط stella desktop على حاسوبك، لذا توقف هذا الرد. أرسله مرة أخرى.",
+      "errorRestoring": "لا يزال حاسوبك يتراجع عن تغييرات الملفات. أرسل هذا مرة أخرى بعد قليل.",
       "errorUnavailable": "توقف حاسوبك عن معالجة هذا الرد. تأكد من أن stella desktop مفتوح ومتصل، ثم حاول مرة أخرى.",
       "filesNotShared": "تبقى الملفات التي تعذّرت مشاركتها على حاسوبك: {fileNames}",
       "onThisComputer": "{harness} على هذا الحاسوب",
@@ -1880,7 +1883,9 @@
       "stateOffline": "الحاسوب غير متصل",
       "stateUnavailable": "غير متاح حاليًا",
       "stateUnsupported": "هذا الإصدار غير مدعوم",
-      "waitingForComputer": "في انتظار إعادة اتصال حاسوبك…"
+      "waitingForComputer": "في انتظار إعادة اتصال حاسوبك…",
+      "waitingForPickup": "في انتظار أن يستلم حاسوبك هذا الرد…",
+      "waitingSentAt": "أُرسل في {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "اختر كل ما ينطبق",
