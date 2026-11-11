@@ -695,8 +695,9 @@ const commonDefects = ({
   if (resent.length > 0) {
     defects.push(`resent unchanged positions: ${resent.join(", ")}`);
   }
+  // A refused save stored nothing, so the first save is the first accepted one.
   const [first, ...later] = events
-    .filter(isSave)
+    .filter((event) => isSave(event) && event.error === null)
     .map(({ input }) => positionCount(input));
   if (first !== undefined && first !== 1) {
     defects.push(

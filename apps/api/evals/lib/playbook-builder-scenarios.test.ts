@@ -290,6 +290,19 @@ describe("contracts-later scoring", () => {
     ]);
   });
 
+  test("a refused save is not the first save", () => {
+    const events = contractsLaterRun();
+    events.splice(
+      1,
+      1,
+      { ...saveOnePosition(1), error: "validation_error" },
+      event(1, "save_playbook", { positions: positionsNamed(2) }),
+    );
+    expect(score("contracts-later", events)).toEqual([
+      "first save carried 2 positions; the skill starts with one",
+    ]);
+  });
+
   test("a first save without positions is a defect", () => {
     const events = contractsLaterRun();
     events[1] = event(1, "save_playbook", { positions: [] });
