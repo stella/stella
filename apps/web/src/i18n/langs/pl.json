@@ -1876,6 +1876,7 @@
       "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit wyczerpany do {time}",
+      "stateModelUnavailable": "Model nie jest już dostępny",
       "stateNeedsLogin": "Wymaga zalogowania",
       "stateNotInstalled": "Nie zainstalowano",
       "stateOffline": "Komputer offline",

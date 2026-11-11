@@ -1876,6 +1876,7 @@
       "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Korlát elérve eddig: {time}",
+      "stateModelUnavailable": "A modell már nem érhető el",
       "stateNeedsLogin": "Bejelentkezés szükséges",
       "stateNotInstalled": "Nincs telepítve",
       "stateOffline": "A számítógép offline",

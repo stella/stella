@@ -43,6 +43,7 @@ const { ChatEditorProvider } =
 const { AIAvailabilityProvider } = await import("@/components/require-ai-key");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { useChatDraftStore } = await import("@/lib/chat-draft-store");
+const { chatThreadOptions } = await import("@/features/chat/queries");
 const { useChatWebSearchPreferenceStore } =
   await import("@/lib/chat-web-search-store");
 const { rememberRunTarget, useChatRunOnPreferenceStore } =
@@ -158,11 +159,21 @@ const ANSWER = "Done on your computer.";
 const serve = ({
   readiness = READINESS,
   webSearchAvailable = false,
+  holdTurns = false,
 }: {
   readiness?: ChatLocalRunReadiness;
   webSearchAvailable?: boolean;
+  /** Keep each turn's stream open after it starts until `finishTurns`. */
+  holdTurns?: boolean;
 } = {}) => {
+  const turnsFinish = Promise.withResolvers<undefined>();
+  if (!holdTurns) {
+    turnsFinish.resolve(undefined);
+  }
   const state = {
+    finishTurns: () => {
+      turnsFinish.resolve(undefined);
+    },
     stored: null as ChatLocalRunTarget | null,
     /** Whether a write created the draft's row. */
     exists: false,
@@ -271,8 +282,22 @@ const serve = ({
             finishReason: "stop",
           },
         ];
+        const frame = (event: (typeof events)[number]) =>
+          new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`);
+        const [started, ...rest] = events;
         return new Response(
-          events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
+          new ReadableStream<Uint8Array>({
+            start: async (controller) => {
+              if (started !== undefined) {
+                controller.enqueue(frame(started));
+              }
+              await turnsFinish.promise;
+              for (const event of rest) {
+                controller.enqueue(frame(event));
+              }
+              controller.close();
+            },
+          }),
           { headers: { "Content-Type": "text/event-stream" } },
         );
       }
@@ -578,5 +603,46 @@ test("a new chat with web search on by default still sends its first turn to the
   expect(await sendFirstTurn(server, ui)).toMatchObject({
     forwardedProps: { runTarget: CODEX },
   });
+  expect(server.unexpected).toEqual([]);
+});
+
+test("a remembered model the computer no longer offers says so in the bar", async () => {
+  rememberRunTarget(user.activeOrganizationId, {
+    ...CODEX,
+    model: "gpt-4-codex",
+  });
+  const server = serve();
+  const client = createClient();
+  const { ui } = await openNewChat(client);
+
+  const label = `Codex · gpt-4-codex · ${messages.chat.localRun.stateModelUnavailable}`;
+  expect(await ui.findByRole("button", { name: label })).toBeTruthy();
+  expect(server.unexpected).toEqual([]);
+});
+
+test("the thread page reads the first send's target while the turn runs", async () => {
+  rememberRunTarget(user.activeOrganizationId, CODEX);
+  const server = serve({ holdTurns: true });
+  const client = createClient();
+  const { ui, appRouter } = await openNewChat(client);
+  await ui.findByRole("button", { name: CODEX_LABEL });
+
+  await sendFirstTurn(server, ui);
+  await testing.waitFor(() =>
+    expect(appRouter.state.location.pathname).toMatch(/^\/chat\/[^/]+$/u),
+  );
+  const threadId = toChatThreadId(
+    appRouter.state.location.pathname.split("/").at(-1) ?? "",
+  );
+  // The entry the thread page reads, before the server's read reflects the
+  // turn: it names the computer, not Auto on stella.
+  const threadPage = chatThreadOptions({
+    activeOrganizationId: user.activeOrganizationId,
+    key: { scope: "global", threadId },
+    context: { allowMissingThread: true },
+  });
+  expect(client.getQueryData(threadPage.queryKey)?.runTarget).toEqual(CODEX);
+
+  server.finishTurns();
   expect(server.unexpected).toEqual([]);
 });

@@ -1876,6 +1876,7 @@
       "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "تم بلوغ الحد حتى {time}",
+      "stateModelUnavailable": "النموذج لم يعد متاحًا",
       "stateNeedsLogin": "يلزم تسجيل الدخول",
       "stateNotInstalled": "غير مثبّت",
       "stateOffline": "الحاسوب غير متصل",

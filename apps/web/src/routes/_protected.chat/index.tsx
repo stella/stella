@@ -76,9 +76,11 @@ import { acquireChatRuntime } from "@/features/chat/chat-runtime-registry";
 import { useChatDraftMeta } from "@/features/chat/hooks/use-chat-draft-meta";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
-import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
-  chatThreadOptions,
+  readHandoffThread,
+  startNewThreadCommandHandoff,
+} from "@/features/chat/lib/start-new-thread-command-handoff";
+import {
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
   listChatHistoryItems,
@@ -544,15 +546,15 @@ function ChatIndex() {
     // query; the destination page's post-refetch acquire then
     // sees the diverged seed signal and rebuilds with its own
     // getters.
+    // The thread's data carries where this first send runs, so the thread
+    // page shows it until the server's read of the thread reflects the turn.
     const [message, threadData] = await Promise.all([
       buildChatRequestMessage(draft),
-      queryClient.query({
-        ...chatThreadOptions({
-          activeOrganizationId,
-          key: threadRef,
-          context: chatThreadContext,
-        }),
-        staleTime: "static",
+      readHandoffThread({
+        activeOrganizationId,
+        context: chatThreadContext,
+        queryClient,
+        threadRef,
       }),
     ]);
     if (message.isErr()) {

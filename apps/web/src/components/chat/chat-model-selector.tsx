@@ -21,11 +21,11 @@ import {
   type ComposerModelsMenuProps,
   EFFORT_LABEL_KEY,
 } from "@/components/chat/chat-model-options-menu";
-import { useHarnessStateLabel } from "@/components/chat/chat-run-target-menu";
+import { useLocalRunTargetStateLabel } from "@/components/chat/chat-run-target-menu";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
-  chatLocalHarnessOptions,
   localRunModelLabel,
+  localRunTargetState,
 } from "@/components/chat/chat-run-target-menu.logic";
 import {
   localRunnersOptions,
@@ -114,8 +114,8 @@ export const ChatModelSelector = ({
 /**
  * The harness and model a thread on the member's computer runs with, named
  * as the harness reports the model, and why it cannot take a turn now when
- * the member's computers say so (offline, signed out): the bar says it
- * rather than the turn moving to stella. `null` for a thread on stella's
+ * the member's computers say so (offline, signed out, the model no longer
+ * offered): the bar says it rather than the turn moving to stella. `null` for a thread on stella's
  * models.
  */
 const useLocalRunTrigger = (
@@ -123,7 +123,7 @@ const useLocalRunTrigger = (
   target: ChatLocalRunTarget | null,
 ): TriggerView | null => {
   const t = useTranslations();
-  const stateLabel = useHarnessStateLabel();
+  const stateLabel = useLocalRunTargetStateLabel();
   const runnersView = queryView(
     useQuery({
       ...localRunnersOptions(activeOrganizationId),
@@ -141,18 +141,10 @@ const useLocalRunTrigger = (
     model,
   });
   // Until the computers are read nothing is known against the choice.
-  const state = (() => {
-    if (readiness === undefined) {
-      return null;
-    }
-    const option = chatLocalHarnessOptions(readiness)?.find(
-      ({ harness }) => harness === target.harness,
-    );
-    // The member may no longer run turns on a computer at all.
-    return option === undefined
-      ? t("chat.localRun.stateUnavailable")
-      : stateLabel(option);
-  })();
+  const state =
+    readiness === undefined
+      ? null
+      : stateLabel(localRunTargetState(readiness, target));
   return {
     label:
       state === null

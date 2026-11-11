@@ -1876,6 +1876,7 @@
       "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit vyčerpaný do {time}",
+      "stateModelUnavailable": "Model už nie je k dispozícii",
       "stateNeedsLogin": "Vyžaduje prihlásenie",
       "stateNotInstalled": "Nie je nainštalované",
       "stateOffline": "Počítač je offline",

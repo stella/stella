@@ -1876,6 +1876,7 @@
       "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limits sasniegts līdz {time}",
+      "stateModelUnavailable": "Modelis vairs nav pieejams",
       "stateNeedsLogin": "Jāpiesakās",
       "stateNotInstalled": "Nav instalēts",
       "stateOffline": "Dators ir bezsaistē",

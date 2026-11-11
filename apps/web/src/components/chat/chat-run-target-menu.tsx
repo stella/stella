@@ -28,6 +28,7 @@ import {
   LOCAL_RUN_PERMISSION_KEYS,
   localRunMaxApprovals,
   localRunTargetFor,
+  type LocalRunTargetState,
   type PermissionAvailability,
   permissionView,
   runTargetValue,
@@ -94,6 +95,30 @@ export const useHarnessStateLabel = () => {
       default:
         option satisfies never;
         return panic("Unknown harness state");
+    }
+  };
+};
+
+/**
+ * Why the member's computers cannot take a turn on the chosen target now,
+ * as the composer bar says it; `null` while they can.
+ */
+export const useLocalRunTargetStateLabel = () => {
+  const t = useTranslations();
+  const harnessLabel = useHarnessStateLabel();
+  return (state: LocalRunTargetState): string | null => {
+    switch (state.type) {
+      case "ready":
+        return null;
+      case "harness":
+        return harnessLabel(state.option);
+      case "model_unavailable":
+        return t("chat.localRun.stateModelUnavailable");
+      case "not_allowed":
+        return t("chat.localRun.stateUnavailable");
+      default:
+        state satisfies never;
+        return panic("Unknown local run target state");
     }
   };
 };

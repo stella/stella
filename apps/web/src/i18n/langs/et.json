@@ -1876,6 +1876,7 @@
       "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limiit täis kuni {time}",
+      "stateModelUnavailable": "Mudel pole enam saadaval",
       "stateNeedsLogin": "Vaja sisse logida",
       "stateNotInstalled": "Pole installitud",
       "stateOffline": "Arvuti pole võrgus",
