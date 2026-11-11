@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import type { DesktopLinkStatus } from "@stll/api-contract/desktop-account-link";
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { Temporal } from "@stll/time";
@@ -52,22 +53,32 @@ const SIGNED_BY_THE_LOCAL_APP = {
   skewSeconds: 0,
 } as const satisfies DesktopSignature;
 
-const signedStatus = (status: string, signature: DesktopSignature) => {
+/** The status line the app signs: a failure signs its reason too. */
+const signedLine = (status: DesktopLinkStatus) =>
+  status.status === "failed" ? `failed:${status.reason}` : status.status;
+
+const signedStatus = (
+  status: DesktopLinkStatus,
+  signature: DesktopSignature,
+) => {
   const timestamp = String(
     Math.floor(Temporal.Now.instant().epochMilliseconds / 1000) +
       signature.skewSeconds,
   );
   return Response.json({
     correlationId: challenge.correlationId,
-    status,
+    ...status,
     timestamp,
     proof: new Bun.CryptoHasher("sha256", signature.portSecret)
       .update(
-        `${challenge.correlationId}\n${signature.verifierHash}\n${signature.deviceJkt}\n${status}\n${timestamp}`,
+        `${challenge.correlationId}\n${signature.verifierHash}\n${signature.deviceJkt}\n${signedLine(status)}\n${timestamp}`,
       )
       .digest("hex"),
   });
 };
+
+const PENDING = { status: "pending" } as const;
+const CONNECTED = { status: "connected" } as const;
 
 type LoopbackReply = (phase: "before-grant" | "after-grant") => Response;
 
@@ -154,26 +165,26 @@ describe("approving a desktop challenge without a click", () => {
         { status: 401 },
       ),
     "another port secret signed the status": () =>
-      signedStatus("pending", {
+      signedStatus(PENDING, {
         ...SIGNED_BY_THE_LOCAL_APP,
         portSecret: "c".repeat(64),
       }),
     "the app signed another verifier": () =>
-      signedStatus("pending", {
+      signedStatus(PENDING, {
         ...SIGNED_BY_THE_LOCAL_APP,
         verifierHash: "c".repeat(64),
       }),
     "the app signed another device key": () =>
-      signedStatus("pending", {
+      signedStatus(PENDING, {
         ...SIGNED_BY_THE_LOCAL_APP,
         deviceJkt: "B".repeat(43),
       }),
     "the status is older than the skew window": () =>
-      signedStatus("pending", { ...SIGNED_BY_THE_LOCAL_APP, skewSeconds: -31 }),
+      signedStatus(PENDING, { ...SIGNED_BY_THE_LOCAL_APP, skewSeconds: -31 }),
     "the status is ahead of the skew window": () =>
-      signedStatus("pending", { ...SIGNED_BY_THE_LOCAL_APP, skewSeconds: 31 }),
+      signedStatus(PENDING, { ...SIGNED_BY_THE_LOCAL_APP, skewSeconds: 31 }),
     "the app no longer waits for it": () =>
-      signedStatus("connected", SIGNED_BY_THE_LOCAL_APP),
+      signedStatus(CONNECTED, SIGNED_BY_THE_LOCAL_APP),
   } as const satisfies Record<string, LoopbackReply>;
 
   test.each(Object.entries(UNPROVEN))(
@@ -199,7 +210,7 @@ describe("approving a desktop challenge without a click", () => {
   test("a fresh pending status the local app signed for the whole challenge approves it", async () => {
     const network = scriptNetwork((phase) =>
       signedStatus(
-        phase === "before-grant" ? "pending" : "connected",
+        phase === "before-grant" ? PENDING : CONNECTED,
         SIGNED_BY_THE_LOCAL_APP,
       ),
     );
@@ -229,5 +240,53 @@ describe("approving a desktop challenge without a click", () => {
       "/v1/connection",
     ]);
     expect(hasDesktopAccountChallenge()).toBe(false);
+  });
+});
+
+describe("a link the app ends", () => {
+  // Every reason the page names with its own next step, and the update the
+  // app needs; only an unclassified failure stays an error.
+  const NAMED = [
+    ["account_conflict", { status: "refused", reason: "account_conflict" }],
+    ["switch_declined", { status: "refused", reason: "switch_declined" }],
+    ["declined", { status: "refused", reason: "declined" }],
+    ["update_required", { status: "update-required" }],
+  ] as const;
+
+  test.each(NAMED)(
+    "%s reaches the page as its own outcome",
+    async (reason, expected) => {
+      scriptNetwork((phase) =>
+        signedStatus(
+          phase === "before-grant" ? PENDING : { status: "failed", reason },
+          SIGNED_BY_THE_LOCAL_APP,
+        ),
+      );
+      openChallenge();
+
+      const { outcome } = await linkWithLocalProof();
+
+      expect(outcome).toEqual(expected);
+    },
+  );
+
+  test("an unclassified failure stays an error", async () => {
+    scriptNetwork((phase) =>
+      signedStatus(
+        phase === "before-grant"
+          ? PENDING
+          : { status: "failed", reason: "unavailable" },
+        SIGNED_BY_THE_LOCAL_APP,
+      ),
+    );
+    openChallenge();
+
+    const outcome = await linkDesktopAccount({
+      apiBaseUrl: "https://api.example.test",
+      approval: "local-proof",
+      onDesktopOpening: () => {},
+    });
+
+    expect(outcome.isErr()).toBe(true);
   });
 });
