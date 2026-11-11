@@ -128,7 +128,6 @@ const importSharepointFiles = createSafeHandler(
         call: async (accessToken) =>
           await Result.gen(async function* () {
             const imported: SharepointImportResult[] = [];
-            // db-await-in-loop: one file at a time bounds memory to a single document; the request caps files at SHAREPOINT_IMPORT_MAX_ITEMS
             for (const ref of refs) {
               if (
                 Temporal.Now.instant().epochMilliseconds - startedAtMs >
@@ -137,6 +136,7 @@ const importSharepointFiles = createSafeHandler(
                 imported.push({ ...ref, status: "deferred" });
                 continue;
               }
+              // db-await-in-loop: one file at a time bounds memory to a single document; the request caps files at SHAREPOINT_IMPORT_MAX_ITEMS
               const result = yield* Result.await(
                 importSharepointFile({
                   accessToken,
