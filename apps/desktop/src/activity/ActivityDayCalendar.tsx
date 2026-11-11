@@ -485,13 +485,17 @@ export const ActivityDayCalendar = ({
       maximumFractionDigits: 1,
     });
   const summaryLabel = useSummaryLabel();
+  // Matters group the day, so its blocks wait for them: drawn before they
+  // arrive, every block a matter claims would be drawn again as another one,
+  // under a pointer or focus already on it. The grid shows meanwhile.
+  const matched = candidates.type !== "loading";
   const columns = useCalendarColumns({
-    segments: day.segments,
+    segments: matched ? day.segments : [],
     granularity: preferences.granularity,
     sourceAppVisuals: snapshot.sourceAppVisuals,
     rangeSelection: editable,
-    draftedEntries,
-    suggestions,
+    draftedEntries: matched ? draftedEntries : [],
+    suggestions: matched ? suggestions : [],
     narrativeFor: (suggestion) => narratives.editFor(suggestion).narrative,
     onActivate: (suggestion) =>
       open({ id: suggestion.id, type: "suggestion" }, suggestion),
