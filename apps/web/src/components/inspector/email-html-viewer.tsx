@@ -41,7 +41,7 @@ import {
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { getFileSizeDisplay } from "@/lib/file-size";
+import { formatFileSize } from "@/lib/file-size";
 import {
   EMAIL_CITATION_SCROLL_EVENT,
   isEmailCitationTargetDetail,
@@ -442,7 +442,7 @@ export const EmailHtmlViewer = ({
                       </BidiText>
                       {attachment.sizeBytes > 0 ? (
                         <span className="text-muted-foreground shrink-0">
-                          {formatAttachmentSize(attachment.sizeBytes, format)}
+                          {formatFileSize(attachment.sizeBytes, format)}
                         </span>
                       ) : null}
                     </span>
@@ -489,19 +489,6 @@ export const EmailHtmlViewer = ({
       </div>
     </article>
   );
-};
-
-const formatAttachmentSize = (
-  sizeBytes: number,
-  format: ReturnType<typeof useFormatter>,
-): string => {
-  const size = getFileSizeDisplay(sizeBytes);
-  return format.number(size.value, {
-    maximumFractionDigits: 1,
-    style: "unit",
-    unit: size.unit,
-    unitDisplay: "short",
-  });
 };
 
 const EmailParticipantRow = ({

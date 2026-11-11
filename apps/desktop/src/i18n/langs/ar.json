@@ -66,6 +66,10 @@
     "accountWindowTitle": "ربط الحساب",
     "accountTitle": "هل تريد ربط هذا الحساب؟",
     "accountSubtitle": "اربط stella desktop بهذا الحساب وهذه المؤسسة.",
+    "switchWindowTitle": "تبديل الحساب",
+    "switchTitle": "هل تريد التبديل إلى حساب آخر؟",
+    "switchSubtitle": "تطبيق stella desktop مرتبط بالحساب {currentEmail}. هل تريد فصله وربط {email} بدلاً منه؟",
+    "switchConfirm": "فصل وربط",
     "accountEmail": "الحساب",
     "organizationName": "المؤسسة",
     "allow": "السماح",
@@ -422,6 +426,16 @@
     "accessibilityRequired": "اسمح بالوصول إلى تسهيلات الاستخدام لتسجيل التفاصيل. يستمر تسجيل أسماء التطبيقات.",
     "openAccessibilitySettings": "فتح إعدادات تسهيلات الاستخدام",
     "detailsUnavailable": "التفاصيل غير متاحة على هذا الجهاز. يستمر تسجيل أسماء التطبيقات.",
+    "browserTitlesWithheld": "لا تُسجَّل عناوين النوافذ في {browser}.",
+    "recordTitlesFromNow": "التسجيل من الآن",
+    "browserTitlesRecordedFromNow": "تُسجَّل عناوين النوافذ في {browser} من الآن.",
+    "earlierTimeStaysUntitled": "يبقى الوقت السابق بلا عناوين.",
+    "titlesNotRecorded": "لا تُسجَّل عناوين النوافذ.",
+    "accessibilityAccessMissing": "لا يملك تطبيق stella إذن الوصول إلى تسهيلات الاستخدام. إذا كان مفعّلًا في القائمة بالفعل، فأوقفه ثم فعّله مجددًا.",
+    "titlesNeedAccessibility": "لا تُسجَّل عناوين النوافذ دون إذن الوصول إلى تسهيلات الاستخدام.",
+    "recordAppNameOnly": "تسجيل اسم التطبيق {name} فقط",
+    "recordAppDetails": "تسجيل تفاصيل {name}",
+    "appNameOnlyApps": "تطبيقات يُسجَّل اسمها فقط",
     "recording": "جارٍ التسجيل",
     "paused": "متوقف مؤقتًا",
     "pause": "إيقاف مؤقت",
@@ -760,7 +774,9 @@
         "notCompleted": "لم يكتمل تسجيل الدخول. حاول مرة أخرى.",
         "timedOut": "استغرق تسجيل الدخول وقتًا طويلًا. حاول مرة أخرى.",
         "unavailable": "تعذّر تشغيل Claude Code على هذا الكمبيوتر. حاول مرة أخرى."
-      }
+      },
+      "unknown": "تعذر التحقق من تسجيل الدخول إلى Claude Code. تحقق مرة أخرى بعد قليل.",
+      "checkAgain": "تحقق مرة أخرى"
     },
     "install": {
       "notInstalled": "لم يُثبَّت {name} على هذا الكمبيوتر بعد.",

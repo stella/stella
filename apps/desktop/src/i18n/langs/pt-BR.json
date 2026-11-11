@@ -66,6 +66,10 @@
     "accountWindowTitle": "Conectar conta",
     "accountTitle": "Conectar esta conta?",
     "accountSubtitle": "Conecte o stella desktop a esta conta e organização.",
+    "switchWindowTitle": "Trocar de conta",
+    "switchTitle": "Trocar para outra conta?",
+    "switchSubtitle": "O stella desktop está conectado a {currentEmail}. Desconectar essa conta e conectar {email} no lugar?",
+    "switchConfirm": "Desconectar e conectar",
     "accountEmail": "Conta",
     "organizationName": "Organização",
     "allow": "Permitir",
@@ -422,6 +426,16 @@
     "accessibilityRequired": "Permita o acesso de Acessibilidade para registrar detalhes. Os nomes dos aplicativos continuam sendo registrados.",
     "openAccessibilitySettings": "Abrir ajustes de Acessibilidade",
     "detailsUnavailable": "Os detalhes não estão disponíveis neste dispositivo. Os nomes dos aplicativos continuam sendo registrados.",
+    "browserTitlesWithheld": "Os títulos das janelas do {browser} não são registrados.",
+    "recordTitlesFromNow": "Registrar a partir de agora",
+    "browserTitlesRecordedFromNow": "Os títulos das janelas do {browser} são registrados a partir de agora.",
+    "earlierTimeStaysUntitled": "O tempo anterior continua sem títulos.",
+    "titlesNotRecorded": "Os títulos das janelas não são registrados.",
+    "accessibilityAccessMissing": "A stella não tem acesso de Acessibilidade. Se ela já aparece ativada na lista, desative-a e ative-a novamente.",
+    "titlesNeedAccessibility": "Sem acesso de Acessibilidade, os títulos das janelas não são registrados.",
+    "recordAppNameOnly": "Registrar apenas o nome do aplicativo {name}",
+    "recordAppDetails": "Registrar detalhes de {name}",
+    "appNameOnlyApps": "Aplicativos que registram apenas o nome",
     "recording": "Registrando",
     "paused": "Pausado",
     "pause": "Pausar",
@@ -760,7 +774,9 @@
         "notCompleted": "O login não foi concluído. Tente de novo.",
         "timedOut": "O login demorou demais. Tente de novo.",
         "unavailable": "Não foi possível iniciar o Claude Code neste computador. Tente de novo."
-      }
+      },
+      "unknown": "Não foi possível verificar o login no Claude Code. Verifique de novo em instantes.",
+      "checkAgain": "Verificar de novo"
     },
     "install": {
       "notInstalled": "O {name} ainda não está instalado neste computador.",

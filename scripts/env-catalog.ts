@@ -1403,6 +1403,10 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "RECONCILIATION_FETCH_DELAY_MS",
   "SK_DOCUMENT_BACKFILL_ENABLED",
   "SK_DOCUMENT_FETCH_DELAY_MS",
+  // Desktop agent sidecar, local only: `redacted` writes the redacted
+  // harness and sidecar protocol log to holder.log; unset or `off` (the
+  // default) writes none. packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_AGENT_PROTOCOL_LOG",
   "STELLA_API_KEY",
   "STELLA_DESKTOP_ALLOWED_API_BASE_URLS",
   "STELLA_DESKTOP_ALLOWED_ORIGINS",
@@ -1989,6 +1993,19 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_RESOLVER_ERROR",
   "TEST_UPSTREAM_BLOCKED",
   "WXT_STELLA_ORIGINS",
+  // The Outlook add-in build bakes these origins, the provider name, support
+  // link and version into its bundle and manifest
+  // (apps/outlook/scripts/render-manifest.ts), records the release's upload
+  // and frame-ancestor origins, and its local server reads its port.
+  "STELLA_API_ORIGIN",
+  "STELLA_OUTLOOK_FRAME_ANCESTORS",
+  "STELLA_OUTLOOK_PORT",
+  "STELLA_OUTLOOK_VERSION",
+  "STELLA_PROVIDER_NAME",
+  "STELLA_SUPPORT_URL",
+  "STELLA_TASKPANE_ORIGIN",
+  "STELLA_UPLOAD_ORIGIN",
+  "STELLA_WEB_ORIGIN",
 ]);
 
 export const AMBIENT_ENV_KEYS = new Set([

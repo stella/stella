@@ -14,6 +14,7 @@ import listComments from "@/api/handlers/lists/verifications/claim-comments/list
 import updateComment from "@/api/handlers/lists/verifications/claim-comments/update";
 import bulkReview from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import review from "@/api/handlers/lists/verifications/claim-reviews/create";
+import listReviews from "@/api/handlers/lists/verifications/claim-reviews/list";
 import create from "@/api/handlers/lists/verifications/create";
 import get from "@/api/handlers/lists/verifications/get";
 import latest from "@/api/handlers/lists/verifications/latest/list";
@@ -62,6 +63,7 @@ const endpoints = {
   latest,
   review,
   bulkReview,
+  listReviews,
   factDetails,
   sourceReview,
   listComments,

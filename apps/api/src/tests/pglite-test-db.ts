@@ -505,7 +505,8 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_raw_sweeps",
       "case_law_citation_authority_sweep",
       "case_law_decision_citation_stats",
-      "case_law_decision_citation_stats_state"
+      "case_law_decision_citation_stats_state",
+      "case_law_decision_anchor_redirects"
     TO stella_ingestion
   `,
   `

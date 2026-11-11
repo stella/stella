@@ -13,6 +13,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
@@ -494,6 +495,10 @@ describe("local harness chunks", () => {
         message: "Limit reached.",
         resetsAt: "2026-10-28T14:00:00.000Z",
       },
+      model_at_capacity: {
+        type: "model_at_capacity",
+        message: "Selected model is at capacity.",
+      },
       provider_error: {
         type: "provider_error",
         message: "Model unavailable.",
@@ -528,6 +533,22 @@ describe("local harness chunks", () => {
       codes.add(String(last.code));
     }
     expect(codes.size).toBe(Object.keys(failures).length);
+  });
+
+  test("a model at capacity ends the run with the chat's code for a provider outage", async () => {
+    const chunks = await localChunks([
+      {
+        type: "turn.failed",
+        failure: {
+          type: "model_at_capacity",
+          message: "Selected model is at capacity.",
+        },
+      },
+    ]);
+    expect(chunks.at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: AI_FAILURE_CODES.provider_unavailable,
+    });
   });
 
   test("a usage limit says when it resets, and only a limit with a known reset", async () => {

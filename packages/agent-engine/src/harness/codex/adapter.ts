@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
+import type { ProtocolLog } from "../../protocol-log";
 import {
   type HarnessAdapter,
   type HarnessAuth,
@@ -30,6 +31,7 @@ import {
   startAppServer,
 } from "./app-server-client";
 import {
+  CODEX_CLIENT_INFO,
   CODEX_OPT_OUT_NOTIFICATIONS,
   GetAccountResponseSchema,
   InitializeResponseSchema,
@@ -80,6 +82,8 @@ export type CodexHarnessAdapterOptions = {
   requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /** Where the app server's protocol lines go, redacted. */
+  protocolLog: ProtocolLog;
   /**
    * Called with each new process's id before it is asked anything; a
    * process it does not answer `true` for is ended unused.
@@ -96,9 +100,9 @@ const DEFAULT_CAPACITY_RETRY: CodexCapacityRetry = {
   maxAttempts: 5,
   baseDelayMs: 2000,
   maxDelayMs: 30_000,
+  sleep: Bun.sleep,
 };
 
-const CLIENT_NAME = "stella";
 const MAX_MODEL_PAGES = 20;
 /** `<client name>/<version> (<platform>) ...`, as `initialize` reports it. */
 const USER_AGENT_VERSION = /^[^/\s]+\/(\S+)/u;
@@ -187,6 +191,7 @@ const connect = async ({
 }: ConnectOptions): Promise<Result<Connection, ConnectFailure>> => {
   const started = startAppServer({
     launch: options.launch,
+    protocolLog: options.protocolLog,
     detached: createDetached(options.onBackgroundError),
     deadlines: {
       requestMs: options.requestTimeoutMs,
@@ -219,8 +224,8 @@ const connect = async ({
   }
   const initialized = await client.request("initialize", {
     clientInfo: {
-      name: options.clientName ?? CLIENT_NAME,
-      title: "stella",
+      name: options.clientName ?? CODEX_CLIENT_INFO.name,
+      title: CODEX_CLIENT_INFO.title,
       version: options.clientVersion,
     },
     capabilities: {

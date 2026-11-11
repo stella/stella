@@ -3078,7 +3078,7 @@ type FinishedSearchCaseLawData = Exclude<
 export const createCaseLawContinuation = (
   options: Pick<
     Parameters<typeof createToolContinuation>[1],
-    "store" | "ownerId" | "limits"
+    "store" | "ownerId" | "limits" | "clock"
   > = {},
 ) =>
   createToolContinuation<

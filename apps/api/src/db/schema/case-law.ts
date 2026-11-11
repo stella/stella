@@ -1642,6 +1642,43 @@ export const caseLawDecisionAliases = p.pgTable(
   ],
 );
 
+/**
+ * Where a decision's block anchors went when a write replaced its document.
+ * One row per anchor the stored document no longer holds: the anchor now
+ * holding its text, or none when nothing does. Chains are flattened on write,
+ * so a lookup is one hop. Written in the decision write's transaction.
+ */
+export const caseLawDecisionAnchorRedirects = p.pgTable(
+  "case_law_decision_anchor_redirects",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    /** An anchor an earlier version of the decision's document held. */
+    fromAnchor: p.text("from_anchor").notNull(),
+    /** The current anchor holding its text; null when nothing does. */
+    toAnchor: p.text("to_anchor"),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.decisionId, t.fromAnchor],
+      name: "case_law_decision_anchor_redirects_pk",
+    }),
+    p
+      .foreignKey({
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_decision_anchor_redirects_decision_id_fk",
+      })
+      .onDelete("cascade"),
+    p.check(
+      "case_law_decision_anchor_redirects_anchors_shape",
+      sql`${t.fromAnchor} <> '' AND (${t.toAnchor} IS NULL OR (${t.toAnchor} <> '' AND ${t.toAnchor} <> ${t.fromAnchor}))`,
+    ),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
 /** Exact source identities moved by a reversible decision-alias repair. */
 export const caseLawDecisionAliasMovedIdentities = p.pgTable(
   "case_law_decision_alias_moved_identities",

@@ -1,5 +1,10 @@
 import { Result } from "better-result";
 
+import {
+  type ProtocolChannel,
+  type ProtocolLog,
+  protocolTap,
+} from "../protocol-log";
 import { createLineReader } from "./json-lines";
 import {
   type HarnessSpawnError,
@@ -37,6 +42,8 @@ type StartHarnessProcessOptions<TError> = {
   deadlines: HarnessProcessDeadlines;
   /** Names the process in detached failures, e.g. `claude-cli`. */
   name: string;
+  /** Which protocol the process speaks, and where its lines are logged. */
+  protocol: { channel: ProtocolChannel; log: ProtocolLog };
   /** The failure of a request the harness can no longer answer. */
   unanswered: (reason: "closed" | "timed_out", message: string) => TError;
   /** One JSON value the harness wrote. */
@@ -81,6 +88,7 @@ export const startHarnessProcess = <TId, TError>({
   detached,
   deadlines,
   name,
+  protocol,
   unanswered,
   message,
   violation,
@@ -100,6 +108,10 @@ export const startHarnessProcess = <TId, TError>({
   }
   const tree = spawned.value;
   const { child } = tree;
+  const tap = protocolTap(protocol.log, {
+    channel: protocol.channel,
+    source: `pid=${String(child.pid)}`,
+  });
   const pending = new Map<TId, (result: Result<unknown, TError>) => void>();
   const state = { closed: false, terminating: false };
 
@@ -134,10 +146,9 @@ export const startHarnessProcess = <TId, TError>({
       return;
     }
     onInput(() => {
-      detached(
-        child.stdin.write(`${JSON.stringify(outgoing)}\n`),
-        `${name}.write`,
-      );
+      const line = JSON.stringify(outgoing);
+      tap("out", line);
+      detached(child.stdin.write(`${line}\n`), `${name}.write`);
       detached(child.stdin.flush(), `${name}.flush`);
     });
   };
@@ -146,6 +157,7 @@ export const startHarnessProcess = <TId, TError>({
     if (line.trim() === "") {
       return;
     }
+    tap("in", line);
     const json = Result.try((): unknown => JSON.parse(line));
     if (Result.isError(json)) {
       violation("The harness wrote a line that is not JSON.");
