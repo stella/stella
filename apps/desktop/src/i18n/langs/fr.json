@@ -66,6 +66,10 @@
     "accountWindowTitle": "Connecter un compte",
     "accountTitle": "Connecter ce compte ?",
     "accountSubtitle": "Connectez stella desktop à ce compte et à cette organisation.",
+    "switchWindowTitle": "Changer de compte",
+    "switchTitle": "Passer à un autre compte ?",
+    "switchSubtitle": "stella desktop est connecté à {currentEmail}. Déconnecter ce compte et connecter {email} à la place ?",
+    "switchConfirm": "Déconnecter et connecter",
     "accountEmail": "Compte",
     "organizationName": "Organisation",
     "allow": "Autoriser",
@@ -770,7 +774,9 @@
         "notCompleted": "La connexion n’a pas abouti. Réessayez.",
         "timedOut": "La connexion a pris trop de temps. Réessayez.",
         "unavailable": "Claude Code n’a pas pu être lancé sur cet ordinateur. Réessayez."
-      }
+      },
+      "unknown": "Impossible de vérifier la connexion à Claude Code. Vérifiez à nouveau dans un instant.",
+      "checkAgain": "Vérifier à nouveau"
     },
     "install": {
       "notInstalled": "{name} n’est pas encore installé sur cet ordinateur.",

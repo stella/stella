@@ -118,8 +118,13 @@ pub async fn open_stella_account(
   let linked = crate::account::current(&account).await?;
   if linked.is_none() {
     let (api_base_url, origin) = browser_connect_target(&*state.lock().await)?;
-    return crate::account::open_browser_connection(&app, &api_base_url, &origin)
-      .await
+    return crate::account::open_browser_connection(
+      &app,
+      &api_base_url,
+      &origin,
+      crate::account::LinkIntent::Connect,
+    )
+    .await
       .inspect_err(|error| {
         tracing::warn!(error = %error, web_origin = %origin, "stella web connection did not open");
       });

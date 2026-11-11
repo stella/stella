@@ -26,7 +26,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { textMarkClass } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -480,16 +480,11 @@ const AttentionBar = ({
   return (
     <div className="bg-muted flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-lg border px-3 py-2 text-xs">
       <FilterIcon aria-hidden="true" className="size-3.5 shrink-0" />
-      {/* One line, whatever the width: the full sentence is in the tooltip
-          and stays in the text a screen reader reads. */}
-      <Tooltip>
-        <TooltipTrigger
-          render={<span className="line-clamp-1 min-w-0 flex-1 basis-48" />}
-        >
-          {sentence}
-        </TooltipTrigger>
-        <TooltipPopup className="max-w-80">{sentence}</TooltipPopup>
-      </Tooltip>
+      {/* One line, whatever the width: a cut sentence shows whole on hover,
+          focus or tap, and stays in the text a screen reader reads. */}
+      <TruncatedText className="min-w-0 flex-1 basis-48">
+        {sentence}
+      </TruncatedText>
       {/* The queue's views are quiet; accepting routine claims is the bar's
           one accent. */}
       <div className="flex flex-wrap items-center gap-1">

@@ -115,6 +115,9 @@ const AI_FAILURE_CAN_CLEAR_ON_RETRY = {
   local_runner_limit_reached: false,
   local_runner_unavailable: true,
   local_runner_turn_too_large: false,
+  local_runner_not_reached: true,
+  local_runner_relinked: true,
+  local_runner_restoring: true,
   unknown: true,
 } as const satisfies Record<AIErrorKind, boolean>;
 

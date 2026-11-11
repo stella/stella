@@ -32,6 +32,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { CreateOrganizationDialog } from "@/components/create-organization-dialog";
@@ -138,12 +139,12 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                 {user.name ? (
                   <>
                     <div className="flex min-w-0 items-center gap-1.5">
-                      <BidiText
-                        as="span"
-                        className="min-w-0 truncate text-sm font-medium"
+                      <TruncatedText
+                        className="text-sm font-medium"
+                        render={<BidiText as="span" />}
                       >
                         {user.name}
-                      </BidiText>
+                      </TruncatedText>
                       {role && (
                         <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
                           {t(`organization.roles.${role}`)}
@@ -151,24 +152,27 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                       )}
                     </div>
                     {user.email && (
-                      <BidiText
-                        as="span"
-                        className="text-muted-foreground truncate text-xs"
-                        direction="ltr"
+                      <TruncatedText
+                        className="text-muted-foreground text-xs"
+                        render={<BidiText as="span" direction="ltr" />}
                       >
                         {user.email}
-                      </BidiText>
+                      </TruncatedText>
                     )}
                   </>
                 ) : (
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <BidiText
-                      as="span"
-                      className="min-w-0 truncate text-sm font-medium"
-                      direction={user.email ? "ltr" : "auto"}
+                    <TruncatedText
+                      className="text-sm font-medium"
+                      render={
+                        <BidiText
+                          as="span"
+                          direction={user.email ? "ltr" : "auto"}
+                        />
+                      }
                     >
                       {user.email || t("common.user")}
-                    </BidiText>
+                    </TruncatedText>
                     {role && (
                       <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
                         {t(`organization.roles.${role}`)}
@@ -396,9 +400,9 @@ const OrganizationMenuSection = ({
               value={organization.id}
             >
               <span className="flex min-w-0 items-center gap-1.5">
-                <BidiText as="span" className="min-w-0 truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {organization.name}
-                </BidiText>
+                </TruncatedText>
                 {organization.id === activeOrganization.id && (
                   <OrganizationRoleBadge role={role} />
                 )}

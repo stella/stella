@@ -18,6 +18,7 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
@@ -217,9 +218,9 @@ export const RunLauncher = ({
                 checked={selectedEntityIds.includes(entity.id)}
                 onCheckedChange={(checked) => toggleEntity(entity.id, checked)}
               />
-              <span className="truncate text-sm font-normal" dir="auto">
+              <TruncatedText className="text-sm font-normal" dir="auto">
                 {entity.name}
-              </span>
+              </TruncatedText>
             </Label>
           ))}
         </div>

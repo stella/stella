@@ -252,6 +252,29 @@ const COURT_WEIGHT_SEED_BY_JURISDICTION = {
       },
     ],
   },
+  // The STF is the constitutional court and the apex of the system; the
+  // four superior courts head their branches (common, labour, electoral,
+  // military). The second instance is the state, federal regional, labour
+  // regional, electoral regional and state military courts.
+  BRA: {
+    type: "ranked-by-name",
+    rows: [
+      {
+        courtPattern: "^stf$|^supremo tribunal federal$",
+        ...RANK.constitutional,
+      },
+      {
+        courtPattern:
+          "^(stj|tst|tse|stm)$|^superior tribunal (de justiça|militar)$|^tribunal superior (do trabalho|eleitoral)$",
+        ...RANK.supreme,
+      },
+      {
+        courtPattern:
+          "^(tj[a-z]{2}|tjdft|tjm[a-z]{2}|trf[1-6]|trt([1-9]|1[0-9]|2[0-4])|tre-?[a-z]{2})$|^tribunal de justiça |^tribunal regional (federal|do trabalho|eleitoral) ",
+        ...RANK.appeal,
+      },
+    ],
+  },
 } as const satisfies Record<CaseLawJurisdiction, CourtWeightSeedDisposition>;
 
 const seededPatterns = (

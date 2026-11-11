@@ -1876,6 +1876,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "RUN_ID",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
+  // The script test runner's scan preload logs directory scans here.
+  "SCRIPT_TEST_SCAN_LOG",
   "SHA",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
@@ -1993,6 +1995,19 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_RESOLVER_ERROR",
   "TEST_UPSTREAM_BLOCKED",
   "WXT_STELLA_ORIGINS",
+  // The Outlook add-in build bakes these origins, the provider name, support
+  // link and version into its bundle and manifest
+  // (apps/outlook/scripts/render-manifest.ts), records the release's upload
+  // and frame-ancestor origins, and its local server reads its port.
+  "STELLA_API_ORIGIN",
+  "STELLA_OUTLOOK_FRAME_ANCESTORS",
+  "STELLA_OUTLOOK_PORT",
+  "STELLA_OUTLOOK_VERSION",
+  "STELLA_PROVIDER_NAME",
+  "STELLA_SUPPORT_URL",
+  "STELLA_TASKPANE_ORIGIN",
+  "STELLA_UPLOAD_ORIGIN",
+  "STELLA_WEB_ORIGIN",
 ]);
 
 export const AMBIENT_ENV_KEYS = new Set([

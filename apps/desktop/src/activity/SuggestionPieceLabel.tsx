@@ -1,3 +1,5 @@
+import { TruncatedText } from "@stll/ui/truncated-text";
+
 /**
  * A suggestion piece's one-line label: the matter, then the piece's own time.
  * The time never shrinks, so a narrow piece ellipsises the matter and keeps
@@ -15,9 +17,12 @@ export const SuggestionPieceLabel = ({
   range: string;
 }) => (
   <span className="flex min-w-0 items-center" data-suggestion-piece-label="">
-    <bdi className="min-w-0 truncate" data-part="matter">
+    {/* The block carries the whole label as its accessible name, and the
+        calendar shows the piece in full on hover, so a cut matter adds no
+        hint. */}
+    <TruncatedText data-part="matter" hint={false} render={<bdi />}>
       {matter}
-    </bdi>
+    </TruncatedText>
     <span className="shrink-0 whitespace-nowrap tabular-nums" data-part="time">
       {LEADING_SEPARATOR}
       <span className="@max-[120px]:hidden" data-part="range">

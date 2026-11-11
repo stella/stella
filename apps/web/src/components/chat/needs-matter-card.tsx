@@ -16,6 +16,7 @@ import {
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { SearchField } from "@stll/ui/search-field";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import { useChatMatters } from "@/components/chat/chat-matters-context";
@@ -224,9 +225,13 @@ const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
       <DocumentThumbnail />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {fileName && (
-          <p className="truncate text-xs font-semibold" dir="auto">
+          <TruncatedText
+            className="text-xs font-semibold"
+            dir="auto"
+            render={<p />}
+          >
             {fileName}
-          </p>
+          </TruncatedText>
         )}
         {snippet ? (
           <MarkdownPreview
@@ -434,12 +439,12 @@ const MatterPickerSection = ({
                       matter={{ id: m.id, color: m.color }}
                     />
                     {/* Menu rows name their item in regular weight. */}
-                    <BidiText
-                      as="span"
-                      className="min-w-0 flex-1 truncate font-normal"
+                    <TruncatedText
+                      className="flex-1 font-normal"
+                      render={<BidiText as="span" />}
                     >
                       {m.name}
-                    </BidiText>
+                    </TruncatedText>
                     {m.client?.displayName && (
                       <BidiText
                         as="span"
@@ -505,9 +510,12 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
     <>
       <DocumentThumbnail />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <BidiText as="span" className="truncate text-xs font-semibold">
+        <TruncatedText
+          className="text-xs font-semibold"
+          render={<BidiText as="span" />}
+        >
           {output.fileName}
-        </BidiText>
+        </TruncatedText>
         {canOpen && (
           <span className="text-muted-foreground text-2xs inline-flex items-center gap-1">
             {t("chat.createDocument.openInFolio")}

@@ -1008,6 +1008,7 @@
       "COMPOSER_SEND_BUTTON_CLASS",
       "COMPOSER_TEXT_CLASS",
       "ComposerPicker",
+      "ComposerPlaceholder",
       "ComposerStatusRow"
     ],
     "./composer-tokens": [
@@ -1969,6 +1970,7 @@
     "ColorPickerContent.presentation": ["inline", "popover"],
     "ComboboxTrigger.variant": ["field", "plain"],
     "CommandItem.size": ["default", "row"],
+    "ComposerPlaceholder.stature": ["compact", "large"],
     "CourtBadge.size": ["default", "inline"],
     "CourtBadge.weight": ["dashed", "outline", "solid", "tinted"],
     "DatePickerPopover.layer": [

@@ -18,6 +18,7 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "../components/tooltip";
+import { TruncatedText } from "../components/truncated-text";
 import { resolveMatterColor } from "../lib/matter-colors";
 import { cn } from "../lib/utils";
 import {
@@ -432,11 +433,11 @@ export const DayCalendar = ({
           data-slot="day-calendar-column-header"
           key={column.id}
         >
-          <span className="min-w-0 shrink-0 truncate">{column.label}</span>
+          <TruncatedText className="shrink-0">{column.label}</TruncatedText>
           {column.badge === undefined ? null : (
-            <span className="bg-muted text-muted-foreground text-2xs min-w-0 truncate rounded-full px-2 py-0.5">
+            <TruncatedText className="bg-muted text-muted-foreground text-2xs rounded-full px-2 py-0.5">
               {column.badge}
-            </span>
+            </TruncatedText>
           )}
         </header>
       ))}
@@ -659,24 +660,25 @@ const DayCalendarBlockView = ({
     blockSize < DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX ? null : (
       <>
         {/* On one line the caption gives way first, then the title ends in
-            an ellipsis rather than being cut at the block's edge. */}
-        <span
-          className={cn(
-            "min-w-0 truncate font-medium",
-            oneLine ? "shrink" : "shrink-0",
-          )}
+            an ellipsis rather than being cut at the block's edge. The block
+            carries its whole text as its accessible name, so a cut line adds
+            no hint. */}
+        <TruncatedText
+          className={cn("font-medium", oneLine ? "shrink" : "shrink-0")}
+          hint={false}
         >
           {block.title}
-        </span>
+        </TruncatedText>
         {block.caption === undefined ? null : (
-          <span
+          <TruncatedText
             className={cn(
-              "text-muted-foreground min-w-0 truncate tabular-nums",
+              "text-muted-foreground tabular-nums",
               oneLine && "shrink-[999]",
             )}
+            hint={false}
           >
             {block.caption}
-          </span>
+          </TruncatedText>
         )}
       </>
     );

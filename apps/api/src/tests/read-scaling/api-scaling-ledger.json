@@ -753,10 +753,6 @@
       "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
-      "id": "GET /v1/sharepoint/drive/root",
-      "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
-    },
-    {
       "id": "GET /v1/sharepoint/oauth/callback",
       "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
