@@ -1801,7 +1801,7 @@ export const installPgliteFindingDecisionHistory = async (
     db,
     migrationPath: nodePath.join(
       DRIZZLE_DIR,
-      "20261111150000_document_review_finding_decision_trigger",
+      "20261111230000_document_review_finding_decision_trigger",
       "migration.sql",
     ),
   });

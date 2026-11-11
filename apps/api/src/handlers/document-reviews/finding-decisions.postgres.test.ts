@@ -251,7 +251,7 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
         await db.transaction(async (tx) => {
           for (const folder of [
             "20261028130100_document_review_finding_decision_history",
-            "20261111150000_document_review_finding_decision_trigger",
+            "20261111230000_document_review_finding_decision_trigger",
           ]) {
             for (const statement of await migrationIn(folder, schema)) {
               await tx.execute(sql.raw(statement));
