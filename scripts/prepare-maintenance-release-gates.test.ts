@@ -17,6 +17,7 @@ import { repoRelativePath } from "@stll/portable-path";
 import {
   type CutGateRunner,
   cutMaintenanceRelease,
+  IncompleteReleaseListingError,
   type MaintenanceCutEffects,
   MaintenanceReleaseError,
   type PreviousRelease,
@@ -178,6 +179,7 @@ const runCut = async (
   root: string,
   script: GateScript,
   args: readonly string[] = [],
+  pulls: unknown = [],
   previousRelease: PreviousRelease = PUBLISHED_PREVIOUS,
 ): Promise<CutRun> => {
   const before = snapshot(root);
@@ -211,7 +213,7 @@ const runCut = async (
     assertCleanWorktree: () => undefined,
     resolveHeadSha: () => BASE_SHA,
     latestFinalVersion: () => "1.2.3",
-    assertNoOpenRelease: () => undefined,
+    listOpenPullRequests: () => pulls,
     openReleasePullRequest: () => undefined,
     runGate,
     queueHistoryWarning: () => null,
@@ -345,7 +347,7 @@ describe("the maintenance cut checks the tag gates first", () => {
       '{\n  "v1.2.3": "2026-02-01T00:00:00Z"\n}\n',
     );
 
-    const run = await runCut(root, {}, [], { kind: "superseded" });
+    const run = await runCut(root, {}, [], [], { kind: "superseded" });
 
     expect(run.error).toBeNull();
     expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
@@ -370,7 +372,7 @@ describe("the maintenance cut checks the tag gates first", () => {
       write(root, "docs/changelog/v1.2.4.md", "# Maintenance release\n");
       const before = snapshot(root);
 
-      const run = await runCut(root, {}, [], previousRelease);
+      const run = await runCut(root, {}, [], [], previousRelease);
 
       expect(run.error).toBeInstanceOf(MaintenanceReleaseError);
       expect(String(run.error)).toContain("v1.2.4 gained a final tag");
@@ -383,7 +385,7 @@ describe("the maintenance cut checks the tag gates first", () => {
     const root = releaseTree("1.2.3", "v1.2.3");
     const before = snapshot(root);
 
-    const run = await runCut(root, {}, [], PUBLISHED_PREVIOUS);
+    const run = await runCut(root, {}, [], [], PUBLISHED_PREVIOUS);
 
     expect(run.npmArguments).toEqual(["--ref", "v1.2.3"]);
     expect(run.error).toBeInstanceOf(MaintenanceReleaseError);
@@ -397,7 +399,7 @@ describe("the maintenance cut checks the tag gates first", () => {
   test("an unpromoted previous final is skipped for the older promoted release", async () => {
     const root = releaseTree("1.2.3", "v1.2.3");
 
-    const run = await runCut(root, {}, [], { kind: "unpromoted" });
+    const run = await runCut(root, {}, [], [], { kind: "unpromoted" });
 
     expect(run.error).toBeNull();
     expect(run.npmArguments).toEqual(["--ref", "v1.2.2"]);
@@ -421,7 +423,7 @@ describe("the maintenance cut checks the tag gates first", () => {
       '{\n  "v1.2.2": null\n}\n',
     );
 
-    const run = await runCut(root, {}, [], { kind: "unpromoted" });
+    const run = await runCut(root, {}, [], [], { kind: "unpromoted" });
 
     expect(run.error instanceof Error ? run.error.message : "").toContain(
       "records no promoted release below 1.2.4",
@@ -599,3 +601,47 @@ describe("a command gate", () => {
     ).toBe("exit 3");
   });
 });
+
+test("the cut names every blocking release PR and its head before running gates", async () => {
+  const proof = await runCut(
+    releaseTree(),
+    {},
+    [],
+    [
+      { number: 123, title: "chore: release v1.2.4", headRefOid: BASE_SHA },
+      {
+        number: 456,
+        title: "chore: release v1.2.5",
+        headRefOid: "d".repeat(40),
+      },
+    ],
+  );
+  expect(proof.error).toBeInstanceOf(MaintenanceReleaseError);
+  expect(String(proof.error)).toContain(
+    "#123 chore: release v1.2.4 (head ccccccc); land it first (merge-bar 123)",
+  );
+  expect(String(proof.error)).toContain(
+    "#456 chore: release v1.2.5 (head ddddddd); land it first (merge-bar 456)",
+  );
+  expect(proof.gatesRun).toEqual([]);
+  expect(proof.versioned).toBe(0);
+});
+
+for (const pulls of [
+  null,
+  {},
+  [{ title: "chore: release v1.2.4" }],
+  Array.from({ length: 500 }, () => ({
+    number: 123,
+    title: "fix: example",
+    headRefOid: BASE_SHA,
+  })),
+]) {
+  test(`an incomplete listing has a distinct typed refusal (${JSON.stringify(pulls).slice(0, 60)})`, async () => {
+    const proof = await runCut(releaseTree(), {}, [], pulls);
+    expect(proof.error).toBeInstanceOf(IncompleteReleaseListingError);
+    expect(String(proof.error)).toContain("listing is incomplete");
+    expect(String(proof.error)).not.toContain("land it first");
+    expect(proof.gatesRun).toEqual([]);
+  });
+}
