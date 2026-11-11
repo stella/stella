@@ -124,6 +124,9 @@ describe("party screening", () => {
       "Nordwind Logistik mbH",
       "Nordwind Logistik OHG",
       "Nordwind Logistik e.K.",
+      "Nordwind Logistik PartG mbB",
+      "Nordwind Logistik PartGmbB",
+      "Nordwind Logistik PartG",
       "Nordwind Logistik s.r.o.",
     ]) {
       expect(refs({ name, entityType: "organisation" })).toContain("nordwind");
