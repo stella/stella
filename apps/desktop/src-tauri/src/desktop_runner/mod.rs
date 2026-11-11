@@ -305,7 +305,10 @@ fn journal_backing(namespace: &str) -> JournalBacking {
 /// Where the host keeps its holders and run folders, under the app's data.
 const HOLDER_DIRECTORY: &str = "agent-holder";
 const RUNS_DIRECTORY: &str = "agent-runs";
-const PACKAGE_CACHE_DIRECTORY: &str = "agent-package-cache";
+/// Where every run on this computer once shared one cache. Each chat has its
+/// own beside its folder now; what is left here is removed once no holder of
+/// an earlier version, whose runs may still use it, is left.
+const RETIRED_PACKAGE_CACHE_DIRECTORY: &str = "agent-package-cache";
 
 /// The folders on this computer every run writes to, which a skill folder must
 /// stay out of.
@@ -315,7 +318,7 @@ pub(crate) fn run_folders_on_this_computer() -> Vec<std::path::PathBuf> {
     .map(|data| {
       vec![
         data.join(RUNS_DIRECTORY),
-        data.join(PACKAGE_CACHE_DIRECTORY),
+        data.join(RETIRED_PACKAGE_CACHE_DIRECTORY),
       ]
     })
     .unwrap_or_default()
@@ -347,9 +350,9 @@ fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
         start_timeout: Duration::from_secs(20),
         shutdown_grace: Duration::from_secs(10),
         backoff: ReconnectBackoff::DEFAULT,
+        retired_dirs: vec![data.join(RETIRED_PACKAGE_CACHE_DIRECTORY)],
       },
       workspaces: data.join(RUNS_DIRECTORY),
-      package_cache: data.join(PACKAGE_CACHE_DIRECTORY),
       unreadable: read_limits::unreadable_paths(&data, dirs::home_dir().as_deref()),
       probe_interval: sidecar_host::PROBE_INTERVAL,
     },

@@ -191,7 +191,6 @@ impl Place {
       HostSettings {
         sidecar: self.fixture.settings_for("1.4.0", self.fixture.stand_in()),
         workspaces: self.workspaces(),
-        package_cache: self.package_cache(),
         unreadable: vec![self.fixture.root.join("home/.ssh")],
         probe_interval,
       },
@@ -216,10 +215,6 @@ impl Place {
 
   fn workspaces(&self) -> PathBuf {
     self.fixture.root.join("runs")
-  }
-
-  fn package_cache(&self) -> PathBuf {
-    self.fixture.root.join("agent-package-cache")
   }
 
   /// Every message the holder read, of one type.
@@ -422,10 +417,12 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
     start["workspaceDir"],
     place.workspaces().join(&id).to_str().unwrap()
   );
-  assert_eq!(start["cacheDir"], place.package_cache().to_str().unwrap());
-  assert!(place.package_cache().is_dir());
-  // No chat's folder is readable but for the run's own, which the harness
-  // re-opens; the app's own paths follow.
+  // The chat's own cache, beside its folder, never one other chats share.
+  let cache = place.workspaces().join(format!("{id}.cache"));
+  assert_eq!(start["cacheDir"], cache.to_str().unwrap());
+  assert!(cache.is_dir());
+  // No chat's folder or cache is readable but for the run's own, which
+  // the harness re-opens; the app's own paths follow.
   assert_eq!(
     start["unreadablePaths"],
     json!([
@@ -433,12 +430,9 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
       place.fixture.root.join("home/.ssh").to_str().unwrap(),
     ])
   );
-  assert!(
-    place
-      .workspaces()
-      .join(&id)
-      .starts_with(start["unreadablePaths"][0].as_str().unwrap())
-  );
+  let chats = std::path::Path::new(start["unreadablePaths"][0].as_str().unwrap());
+  assert!(place.workspaces().join(&id).starts_with(chats));
+  assert!(cache.starts_with(chats));
   assert_eq!(
     start["toolPath"],
     json!([place

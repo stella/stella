@@ -1384,8 +1384,9 @@ const commandReads = (filesystem: SandboxFilesystem, target: string) => {
 describe("Claude Code full auto reads", () => {
   /**
    * The desktop's data folder as it lays it out: one folder per chat under
-   * `agent-runs`, the package cache, managed tools and the CLI's own
-   * configuration directory, plus a home folder with a credential store.
+   * `agent-runs`, with its cache and checkpoints beside it, managed tools
+   * and the CLI's own configuration directory, plus a home folder with a
+   * credential store.
    */
   const desktopLayout = () => {
     const harness = harnessFor("tool_calls");
@@ -1402,7 +1403,7 @@ describe("Claude Code full auto reads", () => {
       runs,
       own,
       other,
-      cache: path.join(data, "agent-package-cache"),
+      cache: `${own}.cache`,
       tools: path.join(data, "harness", "bun", "1.4.4", "package", "bin"),
       ssh: path.join(home, ".ssh"),
     };
@@ -1459,9 +1460,15 @@ describe("Claude Code full auto reads", () => {
     expect(readable(path.join(layout.own, "brief.docx"))).toBe(true);
     expect(readable(path.join(layout.other, "brief.docx"))).toBe(false);
     expect(readable(layout.other)).toBe(false);
-    // What the desktop keeps beside each chat's folder.
-    expect(readable(`${layout.other}.used`)).toBe(false);
+    // What the desktop keeps beside each chat's folder: the run's own cache
+    // reads, another chat's cache, checkpoints and record do not.
     expect(readable(path.join(layout.cache, "bun", "x.tgz"))).toBe(true);
+    expect(readable(path.join(`${layout.other}.cache`, "bun", "x.tgz"))).toBe(
+      false,
+    );
+    expect(readable(path.join(`${layout.other}.checkpoints`, "1"))).toBe(false);
+    expect(readable(path.join(`${layout.own}.checkpoints`, "1"))).toBe(false);
+    expect(readable(`${layout.other}.used`)).toBe(false);
     expect(readable(path.join(layout.tools, "bun"))).toBe(true);
     expect(
       readable(
@@ -1527,10 +1534,18 @@ describe("Claude Code full auto reads", () => {
         // Misplaced on purpose: a cache and tool directories that hold the
         // chat folders, and one that is the app's data itself.
         cacheDir: layout.runs,
-        toolPath: [layout.data, layout.runs, path.join(layout.other, "bin")],
+        toolPath: [
+          layout.data,
+          layout.runs,
+          path.join(layout.other, "bin"),
+          `${layout.other}.cache`,
+        ],
         unreadablePaths: [layout.runs, layout.data],
       }),
     );
+    expect(
+      commandReads(filesystem, path.join(`${layout.other}.cache`, "a.tgz")),
+    ).toBe(false);
     expect(commandReads(filesystem, path.join(layout.own, "a.txt"))).toBe(true);
     expect(commandReads(filesystem, path.join(layout.other, "a.txt"))).toBe(
       false,

@@ -70,8 +70,9 @@ export type HarnessTurnInput = {
   /** Absolute directory the harness runs in and may write to. */
   workspaceDir: string;
   /**
-   * Absolute stella-owned directory for package-manager caches, shared by
-   * the computer's runs; writable inside every harness sandbox.
+   * Absolute stella-owned cache directory of the run's chat, beside its
+   * folder: package managers and `XDG_CACHE_HOME` tools write there, writable
+   * inside every harness sandbox and never shared with another chat.
    */
   cacheDir: string;
   /**

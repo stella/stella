@@ -310,7 +310,7 @@ export const sidecarHostMessageSchema = v.variant("type", [
     ...harnessLaunchEntries,
     /** The directory the harness runs in and may write to. */
     workspaceDir: absolutePathSchema,
-    /** The computer's package-manager cache, writable in every sandbox. */
+    /** The chat's own cache folder, writable in every sandbox. */
     cacheDir: absolutePathSchema,
     /**
      * What the run's sandboxed commands may not read, apart from the paths
