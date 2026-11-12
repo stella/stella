@@ -397,6 +397,16 @@ const CLAUDE_CONTROL_REQUEST_FIELDS: Readonly<
   interrupt: {},
   get_usage: { skip_behaviors: BOOLEAN },
   mcp_set_servers: { servers: SIZE },
+  set_permission_mode: {
+    mode: vocabulary([
+      "default",
+      "acceptEdits",
+      "bypassPermissions",
+      "plan",
+      "dontAsk",
+      "auto",
+    ]),
+  },
 };
 
 const CLAUDE_USAGE_WINDOW = object({ utilization: NUMBER, resets_at: INSTANT });
