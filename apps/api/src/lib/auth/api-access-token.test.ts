@@ -174,6 +174,14 @@ describe("which routes an API access token opens", () => {
     ).toEqual([]);
   });
 
+  test("the mobile app asks for no administrative consent", () => {
+    expect(
+      MOBILE_SCOPES.filter((scope) =>
+        ["stella:admin_read", "stella:admin_write"].includes(scope),
+      ),
+    ).toEqual([]);
+  });
+
   test("a new document version needs the documents write scope", () => {
     const route = "/v1/entities/:workspaceId/upload-version";
     expect(
@@ -234,6 +242,58 @@ describe("which routes an API access token opens", () => {
           route,
           scopes: ["stella:read", "stella:contacts_write"],
         }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
+  test("a matter's settings and members change with the matters scope", () => {
+    const admit = (method: string, route: string, scopes: string[]) =>
+      admitApiAccessTokenRoute({ method, route, scopes });
+    for (const route of [
+      "/v1/workspaces/:workspaceId",
+      "/v1/workspaces/:workspaceId/contacts",
+    ]) {
+      expect(admit("GET", route, ["stella:read"])).toEqual({
+        admitted: true,
+      });
+    }
+    for (const [method, route] of [
+      ["POST", "/v1/workspaces/:workspaceId"],
+      ["DELETE", "/v1/workspaces/:workspaceId"],
+      ["POST", "/v1/workspaces/:workspaceId/archive"],
+      ["POST", "/v1/workspaces/:workspaceId/unarchive"],
+      ["POST", "/v1/workspaces/:workspaceId/duplicate"],
+      ["PUT", "/v1/workspaces/:workspaceId/contacts"],
+      ["DELETE", "/v1/workspaces/:workspaceId/contacts/:workspaceContactId"],
+      // Who works on the matter is a matter edit, not an admin one.
+      ["PUT", "/v1/workspaces/:workspaceId/members"],
+      ["DELETE", "/v1/workspaces/:workspaceId/members/:userId"],
+    ] as const) {
+      expect(admit(method, route, ["stella:read"])).toEqual({
+        admitted: false,
+        reason: "scope",
+      });
+      expect(admit(method, route, ["stella:admin_write"])).toEqual({
+        admitted: false,
+        reason: "scope",
+      });
+      expect(admit(method, route, ["stella:matters_write"])).toEqual({
+        admitted: true,
+      });
+    }
+    // The matter's other settings stay closed: its correspondence address,
+    // anonymization terms and workflow runs.
+    for (const [method, route] of [
+      ["POST", "/v1/workspaces/:workspaceId/correspondence/address"],
+      ["PUT", "/v1/workspaces/:workspaceId/anonymization-terms"],
+      ["POST", "/v1/workspaces/:workspaceId/workflow/start"],
+    ] as const) {
+      expect(
+        admit(method, route, [
+          "stella:read",
+          "stella:matters_write",
+          "stella:admin_write",
+        ]),
       ).toEqual({ admitted: false, reason: "route" });
     }
   });

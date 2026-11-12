@@ -32,7 +32,10 @@ const MatterScreen = () => {
   );
 };
 
-/** The matter's "+": a menu of what can be added to it. */
+/**
+ * The matter's Details, its own settings: name, number, client, team and
+ * parties; and its "+", a menu of what can be added to it.
+ */
 const AddMenu = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations("matter");
   const router = useRouter();
@@ -41,6 +44,16 @@ const AddMenu = ({ workspaceId }: { workspaceId: string }) => {
 
   return (
     <Stack.Toolbar placement="right">
+      <Stack.Toolbar.Button
+        onPress={() => {
+          router.push({
+            pathname: "/matter/[workspaceId]/info",
+            params: { workspaceId },
+          });
+        }}
+      >
+        <Stack.Toolbar.Label>{t("details")}</Stack.Toolbar.Label>
+      </Stack.Toolbar.Button>
       <Stack.Toolbar.Menu>
         {barGlyph("plus")}
         <Stack.Toolbar.Label>{t("add")}</Stack.Toolbar.Label>

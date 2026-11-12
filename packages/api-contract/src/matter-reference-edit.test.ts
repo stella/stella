@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { resolveReferenceEdit } from "@/components/workspaces/matter-metadata-sheet.logic";
+import { resolveReferenceEdit } from "./matter-reference-edit";
 
 describe("resolving a matter reference edit", () => {
   it("discards an edit that only changes surrounding whitespace", () => {
