@@ -5429,8 +5429,6 @@
   "search": {
     "aiRefine": "تحسين الاستعلام بالذكاء الاصطناعي",
     "caseLawEmptyState": "ابدأ الكتابة للبحث في الأحكام القضائية.",
-    "caseLawMatchingDecisions": "{count, plural, zero {# قرارات مطابقة} one {قرار مطابق واحد} two {قراران مطابقان} few {# قرارات مطابقة} many {# قرارًا مطابقًا} other {# قرار مطابق}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ قرارات مطابقة} one {#+ قرار مطابق} two {#+ قرار مطابق} few {#+ قرارات مطابقة} many {#+ قرارًا مطابقًا} other {#+ قرار مطابق}}",
     "chatCoveragePartial": "لم يتم البحث في كل الدردشات بالكامل.",
     "continueInChat": "المتابعة في الدردشة",
     "dateFrom": "من",

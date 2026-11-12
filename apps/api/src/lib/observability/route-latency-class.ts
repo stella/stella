@@ -753,6 +753,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/search": "crud",
   "POST /v1/search-history": "crud",
   "POST /v1/search-history/import": "crud",
+  "POST /v1/search/case-law": "search",
   "POST /v1/search/facets": "crud",
   "POST /v1/search/preview": "crud",
   "POST /v1/search/refine": "ai",

@@ -5429,8 +5429,6 @@
   "search": {
     "aiRefine": "Improve query with AI",
     "caseLawEmptyState": "Start typing to search court decisions.",
-    "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",
     "chatCoveragePartial": "Not every chat was searched in full.",
     "continueInChat": "Continue in chat",
     "dateFrom": "From",
