@@ -6070,12 +6070,9 @@ jobs:
           STELLA_VERIFY: prepare
         run: bun scripts/ci-generated-sources.ts prepare
 
-      # A turn its computer does not pick up fails after 4 s instead of 2 min.
       - name: Start docker stack and API server
         id: e2e-stack
         uses: ./.github/actions/setup-e2e-stack
-        env:
-          E2E_DESKTOP_RUNNER_PICKUP_MS: "4000"
         with:
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}

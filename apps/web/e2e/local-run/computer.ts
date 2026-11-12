@@ -1,4 +1,4 @@
-import type { APIRequestContext, Locator, Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
@@ -142,12 +142,14 @@ export const filesWritten = (log: ReturnType<typeof agentLog>) =>
     return parsed.success ? [parsed.output.wrote] : [];
   });
 
-/** The raw messages the agent received since `log` started. */
+/** The messages the agent received since `log` started, as JSON text. */
 export const messagesReceived = (log: ReturnType<typeof agentLog>) =>
   log
     .entries()
     .flatMap((entry) =>
-      typeof entry["received"] === "string" ? [entry["received"]] : [],
+      entry["received"] === undefined
+        ? []
+        : [JSON.stringify(entry["received"])],
     );
 
 // ── The chat page ──────────────────────────────────────────────────────
@@ -290,9 +292,22 @@ export const send = async (page: Page, text: string) => {
   await page.getByRole("button", { name: "Send message" }).click();
 };
 
-/** The newest answer in the transcript. */
-export const lastAnswer = (page: Page): Locator =>
-  transcript(page).locator("[data-chat-message-id]").last();
+/**
+ * Open every collapsed part of the transcript (an answer's steps, then each
+ * step's details) and return how many opened.
+ */
+export const expandTranscript = async (page: Page) => {
+  const collapsed = transcript(page).locator('button[aria-expanded="false"]');
+  let opened = 0;
+  // Opening a group reveals the rows inside it, so read again after each.
+  for (let count = await collapsed.count(); count > 0;) {
+    // await-in-loop: each click changes what is collapsed.
+    await collapsed.first().click();
+    opened += 1;
+    count = await collapsed.count();
+  }
+  return opened;
+};
 
 export const stopButton = (page: Page) =>
   page.getByRole("button", { name: "Stop", exact: true });

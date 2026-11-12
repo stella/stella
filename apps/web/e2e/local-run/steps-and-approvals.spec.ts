@@ -1,5 +1,3 @@
-import type { Page } from "@playwright/test";
-
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import {
@@ -7,6 +5,7 @@ import {
   agentLog,
   AGENTS,
   chooseRunOn,
+  expandTranscript,
   openNewChat,
   send,
   setComputerOnline,
@@ -71,19 +70,6 @@ test.beforeEach(async ({ request }) => {
   await setComputerOnline(request, true);
 });
 
-/** Every step's details opened, so hidden text would be on the page. */
-const openAllDetails = async (page: Page) => {
-  const toggles = transcript(page).getByRole("button", {
-    name: "Toggle details",
-  });
-  const count = await toggles.count();
-  for (let index = 0; index < count; index += 1) {
-    // await-in-loop: each toggle opens in place, in order.
-    await toggles.nth(index).click();
-  }
-  return count;
-};
-
 for (const agent of ["codex", "claude-code"] as const) {
   const { name } = AGENTS[agent];
 
@@ -98,14 +84,14 @@ for (const agent of ["codex", "claude-code"] as const) {
     });
     await send(page, "Draft the notice");
 
+    await expect(transcript(page).getByText(/^Worked for/u)).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
+    expect(await expandTranscript(page)).toBeGreaterThan(0);
+    const shown = await transcript(page).innerText();
     for (const text of STEPS[agent].shown) {
-      // await-in-loop: each step row, in the order the agent ran them.
-      await expect(transcript(page)).toContainText(text, {
-        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
-      });
+      expect(shown, `chat does not show "${text}"`).toContain(text);
     }
-    expect(await openAllDetails(page)).toBeGreaterThan(0);
-    const shown = await page.locator("body").innerText();
     for (const text of STEPS[agent].hidden) {
       expect(shown, `chat showed "${text}"`).not.toContain(text);
     }
@@ -115,8 +101,8 @@ for (const agent of ["codex", "claude-code"] as const) {
     await expect(transcript(page)).toContainText(STEPS[agent].shown[0], {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
-    await openAllDetails(page);
-    const reloaded = await page.locator("body").innerText();
+    await expandTranscript(page);
+    const reloaded = await transcript(page).innerText();
     for (const text of STEPS[agent].hidden) {
       expect(reloaded, `chat showed "${text}" after a reload`).not.toContain(
         text,

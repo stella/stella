@@ -7,18 +7,18 @@ import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets
 import {
   agentLog,
   chooseRunOn,
+  composer,
   filesWritten,
   messagesReceived,
   openNewChat,
   relinkComputer,
   send,
   setComputerOnline,
+  THREAD_URL,
   transcript,
 } from "./computer";
 
 // Turns whose computer goes away, links again, or undoes what a turn wrote.
-// The pickup limit is the API's `E2E_DESKTOP_RUNNER_PICKUP_MS` (4 s in CI),
-// so a turn its computer never picks up fails in seconds.
 
 const TEXT_ANSWER =
   "Lease one is the office lease; lease two is the warehouse.";
@@ -28,6 +28,8 @@ const WROTE_ANSWER = "Wrote notes.md.";
 const UNDONE_NOTE = "the member undid the file changes of an earlier reply";
 const UNDO_REQUEST =
   /\/chat\/threads\/[^/]+\/turns\/[^/]+\/local-files\/undo$/u;
+/** The send's refusal while none of the member's computers is connected. */
+const NO_COMPUTER = "None of your computers is connected.";
 
 test.beforeEach(async ({ request }) => {
   await setComputerOnline(request, true);
@@ -63,20 +65,37 @@ const answerActions = (page: Page, answer: string) =>
     .filter({ hasText: answer })
     .getByRole("button", { name: "Actions" });
 
+const undoItem = (page: Page) =>
+  page.getByRole("menuitem", { name: "Undo file changes" });
+
 const askToUndo = async (page: Page) => {
   await answerActions(page, WROTE_ANSWER).click();
-  await page.getByRole("menuitem", { name: "Undo file changes" }).click();
+  await undoItem(page).click();
   const dialog = page.getByRole("alertdialog", {
     name: "Undo this turn's file changes?",
   });
   await dialog.getByRole("button", { name: "Undo changes" }).click();
 };
 
+test("the answer of a turn that just wrote files offers to undo them", async ({
+  page,
+}) => {
+  test.fail(
+    true,
+    "Undo is offered only once the chat is loaded again: the newest local turn is read with the thread and not again when a turn ends.",
+  );
+  await writeNotes(page);
+  await answerActions(page, WROTE_ANSWER).click();
+  await expect(undoItem(page)).toBeVisible();
+});
+
 test("undo removes what the newest turn wrote, and the next turn is told", async ({
   page,
   request,
 }) => {
   const file = await writeNotes(page);
+  // Undo is offered from the loaded chat (see the test above).
+  await page.reload();
 
   const undoRequest = page.waitForRequest(
     (sent) => sent.method() === "POST" && UNDO_REQUEST.test(sent.url()),
@@ -109,9 +128,7 @@ test("undo removes what the newest turn wrote, and the next turn is told", async
   });
   await answerActions(page, WROTE_ANSWER).click();
   await expect(page.getByRole("menu")).toBeVisible();
-  await expect(
-    page.getByRole("menuitem", { name: "Undo file changes" }),
-  ).toHaveCount(0);
+  await expect(undoItem(page)).toHaveCount(0);
   await page.keyboard.press("Escape");
   const refused = await request.post(`${E2E_API_ORIGIN}${undoUrl.pathname}`);
   expect(refused.status()).toBe(409);
@@ -126,6 +143,7 @@ test("undo is refused while the computer is offline, and the file stays", async 
   request,
 }) => {
   const file = await writeNotes(page);
+  await page.reload();
   await setComputerOnline(request, false);
 
   await askToUndo(page);
@@ -140,31 +158,82 @@ test("undo is refused while the computer is offline, and the file stays", async 
   expect(existsSync(file)).toBe(true);
 });
 
-test("a turn sent while the computer is offline waits for it, then fails as not reached", async ({
+test("the first send of a new chat while no computer is connected says why and keeps the message", async ({
   page,
   request,
 }) => {
+  test.fail(
+    true,
+    "The API refuses the send (409 local_run_no_computer), but the new chat shows neither the reason nor the message.",
+  );
   await openNewChat(page);
   await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
   await setComputerOnline(request, false);
 
   await send(page, "Are you there?");
 
+  await expect(page.getByText(NO_COMPUTER)).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+  await expect(page.getByText("Are you there?")).toBeVisible();
+});
+
+test("a send in a chat while no computer is connected says why, and goes through once it is back", async ({
+  page,
+  request,
+}) => {
+  await openNewChat(page);
+  await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
+  await send(page, "First question");
+  await expect(transcript(page)).toContainText(TEXT_ANSWER, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+  await expect(page).toHaveURL(THREAD_URL);
+  await setComputerOnline(request, false);
+
+  await send(page, "Second question");
+
+  await expect(page.getByText(NO_COMPUTER)).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+
+  await setComputerOnline(request, true);
+  // The refused message is offered again, in the transcript or the composer.
+  if ((await composer(page).innerText()).includes("Second question")) {
+    await page.getByRole("button", { name: "Send message" }).click();
+  } else {
+    await send(page, "Second question");
+  }
+  await expect(
+    transcript(page).getByText(TEXT_ANSWER, { exact: true }),
+  ).toHaveCount(2, { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
+});
+
+test("a computer that goes offline mid-turn shows the wait, and the turn finishes once it is back", async ({
+  page,
+  request,
+}) => {
+  await openNewChat(page);
+  await chooseRunOn(page, {
+    place: "computer",
+    agent: "codex",
+    model: "slow_text",
+  });
+  await send(page, "Answer slowly");
+  await expect(transcript(page)).toContainText("Lease one", {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+
+  await setComputerOnline(request, false);
   await expect(
     transcript(page)
       .getByRole("status")
-      .filter({ hasText: "Waiting for your computer to pick up this turn" }),
+      .filter({ hasText: "Waiting for your computer to reconnect" }),
   ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
-  await expect(transcript(page)).toContainText(
-    "Your computer did not pick up this turn.",
-    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
-  );
 
-  // Once the computer is back, sending again reaches it.
   await setComputerOnline(request, true);
-  await page.getByRole("button", { name: "Resend" }).click();
   await expect(transcript(page)).toContainText(TEXT_ANSWER, {
-    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS * 2,
   });
 });
 

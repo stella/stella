@@ -60,7 +60,10 @@ for (const agent of ["codex", "claude-code"] as const) {
 
 test("a computer turn that reaches the agent's usage limit says when it resets", async ({
   page,
+  browserErrors,
 }) => {
+  // The development build echoes the turn's failure to the console.
+  browserErrors.expectCaptured(/local_runner_limit_reached/u);
   await openNewChat(page);
   await chooseRunOn(page, {
     place: "computer",
