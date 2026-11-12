@@ -152,7 +152,26 @@
     "doneAssigning": "Atlikta",
     "someone": "Kažkas",
     "membersFailed": "Nepavyko įkelti bylos narių.",
-    "assignFailed": "Užduoties priskirti nepavyko. Bandykite dar kartą."
+    "assignFailed": "Užduoties priskirti nepavyko. Bandykite dar kartą.",
+    "statusTitle": "Būsena",
+    "priorityTitle": "Prioritetas",
+    "priority": {
+      "none": "Nėra",
+      "urgent": "Skubu",
+      "high": "Aukštas",
+      "medium": "Vidutinis",
+      "low": "Žemas"
+    },
+    "subtasks": "Použduočiai",
+    "linked": "Susieti elementai",
+    "delete": "Ištrinti užduotį",
+    "deleteTitle": "Ištrinti užduotį?",
+    "deleteMessage": "Ar tikrai norite ištrinti „{name}“? Šio veiksmo negalima atšaukti.",
+    "cancel": "Atšaukti",
+    "saveFailed": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
+    "readOnly": "Ši užduotis gauta iš prijungto kalendoriaus, todėl čia jos keisti negalima.",
+    "untitled": "Užduotis be pavadinimo",
+    "loadOneFailed": "Šios užduoties įkelti nepavyko."
   },
   "matters": {
     "emptyTitle": "Bylų dar nėra",

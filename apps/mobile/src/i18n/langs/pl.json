@@ -152,7 +152,26 @@
     "doneAssigning": "Gotowe",
     "someone": "Ktoś",
     "membersFailed": "Nie udało się wczytać członków sprawy.",
-    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie."
+    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie.",
+    "statusTitle": "Status",
+    "priorityTitle": "Priorytet",
+    "priority": {
+      "none": "Brak",
+      "urgent": "Pilny",
+      "high": "Wysoki",
+      "medium": "Średni",
+      "low": "Niski"
+    },
+    "subtasks": "Podzadania",
+    "linked": "Powiązane elementy",
+    "delete": "Usuń zadanie",
+    "deleteTitle": "Usunąć zadanie?",
+    "deleteMessage": "Czy na pewno chcesz usunąć „{name}”? Tej operacji nie można cofnąć.",
+    "cancel": "Anuluj",
+    "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "readOnly": "To zadanie pochodzi z połączonego kalendarza i nie można go tu zmienić.",
+    "untitled": "Zadanie bez tytułu",
+    "loadOneFailed": "Nie udało się wczytać tego zadania."
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",

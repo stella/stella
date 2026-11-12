@@ -152,7 +152,26 @@
     "doneAssigning": "Kész",
     "someone": "Valaki",
     "membersFailed": "Az ügy tagjait nem sikerült betölteni.",
-    "assignFailed": "A feladatot nem sikerült kiosztani. Próbálja újra."
+    "assignFailed": "A feladatot nem sikerült kiosztani. Próbálja újra.",
+    "statusTitle": "Állapot",
+    "priorityTitle": "Prioritás",
+    "priority": {
+      "none": "Nincs",
+      "urgent": "Sürgős",
+      "high": "Magas",
+      "medium": "Közepes",
+      "low": "Alacsony"
+    },
+    "subtasks": "Alfeladatok",
+    "linked": "Kapcsolt elemek",
+    "delete": "Feladat törlése",
+    "deleteTitle": "Törli a feladatot?",
+    "deleteMessage": "Biztosan törölni szeretné a következőt: „{name}”? Ez a művelet nem vonható vissza.",
+    "cancel": "Mégse",
+    "saveFailed": "A módosítást nem sikerült menteni. Próbálja újra.",
+    "readOnly": "Ez a feladat egy csatlakoztatott naptárból származik, itt nem módosítható.",
+    "untitled": "Névtelen feladat",
+    "loadOneFailed": "Ezt a feladatot nem sikerült betölteni."
   },
   "matters": {
     "emptyTitle": "Még nincsenek ügyek",

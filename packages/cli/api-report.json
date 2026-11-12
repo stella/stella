@@ -403,6 +403,7 @@
         "./capabilities/tasks.assignees.remove.json",
         "./capabilities/tasks.calendar.list.json",
         "./capabilities/tasks.create.json",
+        "./capabilities/tasks.delete.json",
         "./capabilities/tasks.entity-links.create.json",
         "./capabilities/tasks.entity-links.delete.json",
         "./capabilities/tasks.entity-links.list.json",

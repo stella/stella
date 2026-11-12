@@ -152,7 +152,26 @@
     "doneAssigning": "Hecho",
     "someone": "Alguien",
     "membersFailed": "No se pudieron cargar los miembros del asunto.",
-    "assignFailed": "No se pudo asignar la tarea. Inténtelo de nuevo."
+    "assignFailed": "No se pudo asignar la tarea. Inténtelo de nuevo.",
+    "statusTitle": "Estado",
+    "priorityTitle": "Prioridad",
+    "priority": {
+      "none": "Ninguna",
+      "urgent": "Urgente",
+      "high": "Alta",
+      "medium": "Media",
+      "low": "Baja"
+    },
+    "subtasks": "Subtareas",
+    "linked": "Elementos vinculados",
+    "delete": "Eliminar tarea",
+    "deleteTitle": "¿Eliminar la tarea?",
+    "deleteMessage": "¿Está seguro de que desea eliminar «{name}»? Esta acción no se puede deshacer.",
+    "cancel": "Cancelar",
+    "saveFailed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
+    "readOnly": "Esta tarea procede de un calendario conectado y no se puede cambiar aquí.",
+    "untitled": "Tarea sin título",
+    "loadOneFailed": "No se pudo cargar esta tarea."
   },
   "matters": {
     "emptyTitle": "Aún no hay asuntos",

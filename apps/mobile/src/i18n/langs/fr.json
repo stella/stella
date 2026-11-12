@@ -152,7 +152,26 @@
     "doneAssigning": "Terminé",
     "someone": "Quelqu’un",
     "membersFailed": "Les membres du dossier n’ont pas pu être chargés.",
-    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez."
+    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez.",
+    "statusTitle": "Statut",
+    "priorityTitle": "Priorité",
+    "priority": {
+      "none": "Aucune",
+      "urgent": "Urgente",
+      "high": "Haute",
+      "medium": "Moyenne",
+      "low": "Basse"
+    },
+    "subtasks": "Sous-tâches",
+    "linked": "Éléments liés",
+    "delete": "Supprimer la tâche",
+    "deleteTitle": "Supprimer la tâche ?",
+    "deleteMessage": "Voulez-vous vraiment supprimer « {name} » ? Cette action est irréversible.",
+    "cancel": "Annuler",
+    "saveFailed": "La modification n’a pas pu être enregistrée. Réessayez.",
+    "readOnly": "Cette tâche provient d’un calendrier connecté et ne peut pas être modifiée ici.",
+    "untitled": "Tâche sans titre",
+    "loadOneFailed": "Cette tâche n’a pas pu être chargée."
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",

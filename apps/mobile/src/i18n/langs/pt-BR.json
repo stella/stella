@@ -152,7 +152,26 @@
     "doneAssigning": "Concluído",
     "someone": "Alguém",
     "membersFailed": "Não foi possível carregar os membros do caso.",
-    "assignFailed": "Não foi possível atribuir a tarefa. Tente novamente."
+    "assignFailed": "Não foi possível atribuir a tarefa. Tente novamente.",
+    "statusTitle": "Status",
+    "priorityTitle": "Prioridade",
+    "priority": {
+      "none": "Nenhuma",
+      "urgent": "Urgente",
+      "high": "Alta",
+      "medium": "Média",
+      "low": "Baixa"
+    },
+    "subtasks": "Subtarefas",
+    "linked": "Itens vinculados",
+    "delete": "Excluir tarefa",
+    "deleteTitle": "Excluir a tarefa?",
+    "deleteMessage": "Tem certeza de que deseja excluir “{name}”? Esta ação não pode ser desfeita.",
+    "cancel": "Cancelar",
+    "saveFailed": "Não foi possível salvar a alteração. Tente novamente.",
+    "readOnly": "Esta tarefa vem de um calendário conectado e não pode ser alterada aqui.",
+    "untitled": "Tarefa sem título",
+    "loadOneFailed": "Não foi possível carregar esta tarefa."
   },
   "matters": {
     "emptyTitle": "Ainda não há casos",
