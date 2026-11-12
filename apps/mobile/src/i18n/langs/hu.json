@@ -70,6 +70,7 @@
     "inputRequest": "Bemenet",
     "questionTitle": "Pontosítás kérése",
     "questionChooseSeveral": "Jelölje be az összes megfelelőt",
+    "questionSelectAll": "Összes kijelölése",
     "questionOwnWords": "Saját válasz",
     "questionShowOptions": "Lehetőségek megjelenítése",
     "questionPlaceholder": "Az Ön válasza",

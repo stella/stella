@@ -70,6 +70,7 @@
     "inputRequest": "Sisend",
     "questionTitle": "Täpsustuse küsimine",
     "questionChooseSeveral": "Valige kõik sobivad",
+    "questionSelectAll": "Vali kõik",
     "questionOwnWords": "Kirjuta oma",
     "questionShowOptions": "Näita valikuid",
     "questionPlaceholder": "Teie vastus",
