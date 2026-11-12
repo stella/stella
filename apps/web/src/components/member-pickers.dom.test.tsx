@@ -17,6 +17,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000/", width: 1280 });
 type Write = { method: string; path: string; body: Record<string, unknown> };
 const writes: Write[] = [];
 let reads: { pattern: RegExp; body: unknown }[] = [];
+const servedReads: string[] = [];
 
 const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(
@@ -29,6 +30,7 @@ globalThis.fetch = Object.assign(
         // An unexpected read stays pending, so it never overwrites a fixture.
         return await new Promise<Response>(() => {});
       }
+      servedReads.push(path);
       return Response.json(read.body);
     }
     const text = await request.text();
@@ -126,6 +128,7 @@ afterEach(() => {
   }
   clients.length = 0;
   writes.length = 0;
+  servedReads.length = 0;
   reads = [];
 });
 afterAll(async () => {
@@ -344,6 +347,38 @@ describe("member pickers save the chosen member", () => {
       taskId: TASK,
       userId: DVORAK.id,
     });
+  });
+
+  test("task assignee: a role without entity update cannot change assignees", async () => {
+    reads = [
+      { ...roleRead, body: { role: "intern" } },
+      matterMembersRead(PEOPLE),
+    ];
+    await mount(() => (
+      <AssigneePicker
+        assignees={[{ user: DVORAK }]}
+        taskId={TASK}
+        workspaceId={WORKSPACE}
+      />
+    ));
+    await testing.screen.findByText(DVORAK.name);
+    await testing.waitFor(() =>
+      expect(servedReads.some((path) => roleRead.pattern.test(path))).toBe(
+        true,
+      ),
+    );
+    await testing.act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      testing.screen.queryByRole("button", {
+        name: messages.tasks.addAssignee,
+      }),
+    ).toBeNull();
+    expect(
+      testing.screen.queryByRole("button", { name: messages.common.remove }),
+    ).toBeNull();
   });
 
   test("correspondence assignee, and the unassigned row", async () => {
