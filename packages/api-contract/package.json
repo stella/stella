@@ -216,6 +216,7 @@
     "./chat-ui-resources": "./src/chat-ui-resources.ts",
     "./task-write": "./src/task-write.ts",
     "./matter-duplicates": "./src/matter-duplicates.ts",
+    "./matter-reference": "./src/matter-reference.ts",
     "./matter-reference-edit": "./src/matter-reference-edit.ts"
   },
   "scripts": {

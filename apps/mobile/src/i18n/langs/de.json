@@ -138,7 +138,8 @@
       "tomorrow": "Morgen",
       "week": "Diese Woche",
       "later": "Später",
-      "none": "Ohne Fälligkeit"
+      "none": "Ohne Fälligkeit",
+      "closed": "Erledigt oder abgebrochen"
     },
     "markDone": "Als erledigt markieren",
     "reopen": "Wieder öffnen",
@@ -152,7 +153,43 @@
     "doneAssigning": "Fertig",
     "someone": "Jemand",
     "membersFailed": "Die Mitglieder der Akte konnten nicht geladen werden.",
-    "assignFailed": "Die Aufgabe konnte nicht zugewiesen werden. Versuchen Sie es erneut."
+    "assignFailed": "Die Aufgabe konnte nicht zugewiesen werden. Versuchen Sie es erneut.",
+    "statusTitle": "Status",
+    "priorityTitle": "Priorität",
+    "priority": {
+      "none": "Keine",
+      "urgent": "Dringend",
+      "high": "Hoch",
+      "medium": "Mittel",
+      "low": "Niedrig"
+    },
+    "subtasks": "Unteraufgaben",
+    "linked": "Verknüpfte Elemente",
+    "delete": "Aufgabe löschen",
+    "deleteTitle": "Aufgabe löschen?",
+    "deleteMessage": "Möchten Sie „{name}“ wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "cancel": "Abbrechen",
+    "saveFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+    "readOnly": "Diese Aufgabe stammt aus einem verbundenen Kalender und kann hier nicht geändert werden.",
+    "untitled": "Aufgabe ohne Titel",
+    "loadOneFailed": "Diese Aufgabe konnte nicht geladen werden.",
+    "filter": "Filter",
+    "whoseTitle": "Zugewiesen an",
+    "whose": {
+      "mine": "Mich",
+      "everyone": "Beliebige Person",
+      "unassigned": "Niemanden"
+    },
+    "showTitle": "Anzeigen",
+    "show": {
+      "open": "Offen",
+      "overdue": "Überfällig",
+      "all": "Alle, auch erledigte"
+    },
+    "emptyFilteredTitle": "Keine Aufgaben",
+    "emptyFilteredDescription": "Aufgaben, die zu diesem Filter passen, erscheinen hier.",
+    "loadMore": "Mehr laden",
+    "loadMoreFailed": "Weitere Aufgaben konnten nicht geladen werden."
   },
   "matters": {
     "emptyTitle": "Noch keine Akten",
@@ -487,6 +524,13 @@
       "judge": "Richter",
       "mediator": "Mediator",
       "other": "Sonstige"
-    }
+    },
+    "numberConvention": "Bevorzugtes Format: {example}",
+    "numberDeparts": "Entspricht nicht dem bevorzugten Format.",
+    "numberHintEmpty": "Vergeben Sie ein Aktenzeichen, damit die Dokumente dieser Akte nummeriert werden."
+  },
+  "role": {
+    "readFailed": "Ihre Berechtigungen konnten nicht geladen werden, daher sind Änderungen vorerst ausgeblendet.",
+    "retry": "Erneut versuchen"
   }
 }

@@ -138,7 +138,8 @@
       "tomorrow": "Zajtra",
       "week": "Tento týždeň",
       "later": "Neskôr",
-      "none": "Bez termínu"
+      "none": "Bez termínu",
+      "closed": "Hotové alebo zrušené"
     },
     "markDone": "Označiť ako hotové",
     "reopen": "Znova otvoriť",
@@ -152,7 +153,43 @@
     "doneAssigning": "Hotovo",
     "someone": "Niekto",
     "membersFailed": "Členov spisu sa nepodarilo načítať.",
-    "assignFailed": "Úlohu sa nepodarilo prideliť. Skúste to znova."
+    "assignFailed": "Úlohu sa nepodarilo prideliť. Skúste to znova.",
+    "statusTitle": "Stav",
+    "priorityTitle": "Priorita",
+    "priority": {
+      "none": "Žiadna",
+      "urgent": "Urgentná",
+      "high": "Vysoká",
+      "medium": "Stredná",
+      "low": "Nízka"
+    },
+    "subtasks": "Podúlohy",
+    "linked": "Prepojené položky",
+    "delete": "Vymazať úlohu",
+    "deleteTitle": "Vymazať úlohu?",
+    "deleteMessage": "Naozaj chcete vymazať „{name}“? Túto akciu nie je možné vrátiť.",
+    "cancel": "Zrušiť",
+    "saveFailed": "Zmenu sa nepodarilo uložiť. Skúste to znova.",
+    "readOnly": "Táto úloha pochádza z prepojeného kalendára a tu ju nemožno meniť.",
+    "untitled": "Úloha bez názvu",
+    "loadOneFailed": "Túto úlohu sa nepodarilo načítať.",
+    "filter": "Filter",
+    "whoseTitle": "Priradené",
+    "whose": {
+      "mine": "Mne",
+      "everyone": "Komukoľvek",
+      "unassigned": "Nikomu"
+    },
+    "showTitle": "Zobraziť",
+    "show": {
+      "open": "Otvorené",
+      "overdue": "Po termíne",
+      "all": "Všetky, aj hotové"
+    },
+    "emptyFilteredTitle": "Žiadne úlohy",
+    "emptyFilteredDescription": "Úlohy zodpovedajúce tomuto filtru sa zobrazia tu.",
+    "loadMore": "Načítať ďalšie",
+    "loadMoreFailed": "Ďalšie úlohy sa nepodarilo načítať."
   },
   "matters": {
     "emptyTitle": "Zatiaľ žiadne spisy",
@@ -487,6 +524,13 @@
       "judge": "Sudca",
       "mediator": "Mediátor",
       "other": "Iné"
-    }
+    },
+    "numberConvention": "Preferovaný formát: {example}",
+    "numberDeparts": "Nezhoduje sa s preferovaným formátom.",
+    "numberHintEmpty": "Zadajte spisovú značku a dokumenty spisu sa začnú číslovať."
+  },
+  "role": {
+    "readFailed": "Vaše oprávnenia sa nepodarilo načítať, preto sú úpravy zatiaľ skryté.",
+    "retry": "Skúsiť znova"
   }
 }

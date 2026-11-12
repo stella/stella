@@ -138,7 +138,8 @@
       "tomorrow": "Rīt",
       "week": "Šonedēļ",
       "later": "Vēlāk",
-      "none": "Bez termiņa"
+      "none": "Bez termiņa",
+      "closed": "Paveikti vai atcelti"
     },
     "markDone": "Atzīmēt kā izpildītu",
     "reopen": "Atvērt atkārtoti",
@@ -152,7 +153,43 @@
     "doneAssigning": "Gatavs",
     "someone": "Kāds",
     "membersFailed": "Neizdevās ielādēt lietas dalībniekus.",
-    "assignFailed": "Uzdevumu neizdevās piešķirt. Mēģiniet vēlreiz."
+    "assignFailed": "Uzdevumu neizdevās piešķirt. Mēģiniet vēlreiz.",
+    "statusTitle": "Statuss",
+    "priorityTitle": "Prioritāte",
+    "priority": {
+      "none": "Nav",
+      "urgent": "Steidzama",
+      "high": "Augsta",
+      "medium": "Vidēja",
+      "low": "Zema"
+    },
+    "subtasks": "Apakšuzdevumi",
+    "linked": "Saistītie vienumi",
+    "delete": "Dzēst uzdevumu",
+    "deleteTitle": "Vai dzēst uzdevumu?",
+    "deleteMessage": "Vai tiešām vēlaties dzēst “{name}”? Šo darbību nevar atsaukt.",
+    "cancel": "Atcelt",
+    "saveFailed": "Izmaiņas neizdevās saglabāt. Mēģiniet vēlreiz.",
+    "readOnly": "Šis uzdevums ir no pievienota kalendāra, un to šeit nevar mainīt.",
+    "untitled": "Uzdevums bez nosaukuma",
+    "loadOneFailed": "Šo uzdevumu neizdevās ielādēt.",
+    "filter": "Filtrs",
+    "whoseTitle": "Piešķirts",
+    "whose": {
+      "mine": "Man",
+      "everyone": "Jebkuram",
+      "unassigned": "Nevienam"
+    },
+    "showTitle": "Rādīt",
+    "show": {
+      "open": "Atvērtos",
+      "overdue": "Nokavētos",
+      "all": "Visus, arī paveiktos"
+    },
+    "emptyFilteredTitle": "Nav uzdevumu",
+    "emptyFilteredDescription": "Šim filtram atbilstošie uzdevumi tiks parādīti šeit.",
+    "loadMore": "Ielādēt vairāk",
+    "loadMoreFailed": "Vairāk uzdevumu neizdevās ielādēt."
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",
@@ -487,6 +524,13 @@
       "judge": "Tiesnesis",
       "mediator": "Mediators",
       "other": "Cits"
-    }
+    },
+    "numberConvention": "Vēlamais formāts: {example}",
+    "numberDeparts": "Neatbilst vēlamajam formātam.",
+    "numberHintEmpty": "Norādiet lietas numuru, lai sāktu numurēt tās dokumentus."
+  },
+  "role": {
+    "readFailed": "Jūsu atļaujas neizdevās ielādēt, tāpēc izmaiņas pagaidām ir paslēptas.",
+    "retry": "Mēģināt vēlreiz"
   }
 }

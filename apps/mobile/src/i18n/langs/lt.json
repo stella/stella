@@ -138,7 +138,8 @@
       "tomorrow": "Rytoj",
       "week": "Šią savaitę",
       "later": "Vėliau",
-      "none": "Be termino"
+      "none": "Be termino",
+      "closed": "Atliktos arba atšauktos"
     },
     "markDone": "Pažymėti kaip atliktą",
     "reopen": "Atidaryti iš naujo",
@@ -152,7 +153,43 @@
     "doneAssigning": "Atlikta",
     "someone": "Kažkas",
     "membersFailed": "Nepavyko įkelti bylos narių.",
-    "assignFailed": "Užduoties priskirti nepavyko. Bandykite dar kartą."
+    "assignFailed": "Užduoties priskirti nepavyko. Bandykite dar kartą.",
+    "statusTitle": "Būsena",
+    "priorityTitle": "Prioritetas",
+    "priority": {
+      "none": "Nėra",
+      "urgent": "Skubu",
+      "high": "Aukštas",
+      "medium": "Vidutinis",
+      "low": "Žemas"
+    },
+    "subtasks": "Použduočiai",
+    "linked": "Susieti elementai",
+    "delete": "Ištrinti užduotį",
+    "deleteTitle": "Ištrinti užduotį?",
+    "deleteMessage": "Ar tikrai norite ištrinti „{name}“? Šio veiksmo negalima atšaukti.",
+    "cancel": "Atšaukti",
+    "saveFailed": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
+    "readOnly": "Ši užduotis gauta iš prijungto kalendoriaus, todėl čia jos keisti negalima.",
+    "untitled": "Užduotis be pavadinimo",
+    "loadOneFailed": "Šios užduoties įkelti nepavyko.",
+    "filter": "Filtras",
+    "whoseTitle": "Priskirta",
+    "whose": {
+      "mine": "Man",
+      "everyone": "Bet kam",
+      "unassigned": "Niekam"
+    },
+    "showTitle": "Rodyti",
+    "show": {
+      "open": "Atviros",
+      "overdue": "Pradelstos",
+      "all": "Visos, ir atliktos"
+    },
+    "emptyFilteredTitle": "Užduočių nėra",
+    "emptyFilteredDescription": "Šį filtrą atitinkančios užduotys bus rodomos čia.",
+    "loadMore": "Įkelti daugiau",
+    "loadMoreFailed": "Daugiau užduočių įkelti nepavyko."
   },
   "matters": {
     "emptyTitle": "Bylų dar nėra",
@@ -487,6 +524,13 @@
       "judge": "Teisėjas",
       "mediator": "Mediatorius",
       "other": "Kita"
-    }
+    },
+    "numberConvention": "Pageidaujamas formatas: {example}",
+    "numberDeparts": "Neatitinka pageidaujamo formato.",
+    "numberHintEmpty": "Nurodykite bylos numerį, kad jos dokumentai būtų numeruojami."
+  },
+  "role": {
+    "readFailed": "Nepavyko įkelti jūsų teisių, todėl pakeitimai kol kas paslėpti.",
+    "retry": "Bandyti dar kartą"
   }
 }

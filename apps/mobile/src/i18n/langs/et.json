@@ -138,7 +138,8 @@
       "tomorrow": "Homme",
       "week": "Sel nädalal",
       "later": "Hiljem",
-      "none": "Tähtajata"
+      "none": "Tähtajata",
+      "closed": "Tehtud või tühistatud"
     },
     "markDone": "Märgi tehtuks",
     "reopen": "Ava uuesti",
@@ -152,7 +153,43 @@
     "doneAssigning": "Valmis",
     "someone": "Keegi",
     "membersFailed": "Asja liikmeid ei õnnestunud laadida.",
-    "assignFailed": "Ülesannet ei õnnestunud määrata. Proovige uuesti."
+    "assignFailed": "Ülesannet ei õnnestunud määrata. Proovige uuesti.",
+    "statusTitle": "Staatus",
+    "priorityTitle": "Prioriteet",
+    "priority": {
+      "none": "Puudub",
+      "urgent": "Kiire",
+      "high": "Kõrge",
+      "medium": "Keskmine",
+      "low": "Madal"
+    },
+    "subtasks": "Alamülesanded",
+    "linked": "Seotud üksused",
+    "delete": "Kustuta ülesanne",
+    "deleteTitle": "Kas kustutada ülesanne?",
+    "deleteMessage": "Kas olete kindel, et soovite kustutada „{name}“? Seda toimingut ei saa tagasi võtta.",
+    "cancel": "Tühista",
+    "saveFailed": "Muudatust ei õnnestunud salvestada. Proovige uuesti.",
+    "readOnly": "See ülesanne pärineb ühendatud kalendrist ja seda ei saa siin muuta.",
+    "untitled": "Pealkirjata ülesanne",
+    "loadOneFailed": "Seda ülesannet ei õnnestunud laadida.",
+    "filter": "Filter",
+    "whoseTitle": "Määratud",
+    "whose": {
+      "mine": "Mulle",
+      "everyone": "Kellele tahes",
+      "unassigned": "Mitte kellelegi"
+    },
+    "showTitle": "Näita",
+    "show": {
+      "open": "Avatud",
+      "overdue": "Tähtaja ületanud",
+      "all": "Kõik, ka tehtud"
+    },
+    "emptyFilteredTitle": "Ülesandeid pole",
+    "emptyFilteredDescription": "Sellele filtrile vastavad ülesanded kuvatakse siin.",
+    "loadMore": "Laadi rohkem",
+    "loadMoreFailed": "Rohkem ülesandeid ei õnnestunud laadida."
   },
   "matters": {
     "emptyTitle": "Toimikuid veel pole",
@@ -487,6 +524,13 @@
       "judge": "Kohtunik",
       "mediator": "Lepitaja",
       "other": "Muu"
-    }
+    },
+    "numberConvention": "Eelistatud vorming: {example}",
+    "numberDeparts": "Ei vasta eelistatud vormingule.",
+    "numberHintEmpty": "Määrake asja number, et selle dokumente nummerdama hakata."
+  },
+  "role": {
+    "readFailed": "Teie õigusi ei õnnestunud laadida, seega on muudatused praegu peidetud.",
+    "retry": "Proovi uuesti"
   }
 }

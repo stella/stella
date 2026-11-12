@@ -138,7 +138,8 @@
       "tomorrow": "Demain",
       "week": "Cette semaine",
       "later": "Plus tard",
-      "none": "Sans échéance"
+      "none": "Sans échéance",
+      "closed": "Terminées ou annulées"
     },
     "markDone": "Marquer comme terminée",
     "reopen": "Rouvrir",
@@ -152,7 +153,43 @@
     "doneAssigning": "Terminé",
     "someone": "Quelqu’un",
     "membersFailed": "Les membres du dossier n’ont pas pu être chargés.",
-    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez."
+    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez.",
+    "statusTitle": "Statut",
+    "priorityTitle": "Priorité",
+    "priority": {
+      "none": "Aucune",
+      "urgent": "Urgente",
+      "high": "Haute",
+      "medium": "Moyenne",
+      "low": "Basse"
+    },
+    "subtasks": "Sous-tâches",
+    "linked": "Éléments liés",
+    "delete": "Supprimer la tâche",
+    "deleteTitle": "Supprimer la tâche ?",
+    "deleteMessage": "Voulez-vous vraiment supprimer « {name} » ? Cette action est irréversible.",
+    "cancel": "Annuler",
+    "saveFailed": "La modification n’a pas pu être enregistrée. Réessayez.",
+    "readOnly": "Cette tâche provient d’un calendrier connecté et ne peut pas être modifiée ici.",
+    "untitled": "Tâche sans titre",
+    "loadOneFailed": "Cette tâche n’a pas pu être chargée.",
+    "filter": "Filtrer",
+    "whoseTitle": "Assignées à",
+    "whose": {
+      "mine": "Moi",
+      "everyone": "N’importe qui",
+      "unassigned": "Personne"
+    },
+    "showTitle": "Afficher",
+    "show": {
+      "open": "Ouvertes",
+      "overdue": "En retard",
+      "all": "Toutes, terminées comprises"
+    },
+    "emptyFilteredTitle": "Aucune tâche",
+    "emptyFilteredDescription": "Les tâches correspondant à ce filtre apparaîtront ici.",
+    "loadMore": "Charger plus",
+    "loadMoreFailed": "Les tâches suivantes n’ont pas pu être chargées."
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",
@@ -487,6 +524,13 @@
       "judge": "Juge",
       "mediator": "Médiateur",
       "other": "Autre"
-    }
+    },
+    "numberConvention": "Format préféré : {example}",
+    "numberDeparts": "Ne correspond pas au format préféré.",
+    "numberHintEmpty": "Renseignez un numéro de dossier pour numéroter ses documents."
+  },
+  "role": {
+    "readFailed": "Vos autorisations n’ont pas pu être chargées : les modifications sont masquées pour l’instant.",
+    "retry": "Réessayer"
   }
 }

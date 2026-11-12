@@ -138,7 +138,8 @@
       "tomorrow": "Tomorrow",
       "week": "This week",
       "later": "Later",
-      "none": "No due date"
+      "none": "No due date",
+      "closed": "Done or cancelled"
     },
     "markDone": "Mark as done",
     "reopen": "Reopen",
@@ -152,7 +153,43 @@
     "doneAssigning": "Done",
     "someone": "Someone",
     "membersFailed": "The matter's members could not be loaded.",
-    "assignFailed": "The task could not be assigned. Try again."
+    "assignFailed": "The task could not be assigned. Try again.",
+    "statusTitle": "Status",
+    "priorityTitle": "Priority",
+    "priority": {
+      "none": "None",
+      "urgent": "Urgent",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "subtasks": "Subtasks",
+    "linked": "Linked items",
+    "delete": "Delete task",
+    "deleteTitle": "Delete task?",
+    "deleteMessage": "Are you sure you want to delete “{name}”? This action cannot be undone.",
+    "cancel": "Cancel",
+    "saveFailed": "The change could not be saved. Try again.",
+    "readOnly": "This task comes from a connected calendar and cannot be changed here.",
+    "untitled": "Untitled task",
+    "loadOneFailed": "This task could not be loaded.",
+    "filter": "Filter",
+    "whoseTitle": "Assigned to",
+    "whose": {
+      "mine": "Me",
+      "everyone": "Anyone",
+      "unassigned": "Nobody"
+    },
+    "showTitle": "Show",
+    "show": {
+      "open": "Open",
+      "overdue": "Overdue",
+      "all": "All, done included"
+    },
+    "emptyFilteredTitle": "No tasks",
+    "emptyFilteredDescription": "Tasks that match this filter will appear here.",
+    "loadMore": "Load more",
+    "loadMoreFailed": "More tasks could not be loaded."
   },
   "matters": {
     "emptyTitle": "No matters yet",
@@ -487,6 +524,13 @@
       "judge": "Judge",
       "mediator": "Mediator",
       "other": "Other"
-    }
+    },
+    "numberConvention": "Preferred format: {example}",
+    "numberDeparts": "Doesn't match the preferred format.",
+    "numberHintEmpty": "Set a matter number to start numbering the documents in this matter."
+  },
+  "role": {
+    "readFailed": "Your permissions could not be loaded, so changes are hidden for now.",
+    "retry": "Try again"
   }
 }

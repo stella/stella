@@ -138,7 +138,8 @@
       "tomorrow": "Holnap",
       "week": "Ezen a héten",
       "later": "Később",
-      "none": "Nincs határidő"
+      "none": "Nincs határidő",
+      "closed": "Kész vagy visszavont"
     },
     "markDone": "Késznek jelölés",
     "reopen": "Újranyitás",
@@ -152,7 +153,43 @@
     "doneAssigning": "Kész",
     "someone": "Valaki",
     "membersFailed": "Az ügy tagjait nem sikerült betölteni.",
-    "assignFailed": "A feladatot nem sikerült kiosztani. Próbálja újra."
+    "assignFailed": "A feladatot nem sikerült kiosztani. Próbálja újra.",
+    "statusTitle": "Állapot",
+    "priorityTitle": "Prioritás",
+    "priority": {
+      "none": "Nincs",
+      "urgent": "Sürgős",
+      "high": "Magas",
+      "medium": "Közepes",
+      "low": "Alacsony"
+    },
+    "subtasks": "Alfeladatok",
+    "linked": "Kapcsolt elemek",
+    "delete": "Feladat törlése",
+    "deleteTitle": "Törli a feladatot?",
+    "deleteMessage": "Biztosan törölni szeretné a következőt: „{name}”? Ez a művelet nem vonható vissza.",
+    "cancel": "Mégse",
+    "saveFailed": "A módosítást nem sikerült menteni. Próbálja újra.",
+    "readOnly": "Ez a feladat egy csatlakoztatott naptárból származik, itt nem módosítható.",
+    "untitled": "Névtelen feladat",
+    "loadOneFailed": "Ezt a feladatot nem sikerült betölteni.",
+    "filter": "Szűrő",
+    "whoseTitle": "Kiosztva",
+    "whose": {
+      "mine": "Nekem",
+      "everyone": "Bárkinek",
+      "unassigned": "Senkinek"
+    },
+    "showTitle": "Megjelenítés",
+    "show": {
+      "open": "Nyitott",
+      "overdue": "Lejárt",
+      "all": "Mind, a késztekkel együtt"
+    },
+    "emptyFilteredTitle": "Nincsenek feladatok",
+    "emptyFilteredDescription": "A szűrőnek megfelelő feladatok itt jelennek meg.",
+    "loadMore": "Továbbiak betöltése",
+    "loadMoreFailed": "További feladatokat nem sikerült betölteni."
   },
   "matters": {
     "emptyTitle": "Még nincsenek ügyek",
@@ -487,6 +524,13 @@
       "judge": "Bíró",
       "mediator": "Mediátor",
       "other": "Egyéb"
-    }
+    },
+    "numberConvention": "Előnyben részesített formátum: {example}",
+    "numberDeparts": "Nem egyezik az előnyben részesített formátummal.",
+    "numberHintEmpty": "Adjon meg ügyszámot, hogy az ügy dokumentumai számozást kapjanak."
+  },
+  "role": {
+    "readFailed": "Nem sikerült betölteni a jogosultságait, ezért a módosítások egyelőre rejtve vannak.",
+    "retry": "Újra"
   }
 }

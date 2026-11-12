@@ -6,6 +6,7 @@ import { screenStyles } from "@/components/empty-state-screen";
 import { useSelection } from "@/components/selection";
 import { SplitPane } from "@/components/split-pane";
 import { TasksList } from "@/components/tasks-list";
+import { useTasksView } from "@/components/tasks-view";
 import { useSession } from "@/connection/session-provider";
 import { useAppColors } from "@/theme";
 
@@ -14,6 +15,7 @@ const TasksScreen = () => {
   const { state } = useSession();
   const selection = useSelection();
   const t = useTranslations("tasks");
+  const { show, whose } = useTasksView();
 
   return (
     // Left and right: an iPhone Duo docks the tab bar as a rail at the side.
@@ -30,7 +32,13 @@ const TasksScreen = () => {
           }
           emptyDescription={t("pickDescription")}
           emptyTitle={t("pickTitle")}
-          list={<TasksList source={state.source} />}
+          list={
+            <TasksList
+              showMatter
+              source={state.source}
+              view={{ show, whose }}
+            />
+          }
         />
       ) : null}
     </SafeAreaView>

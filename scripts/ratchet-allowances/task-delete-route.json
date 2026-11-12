@@ -1,0 +1,5 @@
+{
+  "metric": "cross-handler-imports",
+  "delta": 1,
+  "reason": "The task delete route runs the matter entity delete for one task, the same delete the delete_task tool runs, so a task leaves the same way from every surface; the route adds only the check that the id names a task in the matter."
+}

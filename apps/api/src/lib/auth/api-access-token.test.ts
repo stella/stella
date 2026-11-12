@@ -151,6 +151,7 @@ describe("which routes an API access token opens", () => {
       ["PUT", "/v1/workspaces"],
       ["PUT", "/v1/tasks/:workspaceId"],
       ["PATCH", "/v1/tasks/:workspaceId"],
+      ["DELETE", "/v1/tasks/:workspaceId/:taskId"],
     ] as const) {
       expect(
         admitApiAccessTokenRoute({ method, route, scopes: readOnly }),
@@ -163,6 +164,23 @@ describe("which routes an API access token opens", () => {
         }),
       ).toEqual({ admitted: true });
     }
+  });
+
+  test("a task is deleted at the tasks consent, never through the entity delete that reaches documents", () => {
+    expect(
+      admitApiAccessTokenRoute({
+        method: "DELETE",
+        route: "/v1/tasks/:workspaceId/:taskId",
+        scopes: ["stella:documents_write"],
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    expect(
+      admitApiAccessTokenRoute({
+        method: "DELETE",
+        route: "/v1/entities/:workspaceId",
+        scopes: ["stella:matters_write", "stella:documents_write"],
+      }),
+    ).toEqual({ admitted: false, reason: "route" });
   });
 
   test("the mobile app asks for every scope a listed route requires", () => {
@@ -294,6 +312,31 @@ describe("which routes an API access token opens", () => {
           "stella:matters_write",
           "stella:admin_write",
         ]),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
+  test("the caller's role and the matter-number convention open at the read scope, the organization's settings never", () => {
+    for (const route of ["/v1/me/role", "/v1/workspaces/matter-numbering"]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "GET",
+          route,
+          scopes: ["stella:read"],
+        }),
+      ).toEqual({ admitted: true });
+    }
+    for (const [method, route] of [
+      ["GET", "/v1/organization-settings"],
+      ["POST", "/v1/organization-settings"],
+      ["POST", "/v1/organization-settings/preview"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({
+          method,
+          route,
+          scopes: ["stella:read", "stella:admin_read", "stella:admin_write"],
+        }),
       ).toEqual({ admitted: false, reason: "route" });
     }
   });

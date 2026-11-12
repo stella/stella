@@ -18,7 +18,7 @@ import { useUiColors } from "@/theme";
 export const Pane = ({
   children,
   title,
-}: React.PropsWithChildren<{ title: string }>) => {
+}: React.PropsWithChildren<{ title: React.ReactNode }>) => {
   const t = useTranslations("pane");
   const layout = useLayout();
   const selection = useSelection();
