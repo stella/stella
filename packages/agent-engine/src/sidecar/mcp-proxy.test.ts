@@ -203,3 +203,72 @@ describe("loopback MCP proxy", () => {
     expect(api.seen.map(({ path }) => path)).toEqual(["/redirect"]);
   });
 });
+
+describe("the endpoint of a harness process kept for the chat's next turn", () => {
+  const NEXT_RUN = "4d2c9a7e-1b3f-4e6a-8c5d-2f1e0a9b8c7d";
+  const nextRun = (origin: string, path = "/mcp") => ({
+    runId: NEXT_RUN,
+    serverName: "stella",
+    upstreamUrl: `${origin}${path}`,
+    token: "run-token-next",
+    expiresAt: LATER,
+  });
+
+  test("forwards nothing while parked, then the adopting run's token at the same address", async () => {
+    const { api, proxy, binding } = setup();
+    const endpoint = proxy.park(RUN_ID);
+    expect(endpoint).not.toBeNull();
+    expect((await call(binding.url, binding.token)).status).toBe(404);
+    expect(proxy.tokenOf(RUN_ID)).toBeNull();
+    const adopted = proxy.adopt(
+      endpoint ?? "",
+      nextRun(api.origin, "/mcp-next"),
+    );
+    if (Result.isError(adopted)) {
+      return panic(adopted.error.message);
+    }
+    // The process keeps the address and secret it was configured with.
+    expect(adopted.value).toEqual(binding);
+    expect((await call(binding.url, binding.token)).status).toBe(200);
+    expect(proxy.tokenOf(NEXT_RUN)).toBe("run-token-next");
+    expect(proxy.refresh(NEXT_RUN, "run-token-later", LATER)).toBe(true);
+    await call(binding.url, binding.token);
+    expect(
+      api.seen.map(({ path, authorization }) => [path, authorization]),
+    ).toEqual([
+      ["/mcp-next", "Bearer run-token-next"],
+      ["/mcp-next", "Bearer run-token-later"],
+    ]);
+    // The run that adopted it takes it along when it ends.
+    proxy.unregister(NEXT_RUN);
+    expect((await call(binding.url, binding.token)).status).toBe(404);
+  });
+
+  test("is adopted once, only on the stella origin, and goes when dropped", async () => {
+    const { api, proxy } = setup();
+    const endpoint = proxy.park(RUN_ID) ?? panic("parked");
+    const foreign = proxy.adopt(endpoint, nextRun("https://elsewhere.example"));
+    expect(Result.isError(foreign) && foreign.error.reason).toBe(
+      "foreign_upstream",
+    );
+    expect(Result.isOk(proxy.adopt(endpoint, nextRun(api.origin)))).toBe(true);
+    const again = proxy.adopt(endpoint, {
+      ...nextRun(api.origin),
+      runId: crypto.randomUUID(),
+    });
+    expect(Result.isError(again) && again.error.reason).toBe("not_parked");
+    // An adopted endpoint belongs to its run: dropping it changes nothing.
+    proxy.drop(endpoint);
+    expect(proxy.tokenOf(NEXT_RUN)).toBe("run-token-next");
+    proxy.unregister(NEXT_RUN);
+    expect(proxy.park(NEXT_RUN)).toBeNull();
+  });
+
+  test("a dropped endpoint cannot be adopted", async () => {
+    const { api, proxy } = setup();
+    const endpoint = proxy.park(RUN_ID) ?? panic("parked");
+    proxy.drop(endpoint);
+    const adopted = proxy.adopt(endpoint, nextRun(api.origin));
+    expect(Result.isError(adopted) && adopted.error.reason).toBe("not_parked");
+  });
+});

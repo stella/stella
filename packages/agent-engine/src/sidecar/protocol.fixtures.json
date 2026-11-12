@@ -1,6 +1,6 @@
 {
   "vocabulary": {
-    "protocol": 4,
+    "protocol": 5,
     "maxLineBytes": 8388608,
     "maxHeldRuns": 1000,
     "hostMessageTypes": [
@@ -27,6 +27,7 @@
       "run.approval_request",
       "run.finished",
       "folder.restored",
+      "background.tasks",
       "rejected"
     ],
     "rejections": [
@@ -61,7 +62,7 @@
     "host": [
       {
         "type": "hello",
-        "protocol": 4,
+        "protocol": 5,
         "secret": "abababababababababababababababababababababababababababababababab",
         "appVersion": "1.4.0",
         "apiOrigin": "https://api.example.test",
@@ -69,7 +70,7 @@
       },
       {
         "type": "hello",
-        "protocol": 4,
+        "protocol": 5,
         "secret": "abababababababababababababababababababababababababababababababab",
         "appVersion": "1.4.0",
         "apiOrigin": "http://127.0.0.1:3000",
@@ -258,14 +259,14 @@
     "sidecar": [
       {
         "type": "hello",
-        "protocol": 4,
+        "protocol": 5,
         "sidecarVersion": "1.4.0",
         "mode": "serving",
         "runs": []
       },
       {
         "type": "hello",
-        "protocol": 4,
+        "protocol": 5,
         "sidecarVersion": "1.3.2",
         "mode": "draining",
         "runs": [
@@ -388,6 +389,16 @@
         "type": "folder.restored",
         "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
         "outcome": "folder_busy"
+      },
+      {
+        "type": "background.tasks",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "count": 2
+      },
+      {
+        "type": "background.tasks",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "count": 0
       },
       {
         "type": "rejected",
@@ -575,7 +586,7 @@
         "name": "unknown holder mode",
         "message": {
           "type": "hello",
-          "protocol": 4,
+          "protocol": 5,
           "sidecarVersion": "1.4.0",
           "mode": "paused",
           "runs": []
@@ -650,6 +661,29 @@
         "message": {
           "type": "folder.restored",
           "outcome": "restored"
+        }
+      },
+      {
+        "name": "negative background count",
+        "message": {
+          "type": "background.tasks",
+          "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+          "count": -1
+        }
+      },
+      {
+        "name": "fractional background count",
+        "message": {
+          "type": "background.tasks",
+          "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+          "count": 1.5
+        }
+      },
+      {
+        "name": "background count without a run",
+        "message": {
+          "type": "background.tasks",
+          "count": 1
         }
       }
     ]

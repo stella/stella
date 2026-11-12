@@ -19,6 +19,7 @@ import {
   type HarnessImageMediaType,
   type HarnessInputFile,
   type HarnessInputFileType,
+  type HarnessLiveSession,
   type HarnessModel,
   type HarnessProbe,
   HarnessProbeError,
@@ -38,6 +39,7 @@ import { redactingSkillPaths } from "../skill-redaction";
 import { toolPathEnvironment } from "../tool-path";
 import { buildTurnPrompt } from "../transcript-handoff";
 import { settlesWithin } from "../turn-lifecycle";
+import { ClaudeProcess } from "./background";
 import {
   type ClaudeCliClient,
   type ClaudeCliHandlers,
@@ -638,18 +640,19 @@ const turnArgs = (
 type OpenedSession = {
   session: ClaudeCodeTurnSession;
   client: ClaudeCliClient;
+  cli: ClaudeProcess;
 };
 type OpenFailure =
   | { type: "connect"; failure: ConnectFailure }
   | { type: "start"; error: HarnessStartError };
 
-/** Start the CLI for the target session and register the stella server. */
-const openSession = async (
+/** A turn's session on `cli`, which hands it the process's messages. */
+const turnSession = (
   options: ClaudeCodeHarnessAdapterOptions,
   input: HarnessTurnInput,
-  target: SessionTarget,
-  skills: SkillPlugin | null,
-): Promise<Result<OpenedSession, OpenFailure>> => {
+  cli: ClaudeProcess,
+  sessionId: HarnessSessionId,
+) => {
   const session = new ClaudeCodeTurnSession({
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
@@ -658,7 +661,24 @@ const openSession = async (
     sandboxNetworkHosts: new Set(
       input.policy.approvals === "full_auto" ? input.networkHosts : [],
     ),
+    background: cli.turnBackground(sessionId),
   });
+  cli.route(session.handlers);
+  return session;
+};
+
+/** Start the CLI for the target session and register the stella server. */
+const openSession = async (
+  options: ClaudeCodeHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  target: SessionTarget,
+  skills: SkillPlugin | null,
+): Promise<Result<OpenedSession, OpenFailure>> => {
+  const cli = new ClaudeProcess({
+    gracePeriodMs: options.gracePeriodMs,
+    detached: createDetached(options.onBackgroundError),
+  });
+  const session = turnSession(options, input, cli, target.sessionId);
   const connected = await connect({
     options,
     cwd: input.workspaceDir,
@@ -667,7 +687,7 @@ const openSession = async (
       ...packageCacheEnvironment(input.cacheDir),
       ...toolPathEnvironment(options.environment, input.toolPath),
     },
-    handlers: session.handlers,
+    handlers: cli.handlers,
     // Instructions travel over stdio, never on the command line.
     initialize: { appendSystemPrompt: input.instructions },
   });
@@ -676,6 +696,7 @@ const openSession = async (
     return Result.err({ type: "connect", failure: connected.error });
   }
   const { client, init } = connected.value;
+  cli.attach(client);
   session.attach(client);
   const fail = async (
     error: HarnessStartError,
@@ -719,7 +740,7 @@ const openSession = async (
       }),
     );
   }
-  return Result.ok({ session, client });
+  return Result.ok({ session, client, cli });
 };
 
 const startError = (failure: OpenFailure): HarnessStartError =>
@@ -764,7 +785,7 @@ const openTurn = async (
   if (Result.isError(opened)) {
     return Result.err(startError(opened.error));
   }
-  const { session, client } = opened.value;
+  const { session, client, cli } = opened.value;
   const prompt =
     continuation.type === "resumed"
       ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
@@ -774,17 +795,41 @@ const openTurn = async (
     await client.kill();
     return prompt;
   }
-  session.begin({ sessionId: target.sessionId, continuation });
+  const held = heldProcess(options, cli, client, skills);
+  sendTurn({
+    session,
+    client,
+    input,
+    sessionId: target.sessionId,
+    prompt: prompt.value,
+    continuation,
+  });
+  return Result.ok(processTurn(input, session.turn(), held));
+};
+
+/** Announce the turn's session and send its user message. */
+const sendTurn = ({
+  session,
+  client,
+  input,
+  sessionId,
+  prompt,
+  continuation,
+}: {
+  session: ClaudeCodeTurnSession;
+  client: ClaudeCliClient;
+  input: HarnessTurnInput;
+  sessionId: HarnessSessionId;
+  prompt: string;
+  continuation: HarnessContinuation;
+}) => {
+  session.begin({ sessionId, continuation });
   client.send({
     type: "user",
-    message: {
-      role: "user",
-      content: userContent(input.inputFiles, prompt.value),
-    },
+    message: { role: "user", content: userContent(input.inputFiles, prompt) },
     parent_tool_use_id: null,
-    session_id: target.sessionId,
+    session_id: sessionId,
   });
-  return Result.ok(session.turn());
 };
 
 const removePlugin = async (
@@ -797,25 +842,124 @@ const removePlugin = async (
   }
 };
 
-/** The turn's `dispose` also removes its plugin, once the CLI has stopped. */
-const releasingSkills = (
+/**
+ * What a CLI process holds for every turn it hosts: the skill plugin it was
+ * started with, removed once the process is gone.
+ */
+type HeldProcess = { skills: SkillPlugin | null; gone: Promise<void> };
+
+const HELD = new WeakMap<ClaudeProcess, HeldProcess>();
+
+const heldProcess = (
   options: ClaudeCodeHarnessAdapterOptions,
-  turn: HarnessTurn,
-  skills: SkillPlugin,
-): HarnessTurn => ({
-  events: turn.events,
-  respond: turn.respond,
-  interrupt: turn.interrupt,
-  dispose: async () => {
-    await turn.dispose();
-    await removePlugin(options, skills);
-  },
-});
+  cli: ClaudeProcess,
+  client: ClaudeCliClient,
+  skills: SkillPlugin | null,
+): HeldProcess => {
+  const held = {
+    skills,
+    gone: (async () => {
+      await client.exited;
+      if (skills !== null) {
+        await removePlugin(options, skills);
+      }
+    })(),
+  };
+  HELD.set(cli, held);
+  return held;
+};
+
+/**
+ * The turn with its skill paths redacted. Once its process is gone, which a
+ * turn that keeps the process for its background work leaves to the session
+ * it hands over, `release` and `dispose` also wait for its plugin's removal.
+ */
+const processTurn = (
+  input: HarnessTurnInput,
+  native: HarnessTurn,
+  held: HeldProcess,
+): HarnessTurn => {
+  const turn = redactingSkillPaths(native, {
+    folders: input.skillFolders,
+    plugin:
+      held.skills === null
+        ? null
+        : { dir: held.skills.dir, name: SKILL_PLUGIN_NAME },
+  });
+  const state = { handedOver: false };
+  return {
+    events: turn.events,
+    respond: turn.respond,
+    interrupt: turn.interrupt,
+    release: async () => {
+      const kept = await turn.release();
+      if (kept === null) {
+        await held.gone;
+      } else {
+        state.handedOver = true;
+      }
+      return kept;
+    },
+    dispose: async () => {
+      await turn.dispose();
+      if (!state.handedOver) {
+        await held.gone;
+      }
+    },
+  };
+};
+
+/**
+ * The next turn in the process a completed turn kept for its background
+ * commands: the next user message on its stdin, so the agent still has them.
+ * A session that ended meanwhile is resumed from its transcript like any
+ * other.
+ */
+const continueTurn = async (
+  options: ClaudeCodeHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  live: HarnessLiveSession,
+): Promise<Result<HarnessTurn, HarnessStartError>> => {
+  const cli = ClaudeProcess.of(live);
+  const held = cli === undefined ? undefined : HELD.get(cli);
+  if (cli === undefined || held === undefined || !cli.take(live)) {
+    await live.end();
+    return startTurn(options, {
+      ...input,
+      continuation: { type: "resume", sessionId: live.sessionId },
+    });
+  }
+  const client = cli.client;
+  const session = turnSession(options, input, cli, live.sessionId);
+  session.attach(client);
+  const prompt = buildTurnPrompt({
+    transcript: input.transcript,
+    mode: "resumed",
+  });
+  if (Result.isError(prompt)) {
+    session.abandon();
+    await settlesWithin(cli.stopAll(client), options.gracePeriodMs);
+    await client.kill();
+    return prompt;
+  }
+  sendTurn({
+    session,
+    client,
+    input,
+    sessionId: live.sessionId,
+    prompt: prompt.value,
+    continuation: { type: "resumed" },
+  });
+  return Result.ok(processTurn(input, session.turn(), held));
+};
 
 const startTurn = async (
   options: ClaudeCodeHarnessAdapterOptions,
   input: HarnessTurnInput,
 ): Promise<Result<HarnessTurn, HarnessStartError>> => {
+  if (input.continuation.type === "live") {
+    return continueTurn(options, input, input.continuation.session);
+  }
   const standalone = buildTurnPrompt({
     transcript: input.transcript,
     mode: "standalone",
@@ -859,22 +1003,10 @@ const startTurn = async (
     );
   }
   const opened = await openTurn(options, input, skills.value, standalone.value);
-  if (Result.isError(opened)) {
-    if (skills.value !== null) {
-      await removePlugin(options, skills.value);
-    }
-    return opened;
+  if (Result.isError(opened) && skills.value !== null) {
+    await removePlugin(options, skills.value);
   }
-  const turn = redactingSkillPaths(opened.value, {
-    folders: input.skillFolders,
-    plugin:
-      skills.value === null
-        ? null
-        : { dir: skills.value.dir, name: SKILL_PLUGIN_NAME },
-  });
-  return Result.ok(
-    skills.value === null ? turn : releasingSkills(options, turn, skills.value),
-  );
+  return opened;
 };
 
 export const createClaudeCodeHarnessAdapter = (

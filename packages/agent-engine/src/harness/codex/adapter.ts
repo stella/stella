@@ -16,6 +16,7 @@ import {
   type HarnessCapability,
   type HarnessInputFile,
   type HarnessInputFileType,
+  type HarnessLiveSession,
   type HarnessModel,
   type HarnessProbe,
   HarnessProbeError,
@@ -23,6 +24,7 @@ import {
   type HarnessTurn,
   type HarnessTurnInput,
 } from "../adapter";
+import type { HarnessContinuation } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
 import { redactingSkillPaths } from "../skill-redaction";
 import { toolPathEnvironment } from "../tool-path";
@@ -34,6 +36,7 @@ import {
   type AppServerLaunch,
   startAppServer,
 } from "./app-server-client";
+import { CodexProcess } from "./background";
 import {
   CODEX_CLIENT_INFO,
   CODEX_OPT_OUT_NOTIFICATIONS,
@@ -47,7 +50,8 @@ import { openThread } from "./thread";
 import { type CodexCapacityRetry, CodexTurnSession } from "./turn";
 
 /**
- * Codex over `codex app-server` (JSON-RPC on stdio), one process per turn.
+ * Codex over `codex app-server` (JSON-RPC on stdio), one process per turn,
+ * kept for the next turn while its background terminals run (`background.ts`).
  * The process runs with a stella-owned `CODEX_HOME`, so the user's own Codex
  * configuration, sessions and sign-in stay untouched, and a session started
  * here resumes from the rollout that home keeps between turns.
@@ -415,10 +419,129 @@ const probe = async (
   return result;
 };
 
+const turnSession = (
+  options: CodexHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  appServer: CodexProcess,
+) => {
+  const session = new CodexTurnSession({
+    gracePeriodMs: options.gracePeriodMs,
+    detached: createDetached(options.onBackgroundError),
+    stellaServer: input.mcp.serverName,
+    capacityRetry: options.capacityRetry ?? DEFAULT_CAPACITY_RETRY,
+    background: appServer.turnBackground,
+  });
+  appServer.route(session.handlers);
+  return session;
+};
+
+/** The turn's prompt, its images and `turn/start` on the open thread. */
+const beginTurn = async ({
+  client,
+  input,
+  session,
+  threadId,
+  prompt,
+  continuation,
+}: {
+  client: AppServerClient;
+  input: HarnessTurnInput;
+  session: CodexTurnSession;
+  threadId: string;
+  prompt: string;
+  continuation: HarnessContinuation;
+}): Promise<Result<HarnessTurn, HarnessStartError>> => {
+  const files = await filesTheModelReads(client, input);
+  const started = await client.request("turn/start", {
+    threadId,
+    input: turnInputItems(files, prompt),
+    // Codex keeps it for later turns of the process, so a capacity
+    // continuation runs at it too; omitted, the harness's own setting holds.
+    ...(input.reasoningEffort === null
+      ? {}
+      : { effort: input.reasoningEffort }),
+  });
+  const parsed = Result.isOk(started)
+    ? v.safeParse(TurnStartResponseSchema, started.value)
+    : null;
+  if (parsed === null || !parsed.success) {
+    return Result.err(
+      new HarnessStartError({
+        reason: "start_rejected",
+        message: Result.isError(started)
+          ? started.error.message
+          : "The harness answered turn/start with an unexpected shape.",
+      }),
+    );
+  }
+  session.begin({
+    threadId,
+    turnId: parsed.output.turn.id,
+    startedAt: parsed.output.turn.startedAt ?? null,
+    continuation,
+  });
+  return Result.ok(
+    redactingSkillPaths(session.turn(), {
+      folders: input.skillFolders,
+      plugin: null,
+    }),
+  );
+};
+
+/**
+ * The next turn in the process a completed turn kept for its background
+ * terminals: the thread is loaded there with them, so the turn starts on it
+ * without resuming. A session that ended meanwhile is resumed from its
+ * rollout like any other.
+ */
+const continueTurn = async (
+  options: CodexHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  live: HarnessLiveSession,
+): Promise<Result<HarnessTurn, HarnessStartError>> => {
+  const appServer = CodexProcess.of(live);
+  const threadId = appServer?.threadId ?? null;
+  if (appServer === undefined || threadId === null || !appServer.take(live)) {
+    await live.end();
+    return startTurn(options, {
+      ...input,
+      continuation: { type: "resume", sessionId: live.sessionId },
+    });
+  }
+  const client = appServer.client;
+  const session = turnSession(options, input, appServer);
+  session.attach(client);
+  const prompt = buildTurnPrompt({
+    transcript: input.transcript,
+    mode: "resumed",
+  });
+  const fail = async (error: HarnessStartError) => {
+    session.abandon();
+    await settlesWithin(appServer.stop(client), options.gracePeriodMs);
+    await client.kill();
+    return Result.err(error);
+  };
+  if (Result.isError(prompt)) {
+    return fail(prompt.error);
+  }
+  const begun = await beginTurn({
+    client,
+    input,
+    session,
+    threadId,
+    prompt: prompt.value,
+    continuation: { type: "resumed" },
+  });
+  return Result.isError(begun) ? fail(begun.error) : begun;
+};
+
 const startTurn = async (
   options: CodexHarnessAdapterOptions,
   input: HarnessTurnInput,
 ): Promise<Result<HarnessTurn, HarnessStartError>> => {
+  if (input.continuation.type === "live") {
+    return continueTurn(options, input, input.continuation.session);
+  }
   const standalone = buildTurnPrompt({
     transcript: input.transcript,
     mode: "standalone",
@@ -429,12 +552,11 @@ const startTurn = async (
   if (!path.isAbsolute(input.workspaceDir)) {
     panic("Codex adapter: the workspace directory must be an absolute path");
   }
-  const session = new CodexTurnSession({
+  const appServer = new CodexProcess({
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
-    stellaServer: input.mcp.serverName,
-    capacityRetry: options.capacityRetry ?? DEFAULT_CAPACITY_RETRY,
   });
+  const session = turnSession(options, input, appServer);
   const connected = await connect({
     options,
     cwd: input.workspaceDir,
@@ -442,13 +564,14 @@ const startTurn = async (
       ...packageCacheEnvironment(input.cacheDir),
       ...toolPathEnvironment(options.environment, input.toolPath),
     },
-    handlers: session.handlers,
+    handlers: appServer.handlers,
   });
   if (Result.isError(connected)) {
     session.abandon();
     return Result.err(new HarnessStartError(connected.error));
   }
   const { client } = connected.value;
+  appServer.attach(client);
   session.attach(client);
   const fail = async (error: HarnessStartError) => {
     session.abandon();
@@ -477,7 +600,7 @@ const startTurn = async (
     return fail(opened.error);
   }
   const { threadId, continuation } = opened.value;
-  const files = await filesTheModelReads(client, input);
+  appServer.threadId = threadId;
   const prompt =
     continuation.type === "resumed"
       ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
@@ -485,40 +608,15 @@ const startTurn = async (
   if (Result.isError(prompt)) {
     return fail(prompt.error);
   }
-  const started = await client.request("turn/start", {
+  const begun = await beginTurn({
+    client,
+    input,
+    session,
     threadId,
-    input: turnInputItems(files, prompt.value),
-    // Codex keeps it for later turns of the process, so a capacity
-    // continuation runs at it too; omitted, the harness's own setting holds.
-    ...(input.reasoningEffort === null
-      ? {}
-      : { effort: input.reasoningEffort }),
-  });
-  const parsed = Result.isOk(started)
-    ? v.safeParse(TurnStartResponseSchema, started.value)
-    : null;
-  if (parsed === null || !parsed.success) {
-    return fail(
-      new HarnessStartError({
-        reason: "start_rejected",
-        message: Result.isError(started)
-          ? started.error.message
-          : "The harness answered turn/start with an unexpected shape.",
-      }),
-    );
-  }
-  session.begin({
-    threadId,
-    turnId: parsed.output.turn.id,
-    startedAt: parsed.output.turn.startedAt ?? null,
+    prompt: prompt.value,
     continuation,
   });
-  return Result.ok(
-    redactingSkillPaths(session.turn(), {
-      folders: input.skillFolders,
-      plugin: null,
-    }),
-  );
+  return Result.isError(begun) ? fail(begun.error) : begun;
 };
 
 export const createCodexHarnessAdapter = (

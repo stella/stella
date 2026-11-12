@@ -238,6 +238,7 @@ export const redactingSkillPaths = (
     events: events(),
     respond: turn.respond,
     interrupt: turn.interrupt,
+    release: turn.release,
     dispose: turn.dispose,
   };
 };

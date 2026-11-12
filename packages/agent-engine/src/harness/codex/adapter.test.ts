@@ -1608,6 +1608,100 @@ describe("Codex items as chat parts", () => {
   });
 });
 
+describe("Codex background terminals after a turn", () => {
+  const completedTurn = async (scenario: FakeScenario) => {
+    const started = await start(scenario);
+    const collected = collect(started.turn);
+    await collected.done;
+    expect(terminal(collected.events)).toMatchObject({
+      type: "turn.completed",
+    });
+    return started;
+  };
+
+  test("keep the process, and the chat's next turn runs on the same thread in it", async () => {
+    const { adapter, workspaceDir, received, logPath, turn } =
+      await completedTurn("background_terminal");
+    const live = await turn.release();
+    if (live === null) {
+      return panic("The turn did not keep its process.");
+    }
+    expect(live.harness).toBe("codex");
+    expect(live.sessionId).toBe(harnessSessionId(FAKE_THREAD_ID));
+    expect(live.backgroundTasks).toBe(1);
+
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const collected = collect(next.value);
+    await collected.done;
+    expect(collected.events[0]).toEqual({
+      type: "session.started",
+      sessionId: harnessSessionId(FAKE_THREAD_ID),
+      continuation: { type: "resumed" },
+    });
+    expect(terminal(collected.events)).toMatchObject({
+      type: "turn.completed",
+    });
+    // Its server exited during the turn: nothing is kept any more.
+    expect(await next.value.release()).toBeNull();
+
+    const startups = readFileSync(logPath, "utf-8")
+      .split("\n")
+      .filter((line) => line.includes('"startup"'));
+    expect(startups).toHaveLength(1);
+    const methods = received().map(({ method }) => method);
+    expect(methods.filter((method) => method === "initialize")).toHaveLength(1);
+    expect(methods).not.toContain("thread/resume");
+    const turnStarts = received().filter(
+      ({ method }) => method === "turn/start",
+    );
+    expect(turnStarts).toHaveLength(2);
+    expect(turnStarts[1]?.params).toMatchObject({ threadId: FAKE_THREAD_ID });
+    expect(methods).toContain("thread/backgroundTerminals/clean");
+  });
+
+  test("a kept process ends by itself once its last background command exits", async () => {
+    const { turn, received } = await completedTurn("background_terminal_exits");
+    const live = await turn.release();
+    if (live === null) {
+      return panic("The turn did not keep its process.");
+    }
+    const counts: number[] = [];
+    live.watch((count) => {
+      counts.push(count);
+    });
+    await live.ended;
+    expect(counts).toEqual([0]);
+    expect(live.backgroundTasks).toBe(0);
+    expect(received().map(({ method }) => method)).toContain(
+      "thread/backgroundTerminals/clean",
+    );
+  });
+
+  test("ending a kept process cleans its terminals before it closes", async () => {
+    const { turn, logPath } = await completedTurn("background_terminal");
+    const live = await turn.release();
+    if (live === null) {
+      return panic("The turn did not keep its process.");
+    }
+    await live.end();
+    expect(readFileSync(logPath, "utf-8")).toContain(
+      JSON.stringify({ cleaned: ["call-serve"] }),
+    );
+  });
+
+  test("a turn without background work closes its process as before", async () => {
+    const { turn } = await completedTurn("tool_calls");
+    expect(await turn.release()).toBeNull();
+  });
+});
+
 /**
  * Checks against a real `codex` CLI when one is installed. Nothing here
  * signs in or sends a prompt: the handshake is `initialize` only, and the
@@ -1628,6 +1722,12 @@ const CLIENT_METHODS = [
   "thread/unarchive",
   "turn/start",
   "turn/interrupt",
+] as const;
+
+/** Experimental client methods the adapter calls; `initialize` opts in. */
+const EXPERIMENTAL_CLIENT_METHODS = [
+  "thread/backgroundTerminals/list",
+  "thread/backgroundTerminals/clean",
 ] as const;
 
 const OneOfMethods = v.object({
@@ -1760,6 +1860,22 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
     const clientMethods = new Set(await methodsIn(out, "ClientRequest.json"));
     for (const method of CLIENT_METHODS) {
       expect(clientMethods.has(method)).toBe(true);
+    }
+    const experimentalOut = path.join(root, "experimental-schema");
+    const experimental = Bun.spawnSync([
+      codex ?? "",
+      "app-server",
+      "generate-json-schema",
+      "--experimental",
+      "--out",
+      experimentalOut,
+    ]);
+    expect(experimental.exitCode).toBe(0);
+    const experimentalMethods = new Set(
+      await methodsIn(experimentalOut, "ClientRequest.json"),
+    );
+    for (const method of EXPERIMENTAL_CLIENT_METHODS) {
+      expect(experimentalMethods.has(method)).toBe(true);
     }
 
     const itemTypes = v

@@ -48,7 +48,29 @@ type FakeStep =
   | { spawn: readonly string[]; in?: "own_group" | "orphan" }
   | { raw: string }
   | { sleep: number }
+  /**
+   * The thread's background terminals from now on, by item id: commands
+   * left running past the turn, which `thread/backgroundTerminals/list`
+   * reports until they exit or `thread/backgroundTerminals/clean` ends them.
+   */
+  | { terminals: readonly string[] }
   | { exit: number };
+
+const TERMINAL_METHODS: ReadonlySet<string> = new Set([
+  "thread/backgroundTerminals/list",
+  "thread/backgroundTerminals/clean",
+]);
+
+/** A background terminal as the app-server lists it. */
+const backgroundTerminal = (itemId: string) => ({
+  itemId,
+  processId: `process-${itemId}`,
+  command: "bun run dev",
+  cwd: "/workspace",
+  osPid: null,
+  cpuPercent: null,
+  rssKb: null,
+});
 
 const userAgent = (version: string) =>
   `stella/${version} (Mac OS 27.0; arm64) test`;
@@ -253,7 +275,52 @@ const tokenUsage = (usage: {
 
 const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
 
+/** A dev server the agent started and left running past its yield. */
+const devServer = (status: string, extra: object = {}) =>
+  command("call-serve", status, { command: "bun run dev", ...extra });
+
+/** The next turn's message, on the same thread. */
+const nextTurnItem = (body: object): FakeStep => ({
+  notify: "item/completed",
+  params: { threadId: FAKE_THREAD_ID, turnId: CONTINUED_TURN_ID, item: body },
+});
+
 const FAKE_SCENARIOS = {
+  /**
+   * A turn that leaves a dev server running as a background terminal, then
+   * the chat's next turn on the same thread in the same process, during
+   * which the server exits.
+   */
+  background_terminal: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    item("completed", agentMessage("m-serve", "The server runs.")),
+    completed(),
+    { expect: "turn/start", result: { turn: continuedTurn("inProgress") } },
+    { terminals: [] },
+    item("completed", devServer("completed", { exitCode: 0 })),
+    nextTurnItem(agentMessage("m-next", "It stopped.")),
+    {
+      notify: "turn/completed",
+      params: { threadId: FAKE_THREAD_ID, turn: continuedTurn("completed") },
+    },
+  ],
+  /** As above, but the server exits while the chat waits for its next turn. */
+  background_terminal_exits: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      result: { data: [backgroundTerminal("call-serve")], nextCursor: null },
+    },
+    // Once the process is kept, not while it is being listed.
+    { sleep: 200 },
+    { terminals: [] },
+    item("completed", devServer("completed", { exitCode: 0 })),
+  ],
   /**
    * The shared stella tool calls through the stella MCP binding, step by
    * step: a step's calls all start, then complete. Then an answer.
@@ -1133,8 +1200,25 @@ const run = async (
 
   const skills = skillDiscovery();
   /** Model listing and skill discovery answer whenever they are asked. */
-  const unscriptedAnswer = (method: string | undefined, params: unknown) =>
-    method === "model/list" ? TURN_MODELS : skills.answer(method, params);
+  /** The thread's background terminals, by item id, as the script set them. */
+  const terminals: string[] = [];
+  const unscriptedAnswer = (
+    method: string | undefined,
+    params: unknown,
+  ): object | null => {
+    switch (method) {
+      case "model/list":
+        return TURN_MODELS;
+      case "thread/backgroundTerminals/list":
+        return { data: terminals.map(backgroundTerminal), nextCursor: null };
+      case "thread/backgroundTerminals/clean":
+        log({ cleaned: [...terminals] });
+        terminals.splice(0);
+        return {};
+      default:
+        return skills.answer(method, params);
+    }
+  };
   /** The next request a step scripts; skill discovery answers the rest. */
   const nextRequest = async (expected: string) => {
     for (;;) {
@@ -1199,11 +1283,28 @@ const run = async (
       process.stdout.write(`${step.raw}\n`);
     } else if ("sleep" in step) {
       await Bun.sleep(step.sleep);
+    } else if ("terminals" in step) {
+      terminals.splice(0, terminals.length, ...step.terminals);
     } else {
       process.exit(step.exit);
     }
   }
-  // A real server exits once its client closes stdin.
+  // A real server exits once its client closes stdin. Until then it still
+  // lists and cleans its background terminals; anything else stays
+  // unanswered, as the script left it.
+  for (;;) {
+    // await-in-loop: one request at a time, in the order they arrived.
+    const message = await take("requests");
+    if (message === null) {
+      break;
+    }
+    if (TERMINAL_METHODS.has(message.method ?? "")) {
+      write({
+        id: message.id,
+        result: unscriptedAnswer(message.method, message["params"]),
+      });
+    }
+  }
   await reading;
 };
 

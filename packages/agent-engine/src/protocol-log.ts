@@ -398,6 +398,7 @@ const CLAUDE_CONTROL_REQUEST_FIELDS: Readonly<
   interrupt: {},
   get_usage: { skip_behaviors: BOOLEAN },
   mcp_set_servers: { servers: SIZE },
+  stop_task: { task_id: IDENTIFIER },
 };
 
 const CLAUDE_USAGE_WINDOW = object({ utilization: NUMBER, resets_at: INSTANT });
@@ -731,6 +732,13 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
     excludeTurns: BOOLEAN,
   },
   "thread/unarchive": { threadId: IDENTIFIER },
+  "thread/backgroundTerminals/list": {
+    threadId: IDENTIFIER,
+    cursor: IDENTIFIER,
+    data: list({ itemId: IDENTIFIER }),
+    nextCursor: IDENTIFIER,
+  },
+  "thread/backgroundTerminals/clean": { threadId: IDENTIFIER },
   "turn/start": {
     threadId: IDENTIFIER,
     model: OPAQUE,
@@ -1025,6 +1033,7 @@ const SIDECAR_FIELDS: Readonly<Record<SidecarMessage["type"], Fields>> = {
     requestId: IDENTIFIER,
     outcome: vocabulary(SIDECAR_RESTORE_OUTCOMES),
   },
+  "background.tasks": { runId: IDENTIFIER, count: NUMBER },
   rejected: {
     reason: vocabulary(SIDECAR_REJECTIONS),
     messageType: vocabulary(Object.values(SIDECAR_HOST_MESSAGE)),

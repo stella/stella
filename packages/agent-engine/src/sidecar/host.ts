@@ -14,7 +14,9 @@ import { createDetached } from "@stll/errors";
 
 import type {
   HarnessAdapter,
+  HarnessContinuationRequest,
   HarnessInteractionResponse,
+  HarnessLiveSession,
   HarnessProbe,
   HarnessStartError,
   HarnessTurn,
@@ -63,15 +65,16 @@ import {
   shareOutputs,
   snapshotOutputs,
 } from "./outputs";
-import type {
-  SidecarFolderRestore,
-  SidecarHarnessLaunchSettings,
-  SidecarHostMessage,
-  SidecarHostOutput,
-  SidecarProbeOutcome,
-  SidecarRejection,
-  SidecarRestoreOutcome,
-  SidecarRunStart,
+import {
+  SIDECAR_MAX_BACKGROUND_TASKS,
+  type SidecarFolderRestore,
+  type SidecarHarnessLaunchSettings,
+  type SidecarHostMessage,
+  type SidecarHostOutput,
+  type SidecarProbeOutcome,
+  type SidecarRejection,
+  type SidecarRestoreOutcome,
+  type SidecarRunStart,
 } from "./protocol";
 
 /**
@@ -80,6 +83,15 @@ import type {
  * `run.finished`, also when the harness never started, so the host's run
  * bookkeeping needs no second failure path. The holder (`holder.ts`) owns the
  * connection, the handshake and the numbering of what this loop sends.
+ *
+ * A run whose turn completed while work its agent started in the background
+ * still runs leaves its harness process to the chat's folder (a live
+ * session, `HarnessLiveSession`): the chat's next run continues in it when it
+ * resumes that session with the same launch, and sees that work. Anything
+ * else ends it first: another session or launch, a stop of the next run, a
+ * restore of the folder, the idle limit, the holder stopping, or another API
+ * origin. It also ends by itself once its background work does. While it
+ * waits, `background.tasks` reports how much work it holds.
  */
 
 /** The host messages that act on harnesses and runs. */
@@ -105,6 +117,53 @@ const HARNESS_REQUEST_TIMEOUT_MS = 30_000;
  */
 const HARNESS_STARTUP_REQUEST_TIMEOUT_MS = 2 * 60_000;
 const MAX_PROBED_MODELS = 100;
+/**
+ * How long a chat's harness process kept for its background work waits for
+ * the chat's next turn before that work is ended: long enough for a server
+ * or a watcher to outlast a break, bounded so none runs on unseen for days.
+ */
+const LIVE_SESSION_IDLE_MS = 4 * 60 * 60_000;
+
+/**
+ * What a harness process was started with that a later turn cannot change:
+ * a turn continues in a kept process only when this is the same.
+ */
+const launchKey = (
+  message: SidecarRunStart,
+  networkHosts: readonly string[],
+): string =>
+  JSON.stringify([
+    message.harness,
+    message.executable,
+    message.configDir,
+    message.launch,
+    message.workspaceDir,
+    message.cacheDir,
+    message.toolPath,
+    message.skillFolders,
+    networkHosts,
+    message.model,
+    message.reasoningEffort,
+    message.instructions,
+    message.policy,
+    message.mcp.serverName,
+  ]);
+
+/** How the run's turn continues the chat's native session, if at all. */
+const continuationOf = (
+  message: SidecarRunStart,
+  taken: LiveFolder | null,
+): HarnessContinuationRequest => {
+  if (taken !== null) {
+    return { type: "live", session: taken.session };
+  }
+  return message.harnessSessionId === null
+    ? { type: "fresh" }
+    : {
+        type: "resume",
+        sessionId: harnessSessionId(message.harnessSessionId),
+      };
+};
 
 export type HarnessLaunch = {
   harness: AgentHarness;
@@ -179,6 +238,28 @@ type HeldRun = {
   outputSharing: AbortController;
   /** Whether the folder was saved before the harness started; `null` until then. */
   checkpoint: DesktopRunnerCheckpointEvent | null;
+  /**
+   * The folder's kept harness process, taken at the start: the turn
+   * continues in it, or it ends first. `null` once the adapter has it.
+   */
+  live: LiveFolder | null;
+  /** The run's `launchKey`, once its harness is about to start. */
+  launch: string | null;
+};
+
+/** A chat folder's harness process, kept for the chat's next turn. */
+type LiveFolder = {
+  readonly session: HarnessLiveSession;
+  readonly launch: string;
+  /** The folder, resolved. */
+  readonly workspaceDir: string;
+  /** The run whose turn left the work running; counts are reported for it. */
+  readonly runId: string;
+  /** The process's parked MCP endpoint, on the proxy it was parked on. */
+  readonly endpoint: string;
+  readonly proxy: McpProxy;
+  /** Ends the session once the idle limit passes. */
+  readonly idle: ReturnType<typeof setTimeout>;
 };
 
 /**
@@ -362,6 +443,8 @@ export class SidecarHost {
     string,
     { runId: string; ended: Promise<SidecarRestoreOutcome> }
   >();
+  /** Kept harness processes by their chat's folder, resolved. */
+  private readonly live = new Map<string, LiveFolder>();
   private stopping = false;
   private readonly detached: ReturnType<typeof createDetached>;
 
@@ -387,6 +470,10 @@ export class SidecarHost {
       return false;
     }
     if (config !== null) {
+      // Kept processes belong to the other origin's chats.
+      for (const entry of [...this.live.values()]) {
+        this.track(this.endLive(entry));
+      }
       this.detached(config.proxy.stop(), "sidecar.proxy.stop");
     }
     this.config = {
@@ -405,6 +492,13 @@ export class SidecarHost {
   /** How many runs are still going. */
   get running() {
     return this.runs.size;
+  }
+
+  /** Report every kept process's background work again, to a new desktop. */
+  reportBackground() {
+    for (const entry of this.live.values()) {
+      this.reportTasks(entry.runId, entry.session.backgroundTasks);
+    }
   }
 
   /** Handle one command; the holder passes them only after `configure`. */
@@ -487,7 +581,10 @@ export class SidecarHost {
     this.options.send({ type: "rejected", reason, messageType, runId });
   }
 
-  /** Stop every run, wait for each to finish, and close the proxy. */
+  /**
+   * Stop every run and every kept process, wait for each to finish, and
+   * close the proxy.
+   */
   async shutdown() {
     this.stopping = true;
     for (const refuse of [...this.grants.values()]) {
@@ -495,6 +592,9 @@ export class SidecarHost {
     }
     for (const run of this.runs.values()) {
       this.stop(run, RUN_STOP.cancel);
+    }
+    for (const entry of [...this.live.values()]) {
+      this.track(this.endLive(entry));
     }
     await Promise.allSettled([...this.finished]);
     await this.config?.proxy.stop();
@@ -629,7 +729,16 @@ export class SidecarHost {
       outputs: null,
       outputSharing: new AbortController(),
       checkpoint: null,
+      live: null,
+      launch: null,
     };
+    // Taken now, so no other start or restore finds it: the run continues
+    // in it or ends it before its own harness starts.
+    const kept = this.live.get(run.workspaceDir);
+    if (kept !== undefined) {
+      this.forgetLive(kept);
+      run.live = kept;
+    }
     this.runs.set(message.runId, run);
     this.track(
       this.execute(message, config, run).finally(() => {
@@ -672,6 +781,11 @@ export class SidecarHost {
       return;
     }
     const ended = (async () => {
+      // Undoing the turn ends the work it left running in the folder.
+      const kept = this.live.get(workspaceDir);
+      if (kept !== undefined) {
+        await this.endLive(kept);
+      }
       const restored = await restoreCheckpoint({
         workspaceDir,
         runId: message.runId,
@@ -688,6 +802,91 @@ export class SidecarHost {
     } finally {
       this.restoring.delete(workspaceDir);
     }
+  }
+
+  /**
+   * Keep the process a completed turn left work running in, for the chat's
+   * next turn; registered before the run's `run.finished`, so that turn's
+   * start finds it. A launch a later turn cannot continue (one whose process
+   * holds a credential grant only for this run), a stopping host or an
+   * endpoint that cannot be parked ends it instead.
+   */
+  private async keepLive({
+    message,
+    config,
+    run,
+    session,
+  }: {
+    message: SidecarRunStart;
+    config: Config;
+    run: HeldRun;
+    session: HarnessLiveSession;
+  }) {
+    const endpoint =
+      this.stopping ||
+      run.launch === null ||
+      message.launch.processGrant ||
+      this.live.has(run.workspaceDir) ||
+      // Its work ended meanwhile, and the session with it.
+      session.backgroundTasks === 0
+        ? null
+        : config.proxy.park(message.runId);
+    if (endpoint === null) {
+      await session.end();
+      return;
+    }
+    const workspaceDir = run.workspaceDir;
+    const entry: LiveFolder = {
+      session,
+      launch: run.launch ?? panic("A kept process without its launch"),
+      workspaceDir,
+      runId: message.runId,
+      endpoint,
+      proxy: config.proxy,
+      idle: setTimeout(() => {
+        this.options.log("ended a chat's background work at the idle limit");
+        this.track(this.endLive(entry));
+      }, LIVE_SESSION_IDLE_MS),
+    };
+    this.live.set(workspaceDir, entry);
+    this.options.log("kept a harness process for its background work");
+    session.watch((count) => {
+      if (this.live.get(workspaceDir) !== entry) {
+        return;
+      }
+      if (count > 0) {
+        this.reportTasks(entry.runId, count);
+        return;
+      }
+      // The work ended, and the session with it; reported as 0.
+      this.forgetLive(entry);
+      entry.proxy.drop(entry.endpoint);
+    });
+    this.reportTasks(entry.runId, session.backgroundTasks);
+  }
+
+  /** Take a kept process out of the folder's keeping; reported as 0. */
+  private forgetLive(entry: LiveFolder) {
+    clearTimeout(entry.idle);
+    if (this.live.get(entry.workspaceDir) === entry) {
+      this.live.delete(entry.workspaceDir);
+      this.reportTasks(entry.runId, 0);
+    }
+  }
+
+  /** End a kept process and the work it holds. */
+  private async endLive(entry: LiveFolder) {
+    this.forgetLive(entry);
+    await entry.session.end();
+    entry.proxy.drop(entry.endpoint);
+  }
+
+  private reportTasks(runId: string, count: number) {
+    this.options.send({
+      type: "background.tasks",
+      runId,
+      count: Math.min(count, SIDECAR_MAX_BACKGROUND_TASKS),
+    });
   }
 
   private stop(run: HeldRun, reason: RunStop) {
@@ -753,13 +952,40 @@ export class SidecarHost {
         message: "The run's transcript has a message stella cannot read.",
       });
     }
-    const binding = config.proxy.register({
+    const declared = await readSkillFolderNetworkHosts(message.skillFolders);
+    for (const skill of declared.unreadable) {
+      this.options.log(
+        `a skill's network hosts could not be read and add none: ${skill}`,
+      );
+    }
+    run.launch = launchKey(message, declared.hosts);
+    const live = run.live;
+    if (
+      live !== null &&
+      !(
+        live.session.harness === message.harness &&
+        live.launch === run.launch &&
+        live.session.sessionId === message.harnessSessionId &&
+        live.proxy === config.proxy
+      )
+    ) {
+      // Another session or launch: the work the kept process holds is not
+      // this turn's to see, so it ends before this turn's harness starts.
+      run.live = null;
+      this.options.log("ended a chat's kept harness process for a new launch");
+      await this.endLive(live);
+    }
+    const endpoint = {
       runId: message.runId,
       serverName: message.mcp.serverName,
       upstreamUrl: message.mcp.url,
       token: message.mcp.token,
       expiresAt: message.mcp.expiresAt,
-    });
+    };
+    const binding =
+      run.live === null
+        ? config.proxy.register(endpoint)
+        : config.proxy.adopt(run.live.endpoint, endpoint);
     if (Result.isError(binding)) {
       this.options.log(`refused a run's MCP endpoint: ${binding.error.reason}`);
       return Result.err({
@@ -843,12 +1069,10 @@ export class SidecarHost {
     for (const reason of input.skipped) {
       this.options.log(`an attached file stays a path only: ${reason}`);
     }
-    const declared = await readSkillFolderNetworkHosts(message.skillFolders);
-    for (const skill of declared.unreadable) {
-      this.options.log(
-        `a skill's network hosts could not be read and add none: ${skill}`,
-      );
-    }
+    // From here the adapter owns the kept process: it continues the turn in
+    // it, or ends it.
+    const taken = run.live;
+    run.live = null;
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -864,13 +1088,7 @@ export class SidecarHost {
       mcp: binding.value,
       transcript: transcript.output,
       inputFiles: input.files,
-      continuation:
-        message.harnessSessionId === null
-          ? { type: "fresh" }
-          : {
-              type: "resume",
-              sessionId: harnessSessionId(message.harnessSessionId),
-            },
+      continuation: continuationOf(message, taken),
     });
     return Result.isOk(started)
       ? Result.ok(started.value)
@@ -883,6 +1101,13 @@ export class SidecarHost {
     run: HeldRun,
   ) {
     const opened = await this.open(message, config, run);
+    // A run that ended before its harness started does not continue in the
+    // folder's kept process, so that process ends: a stop ends everything.
+    const untaken = run.live;
+    if (untaken !== null) {
+      run.live = null;
+      await this.endLive(untaken);
+    }
     const outcome: { value: RunOutcome; sessionId: string | null } = {
       value: "failed",
       sessionId: null,
@@ -1062,7 +1287,13 @@ export class SidecarHost {
       }
     }
     coalescer.flush();
-    await run.turn?.dispose();
+    const kept = (await run.turn?.release()) ?? null;
+    if (kept !== null && delivery.broken) {
+      // The run fails: nothing it started stays behind.
+      await kept.end();
+    } else if (kept !== null) {
+      await this.keepLive({ message, config, run, session: kept });
+    }
     const finished = {
       type: "run.finished",
       runId,
