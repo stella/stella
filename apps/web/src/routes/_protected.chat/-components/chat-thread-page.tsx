@@ -37,6 +37,7 @@ import {
 } from "@/components/chat-editor-source";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { ChatBackgroundTasks } from "@/components/chat/chat-background-tasks";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatLocalRunQuestionContext } from "@/components/chat/chat-local-run-question-context";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
@@ -775,6 +776,11 @@ export const ChatThreadPage = ({
                           workspaceId={workspaceId}
                         />
                       </ChatLocalRunQuestionContext>
+                      <ChatBackgroundTasks
+                        generationActive={isGenerating}
+                        ranOnComputer={data.newestLocalTurn !== undefined}
+                        threadId={threadRef.threadId}
+                      />
                       <ChatThreadRecap
                         activeOrganizationId={activeOrganizationId}
                         isGenerating={isGenerating}

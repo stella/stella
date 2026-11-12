@@ -1389,6 +1389,7 @@ const storedRunMessage = (stored: unknown): SequencedRunMessage => {
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runAccepted:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runRejected:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runBackground:
       return panic(`A run stored an unsequenced ${message.type}`);
     default:
       message satisfies never;

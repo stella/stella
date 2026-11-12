@@ -1853,6 +1853,7 @@
       "restored": "Zmiany w plikach cofnięte"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# zadanie działa w tle} few {# zadania działają w tle} many {# zadań działa w tle} other {# zadania działa w tle}}",
       "cloud": "Chmura stella",
       "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
       "errorLimitResetsAt": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Możesz spróbować ponownie po {time}.",

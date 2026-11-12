@@ -1853,6 +1853,7 @@
       "restored": "Změny souborů vráceny"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {Na pozadí běží # úloha} few {Na pozadí běží # úlohy} many {Na pozadí běží # úlohy} other {Na pozadí běží # úloh}}",
       "cloud": "Cloud stella",
       "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
       "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",

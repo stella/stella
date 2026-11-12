@@ -179,6 +179,13 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
       .bigint("chat_read_seq", { mode: "number" })
       .notNull()
       .default(0),
+    /**
+     * How many tasks the harness process the run left behind keeps running
+     * in the background, as its computer last reported (`run.background`),
+     * while the chat waits for its next turn; 0 when none. Reset when the
+     * computer's socket says hello, which reports the live ones again.
+     */
+    backgroundTasks: p.integer("background_tasks").notNull().default(0),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
@@ -263,6 +270,10 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     p.check(
       "desktop_runner_runs_chat_read_seq_check",
       sql`${table.chatReadSeq} BETWEEN 0 AND 4294967295`,
+    ),
+    p.check(
+      "desktop_runner_runs_background_tasks_check",
+      sql`${table.backgroundTasks} BETWEEN 0 AND 1000`,
     ),
     ...ownerOnlyPolicies("desktop_runner_runs"),
   ],

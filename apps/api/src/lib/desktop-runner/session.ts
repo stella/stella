@@ -36,11 +36,13 @@ import {
 } from "@/api/lib/desktop-runner/sealed-answers";
 import {
   claimRunnerSession,
+  clearBackgroundTasks,
   type DesktopRunnerDb,
   markRunStartsSending,
   type PendingCommand,
   persistRunMessage,
   readPendingCommands,
+  recordBackgroundTasks,
   recordHarnessStatus,
   recordRunAccepted,
   recordRunRejected,
@@ -108,6 +110,8 @@ type RunnerSessionContext = {
   readonly ringPrevious: (holder: RunHolder) => void;
   /** Wake the readers of a run whose stored messages or state changed. */
   readonly ringRun: (runId: string) => void;
+  /** Tell the account its chats' background work here changed. */
+  readonly announceBackgroundTasks: (owner: RunnerBinding) => void;
 };
 
 type RunnerSessionOptions = {
@@ -744,6 +748,11 @@ const onHello = async (
   }
   // Claimed, so the closing socket's release marks the runner disconnected.
   state.claimed = true;
+  // What ran in the background before this socket is reported again after
+  // `welcome`; a count the computer no longer holds must not linger.
+  if (await clearBackgroundTasks(context.db, state.binding)) {
+    context.announceBackgroundTasks(state.binding);
+  }
   if (claim.previous !== null) {
     context.ringPrevious(claim.previous);
   }
@@ -861,6 +870,29 @@ const handleMessage = async (
         now: now(),
       });
       return;
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runBackground: {
+      const recorded = await recordBackgroundTasks(db, {
+        binding,
+        sessionId: state.sessionId,
+        runId: message.runId,
+        count: message.count,
+      });
+      switch (recorded) {
+        case "applied":
+          state.context.announceBackgroundTasks(binding);
+          return;
+        case "not_current":
+          close(state, DESKTOP_RUNNER_CLOSE.superseded);
+          return;
+        case "unknown_run":
+          // A run the API already forgot, or never routed here: its chat
+          // shows nothing for it.
+          return;
+        default:
+          recorded satisfies never;
+          return panic("Unhandled background count outcome");
+      }
+    }
     default: {
       message satisfies never;
       panic("Unknown desktop runner message");
@@ -930,6 +962,8 @@ const onSocketClosed = (state: SessionState) => {
       // Routing ignores the runner once its heartbeat goes stale.
       observeFailure(released.error, { sink: RELEASE_SINK });
     }
+    // An open chat stops showing what this computer runs while it is away.
+    state.context.announceBackgroundTasks(state.binding);
   }, "desktop-runner.release");
 };
 

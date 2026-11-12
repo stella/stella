@@ -202,6 +202,7 @@
     "./mcp-app-failure": "./src/mcp-app-failure.ts",
     "./desktop-runner": "./src/desktop-runner.ts",
     "./chat-local-files-undo": "./src/chat-local-files-undo.ts",
+    "./chat-background-tasks": "./src/chat-background-tasks.ts",
     "./chat-run-target": "./src/chat-run-target.ts",
     "./chat-local-run-question": "./src/chat-local-run-question.ts",
     "./ai-errors": "./src/ai-errors.ts",

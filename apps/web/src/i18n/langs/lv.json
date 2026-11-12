@@ -1853,6 +1853,7 @@
       "restored": "Failu izmaiņas atsauktas"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, zero {Fonā darbojas # uzdevumu} one {Fonā darbojas # uzdevums} other {Fonā darbojas # uzdevumi}}",
       "cloud": "stella mākonis",
       "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",
       "errorLimitResetsAt": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Vēlreiz mēģināt varēsiet pēc {time}.",

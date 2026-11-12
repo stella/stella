@@ -40,7 +40,7 @@ use super::harness::{EmitError, RunOutput};
 use crate::local_store::{self, EncryptedJsonFile, EncryptedJsonLog, LogContents};
 use crate::runner_protocol::{
   DesktopMessage, MAX_MESSAGE_BYTES_PER_RUN, MAX_MESSAGES_PER_RUN, RejectReason,
-  RunApprovalRequest, RunEvent, RunFinished,
+  RunApprovalRequest, RunBackground, RunEvent, RunFinished,
 };
 
 const RECORD_LABEL: &str = "desktop runner journal";
@@ -305,7 +305,8 @@ pub(crate) fn seq_of(message: &DesktopMessage) -> Option<u32> {
     | DesktopMessage::HarnessStatus(_)
     | DesktopMessage::RunAccepted(_)
     | DesktopMessage::RunRejected(_)
-    | DesktopMessage::FolderRestored(_) => None,
+    | DesktopMessage::FolderRestored(_)
+    | DesktopMessage::RunBackground(_) => None,
   }
 }
 
@@ -319,7 +320,8 @@ pub(crate) fn run_of(message: &DesktopMessage) -> Option<&str> {
     | DesktopMessage::HarnessStatus(_)
     | DesktopMessage::RunAccepted(_)
     | DesktopMessage::RunRejected(_)
-    | DesktopMessage::FolderRestored(_) => None,
+    | DesktopMessage::FolderRestored(_)
+    | DesktopMessage::RunBackground(_) => None,
   }
 }
 
@@ -925,6 +927,9 @@ struct SharedState {
   journal: Option<(String, Journal)>,
   /// Where newly journaled messages go to be sent while a socket is up.
   live: Option<mpsc::UnboundedSender<DesktopMessage>>,
+  /// What each finished run's kept harness process runs in the background,
+  /// as the holder last reported; only counts above 0.
+  background: BTreeMap<String, u32>,
 }
 
 /// The journal of the account the runner connects for, shared by the runner
@@ -939,6 +944,7 @@ impl Default for SharedJournal {
     Self(Mutex::new(SharedState {
       journal: None,
       live: None,
+      background: BTreeMap::new(),
     }))
   }
 }
@@ -964,6 +970,38 @@ impl SharedJournal {
   /// The channel newly journaled messages are sent on, until replaced.
   pub(crate) fn set_live(&self, live: mpsc::UnboundedSender<DesktopMessage>) {
     self.state().live = Some(live);
+  }
+
+  /// What a run's kept harness process runs in the background now: held
+  /// for the next socket and sent to the current one, if one is up.
+  pub(crate) fn report_background(&self, run_id: String, count: u32) {
+    let mut state = self.state();
+    if count == 0 {
+      state.background.remove(&run_id);
+    } else {
+      state.background.insert(run_id.clone(), count);
+    }
+    if let Some(live) = state.live.as_ref() {
+      let _sent = live.send(DesktopMessage::RunBackground(RunBackground {
+        run_id,
+        count,
+      }));
+    }
+  }
+
+  /// Every count above 0, for a socket that just connected.
+  pub(crate) fn background_reports(&self) -> Vec<DesktopMessage> {
+    self
+      .state()
+      .background
+      .iter()
+      .map(|(run_id, &count)| {
+        DesktopMessage::RunBackground(RunBackground {
+          run_id: run_id.clone(),
+          count,
+        })
+      })
+      .collect()
   }
 
   /// Send a message that is not journaled (it belongs to no run) to the

@@ -52,6 +52,7 @@ import {
   readRun,
   readRunOutputFile,
   readStoredRunEvents,
+  readThreadBackgroundTasks,
   recordChatReadSeq,
   type RunOwner,
   type StoredRunEvent,
@@ -699,6 +700,27 @@ export const createDesktopRunnerControl = ({
         })),
       );
     },
+    /**
+     * What the chat's runs left running in the background on the member's
+     * computers, counted only for a computer whose socket is fresh, the
+     * same rule `readMemberRunners` uses.
+     */
+    readBackgroundTasks: async ({
+      owner,
+      threadId,
+    }: {
+      owner: RunOwner;
+      threadId: SafeId<"chatThread">;
+    }): Promise<Result<number, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () =>
+          await readThreadBackgroundTasks(db, {
+            owner,
+            threadId,
+            freshSince: seenSince(deps),
+          }),
+        catch: toDatabaseError,
+      }),
     /** The harness session a thread's next turn on this computer resumes. */
     readChatRunSession: async (
       options: Parameters<typeof readChatRunSession>[1],

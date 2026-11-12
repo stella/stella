@@ -1853,6 +1853,7 @@
       "restored": "File changes undone"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# background task running} other {# background tasks running}}",
       "cloud": "stella cloud",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
       "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",

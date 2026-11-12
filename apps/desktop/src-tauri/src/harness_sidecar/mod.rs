@@ -59,7 +59,7 @@ use tokio::sync::{mpsc, oneshot};
 pub(crate) use endpoint::EndpointError;
 use endpoint::Endpoints;
 pub(crate) use protocol::{
-  CHECKPOINT_STORE_SUFFIX, FolderRestore as SidecarFolderRestore,
+  BackgroundTasks, CHECKPOINT_STORE_SUFFIX, FolderRestore as SidecarFolderRestore,
   HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
   RestoreOutcome, SidecarRunStart, SkillFolderRef,
 };
@@ -312,6 +312,7 @@ enum Control {
   },
   Ack(Ack),
   WatchProcesses(mpsc::Sender<HarnessProcess>),
+  WatchBackground(mpsc::Sender<BackgroundTasks>),
   GrantProcess(String),
   #[cfg_attr(
     not(all(test, unix)),
@@ -358,6 +359,7 @@ impl HarnessSidecar {
         probes: HashMap::new(),
         restores: HashMap::new(),
         processes: None,
+        background: None,
       }
       .run(),
     );
@@ -371,6 +373,16 @@ impl HarnessSidecar {
   ) -> Result<mpsc::Receiver<HarnessProcess>, SidecarUnavailable> {
     let (reports, receiver) = mpsc::channel(PROCESS_QUEUE);
     self.control(Control::WatchProcesses(reports))?;
+    Ok(receiver)
+  }
+
+  /// What each kept harness process runs in the background, from now on; a
+  /// later call replaces the earlier watcher.
+  pub(crate) fn watch_background(
+    &self,
+  ) -> Result<mpsc::Receiver<BackgroundTasks>, SidecarUnavailable> {
+    let (reports, receiver) = mpsc::channel(PROCESS_QUEUE);
+    self.control(Control::WatchBackground(reports))?;
     Ok(receiver)
   }
 
@@ -942,6 +954,8 @@ struct Supervisor {
   restores: HashMap<String, PendingRestore>,
   /// Where reported harness processes go.
   processes: Option<mpsc::Sender<HarnessProcess>>,
+  /// Where background task counts go.
+  background: Option<mpsc::Sender<BackgroundTasks>>,
 }
 
 impl Supervisor {
@@ -978,6 +992,7 @@ impl Supervisor {
           }
           Some(Control::Ack(ack)) => self.ack(ack).await,
           Some(Control::WatchProcesses(reports)) => self.processes = Some(reports),
+          Some(Control::WatchBackground(reports)) => self.background = Some(reports),
           Some(Control::GrantProcess(id)) => self.grant_process(id).await,
         },
         Some(event) = self.events.recv() => self.event(event).await,
@@ -1549,13 +1564,13 @@ impl Supervisor {
         }
       }
       SidecarMessage::BackgroundTasks(tasks) => {
-        // The chat learns the count once the runner relays it; until then it
-        // stays on this computer.
-        tracing::debug!(
-          target: LOG_TARGET,
-          count = tasks.count,
-          "a kept harness process reported its background tasks"
-        );
+        let watched = self
+          .background
+          .as_ref()
+          .is_some_and(|reports| reports.try_send(tasks).is_ok());
+        if !watched {
+          tracing::warn!(target: LOG_TARGET, "a background task count had no watcher");
+        }
       }
       SidecarMessage::Rejected(rejected) => {
         tracing::warn!(

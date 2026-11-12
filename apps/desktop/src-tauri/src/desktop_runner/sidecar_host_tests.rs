@@ -208,6 +208,7 @@ impl Place {
         credentials,
         settled: Arc::clone(&self.settled),
       }),
+      Arc::new(SharedJournal::default()),
     )
   }
 

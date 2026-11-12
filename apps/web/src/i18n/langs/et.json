@@ -1853,6 +1853,7 @@
       "restored": "Failimuudatused on tagasi võetud"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {Taustal käib # ülesanne} other {Taustal käib # ülesannet}}",
       "cloud": "stella pilv",
       "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
       "errorLimitResetsAt": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Uuesti saad proovida alates {time}.",

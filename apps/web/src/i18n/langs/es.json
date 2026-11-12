@@ -1853,6 +1853,7 @@
       "restored": "Cambios en archivos deshechos"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# tarea en segundo plano en curso} other {# tareas en segundo plano en curso} many {# tareas en segundo plano en curso}}",
       "cloud": "Nube de stella",
       "errorLimitReached": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Vuelve a intentarlo cuando se restablezca el límite.",
       "errorLimitResetsAt": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Puedes volver a intentarlo a partir del {time}.",

@@ -166,6 +166,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/chat/runs/active": "crud",
   "GET /v1/chat/skill-availability": "crud",
   "GET /v1/chat/threads": "crud",
+  "GET /v1/chat/threads/:threadId/background-tasks": "crud",
   "GET /v1/chat/threads/:threadId/messages": "crud",
   "GET /v1/chat/threads/:threadId/messages/:messageId": "crud",
   "GET /v1/chat/threads/:threadId/messages/:messageId/revisions": "crud",
