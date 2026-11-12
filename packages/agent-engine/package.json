@@ -29,6 +29,7 @@
     "@stll/fetch": "workspace:*",
     "@stll/portable-path": "workspace:*",
     "@stll/sha256": "workspace:*",
+    "@stll/skills": "workspace:*",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-codex": "catalog:",
     "@tanstack/ai-persistence": "catalog:",

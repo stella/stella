@@ -207,7 +207,7 @@ pub(crate) struct SidecarRunStart {
   pub(crate) config_dir: String,
   pub(crate) launch: HarnessLaunchSettings,
   pub(crate) workspace_dir: String,
-  /// The computer's package-manager cache, writable in every sandbox.
+  /// The chat's own cache folder, writable in every sandbox.
   pub(crate) cache_dir: String,
   pub(crate) model: String,
   pub(crate) instructions: String,
