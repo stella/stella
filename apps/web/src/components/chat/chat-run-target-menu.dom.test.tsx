@@ -155,7 +155,7 @@ test("Plan is offered with what it does, under any limit, and choosing it keeps 
     ...READINESS,
     maxApprovals: "ask",
   });
-  const plan = await permissionItem(view, "Plan");
+  const plan = await radioItem(view, "Plan");
   expect(plan.getAttribute("aria-disabled")).not.toBe("true");
   expect(plan.textContent).toContain(
     "Reads and plans first; changes nothing until you approve the plan.",
