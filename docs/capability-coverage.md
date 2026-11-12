@@ -813,7 +813,7 @@ mechanics, and similar), not gaps in coverage.
 | assistant_chat | 16 |
 | auth_plumbing | 39 |
 | billing_ui | 1 |
-| chat_thread_ui | 26 |
+| chat_thread_ui | 27 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |
