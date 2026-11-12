@@ -1,32 +1,32 @@
-import { AlertTriangleIcon, InfoIcon } from "@stll/ui/icons";
+import { AlertTriangleIcon, CheckIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/lib/utils";
+import {
+  ListItem,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemTitle,
+} from "@stll/ui/list";
 
 import type { DraftCheck } from "@/types";
 
+/** One pre-send check, as a row of the checks list. */
 export const CheckRow = ({ check }: { check: DraftCheck }) => (
-  <div
-    className={cn("flex gap-2 rounded-lg border p-2.5", SURFACE[check.type])}
-  >
-    <span className={cn("mt-0.5 inline-flex", ICON_TONE[check.type])}>
-      {check.type === "info" ? <InfoIcon /> : <AlertTriangleIcon />}
-    </span>
-    <span className="min-w-0">
-      <span className="block text-xs/4.5 font-bold">{check.title}</span>
-      <span className="text-muted-foreground block text-xs/4.5 [overflow-wrap:anywhere]">
+  <ListItem className="min-h-0 items-start px-3 py-3">
+    <ListItemMedia className={cn("size-7", MEDIA_TONE[check.type])}>
+      {check.type === "info" ? <CheckIcon /> : <AlertTriangleIcon />}
+    </ListItemMedia>
+    <ListItemContent className="pt-0.5">
+      <ListItemTitle variant="statement">{check.title}</ListItemTitle>
+      <ListItemDescription variant="paragraph">
         {check.description}
-      </span>
-    </span>
-  </div>
+      </ListItemDescription>
+    </ListItemContent>
+  </ListItem>
 );
 
-const SURFACE: Record<DraftCheck["type"], string> = {
-  info: "border-border",
-  risk: "border-destructive/24 bg-destructive/8",
-  warning: "border-warning/24 bg-warning/8",
-};
-
-const ICON_TONE: Record<DraftCheck["type"], string> = {
-  info: "text-info-foreground",
-  risk: "text-destructive-foreground",
-  warning: "text-warning-foreground",
+const MEDIA_TONE: Record<DraftCheck["type"], string> = {
+  info: "",
+  risk: "bg-destructive/10 text-destructive-foreground",
+  warning: "bg-warning/10 text-warning-foreground",
 };

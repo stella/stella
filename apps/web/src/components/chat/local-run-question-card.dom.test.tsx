@@ -3,10 +3,9 @@ import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
 import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
-
-import type { LocalRunQuestionPause } from "@/components/chat/local-run-question.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 

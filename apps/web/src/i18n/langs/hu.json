@@ -553,6 +553,24 @@
       "failed": "Nincs mentve",
       "failedTitle": "A módosítás mentése sikertelen volt"
     },
+    "scope": {
+      "checkedDocument": "Csak a(z) <num>{range}</num>. bekezdés ellenőrizve.",
+      "checkedOrdinal": "Csak a(z) <num>{range}</num>. bekezdés ellenőrizve, sorrend szerint számolva: ez a dokumentum nem számozza a bekezdéseit.",
+      "errors": {
+        "empty": "Ezekben a bekezdésekben nincs ellenőrizhető szöveg.",
+        "garbage": "Adja meg a bekezdések számát, például 82–136.",
+        "notFound": "Ezek a bekezdések nincsenek ebben a dokumentumban.",
+        "numberingUnclear": "A dokumentum bekezdésszámozása nem olvasható. Ellenőrizze a teljes dokumentumot.",
+        "required": "Adja meg az ellenőrizendő bekezdéseket.",
+        "reversed": "A tartomány előbb ér véget, mint ahogy kezdődik.",
+        "tooWide": "Egyszerre legfeljebb 500 bekezdést ellenőrizzen."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "Ezekben a bekezdésekben nem található állítás.",
+      "showBefore": "A(z) {from}. ¶ előtti szöveg megjelenítése",
+      "verifyParagraphs": "Bekezdések ellenőrzése"
+    },
     "states": {
       "contradicted": {
         "chip": "Cáfolt",
@@ -1948,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# csevegés vár Önre} other {# csevegés vár Önre}}",
-      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}"
+      "waitsOn": {
+        "approval": "Az Ön jóváhagyására vár",
+        "askUser": "Kérdést tesz fel Önnek",
+        "clientTool": "Folytatódik, amikor megnyitja ezt a csevegést",
+        "harnessQuestion": "Az Ön számítógépén futó ügynöknek kérdése van"
+      },
+      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}",
+      "workingNow": "Folyamatban"
     },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mcpReconnect": {

@@ -553,6 +553,24 @@
       "failed": "Neuloženo",
       "failedTitle": "Vaše změna nebyla uložena"
     },
+    "scope": {
+      "checkedDocument": "Ověřeny jen odstavce <num>{range}</num>.",
+      "checkedOrdinal": "Ověřeny jen odstavce <num>{range}</num>, počítané podle pořadí: tento dokument své odstavce nečísluje.",
+      "errors": {
+        "empty": "Tyto odstavce neobsahují žádný text k ověření.",
+        "garbage": "Zadejte čísla odstavců, například 82–136.",
+        "notFound": "Tyto odstavce v dokumentu nejsou.",
+        "numberingUnclear": "Číslování odstavců v tomto dokumentu nelze přečíst. Ověřte celý dokument.",
+        "required": "Zadejte odstavce, které chcete ověřit.",
+        "reversed": "Rozsah končí dřív, než začíná.",
+        "tooWide": "Najednou lze ověřit nejvýše 500 odstavců."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "V těchto odstavcích nebyla nalezena žádná tvrzení.",
+      "showBefore": "Zobrazit text před ¶ {from}",
+      "verifyParagraphs": "Ověřit odstavce"
+    },
     "states": {
       "contradicted": {
         "chip": "V rozporu",
@@ -1948,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {Na vás čeká # chat} few {Na vás čekají # chaty} many {Na vás čeká # chatu} other {Na vás čeká # chatů}}",
-      "working": "{count, plural, one {Pracuje # chat} few {Pracují # chaty} many {Pracuje # chatu} other {Pracuje # chatů}}"
+      "waitsOn": {
+        "approval": "Čeká na vaše schválení",
+        "askUser": "Ptá se vás",
+        "clientTool": "Pokračuje, až chat otevřete",
+        "harnessQuestion": "Agent ve vašem počítači má dotaz"
+      },
+      "working": "{count, plural, one {Pracuje # chat} few {Pracují # chaty} many {Pracuje # chatu} other {Pracuje # chatů}}",
+      "workingNow": "Pracuje"
     },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mcpReconnect": {

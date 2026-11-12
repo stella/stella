@@ -553,6 +553,24 @@
       "failed": "No guardado",
       "failedTitle": "No se guardó su cambio"
     },
+    "scope": {
+      "checkedDocument": "Solo se verificaron los párrafos <num>{range}</num>.",
+      "checkedOrdinal": "Solo se verificaron los párrafos <num>{range}</num>, contados por orden: este documento no numera sus párrafos.",
+      "errors": {
+        "empty": "Estos párrafos no tienen texto que verificar.",
+        "garbage": "Introduzca números de párrafo, por ejemplo 82–136.",
+        "notFound": "Estos párrafos no están en este documento.",
+        "numberingUnclear": "No se puede leer la numeración de párrafos de este documento. Verifique el documento completo.",
+        "required": "Introduzca los párrafos que desea verificar.",
+        "reversed": "El intervalo termina antes de empezar.",
+        "tooWide": "Verifique como máximo 500 párrafos a la vez."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "No se encontraron afirmaciones en estos párrafos.",
+      "showBefore": "Mostrar el texto anterior al ¶ {from}",
+      "verifyParagraphs": "Verificar párrafos"
+    },
     "states": {
       "contradicted": {
         "chip": "Contradicha",
@@ -1948,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat espera su respuesta} other {# chats esperan su respuesta} many {# chats esperan su respuesta}}",
-      "working": "{count, plural, one {# chat en curso} other {# chats en curso} many {# chats en curso}}"
+      "waitsOn": {
+        "approval": "Espera su aprobación",
+        "askUser": "Le hace una pregunta",
+        "clientTool": "Continúa cuando abra este chat",
+        "harnessQuestion": "El agente de su ordenador tiene una pregunta"
+      },
+      "working": "{count, plural, one {# chat en curso} other {# chats en curso} many {# chats en curso}}",
+      "workingNow": "En curso"
     },
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
     "mcpReconnect": {

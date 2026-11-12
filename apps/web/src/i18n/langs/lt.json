@@ -553,6 +553,24 @@
       "failed": "Neišsaugota",
       "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas"
     },
+    "scope": {
+      "checkedDocument": "Patikrintos tik <num>{range}</num> pastraipos.",
+      "checkedOrdinal": "Patikrintos tik <num>{range}</num> pastraipos, skaičiuojant iš eilės: šiame dokumente pastraipos nenumeruotos.",
+      "errors": {
+        "empty": "Šiose pastraipose nėra teksto, kurį būtų galima patikrinti.",
+        "garbage": "Įveskite pastraipų numerius, pvz., 82–136.",
+        "notFound": "Šių pastraipų šiame dokumente nėra.",
+        "numberingUnclear": "Šio dokumento pastraipų numerių nepavyksta perskaityti. Patikrinkite visą dokumentą.",
+        "required": "Įveskite pastraipas, kurias norite patikrinti.",
+        "reversed": "Intervalas baigiasi anksčiau, nei prasideda.",
+        "tooWide": "Vienu metu tikrinkite ne daugiau kaip 500 pastraipų."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "Šiose pastraipose teiginių nerasta.",
+      "showBefore": "Rodyti tekstą prieš ¶ {from}",
+      "verifyParagraphs": "Tikrinti pastraipas"
+    },
     "states": {
       "contradicted": {
         "chip": "Prieštarauja",
@@ -1948,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# pokalbis laukia jūsų} few {# pokalbiai laukia jūsų} many {# pokalbio laukia jūsų} other {# pokalbių laukia jūsų}}",
-      "working": "{count, plural, one {# pokalbis vykdomas} few {# pokalbiai vykdomi} many {# pokalbio vykdoma} other {# pokalbių vykdoma}}"
+      "waitsOn": {
+        "approval": "Laukia jūsų patvirtinimo",
+        "askUser": "Užduoda jums klausimą",
+        "clientTool": "Tęsis, kai atidarysite šį pokalbį",
+        "harnessQuestion": "Jūsų kompiuteryje veikiantis agentas turi klausimą"
+      },
+      "working": "{count, plural, one {# pokalbis vykdomas} few {# pokalbiai vykdomi} many {# pokalbio vykdoma} other {# pokalbių vykdoma}}",
+      "workingNow": "Vykdoma"
     },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mcpReconnect": {

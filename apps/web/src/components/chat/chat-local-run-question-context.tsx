@@ -1,6 +1,7 @@
 import { createContext } from "react";
 
-import type { LocalRunQuestionPause } from "@/components/chat/local-run-question.logic";
+import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
+
 import type { ChatRuntime } from "@/features/chat/chat-runtime";
 
 /**

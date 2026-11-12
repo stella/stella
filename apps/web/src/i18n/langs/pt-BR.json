@@ -553,6 +553,24 @@
       "failed": "Não salvo",
       "failedTitle": "Sua alteração não foi salva"
     },
+    "scope": {
+      "checkedDocument": "Somente os parágrafos <num>{range}</num> foram verificados.",
+      "checkedOrdinal": "Somente os parágrafos <num>{range}</num> foram verificados, contados pela ordem: este documento não numera seus parágrafos.",
+      "errors": {
+        "empty": "Estes parágrafos não têm texto para verificar.",
+        "garbage": "Informe números de parágrafo, como 82–136.",
+        "notFound": "Estes parágrafos não estão neste documento.",
+        "numberingUnclear": "Não é possível ler a numeração dos parágrafos deste documento. Verifique o documento inteiro.",
+        "required": "Informe os parágrafos a verificar.",
+        "reversed": "O intervalo termina antes de começar.",
+        "tooWide": "Verifique no máximo 500 parágrafos por vez."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "Nenhuma alegação foi encontrada nestes parágrafos.",
+      "showBefore": "Mostrar o texto antes do ¶ {from}",
+      "verifyParagraphs": "Verificar parágrafos"
+    },
     "states": {
       "contradicted": {
         "chip": "Contradita",
@@ -1948,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat aguarda você} other {# chats aguardam você} many {# chats aguardam você}}",
-      "working": "{count, plural, one {# chat em andamento} other {# chats em andamento} many {# chats em andamento}}"
+      "waitsOn": {
+        "approval": "Aguarda sua aprovação",
+        "askUser": "Faz uma pergunta a você",
+        "clientTool": "Continua quando você abrir este chat",
+        "harnessQuestion": "O agente no seu computador tem uma pergunta"
+      },
+      "working": "{count, plural, one {# chat em andamento} other {# chats em andamento} many {# chats em andamento}}",
+      "workingNow": "Em andamento"
     },
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
     "mcpReconnect": {

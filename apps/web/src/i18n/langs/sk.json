@@ -553,6 +553,24 @@
       "failed": "Neuložené",
       "failedTitle": "Vaša zmena sa neuložila"
     },
+    "scope": {
+      "checkedDocument": "Overené len odseky <num>{range}</num>.",
+      "checkedOrdinal": "Overené len odseky <num>{range}</num>, počítané podľa poradia: tento dokument svoje odseky nečísluje.",
+      "errors": {
+        "empty": "Tieto odseky neobsahujú žiadny text na overenie.",
+        "garbage": "Zadajte čísla odsekov, napríklad 82–136.",
+        "notFound": "Tieto odseky v dokumente nie sú.",
+        "numberingUnclear": "Číslovanie odsekov v tomto dokumente sa nedá prečítať. Overte celý dokument.",
+        "required": "Zadajte odseky, ktoré chcete overiť.",
+        "reversed": "Rozsah končí skôr, ako začína.",
+        "tooWide": "Naraz možno overiť najviac 500 odsekov."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "V týchto odsekoch sa nenašli žiadne tvrdenia.",
+      "showBefore": "Zobraziť text pred ¶ {from}",
+      "verifyParagraphs": "Overiť odseky"
+    },
     "states": {
       "contradicted": {
         "chip": "V rozpore",
@@ -1948,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {Na vás čaká # chat} few {Na vás čakajú # chaty} many {Na vás čaká # chatu} other {Na vás čaká # chatov}}",
-      "working": "{count, plural, one {Pracuje # chat} few {Pracujú # chaty} many {Pracuje # chatu} other {Pracuje # chatov}}"
+      "waitsOn": {
+        "approval": "Čaká na vaše schválenie",
+        "askUser": "Pýta sa vás",
+        "clientTool": "Pokračuje, keď otvoríte chat",
+        "harnessQuestion": "Agent vo vašom počítači má otázku"
+      },
+      "working": "{count, plural, one {Pracuje # chat} few {Pracujú # chaty} many {Pracuje # chatu} other {Pracuje # chatov}}",
+      "workingNow": "Pracuje"
     },
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mcpReconnect": {

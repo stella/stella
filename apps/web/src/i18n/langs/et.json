@@ -553,6 +553,24 @@
       "failed": "Salvestamata",
       "failedTitle": "Teie muudatust ei salvestatud"
     },
+    "scope": {
+      "checkedDocument": "Kontrolliti ainult lõike <num>{range}</num>.",
+      "checkedOrdinal": "Kontrolliti ainult lõike <num>{range}</num>, loendatuna järjekorra järgi: see dokument ei nummerda oma lõike.",
+      "errors": {
+        "empty": "Neis lõikudes pole kontrollitavat teksti.",
+        "garbage": "Sisestage lõikude numbrid, näiteks 82–136.",
+        "notFound": "Neid lõike selles dokumendis ei ole.",
+        "numberingUnclear": "Selle dokumendi lõikude numbreid ei saa lugeda. Kontrollige kogu dokumenti.",
+        "required": "Sisestage kontrollitavad lõigud.",
+        "reversed": "Vahemik lõpeb enne, kui algab.",
+        "tooWide": "Kontrollige korraga kuni 500 lõiku."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "Neist lõikudest ei leitud ühtegi väidet.",
+      "showBefore": "Näita teksti enne ¶ {from}",
+      "verifyParagraphs": "Kontrolli lõike"
+    },
     "states": {
       "contradicted": {
         "chip": "Vastuolus",
@@ -1948,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# vestlus ootab teid} other {# vestlust ootab teid}}",
-      "working": "{count, plural, one {# vestlus on töös} other {# vestlust on töös}}"
+      "waitsOn": {
+        "approval": "Ootab teie kinnitust",
+        "askUser": "Esitab teile küsimuse",
+        "clientTool": "Jätkub, kui avate selle vestluse",
+        "harnessQuestion": "Teie arvutis töötaval agendil on küsimus"
+      },
+      "working": "{count, plural, one {# vestlus on töös} other {# vestlust on töös}}",
+      "workingNow": "Töös"
     },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mcpReconnect": {
