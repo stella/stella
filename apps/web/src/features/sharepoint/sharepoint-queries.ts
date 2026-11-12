@@ -98,6 +98,12 @@ export const prefetchSharepointAccess = ({
     "sharepoint.prefetch-access",
   );
 
+/**
+ * How long a listing serves from cache, so going back up the breadcrumb does
+ * not ask Microsoft for a folder the picker just showed.
+ */
+const SHAREPOINT_BROWSE_STALE_TIME_MS = 60_000;
+
 type PageRequest = { cursor: string | undefined; signal: AbortSignal };
 
 const cursorQuery = (cursor: string | undefined) =>
@@ -130,6 +136,7 @@ export const sharepointSitesOptions = (
       { search },
     ],
     initialPageParam: stringCursorSeed(),
+    staleTime: SHAREPOINT_BROWSE_STALE_TIME_MS,
     queryFn: async ({ pageParam, signal }) =>
       await fetchSitesPage({ search, cursor: pageParam, signal }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
@@ -162,6 +169,7 @@ export const sharepointDrivesOptions = (
       { siteId },
     ],
     initialPageParam: stringCursorSeed(),
+    staleTime: SHAREPOINT_BROWSE_STALE_TIME_MS,
     queryFn: async ({ pageParam, signal }) =>
       await fetchDrivesPage({ siteId, cursor: pageParam, signal }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
@@ -198,6 +206,7 @@ export const sharepointChildrenOptions = (
       { driveId, folderId },
     ],
     initialPageParam: stringCursorSeed(),
+    staleTime: SHAREPOINT_BROWSE_STALE_TIME_MS,
     queryFn: async ({ pageParam, signal }) =>
       await fetchChildrenPage({ driveId, folderId, cursor: pageParam, signal }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,

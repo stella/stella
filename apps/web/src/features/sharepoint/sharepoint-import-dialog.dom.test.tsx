@@ -13,7 +13,7 @@ GlobalRegistrator.register({
   url: "http://localhost:3000/workspaces/matter-fixture",
 });
 const originalFetch = globalThis.fetch;
-const { cleanup, fireEvent, render, screen, waitFor, within } =
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -24,8 +24,9 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { SharepointImportDialog } = await import("./sharepoint-import-dialog");
 
-afterEach(() => {
-  cleanup();
+// Unmounting inside act lets the tooltip popups opened by the clicks settle.
+afterEach(async () => {
+  await act(async () => cleanup());
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
@@ -235,9 +236,12 @@ test("the breadcrumb returns from a folder to its drive's top level", async () =
   await screen.findByText(picker.emptyFolder);
 
   const breadcrumb = screen.getByRole("navigation");
-  expect(
-    within(breadcrumb).getByText("Pleadings").getAttribute("aria-current"),
-  ).toBe("page");
+  // The crumb element carries aria-current; its label renders inside it.
+  const current = within(breadcrumb)
+    .getByText("Pleadings")
+    .closest("[aria-current]");
+  expect(current?.getAttribute("aria-current")).toBe("page");
+  expect(current?.closest("[data-slot='breadcrumb-page']")).toBe(current);
   fireEvent.click(within(breadcrumb).getByRole("button", { name: DRIVE.name }));
 
   await screen.findByRole("checkbox", { name: "Statement of claim.pdf" });
