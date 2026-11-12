@@ -27,9 +27,16 @@ test("rejects every way to send page content off the computer", async () => {
         "await Bun.connect({ hostname: 'example.com', port: 443 });",
         'await import("node:https");',
         "fetchWithTimeout('https://example.com');",
+        "new globalThis.WebSocket('wss://example.com');",
+        "new window.EventSource('https://example.com');",
+        "new self.XMLHttpRequest();",
+        "globalThis.navigator.sendBeacon('https://example.com', 'page');",
+        "await globalThis.Bun.connect({ hostname: 'example.com', port: 443 });",
       ].join("\n"),
     ),
-  ).toEqual([1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+  ).toEqual([
+    1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+  ]);
 });
 
 test("allows Unix sockets, local servers and names that only look alike", async () => {
@@ -47,6 +54,8 @@ test("allows Unix sockets, local servers and names that only look alike", async 
         "fetch('local');",
         "const client = { connect: () => undefined };",
         "client.connect();",
+        "const sockets = { WebSocket: class {} };",
+        "new sockets.WebSocket();",
       ].join("\n"),
     ),
   ).toEqual([]);

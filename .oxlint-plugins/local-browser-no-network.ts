@@ -46,6 +46,8 @@ const NET_MODULES = new Set(["net", "node:net"]);
 const NET_CONNECTORS = new Set(["connect", "createConnection"]);
 const NET_SOCKETS = new Set(["Socket", "Stream"]);
 const MODULE_OBJECTS = new Set(["default", NAMESPACE_IMPORT]);
+/** Objects whose members are the globals themselves. */
+const GLOBAL_OBJECTS = new Set(["globalThis", "self", "window"]);
 const NETWORK_CONSTRUCTORS = new Set([
   "EventSource",
   "WebSocket",
@@ -99,13 +101,33 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const isNetworkCall = createNetworkCallDetector(context);
-        const isUnboundGlobal = (node: unknown, name: string) => {
+        const isUnboundIdentifier = (node: unknown): string | null => {
           const expression = unwrapExpression(node);
-          return (
-            isIdentifier(expression, name) &&
-            isIdentifierReference(expression) &&
-            resolveVariable(context, expression) === null
-          );
+          if (!isIdentifier(expression) || !isIdentifierReference(expression)) {
+            return null;
+          }
+          // A built-in global resolves to a variable with no declaration.
+          const variable = resolveVariable(context, expression);
+          return variable === null || variable.defs.length === 0
+            ? expression.name
+            : null;
+        };
+        // The global a reference names, written bare (`WebSocket`) or on a
+        // global object (`globalThis.WebSocket`, `window.navigator`), and
+        // not shadowed by a local; `null` for anything else.
+        const globalName = (node: unknown): string | null => {
+          const bare = isUnboundIdentifier(node);
+          if (bare !== null) {
+            return bare;
+          }
+          const expression = unwrapExpression(node);
+          if (expression?.type !== "MemberExpression") {
+            return null;
+          }
+          const owner = globalName(expression.object);
+          return owner !== null && GLOBAL_OBJECTS.has(owner)
+            ? memberPropertyName(expression)
+            : null;
         };
         // The `node:net` export a callee names: `connect` imported by
         // name, or `net.connect` on the module's default or namespace.
@@ -160,11 +182,10 @@ export default eslintCompatPlugin({
             }
             if (callee?.type === "MemberExpression") {
               const property = memberPropertyName(callee);
+              const owner = globalName(callee.object);
               if (
-                (property === "sendBeacon" &&
-                  isUnboundGlobal(callee.object, "navigator")) ||
-                (property === "connect" &&
-                  isUnboundGlobal(callee.object, "Bun"))
+                (property === "sendBeacon" && owner === "navigator") ||
+                (property === "connect" && owner === "Bun")
               ) {
                 context.report({ node, messageId: "networkClient" });
                 return;
@@ -181,12 +202,10 @@ export default eslintCompatPlugin({
           },
           NewExpression(node) {
             const callee = unwrapExpression(node.callee);
-            const name = isIdentifier(callee) ? callee.name : null;
+            const name = globalName(callee);
             const net = netExport(callee);
             if (
-              (name !== null &&
-                NETWORK_CONSTRUCTORS.has(name) &&
-                isUnboundGlobal(callee, name)) ||
+              (name !== null && NETWORK_CONSTRUCTORS.has(name)) ||
               (net !== null && NET_SOCKETS.has(net))
             ) {
               context.report({ node, messageId: "networkClient" });
