@@ -28,7 +28,10 @@ const anchorIn = (block: number): ClaimAnchor => ({
 const blockOf = ({ anchor }: Claim) =>
   anchor.type === "docx-block" ? anchor.blockId : String(anchor.pageNumber);
 
-const letters = fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz");
+/** A lower-case ASCII letter, a to z. */
+const letters = fc
+  .integer({ min: 97, max: 122 })
+  .map((code) => String.fromCodePoint(code));
 const word = fc
   .array(letters, { minLength: 3, maxLength: 8 })
   .map((chars) => chars.join(""));
