@@ -18,13 +18,13 @@ import type {
   ParagraphBlock,
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
+import { getParagraphNumberPieceId } from "@stll/legal-ast/document-search-pieces";
 import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import {
   statuteListMarkerEnd,
   withStatuteListDepth,
 } from "@stll/legal-ast/statute-list";
 import { Button } from "@stll/ui/button";
-import { useCopyConfirmation } from "@stll/ui/copy-button";
 import { CheckIcon } from "@stll/ui/icons";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import {
@@ -38,7 +38,7 @@ import { cn } from "@stll/ui/utils";
 import { useDisplayElisionPolicy } from "./display-elision-policy";
 import { useReaderMessages, useReaderPresentation } from "./reader-adapters";
 import type { ReaderMessageKey } from "./reader-adapters";
-import type { ReaderMark, ReaderMarkRange, SearchPiece } from "./reader-search";
+import type { ReaderMark, ReaderMarkRange } from "./reader-search";
 import { readerHref, useSourceLinkPolicy } from "./source-link-policy";
 import type { SourceLinkPolicy } from "./source-link-policy";
 import "./reader.css";
@@ -144,9 +144,6 @@ type SynchronousNode =
  * renderer walks.
  */
 export const inlinesToPlainText = plainTextOf;
-
-export const getParagraphNumberPieceId = (blockId: string): string =>
-  `paragraph-number:${blockId}`;
 
 type DiffMarkType = Exclude<ReaderMark["type"], "search">;
 
@@ -962,40 +959,45 @@ const BlockPermalink = ({
 }) => {
   const messages = useReaderMessages();
 
-  const { copyPermalink } = useReaderPresentation();
-  const { copied, copy } = useCopyConfirmation(
-    async () => copyPermalink?.(anchorId) ?? Promise.resolve(false),
-  );
-  if (copyPermalink === undefined) {
+  const { renderPermalinkCopy } = useReaderPresentation();
+  if (renderPermalinkCopy === undefined) {
     return null;
   }
 
-  return (
-    <a
-      aria-label={messages[copied ? "common.copied" : "common.copyLink"]}
-      className={cn(
-        "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden",
-        READER_BLOCK_CHROME_REVEAL_CLASS,
-        PERMALINK_PLACEMENT_CLASS[placement],
-      )}
-      data-reader-chrome=""
-      href={`#${anchorId}`}
-      onClick={(event) => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-          return;
-        }
-        event.preventDefault();
-        copy().catch(reportError);
-      }}
-    >
-      {/* The mark turns into a check where the reader clicked; no toast. */}
-      {copied ? (
-        <CheckIcon aria-hidden="true" className="inline size-[0.8em]" />
-      ) : (
-        "¶"
-      )}
-    </a>
-  );
+  return renderPermalinkCopy({
+    anchorId,
+    render: ({ copied, copy }) => (
+      <a
+        aria-label={messages[copied ? "common.copied" : "common.copyLink"]}
+        className={cn(
+          "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden",
+          READER_BLOCK_CHROME_REVEAL_CLASS,
+          PERMALINK_PLACEMENT_CLASS[placement],
+        )}
+        data-reader-chrome=""
+        href={`#${anchorId}`}
+        onClick={(event) => {
+          if (
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          copy();
+        }}
+      >
+        {/* The mark turns into a check where the reader clicked; no toast. */}
+        {copied ? (
+          <CheckIcon aria-hidden="true" className="inline size-[0.8em]" />
+        ) : (
+          "¶"
+        )}
+      </a>
+    ),
+  });
 };
 
 const REGEXP_SPECIALS_RE = /[.*+?^${}()|[\]\\]/gu;
@@ -1848,54 +1850,6 @@ export const FulltextFallback = ({
       })}
     </>
   );
-};
-
-/**
- * Search pieces for a block list, in render order. Table cells get one
- * piece each so a match scrolls to the cell, and a hanging paragraph
- * number gets its own piece: folding it into the paragraph's text would
- * shift every highlight offset in that paragraph.
- */
-export const buildDocumentAstSearchPieces = (
-  blocks: readonly Block[],
-): SearchPiece[] => {
-  const pieces: SearchPiece[] = [];
-
-  for (const block of blocks) {
-    // A figure's only text is its alt, which is chrome for a screen
-    // reader rather than the document's words: a find-bar hit on it
-    // would scroll to a picture with nothing highlighted in it.
-    if (block.type === "image") {
-      continue;
-    }
-
-    if (block.type === "table") {
-      for (const [rowIndex, row] of block.rows.entries()) {
-        for (const [columnIndex, cell] of row.entries()) {
-          pieces.push({
-            id: tableCellPieceId({
-              blockId: block.id,
-              rowIndex,
-              columnIndex,
-            }),
-            text: inlinesToPlainText(cell.inlines),
-          });
-        }
-      }
-      continue;
-    }
-
-    pieces.push({ id: block.id, text: inlinesToPlainText(block.inlines) });
-
-    if (block.type === "paragraph" && block.number !== undefined) {
-      pieces.push({
-        id: getParagraphNumberPieceId(block.id),
-        text: String(block.number),
-      });
-    }
-  }
-
-  return pieces;
 };
 
 const ReaderTooltip = ({

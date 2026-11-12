@@ -47,6 +47,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.ai_memory",
   [AUDIT_RESOURCE_TYPE.ANNOUNCEMENT]:
     "settings.organization.auditResourceKinds.announcement",
+  [AUDIT_RESOURCE_TYPE.CONFLICT_CHECK]:
+    "settings.organization.auditResourceKinds.conflict_check",
   [AUDIT_RESOURCE_TYPE.BILLING_CODE]:
     "settings.organization.auditResourceKinds.billing_code",
   [AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK]:

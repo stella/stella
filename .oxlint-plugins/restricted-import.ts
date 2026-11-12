@@ -503,6 +503,55 @@ const RESTRICTED_IMPORT_RULES = {
       ],
     },
   ],
+  // Every Copy goes through one owner, which writes the clipboard, confirms
+  // the Copy when the clipboard holds what it copies, and renders the Copy
+  // and Copied swap. See ./copy-feedback-owner.ts.
+  "copy-feedback-owner": [
+    {
+      messageId: "copyFeedbackOwner",
+      message:
+        "Render a Copy through @/components/copy-control, not with " +
+        "`{{name}}`: CopyControl for a value, useCopyControl with " +
+        "CopyControlButton or CopyControlFeedback for a custom trigger, " +
+        "useSelectionCopyControl for a selection bar. The owner confirms " +
+        "the press and the reader's own copy of the same text.",
+      modules: [
+        "@stll/ui/copy-button",
+        "packages/ui/src/components/copy-button",
+        "@stll/ui",
+        "packages/ui/src/index",
+      ],
+      restriction: {
+        type: "exports",
+        names: new Set([
+          "CopyButton",
+          "CopyFeedback",
+          "useCopiedFeedback",
+          "useCopyConfirmation",
+        ]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "apps/web/src/components/copy-control.tsx",
+        // The package's public barrel re-exports every component.
+        "packages/ui/src/index.ts",
+      ],
+    },
+    {
+      messageId: "clipboardHelperOwner",
+      message:
+        "Write the clipboard through @/components/copy-control (CopyControl, " +
+        "useCopyControl, useSelectionCopyControl), not @stll/clipboard: the " +
+        "owner reports a failed copy and confirms the Copy in place.",
+      modules: ["@stll/clipboard", "packages/clipboard/src/index"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: ["apps/web/src/components/copy-control.tsx"],
+    },
+  ],
 } as const satisfies Record<string, readonly RestrictedImportEntry[]>;
 
 export type RestrictedImportRuleName = keyof typeof RESTRICTED_IMPORT_RULES;

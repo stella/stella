@@ -60,6 +60,11 @@ export const statements = {
   // them, a desktop registry key. What the organization permits to be linked
   // at all stays under `organizationSettings`.
   integration: ["create", "update", "delete"],
+  // Internal conflict-of-interest checks. Running one searches every matter
+  // of the firm, including matters the runner cannot open, so it is a grant
+  // of its own; reviewing (waiving a conflict, clearing a potential one) is
+  // the four-eyes half and stays with firm management.
+  conflictCheck: ["run", "review"],
 } as const;
 
 type PermissionMap = {
@@ -107,6 +112,7 @@ const externalStellaGrants = {
   savedSearch: [],
   searchHistory: ["read", "create", "delete"],
   integration: [],
+  conflictCheck: [],
 } satisfies StellaPermissionMap;
 
 const internStellaGrants = {
@@ -155,6 +161,7 @@ const memberStellaGrants = {
   savedSearch: ["create", "update", "delete"],
   searchHistory: ["read", "create", "delete"],
   integration: ["create", "update", "delete"],
+  conflictCheck: ["run"],
 } satisfies StellaPermissionMap;
 
 const managementStellaGrants = {
@@ -165,6 +172,7 @@ const managementStellaGrants = {
   organizationSettings: ["update"],
   auditLog: ["read"],
   firmMemory: ["create", "update"],
+  conflictCheck: ["run", "review"],
 } satisfies StellaPermissionMap;
 
 /**

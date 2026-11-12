@@ -455,7 +455,7 @@ for (const { failingRead, failure, withHealthy = true } of [
       { target: { value: "contract" } },
     );
     await waitFor(() =>
-      expect(ui.getAllByRole("alert")).toHaveLength(
+      expect(ui.getAllByRole("alert").length).toBe(
         failingRead === "both" ? 2 : 1,
       ),
     );

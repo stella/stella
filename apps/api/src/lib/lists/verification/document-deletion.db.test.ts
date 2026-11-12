@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
 import {
+  legalListClaimCarryOutcomes,
   legalListClaimReviewEvents,
   legalListClaims,
   legalListVerificationBlocks,
@@ -85,6 +86,8 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           "20260928132500_legal_list_verification_blocks",
           "20261005120200_list_verification_force_rls",
           "20261005120400_verification_read_receipts",
+          "20261110120000_legal_list_claim_qualifiers",
+          "20261112025400_legal_list_claim_carry_over",
         ]) {
           await applyMigration(name);
         }
@@ -163,6 +166,19 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
                 kind: "note",
                 payload: { kind: "note", note: "Reviewed." },
                 actorId: userId,
+              }),
+          );
+          // What a later run carried from this one; here the run is its own
+          // source, so the row depends on it twice over.
+          await fixtureScoped(
+            async (tx) =>
+              await tx.insert(legalListClaimCarryOutcomes).values({
+                workspaceId,
+                runId,
+                sourceRunId: runId,
+                sourceClaimId: claimId,
+                outcome: "unmatched",
+                targetClaimId: null,
               }),
           );
           await fixtureScoped(

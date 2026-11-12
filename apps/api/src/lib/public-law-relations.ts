@@ -21,6 +21,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCourtWeights: "case_law_court_weights",
   caseLawCoverageSlices: "case_law_coverage_slices",
   caseLawDecisionAliases: "case_law_decision_aliases",
+  caseLawDecisionAnchorRedirects: "case_law_decision_anchor_redirects",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
   publishedCaseLawDecisions: "case_law_published_decisions",
@@ -370,6 +371,12 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     retired_decision_id: "permitted",
     canonical_decision_id: "permitted",
   },
+  // Where an earlier document's anchor went; the redirect read answers from it.
+  case_law_decision_anchor_redirects: {
+    decision_id: "required",
+    from_anchor: "required",
+    to_anchor: "required",
+  },
   case_law_decision_identifiers: {
     decision_id: "required",
     type: "required",
@@ -626,6 +633,10 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     expression_kind: "required",
     window_disposition: "required",
     window_disposition_basis: "required",
+    // What a consolidation changed against the one before it, served only
+    // while the row's payload revision is the one it was computed from.
+    change_summary: "required",
+    payload_revision: "required",
     fulltext: "required",
     sections: "required",
     document_ast: "required",

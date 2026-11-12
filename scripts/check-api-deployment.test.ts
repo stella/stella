@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { evaluate } from "./github-expression";
 
 // CI runs this file in "Test release policy scripts" without the dependency
@@ -700,7 +701,7 @@ describe("API deployment health receipt", () => {
     const checkouts = steps.filter(
       (step) =>
         typeof step["uses"] === "string" &&
-        step["uses"].startsWith("actions/checkout@"),
+        isRepositoryCheckoutAction(step["uses"]),
     );
     expect(checkouts).toHaveLength(1);
     const checkoutWith = checkouts.at(0)?.["with"];
@@ -1741,7 +1742,7 @@ test("target-owned journeys require their harness before setup and execution", (
         .findLastIndex(
           (step) =>
             typeof step["uses"] === "string" &&
-            step["uses"].startsWith("actions/checkout@"),
+            isRepositoryCheckoutAction(step["uses"]),
         );
       const setup = steps.findIndex((step) => step["name"] === "Setup Bun");
       expect(guard).toBeGreaterThan(checkout);

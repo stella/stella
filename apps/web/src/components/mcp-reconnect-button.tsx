@@ -96,7 +96,7 @@ export const McpReconnectButton = ({
           size="xs"
           variant="outline"
         >
-          {t("knowledge.mcp.reconnect")}
+          {t("common.reconnect")}
         </Button>
       );
     case "oauth2":
@@ -109,7 +109,7 @@ export const McpReconnectButton = ({
           type="button"
           variant="outline"
         >
-          {t("knowledge.mcp.reconnect")}
+          {t("common.reconnect")}
         </Button>
       );
     default:

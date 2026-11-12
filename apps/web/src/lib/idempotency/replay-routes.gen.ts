@@ -18,6 +18,7 @@ export const REPLAY_CAPABLE_ROUTES = [
   { method: "POST", path: "/v1/lists/:workspaceId/claim-reviews" },
   { method: "POST", path: "/v1/lists/:workspaceId/claim-reviews/bulk" },
   { method: "POST", path: "/v1/lists/:workspaceId/columns" },
+  { method: "POST", path: "/v1/lists/:workspaceId/fact-extractions" },
   { method: "POST", path: "/v1/lists/:workspaceId/generation-candidates" },
   {
     method: "POST",
@@ -56,6 +57,7 @@ export const REPLAY_CAPABLE_ROUTES = [
   { method: "PUT", path: "/v1/properties/:workspaceId/batch" },
   { method: "PUT", path: "/v1/rates/:workspaceId" },
   { method: "PUT", path: "/v1/rates/:workspaceId/:rateTableId/entries" },
+  { method: "PUT", path: "/v1/tasks/:workspaceId" },
   { method: "PUT", path: "/v1/template-recipes" },
   { method: "PUT", path: "/v1/time-entries/:workspaceId" },
   { method: "PUT", path: "/v1/view-templates/:workspaceId" },

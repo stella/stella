@@ -197,10 +197,22 @@ const withCollectingRequestId = <TData>(
     : response;
 };
 
+type ContinuationClock = {
+  now: () => number;
+  sleep: (ms: number) => Promise<void>;
+};
+
+const SYSTEM_CLOCK: ContinuationClock = {
+  now: () => performance.now(),
+  sleep,
+};
+
 type CreateToolContinuationOptions<P> = {
   store?: ContinuationStore;
   ownerId?: string;
   limits?: PublicReadContinuationLimits;
+  /** The clock the response deadline and follow polls run on. */
+  clock?: ContinuationClock;
   progress: (value: unknown) => P | null;
 };
 
@@ -214,6 +226,7 @@ export const createToolContinuation = <
     store = createContinuationStore(),
     ownerId = Bun.randomUUIDv7(),
     limits = PUBLIC_READ_CONTINUATION_LIMITS,
+    clock = SYSTEM_CLOCK,
     progress,
   }: CreateToolContinuationOptions<P>,
 ) => {
@@ -235,8 +248,8 @@ export const createToolContinuation = <
     store,
     ownerId,
     limits,
-    now: () => performance.now(),
-    sleep,
+    now: clock.now,
+    sleep: clock.sleep,
     estimateQueueWaitMs: estimatedCorpusSearchWaitMs,
   });
 };

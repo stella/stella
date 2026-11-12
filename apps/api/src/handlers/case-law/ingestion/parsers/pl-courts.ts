@@ -85,7 +85,6 @@ import {
   isPlSignatureLine,
   namesPlDocumentType,
   opensPlRuling,
-  opensWithPlSignatureTitle,
   plRulingClauseStart,
 } from "@stll/legal-ast/polish-document-roles";
 // parser-output-unchanged: the subheading outline number moved unchanged into the printed-label grammar.
@@ -798,7 +797,6 @@ const underInstructionHeading = (state: ParserState): boolean => {
 const closesOrSigns = (state: ParserState, plainText: string): boolean =>
   isPlClosingLine(plainText) ||
   isPlSignatureLine(plainText) ||
-  opensWithPlSignatureTitle(plainText) ||
   signsBlank(state, plainText);
 
 /**
@@ -912,11 +910,7 @@ const inferParagraphRole = (
       if (isPlClosingLine(plainText)) {
         return "closing";
       }
-      if (
-        isPlSignatureLine(plainText) ||
-        opensWithPlSignatureTitle(plainText) ||
-        signsBlank(state, plainText)
-      ) {
+      if (isPlSignatureLine(plainText) || signsBlank(state, plainText)) {
         return "signature";
       }
       return "argumentation";

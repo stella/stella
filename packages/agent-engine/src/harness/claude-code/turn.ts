@@ -6,6 +6,7 @@ import {
   chatLocalRunAnswersRefusal,
   chatLocalRunQuestionsSchema,
 } from "@stll/api-contract/chat-run-target";
+import { requestedNetworkHost } from "@stll/skills/network-hosts";
 
 import type {
   HarnessInteractionResponse,
@@ -276,11 +277,12 @@ type ClaudeCodeTurnSessionOptions = {
   /** The server name the turn registered the stella MCP binding under. */
   stellaServer: string;
   /**
-   * Whether a sandboxed command's request to reach a host is answered
-   * without asking. A local run's network is open; the CLI's sandbox routes
-   * commands through a proxy that asks about every new host.
+   * The hosts a sandboxed command may reach without the member being asked:
+   * those the turn's skills declare. The CLI's sandbox routes commands
+   * through a proxy that asks about every new host; a host not here is asked
+   * about like any other action.
    */
-  allowSandboxNetwork: boolean;
+  sandboxNetworkHosts: ReadonlySet<string>;
 };
 
 /**
@@ -310,13 +312,13 @@ export class ClaudeCodeTurnSession {
 
   private readonly lifecycle: HarnessTurnLifecycle<ClaudeCliClient>;
   private readonly stellaServer: string;
-  private readonly allowSandboxNetwork: boolean;
+  private readonly sandboxNetworkHosts: ReadonlySet<string>;
 
   constructor({
     gracePeriodMs,
     detached,
     stellaServer,
-    allowSandboxNetwork,
+    sandboxNetworkHosts,
   }: ClaudeCodeTurnSessionOptions) {
     this.lifecycle = new HarnessTurnLifecycle({
       gracePeriodMs,
@@ -324,7 +326,7 @@ export class ClaudeCodeTurnSession {
       name: "claude-turn",
     });
     this.stellaServer = stellaServer;
-    this.allowSandboxNetwork = allowSandboxNetwork;
+    this.sandboxNetworkHosts = sandboxNetworkHosts;
   }
 
   /** Handlers for the process; messages before `begin` are held. */
@@ -755,6 +757,14 @@ export class ClaudeCodeTurnSession {
     }
   }
 
+  /** Whether a sandbox network request names a host the skills declare. */
+  private isDeclaredHost(input: Readonly<Record<string, unknown>>): boolean {
+    const requested = input["host"];
+    const host =
+      typeof requested === "string" ? requestedNetworkHost(requested) : null;
+    return host !== null && this.sandboxNetworkHosts.has(host);
+  }
+
   private permission(controlId: string, request: unknown) {
     const parsed = this.parse(
       CanUseToolRequestSchema,
@@ -764,7 +774,10 @@ export class ClaudeCodeTurnSession {
     if (parsed === null) {
       return;
     }
-    if (parsed.tool_name === SANDBOX_NETWORK_TOOL && this.allowSandboxNetwork) {
+    if (
+      parsed.tool_name === SANDBOX_NETWORK_TOOL &&
+      this.isDeclaredHost(parsed.input)
+    ) {
       this.client?.respond(controlId, {
         behavior: "allow",
         updatedInput: parsed.input,

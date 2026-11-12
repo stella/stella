@@ -38,7 +38,9 @@ import {
   chatThreads,
   chatToolGrants,
   chatTurns,
+  conflictChecks,
   desktopPresence,
+  desktopRunnerFolderRestores,
   desktopTimeEntryBatches,
   documentTranslationRuns,
   entities,
@@ -57,6 +59,7 @@ import {
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
+  searchHistoryOwners,
   sellerProfiles,
   signals,
   templateLookupFormats,
@@ -108,6 +111,8 @@ import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-tit
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
 import deleteChatThread from "@/api/handlers/chat/threads/delete";
 import listChatThreads from "@/api/handlers/chat/threads/list";
+import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
+import updateChatThreadReadState from "@/api/handlers/chat/threads/read-state/update";
 import renameChatThread from "@/api/handlers/chat/threads/rename";
 import updateChatThread from "@/api/handlers/chat/threads/update";
 import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
@@ -116,10 +121,15 @@ import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
+import {
+  createReadLocalFilesUndo,
+  createUndoLocalFiles,
+} from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import createClientInvoice from "@/api/handlers/client-invoices/create";
 import prefillClientInvoice from "@/api/handlers/client-invoices/prefill";
+import listConflictChecks from "@/api/handlers/conflict-checks/list";
 import readContactById from "@/api/handlers/contacts/get";
 import { createDesktopFeatureAccessReadEndpoint } from "@/api/handlers/desktop-feature-access/read";
 import readDesktopPresence from "@/api/handlers/desktop-presence/read";
@@ -201,6 +211,9 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_REQUEST_USER_AGENT } from "@/api/lib/business-registries/desktop/request-contract";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createDesktopRunnerControl } from "@/api/lib/desktop-runner/control";
+import { createLocalDoorbell } from "@/api/lib/desktop-runner/doorbell";
+import type { DesktopRunnerDb } from "@/api/lib/desktop-runner/store";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
@@ -222,6 +235,7 @@ import type {
   generateTanStackTextForTask,
 } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { grantedConflictCheckSnapshot } from "@/api/tests/helpers/conflict-check-access";
 import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -371,6 +385,9 @@ const DESKTOP_ENTRY = {
 };
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
+const conflictCheckB = toSafeId<"conflictCheck">(
+  "22222222-2222-4222-8222-2222222222c7",
+);
 const savedSearchA = toSafeId<"savedSearch">(
   "11111111-1111-4111-8111-111111111145",
 );
@@ -708,6 +725,8 @@ const readChatThreadRow = async (threadId: SafeId<"chatThread">) =>
     await testDb
       .select({
         chatModel: chatThreads.chatModel,
+        lastReadAt: chatThreads.lastReadAt,
+        pinnedAt: chatThreads.pinnedAt,
         title: chatThreads.title,
         webSearchEnabled: chatThreads.webSearchEnabled,
       })
@@ -758,6 +777,21 @@ const countCzechPresetRates = async (organizationId: SafeId<"organization">) =>
         ),
       )
   ).length;
+
+/** The undo handlers on the test database, as the runner control reads it. */
+const undoControl = () =>
+  createDesktopRunnerControl({
+    db: asTestRaw<DesktopRunnerDb>(testDb),
+    doorbell: createLocalDoorbell(),
+  });
+const readLocalFilesUndo = createReadLocalFilesUndo({ control: undoControl });
+const undoLocalFiles = createUndoLocalFiles({ control: undoControl });
+
+const folderRestoresOfTurn = async (turnId: SafeId<"chatTurn">) =>
+  await testDb
+    .select({ id: desktopRunnerFolderRestores.id })
+    .from(desktopRunnerFolderRestores)
+    .where(eq(desktopRunnerFolderRestores.chatTurnId, turnId));
 
 const readChatTurnRow = async (turnId: SafeId<"chatTurn">) =>
   (
@@ -1816,6 +1850,27 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expectPageContainsId(result, legalListB),
   },
   {
+    name: "conflict check list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listConflictChecks, workspaceA, {
+        featureAccessSnapshot: grantedConflictCheckSnapshot({
+          organizationId: workspaceA.session.activeOrganizationId,
+          userId: workspaceA.user.id,
+        }),
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listConflictChecks, workspaceB, {
+        featureAccessSnapshot: grantedConflictCheckSnapshot({
+          organizationId: workspaceB.session.activeOrganizationId,
+          userId: workspaceB.user.id,
+        }),
+        query: { limit: 100 },
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, conflictCheckB),
+    expectPositive: (result) => expectPageContainsId(result, conflictCheckB),
+  },
+  {
     name: "saved search list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listSavedSearches, workspaceA, {
@@ -2606,6 +2661,54 @@ const isolationCases: IsolationCase[] = [
       expect(result).toEqual({ title: chatThreadTitleB }),
   },
   {
+    name: "chat thread read state",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(updateChatThreadReadState, workspaceA, {
+        body: { readState: "unread" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(updateChatThreadReadState, sameUserWorkspaceB, {
+        body: { readState: "read" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      // Marking unread clears the instant; the other firm's attempt left it.
+      expect(recordField(result, "thread")).toMatchObject({
+        lastReadAt: expect.any(Date),
+      });
+    },
+    expectPositive: (result) => expect(result).toEqual({ readState: "read" }),
+  },
+  {
+    name: "chat thread pin state",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(updateChatThreadPinState, workspaceA, {
+        body: { pinState: "pinned" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(updateChatThreadPinState, sameUserWorkspaceB, {
+        body: { pinState: "unpinned" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "thread")).toMatchObject({ pinnedAt: null });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ pinState: "unpinned" }),
+  },
+  {
     // An upsert: a thread id the caller cannot see must neither be updated
     // nor answered by a fresh placeholder row under the caller's firm.
     name: "chat thread web search toggle",
@@ -2777,6 +2880,40 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) =>
       expect(result).toMatchObject({
         turn: { id: chatTurnB, status: "cancelled" },
+      }),
+  },
+  {
+    // Runs after the cancel case: the turn ended without a run, so it has
+    // nothing to undo, which its own member is told.
+    name: "chat turn local files undo",
+    runAAgainstB: async ({ workspaceA }) => {
+      const params = { threadId: chatTurnThreadB, turnId: chatTurnB };
+      return {
+        read: await runHandler(readLocalFilesUndo, workspaceA, { params }),
+        undo: await runHandler(undoLocalFiles, workspaceA, { params }),
+        queued: await folderRestoresOfTurn(chatTurnB),
+      };
+    },
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const params = { threadId: chatTurnThreadB, turnId: chatTurnB };
+      return {
+        read: await runHandler(readLocalFilesUndo, sameUserWorkspaceB, {
+          params,
+        }),
+        undo: await runHandler(undoLocalFiles, sameUserWorkspaceB, {
+          params,
+        }),
+      };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "read"))).toBe(404);
+      expect(getStatusCode(recordField(result, "undo"))).toBe(404);
+      expect(recordField(result, "queued")).toEqual([]);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        read: { undoable: false, undo: null },
+        undo: { status: "refused", undo: null, reason: "no_checkpoint" },
       }),
   },
   {
@@ -3212,6 +3349,22 @@ testState.beforeAll(async () => {
       createdBy: ids.userB1,
     },
   ]);
+  await testDb.insert(conflictChecks).values({
+    id: conflictCheckB,
+    organizationId: ids.orgB,
+    runBy: ids.userB1,
+    title: "Workspace B intake",
+    parties: [
+      {
+        type: "organization",
+        role: "client",
+        name: "Firm B prospect",
+        aliases: [],
+      },
+    ],
+    results: { version: 1, contactsScreened: 0, gaps: [], parties: [] },
+    outcome: "no_matches",
+  });
   await testDb.insert(savedSearches).values([
     {
       id: savedSearchA,
@@ -3232,7 +3385,11 @@ testState.beforeAll(async () => {
     { organizationId: ids.orgB, userId: ids.userA1 },
     [
       {
-        entry: { kind: "search", query: "Firm B research" },
+        entry: {
+          kind: "search",
+          query: "Firm B research",
+          country: "CZE",
+        },
         usedAt: new Date(),
       },
     ],
@@ -3240,6 +3397,10 @@ testState.beforeAll(async () => {
   if (searchHistoryRowB === undefined) {
     throw new Error("Search history fixture was not prepared");
   }
+  await testDb
+    .insert(searchHistoryOwners)
+    .values({ organizationId: ids.orgB, userId: ids.userA1 })
+    .onConflictDoNothing();
   await testDb
     .insert(searchHistoryEntries)
     .values({ ...searchHistoryRowB, id: searchHistoryEntryB });
@@ -3590,10 +3751,6 @@ testState.beforeAll(async () => {
       origin: "https://example.org",
     },
   ]);
-});
-
-afterAll(async () => {
-  await releaseTestDb();
 });
 
 describe("cross-tenant handler isolation", () => {
@@ -4144,6 +4301,7 @@ const desktopServer = (): TestServer => {
 let desktopRoutes: TestServer | undefined;
 
 afterAll(async () => {
+  await releaseTestDb();
   await desktopRoutes?.stop();
 });
 

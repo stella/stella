@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-uodo] only adds the recital-then-ruling clause reading, which the data-protection reader does not call.
+// parser-output-unchanged: [pl-uodo] only reads signature lines by title and name, which the data-protection reader does not call.
 /**
  * How a Polish decision names its own parts: the operative verbs its ruling
  * opens with, the reasons heading, the recital before the ruling, the closing
@@ -295,73 +295,171 @@ export const isPlClosingLine = (text: string): boolean =>
   CLOSING_RE.test(grammarLine(text));
 
 /**
- * A line opening on a judge's title or office (`SSA …`, `Sędzia …`,
- * `Przewodniczący …`). It signs the reasons only where they end; the same
- * opening in the head matter names the bench.
+ * The courts a judge's title names, by abbreviation (`Sędzia SO`, `SSO`) or
+ * in full (`Sędzia Sądu Okręgowego`).
  */
-const SIGNATURE_TITLE_RE =
-  /^(?:SSA|SSA del\.|SSO|SSR|sędzia|Sędzia|Przewodniczący|Przewodnicząca|Prezes|sprawozdawca)\b/u;
+const PL_TITLE_COURTS = [
+  { short: "SN", full: "Sądu Najwyższego" },
+  { short: "SA", full: "Sądu Apelacyjnego" },
+  { short: "SO", full: "Sądu Okręgowego" },
+  { short: "SR", full: "Sądu Rejonowego" },
+  { short: "NSA", full: "Naczelnego Sądu Administracyjnego" },
+  { short: "WSA", full: "Wojewódzkiego Sądu Administracyjnego" },
+] as const;
 
-/** Longest line a signature title opening is read on. */
-const SIGNATURE_TITLE_LINE_MAX_CHARS = 120;
-
-/** Whether a short line opens on a judge's title or office. */
-export const opensWithPlSignatureTitle = (text: string): boolean => {
-  const line = grammarLine(text);
-  return (
-    line.length <= SIGNATURE_TITLE_LINE_MAX_CHARS &&
-    SIGNATURE_TITLE_RE.test(line)
-  );
+/**
+ * A title a decision is signed under. A judge's, assessor's or registrar's
+ * title signs only with a name after it; an office signs printed alone too.
+ */
+type PlSigningTitle = {
+  readonly words: readonly string[];
+  readonly signsAlone: boolean;
 };
 
-/** A judge's title as a bench signs: `SSO Jan Kowalski`, `SSA del. …`. */
-const BENCH_TITLES: ReadonlySet<string> = new Set([
-  "SSN",
-  "SSA",
-  "SSO",
-  "SSR",
-  "SNSA",
-  "SWSA",
-]);
-const SECONDED_MARK = "del.";
+const titleWords = (phrase: string): readonly string[] =>
+  phrase.toLocaleLowerCase("pl-PL").split(" ");
+
+/** A person's title: it signs with a name after it. */
+const signingTitle = (phrase: string): PlSigningTitle => ({
+  words: titleWords(phrase),
+  signsAlone: false,
+});
+
+/** An office: it signs printed alone, or with a name after it. */
+const signingOffice = (phrase: string): PlSigningTitle => ({
+  words: titleWords(phrase),
+  signsAlone: true,
+});
+
+/**
+ * Every title a Polish decision is signed under, longest first so that
+ * `Sędzia Sądu Okręgowego` is read before `Sędzia`: the abbreviated judge's
+ * title (`SSO`, `SNSA`), `Sędzia` alone or with its court, the court
+ * assessor (`ASR`, `Asesor sądowy`), the registrar, the presiding judge,
+ * and the competition authority's office.
+ */
+const PL_SIGNING_TITLES: readonly PlSigningTitle[] = [
+  ...PL_TITLE_COURTS.flatMap(({ short, full }) => [
+    signingTitle(`S${short}`),
+    signingTitle(`Sędzia ${short}`),
+    signingTitle(`Sędzia ${full}`),
+  ]),
+  signingTitle("Sędzia"),
+  signingTitle("ASR"),
+  signingTitle("Asesor sądowy"),
+  signingTitle("Referendarz sądowy"),
+  signingTitle("Starszy referendarz sądowy"),
+  signingTitle("Przewodniczący"),
+  signingTitle("Przewodnicząca"),
+  signingOffice("Prezes Urzędu Ochrony Konkurencji i Konsumentów"),
+].toSorted((left, right) => right.words.length - left.words.length);
+
+/** A judge seconded to another court: `SSO del.`, `SSR (del.)`, `SSA w SO`. */
+const SECONDED_MARKS: readonly (readonly string[])[] = [
+  ["del."],
+  ["(del.)"],
+  ...PL_TITLE_COURTS.map(({ short }) => [
+    "w",
+    short.toLocaleLowerCase("pl-PL"),
+  ]),
+];
+
+/** A dash set between titles or between the parts of one surname. */
+const DASHES: ReadonlySet<string> = new Set(["-", "–"]);
 /** Most words one signed name runs to (`Anna Maria Kowalska-Nowak`). */
 const SIGNED_NAME_MAX_WORDS = 4;
 const NAME_WORD_RE = /^\p{Lu}[\p{L}\p{M}'’.]*(?:-\p{Lu}?[\p{L}\p{M}'’.]*)*$/u;
 /** A role beside a signed name: `(spr.)`, `(przewodniczący)`. */
 const NAME_NOTE_RE = /^\([^()]*\)$/u;
 
+/** How many words of `phrase` the words at `index` match, or 0. */
+const matchesAt = (
+  words: readonly string[],
+  index: number,
+  phrase: readonly string[],
+): number =>
+  phrase.every(
+    (word, offset) =>
+      words[index + offset]?.toLocaleLowerCase("pl-PL") === word,
+  )
+    ? phrase.length
+    : 0;
+
+/** The signing title the words at `index` open on, longest first. */
+const signingTitleAt = (
+  words: readonly string[],
+  index: number,
+): PlSigningTitle | undefined =>
+  PL_SIGNING_TITLES.find((title) => matchesAt(words, index, title.words) > 0);
+
+/** How many words of a seconding mark start at `index`, or 0. */
+const secondedMarkWordsAt = (words: readonly string[], index: number): number =>
+  SECONDED_MARKS.find((mark) => matchesAt(words, index, mark) > 0)?.length ?? 0;
+
+/** How many words of one signed name start at `index` (`Balion - Hajduk` is one). */
+const signedNameWordsAt = (words: readonly string[], index: number): number => {
+  let next = index;
+  let nameWords = 0;
+  while (
+    next < words.length &&
+    signingTitleAt(words, next) === undefined &&
+    NAME_WORD_RE.test(words[next] ?? "")
+  ) {
+    next += 1;
+    nameWords += 1;
+    // A surname's parts joined across a spaced dash read as one word.
+    while (
+      DASHES.has(words[next] ?? "") &&
+      NAME_WORD_RE.test(words[next + 1] ?? "")
+    ) {
+      next += 2;
+    }
+  }
+  return nameWords > SIGNED_NAME_MAX_WORDS ? -1 : next - index;
+};
+
 /**
- * Whether a line is only judges' titles and names, as a bench signs under
- * its ruling: `SSO Katarzyna Banko`, `SSA Ewa Jastrzębska SSA Małgorzata
- * Wołczańska SSO del. Tomasz Tatarczyk`. Read word by word, so a line
- * holding anything else (a ruling naming a judge) is not one.
+ * Whether a line is only signing titles and names: `SSO Katarzyna Banko`,
+ * `Sędzia Przemysław Kociński`, `ASR Maciej Skuczyński`, `SSA Ewa Jastrzębska
+ * SSA Małgorzata Wołczańska SSO del. Tomasz Tatarczyk`, `Przewodniczący -
+ * Sędzia SO Magdalena Balion - Hajduk`. Read word by word: each signer is
+ * one or more titles, a seconding mark, a name of at most four words and a
+ * role beside it. A line holding anything else signs nothing, so a sentence
+ * that opens on a title (`Prezes Urzędu ustalił, co następuje:`, `SSO Jan
+ * Kowalski zasądza …`) is never a signature.
  */
-const isBenchSignatureLine = (line: string): boolean => {
-  // The line is read with single spaces, so a hyphen has at most one beside
-  // it on each side (`Balion - Hajduk`, `Staniszewska- Perenc`).
-  const words = line.replaceAll(/ ?- ?/gu, "-").split(" ");
+const isTitledSignatureLine = (line: string): boolean => {
+  // The line is read with single spaces; a dash with a space on one side
+  // only (`Staniszewska- Perenc`) stands apart like a spaced one.
+  const words = line
+    .replaceAll(/ [-–](?=\S)|(?<=\S)[-–] /gu, (dash) => ` ${dash.trim()} `)
+    .split(" ");
   let index = 0;
   while (index < words.length) {
-    if (!BENCH_TITLES.has(words[index] ?? "")) {
-      return false;
-    }
-    index += 1;
-    if (words[index] === SECONDED_MARK) {
-      index += 1;
-    }
-    const nameStart = index;
-    while (
-      index < words.length &&
-      !BENCH_TITLES.has(words[index] ?? "") &&
-      NAME_WORD_RE.test(words[index] ?? "")
+    let signsAlone = false;
+    let titles = 0;
+    for (
+      let title = signingTitleAt(words, index);
+      title !== undefined;
+      title = signingTitleAt(words, index)
     ) {
-      index += 1;
+      signsAlone ||= title.signsAlone;
+      titles += 1;
+      index += title.words.length;
+      while (DASHES.has(words[index] ?? "")) {
+        index += 1;
+      }
     }
-    const nameWords = index - nameStart;
-    if (nameWords === 0 || nameWords > SIGNED_NAME_MAX_WORDS) {
+    if (titles === 0) {
       return false;
     }
-    if (NAME_NOTE_RE.test(words[index] ?? "")) {
+    index += secondedMarkWordsAt(words, index);
+    const nameLength = signedNameWordsAt(words, index);
+    if (nameLength < 0 || (nameLength === 0 && !signsAlone)) {
+      return false;
+    }
+    index += nameLength;
+    if (nameLength > 0 && NAME_NOTE_RE.test(words[index] ?? "")) {
       index += 1;
     }
   }
@@ -370,12 +468,12 @@ const isBenchSignatureLine = (line: string): boolean => {
 
 /**
  * A signing label with the place for the signature left blank, or nothing
- * after it: `Przewodniczący:…………`, `Skład orzekający Izby:`. A label
- * followed by a name (`Przewodniczący: Anna Kowalska`) names the bench in
- * the head matter and is not one.
+ * after it: `Przewodniczący:…………`, `Sędzia sprawozdawca:`, `Skład
+ * orzekający Izby:`. A label followed by a name (`Przewodniczący: Anna
+ * Kowalska`) names the bench in the head matter and is not one.
  */
 const SIGNING_LABEL_RE =
-  /^(?:przewodnicząc[ya]|członkowie|członek|sędziowie|skład orzekający(?: izby)?)\s?:?\s?[.…]*$/iu;
+  /^(?:przewodnicząc[ya]|członkowie|członek|sędziowie|sędzia(?: sprawozdawca)?|sprawozdawca|skład orzekający(?: izby)?)\s?:?\s?[.…]*$/iu;
 
 /** The place left for a signature: a line of dots alone. */
 const SIGNATURE_BLANK_RE = /^[.…]{3,}$/u;
@@ -383,7 +481,7 @@ const SIGNATURE_BLANK_RE = /^[.…]{3,}$/u;
 /** Whether a line signs the decision: a bench's names or a signing label. */
 export const isPlSignatureLine = (text: string): boolean => {
   const line = grammarLine(text);
-  return isBenchSignatureLine(line) || SIGNING_LABEL_RE.test(line);
+  return isTitledSignatureLine(line) || SIGNING_LABEL_RE.test(line);
 };
 
 /** Whether a line is the blank a signature is written on. */

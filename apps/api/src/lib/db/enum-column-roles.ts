@@ -180,6 +180,13 @@ export const ENUM_COLUMN_ROLES = {
     interaction_type: ATTRIBUTE,
     interruption_reason: ATTRIBUTE,
   },
+  // Any recorded decision may replace another (a conflict later waived); the
+  // decision path still moves it through the transition owner, with a
+  // revision in the predicate.
+  conflict_checks: {
+    decision: ATTRIBUTE,
+    outcome: ATTRIBUTE,
+  },
   contact_relationships: {
     relationship_type: ATTRIBUTE,
   },
@@ -259,8 +266,12 @@ export const ENUM_COLUMN_ROLES = {
   desktop_runner_events: {
     type: ATTRIBUTE,
   },
+  desktop_runner_folder_restores: {
+    reason: ATTRIBUTE,
+  },
   desktop_runner_runs: {
     harness: ATTRIBUTE,
+    lost_reason: ATTRIBUTE,
     outcome: ATTRIBUTE,
     reject_reason: ATTRIBUTE,
   },
@@ -379,6 +390,10 @@ export const ENUM_COLUMN_ROLES = {
   justifications: {
     entity_feature_gate: ATTRIBUTE,
   },
+  legal_list_claim_carry_outcomes: {
+    entity_feature_gate: ATTRIBUTE,
+    outcome: ATTRIBUTE,
+  },
   legal_list_claim_review_events: {
     entity_feature_gate: ATTRIBUTE,
     kind: ATTRIBUTE,
@@ -398,9 +413,17 @@ export const ENUM_COLUMN_ROLES = {
     entity_feature_gate: ATTRIBUTE,
   },
   legal_list_generation_candidates: {
+    confidence: ATTRIBUTE,
     entity_feature_gate: ATTRIBUTE,
     item_type: ATTRIBUTE,
+    occurred_on_precision: ATTRIBUTE,
     priority: ATTRIBUTE,
+    scoring: ATTRIBUTE,
+  },
+  legal_list_generation_runs: {
+    error_code: ATTRIBUTE,
+    item_type: ATTRIBUTE,
+    producer: ATTRIBUTE,
   },
   legal_list_generation_sources: {
     entity_feature_gate: ATTRIBUTE,
@@ -420,6 +443,10 @@ export const ENUM_COLUMN_ROLES = {
   },
   legal_list_items: {
     entity_feature_gate: ATTRIBUTE,
+  },
+  legal_list_source_documents: {
+    entity_feature_gate: ATTRIBUTE,
+    source_kind: ATTRIBUTE,
   },
   legal_list_verification_blocks: {
     entity_feature_gate: ATTRIBUTE,
