@@ -369,7 +369,10 @@ impl LinkedFolders {
 
   /// Links a folder by its real path and answers the link's id; a folder
   /// already linked keeps its link. A link is followed only here, where the
-  /// member chose it; the list then names the real folder.
+  /// member chose it; the list then names the real folder. The app links in
+  /// two steps ([`Self::probe`], then [`Self::commit`]) so that only the
+  /// look is bounded; tests link in one.
+  #[cfg(test)]
   pub fn add(&self, chosen: &Path) -> Result<Uuid, LinkedFolderListError> {
     let candidate = self.probe(chosen)?;
     self.commit(candidate)
