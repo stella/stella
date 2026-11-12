@@ -13,6 +13,16 @@ export const SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
  */
 export const SKILL_SOURCE_UNREACHABLE_CODE = "skill_source_unreachable";
 
+/**
+ * A skill resource refusal by size: the file's text is past what one stored
+ * resource may hold, or past what a model may read in one piece (an AI
+ * rewrite reads the whole file).
+ */
+export const SKILL_RESOURCE_REFUSAL_CODE = {
+  tooLarge: "skill_resource_too_large",
+  tooLargeForAi: "skill_resource_too_large_for_ai",
+} as const;
+
 /** Browser-safe path grammar shared by skill-resource producers and editors. */
 export const SKILL_RESOURCE_PATH_PATTERN =
   /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;

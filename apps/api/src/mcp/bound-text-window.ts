@@ -1,6 +1,13 @@
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { sha256Base64Url } from "@stll/sha256/bun";
 
+/**
+ * The one windowed read for a long text a cursor must not carry onto another
+ * text: a statute provision's wording, a skill resource file. The cursor binds
+ * the caller's subject and a digest of the whole text, so it is refused for a
+ * different subject and once the text changes.
+ */
+
 type TextCursorPayload = {
   offset: number;
   binding: string;
@@ -8,15 +15,26 @@ type TextCursorPayload = {
 
 const CURSOR_PREFIX = "ptw1";
 
+const SHA256_BASE64URL_CHARS = 43;
+
+/** Longest cursor this codec issues: prefix, a safe-integer offset, the
+ * binding and the checksum, dot-separated. */
+export const BOUND_TEXT_CURSOR_MAX_CHARS =
+  CURSOR_PREFIX.length +
+  String(Number.MAX_SAFE_INTEGER).length +
+  SHA256_BASE64URL_CHARS * 2 +
+  3;
+
 // Keep damaged members of this codec's class for the decoder to refuse;
 // treating them as placeholders would silently restart a continuation.
-export const isProvisionTextCursor = (value: string): boolean =>
+export const isBoundTextCursor = (value: string): boolean =>
   value === CURSOR_PREFIX || value.startsWith(`${CURSOR_PREFIX}.`);
 
 const checksum = (payload: string): string => sha256Base64Url(payload);
 
-// A cursor continues one exact text: a corrected consolidation under the same
-// subject must not be stitched onto windows read from the previous wording.
+// A cursor continues one exact text: a corrected consolidation or an edited
+// file under the same subject must not be stitched onto windows read from the
+// previous wording.
 const textBinding = (subject: string, text: string): string =>
   checksum(`${subject}\u0000${checksum(text)}`);
 
@@ -57,7 +75,7 @@ const splitsSurrogatePair = (text: string, offset: number) =>
   /[\uD800-\uDBFF]/u.test(text.charAt(offset - 1)) &&
   /[\uDC00-\uDFFF]/u.test(text.charAt(offset));
 
-export type ProvisionTextWindow =
+export type BoundTextWindow =
   | { type: "invalid-cursor" }
   | {
       type: "window";
@@ -67,7 +85,7 @@ export type ProvisionTextWindow =
     };
 
 /** Retains whole code points; a one-unit budget may return a surrogate pair. */
-export const windowProvisionText = ({
+export const windowBoundText = ({
   cursor,
   limit,
   subject,
@@ -77,7 +95,7 @@ export const windowProvisionText = ({
   limit: number;
   subject: string;
   text: string;
-}): ProvisionTextWindow => {
+}): BoundTextWindow => {
   const decoded = cursor === undefined ? null : decodePayload(cursor);
   if (
     cursor !== undefined &&
