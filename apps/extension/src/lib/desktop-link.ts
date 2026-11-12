@@ -182,14 +182,11 @@ export const createDesktopLink = ({
   };
 
   const connect = async (): Promise<void> => {
-    if (current !== null) {
-      return;
-    }
     if (!(await hasDesktopLinkAccess())) {
       await writeDesktopLinkState(DESKTOP_LINK_STATE.offline);
       return;
     }
-    // Checked again after the await: another start may have connected.
+    // Checked after the await: another start may have connected meanwhile.
     if (current !== null) {
       return;
     }

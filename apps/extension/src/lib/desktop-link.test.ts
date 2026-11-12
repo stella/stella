@@ -99,6 +99,14 @@ afterEach(() => {
   }
 });
 
+/** Lets every already-settled promise chain run its callbacks. */
+const settleMicrotasks = async () => {
+  for (let turn = 0; turn < 10; turn += 1) {
+    // await-in-loop: each turn drains one more step of the chains.
+    await Promise.resolve();
+  }
+};
+
 /** Records reconnects; `fire` runs the earliest one now. */
 const createManualTimer = () => {
   const pending: { delayMs: number; task: () => void }[] = [];
@@ -152,13 +160,11 @@ test("stays offline without the member's permission", async () => {
 test("answers stella desktop's hello and runs its commands", async () => {
   const { hosts, ports } = installFakeChrome({ allowed: true });
   const ran: DesktopCommand[] = [];
-  const answered = Promise.resolve(RESULT);
   const link = createDesktopLink({
     cancel: () => undefined,
-    // The same promise the test awaits, so the result is posted first.
-    runCommand: (request) => {
+    runCommand: async (request) => {
       ran.push(request);
-      return answered;
+      return RESULT;
     },
     timer: createManualTimer().timer,
   });
@@ -188,7 +194,7 @@ test("answers stella desktop's hello and runs its commands", async () => {
   native.deliver(command("r-1"));
   // A web page's message is not stella desktop's.
   native.deliver({ ...command("r-2"), source: "stella-web" });
-  await answered;
+  await settleMicrotasks();
   expect(ran.map(({ requestId }) => requestId)).toEqual(["r-1"]);
   expect(native.posted.at(-1)).toEqual({
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
@@ -205,7 +211,7 @@ test("drops a result whose connection is gone and reconnects", async () => {
   const manual = createManualTimer();
   const link = createDesktopLink({
     cancel: () => undefined,
-    runCommand: () => pending.promise,
+    runCommand: async () => await pending.promise,
     timer: manual.timer,
   });
   await link.connect();
@@ -216,7 +222,7 @@ test("drops a result whose connection is gone and reconnects", async () => {
   first.deliver(command("r-1"));
   first.drop();
   pending.resolve(RESULT);
-  await pending.promise;
+  await settleMicrotasks();
   expect(first.posted).toEqual([]);
   expect(await readDesktopLinkState()).toBe(DESKTOP_LINK_STATE.offline);
 
