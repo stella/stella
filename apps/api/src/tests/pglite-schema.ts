@@ -13,6 +13,10 @@ import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 
 import { parseMigrationStatements } from "../../../../scripts/check-migration-safety";
 import { readDecisionDocketFilingYearMigration } from "./decision-docket-filing-year-migration";
+import {
+  findingDecisionHistoryMigrationPath,
+  findingDecisionHistoryMigrations,
+} from "./finding-decision-history-migrations";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
@@ -1847,12 +1851,10 @@ export const installPgliteCaseLawPopulationCounts = async (
 export const installPgliteFindingDecisionHistory = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  await installPgliteMigration({
-    db,
-    migrationPath: nodePath.join(
-      DRIZZLE_DIR,
-      "20261111230000_document_review_finding_decision_trigger",
-      "migration.sql",
-    ),
-  });
+  for (const folder of findingDecisionHistoryMigrations()) {
+    await installPgliteMigration({
+      db,
+      migrationPath: findingDecisionHistoryMigrationPath(folder),
+    });
+  }
 };

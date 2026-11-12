@@ -87,7 +87,9 @@ export const serializeClaimReview = ({
   review,
   eventCount,
 }: ClaimReviewRecord) => {
-  const { recheck: _onTheClaim, ...wire } = review;
+  // The shared decision is the status read in the shared vocabulary; the
+  // wire states the status itself.
+  const { recheck: _onTheClaim, decision: _sharedReading, ...wire } = review;
   return {
     ...wire,
     linksChanged: linksChangedSinceGrade(review),

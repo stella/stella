@@ -380,7 +380,7 @@ describe("generateCliSkill (TanStack Intent)", () => {
     );
     // A discriminator subcommand marked destructive.
     expect(skill).toContain(
-      "`stella matter remove-member` | admin_write | destructive (needs `--yes` off a TTY) |",
+      "`stella matter remove-member` | matters_write | destructive (needs `--yes` off a TTY) |",
     );
     expect(skill).toContain(
       "`stella template save-filled new-document` | documents_write + templates |",

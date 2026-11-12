@@ -13,6 +13,7 @@ import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
   DOCUMENT_REVIEW_APPLICATION_STATUSES,
   DOCUMENT_REVIEW_DECISION,
+  DOCUMENT_REVIEW_DECISION_REASON_MAX,
   DOCUMENT_REVIEW_DECISIONS,
   DOCUMENT_REVIEW_FINDING_FLAGS,
   DOCUMENT_REVIEW_FINDING_FLAGS_MAX,
@@ -417,7 +418,7 @@ export const documentReviewFindingDecisions = p.pgTable(
     ),
     p.check(
       "document_review_finding_decisions_reason_length_check",
-      sql`${table.reason} IS NULL OR char_length(${table.reason}) <= 2000`,
+      sql`${table.reason} IS NULL OR char_length(${table.reason}) <= ${sql.raw(String(DOCUMENT_REVIEW_DECISION_REASON_MAX))}`,
     ),
     p.pgPolicy("document_review_finding_decisions_workspace_select", {
       for: "select",

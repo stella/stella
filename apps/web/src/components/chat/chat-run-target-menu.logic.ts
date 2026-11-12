@@ -48,10 +48,11 @@ export const CHAT_LOCAL_HARNESS_NAMES = {
 } as const satisfies Record<ChatLocalRunHarness, string>;
 
 type HarnessState = ChatLocalHarnessReadiness["state"];
-type HarnessModels = Extract<
+type ReadyHarnessReport = Extract<
   ChatLocalHarnessReadiness,
   { state: "ready" }
->["models"];
+>;
+type HarnessModels = ReadyHarnessReport["models"];
 
 /**
  * One harness as the Run on menu offers it: ready with its models, or why it
@@ -62,7 +63,8 @@ export type ChatLocalHarnessOption =
   | {
       harness: ChatLocalRunHarness;
       state: "ready";
-      /** The models it reports, each with the efforts a turn may ask for. */
+      /** As the harness reports them: `isDefault` marks the one it runs
+       *  when none is named, and each lists the efforts a turn may ask for. */
       models: HarnessModels;
       /** The permission modes the computer can run the harness in. */
       approvalModes: readonly DesktopRunnerApprovalMode[];
@@ -202,6 +204,32 @@ export const localRunMaxApprovals = (
     : CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS;
 
 const SEPARATOR = "::";
+
+/** A ready harness's model, as its report lists it. */
+export type LocalHarnessModel = Extract<
+  ChatLocalHarnessOption,
+  { state: "ready" }
+>["models"][number];
+
+/**
+ * The model a ready harness runs when none is named: the one its report
+ * marks, else its first. Offered first, as the recommended one.
+ */
+export const defaultHarnessModel = (
+  option: Extract<ChatLocalHarnessOption, { state: "ready" }>,
+): LocalHarnessModel =>
+  option.models.find(({ isDefault }) => isDefault === true) ??
+  option.models.at(0) ??
+  panic("A ready harness reports at least one model");
+
+/**
+ * Where a turn runs, as the where chip's radio value: stella's models in
+ * the cloud, or one harness on the member's computer whatever its model.
+ */
+export const runOnPlaceValue = (target: ChatRunTarget): string =>
+  target.kind === "local"
+    ? `${CHAT_RUN_TARGET_KIND.local}${SEPARATOR}${target.harness}`
+    : CHAT_RUN_TARGET_KIND.cloud;
 
 /**
  * The menu's radio value for where a turn runs: the harness and model, not

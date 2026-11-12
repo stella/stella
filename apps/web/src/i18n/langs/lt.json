@@ -643,100 +643,21 @@
       "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Sukurti dvikalbę versiją",
-      "creating": "Kuriama…",
-      "description": "Sukuria šio dokumento kopiją dviem stulpeliais: kairėje originalus tekstas, dešinėje verčiama kopija su atskira numeracija. Kopija išsaugoma šioje byloje kaip naujas dokumentas.",
-      "sameLanguage": "Pasirinkite dvi skirtingas kalbas.",
-      "sourceLanguage": "Šaltinio kalba",
-      "title": "Dvikalbė versija"
-    },
-    "error": {
-      "title": "Nepavyko sukurti dvikalbės versijos"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> paruoštas, versti reikia {rowCount, plural, one {# eilutę} few {# eilutes} many {# eilutės} other {# eilučių}}.",
-      "title": "Dvikalbė versija sukurta"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Užpildo šio dviejų stulpelių dokumento vertimo stulpelį. Peržiūrėkite, kas nutiks kiekvienai eilutei ir kaip verčiami apibrėžti terminai, tada pradėkite vertimą.",
-      "prepare": "Paruošti",
-      "preparing": "Skaitomas dokumentas…",
-      "preparingHint": "Perskaityti visą dokumentą ir įvertinti kiekvieną eilutę trunka iki dviejų minučių.",
-      "title": "Versti dvikalbę versiją"
+      "prepare": "Paruošti"
     },
     "dispositions": {
-      "inline": "Abi kalbos",
       "keep": "Palikti nepakeistą"
     },
-    "error": {
-      "prepareTitle": "Nepavyko paruošti dokumento",
-      "startTitle": "Nepavyko pradėti vertimo"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Vertimui nėra prieinamo DI modelio.",
-      "applyFailed": "Vertimų nepavyko įrašyti atgal į dokumentą.",
-      "documentChanged": "Dokumentas pasikeitė vykstant vertimui. Paruoškite jį iš naujo.",
-      "documentUnresolved": "Dokumentas arba jo failas nebepasiekiamas.",
-      "enqueueFailed": "Vertimo nepavyko įtraukti į eilę.",
-      "internal": "Vertimas netikėtai nutrūko.",
-      "notBilingual": "Šiame dokumente nėra dvikalbės lentelės.",
-      "translationFailed": "Nepavyko išversti eilučių paketo.",
-      "unknown": "Vertimas netikėtai nutrūko."
-    },
-    "glossary": {
-      "add": "Pridėti terminą",
-      "description": "Šie atitikmenys taikomi visoms eilutėms. Terminą be vertimo reikia užpildyti arba pašalinti.",
-      "empty": "Apibrėžtų terminų nerasta.",
-      "formsHint": "Kitas formas atskirkite kableliais.",
-      "formsSource": "Kitos termino formos",
-      "formsTarget": "Kitos vertimo formos",
-      "incomplete": "Užpildykite trūkstamus vertimus arba pašalinkite šiuos terminus.",
-      "origins": {
-        "detected": "Rasta",
-        "user": "Jūsų"
-      },
-      "term": "Terminas",
-      "title": "Apibrėžti terminai",
-      "tooManyForms": "Terminas gali turėti ne daugiau kaip {max} kitų formų.",
-      "translation": "Vertimas"
-    },
     "kinds": {
-      "heading": "Antraštė",
-      "listItem": "Sąrašo elementas",
-      "paragraph": "Pastraipa",
-      "table": "Visa lentelė"
-    },
-    "origins": {
-      "default": "Neįvertinta",
-      "model": "DI"
+      "paragraph": "Pastraipa"
     },
     "review": {
-      "droppedRows": "{count, plural, one {Praleista # eilutė} few {Praleistos # eilutės} many {Praleista # eilutės} other {Praleista # eilučių}}: jose nėra verstino teksto.",
-      "start": "Pradėti vertimą",
       "starting": "Pradedama…"
     },
     "rows": {
-      "description": "Pasirinkite, kas nutiks kiekvienai vertimo stulpelio eilutei.",
-      "ordinal": "#",
-      "sourceText": "Šaltinio tekstas",
-      "title": "Eilutės",
-      "whatToDo": "Ką daryti"
-    },
-    "run": {
-      "cancelled": "Vertimas buvo atšauktas.",
-      "doneSummary": "{count, plural, one {Išversta # eilutė} few {Išverstos # eilutės} many {Išversta # eilutės} other {Išversta # eilučių}}.",
-      "doneTitle": "Vertimas baigtas",
-      "failedRows": "{count, plural, one {Nepavyko išversti # eilutės} few {Nepavyko išversti # eilučių} many {Nepavyko išversti # eilutės} other {Nepavyko išversti # eilučių}}.",
-      "failedTitle": "Vertimas sustabdytas",
-      "hint": "Vertimas vykdomas serveryje. Kad galėtumėte jį stebėti, palikite šį langą atidarytą.",
-      "moreRows": "{count, plural, one {dar # eilutė} few {dar # eilutės} many {dar # eilutės} other {dar # eilučių}}",
-      "progress": "Išversta {completed} iš {total} eilučių",
-      "title": "Vyksta vertimas…",
-      "warningsTitle": "Tikrintinos eilutės"
+      "title": "Eilutės"
     }
   },
   "billing": {
@@ -1249,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# neigiama} few {# neigiamos} many {# neigiamos} other {# neigiamų}}",
       "none": "Citavimų dar neužfiksuota.",
       "notInStella": "Programoje stella dar nėra",
-      "openAtCitation": "Atverti citatos vietoje",
       "openDecision": "Atverti sprendimą",
       "paragraphLabel": "{paragraph} punktas",
       "paragraphMark": "¶ {paragraph}",
@@ -1933,7 +1853,6 @@
       "restored": "Failų pakeitimai atšaukti"
     },
     "localRun": {
-      "cloud": "stella debesis",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
       "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",
@@ -1944,7 +1863,6 @@
       "filesNotShared": "Failai, kurių nepavyko bendrinti, lieka jūsų kompiuteryje: {fileNames}",
       "limitReminderNotify": "Pranešti, kai atsinaujins",
       "limitReminderScheduled": "Pranešime jums po {time}.",
-      "onThisComputer": "{harness} šiame kompiuteryje",
       "permissionAboveLimit": "Jūsų organizacija to neleidžia",
       "permissionAskDescription": "Pokalbio aplanko failus redaguoja pats; dėl visko kito klausia.",
       "permissionAutoDescription": "Tai, ką laiko saugiu, atlieka pats; dėl kito klausia.",
@@ -1962,8 +1880,6 @@
       "refusalReasoningEffortUnavailable": "Programavimo agentas jūsų kompiuteryje šiam modeliui nesiūlo šio samprotavimo lygio. Pasirinkite kitą meniu Samprotavimo lygis.",
       "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
-      "runOn": "Paleisti",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limitas pasiektas iki {time}",
       "stateModelUnavailable": "Modelis nebepasiekiamas",
@@ -2127,6 +2043,23 @@
     "richContentLoading": "Įkeliamas interaktyvus turinys…",
     "richContentTitle": "Interaktyvus turinys",
     "richContentUnavailable": "Šio turinio negalima saugiai rodyti.",
+    "runOn": {
+      "checkFailed": "Nepavyko patikrinti jūsų kompiuterio",
+      "chipLabel": "Kur veikia: {place}",
+      "cloud": "Debesis",
+      "cloudDescription": "Veikia debesyje. Pasiekiama iš bet kur.",
+      "harnessModels": "{harness} modeliai",
+      "hintInstall": "Įdiekite jį per stella desktop",
+      "hintOffline": "Atidarykite stella desktop savo kompiuteryje",
+      "hintSignIn": "Prisijunkite per stella desktop",
+      "hintUpdate": "Atnaujinkite jį per stella desktop",
+      "localPlace": "Jūsų kompiuteris, {harness}",
+      "localSelection": "Jūsų kompiuteris · {harness}",
+      "modelDefault": "Numatytasis (rekomenduojamas)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Jūsų kompiuteris",
+      "yourComputerDescription": "Naudoja Codex arba Claude Code jūsų kompiuteryje su jūsų pačių prenumerata. Gali skaityti ir keisti šio pokalbio aplanko failus; leidimai nustato, ką jis gali daryti neklausdamas."
+    },
     "selection": {
       "askInNewChat": "Klausti naujame pokalbyje",
       "quoteInReply": "Cituoti atsakyme",
