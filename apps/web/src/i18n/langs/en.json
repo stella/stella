@@ -1853,7 +1853,6 @@
       "restored": "File changes undone"
     },
     "localRun": {
-      "cloud": "stella cloud",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
       "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
@@ -1862,7 +1861,6 @@
       "errorRestoring": "Your computer is still undoing file changes. Send this again in a moment.",
       "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
       "filesNotShared": "Files that could not be shared stay on your computer: {fileNames}",
-      "onThisComputer": "{harness} on this computer",
       "permissionAboveLimit": "Not allowed by your organization",
       "permissionAskDescription": "Edits files in the chat's folder on its own; asks before anything else.",
       "permissionAutoDescription": "Does what it judges safe on its own; asks about the rest.",
@@ -1880,8 +1878,6 @@
       "refusalReasoningEffortUnavailable": "The coding agent on your computer does not offer this reasoning effort for the model. Choose another one under Reasoning effort.",
       "refusalTooLarge": "This conversation is too long to hand to your computer. Start a new chat to run it there.",
       "refusalUnavailable": "Running chats on your computer is not available for your account.",
-      "runOn": "Run on",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit reached until {time}",
       "stateModelUnavailable": "Model no longer available",
@@ -2045,6 +2041,23 @@
     "richContentLoading": "Loading interactive content…",
     "richContentTitle": "Interactive content",
     "richContentUnavailable": "This content cannot be displayed safely.",
+    "runOn": {
+      "checkFailed": "Couldn't check your computer",
+      "chipLabel": "Runs on: {place}",
+      "cloud": "Cloud",
+      "cloudDescription": "Runs in the cloud. Works anywhere.",
+      "harnessModels": "{harness} models",
+      "hintInstall": "Install it from stella desktop",
+      "hintOffline": "Open stella desktop on your computer",
+      "hintSignIn": "Sign in from stella desktop",
+      "hintUpdate": "Update it from stella desktop",
+      "localPlace": "Your computer, {harness}",
+      "localSelection": "Your computer · {harness}",
+      "modelDefault": "Default (recommended)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Your computer",
+      "yourComputerDescription": "Uses Codex or Claude Code on your computer with your own subscription. It can read and change files in this chat's folder; its permissions decide what it does without asking."
+    },
     "selection": {
       "askInNewChat": "Ask in new chat",
       "quoteInReply": "Quote in reply",

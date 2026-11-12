@@ -381,6 +381,12 @@
     "chat.pastedText.fromPromptFallback": [
       "de"
     ],
+    "chat.runOn.cloud": [
+      "cs",
+      "de",
+      "fr",
+      "sk"
+    ],
     "chat.suggestionSeverity.style": [
       "fr"
     ],

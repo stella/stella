@@ -1853,7 +1853,6 @@
       "restored": "Failų pakeitimai atšaukti"
     },
     "localRun": {
-      "cloud": "stella debesis",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
       "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",
@@ -1862,7 +1861,6 @@
       "errorRestoring": "Jūsų kompiuteris dar atšaukia failų pakeitimus. Po akimirkos išsiųskite tai dar kartą.",
       "errorUnavailable": "Jūsų kompiuteris nustojo apdoroti šį atsakymą. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
       "filesNotShared": "Failai, kurių nepavyko bendrinti, lieka jūsų kompiuteryje: {fileNames}",
-      "onThisComputer": "{harness} šiame kompiuteryje",
       "permissionAboveLimit": "Jūsų organizacija to neleidžia",
       "permissionAskDescription": "Pokalbio aplanko failus redaguoja pats; dėl visko kito klausia.",
       "permissionAutoDescription": "Tai, ką laiko saugiu, atlieka pats; dėl kito klausia.",
@@ -1880,8 +1878,6 @@
       "refusalReasoningEffortUnavailable": "Programavimo agentas jūsų kompiuteryje šiam modeliui nesiūlo šio samprotavimo lygio. Pasirinkite kitą meniu Samprotavimo lygis.",
       "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
-      "runOn": "Paleisti",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limitas pasiektas iki {time}",
       "stateModelUnavailable": "Modelis nebepasiekiamas",
@@ -2045,6 +2041,23 @@
     "richContentLoading": "Įkeliamas interaktyvus turinys…",
     "richContentTitle": "Interaktyvus turinys",
     "richContentUnavailable": "Šio turinio negalima saugiai rodyti.",
+    "runOn": {
+      "checkFailed": "Nepavyko patikrinti jūsų kompiuterio",
+      "chipLabel": "Kur veikia: {place}",
+      "cloud": "Debesis",
+      "cloudDescription": "Veikia debesyje. Pasiekiama iš bet kur.",
+      "harnessModels": "{harness} modeliai",
+      "hintInstall": "Įdiekite jį per stella desktop",
+      "hintOffline": "Atidarykite stella desktop savo kompiuteryje",
+      "hintSignIn": "Prisijunkite per stella desktop",
+      "hintUpdate": "Atnaujinkite jį per stella desktop",
+      "localPlace": "Jūsų kompiuteris, {harness}",
+      "localSelection": "Jūsų kompiuteris · {harness}",
+      "modelDefault": "Numatytasis (rekomenduojamas)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Jūsų kompiuteris",
+      "yourComputerDescription": "Naudoja Codex arba Claude Code jūsų kompiuteryje su jūsų pačių prenumerata. Gali skaityti ir keisti šio pokalbio aplanko failus; leidimai nustato, ką jis gali daryti neklausdamas."
+    },
     "selection": {
       "askInNewChat": "Klausti naujame pokalbyje",
       "quoteInReply": "Cituoti atsakyme",

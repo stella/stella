@@ -1853,7 +1853,6 @@
       "restored": "Alterações nos arquivos desfeitas"
     },
     "localRun": {
-      "cloud": "Nuvem da stella",
       "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",
       "errorLimitResetsAt": "O agente de programação do seu computador atingiu o limite de uso. Você poderá tentar novamente a partir de {time}.",
       "errorNeedsLogin": "O agente de programação do seu computador precisa que você entre novamente. Entre pelo stella desktop e tente de novo.",
@@ -1862,7 +1861,6 @@
       "errorRestoring": "Seu computador ainda está desfazendo alterações de arquivos. Envie isto de novo em instantes.",
       "errorUnavailable": "Seu computador parou de processar esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
       "filesNotShared": "Os arquivos que não puderam ser compartilhados continuam no seu computador: {fileNames}",
-      "onThisComputer": "{harness} neste computador",
       "permissionAboveLimit": "Não permitido pela sua organização",
       "permissionAskDescription": "Edita sozinho os arquivos da pasta do chat; pergunta antes de qualquer outra coisa.",
       "permissionAutoDescription": "Faz sozinho o que julga seguro; pergunta sobre o resto.",
@@ -1880,8 +1878,6 @@
       "refusalReasoningEffortUnavailable": "O agente de programação do seu computador não oferece este nível de raciocínio para o modelo. Escolha outro em Nível de raciocínio.",
       "refusalTooLarge": "Esta conversa é longa demais para ser enviada ao seu computador. Comece um novo chat para executá-la lá.",
       "refusalUnavailable": "Executar chats no seu computador não está disponível para sua conta.",
-      "runOn": "Executar em",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limite atingido até {time}",
       "stateModelUnavailable": "Modelo não está mais disponível",
@@ -2045,6 +2041,23 @@
     "richContentLoading": "Carregando conteúdo interativo…",
     "richContentTitle": "Conteúdo interativo",
     "richContentUnavailable": "Não é possível exibir este conteúdo com segurança.",
+    "runOn": {
+      "checkFailed": "Não foi possível verificar seu computador",
+      "chipLabel": "Executa em: {place}",
+      "cloud": "Nuvem",
+      "cloudDescription": "Roda na nuvem. Funciona de qualquer lugar.",
+      "harnessModels": "Modelos do {harness}",
+      "hintInstall": "Instale pelo stella desktop",
+      "hintOffline": "Abra o stella desktop no seu computador",
+      "hintSignIn": "Entre no stella desktop",
+      "hintUpdate": "Atualize pelo stella desktop",
+      "localPlace": "Seu computador, {harness}",
+      "localSelection": "Seu computador · {harness}",
+      "modelDefault": "Padrão (recomendado)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Seu computador",
+      "yourComputerDescription": "Usa o Codex ou o Claude Code no seu computador com a sua própria assinatura. Pode ler e alterar arquivos na pasta deste chat; as permissões definem o que ele pode fazer sem perguntar."
+    },
     "selection": {
       "askInNewChat": "Perguntar em um novo chat",
       "quoteInReply": "Citar na resposta",
