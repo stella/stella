@@ -2,6 +2,7 @@
 // parser-output-unchanged: [sk-us] exports `romanValue` for the case-law outline; no designator level changes.
 // parser-output-unchanged: [sk-courts] exports the title split for the reader's contents; no designator level changes.
 // parser-output-unchanged: [sk-us] exports the title split for the reader's contents; no designator level changes.
+// parser-output-unchanged: exports the title split for the reader's contents; designator detection and levels are unchanged for every parser.
 /**
  * Heading levels read from the headings' own designators.
  *
