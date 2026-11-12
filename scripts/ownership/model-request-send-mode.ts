@@ -110,7 +110,7 @@ export default {
           "Recaps the window `loadRecapMessageWindow` returns, which reads the send mode after the messages.",
       },
       {
-        path: "apps/api/src/handlers/skills/from-chat/create.ts",
+        path: "apps/api/src/handlers/skills/from-chat/draft.ts",
         reason:
           "Drafts a skill from the window `loadRecapMessageWindow` returns, which reads the send mode after the messages, and refuses an anonymized thread.",
       },

@@ -64,6 +64,7 @@ export const ACTION_KINDS = {
   "templates.fill": MODEL_ACTION,
   "skills.rewrite-resource": MODEL_ACTION,
   "skills.generate-draft": MODEL_ACTION,
+  "skills.draft-from-chat": MODEL_ACTION,
   "skills.propose-from-comments": MODEL_ACTION,
   "time-entries.polish-narrative": MODEL_ACTION,
   "entities.suggest-placements": MODEL_ACTION,

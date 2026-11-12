@@ -3367,6 +3367,7 @@
       "sharepointThrottled": "Microsoft obmedzuje počet požiadaviek. Skúste to čoskoro znova.",
       "skillFromChatAnonymizedThread": "Z anonymizovanej konverzácie zatiaľ nemožno vytvoriť zručnosť.",
       "skillFromChatEmptyThread": "Táto konverzácia zatiaľ neobsahuje nič, z čoho by sa dala vytvoriť zručnosť.",
+      "skillFromChatLocalRunThread": "Táto konverzácia beží na vašom počítači, preto sa z nej zručnosť v cloude nevytvára.",
       "skillFromChatThreadNotFound": "Túto konverzáciu sa nepodarilo nájsť.",
       "skillFromChatWithdrawn": "Obsah tejto konverzácie bol stiahnutý, preto z nej nemožno vytvoriť zručnosť.",
       "skillSourceUnreachable": "Zdroj zručnosti sa nepodarilo načítať. Skontrolujte, či odkaz vedie na verejný repozitár GitHub, alebo to skúste neskôr.",

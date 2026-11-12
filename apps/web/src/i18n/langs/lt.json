@@ -3367,6 +3367,7 @@
       "sharepointThrottled": "Microsoft riboja užklausas. Netrukus bandykite dar kartą.",
       "skillFromChatAnonymizedThread": "Iš anonimizuoto pokalbio įgūdžio kol kas sukurti negalima.",
       "skillFromChatEmptyThread": "Šiame pokalbyje dar nėra nieko, iš ko būtų galima sukurti įgūdį.",
+      "skillFromChatLocalRunThread": "Šis pokalbis vyksta jūsų kompiuteryje, todėl iš jo įgūdis debesyje nekuriamas.",
       "skillFromChatThreadNotFound": "Šio pokalbio rasti nepavyko.",
       "skillFromChatWithdrawn": "Šio pokalbio turinys buvo atšauktas, todėl iš jo negalima sukurti įgūdžio.",
       "skillSourceUnreachable": "Nepavyko įkelti įgūdžio šaltinio. Patikrinkite, ar nuoroda veda į viešą „GitHub“ saugyklą, arba bandykite vėliau.",

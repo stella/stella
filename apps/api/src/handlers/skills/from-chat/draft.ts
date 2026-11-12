@@ -53,6 +53,7 @@ const fromChatBodySchema = v.object({
 
 const config = {
   contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "skills.draft-from-chat" },
   permissions: { agentSkill: ["create"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
@@ -106,7 +107,11 @@ const draftSkillFromChat = createSafeRootHandler(
       safeDb((tx) =>
         tx.query.chatThreads.findFirst({
           where: { id: { eq: body.threadId }, userId: { eq: user.id } },
-          columns: { workspaceId: true },
+          columns: {
+            chatLocalRunTarget: true,
+            usedAnonymization: true,
+            workspaceId: true,
+          },
         }),
       ),
     );
@@ -124,6 +129,29 @@ const draftSkillFromChat = createSafeRootHandler(
       persistedWorkspaceId: workspaceId,
       scope,
     });
+
+    // A chat whose turns run on the member's computer never reaches stella's
+    // cloud models, so no skill is drafted from it by one either. Any stored
+    // target counts, also one the contract no longer reads.
+    if (thread.chatLocalRunTarget !== null) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          code: SKILL_FROM_CHAT_REFUSAL_CODE.localRunThread,
+          message:
+            "This chat runs on the member's computer, so no cloud model drafts a skill from it",
+        }),
+      );
+    }
+    if (thread.usedAnonymization) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          code: SKILL_FROM_CHAT_REFUSAL_CODE.anonymizedThread,
+          message: "A skill cannot be drafted from an anonymized chat yet",
+        }),
+      );
+    }
 
     const window = yield* Result.await(
       loadRecapMessageWindow({
@@ -214,7 +242,7 @@ const draftSkillFromChat = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
-          code: "internal_error",
+          code: "upstream_unavailable",
           message: "Could not draft a skill from this chat. Please try again.",
           cause,
         });
@@ -229,7 +257,7 @@ const draftSkillFromChat = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
-          code: "internal_error",
+          code: "upstream_unavailable",
           message: "The draft was not a valid skill. Please try again.",
           cause: parsed.error,
         }),

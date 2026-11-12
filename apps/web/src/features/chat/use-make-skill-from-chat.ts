@@ -80,7 +80,11 @@ export const useMakeSkillFromChat = () => {
           openSaved(outcome.skill.id);
           return;
         }
-        openReview({ draft: outcome.draft, names: outcome.names });
+        openReview({
+          draft: outcome.draft,
+          names: outcome.names,
+          approved: [],
+        });
       },
       onError: (error) => {
         stellaToast.close(toastId);

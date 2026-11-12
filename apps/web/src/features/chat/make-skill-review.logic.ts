@@ -1,4 +1,5 @@
 import type { SkillDraftNameKind } from "@stll/api-contract";
+import { slugify } from "@stll/text-normalize";
 
 /** A skill draft as the API returns it for review. */
 export type SkillDraft = {
@@ -14,33 +15,102 @@ const replaceAll = (
   replacements: ReadonlyMap<string, string>,
 ) => {
   let next = text;
-  for (const [value, role] of replacements) {
-    next = next.split(value).join(role);
+  for (const [from, to] of replacements) {
+    next = next.split(from).join(to);
   }
   return next;
 };
 
+/** Longer than any name a skill file path holds. */
+const PATH_SLUG_MAX = 256;
+
+/**
+ * How a name can appear in a skill file path, which is lowercase: as written,
+ * or as a path slug.
+ */
+const pathForms = (value: string): string[] => [
+  ...new Set(
+    [
+      value.toLowerCase(),
+      slugify(value, {
+        charset: "ascii",
+        fallback: "",
+        maxLength: PATH_SLUG_MAX,
+        separator: "-",
+      }),
+    ].filter((form) => form !== ""),
+  ),
+];
+
+/** The path without the replaced names, kept unique among `taken`. */
+const neutralPath = (
+  path: string,
+  replaced: readonly SkillDraftName[],
+  taken: ReadonlySet<string>,
+): string => {
+  let next = path;
+  for (const { kind, value } of replaced) {
+    for (const form of pathForms(value)) {
+      next = next.split(form).join(kind);
+    }
+  }
+  if (next === path || !taken.has(next)) {
+    return next;
+  }
+  const dot = next.lastIndexOf(".");
+  const [stem, extension] =
+    dot > next.lastIndexOf("/")
+      ? [next.slice(0, dot), next.slice(dot)]
+      : [next, ""];
+  let suffix = 2;
+  while (taken.has(`${stem}-${suffix}${extension}`)) {
+    suffix += 1;
+  }
+  return `${stem}-${suffix}${extension}`;
+};
+
 /**
  * The draft with each name the author did not keep replaced by its role, in
- * SKILL.md and in every companion file. Paths stay: a name in a path is shown
- * for review like any other and the server checks the draft again.
+ * SKILL.md and every companion file. A file whose path holds the name is
+ * renamed with the name's kind instead, and every link to it follows.
  */
 export const replaceDraftNames = (
   draft: SkillDraft,
   replaced: readonly SkillDraftName[],
   roleOf: (kind: SkillDraftNameKind) => string,
 ): SkillDraft => {
+  if (replaced.length === 0) {
+    return draft;
+  }
   // Longer names first, so a name inside another is not replaced half-way.
-  const replacements = new Map(
-    [...replaced]
-      .toSorted((left, right) => right.value.length - left.value.length)
-      .map(({ kind, value }) => [value, roleOf(kind)] as const),
+  const longestFirst = [...replaced].toSorted(
+    (left, right) => right.value.length - left.value.length,
   );
+  const taken = new Set(draft.resources.map(({ path }) => path));
+  const renames = new Map<string, string>();
+  for (const { path } of draft.resources) {
+    const next = neutralPath(path, longestFirst, taken);
+    if (next !== path) {
+      taken.add(next);
+      renames.set(path, next);
+    }
+  }
+  // Links first, while they still read as the old paths.
+  const replacements = new Map([
+    ...renames,
+    ...longestFirst.map(({ kind, value }) => [value, roleOf(kind)] as const),
+  ]);
   return {
     markdown: replaceAll(draft.markdown, replacements),
     resources: draft.resources.map((resource) => ({
-      path: resource.path,
+      path: renames.get(resource.path) ?? resource.path,
       content: replaceAll(resource.content, replacements),
     })),
   };
 };
+
+/** Every name approved so far, once each. */
+export const mergeApprovedNames = (
+  approved: readonly string[],
+  kept: Iterable<string>,
+): string[] => [...new Set([...approved, ...kept])];

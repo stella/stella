@@ -27,6 +27,8 @@ export const SKILL_RESOURCE_REFUSAL_CODE = {
 export const SKILL_FROM_CHAT_REFUSAL_CODE = {
   /** No chat of the caller's has this id in this scope. */
   threadNotFound: "skill_from_chat_thread_not_found",
+  /** The chat runs on the member's computer; no cloud model reads it. */
+  localRunThread: "skill_from_chat_local_run_thread",
   /** The chat was held anonymized; its stored text cannot be drafted from. */
   anonymizedThread: "skill_from_chat_anonymized_thread",
   /** The chat's content was withdrawn. */

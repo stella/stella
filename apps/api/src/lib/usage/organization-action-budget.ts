@@ -112,6 +112,7 @@ export const FREE_WITHOUT_OWN_KEY = {
   "templates.fill": "counts",
   "skills.rewrite-resource": "counts",
   "skills.generate-draft": "counts",
+  "skills.draft-from-chat": "counts",
   "skills.propose-from-comments": "counts",
   "time-entries.polish-narrative": "counts",
   "billing.activity-drafts": "counts",

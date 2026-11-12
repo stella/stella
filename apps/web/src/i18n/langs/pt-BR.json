@@ -3367,6 +3367,7 @@
       "sharepointThrottled": "A Microsoft está limitando as solicitações. Tente novamente em instantes.",
       "skillFromChatAnonymizedThread": "Ainda não é possível criar uma habilidade a partir de uma conversa anonimizada.",
       "skillFromChatEmptyThread": "Esta conversa ainda não tem nada a partir do qual criar uma habilidade.",
+      "skillFromChatLocalRunThread": "Esta conversa é executada no seu computador, então não é criada uma habilidade a partir dela na nuvem.",
       "skillFromChatThreadNotFound": "Não foi possível encontrar esta conversa.",
       "skillFromChatWithdrawn": "O conteúdo desta conversa foi retirado, então não é possível criar uma habilidade a partir dela.",
       "skillSourceUnreachable": "Não foi possível carregar a origem da habilidade. Verifique se o link aponta para um repositório público do GitHub ou tente novamente mais tarde.",

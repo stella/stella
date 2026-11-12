@@ -31,7 +31,7 @@ import { applyChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import createSkillComment from "@/api/handlers/skills/comments/create";
 import generateSkillDraft from "@/api/handlers/skills/drafts/generate";
-import draftSkillFromChat from "@/api/handlers/skills/from-chat/create";
+import draftSkillFromChat from "@/api/handlers/skills/from-chat/draft";
 import createProposalFromComments from "@/api/handlers/skills/proposals/from-comments/create";
 import createSkillResource from "@/api/handlers/skills/resources/create";
 import rewriteSkillResource from "@/api/handlers/skills/resources/rewrite";
@@ -469,7 +469,7 @@ const TASK_REQUESTS = {
     },
   },
   "skill-from-chat": {
-    file: "handlers/skills/from-chat/create.ts",
+    file: "handlers/skills/from-chat/draft.ts",
     task: "short-text",
     settings: { caching: true, sendMode: false },
     run: async (run) => {

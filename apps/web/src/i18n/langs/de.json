@@ -3367,6 +3367,7 @@
       "sharepointThrottled": "Microsoft begrenzt die Anfragen. Versuchen Sie es in Kürze erneut.",
       "skillFromChatAnonymizedThread": "Aus einer anonymisierten Konversation kann noch kein Skill erstellt werden.",
       "skillFromChatEmptyThread": "Diese Konversation enthält noch nichts, woraus ein Skill erstellt werden kann.",
+      "skillFromChatLocalRunThread": "Diese Konversation läuft auf Ihrem Computer, daher wird daraus kein Skill in der Cloud erstellt.",
       "skillFromChatThreadNotFound": "Diese Konversation wurde nicht gefunden.",
       "skillFromChatWithdrawn": "Der Inhalt dieser Konversation wurde zurückgezogen, daher kann daraus kein Skill erstellt werden.",
       "skillSourceUnreachable": "Die Skill-Quelle konnte nicht geladen werden. Prüfen Sie, ob der Link auf ein öffentliches GitHub-Repository verweist, oder versuchen Sie es später erneut.",

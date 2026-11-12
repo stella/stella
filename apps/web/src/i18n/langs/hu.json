@@ -3367,6 +3367,7 @@
       "sharepointThrottled": "A Microsoft korlátozza a kéréseket. Próbálja újra rövidesen.",
       "skillFromChatAnonymizedThread": "Anonimizált beszélgetésből egyelőre nem hozható létre készség.",
       "skillFromChatEmptyThread": "Ebben a beszélgetésben még nincs semmi, amiből készség hozható létre.",
+      "skillFromChatLocalRunThread": "Ez a beszélgetés az Ön számítógépén fut, ezért a felhőben nem készül belőle készség.",
       "skillFromChatThreadNotFound": "Ez a beszélgetés nem található.",
       "skillFromChatWithdrawn": "A beszélgetés tartalmát visszavonták, ezért abból nem hozható létre készség.",
       "skillSourceUnreachable": "A készség forrását nem sikerült betölteni. Ellenőrizze, hogy a hivatkozás nyilvános GitHub-tárolóra mutat-e, vagy próbálja újra később.",

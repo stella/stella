@@ -22,6 +22,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 
 import { saveSkillDraft, useMakeSkillReviewStore } from "./make-skill-review";
 import {
+  mergeApprovedNames,
   replaceDraftNames,
   type SkillDraft,
   type SkillDraftName,
@@ -50,6 +51,7 @@ export const MakeSkillReviewDialog = () => {
           // A new review (another draft, or names the server found again)
           // starts from its own list, every name kept.
           key={pending.names.map(({ value }) => value).join("\u0000")}
+          approved={pending.approved}
           draft={pending.draft}
           names={pending.names}
           onDone={close}
@@ -60,10 +62,12 @@ export const MakeSkillReviewDialog = () => {
 };
 
 const MakeSkillReviewBody = ({
+  approved,
   draft,
   names,
   onDone,
 }: {
+  approved: string[];
   draft: SkillDraft;
   names: SkillDraftName[];
   onDone: () => void;
@@ -84,18 +88,26 @@ const MakeSkillReviewBody = ({
           ? `<${tReview("role.person")}>`
           : `<${tReview("role.organization")}>`,
       );
+      // Names kept in an earlier round stay approved: the server checks the
+      // whole draft again on every save.
+      const approvedNow = mergeApprovedNames(approved, kept);
       return {
+        approvedNow,
         reviewed,
-        outcome: await saveSkillDraft(reviewed, [...kept]),
+        outcome: await saveSkillDraft(reviewed, approvedNow),
       };
     },
-    onSuccess: ({ reviewed, outcome }) => {
+    onSuccess: ({ approvedNow, reviewed, outcome }) => {
       if (outcome.type === "saved") {
         onDone();
         openSaved(outcome.skill.id);
         return;
       }
-      openReview({ draft: reviewed, names: outcome.names });
+      openReview({
+        approved: approvedNow,
+        draft: reviewed,
+        names: outcome.names,
+      });
     },
     onError: (error) => {
       notifyUserError(error, t("chat.makeSkill.failed"), {

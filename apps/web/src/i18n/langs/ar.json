@@ -3367,6 +3367,7 @@
       "sharepointThrottled": "تحدّ Microsoft من عدد الطلبات. حاول مرة أخرى بعد قليل.",
       "skillFromChatAnonymizedThread": "لا يمكن بعد إنشاء مهارة من محادثة مجهّلة الهوية.",
       "skillFromChatEmptyThread": "لا تحتوي هذه المحادثة بعد على ما يكفي لإنشاء مهارة.",
+      "skillFromChatLocalRunThread": "تعمل هذه المحادثة على جهاز الكمبيوتر الخاص بك، لذا لا تُعَدّ منها مهارة في السحابة.",
       "skillFromChatThreadNotFound": "تعذّر العثور على هذه المحادثة.",
       "skillFromChatWithdrawn": "سُحب محتوى هذه المحادثة، لذا لا يمكن إنشاء مهارة منها.",
       "skillSourceUnreachable": "تعذر تحميل مصدر المهارة. تحقق من أن الرابط يشير إلى مستودع GitHub عام، أو حاول مرة أخرى لاحقًا.",

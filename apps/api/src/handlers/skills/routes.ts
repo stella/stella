@@ -9,7 +9,7 @@ import discoverSkillUrl from "@/api/handlers/skills/discover";
 import generateSkillDraft from "@/api/handlers/skills/drafts/generate";
 import saveSkillDraft from "@/api/handlers/skills/drafts/save";
 import fromBlueprint from "@/api/handlers/skills/from-blueprint/create";
-import draftSkillFromChat from "@/api/handlers/skills/from-chat/create";
+import draftSkillFromChat from "@/api/handlers/skills/from-chat/draft";
 import importSkillFromUrl from "@/api/handlers/skills/from-url/import";
 import getSkill from "@/api/handlers/skills/get";
 import importSkillsFromUrls from "@/api/handlers/skills/import";

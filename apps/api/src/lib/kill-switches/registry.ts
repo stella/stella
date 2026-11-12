@@ -218,6 +218,7 @@ export const ACTION_KIND_KILL_SWITCH = {
   "templates.fill": "templates",
   "skills.rewrite-resource": "skills",
   "skills.generate-draft": "skills",
+  "skills.draft-from-chat": "skills",
   "skills.propose-from-comments": "skills",
   "time-entries.polish-narrative": "time-narratives",
   "billing.activity-drafts": "billing-drafts",

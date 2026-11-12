@@ -193,7 +193,7 @@ describe("period identity coverage", () => {
       "handlers/search/routes.ts",
       "handlers/search/routes.ts",
       "handlers/skills/drafts/generate.ts",
-      "handlers/skills/from-chat/create.ts",
+      "handlers/skills/from-chat/draft.ts",
       "handlers/skills/proposals/from-comments/create.ts",
       "handlers/skills/resources/rewrite.ts",
       "handlers/templates/fields/suggest.ts",

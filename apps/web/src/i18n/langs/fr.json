@@ -3367,6 +3367,7 @@
       "sharepointThrottled": "Microsoft limite les requêtes. Réessayez dans quelques instants.",
       "skillFromChatAnonymizedThread": "Il n'est pas encore possible de créer une compétence à partir d'une conversation anonymisée.",
       "skillFromChatEmptyThread": "Cette conversation ne contient encore rien à partir de quoi créer une compétence.",
+      "skillFromChatLocalRunThread": "Cette conversation s'exécute sur votre ordinateur : aucune compétence n'en est créée dans le cloud.",
       "skillFromChatThreadNotFound": "Cette conversation est introuvable.",
       "skillFromChatWithdrawn": "Le contenu de cette conversation a été retiré : impossible d'en créer une compétence.",
       "skillSourceUnreachable": "La source de la compétence n’a pas pu être chargée. Vérifiez que le lien mène à un dépôt GitHub public, ou réessayez plus tard.",

@@ -254,7 +254,7 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
         '{"markdown":"---\\nname: nda-review\\ndescription: Review a mutual NDA against the firm\'s standard positions.\\n---\\n\\n# NDA review\\n\\nCheck the term, the definition of confidential information and the carve-outs.","resources":[{"path":"references/nda-positions.md","content":"# Standard positions\\n\\n- Term: at most three years."}]}',
     },
     {
-      file: "handlers/skills/from-chat/create.ts",
+      file: "handlers/skills/from-chat/draft.ts",
       outputSchema: "aiGenerationSchema",
       schema: aiGenerationSchema,
       answer:

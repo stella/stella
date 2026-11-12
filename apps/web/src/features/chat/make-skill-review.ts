@@ -6,8 +6,15 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 
 import type { SkillDraft, SkillDraftName } from "./make-skill-review.logic";
 
-/** A drafted skill waiting for its author to approve the names it holds. */
-type PendingSkillReview = { draft: SkillDraft; names: SkillDraftName[] };
+/**
+ * A drafted skill waiting for its author to approve the names it holds:
+ * `names` to decide now, `approved` the names kept in earlier rounds.
+ */
+type PendingSkillReview = {
+  draft: SkillDraft;
+  names: SkillDraftName[];
+  approved: string[];
+};
 
 type MakeSkillReviewStore = {
   pending: PendingSkillReview | null;

@@ -388,6 +388,8 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.skillFromChatAnonymizedThread",
   [SKILL_FROM_CHAT_REFUSAL_CODE.emptyThread]:
     "errors.apiCodes.skillFromChatEmptyThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.localRunThread]:
+    "errors.apiCodes.skillFromChatLocalRunThread",
   [SKILL_FROM_CHAT_REFUSAL_CODE.threadNotFound]:
     "errors.apiCodes.skillFromChatThreadNotFound",
   [SKILL_FROM_CHAT_REFUSAL_CODE.withdrawn]:
