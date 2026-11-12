@@ -156,6 +156,7 @@ const openWindow = async (
       // No install status either, read the same as the refusal with local agents off.
       harness_get_status: () => null,
       local_skill_folders_get: () => null,
+      signing_driver_get: () => null,
       desktop_report_error: () => null,
       desktop_report_timing: () => null,
       get_desktop_language: () => data.language,

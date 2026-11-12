@@ -320,7 +320,7 @@ struct DialogContent<'a> {
   /// Where the signature will be visible, so consent covers what shows.
   stamp_page_number: Option<i64>,
   identities: &'a [OfferedIdentity],
-  /// Installed drivers the user has to act on before their card can sign.
+  /// Drivers the user has to install or update before their card can sign.
   driver_notices: &'a [DriverNotice],
   state: DialogState,
   /// Why the keychain could not be read, for `KeychainUnavailable`.
@@ -1242,8 +1242,13 @@ async fn list_offered_identities() -> (
   Result<Vec<OfferedIdentity>, SigningErrorCode>,
   Vec<DriverNotice>,
 ) {
-  let (store, tokens) =
-    tokio::join!(list_identities(), crate::pkcs11_signing::scan(unix_now()));
+  let (store, tokens) = tokio::join!(
+    list_identities(),
+    crate::pkcs11_signing::scan(
+      unix_now(),
+      crate::pkcs11_module_setting::chosen_module()
+    )
+  );
   let tokens = match tokens {
     Ok(scan) => scan,
     Err(HelperFailure::Missing) => {

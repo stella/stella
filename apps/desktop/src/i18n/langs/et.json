@@ -82,6 +82,7 @@
     "pdfSignCertificate": "Allkirjastamissertifikaat",
     "pdfSignDocument": "Dokument",
     "pdfSignDownloadDriver": "Laadi draiver alla",
+    "pdfSignDriverMissing": "Kaardilugejas oleva kaardi jaoks on vaja draiverit {vendor}, mis pole paigaldatud. Selle kaardiga allkirjastamiseks paigaldage see.",
     "pdfSignDriverNeedsUpdate": "Paigaldatud {vendor} draiver ei tööta selle Maci protsessoril. Selle kaardiga allkirjastamiseks paigaldage draiveri uusim versioon.",
     "pdfSignErrorCode": "Veakood: {code}",
     "pdfSignErrors": {
@@ -827,6 +828,18 @@
       "runs_can_write": "Kohalikud käivitused saavad sellesse kausta kirjutada, seega ei saa selles oskust hoida.",
       "network_folder": "See kaust asub võrguketta jagatud alal. Oskused peavad olema selle arvuti enda kettal.",
       "path_changed": "Ülemkaust on muutunud. Eemaldage see kaust ja lisage see uuesti."
+    }
+  },
+  "signingDriver": {
+    "title": "Kiipkaardi draiver",
+    "description": "Kui stella desktop ei leia teie kiipkaardi või turvavõtme draiverit ise üles, valige selle PKCS #11 moodul. Seda laaditakse ainult PDF-ide allkirjastamiseks, eraldi protsessis.",
+    "choose": "Vali moodul",
+    "remove": "Eemalda",
+    "notice": {
+      "action_failed": "See ei õnnestunud. Proovige uuesti.",
+      "missing": "Seda faili enam pole.",
+      "needs_update": "See moodul ei tööta selle Maci protsessoril. Paigaldage draiveri uusim versioon.",
+      "not_a_library": "See fail ei ole PKCS #11 moodul."
     }
   }
 }

@@ -82,6 +82,7 @@
     "pdfSignCertificate": "Podpisový certifikát",
     "pdfSignDocument": "Dokument",
     "pdfSignDownloadDriver": "Stáhnout ovladač",
+    "pdfSignDriverMissing": "Karta ve čtečce potřebuje ovladač {vendor}, který není nainstalovaný. Pro podepisování touto kartou ho nainstalujte.",
     "pdfSignDriverNeedsUpdate": "Nainstalovaný ovladač {vendor} na procesoru tohoto Macu neběží. Pro podepisování touto kartou nainstalujte jeho aktuální verzi.",
     "pdfSignErrorCode": "Kód chyby: {code}",
     "pdfSignErrors": {
@@ -827,6 +828,18 @@
       "runs_can_write": "Do této složky mohou místní běhy zapisovat, proto v ní dovednost být nemůže.",
       "network_folder": "Tato složka je na síťovém úložišti. Dovednosti musí být na vlastním disku tohoto počítače.",
       "path_changed": "Některá nadřazená složka se změnila. Odeberte ji a přidejte znovu."
+    }
+  },
+  "signingDriver": {
+    "title": "Ovladač čipové karty",
+    "description": "Pokud stella desktop sama nenajde ovladač vaší čipové karty nebo tokenu, vyberte jeho modul PKCS #11. Načítá se jen k podepisování PDF, v samostatném procesu.",
+    "choose": "Vybrat modul",
+    "remove": "Odebrat",
+    "notice": {
+      "action_failed": "Nepodařilo se to. Zkuste to znovu.",
+      "missing": "Tento soubor už neexistuje.",
+      "needs_update": "Tento modul na procesoru tohoto Macu neběží. Nainstalujte aktuální verzi ovladače.",
+      "not_a_library": "Tento soubor není modul PKCS #11."
     }
   }
 }

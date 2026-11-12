@@ -82,6 +82,7 @@
     "pdfSignCertificate": "Signing certificate",
     "pdfSignDocument": "Document",
     "pdfSignDownloadDriver": "Download driver",
+    "pdfSignDriverMissing": "A card in a reader needs the {vendor} driver, which is not installed. Install it to sign with that card.",
     "pdfSignDriverNeedsUpdate": "The installed {vendor} driver does not run on this Mac's processor. Install its current version to sign with that card.",
     "pdfSignErrorCode": "Error code: {code}",
     "pdfSignErrors": {
@@ -827,6 +828,18 @@
       "runs_can_write": "Local runs can write to this folder, so it cannot hold a skill.",
       "network_folder": "This folder is on a network share. Skills must be on this computer's own disk.",
       "path_changed": "A folder on the way to this one has changed. Remove it and add it again."
+    }
+  },
+  "signingDriver": {
+    "title": "Smart card driver",
+    "description": "If stella desktop does not find your smart card or token's driver on its own, choose its PKCS #11 module. It is loaded only to sign PDFs, in a separate process.",
+    "choose": "Choose module",
+    "remove": "Remove",
+    "notice": {
+      "action_failed": "That did not work. Try again.",
+      "missing": "This file is gone.",
+      "needs_update": "This module does not run on this Mac's processor. Install the driver's current version.",
+      "not_a_library": "This file is not a PKCS #11 module."
     }
   }
 }

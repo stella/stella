@@ -286,7 +286,7 @@ pub async fn pdf_sign_respond(
 }
 
 /// Opens the download page of a smart card driver the signing dialog says
-/// needs an update. The page names the driver; the address comes from the
+/// is missing or needs an update. The page names the driver; the address comes from the
 /// desktop's own driver list, never from the page.
 #[tauri::command]
 pub fn pdf_sign_open_driver_download(

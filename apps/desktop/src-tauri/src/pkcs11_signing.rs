@@ -10,17 +10,22 @@
 //!
 //! The certificates the helper finds go through the same filter as the
 //! keychain's ([`stella_desktop_signing_core::signing_identity`]), so a card
-//! offers what the keychain would offer for the same certificate.
+//! offers what the keychain would offer for the same certificate. A card in a
+//! reader that no module turns into a token is named by its ATR, with the
+//! driver it needs.
 
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
 
-use stella_desktop_pkcs11::drivers::{InstalledModule, installed_modules};
+use stella_desktop_pkcs11::atr::driver_for_atr;
+use stella_desktop_pkcs11::drivers::{
+  InstalledModule, ModuleOrigin, installed_modules, known_driver,
+};
 use stella_desktop_pkcs11::macho::ModuleCheck;
 use stella_desktop_pkcs11::protocol::{
-  MAX_RESPONSE_BYTES, ModuleOutcome, Pin, PinEntry, PinRetries, Request, Response,
-  SignRequest, TokenListing, decode_response, encode,
+  MAX_RESPONSE_BYTES, ModuleOutcome, Pin, PinEntry, PinRetries, ReaderCard, ReaderScan,
+  Request, Response, SignRequest, TokenListing, decode_response, encode,
 };
 use stella_desktop_signing_core::{
   SigningErrorCode, SigningIdentity, issuer_chain, signing_identity,
@@ -72,6 +77,8 @@ pub struct DriverNotice {
 pub enum DriverNoticeKind {
   /// Installed, but not built for this Mac's processor.
   NeedsUpdate,
+  /// A card of this vendor is in a reader, and its driver is not installed.
+  Missing,
 }
 
 /// What the tokens offer, and what the dialog should say about the drivers
@@ -113,29 +120,49 @@ pub struct TokenSignFailure {
 }
 
 /// Every signing identity on a token an installed driver can read, at `now`
-/// (Unix seconds). With no known driver installed, no helper starts.
-pub async fn scan(now: i64) -> Result<TokenScan, HelperFailure> {
-  let installed = tokio::task::spawn_blocking(installed_modules)
-    .await
-    .map_err(|error| HelperFailure::Failed(error.to_string()))?;
-  let (loadable, notices) = sort_installed(installed);
-  if loadable.is_empty() {
+/// (Unix seconds), and what the dialog should say about drivers. `chosen` is
+/// the module the user picked in the settings, if any. Without a helper
+/// (another platform, a development build that did not compile it) and
+/// without a loadable module, nothing starts.
+pub async fn scan(
+  now: i64,
+  chosen: Option<PathBuf>,
+) -> Result<TokenScan, HelperFailure> {
+  let installed =
+    tokio::task::spawn_blocking(move || installed_modules(chosen.as_deref()))
+      .await
+      .map_err(|error| HelperFailure::Failed(error.to_string()))?;
+  let installed_drivers: Vec<&'static str> = installed
+    .iter()
+    .filter_map(|module| match module.origin {
+      ModuleOrigin::Known(driver) => Some(driver.id),
+      ModuleOrigin::Chosen => None,
+    })
+    .collect();
+  let (loadable, mut notices) = sort_installed(installed);
+  if loadable.is_empty() && helper_path().is_none() {
     return Ok(TokenScan {
       identities: Vec::new(),
       notices,
     });
   }
+  // Even with no module to load, the helper reads the readers, so a card
+  // whose driver is missing can be named.
   let response = run(&Request::List { modules: loadable }, LISTING_TIMEOUT).await?;
-  let Response::Listed { modules } = response else {
+  let Response::Listed { modules, readers } = response else {
     return Err(HelperFailure::Failed(
       "the helper answered a listing with something else".to_string(),
     ));
   };
   let mut identities = Vec::new();
+  let mut read_slots: Vec<String> = Vec::new();
   for listing in modules {
     match listing.outcome {
       ModuleOutcome::Loaded { tokens } => {
         for token in tokens {
+          if !token.certificates.is_empty() {
+            read_slots.push(token.slot_description.clone());
+          }
           identities.extend(token_identities(&listing.module, token, now));
         }
       }
@@ -144,31 +171,89 @@ pub async fn scan(now: i64) -> Result<TokenScan, HelperFailure> {
       }
     }
   }
+  match readers {
+    ReaderScan::Read { cards } => {
+      notices.extend(missing_drivers(&cards, &read_slots, &installed_drivers));
+    }
+    ReaderScan::Unavailable { detail } => {
+      tracing::info!(%detail, "smart card readers could not be read");
+    }
+  }
   Ok(TokenScan {
     identities,
     notices,
   })
 }
 
-/// The modules to hand the helper, and a notice for each one that cannot
-/// load into it.
+/// A notice for each card in a reader that no module read certificates
+/// from, whose ATR names a driver that is not installed. A card no module
+/// read but whose driver is installed is that driver's to explain (it may
+/// hold no certificate at all); a card the table does not know is left
+/// alone rather than guessed at.
+fn missing_drivers(
+  cards: &[ReaderCard],
+  read_slots: &[String],
+  installed_drivers: &[&str],
+) -> Vec<DriverNotice> {
+  let mut notices: Vec<DriverNotice> = Vec::new();
+  for card in cards {
+    if read_slots
+      .iter()
+      .any(|slot| same_reader(&card.reader, slot))
+    {
+      continue;
+    }
+    let Some(driver) = hex::decode(&card.atr_hex)
+      .ok()
+      .and_then(|atr| driver_for_atr(&atr))
+      .and_then(known_driver)
+    else {
+      continue;
+    };
+    if installed_drivers.contains(&driver.id)
+      || notices.iter().any(|notice| notice.driver_id == driver.id)
+    {
+      continue;
+    }
+    notices.push(DriverNotice {
+      driver_id: driver.id,
+      vendor: driver.vendor,
+      kind: DriverNoticeKind::Missing,
+    });
+  }
+  notices
+}
+
+/// Whether a PKCS #11 slot description names this PC/SC reader. A slot
+/// description is at most 64 characters, so a long reader name arrives cut
+/// short.
+fn same_reader(reader: &str, slot_description: &str) -> bool {
+  let (reader, slot) = (reader.trim(), slot_description.trim());
+  !slot.is_empty() && (reader.starts_with(slot) || slot.starts_with(reader))
+}
+
+/// The modules to hand the helper, and a notice for each known one that
+/// cannot load into it. A chosen module's problems are the settings' to show.
 fn sort_installed(
   installed: Vec<InstalledModule>,
 ) -> (Vec<PathBuf>, Vec<DriverNotice>) {
   let mut loadable = Vec::new();
   let mut notices = Vec::new();
   for module in installed {
-    match module.check {
-      ModuleCheck::Loadable => loadable.push(module.path),
-      ModuleCheck::MissingArchitecture { found } => {
+    match (module.check, module.origin) {
+      (ModuleCheck::Loadable, _) => loadable.push(module.path),
+      (ModuleCheck::MissingArchitecture { found }, ModuleOrigin::Known(driver)) => {
         tracing::info!(module = %module.path.display(), ?found, "PKCS #11 module is not built for this processor");
         notices.push(DriverNotice {
-          driver_id: module.driver.id,
-          vendor: module.driver.vendor,
+          driver_id: driver.id,
+          vendor: driver.vendor,
           kind: DriverNoticeKind::NeedsUpdate,
         });
       }
-      ModuleCheck::NotALibrary => {
+      (ModuleCheck::MissingArchitecture { found }, ModuleOrigin::Chosen) => {
+        tracing::info!(module = %module.path.display(), ?found, "the chosen PKCS #11 module is not built for this processor");
+      }
+      (ModuleCheck::NotALibrary, _) => {
         tracing::warn!(module = %module.path.display(), "PKCS #11 module path holds no Mach-O library");
       }
     }
@@ -380,6 +465,7 @@ mod tests {
   fn token(certificates: Vec<TokenCertificate>) -> TokenListing {
     TokenListing {
       slot: 2,
+      slot_description: "Reader 0".to_string(),
       label: "Signing card".to_string(),
       pin_entry: PinEntry::Keyboard,
       pin_retries: PinRetries::Low,
@@ -415,27 +501,44 @@ mod tests {
   #[test]
   fn a_driver_built_for_another_processor_becomes_a_notice() {
     let driver = &KNOWN_DRIVERS[0];
+    let known = ModuleOrigin::Known(driver);
     let (loadable, notices) = sort_installed(vec![
       InstalledModule {
-        driver,
+        origin: known,
         path: PathBuf::from("/a.dylib"),
         check: ModuleCheck::Loadable,
       },
       InstalledModule {
-        driver,
+        origin: known,
         path: PathBuf::from("/b.dylib"),
         check: ModuleCheck::MissingArchitecture {
           found: vec![Architecture::X86_64],
         },
       },
       InstalledModule {
-        driver,
+        origin: known,
         path: PathBuf::from("/c.dylib"),
         check: ModuleCheck::NotALibrary,
       },
+      // The settings explain a chosen module; the dialog does not.
+      InstalledModule {
+        origin: ModuleOrigin::Chosen,
+        path: PathBuf::from("/d.dylib"),
+        check: ModuleCheck::MissingArchitecture {
+          found: vec![Architecture::X86_64],
+        },
+      },
+      InstalledModule {
+        origin: ModuleOrigin::Chosen,
+        path: PathBuf::from("/e.dylib"),
+        check: ModuleCheck::Loadable,
+      },
     ]);
 
-    assert_eq!(loadable, vec![PathBuf::from("/a.dylib")]);
+    assert_eq!(
+      loadable,
+      vec![PathBuf::from("/a.dylib"), PathBuf::from("/e.dylib")]
+    );
     assert_eq!(
       notices,
       vec![DriverNotice {
@@ -444,6 +547,60 @@ mod tests {
         kind: DriverNoticeKind::NeedsUpdate,
       }]
     );
+  }
+
+  const ICA_ATR: &str = "3bda96ff81b1fe451f0780584943412056322e30e9";
+  const EOP_ATR: &str = "3b7e9400008025d20310010056000000020200";
+
+  fn card(reader: &str, atr_hex: &str) -> ReaderCard {
+    ReaderCard {
+      reader: reader.to_string(),
+      atr_hex: atr_hex.to_string(),
+    }
+  }
+
+  #[test]
+  fn names_the_missing_driver_of_a_card_no_module_read() {
+    let notices = missing_drivers(
+      &[
+        card("Alcor Micro AU9540 00 00", ICA_ATR),
+        // Read by a module already: nothing to say.
+        card("Identiv uTrust 2700 R Smart Card Reader", EOP_ATR),
+        // Unknown card: not guessed at.
+        card("Generic Reader", "3b00"),
+        // Same vendor twice: one notice.
+        card("Second Reader", ICA_ATR),
+      ],
+      &["Identiv uTrust 2700 R Smart Card Reader".to_string()],
+      &[],
+    );
+
+    let ica = known_driver("ica-securestore").unwrap();
+    assert_eq!(
+      notices,
+      vec![DriverNotice {
+        driver_id: ica.id,
+        vendor: ica.vendor,
+        kind: DriverNoticeKind::Missing,
+      }]
+    );
+  }
+
+  #[test]
+  fn an_installed_driver_is_never_reported_missing() {
+    assert!(
+      missing_drivers(&[card("Reader", ICA_ATR)], &[], &["ica-securestore"]).is_empty()
+    );
+  }
+
+  #[test]
+  fn matches_a_reader_to_a_slot_description_cut_short() {
+    let reader = "Identiv uTrust 4701 F Dual Interface Reader(1) with a very long name";
+    let slot = &reader[..64];
+    assert!(same_reader(reader, slot));
+    assert!(same_reader("Reader 0", "  Reader 0  "));
+    assert!(!same_reader("Reader 0", ""));
+    assert!(!same_reader("Reader 0", "Reader 1"));
   }
 
   #[test]
@@ -465,6 +622,10 @@ mod tests {
       })
       .unwrap(),
       r#"{"driverId":"opensc","vendor":"OpenSC","kind":"needsUpdate"}"#
+    );
+    assert_eq!(
+      serde_json::to_value(DriverNoticeKind::Missing).unwrap(),
+      "missing"
     );
   }
 }

@@ -339,6 +339,7 @@ const installNativeBoundary = async ({
         // No install status either, read the same as the refusal with local agents off.
         harness_get_status: () => null,
         local_skill_folders_get: () => null,
+        signing_driver_get: () => null,
         activity_delete_all: (args) => {
           if (
             args["recovery"] === "discardUnreadable" &&

@@ -85,10 +85,19 @@ pub fn known_driver(id: &str) -> Option<&'static KnownDriver> {
   KNOWN_DRIVERS.iter().find(|driver| driver.id == id)
 }
 
+/// Where an installed module came from.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModuleOrigin {
+  Known(&'static KnownDriver),
+  /// A module the user chose in the settings, for a card no known driver
+  /// covers.
+  Chosen,
+}
+
 /// An installed module, as found on disk.
 #[derive(Debug, Eq, PartialEq)]
 pub struct InstalledModule {
-  pub driver: &'static KnownDriver,
+  pub origin: ModuleOrigin,
   /// With symbolic links resolved: one file reached by two listed paths is
   /// loaded once.
   pub path: PathBuf,
@@ -100,14 +109,21 @@ pub struct InstalledModule {
 pub type ReadModuleHead<'a> = &'a dyn Fn(&Path) -> Option<(PathBuf, Vec<u8>)>;
 
 /// Every known module installed on this computer, in [`KNOWN_DRIVERS`]
-/// order, each checked against the processor this build runs on.
+/// order, then the one the user chose, each checked against the processor
+/// this build runs on.
 #[must_use]
-pub fn installed_modules() -> Vec<InstalledModule> {
-  installed_modules_with(KNOWN_DRIVERS, &read_module_head, Architecture::current())
+pub fn installed_modules(chosen: Option<&Path>) -> Vec<InstalledModule> {
+  installed_modules_with(
+    KNOWN_DRIVERS,
+    chosen,
+    &read_module_head,
+    Architecture::current(),
+  )
 }
 
 pub fn installed_modules_with(
   drivers: &'static [KnownDriver],
+  chosen: Option<&Path>,
   read_head: ReadModuleHead<'_>,
   wanted: Architecture,
 ) -> Vec<InstalledModule> {
@@ -121,7 +137,7 @@ pub fn installed_modules_with(
         continue;
       }
       installed.push(InstalledModule {
-        driver,
+        origin: ModuleOrigin::Known(driver),
         path,
         check: check_module(&head, wanted),
       });
@@ -129,7 +145,26 @@ pub fn installed_modules_with(
       break;
     }
   }
+  // A chosen module that is a known one stays known, so the dialog names
+  // its vendor.
+  if let Some((path, head)) = chosen.and_then(read_head)
+    && !installed.iter().any(|module| module.path == path)
+  {
+    installed.push(InstalledModule {
+      origin: ModuleOrigin::Chosen,
+      path,
+      check: check_module(&head, wanted),
+    });
+  }
   installed
+}
+
+/// What the header of the module at `path` says about loading it here, or
+/// `None` when no readable file is there.
+#[must_use]
+pub fn check_module_file(path: &Path) -> Option<ModuleCheck> {
+  let (_, head) = read_module_head(path)?;
+  Some(check_module(&head, Architecture::current()))
 }
 
 /// A regular file's resolved path and leading bytes.
@@ -204,13 +239,20 @@ mod tests {
     ]);
     let found = installed_modules_with(
       DRIVERS,
+      None,
       &|path| files.get(path).cloned(),
       Architecture::Arm64,
     );
 
     let summary: Vec<(&str, &Path, &ModuleCheck)> = found
       .iter()
-      .map(|module| (module.driver.id, module.path.as_path(), &module.check))
+      .map(|module| {
+        (
+          origin_id(module.origin),
+          module.path.as_path(),
+          &module.check,
+        )
+      })
       .collect();
     assert_eq!(
       summary,
@@ -244,11 +286,65 @@ mod tests {
     ]);
     let found = installed_modules_with(
       DRIVERS,
+      None,
       &|path| files.get(path).cloned(),
       Architecture::Arm64,
     );
     assert_eq!(found.len(), 1);
-    assert_eq!(found[0].driver.id, "vendor");
+    assert_eq!(origin_id(found[0].origin), "vendor");
+  }
+
+  fn origin_id(origin: ModuleOrigin) -> &'static str {
+    match origin {
+      ModuleOrigin::Known(driver) => driver.id,
+      ModuleOrigin::Chosen => "chosen",
+    }
+  }
+
+  #[test]
+  fn a_chosen_module_comes_after_the_known_ones_unless_it_is_one() {
+    let files = disk(&[
+      ("/vendor/new.dylib", "/vendor/new.dylib", ARM64_MODULE),
+      ("/custom/module.dylib", "/custom/module.dylib", INTEL_MODULE),
+    ]);
+    let read = |path: &Path| files.get(path).cloned();
+
+    let found = installed_modules_with(
+      DRIVERS,
+      Some(Path::new("/custom/module.dylib")),
+      &read,
+      Architecture::Arm64,
+    );
+    assert_eq!(
+      found
+        .iter()
+        .map(|module| origin_id(module.origin))
+        .collect::<Vec<_>>(),
+      ["vendor", "chosen"]
+    );
+    assert!(matches!(
+      found[1].check,
+      ModuleCheck::MissingArchitecture { .. }
+    ));
+
+    // Choosing a known driver's module keeps it known.
+    let same = installed_modules_with(
+      DRIVERS,
+      Some(Path::new("/vendor/new.dylib")),
+      &read,
+      Architecture::Arm64,
+    );
+    assert_eq!(same.len(), 1);
+    assert_eq!(origin_id(same[0].origin), "vendor");
+
+    // A chosen file that is gone adds nothing.
+    let gone = installed_modules_with(
+      DRIVERS,
+      Some(Path::new("/custom/gone.dylib")),
+      &read,
+      Architecture::Arm64,
+    );
+    assert_eq!(gone.len(), 1);
   }
 
   #[test]
@@ -273,5 +369,9 @@ mod tests {
   #[test]
   fn reads_nothing_where_no_file_is() {
     assert!(read_module_head(Path::new("/nonexistent/stella/module.dylib")).is_none());
+    assert_eq!(
+      check_module_file(Path::new("/nonexistent/stella/module.dylib")),
+      None
+    );
   }
 }

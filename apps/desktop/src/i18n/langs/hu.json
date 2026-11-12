@@ -82,6 +82,7 @@
     "pdfSignCertificate": "Aláírási tanúsítvány",
     "pdfSignDocument": "Dokumentum",
     "pdfSignDownloadDriver": "Illesztőprogram letöltése",
+    "pdfSignDriverMissing": "Az olvasóban lévő kártyához {vendor}-illesztőprogram kell, de nincs telepítve. Az ezzel a kártyával való aláíráshoz telepítse.",
     "pdfSignDriverNeedsUpdate": "A telepített {vendor}-illesztőprogram nem fut ennek a Macnek a processzorán. Az ezzel a kártyával való aláíráshoz telepítse az aktuális verzióját.",
     "pdfSignErrorCode": "Hibakód: {code}",
     "pdfSignErrors": {
@@ -827,6 +828,18 @@
       "runs_can_write": "A helyi futtatások írhatnak ebbe a mappába, ezért nem tartalmazhat készséget.",
       "network_folder": "Ez a mappa hálózati megosztáson van. A készségeknek a számítógép saját lemezén kell lenniük.",
       "path_changed": "Egy szülőmappa megváltozott. Távolítsa el ezt a mappát, majd adja hozzá újra."
+    }
+  },
+  "signingDriver": {
+    "title": "Intelligenskártya-illesztőprogram",
+    "description": "Ha a stella desktop nem találja meg magától az intelligens kártya vagy a token illesztőprogramját, válassza ki a PKCS #11-modulját. Csak PDF-ek aláírásához töltődik be, külön folyamatban.",
+    "choose": "Modul kiválasztása",
+    "remove": "Eltávolítás",
+    "notice": {
+      "action_failed": "Ez nem sikerült. Próbálja újra.",
+      "missing": "Ez a fájl már nem létezik.",
+      "needs_update": "Ez a modul nem fut ennek a Macnek a processzorán. Telepítse az illesztőprogram aktuális verzióját.",
+      "not_a_library": "Ez a fájl nem PKCS #11-modul."
     }
   }
 }

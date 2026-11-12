@@ -20,7 +20,7 @@ use sha2::{Digest, Sha256};
 use stella_desktop_pkcs11::digest_info::sha256_digest_info;
 use stella_desktop_pkcs11::protocol::{
   CertificateKey, KeyType, ModuleListing, ModuleOutcome, Pin, PinEntry, PinRetries,
-  Response, SignRequest, TokenCertificate, TokenListing,
+  ReaderScan, Response, SignRequest, TokenCertificate, TokenListing,
 };
 use stella_desktop_signing_core::{SigningErrorCode, ecdsa_signature_der};
 
@@ -31,6 +31,10 @@ const DIGEST_BYTES: usize = 32;
 
 pub(crate) fn list(modules: &[PathBuf]) -> Response {
   Response::Listed {
+    readers: match crate::readers::cards_in_readers() {
+      Ok(cards) => ReaderScan::Read { cards },
+      Err(detail) => ReaderScan::Unavailable { detail },
+    },
     modules: modules
       .iter()
       .map(|module| ModuleListing {
@@ -96,6 +100,10 @@ fn list_module(module: &Path) -> Result<Vec<TokenListing>, Error> {
 
 fn list_token(pkcs11: &Pkcs11, slot: Slot) -> Result<TokenListing, Error> {
   let info = pkcs11.get_token_info(slot)?;
+  let slot_description = pkcs11
+    .get_slot_info(slot)
+    .map(|slot_info| slot_info.slot_description().trim().to_string())
+    .unwrap_or_default();
   let session = pkcs11.open_ro_session(slot)?;
   let key_ids: HashSet<Vec<u8>> = session
     .find_objects(&[Attribute::Class(ObjectClass::PRIVATE_KEY)])?
@@ -141,6 +149,7 @@ fn list_token(pkcs11: &Pkcs11, slot: Slot) -> Result<TokenListing, Error> {
 
   Ok(TokenListing {
     slot: slot.id(),
+    slot_description,
     label: info.label().trim().to_string(),
     pin_entry: pin_entry(&info),
     pin_retries: pin_retries(&info),
@@ -442,7 +451,7 @@ mod tests {
 
   #[test]
   fn a_module_that_will_not_load_is_unusable_and_the_rest_still_answer() {
-    let Response::Listed { modules } = list(&[
+    let Response::Listed { modules, .. } = list(&[
       PathBuf::from("/nonexistent/one.dylib"),
       PathBuf::from("relative.dylib"),
     ]) else {
@@ -578,7 +587,7 @@ mod tests {
     session.logout().unwrap();
     drop(session);
 
-    let Response::Listed { modules } = list(std::slice::from_ref(&module)) else {
+    let Response::Listed { modules, .. } = list(std::slice::from_ref(&module)) else {
       panic!("not a listing");
     };
     let ModuleOutcome::Loaded { tokens } = &modules[0].outcome else {

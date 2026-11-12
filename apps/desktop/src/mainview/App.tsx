@@ -67,6 +67,7 @@ import { DictationSetting } from "./DictationSetting";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
+import { SigningDriverSection } from "./SigningDriverSection";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
   documentReady: true,
@@ -444,6 +445,7 @@ const GeneralPane = ({
   const t = useTranslations("settings");
   const tSubscriptions = useTranslations("agentSubscriptions");
   const tLocalSkills = useTranslations("localSkills");
+  const tSigningDriver = useTranslations("signingDriver");
   const presentation = accountPresentation(accountState);
   const linkedAccount =
     accountState.status === "connected" ? accountState.account : null;
@@ -547,6 +549,11 @@ const GeneralPane = ({
       <LocalSkillFoldersSection
         renderGroup={(content) => (
           <PanelGroup title={tLocalSkills("title")}>{content}</PanelGroup>
+        )}
+      />
+      <SigningDriverSection
+        renderGroup={(content) => (
+          <PanelGroup title={tSigningDriver("title")}>{content}</PanelGroup>
         )}
       />
       <PanelGroup title={t("permissions")}>
