@@ -552,11 +552,19 @@ const ToolCallCardComponent = ({
   const failureLabelKey = toolFailureLabelKey(rawErrorDetails, part.state);
   const errorMessage =
     failureLabelKey === undefined ? undefined : t(failureLabelKey);
-  const hasError = errorMessage !== undefined;
-  const status = hasError ? "failed" : TOOL_CALL_SETTLED_STATUS[part.state];
+  // A call its turn cut off (a stop, a new message) never finished; that is
+  // not the tool failing, so it reads as stopped, without the failure tint.
+  const stopped = failureLabelKey === "chat.toolCall.interrupted";
+  const hasError = errorMessage !== undefined && !stopped;
+  const status = (() => {
+    if (hasError) {
+      return "failed";
+    }
+    return stopped ? "pending" : TOOL_CALL_SETTLED_STATUS[part.state];
+  })();
   // A running call waits on nothing; the turn's live status names the work.
   const settledStatusLabel =
-    status === "failed" ? errorMessage : t(TOOL_CALL_STATUS_LABEL_KEYS[status]);
+    hasError || stopped ? errorMessage : t(TOOL_CALL_STATUS_LABEL_KEYS[status]);
   const statusLabel = isLoading ? undefined : settledStatusLabel;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);

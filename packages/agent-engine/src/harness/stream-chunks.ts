@@ -29,6 +29,7 @@ import {
   type HarnessFailure,
   type HarnessQuestionRequest,
   type HarnessToolCall,
+  type HarnessToolResult,
   type HarnessUsage,
 } from "./events";
 import { shownToolInput, shownToolResult } from "./tool-parts";
@@ -371,7 +372,7 @@ class ChunkMapper {
 
   private completeToolCall(
     toolCall: HarnessToolCall,
-    result: { content: string; status: "succeeded" | "failed" },
+    result: HarnessToolResult,
   ) {
     if (this.opened.has(toolCall.id) && !this.unresolved.has(toolCall.id)) {
       // One result per call: a repeat would persist a second result part.

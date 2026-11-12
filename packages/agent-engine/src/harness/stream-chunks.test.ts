@@ -487,6 +487,31 @@ describe("local harness chunks", () => {
     );
   });
 
+  test("a call the harness reports it did not run because of a stop is stored cancelled, not failed", async () => {
+    const chunks = await localChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("native-5"),
+        continuation: { type: "resumed" },
+      },
+      { type: "tool.started", toolCall: commandCall },
+      {
+        type: "tool.completed",
+        toolCall: commandCall,
+        result: { content: "Interrupted by the user.", status: "cancelled" },
+      },
+      { type: "turn.interrupted" },
+    ]);
+    expect(fold(chunks).flatMap(({ parts }) => parts)).toContainEqual(
+      expect.objectContaining({
+        type: "tool-result",
+        toolCallId: commandCall.id,
+        state: "error",
+        outcome: "cancelled",
+      }),
+    );
+  });
+
   test("each failure kind ends the run with its own error code", async () => {
     const failures = {
       auth_required: { type: "auth_required", message: "Sign in again." },

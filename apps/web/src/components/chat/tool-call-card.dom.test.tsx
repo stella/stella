@@ -72,3 +72,31 @@ test("a running tool is not announced as waiting", () => {
     screen.queryByLabelText(messages.chat.toolCall.statusWaiting),
   ).toBeNull();
 });
+
+test("a call its turn cut off reads as stopped, not as a failure", () => {
+  const queryClient = new QueryClient();
+  const { container } = render(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="ar" messages={messages}>
+        <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
+          <ToolCallCard
+            activeOrganizationId="test-org"
+            part={{
+              type: "tool-call",
+              id: "stopped-search",
+              name: "search-chat-history",
+              arguments: '{"query":"synthetic"}',
+              input: { query: "synthetic" },
+              state: "error",
+            }}
+          />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  expect(container.innerHTML.includes(messages.chat.toolCall.interrupted)).toBe(
+    true,
+  );
+  expect(container.innerHTML.includes("bg-destructive")).toBe(false);
+});

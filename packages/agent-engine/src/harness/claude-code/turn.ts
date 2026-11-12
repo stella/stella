@@ -46,6 +46,7 @@ import {
   AssistantMessageSchema,
   CanUseToolRequestSchema,
   CLAUDE_CONTROL_REQUESTS,
+  CLAUDE_STOPPED_TOOL_KINDS,
   type ClaudeControlRequestSubtype,
   type ClaudeResultMessage,
   type ClaudeToolUse,
@@ -693,10 +694,19 @@ export class ClaudeCodeTurnSession {
       // is released with it.
       if (held !== undefined) {
         this.toolUses.delete(block.tool_use_id);
+        const result = toolResultFor(held.use, block);
+        const notRun = parsed.tool_result_meta?.find(
+          ({ id }) => id === block.tool_use_id,
+        )?.non_execution_kind;
         this.emit({
           type: "tool.completed",
           toolCall: held.toolCall,
-          result: toolResultFor(held.use, block),
+          result:
+            notRun !== undefined &&
+            notRun !== null &&
+            CLAUDE_STOPPED_TOOL_KINDS.has(notRun)
+              ? { ...result, status: "cancelled" }
+              : result,
         });
       }
     }
