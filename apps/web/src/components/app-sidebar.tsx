@@ -1557,7 +1557,7 @@ export const MatterItem = ({
                 <Tooltip
                   content={formatFullTimestamp(ws.lastActivityAt)}
                   render={
-                    <span className="text-muted-foreground text-3xs min-w-0 leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
+                    <span className="text-muted-foreground text-3xs flex min-w-0 leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
                   }
                 >
                   <TruncatedText render={<BidiText />}>
@@ -1565,7 +1565,11 @@ export const MatterItem = ({
                       ? ws.client.displayName
                       : t("workspaces.parties.personalLabel")}
                   </TruncatedText>
-                  {relTime ? ` · ${relTime}` : ""}
+                  {relTime ? (
+                    <span className="shrink-0 whitespace-pre">
+                      {` · ${relTime}`}
+                    </span>
+                  ) : null}
                 </Tooltip>
                 <span className="ms-auto">
                   <MatterRunMarks status={runStatus} />
