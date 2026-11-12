@@ -223,8 +223,8 @@ const continuation = (outcome: FakeStep[]): FakeStep[] => [
 ];
 
 /** What the approval scenarios answer once the command ran. */
-export const FAKE_APPROVED_ANSWER = "Removed draft.md.";
-export const FAKE_DENIED_ANSWER = "Left it in place.";
+const FAKE_APPROVED_ANSWER = "Removed draft.md.";
+const FAKE_DENIED_ANSWER = "Left it in place.";
 
 /** The command the approval scenarios ask to run, and the request for it. */
 const removeDraft = (reason: string | null): FakeStep[] => [
@@ -265,7 +265,7 @@ const commandApproval = (reason: string | null): FakeStep[] => [
 ];
 
 /** The file `writes_file` adds to its working directory, and its text. */
-export const FAKE_WRITTEN_FILE = {
+const FAKE_WRITTEN_FILE = {
   path: "notes.md",
   text: "Rent is due quarterly.\n",
 } as const;

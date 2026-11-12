@@ -213,7 +213,6 @@ const stackRequest = async (
       await fetch(`${stack.apiUrl}${pathname}`, {
         headers: { cookie: stack.cookie, origin: stack.webUrl },
         method,
-        signal: AbortSignal.timeout(10_000),
       }),
   );
   if (Result.isError(response)) {
@@ -284,6 +283,8 @@ type StartOptions = {
   apiUrl: string;
   webUrl: string;
   cookie: string;
+  /** A stand-in built elsewhere (CI builds it in its own job); else Cargo builds it. */
+  executable?: string;
 };
 
 /**
@@ -295,6 +296,7 @@ export const startLocalRunner = async ({
   apiUrl,
   webUrl,
   cookie,
+  executable,
 }: StartOptions): Promise<Result<void, string>> => {
   const stack = { apiUrl, webUrl, cookie };
   const state = localRunnerDir(root);
@@ -310,7 +312,8 @@ export const startLocalRunner = async ({
   }
   const running = runningLocalRunner(root);
   if (running === null) {
-    const built = await build(root);
+    const built =
+      executable === undefined ? await build(root) : Result.ok(executable);
     if (Result.isError(built)) {
       return Result.err(built.error);
     }

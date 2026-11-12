@@ -209,6 +209,7 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       },
     },
   },
+  "local-run-stand-in": { class: "correctness" },
   "e2e-local-runs": {
     class: "correctness",
     steps: {

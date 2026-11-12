@@ -172,11 +172,32 @@ export const runOnButton = (page: Page) =>
     name: /^(?:Auto|Codex · |Claude Code · )/u,
   });
 
+/**
+ * Open the Run on menu. A click that lands while the menu that just closed
+ * is still leaving can close it again, so it is opened until its first
+ * choice shows.
+ */
+const openRunOnMenu = async (page: Page) => {
+  const cloud = page.getByRole("menuitemradio", { name: "stella cloud" });
+  await expect(async () => {
+    if (!(await cloud.isVisible())) {
+      await runOnButton(page).click();
+    }
+    await expect(cloud).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
+};
+
+const closeMenu = async (page: Page) => {
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+};
+
 /** Choose where the chat runs: on stella, or an agent and model on the computer. */
 export const chooseRunOn = async (page: Page, runOn: RunOn) => {
-  await runOnButton(page).click();
+  await openRunOnMenu(page);
   if (runOn.place === "cloud") {
     await page.getByRole("menuitemradio", { name: "stella cloud" }).click();
+    await expect(page.getByRole("menu")).toHaveCount(0);
     return;
   }
   const agent = AGENTS[runOn.agent].name;
@@ -186,6 +207,7 @@ export const chooseRunOn = async (page: Page, runOn: RunOn) => {
   await page
     .getByRole("menuitemradio", { name: runOn.model, exact: true })
     .click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
   await expect(runOnButton(page)).toHaveAccessibleName(
     `${agent} · ${runOn.model}`,
   );
@@ -208,8 +230,9 @@ export const choosePermission = async (
   page: Page,
   mode: keyof typeof PERMISSIONS,
 ) => {
-  await runOnButton(page).click();
+  await openRunOnMenu(page);
   await permissionItem(page, mode).click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
 };
 
 /**
@@ -219,17 +242,20 @@ export const choosePermission = async (
 export const widestPermission = async (
   page: Page,
 ): Promise<"fullAuto" | "auto"> => {
-  await runOnButton(page).click();
-  const disabled = await permissionItem(page, "fullAuto").getAttribute(
-    "aria-disabled",
-  );
-  await page.keyboard.press("Escape");
-  return disabled === "true" ? "auto" : "fullAuto";
+  await openRunOnMenu(page);
+  await expect(permissionItem(page, "auto")).toBeVisible();
+  const fullAuto = permissionItem(page, "fullAuto");
+  const offered =
+    (await fullAuto.count()) > 0 &&
+    (await fullAuto.getAttribute("aria-disabled")) !== "true";
+  await closeMenu(page);
+  return offered ? "fullAuto" : "auto";
 };
 
 /** The permission the open Run on menu shows as chosen. */
 export const chosenPermission = async (page: Page) => {
-  await runOnButton(page).click();
+  await openRunOnMenu(page);
+  await expect(permissionItem(page, "ask")).toBeVisible();
   const chosen: string[] = [];
   for (const mode of ["ask", "auto", "fullAuto"] as const) {
     // await-in-loop: three menu items, read in order.
@@ -239,12 +265,14 @@ export const chosenPermission = async (page: Page) => {
       chosen.push(mode);
     }
   }
-  await page.keyboard.press("Escape");
+  await closeMenu(page);
   return chosen;
 };
 
 export const send = async (page: Page, text: string) => {
-  await composer(page).click();
+  // The composer's toolbar sits over the editor's middle, so focus it
+  // rather than click it.
+  await composer(page).focus();
   await composer(page).pressSequentially(text);
   await page.getByRole("button", { name: "Send message" }).click();
 };

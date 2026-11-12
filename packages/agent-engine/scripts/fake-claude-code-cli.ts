@@ -246,8 +246,8 @@ export const FAKE_PRIVATE_TEXT = {
 export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
 
 /** What `approval_outcome` answers once the command ran, or did not. */
-export const FAKE_APPROVED_ANSWER = "Removed draft.md.";
-export const FAKE_DENIED_ANSWER = "Left the draft in place.";
+const FAKE_APPROVED_ANSWER = "Removed draft.md.";
+const FAKE_DENIED_ANSWER = "Left the draft in place.";
 
 export const FAKE_APPROVAL_REASON = "\u001B[33mDeletes a file\u001B[0m";
 
