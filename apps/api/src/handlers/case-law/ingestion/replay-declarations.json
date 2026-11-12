@@ -256,5 +256,11 @@
     "parserVersion": 15,
     "type": "pending-enrolment-wave",
     "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-kis",
+    "parserVersion": 33,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
   }
 ]
