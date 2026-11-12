@@ -8,7 +8,6 @@ import type {
 
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { loadMatterSearchContexts } from "@/api/handlers/search/ai";
-import type { MatterSearchContext } from "@/api/handlers/search/ai";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
@@ -55,6 +54,11 @@ const isEntityHit = (hit: GlobalSearchHit): hit is EntityGlobalSearchHit =>
 
 /** A matter document the question may draw on, numbered for citation. */
 export type AskPassage = EmailAskPassage & { hit: EntityGlobalSearchHit };
+
+/** The fields of a matter search context a passage reads. */
+type MatterSearchContext = Pick<EmailAskPassage, "content" | "title"> & {
+  hit: GlobalSearchHit;
+};
 
 /**
  * The matter's own documents among the search contexts, numbered from 1 in
