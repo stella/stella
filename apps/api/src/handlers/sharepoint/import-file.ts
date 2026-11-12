@@ -13,7 +13,10 @@
 import { panic, Result } from "better-result";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
-import { SHAREPOINT_REFUSAL_CODE } from "@stll/api-contract/sharepoint";
+import {
+  SHAREPOINT_ITEM_KIND,
+  SHAREPOINT_REFUSAL_CODE,
+} from "@stll/api-contract/sharepoint";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
@@ -21,7 +24,6 @@ import { entities, entityVersions } from "@/api/db/schema";
 import {
   downloadSharepointFile,
   getSharepointDriveItem,
-  SHAREPOINT_ITEM_KIND,
   type SharepointDriveItem,
   type SharepointGraphError,
 } from "@/api/handlers/sharepoint/graph-client";

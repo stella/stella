@@ -265,7 +265,7 @@ const openMenuRename = async (scope: HTMLElement) => {
     within(scope).getByRole("button", { name: englishMessages.common.actions }),
   );
   await waitFor(() =>
-    expect(document.querySelector('[role="menuitem"]')).not.toBeNull(),
+    expect(document.querySelector('[role="menuitem"]') === null).toBe(false),
   );
   fireEvent.click(
     within(document.body).getByRole("menuitem", {
@@ -419,7 +419,7 @@ test("breadcrumb pending label settles before file metadata refetch and refusal 
     edit(view.container, "new-A");
     await waitFor(() => expect(requests).toHaveLength(1));
     await waitFor(() =>
-      expect(view.queryByRole("link", { name: "A.md" })).toBeNull(),
+      expect(view.queryByRole("link", { name: "A.md" }) === null).toBe(true),
     );
     expect(view.container.textContent).toContain("new-A.md");
     await act(async () => confirm(0));

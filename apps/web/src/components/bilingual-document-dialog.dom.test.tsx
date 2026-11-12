@@ -122,5 +122,5 @@ test("bilingual document creation succeeds without an idempotency header", async
   expect(requests[0]?.method).toBe("POST");
   expect(requests[0]?.headers.has("Idempotency-Key")).toBe(false);
   await waitFor(() => expect(toastAdd).toHaveBeenCalled());
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
 });

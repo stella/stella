@@ -350,6 +350,7 @@ export const ENUM_COLUMNS = {
     "interaction_type",
     "interruption_reason",
   ],
+  conflict_checks: ["decision", "outcome"],
   contact_relationships: ["relationship_type"],
   contact_search_documents: ["contact_type"],
   contacts: [
@@ -437,6 +438,7 @@ export const ENUM_COLUMNS = {
   invoice_payments: ["method", "origin"],
   invoices: ["billing_mode", "document_type", "language"],
   justifications: ["entity_feature_gate"],
+  legal_list_claim_carry_outcomes: ["entity_feature_gate", "outcome"],
   legal_list_claim_review_events: ["entity_feature_gate", "kind"],
   legal_list_claims: ["entity_feature_gate", "framing", "type"],
   legal_list_fact_details: [

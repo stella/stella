@@ -42,6 +42,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   "system:case-law-population-fold": ["deltas"],
   "system:case-law-population-seed": ["projectedDecisions"],
   "system:legislation-facet-refresh": ["buckets"],
+  "system:legislation-version-changes": ["summaries"],
   "system:case-law-source-arrivals-refresh": ["sources"],
   "system:case-law-raw-storage": [
     "sweptPrefixes",
@@ -69,6 +70,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   "system:corpus-index-job-detail-backfill": ["movedJobs"],
   "system:case-law-parsed-input-state-backfill": ["updatedDecisions"],
   "system:legislation-expression-id-backfill": ["claimedDocuments"],
+  "system:search-history-country-repair": ["classified", "unclassifiable"],
   "system:audit-retention": ["deletedRuns"],
   "system:case-law-background-replay": [
     "attempted",

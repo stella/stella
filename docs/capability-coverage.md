@@ -111,6 +111,16 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `client-invoices.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices create` |
 | `client-invoices.prefill` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices prefill` |
 
+## conflict-checks
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `conflict-checks.create` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks create` |
+| `conflict-checks.get` | read | stella:read | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks get` |
+| `conflict-checks.link` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks link` |
+| `conflict-checks.list` | read | stella:read | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks list` |
+| `conflict-checks.review` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks review` |
+
 ## contacts
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -526,6 +536,15 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `seller-profiles.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles list` |
 | `seller-profiles.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles update` |
 
+## sharepoint
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `sharepoint.drives.items.list` | read | stella:read | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint drives-items-list` |
+| `sharepoint.drives.list` | read | stella:read | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint drives-list` |
+| `sharepoint.imports.create` | write | stella:documents_write | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint imports-create` |
+| `sharepoint.sites.list` | read | stella:read | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint sites-list` |
+
 ## signals
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -794,10 +813,10 @@ mechanics, and similar), not gaps in coverage.
 | mcp_transport | 12 |
 | native_device | 5 |
 | native_tool_ui | 10 |
-| provider_secret | 37 |
+| provider_secret | 33 |
 | public_indexing | 10 |
 | realtime_stream | 9 |
-| search_ui | 20 |
+| search_ui | 21 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 22 |

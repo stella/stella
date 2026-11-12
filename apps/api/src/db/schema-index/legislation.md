@@ -4,207 +4,208 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## legislation_sources · `legislationSources` · legislation.ts:142 · rls
+## legislation_sources · `legislationSources` · legislation.ts:143 · rls
 
 ```text
-legislation_sources.id                    pUuid        pk,not null       legislation.ts:145
-legislation_sources.adapter_key           varchar      not null          legislation.ts:146
-legislation_sources.name                  varchar      not null          legislation.ts:147
-legislation_sources.enabled               boolean      default,not null  legislation.ts:148
-legislation_sources.sync_cursor           text         null              legislation.ts:149
-legislation_sources.last_sync_at          timestamptz  null              legislation.ts:150
-legislation_sources.config                jsonb        default,null      legislation.ts:151
-legislation_sources.descriptor            jsonb        null              legislation.ts:152
-legislation_sources.expression_namespace  varchar      null              legislation.ts:160  The prefix of every publisher expression id stored under this source (`<namespace>:<publisher id>`).
-legislation_sources.identity_mode         varchar      default,not null  legislation.ts:162  Selected before the first document; existing sources retain window identity.
-legislation_sources.created_at            timestamptz  default,not null  legislation.ts:173
-legislation_sources.updated_at            timestamptz  default,not null  legislation.ts:174
+legislation_sources.id                    pUuid        pk,not null       legislation.ts:146
+legislation_sources.adapter_key           varchar      not null          legislation.ts:147
+legislation_sources.name                  varchar      not null          legislation.ts:148
+legislation_sources.enabled               boolean      default,not null  legislation.ts:149
+legislation_sources.sync_cursor           text         null              legislation.ts:150
+legislation_sources.last_sync_at          timestamptz  null              legislation.ts:151
+legislation_sources.config                jsonb        default,null      legislation.ts:152
+legislation_sources.descriptor            jsonb        null              legislation.ts:153
+legislation_sources.expression_namespace  varchar      null              legislation.ts:161  The prefix of every publisher expression id stored under this source (`<namespace>:<publisher id>`).
+legislation_sources.identity_mode         varchar      default,not null  legislation.ts:163  Selected before the first document; existing sources retain window identity.
+legislation_sources.created_at            timestamptz  default,not null  legislation.ts:174
+legislation_sources.updated_at            timestamptz  default,not null  legislation.ts:175
 ```
 
-## legislation_documents · `legislationDocuments` · legislation.ts:199 · rls
+## legislation_documents · `legislationDocuments` · legislation.ts:200 · rls
 
 ```text
-legislation_documents.id                              pUuid            pk,not null       legislation.ts:202
-legislation_documents.source_id                       safeUuid         fk,not null       legislation.ts:203
-legislation_documents.eli                             varchar          not null          legislation.ts:208  European Legislation Identifier / national statute id — the work key shared across consolidations.
-legislation_documents.title                           text             not null          legislation.ts:211  Official titles can enumerate every amended act and have no bounded maximum in the publisher's domain.
-legislation_documents.slug                            varchar          null              legislation.ts:219  The readable segment the public statute URL is addressed by, derived from the citation and the short title (`89-2012-sb-obcansky-zakonik`).
-legislation_documents.country                         varchar          not null          legislation.ts:220
-legislation_documents.language                        varchar          not null          legislation.ts:221
-legislation_documents.document_type                   varchar          null              legislation.ts:222
-legislation_documents.status                          varchar          default,not null  legislation.ts:223
-legislation_documents.effective_date                  date             null              legislation.ts:224
-legislation_documents.version_valid_from              date             null              legislation.ts:225
-legislation_documents.version_valid_to                date             null              legislation.ts:226
-legislation_documents.identity_mode                   varchar          default,not null  legislation.ts:228  Derived by the database from the source, so partial identity indexes cannot drift.
-legislation_documents.publisher_expression_id         varchar          null              legislation.ts:245  The publisher's own identity for this version, prefixed with the source's namespace.
-legislation_documents.expression_kind                 varchar          default,not null  legislation.ts:248
-legislation_documents.window_disposition              varchar          default,not null  legislation.ts:256  Whether the stored window can answer a point-in-time read.
-legislation_documents.window_disposition_basis        varchar          null              legislation.ts:264  Why the version carries its disposition; see the pairing CHECK.
-legislation_documents.fulltext                        text             null              legislation.ts:267
-legislation_documents.sections                        jsonb            null              legislation.ts:268
-legislation_documents.document_ast                    jsonb            null              legislation.ts:269
-legislation_documents.source_url                      varchar          null              legislation.ts:270
-legislation_documents.document_url                    varchar          null              legislation.ts:271
-legislation_documents.metadata                        jsonb            default,null      legislation.ts:272
-legislation_documents.source_hash                     varchar          null              legislation.ts:273
-legislation_documents.source_raw_s3_key               varchar          null              legislation.ts:279  Where the publisher's response for this Expression is kept, so a later parser can be replayed without re-crawling.
-legislation_documents.source_raw_content_type         varchar          null              legislation.ts:280
-legislation_documents.citation_authority              doublePrecision  default,not null  legislation.ts:283  Reuse the corpus ranking signal (cross-reference authority); 0 until a legislation-specific signal is computed.
-legislation_documents.citation_count                  integer          default,not null  legislation.ts:287
-legislation_documents.citation_authority_computed_at  timestamptz      null              legislation.ts:289  Retained until the next schema release; remove with its case-law counterpart.
-legislation_documents.text_s3_key                     varchar          null              legislation.ts:290
-legislation_documents.normalized_s3_key               varchar          null              legislation.ts:291
-legislation_documents.ast_s3_key                      varchar          null              legislation.ts:292
-legislation_documents.content_hash                    varchar          null              legislation.ts:293
-legislation_documents.indexed_hash                    varchar          null              legislation.ts:295  The case-law twins' legislation counterparts; see that table.
-legislation_documents.indexed_generation              varchar          null              legislation.ts:296
-legislation_documents.indexed_at                      timestamptz      null              legislation.ts:297
-legislation_documents.projection_epoch                bigint           default,not null  legislation.ts:299  Monotonic fence advanced by each desired-state transaction.
-legislation_documents.payload_revision                bigint           default,not null  legislation.ts:308  Advanced by the database whenever the payload or the version identity changes (migration `20260926150000_legislation_payload_revision`); a write that supplies…
-legislation_documents.created_at                      timestamptz      default,not null  legislation.ts:312
-legislation_documents.updated_at                      timestamptz      default,not null  legislation.ts:313
+legislation_documents.id                              pUuid            pk,not null       legislation.ts:203
+legislation_documents.source_id                       safeUuid         fk,not null       legislation.ts:204
+legislation_documents.eli                             varchar          not null          legislation.ts:209  European Legislation Identifier / national statute id — the work key shared across consolidations.
+legislation_documents.title                           text             not null          legislation.ts:212  Official titles can enumerate every amended act and have no bounded maximum in the publisher's domain.
+legislation_documents.slug                            varchar          null              legislation.ts:220  The readable segment the public statute URL is addressed by, derived from the citation and the short title (`89-2012-sb-obcansky-zakonik`).
+legislation_documents.country                         varchar          not null          legislation.ts:221
+legislation_documents.language                        varchar          not null          legislation.ts:222
+legislation_documents.document_type                   varchar          null              legislation.ts:223
+legislation_documents.status                          varchar          default,not null  legislation.ts:224
+legislation_documents.effective_date                  date             null              legislation.ts:225
+legislation_documents.version_valid_from              date             null              legislation.ts:226
+legislation_documents.version_valid_to                date             null              legislation.ts:227
+legislation_documents.identity_mode                   varchar          default,not null  legislation.ts:229  Derived by the database from the source, so partial identity indexes cannot drift.
+legislation_documents.publisher_expression_id         varchar          null              legislation.ts:246  The publisher's own identity for this version, prefixed with the source's namespace.
+legislation_documents.expression_kind                 varchar          default,not null  legislation.ts:249
+legislation_documents.window_disposition              varchar          default,not null  legislation.ts:257  Whether the stored window can answer a point-in-time read.
+legislation_documents.window_disposition_basis        varchar          null              legislation.ts:265  Why the version carries its disposition; see the pairing CHECK.
+legislation_documents.fulltext                        text             null              legislation.ts:268
+legislation_documents.sections                        jsonb            null              legislation.ts:269
+legislation_documents.document_ast                    jsonb            null              legislation.ts:270
+legislation_documents.source_url                      varchar          null              legislation.ts:271
+legislation_documents.document_url                    varchar          null              legislation.ts:272
+legislation_documents.metadata                        jsonb            default,null      legislation.ts:273
+legislation_documents.source_hash                     varchar          null              legislation.ts:274
+legislation_documents.source_raw_s3_key               varchar          null              legislation.ts:280  Where the publisher's response for this Expression is kept, so a later parser can be replayed without re-crawling.
+legislation_documents.source_raw_content_type         varchar          null              legislation.ts:281
+legislation_documents.citation_authority              doublePrecision  default,not null  legislation.ts:284  Reuse the corpus ranking signal (cross-reference authority); 0 until a legislation-specific signal is computed.
+legislation_documents.citation_count                  integer          default,not null  legislation.ts:288
+legislation_documents.citation_authority_computed_at  timestamptz      null              legislation.ts:290  Retained until the next schema release; remove with its case-law counterpart.
+legislation_documents.text_s3_key                     varchar          null              legislation.ts:291
+legislation_documents.normalized_s3_key               varchar          null              legislation.ts:292
+legislation_documents.ast_s3_key                      varchar          null              legislation.ts:293
+legislation_documents.content_hash                    varchar          null              legislation.ts:294
+legislation_documents.indexed_hash                    varchar          null              legislation.ts:296  The case-law twins' legislation counterparts; see that table.
+legislation_documents.indexed_generation              varchar          null              legislation.ts:297
+legislation_documents.indexed_at                      timestamptz      null              legislation.ts:298
+legislation_documents.projection_epoch                bigint           default,not null  legislation.ts:300  Monotonic fence advanced by each desired-state transaction.
+legislation_documents.payload_revision                bigint           default,not null  legislation.ts:309  Advanced by the database whenever the payload or the version identity changes (migration `20260926150000_legislation_payload_revision`); a write that supplies…
+legislation_documents.change_summary                  jsonb            null              legislation.ts:320  What this consolidation changed against the eligible one before it, and the payload revisions of both it was computed from; null until computed.
+legislation_documents.created_at                      timestamptz      default,not null  legislation.ts:321
+legislation_documents.updated_at                      timestamptz      default,not null  legislation.ts:322
 ```
 
-## legislation_matter_links · `legislationMatterLinks` · legislation.ts:513
+## legislation_matter_links · `legislationMatterLinks` · legislation.ts:522
 
 A reproducible provision version pinned to a tenant matter.
 
 ```text
-legislation_matter_links.id               pUuid            pk,not null       legislation.ts:516
-legislation_matter_links.document_id      safeUuid         fk,not null       legislation.ts:517
-legislation_matter_links.statute_id       varchar          not null          legislation.ts:518
-legislation_matter_links.provision_id     text             not null          legislation.ts:519
-legislation_matter_links.applied_version  date             not null          legislation.ts:520
-legislation_matter_links.jurisdiction     varchar          not null          legislation.ts:521
-legislation_matter_links.workspace_id     safeWorkspaceId  fk,not null       legislation.ts:522
-legislation_matter_links.linked_by        text             fk,not null       legislation.ts:525
-legislation_matter_links.created_at       timestamptz      default,not null  legislation.ts:529
+legislation_matter_links.id               pUuid            pk,not null       legislation.ts:525
+legislation_matter_links.document_id      safeUuid         fk,not null       legislation.ts:526
+legislation_matter_links.statute_id       varchar          not null          legislation.ts:527
+legislation_matter_links.provision_id     text             not null          legislation.ts:528
+legislation_matter_links.applied_version  date             not null          legislation.ts:529
+legislation_matter_links.jurisdiction     varchar          not null          legislation.ts:530
+legislation_matter_links.workspace_id     safeWorkspaceId  fk,not null       legislation.ts:531
+legislation_matter_links.linked_by        text             fk,not null       legislation.ts:534
+legislation_matter_links.created_at       timestamptz      default,not null  legislation.ts:538
 ```
 
-## legislation_work_identifiers · `legislationWorkIdentifiers` · legislation.ts:548 · rls
+## legislation_work_identifiers · `legislationWorkIdentifiers` · legislation.ts:557 · rls
 
 Publisher-stated aliases bound immutably to a source's language-neutral Work.
 
 ```text
-legislation_work_identifiers.source_id   safeUuid  fk,not null  legislation.ts:551
-legislation_work_identifiers.identifier  varchar   not null     legislation.ts:552
-legislation_work_identifiers.eli         varchar   not null     legislation.ts:553
+legislation_work_identifiers.source_id   safeUuid  fk,not null  legislation.ts:560
+legislation_work_identifiers.identifier  varchar   not null     legislation.ts:561
+legislation_work_identifiers.eli         varchar   not null     legislation.ts:562
 ```
 
-## legislation_work_names · `legislationWorkNames` · legislation.ts:619 · rls
+## legislation_work_names · `legislationWorkNames` · legislation.ts:628 · rls
 
 The names each stored legislation version's title states, for recognising a query that names an act.
 
 ```text
-legislation_work_names.id              pUuid        pk,not null       legislation.ts:622
-legislation_work_names.document_id     safeUuid     fk,not null       legislation.ts:624  The version whose stored title states the name.
-legislation_work_names.country         varchar      not null          legislation.ts:627
-legislation_work_names.official_title  text         null              legislation.ts:629  The title exactly as the publisher states it.
-legislation_work_names.derived_name    text         null              legislation.ts:631  A name derived from stored titles; see `derivation`.
-legislation_work_names.derivation      varchar      null              legislation.ts:632
-legislation_work_names.cited_key       varchar      null              legislation.ts:640  For `derived_from_citation`: the match key of the citation the name was written beside, resolved against `derived_title_citation` rows.
-legislation_work_names.match_key       varchar      null              legislation.ts:648  The name as a query is compared with it: case-folded word tokens joined by one space (`legislationNameMatchKey`).
-legislation_work_names.created_at      timestamptz  default,not null  legislation.ts:651
+legislation_work_names.id              pUuid        pk,not null       legislation.ts:631
+legislation_work_names.document_id     safeUuid     fk,not null       legislation.ts:633  The version whose stored title states the name.
+legislation_work_names.country         varchar      not null          legislation.ts:636
+legislation_work_names.official_title  text         null              legislation.ts:638  The title exactly as the publisher states it.
+legislation_work_names.derived_name    text         null              legislation.ts:640  A name derived from stored titles; see `derivation`.
+legislation_work_names.derivation      varchar      null              legislation.ts:641
+legislation_work_names.cited_key       varchar      null              legislation.ts:649  For `derived_from_citation`: the match key of the citation the name was written beside, resolved against `derived_title_citation` rows.
+legislation_work_names.match_key       varchar      null              legislation.ts:657  The name as a query is compared with it: case-folded word tokens joined by one space (`legislationNameMatchKey`).
+legislation_work_names.created_at      timestamptz  default,not null  legislation.ts:660
 ```
 
-## statute_sitemap_shards · `statuteSitemapShards` · legislation.ts:690 · rls
+## statute_sitemap_shards · `statuteSitemapShards` · legislation.ts:699 · rls
 
 Public statute sitemap index, replaced as one snapshot by the scheduler.
 
 ```text
-statute_sitemap_shards.country  varchar  not null  legislation.ts:693
-statute_sitemap_shards.bucket   varchar  not null  legislation.ts:694
-statute_sitemap_shards.total    integer  not null  legislation.ts:695
-statute_sitemap_shards.lastmod  varchar  not null  legislation.ts:696
+statute_sitemap_shards.country  varchar  not null  legislation.ts:702
+statute_sitemap_shards.bucket   varchar  not null  legislation.ts:703
+statute_sitemap_shards.total    integer  not null  legislation.ts:704
+statute_sitemap_shards.lastmod  varchar  not null  legislation.ts:705
 ```
 
-## legislation_facet_counts · `legislationFacetCounts` · legislation.ts:719 · rls
+## legislation_facet_counts · `legislationFacetCounts` · legislation.ts:728 · rls
 
 Works per kind of act, per jurisdiction and source, replaced as one snapshot by the scheduler.
 
 ```text
-legislation_facet_counts.country        varchar   not null     legislation.ts:722
-legislation_facet_counts.source_id      safeUuid  fk,not null  legislation.ts:723
-legislation_facet_counts.document_type  varchar   not null     legislation.ts:726
-legislation_facet_counts.works          integer   not null     legislation.ts:727
+legislation_facet_counts.country        varchar   not null     legislation.ts:731
+legislation_facet_counts.source_id      safeUuid  fk,not null  legislation.ts:732
+legislation_facet_counts.document_type  varchar   not null     legislation.ts:735
+legislation_facet_counts.works          integer   not null     legislation.ts:736
 ```
 
-## legislation_facet_refreshes · `legislationFacetRefreshes` · legislation.ts:760 · rls
+## legislation_facet_refreshes · `legislationFacetRefreshes` · legislation.ts:769 · rls
 
 When the statute facet snapshot last completed: one row, no source data.
 
 ```text
-legislation_facet_refreshes.singleton     boolean      pk,default,not null  legislation.ts:763
-legislation_facet_refreshes.refreshed_at  timestamptz  not null             legislation.ts:764
+legislation_facet_refreshes.singleton     boolean      pk,default,not null  legislation.ts:772
+legislation_facet_refreshes.refreshed_at  timestamptz  not null             legislation.ts:773
 ```
 
-## legislation_work_changes · `legislationWorkChanges` · legislation.ts:784 · rls
+## legislation_work_changes · `legislationWorkChanges` · legislation.ts:793 · rls
 
 Works whose versions changed, one row per affected `(country, eli)`.
 
 ```text
-legislation_work_changes.id          bigint       pk,generated,not null  legislation.ts:787
-legislation_work_changes.country     varchar      not null               legislation.ts:791
-legislation_work_changes.eli         varchar      not null               legislation.ts:792
-legislation_work_changes.changed_at  timestamptz  default,not null       legislation.ts:793
+legislation_work_changes.id          bigint       pk,generated,not null  legislation.ts:796
+legislation_work_changes.country     varchar      not null               legislation.ts:800
+legislation_work_changes.eli         varchar      not null               legislation.ts:801
+legislation_work_changes.changed_at  timestamptz  default,not null       legislation.ts:802
 ```
 
-## legislation_search_documents · `legislationSearchDocuments` · legislation.ts:808 · rls
+## legislation_search_documents · `legislationSearchDocuments` · legislation.ts:817 · rls
 
 ```text
-legislation_search_documents.document_id      safeUuid     pk,fk,not null    legislation.ts:811
-legislation_search_documents.title            text         default,not null  legislation.ts:814
-legislation_search_documents.searchable_text  text         default,not null  legislation.ts:815
-legislation_search_documents.language         varchar      null              legislation.ts:816
-legislation_search_documents.regconfig        varchar      default,not null  legislation.ts:817
-legislation_search_documents.tsv              tsvector     null              legislation.ts:818
-legislation_search_documents.updated_at       timestamptz  default,not null  legislation.ts:819
-legislation_search_documents.retry_after      timestamptz  null              legislation.ts:820
+legislation_search_documents.document_id      safeUuid     pk,fk,not null    legislation.ts:820
+legislation_search_documents.title            text         default,not null  legislation.ts:823
+legislation_search_documents.searchable_text  text         default,not null  legislation.ts:824
+legislation_search_documents.language         varchar      null              legislation.ts:825
+legislation_search_documents.regconfig        varchar      default,not null  legislation.ts:826
+legislation_search_documents.tsv              tsvector     null              legislation.ts:827
+legislation_search_documents.updated_at       timestamptz  default,not null  legislation.ts:828
+legislation_search_documents.retry_after      timestamptz  null              legislation.ts:829
 ```
 
-## legislation_index_jobs · `legislationIndexJobs` · legislation.ts:833 · rls
+## legislation_index_jobs · `legislationIndexJobs` · legislation.ts:842 · rls
 
 ```text
-legislation_index_jobs.id             pUuid        pk,not null       legislation.ts:836
-legislation_index_jobs.document_id    safeUuid     fk,null           legislation.ts:837
-legislation_index_jobs.generation     varchar      not null          legislation.ts:841
-legislation_index_jobs.operation      varchar      not null          legislation.ts:842
-legislation_index_jobs.status         varchar      not null          legislation.ts:846
-legislation_index_jobs.content_hash   varchar      null              legislation.ts:847
-legislation_index_jobs.error_message  varchar      null              legislation.ts:848
-legislation_index_jobs.detail         varchar      null              legislation.ts:850  Why a succeeded operation was performed; see the case-law twin.
-legislation_index_jobs.created_at     timestamptz  default,not null  legislation.ts:851
+legislation_index_jobs.id             pUuid        pk,not null       legislation.ts:845
+legislation_index_jobs.document_id    safeUuid     fk,null           legislation.ts:846
+legislation_index_jobs.generation     varchar      not null          legislation.ts:850
+legislation_index_jobs.operation      varchar      not null          legislation.ts:851
+legislation_index_jobs.status         varchar      not null          legislation.ts:855
+legislation_index_jobs.content_hash   varchar      null              legislation.ts:856
+legislation_index_jobs.error_message  varchar      null              legislation.ts:857
+legislation_index_jobs.detail         varchar      null              legislation.ts:859  Why a succeeded operation was performed; see the case-law twin.
+legislation_index_jobs.created_at     timestamptz  default,not null  legislation.ts:860
 ```
 
-## legislation_amendment_snapshots · `legislationAmendmentSnapshots` · legislation.ts:877 · rls
+## legislation_amendment_snapshots · `legislationAmendmentSnapshots` · legislation.ts:886 · rls
 
 Latest publisher observation of incoming amendments for one target Work.
 
 ```text
-legislation_amendment_snapshots.source_id    safeUuid     fk,not null  legislation.ts:880
-legislation_amendment_snapshots.target_eli   varchar      not null     legislation.ts:881
-legislation_amendment_snapshots.language     varchar      not null     legislation.ts:882
-legislation_amendment_snapshots.observed_at  timestamptz  not null     legislation.ts:883
-legislation_amendment_snapshots.coverage     jsonb        not null     legislation.ts:884
+legislation_amendment_snapshots.source_id    safeUuid     fk,not null  legislation.ts:889
+legislation_amendment_snapshots.target_eli   varchar      not null     legislation.ts:890
+legislation_amendment_snapshots.language     varchar      not null     legislation.ts:891
+legislation_amendment_snapshots.observed_at  timestamptz  not null     legislation.ts:892
+legislation_amendment_snapshots.coverage     jsonb        not null     legislation.ts:893
 ```
 
-## legislation_amendments · `legislationAmendments` · legislation.ts:904 · rls
+## legislation_amendments · `legislationAmendments` · legislation.ts:913 · rls
 
 Publisher-stated provision effects, independent of consolidation windows.
 
 ```text
-legislation_amendments.source_id              safeUuid  fk,not null  legislation.ts:907
-legislation_amendments.target_eli             varchar   not null     legislation.ts:910
-legislation_amendments.language               varchar   not null     legislation.ts:911
-legislation_amendments.publisher_id           varchar   not null     legislation.ts:912
-legislation_amendments.amending_eli           varchar   not null     legislation.ts:913
-legislation_amendments.amending_title         text      null         legislation.ts:914
-legislation_amendments.amending_anchor        text      null         legislation.ts:915
-legislation_amendments.affected_anchor        text      not null     legislation.ts:916
-legislation_amendments.change_kind            text      not null     legislation.ts:917
-legislation_amendments.effective_type         text      not null     legislation.ts:920
-legislation_amendments.effective_date         date      null         legislation.ts:923
-legislation_amendments.effective_text         text      null         legislation.ts:924
-legislation_amendments.publisher_instruction  text      null         legislation.ts:925
+legislation_amendments.source_id              safeUuid  fk,not null  legislation.ts:916
+legislation_amendments.target_eli             varchar   not null     legislation.ts:919
+legislation_amendments.language               varchar   not null     legislation.ts:920
+legislation_amendments.publisher_id           varchar   not null     legislation.ts:921
+legislation_amendments.amending_eli           varchar   not null     legislation.ts:922
+legislation_amendments.amending_title         text      null         legislation.ts:923
+legislation_amendments.amending_anchor        text      null         legislation.ts:924
+legislation_amendments.affected_anchor        text      not null     legislation.ts:925
+legislation_amendments.change_kind            text      not null     legislation.ts:926
+legislation_amendments.effective_type         text      not null     legislation.ts:929
+legislation_amendments.effective_date         date      null         legislation.ts:932
+legislation_amendments.effective_text         text      null         legislation.ts:933
+legislation_amendments.publisher_instruction  text      null         legislation.ts:934
 ```
