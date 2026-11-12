@@ -69,6 +69,7 @@ import {
   skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
+import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
 import {
   documentWordCounts,
   joinWordSeams,
@@ -1098,7 +1099,9 @@ const readOpeningFormula = (
   builder.blockCount += 1;
   builder.blocks.push({
     id: nextBlockId(builder),
-    anchorId: builder.makeAnchor(`p${builder.blockCount}`),
+    anchorId: builder.makeAnchor(
+      positionalBlockAnchor({ kind: "p", ordinal: builder.blockCount }),
+    ),
     type: "paragraph",
     role: "opening-formula",
     inlines: line.inlines,
