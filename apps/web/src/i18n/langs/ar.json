@@ -571,6 +571,21 @@
       "showBefore": "إظهار النص قبل ¶ {from}",
       "verifyParagraphs": "التحقق من فقرات"
     },
+    "staleness": {
+      "failed": "تعذّرت إعادة فحص الادعاءات",
+      "finished": "{count, plural, zero {لم يُعَد فحص أي ادعاء} one {أُعيد فحص ادعاء واحد} two {أُعيد فحص ادعاءين} few {أُعيد فحص # ادعاءات} many {أُعيد فحص # ادعاءً} other {أُعيد فحص # ادعاء}}",
+      "partial": "أُعيد الفحص: {rechecked, number}، تعذّر: {failed, plural, zero {#} one {#} two {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "تغيّرت الواقعة",
+        "factHeld": "استُبعدت الواقعة",
+        "factRemoved": "أُزيلت الواقعة",
+        "newFactRelated": "واقعة جديدة ذات صلة"
+      },
+      "recheckAll": "إعادة فحص الكل",
+      "recheckLocked": "يُعاد فحصه مع الادعاءات القديمة الأخرى",
+      "runLine": "{count, plural, zero {لا ادعاءات قد تكون قديمة} one {ادعاء واحد قد يكون قديمًا} two {ادعاءان قد يكونان قديمين} few {# ادعاءات قد تكون قديمة} many {# ادعاءً قد يكون قديمًا} other {# ادعاء قد يكون قديمًا}}",
+      "running": "{count, plural, zero {لا ادعاءات قيد إعادة الفحص…} one {جارٍ إعادة فحص ادعاء واحد…} two {جارٍ إعادة فحص ادعاءين…} few {جارٍ إعادة فحص # ادعاءات…} many {جارٍ إعادة فحص # ادعاءً…} other {جارٍ إعادة فحص # ادعاء…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "متعارض",
@@ -2162,6 +2177,7 @@
     "stopFailed": "تعذّر إيقاف الإجابة. حاول مرة أخرى.",
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
+    "stopping": "جارٍ الإيقاف…",
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
     "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
@@ -2699,6 +2715,7 @@
     "organization": "المؤسسة",
     "organizationName": "اسم المؤسسة",
     "organizations": "المؤسسات",
+    "outOfDate": "غير محدَّث",
     "page": "الصفحة {page}",
     "paymentRetryNotice": "هناك مشكلة في الدفع. حدّث طريقة الدفع بحلول {date} للحفاظ على إمكانية الوصول.",
     "pin": "تثبيت",
@@ -4477,7 +4494,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "أنشئ دليل مراجعة للعقود موقفًا تلو الآخر، استنادًا إلى عقودك الموقّعة سابقًا ومقابلة قصيرة والمعايير المعتادة في السوق.",
-          "name": "إنشاء دليل مراجعة"
+          "name": "إنشاء دليل مراجعة",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "أضف مواقف إلى أحد أدلة المراجعة الحالية لديّ.",
+              "name": "توسيع دليل مراجعة"
+            },
+            "fromContracts": {
+              "body": "أنشئ دليل مراجعة لاتفاقيات عدم الإفصاح استنادًا إلى اتفاقياتي الموقّعة سابقًا.",
+              "name": "البدء من عقود سابقة"
+            },
+            "fromMarketStandards": {
+              "body": "أنشئ دليل مراجعة لعقود التوريد انطلاقًا من المواقف المعتادة في السوق.",
+              "name": "البدء من معايير السوق"
+            }
+          }
         }
       },
       "builtInSection": "المهارات المُدمَجة",
@@ -4727,6 +4758,10 @@
       "optionPlaceholder": "قيمة الخيار",
       "optionsLabel": "الخيارات",
       "outline": "الهيكل",
+      "pendingPane": {
+        "description": "أجب عن الأسئلة في الدردشة. بعد أن توافق على أول حفظ، يُفتح دليل المراجعة هنا ويمكنك تعديله بجانب الدردشة.",
+        "title": "سيظهر دليل المراجعة هنا"
+      },
       "positionOfTotal": "الموقف {index} من {total}",
       "positionRemoved": "تمت إزالة الموقف",
       "positions": "المواقف",
@@ -6086,7 +6121,6 @@
     "comments": "التعليقات",
     "commentsEmpty": "حدّد نصًا للتعليق عليه.",
     "noRevisions": "لا توجد مراجعات بعد",
-    "outOfDate": "غير محدَّث",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "بلا ملخص",
     "proposals": "الاقتراحات",

@@ -165,6 +165,7 @@ export { default as repairs_import_provenance_constraint_validations } from "./o
 export { default as repairs_invoice_language_constraint_validations } from "./online-migration-entries/repairs-invoice-language-constraint-validations";
 export { default as repairs_invoice_legacy_payment_backfill } from "./online-migration-entries/repairs-invoice-legacy-payment-backfill";
 export { default as repairs_invoice_sent_at_backfill } from "./online-migration-entries/repairs-invoice-sent-at-backfill";
+export { default as repairs_legal_graph_edge_backfill } from "./online-migration-entries/repairs-legal-graph-edge-backfill";
 export { default as repairs_legal_list_source_decision_backfill } from "./online-migration-entries/repairs-legal-list-source-decision-backfill";
 export { default as repairs_legislation_matter_link_constraint_validations } from "./online-migration-entries/repairs-legislation-matter-link-constraint-validations";
 export { default as repairs_lifecycle_shape_constraint_validations } from "./online-migration-entries/repairs-lifecycle-shape-constraint-validations";

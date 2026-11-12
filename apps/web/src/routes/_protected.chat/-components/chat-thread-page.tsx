@@ -56,6 +56,7 @@ import { UsageFallbackNotice } from "@/components/usage/usage-fallback-notice";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
 import { env } from "@/env";
+import { ChatActiveSkillIntro } from "@/features/chat/components/chat-active-skill-intro";
 import { ChatActiveSkillLabel } from "@/features/chat/components/chat-active-skill-label";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
@@ -277,6 +278,7 @@ export const ChatThreadPage = ({
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     reconnecting,
@@ -708,10 +710,17 @@ export const ChatThreadPage = ({
                 <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[max(var(--chat-bottom-fade-h),calc(var(--composer-block-h,7rem)+1.5rem))]">
                   {messages.length === 0 && !isGenerating && !error ? (
                     <div className="m-auto flex w-full max-w-md flex-col gap-6 px-4">
-                      <PromptSuggestions
-                        onSelect={selectPrompt}
-                        prompts={suggestedSkills}
-                      />
+                      {activeSkill ? (
+                        <ChatActiveSkillIntro
+                          onSelectPrompt={selectPrompt}
+                          skill={activeSkill}
+                        />
+                      ) : (
+                        <PromptSuggestions
+                          onSelect={selectPrompt}
+                          prompts={suggestedSkills}
+                        />
+                      )}
                       <GuideNudge />
                     </div>
                   ) : (
@@ -728,6 +737,7 @@ export const ChatThreadPage = ({
                         value={{
                           pause: localRunQuestion,
                           answer: answerLocalRunQuestion,
+                          threadRef,
                         }}
                       >
                         <ChatThreadMessages
@@ -923,6 +933,7 @@ export const ChatThreadPage = ({
                     onStop={() => {
                       stop();
                     }}
+                    stopping={stopPending}
                     onFocusChange={setComposerFocused}
                     onSubmit={handleSubmit}
                   />

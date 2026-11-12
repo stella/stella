@@ -571,6 +571,21 @@
       "showBefore": "Mostrar el texto anterior al ¶ {from}",
       "verifyParagraphs": "Verificar párrafos"
     },
+    "staleness": {
+      "failed": "No se pudieron volver a comprobar las afirmaciones",
+      "finished": "{count, plural, one {# afirmación comprobada de nuevo} other {# afirmaciones comprobadas de nuevo} many {# afirmaciones comprobadas de nuevo}}",
+      "partial": "{rechecked, number} comprobadas de nuevo, {failed, plural, one {# con error} other {# con error} many {# con error}}",
+      "reasons": {
+        "factChanged": "Hecho modificado",
+        "factHeld": "Hecho excluido",
+        "factRemoved": "Hecho eliminado",
+        "newFactRelated": "Nuevo hecho relacionado"
+      },
+      "recheckAll": "Volver a comprobar todas",
+      "recheckLocked": "Se está volviendo a comprobar con las demás afirmaciones desactualizadas",
+      "runLine": "{count, plural, one {# afirmación puede estar desactualizada} other {# afirmaciones pueden estar desactualizadas} many {# afirmaciones pueden estar desactualizadas}}",
+      "running": "{count, plural, one {Volviendo a comprobar # afirmación…} other {Volviendo a comprobar # afirmaciones…} many {Volviendo a comprobar # afirmaciones…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Contradicha",
@@ -2162,6 +2177,7 @@
     "stopFailed": "No se pudo detener la respuesta. Inténtalo de nuevo.",
     "stopResponse": "Detener",
     "stopped": "Detenido",
+    "stopping": "Deteniendo…",
     "suggestTitle": "Sugerir un título",
     "suggestTitleUnavailableAnonymized": "Las sugerencias de título no están disponibles para conversaciones anonimizadas.",
     "suggestedFollowupsLabel": "Sugerencias de preguntas de seguimiento",
@@ -2699,6 +2715,7 @@
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
     "organizations": "Organizaciones",
+    "outOfDate": "Desactualizada",
     "page": "Página {page}",
     "paymentRetryNotice": "Problema con el pago. Actualiza tu método de pago antes del {date} para mantener el acceso.",
     "pin": "Fijar",
@@ -4477,7 +4494,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Crea un playbook de revisión de contratos posición por posición, a partir de tus contratos firmados anteriormente, una breve entrevista y los estándares habituales del mercado.",
-          "name": "Crear un playbook"
+          "name": "Crear un playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Añade posiciones a uno de mis playbooks existentes.",
+              "name": "Ampliar un playbook"
+            },
+            "fromContracts": {
+              "body": "Crea un playbook para acuerdos de confidencialidad a partir de mis acuerdos firmados anteriormente.",
+              "name": "Partir de contratos anteriores"
+            },
+            "fromMarketStandards": {
+              "body": "Crea un playbook para contratos con proveedores partiendo de las posiciones habituales del mercado.",
+              "name": "Partir de los estándares del mercado"
+            }
+          }
         }
       },
       "builtInSection": "Habilidades integradas",
@@ -4727,6 +4758,10 @@
       "optionPlaceholder": "Valor de la opción",
       "optionsLabel": "Opciones",
       "outline": "Esquema",
+      "pendingPane": {
+        "description": "Responde a las preguntas del chat. Cuando apruebes el primer guardado, el playbook se abrirá aquí y podrás editarlo junto a la conversación.",
+        "title": "Tu playbook aparecerá aquí"
+      },
       "positionOfTotal": "Posición {index} de {total}",
       "positionRemoved": "Posición eliminada",
       "positions": "Posiciones",
@@ -6086,7 +6121,6 @@
     "comments": "Comentarios",
     "commentsEmpty": "Selecciona texto para comentarlo.",
     "noRevisions": "Aún no hay revisiones",
-    "outOfDate": "Desactualizada",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Sin resumen",
     "proposals": "Propuestas",

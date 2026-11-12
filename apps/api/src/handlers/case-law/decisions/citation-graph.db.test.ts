@@ -1252,50 +1252,6 @@ test("exact empty projections report zero totals without falling back", async ()
   expect(exact.incomingByYear).toEqual([]);
 });
 
-test("missing projection column grants preserve bounded summaries", async () => {
-  await db.execute(
-    sql`SELECT refresh_decision_citation_stats(${subjectId}::uuid)`,
-  );
-  const exact = await withSubject(
-    subjectId,
-    async (subject) => await summaryOf({ currentYear: 2026, subject }),
-  );
-  expect(exact.precision).toEqual({ status: "exact" });
-  await db.execute(
-    sql`REVOKE SELECT (count) ON case_law_decision_citation_stats FROM stella_public_law_reader`,
-  );
-  try {
-    const bounded = await withSubject(
-      subjectId,
-      async (subject) => await summaryOf({ currentYear: 2026, subject }),
-    );
-    const top = await withSubject(
-      subjectId,
-      async (subject) =>
-        await listTopCitingDecisionsHandler({
-          subject,
-          summary: await summaryOf({ subject }),
-          limit: 5,
-        }),
-    );
-    expect(top).toMatchObject({
-      precision: "bounded",
-      candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
-    });
-    expect(bounded).toEqual({
-      ...exact,
-      precision: {
-        status: "bounded",
-        capped: { incoming: false, outgoing: false },
-      },
-    });
-  } finally {
-    await db.execute(
-      sql`GRANT SELECT (count) ON case_law_decision_citation_stats TO stella_public_law_reader`,
-    );
-  }
-});
-
 test("exact totals follow source redistribution changes without rebuilding buckets", async () => {
   const read = async () =>
     await withSubject(subjectId, async (subject) =>

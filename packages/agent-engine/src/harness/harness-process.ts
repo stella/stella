@@ -28,6 +28,12 @@ export type HarnessProcessDeadlines = {
   /** How long a request waits for its answer before the process is ended. */
   requestMs: number;
   /**
+   * How long a startup request waits instead (the first launch, connecting
+   * stella's MCP server): a slow computer is not a hung harness. `requestMs`
+   * when unset.
+   */
+  startupRequestMs?: number | undefined;
+  /**
    * How long the process, and every process it started, gets to exit on
    * SIGTERM before SIGKILL.
    */
@@ -62,10 +68,12 @@ type HarnessProcess<TId, TError> = {
    * Writes `message` as the request `id` and waits for `settle` with that id,
    * the deadline, or the process's exit, whichever comes first.
    */
+  /** `timeoutMs` overrides the process's request deadline for this one. */
   request: (
     id: TId,
     label: string,
     message: object,
+    timeoutMs?: number,
   ) => Promise<Result<unknown, TError>>;
   /** Answers the pending request `id`; false when none is pending. */
   settle: (id: TId, result: Result<unknown, TError>) => boolean;
@@ -209,7 +217,7 @@ export const startHarnessProcess = <TId, TError>({
   return Result.ok({
     pid: child.pid,
     write,
-    request: async (id, label, outgoing) => {
+    request: async (id, label, outgoing, timeoutMs) => {
       if (state.closed) {
         return Result.err(unanswered("closed", "The harness is not running."));
       }
@@ -230,7 +238,7 @@ export const startHarnessProcess = <TId, TError>({
         );
         // A harness that stops answering cannot be trusted with the session.
         terminate();
-      }, deadlines.requestMs);
+      }, timeoutMs ?? deadlines.requestMs);
       write(outgoing);
       const result = await promise;
       clearTimeout(deadline);
