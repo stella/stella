@@ -1481,7 +1481,7 @@
   "chat.localRun.permissionFullAuto": "Full auto",
   "chat.localRun.permissionFullAutoDescription": "Never asks for anything inside the chat's folder; always asks before changing your computer.",
   "chat.localRun.permissionPlan": "Plan",
-  "chat.localRun.permissionPlanDescription": "Reads and plans first; changes nothing until you approve the plan.",
+  "chat.localRun.permissionPlanDescription": "Reads and plans first; asks before any change until you approve the plan.",
   "chat.localRun.permissionSandboxed": "Runs in a sandbox; asks before changing your computer.",
   "chat.localRun.permissionUnavailable": "Not available on this computer",
   "chat.localRun.permissions": "Permissions",

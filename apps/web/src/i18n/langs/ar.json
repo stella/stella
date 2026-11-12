@@ -1867,7 +1867,7 @@
       "permissionFullAuto": "تلقائي بالكامل",
       "permissionFullAutoDescription": "لا يسأل عن أي شيء داخل مجلد الدردشة، ويسأل دائمًا قبل تغيير أي شيء على حاسوبك.",
       "permissionPlan": "خطة",
-      "permissionPlanDescription": "يقرأ ويخطط أولًا، ولا يغيّر شيئًا حتى توافق على الخطة.",
+      "permissionPlanDescription": "يقرأ ويخطط أولًا، ويسأل قبل أي تغيير حتى توافق على الخطة.",
       "permissionSandboxed": "يعمل في بيئة معزولة، ويسأل قبل تغيير أي شيء على حاسوبك.",
       "permissionUnavailable": "غير متاح على هذا الحاسوب",
       "permissions": "الأذونات",

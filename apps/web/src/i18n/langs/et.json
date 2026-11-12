@@ -1867,7 +1867,7 @@
       "permissionFullAuto": "Täisautomaatne",
       "permissionFullAutoDescription": "Ei küsi vestluse kaustas millegi kohta; küsib alati enne, kui sinu arvutis midagi muudab.",
       "permissionPlan": "Plaan",
-      "permissionPlanDescription": "Kõigepealt loeb ja planeerib; ei muuda midagi enne, kui plaani kinnitad.",
+      "permissionPlanDescription": "Kõigepealt loeb ja planeerib; küsib enne iga muudatust, kuni plaani kinnitad.",
       "permissionSandboxed": "Töötab liivakastis; küsib enne, kui sinu arvutis midagi muudab.",
       "permissionUnavailable": "Selles arvutis pole saadaval",
       "permissions": "Õigused",

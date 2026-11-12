@@ -1305,6 +1305,27 @@ describe("Claude Code approval modes", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
+  test("a plan call without a plan is never put to the member", async () => {
+    const { events, answers, controlRequests } = await run("plan_missing", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "plan" },
+      },
+    });
+    expect(events.map(({ type }) => type)).not.toContain("approval.requested");
+    expect(answers()).toEqual([
+      {
+        subtype: "success",
+        request_id: "cli-1",
+        response: {
+          behavior: "deny",
+          message: expect.stringContaining("No plan was given"),
+        },
+      },
+    ]);
+    expect(controlRequests("set_permission_mode")).toEqual([]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
   test("a plan too long to show in full is never put to the member: the CLI is told to shorten it", async () => {
     expect(FAKE_LONG_PLAN.length).toBeGreaterThan(20_000);
     const { events, answers, controlRequests } = await run("plan_too_long", {

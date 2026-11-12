@@ -1867,7 +1867,7 @@
       "permissionFullAuto": "Totalmente automático",
       "permissionFullAutoDescription": "Nunca pergunta nada dentro da pasta do chat; sempre pergunta antes de alterar seu computador.",
       "permissionPlan": "Plano",
-      "permissionPlanDescription": "Primeiro lê e planeja; não altera nada até você aprovar o plano.",
+      "permissionPlanDescription": "Primeiro lê e planeja; pergunta antes de cada alteração até você aprovar o plano.",
       "permissionSandboxed": "É executado em um ambiente isolado; pergunta antes de alterar seu computador.",
       "permissionUnavailable": "Indisponível neste computador",
       "permissions": "Permissões",

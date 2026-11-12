@@ -1867,7 +1867,7 @@
       "permissionFullAuto": "Pilnībā automātiski",
       "permissionFullAutoDescription": "Par neko tērzēšanas mapē nejautā; pirms kaut ko maina jūsu datorā, vienmēr pajautā.",
       "permissionPlan": "Plāns",
-      "permissionPlanDescription": "Vispirms lasa un plāno; neko nemaina, kamēr neapstiprināsiet plānu.",
+      "permissionPlanDescription": "Vispirms lasa un plāno; pirms katras izmaiņas jautā, kamēr neapstiprināsiet plānu.",
       "permissionSandboxed": "Darbojas izolētā vidē; pirms kaut ko maina jūsu datorā, pajautā.",
       "permissionUnavailable": "Šajā datorā nav pieejams",
       "permissions": "Atļaujas",

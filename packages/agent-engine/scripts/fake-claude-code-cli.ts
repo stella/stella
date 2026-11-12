@@ -258,12 +258,17 @@ const SET_MODE_SUGGESTION = {
 export const FAKE_LONG_PLAN = `## Plan\n\n${"1. Read the lease.\n".repeat(1200)}`;
 
 /** The plan call as the CLI asks about it: the model's input plus the plan. */
-const proposePlan = (toolUseId: string, plan = FAKE_PLAN): FakeStep[] => [
+const proposePlan = (
+  toolUseId: string,
+  plan: string | null = FAKE_PLAN,
+): FakeStep[] => [
   assistant("msg-plan", [toolUse(toolUseId, "ExitPlanMode", {})]),
   canUseTool(
     toolUseId,
     "ExitPlanMode",
-    { plan, planFilePath: "/plans/lease.md" },
+    plan === null
+      ? { planFilePath: "/plans/lease.md" }
+      : { plan, planFilePath: "/plans/lease.md" },
     { permission_suggestions: [SET_MODE_SUGGESTION] },
   ),
 ];
@@ -631,6 +636,14 @@ const FAKE_SCENARIOS = {
     ...proposePlan("call-plan"),
     toolResult("call-plan", "The user denied this action.", true),
     assistant("msg-2", [{ type: "text", text: "Waiting for a new plan." }]),
+    result(),
+  ],
+  /** A plan call without a plan: refused without asking. */
+  plan_missing: [
+    ...freshTurn(),
+    ...proposePlan("call-plan", null),
+    toolResult("call-plan", "No plan was given.", true),
+    assistant("msg-2", [{ type: "text", text: "Writing the plan out." }]),
     result(),
   ],
   /** A plan too long to show: refused without asking, the CLI stays in plan mode. */

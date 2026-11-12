@@ -1867,7 +1867,7 @@
       "permissionFullAuto": "Entièrement automatique",
       "permissionFullAutoDescription": "Ne demande jamais rien dans le dossier de la conversation ; demande toujours avant de modifier votre ordinateur.",
       "permissionPlan": "Planifier",
-      "permissionPlanDescription": "Lit et planifie d’abord ; ne modifie rien tant que vous n’avez pas approuvé le plan.",
+      "permissionPlanDescription": "Lit et planifie d’abord ; demande avant chaque modification tant que vous n’avez pas approuvé le plan.",
       "permissionSandboxed": "S’exécute dans un bac à sable ; demande avant de modifier votre ordinateur.",
       "permissionUnavailable": "Indisponible sur cet ordinateur",
       "permissions": "Autorisations",

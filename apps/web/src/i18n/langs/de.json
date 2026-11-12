@@ -1867,7 +1867,7 @@
       "permissionFullAuto": "Vollautomatisch",
       "permissionFullAutoDescription": "Fragt bei nichts innerhalb des Ordners des Chats nach; fragt immer, bevor es etwas an Ihrem Computer ändert.",
       "permissionPlan": "Planen",
-      "permissionPlanDescription": "Liest und plant zuerst; ändert nichts, bevor Sie den Plan genehmigen.",
+      "permissionPlanDescription": "Liest und plant zuerst; fragt vor jeder Änderung, bis Sie den Plan genehmigen.",
       "permissionSandboxed": "Läuft in einer Sandbox; fragt, bevor es etwas an Ihrem Computer ändert.",
       "permissionUnavailable": "Auf diesem Computer nicht verfügbar",
       "permissions": "Berechtigungen",

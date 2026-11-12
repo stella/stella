@@ -1867,7 +1867,7 @@
       "permissionFullAuto": "Plně automaticky",
       "permissionFullAutoDescription": "Na nic uvnitř složky chatu se neptá; než změní něco ve vašem počítači, vždy se zeptá.",
       "permissionPlan": "Plán",
-      "permissionPlanDescription": "Nejdřív čte a plánuje; nic nezmění, dokud plán neschválíte.",
+      "permissionPlanDescription": "Nejdřív čte a plánuje; před každou změnou se zeptá, dokud plán neschválíte.",
       "permissionSandboxed": "Běží v izolovaném prostředí; než změní něco ve vašem počítači, zeptá se.",
       "permissionUnavailable": "V tomto počítači není k dispozici",
       "permissions": "Oprávnění",

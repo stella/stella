@@ -105,6 +105,8 @@ const DENIED_MESSAGE = "The user denied this action.";
 /** Chat shows a proposed plan up to this length; a longer one is never put
  *  to the member, since approving it would approve steps they cannot see. */
 const MAX_PLAN_CHARS = CHAT_LOCAL_RUN_TOOL_LIMITS.proposedPlan;
+const PLAN_MISSING_MESSAGE =
+  "No plan was given for the user to review: propose the plan's text.";
 const PLAN_TOO_LONG_MESSAGE = `The plan is too long for the user to review: keep it under ${MAX_PLAN_CHARS} characters and propose it again.`;
 /** Rules granted for the session stay in memory, never in a settings file. */
 const SESSION_DESTINATION = "session";
@@ -722,27 +724,28 @@ export class ClaudeCodeTurnSession {
         return;
       }
       const held = this.toolUses.get(block.tool_use_id);
+      const notRun = parsed.tool_result_meta?.find(
+        ({ id }) => id === block.tool_use_id,
+      )?.non_execution_kind;
+      // A call the stop cut off never ran: not a failure, and not done.
+      const stopped =
+        notRun !== undefined &&
+        notRun !== null &&
+        CLAUDE_STOPPED_TOOL_KINDS.has(notRun);
       // A result always follows its call on the main thread, once: the call
       // is released with it.
       if (held !== undefined) {
         this.toolUses.delete(block.tool_use_id);
         const result = toolResultFor(held.use, block);
-        const notRun = parsed.tool_result_meta?.find(
-          ({ id }) => id === block.tool_use_id,
-        )?.non_execution_kind;
         this.emit({
           type: "tool.completed",
           toolCall: held.toolCall,
-          result:
-            notRun !== undefined &&
-            notRun !== null &&
-            CLAUDE_STOPPED_TOOL_KINDS.has(notRun)
-              ? { ...result, status: "cancelled" }
-              : result,
+          result: stopped ? { ...result, status: "cancelled" } : result,
         });
       }
+      // Only a plan call that ran leaves plan mode.
       if (this.approvedPlans.delete(block.tool_use_id)) {
-        this.leavePlanMode(block.is_error === true);
+        this.leavePlanMode(block.is_error === true || stopped);
       }
     }
   }
@@ -848,6 +851,15 @@ export class ClaudeCodeTurnSession {
       return;
     }
     const plan = parsed.input["plan"];
+    // A plan is put to the member only as the text they approve: none, or
+    // more than chat shows, is refused before any approval opens.
+    if (proposesPlan && (typeof plan !== "string" || plan.trim() === "")) {
+      this.client?.respond(controlId, {
+        behavior: "deny",
+        message: PLAN_MISSING_MESSAGE,
+      });
+      return;
+    }
     if (
       proposesPlan &&
       typeof plan === "string" &&
@@ -859,9 +871,12 @@ export class ClaudeCodeTurnSession {
       });
       return;
     }
-    const suggestions = (parsed.permission_suggestions ?? []).filter(
-      ({ type }) => type !== SET_MODE_SUGGESTION,
-    );
+    // A plan is approved once: no rule from it outlives this call.
+    const suggestions = proposesPlan
+      ? []
+      : (parsed.permission_suggestions ?? []).filter(
+          ({ type }) => type !== SET_MODE_SUGGESTION,
+        );
     this.pending.set(requestId, {
       type: "approval",
       controlId,

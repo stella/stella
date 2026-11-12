@@ -1867,7 +1867,7 @@
       "permissionFullAuto": "Visiškai automatiškai",
       "permissionFullAutoDescription": "Dėl nieko pokalbio aplanke neklausia; prieš ką nors keisdamas jūsų kompiuteryje, visada paklausia.",
       "permissionPlan": "Planas",
-      "permissionPlanDescription": "Pirmiausia skaito ir planuoja; nieko nekeičia, kol nepatvirtinsite plano.",
+      "permissionPlanDescription": "Pirmiausia skaito ir planuoja; prieš kiekvieną pakeitimą klausia, kol nepatvirtinsite plano.",
       "permissionSandboxed": "Veikia izoliuotoje aplinkoje; prieš ką nors keisdamas jūsų kompiuteryje, paklausia.",
       "permissionUnavailable": "Šiame kompiuteryje nepasiekiama",
       "permissions": "Leidimai",

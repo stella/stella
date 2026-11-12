@@ -1867,7 +1867,7 @@
       "permissionFullAuto": "Teljesen automatikus",
       "permissionFullAutoDescription": "A csevegés mappáján belül semmire sem kérdez rá; mielőtt bármit módosítana a számítógépén, mindig rákérdez.",
       "permissionPlan": "Terv",
-      "permissionPlanDescription": "Először olvas és tervez; semmit sem módosít, amíg jóvá nem hagyja a tervet.",
+      "permissionPlanDescription": "Először olvas és tervez; minden módosítás előtt rákérdez, amíg jóvá nem hagyja a tervet.",
       "permissionSandboxed": "Elkülönített környezetben fut; mielőtt bármit módosítana a számítógépén, rákérdez.",
       "permissionUnavailable": "Ezen a számítógépen nem érhető el",
       "permissions": "Engedélyek",

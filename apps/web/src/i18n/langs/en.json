@@ -1867,7 +1867,7 @@
       "permissionFullAuto": "Full auto",
       "permissionFullAutoDescription": "Never asks for anything inside the chat's folder; always asks before changing your computer.",
       "permissionPlan": "Plan",
-      "permissionPlanDescription": "Reads and plans first; changes nothing until you approve the plan.",
+      "permissionPlanDescription": "Reads and plans first; asks before any change until you approve the plan.",
       "permissionSandboxed": "Runs in a sandbox; asks before changing your computer.",
       "permissionUnavailable": "Not available on this computer",
       "permissions": "Permissions",
