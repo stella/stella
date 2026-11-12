@@ -332,12 +332,13 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
               'accepted', '${decider}', '2026-05-01T00:00:00Z')
           `);
         });
-        // Ordered by moment: the reopening carries its own clock, later than
-        // both stamped decisions.
+        // In the order the decision changed: the second acceptance is stamped
+        // before the reopening's own clock, and still follows it, so the
+        // history ends at the row's decision.
         expect(await history(reviewed)).toEqual([
           expect.objectContaining({ decision: "accepted", actorId: decider }),
-          expect.objectContaining({ decision: "accepted", actorId: decider }),
           expect.objectContaining({ decision: null, actorId: reopener }),
+          expect.objectContaining({ decision: "accepted", actorId: decider }),
         ]);
 
         // So the repair has nothing left to do, whatever wrote the rows.
@@ -433,6 +434,21 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
           expect(await latest()).toEqual({ decision, reason });
           current = stored;
         }
+
+        // A decision stamped ahead of the database clock, then reopened: the
+        // reopening still comes last, so the history ends where the row is.
+        await client.unsafe(`
+          UPDATE document_review_findings
+             SET decision = 'dismissed', decided_by = '${decider}',
+                 decided_at = clock_timestamp() + interval '1 hour'
+           WHERE id = '${finding}'
+        `);
+        await client.unsafe(`
+          UPDATE document_review_findings
+             SET decision = 'open', decided_by = NULL, decided_at = NULL
+           WHERE id = '${finding}'
+        `);
+        expect(await latest()).toEqual({ decision: null, reason: null });
 
         // A change made without a reason carries none.
         await client.unsafe(`

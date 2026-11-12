@@ -9,6 +9,7 @@
 import {
   REVIEW_STATUS_DECISION,
   type ReviewDecision,
+  type ReviewDecision as Decision,
 } from "@stll/api-contract/review-decision";
 
 type Status = "reviewed" | "disputed";
@@ -22,6 +23,9 @@ export const SECOND_MAP = {
 
 // oxlint-disable-next-line review-decision-map-owner/review-decision-map-owner
 export type DecisionByStatus = Record<Status, ReviewDecision>;
+
+// oxlint-disable-next-line review-decision-map-owner/review-decision-map-owner
+export type AliasedDecisionByStatus = Record<Status, Decision | null>;
 
 // --- Allowed: reading the owner, and records of other values ---
 // expect-clean: review-decision-map-owner/review-decision-map-owner

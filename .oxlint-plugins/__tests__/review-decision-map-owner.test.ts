@@ -12,6 +12,15 @@ describe("review-decision-map-owner", () => {
       ),
     ).toEqual([2, 3]);
   });
+  test("follows ReviewDecision through an aliased import", async () => {
+    expect(
+      await lintSingleRule(
+        "review-decision-map-owner",
+        'import type { ReviewDecision as Decision } from "@stll/api-contract/review-decision";\nexport const A = { open: null } as const satisfies Record<"open", Decision | null>;',
+        { sourcePath: "source.ts" },
+      ),
+    ).toEqual([2]);
+  });
   test("accepts reading the owner and records of other values", async () => {
     expect(
       await lintSingleRule(
