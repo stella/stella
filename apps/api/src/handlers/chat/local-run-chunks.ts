@@ -9,12 +9,12 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import {
-  HARNESS_CONTINUATION_EVENT,
-  harnessSessionIdEvent,
-} from "@stll/agent-engine";
+import { HARNESS_CONTINUATION_EVENT } from "@stll/agent-engine";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
-import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import {
+  AGENT_HARNESSES,
+  harnessSessionIdEvent,
+} from "@stll/api-contract/agent-harness";
 import {
   CHAT_TOOL_EXECUTOR,
   CHAT_TOOL_EXECUTOR_METADATA_KEY,

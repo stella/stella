@@ -2,10 +2,10 @@ import { EventSchema } from "@ag-ui/core/schemas";
 import { EventType } from "@tanstack/ai";
 import * as v from "valibot";
 
-import { harnessSessionIdEvent } from "@stll/agent-engine";
 import {
   AGENT_HARNESSES,
   type AgentHarness,
+  harnessSessionIdEvent,
 } from "@stll/api-contract/agent-harness";
 import {
   chatLocalRunAnswersRefusal,

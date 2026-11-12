@@ -8,7 +8,10 @@ import {
 } from "@tanstack/ai";
 import { panic } from "better-result";
 
-import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import {
+  type AgentHarness,
+  harnessSessionIdEvent,
+} from "@stll/api-contract/agent-harness";
 import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
@@ -49,10 +52,6 @@ import { shownToolInput, shownToolResult } from "./tool-parts";
 
 /** CUSTOM event reporting how the turn's context was established. */
 export const HARNESS_CONTINUATION_EVENT = "harness.continuation";
-
-/** CUSTOM event carrying the harness's native session id. */
-export const harnessSessionIdEvent = (harness: AgentHarness) =>
-  `${harness}.session-id`;
 
 /** Tool name for a harness question, matching Codex's native item name. */
 export const HARNESS_QUESTION_TOOL = CHAT_LOCAL_RUN_QUESTION_TOOL;

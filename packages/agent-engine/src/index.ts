@@ -47,7 +47,6 @@ export {
   HARNESS_CONTINUATION_EVENT,
   HARNESS_QUESTION_TOOL,
   harnessEventsToChunks,
-  harnessSessionIdEvent,
 } from "./harness/stream-chunks";
 export { createChunkCoalescer } from "./harness/chunk-coalescer";
 export type {
