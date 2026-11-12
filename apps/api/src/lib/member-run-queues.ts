@@ -31,6 +31,10 @@ export const MEMBER_RUN_QUEUES = [
     module: "apps/api/src/handlers/data-exports/data-export-worker.ts",
   },
   {
+    queue: "legal-list-generation-runs",
+    module: "apps/api/src/lib/lists/generation/run-queue.ts",
+  },
+  {
     queue: "legal-list-verification-runs",
     module: "apps/api/src/lib/lists/verification/run-queue.ts",
   },
@@ -165,6 +169,13 @@ export const QUEUE_AUTHORITY = {
     executors: ["apps/api/src/lib/flows/flow-executor.ts"],
     reason:
       "Acts as the member who launched the run, or for an automated run the definition's author.",
+  },
+  "legal-list-generation-runs": {
+    authority: "member-run",
+    worker: "apps/api/src/lib/lists/generation/run-queue.ts",
+    revocationTest:
+      "apps/api/src/lib/lists/generation/run-worker-inputs.integration.test.ts",
+    reason: "A fact extraction the requesting member started.",
   },
   "legal-list-verification-runs": {
     authority: "member-run",

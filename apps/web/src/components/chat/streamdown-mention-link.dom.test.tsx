@@ -239,3 +239,40 @@ test("dot-relative markdown destinations stay clickable with their original href
     cleanup();
   }
 });
+
+describe("a bare URL as its own link text", () => {
+  const url = "https://example.com/a/b?x=1";
+  const renderBareUrl = (externalLinks: "citation" | "written") =>
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <p>
+            <StreamdownMentionLink
+              externalLinks={externalLinks}
+              href={url}
+              interactive={false}
+            >
+              {url}
+            </StreamdownMentionLink>
+          </p>
+        </IntlProvider>
+      </QueryClientProvider>,
+    );
+
+  test("shows the URL as written, path and query included, in a person's own message", () => {
+    const link = renderBareUrl("written").getByRole("link");
+    expect(link.textContent).toBe(url);
+    expect(link.getAttribute("href")).toBe(url);
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
+  test("still shows the bare host as a citation chip in an assistant answer", () => {
+    const view = renderBareUrl("citation");
+    expect(view.container.textContent).toContain("example.com");
+    expect(view.container.textContent).not.toContain("/a/b?x=1");
+  });
+});

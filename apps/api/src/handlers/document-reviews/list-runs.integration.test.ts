@@ -23,7 +23,6 @@ import {
   entityVersions,
   fields,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -33,6 +32,7 @@ import type {
   DocumentReviewRunExecutor,
 } from "@/api/lib/document-review/run-contract";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { memberSafeDb } from "@/api/tests/helpers/application-role-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -62,6 +62,7 @@ const basis: DocumentReviewRunBasis = {
     definitionSnapshot: {
       name: "Positions confirmed for this review",
       positions: { version: 3, items: [] },
+      scope: null,
     },
   },
   references: [],
@@ -98,9 +99,11 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  safeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-  );
+  safeDb = memberSafeDb(testDb, {
+    organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1],
+    userId: ids.userA1,
+  });
   // The document gains a version: the same property, a new field row.
   await testDb.insert(entityVersions).values({
     id: laterVersionId,

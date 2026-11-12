@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/agent-auth/routes";
 import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
+import { emailAIRoute } from "@/api/handlers/ai/routes";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
@@ -92,6 +93,7 @@ import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
+import { softLawRoute } from "@/api/handlers/soft-law/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { syntheticRoute } from "@/api/handlers/synthetic/routes";
 import { myTasksRoute, tasksRoute } from "@/api/handlers/tasks/routes";
@@ -260,6 +262,7 @@ export const apiRoutes = mount([
       contactsRoute,
       legislationRoute,
       legislationCorpusRoute,
+      softLawRoute,
       publicLegislationRoute,
       publicSanctionsRoute,
       mobileUpdatesRoute,
@@ -276,6 +279,7 @@ export const apiRoutes = mount([
       chatMcpAppsRoute,
       chatRunOutputsRoute,
       dictationRoute,
+      emailAIRoute,
       userFilesRoute,
       skillsRoute,
       usageRoute,

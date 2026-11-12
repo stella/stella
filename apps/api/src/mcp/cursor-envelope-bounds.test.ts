@@ -165,6 +165,8 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   "advanced.read_case_law_decision_blocks.content.nextCursor": readerCursor,
   "advanced.search_legislation.nextCursor": statuteCursor,
   "advanced.read_statute.nextCursor": offsetCursor,
+  "advanced.search_guidance.nextCursor": offsetCursor,
+  "advanced.read_guidance.nextCursor": offsetCursor,
   "advanced.read_provision_history.nextCursor": encodePaginationCursor([
     DATE,
     UUID,

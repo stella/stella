@@ -147,7 +147,14 @@ export const AnnotationToolbar = ({
   const [doc, setDoc] = useState<Document | null>(null);
   const [style, setStyle] = useState<AnnotationStyle>("highlight");
   const [copyOpen, setCopyOpen] = useState(false);
-  const selectionCopy = useSelectionCopy();
+  // The bar copies the words selected in the reader while it is showing.
+  const selectionCopy = useSelectionCopy({
+    ownsSelection: (selection, root) =>
+      barRef.current !== null &&
+      root.contains(selection.anchorNode) &&
+      root.contains(selection.focusNode),
+    rootRef: scrollContainerRef,
+  });
   // A new highlight is private; sharing is a deliberate second step on the mark.
   const visibility: AnnotationVisibility = "private";
 
@@ -397,22 +404,7 @@ export const AnnotationToolbar = ({
       }
       readSelection();
     };
-    const onSelectionChange = () => {
-      selectionCopy.selectionChanged();
-      readSelection();
-    };
-    const onCopy = () => {
-      const selection = ownerDoc.getSelection();
-      if (
-        barRef.current !== null &&
-        selection !== null &&
-        !selection.isCollapsed &&
-        root.contains(selection.anchorNode) &&
-        root.contains(selection.focusNode)
-      ) {
-        selectionCopy.confirmNativeCopy();
-      }
-    };
+    const onSelectionChange = () => readSelection();
     const onViewportChange = () => readSelection();
     const onScroll = (event: Event) => {
       if (scrollMovesSelection(event, [barRef.current, copyMenuRef.current])) {
@@ -436,7 +428,6 @@ export const AnnotationToolbar = ({
       writePassage(event.dataTransfer, quote);
     };
     ownerDoc.addEventListener("selectionchange", onSelectionChange);
-    ownerDoc.addEventListener("copy", onCopy);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
     ownerDoc.addEventListener("pointercancel", onPointerCancel);
@@ -451,7 +442,6 @@ export const AnnotationToolbar = ({
       observer.disconnect();
       cancelAnimationFrame(frame);
       ownerDoc.removeEventListener("selectionchange", onSelectionChange);
-      ownerDoc.removeEventListener("copy", onCopy);
       ownerDoc.removeEventListener("keydown", onKeyDown);
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
       ownerDoc.removeEventListener("pointercancel", onPointerCancel);

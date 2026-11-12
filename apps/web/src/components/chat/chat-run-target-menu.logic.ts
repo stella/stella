@@ -1,7 +1,9 @@
 import { panic } from "better-result";
 
 import {
+  approvalModeWithin,
   CHAT_CLOUD_RUN_TARGET,
+  CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
   CHAT_LOCAL_RUN_HARNESSES,
   CHAT_RUN_TARGET_KIND,
   type ChatLocalHarnessReadiness,
@@ -9,12 +11,34 @@ import {
   type ChatLocalRunReadiness,
   type ChatLocalRunTarget,
   type ChatRunTarget,
+  isApprovalModeWithin,
 } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   type DesktopRunnerApprovalMode,
 } from "@stll/api-contract/desktop-runner";
+
+import type { TranslationKey } from "@/i18n/types";
+
+/** Each permission mode's name and what it lets a run do on its own. */
+export const LOCAL_RUN_PERMISSION_KEYS = {
+  ask: {
+    label: "common.ask",
+    description: "chat.localRun.permissionAskDescription",
+  },
+  auto: {
+    label: "chat.modelSelector.autoLabel",
+    description: "chat.localRun.permissionAutoDescription",
+  },
+  full_auto: {
+    label: "chat.localRun.permissionFullAuto",
+    description: "chat.localRun.permissionFullAutoDescription",
+  },
+} as const satisfies Record<
+  DesktopRunnerApprovalMode,
+  { label: TranslationKey; description: TranslationKey }
+>;
 
 /** Product names of the harnesses, shown as they are in every locale. */
 export const CHAT_LOCAL_HARNESS_NAMES = {
@@ -99,6 +123,40 @@ export const chatLocalHarnessOptions = (
 };
 
 /**
+ * Whether the member's computers can take a turn on `target` now, read as
+ * the Run on menu reads them (the harness option a send is routed by):
+ * `ready`; why its harness cannot (offline, signed out); `model_unavailable`
+ * when the ready harness no longer offers the model, which the API would
+ * refuse; `not_allowed` when the member may not run turns on a computer.
+ */
+export type LocalRunTargetState =
+  | { type: "ready" }
+  | {
+      type: "harness";
+      option: Exclude<ChatLocalHarnessOption, { state: "ready" }>;
+    }
+  | { type: "model_unavailable" }
+  | { type: "not_allowed" };
+
+export const localRunTargetState = (
+  readiness: ChatLocalRunReadiness,
+  target: ChatLocalRunTarget,
+): LocalRunTargetState => {
+  const option = chatLocalHarnessOptions(readiness)?.find(
+    ({ harness }) => harness === target.harness,
+  );
+  if (option === undefined) {
+    return { type: "not_allowed" };
+  }
+  if (option.state !== "ready") {
+    return { type: "harness", option };
+  }
+  return option.models.some(({ id }) => id === target.model)
+    ? { type: "ready" }
+    : { type: "model_unavailable" };
+};
+
+/**
  * The name a harness reports for the thread's model, from any computer whose
  * last report offers it. A disconnected computer's report still names the
  * model correctly, so the composer keeps the name while the computer is away;
@@ -125,6 +183,18 @@ export const localRunModelLabel = (
   return null;
 };
 
+/**
+ * The most the organization lets a run do without asking, as the member's
+ * computers were last read; every mode until they are, since the API holds
+ * each turn to the stored ceiling either way.
+ */
+export const localRunMaxApprovals = (
+  readiness: ChatLocalRunReadiness | undefined,
+): DesktopRunnerApprovalMode =>
+  readiness?.status === "enabled"
+    ? readiness.maxApprovals
+    : CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS;
+
 const SEPARATOR = "::";
 
 /**
@@ -148,44 +218,75 @@ export const sameRunTarget = (
 
 /**
  * The target for a model picked under a ready harness. The permission mode
- * carries over when this harness can run in it, and is Ask otherwise.
+ * carries over when this harness can run in it, and is Ask otherwise; a mode
+ * above the organization's ceiling falls to the highest one it allows.
  */
 export const localRunTargetFor = ({
   selected,
   option,
   model,
+  maxApprovals,
 }: {
   selected: ChatRunTarget;
   option: Extract<ChatLocalHarnessOption, { state: "ready" }>;
   model: string;
+  maxApprovals: DesktopRunnerApprovalMode;
 }): ChatRunTarget => ({
   kind: "local",
   harness: option.harness,
   model,
-  approvals:
-    selected.kind === "local" &&
-    option.approvalModes.includes(selected.approvals)
-      ? selected.approvals
-      : DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+  approvals: approvalModeWithin({
+    mode:
+      selected.kind === "local" &&
+      option.approvalModes.includes(selected.approvals)
+        ? selected.approvals
+        : DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+    ceiling: maxApprovals,
+    offered: option.approvalModes,
+  }),
 });
 
 /**
+ * Whether a permission mode can be chosen: `computer` when the computer
+ * cannot run the harness in it, `organization` when it is above what the
+ * organization allows.
+ */
+export type PermissionAvailability = "available" | "computer" | "organization";
+
+/**
  * What the menu shows about permissions for the selected target: a choice of
- * modes, each with whether the computer can run it; the harness's one fixed
- * behaviour when it reports a single mode, so nothing is offered that would
- * run the same way; `null` when the turn runs in the cloud or its harness
- * cannot take a turn.
+ * modes, each with whether it can be chosen and why not; the harness's one
+ * fixed behaviour when it reports a single mode, so nothing is offered that
+ * would run the same way; `null` when the turn runs in the cloud or its
+ * harness cannot take a turn.
  */
 export type PermissionView =
   | {
       type: "choice";
-      modes: { mode: DesktopRunnerApprovalMode; available: boolean }[];
+      modes: {
+        mode: DesktopRunnerApprovalMode;
+        availability: PermissionAvailability;
+      }[];
     }
   | { type: "fixed"; harness: ChatLocalRunHarness };
+
+const availabilityOf = (
+  mode: DesktopRunnerApprovalMode,
+  offered: readonly DesktopRunnerApprovalMode[],
+  maxApprovals: DesktopRunnerApprovalMode,
+): PermissionAvailability => {
+  if (!offered.includes(mode)) {
+    return "computer";
+  }
+  return isApprovalModeWithin(mode, maxApprovals)
+    ? "available"
+    : "organization";
+};
 
 export const permissionView = (
   selected: ChatRunTarget,
   options: readonly ChatLocalHarnessOption[],
+  maxApprovals: DesktopRunnerApprovalMode,
 ): PermissionView | null => {
   if (selected.kind !== "local") {
     return null;
@@ -201,7 +302,7 @@ export const permissionView = (
     type: "choice",
     modes: DESKTOP_RUNNER_APPROVAL_MODES.map((mode) => ({
       mode,
-      available: option.approvalModes.includes(mode),
+      availability: availabilityOf(mode, option.approvalModes, maxApprovals),
     })),
   };
 };
@@ -209,8 +310,26 @@ export const permissionView = (
 /**
  * The target a turn should carry. A local target whose harness no longer
  * offers its model is still sent: the API refuses it with a reason the member
- * can read, rather than the page silently moving the turn to the cloud.
+ * can read, rather than the page silently moving the turn to the cloud. A
+ * thread whose permission mode is now above the organization's ceiling runs
+ * its next turn in the highest mode the ceiling allows and the computer
+ * offers.
  */
 export const effectiveRunTarget = (
   target: ChatRunTarget | undefined,
-): ChatRunTarget => target ?? CHAT_CLOUD_RUN_TARGET;
+  readiness?: ChatLocalRunReadiness,
+): ChatRunTarget => {
+  const chosen = target ?? CHAT_CLOUD_RUN_TARGET;
+  if (chosen.kind !== "local" || readiness?.status !== "enabled") {
+    return chosen;
+  }
+  const option = chatLocalHarnessOptions(readiness)?.find(
+    ({ harness }) => harness === chosen.harness,
+  );
+  const approvals = approvalModeWithin({
+    mode: chosen.approvals,
+    ceiling: readiness.maxApprovals,
+    offered: option?.state === "ready" ? option.approvalModes : undefined,
+  });
+  return approvals === chosen.approvals ? chosen : { ...chosen, approvals };
+};

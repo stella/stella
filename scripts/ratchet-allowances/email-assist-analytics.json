@@ -1,0 +1,5 @@
+{
+  "metric": "ai-analytics-callback-seams",
+  "delta": 1,
+  "reason": "The Outlook email helpers (apps/api/src/handlers/ai/email-generation.ts) follow the established short-text handler shape (improve-prompt): a generation failure or an empty answer is reported once through the request's customer-data AI analytics callbacks, which also carry its generation bookkeeping."
+}

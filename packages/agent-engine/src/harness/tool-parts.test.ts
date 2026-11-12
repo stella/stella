@@ -108,8 +108,6 @@ describe("harness activity names", () => {
     expect(toolCall.name).toBe(HARNESS_TOOL_NAMES.unsupportedItem);
     expect(toolCall.input).toEqual({ itemType: "x".repeat(128) });
     expect(result.status).toBe("failed");
-    expect(JSON.parse(result.content)).toMatchObject({
-      error: { code: "unsupported_item" },
-    });
+    expect(JSON.parse(result.content)).toEqual({ status: "failed" });
   });
 });

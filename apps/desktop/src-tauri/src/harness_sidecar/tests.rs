@@ -111,6 +111,7 @@ impl Fixture {
         initial: Duration::from_millis(20),
         max: Duration::from_millis(100),
       },
+      retired_dirs: Vec::new(),
     }
   }
 
@@ -124,6 +125,27 @@ impl Fixture {
 
   fn sidecar(&self) -> HarnessSidecar {
     self.sidecar_at(VERSION)
+  }
+
+  /// Replace the supervisor's connection to the holder of `version` with
+  /// another one, as a dropped link does; keep the stream to keep it open.
+  pub(crate) fn replace_holder_connection(
+    &self,
+    version: &str,
+  ) -> std::os::unix::net::UnixStream {
+    let dir = self.holders().join(version);
+    let mut intruder =
+      std::os::unix::net::UnixStream::connect(self.endpoint(version)).unwrap();
+    let hello = json!({
+      "type": "hello",
+      "protocol": SIDECAR_PROTOCOL,
+      "secret": read_secret(&dir).unwrap().0,
+      "appVersion": "1.4.0",
+      "apiOrigin": "https://api.example.test",
+      "resume": [],
+    });
+    writeln!(intruder, "{hello}").unwrap();
+    intruder
   }
 
   /// Every line a stand-in read, parsed.
@@ -613,6 +635,113 @@ fn a_dropped_connection_resumes_after_the_last_delivered_message() {
     .filter(|message| message["type"] == "hello")
     .collect();
   assert_eq!(hellos[2]["resume"][0]["afterSeq"], 1);
+}
+
+#[test]
+fn a_restore_outlives_a_dropped_connection_and_is_asked_again_on_the_next() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let restoring = {
+      let sidecar = sidecar.clone();
+      tokio::spawn(async move {
+        sidecar
+          .restore_folder(SidecarFolderRestore {
+            request_id: REQUEST_ID.to_owned(),
+            workspace_dir: "/tmp/stand-in-folder".to_owned(),
+            run_id: uuid::Uuid::new_v4().to_string(),
+          })
+          .await
+      })
+    };
+    until("the holder got the restore", || {
+      fixture
+        .received()
+        .iter()
+        .any(|message| message["type"] == "folder.restore")
+    })
+    .await;
+    // Another connection replaces this one while the holder still writes
+    // the folder: the restore waits through the reconnect, is asked again
+    // by the same request, and ends with the holder's answer.
+    let _intruder = fixture.replace_holder_connection(VERSION);
+    let answered = tokio::time::timeout(WAIT, restoring)
+      .await
+      .unwrap()
+      .unwrap();
+    assert_eq!(answered, Ok(RestoreOutcome::Restored));
+    sidecar.shutdown().await;
+  });
+  let asked: Vec<Value> = fixture
+    .received()
+    .into_iter()
+    .filter(|message| message["type"] == "folder.restore")
+    .collect();
+  assert_eq!(asked.len(), 2);
+  assert!(
+    asked
+      .iter()
+      .all(|message| message["requestId"] == REQUEST_ID)
+  );
+}
+
+#[test]
+fn a_restore_outlives_a_link_that_broke_and_is_asked_again_on_the_next() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let restore = |request_id: &str| SidecarFolderRestore {
+      request_id: request_id.to_owned(),
+      workspace_dir: "/tmp/stand-in-folder".to_owned(),
+      run_id: uuid::Uuid::new_v4().to_string(),
+    };
+    let restoring = {
+      let sidecar = sidecar.clone();
+      let first = restore(REQUEST_ID);
+      tokio::spawn(async move { sidecar.restore_folder(first).await })
+    };
+    until("the holder got the restore", || {
+      fixture
+        .received()
+        .iter()
+        .any(|message| message["type"] == "folder.restore")
+    })
+    .await;
+    // The holder breaks the protocol: its runs fail and its link is dropped
+    // with no reconnect, but the restore it may still be writing stays.
+    let mut broken = sidecar.start_run(run_start("garbage")).unwrap();
+    assert_eq!(finish(&mut broken).await, vec![ended(RunOutcome::Failed)]);
+    // The next call that needs the holder connects again, and the connection
+    // asks for the pending restore again by the same request.
+    let later = {
+      let sidecar = sidecar.clone();
+      let next = restore("7a2d3e4f-5b6c-4d7e-8f90-a1b2c3d4e5f6");
+      tokio::spawn(async move { sidecar.restore_folder(next).await })
+    };
+    let answered = tokio::time::timeout(WAIT, restoring)
+      .await
+      .unwrap()
+      .unwrap();
+    assert_eq!(answered, Ok(RestoreOutcome::Restored));
+    sidecar.shutdown().await;
+    // The later restore was asked once and the stand-in never answers a first
+    // ask; stopping the supervisor ends it.
+    assert!(
+      tokio::time::timeout(WAIT, later)
+        .await
+        .unwrap()
+        .unwrap()
+        .is_err()
+    );
+  });
+  let asked: Vec<Value> = fixture
+    .received()
+    .into_iter()
+    .filter(|message| {
+      message["type"] == "folder.restore" && message["requestId"] == REQUEST_ID
+    })
+    .collect();
+  assert_eq!(asked.len(), 2);
 }
 
 #[test]
@@ -1216,6 +1345,9 @@ mod stand_in {
     runs: HashMap<String, StandInRun>,
     /// Probes that wait for their process grant.
     probes: HashMap<String, Value>,
+    /// Folder restores asked once: the first ask is still "writing" and gets
+    /// no answer; the same request asked again is answered `restored`.
+    restores: HashSet<String>,
     current: Option<Connection>,
   }
 
@@ -1252,6 +1384,7 @@ mod stand_in {
       draining: false,
       runs: HashMap::new(),
       probes: HashMap::new(),
+      restores: HashSet::new(),
       current: None,
     }));
     let mut next_id = 0;
@@ -1598,6 +1731,17 @@ mod stand_in {
       "run.cancel" => {
         if held.runs.get(&run_id).is_some_and(|run| !run.finished) {
           emit(held, &run_id, finished(&run_id, "cancelled", None)).await;
+        }
+      }
+      "folder.restore" => {
+        let request_id = message["requestId"].as_str().unwrap_or_default().to_owned();
+        if !held.restores.insert(request_id.clone()) {
+          let restored = json!({
+            "type": "folder.restored",
+            "requestId": request_id,
+            "outcome": "restored",
+          });
+          write(held, &format!("{restored}\n")).await;
         }
       }
       "harness.probe" => {

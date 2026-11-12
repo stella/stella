@@ -1,0 +1,5 @@
+{
+  "metric": "cross-workspace-duplicate-export-names",
+  "delta": 7,
+  "reason": "The Outlook add-in's browser OAuth client (apps/outlook/src/lib/oauth) defines PKCE, authorization URL, metadata and token names that the published CLI's Node client and the API's MCP upstream client also define. Each runs on a different runtime and crypto source; a shared OAuth client package for the browser, mobile and CLI clients is a separate change."
+}

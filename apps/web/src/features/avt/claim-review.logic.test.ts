@@ -38,7 +38,7 @@ describe("predicted claim reviews", () => {
     );
     const afterOverride = predictClaimReview(
       afterStatus,
-      { kind: "override", state: "tension" },
+      { kind: "override", state: "tension", reason: "The diary hedges." },
       SECOND,
     );
 
@@ -57,11 +57,16 @@ describe("predicted claim reviews", () => {
   });
 
   const withdrawing: ClaimReviewEvent[] = [
-    { kind: "reopen" },
-    { kind: "record-conflict", resolution: { kind: "escalated" } },
+    { kind: "reopen", reason: "The date can be checked." },
+    {
+      kind: "record-conflict",
+      resolution: { kind: "escalated" },
+      reason: "Needs the originals.",
+    },
     {
       kind: "record-conflict",
       resolution: { kind: "governed", factEntityId: factId(5) },
+      reason: "The bank record governs.",
     },
   ];
 

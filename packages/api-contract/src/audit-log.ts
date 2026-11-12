@@ -38,6 +38,8 @@ export const AUDIT_RESOURCE_TYPE = {
   DATA_EXPORT: "data_export",
   CHAT_TOOL_EXECUTION: "chat_tool_execution",
   CHAT_TOOL_GRANT: "chat_tool_grant",
+  /** A standing approval for chat's browser actions on one website. */
+  CHAT_BROWSER_SITE_GRANT: "chat_browser_site_grant",
   CLAUSE: "clause",
   CLAUSE_CATEGORY: "clause_category",
   CLAUSE_TEMPLATE_LINK: "clause_template_link",

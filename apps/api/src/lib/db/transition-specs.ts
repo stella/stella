@@ -49,7 +49,10 @@ import type {
   ScopedTransitionDeclaration,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
-import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
+import {
+  DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+  DESKTOP_RUNNER_RUN_TRANSITIONS,
+} from "@/api/lib/desktop-runner/run-transitions";
 import { PROVIDER_WEBHOOK_RESULT_TRANSITIONS } from "@/api/lib/hosted-usage-provider/webhook-result-transitions";
 import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
 import {
@@ -480,6 +483,7 @@ export const TRANSITIONS = {
   corpusIndexProjectionStates: { unmanaged: UNMANAGED_REASONS.projection },
   correspondence: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   desktopEditSessions: DESKTOP_EDIT_SESSION_TRANSITIONS,
+  desktopRunnerFolderRestores: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
   desktopRunnerRuns: DESKTOP_RUNNER_RUN_TRANSITIONS,
   desktopTimeEntryBatches: DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE,
   documentProcessingRuns: { unmanaged: UNMANAGED_REASONS.workerRun },

@@ -69,6 +69,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.chat_tool_execution",
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]:
     "settings.organization.auditResourceKinds.chat_tool_grant",
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]:
+    "settings.organization.auditResourceKinds.chat_browser_site_grant",
   [AUDIT_RESOURCE_TYPE.CLAUSE]:
     "settings.organization.auditResourceKinds.clause",
   [AUDIT_RESOURCE_TYPE.CLAUSE_CATEGORY]:

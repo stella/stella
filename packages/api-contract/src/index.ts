@@ -24,6 +24,7 @@ export {
   CHAT_SKILL_DOCUMENT,
   SKILL_REF_HREF_PREFIX,
   SKILL_RESOURCE_PATH_PATTERN,
+  SKILL_SOURCE_UNREACHABLE_CODE,
 } from "./agent-skills";
 export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
 export { AI_ERROR_KINDS, AI_FAILURE_CODES, isAIFailureCode } from "./ai-errors";
@@ -367,7 +368,9 @@ export {
   CHAT_INPUT_REFUSAL_CODE,
   CHAT_MESSAGE_EDIT_ERROR_CODE,
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
+  CHAT_THREAD_NOT_FOUND_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
@@ -491,6 +494,7 @@ export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
   chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
   RESOURCE_MUTATION_ID_HEADER,
   parseResourceMutationId,

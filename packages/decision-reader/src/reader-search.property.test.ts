@@ -12,9 +12,11 @@ import { assertProperty } from "@stll/property-testing";
 
 import { textAnchorSegmentOwnsRange } from "./document-ast-text";
 import {
+  queryFindPhrase,
   queryFindTokens,
   queryMarkRanges,
   wordPrefixMatchEnd,
+  wordSpans,
 } from "./query-marks";
 import { createReaderSearchIndex, searchReaderIndex } from "./reader-search";
 import type { ReaderSearchMatchRange, SearchResults } from "./reader-search";
@@ -122,8 +124,65 @@ const queryArb = fc.oneof(
   textArb,
 );
 
-/** The scan the index replaced, over the index's own folded text. */
+/**
+ * The typed phrase found by sliding it over each piece's folded words: every
+ * word but the last equal to the typed one, the last a prefix, and a run that
+ * starts inside the run before it left to that one.
+ */
+const phraseScanResults = (
+  index: ReturnType<typeof createReaderSearchIndex>,
+  query: string,
+): SearchResults => {
+  const phrase = queryFindPhrase(query);
+  const rangesByPieceId: Record<string, ReaderSearchMatchRange[]> = {};
+  let matchCount = 0;
+  if (phrase.length < 2 || queryFindTokens(query).length === 0) {
+    return { matchCount, rangesByPieceId };
+  }
+  for (const piece of index.pieces) {
+    const { endMap, startMap, text } = piece.folded;
+    const words = wordSpans(text);
+    let position = 0;
+    while (position + phrase.length <= words.length) {
+      const window = words.slice(position, position + phrase.length);
+      const matches = window.every(({ end, start }, offset) => {
+        const word = text.slice(start, end);
+        const typed = phrase[offset] ?? "";
+        return offset === phrase.length - 1
+          ? word.startsWith(typed)
+          : word === typed;
+      });
+      const first = window.at(0);
+      const last = window.at(-1);
+      if (!matches || first === undefined || last === undefined) {
+        position += 1;
+        continue;
+      }
+      const start = startMap[first.start];
+      const end = endMap[last.end - 1];
+      if (start !== undefined && end !== undefined) {
+        const ranges = rangesByPieceId[piece.id] ?? [];
+        ranges.push({ end, matchIndex: matchCount, start, type: "search" });
+        rangesByPieceId[piece.id] = ranges;
+        matchCount += 1;
+      }
+      position += phrase.length;
+    }
+  }
+  return { matchCount, rangesByPieceId };
+};
+
+/** The phrase where the text uses it, else the word scan. */
 const scanResults = (
+  index: ReturnType<typeof createReaderSearchIndex>,
+  query: string,
+): SearchResults => {
+  const phrase = phraseScanResults(index, query);
+  return phrase.matchCount > 0 ? phrase : wordScanResults(index, query);
+};
+
+/** The word scan the index replaced, over the index's own folded text. */
+const wordScanResults = (
   index: ReturnType<typeof createReaderSearchIndex>,
   query: string,
 ): SearchResults => {
@@ -212,10 +271,13 @@ describe("indexed reader search", () => {
     assertProperty(
       "the reader's find marks exactly what a headnote mark marks",
       fc.property(piecesArb, queryArb, (pieces, query) => {
-        const { rangesByPieceId } = searchReaderIndex(
-          createReaderSearchIndex(pieces),
-          query,
-        );
+        const index = createReaderSearchIndex(pieces);
+        // A headnote marks words; the reader's find marks a phrase the text
+        // uses, which the property above pins.
+        if (phraseScanResults(index, query).matchCount > 0) {
+          return;
+        }
+        const { rangesByPieceId } = searchReaderIndex(index, query);
         const tokens = queryFindTokens(query);
         for (const piece of pieces) {
           expect(
@@ -238,5 +300,8 @@ describe("indexed reader search", () => {
     const scanned = scanResults(index, "abc");
     expect(scanned.matchCount).toBeGreaterThan(1);
     expect(searchReaderIndex(index, "abc")).toEqual(scanned);
+    const phrase = phraseScanResults(index, "abc abc");
+    expect(phrase.matchCount).toBeGreaterThan(0);
+    expect(searchReaderIndex(index, "abc abc")).toEqual(phrase);
   });
 });

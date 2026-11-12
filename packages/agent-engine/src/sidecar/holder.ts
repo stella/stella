@@ -6,6 +6,7 @@ import { Temporal } from "temporal-polyfill/full";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import { createDetached } from "@stll/errors";
 
+import type { ProtocolLog } from "../protocol-log";
 import { SidecarHost } from "./host";
 import {
   encodeSidecarMessage,
@@ -75,6 +76,8 @@ export type HolderOptions = {
   secret: string;
   /** One line in the holder's log. Never passed tokens, prompts or outputs. */
   log: (line: string) => void;
+  /** Where each harness process's protocol lines go, redacted. */
+  protocolLog: ProtocolLog;
   /** The harness's environment; `CODEX_HOME` and the like are set per run. */
   environment: Readonly<Record<string, string>>;
   idleExitMs: number;
@@ -157,6 +160,7 @@ export class Holder {
     this.host = new SidecarHost({
       send: (message) => this.fromHost(message),
       log: options.log,
+      protocolLog: options.protocolLog,
       environment: options.environment,
       processGrantTimeoutMs: options.processGrantTimeoutMs,
     });
@@ -354,6 +358,7 @@ export class Holder {
       case "run.interrupt":
       case "run.cancel":
       case "run.token":
+      case "folder.restore":
         this.host.handle(message);
         return;
       default:

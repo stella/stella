@@ -25,6 +25,7 @@ import {
   type FakeScenario,
 } from "../../scripts/fake-codex-app-server";
 import { bundledHarnessCompatibility } from "../harness/compatibility";
+import { PROTOCOL_LOG_OFF } from "../protocol-log";
 import {
   HOLDER_ENDPOINT_FILE,
   HOLDER_LOG_FILE,
@@ -155,7 +156,10 @@ const place = (): Place => {
 type HolderProcess = Place & { exited: Promise<number> };
 
 /** The holder as `main.ts`, the way the desktop starts it. */
-const spawnHolder = async (at: Place = place()): Promise<HolderProcess> => {
+const spawnHolder = async (
+  at: Place = place(),
+  environment: Readonly<Record<string, string>> = {},
+): Promise<HolderProcess> => {
   const child = Bun.spawn(
     [process.execPath, MAIN, "--dir", at.dir, "--endpoint", at.endpoint],
     {
@@ -166,6 +170,7 @@ const spawnHolder = async (at: Place = place()): Promise<HolderProcess> => {
         PATH: process.env["PATH"] ?? "",
         FAKE_HARNESS_LOG: at.fakeLog,
         OPENAI_API_KEY: "inherited-key",
+        ...environment,
       },
     },
   );
@@ -572,7 +577,7 @@ describe("harness holder over its socket", () => {
       outcome: {
         type: "ready",
         version: "0.166.0",
-        capabilities: ["approvals", "interrupt", "resume"],
+        capabilities: ["approvals", "interrupt", "resume", "image_input"],
         approvalModes: ["ask"],
         models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
       },
@@ -719,6 +724,113 @@ describe("harness holder over its socket", () => {
     expect(JSON.stringify(holder.received())).not.toContain(RUN_TOKEN);
   });
 
+  test("hands each harness the turn's attached image from its copy; a PDF reaches Claude only", async () => {
+    // A real 1x1 PNG and a one-page PDF, already copied by an earlier turn,
+    // so nothing is fetched: the link below is never read.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const pdf = Buffer.from(
+      "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n",
+      "latin1",
+    );
+    const image = "attachments/019a0000-0000-7000-8000-0000000000a1/plan.png";
+    const document =
+      "attachments/019a0000-0000-7000-8000-0000000000a2/smlouva.pdf";
+    const earlier =
+      "attachments/019a0000-0000-7000-8000-0000000000a3/earlier.png";
+    const holder = await spawnHolder();
+    const workspaceDir = path.join(holder.root, "workspace");
+    for (const [at, bytes] of [
+      [image, png],
+      [document, pdf],
+      [earlier, png],
+    ] as const) {
+      mkdirSync(path.join(workspaceDir, path.dirname(at)), {
+        recursive: true,
+      });
+      writeFileSync(path.join(workspaceDir, at), bytes);
+    }
+    const turn = {
+      attachments: [image, document, earlier].map((at) => ({
+        path: at,
+        url: "https://files.example.test/never-read",
+      })),
+      messages: [
+        { role: "user", content: `Earlier: ${earlier}` },
+        { role: "assistant", content: "Seen." },
+        {
+          role: "user",
+          content: [
+            { type: "text", content: "Compare the plan with the contract." },
+            { type: "text", content: `The plan is at ${image}.` },
+            { type: "text", content: `The contract is at ${document}.` },
+          ],
+        },
+      ],
+    };
+    const { client } = await desktop(holder);
+    const claudeRun = startRun(
+      client,
+      holder,
+      {
+        harness: "claude-code",
+        executable: fakeClaude(holder.root, "stella_tools"),
+        model: "sonnet",
+      },
+      turn,
+    );
+    expect(await client.waitFor(is("run.finished", claudeRun))).toMatchObject({
+      outcome: "completed",
+    });
+    const codexRun = runStart(client, holder, "stella_tools", turn);
+    expect(await client.waitFor(is("run.finished", codexRun))).toMatchObject({
+      outcome: "completed",
+    });
+
+    const userMessage = holder.received().find(({ type }) => type === "user");
+    expect(userMessage).toMatchObject({
+      message: {
+        content: [
+          {
+            type: "image",
+            source: { media_type: "image/png", data: png.toString("base64") },
+          },
+          {
+            type: "document",
+            source: {
+              media_type: "application/pdf",
+              data: pdf.toString("base64"),
+            },
+          },
+          {
+            type: "text",
+            text: expect.stringContaining(`The contract is at ${document}.`),
+          },
+        ],
+      },
+    });
+    const turnStart = holder
+      .received()
+      .find(({ method }) => method === "turn/start");
+    expect(turnStart?.params).toMatchObject({
+      input: [
+        {
+          type: "image",
+          url: `data:image/png;base64,${png.toString("base64")}`,
+        },
+        {
+          type: "text",
+          text: expect.stringContaining(`The contract is at ${document}.`),
+        },
+      ],
+    });
+    expect(holder.log()).toContain(
+      "an attached file stays a path only: not_accepted",
+    );
+  });
+
   test("a Claude Code run finishes as interrupted or cancelled", async () => {
     for (const [type, outcome] of [
       ["run.interrupt", "interrupted"],
@@ -803,6 +915,52 @@ describe("harness holder over its socket", () => {
     expect(await holder.exited).toBe(0);
     expect(holder.log()).not.toContain(RUN_TOKEN);
     expect(holder.log()).not.toContain(secret);
+  });
+
+  test("with the protocol log on, the holder log has each message's structure and none of its content", async () => {
+    const holder = await spawnHolder(place(), {
+      STELLA_AGENT_PROTOCOL_LOG: "redacted",
+    });
+    const { client } = await desktop(holder);
+    const codexRun = runStart(client, holder, "stella_tools");
+    await client.waitFor(is("run.finished", codexRun));
+    const claudeRun = claudeRunStart(client, holder, "stella_tools");
+    await client.waitFor(is("run.finished", claudeRun));
+    const secret = holder.secret();
+    client.send({ type: "shutdown" });
+    expect(await holder.exited).toBe(0);
+    const log = holder.log();
+    expect(log).toContain("the protocol log is on");
+    for (const line of [
+      /protocol sidecar connection=1 in type=run\.start runId=#[0-9a-f]{8} /u,
+      /protocol sidecar connection=1 out type=run\.finished /u,
+      /protocol codex pid=\d+ out method=turn\/start id=\d+ /u,
+      /protocol codex pid=\d+ in method=turn\/completed /u,
+      /protocol claude-code pid=\d+ out type=user /u,
+      /protocol claude-code pid=\d+ in type=result /u,
+    ]) {
+      expect(log).toMatch(line);
+    }
+    // What the member and the model wrote, and where the run's files are.
+    const written = [codexRun, claudeRun]
+      .flatMap((runId) => chunksOf(client, runId))
+      .flatMap((chunk) =>
+        ["delta", "content", "args", "result"].flatMap((key) => {
+          const value: unknown = chunk[key];
+          return typeof value === "string" && value.length >= 6 ? [value] : [];
+        }),
+      );
+    expect(written.length).toBeGreaterThan(0);
+    for (const content of [
+      "Find the lease decision.",
+      "Use the stella MCP server.",
+      RUN_TOKEN,
+      secret,
+      holder.root,
+      ...written,
+    ]) {
+      expect(log).not.toContain(content);
+    }
   });
 
   test("hands the harness the run's approval mode and the computer's package cache", async () => {
@@ -1218,6 +1376,7 @@ describe("harness holder over its socket", () => {
         return true;
       },
       log: () => {},
+      protocolLog: PROTOCOL_LOG_OFF,
       environment: {
         PATH: process.env["PATH"] ?? "",
         FAKE_HARNESS_LOG: path.join(root, "fake.log"),
@@ -1303,6 +1462,7 @@ describe("harness holder over its socket", () => {
           return true;
         },
         log: () => {},
+        protocolLog: PROTOCOL_LOG_OFF,
         environment: {
           PATH: process.env["PATH"] ?? "",
           FAKE_HARNESS_LOG: path.join(root, "fake.log"),
@@ -1488,6 +1648,7 @@ describe("holder limits and timers", () => {
       unackedRetentionMs: 60_000,
       processGrantTimeoutMs: 60_000,
       limits: { maxMessages: 1000, maxBytes: 1024 * 1024 },
+      protocolLog: { type: "set", setting: "off" },
       ...overrides,
     });
     const server = Result.isOk(started)

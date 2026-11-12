@@ -1,0 +1,26 @@
+{
+  "id": "copy-feedback-owner",
+  "rules": [
+    "copy-feedback-owner/copy-feedback-owner",
+    "copy-feedback-owner/no-raw-copy-listener"
+  ],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-17T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "copy-feedback-owner/copy-feedback-owner",
+    "--deny",
+    "copy-feedback-owner/no-raw-copy-listener",
+    "apps/web/src",
+    "packages/mcp-apps/src",
+    "packages/ui/src",
+    "packages/chat/src"
+  ]
+}

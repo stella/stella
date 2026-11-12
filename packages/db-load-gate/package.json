@@ -17,8 +17,8 @@
     "test": "bun test",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/db-load-gate",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/db-load-gate"
+    "lint": "cd ../.. && bun scripts/lint.ts packages/db-load-gate",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/db-load-gate"
   },
   "dependencies": {
     "@stll/concurrency": "workspace:*",

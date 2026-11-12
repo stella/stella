@@ -73,6 +73,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `chat.older-messages.list` | read | stella:chat | — | generic invoke → `stella capability chat older-messages-list` |
 | `chat.threads.delete` | write, destructive | stella:chat | — | generic invoke → `stella capability chat threads-delete` |
 | `chat.threads.list` | read | stella:chat | — | generic invoke → `stella capability chat threads-list` |
+| `chat.threads.pin-state.update` | write | stella:chat | — | generic invoke → `stella capability chat threads-pin-state-update` |
+| `chat.threads.read-state.update` | write | stella:chat | — | generic invoke → `stella capability chat threads-read-state-update` |
 | `chat.threads.rename` | write | stella:chat | — | generic invoke → `stella capability chat threads-rename` |
 | `chat.threads.update` | write | stella:chat | — | generic invoke → `stella capability chat threads-update` |
 
@@ -311,6 +313,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | --- | --- | --- | --- | --- |
 | `lists.columns.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists columns-create` |
 | `lists.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists create` |
+| `lists.fact-extractions.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists fact-extractions-create` |
 | `lists.generation-candidates.acceptance.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-acceptance-create` |
 | `lists.generation-candidates.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-create` |
 | `lists.generation-candidates.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-list` |
@@ -330,6 +333,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists list` |
 | `lists.sample-case.create` | write | stella:documents_write, stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sample-case-create` |
 | `lists.sections.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sections-create` |
+| `lists.source-documents.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists source-documents-list` |
+| `lists.source-documents.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists source-documents-update` |
 | `lists.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists update` |
 | `lists.verifications.claim-comments.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-create` |
 | `lists.verifications.claim-comments.delete` | write, destructive | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-delete` |
@@ -337,6 +342,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.verifications.claim-comments.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-update` |
 | `lists.verifications.claim-reviews.bulk.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-bulk-create` |
 | `lists.verifications.claim-reviews.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-create` |
+| `lists.verifications.claim-reviews.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-list` |
 | `lists.verifications.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-create` |
 | `lists.verifications.get` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-get` |
 | `lists.verifications.latest.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-latest-list` |
@@ -574,6 +580,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `skills.update` | write | stella:skills | — | generic invoke → `stella capability skills update` |
 | `skills.upload` | write | stella:skills | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. Use uploads.create then uploads.update instead: presign with purpose agent_skill, PUT the skill pack to the returned URL, then finalize |
 
+## soft-law
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `soft-law.get` | read | stella:read | FEATURE_PUBLIC_LAW | curated tool `read_guidance` |
+| `soft-law.search` | read | stella:search | FEATURE_PUBLIC_LAW | curated tool `search_guidance` |
+
 ## style-sets
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -774,10 +787,11 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 6 |
+| agent_autonomy_ceiling | 1 |
 | assistant_chat | 16 |
-| auth_plumbing | 38 |
+| auth_plumbing | 39 |
 | billing_ui | 1 |
-| chat_thread_ui | 21 |
+| chat_thread_ui | 26 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |
@@ -785,10 +799,10 @@ mechanics, and similar), not gaps in coverage.
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_device | 5 |
-| native_tool_ui | 8 |
+| native_tool_ui | 10 |
 | organization_export | 2 |
-| provider_secret | 34 |
-| public_indexing | 9 |
+| provider_secret | 37 |
+| public_indexing | 10 |
 | realtime_stream | 9 |
 | search_ui | 20 |
 | session_token_exchange | 21 |

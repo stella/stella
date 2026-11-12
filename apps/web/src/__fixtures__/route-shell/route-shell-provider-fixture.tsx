@@ -281,8 +281,11 @@ const installFixtureNetwork = () => {
     matterNumberingEnabled: true,
     practiceJurisdictions: [],
     promptCachingEnabled: true,
+    aiInstructions: "",
+    aiInstructionsMaxLength: 3000,
     managedAIResidency: "eu",
     memoryExtractionEnabled: false,
+    localRunMaxApprovalMode: "full_auto",
     timeMinimumUnitMinutes: 1,
     timeEditWindowDays: 30,
     timeLockedThroughMonth: null,
@@ -380,6 +383,7 @@ const installFixtureNetwork = () => {
           return Response.json({
             activeSkill: null,
             activeTurnId: null,
+            newestLocalTurn: null,
             attachedFiles: { fileCount: 0, files: [] },
             context: {
               estimatedTokens: 0,

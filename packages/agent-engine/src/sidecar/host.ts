@@ -1,10 +1,15 @@
+import { EventType } from "@tanstack/ai";
 import { panic, Result } from "better-result";
+import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
-import type { DESKTOP_RUNNER_RUN_OUTCOMES } from "@stll/api-contract/desktop-runner";
+import type {
+  DESKTOP_RUNNER_RUN_OUTCOMES,
+  DesktopRunnerCheckpointEvent,
+} from "@stll/api-contract/desktop-runner";
 import { createDetached } from "@stll/errors";
 
 import type {
@@ -39,9 +44,17 @@ import {
   type HarnessFailure,
   harnessSessionId,
 } from "../harness/events";
+import { readSkillFolderNetworkHosts } from "../harness/skill-network-hosts";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
+import type { ProtocolLog } from "../protocol-log";
 import { copyAttachments } from "./attachments";
+import {
+  captureCheckpoint,
+  checkpointChunk,
+  restoreCheckpoint,
+} from "./checkpoints";
+import { readInputFiles } from "./input-files";
 import { type McpProxy, startMcpProxy } from "./mcp-proxy";
 import {
   outputReportChunk,
@@ -51,11 +64,13 @@ import {
   snapshotOutputs,
 } from "./outputs";
 import type {
+  SidecarFolderRestore,
   SidecarHarnessLaunchSettings,
   SidecarHostMessage,
   SidecarHostOutput,
   SidecarProbeOutcome,
   SidecarRejection,
+  SidecarRestoreOutcome,
   SidecarRunStart,
 } from "./protocol";
 
@@ -83,7 +98,6 @@ const HARNESS_GRACE_MS = 5000;
  * catches a harness that stopped answering.
  */
 const HARNESS_REQUEST_TIMEOUT_MS = 30_000;
-const MAX_SUMMARY_CHARS = 4000;
 const MAX_PROBED_MODELS = 100;
 
 export type HarnessLaunch = {
@@ -103,6 +117,8 @@ export type SidecarHostOptions = {
   send: (message: SidecarHostOutput) => boolean;
   /** One line in the holder's log. Never passed tokens, prompts or outputs. */
   log: (line: string) => void;
+  /** Where each harness process's protocol lines go, redacted. */
+  protocolLog: ProtocolLog;
   /** The harness's environment; `CODEX_HOME` and the like are set per run. */
   environment: Readonly<Record<string, string>>;
   /**
@@ -139,6 +155,8 @@ const RUN_STOP = {
 type RunStop = (typeof RUN_STOP)[keyof typeof RUN_STOP];
 
 type HeldRun = {
+  /** The run's folder, resolved: no restore touches it while the run is held. */
+  readonly workspaceDir: string;
   turn: HarnessTurn | null;
   /** Set before the turn starts too: a turn that opens later stops at once. */
   stop: RunStop;
@@ -153,7 +171,15 @@ type HeldRun = {
   outputs: OutputSnapshot | null;
   /** Cut by a stop, so sharing a stopped run's files ends at once. */
   outputSharing: AbortController;
+  /** Whether the folder was saved before the harness started; `null` until then. */
+  checkpoint: DesktopRunnerCheckpointEvent | null;
 };
+
+/**
+ * Whether the run was asked to stop. A call, not a field read, so a check
+ * after an await is not narrowed away by an earlier one.
+ */
+const isStopped = (run: HeldRun) => run.stop !== RUN_STOP.none;
 
 type Config = { appVersion: string; apiOrigin: string; proxy: McpProxy };
 
@@ -171,6 +197,7 @@ const ADAPTERS = {
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
+      protocolLog: options.protocolLog,
       ...(options.onProcess === null ? {} : { onProcess: options.onProcess }),
       ...(launch.launch.clientName === null
         ? {}
@@ -193,6 +220,7 @@ const ADAPTERS = {
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
+      protocolLog: options.protocolLog,
       platform: process.platform,
     });
   },
@@ -205,6 +233,7 @@ const ADAPTERS = {
 type AdapterOptions = {
   environment: Readonly<Record<string, string>>;
   onBackgroundError: (error: unknown, context: string) => void;
+  protocolLog: ProtocolLog;
   /** Waits for the desktop's grant of a new harness process; `null` without one. */
   onProcess: ((pid: number) => Promise<boolean>) | null;
 };
@@ -315,6 +344,15 @@ export class SidecarHost {
   private readonly finished = new Set<Promise<void>>();
   /** Harness processes waiting for the desktop's grant, by run or probe id. */
   private readonly grants = new Map<string, (granted: boolean) => void>();
+  /**
+   * Run folders being restored, resolved, with the run whose checkpoint each
+   * goes back to and how it ends: no run starts in one meanwhile, and the
+   * same restore asked again waits for that one.
+   */
+  private readonly restoring = new Map<
+    string,
+    { runId: string; ended: Promise<SidecarRestoreOutcome> }
+  >();
   private stopping = false;
   private readonly detached: ReturnType<typeof createDetached>;
 
@@ -400,6 +438,9 @@ export class SidecarHost {
       case "harness.process_granted":
         // A grant nobody waits for answers a report sent again on resume.
         this.grants.get(message.id)?.(true);
+        return;
+      case "folder.restore":
+        this.track(this.restoreFolder(message));
         return;
       case "run.token":
         this.withRun(message, () => {
@@ -509,6 +550,7 @@ export class SidecarHost {
           onBackgroundError: (_error, context) => {
             this.options.log(`harness background work failed: ${context}`);
           },
+          protocolLog: this.options.protocolLog,
           onProcess: launch.launch.processGrant
             ? async (pid) => this.awaitGrant(id, pid)
             : null,
@@ -569,6 +611,7 @@ export class SidecarHost {
       return;
     }
     const run: HeldRun = {
+      workspaceDir: path.resolve(message.workspaceDir),
       turn: null,
       // A run that starts while the host stops is cancelled like the held ones.
       stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
@@ -576,6 +619,7 @@ export class SidecarHost {
       requests: new Map(),
       outputs: null,
       outputSharing: new AbortController(),
+      checkpoint: null,
     };
     this.runs.set(message.runId, run);
     this.track(
@@ -584,6 +628,57 @@ export class SidecarHost {
         this.runs.delete(message.runId);
       }),
     );
+  }
+
+  /**
+   * Put a run's folder back as its checkpoint saved it, unless a run uses the
+   * folder or a restore to another run's checkpoint does. Both are checked
+   * and the folder claimed before the first await, so a `run.start` handled
+   * after this one finds the folder taken. The same restore asked again while
+   * it runs, as after the desktop's connection dropped, is answered when that
+   * one ends; asked after, the run is already undone and answers `restored`.
+   * Tracked: the holder does not exit halfway through.
+   */
+  private async restoreFolder(message: SidecarFolderRestore) {
+    const workspaceDir = path.resolve(message.workspaceDir);
+    const answer = (outcome: SidecarRestoreOutcome) => {
+      this.options.log(`a folder restore ended: ${outcome}`);
+      this.options.send({
+        type: "folder.restored",
+        requestId: message.requestId,
+        outcome,
+      });
+    };
+    const going = this.restoring.get(workspaceDir);
+    if (going?.runId === message.runId) {
+      answer(await going.ended);
+      return;
+    }
+    const busy =
+      this.stopping ||
+      going !== undefined ||
+      [...this.runs.values()].some((run) => run.workspaceDir === workspaceDir);
+    if (busy) {
+      answer("folder_busy");
+      return;
+    }
+    const ended = (async () => {
+      const restored = await restoreCheckpoint({
+        workspaceDir,
+        runId: message.runId,
+        log: this.options.log,
+      });
+      if (restored.detail !== null) {
+        this.options.log(`a folder restore: ${restored.detail}`);
+      }
+      return restored.outcome;
+    })();
+    this.restoring.set(workspaceDir, { runId: message.runId, ended });
+    try {
+      answer(await ended);
+    } finally {
+      this.restoring.delete(workspaceDir);
+    }
   }
 
   private stop(run: HeldRun, reason: RunStop) {
@@ -630,6 +725,15 @@ export class SidecarHost {
     config: Config,
     run: HeldRun,
   ): Promise<Result<HarnessTurn, HarnessFailure>> {
+    if (this.restoring.has(run.workspaceDir)) {
+      this.options.log("refused a run whose folder is being restored");
+      return Result.err({
+        type: "harness_exited",
+        message: "The chat's folder is being restored on this computer.",
+        exitCode: null,
+        signal: null,
+      });
+    }
     // The wire checks each message's role only, as the runner socket does;
     // the turn reads more, so the rest is checked before anything starts.
     const transcript = v.safeParse(harnessTranscriptSchema, message.messages);
@@ -689,21 +793,67 @@ export class SidecarHost {
         signal: null,
       });
     }
+    // After the copies and before the harness: the folder as the member left
+    // it, attachments included, so the turn's changes can be undone.
+    run.checkpoint = await captureCheckpoint({
+      workspaceDir: run.workspaceDir,
+      runId: message.runId,
+      memberFiles: copied.value,
+      protectedPaths: [
+        message.configDir,
+        message.cacheDir,
+        ...message.skillFolders.map((folder) => folder.path),
+      ],
+      signal: run.stopCopying.signal,
+      log: this.options.log,
+    });
+    if (run.checkpoint.status === "unavailable") {
+      this.options.log(
+        `a run's folder was not saved: ${run.checkpoint.reason}`,
+      );
+    }
+    // The capture can take a while: a stop during it ends the run here.
+    if (isStopped(run)) {
+      return Result.err({
+        type: "harness_exited",
+        message: "The run was stopped before it started.",
+        exitCode: null,
+        signal: null,
+      });
+    }
     // Read after the copies and before the harness: what is there now was not
     // written by this turn.
     run.outputs = await snapshotOutputs(message.workspaceDir);
+    // From the copies just made: a file is never fetched twice.
+    const input = await readInputFiles({
+      attachments: message.attachments,
+      workspaceDir: message.workspaceDir,
+      request: transcript.output.at(-1),
+      accepts: adapter.value.inputFileTypes,
+    });
+    for (const reason of input.skipped) {
+      this.options.log(`an attached file stays a path only: ${reason}`);
+    }
+    const declared = await readSkillFolderNetworkHosts(message.skillFolders);
+    for (const skill of declared.unreadable) {
+      this.options.log(
+        `a skill's network hosts could not be read and add none: ${skill}`,
+      );
+    }
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
       workspaceDir: message.workspaceDir,
       cacheDir: message.cacheDir,
       skillFolders: message.skillFolders,
+      networkHosts: declared.hosts,
       toolPath: message.toolPath,
       model: message.model,
       instructions: message.instructions,
       policy: message.policy,
       mcp: binding.value,
       transcript: transcript.output,
+      inputFiles: input.files,
       continuation:
         message.harnessSessionId === null
           ? { type: "fresh" }
@@ -816,10 +966,7 @@ export class SidecarHost {
               runId,
               requestId,
               kind: event.request.kind,
-              summary: approvalMessage(event.request).slice(
-                0,
-                MAX_SUMMARY_CHARS,
-              ),
+              summary: approvalMessage(event.request),
             });
             break;
           }
@@ -877,6 +1024,7 @@ export class SidecarHost {
       model: message.model,
       runId,
       threadId: message.threadId,
+      workspaceDir: message.workspaceDir,
       generateId: () => crypto.randomUUID(),
       now: () => Temporal.Now.instant().epochMilliseconds,
     });
@@ -892,6 +1040,16 @@ export class SidecarHost {
     });
     for await (const chunk of chunks) {
       coalescer.push(chunk);
+      // Once, right after the run's start: whether its changes can be undone.
+      if (chunk.type === EventType.RUN_STARTED && run.checkpoint !== null) {
+        coalescer.push(
+          checkpointChunk(
+            run.checkpoint,
+            Temporal.Now.instant().epochMilliseconds,
+          ),
+        );
+        run.checkpoint = null;
+      }
     }
     coalescer.flush();
     await run.turn?.dispose();

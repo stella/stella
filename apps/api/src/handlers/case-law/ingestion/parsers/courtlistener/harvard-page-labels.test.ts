@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { load } from "@stll/html";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
@@ -46,7 +45,7 @@ describe("removed page labels preserve source word boundaries", () => {
         if (parsed.status !== "parsed") {
           return;
         }
-        expect(load(parsed.text.validationHtml)("p").text()).toBe(
+        expect(parsed.text.validationParagraphs.join("")).toBe(
           left + separator + right,
         );
         const allBlocks = parsed.text.units.flatMap(({ blocks }) => [
@@ -62,7 +61,13 @@ describe("removed page labels preserve source word boundaries", () => {
           `${left}${separator}${right}`.replace(/\s+/gu, " ").trim(),
         );
         expect(
-          validateAst(parsed.text.validationHtml, allBlocks).stats.missingWords,
+          validateAst(
+            {
+              type: "paragraphs",
+              paragraphs: parsed.text.validationParagraphs,
+            },
+            allBlocks,
+          ).stats.missingWords,
         ).toEqual([]);
         expect(parsed.text.counts.paginationCharacters).toBe(
           label.replace(/\s/gu, "").length,
@@ -100,7 +105,7 @@ describe("removed page labels preserve source word boundaries", () => {
           if (parsed.status !== "parsed") {
             return;
           }
-          const sourceText = load(parsed.text.validationHtml)("p").text();
+          const sourceText = parsed.text.validationParagraphs.join("");
           const astText = parsed.text.units
             .flatMap(({ blocks }) =>
               blocks.map((block) => {
@@ -157,7 +162,10 @@ describe("removed page labels preserve source word boundaries", () => {
       return;
     }
     const allBlocks = parsed.text.units.flatMap(({ blocks }) => [...blocks]);
-    const validation = validateAst(parsed.text.validationHtml, allBlocks);
+    const validation = validateAst(
+      { type: "paragraphs", paragraphs: parsed.text.validationParagraphs },
+      allBlocks,
+    );
     expect(validation.ok).toBe(true);
     expect(validation.stats.missingWords).toEqual([]);
 
@@ -171,7 +179,10 @@ describe("removed page labels preserve source word boundaries", () => {
       },
     ] satisfies Block[];
     expect(conservesText(words.join(" "), [])).toBe(false);
-    const loss = validateAst(parsed.text.validationHtml, missing);
+    const loss = validateAst(
+      { type: "paragraphs", paragraphs: parsed.text.validationParagraphs },
+      missing,
+    );
     expect(loss.ok).toBe(false);
     expect(loss.issues.map(({ code }) => code)).toContain("CONTENT_LOSS");
     expect(loss.issues.map(({ code }) => code)).toContain("MISSING_WORDS");

@@ -50,6 +50,10 @@ export const brandPersistedSavedTimeNarrativeId = (
   id: string,
 ): SafeId<"savedTimeNarrative"> => toSafeId<"savedTimeNarrative">(id);
 
+export const brandPersistedSoftLawDocumentId = (
+  id: string,
+): SafeId<"softLawDocument"> => toSafeId<"softLawDocument">(id);
+
 export const brandPersistedLegalReaderAnswerId = (
   id: string,
 ): SafeId<"legalReaderAnswer"> => toSafeId<"legalReaderAnswer">(id);
@@ -243,6 +247,11 @@ export const brandPersistedLegalReaderAnnotationId = (
   legalReaderAnnotationId: string,
 ): SafeId<"legalReaderAnnotation"> =>
   toSafeId<"legalReaderAnnotation">(legalReaderAnnotationId);
+
+export const brandPersistedLegalListClaimReviewEventId = (
+  legalListClaimReviewEventId: string,
+): SafeId<"legalListClaimReviewEvent"> =>
+  toSafeId<"legalListClaimReviewEvent">(legalListClaimReviewEventId);
 
 export const brandPersistedCaseLawCitationId = (
   caseLawCitationId: string,

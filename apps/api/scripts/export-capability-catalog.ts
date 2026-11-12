@@ -197,6 +197,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // A reader's highlights and comments: personal knowledge, like clauses.
   "legal-reader": "stella:knowledge_write",
   legislation: "stella:read",
+  "soft-law": "stella:read",
   lists: "stella:matters_write",
   // Assistant memory is replayed into future chat prompts, so it shares the
   // assistant's own consent rather than a workspace write.
@@ -308,6 +309,8 @@ const SCOPE_STRICTNESS: Record<string, number> = {
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  // The same consent its MCP tool demands.
+  "soft-law.search": "stella:search",
   "legislation.matter-links.batch.create": "stella:matters_write",
   "legislation.matter-links.create": "stella:matters_write",
   "legislation.matter-links.delete": "stella:matters_write",
@@ -469,6 +472,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   invoices: "FEATURE_TIME_BILLING",
   "client-invoices": "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
+  "soft-law": "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
   memories: "FEATURE_AI_MEMORY",
   "number-series": "FEATURE_TIME_BILLING",

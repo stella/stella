@@ -1,5 +1,41 @@
 # @stll/ui
 
+## 0.69.0
+
+### Minor Changes
+
+- [#8264](https://github.com/stella/stella/pull/8264) [`a168fa2`](https://github.com/stella/stella/commit/a168fa2b2fcd5ac1f63b0d47f4f4ecfe9f3dc0e7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendar` blocks take a `tooltip` of `{ type: "text", content }` or `{ type: "actions", content }`. An actions tooltip opens as a popover on hover, focus or press, so its buttons can be reached by pointer and keyboard, and stays open after a press inside it until it is dismissed; keys and presses inside it no longer start a range selection.
+
+- [#8267](https://github.com/stella/stella/pull/8267) [`7f4b66d`](https://github.com/stella/stella/commit/7f4b66d3518d62c6da22fbfb89517ef8c14ec40b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendar` paints a `topic` tone from a separate low-chroma set (`--topic-*` tokens), so time no matter claimed never shares a matter's colour.
+
+- [#8275](https://github.com/stella/stella/pull/8275) [`e7d8040`](https://github.com/stella/stella/commit/e7d80400c14af980d49c15ca0555e21bc8e78534) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `RunStateMark` (`@stll/ui/run-state-mark`) draws where a run of work stands: a bold warning `!` while it waits on the reader, `StatusMark`'s turning ring while it works. It has a React Native renderer under the `react-native` export condition.
+
+### Patch Changes
+
+- [#8265](https://github.com/stella/stella/pull/8265) [`c98d90f`](https://github.com/stella/stella/commit/c98d90f08913deef444adcc8e821f16ecd9ce7f6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A day calendar block too short for two lines ends its title in an ellipsis; its caption gives way first. Each block is a size container, so a title can adapt to the block's width with a container query.
+
+- [#8282](https://github.com/stella/stella/pull/8282) [`fdc86ae`](https://github.com/stella/stella/commit/fdc86ae113bd086fda0d174b200f59dce7abeaa1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ReviewDecisionActions` takes `emphasis="quiet"` for a list of items whose one accent is a batch action. `ListItemTitle` gains a `statement` variant (a sentence clamped to two lines) and `ListItemDescription` a `paragraph` variant (two lines).
+
+## 0.68.0
+
+### Minor Changes
+
+- [#7423](https://github.com/stella/stella/pull/7423) [`5afd089`](https://github.com/stella/stella/commit/5afd0899278f2dd459ad8789b7d8b94d6e1de2c5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Accordion` now keeps closed panels as `hidden="until-found"` by default, so find-in-page reaches their content (pass `hiddenUntilFound={false}` to unmount them), and `AccordionTrigger` gains a `trailing` slot for status text before its chevron.
+
+- [#7450](https://github.com/stella/stella/pull/7450) [`faad54b`](https://github.com/stella/stella/commit/faad54bc23ee324f40fbcffa36094197fd2a0b1d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Button gains `variant="plain"` (a box-less click target whose look is its content, keeping the disabled disposition, tooltip and focus ring, with `shape` for the ring's outline), `variant="muted-destructive"`, `size="inline"` (an action inside a line of text; an underlined link when no variant is given), `size="icon-2xs"`, a `selected` prop with a selected treatment distinct from hover in every variant, and `focusRing="inside"` for targets inside clipping containers. Hover no longer paints a selected button. Accordion gains `size="sm"` and `AccordionTrigger variant="muted"`, Label gains `variant="choice"` and `"choice-card"`, and DetailsGrid gains `variant="list"` and `orientation`. Label also gains `variant="muted"`; Form takes `layout` (`stack` | `inline`) and `density` (`default` | `snug` | `compact`); Input and Textarea take `inline` (one shared borderless-field class), Textarea takes `fieldSizing="fixed"`; NumberInput takes `suffix` and reads as a spin button with its bounds. DESIGN.md lists one name per concept.
+
+### Patch Changes
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependencies: `@stll/time` 0.4.2, `temporal-polyfill` 1.0.6, `lucide-react` 1.65.0, Tiptap 3.32.1 and the MCP client 2.4.0.
+
+- [#7987](https://github.com/stella/stella/pull/7987) [`26a454c`](https://github.com/stella/stella/commit/26a454c7de75da7fabf3ac4c7746e68f09bdb1a1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `InputGroupAddon` no longer focuses its input when a press lands inside a menu or popover opened from the addon.
+
+- [#6940](https://github.com/stella/stella/pull/6940) [`704ca22`](https://github.com/stella/stella/commit/704ca22912cd096ae056e181286e4a7aefc03064) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Corner radii name a scale step: bare `rounded` is now `rounded-sm`, and the checkbox, segmented toggle and input-group keycap use scale steps instead of pixel radii. `--radius` is 0.5rem. Light text is neutral-900, dark muted text neutral-400, and sidebar text is stronger in both themes.
+
+  `@stll/workspace-ui`: `./field-value#getIntClassName` returns the kanban class string with `rounded-sm` in place of `rounded`, so its literal return type changes.
+
+- [#7194](https://github.com/stella/stella/pull/7194) [`e06b815`](https://github.com/stella/stella/commit/e06b81538abe018cd8015a5ba2732e84981ff9a2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - View toolbars never grow past their container on a small screen, so controls past the edge are scrolled to rather than clipped. Sortable table heads stay inside the table's edge.
+
 ## 0.67.0
 
 ### Minor Changes
