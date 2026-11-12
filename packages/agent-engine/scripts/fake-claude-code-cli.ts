@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { browseAsAgent, claudeMcpEndpoints } from "./fake-browser";
 import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
@@ -39,7 +40,12 @@ type FakeStep =
   | { cancelLast: true }
   | { raw: string }
   | { sleep: number }
-  | { exit: number };
+  | { exit: number }
+  /**
+   * Browse the fixture library through the browser and stella MCP servers
+   * `mcp_set_servers` registered, and report each call and the answer.
+   */
+  | { browse: true };
 
 /** A scenario that starts differently when the client resumes a session. */
 type FakeScenario =
@@ -47,6 +53,8 @@ type FakeScenario =
   | { resume: readonly FakeStep[]; fresh: readonly FakeStep[] };
 
 export const FAKE_CLAUDE_VERSION = "2.1.309";
+/** The server name the holder registers the browser tools under. */
+const FAKE_BROWSER_SERVER = "stella_browser";
 export const FAKE_RESUMED_SESSION_ID = "4f1d2c3b-5a6e-4b7c-8d9e-0f1a2b3c4d5e";
 
 const SUBSCRIPTION = {
@@ -331,6 +339,8 @@ const devServer: FakeStep[] = [
 ];
 
 const FAKE_SCENARIOS = {
+  /** The local browser canary: a search, a result, a sign-in, a citation. */
+  browse: [...freshTurn(), { browse: true }, result()],
   /**
    * A turn that leaves a dev server running in the background; the chat's
    * next user message continues in this process, and the server exits
@@ -1180,6 +1190,7 @@ const run = async (
   });
 
   let cliRequestId = 0;
+  let registeredServers: unknown = undefined;
   for (const step of steps) {
     if ("expect" in step) {
       const message = await take("requests");
@@ -1189,6 +1200,9 @@ const run = async (
       if (message.request?.subtype !== step.expect) {
         log({ unexpected: message.request?.subtype, wanted: step.expect });
         process.exit(97);
+      }
+      if (step.expect === "mcp_set_servers") {
+        registeredServers = message.request["servers"];
       }
       write({
         type: "control_response",
@@ -1228,6 +1242,61 @@ const run = async (
       process.stdout.write(`${step.raw}\n`);
     } else if ("sleep" in step) {
       await Bun.sleep(step.sleep);
+    } else if ("browse" in step) {
+      const browsed = await browseAsAgent({
+        browserServer: FAKE_BROWSER_SERVER,
+        endpoints: claudeMcpEndpoints(registeredServers),
+        stellaServer: FAKE_STELLA_SERVER,
+      });
+      for (const call of browsed.steps) {
+        write({
+          type: "assistant",
+          message: {
+            id: `msg-${call.id}`,
+            role: "assistant",
+            content: [
+              {
+                type: "tool_use",
+                id: call.id,
+                name: `mcp__${call.server}__${call.tool}`,
+                input: call.arguments,
+              },
+            ],
+            stop_reason: null,
+          },
+          parent_tool_use_id: null,
+          session_id: "s",
+          uuid: `msg-${call.id}-uuid`,
+        });
+        write({
+          type: "user",
+          message: {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: call.id,
+                content: [{ type: "text", text: call.text }],
+                is_error: call.isError,
+              },
+            ],
+          },
+          parent_tool_use_id: null,
+          session_id: "s",
+        });
+      }
+      write({
+        type: "assistant",
+        message: {
+          id: "msg-browse-answer",
+          role: "assistant",
+          content: [{ type: "text", text: browsed.answer }],
+          stop_reason: null,
+        },
+        parent_tool_use_id: null,
+        session_id: "s",
+        uuid: "msg-browse-answer-uuid",
+      });
     } else {
       process.exit(step.exit);
     }
