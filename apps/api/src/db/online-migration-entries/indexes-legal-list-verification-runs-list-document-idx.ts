@@ -2,7 +2,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 
 export default {
   id: "indexes-legal-list-verification-runs-list-document-idx",
-  revision: 1440,
+  revision: 1442,
   type: "indexes",
   values: [
     {
