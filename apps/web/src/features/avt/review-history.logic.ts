@@ -67,6 +67,9 @@ const ACTION_KEYS = {
   governed: "avt.history.actions.governed",
   escalated: "avt.history.actions.escalated",
   conflictReopened: "avt.history.actions.conflictReopened",
+  factLinked: "avt.history.actions.factLinked",
+  factUnlinked: "avt.history.actions.factUnlinked",
+  rechecked: "avt.history.actions.rechecked",
 } as const satisfies Record<string, TranslationKey>;
 
 type HistoryActionKey = (typeof ACTION_KEYS)[keyof typeof ACTION_KEYS];
@@ -120,6 +123,14 @@ export const historyActionKey = ({
           return panic(`Unhandled resolution: ${String(resolution)}`);
         }
       }
+    }
+    case "fact-link": {
+      return action.change === "link"
+        ? ACTION_KEYS.factLinked
+        : ACTION_KEYS.factUnlinked;
+    }
+    case "recheck": {
+      return ACTION_KEYS.rechecked;
     }
     default: {
       action satisfies never;

@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "The verdict is clean, but a contributing fact's interpretation is contested; worth your eyes before sign-off.",
       "contradicted": "The record departs from this claim. A human call is needed before this verdict stands.",
-      "nocover": "No anchor fact addresses this claim, so there's nothing to confirm it against. Sign-off is optional.",
+      "nocover": "No fact on the list covers this yet.",
       "notverifiable": "Set aside as not verifiable; sign-off is optional. Re-open below if it's actually checkable.",
       "recordconflict": "Two exhibits in the record disagree. Resolve which governs above, or flag the evidence team; the tool won't pick for you.",
       "restsOnHeld": "A fact this verdict rests on is held for review; confirm the verdict still stands without it, or re-check the claim once the fact is settled.",
@@ -381,6 +381,30 @@
         "label": "Unsourced"
       }
     },
+    "gap": {
+      "addFact": "Add fact from a document",
+      "addFactFailed": "The fact could not be added",
+      "factOffList": "A fact no longer on the list",
+      "linkFact": "Link a fact",
+      "linkFailed": "The fact could not be linked",
+      "linked": "Linked facts",
+      "linkedMark": "Linked",
+      "linksChanged": "Links changed since the last check.",
+      "noFacts": "No fact on the list matches.",
+      "recheck": "Re-check",
+      "recheckFailed": "The claim could not be checked again",
+      "searchFacts": "Search the list's facts",
+      "sheet": {
+        "passage": "Passage",
+        "passageHint": "The words in the document that establish the fact.",
+        "statementRequired": "Write the fact.",
+        "statementTooLong": "A fact holds at most {limit} characters.",
+        "submit": "Add and re-check",
+        "title": "Add fact from a document"
+      },
+      "showNextSteps": "Show next steps",
+      "unlink": "Unlink {fact}"
+    },
     "guidance": {
       "escalate": "Escalate",
       "manualJudgement": "Manual judgement",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Accepted as routine",
         "conflictReopened": "Withdrew the conflict's resolution",
         "escalated": "Flagged for the evidence team",
+        "factLinked": "Linked a fact",
+        "factUnlinked": "Unlinked a fact",
         "governed": "Chose the governing record",
         "noteCleared": "Cleared the note",
         "noteSaved": "Saved a note",
         "overridden": "Overrode the verdict",
         "overrideWithdrawn": "Withdrew the override",
+        "rechecked": "Re-checked the claim",
         "reopened": "Re-opened as a checkable claim",
         "statusCleared": "Cleared the review status",
         "statusDisputed": "Marked disputed",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Former member",
       "kinds": {
+        "factLink": "Fact links",
         "override": "Verdict overrides",
+        "recheck": "Re-checks",
         "recordConflict": "Record conflict resolutions",
         "reopen": "Re-openings",
         "status": "Status changes"
@@ -461,6 +490,11 @@
       "unresolveConflict": "Why withdraw this resolution?",
       "withdrawOverride": "Why return to the tool's verdict?"
     },
+    "recheck": {
+      "currentVerdict": "The verdict after the re-check",
+      "runVerdict": "The run's verdict",
+      "summary": "Re-checked {checkedAt} against {count, plural, one {# fact} other {# facts}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Disputed} needsEvidence {Needs evidence} other {{origin, select, bulk {Accepted as routine} other {Reviewed}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "Not saved",
       "failedTitle": "Your change was not saved"
     },
-    "sourceMediumTooltip": "Source medium: a neutral descriptor. It does not lower confidence on its own.",
     "states": {
       "contradicted": {
         "chip": "Contradicted",
@@ -6779,6 +6812,7 @@
     "deletedItem": "Deleted: {name}",
     "deletingWorkspace": "Deleting matter",
     "documentSwitcher": {
+      "download": "Download this file",
       "searchPlaceholder": "Find a document…",
       "trigger": "Switch document"
     },

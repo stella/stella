@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "El resultado es claro, pero se cuestiona la interpretación de un hecho relacionado; conviene revisarlo antes de aprobar.",
       "contradicted": "El registro difiere de esta afirmación. Hace falta una decisión humana antes de dar por válido el resultado.",
-      "nocover": "Ningún hecho de referencia aborda esta afirmación, por lo que no hay nada con que contrastarla. La aprobación es opcional.",
+      "nocover": "Ningún hecho de la lista cubre todavía esta afirmación.",
       "notverifiable": "Reservada como no verificable; la aprobación es opcional. Reábrala abajo si realmente puede comprobarse.",
       "recordconflict": "Dos documentos del registro discrepan. Resuelva arriba cuál prevalece o avise al equipo de pruebas; la herramienta no decidirá por usted.",
       "restsOnHeld": "Un hecho en el que se basa este resultado está retenido para revisión; confirme que el resultado se sostiene sin él o vuelva a verificar la afirmación cuando el hecho esté resuelto.",
@@ -381,6 +381,30 @@
         "label": "Sin fuente"
       }
     },
+    "gap": {
+      "addFact": "Añadir un hecho desde un documento",
+      "addFactFailed": "No se pudo añadir el hecho",
+      "factOffList": "Un hecho que ya no está en la lista",
+      "linkFact": "Vincular un hecho",
+      "linkFailed": "No se pudo vincular el hecho",
+      "linked": "Hechos vinculados",
+      "linkedMark": "Vinculado",
+      "linksChanged": "Los vínculos cambiaron desde la última comprobación.",
+      "noFacts": "Ningún hecho de la lista coincide.",
+      "recheck": "Volver a comprobar",
+      "recheckFailed": "No se pudo volver a comprobar la afirmación",
+      "searchFacts": "Buscar en los hechos de la lista",
+      "sheet": {
+        "passage": "Pasaje",
+        "passageHint": "Las palabras del documento que acreditan el hecho.",
+        "statementRequired": "Redacte el hecho.",
+        "statementTooLong": "Un hecho admite como máximo {limit} caracteres.",
+        "submit": "Añadir y volver a comprobar",
+        "title": "Añadir un hecho desde un documento"
+      },
+      "showNextSteps": "Mostrar los pasos siguientes",
+      "unlink": "Desvincular {fact}"
+    },
     "guidance": {
       "escalate": "Remitir",
       "manualJudgement": "Valoración manual",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Aceptada como rutinaria",
         "conflictReopened": "Resolución del conflicto retirada",
         "escalated": "Marcada para el equipo de pruebas",
+        "factLinked": "Hecho vinculado",
+        "factUnlinked": "Hecho desvinculado",
         "governed": "Registro prevalente elegido",
         "noteCleared": "Nota eliminada",
         "noteSaved": "Nota guardada",
         "overridden": "Resultado cambiado",
         "overrideWithdrawn": "Cambio de resultado retirado",
+        "rechecked": "Afirmación comprobada de nuevo",
         "reopened": "Reabierta como afirmación comprobable",
         "statusCleared": "Estado de revisión retirado",
         "statusDisputed": "Marcada como impugnada",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Antiguo miembro",
       "kinds": {
+        "factLink": "Vinculaciones de hechos",
         "override": "Cambios de resultado",
+        "recheck": "Nuevas comprobaciones",
         "recordConflict": "Resoluciones de conflictos",
         "reopen": "Reaperturas",
         "status": "Cambios de estado"
@@ -461,6 +490,11 @@
       "unresolveConflict": "¿Por qué retirar esta resolución?",
       "withdrawOverride": "¿Por qué volver al resultado de la herramienta?"
     },
+    "recheck": {
+      "currentVerdict": "Resultado tras la nueva comprobación",
+      "runVerdict": "Resultado de la ejecución",
+      "summary": "Comprobada de nuevo el {checkedAt} con {count, plural, one {# hecho} other {# hechos} many {# hechos}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Impugnada} needsEvidence {Faltan pruebas} other {{origin, select, bulk {Aceptada como rutinaria} other {Revisada}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "No guardado",
       "failedTitle": "No se guardó su cambio"
     },
-    "sourceMediumTooltip": "Formato de la fuente: descriptor neutro. Por sí solo no reduce la confianza.",
     "states": {
       "contradicted": {
         "chip": "Contradicha",
@@ -6779,6 +6812,7 @@
     "deletedItem": "Eliminado: {name}",
     "deletingWorkspace": "Eliminando asunto",
     "documentSwitcher": {
+      "download": "Descargar este archivo",
       "searchPlaceholder": "Buscar un documento…",
       "trigger": "Cambiar de documento"
     },

@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Slēdziens ir skaidrs, taču viena saistītā fakta interpretācija ir apstrīdēta; pirms apstiprināšanas pārskatiet to.",
       "contradicted": "Reģistrs neatbilst šim apgalvojumam. Pirms slēdziena apstiprināšanas tas jāizvērtē cilvēkam.",
-      "nocover": "Neviens enkurfakts neattiecas uz šo apgalvojumu, tāpēc nav nekā, pret ko to pārbaudīt. Apstiprināšana nav obligāta.",
+      "nocover": "Neviens saraksta fakts vēl neattiecas uz šo apgalvojumu.",
       "notverifiable": "Atlikts kā nepārbaudāms; apstiprināšana nav obligāta. Ja apgalvojumu patiesībā var pārbaudīt, atveriet to vēlreiz tālāk.",
       "recordconflict": "Divi pierādījumi reģistrā ir pretrunā. Iepriekš izlemiet, kurš ir noteicošais, vai nododiet jautājumu pierādījumu komandai; rīks neizvēlēsies jūsu vietā.",
       "restsOnHeld": "Fakts, uz kuru balstās šis slēdziens, ir aizturēts pārskatīšanai; apstipriniet, ka slēdziens ir spēkā arī bez tā, vai pārbaudiet apgalvojumu vēlreiz, kad fakts būs noskaidrots.",
@@ -381,6 +381,30 @@
         "label": "Bez avota"
       }
     },
+    "gap": {
+      "addFact": "Pievienot faktu no dokumenta",
+      "addFactFailed": "Faktu neizdevās pievienot",
+      "factOffList": "Fakts, kura sarakstā vairs nav",
+      "linkFact": "Sasaistīt faktu",
+      "linkFailed": "Faktu neizdevās sasaistīt",
+      "linked": "Sasaistītie fakti",
+      "linkedMark": "Saistīts",
+      "linksChanged": "Saites ir mainījušās kopš pēdējās pārbaudes.",
+      "noFacts": "Neviens saraksta fakts neatbilst.",
+      "recheck": "Pārbaudīt vēlreiz",
+      "recheckFailed": "Apgalvojumu neizdevās pārbaudīt vēlreiz",
+      "searchFacts": "Meklēt saraksta faktos",
+      "sheet": {
+        "passage": "Fragments",
+        "passageHint": "Dokumenta vārdi, kas pierāda faktu.",
+        "statementRequired": "Uzrakstiet faktu.",
+        "statementTooLong": "Fakts var būt ne garāks par {limit} rakstzīmēm.",
+        "submit": "Pievienot un pārbaudīt vēlreiz",
+        "title": "Pievienot faktu no dokumenta"
+      },
+      "showNextSteps": "Rādīt nākamos soļus",
+      "unlink": "Atsaistīt: {fact}"
+    },
     "guidance": {
       "escalate": "Nodot tālāk",
       "manualJudgement": "Cilvēka lēmums",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Pieņemts kā standarta",
         "conflictReopened": "Pretrunas atrisinājums atsaukts",
         "escalated": "Nodots pierādījumu komandai",
+        "factLinked": "Fakts sasaistīts",
+        "factUnlinked": "Fakts atsaistīts",
         "governed": "Izvēlēts noteicošais ieraksts",
         "noteCleared": "Piezīme noņemta",
         "noteSaved": "Piezīme saglabāta",
         "overridden": "Slēdziens mainīts",
         "overrideWithdrawn": "Slēdziena maiņa atsaukta",
+        "rechecked": "Apgalvojums pārbaudīts vēlreiz",
         "reopened": "Atvērts vēlreiz kā pārbaudāms apgalvojums",
         "statusCleared": "Pārskatīšanas statuss noņemts",
         "statusDisputed": "Atzīmēts kā apstrīdēts",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Bijušais dalībnieks",
       "kinds": {
+        "factLink": "Faktu sasaistes",
         "override": "Mainīti slēdzieni",
+        "recheck": "Atkārtotas pārbaudes",
         "recordConflict": "Pretrunu atrisinājumi",
         "reopen": "Atvēršanas vēlreiz",
         "status": "Statusa izmaiņas"
@@ -461,6 +490,11 @@
       "unresolveConflict": "Kāpēc atsaukt šo atrisinājumu?",
       "withdrawOverride": "Kāpēc atgriezties pie rīka slēdziena?"
     },
+    "recheck": {
+      "currentVerdict": "Slēdziens pēc atkārtotas pārbaudes",
+      "runVerdict": "Pārbaudes slēdziens",
+      "summary": "Pārbaudīts vēlreiz {checkedAt}, izmantojot {count, plural, zero {# faktu} one {# faktu} other {# faktus}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Apstrīdēts} needsEvidence {Vajag pierādījumus} other {{origin, select, bulk {Pieņemts kā standarta} other {Pārskatīts}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "Nav saglabāts",
       "failedTitle": "Jūsu izmaiņas netika saglabātas"
     },
-    "sourceMediumTooltip": "Avota nesējs ir neitrāls raksturojums. Tas pats par sevi nemazina ticamību.",
     "states": {
       "contradicted": {
         "chip": "Pretrunā",
@@ -6779,6 +6812,7 @@
     "deletedItem": "Izdzēsts: {name}",
     "deletingWorkspace": "Dzēš lietu",
     "documentSwitcher": {
+      "download": "Lejupielādēt šo failu",
       "searchPlaceholder": "Atrast dokumentu…",
       "trigger": "Pārslēgt dokumentu"
     },
