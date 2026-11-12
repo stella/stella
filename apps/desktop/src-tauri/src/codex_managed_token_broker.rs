@@ -8,26 +8,24 @@
 //! has to restart for a renewal, and no token is ever placed in an
 //! environment variable, a command line, a file or a log.
 //!
-//! The channel is a Unix socket (mode 0600) in a fresh directory (mode 0700)
+//! The channel is a Unix socket (mode 0600) in a directory (mode 0700)
 //! owned by this user, or a named pipe only the current user can open and no
 //! remote client can reach; never a TCP listener. The broker answers only a
 //! peer process descended from a Codex process the desktop started and
 //! registered with [`CodexChatGptLaunch::authorize`], and only for the
 //! sign-in that run was launched with. The broker endpoint and that sign-in's
-//! key reach the helper through Codex's environment, never a command line.
+//! key reach the helper through Codex's environment, never a command line,
+//! and the helper asks only a socket in a private directory of its own user.
+//!
+//! A Codex run the harness holder keeps through an app restart still names
+//! the endpoint it was launched with, so the broker listens at the same
+//! endpoint on every start (recorded in the app's data; see
+//! `local_store::token_broker`). What it authorized does not carry over: a
+//! restarted app authorizes a kept run's Codex process again when it resumes
+//! the run, under the sign-in connected then.
 //!
 //! Ported from t3code's `CodexManagedTokenBroker`, `CodexManagedTokenProtocol`
 //! and `managedChatGptToken` helper (MIT).
-
-// The desktop runner's harness host takes the launch and its grant; until it
-// lands only the tests do.
-#![cfg_attr(
-  not(all(test, unix)),
-  allow(
-    dead_code,
-    reason = "the desktop runner's harness host consumes the launch"
-  )
-)]
 
 use std::{
   collections::HashMap,
@@ -45,6 +43,8 @@ use tokio::{
 };
 
 use crate::chatgpt_auth::{AGENT_NAME, AccessError, ChatGptAuth};
+#[cfg(any(unix, windows))]
+use crate::local_store::token_broker;
 
 /// The argument that starts the desktop executable as the token helper.
 pub const TOKEN_HELPER_ARGUMENT: &str = "--codex-chatgpt-token";
@@ -66,9 +66,6 @@ const COMMAND_TIMEOUT: Duration = Duration::from_secs(80);
 const MAX_CONNECTIONS: usize = 32;
 /// How many ancestors of a peer are checked for an authorized Codex process.
 const MAX_ANCESTRY: usize = 32;
-/// Stays below macOS's 104-byte and Linux's 108-byte socket path limits.
-#[cfg(unix)]
-const UNIX_SOCKET_PATH_BYTES: usize = 100;
 
 /// Variables a managed Codex run must not inherit: each could send the run
 /// to another provider or billing path.
@@ -273,14 +270,14 @@ async fn serve_connection<S, C>(
 }
 
 /// The running broker. Dropping it stops the listener and removes its
-/// directory.
+/// socket; the directory stays for the next start.
 pub struct CodexManagedTokenBroker {
   endpoint: String,
   processes: Arc<AuthorizedProcesses>,
   task: tokio::task::JoinHandle<()>,
-  /// Removed with the broker.
+  /// Its socket is removed with the broker.
   #[cfg(unix)]
-  _directory: OwnedDirectory,
+  _directory: token_broker::OwnedDirectory,
 }
 
 impl Drop for CodexManagedTokenBroker {
@@ -294,19 +291,19 @@ impl CodexManagedTokenBroker {
     &self.endpoint
   }
 
+  /// Starts the broker at the endpoint `record` names, where runs launched
+  /// before an app restart still ask, or at a fresh one it records there.
   #[cfg(unix)]
-  pub(crate) fn start<S: TokenSource>(source: Arc<S>) -> std::io::Result<Self> {
-    let directory = OwnedDirectory::create()?;
-    let path = directory.path.join("s");
-    if path.as_os_str().len() > UNIX_SOCKET_PATH_BYTES {
-      return Err(std::io::Error::other("token broker path is too long"));
-    }
-    let listener = tokio::net::UnixListener::bind(&path)?;
-    {
-      use std::os::unix::fs::PermissionsExt;
-      std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-    }
-    let endpoint = path
+  pub(crate) fn start<S: TokenSource>(
+    source: Arc<S>,
+    record: &Path,
+  ) -> std::io::Result<Self> {
+    let (directory, socket) = token_broker::bind_broker(record)?;
+    let listener = std::os::unix::net::UnixListener::from(socket);
+    listener.set_nonblocking(true)?;
+    let listener = tokio::net::UnixListener::from_std(listener)?;
+    let endpoint = directory
+      .socket_path()
       .to_str()
       .ok_or_else(|| std::io::Error::other("token broker path is not UTF-8"))?
       .to_owned();
@@ -345,12 +342,16 @@ impl CodexManagedTokenBroker {
     })
   }
 
+  /// Starts the broker on the pipe `record` names, where runs launched
+  /// before an app restart still ask, or on a fresh one it records there.
   #[cfg(windows)]
-  pub(crate) fn start<S: TokenSource>(source: Arc<S>) -> std::io::Result<Self> {
+  pub(crate) fn start<S: TokenSource>(
+    source: Arc<S>,
+    record: &Path,
+  ) -> std::io::Result<Self> {
     use std::os::windows::io::AsHandle;
     use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
-    let endpoint = format!(r"\\.\pipe\stella-token-{}", uuid::Uuid::new_v4());
     // Remote clients are refused, only the current user may open the pipe,
     // and the first instance claims the name, so no other process can have
     // created it first.
@@ -361,7 +362,19 @@ impl CodexManagedTokenBroker {
         .reject_remote_clients(true);
       stella_desktop_macos::create_owner_only_pipe(&options, name)
     };
-    let mut server = create(&endpoint, true)?;
+    // A recorded name another process holds is never shared: this start
+    // takes a fresh one instead.
+    let reused = token_broker::recorded_pipe(record)
+      .and_then(|name| create(&name, true).ok().map(|server| (name, server)));
+    let (endpoint, mut server) = match reused {
+      Some(reused) => reused,
+      None => {
+        let endpoint = token_broker::fresh_pipe();
+        let server = create(&endpoint, true)?;
+        token_broker::record_endpoint(record, &endpoint);
+        (endpoint, server)
+      }
+    };
     let name = endpoint.clone();
     let processes = Arc::new(AuthorizedProcesses::default());
     let admitted = Arc::new(Semaphore::new(MAX_CONNECTIONS));
@@ -404,89 +417,13 @@ impl CodexManagedTokenBroker {
   }
 
   #[cfg(not(any(unix, windows)))]
-  pub(crate) fn start<S: TokenSource>(_source: Arc<S>) -> std::io::Result<Self> {
+  pub(crate) fn start<S: TokenSource>(
+    _source: Arc<S>,
+    _record: &Path,
+  ) -> std::io::Result<Self> {
     Err(std::io::Error::other(
       "no private token channel on this platform",
     ))
-  }
-}
-
-/// A `0700` directory this process created, removed (only if it is still
-/// the same directory) when dropped.
-#[cfg(unix)]
-struct OwnedDirectory {
-  path: std::path::PathBuf,
-  device: u64,
-  inode: u64,
-}
-
-#[cfg(unix)]
-impl OwnedDirectory {
-  fn create() -> std::io::Result<Self> {
-    let candidates = [std::env::temp_dir(), std::path::PathBuf::from("/tmp")];
-    let mut last = std::io::Error::other("no private directory for the token broker");
-    for parent in candidates {
-      match Self::create_in(&parent) {
-        Ok(directory) => return Ok(directory),
-        Err(error) => last = error,
-      }
-    }
-    Err(last)
-  }
-
-  fn create_in(parent: &Path) -> std::io::Result<Self> {
-    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
-
-    let parent = std::fs::canonicalize(parent)?;
-    let name = format!(
-      "stella-token-{}",
-      &uuid::Uuid::new_v4().simple().to_string()[..12]
-    );
-    let path = parent.join(name);
-    std::fs::DirBuilder::new().mode(0o700).create(&path)?;
-    let created = std::fs::symlink_metadata(&path)?;
-    let owner = created.uid();
-    let parent_metadata = std::fs::symlink_metadata(&parent)?;
-    let parent_mode = parent_metadata.mode();
-    // The parent must be ours and closed to others, or root's and sticky.
-    let parent_trusted = parent_metadata.is_dir()
-      && ((parent_metadata.uid() == owner && parent_mode & 0o022 == 0)
-        || (parent_metadata.uid() == 0
-          && (parent_mode & 0o022 == 0 || parent_mode & 0o1000 != 0)));
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))?;
-    let created = std::fs::symlink_metadata(&path)?;
-    if !parent_trusted
-      || !created.is_dir()
-      || created.file_type().is_symlink()
-      || created.mode() & 0o777 != 0o700
-    {
-      let _ = std::fs::remove_dir(&path);
-      return Err(std::io::Error::other(
-        "token broker directory is not private",
-      ));
-    }
-    Ok(Self {
-      path,
-      device: created.dev(),
-      inode: created.ino(),
-    })
-  }
-}
-
-#[cfg(unix)]
-impl Drop for OwnedDirectory {
-  fn drop(&mut self) {
-    use std::os::unix::fs::MetadataExt;
-    // Never remove a directory that was replaced, or anything but our socket.
-    let Ok(current) = std::fs::symlink_metadata(&self.path) else {
-      return;
-    };
-    if current.dev() != self.device || current.ino() != self.inode || !current.is_dir()
-    {
-      return;
-    }
-    let _ = std::fs::remove_file(self.path.join("s"));
-    let _ = std::fs::remove_dir(&self.path);
   }
 }
 
@@ -554,15 +491,18 @@ pub enum CodexLaunchError {
 }
 
 /// The launch configuration for the next Codex run on the user's ChatGPT
-/// plan. It starts the broker on first use and fails early when there is no
-/// usable connection. The caller authorizes the Codex process once it runs.
+/// plan. It starts the broker on first use, at the endpoint `record` names,
+/// and fails early when there is no usable connection. The caller authorizes
+/// the Codex process once it runs, and again when a restarted app resumes
+/// its run.
 pub(crate) async fn codex_chatgpt_launch(
   auth: &ChatGptAuth,
   broker: &tokio::sync::OnceCell<CodexManagedTokenBroker>,
+  record: &Path,
 ) -> Result<CodexChatGptLaunch, CodexLaunchError> {
   let broker = broker
     .get_or_try_init(|| async {
-      CodexManagedTokenBroker::start(Arc::new(auth.clone()))
+      CodexManagedTokenBroker::start(Arc::new(auth.clone()), record)
     })
     .await
     .map_err(|error| {
@@ -615,6 +555,10 @@ fn helper_token(environment: impl Fn(&str) -> Option<String>) -> Option<String> 
 }
 
 fn fail_helper() -> i32 {
+  #[expect(
+    clippy::let_underscore_must_use,
+    reason = "the helper's stderr is its only channel, so a failed write has nowhere to go"
+  )]
   let _ = std::io::stderr()
     .write_all(b"Could not use the ChatGPT connection. Reconnect ChatGPT in Stella.\n");
   1
@@ -649,6 +593,10 @@ fn request_token(endpoint: &str, profile_key: &str) -> Option<String> {
 
 #[cfg(unix)]
 fn connect(endpoint: &str) -> Option<std::os::unix::net::UnixStream> {
+  // Never a socket another user could have put at a path the run names.
+  if !token_broker::is_private_socket(Path::new(endpoint)) {
+    return None;
+  }
   let stream = std::os::unix::net::UnixStream::connect(endpoint).ok()?;
   stream.set_read_timeout(Some(COMMAND_TIMEOUT)).ok()?;
   stream.set_write_timeout(Some(SOCKET_IDLE)).ok()?;
@@ -657,21 +605,7 @@ fn connect(endpoint: &str) -> Option<std::os::unix::net::UnixStream> {
 
 #[cfg(windows)]
 fn connect(endpoint: &str) -> Option<std::fs::File> {
-  use std::os::windows::fs::OpenOptionsExt;
-
-  /// `SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION`: a server answering
-  /// on this name can identify the helper but never act as it.
-  const IDENTIFY_ONLY: u32 = 0x0010_0000 | 0x0001_0000;
-
-  if !endpoint.starts_with(r"\\.\pipe\stella-token-") {
-    return None;
-  }
-  std::fs::OpenOptions::new()
-    .read(true)
-    .write(true)
-    .security_qos_flags(IDENTIFY_ONLY)
-    .open(endpoint)
-    .ok()
+  token_broker::connect(endpoint)
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -680,7 +614,13 @@ fn connect(_endpoint: &str) -> Option<std::fs::File> {
 }
 
 #[cfg(all(test, unix))]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
+  use std::{cell::RefCell, path::PathBuf};
+
   use super::*;
 
   const KEY: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -700,9 +640,21 @@ mod tests {
       .unwrap();
     // The broker closes a refused peer at once, so these can lose that race;
     // only the response says what the broker decided.
+    #[expect(
+      clippy::let_underscore_must_use,
+      reason = "the broker may close a refused peer first; only the response is asserted"
+    )]
     let _ = stream.write_all(request);
+    #[expect(
+      clippy::let_underscore_must_use,
+      reason = "the broker may close a refused peer first; only the response is asserted"
+    )]
     let _ = stream.shutdown(std::net::Shutdown::Write);
     let mut response = Vec::new();
+    #[expect(
+      clippy::let_underscore_must_use,
+      reason = "the broker may close a refused peer first; only the response is asserted"
+    )]
     let _ = stream.read_to_end(&mut response);
     response
   }
@@ -711,11 +663,97 @@ mod tests {
     format!("{{\"version\":1,\"profileKey\":\"{KEY}\"}}\n")
   }
 
+  /// An app data folder of its own, where brokers record their endpoint as
+  /// app starts do. Removes it and the broker directories made for it, which
+  /// outlive their brokers.
+  struct Place {
+    root: PathBuf,
+    directories: RefCell<Vec<PathBuf>>,
+  }
+
+  impl Place {
+    fn new() -> Self {
+      // Short, so a socket made in it fits a socket path.
+      let root = std::env::temp_dir().join(format!(
+        "sbt-{}",
+        &uuid::Uuid::new_v4().simple().to_string()[..12]
+      ));
+      crate::local_store::create_private_dir(&root).unwrap();
+      Self {
+        root,
+        directories: RefCell::default(),
+      }
+    }
+
+    fn record(&self) -> PathBuf {
+      self.root.join("codex-token-broker")
+    }
+
+    /// Records `endpoint` as an earlier start would have.
+    fn recorded(&self, endpoint: &Path) {
+      crate::local_store::write_private_atomic(
+        &self.record(),
+        endpoint.as_os_str().as_encoded_bytes(),
+      )
+      .unwrap();
+    }
+
+    /// Removed at the end, with the place.
+    fn made(&self, path: &Path) {
+      self.directories.borrow_mut().push(path.to_owned());
+    }
+
+    /// One app start's broker.
+    fn start(&self) -> CodexManagedTokenBroker {
+      let broker =
+        CodexManagedTokenBroker::start(Arc::new(FixedSource), &self.record()).unwrap();
+      self.made(Path::new(broker.endpoint()).parent().unwrap());
+      broker
+    }
+  }
+
+  impl Drop for Place {
+    fn drop(&mut self) {
+      for directory in self.directories.get_mut().drain(..) {
+        crate::logging::best_effort(
+          std::fs::remove_dir_all(directory),
+          "test directory was not removed",
+        );
+      }
+      crate::logging::best_effort(
+        std::fs::remove_dir_all(&self.root),
+        "test directory was not removed",
+      );
+    }
+  }
+
   /// A broker that answers this test process, as if it were a managed Codex.
-  fn started() -> (CodexManagedTokenBroker, BrokerGrant) {
-    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
+  fn started(place: &Place) -> (CodexManagedTokenBroker, BrokerGrant) {
+    let broker = place.start();
     let grant = BrokerGrant::new(&broker.processes, std::process::id());
     (broker, grant)
+  }
+
+  /// The token helper as a run launched with `launch` starts it, from that
+  /// run's environment.
+  async fn helper_of(launch: &CodexChatGptLaunch) -> Option<String> {
+    let environment = launch.environment.clone();
+    tokio::task::spawn_blocking(move || {
+      helper_token(|name: &str| {
+        environment
+          .iter()
+          .find(|(variable, _)| *variable == name)
+          .map(|(_, value)| value.clone())
+      })
+    })
+    .await
+    .unwrap()
+  }
+
+  fn directory_with_mode(path: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir(path).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
   }
 
   /// A same-user process that is not part of any managed Codex run.
@@ -730,27 +768,168 @@ mod tests {
   async fn the_socket_is_private_to_this_user() {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
-    let (broker, _grant) = started();
-    let socket = Path::new(broker.endpoint());
-    assert!(socket.as_os_str().len() <= UNIX_SOCKET_PATH_BYTES);
-    let socket_mode = std::fs::metadata(socket).unwrap().permissions().mode();
+    let place = Place::new();
+    let (broker, _grant) = started(&place);
+    let socket = Path::new(broker.endpoint()).to_owned();
+    assert!(socket.as_os_str().len() <= token_broker::SOCKET_PATH_BYTES);
+    let socket_mode = std::fs::metadata(&socket).unwrap().permissions().mode();
     assert_eq!(socket_mode & 0o777, 0o600);
-    let directory = socket.parent().unwrap();
-    let directory_metadata = std::fs::symlink_metadata(directory).unwrap();
+    let directory = socket.parent().unwrap().to_owned();
+    let directory_metadata = std::fs::symlink_metadata(&directory).unwrap();
     assert_eq!(directory_metadata.mode() & 0o777, 0o700);
     assert_eq!(
       directory_metadata.uid(),
-      std::fs::metadata(socket).unwrap().uid()
+      std::fs::metadata(&socket).unwrap().uid()
+    );
+    assert_eq!(
+      token_broker::recorded_endpoint(&place.record()).as_deref(),
+      Some(broker.endpoint()),
+      "the next start finds the endpoint"
     );
 
-    let directory = directory.to_owned();
     drop(broker);
-    assert!(!directory.exists(), "the broker removes its directory");
+    assert!(!socket.exists(), "the broker removes its socket");
+    assert!(directory.is_dir(), "the next start listens here again");
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn a_run_launched_before_a_restart_gets_tokens_once_the_new_app_authorizes_it()
+  {
+    let place = Place::new();
+    let first = place.start();
+    let launch = launch_for(
+      Path::new("/bin/true"),
+      first.endpoint(),
+      KEY,
+      Arc::clone(&first.processes),
+    );
+    let grant = launch.authorize(std::process::id());
+    assert_eq!(helper_of(&launch).await.as_deref(), Some("access-fixture"));
+
+    // The app ends; the run goes on in the holder with this environment. An
+    // app that exits leaves its socket behind, with nothing listening.
+    let endpoint = PathBuf::from(first.endpoint());
+    drop(grant);
+    drop(first);
+    drop(std::os::unix::net::UnixListener::bind(&endpoint).unwrap());
+
+    let second = place.start();
+    assert_eq!(Path::new(second.endpoint()), endpoint);
+    // Nothing the first app authorized carries over.
+    assert_eq!(helper_of(&launch).await, None);
+    // Resuming the run authorizes its process with the new app's broker.
+    let resumed = launch_for(
+      Path::new("/bin/true"),
+      second.endpoint(),
+      KEY,
+      Arc::clone(&second.processes),
+    );
+    assert_eq!(resumed.environment, launch.environment);
+    let regrant = resumed.authorize(std::process::id());
+    assert_eq!(helper_of(&launch).await.as_deref(), Some("access-fixture"));
+    drop(regrant);
+    assert_eq!(helper_of(&launch).await, None);
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn a_live_broker_keeps_its_endpoint_and_another_start_listens_elsewhere() {
+    let place = Place::new();
+    let (first, _grant) = started(&place);
+    let second = place.start();
+    assert_ne!(first.endpoint(), second.endpoint());
+    assert_eq!(
+      token_broker::recorded_endpoint(&place.record()).as_deref(),
+      Some(second.endpoint())
+    );
+    let endpoint = first.endpoint().to_owned();
+    let served = tokio::task::spawn_blocking(move || {
+      exchange(&endpoint, good_request().as_bytes())
+    })
+    .await
+    .unwrap();
+    assert_eq!(served, b"{\"token\":\"access-fixture\"}\n");
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn a_recorded_endpoint_that_is_not_a_private_broker_directory_is_not_used() {
+    let place = Place::new();
+    let temporary = std::fs::canonicalize(std::env::temp_dir()).unwrap();
+    let name = || {
+      format!(
+        "stella-token-{}",
+        &uuid::Uuid::new_v4().simple().to_string()[..12]
+      )
+    };
+    // Open to others.
+    let open = temporary.join(name());
+    directory_with_mode(&open, 0o755);
+    place.made(&open);
+    // A link to a private directory.
+    let target = place.root.join("target");
+    directory_with_mode(&target, 0o700);
+    let link = temporary.join(name());
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    place.made(&link);
+    // Private, but not in a temporary folder.
+    let elsewhere = place.root.join(name());
+    directory_with_mode(&elsewhere, 0o700);
+    // Not a broker directory's name.
+    let unnamed =
+      temporary.join(format!("stella-other-{}", uuid::Uuid::new_v4().simple()));
+    directory_with_mode(&unnamed, 0o700);
+    place.made(&unnamed);
+    let refused = [
+      open.join("s"),
+      link.join("s"),
+      elsewhere.join("s"),
+      unnamed.join("s"),
+      PathBuf::from(name()).join("s"),
+    ];
+    for recorded in &refused {
+      place.recorded(recorded);
+      let broker = place.start();
+      assert_ne!(Path::new(broker.endpoint()), recorded.as_path());
+      assert_eq!(
+        token_broker::recorded_endpoint(&place.record()).as_deref(),
+        Some(broker.endpoint()),
+        "a fresh endpoint replaces the record"
+      );
+    }
+    for directory in [&open, &target, &elsewhere, &unnamed] {
+      assert_eq!(std::fs::read_dir(directory).unwrap().count(), 0);
+    }
+  }
+
+  #[test]
+  fn the_helper_asks_only_a_socket_in_a_private_directory_of_its_user() {
+    let place = Place::new();
+    let open = place.root.join("open");
+    directory_with_mode(&open, 0o755);
+    let endpoint = open.join("s");
+    let listener = std::os::unix::net::UnixListener::bind(&endpoint).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    // Everything else about the request is right: only the directory others
+    // can reach keeps the helper from connecting.
+    let named = endpoint.to_string_lossy().into_owned();
+    let environment = |name: &str| match name {
+      BROKER_ENVIRONMENT => Some(named.clone()),
+      PROFILE_ENVIRONMENT => Some(KEY.to_owned()),
+      _ => None,
+    };
+    assert_eq!(helper_token(environment), None);
+    assert!(
+      matches!(
+        listener.accept(),
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock
+      ),
+      "the helper did not connect"
+    );
   }
 
   #[tokio::test(flavor = "multi_thread")]
   async fn an_unrelated_same_user_process_is_refused() {
-    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
+    let place = Place::new();
+    let broker = place.start();
     let mut codex = unrelated_process();
     // Only the "Codex" process tree is authorized; this test process is not
     // in it, although it runs as the same user and holds the right key.
@@ -791,7 +970,8 @@ mod tests {
 
   #[tokio::test(flavor = "multi_thread")]
   async fn only_a_complete_request_for_the_current_sign_in_gets_a_token() {
-    let (broker, _grant) = started();
+    let place = Place::new();
+    let (broker, _grant) = started(&place);
     let endpoint = broker.endpoint().to_owned();
     tokio::task::spawn_blocking(move || {
       assert_eq!(
@@ -839,7 +1019,8 @@ mod tests {
 
   #[tokio::test(flavor = "multi_thread")]
   async fn a_silent_peer_is_disconnected() {
-    let (broker, _grant) = started();
+    let place = Place::new();
+    let (broker, _grant) = started(&place);
     let endpoint = broker.endpoint().to_owned();
     tokio::task::spawn_blocking(move || {
       let mut stream = std::os::unix::net::UnixStream::connect(&endpoint).unwrap();
@@ -908,7 +1089,8 @@ mod tests {
 
   #[tokio::test(flavor = "multi_thread")]
   async fn a_launch_authorizes_its_codex_process_until_the_grant_ends() {
-    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
+    let place = Place::new();
+    let broker = place.start();
     let launch = launch_for(
       Path::new("/bin/true"),
       broker.endpoint(),

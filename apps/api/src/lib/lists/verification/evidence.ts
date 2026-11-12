@@ -33,8 +33,18 @@ import type {
 const clip = (text: string): string =>
   text.slice(0, VERIFICATION_LIMITS.EVIDENCE_TEXT_MAX);
 
+/** One source of a fact as a run pins it, before it is grouped by fact. */
+type FactSourceRow = Pick<
+  typeof legalListItemSources.$inferSelect,
+  | "itemEntityId"
+  | "sourceEntityId"
+  | "sourceEntityVersionId"
+  | "locator"
+  | "quote"
+> & { sourceName: string };
+
 type ReadEvidenceArgs = {
-  tx: Transaction;
+  tx: Pick<Transaction, "select">;
   workspaceId: SafeId<"workspace">;
   listId: SafeId<"legalList">;
 };
@@ -89,58 +99,59 @@ export const readVerificationEvidence = async ({
     return { type: "too-many-facts", count: facts.length };
   }
 
-  // Ranked within each fact, so one heavily sourced fact cannot use up the
-  // read and leave the others pinned with no sources.
-  const ranked = tx
-    .select({
-      itemEntityId: legalListItemSources.itemEntityId,
-      sourceEntityId: legalListItemSources.sourceEntityId,
-      sourceEntityVersionId: legalListItemSources.sourceEntityVersionId,
-      locator: legalListItemSources.locator,
-      quote: legalListItemSources.quote,
-      sourceName: entities.name,
-      rank: sql<number>`row_number() over (partition by ${legalListItemSources.itemEntityId} order by ${legalListItemSources.createdAt}, ${legalListItemSources.id})`.as(
-        "rank",
-      ),
-    })
-    .from(legalListItemSources)
-    .innerJoin(
-      entities,
-      and(
-        eq(entities.id, legalListItemSources.sourceEntityId),
-        eq(entities.workspaceId, legalListItemSources.workspaceId),
-      ),
-    )
-    .where(
-      and(
-        eq(legalListItemSources.workspaceId, workspaceId),
-        inArray(
-          legalListItemSources.itemEntityId,
-          facts.map((fact) => fact.factEntityId),
+  // Read only for a list that has facts: an empty list has no sources.
+  let sources: FactSourceRow[] = [];
+  if (facts.length > 0) {
+    // Ranked within each fact, so one heavily sourced fact cannot use up the
+    // read and leave the others pinned with no sources.
+    const ranked = tx
+      .select({
+        itemEntityId: legalListItemSources.itemEntityId,
+        sourceEntityId: legalListItemSources.sourceEntityId,
+        sourceEntityVersionId: legalListItemSources.sourceEntityVersionId,
+        locator: legalListItemSources.locator,
+        quote: legalListItemSources.quote,
+        sourceName: entities.name,
+        rank: sql<number>`row_number() over (partition by ${legalListItemSources.itemEntityId} order by ${legalListItemSources.createdAt}, ${legalListItemSources.id})`.as(
+          "rank",
         ),
-        ne(legalListItemSources.verificationStatus, "rejected"),
-      ),
-    )
-    .as("ranked");
-  const sources =
-    facts.length === 0
-      ? []
-      : await tx
-          .select({
-            itemEntityId: ranked.itemEntityId,
-            sourceEntityId: ranked.sourceEntityId,
-            sourceEntityVersionId: ranked.sourceEntityVersionId,
-            locator: ranked.locator,
-            quote: ranked.quote,
-            sourceName: ranked.sourceName,
-          })
-          .from(ranked)
-          .where(lte(ranked.rank, VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX))
-          .orderBy(asc(ranked.itemEntityId), asc(ranked.rank))
-          .limit(
-            VERIFICATION_LIMITS.FACTS_PER_RUN_MAX *
-              VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX,
-          );
+      })
+      .from(legalListItemSources)
+      .innerJoin(
+        entities,
+        and(
+          eq(entities.id, legalListItemSources.sourceEntityId),
+          eq(entities.workspaceId, legalListItemSources.workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(legalListItemSources.workspaceId, workspaceId),
+          inArray(
+            legalListItemSources.itemEntityId,
+            facts.map((fact) => fact.factEntityId),
+          ),
+          ne(legalListItemSources.verificationStatus, "rejected"),
+        ),
+      )
+      .as("ranked");
+    sources = await tx
+      .select({
+        itemEntityId: ranked.itemEntityId,
+        sourceEntityId: ranked.sourceEntityId,
+        sourceEntityVersionId: ranked.sourceEntityVersionId,
+        locator: ranked.locator,
+        quote: ranked.quote,
+        sourceName: ranked.sourceName,
+      })
+      .from(ranked)
+      .where(lte(ranked.rank, VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX))
+      .orderBy(asc(ranked.itemEntityId), asc(ranked.rank))
+      .limit(
+        VERIFICATION_LIMITS.FACTS_PER_RUN_MAX *
+          VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX,
+      );
+  }
 
   const sourcesByFact = new Map<SafeId<"entity">, VerificationEvidenceSource[]>(
     facts.map((fact) => [fact.factEntityId, []]),
@@ -173,3 +184,37 @@ export const readVerificationEvidence = async ({
     },
   };
 };
+
+type ReadHeldFactIdsArgs = ReadEvidenceArgs & {
+  /** Narrow to these facts: the held ones among them are returned. */
+  factIds: readonly SafeId<"entity">[];
+};
+
+/** Which of these facts are on the list and held out of scoring, so a fact
+ *  the evidence leaves out reads as held rather than as gone. */
+export const readHeldFactIds = async ({
+  tx,
+  workspaceId,
+  listId,
+  factIds,
+}: ReadHeldFactIdsArgs): Promise<SafeId<"entity">[]> =>
+  factIds.length === 0
+    ? []
+    : (
+        await tx
+          .select({ factEntityId: legalListItems.entityId })
+          .from(legalListItems)
+          .innerJoin(
+            legalListFactDetails,
+            eq(legalListFactDetails.itemEntityId, legalListItems.entityId),
+          )
+          .where(
+            and(
+              eq(legalListItems.workspaceId, workspaceId),
+              eq(legalListItems.listId, listId),
+              inArray(legalListItems.entityId, [...factIds]),
+              eq(legalListFactDetails.scoring, "held"),
+            ),
+          )
+          .limit(factIds.length)
+      ).map((row) => row.factEntityId);

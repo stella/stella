@@ -37,6 +37,7 @@ import {
 } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -361,7 +362,7 @@ const TemplateRow = ({
   return (
     // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- onFocus mirrors onMouseEnter (keyboard parity); the <li> stays a semantic list item wrapping the actionable Button
     <li
-      className="hover:bg-muted/50 flex items-center gap-2 rounded p-2"
+      className="hover:bg-muted/50 flex items-center gap-2 rounded-sm p-2"
       onFocus={onPreview}
       onMouseEnter={onPreview}
     >
@@ -375,7 +376,7 @@ const TemplateRow = ({
             variant="plain"
             {...capabilityProps}
           >
-            <span className="truncate text-sm">{template.name}</span>
+            <TruncatedText className="text-sm">{template.name}</TruncatedText>
           </Button>
         )}
       </CapabilityAction>
@@ -423,7 +424,7 @@ const BuiltInTemplateRow = ({
   const t = useTranslations();
 
   return (
-    <div className="hover:bg-muted/50 mb-1 flex items-center gap-2 rounded p-2">
+    <div className="hover:bg-muted/50 mb-1 flex items-center gap-2 rounded-sm p-2">
       <Icon className="text-muted-foreground size-4 shrink-0" />
       <CapabilityAction action={{ capability }} surface="control">
         {(capabilityProps) => (
@@ -436,7 +437,7 @@ const BuiltInTemplateRow = ({
             variant="plain"
             {...capabilityProps}
           >
-            <span className="truncate text-sm">{name}</span>
+            <TruncatedText className="text-sm">{name}</TruncatedText>
           </Button>
         )}
       </CapabilityAction>

@@ -53,7 +53,7 @@ const MODEL_FAMILY_PARSERS = {
   },
   google: (modelId) => {
     const match =
-      /^gemini-(\d{1,3})(?:\.(\d{1,3}))?-(flash-lite|flash|pro|argon)(?:-preview)?$/u.exec(
+      /^gemini-(\d{1,3})(?:\.(\d{1,3}))?-(flash-lite|flash|pro|argon|carbon)(?:-preview)?$/u.exec(
         modelId,
       );
     return match?.[3] !== undefined && match[1] !== undefined
@@ -61,9 +61,14 @@ const MODEL_FAMILY_PARSERS = {
       : null;
   },
   mistral: (modelId) => {
-    const match = /^mistral-(large|medium|small)-(\d{1,2})$/u.exec(modelId);
+    // Point releases spell the version with dashes (mistral-large-4-0-8);
+    // the patch component never starts a new generation.
+    const match =
+      /^mistral-(large|medium|small)-(\d{1,2})(?:-(\d{1,2})(?:-\d{1,2})?)?$/u.exec(
+        modelId,
+      );
     return match?.[1] !== undefined && match[2] !== undefined
-      ? { family: match[1], generation: parseGeneration(match[2]) }
+      ? { family: match[1], generation: parseGeneration(match[2], match[3]) }
       : null;
   },
   openai: (modelId) => {
@@ -251,6 +256,10 @@ const REVIEWED_MODEL_EXCLUSIONS = {
     "2026-08-22: floating alias; do not offer or assign fixed-model metadata",
   "google:gemini-flash-lite-latest":
     "2026-08-22: floating alias; do not offer or assign fixed-model metadata",
+  "mistral:deepseek-v4-1-flash-1017":
+    "2026-11-05: third-party relay; DeepSeek model served through the Mistral platform, not a Mistral model",
+  "mistral:mistral-large-4-0-8":
+    "2026-11-05: duplicate alias; versioned ID at the rates of mistral-large-4, the offered picker ID",
   "mistral:zai-glm-5-2":
     "2026-08-28: third-party relay; GLM model served through the Mistral platform, not a Mistral model",
   "mistral:zai-glm-5-3":

@@ -7,11 +7,7 @@ import fc from "fast-check";
 
 import { getOutputTokenLimit } from "@stll/ai-catalog";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
-import {
-  propertyConfig,
-  propertySeed,
-  propertyTestTimeout,
-} from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads, chatToolGrants, mcpConnectors } from "@/api/db/schema";
@@ -846,6 +842,54 @@ const answerIdsOf = async (real: Real): Promise<SafeId<"chatMessage">[]> =>
       role === "assistant" ? [toSafeId<"chatMessage">(id)] : [],
   );
 
+/** Forks the thread at the answer of `turn` and continues on the fork. */
+const forkFrom = async (turn: number, model: Model, real: Real) => {
+  const { ledger } = real;
+  const failuresBefore = ledger.failures;
+  const answers = await answerIdsOf(real);
+  // The fixture must reach the fault: one answer per turn.
+  expect(answers).toHaveLength(ledger.turn);
+  const upToMessageId =
+    answers.at(turn - 1) ?? expect.unreachable(`No answer for turn ${turn}`);
+  const forkThreadId = newThread();
+  const forked = await createForkThread({
+    indexChatThread: async () => undefined,
+  }).handler(
+    asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
+      body: { newThreadId: forkThreadId, upToMessageId },
+      getWorkspaceAccess: async () => null,
+      memberRole: sessionMemberRole("owner"),
+      params: { threadId: real.threadId },
+      query: {},
+      recordAuditEvent: async () => undefined,
+      request: new Request("http://localhost/v1/chat/threads/fork"),
+      route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
+      safeDb,
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userA1 },
+    }),
+  );
+  expect(forked).toMatchObject({ threadId: forkThreadId });
+  const outcome =
+    turn === ledger.turn ? ledger.latest : ledger.outcomes.get(turn);
+  ledger.calls = ledger.calls.filter((call) => call.turn <= turn);
+  for (const later of [...ledger.waiting.keys()].filter((t) => t > turn)) {
+    ledger.waiting.delete(later);
+  }
+  ledger.pending = [];
+  ledger.latest =
+    outcome === undefined || outcome === "awaiting" ? "cancelled" : outcome;
+  ledger.turn = turn;
+  // A conversation grant stays with the thread it was given in.
+  if (ledger.grant === "conversation") {
+    ledger.grant = "none";
+  }
+  real.client.dispose();
+  real.threadId = forkThreadId;
+  real.client = await real.harness.openWebClient(forkThreadId);
+  await verify(model, real, { failuresBefore });
+};
+
 /**
  * "Fork from here" on an answer, which the page offers on every answer but
  * a running latest one. The fork holds the thread up to that answer, with
@@ -863,51 +907,7 @@ class ForkFrom implements fc.AsyncCommand<Model, Real> {
   targetTurn = (model: Readonly<Model>): number =>
     (this.pick % (isBusy(model) ? model.turn - 1 : model.turn)) + 1;
   run = async (model: Model, real: Real) => {
-    const { ledger } = real;
-    const failuresBefore = ledger.failures;
-    const turn = this.targetTurn(model);
-    const answers = await answerIdsOf(real);
-    // The fixture must reach the fault: one answer per turn.
-    expect(answers).toHaveLength(ledger.turn);
-    const upToMessageId =
-      answers.at(turn - 1) ?? expect.unreachable(`No answer for turn ${turn}`);
-    const forkThreadId = newThread();
-    const forked = await createForkThread({
-      indexChatThread: async () => undefined,
-    }).handler(
-      asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
-        body: { newThreadId: forkThreadId, upToMessageId },
-        getWorkspaceAccess: async () => null,
-        memberRole: sessionMemberRole("owner"),
-        params: { threadId: real.threadId },
-        query: {},
-        recordAuditEvent: async () => undefined,
-        request: new Request("http://localhost/v1/chat/threads/fork"),
-        route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
-        safeDb,
-        session: { activeOrganizationId: ids.orgA },
-        user: { id: ids.userA1 },
-      }),
-    );
-    expect(forked).toMatchObject({ threadId: forkThreadId });
-    const outcome =
-      turn === ledger.turn ? ledger.latest : ledger.outcomes.get(turn);
-    ledger.calls = ledger.calls.filter((call) => call.turn <= turn);
-    for (const later of [...ledger.waiting.keys()].filter((t) => t > turn)) {
-      ledger.waiting.delete(later);
-    }
-    ledger.pending = [];
-    ledger.latest =
-      outcome === undefined || outcome === "awaiting" ? "cancelled" : outcome;
-    ledger.turn = turn;
-    // A conversation grant stays with the thread it was given in.
-    if (ledger.grant === "conversation") {
-      ledger.grant = "none";
-    }
-    real.client.dispose();
-    real.threadId = forkThreadId;
-    real.client = await real.harness.openWebClient(forkThreadId);
-    await verify(model, real, { failuresBefore });
+    await forkFrom(this.targetTurn(model), model, real);
   };
   toString = () => `ForkFrom(${String(this.pick)})`;
 }
@@ -1199,6 +1199,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "always-allow": byCommands(
     "ResolveCards (always-allow), AnswerOnStaleTab",
     ResolveCards.allows,
+  ),
+  "answer-local-question": notModelled(
+    "Only a run on the member's computer asks it, and the harness runs cloud turns only; local-run-question-card.dom.test.tsx drives it through the page.",
   ),
   "answer-question": byCommands(
     "ResolveCards, AnswerOnStaleTab",
@@ -1493,21 +1496,17 @@ const closeConversation = async ({ real }: { real: Real }) => {
   await real.harness.close();
 };
 
-const runConversations = async (
+const conversationsProperty = (
   commands: fc.Arbitrary<Iterable<fc.AsyncCommand<Model, Real>>>,
-) => {
-  await fc.assert(
-    fc.asyncProperty(commands, async (sequence) => {
-      const conversation = await openConversation();
-      try {
-        await fc.asyncModelRun(() => conversation, sequence);
-      } finally {
-        await closeConversation(conversation);
-      }
-    }),
-    propertyConfig({ numRuns: 25, seed: propertySeed() }),
-  );
-};
+) =>
+  fc.asyncProperty(commands, async (sequence) => {
+    const conversation = await openConversation();
+    try {
+      await fc.asyncModelRun(() => conversation, sequence);
+    } finally {
+      await closeConversation(conversation);
+    }
+  });
 
 // --- Example cases----------------------------------------------------------
 
@@ -2487,8 +2486,12 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger after every step of any conversation",
     async () => {
-      await runConversations(
-        fc.commands(conversationCommands, { maxCommands: 6 }),
+      await assertProperty(
+        "matches a reload and the ledger after every step of any conversation",
+        conversationsProperty(
+          fc.commands(conversationCommands, { maxCommands: 6 }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),
@@ -2745,10 +2748,14 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger after every action the page offers",
     async () => {
-      await runConversations(
-        fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
-          maxCommands: 6,
-        }),
+      await assertProperty(
+        "matches a reload and the ledger after every action the page offers",
+        conversationsProperty(
+          fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
+            maxCommands: 6,
+          }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),
@@ -2757,10 +2764,14 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger when a new message replaces waiting cards",
     async () => {
-      await runConversations(
-        fc.commands([...conversationCommands, supersedeCommand], {
-          maxCommands: 6,
-        }),
+      await assertProperty(
+        "matches a reload and the ledger when a new message replaces waiting cards",
+        conversationsProperty(
+          fc.commands([...conversationCommands, supersedeCommand], {
+            maxCommands: 6,
+          }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),

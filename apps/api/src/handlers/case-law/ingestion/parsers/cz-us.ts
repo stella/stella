@@ -1,13 +1,15 @@
-// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
 
 import type {
   BlockContent as FolioBlockContent,
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
 } from "@stll/docx-core/model";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 /**
  * Czech Constitutional Court (Ustavni soud) HTML parser.
  *
@@ -65,6 +67,8 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
   CZ_TAKTO,
   CZ_TAKTO_TAIL_RE,
+  czechBenchRecitalStart,
+  isCzechBareSignatoryName,
   isCzechOpeningFormula,
   isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
@@ -83,6 +87,10 @@ import {
   normalizeInlineLine,
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
+import {
+  DOT_PARAGRAPH_MARKER_RE,
+  ITEM_OPENING_RE,
+} from "@stll/legal-ast/printed-paragraph-labels";
 
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -99,7 +107,7 @@ import {
   readHardWrap,
 } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import {
-  collapseLetterSpacing,
+  readInlineLetterSpacing,
   withAttestedLetterSpacing,
 } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
@@ -143,7 +151,7 @@ type ParseUsDecisionOutput = {
 export const parseUsDecisionHtml = (
   input: ParseUsDecisionInput,
 ): ParseUsDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const docContent = $(".DocContent");
 
   // Extract metadata from hidden fields
@@ -523,7 +531,7 @@ const reflowUsLines = (
       reading === null ? inlines : mapInlineText(inlines, reading.clean),
     );
   const spelled = (inlines: readonly Inline[]): Inline[] =>
-    mapInlineText(inlines, collapseLetterSpacing);
+    readInlineLetterSpacing(inlines);
 
   const lines: ParsedLine[] = [];
   let paragraph: Inline[] | null = null;
@@ -686,9 +694,6 @@ const ODUVODNENI_RE =
  */
 const SECTION_ROMAN_RE = /^(?=[IVX])(?<roman>X{0,3}(?:IX|IV|V?I{0,3}))\.?\s*$/u;
 
-/** Numbered paragraph: "1. ...", "2. ..." */
-const NUMBERED_PARA_RE = /^(?:\d+)\.\s+/u;
-
 /** The court's first reasoning paragraph, which no ruling item opens with. */
 const FIRST_REASONING_PARAGRAPH_RE = /^(?:\[1\]|1\.)\s/u;
 
@@ -697,7 +702,6 @@ const FIRST_REASONING_PARAGRAPH_RE = /^(?:\[1\]|1\.)\s/u;
  * where a sentence or a printed line goes on. A title may end with a full
  * stop ("… zákona č. 128/1946 Sb."); a long line that does is a sentence.
  */
-const ITEM_OPENING_RE = /^(?:\d{1,3}[.)]|\p{L}\)|[-–•])\s/u;
 const UNFINISHED_TITLE_RE = /[,;:-]$/u;
 const TITLE_SENTENCE_MAX_WORDS = 10;
 
@@ -711,6 +715,15 @@ const DISSENT_HEADING_MAX_CHARS = 120;
  * opens with a date ("Dne 26. 8. 1993 zaslaly stěžovatelky …") is reasoning.
  */
 const CLOSING_MAX_CHARS = 80;
+/**
+ * A bare name under the closing, or under the signature lines that follow
+ * it, signs the decision or a separate opinion: the Court's judges often sign
+ * with no academic title and no "v. r.".
+ */
+const signsUnderClosing = (plainText: string, previous: Block | undefined) =>
+  isCzechBareSignatoryName(plainText) &&
+  previous?.type === "paragraph" &&
+  (previous.role === "closing" || previous.role === "signature");
 /** Longest heading an author continuation can make. */
 const DISSENT_TITLE_MAX_CHARS = 500;
 
@@ -801,7 +814,7 @@ const classifyUsBodyLine = ({
       id: makeUsBlockId(state),
       anchorId: makeAnchorId("p", state.blockIndex),
       type: "paragraph",
-      role: "intro",
+      role: "opening-formula",
       inlines,
       plainText,
     });
@@ -811,6 +824,7 @@ const classifyUsBodyLine = ({
   // "takto:" separator
   if (isCzechTaktoLine(plainText) || isCzechTaktoLine(collapsed)) {
     state.inRuling = true;
+    markBenchRecital(blocks);
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -905,6 +919,20 @@ const classifyUsBodyLine = ({
 
   // Signature: judge title line
   if (!courtNumbered && SIGNATURE_RE.test(plainText) && plainText.length < 80) {
+    state.inRuling = false;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "signature",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  if (!courtNumbered && signsUnderClosing(plainText, blocks.at(-1))) {
     state.inRuling = false;
     state.blockIndex += 1;
     blocks.push({
@@ -1075,6 +1103,26 @@ const opensRuling = (
     PLENARY_BENCH_RE.test(plainText) ||
     NALEZ_CAPTION_RE.test(plainText));
 
+/**
+ * The bench recital printed before a "takto:" of its own line (`Ústavní
+ * soud České republiky` / `v senátě rozhodl ve věci …`) introduces the
+ * ruling, as the shared Czech grammar reads it.
+ */
+const markBenchRecital = (blocks: Block[]): void => {
+  // The title is kept apart from the body's blocks, which open after it.
+  const start = czechBenchRecitalStart(blocks, blocks.length, {
+    opensAfterHeadMatter: true,
+  });
+  if (start === undefined) {
+    return;
+  }
+  for (const [index, block] of blocks.entries()) {
+    if (index >= start && block.type === "paragraph") {
+      blocks[index] = { ...block, role: "intro" };
+    }
+  }
+};
+
 /** A paragraph's role: its separate opinion's, or the ruling's opener. */
 const paragraphRole = (
   state: UsClassificationState,
@@ -1105,7 +1153,7 @@ const opinionHeading = (
   line: ParsedLineData,
 ): SeparateOpinionHeading | undefined =>
   separateOpinionHeading(
-    stripInlineLinePrefix(line, NUMBERED_PARA_RE).line.plainText,
+    stripInlineLinePrefix(line, DOT_PARAGRAPH_MARKER_RE).line.plainText,
     DISSENT_HEADING_MAX_CHARS,
   );
 

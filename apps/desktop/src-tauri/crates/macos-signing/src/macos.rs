@@ -121,9 +121,17 @@ fn issuer_chain_der(certificate: &SecCertificate, leaf_der: &[u8]) -> Vec<Vec<u8
   // Fetching a missing issuer over the network would put an unbounded wait in
   // front of a picker: what the system already holds is the chain the user
   // can sign with.
+  #[expect(
+    clippy::let_underscore_must_use,
+    reason = "a refused setting only allows a network fetch the chain does not need"
+  )]
   let _ = trust.set_network_fetch_allowed(false);
   // The chain is only readable once an evaluation has run; a failed one still
   // leaves the constructed chain behind.
+  #[expect(
+    clippy::let_underscore_must_use,
+    reason = "a failed evaluation still leaves the constructed chain to read"
+  )]
   let _ = trust.evaluate_with_error();
 
   // `SecTrustCopyCertificateChain`, which `chain()` calls, arrived in macOS

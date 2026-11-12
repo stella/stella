@@ -3,8 +3,14 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { MODEL_CATALOG_INPUTS } from "../packages/scripts/src/generated-files";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
+import {
+  directlyChangedSuiteSpecs,
+  hostedSuiteSpecs,
+  PRODUCTION_JOB,
+} from "./ci-browser-suites";
 import { type DependencyScope, dependencyScope } from "./ci-dependency-scope";
 import {
   requiresDesktopBrowser,
@@ -17,7 +23,11 @@ import {
   sourceImportClosure,
 } from "./detect-route-smoke-changes";
 import { planServiceSuites } from "./detect-service-suite-changes";
-import { landingDeployAffected } from "./landing-deploy-scope";
+import {
+  deployAffected,
+  type DeployRange,
+  LANDING_PACKAGE,
+} from "./landing-deploy-scope";
 import { productionE2eChanged } from "./production-e2e-inputs.mjs";
 
 const TRUE = "true";
@@ -54,9 +64,7 @@ export type ChangedFileScopeDetectors = {
   landingBuild: (
     options: Parameters<typeof requiresLandingBuild>[0],
   ) => unknown;
-  landingDeploy: (
-    options: Parameters<typeof landingDeployAffected>[0],
-  ) => unknown;
+  landingDeploy: (range: DeployRange) => unknown;
   desktopBrowser: (
     options: Parameters<typeof requiresDesktopBrowser>[0],
   ) => unknown;
@@ -65,7 +73,8 @@ export type ChangedFileScopeDetectors = {
 export const DEFAULT_DETECTORS = {
   packageChecks: requiresPackageChecks,
   landingBuild: requiresLandingBuild,
-  landingDeploy: landingDeployAffected,
+  landingDeploy: (range) =>
+    deployAffected({ ...range, packageName: LANDING_PACKAGE }),
   desktopBrowser: requiresDesktopBrowser,
 } satisfies ChangedFileScopeDetectors;
 
@@ -202,25 +211,7 @@ export const LEGAL_ATLAS_IMAGE_INPUTS = [
   ".github/workflows/ci.yml",
 ] as const;
 
-export const MODEL_CATALOG_DRIFT_INPUTS = [
-  ".github/workflows/ci.yml",
-  "packages/ai-catalog/package.json",
-  "packages/ai-catalog/src/capabilities-overrides.ts",
-  "packages/ai-catalog/src/capabilities.gen.ts",
-  "packages/ai-catalog/src/document-input-overrides.ts",
-  "packages/ai-catalog/src/index.ts",
-  "packages/ai-catalog/src/model-defaults-ledger.ts",
-  "packages/ai-catalog/src/model-rate-policy.ts",
-  "packages/ai-catalog/src/model-rate.ts",
-  "packages/ai-catalog/src/model-rates.gen.ts",
-  "packages/ai-catalog/src/reasoning-capabilities.ts",
-  "packages/fetch/src/connection-failure.ts",
-  "packages/fetch/src/index.ts",
-  "packages/scripts/src/model-catalog-capabilities-gen.ts",
-  "packages/scripts/src/model-catalog-capabilities.ts",
-  "packages/scripts/src/model-catalog-rates-gen.ts",
-  "packages/scripts/src/model-catalog-snapshot.ts",
-] as const;
+export const MODEL_CATALOG_DRIFT_INPUTS = MODEL_CATALOG_INPUTS;
 
 export const ROUTE_TREE_INPUTS = [
   "apps/web/src/routes/*",
@@ -259,6 +250,8 @@ export const STACK_REDACTION_BROWSER_INPUTS = [
 export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "VERSION",
   "apps/desktop/*",
+  "packages/agent-engine/package.json",
+  "packages/agent-engine/scripts/build-sidecar.ts",
   "scripts/desktop-*",
   "scripts/*tauri*",
   "scripts/detect-desktop-*",
@@ -336,17 +329,21 @@ const e2eRequired = (scope: "core" | "landing", files: readonly string[]) => {
 
 const desktopRustRequired = (files: readonly string[]) =>
   anyMatches(files, [
+    ".github/actions/cargo-deny/*",
     "apps/desktop/rust-toolchain.toml",
     "apps/desktop/src-tauri/*",
     "apps/desktop/fixtures/*",
     "apps/desktop/src/i18n/langs/*",
     "apps/desktop/src/activity/preview-apps.json",
     "apps/desktop/src/clipboard/clipboard-types.ts",
+    "packages/api-contract/src/desktop-account-link.fixtures.json",
     "packages/api-contract/src/desktop-account-policy.json",
     "packages/api-contract/src/desktop-feature-access.json",
     "packages/api-contract/src/desktop-handoff.ts",
     "packages/api-contract/src/desktop-presence-policy.json",
     "packages/api-contract/src/desktop-presence-request.fixture.json",
+    "packages/api-contract/src/desktop-runner.fixtures.json",
+    "packages/agent-engine/src/sidecar/protocol.fixtures.json",
     "packages/api-contract/src/desktop-edit-file-types.ts",
     "packages/api-contract/src/desktop-registry.ts",
     "packages/api-contract/src/desktop-rpc.gen.ts",
@@ -894,9 +891,19 @@ export const OUTPUT_RULES = {
           full
             ? e2eCore
             : input.eventName === "pull_request" &&
-                failClosedDetector("production e2e", () =>
+                (failClosedDetector("production e2e", () =>
                   productionE2eChanged(files),
-                ),
+                ) ||
+                  // The job also runs the suites it hosts; the e2e planner
+                  // adds the changes their import graphs reach.
+                  failClosedDetector(
+                    "production browser suites",
+                    () =>
+                      hostedSuiteSpecs(
+                        directlyChangedSuiteSpecs(files, input.root),
+                        PRODUCTION_JOB,
+                      ).length > 0,
+                  )),
         ),
     ),
   e2e_landing_required: (facts) =>
@@ -961,10 +968,15 @@ export const OUTPUT_RULES = {
         p([
           "bun.lock",
           "*/bun.lock",
+          "Cargo.lock",
+          "*/Cargo.lock",
+          "Cargo.toml",
+          "*/Cargo.toml",
           "scripts/check-lockfile-release-ages.ts",
           "scripts/check-lockfile-release-ages.test.ts",
           "scripts/check-stll-quarantine-excludes.ts",
           "scripts/bun-lock-text.ts",
+          "scripts/crates-io-release-age.ts",
         ]),
       ),
     ),
@@ -984,12 +996,19 @@ export const OUTPUT_RULES = {
           "apps/api/drizzle/*",
           "apps/api/src/db/*",
           "apps/api/src/lib/db/*",
+          // The OAuth resource policy the boot census and its online repair
+          // compare the stored policy against.
+          "apps/api/src/mcp/resource-policy-contract.ts",
+          "apps/api/src/lib/auth/oauth-own-client-links.ts",
+          "packages/api-contract/src/mcp.ts",
+          "packages/api-contract/src/api-oauth-resource.ts",
           "apps/api/src/lib/decision-date-bounds-sql.ts",
           "apps/api/src/handlers/case-law/citation-resolution.ts",
           "apps/api/src/scripts/*",
           "scripts/rehearse-migration-upgrade.sh",
           "scripts/resolve-promoted-release.ts",
           "scripts/migration-rehearsal-db.ts",
+          "scripts/migration-rehearsal-startup-refusal.ts",
           ".github/workflows/ci.yml",
         ]),
       ),
@@ -1062,7 +1081,12 @@ export const OUTPUT_RULES = {
   scan_engine_wasm_required: (facts) =>
     scopeRule(facts, "scan_engine_wasm_required", ({ p }) =>
       bool(
-        p(["packages/scan-engine/*", "bun.lock", ".github/workflows/ci.yml"]),
+        p([
+          "packages/scan-engine/*",
+          ".github/actions/cargo-deny/*",
+          "bun.lock",
+          ".github/workflows/ci.yml",
+        ]),
       ),
     ),
   stack_redaction_browsers_required: (facts) =>
@@ -1085,6 +1109,7 @@ export const OUTPUT_RULES = {
             "packages/ai-catalog/*",
             "packages/api-contract/*",
             "packages/boe/*",
+            "packages/brand/*",
             "packages/cli/*",
             "packages/business-registries/*",
             "packages/chat-limits/*",

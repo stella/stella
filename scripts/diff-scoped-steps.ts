@@ -94,15 +94,6 @@ const GENERATED_CONFLICTS =
 
 /** Keys are `<workflow file>:<job>#<step name>`. */
 export const DIFF_SCOPED_STEPS = {
-  "queue-admission.yml:admission#Run deterministic manifest checks":
-    operational(CHECK_POOL),
-  "queue-admission.yml:admission#Check parser versions":
-    expands(PARSER_VERSIONS),
-  "queue-admission.yml:admission#Check workflow job classifications":
-    fullTree(JOB_CLASSIFICATION),
-  "queue-admission.yml:admission#Code quality for changed files": expands(
-    "Turbo's affected scope adds reverse dependants of the queued change.",
-  ),
   "autofix.yml:dependabot-bun-autofix#Verify trusted autofix sources":
     diffComplete("Verifies the provenance of the commits being fixed."),
   "autofix.yml:dependabot-bun-autofix#Align Tauri counterparts": diffComplete(
@@ -121,6 +112,8 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "autofix.yml:regenerate-derived-files#Prune stale baseline entries":
     operational("Rewrites baselines on the fix branch; no verdict."),
+  "autofix.yml:regenerate-derived-files#Raise stale bridge version":
+    operational("Bumps the bridge version on the fix branch; CI enforces it."),
   "autofix.yml:regenerate-derived-files#Restrict autofix changes": diffComplete(
     "Limits the fix to the paths the change touched.",
   ),
@@ -191,6 +184,10 @@ export const DIFF_SCOPED_STEPS = {
   "deploy-landing.yml:scope#Decide whether the push changes the site": expands(
     "Follows the landing's workspace graph and declared inputs from the pushed range.",
   ),
+  "deploy-outlook-addin.yml:scope#Decide whether the push changes the add-in":
+    expands(
+      "Follows the add-in's workspace graph and declared inputs from the last successful deploy run.",
+    ),
   "ci.yml:ci-plan#Resolve comparison base": operational(
     "Resolves the base the plan compares against.",
   ),
@@ -230,6 +227,9 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-policy#Select measured ratchet base from the target branch":
     operational("Selects the base tree the ratchet measures."),
   "ci.yml:ci-checks-policy#Run policy checks": operational(CHECK_POOL),
+  "ci.yml:ci-checks-policy#Published package API reports": fullTree(
+    "Regenerates every published package's report; the base supplies the previous reports and the changesets since.",
+  ),
   "ci.yml:ci-checks-policy#Ratchet guard": fullTree(
     "Measures both full trees; the base only supplies the comparison.",
   ),
@@ -251,8 +251,8 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-policy#Custom lint rule coverage": fullTree(
     "Checks every custom rule; the base is not read.",
   ),
-  "ci.yml:ci-checks-policy#Instruction references": fullTree(
-    "Checks every instruction reference in the tree.",
+  "ci.yml:ci-checks-policy#Instruction policy": fullTree(
+    "Checks every instruction reference and enforcement tag in the tree.",
   ),
   "ci.yml:ci-checks-rest#Run repository checks": operational(CHECK_POOL),
   "ci.yml:ci-checks-rest#Prepare route network manifest":
@@ -320,7 +320,7 @@ export const DIFF_SCOPED_STEPS = {
     "Repeats the changed tests to catch flakes; the full suites run separately.",
   ),
   "ci.yml:ci-browser#Check UI browser test scope": expands(
-    "Pull requests use the planner's specs; the merge queue covers every package and app the browser legs load.",
+    "Pull requests use the specs their legs carry; the merge queue covers every package and app the browser legs load.",
   ),
   "ci.yml:ci-browser#Check extension browser test scope": gap(
     "dependents",

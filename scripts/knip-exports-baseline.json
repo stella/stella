@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 121,
+    "count": 119,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 1,
@@ -8,7 +8,6 @@
       "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts": 6,
       "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-tool.ts": 2,
       "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-write-tool.ts": 1,
-      "apps/api/src/handlers/document-reviews/propose-positions-stream.ts": 1,
       "apps/api/src/handlers/entities/copy-utils.ts": 3,
       "apps/api/src/handlers/entities/pdf-signing-redeem-handoff.ts": 1,
       "apps/api/src/handlers/files/routes.ts": 7,
@@ -32,7 +31,7 @@
       "apps/api/src/lib/legal-search/corpus-index-generation-store.ts": 1,
       "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts": 1,
       "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 1,
-      "apps/api/src/lib/legal-search/sk-document-backfill.ts": 3,
+      "apps/api/src/lib/legal-search/sk-document-backfill.ts": 2,
       "apps/api/src/lib/lists/verification/run-caps.ts": 1,
       "apps/api/src/lib/lists/verification/run-persistence.ts": 1,
       "apps/api/src/lib/lists/verification/run-summary.ts": 2,
@@ -76,6 +75,12 @@
       "apps/web/src/lib/api.ts": 1,
       "apps/web/src/lib/workspaces/format-duration.ts": 1,
       "apps/web/src/lib/workspaces/mutations/time-entries.ts": 3
+    }
+  },
+  "packages/agent-engine": {
+    "count": 1,
+    "files": {
+      "packages/agent-engine/src/harness/skill-folders.ts": 1
     }
   },
   "packages/business-registries": {

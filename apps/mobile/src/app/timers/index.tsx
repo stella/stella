@@ -1,11 +1,11 @@
-import { Suspense, use, useState, useTransition } from "react";
+import { Suspense, use, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useRouter } from "expo-router";
 import { ActivityIndicator, RefreshControl, ScrollView } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { useChanged, useRevision } from "@/components/changes";
+import { useChanged, useRevisedLoad } from "@/components/changes";
 import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
 import { LoadFailedCard } from "@/components/load-failure";
 import { TimerCard } from "@/components/timer-card";
@@ -33,7 +33,6 @@ type TimersLoad = {
  */
 const TimersScreen = () => {
   const { state } = useSession();
-  const revision = useRevision("timers");
   const t = useTranslations("timers");
   const router = useRouter();
 
@@ -51,7 +50,7 @@ const TimersScreen = () => {
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
       {state.status === "signed-in" ? (
-        <TimersLoader key={revision} source={state.source} />
+        <TimersLoader source={state.source} />
       ) : null}
     </>
   );
@@ -77,7 +76,7 @@ const TimersLoader = ({ source }: { source: AccessTokenSource }) => {
       ),
     };
   };
-  const [load, setLoad] = useState(loadTimers);
+  const [load, setLoad] = useRevisedLoad(loadTimers, ["timers"]);
   const [refreshing, startRefresh] = useTransition();
   const reload = () => {
     startRefresh(() => {

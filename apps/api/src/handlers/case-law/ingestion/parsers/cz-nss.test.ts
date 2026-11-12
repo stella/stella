@@ -3,11 +3,14 @@ import { describe, expect, test } from "bun:test";
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import { nssUnitDecisionHtml } from "./cz-nss.test-fixture";
 import { inlinesToPlainText } from "./shared-inlines";
+
+const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -153,7 +156,7 @@ describe("parseNssDecisionHtml", () => {
         documentAst.blocks.find(
           (block) => block.plainText === "JMÉNEM REPUBLIKY",
         ),
-      ).toMatchObject({ type: "paragraph", role: "intro" });
+      ).toMatchObject({ type: "paragraph", role: "opening-formula" });
     });
   });
 
@@ -917,7 +920,7 @@ describe("parseNssDecisionHtml", () => {
 
       expect(republicTitle).toMatchObject({
         type: "paragraph",
-        role: "intro",
+        role: "opening-formula",
       });
       expect(holding?.plainText).toContain("se zrušuje");
       expect(holding?.inlines).toContainEqual({

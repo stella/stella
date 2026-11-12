@@ -1,7 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslations } from "use-intl";
 
-import { useRevision } from "@/components/changes";
 import { MatterEntities } from "@/components/matter-entities";
 import { barGlyph } from "@/components/ui/bar-glyph";
 import { usePickDocument } from "@/components/use-pick-document";
@@ -21,24 +20,22 @@ const MatterScreen = () => {
     name?: string;
   }>();
   const { state } = useSession();
-  const revision = useRevision("documents", "tasks");
 
   return (
     <>
       <Stack.Screen options={{ title: name ?? "" }} />
       <AddMenu workspaceId={workspaceId} />
       {state.status === "signed-in" ? (
-        <MatterEntities
-          key={revision}
-          source={state.source}
-          workspaceId={workspaceId}
-        />
+        <MatterEntities source={state.source} workspaceId={workspaceId} />
       ) : null}
     </>
   );
 };
 
-/** The matter's "+": a menu of what can be added to it. */
+/**
+ * The matter's Details, its own settings: name, number, client, team and
+ * parties; and its "+", a menu of what can be added to it.
+ */
 const AddMenu = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations("matter");
   const router = useRouter();
@@ -47,6 +44,16 @@ const AddMenu = ({ workspaceId }: { workspaceId: string }) => {
 
   return (
     <Stack.Toolbar placement="right">
+      <Stack.Toolbar.Button
+        onPress={() => {
+          router.push({
+            pathname: "/matter/[workspaceId]/info",
+            params: { workspaceId },
+          });
+        }}
+      >
+        <Stack.Toolbar.Label>{t("details")}</Stack.Toolbar.Label>
+      </Stack.Toolbar.Button>
       <Stack.Toolbar.Menu>
         {barGlyph("plus")}
         <Stack.Toolbar.Label>{t("add")}</Stack.Toolbar.Label>

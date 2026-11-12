@@ -59,14 +59,15 @@ const BENIGN: readonly RegExp[] = [
   // department code sits in one of the slash-joined segments: "č. j.
   // KK/547/DS/19-3" (regional authority), "č. j. 2194/OD/19-4/Rsz" (city
   // transport department), "č. j. 5/OH/8433/01-Sa/533" (environmental
-  // inspectorate). Two properties separate these from a court docket: the
+  // inspectorate), and its "sp. zn." spelling ("sp. zn. IV/12/345/2000/AB",
+  // tax directorate). Two properties separate these from a court docket: the
   // reference carries no whitespace, and it joins four or more segments,
   // while the widest court docket the extractor accepts
   // (CASE_NUMBER_BODY_COMMA) reaches three. The leading lookahead keeps the
   // no-whitespace chamber+registry spelling ("36Co/52/53/2023") out, and the
   // trailing one prevents a longer or oversized reference from matching a
   // benign-looking prefix of itself.
-  /[čc]\.\s{0,3}j\.:?\s{0,3}(?!\d{1,3}\p{L}{1,6}\/)[\p{L}\d-]{1,10}(?:\/[\p{L}\d-]{1,10}){3,5}(?![\p{L}\d/-])/u,
+  /(?:[čc]\.\s{0,3}j\.|sp\.\s{0,3}zn\.):?\s{0,3}(?!\d{1,3}\p{L}{1,6}\/)[\p{L}\d-]{1,10}(?:\/[\p{L}\d-]{1,10}){3,5}(?![\p{L}\d/-])/u,
   // The same administrative reference written with a whitespace-separated
   // authority code: "č.j. MCO5 155283/2019/ODP/Mach" (městská část office),
   // "sp.zn. MCO5/OSU/1827/2017/Šev/Sm.p.967" (its sp. zn. spelling). The
@@ -87,6 +88,12 @@ const BENIGN: readonly RegExp[] = [
   // rule above misses it whenever the detector's greedy tail reaches into
   // following prose that carries a date.
   /^(?:sp\.\s{0,3}zn\.|sen\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)\s{0,3}[Aa]nonymizov[aá]no\b/u,
+  // Czech anonymization label standing where the file number belongs ("č. j.
+  // číslo jednací ze dne …", "č. j. Číslo jednací …", "č. j. č. účtu ze dne
+  // …"): a lowercase word follows the label, never a number, so trailing prose
+  // digits must not keep it a residual. A docket-shaped number/year shortly
+  // after the label ("č. j. číslo jednací 12 C 345/2020") is a real reference.
+  /^[čc]\.\s{0,3}j\.:?\s{0,3}(?:[čČ]íslo|[čČ]\.\s{0,2}účtu)(?=\s{1,3}\p{Ll}|$)(?![^\n]{0,45}?\d{1,6}\/\d{2,4})/u,
   // Czech regional-authority file number with a space-separated office
   // code ("č. j. KUAB 12345/2020"): every krajský úřad code opens with
   // "KU", which no court registry does, and the reference is not a court

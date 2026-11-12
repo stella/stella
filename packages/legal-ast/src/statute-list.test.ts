@@ -5,17 +5,21 @@ import { section72aSubsection1Blocks } from "./fixtures/cz-141-1961-section-72a.
 import { section128Subsection2Blocks } from "./fixtures/sk-300-2005-section-128.js";
 import { section15LetterBPoint1Blocks } from "./fixtures/sk-595-2003-section-15.js";
 import {
-  E_SBIRKA_LIST_SCHEME,
-  flatStatuteLists,
+  E_SBIRKA_ANCHORS,
+  SLOV_LEX_ANCHORS,
+  US_CODE_ANCHORS,
+  wholeStatuteAnchors,
+} from "./statute-anchor-scheme.js";
+import type { StatuteAnchorScheme } from "./statute-anchor-scheme.js";
+import {
   paragraphFromPreview,
-  SLOV_LEX_LIST_SCHEME,
   statuteListMarkerEnd,
   withStatuteListDepth,
 } from "./statute-list.js";
-import type { PreviewBlock, StatuteListScheme } from "./statute-list.js";
+import type { PreviewBlock } from "./statute-list.js";
 
 /** A paragraph's depth and the designator the renderer hangs, as drawn. */
-const drawnParagraph = (scheme: StatuteListScheme, block: ParagraphBlock) => {
+const drawnParagraph = (scheme: StatuteAnchorScheme, block: ParagraphBlock) => {
   const paragraph = withStatuteListDepth(block, scheme);
   const end = statuteListMarkerEnd(paragraph, scheme);
   return {
@@ -25,10 +29,10 @@ const drawnParagraph = (scheme: StatuteListScheme, block: ParagraphBlock) => {
 };
 
 /** A provision read's block, drawn through a publisher's scheme. */
-const drawnIn = (scheme: StatuteListScheme) => (block: PreviewBlock) =>
+const drawnIn = (scheme: StatuteAnchorScheme) => (block: PreviewBlock) =>
   drawnParagraph(scheme, paragraphFromPreview(block));
 
-const drawn = drawnIn(E_SBIRKA_LIST_SCHEME);
+const drawn = drawnIn(E_SBIRKA_ANCHORS);
 
 describe("a provision's list structure", () => {
   test("a paragraph's letters nest one level under its lead-in and hang their designators", () => {
@@ -88,7 +92,7 @@ describe("a provision's list structure", () => {
       plainText: "a) písmeno",
       type: "paragraph",
     } satisfies ParagraphBlock;
-    expect(withStatuteListDepth(stored, E_SBIRKA_LIST_SCHEME)).toBe(stored);
+    expect(withStatuteListDepth(stored, E_SBIRKA_ANCHORS)).toBe(stored);
   });
 
   test("a paragraph in no list has no designator to hang", () => {
@@ -97,10 +101,8 @@ describe("a provision's list structure", () => {
       id: "p-7",
       text: "a) not a statute letter",
     });
-    expect(withStatuteListDepth(paragraph, E_SBIRKA_LIST_SCHEME)).toBe(
-      paragraph,
-    );
-    expect(statuteListMarkerEnd(paragraph, E_SBIRKA_LIST_SCHEME)).toBeNull();
+    expect(withStatuteListDepth(paragraph, E_SBIRKA_ANCHORS)).toBe(paragraph);
+    expect(statuteListMarkerEnd(paragraph, E_SBIRKA_ANCHORS)).toBeNull();
   });
 });
 
@@ -156,19 +158,20 @@ describe("e-Sbírka anchors as the Czech reader draws them", () => {
       "par_11-odst_2-pism_b": { depth: 1, marker: "b) " },
       "par_11-odst_2-pism_b-bod_1": { depth: 2, marker: "1. " },
       "par_139-odst_1-pism_b": { depth: 1, marker: "b) " },
-      "par_139-odst_1-pism_b-pism_aa": { depth: 1, marker: "aa) " },
+      // A letter nested in a letter sits one level under it.
+      "par_139-odst_1-pism_b-pism_aa": { depth: 2, marker: "aa) " },
       ppc_1: { depth: null, marker: null },
     });
   });
 });
 
 describe("Slov-Lex anchors", () => {
-  const drawnSk = drawnIn(SLOV_LEX_LIST_SCHEME);
+  const drawnSk = drawnIn(SLOV_LEX_ANCHORS);
 
   test("a subsection's letters nest under its lead-in, and the tail they continue does not", () => {
     expect(
       section128Subsection2Blocks.map((block) =>
-        drawnParagraph(SLOV_LEX_LIST_SCHEME, block),
+        drawnParagraph(SLOV_LEX_ANCHORS, block),
       ),
     ).toEqual([
       { depth: null, marker: null },
@@ -222,15 +225,24 @@ describe("Slov-Lex anchors", () => {
 
 describe("a publisher whose anchors state no lists", () => {
   test("neither nests nor hangs an item", () => {
-    const flat = flatStatuteLists("No anchor grammar.");
     const paragraph = paragraphFromPreview({
       anchorId: "par_72a-odst_1-pism_a",
       id: "1",
       text: "a) jeden rok, je-li vedeno trestní stíhání pro přečin,",
     });
-    expect(withStatuteListDepth(paragraph, flat)).toBe(paragraph);
-    expect(
-      statuteListMarkerEnd({ ...paragraph, listDepth: 1 }, flat),
-    ).toBeNull();
+    const usPath = paragraphFromPreview({
+      anchorId: "s1983/a/1",
+      id: "2",
+      text: "(1) In general.",
+    });
+    for (const [scheme, block] of [
+      [wholeStatuteAnchors("No anchor grammar."), paragraph],
+      [US_CODE_ANCHORS, usPath],
+    ] as const) {
+      expect(withStatuteListDepth(block, scheme)).toBe(block);
+      expect(
+        statuteListMarkerEnd({ ...block, listDepth: 1 }, scheme),
+      ).toBeNull();
+    }
   });
 });

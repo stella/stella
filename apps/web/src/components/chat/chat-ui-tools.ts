@@ -9,12 +9,14 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
+  isBrowserResolvedChatToolCall,
   isChatPastedTextPart,
-  isServerChatToolCall,
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-local-run-question";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import {
+  externalMcpConnectorSlugOf,
   isApprovalGatedBuiltInChatTool,
   isGrantableChatTool,
 } from "@stll/api-contract/chat-tool-grants";
@@ -22,6 +24,7 @@ import { isOwnKey } from "@stll/api-contract/own-key";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
+import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
 import type { TranslationKey } from "@/i18n/types";
 import type { WebApiRoutes } from "@/lib/api";
 import type {
@@ -124,11 +127,23 @@ type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
   "ask-user" | "create-document" | "request_secret" | "connect_connector"
 >;
-export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
+/**
+ * A harness-native step of a coding agent on the member's computer. The
+ * member approves one like any other call (`isApprovalToolName` accepts its
+ * name), and its input is the contract's (`chat-local-run-tool`).
+ */
+type HarnessToolName = keyof typeof HARNESS_TOOL_TITLE_KEYS;
+export type HarnessChatToolCallPart = Omit<TanStackChatToolCallPart, "name"> & {
+  name: HarnessToolName;
+};
+export type ApprovalToolName =
+  BuiltInApprovalToolName | HarnessToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
   ApprovalToolName | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
-export type ApprovalToolPart = RegisteredChatUIToolCallPart & {
+export type ApprovalToolPart = (
+  RegisteredChatUIToolCallPart | HarnessChatToolCallPart
+) & {
   name: ApprovalToolName;
   approval: {
     approved?: boolean | undefined;
@@ -170,6 +185,9 @@ const USER_INPUT_TOOL_NAMES = {
   [ASK_USER_TOOL_NAME]: true,
   [REQUEST_SECRET_TOOL_NAME]: true,
   [CONNECT_CONNECTOR_TOOL_NAME]: true,
+  // A blocking question a coding agent on the member's computer asks: its
+  // call stays open until the member answers it from the question card.
+  [CHAT_LOCAL_RUN_QUESTION_TOOL]: true,
 } as const satisfies Record<string, true>;
 export type UserInputChatToolName = keyof typeof USER_INPUT_TOOL_NAMES;
 
@@ -232,6 +250,7 @@ export const isSuggestChangesApplyOutput = (
 
 const CHAT_TOOL_TITLE_KEYS = {
   show_visual: "chat.generatedView",
+  show_app: "chat.tool.show_app",
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
   request_secret: "chat.tool.request_secret",
@@ -344,9 +363,25 @@ const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   "search-across-matters": "chat.tool.search-across-matters",
 } as const satisfies Record<string, TranslationKey>;
 
+/**
+ * Actions a coding agent on the member's computer takes itself, persisted
+ * under the harness-native names the agent engine gives them
+ * (`HARNESS_TOOL_NAMES` in `@stll/agent-engine`). Its MCP calls to stella use
+ * the registry names above and need no entry here.
+ */
+const HARNESS_TOOL_TITLE_KEYS = {
+  command_execution: "chat.tool.command_execution",
+  file_change: "chat.tool.file_change",
+  harness_web_search: "chat.tool.harness_web_search",
+  request_user_input: "chat.tool.request_user_input",
+  request_permissions: "chat.tool.request_permissions",
+  harness_unsupported_item: "chat.tool.harness_unsupported_item",
+} as const satisfies Record<string, TranslationKey>;
+
 const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
   ...CHAT_TOOL_TITLE_KEYS,
   ...RETIRED_CHAT_TOOL_TITLE_KEYS,
+  ...HARNESS_TOOL_TITLE_KEYS,
 } as const;
 
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
@@ -377,13 +412,6 @@ export const isExternalInputChatToolName = (
 ): toolName is ExternalInputToolName =>
   isOwnKey(EXTERNAL_INPUT_CHAT_TOOL_NAMES, toolName);
 
-export const getExternalMcpConnectorSlugFromToolName = (
-  toolName: `mcp__${string}`,
-): string | null => {
-  const parts = toolName.split("__");
-  return parts.length >= 3 ? (parts.at(1) ?? null) : null;
-};
-
 export const getExternalMcpConnectorApprovalGrant = (
   connectorSlug: string,
 ): ToolApprovalGrant =>
@@ -396,7 +424,7 @@ export const getToolApprovalGrant = (
     return toolName;
   }
 
-  const connectorSlug = getExternalMcpConnectorSlugFromToolName(toolName);
+  const connectorSlug = externalMcpConnectorSlugOf(toolName);
   if (!connectorSlug) {
     return toolName;
   }
@@ -656,8 +684,10 @@ export const isPendingApprovalPart = (
   );
 };
 
+// Any part: a coding agent's step is an approval part too, outside the
+// registered tool names.
 export const isApprovalRespondedPart = (
-  part: ChatPart,
+  part: unknown,
 ): part is ApprovalToolPart & {
   approval: { approved: boolean; id: string; needsApproval: boolean };
   state: "approval-responded";
@@ -735,7 +765,7 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
       !(
         part.type === "tool-call" &&
         part.state === "input-complete" &&
-        isServerChatToolCall(part)
+        !isBrowserResolvedChatToolCall(part)
       ),
   );
 };
@@ -830,7 +860,7 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   if (
     part.type !== "tool-call" ||
     part.state !== "input-complete" ||
-    isServerChatToolCall(part)
+    !isBrowserResolvedChatToolCall(part)
   ) {
     return false;
   }
@@ -920,7 +950,7 @@ export const sanitizeRunningToolCalls = (
       message.metadata?.turnOutcome?.type === "awaiting-user" &&
       part.type === "tool-call" &&
       part.state === "input-complete" &&
-      isServerChatToolCall(part)
+      !isBrowserResolvedChatToolCall(part)
         ? part
         : toTerminalIfRunningToolPart(part),
     );
@@ -1066,9 +1096,12 @@ export const getChatAssistantTurnError = (
   switch (outcome.type) {
     case "failed":
       return outcome.refusal === undefined
-        ? withProviderDiagnostic(
-            new Error(outcome.error),
-            outcome.providerDiagnostic,
+        ? withLocalRunLimitResetsAt(
+            withProviderDiagnostic(
+              new Error(outcome.error),
+              outcome.providerDiagnostic,
+            ),
+            outcome.limitResetsAt,
           )
         : toAPIError({
             status: ACTION_ADMISSION_REFUSALS[outcome.refusal.code].status,
@@ -1252,6 +1285,15 @@ export const consumeDocumentDeletionToolCalls = ({
 export type PlaybookSaveMessage = DocumentDeletionMessage;
 
 /**
+ * The newest save a session has not handled yet. `history` marks a save that
+ * was loaded with older messages, not made while the session watched.
+ */
+export type PlaybookSaveTarget = {
+  playbookId: string;
+  source: "history" | "live";
+};
+
+/**
  * Consume the successful `save_playbook` calls this session has not handled,
  * returning whether caches changed and the latest playbook to follow. A
  * newly completed older call still changed caches even when a later call
@@ -1267,8 +1309,8 @@ export const consumePlaybookSaveToolCalls = ({
   handledToolCallIds: Set<string>;
   historicalToolCallIds?: ReadonlySet<string>;
   messages: readonly PlaybookSaveMessage[];
-}): { playbookId: string | null } | null => {
-  let latestPlaybookId: string | null = null;
+}): { target: PlaybookSaveTarget | null } | null => {
+  let target: PlaybookSaveTarget | null = null;
   let hasNewSaves = false;
 
   for (const message of messages) {
@@ -1288,19 +1330,20 @@ export const consumePlaybookSaveToolCalls = ({
         continue;
       }
       if (handledToolCallIds.has(part["id"])) {
-        latestPlaybookId = null;
+        target = null;
         continue;
       }
 
       handledToolCallIds.add(part["id"]);
       hasNewSaves = true;
-      latestPlaybookId = historicalToolCallIds?.has(part["id"])
-        ? null
-        : part["output"]["playbookId"];
+      target = {
+        playbookId: part["output"]["playbookId"],
+        source: historicalToolCallIds?.has(part["id"]) ? "history" : "live",
+      };
     }
   }
 
-  return hasNewSaves ? { playbookId: latestPlaybookId } : null;
+  return hasNewSaves ? { target } : null;
 };
 
 /** The playbook a tool call saved, if it is a completed `save_playbook`

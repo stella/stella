@@ -1,4 +1,5 @@
 import { CornerDownLeftIcon, SearchIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 /**
@@ -67,9 +68,9 @@ export const ClipboardWorkflowPreview = ({
     >
       <div className="border-border/50 flex items-center gap-2 border-b px-2.5 py-2">
         <SearchIcon className="text-muted-foreground size-3.5 shrink-0" />
-        <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
+        <TruncatedText className="text-muted-foreground flex-1 text-xs">
           {title}
-        </span>
+        </TruncatedText>
       </div>
       <ul className="flex flex-col gap-0.5 p-1.5">
         {HISTORY.map((snippet, index) => (
@@ -187,7 +188,7 @@ type ClipboardWorkflowPreviewProps = {
 };
 
 const Chip = ({ snippet }: { snippet: Snippet }) => (
-  <span className="bg-foreground text-background text-3xs grid size-4 shrink-0 place-items-center rounded-[4px] leading-none font-semibold">
+  <span className="bg-foreground text-background text-3xs grid size-4 shrink-0 place-items-center rounded-sm leading-none font-semibold">
     <bdi>{snippet.label}</bdi>
   </span>
 );
@@ -212,7 +213,7 @@ const SourceWindow = ({
         src={SOURCE_APP_ICON_PATHS[snippet.sourceApp]}
       />
       <kbd
-        className="cwp-press bg-muted text-muted-foreground ms-auto shrink-0 rounded-[3px] px-1 py-px font-mono text-[9px] leading-none"
+        className="cwp-press bg-muted text-muted-foreground ms-auto shrink-0 rounded-sm px-1 py-px font-mono text-[9px] leading-none"
         dir="ltr"
         style={delay(T.select + index * T.selectStagger)}
       >

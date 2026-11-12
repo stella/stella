@@ -16,6 +16,7 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
+import { Form } from "@stll/ui/form";
 import {
   CheckIcon,
   DownloadIcon,
@@ -24,10 +25,11 @@ import {
   PlusIcon,
   Trash2Icon,
 } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { useContentDir } from "@stll/ui/use-content-dir";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -385,13 +387,13 @@ export const VersionsSidebar = ({
             variant="ghost"
           >
             <FileDiffIcon className="size-4 shrink-0" />
-            <span className="truncate">
+            <TruncatedText>
               {t(
                 onCompareVersions === undefined
                   ? "fileDetail.compareDocxOnly"
                   : "fileDetail.compare",
               )}
-            </span>
+            </TruncatedText>
           </Button>
         )}
         <Button
@@ -412,7 +414,7 @@ export const VersionsSidebar = ({
           variant="ghost"
         >
           <PlusIcon className="size-4" />
-          <span className="truncate">{t("fileDetail.uploadNewVersion")}</span>
+          <TruncatedText>{t("fileDetail.uploadNewVersion")}</TruncatedText>
         </Button>
       </div>
     </div>
@@ -558,21 +560,23 @@ const VersionItem = ({
                 <Tooltip
                   content={t("common.documentReference")}
                   render={
-                    <span className="text-muted-foreground text-3xs truncate font-mono" />
+                    <span className="text-muted-foreground text-3xs min-w-0 font-mono" />
                   }
                 >
-                  <BidiText direction="ltr">{version.stamp}</BidiText>
+                  <TruncatedText render={<BidiText direction="ltr" />}>
+                    {version.stamp}
+                  </TruncatedText>
                 </Tooltip>
               )}
               {version.label !== null && (
-                <span className="text-accent-foreground text-3xs inline-flex w-fit items-center gap-1.5 truncate font-medium">
+                <span className="text-accent-foreground text-3xs inline-flex w-fit min-w-0 items-center gap-1.5 font-medium">
                   <span
                     className={cn(
                       "size-2 shrink-0 rounded-full",
                       labelDotColor,
                     )}
                   />
-                  {version.label}
+                  <TruncatedText>{version.label}</TruncatedText>
                 </span>
               )}
             </div>
@@ -629,7 +633,7 @@ const VersionItem = ({
               settles; we just close the menu after the action
               finishes. */}
           <div className="px-2 py-1.5">
-            <form
+            <Form
               action={async (formData) => {
                 const raw = formData.get("customLabel");
                 const value = typeof raw === "string" ? raw.trim() : "";
@@ -641,7 +645,7 @@ const VersionItem = ({
               }}
             >
               <VersionLabelInput placeholder={t("fileDetail.label")} />
-            </form>
+            </Form>
           </div>
 
           <MenuSeparator />
@@ -724,28 +728,19 @@ const DEFAULT_LABEL_COLOR = "bg-foreground-disabled";
 const MENU_OWNED_KEYS = ["Escape", "ArrowDown", "ArrowUp"] as const;
 
 // Uncontrolled custom-label field (the form action reads it via FormData). It
-// is free text in any language, so resolve direction from the typed content
-// (empty inherits the UI direction; first character sets LTR vs RTL).
-const VersionLabelInput = ({ placeholder }: { placeholder: string }) => {
-  const labelDir = useContentDir({
-    dir: undefined,
-    value: undefined,
-    defaultValue: undefined,
-  });
-  return (
-    <input
-      autoComplete="off"
-      className="border-input bg-background placeholder:text-muted-foreground focus:ring-ring w-full rounded-md border px-2 py-1 text-xs outline-none focus:ring-1"
-      dir={labelDir.dir}
-      maxLength={128}
-      name="customLabel"
-      onChange={(event) => labelDir.trackValue(event.currentTarget.value)}
-      onKeyDown={(event) => {
-        if (!MENU_OWNED_KEYS.some((key) => key === event.key)) {
-          event.stopPropagation();
-        }
-      }}
-      placeholder={placeholder}
-    />
-  );
-};
+// is free text in any language; `Input` resolves its direction from the typed
+// content (empty inherits the UI direction; first character sets LTR vs RTL).
+const VersionLabelInput = ({ placeholder }: { placeholder: string }) => (
+  <Input
+    autoComplete="off"
+    maxLength={128}
+    name="customLabel"
+    onKeyDown={(event) => {
+      if (!MENU_OWNED_KEYS.some((key) => key === event.key)) {
+        event.stopPropagation();
+      }
+    }}
+    placeholder={placeholder}
+    size="sm"
+  />
+);

@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
@@ -8,8 +9,27 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import type * as v from "valibot";
 
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+
+import type { envWebClientSchema } from "../../src/env-schema";
+import { respond, staticBody } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
+
+const fixtureEnv = {
+  VITE_API_URL: "http://coverage.test",
+  VITE_DOCUMENTS_BUCKET: "documents",
+  VITE_DOCUMENTS_ENDPOINT: "https://objects.coverage.test",
+} satisfies v.InferInput<v.ObjectSchema<typeof envWebClientSchema, undefined>>;
+
+// The narrow-screen switcher is the design system's Select: open it, then
+// pick the country by the name the (hidden) desktop link shows in this locale.
+const pickCountry = async (page: Page, anchor: string) => {
+  const name = await page.locator(`nav a[href$="#${anchor}"]`).textContent();
+  await page.getByRole("combobox").click();
+  await page.getByRole("option", { name: name ?? anchor, exact: true }).click();
+};
 
 const cache = path.resolve(import.meta.dirname, "../../.cache");
 mkdirSync(cache, { recursive: true });
@@ -30,7 +50,10 @@ test.beforeAll(() => {
       "--target=browser",
       "--minify",
       "--external=@tanstack/react-start/server",
-      '--define=import.meta.env={"VITE_API_URL":"http://coverage.test","DEV":false}',
+      `--define=import.meta.env=${JSON.stringify({
+        ...fixtureEnv,
+        DEV: false,
+      })}`,
       '--define=process.env.NODE_ENV="production"',
       "--outfile",
       output,
@@ -69,22 +92,31 @@ test.beforeAll(() => {
 test.afterAll(() => rmSync(directory, { recursive: true, force: true }));
 test.beforeEach(async ({ page }) => {
   await page.route("**/law/coverage*", async (route) =>
-    route.fulfill({
-      contentType: "text/html",
-      body: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/coverage-fixture.css"></head><body><script type="importmap">{"imports":{"@tanstack/react-start/server":"/server-boundary.js"}}</script><script type="module" src="/coverage-fixture.js"></script></body></html>',
-    }),
+    respond(
+      route,
+      staticBody({
+        contentType: "text/html",
+        body: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/coverage-fixture.css"></head><body><script type="importmap">{"imports":{"@tanstack/react-start/server":"/server-boundary.js"}}</script><script type="module" src="/coverage-fixture.js"></script></body></html>',
+      }),
+    ),
   );
   await page.route("**/coverage-fixture.css", async (route) =>
-    route.fulfill({ contentType: "text/css", body: styles }),
+    respond(route, staticBody({ contentType: "text/css", body: styles })),
   );
   await page.route("**/server-boundary.js", async (route) =>
-    route.fulfill({
-      contentType: "text/javascript",
-      body: "export const getRequestHost = () => location.host; export const getCookie = () => undefined; export const setCookie = () => { throw new Error('Server cookie writes are unavailable in this fixture'); };",
-    }),
+    respond(
+      route,
+      staticBody({
+        contentType: "text/javascript",
+        body: "export const getRequestHost = () => location.host; export const getCookie = () => undefined; export const setCookie = () => { throw new Error('Server cookie writes are unavailable in this fixture'); };",
+      }),
+    ),
   );
   await page.route("**/coverage-fixture.js", async (route) =>
-    route.fulfill({ contentType: "text/javascript", body: bundle }),
+    respond(
+      route,
+      staticBody({ contentType: "text/javascript", body: bundle }),
+    ),
   );
 });
 
@@ -132,9 +164,9 @@ for (const locale of ["en", "ar"]) {
     await expect(switcher).toBeVisible();
     await toggle.focus();
     await page.keyboard.press("Space");
-    await switcher.selectOption("country-svk");
+    await pickCountry(page, "country-svk");
     await expect(page).toHaveURL(/#country-svk$/u);
-    await switcher.selectOption("country-cze");
+    await pickCountry(page, "country-cze");
     await expect(page).toHaveURL(/#country-cze$/u);
     await expect(table).toBeVisible();
     expect(
@@ -169,7 +201,10 @@ for (const locale of ["en", "ar"]) {
         waitUntil: "domcontentloaded",
       });
       const navigation = page.getByRole("navigation");
-      await expect(navigation.locator("a")).toHaveCount(8);
+      // The fixture lists every declared jurisdiction, so each gets an anchor.
+      await expect(navigation.locator("a")).toHaveCount(
+        CASE_LAW_JURISDICTIONS.length,
+      );
       const country = page.locator("#country-cze");
       const heading = country.getByRole("heading", { level: 2 });
       const expectHeadingBelowNavigation = async () => {
@@ -191,8 +226,8 @@ for (const locale of ["en", "ar"]) {
         node.style.fontSize = "24px";
       });
       if (width < 640) {
-        await page.getByRole("combobox").selectOption("country-svk");
-        await page.getByRole("combobox").selectOption("country-cze");
+        await pickCountry(page, "country-svk");
+        await pickCountry(page, "country-cze");
       } else {
         await navigation.locator('a[href$="#country-svk"]').click();
         await navigation.locator('a[href$="#country-cze"]').click();

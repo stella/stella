@@ -10,6 +10,7 @@ import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useFormatter } from "@/i18n/formatting-context";
 
@@ -20,6 +21,7 @@ import type {
 } from "./skill-history.logic";
 import {
   isOpenProposalStatus,
+  isReviewableProposalStatus,
   PROPOSAL_STATUS_LABEL_KEY,
 } from "./skill-history.logic";
 
@@ -84,7 +86,7 @@ export const ProposalMenu = ({
                     <span className="flex w-full flex-col gap-0.5 font-normal">
                       <span className="flex items-center gap-1.5">
                         <ProposalStatusBadge status={proposal.status} />
-                        <span className="text-muted-foreground text-2xs truncate">
+                        <TruncatedText className="text-muted-foreground text-2xs">
                           {t("skillHistory.proposalMeta", {
                             author: authorName(proposal.authorId),
                             date: format.dateTime(
@@ -95,7 +97,7 @@ export const ProposalMenu = ({
                               },
                             ),
                           })}
-                        </span>
+                        </TruncatedText>
                       </span>
                       <span className="text-foreground text-xs wrap-anywhere">
                         {proposal.summary === ""
@@ -105,7 +107,7 @@ export const ProposalMenu = ({
                       <span className="text-muted-foreground text-2xs">
                         {proposal.baseIsCurrent
                           ? t("skillHistory.basedOnCurrent")
-                          : t("skillHistory.outOfDate")}
+                          : t("common.outOfDate")}
                       </span>
                     </span>
                   </Button>
@@ -190,16 +192,19 @@ export const ProposalActionBar = ({
           value={summary}
         />
       ) : (
-        <p className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
+        <TruncatedText
+          className="text-muted-foreground flex-1 text-xs"
+          render={<p />}
+        >
           {summary === "" ? t("skillHistory.proposalNoSummary") : summary}
-        </p>
+        </TruncatedText>
       )}
       {isAuthor && status === "draft" ? (
         <Button onClick={onSubmitForReview} size="xs">
           {t("skillHistory.submitForReview")}
         </Button>
       ) : null}
-      {canManage && isOpen ? (
+      {canManage && isReviewableProposalStatus(status) ? (
         <ReviewDecisionActions
           acceptLabel={
             isStale ? t("skillHistory.acceptStale") : t("common.accept")

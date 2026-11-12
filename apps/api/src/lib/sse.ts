@@ -59,15 +59,22 @@ type WorkspaceConnectionAuthorizer = (
 
 /**
  * Whether one user still holds an active membership in the organization their
- * user-channel connection was opened for. The user channel is its own routing
- * table, so this is the only membership question it has to ask — no workspace
- * bucket is scanned to find a user's streams.
+ * user-channel connections were opened for, and which of their browser
+ * sessions among `sessionIds` are still live. The user channel is its own
+ * routing table, so this is the only membership question it has to ask — no
+ * workspace bucket is scanned to find a user's streams.
  */
 type UserConnectionAuthorizer = (lookup: {
   organizationId: SafeId<"organization">;
   sessionIds: readonly string[];
   userId: SafeId<"user">;
-}) => Promise<ReadonlySet<string>>;
+}) => Promise<UserConnectionAudience>;
+
+export type UserConnectionAudience = {
+  readonly member: boolean;
+  /** Only ever non-empty for a member. */
+  readonly liveSessionIds: ReadonlySet<string>;
+};
 
 /** Workspace ID → connected SSE streams on THIS instance. */
 const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
@@ -83,7 +90,37 @@ let authorizeWorkspaceConnections: WorkspaceConnectionAuthorizer | null = null;
 type UserSSEConnection = {
   controller: ReadableStreamDefaultController;
   organizationId: SafeId<"organization">;
-  sessionId: string;
+  holder: UserStreamHolder;
+};
+
+/**
+ * Who holds a user-channel stream. `id` keys the per-holder stream cap: the
+ * browser session, or for an app's access token the `oauth-client:` id its
+ * requests carry, so one app's streams for a person share one cap whichever
+ * device or refreshed token opened them. `kind` is the stream's binding kind
+ * and decides what each delivery re-checks: a browser session must still be
+ * live; a credential has no session row, so delivery re-checks the
+ * organization membership and the bound-stream sweep revalidates the token
+ * itself.
+ */
+type UserStreamHolder = {
+  readonly id: string;
+  readonly kind: SseStreamBinding["kind"];
+};
+
+const holdsUserStream = (
+  audience: UserConnectionAudience,
+  holder: UserStreamHolder,
+): boolean => {
+  switch (holder.kind) {
+    case "session":
+      return audience.liveSessionIds.has(holder.id);
+    case "credential":
+      return audience.member;
+    default:
+      holder.kind satisfies never;
+      return panic(`Unhandled user stream holder: ${String(holder.kind)}`);
+  }
 };
 
 /** User ID → that user's connected streams on THIS instance. */
@@ -332,9 +369,15 @@ const withHeartbeatFrames = (
           }
           closeHeartbeat();
           closeControllerQuietly(controller);
-          reader.cancel(CREDENTIAL_ENDED).catch((error: unknown) => {
-            observeFailure(error, { sink: BOUND_STREAM_CANCEL_FAILURE_SINK });
-          });
+          detached(
+            async () =>
+              reader.cancel(CREDENTIAL_ENDED).catch((error: unknown) => {
+                observeFailure(error, {
+                  sink: BOUND_STREAM_CANCEL_FAILURE_SINK,
+                });
+              }),
+            "sse.cancel-bound-stream",
+          );
         },
       };
       boundStreams.add(bound);
@@ -441,6 +484,36 @@ const enqueueOrDrop = <TConnection extends StreamConnection>({
   }
 };
 
+type AddStreamWithinLimitOptions<TConnection extends StreamConnection> = {
+  close: (connection: TConnection) => void;
+  connection: TConnection;
+  limit: number;
+  /** Whether a registered stream belongs to the same holder as `connection`. */
+  sameHolder: (registered: TConnection) => boolean;
+  set: Set<TConnection>;
+};
+
+/**
+ * Register a stream, keeping at most `limit` streams per holder in `set`: the
+ * holder's oldest streams beyond it are removed and closed. The newest stream
+ * is the one a reconnecting client reads, so closing older ones never ends the
+ * stream the client is waiting on.
+ */
+export const addStreamWithinLimit = <TConnection extends StreamConnection>({
+  close,
+  connection,
+  limit,
+  sameHolder,
+  set,
+}: AddStreamWithinLimitOptions<TConnection>): void => {
+  set.add(connection);
+  const held = [...set].filter(sameHolder);
+  for (const stale of held.slice(0, Math.max(0, held.length - limit))) {
+    set.delete(stale);
+    close(stale);
+  }
+};
+
 /**
  * Register a new SSE connection for a workspace.
  * Returns a ReadableStream that stays open until the client disconnects.
@@ -488,7 +561,15 @@ export const subscribe = ({
         set = new Set();
         connections.set(workspaceId, set);
       }
-      set.add(conn);
+      addStreamWithinLimit({
+        close: (stale) => {
+          closeControllerQuietly(stale.controller);
+        },
+        connection: conn,
+        limit: LIMITS.sseStreamsPerSession,
+        sameHolder: (registered) => registered.sessionId === sessionId,
+        set,
+      });
 
       const cleanup = () => {
         set.delete(conn);
@@ -507,7 +588,7 @@ export const subscribe = ({
 
 type SubscribeUserOptions = {
   organizationId: SafeId<"organization">;
-  sessionId: string;
+  holder: UserStreamHolder;
   signal: AbortSignal;
   userId: SafeId<"user">;
 };
@@ -519,7 +600,7 @@ type SubscribeUserOptions = {
  */
 export const subscribeUser = ({
   organizationId,
-  sessionId,
+  holder,
   signal,
   userId,
 }: SubscribeUserOptions): ReadableStream<Uint8Array> => {
@@ -537,7 +618,7 @@ export const subscribeUser = ({
       const conn: UserSSEConnection = {
         controller,
         organizationId,
-        sessionId,
+        holder,
       };
 
       let set = userConnections.get(userId);
@@ -545,7 +626,17 @@ export const subscribeUser = ({
         set = new Set();
         userConnections.set(userId, set);
       }
-      set.add(conn);
+      addStreamWithinLimit({
+        close: (stale) => {
+          closeControllerQuietly(stale.controller);
+        },
+        connection: conn,
+        limit: LIMITS.sseStreamsPerSession,
+        sameHolder: (registered) =>
+          registered.holder.kind === holder.kind &&
+          registered.holder.id === holder.id,
+        set,
+      });
 
       const cleanup = () => {
         set.delete(conn);
@@ -724,7 +815,9 @@ const broadcastLocalToUser = async (
     try: async () =>
       await authorizer({
         organizationId,
-        sessionIds: targets.map((connection) => connection.sessionId),
+        sessionIds: targets.flatMap(({ holder }) =>
+          holder.kind === "session" ? [holder.id] : [],
+        ),
         userId,
       }),
     catch: (cause) => cause,
@@ -742,7 +835,7 @@ const broadcastLocalToUser = async (
     if (!set.has(conn)) {
       continue;
     }
-    if (!reauthorized.value.has(conn.sessionId)) {
+    if (!holdsUserStream(reauthorized.value, conn.holder)) {
       set.delete(conn);
       closeControllerQuietly(conn.controller);
       continue;
@@ -776,18 +869,22 @@ const queueWorkspaceDelivery = (
     return undefined;
   });
   workspaceDeliveryTails.set(workspaceId, current);
-  current
-    .then(() => {
-      if (workspaceDeliveryTails.get(workspaceId) === current) {
-        workspaceDeliveryTails.delete(workspaceId);
-      }
-      return undefined;
-    })
-    .catch((error: unknown) => {
-      logger.error("sse.workspace_queue_cleanup_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+  detached(
+    async () =>
+      current
+        .then(() => {
+          if (workspaceDeliveryTails.get(workspaceId) === current) {
+            workspaceDeliveryTails.delete(workspaceId);
+          }
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          logger.error("sse.workspace_queue_cleanup_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+    "sse.release-workspace-delivery-tail",
+  );
 };
 
 /** Serialize one user's deliveries without blocking unrelated users. */
@@ -809,21 +906,31 @@ const queueUserDelivery = (
     return undefined;
   });
   userDeliveryTails.set(userId, current);
-  current
-    .then(() => {
-      if (userDeliveryTails.get(userId) === current) {
-        userDeliveryTails.delete(userId);
-      }
-      return undefined;
-    })
-    .catch((error: unknown) => {
-      logger.error("sse.user_queue_cleanup_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+  detached(
+    async () =>
+      current
+        .then(() => {
+          if (userDeliveryTails.get(userId) === current) {
+            userDeliveryTails.delete(userId);
+          }
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          logger.error("sse.user_queue_cleanup_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+    "sse.release-user-delivery-tail",
+  );
 };
 
-/** Push an SSE event to local connections for an entire organization. */
+/**
+ * Push an SSE event to local connections for an entire organization: every
+ * matter stream, which refreshes that matter's views, and every user stream,
+ * which each signed-in tab holds wherever it is, so organization-wide lists
+ * (contacts, for one) refresh on pages that have no matter open. The event is
+ * content-free — a resource type, never an id — like the rest of this fan-out.
+ */
 const broadcastLocalToOrganization = (
   organizationId: SafeId<"organization">,
   event: OrganizationRealtimeEvent,
@@ -839,6 +946,18 @@ const broadcastLocalToOrganization = (
     }
     if (set.size === 0 && connections.get(workspaceId) === set) {
       connections.delete(workspaceId);
+    }
+  }
+
+  for (const [userId, set] of userConnections) {
+    for (const conn of set) {
+      if (conn.organizationId !== organizationId) {
+        continue;
+      }
+      enqueueOrDrop({ chunk, connection: conn, set });
+    }
+    if (set.size === 0 && userConnections.get(userId) === set) {
+      userConnections.delete(userId);
     }
   }
 };
@@ -1012,21 +1131,25 @@ export const broadcastToUser = (
     );
   }
 
-  activePublisher()
-    .publishUserEvent(userId, organizationId, event, {
-      originInstanceId: INSTANCE_ID,
-      deliveredInline: deliveredLocally,
-    })
-    .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", {
-        "error.type": errorTag(error),
-      });
-      if (!deliveredLocally) {
-        queueUserDelivery(userId, async () =>
-          broadcastLocalToUser(userId, organizationId, event),
-        );
-      }
-    });
+  detached(
+    async () =>
+      activePublisher()
+        .publishUserEvent(userId, organizationId, event, {
+          originInstanceId: INSTANCE_ID,
+          deliveredInline: deliveredLocally,
+        })
+        .catch((error: unknown) => {
+          logger.warn("sse.redis_publish_failed", {
+            "error.type": errorTag(error),
+          });
+          if (!deliveredLocally) {
+            queueUserDelivery(userId, async () =>
+              broadcastLocalToUser(userId, organizationId, event),
+            );
+          }
+        }),
+    "sse.publish-user-event",
+  );
 };
 
 /**
@@ -1065,22 +1188,26 @@ export const broadcast = (
 
   const publishWorkspace =
     publishWorkspaceOverride ?? activePublisher().publishWorkspaceEvent;
-  publishWorkspace(workspaceId, event, {
-    originInstanceId: INSTANCE_ID,
-    deliveredInline: deliveredLocally,
-  }).catch((error: unknown) => {
-    logger.warn("sse.redis_publish_failed", {
-      "error.type": errorTag(error),
-    });
-    // Fallback: deliver locally when Redis is unavailable so
-    // single-instance deployments still get SSE invalidation. Skip it
-    // when we already delivered inline above to avoid double delivery.
-    if (!deliveredLocally) {
-      queueWorkspaceDelivery(workspaceId, async () =>
-        broadcastLocal(workspaceId, event),
-      );
-    }
-  });
+  detached(
+    async () =>
+      publishWorkspace(workspaceId, event, {
+        originInstanceId: INSTANCE_ID,
+        deliveredInline: deliveredLocally,
+      }).catch((error: unknown) => {
+        logger.warn("sse.redis_publish_failed", {
+          "error.type": errorTag(error),
+        });
+        // Fallback: deliver locally when Redis is unavailable so
+        // single-instance deployments still get SSE invalidation. Skip it
+        // when we already delivered inline above to avoid double delivery.
+        if (!deliveredLocally) {
+          queueWorkspaceDelivery(workspaceId, async () =>
+            broadcastLocal(workspaceId, event),
+          );
+        }
+      }),
+    "sse.publish-workspace",
+  );
 };
 
 export const broadcastToOrganization = (
@@ -1092,19 +1219,23 @@ export const broadcastToOrganization = (
     broadcastLocalToOrganization(organizationId, event);
   }
 
-  activePublisher()
-    .publishOrganizationEvent(organizationId, event, {
-      originInstanceId: INSTANCE_ID,
-      deliveredInline: deliveredLocally,
-    })
-    .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", {
-        "error.type": errorTag(error),
-      });
-      if (!deliveredLocally) {
-        broadcastLocalToOrganization(organizationId, event);
-      }
-    });
+  detached(
+    async () =>
+      activePublisher()
+        .publishOrganizationEvent(organizationId, event, {
+          originInstanceId: INSTANCE_ID,
+          deliveredInline: deliveredLocally,
+        })
+        .catch((error: unknown) => {
+          logger.warn("sse.redis_publish_failed", {
+            "error.type": errorTag(error),
+          });
+          if (!deliveredLocally) {
+            broadcastLocalToOrganization(organizationId, event);
+          }
+        }),
+    "sse.publish-organization-event",
+  );
 };
 
 // ── MCP tool projections ────────────────────────────────
@@ -1218,15 +1349,19 @@ export const broadcastSessionEvent = (
 ): void => {
   sessionDeliveryHandler?.(sessionId, event);
 
-  activePublisher()
-    .publishSessionEvent(sessionId, event, {
-      originInstanceId: INSTANCE_ID,
-    })
-    .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+  detached(
+    async () =>
+      activePublisher()
+        .publishSessionEvent(sessionId, event, {
+          originInstanceId: INSTANCE_ID,
+        })
+        .catch((error: unknown) => {
+          logger.warn("sse.redis_publish_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+    "sse.publish-session-event",
+  );
 };
 
 // ── Keep-alive heartbeat ────────────────────────────────
@@ -1553,9 +1688,16 @@ const launchAttachAttempt = (
   lifecycle: SseLifecycle,
   attempt: number,
 ): void => {
-  runAttachAttempt(lifecycle, attempt).catch((error: unknown) => {
-    logger.error("sse.redis_connection_failed", connectionErrorFields(error));
-  });
+  detached(
+    async () =>
+      runAttachAttempt(lifecycle, attempt).catch((error: unknown) => {
+        logger.error(
+          "sse.redis_connection_failed",
+          connectionErrorFields(error),
+        );
+      }),
+    "sse.run-attach-attempt",
+  );
 };
 
 /**
@@ -1613,9 +1755,10 @@ export const startSse = (
     }
     sweeping = true;
     detached(
-      sweepBoundStreams(authorizers.sessions).finally(() => {
-        sweeping = false;
-      }),
+      async () =>
+        sweepBoundStreams(authorizers.sessions).finally(() => {
+          sweeping = false;
+        }),
       "sse.credential-sweep",
     );
   };

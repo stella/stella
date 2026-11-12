@@ -1,5 +1,159 @@
 # @stll/cli
 
+## 6.10.0
+
+### Minor Changes
+
+- [#5730](https://github.com/stella/stella/pull/5730) [`bb3c063`](https://github.com/stella/stella/commit/bb3c0631575a9cb18be3688c80fbb16819802dfd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read and update organization-wide AI instructions, including the `--ai-instructions` option for organization settings.
+
+### Patch Changes
+
+- [#8290](https://github.com/stella/stella/pull/8290) [`ceb5745`](https://github.com/stella/stella/commit/ceb5745c39fd4dc6676676cdc797dc5dafc1dc54) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `chat.threads.read-state.update` and `chat.threads.pin-state.update`: mark one of your chats read or unread, and pin it to the top of your list or unpin it. `chat.threads.list` now says, for each chat, whether you have read its latest answer and whether you pinned it, and takes `pinState` to list only pinned or only unpinned chats.
+
+- [#8317](https://github.com/stella/stella/pull/8317) [`4571450`](https://github.com/stella/stella/commit/4571450505b901883f85e9d5ff68de355bd0c986) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `chat.threads.read-state.update` and `chat.threads.pin-state.update` describe that asking for the state a chat already has changes nothing and notifies none of your devices.
+
+- [#8282](https://github.com/stella/stella/pull/8282) [`fdc86ae`](https://github.com/stella/stella/commit/fdc86ae113bd086fda0d174b200f59dce7abeaa1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `entities.files.list` returns each file's size in bytes.
+
+- [#8283](https://github.com/stella/stella/pull/8283) [`b387911`](https://github.com/stella/stella/commit/b3879115ee4a9517c74c212325165bb9cd7409da) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.get` returns each claim's qualifiers: caveats beside its verdict that never change it (the record is not expected to speak to the point, a cited fact has a different scope, every fact it rests on is unsourced, or it rests on a held fact).
+
+- [#8309](https://github.com/stella/stella/pull/8309) [`7813e23`](https://github.com/stella/stella/commit/7813e230de265794852ca9147146bc21f49b792b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.claim-reviews.create` requires `reason` on `override`, `reopen` and `record-conflict` actions and takes an optional one on `status`, which can now also be `needs-evidence` (open until the record can answer it; never accepted in bulk). `lists.verifications.claim-reviews.list` reads a verification's review history, newest first: who acted, when, the action, its reason, and the claim's disposition just before and after, filterable by claim, action kind and reviewer.
+
+- [#8243](https://github.com/stella/stella/pull/8243) [`aa71bbb`](https://github.com/stella/stella/commit/aa71bbba70829a96ad63d85d42d94c0a60578d24) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `lists.fact-extractions.create`: stella reads evidence documents and proposes their facts, each citing the passage it comes from, as generation candidates to accept or reject.
+
+- [#8236](https://github.com/stella/stella/pull/8236) [`efafd07`](https://github.com/stella/stella/commit/efafd0742a3e6818cc18113f060d2e01c2dd8956) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Generation candidates of fact items carry their proposed fact details: submitting accepts them, listing returns them, and accepting a fact writes them onto the item. Generation runs list who produced them. A candidate name is held to the task name bound and a source quote to 2,000 characters.
+
+- [#8305](https://github.com/stella/stella/pull/8305) [`05f2f90`](https://github.com/stella/stella/commit/05f2f9073e6eb927ca6bb2a9a120970f6124359a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.source-documents.update` marks a document as testimony (a witness statement, interview note or transcript) or a record for one list's facts, and `lists.source-documents.list` reads the kind of each named document. `lists.items.list` returns each fact's tier (`document`, `testimony` or `unsourced`); `lists.verifications.get` returns the tier of each pinned fact in place of `sourcing`, the `testimony-only` qualifier, and for a record conflict the fact suggested to govern it.
+
+## 6.9.0
+
+### Minor Changes
+
+- [#8178](https://github.com/stella/stella/pull/8178) [`4f1cb55`](https://github.com/stella/stella/commit/4f1cb55d3b32c02e2913813d2d5634af2fe88271) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Adds `guidance search` and `guidance read` for regulator guidance served by stella.
+
+### Patch Changes
+
+- [#8172](https://github.com/stella/stella/pull/8172) [`23f7f99`](https://github.com/stella/stella/commit/23f7f992d6cc1070dd3799beffe477e797ed2362) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Reading case-law citations accepts `detail: compact` for short passages and `passage_query` to keep only citations whose citing paragraph holds given words.
+
+- [#8166](https://github.com/stella/stella/pull/8166) [`e25f865`](https://github.com/stella/stella/commit/e25f8658da8918e08519a1818ef9c4cf2c711dbd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law search` accepts `--docket-registers` and `--senate` to filter Czech and Slovak decisions by their docket.
+
+- [#8164](https://github.com/stella/stella/pull/8164) [`f0b45d2`](https://github.com/stella/stella/commit/f0b45d25b1c2d8813ea028e3b0a36b219d412f27) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law search` and `case-law read` accept `--preferred-language` to return a decision in that language where a version exists.
+
+- [#8176](https://github.com/stella/stella/pull/8176) [`7770328`](https://github.com/stella/stella/commit/777032868a3d921d9932673937fd687300a762a4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search `provision` description no longer offers EU provisions, which have no recorded links yet; name them in the query instead.
+
+- [#8168](https://github.com/stella/stella/pull/8168) [`04bec78`](https://github.com/stella/stella/commit/04bec78f6570b722b6269b996c7c6b4588e43f12) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law read` accepts `--resume-after` to continue a query's matches and `--section court_reasoning` to restrict them, reporting when the boundary was not found.
+
+- [#8171](https://github.com/stella/stella/pull/8171) [`adfa8f1`](https://github.com/stella/stella/commit/adfa8f1f4ad88cddc45d94f3fe86516a4a22495d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` returns the phrasings that finished when others run out of time, and the returned cursor runs those phrasings again.
+
+- [#8162](https://github.com/stella/stella/pull/8162) [`1fd0738`](https://github.com/stella/stella/commit/1fd0738aa53af83db7229285149db7b42051c98b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` reports a total only when the call names facets, for a single phrasing.
+
+- [#8137](https://github.com/stella/stella/pull/8137) [`6fe6aa0`](https://github.com/stella/stella/commit/6fe6aa052474508b3b0c784298231bf77d168c41) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `organization-settings get` also returns `localRunMaxApprovalMode`, the most a chat turn run on a member's computer may do without asking.
+
+- [#8183](https://github.com/stella/stella/pull/8183) [`6f5b448`](https://github.com/stella/stella/commit/6f5b4481750c601bd1935a042789287ccfb61728) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` and `search_legislation` can answer `status: "running"` with `continuation_token` when a search outlives its response deadline, instead of timing out. Calling again with the token collects the answer. Two new error codes: `continuation_expired` and `public_read_unfinished`.
+
+## 6.8.3
+
+### Patch Changes
+
+- [#7940](https://github.com/stella/stella/pull/7940) [`ad81543`](https://github.com/stella/stella/commit/ad81543e9c85c79cc921caa5b72d7ee39cde94c3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `properties create` and `properties batch-create` accept `toolType: "ai-model"` for a money column, and `properties prompt-suggest` accepts the `money` content type. An AI money column requires the `table-analysis` feature.
+
+- [#7948](https://github.com/stella/stella/pull/7948) [`f0bb587`](https://github.com/stella/stella/commit/f0bb587b3b56b0f59c2e366c6fbf844a1d85a123) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `fields cell-metadata-update` accepts `overrideReason`: why a person replaced the value a run produced in a cell. It is refused with `cell_override_absent` on a cell that holds no such replacement.
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependencies: `@stll/time` 0.4.2, `temporal-polyfill` 1.0.6, `lucide-react` 1.65.0, Tiptap 3.32.1 and the MCP client 2.4.0.
+
+- [#8045](https://github.com/stella/stella/pull/8045) [`f89caa2`](https://github.com/stella/stella/commit/f89caa2e730c7da753ccd0efe2e67785e77732cf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law read --query` says which words a query with no match could not find together, and which query to try next. It still returns no paragraph unless one holds every word.
+
+- [#8046](https://github.com/stella/stella/pull/8046) [`34d9234`](https://github.com/stella/stella/commit/34d923482605050a0c62be2e17b3e820886cea0d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law search`, `stella legislation search` and `stella legislation read` results carry the publisher link once, as `source_url`. The duplicate `sourceUrl` field is gone.
+
+- [#8041](https://github.com/stella/stella/pull/8041) [`72ba870`](https://github.com/stella/stella/commit/72ba8701d59996f51b43a4f77b3aa42411f355f1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law resolve` returns a decision's identity and whether its text can be read, not the text. Read the text with `stella case-law read`.
+- Updated dependencies [[`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88)]:
+  - @stll/agent-input@0.4.2
+
+## 6.8.2
+
+### Patch Changes
+
+- Carry the current generated tool registry. No command changes.
+
+## 6.8.1
+
+### Patch Changes
+
+- [#7887](https://github.com/stella/stella/pull/7887) [`f902f3b`](https://github.com/stella/stella/commit/f902f3b736adb0ac24e749876e319ad554cdc710) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` returns the phrasings that finished when another phrasing runs out of its time budget; that phrasing reports a `time_budget` truncated outcome and a `phrasing_timed_out` warning instead of failing the call.
+
+## 6.8.0
+
+### Minor Changes
+
+- [#5808](https://github.com/stella/stella/pull/5808) [`620ff13`](https://github.com/stella/stella/commit/620ff13b01484e4863fdc938a6ee9bf1a2db5a52) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add organization data-box settings commands and expose data-box messages through matter correspondence reads and channel filtering.
+
+### Patch Changes
+
+- [#6937](https://github.com/stella/stella/pull/6937) [`3fdce69`](https://github.com/stella/stella/commit/3fdce69a4490b2d55483c1c6b8e56dd4eb722a57) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A reader mark keeps the words either side of its quote, and listing marks reports each passage as placed at the anchor where its words are now or as orphaned when the document's current text has no single place for them.
+
+## 6.7.1
+
+### Patch Changes
+
+- [#7606](https://github.com/stella/stella/pull/7606) [`6c907e2`](https://github.com/stella/stella/commit/6c907e206ce59165e77e0714b8302160b396d56a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use the stella CLI display name and show a themed sign-in completion page with organization context. The browser shows "Signed in" only after the CLI has exchanged the code and saved the credential; otherwise it names what failed and how to retry.
+
+## 6.7.0
+
+### Minor Changes
+
+- [#7569](https://github.com/stella/stella/pull/7569) [`4e29565`](https://github.com/stella/stella/commit/4e2956596d0f3b7685341d263192cd0131dcd212) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a capability that deletes several contacts at once and reports, per contact, whether it was deleted or why it was kept.
+
+## 6.6.3
+
+### Patch Changes
+
+- [#7618](https://github.com/stella/stella/pull/7618) [`e9788a3`](https://github.com/stella/stella/commit/e9788a3d95a36f9867195899b98a8760a3733683) Thanks [@jan-kubica](https://github.com/jan-kubica)! - audit-logs.list accepts a performer filter: people for entries members and their agents performed, automations for entries background services wrote.
+
+## 6.6.2
+
+### Patch Changes
+
+- [#7147](https://github.com/stella/stella/pull/7147) [`6437ee1`](https://github.com/stella/stella/commit/6437ee114994c67fdc87348c0ac16d21daee6df4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow matter-list requests to filter matters by active or archived status.
+
+## 6.6.1
+
+### Patch Changes
+
+- [#7839](https://github.com/stella/stella/pull/7839) [`d35400e`](https://github.com/stella/stella/commit/d35400e1f22707188c32659ca94b2e74ca84b527) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `set_field_value` accepts `null` as an int value, which clears the cell.
+
+- [#7616](https://github.com/stella/stella/pull/7616) [`bd8e585`](https://github.com/stella/stella/commit/bd8e585d1c18484955d354b23ca36374d4a08867) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept vendor schema annotations, cache trusted registry projections between commands, serialize token refreshes, and distinguish missing scopes, disabled features, incompatible protocols and commands unknown to the server. Add template list paging and validate every generated list and curated command binding against the server contract. Resolve effective scope grants once for command discovery and execution.
+
+  Keep template pagination stable after boundary deletion, allow unrelated credential refreshes to overlap, and report registry persistence failures consistently.
+
+- [#7845](https://github.com/stella/stella/pull/7845) [`abe39ba`](https://github.com/stella/stella/commit/abe39ba8cf2b6828e0fe4663a09c006cc8629d5a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `invoices.prefill` returns `issueBlockers`, what would stop the new invoice from being issued. `invoices.transition` refuses to finalize an invoice without a seller profile or a default number series with the codes `invoice_seller_profile_missing` and `invoice_number_series_missing`.
+
+- [#7840](https://github.com/stella/stella/pull/7840) [`98d0c2e`](https://github.com/stella/stella/commit/98d0c2eccf00a9445d55a110d1a124e2fbb2785a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `rates.create` makes a matter's first rate table its default, and `rates.delete` can remove a matter's last table.
+- Updated dependencies []:
+  - @stll/agent-input@0.4.1
+
+## 6.6.0
+
+### Minor Changes
+
+- Contact create and import no longer accept a contact `id`; the server mints each contact's id and returns it.
+
+### Patch Changes
+
+- `entities.files.list` takes a `search` text that keeps only documents whose file name or name contains it, ignoring case and accents.
+
+- The `matters.update` capability accepts `billingNarrativeLanguage`, the BCP-47 language a matter's billing narratives are written in, or null to clear it.
+- Updated dependencies []:
+  - @stll/agent-input@0.4.0
+
+## 6.5.1
+
+### Patch Changes
+
+- Keep provision-filtered case-law searches bounded. Exhausting the candidate budget returns a successful partial or empty page with a continuation cursor; only a statement timeout returns the retryable timeout response.
+
+- Add `defaultTranscriptionModelId`, the cheapest transcription model offered in a region. The `dictation transcribe` capability no longer requires a model: without one the server uses that default for the organization's region.
+
+- `search.results.list` searches across the matters you can open, by text and filters, with `stella:read`. Assistant chat results need `stella:chat`.
+
 ## 6.5.0
 
 ### Minor Changes

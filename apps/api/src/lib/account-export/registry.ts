@@ -72,6 +72,7 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
+  billing_draft_user_settings: { type: "exported" },
   case_law_matter_links: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
@@ -94,6 +95,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
+  chat_browser_site_grants: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
   chat_threads: { type: "exported" },
   chat_tool_grants: {
     type: "exempt",
@@ -101,6 +106,12 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   },
   chat_turns: { type: "exempt", reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived },
   clauses: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
+  // The firm's compliance record about third parties; the runner and the
+  // decider are attribution on it, not the account's own content.
+  conflict_checks: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
@@ -137,6 +148,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
   desktop_presence: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
+  },
+  desktop_runners: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
   },
@@ -253,6 +268,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
+  legal_list_source_documents: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
   legal_list_verification_read_receipts: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
@@ -300,9 +319,17 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
+  oauth_grant_revocations: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
   oauth_refresh_token: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
+  organization_data_exports: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
   },
   organization_professional_use_acceptances: {
     type: "exempt",
@@ -328,6 +355,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
+  timer_activity_devices: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
   rate_entries: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
@@ -347,6 +378,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   saved_searches: { type: "exported" },
   saved_time_narratives: { type: "exported" },
   search_history_entries: { type: "exported" },
+  search_history_country_clears: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
   search_history_owners: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,

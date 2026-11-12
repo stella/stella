@@ -13,11 +13,20 @@
 # Everything else is validated in CI.
 set -euo pipefail
 
-if ! command -v gitleaks >/dev/null 2>&1; then
-  echo "error: gitleaks is required for pre-push secret scanning." >&2
+# A scanner on PATH is used as is. Without one, the pinned release is
+# provisioned the way the staged hook does it (scripts/gitleaks.ts: official
+# archive, repository-pinned SHA-256, per-user cache), so a host without a
+# preinstalled scanner still scans instead of refusing every push.
+if command -v gitleaks >/dev/null 2>&1; then
+  scanner="gitleaks"
+elif ! command -v bun >/dev/null 2>&1; then
+  echo "error: gitleaks is required for pre-push secret scanning, and Bun is needed to provision it." >&2
   echo "Install it from https://github.com/gitleaks/gitleaks/releases" >&2
   echo "  macOS (Homebrew): brew install gitleaks" >&2
-  echo "  Other platforms: use the releases page above" >&2
+  exit 1
+elif ! scanner="$(bun "$(dirname -- "${BASH_SOURCE[0]}")/gitleaks.ts")" ||
+  [[ ! -x "${scanner}" ]]; then
+  echo "error: cannot provision the pinned gitleaks; secret scanning refused." >&2
   exit 1
 fi
 
@@ -107,7 +116,7 @@ count_changed_commits() {
 # Runs the scanner over Git history and checks it read `expected` commits.
 scan_history() {
   local log_opts="$1" expected="$2" label="$3" status=0 scanned
-  gitleaks git --redact --no-banner --no-color --log-opts="${log_opts}" . 2>"${scanner_log}" || status=$?
+  "${scanner}" git --redact --no-banner --no-color --log-opts="${log_opts}" . 2>"${scanner_log}" || status=$?
   cat "${scanner_log}" >&2
   if [[ ${status} -ne 0 ]]; then
     exit "${status}"

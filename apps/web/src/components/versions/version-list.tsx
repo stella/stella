@@ -26,6 +26,7 @@ import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
 } from "@stll/ui/review-diff-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -179,12 +180,14 @@ export const VersionRow = ({
           content={author?.name}
           render={
             <span
-              className="text-muted-foreground truncate text-xs"
+              className="text-muted-foreground min-w-0 text-xs"
               dir="auto"
             />
           }
         >
-          {author ? firstName(author.name) : ""}
+          <TruncatedText hint={false}>
+            {author ? firstName(author.name) : ""}
+          </TruncatedText>
         </Tooltip>
         <Tooltip
           content={formatFullTimestamp(createdAt)}
@@ -204,14 +207,18 @@ export const VersionRow = ({
   let headerElement: React.ReactNode;
   if (onActivate) {
     headerElement = (
-      <button
-        className={cn(headerClassName, !isSelected && "hover:bg-muted/50")}
-        type="button"
+      <Button
+        className="block w-full"
         onClick={onActivate}
         onContextMenu={onContextMenu}
+        variant="plain"
       >
-        {header}
-      </button>
+        <span
+          className={cn(headerClassName, !isSelected && "hover:bg-muted/50")}
+        >
+          {header}
+        </span>
+      </Button>
     );
   } else {
     headerElement = (

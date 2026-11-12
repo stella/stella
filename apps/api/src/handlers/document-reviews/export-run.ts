@@ -25,6 +25,7 @@ import {
   renderIssuesTableDocx,
 } from "@/api/lib/document-review/issues-table";
 import {
+  basisReferenceWorkspaceIds,
   readReferencePassageTexts,
   referencePassageIds,
 } from "@/api/lib/document-review/reference-passages";
@@ -32,7 +33,6 @@ import {
   basisForReader,
   findingForReader,
   readableReferenceWorkspaces,
-  referenceWorkspacesByPosition,
 } from "@/api/lib/document-review/reference-visibility";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -147,7 +147,7 @@ const exportDocumentReviewRun = createSafeHandler(
       safeDb,
       basis: run.basis,
     });
-    const positionWorkspaces = referenceWorkspacesByPosition(run.basis);
+    const runSources = basisReferenceWorkspaceIds(run.basis);
     const basis = basisForReader(run.basis, readable);
     const rows = buildIssuesTableRows({
       basis,
@@ -157,7 +157,7 @@ const exportDocumentReviewRun = createSafeHandler(
         decision,
         payload: {
           finding: findingForReader(payload.finding, {
-            positionWorkspaces,
+            runSources,
             readable,
           }),
         },

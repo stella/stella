@@ -8,10 +8,12 @@ import type {
 import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
 } from "@stll/api-contract/chat-docx-suggestions";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -107,8 +109,19 @@ const EMPTY_ATTACHED_FILES: ChatThreadAttachedFiles = {
   files: [],
 };
 
+/**
+ * The member's newest turn of a chat that runs on their computer, and the
+ * message that answered it: only this turn's file changes can be undone.
+ */
+export type NewestLocalTurn = {
+  id: SafeId<"chatTurn">;
+  assistantMessageId: SafeId<"chatMessage"> | null;
+};
+
 type ThreadFetch = {
   activeSkill: ActiveSkillChatContext | null;
+  /** Absent for a cloud chat. */
+  newestLocalTurn?: NewestLocalTurn | undefined;
   /** The thread's turn not yet settled; null when every turn has settled. */
   activeTurnId: SafeId<"chatTurn"> | null;
   attachedFiles: ChatThreadAttachedFiles;
@@ -133,6 +146,8 @@ type ThreadFetch = {
   model: string | null;
   /** Explicit effort for a manual model; null in Auto/provider-default mode. */
   reasoningEffort: ReasoningEffort | null;
+  /** Where the thread's turns run; absent where only the cloud is offered. */
+  runTarget?: ChatRunTarget | undefined;
   /** Model-context estimate for the next send; null for a missing or empty
    *  thread (nothing to meter yet). */
   context: ChatContextUsage | null;
@@ -202,6 +217,9 @@ const fetchThreadMessages = async (
   return {
     activeSkill: data.activeSkill,
     activeTurnId: data.activeTurnId,
+    ...(data.newestLocalTurn === null
+      ? {}
+      : { newestLocalTurn: data.newestLocalTurn }),
     attachedFiles: data.attachedFiles,
     forkProvenance: data.forkProvenance,
     messages: deserializeChatMessages(data.messages),
@@ -215,6 +233,7 @@ const fetchThreadMessages = async (
     webSearchEnabled: data.webSearchEnabled,
     model: data.model,
     reasoningEffort: data.reasoningEffort,
+    runTarget: data.runTarget,
     context: data.context,
   };
 };
@@ -252,11 +271,13 @@ export const fetchOlderMessages = async ({
 
 const fetchGroupedChatThreads = async ({
   cursor,
+  pinState,
   search,
   signal,
   workspaceId,
 }: {
   cursor?: string | undefined;
+  pinState?: ChatThreadPinState | undefined;
   search?: string | undefined;
   signal?: AbortSignal | undefined;
   workspaceId?: string | undefined;
@@ -266,6 +287,7 @@ const fetchGroupedChatThreads = async ({
     query: {
       limit: CHAT_THREADS_PAGE_SIZE,
       ...(cursor !== undefined && { cursor }),
+      ...(pinState !== undefined && { pinState }),
       ...(search !== undefined && { search }),
       ...(workspaceId !== undefined && {
         workspaceId: toSafeId<"workspace">(workspaceId),
@@ -465,6 +487,12 @@ export const listChatHistoryItems = (
 export type ChatThreadFetched = {
   activeSkill: ActiveSkillChatContext | null;
   /**
+   * The member's newest turn when the chat runs on their computer, whose
+   * file changes the chat offers to undo; absent for a cloud chat and a
+   * file thread.
+   */
+  newestLocalTurn?: NewestLocalTurn | undefined;
+  /**
    * The thread's turn not yet settled when this page was read, which the
    * composer's Stop cancels. Null when every turn has settled.
    */
@@ -530,6 +558,12 @@ export type ChatThreadFetched = {
    *  `webSearchEnabled` above. */
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+  /**
+   * Where the thread's turns run when that is a computer; absent runs them
+   * on stella's own models. Changed with the model, through
+   * PATCH /chat/threads/:id/model.
+   */
+  runTarget?: ChatRunTarget | undefined;
   /**
    * Model-context estimate for the next send, driving the composer
    * meter. Null for a missing or empty thread (nothing to meter yet).
@@ -868,6 +902,7 @@ export const chatContextCapabilityFingerprint = (
     getEditApplyMode: context?.getEditApplyMode,
     getSendMode: context?.getSendMode,
     getUserContext: context?.getUserContext,
+    getRunTarget: context?.getRunTarget,
     getDocxSuggestionSurface: context?.getDocxSuggestionSurface,
   } satisfies {
     [Key in ChatContextCapabilityKey]-?: ChatThreadOptionsContext[Key];
@@ -1054,8 +1089,24 @@ export const modelOptionsOptions = (activeOrganizationId: string) =>
     queryFn: async () => await fetchChatModelOptions(),
   });
 
+const fetchChatLocalRunners = async (signal: AbortSignal) =>
+  unwrapApiResponse(await api.chat["local-runners"].get({ fetch: { signal } }));
+
+/**
+ * The member's computers and the harnesses a turn can run on. Read when the
+ * Models submenu opens, like the model options, and kept briefly: a computer
+ * signing in or reaching a limit shows on the next open.
+ */
+export const localRunnersOptions = (activeOrganizationId: string) =>
+  queryOptions({
+    queryKey: chatKeys.localRunners(activeOrganizationId),
+    staleTime: 30_000,
+    queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
+  });
+
 export const groupedChatThreadsOptions = ({
   activeOrganizationId,
+  pinState,
   search,
   userId,
   workspaceId,
@@ -1064,6 +1115,7 @@ export const groupedChatThreadsOptions = ({
   return infiniteQueryOptions({
     queryKey: chatKeys.groupedThreads({
       activeOrganizationId,
+      pinState,
       search: normalizedSearch,
       userId,
       workspaceId,
@@ -1073,6 +1125,7 @@ export const groupedChatThreadsOptions = ({
     queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
       await fetchGroupedChatThreads({
         cursor: pageParam,
+        pinState,
         search: normalizedSearch,
         signal,
         workspaceId,
@@ -1127,6 +1180,11 @@ export const chatDraftMetaOptions = ({
         webSearchEnabled: data.webSearchEnabled,
         model: data.model,
         reasoningEffort: data.reasoningEffort,
+        // Where the first send runs, as the draft's Run on choice stored it.
+        runTarget: data.runTarget,
+        // A draft the server holds no row for starts from the member's last
+        // Run on choice instead.
+        threadExists: data.threadExists,
         // The draft's cache-stable context floor (system prompt + tools), so
         // the hero meter shows the honest baseline instead of 0% before send.
         context: data.context,
@@ -1306,22 +1364,36 @@ export const invalidateChatThreadAcrossScopes = async ({
 export const applyChatModelChange = ({
   model,
   reasoningEffort,
+  runTarget,
   queryClient,
   queryKey,
   threadId,
 }: {
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+  /** Absent when the change left where turns run as it was. */
+  runTarget?: ChatRunTarget | undefined;
   queryClient: QueryClient;
   queryKey: DataTag<
     QueryKey,
-    { model: string | null; reasoningEffort: ReasoningEffort | null },
+    {
+      model: string | null;
+      reasoningEffort: ReasoningEffort | null;
+      runTarget?: ChatRunTarget | undefined;
+    },
     Error
   >;
   threadId: ChatThreadId;
 }): void => {
   queryClient.setQueryData(queryKey, (prev) =>
-    prev ? { ...prev, model, reasoningEffort } : prev,
+    prev
+      ? {
+          ...prev,
+          model,
+          reasoningEffort,
+          ...(runTarget === undefined ? {} : { runTarget }),
+        }
+      : prev,
   );
   detached(
     invalidateChatThreadAcrossScopes({ queryClient, threadId }),

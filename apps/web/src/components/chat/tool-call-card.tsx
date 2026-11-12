@@ -3,8 +3,10 @@ import type { ReactNode } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { isChatLocalRunToolName } from "@stll/api-contract/chat-local-run-tool";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -17,14 +19,20 @@ import { ChevronRightIcon, CircleHelpIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { StatusMark } from "@stll/ui/status-mark";
 import type { StatusMarkStatus } from "@stll/ui/status-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import {
   type ChatToolCallPart,
   getChatToolTitleKey,
+  type HarnessChatToolCallPart,
   isRunningToolPart,
 } from "@/components/chat/chat-ui-tools";
+import {
+  localRunToolSubtitleText,
+  localRunToolView,
+} from "@/components/chat/local-run-tool.logic";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
 import {
   advanceToolCallTiming,
@@ -47,7 +55,8 @@ import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 
-type ToolPart = ChatToolCallPart;
+/** A stella or connector tool's call, or a coding agent's own step. */
+type ToolPart = ChatToolCallPart | HarnessChatToolCallPart;
 
 const getToolInput = (part: ToolPart): unknown => {
   if (!("input" in part)) {
@@ -387,47 +396,95 @@ const TOOL_CALL_SETTLED_STATUS = {
   error: "failed",
   "input-complete": "pending",
   "input-streaming": "pending",
-} as const satisfies Record<ToolPart["state"], StatusMarkStatus>;
-
-const toolCallStatus = ({
-  hasError,
-  isRunning,
-  state,
-}: {
-  hasError: boolean;
-  isRunning: boolean;
-  state: ToolPart["state"];
-}): StatusMarkStatus => {
-  if (hasError) {
-    return "failed";
-  }
-  return isRunning ? "running" : TOOL_CALL_SETTLED_STATUS[state];
-};
+} as const satisfies Record<
+  ToolPart["state"],
+  Exclude<StatusMarkStatus, "running">
+>;
 
 const TOOL_CALL_STATUS_LABEL_KEYS = {
   done: "common.done",
   pending: "chat.toolCall.statusWaiting",
-  running: "common.running",
-} as const satisfies Record<Exclude<StatusMarkStatus, "failed">, string>;
+} as const satisfies Record<
+  Exclude<StatusMarkStatus, "failed" | "running">,
+  string
+>;
 
 /** A follow-up a tool row offers once its call completed, such as opening
  *  what the call saved. */
 export type ToolCallAction = { label: string; onClick: () => void };
 
-export const toolFailureLabelKey = (
-  rawErrorDetails: ReturnType<typeof getToolOutputError>,
-  state: ToolPart["state"],
-) => {
-  if (rawErrorDetails !== undefined) {
+/**
+ * Whether a coding agent's own step reports that it failed: its result is
+ * `{ status: "failed" }` (`chat-local-run-tool`), with no error envelope.
+ */
+const localRunStepFailed = (name: string, output: unknown): boolean =>
+  isChatLocalRunToolName(name) &&
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === "failed";
+
+/** The result a coding agent's run gives a call its turn cut off. */
+const isInterruptedOutput = (output: unknown): boolean =>
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === "interrupted";
+
+/**
+ * How a call that did not complete reads: interrupted only when it ended
+ * with no result at all (its stream died mid call) or with the explicit
+ * cancellation result; any other error result, an envelope, a step
+ * reporting `failed` or a connector's plain-text error, reads as failed.
+ */
+export const toolFailureLabelKey = ({
+  name,
+  output,
+  state,
+}: {
+  name: string;
+  output: unknown;
+  state: ToolPart["state"];
+}) => {
+  if (
+    getToolOutputError(output) !== undefined ||
+    localRunStepFailed(name, output)
+  ) {
     return "chat.toolCall.failed";
   }
-  return state === "error" ? "chat.toolCall.interrupted" : undefined;
+  if (state !== "error") {
+    return undefined;
+  }
+  return output === undefined || isInterruptedOutput(output)
+    ? "chat.toolCall.interrupted"
+    : "chat.toolCall.failed";
+};
+
+// Static marks make a running glyph impossible outside the turn owner.
+const SettledToolStatusMark = ({
+  label,
+  status,
+}: {
+  label: string | undefined;
+  status: Exclude<StatusMarkStatus, "running">;
+}) => {
+  switch (status) {
+    case "done":
+      return <StatusMark label={label} status="done" />;
+    case "failed":
+      return <StatusMark label={label} status="failed" />;
+    case "pending":
+      return <StatusMark label={label} status="pending" />;
+    default:
+      return panic("Unhandled settled tool status", {
+        status: status satisfies never,
+      });
+  }
 };
 
 const ToolCallCardComponent = ({
   action,
   activeOrganizationId,
   durationMs,
+  turnStatus = "finished",
   part,
   showDetails,
 }: {
@@ -435,6 +492,7 @@ const ToolCallCardComponent = ({
   activeOrganizationId: string;
   /** Known elapsed time, used by persisted callers and visual fixtures. */
   durationMs?: number;
+  turnStatus?: "running" | "finished";
   part: ToolPart;
   /** Open rich tool details initially in development surfaces. */
   showDetails?: boolean;
@@ -467,13 +525,31 @@ const ToolCallCardComponent = ({
         isSkillResourceOutputToolName(name)),
     ),
   );
-  const label = catalogEntry?.brand ?? t(getChatToolTitleKey(name));
-  const subtitle = getToolSubtitle({
-    formatCharacterCount: (count) =>
-      t("chat.toolCall.characterCount", { count }),
-    part,
-    toolName: name,
+  // A step a coding agent took on the member's computer names what it was
+  // about: its command, file names, search or plan.
+  const localRunTool = localRunToolView({
+    name,
+    input: getToolInput(part),
+    output: part.output,
   });
+  const localRunTitleKey = localRunTool?.titleKey ?? null;
+  const label =
+    catalogEntry?.brand ??
+    (localRunTitleKey === null
+      ? t(getChatToolTitleKey(name))
+      : t(localRunTitleKey));
+  const subtitle =
+    localRunTool === null
+      ? getToolSubtitle({
+          formatCharacterCount: (count) =>
+            t("chat.toolCall.characterCount", { count }),
+          part,
+          toolName: name,
+        })
+      : localRunToolSubtitleText(localRunTool.subtitle, {
+          patternInPath: (values) => t("chat.toolCall.patternInPath", values),
+          commandExited: (values) => t("chat.toolCall.commandExited", values),
+        });
 
   const isLoading = isRunningToolPart(part);
   const [timing, setTiming] = useState(() =>
@@ -494,7 +570,9 @@ const ToolCallCardComponent = ({
     );
   }, [durationMs, isLoading]);
   const elapsed =
-    timing.status === "finished" && timing.durationMs !== undefined
+    turnStatus === "finished" &&
+    timing.status === "finished" &&
+    timing.durationMs !== undefined
       ? format.number(Math.max(1, Math.round(timing.durationMs / 1000)), {
           style: "unit",
           unit: "second",
@@ -509,17 +587,28 @@ const ToolCallCardComponent = ({
   // never produced an `output.error`) still reads as failed via a generic
   // interrupted label.
   const rawErrorDetails = getToolOutputError(part.output);
-  const failureLabelKey = toolFailureLabelKey(rawErrorDetails, part.state);
-  const errorMessage =
-    failureLabelKey === undefined ? undefined : t(failureLabelKey);
-  const hasError = errorMessage !== undefined;
-  const status = toolCallStatus({
-    hasError,
-    isRunning: isLoading,
+  const failureLabelKey = toolFailureLabelKey({
+    name,
+    output: part.output,
     state: part.state,
   });
-  const statusLabel =
-    status === "failed" ? errorMessage : t(TOOL_CALL_STATUS_LABEL_KEYS[status]);
+  const errorMessage =
+    failureLabelKey === undefined ? undefined : t(failureLabelKey);
+  // A call its turn cut off (a stop, a new message) never finished; that is
+  // not the tool failing, so it reads as stopped, without the failure tint.
+  const stopped = failureLabelKey === "chat.toolCall.interrupted";
+  const hasError = errorMessage !== undefined && !stopped;
+  const status = (() => {
+    if (hasError) {
+      return "failed";
+    }
+    return stopped ? "pending" : TOOL_CALL_SETTLED_STATUS[part.state];
+  })();
+  // A running call waits on nothing; the turn's live status names the work.
+  const settledStatusLabel =
+    errorMessage ??
+    (status === "failed" ? undefined : t(TOOL_CALL_STATUS_LABEL_KEYS[status]));
+  const statusLabel = isLoading ? undefined : settledStatusLabel;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
   const showCodeToolOutput = isCodeToolName(name) && hasOutput;
@@ -725,7 +814,7 @@ const ToolCallHeaderLabel = ({
   hasError: boolean;
   isLoading: boolean;
   label: ReactNode;
-  status: StatusMarkStatus;
+  status: Exclude<StatusMarkStatus, "running">;
   statusLabel: string | undefined;
   subtitle: ReturnType<typeof getToolSubtitle>;
 }) => (
@@ -737,9 +826,9 @@ const ToolCallHeaderLabel = ({
         : "text-muted-foreground group-hover/tool-step:text-foreground-muted",
     )}
   >
-    <StatusMark label={statusLabel} status={status} />
-    <span
-      className={cn("min-w-0 truncate", isLoading && CHAT_PENDING_TEXT_CLASS)}
+    <SettledToolStatusMark label={statusLabel} status={status} />
+    <TruncatedText
+      render={<span className={cn(isLoading && CHAT_PENDING_TEXT_CLASS)} />}
     >
       <span>{label}</span>
       {subtitle && (
@@ -747,9 +836,12 @@ const ToolCallHeaderLabel = ({
           {subtitle}
         </span>
       )}
-    </span>
+    </TruncatedText>
     {elapsed && (
-      <span className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums">
+      <span
+        data-tool-duration
+        className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums"
+      >
         {elapsed}
       </span>
     )}

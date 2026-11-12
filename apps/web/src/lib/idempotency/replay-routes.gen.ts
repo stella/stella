@@ -4,6 +4,8 @@ import type { RequestReplayRoute } from "@stll/api-client";
 export const REPLAY_CAPABLE_ROUTES = [
   { method: "POST", path: "/v1/case/matter-links/:workspaceId" },
   { method: "POST", path: "/v1/case/matter-links/:workspaceId/batch" },
+  { method: "POST", path: "/v1/chat/browser-site-grants" },
+  { method: "POST", path: "/v1/data-exports" },
   { method: "POST", path: "/v1/document-types" },
   {
     method: "POST",
@@ -17,6 +19,7 @@ export const REPLAY_CAPABLE_ROUTES = [
   { method: "POST", path: "/v1/lists/:workspaceId/claim-reviews" },
   { method: "POST", path: "/v1/lists/:workspaceId/claim-reviews/bulk" },
   { method: "POST", path: "/v1/lists/:workspaceId/columns" },
+  { method: "POST", path: "/v1/lists/:workspaceId/fact-extractions" },
   { method: "POST", path: "/v1/lists/:workspaceId/generation-candidates" },
   {
     method: "POST",
@@ -47,6 +50,7 @@ export const REPLAY_CAPABLE_ROUTES = [
   },
   { method: "PUT", path: "/v1/billing-codes/:workspaceId" },
   { method: "PUT", path: "/v1/client-invoices/:clientId" },
+  { method: "PUT", path: "/v1/contacts" },
   { method: "PUT", path: "/v1/docx-suggestions/:workspaceId/entity/:entityId" },
   { method: "PUT", path: "/v1/entity-views" },
   { method: "PUT", path: "/v1/expenses/:workspaceId" },
@@ -54,6 +58,7 @@ export const REPLAY_CAPABLE_ROUTES = [
   { method: "PUT", path: "/v1/properties/:workspaceId/batch" },
   { method: "PUT", path: "/v1/rates/:workspaceId" },
   { method: "PUT", path: "/v1/rates/:workspaceId/:rateTableId/entries" },
+  { method: "PUT", path: "/v1/tasks/:workspaceId" },
   { method: "PUT", path: "/v1/template-recipes" },
   { method: "PUT", path: "/v1/time-entries/:workspaceId" },
   { method: "PUT", path: "/v1/view-templates/:workspaceId" },

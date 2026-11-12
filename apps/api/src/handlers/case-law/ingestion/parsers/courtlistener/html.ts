@@ -1,4 +1,6 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks; page-chrome text normalization uses the shared normalizeUnicode owner with the same NFC form.
+// parser-output-unchanged: validation reads the source paragraphs directly, as the markup built from them parsed to.
 /**
  * CourtListener's HTML columns: `html_with_citations` where it holds HTML,
  * `html_lawbox`, `html_columbia`, `html_anon_2020`, `html`, and the
@@ -11,18 +13,19 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import {
   type Element,
   hasChildren,
   isTag,
   isText,
   type ParentNode,
-} from "domhandler";
-
+} from "@stll/html/nodes";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
+import { validationParagraphs } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { isExcludedHtmlTag } from "../shared-inlines";
 import {
@@ -588,7 +591,7 @@ const parseHtml =
     }
     // HTML parsing does not recurse, so the tree is measured before any walk
     // can recurse through it.
-    const $ = cheerio.load(text, { sourceCodeLocationInfo: true });
+    const $ = load(text, { sourceCodeLocationInfo: true });
     const [document] = $.root().toArray();
     const limit =
       document === undefined ? "DOM_NODES" : spendDomNodes(budget, document);
@@ -722,9 +725,7 @@ const parseHtml =
           unknownConstructs,
           noteSpanDefects: spanDefects,
         },
-        validationHtml: buildValidationHtml(
-          source.paragraphs.map((paragraph) => Bun.escapeHTML(paragraph)),
-        ),
+        validationParagraphs: validationParagraphs(source.paragraphs),
       },
     };
   };

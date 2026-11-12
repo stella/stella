@@ -10,6 +10,7 @@ import { NewChatIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel } from "@stll/ui/popover";
 
 import { ConversationScrollButton } from "@/components/ai-elements/conversation";
+import { AnonymizationPreviewCard } from "@/components/chat/anonymization-preview";
 import { BrowserExtensionChip } from "@/components/chat/browser-extension-chip";
 import {
   ChatContextMeter,
@@ -41,8 +42,13 @@ type ChatComposerNewThreadPrompt = {
 type ChatComposerDockCommonProps = {
   threadRef: ChatThreadRef;
   guideAnchorsEnabled?: boolean;
-  /** Model picker rendered beside the context meter when the surface has one. */
-  models?: ComposerModelsMenuProps | undefined;
+  /**
+   * Model picker rendered beside the context meter, with where the thread's
+   * turns run. Required, so a surface cannot drop the Run on choice by
+   * leaving a prop out; `null` only where the surface pins the model or has
+   * no thread to choose for yet.
+   */
+  models: ComposerModelsMenuProps | null;
   /**
    * Genuine per-surface leading context, rendered first in the start
    * cluster: the main-chat matter picker, or the file overlay's
@@ -72,7 +78,7 @@ type ChatComposerDockProps = ChatComposerDockCommonProps &
 type ChatComposerDockRenderState = {
   disabled: boolean;
   endExtras: ReactNode | undefined;
-  models?: ComposerModelsMenuProps | undefined;
+  models: ComposerModelsMenuProps | null;
   onNewThread: (() => void) | null;
   newThreadPrompt: ChatComposerNewThreadPrompt | undefined;
 } & (
@@ -246,11 +252,19 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
             {...guideAnchor(GUIDE_ANCHORS.chatAnonymize, guideAnchorsEnabled)}
             className="inline-flex"
           >
-            <ChatAnonymizedToggle
-              disabled={disabled}
+            {/* The preview card says what the shield does and whether it
+                is on, so the toggle's own on/off tooltip would repeat it. */}
+            <AnonymizationPreviewCard
               enabled={anonymized}
-              onChange={setAnonymized}
-              size="icon-xs"
+              trigger={
+                <ChatAnonymizedToggle
+                  disabled={disabled}
+                  enabled={anonymized}
+                  onChange={setAnonymized}
+                  size="icon-xs"
+                  tooltip={false}
+                />
+              }
             />
           </span>
           {!disabled && <BrowserExtensionChip />}

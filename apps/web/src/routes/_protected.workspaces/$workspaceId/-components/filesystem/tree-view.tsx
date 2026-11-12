@@ -19,7 +19,6 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
-import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -34,8 +33,11 @@ import {
   FileIcon,
 } from "@stll/ui/icons";
 import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
+import { MiddleTruncate } from "@stll/ui/middle-truncate";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
+import { RecordFieldValue } from "@stll/workspace-ui/field-value";
 
 import { DocumentIcon } from "@/components/document-icon";
 import {
@@ -893,7 +895,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       </div>
       <div
         className={cn(
-          "text-muted-foreground mt-1 flex items-center gap-2 rounded border border-dashed px-3 py-1.5 text-xs",
+          "text-muted-foreground mt-1 flex items-center gap-2 rounded-sm border border-dashed px-3 py-1.5 text-xs",
           isDragActive ? "visible" : "hidden",
           isRootDropTarget
             ? "border-primary bg-primary/10 text-foreground"
@@ -1133,7 +1135,7 @@ const ColumnHeaderCell = ({
       <Button
         className={cn(
           "flex min-w-0 shrink",
-          align === "end" ? "justify-end text-end" : "justify-start text-start",
+          align === "end" ? "justify-end" : "justify-start",
         )}
         onClick={() => onSort(propertyId)}
         variant="plain"
@@ -1141,11 +1143,13 @@ const ColumnHeaderCell = ({
         <span
           className={cn(
             "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5",
-            align === "end" ? "justify-end" : "justify-start",
+            align === "end"
+              ? "justify-end text-end"
+              : "justify-start text-start",
             isActive && "text-foreground",
           )}
         >
-          <span className="truncate font-medium">{label}</span>
+          <TruncatedText className="font-medium">{label}</TruncatedText>
           {isActive && <SortIcon className="size-3 shrink-0" />}
         </span>
       </Button>
@@ -1599,13 +1603,7 @@ export const FilesystemRow = ({
         />
       ) : (
         <span className="flex min-w-0 items-center gap-1.5">
-          <BidiText
-            as="span"
-            className="overflow-hidden text-ellipsis whitespace-pre"
-            title={name}
-          >
-            {name}
-          </BidiText>
+          <MiddleTruncate value={name} />
           {folderStatistics && formattedFolderSize && (
             <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs tabular-nums">
               <span>
@@ -1636,7 +1634,7 @@ export const FilesystemRow = ({
 
   const extraCells = extraColumns.map((col) => (
     <span
-      className="text-muted-foreground flex h-full min-w-0 items-center justify-end overflow-hidden text-end text-xs text-ellipsis whitespace-nowrap"
+      className="text-muted-foreground flex h-full min-w-0 items-center justify-end overflow-hidden text-end text-xs whitespace-nowrap"
       key={col.id}
     >
       <ExtraColumnCell column={col} entity={node} />
@@ -1644,12 +1642,12 @@ export const FilesystemRow = ({
   ));
 
   const gridCls = cn(
-    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm",
+    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded-sm px-2 text-start text-sm",
     (isFolderDropTarget || isExternalDropTarget) && "bg-accent",
     isSelected && "bg-accent",
   );
   const rowButtonCls =
-    "min-w-0 rounded text-start outline-none focus-visible:bg-muted/70";
+    "min-w-0 rounded-sm text-start outline-none focus-visible:bg-muted/70";
 
   // Content area: Name + Type + extras (interactive, clickable)
   // gridColumn spans all content columns (excluding the actions column)
@@ -1850,17 +1848,27 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   if (field?.content.type === "date") {
     const formatted = formatDateValue(field.content.value, locale);
     return (
-      <span className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs">
         {formatted || "-"}
-      </span>
+      </TruncatedText>
+    );
+  }
+
+  // A record's state (candidates to choose, a count, review) is part of
+  // what it says; the flat text would hide it behind "-".
+  if (field?.content.type === "record") {
+    return (
+      <TruncatedText className="text-muted-foreground text-xs">
+        <RecordFieldValue content={field.content} variant="table" />
+      </TruncatedText>
     );
   }
 
   const value = getFieldValue(field);
 
   return (
-    <span className="text-muted-foreground truncate text-xs">
+    <TruncatedText className="text-muted-foreground text-xs">
       {value || "-"}
-    </span>
+    </TruncatedText>
   );
 };

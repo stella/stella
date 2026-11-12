@@ -1,0 +1,139 @@
+import type { HarnessFailure } from "../events";
+import type { CodexRateLimits, CodexTurnError } from "./protocol";
+
+/**
+ * Typed failure states for a failed Codex turn. Reset-time derivation adapted
+ * from t3code (MIT, `codexUsageLimits.ts`): a continuation can run only once
+ * every exhausted window has reset, so the latest reset time wins.
+ */
+
+const EXHAUSTED_PERCENT = 100;
+const HTTP_UNAUTHORIZED = 401;
+/** Codex's error code for a model at capacity. */
+const SERVER_OVERLOADED = "serverOverloaded";
+
+/** Rate-limit updates are partial; omitted windows keep earlier values. */
+export const mergeRateLimits = (
+  previous: CodexRateLimits | null,
+  update: CodexRateLimits,
+): CodexRateLimits | null => {
+  // Model-specific limits must not overwrite the main allowance.
+  if (
+    update.limitId !== undefined &&
+    update.limitId !== null &&
+    update.limitId !== "codex"
+  ) {
+    return previous;
+  }
+  if (previous === null) {
+    return update;
+  }
+  return {
+    limitId: update.limitId ?? previous.limitId,
+    primary: update.primary === undefined ? previous.primary : update.primary,
+    secondary:
+      update.secondary === undefined ? previous.secondary : update.secondary,
+  };
+};
+
+const usageLimitResetsAt = (limits: CodexRateLimits | null): string | null => {
+  const resets: number[] = [];
+  for (const window of [limits?.primary, limits?.secondary]) {
+    if (
+      window === undefined ||
+      window === null ||
+      window.usedPercent < EXHAUSTED_PERCENT
+    ) {
+      continue;
+    }
+    if (typeof window.resetsAt !== "number" || window.resetsAt <= 0) {
+      // One exhausted window without a reset time: the reset is unknown.
+      return null;
+    }
+    resets.push(window.resetsAt);
+  }
+  if (resets.length === 0) {
+    return null;
+  }
+  const resetsAt = new Date(Math.max(...resets) * 1000);
+  // A reset time past the representable range is as good as unknown.
+  return Number.isNaN(resetsAt.getTime()) ? null : resetsAt.toISOString();
+};
+
+/** The upstream error code: a string variant, or the key of an object one. */
+const errorCode = (info: CodexTurnError["codexErrorInfo"]): string => {
+  if (info === null) {
+    return "unknown";
+  }
+  if (typeof info === "string") {
+    return info;
+  }
+  return Object.keys(info).at(0) ?? "unknown";
+};
+
+const httpStatus = (info: CodexTurnError["codexErrorInfo"]): number | null => {
+  if (info === null || typeof info === "string") {
+    return null;
+  }
+  for (const detail of Object.values(info)) {
+    if (
+      typeof detail === "object" &&
+      detail !== null &&
+      "httpStatusCode" in detail &&
+      typeof detail.httpStatusCode === "number"
+    ) {
+      return detail.httpStatusCode;
+    }
+  }
+  return null;
+};
+
+/**
+ * The selected model was at capacity (`serverOverloaded`), a transient state
+ * of the provider; the member's own allowance is `usageLimitExceeded`. Codex
+ * itself retries transient errors inside a turn; this one ends the turn, and
+ * a continuation on the same thread is how it resumes (approach from t3code,
+ * MIT, `CodexAdapterV2.ts`).
+ */
+export const isCapacityFailure = (error: CodexTurnError | null): boolean =>
+  errorCode(error?.codexErrorInfo ?? null) === SERVER_OVERLOADED;
+
+type ClassifyTurnFailureOptions = {
+  error: CodexTurnError | null;
+  rateLimits: CodexRateLimits | null;
+};
+
+/**
+ * Codex reports an exhausted ChatGPT Subscription Sharing allowance as a stream
+ * disconnect that only its text tells apart (approach from t3code, MIT,
+ * pingdotgg/t3code#25341).
+ */
+const SHARING_LIMIT_TEXT = "has reached their Subscription Sharing usage limit";
+
+export const classifyTurnFailure = ({
+  error,
+  rateLimits,
+}: ClassifyTurnFailureOptions): HarnessFailure => {
+  const message = error?.message ?? "The harness turn failed.";
+  const info = error?.codexErrorInfo ?? null;
+  const code = errorCode(info);
+  if (code === "unauthorized" || httpStatus(info) === HTTP_UNAUTHORIZED) {
+    return { type: "auth_required", message };
+  }
+  if (code === "usageLimitExceeded") {
+    return {
+      type: "usage_limit",
+      message,
+      resetsAt: usageLimitResetsAt(rateLimits),
+    };
+  }
+  // Reached once the continuations are spent, or when no turn may continue.
+  if (code === SERVER_OVERLOADED) {
+    return { type: "model_at_capacity", message };
+  }
+  if (message.includes(SHARING_LIMIT_TEXT)) {
+    // This allowance has its own reset, which the plan's rate limits do not say.
+    return { type: "usage_limit", message, resetsAt: null };
+  }
+  return { type: "provider_error", message, code };
+};

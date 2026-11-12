@@ -28,6 +28,18 @@ if git show-ref --verify --quiet "refs/tags/$final"; then
   fi
   echo "Final tag $final already targets $sha; resuming publication." >&2
 else
+  # Each proof workflow re-enters here when it completes, so while another
+  # proof of this candidate is still queued or running, its own completion
+  # finalizes: this one writes nothing and leaves a notice.
+  for workflow in deploy-staging.yml main-heavy.yml main-pr-depth.yml; do
+    running=$(GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$gh_retry_script" api \
+      "repos/$repo/actions/workflows/$workflow/runs?event=workflow_dispatch&branch=main&per_page=50" \
+      | jq -r --arg sha "$sha" '[.workflow_runs[] | select(.status != "completed" and (.display_title | endswith(" " + $sha)))] | length')
+    if [[ "$running" != 0 ]]; then
+      echo "::notice::Final tag $final waits for the running $workflow proof of $sha" >&2
+      exit 0
+    fi
+  done
   GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$script_dir/check-release-main-health.sh" "$repo" "$sha" "$sha"
   # The final tag starts the production promote, so a proven candidate waits
   # for the production gate: the newest release/prod-gate status on this exact

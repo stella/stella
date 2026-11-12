@@ -37,6 +37,13 @@ export const documentTranslationProviderErrorCode = (
     case "provider_billing":
     case "provider_credentials_rejected":
     case "quota_exhausted":
+    case "local_runner_needs_login":
+    case "local_runner_limit_reached":
+    case "local_runner_unavailable":
+    case "local_runner_turn_too_large":
+    case "local_runner_not_reached":
+    case "local_runner_relinked":
+    case "local_runner_restoring":
     case "unknown":
       return "translation_failed";
     default: {

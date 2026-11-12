@@ -41,16 +41,20 @@ import {
 import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { applicationRoleDatabase } from "@/api/tests/helpers/application-role-db";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
+const testFetchState = createTestFetch();
+
 const { testDb, ids } = await getRlsFixture();
-const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
+const database = applicationRoleDatabase(testDb);
 const scope = { organizationId: ids.orgA, userId: ids.userA1 };
 const inputDb = createRootMembershipScopedDb(scope, database);
 const runId = createSafeId<"documentReviewRun">();
@@ -106,6 +110,7 @@ const basis = {
           },
         ],
       },
+      scope: null,
     },
   },
   references: [
@@ -134,7 +139,10 @@ const analytics = installRecordingAnalytics();
 beforeEach(async () => {
   preparationSpy = spyOn(preparation, "fetchAndPrepareReviewFiles");
   modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
-  fetchSpy = spyOn(globalThis, "fetch");
+  fetchSpy = Object.assign(mock(globalThis.fetch), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
 
   preparationSpy.mockClear();
   preparationSpy.mockImplementation(async () =>
@@ -208,7 +216,7 @@ afterEach(async () => {
 afterAll(async () => {
   preparationSpy.mockRestore();
   modelSpy.mockRestore();
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   analytics.restore();
   await releaseRlsFixture();
 });

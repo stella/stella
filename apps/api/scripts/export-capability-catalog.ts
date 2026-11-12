@@ -94,6 +94,7 @@ import {
   parseCapabilityTransport,
   readScopeForDomainScope,
   resolveAccess,
+  resolveCapabilityDeploymentFeature,
   resolveHandlerKind,
   resolveScope,
   scanBinarySchemaFields,
@@ -168,6 +169,13 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // Organization-wide address-book mutations cross matter boundaries, so
   // they require their own consent instead of borrowing a workspace write.
   contacts: "stella:contacts_write",
+  // A conflict check reads across every matter of the firm and records the
+  // result, so it takes the address-book consent rather than a matter write.
+  "conflict-checks": "stella:contacts_write",
+  // A full copy of the organization's data, held by owners and admins only:
+  // starting one and minting its download links are administrative actions,
+  // so they take the admin consent rather than a matter write.
+  "data-exports": "stella:admin_write",
   "document-types": "stella:matters_write",
   // Redline suggestions queued on a document: deciding or reopening one is a
   // document review act, so it takes the document write consent.
@@ -192,6 +200,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // A reader's highlights and comments: personal knowledge, like clauses.
   "legal-reader": "stella:knowledge_write",
   legislation: "stella:read",
+  "soft-law": "stella:read",
   lists: "stella:matters_write",
   // Assistant memory is replayed into future chat prompts, so it shares the
   // assistant's own consent rather than a workspace write.
@@ -226,6 +235,10 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // dedicated read-only scope would understate what it does.
   reports: "stella:matters_write",
   "seller-profiles": "stella:billing_write",
+  // Browse a connected SharePoint or OneDrive account and copy files into a
+  // matter as documents: the copy writes document content, so it takes the
+  // document write consent; the browse reads downgrade to the read scope.
+  sharepoint: "stella:documents_write",
   skills: "stella:skills",
   "style-sets": "stella:templates",
   tasks: "stella:matters_write",
@@ -303,6 +316,8 @@ const SCOPE_STRICTNESS: Record<string, number> = {
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  // The same consent its MCP tool demands.
+  "soft-law.search": "stella:search",
   "legislation.matter-links.batch.create": "stella:matters_write",
   "legislation.matter-links.create": "stella:matters_write",
   "legislation.matter-links.delete": "stella:matters_write",
@@ -464,12 +479,14 @@ const DOMAIN_FEATURE: Record<string, string> = {
   invoices: "FEATURE_TIME_BILLING",
   "client-invoices": "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
+  "soft-law": "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
   memories: "FEATURE_AI_MEMORY",
   "number-series": "FEATURE_TIME_BILLING",
   rates: "FEATURE_TIME_BILLING",
   "saved-time-narratives": "FEATURE_TIME_BILLING",
   "seller-profiles": "FEATURE_TIME_BILLING",
+  sharepoint: "FEATURE_SHAREPOINT",
   "template-packs": "FEATURE_TEMPLATE_PACKS",
   "time-entries": "FEATURE_TIME_BILLING",
   "time-timers": "FEATURE_TIME_BILLING",
@@ -488,10 +505,9 @@ type CapabilityEntry = {
    * Prose from the handler config's `description`, written for the agent
    * deciding whether to call this capability. Carried verbatim into the
    * committed catalog; the CLI renders it as the generated command's
-   * `--help` brief and MCP renders it in list/describe. Absent only for a
-   * capability that has not been given one yet; each of those is listed by id
-   * in apps/api/capability-description-ledger.json and guarded by
-   * apps/api/scripts/capability-description-guard.ts.
+   * `--help` brief and MCP renders it in list/describe.
+   * apps/api/scripts/capability-description-guard.ts fails a capability
+   * without one.
    */
   description?: string;
   handlerKind: HandlerKind;
@@ -520,7 +536,8 @@ type CapabilityEntry = {
   transport: CapabilityTransport;
   /**
    * Deployment feature flag gating this capability: the covering tool's
-   * `feature` (tool/covered dispositions) else the DOMAIN_FEATURE table.
+   * `feature` (tool/covered dispositions), the DOMAIN_FEATURE table, or the
+   * deployment flag of the handler's required feature-access declaration.
    * Consulted by list_capabilities/describe/invoke (see capability-feature.ts).
    */
   feature?: string;
@@ -1549,13 +1566,16 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (transportErrors.length > 0) {
       return;
     }
-    // Deployment feature gate: the covering tool's flag wins (mechanical
-    // inheritance), the reviewed domain table covers the rest.
+    // Preserve reviewed tool/domain gates; required handler feature access
+    // also supplies a deployment gate for capabilities in a mixed domain.
     const coveringToolName = coveringToolOf(endpoint.exposure);
     const inheritedFeature =
       coveringToolName === undefined
         ? undefined
         : toolFeatureByName.get(coveringToolName);
+    const featureAccess = parseFeatureRequirement(
+      endpoint.config["featureAccess"],
+    );
     const consumesServices = serviceConsumptionOf(
       endpoint.exposure,
       toolServicesByName,
@@ -1582,10 +1602,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
         permissions,
         compactedInputSchema,
         exposure: endpoint.exposure,
-        feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
-        featureAccess: parseFeatureRequirement(
-          endpoint.config["featureAccess"],
-        ),
+        feature: resolveCapabilityDeploymentFeature({
+          registry: FEATURE_REGISTRY,
+          requirement: featureAccess,
+          inheritedFeature,
+          domainFeature: DOMAIN_FEATURE[domain],
+        }),
+        featureAccess,
         transport,
         allowsArchivedWorkspace:
           endpoint.config["workspaceStatus"] === "active-or-archived",
@@ -1596,7 +1619,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       id,
       importPath: deriveHandlerImportPath(endpoint.file),
       exportName: endpoint.exportName,
-      featureAccess: parseFeatureRequirement(endpoint.config["featureAccess"]),
+      featureAccess,
     });
     const source = sourceByFile.get(endpoint.file);
     if (source !== undefined) {

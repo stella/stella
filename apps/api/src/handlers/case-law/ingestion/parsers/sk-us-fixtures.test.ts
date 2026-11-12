@@ -7,8 +7,11 @@ import {
   projectPlainText,
 } from "@stll/legal-ast/document-ast";
 
-import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseSkUsDocumentXhtml = guardParser(uncheckedParseSkUsDocumentXhtml);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -161,6 +164,21 @@ describe("the page numbers the markup keeps from the file", () => {
     );
   });
 
+  test("a separate opinion opening a fresh page leaves the page before it short (III. ÚS 86/05)", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-86-05", "III. ÚS 86/05");
+    const texts = paragraphs(blocks).map(textOf);
+    // Page 21 holds only the decision's closing lines; page 22 opens the
+    // separate opinion with the docket. Every page number still leaves.
+    expect(texts.filter((text) => /^\d{1,2} \p{Ll}/u.test(text))).toEqual([]);
+    expect(
+      texts.some((text) =>
+        text.includes(
+          "Podľa jej vyjadrenia sa o tejto skutočnosti dozvedela až s veľkým časovým odstupom",
+        ),
+      ),
+    ).toBe(true);
+  });
+
   test("a page number closing a page's last line leaves the text (PL. ÚS 1/2021)", async () => {
     const blocks = await parsedFixture("sk-us-pl-us-1-2021", "PL. ÚS 1/2021");
     const first = paragraphs(blocks).find((block) => block.number === 1);
@@ -201,6 +219,48 @@ describe("the parts of a part (PL. ÚS 1/2021)", () => {
   });
 });
 
+describe("the state and the formula above a ruling", () => {
+  /** The head of the decision, up to its first part marker. */
+  const head = (blocks: readonly Block[]) =>
+    blocks
+      .slice(0, 4)
+      .map((block) =>
+        block.type === "heading" || block.type === "paragraph"
+          ? { type: block.type, role: block.role, text: textOf(block) }
+          : { type: block.type },
+      );
+
+  test.each([
+    // The title, the formula and the docket are set in one type.
+    ["sk-us-pl-us-10-2014", "PL. ÚS 10/2014", "PL. ÚS 10/2014-78"],
+    // The state is set in the title's type.
+    ["sk-us-iii-us-86-05", "III. ÚS 86/05", "III. ÚS 86/05-45"],
+  ])(
+    "%s: the state and the formula are the opening formula, the title stands alone",
+    async (name, caseNumber, docket) => {
+      const blocks = await parsedFixture(name, caseNumber);
+      expect(head(blocks)).toEqual([
+        {
+          type: "paragraph",
+          role: "opening-formula",
+          text: "SLOVENSKÁ REPUBLIKA",
+        },
+        {
+          type: "heading",
+          role: "decision-title",
+          text: "NÁLEZ Ústavného súdu Slovenskej republiky",
+        },
+        {
+          type: "paragraph",
+          role: "opening-formula",
+          text: "V mene Slovenskej republiky",
+        },
+        { type: "paragraph", role: undefined, text: docket },
+      ]);
+    },
+  );
+});
+
 describe("PL. ÚS 10/2014", () => {
   test("the hyphen the court's file prints as U+00AD reads as a hyphen", async () => {
     const blocks = await parsedFixture("sk-us-pl-us-10-2014", "PL. ÚS 10/2014");
@@ -208,7 +268,11 @@ describe("PL. ÚS 10/2014", () => {
       .map((block) => ("inlines" in block ? textOf(block) : ""))
       .join("\n");
     expect(text).not.toContain(String.fromCodePoint(0xad));
-    expect(headings(blocks, 1)).toContain("PL. ÚS 10/2014-78");
+    // The docket under the formula is a line of its own, not the title's.
+    expect(paragraphs(blocks).map(textOf)).toContain("PL. ÚS 10/2014-78");
+    expect(
+      headings(blocks, 1).some((heading) => heading.includes("PL. ÚS")),
+    ).toBe(false);
     expect(text).toContain("peer-to-peer (P2P)");
     expect(text).toContain("C-293/12 a C-594/12");
     // Hyphens at a line's end are the court's too: a compound and a docket.
@@ -301,4 +365,52 @@ describe("a file that sets its words apart with no-break spaces (II. ÚS 111/201
     expect(text).toContain("Poučenie:");
     expect(text).not.toContain("Pou čenie");
   });
+});
+
+describe("a file that runs a new block onto a finished sentence with plain spaces", () => {
+  test("the next point of the holding opens its own paragraph (III. ÚS 86/05)", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-86-05", "III. ÚS 86/05");
+    const holding = paragraphs(blocks)
+      .filter((block) => block.role === "holding")
+      .map(textOf);
+    expect(holding.map((text) => /^\d+\./u.exec(text)?.[0])).toEqual([
+      "1.",
+      "2.",
+      "3.",
+      "4.",
+    ]);
+    expect(holding[0]).toEndWith("porušené boli.");
+    expect(holding[1]).toStartWith("2. Zrušuje uznesenie Krajskej prokuratúry");
+  });
+
+  test("a part marker ending the holding's line opens the reasoning (III. ÚS 5/2019)", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-5-2019", "III. ÚS 5/2019");
+    expect(headings(blocks, 2)).toEqual(["rozhodol:", "Odôvodnenie:"]);
+    const holding = paragraphs(blocks)
+      .filter((block) => block.role === "holding")
+      .map(textOf);
+    expect(holding).toHaveLength(1);
+    expect(holding[0]).toEndWith(
+      "odmieta ako podanú zjavne neoprávnenou osobou.",
+    );
+  });
+
+  test("a citation's number after an abbreviation stays in its sentence", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-86-05", "III. ÚS 86/05");
+    const opened = paragraphs(blocks)
+      .map(textOf)
+      .filter((text) => /^\d+\. (?:Ústavy|Dohovoru|Trestného)/u.test(text));
+    expect(opened).toEqual([]);
+  });
+});
+
+test("IV. ÚS 344/2012: a parenthesis left open at a page break goes on onto the next page", async () => {
+  const blocks = await parsedFixture("sk-us-iv-us-344-2012", "IV. ÚS 344/2012");
+  const texts = paragraphs(blocks).map(textOf);
+  expect(texts.filter((text) => text.startsWith("C-472/11"))).toEqual([]);
+  expect(
+    texts.some((text) =>
+      text.includes("proti Csaba Csipai a spol. C-472/11 z 21. 2. 2013)"),
+    ),
+  ).toBe(true);
 });

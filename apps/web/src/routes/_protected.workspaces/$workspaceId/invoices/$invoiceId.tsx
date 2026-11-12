@@ -53,6 +53,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -61,6 +62,7 @@ import {
   toFormErrors,
   trimmedStringSchema,
 } from "@/lib/schema";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import {
   invoiceByIdOptions,
   invoicesKeys,
@@ -87,10 +89,14 @@ export const Route = createFileRoute(
   loader: async ({ context, params }) => {
     // Prime the invoice query the detail view suspends on so the fetch starts
     // during navigation instead of after the component mounts and suspends.
-    await ensureRouteQueryData(
-      context.queryClient,
-      invoiceByIdOptions(params.workspaceId, params.invoiceId),
-    );
+    await loadRouteResource({
+      ids: [params.workspaceId, params.invoiceId],
+      load: async () =>
+        await ensureRouteQueryData(
+          context.queryClient,
+          invoiceByIdOptions(params.workspaceId, params.invoiceId),
+        ),
+    });
   },
   remountDeps: ({ params }) => [params.workspaceId, params.invoiceId],
 });
@@ -254,16 +260,28 @@ const InvoiceDetail = ({
   type TransitionAction = "finalize" | "send" | "void" | "revert_to_draft";
 
   const transitionMutation = useMutation({
-    mutationFn: async (action: TransitionAction) => {
-      const response = await api
-        .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
-          invoiceId: toSafeId<"invoice">(invoiceId),
-        })
-        .transition.post({
-          action,
-        });
-      return unwrapApiResponse(response);
-    },
+    mutationFn: resourceMutation({
+      mutation: "transitionInvoice",
+      queryClient,
+      mutationFn: async ({
+        action,
+        workspaceId: mutationWorkspaceId,
+      }: {
+        action: TransitionAction;
+        workspaceId: string;
+      }) => {
+        const response = await api
+          .invoices({
+            workspaceId: toSafeId<"workspace">(mutationWorkspaceId),
+          })({
+            invoiceId: toSafeId<"invoice">(invoiceId),
+          })
+          .transition.post({
+            action,
+          });
+        return unwrapApiResponse(response);
+      },
+    }),
     onSuccess: () => {
       invalidateAll();
     },
@@ -387,7 +405,9 @@ const InvoiceDetail = ({
             invoiceStatus={invoiceStatus}
             onDelete={() => deleteMutation.mutate()}
             onEdit={() => setEditOpen(true)}
-            onTransition={(action) => transitionMutation.mutate(action)}
+            onTransition={(action) =>
+              transitionMutation.mutate({ action, workspaceId })
+            }
           />
         </div>
       </div>

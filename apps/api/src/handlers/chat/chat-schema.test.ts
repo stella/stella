@@ -8,6 +8,7 @@ import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_STATUS,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_TURN_INTENT,
   RESOURCE_TYPE,
@@ -20,6 +21,7 @@ import {
   isServerChatToolCall,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
+import type { AskUserAnswer } from "@stll/api-contract/chat-ask-user";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import { assertProperty } from "@stll/property-testing";
 
@@ -50,11 +52,12 @@ import {
   activeTemplateSchema,
   agUiSendMessageBodySchema,
   parseMessage,
+  requireUserMessageContent,
   resolveBrowserExtensionCapability,
   resolveEditedUserMessageId,
   sendMessageBodySchema,
-  validateMessage as validateMessageWithPersistence,
-  validateToolCallParts,
+  validateMessage as validateChatMessage,
+  validateToolCallParts as validateChatToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import { UPDATE_ENTITY_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
@@ -91,6 +94,21 @@ const noDbReads: SafeDb = async () => {
   throw new Error("This validation path should not read the database");
 };
 const noTools = {} satisfies ChatToolMap;
+/** Every case here validates a cloud turn's calls unless it names an owner. */
+type CloudByDefault<TInput, TKey extends keyof TInput> = Omit<TInput, TKey> &
+  Partial<Pick<TInput, TKey>>;
+const validateMessageWithPersistence = async (
+  input: CloudByDefault<
+    Parameters<typeof validateChatMessage>[0],
+    "toolCallOwnership"
+  >,
+) => await validateChatMessage({ toolCallOwnership: "cloud", ...input });
+const validateToolCallParts = (
+  input: CloudByDefault<
+    Parameters<typeof validateChatToolCallParts>[0],
+    "ownership"
+  >,
+) => validateChatToolCallParts({ ownership: "cloud", ...input });
 const validateMessage = async (
   input: Omit<
     Parameters<typeof validateMessageWithPersistence>[0],
@@ -825,6 +843,117 @@ describe("parseMessage", () => {
   });
 });
 
+describe("user message content", () => {
+  const otherWorkspaceId = toSafeId<"workspace">("workspace_other");
+  const userMessage = (...contents: string[]) =>
+    toPersistableChatMessage({
+      id: chatMessageId("msg_content"),
+      role: "user",
+      parts: contents.map((content) => ({ type: "text" as const, content })),
+    });
+  const contentOf = (...contents: string[]) =>
+    requireUserMessageContent(
+      parseMessage({
+        accessibleWorkspaceIds: [],
+        message: userMessage(...contents),
+      }).message,
+    );
+
+  // Composer HTML the editor sends for a draft with nothing to read: its
+  // own emptiness check counts spaces and line breaks as content.
+  const BLANK_COMPOSER_HTML = [
+    "<p> </p>",
+    "<p><br></p>",
+    "<p>&nbsp; </p>",
+    "<p>  </p><p></p>",
+    // A matter chip from a workspace the sender cannot read is dropped.
+    `<p><entity-mention data-id="entity_1" data-label="Lease" data-category="entity" data-source-workspace-id="${otherWorkspaceId}"></entity-mention> </p>`,
+  ];
+
+  test.each(BLANK_COMPOSER_HTML)(
+    "refuses %s before a provider sees an empty user message",
+    (html) => {
+      // The raw HTML is not blank; only the normalized text is.
+      expect(html.trim()).not.toBe("");
+      const refused = contentOf(html);
+      expect(Result.isError(refused)).toBe(true);
+      if (Result.isOk(refused)) {
+        return;
+      }
+      expect(refused.error.status).toBe(422);
+      expect(refused.error.code).toBe(CHAT_MESSAGE_EMPTY_ERROR_CODE);
+    },
+  );
+
+  test("a message of chips alone is content: the quote and the decision", () => {
+    const decisionId = "0190f2b4-6a1e-7c2d-9a3b-1c2d3e4f5a6b";
+    const result = contentOf(
+      `<p><pasted-text data-label="1 Afs 2/2020" data-source="paste">Quoted words</pasted-text> <entity-mention data-id="${decisionId}" data-label="1 Afs 2/2020" data-category="decision" data-kind="decision"></entity-mention> </p>`,
+    );
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("pasted text beside a blank paragraph is content", () => {
+    const result = requireUserMessageContent(
+      parseMessage({
+        accessibleWorkspaceIds: [],
+        message: toPersistableChatMessage({
+          id: chatMessageId("msg_pasted_only"),
+          role: "user",
+          parts: [
+            { type: "text", content: "<p> </p>" },
+            createChatPastedTextPart("Clause 4.2"),
+          ],
+        }),
+      }).message,
+    );
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("blank composer HTML is refused and any visible word is accepted", () => {
+    const blankFragment = fc.constantFrom(
+      "<p>",
+      "</p>",
+      "<br>",
+      " ",
+      "\n",
+      "\t",
+      "&nbsp;",
+      "<p><br></p>",
+    );
+    assertProperty(
+      "blank composer HTML is refused and any visible word is accepted",
+      fc.property(
+        fc.array(blankFragment, { minLength: 1, maxLength: 12 }),
+        fc.stringMatching(/^[A-Za-z0-9]{1,12}$/u),
+        fc.nat(),
+        (fragments, word, at) => {
+          const blank = fragments.join("");
+          expect(Result.isError(contentOf(blank))).toBe(true);
+          const index = at % (fragments.length + 1);
+          const withWord = [
+            ...fragments.slice(0, index),
+            word,
+            ...fragments.slice(index),
+          ].join("");
+          expect(Result.isOk(contentOf(withWord))).toBe(true);
+        },
+      ),
+    );
+  });
+
+  test("assistant messages are not judged as user content", () => {
+    const result = requireUserMessageContent(
+      toPersistableChatMessage({
+        id: chatMessageId("msg_assistant_blank"),
+        role: "assistant",
+        parts: [],
+      }),
+    );
+    expect(Result.isOk(result)).toBe(true);
+  });
+});
+
 describe("validateMessage", () => {
   test("approval inputs compare by resolved identity only in declared ref fields", async () => {
     await assertProperty(
@@ -1511,6 +1640,126 @@ describe("validateMessage", () => {
     expect(Result.isError(drifted) && drifted.error.message).toBe(
       "Chat tool input does not match arguments for ask-user",
     );
+  });
+
+  describe("ask-user answers", () => {
+    const input = {
+      analysis: "The builder needs its sources.",
+      questions: [
+        {
+          question: "Which documents should I read?",
+          reason: "Only picked documents are read.",
+          options: ["Lease A (Matter 1)", "Lease B (Matter 2)", "NDA C"],
+          selection: "multiple",
+        },
+        {
+          question: "Which side are you on?",
+          reason: "Sets the tiers.",
+          options: ["Landlord", "Tenant"],
+        },
+      ],
+    } as const;
+    const validateAnswers = (
+      answers: AskUserAnswer[],
+      callInput: unknown = input,
+    ) =>
+      validateToolCallParts({
+        message: {
+          id: chatMessageId("msg_ask_user_answers"),
+          role: "assistant",
+          parts: [
+            {
+              arguments: JSON.stringify(callInput),
+              id: "ask-user-answers",
+              input: callInput,
+              name: "ask-user",
+              output: { answers },
+              state: "complete",
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+              type: "tool-call",
+            },
+          ],
+        },
+        tools: registeredAskUserTools,
+      });
+    const side = { question: "Which side are you on?", answer: "Tenant" };
+    const documents = (selected: string[]) => ({
+      question: "Which documents should I read?",
+      selected,
+    });
+
+    test("accepts ticked options and answers stored before selections existed", () => {
+      expect(
+        Result.isOk(
+          validateAnswers([documents(["NDA C", "Lease A (Matter 1)"]), side]),
+        ),
+      ).toBe(true);
+      // Stored threads hold one string per question, blank when skipped.
+      expect(
+        Result.isOk(
+          validateAnswers([
+            { question: "Which documents should I read?", answer: "" },
+            side,
+          ]),
+        ),
+      ).toBe(true);
+    });
+
+    const refusal = (answers: AskUserAnswer[], callInput: unknown = input) => {
+      const result = validateAnswers(answers, callInput);
+      return Result.isError(result) ? result.error.message : null;
+    };
+
+    test("refuses answers that are not one per question, in order", () => {
+      expect(refusal([])).toBe(
+        "Invalid answers for ask-user: Expected 2 answers, got 0.",
+      );
+      expect(
+        refusal([
+          documents(["NDA C"]),
+          side,
+          { question: "Anything else?", answer: "No" },
+        ]),
+      ).toBe("Invalid answers for ask-user: Expected 2 answers, got 3.");
+      expect(refusal([side, documents(["NDA C"])])).toBe(
+        "Invalid answers for ask-user: Answer 1 is for a different question.",
+      );
+    });
+
+    test("refuses a question that offers the same option twice", () => {
+      const [documentsQuestion, sideQuestion] = input.questions;
+      expect(
+        refusal([documents(["NDA C"]), side], {
+          ...input,
+          questions: [
+            { ...documentsQuestion, options: ["NDA C", "NDA C"] },
+            sideQuestion,
+          ],
+        }),
+      ).toBe("Invalid chat tool input for ask-user");
+    });
+
+    test("refuses a selection that is not exactly the question's options", () => {
+      expect(
+        refusal([documents(["Lease A (Matter 1)", "Lease D"]), side]),
+      ).toBe(
+        "Invalid answers for ask-user: Question 1 was answered with a value that is not one of its options.",
+      );
+      expect(refusal([documents(["NDA C", "NDA C"]), side])).toBe(
+        "Invalid answers for ask-user: Question 1 was answered with the same option twice.",
+      );
+      expect(
+        refusal([
+          documents(["NDA C"]),
+          { question: "Which side are you on?", selected: ["Tenant"] },
+        ]),
+      ).toBe(
+        "Invalid answers for ask-user: Question 2 takes one answer, not a selection.",
+      );
+      expect(refusal([documents([]), side])).toBe(
+        "Invalid chat tool output for ask-user",
+      );
+    });
   });
 
   test("accepts TanStack text parts at the live boundary", async () => {
@@ -2777,7 +3026,14 @@ describe("validateMessage", () => {
         parts: [
           {
             ...canonicalCall,
-            output: { answers: ["Municipal Court in Prague"] },
+            output: {
+              answers: [
+                {
+                  question: "Which court?",
+                  answer: "Municipal Court in Prague",
+                },
+              ],
+            },
             state: "complete",
           },
         ],
@@ -2788,7 +3044,7 @@ describe("validateMessage", () => {
       },
       safeDb: noDbReads,
       threadId: chatThreadId("thread_ask_user_completion"),
-      tools: askUserTools,
+      tools: registeredAskUserTools,
       userId: userId("user_ask_user_completion"),
     });
 

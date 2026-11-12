@@ -5,6 +5,10 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  type ApiValidationIssue,
+  CHAT_INPUT_REFUSAL_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
+  type ChatInputRefusalCode,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
@@ -15,12 +19,19 @@ import {
   parseApiErrorValue,
   parseApiValidationIssues,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
+  SKILL_SOURCE_UNREACHABLE_CODE,
 } from "@stll/api-contract";
-import type { ApiValidationIssue } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { BROWSER_SITE_GRANT_REFUSAL_CODE } from "@stll/api-contract/browser-site-grants";
+import {
+  CHAT_LOCAL_RUN_REFUSAL,
+  type ChatLocalRunRefusal,
+} from "@stll/api-contract/chat-run-target";
+import { CORRESPONDENCE_SOURCE_CHANGED_CODE } from "@stll/api-contract/correspondence";
+import { ORGANIZATION_DATA_BOX_REFUSAL_CODE } from "@stll/api-contract/data-box";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
@@ -31,6 +42,10 @@ import {
   publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
+import {
+  SHAREPOINT_REFUSAL_CODE,
+  type SharepointRefusalCode,
+} from "@stll/api-contract/sharepoint";
 import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
@@ -41,6 +56,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { AI_FAILURE_ERROR_KEYS } from "@/lib/errors/ai-failure";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { ClientOperationError } from "@/lib/errors/client";
+import { INVOICE_ISSUE_ERROR_KEYS } from "@/lib/errors/invoice-issue";
 import {
   ACTION_ADMISSION_ERROR_KEYS,
   STATUS_ERROR_KEYS,
@@ -104,6 +120,26 @@ export const shouldRetryAPIRequest = (
       error.status >= 500)
   );
 };
+
+const SERVICE_UNAVAILABLE_STATUS = 503;
+const DEFAULT_RETRY_BASE_MS = 1000;
+const DEFAULT_RETRY_MAX_MS = 30_000;
+/** The body field a refusal's `Retry-After` is carried in. */
+export const RETRY_AFTER_MS_DETAIL = "retryAfterMs";
+
+/** How long a 503 said to wait before asking again, when it said. */
+export const serviceBusyRetryAfterMs = (error: unknown): number | undefined => {
+  if (!APIError.is(error) || error.status !== SERVICE_UNAVAILABLE_STATUS) {
+    return undefined;
+  }
+  const value = error.details?.[RETRY_AFTER_MS_DETAIL];
+  return typeof value === "number" ? value : undefined;
+};
+
+/** TanStack's default backoff, unless the server named a delay. */
+export const apiRetryDelayMs = (attemptIndex: number, error: unknown): number =>
+  serviceBusyRetryAfterMs(error) ??
+  Math.min(DEFAULT_RETRY_BASE_MS * 2 ** attemptIndex, DEFAULT_RETRY_MAX_MS);
 
 export type ToAPIErrorProps = {
   status: number;
@@ -232,18 +268,84 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
     "errors.apiCodes.verificationDailyLimitReached",
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
+/** Why a chat turn bound for the member's computer was refused. */
+const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
+  [CHAT_LOCAL_RUN_REFUSAL.unavailable]: "chat.localRun.refusalUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.noComputer]: "chat.localRun.refusalNoComputer",
+  [CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable]:
+    "chat.localRun.refusalHarnessUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.modelUnavailable]:
+    "chat.localRun.refusalModelUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable]:
+    "chat.localRun.refusalReasoningEffortUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable]:
+    "chat.localRun.refusalPermissionUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit]:
+    "chat.localRun.refusalPermissionAboveLimit",
+  [CHAT_LOCAL_RUN_REFUSAL.tooLarge]: "chat.localRun.refusalTooLarge",
+  [CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode]:
+    "chat.localRun.refusalConflictingRunMode",
+} as const satisfies Record<ChatLocalRunRefusal, TranslationKey>;
+
+/** Why a chat turn was refused before it started, with what the person can do. */
+const CHAT_INPUT_REFUSAL_ERROR_KEYS = {
+  [CHAT_INPUT_REFUSAL_CODE.activeFileNoText]: "chat.sendErrorActiveFileNoText",
+  [CHAT_INPUT_REFUSAL_CODE.activeFileTooLarge]:
+    "chat.sendErrorActiveFileTooLarge",
+  [CHAT_INPUT_REFUSAL_CODE.agentRunsDisabled]:
+    "chat.sendErrorAgentRunsDisabled",
+  [CHAT_INPUT_REFUSAL_CODE.attachmentNoText]: "chat.sendErrorAttachmentNoText",
+  [CHAT_INPUT_REFUSAL_CODE.attachmentUnsupported]:
+    "chat.sendErrorAttachmentUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.documentUnsupported]:
+    "chat.sendErrorDocumentUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.imageInvalid]: "chat.sendErrorImageInvalid",
+  [CHAT_INPUT_REFUSAL_CODE.imageUnsupported]: "chat.sendErrorImageUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.toolsUnsupported]: "chat.sendErrorToolsUnsupported",
+} as const satisfies Record<ChatInputRefusalCode, TranslationKey>;
+
+/** Why a SharePoint or OneDrive read or import was refused. */
+const SHAREPOINT_REFUSAL_ERROR_KEYS = {
+  [SHAREPOINT_REFUSAL_CODE.notConnected]:
+    "errors.apiCodes.sharepointNotConnected",
+  [SHAREPOINT_REFUSAL_CODE.reconnectRequired]:
+    "errors.apiCodes.sharepointReconnectRequired",
+  [SHAREPOINT_REFUSAL_CODE.accessDenied]:
+    "errors.apiCodes.sharepointAccessDenied",
+  [SHAREPOINT_REFUSAL_CODE.notFound]: "errors.apiCodes.sharepointNotFound",
+  [SHAREPOINT_REFUSAL_CODE.throttled]: "errors.apiCodes.sharepointThrottled",
+  [SHAREPOINT_REFUSAL_CODE.invalidCursor]:
+    "errors.apiCodes.sharepointInvalidCursor",
+  [SHAREPOINT_REFUSAL_CODE.notAFile]: "errors.apiCodes.sharepointNotAFile",
+  [SHAREPOINT_REFUSAL_CODE.fileTooLarge]:
+    "errors.apiCodes.sharepointFileTooLarge",
+} as const satisfies Record<SharepointRefusalCode, TranslationKey>;
+
 const CODE_ERROR_KEYS = {
   [TIME_ENTRY_RATE_REQUIRED_CODE]: "billing.rates.effectiveRateRequired",
   [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
   [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
   ...AI_FAILURE_ERROR_KEYS,
+  ...CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS,
+  ...CHAT_INPUT_REFUSAL_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
+  ...INVOICE_ISSUE_ERROR_KEYS,
+  ...SHAREPOINT_REFUSAL_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
   [MATTER_CONTACT_CAPACITY_CODE.reached]:
     "errors.apiCodes.matterContactCapacityReached",
   [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
     "errors.apiCodes.matterContactCapacityExceeded",
+  [CORRESPONDENCE_SOURCE_CHANGED_CODE]:
+    "errors.apiCodes.correspondenceSourceChanged",
+  [ORGANIZATION_DATA_BOX_REFUSAL_CODE.limitReached]:
+    "errors.apiCodes.organizationDataBoxLimitReached",
+  [ORGANIZATION_DATA_BOX_REFUSAL_CODE.changedConcurrently]:
+    "errors.apiCodes.organizationDataBoxesChanged",
+  [BROWSER_SITE_GRANT_REFUSAL_CODE.limitReached]:
+    "errors.apiCodes.browserSiteGrantLimitReached",
+  [CHAT_MESSAGE_EMPTY_ERROR_CODE]: "chat.sendErrorMessageEmpty",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
   [MEMBER_REMOVAL_BUSY_CODE]: "errors.actionAdmission.concurrencyBusy",
@@ -283,6 +385,7 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.mcpAuthorizationApprovalRequired",
   provider_key_rejected: "errors.apiCodes.providerKeyRejected",
   provider_rate_limited: "errors.apiCodes.providerRateLimited",
+  [SKILL_SOURCE_UNREACHABLE_CODE]: "errors.apiCodes.skillSourceUnreachable",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
   usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",
   validation: STATUS_ERROR_KEYS.validation,
@@ -301,6 +404,15 @@ const isUsageRejectionReason = (
   reason: string,
 ): reason is keyof typeof USAGE_REJECTION_REASON_KEYS =>
   Object.hasOwn(USAGE_REJECTION_REASON_KEYS, reason);
+
+/**
+ * The localized message for a refusal code carried outside an HTTP error (a
+ * per-item result of a batch), or `undefined` when the code has no message.
+ */
+export const apiCodeMessage = (code: string): string | undefined =>
+  Object.hasOwn(CODE_ERROR_KEYS, code) && isKnownErrorCode(code)
+    ? translateError(CODE_ERROR_KEYS[code])
+    : undefined;
 
 /** The message for the first field a rejected request named. */
 const validationIssueMessage = (issue: ApiValidationIssue): string => {
@@ -367,12 +479,32 @@ const AUTH_REFUSAL_CODES: ReadonlySet<string> = new Set([
 type AuthRefusalCandidate = { code?: string | undefined; status: number };
 
 /** Whether this is a plain refusal of who is asking, whatever the action. */
-export const isAuthRefusal = ({
-  code,
-  status,
-}: AuthRefusalCandidate): boolean =>
+const isAuthRefusal = ({ code, status }: AuthRefusalCandidate): boolean =>
   (status === 401 || status === 403) &&
   (code === undefined || AUTH_REFUSAL_CODES.has(code));
+
+/** The session behind this request is gone; signing in again answers it. */
+export const isSessionRefusal = (candidate: AuthRefusalCandidate): boolean =>
+  candidate.status === 401 && isAuthRefusal(candidate);
+
+/**
+ * Codes the auth server sets when it turns down a code the person typed. Each
+ * form that asks for one says so in place and lets them try again.
+ */
+const TYPED_CODE_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  "INVALID_BACKUP_CODE",
+  "INVALID_CODE",
+  "INVALID_OTP",
+  "OTP_EXPIRED",
+]);
+
+/** Whether the auth server turned down a code the person typed. */
+export const isTypedCodeRefusal = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  typeof error.code === "string" &&
+  TYPED_CODE_REFUSAL_CODES.has(error.code);
 
 /** The server has nothing to show for this file; retrying cannot help. */
 export const isPreviewUnavailableError = (error: unknown): boolean =>

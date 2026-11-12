@@ -26,6 +26,14 @@ const POINTER_ONLY_TABLES: ReadonlyMap<string, string> = new Map([
     "chat_tool_grants",
     "names the conversation a tool approval applies in; holds a tool name, never thread content",
   ],
+  [
+    "desktop_runner_runs",
+    "names the thread whose turn started a run on the member's computer; owner-only RLS denies every application role, and only the thread's own member reads the run back, by account and organization",
+  ],
+  [
+    "desktop_runner_folder_restores",
+    "names the thread whose folder a member asked to undo, with its state; holds no thread content, owner-only RLS denies every application role, and the undo routes read the turn through the member's chat scope first",
+  ],
 ]);
 
 const renderPolicies = (table: PgTable): string => {

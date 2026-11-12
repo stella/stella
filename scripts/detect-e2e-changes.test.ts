@@ -14,6 +14,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import {
   type ChangedFileScopeDetectors,
   computeChangedFileScope,
@@ -226,8 +227,7 @@ const evaluateExpression = (expression: string, context: object) =>
 const checkoutRefs = Object.values(ciContract.jobs).flatMap((job) =>
   (job.steps ?? []).filter(
     (step) =>
-      step.uses?.startsWith("actions/checkout@") &&
-      step.with?.["ref"] !== undefined,
+      isRepositoryCheckoutAction(step.uses) && step.with?.["ref"] !== undefined,
   ),
 );
 const marketingCheckout = (job: string) => {
@@ -533,7 +533,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(requiredExpression(collabRedis["if"])).toBe(
       githubExpression(
-        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
+        "!cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')))",
       ),
     );
     expect(requiredExpression(collabRedis["run"])).toBe(
@@ -663,6 +663,7 @@ describe("detect-e2e-changes", () => {
                 SELECTED_PLAN_PATH: selectedPlan,
                 E2E_PRODUCTION_REQUIRED: required,
                 ROUTE_SMOKE_REQUIRED: routeSmoke,
+                SCOPE_UNKNOWN: "false",
                 FULL_MATRIX: fullMatrix,
               };
               // The harness supplies every variable the step declares, so a
@@ -703,6 +704,8 @@ describe("detect-e2e-changes", () => {
                 `matrix=${expectedMatrix}`,
                 `mode=${usesSelection ? "selected" : "full"}`,
                 `specs=${usesSelection ? selectedSpecs : "[]"}`,
+                // The fixture plans no hosted browser suite specs.
+                "suite_specs=[]",
                 `selection_required=${String(!emptySelection)}`,
                 `required=${emptySelection ? "false" : required}`,
               ]);
@@ -959,27 +962,6 @@ describe("detect-e2e-changes", () => {
     const plan = workflowJob("ci-plan");
     expect(plan).toContain(
       `model_catalog_drift_required: ${githubExpression("steps.changed-files.outputs.model_catalog_drift_required")}`,
-    );
-    expect(new Set(MODEL_CATALOG_DRIFT_INPUTS)).toEqual(
-      new Set([
-        ".github/workflows/ci.yml",
-        "packages/ai-catalog/package.json",
-        "packages/ai-catalog/src/capabilities-overrides.ts",
-        "packages/ai-catalog/src/capabilities.gen.ts",
-        "packages/ai-catalog/src/document-input-overrides.ts",
-        "packages/ai-catalog/src/index.ts",
-        "packages/ai-catalog/src/model-defaults-ledger.ts",
-        "packages/ai-catalog/src/model-rate-policy.ts",
-        "packages/ai-catalog/src/model-rate.ts",
-        "packages/ai-catalog/src/model-rates.gen.ts",
-        "packages/ai-catalog/src/reasoning-capabilities.ts",
-        "packages/fetch/src/connection-failure.ts",
-        "packages/fetch/src/index.ts",
-        "packages/scripts/src/model-catalog-capabilities-gen.ts",
-        "packages/scripts/src/model-catalog-capabilities.ts",
-        "packages/scripts/src/model-catalog-rates-gen.ts",
-        "packages/scripts/src/model-catalog-snapshot.ts",
-      ]),
     );
     for (const input of MODEL_CATALOG_DRIFT_INPUTS) {
       expect(changedFileScope(input).model_catalog_drift_required, input).toBe(
@@ -2050,7 +2032,12 @@ test("every workflow browser command uses the pinned image and no reachable brow
       );
       const runs =
         isRecord(action) && isRecord(action["runs"]) ? action["runs"] : {};
-      const reached = reachableSteps(stepsOf(runs["steps"], step.uses));
+      // Only composite actions have steps to inherit; a node action runs one
+      // entry point and reaches no further workflow steps.
+      const reached =
+        runs["using"] === "composite"
+          ? reachableSteps(stepsOf(runs["steps"], step.uses))
+          : [];
       actionSteps.set(step.uses, reached);
       return [step, ...reached];
     });

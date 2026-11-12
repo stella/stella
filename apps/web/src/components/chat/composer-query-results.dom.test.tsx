@@ -1,8 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act } = await import("react");
@@ -139,7 +140,9 @@ for (const source of [
       for (const answer of [[], ["Cached answer"]]) {
         const { client, requests, ui, settle } = mount();
         await settle(answer);
-        await waitFor(() => expect(ui.queryByRole("status")).toBeNull());
+        await waitFor(() =>
+          expect(ui.queryByRole("status") === null).toBe(true),
+        );
         if (answer.length === 0) {
           expect(ui.getByText("Empty answer")).toBeDefined();
         }

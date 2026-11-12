@@ -11,6 +11,7 @@ import {
 
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
+import { ViewChromeBar, ViewToolbarChrome } from "@stll/ui/view-toolbar";
 
 import {
   getWeekStart,
@@ -29,6 +30,7 @@ import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
@@ -63,7 +65,12 @@ import {
   type CurrentWorkspaceDocument,
   getCurrentWorkspaceDocument,
 } from "@/lib/workspaces/use-workspace-view-params";
-import { isWorkspaceViewId } from "@/lib/workspaces/view-params.logic";
+import {
+  DEFAULT_WORKSPACE_VIEW_ID,
+  isWorkspaceViewId,
+  workspaceViewRouteIds,
+  workspaceViewsInclude,
+} from "@/lib/workspaces/view-params.logic";
 import { routeSearchSchema } from "@/route-search-params";
 import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
@@ -115,11 +122,16 @@ export const Route = createFileRoute(
     const { queryClient } = context;
     const isDocumentRoute = context.documentOnScreen !== undefined;
 
-    const views = await ensureRouteQueryData(
-      queryClient,
-      viewsOptions(workspaceId),
-    );
-    const activeView = views.find((view) => view.id === viewId) ?? views.at(0);
+    const views = await loadRouteResource({
+      ids: workspaceViewRouteIds(workspaceId, viewId),
+      load: async () =>
+        await ensureRouteQueryData(queryClient, viewsOptions(workspaceId)),
+      exists: (loadedViews) => workspaceViewsInclude(loadedViews, viewId),
+    });
+    const activeView =
+      viewId === DEFAULT_WORKSPACE_VIEW_ID
+        ? selectAvailableWorkspaceView(views, viewId)
+        : views.find((view) => view.id === viewId);
 
     if (!activeView) {
       return;
@@ -513,13 +525,9 @@ function ViewChromeRow({
 }) {
   const navigate = Route.useNavigate();
   return (
-    <div className="flex min-w-0 flex-col border-b md:flex-row md:flex-wrap md:items-center md:justify-between">
+    <ViewChromeBar>
       <div
-        className={cn(
-          "flex min-w-0 items-center",
-          TOOLBAR_ROW_HEIGHT,
-          toolbar !== null && "border-b md:border-b-0",
-        )}
+        className={cn("flex min-w-0 flex-1 items-center", TOOLBAR_ROW_HEIGHT)}
       >
         <ViewSwitcher
           activeViewId={activeViewId}
@@ -537,7 +545,7 @@ function ViewChromeRow({
         />
       </div>
       {toolbar}
-    </div>
+    </ViewChromeBar>
   );
 }
 
@@ -577,7 +585,7 @@ const PENDING_OVERVIEW_CARD_KEYS = ["o1", "o2", "o3", "o4"];
 const PendingTableBody = () => (
   <div className="flex flex-col">
     <div className="flex items-center gap-4 border-b px-3 py-2">
-      <Skeleton className="size-4 rounded" />
+      <Skeleton className="size-4 rounded-sm" />
       {PENDING_TABLE_CELLS.map((cell) => (
         <Skeleton className={cn("h-3", cell.width)} key={cell.key} />
       ))}
@@ -587,7 +595,7 @@ const PendingTableBody = () => (
         className="flex items-center gap-4 border-b px-3 py-2.5"
         key={rowKey}
       >
-        <Skeleton className="size-4 rounded" />
+        <Skeleton className="size-4 rounded-sm" />
         {PENDING_TABLE_CELLS.map((cell) => (
           <Skeleton className={cn("h-4", cell.width)} key={cell.key} />
         ))}
@@ -651,11 +659,11 @@ function ViewPendingComponent() {
       : selectAvailableWorkspaceView(cachedViews, viewId);
   const layoutType = pendingView?.layout.type;
   const toolbarSkeleton = (
-    <div className={cn("flex items-center gap-1.5 px-3", TOOLBAR_ROW_HEIGHT)}>
-      <Skeleton className="size-7 rounded-md" />
-      <Skeleton className="size-7 rounded-md" />
-      <Skeleton className="h-7 w-24 rounded-md" />
-    </div>
+    <ViewToolbarChrome>
+      <Skeleton className="size-7 shrink-0 rounded-md" />
+      <Skeleton className="size-7 shrink-0 rounded-md" />
+      <Skeleton className="h-7 w-24 shrink-0 rounded-md" />
+    </ViewToolbarChrome>
   );
 
   return (
@@ -667,13 +675,18 @@ function ViewPendingComponent() {
           workspaceId={workspaceId}
         />
       ) : (
-        <div className="flex min-w-0 flex-col border-b px-3 md:flex-row md:items-center md:justify-between">
-          <div className={cn("flex items-center gap-1.5", TOOLBAR_ROW_HEIGHT)}>
+        <ViewChromeBar>
+          <div
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-1.5 px-3",
+              TOOLBAR_ROW_HEIGHT,
+            )}
+          >
             <Skeleton className="h-7 w-24 rounded-md" />
             <Skeleton className="h-7 w-20 rounded-md" />
           </div>
           {toolbarSkeleton}
-        </div>
+        </ViewChromeBar>
       )}
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex-1 overflow-auto">

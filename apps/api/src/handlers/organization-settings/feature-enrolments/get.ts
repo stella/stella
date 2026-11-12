@@ -5,7 +5,7 @@ import { featureEnrolments } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { readBounded } from "@/api/lib/db/read-bounded";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
 import {
   FEATURE_REGISTRY,
   SELF_SERVE_FEATURE_IDS,
@@ -81,9 +81,7 @@ export default createSafeRootHandler(
     const enrolled = new Set(rows.map(({ featureId }) => featureId));
     return Result.ok({
       features: SELF_SERVE_FEATURE_IDS.filter((featureId) =>
-        isDeploymentFeatureEnabled(
-          FEATURE_REGISTRY[featureId].deploymentFeature,
-        ),
+        isFeatureDeployed(FEATURE_REGISTRY, featureId),
       ).map((featureId) => ({ featureId, enrolled: enrolled.has(featureId) })),
     });
   },

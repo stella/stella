@@ -29,9 +29,18 @@ const capability = (replay: "replay" | "unsupported") =>
     ...(replay === "replay" ? { idempotency: { type: "replay" } } : {}),
   });
 
+const OPAQUE = {
+  token: "opaque",
+  effectiveGrants: { type: "unknown" },
+  serverUrl: undefined,
+} as const;
+
 const runWith = async (
   replay: "replay" | "unsupported",
   call: BatchToolCall,
+  authorization: Parameters<
+    typeof resolveBatchCommand
+  >[0]["authorization"] = OPAQUE,
 ) => {
   const { spec } = capability(replay);
   const tree: RouteNode = {
@@ -49,7 +58,7 @@ const runWith = async (
       input: { body: { name: "Fixture" } },
     }),
     resolve: (command) =>
-      resolveBatchCommand({ tree, command, call, token: "opaque", yes: false }),
+      resolveBatchCommand({ tree, command, call, authorization, yes: false }),
     now: () => 0,
     sleep: async () => undefined,
   });
@@ -74,7 +83,7 @@ describe("batch command", () => {
             tree: generatedRouteMap,
             command,
             call,
-            token: "opaque",
+            authorization: OPAQUE,
             yes,
           }),
         now: () => 0,
@@ -106,6 +115,28 @@ describe("batch command", () => {
     expect(calls.at(0)?.args).toEqual({
       capability: "contacts.create",
       input: { body: { name: "Fixture" } },
+    });
+  });
+
+  test("server grants decide scope preflight, naming the same server in the login hint", async () => {
+    let calls = 0;
+    const call: BatchToolCall = async () => {
+      calls += 1;
+      return await Promise.resolve(Result.ok({ content: [] }));
+    };
+    const outcome = await runWith("unsupported", call, {
+      token: "opaque",
+      effectiveGrants: { type: "known", scopes: ["stella:contacts_read"] },
+      serverUrl: "https://stella.example",
+    });
+    expect(calls).toBe(0);
+    expect(outcome.unwrap().at(0)).toMatchObject({
+      status: "error",
+      error: {
+        code: "missing_scope",
+        message:
+          "Missing scope stella:contacts_write. Re-run 'stella auth login --scopes stella:contacts_read,stella:contacts_write --server https://stella.example' to grant the complete scope set.",
+      },
     });
   });
 

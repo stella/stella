@@ -6,6 +6,7 @@ import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-exec
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_SET } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_SET } from "@/api/mcp/capability-tools";
+import { CASE_LAW_COURT_CATALOG_TOOL_SET } from "@/api/mcp/case-law-court-catalog-tool";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { COMPAT_TOOL_SET } from "@/api/mcp/compat-tools";
 import {
@@ -22,6 +23,7 @@ import { LEGISLATION_TOOL_SET } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_SET } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_SET } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_SET } from "@/api/mcp/research-admin-tools";
+import { SOFT_LAW_TOOL_SET } from "@/api/mcp/soft-law-tools";
 import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
 import type { McpToolName } from "@/api/mcp/static-tool-names";
 import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
@@ -51,7 +53,9 @@ type DefaultMcpToolSets = readonly [
   typeof COMPAT_TOOL_SET,
   typeof STELLA_TOOL_SET,
   typeof DECISION_READER_TOOL_SET,
+  typeof CASE_LAW_COURT_CATALOG_TOOL_SET,
   typeof LEGISLATION_TOOL_SET,
+  typeof SOFT_LAW_TOOL_SET,
   typeof LEGAL_RESOLVE_TOOL_SET,
   typeof TEMPLATE_TOOL_SET,
   typeof DOCUMENT_TOOL_SET,
@@ -69,7 +73,9 @@ export const DEFAULT_MCP_TOOL_SETS: DefaultMcpToolSets = [
   COMPAT_TOOL_SET,
   STELLA_TOOL_SET,
   DECISION_READER_TOOL_SET,
+  CASE_LAW_COURT_CATALOG_TOOL_SET,
   LEGISLATION_TOOL_SET,
+  SOFT_LAW_TOOL_SET,
   LEGAL_RESOLVE_TOOL_SET,
   TEMPLATE_TOOL_SET,
   DOCUMENT_TOOL_SET,
@@ -96,7 +102,9 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS: readonly RegisteredMcpToolDefinition[
     ...COMPAT_TOOL_SET.definitions,
     ...STELLA_TOOL_SET.definitions,
     ...DECISION_READER_TOOL_SET.definitions,
+    ...CASE_LAW_COURT_CATALOG_TOOL_SET.definitions,
     ...LEGISLATION_TOOL_SET.definitions,
+    ...SOFT_LAW_TOOL_SET.definitions,
     ...LEGAL_RESOLVE_TOOL_SET.definitions,
     ...TEMPLATE_TOOL_SET.definitions,
     ...DOCUMENT_TOOL_SET.definitions,
@@ -377,11 +385,14 @@ export const LAW_MCP_TOOL_DISPOSITION = {
   open_case_law_decision: "corpus",
   read_case_law_decision_blocks: "corpus",
   preview_cited_provision: "corpus",
+  list_case_law_courts: "corpus",
   read_case_law_citations: "corpus",
   search_legislation: "corpus",
   read_statute: "corpus",
   read_statute_provisions: "corpus",
   read_provision_history: "corpus",
+  search_guidance: "corpus",
+  read_guidance: "corpus",
   // Excluded deliberately: this one queries a live upstream publisher rather
   // than the stella corpus, so its availability, latency and coverage are not
   // properties of this surface. An agent told "these tools are the corpus"
@@ -412,11 +423,14 @@ export const MCP_PUBLIC_CORPUS_CLASS = {
   open_case_law_decision: "browse",
   read_case_law_decision_blocks: "browse",
   preview_cited_provision: "browse",
+  list_case_law_courts: "browse",
   read_case_law_citations: "browse",
   search_legislation: "search",
   read_statute: "browse",
   read_statute_provisions: "browse",
   read_provision_history: "browse",
+  search_guidance: "search",
+  read_guidance: "browse",
   create_reader_annotation: "browse",
   list_reader_annotations: "browse",
 } as const satisfies Record<

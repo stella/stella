@@ -4,6 +4,7 @@ import { DATA_BOX_ID_PATTERN, EMAIL_ADDRESS_PATTERN } from "@stll/agent-input";
 
 import { INVOICE_LANGUAGES } from "./billing";
 import { contactBirthDateSchema } from "./contact-date";
+import { displayNameSchema } from "./display-name";
 import { PARTY_IDENTIFIER_MAX_LENGTH } from "./party-identifiers";
 import { userIdSchema } from "./safe-id";
 import { CONTACT_TYPES } from "./workspace-contacts";
@@ -30,7 +31,9 @@ export const contactBankAccountSchema = v.strictObject({
   iban: v.exactOptional(v.pipe(v.string(), v.maxLength(34))),
   bic: v.exactOptional(v.pipe(v.string(), v.maxLength(11))),
   accountNumber: v.exactOptional(v.pipe(v.string(), v.maxLength(64))),
-  bankName: v.exactOptional(v.pipe(v.string(), v.maxLength(256))),
+  bankName: v.exactOptional(
+    displayNameSchema({ maxLength: 256, allowEmpty: true }),
+  ),
   currency: v.exactOptional(contactCurrencyCodeSchema),
 });
 
@@ -106,15 +109,21 @@ const minorUnitAmountSchema = v.pipe(
 
 export const contactCreateFieldsSchema = v.object({
   type: v.picklist(CONTACT_TYPES),
-  prefix: v.optional(v.pipe(v.string(), v.maxLength(32))),
-  firstName: v.optional(v.pipe(v.string(), v.maxLength(256))),
-  middleName: v.optional(v.pipe(v.string(), v.maxLength(256))),
-  lastName: v.optional(v.pipe(v.string(), v.maxLength(256))),
-  suffix: v.optional(v.pipe(v.string(), v.maxLength(32))),
+  prefix: v.optional(displayNameSchema({ maxLength: 32, allowEmpty: true })),
+  firstName: v.optional(
+    displayNameSchema({ maxLength: 256, allowEmpty: true }),
+  ),
+  middleName: v.optional(
+    displayNameSchema({ maxLength: 256, allowEmpty: true }),
+  ),
+  lastName: v.optional(displayNameSchema({ maxLength: 256, allowEmpty: true })),
+  suffix: v.optional(displayNameSchema({ maxLength: 32, allowEmpty: true })),
   dateOfBirth: v.optional(contactBirthDateSchema),
   nationalityCodes: v.optional(contactNationalityCodesSchema),
-  organizationName: v.optional(v.pipe(v.string(), v.maxLength(512))),
-  displayName: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  organizationName: v.optional(
+    displayNameSchema({ maxLength: 512, allowEmpty: true }),
+  ),
+  displayName: displayNameSchema({ maxLength: 512 }),
   notes: v.optional(v.string()),
   emails: v.optional(v.pipe(v.array(contactEmailSchema), v.maxLength(20))),
   phones: v.optional(v.pipe(v.array(contactPhoneSchema), v.maxLength(20))),

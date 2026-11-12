@@ -1,5 +1,27 @@
 # @stll/agent-input
 
+## 0.4.2
+
+### Patch Changes
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependencies: `@stll/time` 0.4.2, `temporal-polyfill` 1.0.6, `lucide-react` 1.65.0, Tiptap 3.32.1 and the MCP client 2.4.0.
+- Updated dependencies [[`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88), [`c1f546a`](https://github.com/stella/stella/commit/c1f546aff35c2c7e3d97a380642161b0c79799ba)]:
+  - @stll/template-conditions@0.6.5
+  - @stll/text-normalize@0.7.0
+
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`228b271`](https://github.com/stella/stella/commit/228b271affce5a3f531e0adf036b5e02e3494f97)]:
+  - @stll/text-normalize@0.6.0
+
+## 0.4.0
+
+### Minor Changes
+
+- Share JSON Schema optional-value handling through the agent-input package.
+
 ## 0.3.0
 
 ### Minor Changes

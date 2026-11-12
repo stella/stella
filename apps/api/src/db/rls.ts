@@ -57,6 +57,13 @@ export const SETTING_USER_ID = "app.user_id";
 export const SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID =
   "app.account_export_organization_id";
 export const SETTING_ACCOUNT_EXPORT_USER_ID = "app.account_export_user_id";
+/**
+ * Organization ids, comma-separated, whose row this transaction may delete.
+ * The organization delete guard trigger refuses every other row; only the
+ * deletion owner (completeOrganizationDeletion) sets it in production.
+ */
+export const SETTING_ORGANIZATION_DELETION_IDS =
+  "app.organization_deletion_ids";
 
 export const WORKSPACE_ACCESS_MODE = {
   explicit: "explicit",
@@ -441,6 +448,41 @@ export const wsOrganizationPolicies = (
     using: workspaceOrganizationCheck,
   }),
 ];
+
+/**
+ * Workspace policies for a table whose organization_id was added after rows
+ * existed. Every new row must record its organization and match the
+ * session's; a row written before the column carries none and stays reachable
+ * through its workspace alone, so its history and pending work keep working.
+ * Policy names match `wsPolicies`, which such a table used before.
+ */
+export const wsRecordedOrganizationPolicies = () => {
+  const recordedOrganizationCheck = sql`(
+  ${workspaceCheck} AND (organization_id IS NULL OR ${organizationCheck})
+)`;
+  return [
+    p.pgPolicy("workspace_select", {
+      for: "select",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: workspaceOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_update", {
+      for: "update",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_delete", {
+      for: "delete",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+  ];
+};
 
 const wsOrganizationUserCheck = sql`(
   ${userCheck} AND ${workspaceOrganizationCheck}
@@ -1217,6 +1259,40 @@ export const chatToolGrantPolicies = () => [
   }),
 ];
 
+// Stored browser site approvals follow the tool grants: per user+org, never
+// edited in place, and reachable by the owner role for member offboarding.
+const chatBrowserSiteGrantOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_browser_site_grants'::regclass)`;
+
+export const chatBrowserSiteGrantPolicies = () => [
+  p.pgPolicy("chat_browser_site_grant_owner", {
+    for: "all",
+    to: "public",
+    using: chatBrowserSiteGrantOwnerCheck,
+    withCheck: chatBrowserSiteGrantOwnerCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_select", {
+    for: "select",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_delete", {
+    for: "delete",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
 const workspaceViewTemplateCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;
@@ -1328,7 +1404,7 @@ const organizationManagementRoleValues = sql.raw(
 );
 
 /** The session user holds a management role in the session organization. */
-const organizationManagerCheck = sql`EXISTS (
+export const organizationManagerCheck = sql`EXISTS (
   SELECT 1
   FROM member m
   WHERE m.organization_id = (SELECT current_setting(
@@ -1339,6 +1415,30 @@ const organizationManagerCheck = sql`EXISTS (
     ))
     AND m.role IN (${organizationManagementRoleValues})
 )`;
+
+export const billingGuidelinePolicies = () => [
+  p.pgPolicy("organization_select", {
+    for: "select",
+    to: stella,
+    using: organizationCheck,
+  }),
+  p.pgPolicy("admin_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+  p.pgPolicy("admin_update", {
+    for: "update",
+    to: stella,
+    using: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+    withCheck: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+  p.pgPolicy("admin_delete", {
+    for: "delete",
+    to: stella,
+    using: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+];
 
 // Internal work is visible to its owner and approvers, never every org member.
 const internalTimeEntryAccessCheck = sql`(

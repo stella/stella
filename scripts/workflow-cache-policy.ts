@@ -1,6 +1,7 @@
 // This classification owns both cache prohibition and raw Bun setup eligibility.
-// Existing cold-scanner wiring and explicit no-cache runtime inputs are contracts,
-// not a separate list of exempt workflow/job names.
+// Cold-scanner wiring and explicit no-cache runtime inputs are contracts; where
+// a no-cache input or a raw Bun setup is allowed outside the structural rules,
+// the job is listed below with the reason.
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -41,6 +42,55 @@ const REVIEWED_LOCAL_ACTIONS: Record<string, string> = {
 };
 
 export const MAIN_ONLY_BUN_CACHE_SAVE = `\${{ github.ref == 'refs/heads/main' }}`;
+
+// oven-sh/setup-bun caches only the Bun executable; it has no package cache.
+// Its `no-cache: true` therefore skips no package store: it makes every run
+// download Bun from GitHub releases, so a releases outage fails the job.
+// Default-scope and publish-chain jobs may set it by structure. Other jobs
+// may set it only when they must restore no cache at all, listed here with
+// why. Keys are `<repo-relative file>#<job id>`; a composite action's job id
+// is `composite`.
+const CACHE_FREE_BUN_JOBS: Record<string, string> = {
+  ".github/actions/build-web-image/action.yml#composite":
+    "builds the web image that release and deploy jobs publish",
+  ".github/workflows/generated-conflicts-publish.yml#publish":
+    "holds the generated-conflicts push key",
+  ".github/workflows/main-heavy.yml#validate":
+    "runs the release queue history check from the trusted release-proof checkout",
+  ".github/workflows/main-pr-depth.yml#validate":
+    "runs the release queue history check from the trusted release-proof checkout",
+  ".github/workflows/mobile-release-plan.yml#plan":
+    "plans which mobile builds a release ships",
+  ".github/workflows/network-baseline-deliver.yml#deliver":
+    "validates and publishes the immutable main network recording",
+  ".github/workflows/release-mobile-ios.yml#testflight":
+    "builds the iOS app shipped to TestFlight",
+  ".github/workflows/release-rehearsal.yml#rehearse":
+    "rehearses the release from the release revision",
+};
+
+// Ordinary jobs set Bun up through the shared install owner unless listed
+// here with why they need no shared package store.
+const UNSTORED_BUN_JOBS: Record<string, string> = {
+  ".github/workflows/autofix.yml#regenerate-scope": "installs nothing",
+  ".github/workflows/ci.yml#dependency-review":
+    "parses workflow YAML and installs nothing",
+  ".github/workflows/ci.yml#postgres-service-suites":
+    "its filtered API/CLI install (8-13 s in run 38089283216) is cheaper than a store restore",
+  ".github/workflows/fetch-public-documents.yml#fetch": "installs nothing",
+  ".github/workflows/journey-canary.yml#journeys": "installs nothing",
+  ".github/workflows/mobile-fingerprint-check.yml#fingerprint":
+    "installs the mobile closure of both the merge result and its base",
+  ".github/workflows/mobile-fingerprint-check.yml#fingerprint-macos":
+    "installs the mobile closure of the merge result on macOS",
+};
+
+const setsBunNoCache = (step: unknown) =>
+  isRecord(step) &&
+  typeof step["uses"] === "string" &&
+  step["uses"].startsWith("oven-sh/setup-bun@") &&
+  isRecord(step["with"]) &&
+  step["with"]["no-cache"] === true;
 
 /** Why a step can save to the Actions cache, or null when it cannot. */
 const cacheSave = (step: Record<string, unknown>): string | null => {
@@ -205,21 +255,90 @@ export const jobCachePolicy = ({ workflow, job }: JobCachePolicyOptions) => {
   ) {
     return "no-cache";
   }
-  if (
-    hasPublishToken(workflow, job) ||
-    (isRecord(workflow) &&
-      isRecord(workflow["jobs"]) &&
-      Object.entries(workflow["jobs"]).some(
-        ([name, candidate]) =>
-          candidate === job && publishingJobNames(workflow).has(name),
-      ))
-  ) {
+  if (inPublishChain(workflow, job)) {
     return "publish-chain";
   }
   return "install-cache";
 };
 
-export const workflowCacheProblems = (workflow: unknown): string[] => {
+const inPublishChain = (workflow: unknown, job: Record<string, unknown>) =>
+  hasPublishToken(workflow, job) ||
+  (isRecord(workflow) &&
+    isRecord(workflow["jobs"]) &&
+    Object.entries(workflow["jobs"]).some(
+      ([name, candidate]) =>
+        candidate === job && publishingJobNames(workflow).has(name),
+    ));
+
+type BunSetupReview = { problems: string[]; exemptions: string[] };
+
+// `file` is the repo-relative workflow or composite action path; without it
+// (fixtures) no listed exemption applies.
+const reviewBunSetup = (
+  workflow: unknown,
+  name: string,
+  job: Record<string, unknown>,
+  file: string | undefined,
+): BunSetupReview => {
+  const steps = flattenWorkflowSteps(job["steps"] ?? []);
+  const key = file === undefined ? undefined : `${file}#${name}`;
+  const review: BunSetupReview = { problems: [], exemptions: [] };
+  if (
+    steps.some(setsBunNoCache) &&
+    !usesDefaultCacheScope(workflow) &&
+    !inPublishChain(workflow, job)
+  ) {
+    if (key !== undefined && key in CACHE_FREE_BUN_JOBS) {
+      review.exemptions.push(key);
+    } else {
+      review.problems.push(
+        `job '${name}': oven-sh/setup-bun no-cache: true only turns off the cached Bun executable (setup-bun has no package cache), so every run downloads Bun from GitHub releases and fails whenever they do; drop it, or list the job in CACHE_FREE_BUN_JOBS (scripts/workflow-cache-policy.ts) with why it must restore no cache`,
+      );
+    }
+  }
+  if (
+    jobCachePolicy({ workflow, job }) === "install-cache" &&
+    steps.some(
+      (step) =>
+        typeof step["uses"] === "string" &&
+        step["uses"].startsWith("oven-sh/setup-bun@"),
+    ) &&
+    !steps.some(
+      (step) =>
+        step["uses"] === "$/.github/actions/ci-install" ||
+        step["uses"] === "./.github/actions/ci-install",
+    )
+  ) {
+    if (key !== undefined && key in UNSTORED_BUN_JOBS) {
+      review.exemptions.push(key);
+    } else {
+      review.problems.push(
+        `job '${name}': raw Bun setup needs the shared install-cache action`,
+      );
+    }
+  }
+  return review;
+};
+
+/** Listed Bun setup exemptions the committed workflow or action still needs. */
+export const usedBunSetupExemptions = (file: string, workflow: unknown) =>
+  !isRecord(workflow) || !isRecord(workflow["jobs"])
+    ? []
+    : Object.entries(workflow["jobs"]).flatMap(([name, job]) =>
+        isRecord(job)
+          ? reviewBunSetup(workflow, name, job, file).exemptions
+          : [],
+      );
+
+export const BUN_SETUP_EXEMPTIONS = [
+  ...Object.keys(CACHE_FREE_BUN_JOBS),
+  ...Object.keys(UNSTORED_BUN_JOBS),
+];
+
+export const workflowCacheProblems = (
+  workflow: unknown,
+  file?: string,
+): string[] => {
   if (!isRecord(workflow) || !isRecord(workflow["jobs"])) {
     return [];
   }
@@ -227,6 +346,7 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
     if (!isRecord(job)) {
       return [];
     }
+    const bunSetup = reviewBunSetup(workflow, name, job, file).problems;
     const policy = jobCachePolicy({ workflow, job });
     const reusable = typeof job["uses"] === "string" ? job["uses"] : null;
     if (policy === "default-scope" && reusable !== null) {
@@ -237,12 +357,7 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
           ];
     }
     const steps = flattenWorkflowSteps(job["steps"] ?? []);
-    const scopedInstall = steps.some(
-      (step) =>
-        step["uses"] === "$/.github/actions/ci-install" ||
-        step["uses"] === "./.github/actions/ci-install",
-    );
-    return steps.flatMap((step: unknown) => {
+    const stepProblems = steps.flatMap((step: unknown) => {
       if (!isRecord(step)) {
         return [];
       }
@@ -294,11 +409,8 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
         return [`job '${name}': Bun install cache saves must be main-only`];
       }
       if (policy === "install-cache") {
-        return uses.startsWith("oven-sh/setup-bun@") && !scopedInstall
-          ? [
-              `job '${name}': raw Bun setup needs the shared install-cache action`,
-            ]
-          : [];
+        // reviewBunSetup owns raw Bun setup in ordinary jobs.
+        return [];
       }
       if (policy === "publish-chain") {
         return /setup-bun-cached@|^actions\/cache(?:\/[^@]+)?@/u.test(uses)
@@ -316,5 +428,6 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
         policy === "no-cache" && uses.startsWith("./") ? null : cacheSave(step);
       return reason === null ? [] : [`job '${name}': ${reason}`];
     });
+    return [...bunSetup, ...stepProblems];
   });
 };

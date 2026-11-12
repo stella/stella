@@ -16,6 +16,7 @@ import {
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -63,7 +64,7 @@ import {
 } from "@/components/chat/chat-thread-decision";
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
-import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
+import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
@@ -75,10 +76,11 @@ import { acquireChatRuntime } from "@/features/chat/chat-runtime-registry";
 import { useChatDraftMeta } from "@/features/chat/hooks/use-chat-draft-meta";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
-import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
-  applyChatModelChange,
-  chatThreadOptions,
+  readHandoffThread,
+  startNewThreadCommandHandoff,
+} from "@/features/chat/lib/start-new-thread-command-handoff";
+import {
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
   listChatHistoryItems,
@@ -102,8 +104,10 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { skillsOptions } from "@/lib/knowledge/queries";
+import type { fetchWorkspaceNavigationPage } from "@/lib/memory-api";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
@@ -276,22 +280,27 @@ function ChatIndex() {
     threadRef,
   });
 
-  // Persists the composer's Models submenu selection and gates the
-  // route-handoff send below on the outcome (see `onSubmit`) so a send can
-  // never race a just-changed model onto the thread's previous one. Same
-  // hook `ChatThreadPage` uses; keeps both surfaces' sequencing identical.
-  const modelSelection = useChatModelSelection({
-    onPersisted: ({ model, reasoningEffort }) => {
-      applyChatModelChange({
-        model,
-        reasoningEffort,
-        queryClient,
-        queryKey: draftMetaQueryKey,
-        threadId: toSafeId<"chatThread">(draftThreadId),
-      });
-    },
+  // The draft's model and where its turns run. A choice is stored on the
+  // draft's row, the first send carries it, and the route-handoff send below
+  // waits for it to land (see `onSubmit`). Same owner `ChatThreadPage` uses,
+  // so the new chat offers Run on as an open thread does.
+  const composerModels = useChatComposerModels({
+    activeOrganizationId,
     threadRef,
+    stored: chatDraftMeta,
+    queryKey: draftMetaQueryKey,
+    startsOnLastChoice: true,
   });
+  const { getRunTarget } = composerModels;
+  // The capability set `ChatThreadPage` passes, so the runtime the first
+  // send registers is the one the thread page reattaches to.
+  const chatThreadContext = {
+    allowMissingThread: true,
+    getUserContext,
+    getContextMatterIds,
+    getSendMode,
+    getRunTarget,
+  };
 
   // Mirror the per-thread seeding from ChatThreadPage: if the user
   // previously enabled web search and the draft thread doesn't have
@@ -373,6 +382,7 @@ function ChatIndex() {
     if (workspaces) {
       for (const workspace of workspaces) {
         workspaceById.set(workspace.id, {
+          status: workspace.status,
           color: workspace.color,
           id: workspace.id,
           lastActivityAt: workspace.lastActivityAt,
@@ -403,6 +413,7 @@ function ChatIndex() {
       )
       .slice(0, 5)
       .map((workspace) => ({
+        status: workspace.status,
         color: workspace.color,
         id: workspace.id,
         lastActivityAt: workspace.lastActivityAt,
@@ -478,16 +489,10 @@ function ChatIndex() {
       if (!(await ensureAIAvailable())) {
         return CHAT_SEND_KEPT;
       }
-      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+      if (Result.isError(await composerModels.awaitPendingSelection())) {
         return CHAT_SEND_KEPT;
       }
-      const chatThreadContext = {
-        allowMissingThread: true,
-        getUserContext,
-        getContextMatterIds,
-        getSendMode,
-      };
-      await startNewThreadCommandHandoff({
+      const handoff = await startNewThreadCommandHandoff({
         activeOrganizationId,
         context: chatThreadContext,
         files: draft.files,
@@ -495,6 +500,10 @@ function ChatIndex() {
         queryClient,
         threadRef,
       });
+      if (handoff.isErr()) {
+        notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
       await navigate({
         to: "/chat/$threadId",
         params: { threadId: threadRef.threadId },
@@ -516,7 +525,7 @@ function ChatIndex() {
     // failure the hook has already toasted; abort instead of
     // sending with a model that may not match what the server
     // has persisted.
-    if (Result.isError(await modelSelection.awaitPendingSelection())) {
+    if (Result.isError(await composerModels.awaitPendingSelection())) {
       return CHAT_SEND_KEPT;
     }
     // Build the request payload and fetch the pure thread data
@@ -537,23 +546,21 @@ function ChatIndex() {
     // query; the destination page's post-refetch acquire then
     // sees the diverged seed signal and rebuilds with its own
     // getters.
-    const chatThreadContext = {
-      allowMissingThread: true,
-      getUserContext,
-      getContextMatterIds,
-      getSendMode,
-    };
+    // The thread's data carries where this first send runs, so the thread
+    // page shows it until the server's read of the thread reflects the turn.
     const [message, threadData] = await Promise.all([
       buildChatRequestMessage(draft),
-      queryClient.query({
-        ...chatThreadOptions({
-          activeOrganizationId,
-          key: threadRef,
-          context: chatThreadContext,
-        }),
-        staleTime: "static",
+      readHandoffThread({
+        activeOrganizationId,
+        context: chatThreadContext,
+        queryClient,
+        threadRef,
       }),
     ]);
+    if (message.isErr()) {
+      notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+      return CHAT_SEND_KEPT;
+    }
     const chat = acquireChatRuntime({
       activeOrganizationId,
       context: chatThreadContext,
@@ -567,7 +574,7 @@ function ChatIndex() {
     // TanStack boundary fails before appending, this
     // throws here so the composer restores the draft
     // instead of navigating to an empty thread.
-    await chat.startRouteHandoffMessage(message, {
+    await chat.startRouteHandoffMessage(message.value, {
       timingSurface: "chat-thread",
     });
 
@@ -584,13 +591,6 @@ function ChatIndex() {
     return CHAT_SEND_SENT;
   };
 
-  const composerModels = {
-    activeOrganizationId,
-    threadRef,
-    selectedModel: chatDraftMeta?.model ?? null,
-    selectedReasoningEffort: chatDraftMeta?.reasoningEffort ?? null,
-    selectModel: modelSelection.selectModel,
-  };
   const matterPicker = (
     <ChatMatterPicker
       matterIds={contextMatterIds}
@@ -625,11 +625,12 @@ function ChatIndex() {
               guideAnchorsEnabled
               variant="large"
               mcpOrganizationId={activeOrganizationId}
-              models={composerModels}
+              models={composerModels.models}
               reservedCommands={{ hasPersistedThread: false }}
               skillChat={{
                 contextMatterIds,
                 document: null,
+                runTarget: composerModels.runTarget,
                 threadRef,
                 webSearch:
                   chatDraftMeta === undefined
@@ -645,7 +646,7 @@ function ChatIndex() {
                   <ChatComposerDock
                     guideAnchorsEnabled
                     leadingContext={matterPicker}
-                    models={composerModels}
+                    models={composerModels.models}
                     status="pending"
                     threadRef={threadRef}
                   />
@@ -661,7 +662,7 @@ function ChatIndex() {
                     }}
                     guideAnchorsEnabled
                     leadingContext={matterPicker}
-                    models={composerModels}
+                    models={composerModels.models}
                     // The hero already IS a fresh thread; a new-chat
                     // affordance here would be a no-op, so opt out.
                     onNewThread={null}
@@ -710,6 +711,7 @@ function ChatIndex() {
                   name: matter.name,
                   color: matter.color,
                   client: matter.client,
+                  isArchived: matter.status === WORKSPACE_STATUS.archived,
                 }}
               >
                 <Link
@@ -922,16 +924,20 @@ type SuggestedSkillRowProps = {
  * the data cannot name (a former member, a system write) shows nothing.
  */
 const SuggestedSkillRow = ({ onSelect, skill }: SuggestedSkillRowProps) => (
-  <button
-    className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
+  <Button
+    className="group/row group flex w-full"
     onClick={onSelect}
-    type="button"
+    variant="plain"
   >
-    <span className="min-w-0 flex-1">
-      <LandingItemText meta={skill.body} title={skill.name} />
+    {/* The landing row's inset, gap and hover tint, so the row lines up and
+        lights like the matter and thread links beside it. */}
+    <span className="group-hover/row:bg-accent/50 flex w-full items-center gap-3 rounded-md px-2 py-1.5">
+      <span className="min-w-0 flex-1">
+        <LandingItemText meta={skill.body} title={skill.name} />
+      </span>
+      <SkillAuthorAvatar author={skillAuthor(skill)} />
     </span>
-    <SkillAuthorAvatar author={skillAuthor(skill)} />
-  </button>
+  </Button>
 );
 
 type SkillAuthor =
@@ -1006,6 +1012,9 @@ const SkillAuthorAvatar = ({ author }: { author: SkillAuthor }) => {
 };
 
 type PinnedMatter = {
+  status: Awaited<
+    ReturnType<typeof fetchWorkspaceNavigationPage>
+  >["workspaces"][number]["status"];
   color: string | null;
   id: string;
   lastActivityAt: Date;

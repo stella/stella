@@ -44,6 +44,116 @@ const PARSER_DIRECTORIES = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/lib/legal-search/parsers/",
 ];
+/** The root manifest, whose `patchedDependencies` patch npm packages. */
+const ROOT_MANIFEST = "package.json";
+const PATCH_DIRECTORY = "patches";
+export const PARSER_REPLAY_DECLARATIONS_PATH =
+  "apps/api/src/handlers/case-law/ingestion/replay-declarations.json";
+export const NO_STORED_ROW_EFFECT_REASONS = [
+  "unchanged-derived-output",
+  "newly-captured-raw-only",
+  "stored-raw-unavailable",
+] as const;
+
+type ParserReplayDeclarationIdentity = {
+  source: string;
+  parserVersion: number;
+};
+export type ParserReplayDeclaration = ParserReplayDeclarationIdentity &
+  (
+    | { type: "pending-enrolment-wave"; wave: string }
+    | {
+        type: "no-stored-row-effect";
+        reason: (typeof NO_STORED_ROW_EFFECT_REASONS)[number];
+        explanation: string;
+      }
+  );
+
+const isParserReplayDeclaration = (
+  value: unknown,
+): value is ParserReplayDeclaration => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("source" in value) ||
+    typeof value.source !== "string" ||
+    value.source.trim().length === 0 ||
+    !("parserVersion" in value) ||
+    typeof value.parserVersion !== "number" ||
+    !Number.isSafeInteger(value.parserVersion) ||
+    value.parserVersion < 1 ||
+    !("type" in value)
+  ) {
+    return false;
+  }
+  switch (value.type) {
+    case "pending-enrolment-wave":
+      return (
+        "wave" in value &&
+        typeof value.wave === "string" &&
+        value.wave.trim().length > 0
+      );
+    case "no-stored-row-effect":
+      return (
+        "reason" in value &&
+        NO_STORED_ROW_EFFECT_REASONS.some(
+          (reason) => reason === value.reason,
+        ) &&
+        "explanation" in value &&
+        typeof value.explanation === "string" &&
+        value.explanation.trim().length > 0
+      );
+    default:
+      return false;
+  }
+};
+
+type ReadReplayDeclarationsResult = {
+  declarations: readonly ParserReplayDeclaration[];
+  errors: string[];
+};
+const readReplayDeclarations = (
+  tree: SourceTree,
+): ReadReplayDeclarationsResult => {
+  const source = tree.get(PARSER_REPLAY_DECLARATIONS_PATH);
+  // Existing parser versions are grandfathered; declarations are required at each later bump.
+  if (source === undefined) {
+    return { declarations: [], errors: [] };
+  }
+  // The guard imports no packages; it reads the registry with the JSON built-in.
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    return {
+      declarations: [],
+      errors: ["Replay declarations must be valid JSON"],
+    };
+  }
+  if (!Array.isArray(parsed)) {
+    return {
+      declarations: [],
+      errors: ["Replay declarations must be an array"],
+    };
+  }
+  const declarations = parsed.filter(isParserReplayDeclaration);
+  const errors =
+    declarations.length === parsed.length
+      ? []
+      : [
+          "Every replay declaration requires a source, positive parserVersion, and a pending enrolment wave or typed no-stored-row-effect reason with explanation",
+        ];
+  const identities = new Set<string>();
+  for (const declaration of declarations) {
+    const identity = `${declaration.source}:${declaration.parserVersion}`;
+    if (identities.has(identity)) {
+      errors.push(`Duplicate replay declaration for ${identity}`);
+    }
+    identities.add(identity);
+  }
+  return { declarations, errors };
+};
+
 const OUTPUT_SHAPING_ROOTS = [
   ADAPTER_DIRECTORY,
   LEGISLATION_ADAPTER_DIRECTORY,
@@ -77,6 +187,34 @@ type SourceOwner = {
   version: number;
   /** Output-affecting source files reached from this registered adapter. */
   parsers: ReadonlySet<string>;
+  /** npm packages imported anywhere in the module's closure. */
+  packages: ReadonlySet<string>;
+};
+
+/**
+ * A version an imported module stamps on records of its own (a collection
+ * enrichment cache), declared as a bare constant. It versions what that
+ * module's closure reads, the way a registry entry's version does.
+ */
+type RecordVersionOwner = SourceOwner & {
+  /** The constant, named where the guard reports it. */
+  name: string;
+  /** The file that declares the constant. */
+  file: string;
+};
+
+/** A dependency patch that `patchedDependencies` applies. */
+type DependencyPatch = {
+  /** The patch file, as the root manifest names it. */
+  file: string;
+  /** The manifest entry and the patch content: any change to either counts. */
+  identity: string;
+};
+
+type DependencyPatchesResult = {
+  /** By patched package name (`@libpdf/core`). */
+  patches: ReadonlyMap<string, DependencyPatch>;
+  errors: readonly string[];
 };
 
 type RegisteredParserSource = {
@@ -87,6 +225,8 @@ type RegisteredParserSource = {
 
 type SourceOwnersResult = {
   owners: ReadonlyMap<string, SourceOwner>;
+  /** By declaring file and sorted stamped-in modules. */
+  recordOwners: ReadonlyMap<string, RecordVersionOwner>;
   registeredSources: readonly RegisteredParserSource[];
   parserFiles: ReadonlySet<string>;
   errors: readonly string[];
@@ -116,6 +256,11 @@ type StaticTreeOptions = {
 class StaticTree {
   private readonly importErrors = new Set<string>();
   private readonly versionDeclarations = new Map<string, Set<string>>();
+  /** Record versions by constant identity, with the files that stamp them. */
+  private readonly recordVersions = new Map<
+    string,
+    { name: string; file: string; version: number; stampedIn: Set<string> }
+  >();
   private readonly codeCache = new Map<string, string>();
   private readonly closureCache = new Map<string, Set<string>>();
   private readonly outputBoundaries: ReadonlySet<string>;
@@ -458,8 +603,18 @@ class StaticTree {
         }
         if (index === undefined && value?.type === "number") {
           // A bare constant in an imported module versions that module's own
-          // records (e.g. collection enrichment), not this source's decisions.
+          // records (e.g. collection enrichment), not this source's decisions;
+          // it is checked as a record version of its own.
           if (file !== module) {
+            const identity = `${value.file}::${value.name}`;
+            const record = this.recordVersions.get(identity) ?? {
+              name: value.name,
+              file: value.file,
+              version: value.value,
+              stampedIn: new Set<string>(),
+            };
+            record.stampedIn.add(module);
+            this.recordVersions.set(identity, record);
             continue;
           }
           version = value.value;
@@ -516,6 +671,102 @@ class StaticTree {
     return printedCode(file, source);
   }
 
+  /** The npm packages a module imports by name, at run time. */
+  packageImports(file: string): string[] {
+    const source = this.files.get(file);
+    if (source === undefined || !SOURCE_MODULE.test(file)) {
+      return [];
+    }
+    return (file.endsWith("x") ? jsxTranspiler : transpiler)
+      .scanImports(source)
+      .flatMap(({ path: specifier }) => {
+        if (
+          specifier.startsWith(".") ||
+          specifier.startsWith("@/") ||
+          /^(?:node|bun):/u.test(specifier) ||
+          this.resolve(file, specifier) !== undefined
+        ) {
+          return [];
+        }
+        const [scope = "", name = ""] = specifier.split("/");
+        return [scope.startsWith("@") ? `${scope}/${name}` : scope];
+      });
+  }
+
+  /** What a module's output depends on: its output-shaping files and packages. */
+  outputOf(module: string): Pick<SourceOwner, "parsers" | "packages"> {
+    const parsers = new Set<string>();
+    const packages = new Set<string>();
+    for (const file of this.closure(module)) {
+      for (const name of this.packageImports(file)) {
+        packages.add(name);
+      }
+      // Adapter-local assemblers, stored-raw decoders and case-law helpers
+      // determine output even when no dedicated parser module exists.
+      if (
+        file.startsWith(ADAPTER_DIRECTORY) ||
+        (file.startsWith(CASE_LAW_DIRECTORY) &&
+          !SEARCH_ONLY_CASE_LAW_MODULES.has(file))
+      ) {
+        parsers.add(file);
+      }
+      if (PARSER_DIRECTORIES.some((directory) => file.startsWith(directory))) {
+        for (const dependency of this.closure(file)) {
+          parsers.add(dependency);
+        }
+      }
+    }
+    return { parsers, packages };
+  }
+
+  /**
+   * The dependency patches the root manifest applies, by package. A patch it
+   * names that the tree does not hold, or an entry naming no package, fails
+   * closed.
+   */
+  dependencyPatches(): DependencyPatchesResult {
+    const patches = new Map<string, DependencyPatch>();
+    const source = this.files.get(ROOT_MANIFEST);
+    if (source === undefined) {
+      return { patches, errors: [] };
+    }
+    let manifest: unknown;
+    try {
+      manifest = JSON.parse(source);
+    } catch {
+      return { patches, errors: [`Cannot parse ${ROOT_MANIFEST}`] };
+    }
+    const entries =
+      typeof manifest === "object" && manifest !== null
+        ? Reflect.get(manifest, "patchedDependencies")
+        : undefined;
+    if (entries === undefined) {
+      return { patches, errors: [] };
+    }
+    if (typeof entries !== "object" || entries === null) {
+      return {
+        patches,
+        errors: [`${ROOT_MANIFEST} patchedDependencies is not an object`],
+      };
+    }
+    const errors: string[] = [];
+    for (const [entry, file] of Object.entries(entries)) {
+      const at = entry.lastIndexOf("@");
+      const patch = typeof file === "string" ? this.files.get(file) : undefined;
+      if (at <= 0 || typeof file !== "string" || patch === undefined) {
+        errors.push(
+          `${ROOT_MANIFEST} patchedDependencies entry ${entry} names no package and patch file the tree holds`,
+        );
+        continue;
+      }
+      patches.set(entry.slice(0, at), {
+        file,
+        identity: `${entry}\n${patch}`,
+      });
+    }
+    return { patches, errors };
+  }
+
   owners(): SourceOwnersResult {
     const owners = new Map<string, SourceOwner>();
     const errors: string[] = [];
@@ -542,27 +793,44 @@ class StaticTree {
           );
           continue;
         }
-        const parsers = new Set<string>();
-        for (const file of this.closure(imported.module)) {
-          // Adapter-local assemblers, stored-raw decoders and case-law helpers
-          // determine output even when no dedicated parser module exists.
-          if (
-            file.startsWith(ADAPTER_DIRECTORY) ||
-            (file.startsWith(CASE_LAW_DIRECTORY) &&
-              !SEARCH_ONLY_CASE_LAW_MODULES.has(file))
-          ) {
-            parsers.add(file);
-          }
-          if (
-            PARSER_DIRECTORIES.some((directory) => file.startsWith(directory))
-          ) {
-            for (const dependency of this.closure(file)) {
-              parsers.add(dependency);
-            }
-          }
-        }
-        owners.set(key, { module: imported.module, version, parsers });
+        owners.set(key, {
+          module: imported.module,
+          version,
+          ...this.outputOf(imported.module),
+        });
       }
+    }
+    const recordOwners = new Map<string, RecordVersionOwner>();
+    for (const {
+      name,
+      file,
+      version,
+      stampedIn,
+    } of this.recordVersions.values()) {
+      const identity = JSON.stringify([file, [...stampedIn].toSorted()]);
+      if (!Number.isSafeInteger(version) || version < 1) {
+        errors.push(
+          `Record version ${name} in ${file} is not a positive integer`,
+        );
+        continue;
+      }
+      if (recordOwners.has(identity)) {
+        errors.push(
+          `Record version stream in ${file} stamped by ${[...stampedIn].toSorted().join(", ")} has multiple declarations; keep one version constant for this stream`,
+        );
+        continue;
+      }
+      // The declaration's own closure determines the record output; the
+      // stamping modules identify which semantic stream owns that version.
+      const { parsers, packages } = this.outputOf(file);
+      recordOwners.set(identity, {
+        module: [...stampedIn].toSorted().join(", "),
+        version,
+        parsers,
+        packages,
+        name,
+        file,
+      });
     }
     errors.push(...this.importErrors);
     const registeredSources: RegisteredParserSource[] = [];
@@ -608,7 +876,14 @@ class StaticTree {
       }
     }
     registryErrors.push(...this.importErrors);
-    return { owners, registeredSources, parserFiles, errors, registryErrors };
+    return {
+      owners,
+      recordOwners,
+      registeredSources,
+      parserFiles,
+      errors,
+      registryErrors,
+    };
   }
 }
 
@@ -810,6 +1085,15 @@ export const checkParserVersions = ({
     ...before.errors,
     ...after.errors,
   ];
+  const replay = readReplayDeclarations(head);
+  errors.push(...replay.errors);
+  for (const declaration of replay.declarations) {
+    if (!after.owners.has(declaration.source)) {
+      errors.push(
+        `Replay declaration names unregistered source ${declaration.source}`,
+      );
+    }
+  }
   const movedSources = movedParserSources(baseTree, headTree);
   const deletedReexports = new Set<string>();
   for (const [file, source] of base) {
@@ -817,16 +1101,22 @@ export const checkParserVersions = ({
       deletedReexports.add(file);
     }
   }
-  for (const [key, current] of after.owners) {
-    const previous = before.owners.get(key);
-    if (previous === undefined) {
-      continue;
-    }
+  const basePatches = baseTree.dependencyPatches();
+  const headPatches = headTree.dependencyPatches();
+  errors.push(...basePatches.errors, ...headPatches.errors);
+
+  const compare = (
+    key: string,
+    /** How the version is named in an error: the source key or the constant. */
+    label: string,
+    previous: SourceOwner,
+    current: SourceOwner,
+  ): void => {
     if (current.version < previous.version) {
       errors.push(
-        `${key}: parser version ${current.version} must not be lower than base ${previous.version}`,
+        `${label}: parser version ${current.version} must not be lower than base ${previous.version}`,
       );
-      continue;
+      return;
     }
     const changed = [
       ...new Set([...previous.parsers, ...current.parsers]),
@@ -834,8 +1124,24 @@ export const checkParserVersions = ({
       (file) =>
         baseTree.comparableSource(file) !== headTree.comparableSource(file),
     );
-    if (changed.length === 0 || current.version > previous.version) {
-      continue;
+    // A patch changes what every module importing its package reads, so it
+    // takes a bump no marker can waive.
+    const changedPatches = [
+      ...new Set([...previous.packages, ...current.packages]),
+    ]
+      .toSorted()
+      .flatMap((name) => {
+        const was = basePatches.patches.get(name);
+        const now = headPatches.patches.get(name);
+        return was?.identity === now?.identity
+          ? []
+          : [`${now?.file ?? was?.file ?? PATCH_DIRECTORY} (patches ${name})`];
+      });
+    if (
+      (changed.length === 0 && changedPatches.length === 0) ||
+      current.version > previous.version
+    ) {
+      return;
     }
     // A marked parser that still imports a workspace package removed from the
     // repository now gets it from the registry; only that package's deleted
@@ -887,9 +1193,50 @@ export const checkParserVersions = ({
         return marker !== null && (owner === undefined || owner === key);
       });
     });
-    if (unexempted.length > 0) {
+    const unexplained = [...unexempted, ...changedPatches];
+    if (unexplained.length > 0) {
       errors.push(
-        `${key}: parser version ${current.version} must exceed base ${previous.version}; changed: ${unexempted.join(", ")}`,
+        `${label}: parser version ${current.version} must exceed base ${previous.version}; changed: ${unexplained.join(", ")}`,
+      );
+    }
+  };
+
+  for (const [key, current] of after.owners) {
+    const previous = before.owners.get(key);
+    if (previous === undefined) {
+      continue;
+    }
+    // Stored decisions carry a source's parser version; record version
+    // streams have no stored-row replay of their own.
+    if (
+      current.version > previous.version &&
+      !replay.declarations.some(
+        (declaration) =>
+          declaration.source === key &&
+          declaration.parserVersion === current.version,
+      )
+    ) {
+      errors.push(
+        `${key}: parser version ${current.version} requires a replay declaration (pending-enrolment-wave or typed no-stored-row-effect)`,
+      );
+    }
+    compare(key, key, previous, current);
+  }
+  for (const [key, current] of after.recordOwners) {
+    const previous = before.recordOwners.get(key);
+    if (previous !== undefined) {
+      compare(
+        current.name.toLowerCase().replaceAll("_", "-"),
+        `${current.name} in ${current.file}`,
+        previous,
+        current,
+      );
+    }
+  }
+  for (const [identity, previous] of before.recordOwners) {
+    if (!after.recordOwners.has(identity)) {
+      errors.push(
+        `Record version ${previous.name} in ${previous.file} disappeared or changed its stamped-in modules; keep the record stream identity stable and bump its version when its output changes`,
       );
     }
   }
@@ -999,6 +1346,8 @@ export const readGitTree = (
     "--",
     "apps/api/src",
     "packages",
+    PATCH_DIRECTORY,
+    ROOT_MANIFEST,
   ]);
   if (listing.type === "failed") {
     return listing;
@@ -1013,9 +1362,15 @@ export const readGitTree = (
       continue;
     }
     // Other imports (JSON, wasm, etc.) still enter the dependency graph by
-    // object identity; only code and package export maps need decoding.
+    // object identity, and so do dependency patches; only code and package
+    // manifests need decoding.
     files.set(file, `git-blob:${object}`);
-    if (/\.[cm]?[jt]sx?$/u.test(file) || file.endsWith("/package.json")) {
+    if (
+      /\.[cm]?[jt]sx?$/u.test(file) ||
+      file.endsWith("/package.json") ||
+      file === ROOT_MANIFEST ||
+      file === PARSER_REPLAY_DECLARATIONS_PATH
+    ) {
       sources.push({ file, object });
     }
   }
@@ -1084,7 +1439,8 @@ export const comparisonBase = ({
         detail: "merge_group requires its exact base SHA",
       };
     }
-    // No merge-base here: the exact queue base includes every earlier bump.
+    // No merge-base here: the base is the previous queue entry's commit, so
+    // this entry must advance every version it affects past the earlier ones.
     return runGit(["rev-parse", "--verify", `${base}^{commit}`]);
   }
   if (event !== "pull_request" && event !== "workflow_dispatch") {

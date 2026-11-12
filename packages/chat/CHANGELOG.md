@@ -1,5 +1,77 @@
 # @stll/chat
 
+## 0.4.4
+
+### Patch Changes
+
+- Updated dependencies [[`459ba98`](https://github.com/stella/stella/commit/459ba9864a0928dfd04e21ab77d0a0eca1f21ebf), [`a168fa2`](https://github.com/stella/stella/commit/a168fa2b2fcd5ac1f63b0d47f4f4ecfe9f3dc0e7), [`c98d90f`](https://github.com/stella/stella/commit/c98d90f08913deef444adcc8e821f16ecd9ce7f6), [`7f4b66d`](https://github.com/stella/stella/commit/7f4b66d3518d62c6da22fbfb89517ef8c14ec40b), [`91b7234`](https://github.com/stella/stella/commit/91b7234554c474741dc9a2bf5f36a8117bc5c10c), [`fdc86ae`](https://github.com/stella/stella/commit/fdc86ae113bd086fda0d174b200f59dce7abeaa1), [`e7d8040`](https://github.com/stella/stella/commit/e7d80400c14af980d49c15ca0555e21bc8e78534)]:
+  - @stll/ai-catalog@0.12.0
+  - @stll/ui@0.69.0
+
+## 0.4.3
+
+### Patch Changes
+
+- [#8195](https://github.com/stella/stella/pull/8195) [`0e08bd9`](https://github.com/stella/stella/commit/0e08bd976be878c201d47dd4904640ff9b373bfe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ChatLink` accepts `urlLabel: "written"` to keep a link's own text when that text is a URL, instead of showing the bare host.
+
+## 0.4.2
+
+### Patch Changes
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependencies: `@stll/time` 0.4.2, `temporal-polyfill` 1.0.6, `lucide-react` 1.65.0, Tiptap 3.32.1 and the MCP client 2.4.0.
+- Updated dependencies [[`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88), [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88), [`26a454c`](https://github.com/stella/stella/commit/26a454c7de75da7fabf3ac4c7746e68f09bdb1a1), [`a673b9c`](https://github.com/stella/stella/commit/a673b9ce9ae19be276457c14a29969f176e3daba), [`5afd089`](https://github.com/stella/stella/commit/5afd0899278f2dd459ad8789b7d8b94d6e1de2c5), [`faad54b`](https://github.com/stella/stella/commit/faad54bc23ee324f40fbcffa36094197fd2a0b1d), [`704ca22`](https://github.com/stella/stella/commit/704ca22912cd096ae056e181286e4a7aefc03064), [`e06b815`](https://github.com/stella/stella/commit/e06b81538abe018cd8015a5ba2732e84981ff9a2)]:
+  - @stll/ui@0.68.0
+  - @stll/html@0.1.1
+  - @stll/ai-catalog@0.11.0
+
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`4c623bb`](https://github.com/stella/stella/commit/4c623bbc19a13167e06f819783849e10c8cbddc0), [`61932c3`](https://github.com/stella/stella/commit/61932c325b3ce81881dbd917961a301891b7d949), [`50c904c`](https://github.com/stella/stella/commit/50c904c50877280367403165f00ef5d92663b23c), [`fa90f18`](https://github.com/stella/stella/commit/fa90f18c69c45e42359e2c5dc2e4511bf69466df), [`b137d1b`](https://github.com/stella/stella/commit/b137d1b048e6d36123ba60d24ab99baaf8208de7)]:
+  - @stll/ui@0.67.0
+
+## 0.4.0
+
+### Minor Changes
+
+- [#7427](https://github.com/stella/stella/pull/7427) [`d05a124`](https://github.com/stella/stella/commit/d05a124a296d0426288f86684f0c77c1b1072db4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ChatModelSelector` now renders the `@stll/ui` select (a button and a popup list) instead of a native `<select>`: a host must load the `@stll/ui` stylesheet (`@stll/ui/theme.css` with Tailwind scanning `@stll/ui`) for it to draw. `ChatLink` shows its new-tab notice or source title as a tooltip and as the link's accessible description. The condition builder's number fields use `NumberInput` without locale grouping.
+
+### Patch Changes
+
+- [#7855](https://github.com/stella/stella/pull/7855) [`f68c520`](https://github.com/stella/stella/commit/f68c52006a9d18719b5850d35a9dd2ab42ba50ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ChatLink` takes a `fullLabel` option for tray chips whose label should keep the available width instead of the compact 20-character cap, and a tray chip's site icon is now centred on the label.
+
+- [#7199](https://github.com/stella/stella/pull/7199) [`84ac48f`](https://github.com/stella/stella/commit/84ac48f7bc54f170b72491c21c1c45dc6fb88c2b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible editor dependencies.
+- Updated dependencies [[`21f18d7`](https://github.com/stella/stella/commit/21f18d7eae6c328149c77ebf2a1baff624de33c6), [`e5ee9a9`](https://github.com/stella/stella/commit/e5ee9a9c120441b0bea4476df78e1432ace3146d), [`254bf05`](https://github.com/stella/stella/commit/254bf058b481c2ea137f8e37664a37b80c537190), [`72b68c8`](https://github.com/stella/stella/commit/72b68c8fc423618a9e060ead157dc3f2f30e1583)]:
+  - @stll/ui@0.66.0
+
+## 0.3.5
+
+### Patch Changes
+
+- [#7838](https://github.com/stella/stella/pull/7838) [`a8c6d13`](https://github.com/stella/stella/commit/a8c6d133b99d6f7440bc90f864501ff2a60bb8b5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Bare file names whose extension is also a top-level domain (for example `memo.md`, `smlouva.pl`, `build.sh`) are no longer detected as links. Such a name becomes a link only when it carries a scheme, a `www.` prefix or a path.
+
+- [#7418](https://github.com/stella/stella/pull/7418) [`68eeb7e`](https://github.com/stella/stella/commit/68eeb7e7dadeeca9efdd6458472a6a3b9187e173) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `htmlToMarkdown` loads HTML through `@stll/html` instead of Cheerio's main entry, so the chat package no longer bundles Cheerio's byte decoders or HTTP client.
+- Updated dependencies [[`68eeb7e`](https://github.com/stella/stella/commit/68eeb7e7dadeeca9efdd6458472a6a3b9187e173), [`14ae497`](https://github.com/stella/stella/commit/14ae497b31a86e96931d734fd3441c4bbe8aac29), [`b94d282`](https://github.com/stella/stella/commit/b94d282e58eb483f7abf6cc7e81b859c7709ce3b)]:
+  - @stll/html@0.1.0
+  - @stll/ai-catalog@0.10.1
+  - @stll/ui@0.65.0
+
+## 0.3.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ui@0.64.0
+
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ai-catalog@0.10.0
+  - @stll/ui@0.63.0
+
 ## 0.3.2
 
 ### Patch Changes

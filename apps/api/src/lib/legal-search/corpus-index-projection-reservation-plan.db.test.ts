@@ -5,12 +5,12 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
+import { corpusProjectionReservationQueue } from "@/api/lib/db/aggregate-lock";
 import { enrolledCorpusIndexGroupContracts } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { corpusProjectionReservationQueue } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -177,6 +177,51 @@ const seed = async (historyDepth: number): Promise<void> => {
   await db.execute(sql.raw("VACUUM ANALYZE corpus_index_projection_states"));
 };
 
+/**
+ * Replacements still waiting on their old revision, older than anything the
+ * queue can take.
+ */
+const seedWaitingReplacements = async (
+  count: number,
+  firstOffset: number,
+): Promise<void> => {
+  await db.execute(
+    sql.raw(`
+      INSERT INTO corpus_index_projection_intents
+        (id, family, generation, entity_id, epoch, fingerprint, index_id, status,
+         expected_document_count, append_started_at, append_committed_at,
+         applied_at, created_at, updated_at)
+      SELECT
+        ('00000000-0000-4000-d000-' || lpad(to_hex(i), 12, '0'))::uuid,
+        'case_law', '${GENERATION}', ${entity("i")}, 1,
+        lpad(to_hex(i), 64, 'c'), '${INDEX_ID}', 'applied', 3,
+        '2026-07-01'::timestamptz, '2026-07-01'::timestamptz,
+        '2026-07-01'::timestamptz, '2026-07-01'::timestamptz,
+        '2026-07-01'::timestamptz
+      FROM generate_series(${firstOffset}, ${firstOffset + count - 1}) AS i
+    `),
+  );
+  await db.execute(
+    sql.raw(`
+      INSERT INTO corpus_index_projection_states
+        (family, generation, entity_id, desired_action, desired_epoch,
+         desired_fingerprint, desired_index_id, work_status, applied_action,
+         applied_epoch, applied_revision, applied_fingerprint, applied_index_id,
+         applied_at, created_at, updated_at)
+      SELECT
+        'case_law', '${GENERATION}', ${entity("i")}, 'upsert', 2,
+        lpad(to_hex(i), 64, 'd'), '${INDEX_ID}', 'eligible', 'upsert', 1,
+        ('00000000-0000-4000-d000-' || lpad(to_hex(i), 12, '0'))::uuid,
+        lpad(to_hex(i), 64, 'c'), '${INDEX_ID}',
+        '2026-07-01'::timestamptz, '2026-07-01'::timestamptz,
+        ('2026-07-15'::timestamptz + (i || ' seconds')::interval)
+      FROM generate_series(${firstOffset}, ${firstOffset + count - 1}) AS i
+    `),
+  );
+  await db.execute(sql.raw("VACUUM ANALYZE corpus_index_projection_states"));
+  await db.execute(sql.raw("VACUUM ANALYZE corpus_index_projection_intents"));
+};
+
 type ReservationPlan = {
   lines: string[];
   reservedRows: number;
@@ -203,7 +248,9 @@ const intentProbe = ({ lines }: ReservationPlan): string => {
   return lines.slice(start, end === -1 ? undefined : end).join("\n");
 };
 
-const explainReservation = async (): Promise<ReservationPlan> =>
+const explainReservation = async (
+  scopedIndexId: string | null = null,
+): Promise<ReservationPlan> =>
   await db.transaction(async (transaction) => {
     const tx = asTestRaw<Transaction>(transaction);
     // A generation this small lets the planner hash the whole outstanding set
@@ -219,7 +266,7 @@ const explainReservation = async (): Promise<ReservationPlan> =>
       limit: LIMIT,
       eligibilityAt: ELIGIBILITY_AT,
       scopedEntityIds: null,
-      scopedIndexId: null,
+      scopedIndexId,
       // The shape a generation takes before its enrolled groups are attested.
       excludedIndexIds: enrolledCorpusIndexGroupContracts(
         CORPUS_INDEX_MANIFESTS[GENERATION],
@@ -273,4 +320,28 @@ test("the reservation queue reads outstanding revisions, not revision history", 
   // What remains is the in-flight prefix ahead of the reserved batch, not
   // anything either table accumulates.
   expect(deep.buffers / deep.reservedRows).toBeLessThanOrEqual(25);
+}, 600_000);
+
+// timeout: seeds and vacuums thousands of rows in PGlite, with no signal to await.
+test("a replacement backlog costs the route's claim nothing", async () => {
+  await seed(2);
+  const firstWaiting = CONVERGED + IN_FLIGHT + RESERVABLE + 1;
+  const WAITING = 500;
+  await seedWaitingReplacements(WAITING, firstWaiting);
+  const small = await explainReservation(INDEX_ID);
+  expect(small.reservedRows).toBe(LIMIT);
+  expect(planText(small)).toContain(
+    "corpus_index_projection_states_append_route_idx",
+  );
+  expect(planText(small)).not.toContain("Seq Scan");
+
+  // Ten times the backlog ahead of the queue, and the walk does not reach it.
+  await seedWaitingReplacements(WAITING * 9, firstWaiting + WAITING);
+  const large = await explainReservation(INDEX_ID);
+  expect(large.reservedRows).toBe(LIMIT);
+  expect(planText(large)).toContain(
+    "corpus_index_projection_states_append_route_idx",
+  );
+  expect(large.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.25));
+  expect(large.buffers / large.reservedRows).toBeLessThanOrEqual(25);
 }, 600_000);

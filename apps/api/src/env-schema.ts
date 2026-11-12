@@ -2,6 +2,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+import { normalizeOutlookTaskPaneOrigin } from "@stll/api-contract/outlook-client";
 import {
   NODE_ENV,
   type NodeEnvLabel,
@@ -146,6 +147,12 @@ export const envApiServerSchema = {
   GOOGLE_GENERATIVE_AI_API_KEY: v.optional(v.string()),
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
+  /**
+   * Optional GitHub token limited to public repositories, for skill sources a
+   * person links. Never the catalogue token: it is sent for any URL a person
+   * enters.
+   */
+  SKILL_IMPORT_GITHUB_TOKEN: v.optional(v.pipe(v.string(), v.minLength(1))),
   OPENROUTER_API_KEY: v.optional(v.string()),
   OPENROUTER_FAST_TIER_API_KEY: v.optional(v.string()),
   OPENROUTER_FAST_TIER_WIF_POLICY_ID: v.optional(
@@ -386,6 +393,21 @@ export const envApiServerSchema = {
   PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
   ...converterSettingsSchema,
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
+  /**
+   * The https origin serving the Outlook add-in's task pane, e.g.
+   * `https://outlook.example.com`. Set, the API publishes the add-in's OAuth
+   * client document, accepts its one redirect on this origin and answers its
+   * browser requests. Unset, the add-in cannot sign in to this deployment.
+   */
+  OUTLOOK_ADDIN_ORIGIN: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        (value) => normalizeOutlookTaskPaneOrigin(value) === value,
+        "OUTLOOK_ADDIN_ORIGIN must be an https origin without a path, e.g. https://outlook.example.com",
+      ),
+    ),
+  ),
   /**
    * RFC 3161 timestamp authorities for PDF signing, in preference order,
    * separated by commas or whitespace. Signing falls back to the next one
@@ -764,6 +786,8 @@ export const envApiServerSchema = {
   // opts in only after its Microsoft app registration is granted the
   // read-only delegated scopes (see handlers/sharepoint/graph-oauth.ts).
   FEATURE_SHAREPOINT: featureFlagSchema,
+  /** Dark-launch internal conflict-of-interest checks until intake review. */
+  FEATURE_CONFLICT_CHECK: featureFlagSchema,
 
   /**
    * Dark-launch gate for the auth.md `identity_assertion` (ID-JAG)
@@ -995,6 +1019,10 @@ type EnvApiInvariantInput = InboundMailReceivingInput &
     APNS_KEY_ID?: string | undefined;
     APNS_TEAM_ID?: string | undefined;
     APNS_PRIVATE_KEY?: string | undefined;
+    DEPLOY_ENVIRONMENT?: v.InferOutput<
+      typeof envApiServerSchema.DEPLOY_ENVIRONMENT
+    >;
+    SMOKE_SESSION_SECRET?: string | undefined;
     AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
     FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
     MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
@@ -1193,6 +1221,20 @@ const reviewAccountInvariantViolation = ({
     ? null
     : "APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID must be set together.";
 
+type SmokeSessionInvariantInput = Pick<
+  EnvApiInvariantInput,
+  "DEPLOY_ENVIRONMENT" | "SMOKE_SESSION_SECRET"
+>;
+
+/** The synthetic-monitoring session route serves non-production deployments only. */
+const smokeSessionInvariantViolation = ({
+  DEPLOY_ENVIRONMENT,
+  SMOKE_SESSION_SECRET,
+}: SmokeSessionInvariantInput): string | null =>
+  DEPLOY_ENVIRONMENT === "production" && SMOKE_SESSION_SECRET !== undefined
+    ? "SMOKE_SESSION_SECRET is for non-production deployments; unset it when DEPLOY_ENVIRONMENT=production."
+    : null;
+
 // Feature-owned invariants, kept out of the top-level check's branch budget.
 const delegatedInvariantViolation = (
   input: ManagedProviderCheckInvariantInput &
@@ -1202,8 +1244,13 @@ const delegatedInvariantViolation = (
     ReviewAccountInvariantInput &
     AppleSignInInput &
     ApnsInvariantInput &
+    SmokeSessionInvariantInput &
     Pick<EnvApiInvariantInput, "runtimeMode">,
 ): string | null => {
+  const smokeSessionViolation = smokeSessionInvariantViolation(input);
+  if (smokeSessionViolation !== null) {
+    return smokeSessionViolation;
+  }
   const reviewAccountViolation = reviewAccountInvariantViolation(input);
   if (reviewAccountViolation !== null) {
     return reviewAccountViolation;
@@ -1233,6 +1280,8 @@ const delegatedInvariantViolation = (
 };
 
 export const envApiInvariantViolation = ({
+  DEPLOY_ENVIRONMENT,
+  SMOKE_SESSION_SECRET,
   APP_REVIEW_ACCOUNT_EMAIL,
   APP_REVIEW_ORGANIZATION_ID,
   APNS_KEY_ID,
@@ -1301,6 +1350,8 @@ export const envApiInvariantViolation = ({
     return "FEATURE_CONFIGURED_ACCESS requires FEATURE_ORG_ACCESS_STATE, FEATURE_ORG_SERVICE_BUDGETS, FEATURE_USAGE and PAYMENT_RETRY_WINDOW_MS.";
   }
   const delegatedViolation = delegatedInvariantViolation({
+    DEPLOY_ENVIRONMENT,
+    SMOKE_SESSION_SECRET,
     APP_REVIEW_ACCOUNT_EMAIL,
     APP_REVIEW_ORGANIZATION_ID,
     APNS_KEY_ID,

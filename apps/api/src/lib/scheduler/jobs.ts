@@ -22,7 +22,10 @@ import {
 import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
-import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import {
+  SCHEDULER_BACKFILL_IDS,
+  SCHEDULER_REPAIR_BACKFILL_IDS,
+} from "@/api/lib/scheduler/backfill-config";
 import {
   REGISTERED_SCHEDULER_TASK_NAMES,
   type RegisteredSchedulerTaskName,
@@ -37,7 +40,9 @@ import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/schedul
 import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK } from "@/api/lib/scheduler/tasks/case-law-decision-identifier-reconciliation";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-parsed-input-state-backfill";
 import { FOLD_CASE_LAW_POPULATION_COUNTS_TASK } from "@/api/lib/scheduler/tasks/case-law-population-fold";
+import { SEED_CASE_LAW_POPULATION_COUNTS_TASK } from "@/api/lib/scheduler/tasks/case-law-population-seed";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
@@ -52,6 +57,7 @@ import { PURGE_CHAT_SECRETS_TASK } from "@/api/lib/scheduler/tasks/chat-secret-r
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import { REAP_OWNERLESS_CHAT_TURNS_TASK } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
+import { MAINTAIN_DATA_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import { CHECK_DATA_INVARIANTS_TASK } from "@/api/lib/scheduler/tasks/data-invariants";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
@@ -62,6 +68,7 @@ import { RECEIVE_EMAIL_DELIVERABILITY_TASK } from "@/api/lib/scheduler/tasks/ema
 import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
 import { REPAIR_FILE_DERIVATIVES_TASK } from "@/api/lib/scheduler/tasks/file-derivative-repair";
 import { RECONCILE_FLOW_RUN_ORPHANS_TASK } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
+import { ERASE_HOSTED_CUSTOMERS_TASK } from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
 import { REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
 import { RECEIVE_INBOUND_MAIL_TASK } from "@/api/lib/scheduler/tasks/inbound-mail-receive";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
@@ -460,6 +467,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "load-governed",
   },
   {
+    description:
+      "Resume the case-law population seed that startup admits while pending",
+    id: SCHEDULER_REPAIR_BACKFILL_IDS.populationSeed,
+    firstRun: "on-registration",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: SEED_CASE_LAW_POPULATION_COUNTS_TASK,
+    reads: "load-governed",
+  },
+  {
     description: "Recount the shards the public statute sitemap index lists",
     id: "legislation.refreshSitemapShards.hourly",
     mode: "recurring",
@@ -574,6 +591,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     },
   },
   {
+    description: "Derive parsed input state for historical case-law decisions",
+    id: SCHEDULER_BACKFILL_IDS.parsedInputState,
+    mode: "oneShot",
+    payloadUpdate: "preserve",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK,
+    reads: "load-governed",
+  },
+  {
     description: "Emit persisted backfill health gauges",
     id: "backfill.heartbeat.minutely",
     mode: "recurring",
@@ -686,6 +712,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     enabled: env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS !== undefined,
   },
   {
+    description: "Erase deleted organizations' hosted billing customers",
+    id: "usage.eraseHostedCustomers.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: ERASE_HOSTED_CUSTOMERS_TASK,
+    reads: { budget: "scheduled.usage.eraseHostedCustomers" },
+    enabled: env.HOSTED_USAGE_PROVIDER === "polar",
+  },
+  {
     description: "Delete expired action cost observations",
     id: "actions.sweepCosts.minute",
     mode: "recurring",
@@ -721,7 +756,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Re-drive list verification runs no queued job owns anymore",
+    description:
+      "Re-drive list verification and fact extraction runs no queued job owns anymore",
     id: "listVerifications.reconcileQueuedRuns.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
@@ -745,6 +781,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_REPORT_EXPORTS_TASK,
     reads: "unmeasured",
+  },
+  {
+    description:
+      "Delete expired data export files, fail stalled export runs, and requeue lost export jobs",
+    id: "dataExports.maintain.fiveMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: MAINTAIN_DATA_EXPORTS_TASK,
+    reads: { budget: "scheduled.dataExports.maintain" },
   },
   {
     description: "Delete style set packages a replacement left behind",

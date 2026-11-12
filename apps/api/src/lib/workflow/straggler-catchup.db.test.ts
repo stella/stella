@@ -14,16 +14,16 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as authSchema from "@/api/db/auth-schema";
-import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
 import { properties } from "@/api/db/schema";
 import type { PropertyTool } from "@/api/db/schema-validators";
+import { markRlsDatabase } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { startStragglerCatchUp } from "@/api/lib/workflow/straggler-catchup";
 import type { StragglerRunStarter } from "@/api/lib/workflow/straggler-catchup";
+import { memberScopedDb } from "@/api/tests/helpers/application-role-db";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 type StartedRun = Parameters<StragglerRunStarter>[0];
@@ -94,9 +94,11 @@ const runCatchUp = async (): Promise<StartedRun[]> => {
     workspaceId: WS_ID,
     organizationId: ORG_ID,
     userId: toSafeId<"user">(USER_ID),
-    scopedDb: asTestRaw<ScopedDb>(
-      async (fn: (tx: unknown) => Promise<unknown>) => await fn(db),
-    ),
+    scopedDb: memberScopedDb(markRlsDatabase(db), {
+      organizationId: ORG_ID,
+      workspaceIds: [WS_ID],
+      userId: toSafeId<"user">(USER_ID),
+    }),
     serviceTier: "flex",
     startWorkflow: async (args) => {
       startedRuns.push(args);

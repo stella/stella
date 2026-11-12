@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -70,7 +71,7 @@ const prefillClientInvoice = createSafeRootHandler(
             and(
               eq(workspaces.clientId, params.clientId),
               eq(workspaces.organizationId, session.activeOrganizationId),
-              eq(workspaces.status, "active"),
+              eq(workspaces.status, WORKSPACE_STATUS.active),
             ),
           )
           .orderBy(workspaces.id)

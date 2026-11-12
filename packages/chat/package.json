@@ -1,6 +1,6 @@
 {
   "name": "@stll/chat",
-  "version": "0.3.2",
+  "version": "0.4.4",
   "description": "Typed React chat composer, message stream, model selector, and transport runtime primitives.",
   "keywords": [
     "ai",
@@ -48,20 +48,19 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/chat",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/chat",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/chat",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/chat",
     "prepack": "bun run build",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
     "@ag-ui/core": "1.0.3",
     "@stll/ai-catalog": "workspace:^",
+    "@stll/html": "workspace:*",
     "@stll/ui": "workspace:^",
     "@tanstack/ai-client": "catalog:",
     "@types/hast": "^3.0.5",
     "better-result": "catalog:",
-    "cheerio": "^1.2.0",
-    "domhandler": "^6.0.1",
     "linkify-it": "6.1.0",
     "tldts": "7.4.19",
     "valibot": "catalog:",
@@ -70,8 +69,8 @@
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@tiptap/core": "^3.32.0",
-    "@tiptap/pm": "^3.32.0",
+    "@tiptap/core": "^3.32.1",
+    "@tiptap/pm": "^3.32.1",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
@@ -81,8 +80,8 @@
   },
   "peerDependencies": {
     "@base-ui/react": "^1.7.0",
-    "@tiptap/core": "^3.31.4",
-    "@tiptap/pm": "^3.31.4",
+    "@tiptap/core": "^3.32.1",
+    "@tiptap/pm": "^3.32.1",
     "@types/react": ">=19",
     "react": ">=19"
   },

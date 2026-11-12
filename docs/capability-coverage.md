@@ -73,6 +73,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `chat.older-messages.list` | read | stella:chat | — | generic invoke → `stella capability chat older-messages-list` |
 | `chat.threads.delete` | write, destructive | stella:chat | — | generic invoke → `stella capability chat threads-delete` |
 | `chat.threads.list` | read | stella:chat | — | generic invoke → `stella capability chat threads-list` |
+| `chat.threads.pin-state.update` | write | stella:chat | — | generic invoke → `stella capability chat threads-pin-state-update` |
+| `chat.threads.read-state.update` | write | stella:chat | — | generic invoke → `stella capability chat threads-read-state-update` |
 | `chat.threads.rename` | write | stella:chat | — | generic invoke → `stella capability chat threads-rename` |
 | `chat.threads.update` | write | stella:chat | — | generic invoke → `stella capability chat threads-update` |
 
@@ -109,10 +111,21 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `client-invoices.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices create` |
 | `client-invoices.prefill` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices prefill` |
 
+## conflict-checks
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `conflict-checks.create` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks create` |
+| `conflict-checks.get` | read | stella:read | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks get` |
+| `conflict-checks.link` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks link` |
+| `conflict-checks.list` | read | stella:read | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks list` |
+| `conflict-checks.review` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks review` |
+
 ## contacts
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `contacts.bulk.delete` | write, destructive | stella:contacts_write | — | generic invoke → `stella capability contacts bulk-delete` |
 | `contacts.business-registries.check` | read | stella:read | — | curated tool `check_counterparty` |
 | `contacts.business-registries.lookup` | read | stella:read | — | curated tool `lookup_business_registry` |
 | `contacts.create` | write | stella:contacts_write | — | curated tool `save_contact` |
@@ -128,6 +141,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `contacts.sanctions.reviews.update` | write | stella:contacts_write | — | generic invoke → `stella capability contacts sanctions-reviews-update` |
 | `contacts.search` | read | stella:read | — | generic invoke → `stella capability contacts search` |
 | `contacts.update` | write | stella:contacts_write | — | covered by `save_contact` |
+
+## data-exports
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `data-exports.get` | read | stella:admin_read | — | generic invoke → `stella capability data-exports get` |
+| `data-exports.list` | read | stella:admin_read | — | generic invoke → `stella capability data-exports list` |
 
 ## dictation
 
@@ -303,6 +323,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | --- | --- | --- | --- | --- |
 | `lists.columns.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists columns-create` |
 | `lists.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists create` |
+| `lists.fact-extractions.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists fact-extractions-create` |
 | `lists.generation-candidates.acceptance.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-acceptance-create` |
 | `lists.generation-candidates.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-create` |
 | `lists.generation-candidates.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-list` |
@@ -322,13 +343,18 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists list` |
 | `lists.sample-case.create` | write | stella:documents_write, stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sample-case-create` |
 | `lists.sections.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sections-create` |
+| `lists.source-documents.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists source-documents-list` |
+| `lists.source-documents.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists source-documents-update` |
 | `lists.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists update` |
 | `lists.verifications.claim-comments.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-create` |
 | `lists.verifications.claim-comments.delete` | write, destructive | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-delete` |
 | `lists.verifications.claim-comments.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-list` |
 | `lists.verifications.claim-comments.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-update` |
+| `lists.verifications.claim-rechecks.bulk.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-rechecks-bulk-create` |
+| `lists.verifications.claim-rechecks.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-rechecks-create` |
 | `lists.verifications.claim-reviews.bulk.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-bulk-create` |
 | `lists.verifications.claim-reviews.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-create` |
+| `lists.verifications.claim-reviews.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-list` |
 | `lists.verifications.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-create` |
 | `lists.verifications.get` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-get` |
 | `lists.verifications.latest.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-latest-list` |
@@ -348,17 +374,20 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.cells.retry` | write | stella:matters_write | — | generic invoke → `stella capability matters cells-retry` |
 | `matters.contacts.create` | write | stella:matters_write | — | curated tool `link_matter_contact` |
 | `matters.contacts.delete` | write, destructive | stella:matters_write | — | covered by `link_matter_contact` |
+| `matters.contacts.list` | read | stella:read | — | covered by `list_matters` |
 | `matters.correspondence.get` | read | stella:read | — | generic invoke → `stella capability matters correspondence-get` |
 | `matters.correspondence.list` | read | stella:read | — | generic invoke → `stella capability matters correspondence-list` |
 | `matters.correspondence.update` | write | stella:matters_write | — | generic invoke → `stella capability matters correspondence-update` |
 | `matters.create` | write | stella:matters_write | — | curated tool `save_matter` |
 | `matters.delete` | write, destructive | stella:matters_write | — | curated tool `delete_matter` |
 | `matters.duplicate` | write | stella:matters_write | — | generic invoke → `stella capability matters duplicate` |
+| `matters.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.justifications.list` | read | stella:read | — | generic invoke → `stella capability matters justifications-list` |
 | `matters.list` | read | stella:read | — | curated tool `list_matters` |
-| `matters.members.add` | write | stella:admin_write | — | curated tool `add_matter_member` |
+| `matters.member-candidates.list` | read | stella:read | — | generic invoke → `stella capability matters member-candidates-list` |
+| `matters.members.add` | write | stella:matters_write | — | curated tool `add_matter_member` |
 | `matters.members.list` | read | stella:read | — | covered by `list_matters` |
-| `matters.members.remove` | write, destructive | stella:admin_write | — | curated tool `remove_matter_member` |
+| `matters.members.remove` | write, destructive | stella:matters_write | — | curated tool `remove_matter_member` |
 | `matters.search-preview.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.unarchive` | write | stella:matters_write | — | covered by `save_matter` |
 | `matters.update` | write | stella:matters_write | — | covered by `save_matter` |
@@ -401,11 +430,16 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.ai-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings ai-availability-get` |
 | `organization-settings.anonymization-blacklist.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings anonymization-blacklist-get` |
 | `organization-settings.anonymization-blacklist.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings anonymization-blacklist-update` |
+| `organization-settings.billing-drafts.get` | read | stella:admin_read | FEATURE_TIME_BILLING | generic invoke → `stella capability organization-settings billing-drafts-get` |
+| `organization-settings.billing-drafts.update` | write | stella:admin_write | FEATURE_TIME_BILLING | generic invoke → `stella capability organization-settings billing-drafts-update` |
 | `organization-settings.correspondence.allowed-senders.create` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-create` |
 | `organization-settings.correspondence.allowed-senders.delete` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-delete` |
 | `organization-settings.correspondence.allowed-senders.list` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-list` |
 | `organization-settings.correspondence.allowed-senders.scope.add` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-scope-add` |
 | `organization-settings.correspondence.allowed-senders.scope.remove` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-scope-remove` |
+| `organization-settings.correspondence.data-boxes.create` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-create` |
+| `organization-settings.correspondence.data-boxes.delete` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-delete` |
+| `organization-settings.correspondence.data-boxes.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-get` |
 | `organization-settings.deepl-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings deepl-availability-get` |
 | `organization-settings.document-ocr-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings document-ocr-availability-get` |
 | `organization-settings.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings get` |
@@ -513,6 +547,15 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `seller-profiles.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles list` |
 | `seller-profiles.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles update` |
 
+## sharepoint
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `sharepoint.drives.items.list` | read | stella:read | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint drives-items-list` |
+| `sharepoint.drives.list` | read | stella:read | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint drives-list` |
+| `sharepoint.imports.create` | write | stella:documents_write | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint imports-create` |
+| `sharepoint.sites.list` | read | stella:read | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint sites-list` |
+
 ## signals
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -560,6 +603,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `skills.revisions.list` | read | stella:skills | — | generic invoke → `stella capability skills revisions-list` |
 | `skills.update` | write | stella:skills | — | generic invoke → `stella capability skills update` |
 | `skills.upload` | write | stella:skills | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. Use uploads.create then uploads.update instead: presign with purpose agent_skill, PUT the skill pack to the returned URL, then finalize |
+
+## soft-law
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `soft-law.get` | read | stella:read | FEATURE_PUBLIC_LAW | curated tool `read_guidance` |
+| `soft-law.search` | read | stella:search | FEATURE_PUBLIC_LAW | curated tool `search_guidance` |
 
 ## style-sets
 
@@ -760,24 +810,26 @@ mechanics, and similar), not gaps in coverage.
 
 | Reason | Count |
 | --- | --- |
-| account_lifecycle | 4 |
-| assistant_chat | 15 |
-| auth_plumbing | 33 |
-| billing_ui | 2 |
-| chat_thread_ui | 18 |
+| account_lifecycle | 6 |
+| agent_autonomy_ceiling | 1 |
+| assistant_chat | 16 |
+| auth_plumbing | 39 |
+| billing_ui | 1 |
+| chat_thread_ui | 26 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
-| native_device | 2 |
-| native_tool_ui | 8 |
-| provider_secret | 34 |
-| public_indexing | 9 |
+| native_device | 5 |
+| native_tool_ui | 11 |
+| organization_export | 2 |
+| provider_secret | 33 |
+| public_indexing | 10 |
 | realtime_stream | 9 |
-| search_ui | 20 |
+| search_ui | 21 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 21 |
+| upload_mechanics | 22 |
 | url_preview | 2 |

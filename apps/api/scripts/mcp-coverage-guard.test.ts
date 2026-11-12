@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { isRecord } from "./lib/enumerate-safe-handlers";
 import {
   classifyCoverage,
-  computeBaselineDiff,
   enumerateModuleEndpoints,
   findHiddenEndpointMismatches,
+  findPendingEndpoints,
   findRealtimeMismatches,
   findStaleAllowlistEntries,
   isEndpointModule,
@@ -192,41 +192,23 @@ describe("parseExposure", () => {
   });
 });
 
-describe("computeBaselineDiff (ratchet)", () => {
-  test("flags a newly-added pending endpoint absent from the baseline", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["a", "b"],
-      baseline: ["a"],
-    });
-    expect(diff.newPending).toEqual(["b"]);
-    expect(diff.stalePending).toEqual([]);
+describe("findPendingEndpoints", () => {
+  test("flags every pending endpoint, sorted", () => {
+    expect(
+      findPendingEndpoints([
+        { id: "b", exposure: { type: "pending" } },
+        { id: "closed", exposure: { type: "internal", reason: "webhook" } },
+        { id: "a", exposure: { type: "pending" } },
+      ]),
+    ).toEqual(["a", "b"]);
   });
 
-  test("flags every pending endpoint once the baseline is empty", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["new-gap"],
-      baseline: [],
-    });
-    expect(diff.newPending).toEqual(["new-gap"]);
-    expect(diff.stalePending).toEqual([]);
-  });
-
-  test("flags a stale baseline entry that is no longer pending", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["a"],
-      baseline: ["a", "closed-gap"],
-    });
-    expect(diff.newPending).toEqual([]);
-    expect(diff.stalePending).toEqual(["closed-gap"]);
-  });
-
-  test("clean when current pending exactly equals the baseline", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["b", "a"],
-      baseline: ["a", "b"],
-    });
-    expect(diff.newPending).toEqual([]);
-    expect(diff.stalePending).toEqual([]);
+  test("is clean when no endpoint is pending", () => {
+    expect(
+      findPendingEndpoints([
+        { id: "a", exposure: { type: "tool", name: "read_document" } },
+      ]),
+    ).toEqual([]);
   });
 });
 

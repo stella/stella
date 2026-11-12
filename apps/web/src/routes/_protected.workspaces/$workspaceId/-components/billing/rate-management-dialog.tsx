@@ -11,7 +11,11 @@ import {
 } from "@stll/api-contract/currency-code";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
-import { tryToMinorUnits } from "@stll/money";
+import {
+  EMPTY_LOCALE_INPUT_TEXT,
+  localeInputText,
+  parseLocaleMinorUnits,
+} from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
@@ -28,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -35,6 +40,7 @@ import { MEMBER_CHOICE, MemberCombobox } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -261,6 +267,7 @@ const RateTablesView = ({
 
       {showForm && (
         <CreateRateTableForm
+          hasDefaultTable={tables.some((table) => table.isDefault)}
           onCancel={() => setShowForm(false)}
           onSubmit={submitRateTable}
         />
@@ -280,9 +287,9 @@ const RateTablesView = ({
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium">
+                    <TruncatedText className="text-sm font-medium">
                       {table.name}
-                    </span>
+                    </TruncatedText>
                     <span className="text-muted-foreground shrink-0 text-xs">
                       {table.currency}
                     </span>
@@ -337,9 +344,16 @@ const RateTablesView = ({
 // --- Create Rate Table Form ---
 
 export const CreateRateTableForm = ({
+  hasDefaultTable,
   onSubmit,
   onCancel,
 }: {
+  /**
+   * Whether the matter already has a default table. Without one, the server
+   * makes the new table the default, so the form shows it checked and fixed;
+   * it still submits only the reader's own choice.
+   */
+  hasDefaultTable: boolean;
   /** Resolves with the server's message for the name when it rejected it. */
   onSubmit: (values: {
     name: string;
@@ -369,6 +383,9 @@ export const CreateRateTableForm = ({
       defaultValues: {
         name: "",
         currency: "USD",
+        // Only the reader's own choice is sent: the server makes the table
+        // the default when the matter has none, and a list page that missed
+        // the default must not take it away from another table.
         isDefault: false,
       },
       onSubmit: async ({ value, formApi }) => {
@@ -437,12 +454,23 @@ export const CreateRateTableForm = ({
 
       <form.Field name="isDefault">
         {(field) => (
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={field.state.value}
-              onCheckedChange={(checked) => field.handleChange(checked)}
-            />
-            <Label>{t("billing.rates.setAsDefault")}</Label>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={!hasDefaultTable || field.state.value}
+                disabled={!hasDefaultTable}
+                id={`${field.name}-checkbox`}
+                onCheckedChange={(checked) => field.handleChange(checked)}
+              />
+              <Label htmlFor={`${field.name}-checkbox`}>
+                {t("billing.rates.setAsDefault")}
+              </Label>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {hasDefaultTable
+                ? t("billing.rates.onlyDefaultApplies")
+                : t("billing.rates.firstTableIsDefault")}
+            </p>
           </div>
         )}
       </form.Field>
@@ -697,6 +725,7 @@ const CreateRateEntryForm = ({
   onCancel: () => void;
 }) => {
   const t = useTranslations();
+  const locale = useFormattingLocale();
   const userFieldId = useId();
   const activityView = queryView(
     useQuery(billingCodesOptions(workspaceId, "activity")),
@@ -720,15 +749,16 @@ const CreateRateEntryForm = ({
     hourlyRate: v.pipe(
       v.string(),
       v.rawTransform(({ addIssue, dataset, NEVER }) => {
-        const hourlyRate = tryToMinorUnits({
+        const hourlyRate = parseLocaleMinorUnits({
           amount: dataset.value,
           currency,
+          locale,
         });
-        if (hourlyRate === null || hourlyRate < 0) {
+        if (hourlyRate.isErr() || hourlyRate.value < 0) {
           addIssue({ message: t("billing.hourlyRateMustBeNonNegative") });
           return NEVER;
         }
-        return hourlyRate;
+        return hourlyRate.value;
       }),
     ),
     effectiveFrom: v.string(),
@@ -746,7 +776,7 @@ const CreateRateEntryForm = ({
         userId: "",
         role: null,
         activityCodeId: "",
-        hourlyRate: "",
+        hourlyRate: EMPTY_LOCALE_INPUT_TEXT,
         effectiveFrom: today,
         effectiveTo: "",
       },
@@ -832,7 +862,9 @@ const CreateRateEntryForm = ({
                   dir="ltr"
                   inputMode="decimal"
                   onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.currentTarget.value)}
+                  onChange={(e) =>
+                    field.handleChange(localeInputText(e.currentTarget))
+                  }
                   placeholder="350.00"
                   value={field.state.value}
                 />
@@ -1006,8 +1038,8 @@ const RateEntryDetails = ({
       <span className="text-muted-foreground text-xs">
         {entry.effectiveFrom}
         {entry.effectiveTo
-          ? ` — ${entry.effectiveTo}`
-          : ` — ${t("billing.rates.ongoing")}`}
+          ? ` – ${entry.effectiveTo}`
+          : ` – ${t("billing.rates.ongoing")}`}
       </span>
     </div>
   );
