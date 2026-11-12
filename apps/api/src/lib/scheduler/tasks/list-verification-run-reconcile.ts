@@ -7,6 +7,7 @@ import {
   asQueuedSweep,
   documentRunReconciler,
   documentRunReconcileTask,
+  sweepDocumentRuns,
 } from "@/api/lib/queue/document-run-reconcile";
 
 export const featureAccess = {
@@ -24,13 +25,19 @@ export const RECONCILE_LIST_VERIFICATION_RUNS_TASK =
  */
 export const reconcileListVerificationRuns = documentRunReconcileTask(
   "scheduler.list_verification_runs_reconciled",
-  [
-    documentRunReconciler("listVerificationRuns", listVerificationRunQueue),
-    {
-      key: "listFactExtractionRuns",
-      reconcileStuck: async (db) => await reconcileStuckFactExtractionRuns(db),
-      reconcileQueued: async (db) =>
-        asQueuedSweep(await reconcileQueuedFactExtractionRuns({ db })),
-    },
-  ],
+  async (db) =>
+    // The two kinds sweep their own tables side by side.
+    await Promise.all([
+      sweepDocumentRuns(
+        db,
+        documentRunReconciler("listVerificationRuns", listVerificationRunQueue),
+      ),
+      sweepDocumentRuns(db, {
+        key: "listFactExtractionRuns",
+        reconcileStuck: async (runDb) =>
+          await reconcileStuckFactExtractionRuns(runDb),
+        reconcileQueued: async (runDb) =>
+          asQueuedSweep(await reconcileQueuedFactExtractionRuns({ db: runDb })),
+      }),
+    ]),
 );

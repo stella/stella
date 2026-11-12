@@ -52,27 +52,37 @@ export const documentRunReconciler = <E extends Error>(
     asQueuedSweep(await queue.reconcileQueued({ db })),
 });
 
+type RunSweep = { key: string; failedStuck: number; queued: QueuedSweep };
+
 /**
- * One task over the run kinds it is given: each kind fails its stuck runs,
- * then re-drives the queued runs its queue no longer holds a job for. The
- * kinds sweep side by side and every one finishes before a failure is
- * reported, so one broken queue does not cost the others their sweep.
+ * One kind's sweep: fail its stuck runs, then re-drive the queued runs its
+ * queue no longer holds a job for. The stuck sweep runs first, so a run it
+ * fails is never handed back.
+ */
+export const sweepDocumentRuns = async (
+  db: SchedulerDb,
+  reconciler: RunReconciler,
+): Promise<RunSweep> => {
+  const failedStuck = await reconciler.reconcileStuck(db);
+  const queued = await reconciler.reconcileQueued(db);
+  return { key: reconciler.key, failedStuck, queued };
+};
+
+/**
+ * A reconcile task over the kinds its `sweep` covers, each through
+ * `sweepDocumentRuns`. Every kind finishes before a failure is reported, so
+ * one broken queue does not cost the others their sweep.
  */
 export const documentRunReconcileTask =
-  (event: string, reconcilers: readonly RunReconciler[]): SchedulerTask =>
+  (
+    event: string,
+    sweep: (db: SchedulerDb) => Promise<readonly RunSweep[]>,
+  ): SchedulerTask =>
   async ({ db, logger, signal }) => {
     if (signal.aborted) {
       panic("SchedulerAborted");
     }
-    // Each kind sweeps its own table; within a kind, the stuck sweep runs
-    // first so a run it fails is never handed back.
-    const swept = await Promise.all(
-      reconcilers.map(async (reconciler) => {
-        const failedStuck = await reconciler.reconcileStuck(db);
-        const queued = await reconciler.reconcileQueued(db);
-        return { key: reconciler.key, failedStuck, queued };
-      }),
-    );
+    const swept = await sweep(db);
     const counts: [string, number][] = [];
     for (const { key, failedStuck, queued } of swept) {
       if (Result.isError(queued)) {
