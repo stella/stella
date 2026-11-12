@@ -278,6 +278,7 @@ export const ChatThreadPage = ({
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     reconnecting,
@@ -736,6 +737,7 @@ export const ChatThreadPage = ({
                         value={{
                           pause: localRunQuestion,
                           answer: answerLocalRunQuestion,
+                          threadRef,
                         }}
                       >
                         <ChatThreadMessages
@@ -931,6 +933,7 @@ export const ChatThreadPage = ({
                     onStop={() => {
                       stop();
                     }}
+                    stopping={stopPending}
                     onFocusChange={setComposerFocused}
                     onSubmit={handleSubmit}
                   />

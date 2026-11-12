@@ -2175,6 +2175,7 @@
     "stopFailed": "Não foi possível interromper a resposta. Tente novamente.",
     "stopResponse": "Parar",
     "stopped": "Interrompido",
+    "stopping": "Parando…",
     "suggestTitle": "Sugerir um título",
     "suggestTitleUnavailableAnonymized": "Sugestões de título não estão disponíveis para conversas anonimizadas.",
     "suggestedFollowupsLabel": "Sugestões de perguntas de acompanhamento",

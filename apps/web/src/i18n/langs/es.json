@@ -2175,6 +2175,7 @@
     "stopFailed": "No se pudo detener la respuesta. Inténtalo de nuevo.",
     "stopResponse": "Detener",
     "stopped": "Detenido",
+    "stopping": "Deteniendo…",
     "suggestTitle": "Sugerir un título",
     "suggestTitleUnavailableAnonymized": "Las sugerencias de título no están disponibles para conversaciones anonimizadas.",
     "suggestedFollowupsLabel": "Sugerencias de preguntas de seguimiento",

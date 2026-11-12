@@ -2175,6 +2175,7 @@
     "stopFailed": "Couldn't stop the answer. Try again.",
     "stopResponse": "Stop",
     "stopped": "Stopped",
+    "stopping": "Stopping…",
     "suggestTitle": "Suggest a title",
     "suggestTitleUnavailableAnonymized": "Title suggestions are unavailable for anonymized conversations.",
     "suggestedFollowupsLabel": "Suggested follow-up prompts",

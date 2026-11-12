@@ -2175,6 +2175,7 @@
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
+    "stopping": "Peatamine…",
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
     "suggestedFollowupsLabel": "Soovitatud jätkuküsimused",

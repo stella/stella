@@ -2175,6 +2175,7 @@
     "stopFailed": "Nie udało się zatrzymać odpowiedzi. Spróbuj ponownie.",
     "stopResponse": "Zatrzymaj",
     "stopped": "Zatrzymano",
+    "stopping": "Zatrzymywanie…",
     "suggestTitle": "Zaproponuj tytuł",
     "suggestTitleUnavailableAnonymized": "Propozycje tytułu są niedostępne dla rozmów zanonimizowanych.",
     "suggestedFollowupsLabel": "Sugerowane pytania uzupełniające",

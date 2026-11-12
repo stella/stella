@@ -2175,6 +2175,7 @@
     "stopFailed": "Nepavyko sustabdyti atsakymo. Bandykite dar kartą.",
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
+    "stopping": "Stabdoma…",
     "suggestTitle": "Pasiūlyti pavadinimą",
     "suggestTitleUnavailableAnonymized": "Anonimizuotiems pokalbiams pavadinimų pasiūlymai negalimi.",
     "suggestedFollowupsLabel": "Siūlomi tęstiniai klausimai",

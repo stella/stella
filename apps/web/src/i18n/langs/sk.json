@@ -2175,6 +2175,7 @@
     "stopFailed": "Odpoveď sa nepodarilo zastaviť. Skúste to znova.",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
+    "stopping": "Zastavujem…",
     "suggestTitle": "Navrhnúť názov",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nie sú dostupné pre anonymizované konverzácie.",
     "suggestedFollowupsLabel": "Navrhované nadväzujúce otázky",

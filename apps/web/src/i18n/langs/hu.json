@@ -2175,6 +2175,7 @@
     "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
+    "stopping": "Leállítás…",
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
     "suggestedFollowupsLabel": "Javasolt követő kérdések",
