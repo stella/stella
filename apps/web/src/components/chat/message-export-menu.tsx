@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -21,10 +22,7 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { prepareCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";
-import {
-  buildCreateDocumentDownloadFileName,
-  type CreateDocumentDraft,
-} from "@/components/chat/create-document-draft.logic";
+import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { hasMessageExportCitations } from "@/components/chat/message-export-menu.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import type { TranslationKey } from "@/i18n/types";
