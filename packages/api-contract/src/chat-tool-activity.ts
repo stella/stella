@@ -221,7 +221,10 @@ const HARNESS_CHAT_TOOL_DISPLAY = {
   command_execution: { category: "computation", label: "command_execution" },
   file_change: { category: "computation", label: "file_change" },
   harness_web_search: { category: "computation", label: "harness_web_search" },
-  [CHAT_LOCAL_RUN_QUESTION_TOOL]: {
+  // `CHAT_LOCAL_RUN_QUESTION_TOOL`, spelled out: a key computed from a
+  // constant reads as a widening literal, and the web's approval grant set,
+  // typed by these names, would then infer as a set of any string.
+  request_user_input: {
     category: "user-input",
     label: "request_user_input",
   },

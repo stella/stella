@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "./chat-local-run-question";
 import {
   CHAT_TOOL_LABELS,
   chatToolLabel,
@@ -79,6 +80,16 @@ describe("kinds of work", () => {
       "mutation",
     );
     expect(getChatToolActivityCategory("mcp__x__run")).toBe("computation");
+  });
+
+  test("a local agent's blocking question is a step of its own that waits on a person", () => {
+    expect(chatToolLabel(CHAT_LOCAL_RUN_QUESTION_TOOL)).toBe(
+      "request_user_input",
+    );
+    expect(getChatToolActivityCategory(CHAT_LOCAL_RUN_QUESTION_TOOL)).toBe(
+      "user-input",
+    );
+    expect(isUserInputChatToolName(CHAT_LOCAL_RUN_QUESTION_TOOL)).toBe(true);
   });
 
   test("inherited object keys are not user-input tool names", () => {
