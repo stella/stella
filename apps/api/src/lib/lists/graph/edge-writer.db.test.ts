@@ -348,8 +348,12 @@ const expectedEdges = (matter: Matter): string[] => {
   return [...runEdges, ...recheckEdges, ...sourceEdges].toSorted();
 };
 
-/** The producer each of `writesOf`'s writes names, in the same order. */
-const PRODUCER_OF_WRITE = ["run", "recheck", "reviewer"] as const;
+/** The producers each of `writesOf`'s writes names, in the same order. */
+const PRODUCER_OF_WRITE = [
+  ["run", "recheck"],
+  ["recheck"],
+  ["reviewer"],
+] as const;
 
 const writesOf = (matter: Matter): GraphEdgeWrite[] => [
   { type: "run", runId: matter.runId },
@@ -421,9 +425,10 @@ describe("graph edge writers", () => {
         ),
       );
     }
-    // Two live citations of the run's three, three claims' worth, one
-    // re-check citation, two fact Spots of three item Spots.
-    expect(counts).toEqual([3, 1, 2]);
+    // The run: three live citations of its claims and the one its re-check
+    // holds (a re-check on its claims is written with it); the re-check
+    // again: nothing new; two fact Spots of three item Spots.
+    expect(counts).toEqual([4, 0, 2]);
     const first = await readEdges(matter.workspaceId);
     expect(first.map(identityOf).toSorted()).toEqual(expectedEdges(matter));
     // Edges inherit the list feature gate from what they link.
@@ -699,7 +704,7 @@ describe("graph edge decisions", () => {
               }
             }
             const all = expectedEdges(matter);
-            const producersApplied = [...applied].map(
+            const producersApplied: readonly string[] = [...applied].flatMap(
               (write) => PRODUCER_OF_WRITE.at(write) ?? panic("write index"),
             );
             const edges = await readEdges(matter.workspaceId, tx);
