@@ -15,6 +15,7 @@ import {
   decisionPathForKey,
   LEGACY_CLASSIFICATION_DECISIONS_PATH,
 } from "./inputs";
+import { readFilesAtRevision } from "./revision-files";
 import { AdmissionError } from "./yaml";
 
 // Reading and writing the per-job decision files. Kept out of inputs.ts,
@@ -138,33 +139,42 @@ export const readDecisions = (
     "--",
     CLASSIFICATION_DECISIONS_PATH,
   ]);
-  const files = listed.stdout
+  const listedFiles = listed.stdout
     .split("\n")
+    .filter((file) => file.length > 0);
+  // Every decision file at the revision in one read, not one git per file.
+  const contents = readFilesAtRevision(
+    source.root,
+    source.revision,
+    listedFiles,
+  );
+  const contentAt = (file: string) => {
+    const content = contents.get(file);
+    if (content !== undefined) {
+      return content;
+    }
+    const shown = git(source.root, ["show", `${source.revision}:${file}`]);
+    if (shown.exitCode !== 0) {
+      throw new AdmissionError({ message: shown.stderr.trim() });
+    }
+    return shown.stdout;
+  };
+  const files = listedFiles
     .filter((file) => file.endsWith("/decision.json"))
     .toSorted();
   if (files.length > 0) {
     const entries = files.map((file) => {
       observeRead?.(file);
-      const shown = git(source.root, ["show", `${source.revision}:${file}`]);
-      if (shown.exitCode !== 0) {
-        throw new AdmissionError({ message: shown.stderr.trim() });
-      }
       const directory = file.slice(0, -"decision.json".length);
-      const approvalFiles = listed.stdout
-        .split("\n")
-        .filter(
-          (candidate) =>
-            candidate.startsWith(directory) &&
-            /\/[0-9a-f]{64}\.json$/u.test(candidate),
-        );
-      const decision = parseRecord(shown.stdout);
+      const approvalFiles = listedFiles.filter(
+        (candidate) =>
+          candidate.startsWith(directory) &&
+          /\/[0-9a-f]{64}\.json$/u.test(candidate),
+      );
+      const decision = parseRecord(contentAt(file));
       const approvedDigests = approvalFiles.map((approvalFile) => {
         observeRead?.(approvalFile);
-        const approval = git(source.root, [
-          "show",
-          `${source.revision}:${approvalFile}`,
-        ]);
-        const record = parseRecord(approval.stdout);
+        const record = parseRecord(contentAt(approvalFile));
         const digest = path.basename(approvalFile, ".json");
         if (
           record["kind"] !== decision["kind"] ||
@@ -203,8 +213,7 @@ export const readDecisions = (
   if (flatFiles.length > 0) {
     return collect(
       flatFiles.map((file) => {
-        const shown = git(source.root, ["show", `${source.revision}:${file}`]);
-        const value = parseRecord(shown.stdout);
+        const value = parseRecord(contentAt(file));
         const key = decodeURIComponent(path.basename(file, ".json"));
         return [
           key,

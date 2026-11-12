@@ -40,6 +40,7 @@ import {
   writeReviewFindingBatch,
 } from "@/api/lib/document-review/finding-write";
 import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
+import { UNGRADED_VERDICT } from "@/api/lib/document-review/review-grade";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type {
@@ -296,7 +297,7 @@ const removeFixture = async (
 
 type Decided = Pick<
   RecordTableRunVerdictsArgs,
-  "graded" | "unresolvedPropertyIds"
+  "graded" | "ungraded" | "unresolvedPropertyIds"
 >;
 
 const deviation = (propertyId: SafeId<"property">): Decided => ({
@@ -308,6 +309,14 @@ const deviation = (propertyId: SafeId<"property">): Decided => ({
       extracted: null,
     },
   ],
+  ungraded: [],
+  unresolvedPropertyIds: [],
+});
+
+/** The model declined the position's question. */
+const refused = (propertyId: SafeId<"property">): Decided => ({
+  graded: [],
+  ungraded: [{ propertyId, extracted: null }],
   unresolvedPropertyIds: [],
 });
 
@@ -503,6 +512,7 @@ if (!databaseUrl || !runPostgresTests) {
           ids,
           first: {
             graded: [],
+            ungraded: [],
             unresolvedPropertyIds: [fixture.firstPropertyId],
           },
           second: deviation(fixture.secondPropertyId),
@@ -517,15 +527,91 @@ if (!databaseUrl || !runPostgresTests) {
         });
       });
     });
+
+    test("a position the model declined is flagged and the run still completes", async () => {
+      await withRun(async ({ db, ids, fixture }) => {
+        const scopedDb = createScopedDb(
+          markRlsDatabase(db),
+          [ids.workspaceId],
+          ids.organizationId,
+          ids.userId,
+        );
+        const record = async (decided: Decided) =>
+          await recordTableRunVerdicts({
+            scopedDb,
+            organizationId: ids.organizationId,
+            workspaceId: ids.workspaceId,
+            entityId: ids.entityId,
+            entityVersionId: ids.entityVersionId,
+            ...decided,
+          });
+
+        expect(await record(refused(fixture.firstPropertyId))).toEqual({
+          type: "written",
+          findingCount: 1,
+          completed: false,
+        });
+        expect(await readRun(db, fixture.runId)).toEqual({
+          status: "running",
+          completed: 1,
+          errorCode: null,
+          positionIds: [FIRST_POSITION_ID],
+        });
+
+        expect(await record(deviation(fixture.secondPropertyId))).toEqual({
+          type: "written",
+          findingCount: 1,
+          completed: true,
+        });
+        expect(await readRun(db, fixture.runId)).toEqual({
+          status: "completed",
+          completed: 2,
+          errorCode: null,
+          positionIds: [FIRST_POSITION_ID, SECOND_POSITION_ID],
+        });
+
+        const findings = await db
+          .select({
+            positionId: documentReviewFindings.positionId,
+            outcome: documentReviewFindings.outcome,
+            payload: documentReviewFindings.payload,
+          })
+          .from(documentReviewFindings)
+          .where(eq(documentReviewFindings.runId, fixture.runId))
+          .orderBy(documentReviewFindings.positionId);
+        expect(
+          findings.map(({ positionId, outcome, payload }) => ({
+            positionId,
+            outcome,
+            rationale: payload.finding.rationale,
+          })),
+        ).toEqual([
+          {
+            positionId: FIRST_POSITION_ID,
+            outcome: "deviation",
+            rationale:
+              "Automated comparison against the standard could not be completed.",
+          },
+          {
+            positionId: SECOND_POSITION_ID,
+            outcome: "deviation",
+            rationale: "Too short.",
+          },
+        ]);
+      });
+    });
   });
 
   describe("both executors' batch paths on PostgreSQL", () => {
     const POSITION_IDS = [FIRST_POSITION_ID, SECOND_POSITION_ID] as const;
 
+    /** A wording deviation, or a question the model declined to answer. */
+    type Judgment = "deviation" | "refused";
+
     type Review = {
       runId: SafeId<"documentReviewRun">;
       /** Delivers one position's finding the way this executor's batch does. */
-      deliver: (positionId: string) => Promise<void>;
+      deliver: (positionId: string, judgment?: Judgment) => Promise<void>;
       /** What follows the last batch: the worker's post-pass recount and
        *  completion. A table batch completes the run itself. */
       settle: () => Promise<void>;
@@ -556,17 +642,19 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
       return {
         runId: run.runId,
-        deliver: async (positionId) => {
+        deliver: async (positionId, judgment = "deviation") => {
+          const propertyId =
+            propertyIdByPositionId.get(positionId) ??
+            panic("No column answers this position");
           await recordTableRunVerdicts({
             scopedDb: scopedDbFor(db, ids),
             organizationId: ids.organizationId,
             workspaceId: ids.workspaceId,
             entityId: ids.entityId,
             entityVersionId: ids.entityVersionId,
-            ...deviation(
-              propertyIdByPositionId.get(positionId) ??
-                panic("No column answers this position"),
-            ),
+            ...(judgment === "deviation"
+              ? deviation(propertyId)
+              : refused(propertyId)),
           });
         },
         settle: async () => {},
@@ -612,21 +700,29 @@ if (!databaseUrl || !runPostgresTests) {
       );
       return {
         runId,
-        deliver: async (positionId) => {
+        deliver: async (positionId, judgment = "deviation") => {
           const planned =
             plan.positions.find(
               (candidate) => candidate.positionId === positionId,
             ) ?? panic("The run did not plan this position");
-          // The same judgment a table batch records for a deviation verdict.
+          // The judgment a table batch records for the same verdict: a
+          // deviation, or what the worker's grading projects for a question
+          // the model declined (flagged, with no answer and no fix).
+          const graded =
+            judgment === "deviation"
+              ? { verdict: "deviation" as const, rationale: "Too short." }
+              : {
+                  verdict: UNGRADED_VERDICT.verdict,
+                  rationale: UNGRADED_VERDICT.rationale,
+                };
           const finding: ReviewFinding = {
             positionId,
             issue: planned.position.issue,
             severity: "high",
             standardSource: "tiers",
-            verdict: "deviation",
+            ...graded,
             delta: LANGUAGE_DELTA,
             extracted: null,
-            rationale: "Too short.",
             citations: [],
             fix: null,
           };
@@ -776,6 +872,81 @@ if (!databaseUrl || !runPostgresTests) {
         worker: await traceReviews(DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER),
         table: await traceReviews(DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE),
       }).toEqual({ worker: expected, table: expected });
+    });
+
+    /** One review where the model declined the first position's question. */
+    const traceDeclinedReview = async (
+      executor: DocumentReviewRunExecutor,
+    ): Promise<unknown> =>
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const ids = createFixtureIds();
+        try {
+          await seedDocument(db, ids);
+          const playbook = await seedTwoPositionPlaybook(db, ids);
+          const review = await (
+            executor === DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE
+              ? startTableReview
+              : startWorkerReview
+          )(db, ids, playbook);
+
+          await review.deliver(FIRST_POSITION_ID, "refused");
+          const afterDeclinedBatch = await readProgress(db, review.runId);
+          await review.deliver(SECOND_POSITION_ID);
+          await review.settle();
+
+          const findings = await db
+            .select({
+              positionId: documentReviewFindings.positionId,
+              outcome: documentReviewFindings.outcome,
+              payload: documentReviewFindings.payload,
+            })
+            .from(documentReviewFindings)
+            .where(eq(documentReviewFindings.runId, review.runId))
+            .orderBy(documentReviewFindings.positionId);
+          return {
+            afterDeclinedBatch,
+            afterLastBatch: await readProgress(db, review.runId),
+            findings,
+          };
+        } finally {
+          await removeFixture(db, ids);
+        }
+      });
+
+    test("a declined position is flagged the same way and the run completes", async () => {
+      const worker = await traceDeclinedReview(
+        DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+      );
+      const table = await traceDeclinedReview(
+        DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+      );
+
+      expect(table).toEqual(worker);
+      expect(worker).toMatchObject({
+        afterDeclinedBatch: {
+          status: "running",
+          completed: 1,
+          errorCode: null,
+        },
+        afterLastBatch: { status: "completed", completed: 2, errorCode: null },
+        findings: [
+          {
+            positionId: FIRST_POSITION_ID,
+            outcome: "deviation",
+            payload: {
+              finding: {
+                verdict: "deviation",
+                rationale:
+                  "Automated comparison against the standard could not be completed.",
+                extracted: null,
+                fix: null,
+              },
+            },
+          },
+          { positionId: SECOND_POSITION_ID, outcome: "deviation" },
+        ],
+      });
     });
   });
 }

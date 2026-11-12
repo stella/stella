@@ -28,6 +28,11 @@ export default {
           "Revalidates the actor's locked membership after the handler authorizes deletion.",
       },
       {
+        path: "apps/api/src/handlers/data-exports/data-export-worker.ts",
+        reason:
+          "Revalidates the requester's membership before each queued export attempt reads the organization.",
+      },
+      {
         path: "apps/api/src/lib/db/member-authority.ts",
         reason:
           "Provides shared transaction-held organization and matter membership rechecks for deferred actions.",

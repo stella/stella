@@ -70,12 +70,18 @@ export type HarnessTurnInput = {
   /** Absolute directory the harness runs in and may write to. */
   workspaceDir: string;
   /**
-   * Absolute stella-owned directory for package-manager caches, shared by
-   * the computer's runs; writable inside every harness sandbox.
+   * Absolute stella-owned cache directory of the run's chat, beside its
+   * folder: package managers and `XDG_CACHE_HOME` tools write there, writable
+   * inside every harness sandbox and never shared with another chat.
    */
   cacheDir: string;
   /** Skills the harness loads for the turn, through its own mechanism. */
   skillFolders: readonly HarnessSkillFolder[];
+  /**
+   * The hosts those skills declare (`stella-network-hosts`): the only hosts a
+   * sandboxed command may reach without the member being asked.
+   */
+  networkHosts: readonly string[];
   /**
    * Absolute directories of tools the desktop manages, such as Bun, which the
    * turn's commands find ahead of what the computer has.

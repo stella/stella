@@ -16,10 +16,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import {
-  documentReviewFindingDecisions,
-  documentReviewFindings,
-} from "@/api/db/schema";
+import { documentReviewFindings } from "@/api/db/schema";
 import { decideReviewFindingBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -27,17 +24,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
-  findingDecisionRows,
-  findingHasDecisionHistory,
-} from "@/api/lib/document-review/finding-decision-history";
-import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
   DOCUMENT_REVIEW_DECISION,
 } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewFindingFlag } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-import { findingDecisionEvent } from "./finding-decision-event";
 
 const config = {
   contract: "patch",
@@ -205,22 +196,9 @@ const decideDocumentReviewFinding = createSafeHandler(
             ),
           );
 
-        const eventDecision = findingDecisionEvent(finding.decision, decision);
-        if (eventDecision !== undefined) {
-          const change = {
-            workspaceId,
-            findingId: params.findingId,
-            previous: finding,
-            decision: eventDecision,
-            actorId: user.id,
-            at: now,
-            hasHistory: await findingHasDecisionHistory(tx, params.findingId),
-          };
-          await tx
-            .insert(documentReviewFindingDecisions)
-            .values(findingDecisionRows(change))
-            .onConflictDoNothing({ target: documentReviewFindingDecisions.id });
-        }
+        // The decision history is the database's: the update above appends
+        // its event (`document_review_findings_decision_history`), from the
+        // decider and moment written here, whichever surface changes it.
 
         const changes: FieldDiffs = {};
         if (decisionChanged) {

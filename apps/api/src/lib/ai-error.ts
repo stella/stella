@@ -9,7 +9,11 @@ import { panic, Result } from "better-result";
  * checked against one source.
  */
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import { AI_FAILURE_CODES, isAIFailureCode } from "@stll/api-contract";
+import {
+  AI_FAILURE_CODES,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
+  isAIFailureCode,
+} from "@stll/api-contract";
 import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { classifyFailure, FAILURE_REASON_GRADE } from "@stll/errors";
@@ -76,13 +80,19 @@ const INCOMPLETE_STREAM_CODES: ReadonlySet<string> = new Set([
 
 /**
  * The run error codes a local chat turn ends with when the computer it ran on
- * reports why it stopped (`local-run-chunks.ts`), by the kind each names.
+ * reports why it stopped (`local-run-chunks.ts`), by the kind each names. A
+ * model at capacity is the provider's outage, reported under its own code by
+ * the harness (`@stll/agent-engine` stream chunks).
  */
 const LOCAL_RUNNER_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
   [AI_FAILURE_CODES.local_runner_needs_login, "local_runner_needs_login"],
   [AI_FAILURE_CODES.local_runner_limit_reached, "local_runner_limit_reached"],
   [AI_FAILURE_CODES.local_runner_unavailable, "local_runner_unavailable"],
   [AI_FAILURE_CODES.local_runner_turn_too_large, "local_runner_turn_too_large"],
+  [AI_FAILURE_CODES.local_runner_not_reached, "local_runner_not_reached"],
+  [AI_FAILURE_CODES.local_runner_relinked, "local_runner_relinked"],
+  [AI_FAILURE_CODES.local_runner_restoring, "local_runner_restoring"],
+  [AI_FAILURE_CODES.provider_unavailable, "provider_unavailable"],
 ]);
 
 /**
@@ -753,6 +763,9 @@ const aiKindHandlerError = (
     case "local_runner_limit_reached":
     case "local_runner_unavailable":
     case "local_runner_turn_too_large":
+    case "local_runner_not_reached":
+    case "local_runner_relinked":
+    case "local_runner_restoring":
     case "unknown":
       return new HandlerError({ ...fallback, code, cause: error });
     default: {
@@ -781,7 +794,7 @@ export const aiHandlerError = (
   // Raised before any model call, so no provider failure kind describes it.
   if (DocumentTooLargeError.is(error)) {
     return new HandlerError({
-      code: "document_too_large",
+      code: DOCUMENT_TOO_LARGE_ERROR_CODE,
       status: 413,
       message: error.message,
       cause: error,

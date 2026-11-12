@@ -15,6 +15,7 @@
     "noMatchesDescription": "Kein Chattitel und keine Akte enthält „{search}“.",
     "search": "Chats durchsuchen",
     "loadFailed": "Ihre Unterhaltungen konnten nicht geladen werden.",
+    "runsLoadFailed": "Es konnte nicht geprüft werden, welche Unterhaltungen auf Sie warten.",
     "retry": "Erneut versuchen",
     "untitled": "Unbenannte Unterhaltung",
     "loadMoreFailed": "Mehr laden",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "Diese Unterhaltung konnte nicht geladen werden.",
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
+    "markRead": "Gelesen",
+    "markUnread": "Ungelesen",
+    "pin": "Anheften",
+    "unpin": "Lösen",
+    "unread": "Ungelesen",
+    "markReadFailed": "Die Unterhaltung konnte nicht als gelesen markiert werden.",
+    "markUnreadFailed": "Die Unterhaltung konnte nicht als ungelesen markiert werden.",
+    "pinFailed": "Die Unterhaltung konnte nicht angeheftet werden.",
+    "unpinFailed": "Die Unterhaltung konnte nicht gelöst werden.",
     "sections": {
+      "needsYou": "Wartet auf Sie",
+      "working": "In Arbeit",
+      "pinned": "Angeheftet",
       "today": "Heute",
       "yesterday": "Gestern",
       "week": "Letzte 7 Tage",
@@ -47,6 +60,22 @@
     "answerStopped": "Gestoppt.",
     "answerNeedsInput": "Diese Antwort braucht Ihre Eingabe. Setzen Sie sie in stella im Web fort.",
     "answerFailed": "Die Antwort konnte nicht abgeschlossen werden.",
+    "answerAwaitingInput": "Diese Antwort braucht Ihre Eingabe.",
+    "alreadyAnswered": "Dies wurde bereits beantwortet.",
+    "answerSendFailed": "Ihre Antwort konnte nicht gesendet werden. Versuchen Sie es erneut.",
+    "approvalTitle": "Diese Aktion erlauben?",
+    "approvalAllowOnce": "Einmal erlauben",
+    "approvalDeny": "Ablehnen",
+    "inputEmpty": "Leer",
+    "inputRequest": "Eingabe",
+    "questionTitle": "Um Klärung bitten",
+    "questionChooseSeveral": "Alles Zutreffende auswählen",
+    "questionOwnWords": "Eigene Antwort",
+    "questionShowOptions": "Optionen anzeigen",
+    "questionPlaceholder": "Ihre Antwort",
+    "questionSecretPlaceholder": "Ihre Antwort bleibt verborgen",
+    "questionDismiss": "Verwerfen und anhalten",
+    "submitAnswers": "Antworten absenden",
     "composerMenu": "Menü für Anhänge und Werkzeuge öffnen",
     "attachFile": "Datei anhängen",
     "attachment": "Anhang",
@@ -62,7 +91,12 @@
     "sendFileRefused": "Eine Datei konnte nicht gesendet werden, daher wurde die Nachricht nicht gesendet. Entfernen Sie die Datei und versuchen Sie es erneut.",
     "sendFileNotAnonymizable": "Diese Unterhaltung ist anonymisiert, und stella konnte eine der Dateien nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei und versuchen Sie es erneut.",
     "pickTitle": "Unterhaltung wählen",
-    "pickDescription": "Wählen Sie einen Verlauf aus der Liste oder beginnen Sie mit + einen neuen."
+    "pickDescription": "Wählen Sie einen Verlauf aus der Liste oder beginnen Sie mit + einen neuen.",
+    "runBanner": {
+      "needsYou": "Wartet auf Sie",
+      "finished": "Abgeschlossen",
+      "openHint": "Öffnet die Unterhaltung"
+    }
   },
   "tasks": {
     "emptyTitle": "Keine offenen Aufgaben",
@@ -151,7 +185,11 @@
     "scanDocument": "Dokument scannen",
     "newTask": "Neue Aufgabe",
     "uploadDocument": "Dokument hochladen",
-    "uploadFailed": "Das Dokument konnte nicht hochgeladen werden. Versuchen Sie es erneut."
+    "uploadFailed": "Das Dokument konnte nicht hochgeladen werden. Versuchen Sie es erneut.",
+    "startTimer": "Timer starten",
+    "pauseTimer": "Timer pausieren",
+    "resumeTimer": "Timer fortsetzen",
+    "timerRunning": "Timer läuft"
   },
   "entity": {
     "type": "Typ",
@@ -199,7 +237,6 @@
     }
   },
   "signIn": {
-    "beta": "Beta",
     "headline": "Klarheit für jeden Fall.",
     "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
     "submit": "Anmelden",
@@ -351,5 +388,13 @@
     "share": "Teilen",
     "cancel": "Abbrechen",
     "openFailed": "Der Link konnte nicht geöffnet werden."
+  },
+  "share": {
+    "title": "Zu stella hinzufügen",
+    "start": "Starten",
+    "uploading": "Wird hochgeladen: {done} von {total}…",
+    "filesOnly": "Nur die Dateien werden gespeichert; Links und Text entfallen.",
+    "unavailableTitle": "Nichts hinzuzufügen",
+    "unavailable": "Diese Freigabe ist nicht mehr vorhanden. Teilen Sie sie erneut aus der anderen App."
   }
 }

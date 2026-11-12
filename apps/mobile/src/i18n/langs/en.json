@@ -15,6 +15,7 @@
     "noMatchesDescription": "No chat title or matter contains “{search}”.",
     "search": "Search chats",
     "loadFailed": "Your conversations could not be loaded.",
+    "runsLoadFailed": "Could not check which conversations are waiting for you.",
     "retry": "Try again",
     "untitled": "Untitled conversation",
     "loadMoreFailed": "Load more",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "This conversation could not be loaded.",
     "greeting": "What would you like to work on?",
     "greetingSubtitle": "Start with a matter, document, or plain question.",
+    "markRead": "Read",
+    "markUnread": "Unread",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "unread": "Unread",
+    "markReadFailed": "The conversation could not be marked as read.",
+    "markUnreadFailed": "The conversation could not be marked as unread.",
+    "pinFailed": "The conversation could not be pinned.",
+    "unpinFailed": "The conversation could not be unpinned.",
     "sections": {
+      "needsYou": "Waiting for you",
+      "working": "Working",
+      "pinned": "Pinned",
       "today": "Today",
       "yesterday": "Yesterday",
       "week": "Previous 7 days",
@@ -47,6 +60,22 @@
     "answerStopped": "Stopped.",
     "answerNeedsInput": "This answer needs your input. Continue it in stella on the web.",
     "answerFailed": "The answer could not be completed.",
+    "answerAwaitingInput": "This answer needs your input.",
+    "alreadyAnswered": "This was already answered.",
+    "answerSendFailed": "Your answer could not be sent. Try again.",
+    "approvalTitle": "Allow this action?",
+    "approvalAllowOnce": "Allow once",
+    "approvalDeny": "Deny",
+    "inputEmpty": "Empty",
+    "inputRequest": "Input",
+    "questionTitle": "Asking for clarification",
+    "questionChooseSeveral": "Choose any that apply",
+    "questionOwnWords": "Write your own",
+    "questionShowOptions": "Show options",
+    "questionPlaceholder": "Your answer",
+    "questionSecretPlaceholder": "Your answer stays hidden",
+    "questionDismiss": "Dismiss and stop",
+    "submitAnswers": "Submit answers",
     "composerMenu": "Open attachments and tools menu",
     "attachFile": "Attach file",
     "attachment": "Attachment",
@@ -62,7 +91,12 @@
     "sendFileRefused": "A file could not be sent, so the message was not sent. Remove the file and try again.",
     "sendFileNotAnonymizable": "This conversation is anonymized, and stella could not anonymize one of the files, so nothing was sent. Remove the file and try again.",
     "pickTitle": "Pick a conversation",
-    "pickDescription": "Choose a thread from the list, or start a new one with +."
+    "pickDescription": "Choose a thread from the list, or start a new one with +.",
+    "runBanner": {
+      "needsYou": "Waiting for you",
+      "finished": "Finished",
+      "openHint": "Opens the conversation"
+    }
   },
   "tasks": {
     "emptyTitle": "No open tasks",
@@ -151,7 +185,11 @@
     "scanDocument": "Scan a document",
     "newTask": "New task",
     "uploadDocument": "Upload document",
-    "uploadFailed": "The document could not be uploaded. Try again."
+    "uploadFailed": "The document could not be uploaded. Try again.",
+    "startTimer": "Start timer",
+    "pauseTimer": "Pause timer",
+    "resumeTimer": "Resume timer",
+    "timerRunning": "Timer running"
   },
   "entity": {
     "type": "Type",
@@ -199,7 +237,6 @@
     }
   },
   "signIn": {
-    "beta": "Beta",
     "headline": "Clarity for every case.",
     "subtitle": "Documents, case law, and review under control. Powered by AI.",
     "submit": "Sign in",
@@ -351,5 +388,13 @@
     "share": "Share",
     "cancel": "Cancel",
     "openFailed": "The link could not be opened."
+  },
+  "share": {
+    "title": "Add to stella",
+    "start": "Start",
+    "uploading": "Uploading {done} of {total}…",
+    "filesOnly": "Only the files are saved; links and text are left out.",
+    "unavailableTitle": "Nothing to add",
+    "unavailable": "This share is no longer here. Share it again from the other app."
   }
 }

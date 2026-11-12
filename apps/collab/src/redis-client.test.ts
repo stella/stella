@@ -253,18 +253,21 @@ test.skipIf(redisTestUrl === undefined)(
     });
     const original = RedisClient.prototype.sendCommand;
     let reported = "noeviction";
+    const infoReplies: unknown[] = [];
     const send = spyOn(RedisClient.prototype, "sendCommand").mockImplementation(
       function (this: RedisClient, command, ...args) {
         const reply: unknown = original.call(this, command, ...args);
         if (command.name !== "info" || !command.args.includes("memory")) {
           return reply;
         }
+        // The client consumes this promise, so a failed assertion inside it
+        // would reach the client instead of the test. The decoded replies
+        // are asserted in the test body instead.
         return Promise.resolve(reply).then((value: unknown) => {
-          expect(typeof value).toBe("string");
+          infoReplies.push(value);
           if (typeof value !== "string") {
-            return panic("INFO memory should be decoded");
+            return value;
           }
-          expect(value).toContain("maxmemory_policy:");
           return value.replace(
             /^maxmemory_policy:[^\r\n]+/mu,
             () => `maxmemory_policy:${reported}`,
@@ -285,6 +288,11 @@ test.skipIf(redisTestUrl === undefined)(
       expect(await client.eval("return 1", 0)).toBe(1);
       expect(statuses).toEqual(["allowed", "refused", "allowed"]);
       expect(errors).toEqual([]);
+      expect(infoReplies.length).toBeGreaterThan(0);
+      for (const reply of infoReplies) {
+        expect(reply).toBeString();
+        expect(reply).toContain("maxmemory_policy:");
+      }
     } finally {
       client.disconnect();
       send.mockRestore();

@@ -16,6 +16,7 @@ import {
 } from "@stll/ui/accordion";
 import { CheckIcon, CircleDashedIcon, SplitIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import { assistantMessageFallbackText } from "@/components/chat/chat-thread-messages.logic";
@@ -143,7 +144,11 @@ const SpawnSubagentsSubtaskList = ({
               <AccordionItem value="result">
                 <AccordionTrigger>
                   <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                    <bdi className="line-clamp-2 min-w-0 text-sm">
+                    <TruncatedText
+                      className="text-sm"
+                      lines={2}
+                      render={<bdi />}
+                    >
                       {subagentTitleRuns(
                         maskSubagentIdentifiers(subagent.title),
                       ).map((run) => {
@@ -163,7 +168,7 @@ const SpawnSubagentsSubtaskList = ({
                             );
                         }
                       })}
-                    </bdi>
+                    </TruncatedText>
                     <SubtaskStatus
                       callStatus={callStatus}
                       status={result?.status}

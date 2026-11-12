@@ -6,11 +6,6 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 import messages from "@/i18n/langs/en.json";
 import type { WebApiRoutes } from "@/lib/api";
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
-
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 const { stellaToast } = await import("@stll/ui/toast");
@@ -86,6 +81,8 @@ const clients: InstanceType<typeof QueryClient>[] = [];
 const spies: { mockRestore: () => void }[] = [];
 
 afterEach(async () => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   await act(async () => {
     await waitFor(() => {
       expect(

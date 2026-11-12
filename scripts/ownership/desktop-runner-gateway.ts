@@ -41,6 +41,11 @@ export default {
         reason:
           "Queues a message for the open run of the member's running chat turn through the control.",
       },
+      {
+        path: "apps/api/src/handlers/chat/turns/local-files-undo.ts",
+        reason:
+          "Asks the turn's computer to undo the turn's file changes and reads where that undo stands.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

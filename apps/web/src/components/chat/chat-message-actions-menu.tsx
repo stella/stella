@@ -16,6 +16,7 @@ import { Loader } from "@stll/ui/loader";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
+import { useLocalFilesUndo } from "@/components/chat/local-files-undo";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
 import {
   SidePanelChatAnnouncer,
@@ -48,6 +49,18 @@ type ChatMessageActionsProps = {
    *  must be told it. Defaults to the thread's own matter. */
   contextMatterIds?: readonly string[] | undefined;
   exportArtifact: CreateDocumentDraft | null;
+  /**
+   * The turn this message answered, when it is the newest turn of a chat
+   * that runs on the member's computer: its file changes may be undone.
+   */
+  localFilesUndoTurnId?: string | null | undefined;
+  /**
+   * Whether a new undo may be asked on this message now: not while a send or
+   * a turn runs, which leaves the turn behind the computer's newest.
+   */
+  localFilesUndoOffered?: boolean | undefined;
+  /** This message's turn had its file changes undone: it keeps the marker. */
+  localFilesUndone?: boolean | undefined;
   message: PersistedChatMessage;
   threadRef: ChatThreadRef;
 };
@@ -89,10 +102,19 @@ const ChatMessageActions = ({
   children,
   contextMatterIds = NO_EXTRA_CONTEXT_MATTERS,
   exportArtifact,
+  localFilesUndoTurnId = null,
+  localFilesUndoOffered = false,
+  localFilesUndone = false,
   message,
   threadRef,
 }: ChatMessageActionsProps) => {
   const t = useTranslations();
+  const localFilesUndo = useLocalFilesUndo({
+    threadId: threadRef.threadId,
+    turnId: localFilesUndoTurnId,
+    offered: localFilesUndoOffered,
+    undone: localFilesUndone,
+  });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   // A fork to the side panel confirms on this action row: the menu closes
@@ -194,7 +216,9 @@ const ChatMessageActions = ({
       ]
     : [];
   // A message still generating offers nothing, and right-click stays native.
-  const actions = canFork ? [...forkActions, ...exportActions] : [];
+  const actions = canFork
+    ? [...forkActions, ...exportActions, ...localFilesUndo.actions]
+    : [];
 
   // The "…" button sits in the message's action row; the row's status note
   // and the export menu anchored to the button go with it.
@@ -204,6 +228,7 @@ const ChatMessageActions = ({
       <>
         <SidePanelChatNote status={sidePanelChat.status} />
         <SidePanelChatAnnouncer status={sidePanelChat.status} />
+        {localFilesUndo.extras}
         {canExport && (
           <MessageExportMenu
             anchor={trigger}

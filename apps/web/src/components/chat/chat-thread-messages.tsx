@@ -21,7 +21,11 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
-import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_STEER_TOOL,
+  type ChatLocalRunComputerWait,
+} from "@stll/api-contract/chat-run-target";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -39,6 +43,7 @@ import {
 } from "@stll/ui/icons";
 import { StatusMark } from "@stll/ui/status-mark";
 import { SwapText } from "@stll/ui/swap-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -113,6 +118,7 @@ import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
   canRetryChatRequest,
+  canUndoLocalFilesOf,
   finalChatRefusalKey,
   isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
@@ -147,7 +153,7 @@ import {
 } from "@/components/chat/user-message-edit";
 import type { UserMessageEditActions } from "@/components/chat/user-message-edit";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { DocumentIcon } from "@/components/document-icon";
 import { ProviderSetupGuidanceNotice } from "@/components/provider-diagnostic-content";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
@@ -164,6 +170,7 @@ import {
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
+import type { NewestLocalTurn } from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
@@ -337,25 +344,64 @@ const messageActionsThreadRef = (
  *  thread re-renders on every streamed chunk, while the line only changes
  *  with the running assistant message. */
 const ActiveTurnStatus = memo(
-  ({ assistant }: { assistant: ChatUIMessage | undefined }) => {
+  ({
+    assistant,
+    sentAt,
+  }: {
+    assistant: ChatUIMessage | undefined;
+    sentAt: number | null | undefined;
+  }) => {
     const t = useTranslations();
+    const turnSentAt = sentAt ?? null;
     return (
       <ChatTurnStatus
         turn={
           assistant === undefined
-            ? { state: "submitted", phase: null }
+            ? { state: "submitted", phase: null, sentAt: turnSentAt }
             : {
                 state: "streaming",
                 phase: turnPhaseFromParts(assistant.parts, (name) =>
                   t(getChatToolTitleKey(name)),
                 ),
                 timing: assistant.metadata?.turnTiming,
+                sentAt: turnSentAt,
               }
         }
       />
     );
   },
 );
+
+/** What the thread knows about undoing its local turns' file changes. */
+type LocalFilesUndoFacts = {
+  generationActive: boolean;
+  messages: ChatUIMessage[];
+  newestLocalTurn: NewestLocalTurn | null | undefined;
+};
+
+/**
+ * The undo props of `message`'s actions: the turn it may undo (only the
+ * newest turn's answer), whether a new undo may be asked now, and whether
+ * its turn was undone already, as the server marked the answer.
+ */
+const localFilesUndoPropsFor = (
+  { generationActive, messages, newestLocalTurn }: LocalFilesUndoFacts,
+  { id: messageId, metadata }: ChatUIMessage,
+) => {
+  const turn =
+    newestLocalTurn?.assistantMessageId === messageId ? newestLocalTurn : null;
+  return {
+    localFilesUndoTurnId: turn?.id ?? null,
+    localFilesUndoOffered:
+      turn !== null &&
+      canUndoLocalFilesOf({
+        isGenerating: generationActive,
+        messageId,
+        messages,
+      }),
+    localFilesUndone: metadata?.localFilesUndone !== undefined,
+  };
+};
 
 export const ChatThreadMessages = ({
   activitySession,
@@ -385,7 +431,9 @@ export const ChatThreadMessages = ({
   showToolCallDetails,
   showToolCalls,
   stickyUserMessages = false,
-  waitingForComputer = false,
+  computerWait = null,
+  turnSentAt,
+  newestLocalTurn,
   queuedMessages,
   queuedMessageActions,
   streamdownComponents,
@@ -404,6 +452,7 @@ export const ChatThreadMessages = ({
     [messages],
   );
   const generationActive = error === undefined && isGenerating;
+  const undo = { generationActive, messages, newestLocalTurn };
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
     [messages],
@@ -461,6 +510,7 @@ export const ChatThreadMessages = ({
                 ? findCreateDocumentArtifactForMessage(messages, index)
                 : null
             }
+            {...localFilesUndoPropsFor(undo, message)}
             message={message}
             threadRef={messageActionsThreadRef(message, threadRef)}
           >
@@ -606,8 +656,8 @@ export const ChatThreadMessages = ({
           )?.message;
           const active = generationActive && turnIndex === turns.length - 1;
           const status =
-            active && !waitingForComputer ? (
-              <ActiveTurnStatus assistant={assistant} />
+            active && computerWait === null ? (
+              <ActiveTurnStatus assistant={assistant} sentAt={turnSentAt} />
             ) : null;
           if (turn.type === "orphan") {
             return (
@@ -650,7 +700,9 @@ export const ChatThreadMessages = ({
             onSendWithoutAnonymization={onSendWithoutAnonymization}
           />
         )}
-        {generationActive && waitingForComputer && <ComputerWaitingIndicator />}
+        {generationActive && computerWait !== null && (
+          <ComputerWaitIndicator wait={computerWait} />
+        )}
         {queuedMessageActions &&
           queuedMessages !== undefined &&
           queuedMessages.length > 0 && (
@@ -1188,22 +1240,69 @@ const MessageRenderFallback = ({ message }: { message: ChatUIMessage }) => {
   );
 };
 
-/** The turn's computer went away mid-turn; the turn goes on once it is back. */
-const ComputerWaitingIndicator = () => {
+/**
+ * The turn waits on its computer: for it to pick the run up, with the time
+ * since the turn was sent, or to come back after it went away mid-turn.
+ */
+const ComputerWaitIndicator = ({
+  wait,
+}: {
+  wait: ChatLocalRunComputerWait;
+}) => {
   const t = useTranslations();
 
   return (
     <Message from="assistant">
       <MessageContent>
-        <div
-          className="text-muted-foreground flex items-center gap-2 text-xs"
-          role="status"
-        >
-          <StatusMark status="pending" />
-          <span>{t("chat.localRun.waitingForComputer")}</span>
+        <div className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums">
+          {/* Only the wait is announced: the count would be read out every
+              second, so it is shown but hidden from assistive technology,
+              which reads when the turn was sent instead. */}
+          <span className="flex items-center gap-2" role="status">
+            <StatusMark status="pending" />
+            {wait.status === "delivering"
+              ? t("chat.localRun.waitingForPickup")
+              : t("chat.localRun.waitingForComputer")}
+          </span>
+          {wait.status === "delivering" ? (
+            <ElapsedSince since={wait.since} />
+          ) : null}
         </div>
       </MessageContent>
     </Message>
+  );
+};
+
+/** Whole seconds since `since`, counted live, and when that was. */
+const ElapsedSince = ({ since }: { since: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const sinceMs = Temporal.Instant.from(since).epochMilliseconds;
+  const [nowMs, setNowMs] = useState(
+    () => Temporal.Now.instant().epochMilliseconds,
+  );
+  useExternalSyncEffect(() => {
+    const interval = setInterval(
+      () => setNowMs(Temporal.Now.instant().epochMilliseconds),
+      1000,
+    );
+    return () => clearInterval(interval);
+  }, [sinceMs]);
+  return (
+    <>
+      <span aria-hidden="true">
+        {format.number(Math.max(0, Math.floor((nowMs - sinceMs) / 1000)), {
+          style: "unit",
+          unit: "second",
+          unitDisplay: "narrow",
+        })}
+      </span>
+      <span className="sr-only">
+        {t("chat.localRun.waitingSentAt", {
+          time: format.dateTime(new Date(sinceMs), { timeStyle: "medium" }),
+        })}
+      </span>
+    </>
   );
 };
 
@@ -1393,7 +1492,7 @@ const AssistantMessageActions = ({
         </span>
       )}
       {text && (
-        <CopyActionButton
+        <CopyControl
           className="text-muted-foreground h-6 px-1.5"
           size="xs"
           text={text}
@@ -1506,9 +1605,18 @@ type ChatThreadMessagesProps = {
       { entityId: string }
     >,
   ) => Promise<void> | void;
-  /** The turn runs on the member's computer, which is away until it
-   *  reconnects; the turn shows the wait in place of its live status. */
-  waitingForComputer?: boolean | undefined;
+  /** The turn runs on the member's computer and waits on it (to pick the
+   *  run up, or to come back); the turn shows the wait in place of its live
+   *  status. */
+  computerWait?: ChatLocalRunComputerWait | null | undefined;
+  /** When this page sent the running turn's message (`performance.now()`);
+   *  its live status counts from it. `null` for a turn the page joined. */
+  turnSentAt?: number | null | undefined;
+  /**
+   * The newest turn of a chat that runs on the member's computer: the
+   * message that answered it offers to undo its file changes.
+   */
+  newestLocalTurn?: NewestLocalTurn | null | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**
@@ -2505,14 +2613,11 @@ const AssistantThinkingHeader = ({
   return (
     <>
       <StatusMark status="done" />
-      <span
-        className={cn(
-          "min-w-0 truncate",
-          isStreaming && CHAT_PENDING_TEXT_CLASS,
-        )}
+      <TruncatedText
+        render={<span className={cn(isStreaming && CHAT_PENDING_TEXT_CLASS)} />}
       >
         {t("chat.reasoning")}
-      </span>
+      </TruncatedText>
       {reasoningTokenCount !== null && (
         <ReasoningTokenCount count={reasoningTokenCount} />
       )}

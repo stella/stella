@@ -18,6 +18,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -367,7 +368,7 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded-sm px-2 py-1 text-sm">
+        <TruncatedText className="hover:bg-muted rounded-sm px-2 py-1 text-sm">
           {isEmpty ? (
             <span className="text-muted-foreground">—</span>
           ) : (
@@ -377,7 +378,7 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
               variant={displayVariant}
             />
           )}
-        </span>
+        </TruncatedText>
       </Button>
     );
   }
@@ -461,13 +462,13 @@ const InlineDateEditor = ({
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded-sm px-2 py-1 text-sm">
+        <TruncatedText className="hover:bg-muted rounded-sm px-2 py-1 text-sm">
           <FieldValue
             content={{ type: "date", version: 1, value }}
             property={property}
             variant={displayVariant}
           />
-        </span>
+        </TruncatedText>
       </Button>
     );
   }
@@ -557,7 +558,7 @@ const InlineTextEditor = ({
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded-sm px-2 py-1 text-sm">
+        <TruncatedText className="hover:bg-muted rounded-sm px-2 py-1 text-sm">
           {value ? (
             <FieldValue
               content={{ type: "text", version: 1, value }}
@@ -567,7 +568,7 @@ const InlineTextEditor = ({
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
-        </span>
+        </TruncatedText>
       </Button>
     );
   }
@@ -854,12 +855,13 @@ const TableFileField = ({
           />
           {/* The name, not the icon, sets the chip's baseline, so a wrapped
             row lines the name up with its neighbours' first lines. */}
-          <BidiText
-            as="span"
-            className="min-w-0 self-baseline truncate text-start"
+          <TruncatedText
+            className="self-baseline text-start"
+            hint={false}
+            render={<BidiText as="span" />}
           >
             <HighlightedText columnId={propertyId} text={content.fileName} />
-          </BidiText>
+          </TruncatedText>
         </span>
       </Tooltip>
     );
@@ -878,9 +880,13 @@ const TableFileField = ({
         mimeType={content.mimeType}
         thumbnail={thumbnail}
       />
-      <BidiText as="span" className="min-w-0 self-baseline truncate text-start">
+      <TruncatedText
+        className="self-baseline text-start"
+        hint={false}
+        render={<BidiText as="span" />}
+      >
         <HighlightedText columnId={propertyId} text={content.fileName} />
-      </BidiText>
+      </TruncatedText>
     </Tooltip>
   );
 };

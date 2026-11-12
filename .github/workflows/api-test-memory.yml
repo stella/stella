@@ -63,6 +63,9 @@ jobs:
       - name: Generate sources
         run: bun run generate
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Measure every test in this shard
         run: |
           bun --filter @stll/api test -- \

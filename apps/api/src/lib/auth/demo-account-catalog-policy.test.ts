@@ -48,12 +48,14 @@ const RESOURCE_WRITE_ACCOUNT_ACCESS = {
   rate: ACCOUNT_ACCESS.sandbox,
   chat: ACCOUNT_ACCESS.sandbox,
   auditLog: ACCOUNT_ACCESS.sandbox,
+  dataExport: ACCOUNT_ACCESS.standard,
   agentSkill: ACCOUNT_ACCESS.sandbox,
   firmMemory: ACCOUNT_ACCESS.sandbox,
   caseLawResearch: ACCOUNT_ACCESS.sandbox,
   legalReaderAnnotation: ACCOUNT_ACCESS.sandbox,
   savedSearch: ACCOUNT_ACCESS.sandbox,
   searchHistory: ACCOUNT_ACCESS.sandbox,
+  conflictCheck: ACCOUNT_ACCESS.sandbox,
 } as const satisfies Record<keyof typeof statements, AccountAccess>;
 
 const requiresStandardResourceWrite = (permissions: Record<string, string[]>) =>
@@ -86,6 +88,8 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/chat/export/create.ts",
   "apps/api/src/handlers/clauses/export.ts",
   "apps/api/src/handlers/contacts/export.ts",
+  "apps/api/src/handlers/data-exports/create.ts",
+  "apps/api/src/handlers/data-exports/download.ts",
   "apps/api/src/handlers/dictation/transcribe.ts",
   "apps/api/src/handlers/document-reviews/export-run.ts",
   "apps/api/src/handlers/document-types/create.ts",

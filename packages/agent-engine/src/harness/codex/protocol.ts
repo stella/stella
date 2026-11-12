@@ -77,12 +77,14 @@ export const SkillsListResponseSchema = v.object({
   ),
 });
 
-const TurnStatusSchema = v.picklist([
+export const CODEX_TURN_STATUSES = [
   "completed",
   "interrupted",
   "failed",
   "inProgress",
-]);
+] as const;
+
+const TurnStatusSchema = v.picklist(CODEX_TURN_STATUSES);
 
 const TurnErrorSchema = v.object({
   message: v.string(),
@@ -250,6 +252,12 @@ export const CODEX_NOTIFICATIONS = {
       modelContextWindow: v.nullish(v.number()),
     }),
   }),
+  /** The harness's working plan changed; only step titles are shown. */
+  "turn/plan/updated": v.object({
+    threadId: v.string(),
+    turnId: v.string(),
+    plan: v.array(v.object({ step: v.string() })),
+  }),
   "serverRequest/resolved": v.object({
     threadId: v.string(),
     requestId: RequestId,
@@ -267,6 +275,10 @@ export const CODEX_NOTIFICATIONS = {
   }),
 } as const;
 export type CodexNotificationMethod = keyof typeof CODEX_NOTIFICATIONS;
+
+export type CodexPlanUpdate = v.InferOutput<
+  (typeof CODEX_NOTIFICATIONS)["turn/plan/updated"]
+>;
 
 export type CodexRateLimits = v.InferOutput<
   (typeof CODEX_NOTIFICATIONS)["account/rateLimits/updated"]
@@ -352,6 +364,29 @@ export const isCodexServerRequestMethod = (
   method: string,
 ): method is CodexServerRequestMethod =>
   Object.hasOwn(CODEX_SERVER_REQUESTS, method);
+
+/** The requests Stella sends the server. */
+export type CodexClientRequestMethod =
+  | "initialize"
+  | "account/read"
+  | "model/list"
+  | "skills/extraRoots/set"
+  | "skills/list"
+  | "thread/start"
+  | "thread/resume"
+  | "thread/unarchive"
+  | "turn/start"
+  | "turn/steer"
+  | "turn/interrupt";
+
+/** The notifications Stella sends the server. */
+export type CodexClientNotificationMethod = "initialized";
+
+/**
+ * How `initialize` introduces Stella, unless a credential was registered
+ * under another client name.
+ */
+export const CODEX_CLIENT_INFO = { name: "stella", title: "stella" } as const;
 
 /** JSON-RPC "method not found". */
 export const METHOD_NOT_FOUND = -32_601;

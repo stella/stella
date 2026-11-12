@@ -36,25 +36,29 @@ import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/a
 import { resolveListVerificationAccess } from "@/api/lib/lists/verification/access-context";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
 import type { ExtractedClaim } from "@/api/lib/lists/verification/claim-extract";
+import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
 import {
-  gradeClaims,
   gradedClaimType,
-} from "@/api/lib/lists/verification/claim-grade";
-import type { ClaimGrade } from "@/api/lib/lists/verification/claim-grade";
-import {
   VERIFICATION_LIMITS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
 } from "@/api/lib/lists/verification/contract";
 import type {
+  ClaimGrade,
   VerificationEvidence,
   VerificationRunErrorCode,
+  VerificationScope,
 } from "@/api/lib/lists/verification/contract";
 import { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
+import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import {
   ListVerificationAccessRevokedError,
   VERIFICATION_MODEL_TASK,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
+import {
+  passageContext,
+  scopePassages,
+} from "@/api/lib/lists/verification/paragraph-scope";
 import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
 import {
   checkVerificationDispatchBudget,
@@ -416,6 +420,7 @@ type ClaimedRun = {
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
   contentSha256: string;
+  scope: VerificationScope;
 };
 
 /** Conditional `queued -> running`: the loser of a double delivery updates
@@ -447,6 +452,7 @@ const claimRun = async ({
       fileFieldId: legalListVerificationRuns.fileFieldId,
       entityVersionId: legalListVerificationRuns.entityVersionId,
       contentSha256: legalListVerificationRuns.contentSha256,
+      scope: legalListVerificationRuns.scope,
     });
   return rows.at(0) ?? null;
 };
@@ -574,6 +580,7 @@ const claimRows = (
         score: null,
         refs: [],
         recordConflict: null,
+        qualifiers: [],
       };
     }
     const grade =
@@ -585,6 +592,7 @@ const claimRows = (
       score: grade.score,
       refs: grade.refs,
       recordConflict: grade.recordConflict,
+      qualifiers: grade.qualifiers,
     };
   });
 
@@ -606,6 +614,21 @@ const resolveRunningActorAccess = async (
         grants,
       }),
   );
+
+/** The text a run reads, or null when it may read none: more blocks than
+ *  a run stores, or a stored range that no longer lands in the document (a
+ *  range never widens to the whole document). Only the blocks the range
+ *  reads are stored, so a range of a long document fits. */
+const runPassages = (
+  blocks: readonly VerificationBlock[],
+  scope: VerificationScope,
+) => {
+  const passages = scopePassages(blocks, scope);
+  return passages === null ||
+    passages.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX
+    ? null
+    : passages;
+};
 
 /** Trusted process-local I/O boundaries; never sourced from queued data. */
 type VerificationExecutionBoundaries = {
@@ -653,7 +676,8 @@ const executeRun = async ({
   if (document.type === "no-text") {
     return "no_text";
   }
-  if (document.blocks.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX) {
+  const passages = runPassages(document.blocks, run.scope);
+  if (passages === null || passages.length === 0) {
     return "extraction_failed";
   }
 
@@ -747,7 +771,7 @@ const executeRun = async ({
     abortSignal,
   };
 
-  const extracted = await extractClaims({ blocks: document.blocks, deps });
+  const extracted = await extractClaims({ passages, deps });
   if (Result.isError(extracted)) {
     if (extracted.error.cause instanceof ListVerificationRunCapError) {
       return "run_limit_reached";
@@ -764,14 +788,13 @@ const executeRun = async ({
             {
               key: String(position),
               text: claim.text,
-              context: {
-                text:
-                  document.blocks.at(claim.blockIndex)?.text ??
-                  panic(
-                    "An extracted claim names a block outside the document",
-                  ),
-                anchor: claim.anchor,
-              },
+              context: passageContext(
+                passages.at(claim.blockIndex) ??
+                  panic("An extracted claim names a block outside the run"),
+                claim.anchor,
+              ),
+              // A new run's claims have no reviewer yet.
+              linkedFactIds: [],
             },
           ]
         : [],
@@ -821,7 +844,7 @@ const executeRun = async ({
       tx,
       runId: actor.runId,
       workspaceId: actor.workspaceId,
-      blocks: document.blocks,
+      blocks: passages.map((passage) => passage.block),
       claims: rows,
     });
   });

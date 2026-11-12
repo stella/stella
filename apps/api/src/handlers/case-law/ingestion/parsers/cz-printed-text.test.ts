@@ -340,7 +340,7 @@ describe("structure", () => {
     ).toEqual(["ROZSUDEK"]);
     expect(
       ast.blocks.find((block) => block.plainText === "JMÉNEM REPUBLIKY"),
-    ).toMatchObject({ type: "paragraph", role: "intro" });
+    ).toMatchObject({ type: "paragraph", role: "opening-formula" });
   });
 
   test("Nejvyšší soud: a caption below the court's name is split into docket and title", async () => {
@@ -353,11 +353,13 @@ describe("structure", () => {
           : [],
       ),
     ).toEqual(["25 Cdo 803/2003", "ROZSUDEK"]);
-    // The state and the formula beside the title are the opening's lines,
+    // The state and the formula beside the title are the opening formula,
     // and the bench recital introduces the ruling after them.
-    expect(rolesOf(ast, "intro")).toEqual([
+    expect(rolesOf(ast, "opening-formula")).toEqual([
       "ČESKÁ REPUBLIKA",
       "JMÉNEM REPUBLIKY",
+    ]);
+    expect(rolesOf(ast, "intro")).toEqual([
       expect.stringMatching(/^Nejvyšší soud .* takto:$/u),
     ]);
   });

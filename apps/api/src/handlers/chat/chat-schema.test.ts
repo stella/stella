@@ -21,6 +21,7 @@ import {
   isServerChatToolCall,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
+import type { AskUserAnswer } from "@stll/api-contract/chat-ask-user";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import { assertProperty } from "@stll/property-testing";
 
@@ -1641,6 +1642,126 @@ describe("validateMessage", () => {
     );
   });
 
+  describe("ask-user answers", () => {
+    const input = {
+      analysis: "The builder needs its sources.",
+      questions: [
+        {
+          question: "Which documents should I read?",
+          reason: "Only picked documents are read.",
+          options: ["Lease A (Matter 1)", "Lease B (Matter 2)", "NDA C"],
+          selection: "multiple",
+        },
+        {
+          question: "Which side are you on?",
+          reason: "Sets the tiers.",
+          options: ["Landlord", "Tenant"],
+        },
+      ],
+    } as const;
+    const validateAnswers = (
+      answers: AskUserAnswer[],
+      callInput: unknown = input,
+    ) =>
+      validateToolCallParts({
+        message: {
+          id: chatMessageId("msg_ask_user_answers"),
+          role: "assistant",
+          parts: [
+            {
+              arguments: JSON.stringify(callInput),
+              id: "ask-user-answers",
+              input: callInput,
+              name: "ask-user",
+              output: { answers },
+              state: "complete",
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+              type: "tool-call",
+            },
+          ],
+        },
+        tools: registeredAskUserTools,
+      });
+    const side = { question: "Which side are you on?", answer: "Tenant" };
+    const documents = (selected: string[]) => ({
+      question: "Which documents should I read?",
+      selected,
+    });
+
+    test("accepts ticked options and answers stored before selections existed", () => {
+      expect(
+        Result.isOk(
+          validateAnswers([documents(["NDA C", "Lease A (Matter 1)"]), side]),
+        ),
+      ).toBe(true);
+      // Stored threads hold one string per question, blank when skipped.
+      expect(
+        Result.isOk(
+          validateAnswers([
+            { question: "Which documents should I read?", answer: "" },
+            side,
+          ]),
+        ),
+      ).toBe(true);
+    });
+
+    const refusal = (answers: AskUserAnswer[], callInput: unknown = input) => {
+      const result = validateAnswers(answers, callInput);
+      return Result.isError(result) ? result.error.message : null;
+    };
+
+    test("refuses answers that are not one per question, in order", () => {
+      expect(refusal([])).toBe(
+        "Invalid answers for ask-user: Expected 2 answers, got 0.",
+      );
+      expect(
+        refusal([
+          documents(["NDA C"]),
+          side,
+          { question: "Anything else?", answer: "No" },
+        ]),
+      ).toBe("Invalid answers for ask-user: Expected 2 answers, got 3.");
+      expect(refusal([side, documents(["NDA C"])])).toBe(
+        "Invalid answers for ask-user: Answer 1 is for a different question.",
+      );
+    });
+
+    test("refuses a question that offers the same option twice", () => {
+      const [documentsQuestion, sideQuestion] = input.questions;
+      expect(
+        refusal([documents(["NDA C"]), side], {
+          ...input,
+          questions: [
+            { ...documentsQuestion, options: ["NDA C", "NDA C"] },
+            sideQuestion,
+          ],
+        }),
+      ).toBe("Invalid chat tool input for ask-user");
+    });
+
+    test("refuses a selection that is not exactly the question's options", () => {
+      expect(
+        refusal([documents(["Lease A (Matter 1)", "Lease D"]), side]),
+      ).toBe(
+        "Invalid answers for ask-user: Question 1 was answered with a value that is not one of its options.",
+      );
+      expect(refusal([documents(["NDA C", "NDA C"]), side])).toBe(
+        "Invalid answers for ask-user: Question 1 was answered with the same option twice.",
+      );
+      expect(
+        refusal([
+          documents(["NDA C"]),
+          { question: "Which side are you on?", selected: ["Tenant"] },
+        ]),
+      ).toBe(
+        "Invalid answers for ask-user: Question 2 takes one answer, not a selection.",
+      );
+      expect(refusal([documents([]), side])).toBe(
+        "Invalid chat tool output for ask-user",
+      );
+    });
+  });
+
   test("accepts TanStack text parts at the live boundary", async () => {
     const result = await validateMessage({
       message: {
@@ -2905,7 +3026,14 @@ describe("validateMessage", () => {
         parts: [
           {
             ...canonicalCall,
-            output: { answers: ["Municipal Court in Prague"] },
+            output: {
+              answers: [
+                {
+                  question: "Which court?",
+                  answer: "Municipal Court in Prague",
+                },
+              ],
+            },
             state: "complete",
           },
         ],
@@ -2916,7 +3044,7 @@ describe("validateMessage", () => {
       },
       safeDb: noDbReads,
       threadId: chatThreadId("thread_ask_user_completion"),
-      tools: askUserTools,
+      tools: registeredAskUserTools,
       userId: userId("user_ask_user_completion"),
     });
 

@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract/desktop-runner";
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
+import type { ProtocolLog } from "../../protocol-log";
 import {
   type HarnessAdapter,
   type HarnessAuth,
@@ -96,6 +97,8 @@ export type ClaudeCodeHarnessAdapterOptions = {
   requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /** Where the CLI's protocol lines go, redacted. */
+  protocolLog: ProtocolLog;
   /** The platform the CLI runs on, which decides whether it can sandbox. */
   platform: NodeJS.Platform;
 };
@@ -193,7 +196,9 @@ const PERMISSION_MODE = {
 } as const satisfies Record<HarnessRunPolicy["approvals"], string>;
 /**
  * The CLI's network is open. Outside full auto its sandbox is off; in full
- * auto the sandbox's proxy asks about each new host and the turn allows it.
+ * auto the sandbox's proxy asks about each new host, and the turn lets
+ * through only the hosts the run's skills declare (`networkHosts`) and asks
+ * the member about any other.
  */
 const NETWORK_ARGS = {
   open: [],
@@ -395,6 +400,7 @@ const connect = async ({
   };
   const started = startClaudeCli({
     launch: options.launch,
+    protocolLog: options.protocolLog,
     args,
     detached: createDetached(options.onBackgroundError),
     deadlines: {
@@ -646,7 +652,10 @@ const openSession = async (
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
     stellaServer: input.mcp.serverName,
-    allowSandboxNetwork: input.policy.approvals === "full_auto",
+    // Outside full auto the sandbox is off and every command is asked about.
+    sandboxNetworkHosts: new Set(
+      input.policy.approvals === "full_auto" ? input.networkHosts : [],
+    ),
   });
   const connected = await connect({
     options,

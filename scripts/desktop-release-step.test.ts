@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { DESKTOP_WINDOWS_DRY_RUN_INPUTS } from "./ci-plan-scope";
 import {
   configureWindowsSigning,
@@ -159,7 +160,7 @@ test("release script steps follow source checkout and Bun setup", () => {
       const inputs = record(step["with"]) ? step["with"] : undefined;
       if (
         typeof uses === "string" &&
-        uses.startsWith("actions/checkout@") &&
+        isRepositoryCheckoutAction(uses) &&
         inputs?.["path"] === undefined
       ) {
         sourceCheckout = true;

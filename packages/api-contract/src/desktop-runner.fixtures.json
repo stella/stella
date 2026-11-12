@@ -1,7 +1,7 @@
 {
   "vocabulary": {
     "protocol": {
-      "current": 1,
+      "current": 2,
       "minimum": 1
     },
     "maxFrameBytes": 4194304,
@@ -12,20 +12,62 @@
     "path": "/v1/desktop/runner",
     "desktopIdHeader": "stella-desktop-id",
     "close": {
-      "goingAway": { "code": 1001, "reason": "going_away" },
-      "unsupportedData": { "code": 1003, "reason": "binary_frame" },
-      "tooLarge": { "code": 1009, "reason": "too_large" },
-      "internalError": { "code": 1011, "reason": "internal_error" },
-      "overloaded": { "code": 1013, "reason": "overloaded" },
-      "upgradeRequired": { "code": 4001, "reason": "upgrade_required" },
-      "superseded": { "code": 4002, "reason": "superseded" },
-      "heartbeatTimeout": { "code": 4003, "reason": "heartbeat_timeout" },
-      "sequenceGap": { "code": 4004, "reason": "sequence_gap" },
-      "helloTimeout": { "code": 4005, "reason": "hello_timeout" },
-      "unknownRun": { "code": 4006, "reason": "unknown_run" },
-      "tooManyRunners": { "code": 4007, "reason": "too_many_runners" },
-      "credentialRevoked": { "code": 4008, "reason": "credential_revoked" },
-      "featureDisabled": { "code": 4009, "reason": "feature_disabled" }
+      "goingAway": {
+        "code": 1001,
+        "reason": "going_away"
+      },
+      "unsupportedData": {
+        "code": 1003,
+        "reason": "binary_frame"
+      },
+      "tooLarge": {
+        "code": 1009,
+        "reason": "too_large"
+      },
+      "internalError": {
+        "code": 1011,
+        "reason": "internal_error"
+      },
+      "overloaded": {
+        "code": 1013,
+        "reason": "overloaded"
+      },
+      "upgradeRequired": {
+        "code": 4001,
+        "reason": "upgrade_required"
+      },
+      "superseded": {
+        "code": 4002,
+        "reason": "superseded"
+      },
+      "heartbeatTimeout": {
+        "code": 4003,
+        "reason": "heartbeat_timeout"
+      },
+      "sequenceGap": {
+        "code": 4004,
+        "reason": "sequence_gap"
+      },
+      "helloTimeout": {
+        "code": 4005,
+        "reason": "hello_timeout"
+      },
+      "unknownRun": {
+        "code": 4006,
+        "reason": "unknown_run"
+      },
+      "tooManyRunners": {
+        "code": 4007,
+        "reason": "too_many_runners"
+      },
+      "credentialRevoked": {
+        "code": 4008,
+        "reason": "credential_revoked"
+      },
+      "featureDisabled": {
+        "code": 4009,
+        "reason": "feature_disabled"
+      }
     },
     "policyViolationCode": 1008,
     "policyReasons": [
@@ -80,7 +122,8 @@
       "policy_unsupported",
       "at_capacity",
       "run_too_large",
-      "unknown_run"
+      "unknown_run",
+      "folder_busy"
     ],
     "approvalKinds": ["command", "file_change", "mcp_tool", "tool"],
     "approvalDecisions": ["approve", "approve_for_session", "deny"],
@@ -102,7 +145,8 @@
       "run.rejected",
       "run.event",
       "run.approval_request",
-      "run.finished"
+      "run.finished",
+      "folder.restored"
     ],
     "serverMessageTypes": [
       "welcome",
@@ -115,20 +159,28 @@
       "run.interrupt",
       "run.cancel",
       "run.token",
-      "ack"
+      "ack",
+      "folder.restore"
     ],
     "answerLimits": {
       "maxQuestions": 32,
       "maxAnswersPerQuestion": 64,
       "maxAnswerLength": 16384,
       "maxQuestionIdLength": 256
-    }
+    },
+    "folderRestoreOutcomes": [
+      "restored",
+      "no_checkpoint",
+      "not_newest",
+      "folder_busy",
+      "failed"
+    ]
   },
   "valid": {
     "desktop": [
       {
         "type": "hello",
-        "protocol": 1,
+        "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.60",
         "harnesses": [
@@ -180,7 +232,7 @@
       },
       {
         "type": "hello",
-        "protocol": 1,
+        "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.61-beta.1",
         "harnesses": [
@@ -203,7 +255,7 @@
       },
       {
         "type": "hello",
-        "protocol": 1,
+        "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.60",
         "harnesses": [],
@@ -257,6 +309,11 @@
         "type": "run.rejected",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "reason": "harness_not_installed"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_busy"
       },
       {
         "type": "run.rejected",
@@ -416,12 +473,37 @@
         "seq": 25,
         "outcome": "needs_login",
         "harnessSessionId": null
+      },
+      {
+        "type": "folder.restored",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "outcome": "restored"
+      },
+      {
+        "type": "folder.restored",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "outcome": "no_checkpoint"
+      },
+      {
+        "type": "folder.restored",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "outcome": "not_newest"
+      },
+      {
+        "type": "folder.restored",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "outcome": "folder_busy"
+      },
+      {
+        "type": "folder.restored",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "outcome": "failed"
       }
     ],
     "server": [
       {
         "type": "welcome",
-        "protocol": 1,
+        "protocol": 2,
         "resume": [
           {
             "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
@@ -435,7 +517,7 @@
       },
       {
         "type": "welcome",
-        "protocol": 1,
+        "protocol": 2,
         "resume": []
       },
       {
@@ -587,6 +669,12 @@
         "type": "ack",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "seq": 12
+      },
+      {
+        "type": "folder.restore",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
       }
     ]
   },
@@ -596,7 +684,7 @@
       "direction": "desktop",
       "input": {
         "type": "hello",
-        "protocol": 1,
+        "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.60",
         "harnesses": [
@@ -633,7 +721,7 @@
       },
       "parsed": {
         "type": "hello",
-        "protocol": 1,
+        "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.60",
         "harnesses": [
@@ -926,7 +1014,7 @@
         "reason": "invalid",
         "message": {
           "type": "hello",
-          "protocol": 1,
+          "protocol": 2,
           "appVersion": "0.9.60",
           "sidecarVersion": "0.9.61-beta.1",
           "harnesses": [
@@ -991,6 +1079,23 @@
             ]
           }
         }
+      },
+      {
+        "name": "unknown restore outcome",
+        "reason": "invalid",
+        "message": {
+          "type": "folder.restored",
+          "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+          "outcome": "partly"
+        }
+      },
+      {
+        "name": "restore answer without its id",
+        "reason": "invalid",
+        "message": {
+          "type": "folder.restored",
+          "outcome": "restored"
+        }
       }
     ],
     "server": [
@@ -1037,7 +1142,9 @@
           "type": "run.answer",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
-          "answers": { "": ["Formal"] }
+          "answers": {
+            "": ["Formal"]
+          }
         }
       },
       {
@@ -1046,7 +1153,9 @@
           "type": "run.answer",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
-          "answers": { "tone": "Formal" }
+          "answers": {
+            "tone": "Formal"
+          }
         }
       },
       {
@@ -1055,7 +1164,9 @@
           "type": "run.answer",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
-          "answers": { "tone": [true] }
+          "answers": {
+            "tone": [true]
+          }
         }
       },
       {
@@ -1264,7 +1375,7 @@
         "name": "welcome without resume positions",
         "message": {
           "type": "welcome",
-          "protocol": 1
+          "protocol": 2
         }
       },
       {
@@ -1380,6 +1491,15 @@
             "token": "run-token-1",
             "expiresAt": "2026-10-28T09:15:00.000Z"
           }
+        }
+      },
+      {
+        "name": "restore of a folder that is not a UUID",
+        "message": {
+          "type": "folder.restore",
+          "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+          "folderId": "../outside",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
         }
       }
     ]

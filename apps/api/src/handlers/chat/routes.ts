@@ -1,3 +1,6 @@
+import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
+import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
+import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import createMessageExport from "@/api/handlers/chat/export/create";
 import forkThread from "@/api/handlers/chat/fork/create";
@@ -30,6 +33,8 @@ import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import tableChart from "@/api/handlers/chat/table-chart";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
+import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
+import updateChatThreadReadState from "@/api/handlers/chat/threads/read-state/update";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
 import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
@@ -37,6 +42,10 @@ import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
+import {
+  readLocalFilesUndo,
+  undoLocalFiles,
+} from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import steerTurn from "@/api/handlers/chat/turns/steer";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
@@ -53,6 +62,11 @@ export const chatRoute = routes(
     "/tool-grants": { GET: listChatToolGrants, POST: createChatToolGrant },
     "/tool-grants/coverage": { GET: readChatToolGrantCoverage },
     "/tool-grants/:grantId": { DELETE: deleteChatToolGrant },
+    "/browser-site-grants": {
+      GET: listBrowserSiteGrants,
+      POST: createBrowserSiteGrant,
+    },
+    "/browser-site-grants/:grantId": { DELETE: deleteBrowserSiteGrant },
     "/workspaces/:workspaceId/file-thread": {
       POST: resolveFileThread,
       GET: readFileThread,
@@ -69,6 +83,8 @@ export const chatRoute = routes(
     "/improve-prompt": { POST: improvePrompt },
     "/threads/:threadId": { DELETE: deleteThread, PATCH: updateThread },
     "/threads/:threadId/model": { PATCH: updateThreadModel },
+    "/threads/:threadId/read-state": { PATCH: updateChatThreadReadState },
+    "/threads/:threadId/pin-state": { PATCH: updateChatThreadPinState },
     "/threads/:threadId/title": { PATCH: renameThread, GET: getThreadTitle },
     "/threads/:threadId/title/suggest": { POST: suggestThreadTitle },
     "/threads/:threadId/messages": { GET: getMessages },
@@ -90,6 +106,10 @@ export const chatRoute = routes(
     "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
     "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
     "/threads/:threadId/turns/:turnId/steer": { POST: steerTurn },
+    "/threads/:threadId/turns/:turnId/local-files/undo": {
+      GET: readLocalFilesUndo,
+      POST: undoLocalFiles,
+    },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },
   },
