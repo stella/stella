@@ -257,7 +257,11 @@ impl Shared {
   /// The kept report takes the probe's freshly read `credentials` all the
   /// same: a sign-in changes them (a ChatGPT profile's key changes on every
   /// sign-in), and a run starts with the cached ones.
-  fn keep_ready_once(&self, harness: Harness, credentials: Option<&HarnessCredentials>) -> bool {
+  fn keep_ready_once(
+    &self,
+    harness: Harness,
+    credentials: Option<&HarnessCredentials>,
+  ) -> bool {
     locked(&self.cache)
       .iter_mut()
       .find(|(id, _)| *id == harness)
