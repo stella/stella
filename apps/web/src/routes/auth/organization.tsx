@@ -127,19 +127,22 @@ export const Route = createFileRoute("/auth/organization")({
     const continuation = isOauthPostLogin
       ? null
       : getOauthContinuationHref(search.redirectTo);
-    if (continuation !== null) {
-      throw redirect({ href: continuation, replace: true });
-    }
 
     const isDevQuickStart =
       import.meta.env.DEV && search.devQuickStart === true;
-    if (
+    const skipsPicking =
       !isDevQuickStart &&
       !isOauthPostLogin &&
-      (context.session.activeOrganizationId ||
-        isAcceptInvitationRedirect(search.redirectTo ?? "/"))
-    ) {
-      throw redirect(destinationNavigation(search.redirectTo ?? "/"));
+      Boolean(
+        context.session.activeOrganizationId ||
+        isAcceptInvitationRedirect(search.redirectTo ?? "/"),
+      );
+    if (continuation !== null || skipsPicking) {
+      throw redirect(
+        continuation === null
+          ? destinationNavigation(search.redirectTo ?? "/")
+          : { href: continuation, replace: true },
+      );
     }
 
     return { userId: context.session.userId };
