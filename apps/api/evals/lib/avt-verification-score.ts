@@ -33,7 +33,7 @@ export type ClaimOutcome = {
 
 const SCORED: readonly ClaimState[] = ["supported", "tension", "contradicted"];
 
-export const verdictCorrect = (outcome: ClaimOutcome): boolean =>
+const verdictCorrect = (outcome: ClaimOutcome): boolean =>
   outcome.predicted !== null &&
   (outcome.predicted.state === outcome.label.verdict ||
     outcome.label.accepted.includes(outcome.predicted.state));
@@ -45,7 +45,7 @@ const leanedOn = (predicted: PredictedGrade): string[] =>
 type Rate = { hits: number; of: number };
 const rate = (hits: number, of: number): Rate => ({ hits, of });
 
-export type VerdictRates = {
+type VerdictRates = {
   /** Of the claims labelled with this verdict, how many were answered right. */
   recall: Rate;
   /** Of the answers giving this verdict, how many the label accepts. */

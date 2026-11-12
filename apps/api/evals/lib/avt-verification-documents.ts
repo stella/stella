@@ -28,7 +28,7 @@ import type { LabelledCase, LabelledClaim } from "./avt-verification-set";
 
 /** Where a labelled claim sits: the passage it is in and its offsets in the
  *  passage's whole block, the coordinates extraction anchors in. */
-export type LocatedClaim = {
+type LocatedClaim = {
   claim: LabelledClaim;
   passageIndex: number;
   start: number;

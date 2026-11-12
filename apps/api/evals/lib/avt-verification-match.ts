@@ -11,7 +11,7 @@
 export type PassageSpan = { passageIndex: number; start: number; end: number };
 
 /** At least this share of the shorter span must lie inside the other. */
-export const SPAN_OVERLAP_MIN = 0.5;
+const SPAN_OVERLAP_MIN = 0.5;
 
 const overlap = (a: PassageSpan, b: PassageSpan): number =>
   a.passageIndex === b.passageIndex

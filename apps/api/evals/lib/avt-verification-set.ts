@@ -21,7 +21,7 @@ import { CLAIM_STATES } from "@/api/lib/lists/verification/contract";
 import { CLAIM_QUALIFIERS } from "@/api/lib/lists/verification/qualifiers";
 
 /** What a labelled claim exercises; the report breaks accuracy down by it. */
-export const CLAIM_TAGS = [
+const CLAIM_TAGS = [
   /** Several checkable points in one claim. */
   "compound",
   /** The verdict turns on a date, a period or an order of events. */
@@ -66,7 +66,6 @@ const factSchema = v.strictObject({
   /** The fact's footing: what its sources are. */
   tier: v.optional(v.picklist(FACT_TIERS), "document"),
 });
-export type LabelledFact = v.InferOutput<typeof factSchema>;
 
 const claimSchema = v.strictObject({
   id: v.pipe(v.string(), v.minLength(1)),
