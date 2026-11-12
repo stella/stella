@@ -231,7 +231,7 @@ const isCa = (certificate: pkijs.Certificate) => {
     () =>
       pkijs.BasicConstraints.fromBER(
         new Uint8Array(extension.extnValue.valueBlock.valueHexView),
-      ).cA === true,
+      ).cA,
   ).unwrapOr(false);
 };
 
@@ -291,7 +291,7 @@ const { values: options } = parseArgs({
   options: { "allow-missing": { type: "string", default: "" } },
 });
 const allowedMissing = new Set(
-  (options["allow-missing"] ?? "")
+  options["allow-missing"]
     .split(",")
     .map((territory) => territory.trim())
     .filter((territory) => territory !== ""),
