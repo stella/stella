@@ -20,8 +20,16 @@ import {
  */
 
 type FakeStep =
-  /** Wait for the client's next control request of this subtype; answer it. */
-  | { expect: string; response?: unknown; error?: string }
+  /**
+   * Wait for the client's next control request of this subtype; answer it,
+   * with `respond` reading the request when the answer depends on it.
+   */
+  | {
+      expect: string;
+      response?: unknown;
+      respond?: (request: Record<string, unknown>) => unknown;
+      error?: string;
+    }
   /** Wait for the client's next user message. */
   | { expectUser: true }
   | { emit: object }
@@ -97,9 +105,18 @@ const initialize = (
   },
 });
 
+/** Every server the client registers is added. */
 const registerStella: FakeStep = {
   expect: "mcp_set_servers",
-  response: { added: [FAKE_STELLA_SERVER], removed: [], errors: {} },
+  respond: (request) => ({
+    added: Object.keys(
+      typeof request["servers"] === "object" && request["servers"] !== null
+        ? request["servers"]
+        : {},
+    ),
+    removed: [],
+    errors: {},
+  }),
 };
 
 const freshTurn = (): FakeStep[] => [
@@ -997,7 +1014,8 @@ const run = async (
             ? {
                 subtype: "success",
                 request_id: message.request_id,
-                response: step.response ?? {},
+                response:
+                  step.respond?.(message.request) ?? step.response ?? {},
               }
             : {
                 subtype: "error",

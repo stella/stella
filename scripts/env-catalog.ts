@@ -1399,6 +1399,10 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   // harness and sidecar protocol log to holder.log; unset or `off` (the
   // default) writes none. packages/agent-engine/src/sidecar/env.ts reads it.
   "STELLA_AGENT_PROTOCOL_LOG",
+  // Extension ids besides the store's that may start the harness holder's
+  // browser host (an unpacked development build has its own), separated by
+  // commas. packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_BROWSER_EXTENSION_IDS",
   "STELLA_API_KEY",
   "STELLA_DESKTOP_ALLOWED_API_BASE_URLS",
   "STELLA_DESKTOP_ALLOWED_ORIGINS",
