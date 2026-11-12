@@ -231,11 +231,10 @@ const DAY_END_RE =
 const MONTH_YEAR_START_RE = /^(?:0?[1-9]|1[0-2])\.\s?\d{4}\b/u;
 
 /**
- * The genitive month names a date spells after its day, by language, in
- * calendar order: a day number before one of them is a date
- * (`2. júla 2014`), never a point.
+ * The genitive month names a date spells after its day, by language: a day
+ * number before one of them is a date (`2. júla 2014`), never a point.
  */
-export const GENITIVE_MONTH_NAMES = {
+const MONTH_NAMES = {
   cs: [
     "ledna",
     "února",
@@ -281,7 +280,7 @@ export const GENITIVE_MONTH_NAMES = {
 } as const;
 
 const MONTH_NAME_START_RE = new RegExp(
-  `^(?:${[...new Set(Object.values(GENITIVE_MONTH_NAMES).flat())].join("|")})(?![\\p{L}])`,
+  `^(?:${[...new Set(Object.values(MONTH_NAMES).flat())].join("|")})(?![\\p{L}])`,
   "iu",
 );
 

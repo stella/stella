@@ -20,9 +20,8 @@
 
 import { panic } from "better-result";
 
-import { GENITIVE_MONTH_NAMES } from "@stll/legal-ast/printed-paragraph-labels";
 import { normalizeUnicode } from "@stll/text-normalize";
-import { parsePlainDate } from "@stll/time";
+import { parsePlainDate, Temporal } from "@stll/time";
 
 import type {
   FactDatePrecision,
@@ -53,25 +52,78 @@ const ENGLISH_MONTHS = [
   ["december", "dec"],
 ] as const;
 
+/**
+ * Other languages whose month names are read, as the platform's calendar data
+ * spells them: alone ("srpen") and inside a date, where some languages
+ * inflect them ("10. srpna"). Latin-script languages the product ships in.
+ */
+const MONTH_LOCALES = [
+  "cs",
+  "sk",
+  "pl",
+  "de",
+  "fr",
+  "es",
+  "pt",
+  "hu",
+  "et",
+  "lt",
+  "lv",
+] as const;
+
 type MonthName = { month: number; english: boolean };
 
-const MONTH_BY_NAME: ReadonlyMap<string, MonthName> = new Map<
-  string,
-  MonthName
->([
-  ...ENGLISH_MONTHS.flatMap((names, index) =>
-    names.map((name): [string, MonthName] => [
-      name,
-      { month: index + 1, english: true },
-    ]),
-  ),
-  ...Object.values(GENITIVE_MONTH_NAMES).flatMap((names) =>
-    names.map((name, index): [string, MonthName] => [
-      name,
-      { month: index + 1, english: false },
-    ]),
-  ),
-]);
+const localeMonthNames = (locale: string, month: number): string[] => {
+  const instant = Temporal.Instant.from(
+    `2021-${String(month).padStart(2, "0")}-15T12:00:00Z`,
+  ).epochMilliseconds;
+  const alone = new Intl.DateTimeFormat(locale, {
+    month: "long",
+    timeZone: "UTC",
+  }).format(instant);
+  const inDate = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  })
+    .formatToParts(instant)
+    .filter((part) => part.type === "month")
+    .map((part) => part.value);
+  return [alone, ...inDate].map((name) => name.toLocaleLowerCase(locale));
+};
+
+/** Every month name read, lower-cased. A name two languages give different
+ *  months is left out, so it is never read as either. */
+const MONTH_BY_NAME: ReadonlyMap<string, MonthName> = (() => {
+  const names = new Map<string, MonthName | null>();
+  const add = (name: string, entry: MonthName) => {
+    const known = names.get(name);
+    if (known === undefined) {
+      names.set(name, entry);
+    } else if (known !== null && known.month !== entry.month) {
+      names.set(name, null);
+    } else if (known !== null && entry.english) {
+      names.set(name, entry);
+    }
+  };
+  for (const [index, english] of ENGLISH_MONTHS.entries()) {
+    for (const name of english) {
+      add(name, { month: index + 1, english: true });
+    }
+  }
+  for (const locale of MONTH_LOCALES) {
+    for (let month = 1; month <= 12; month += 1) {
+      for (const name of localeMonthNames(locale, month)) {
+        add(name, { month, english: false });
+      }
+    }
+  }
+  return new Map(
+    [...names].flatMap(([name, entry]) =>
+      entry === null ? [] : [[name, entry] as const],
+    ),
+  );
+})();
 
 const MONTH = `((?<!\\p{L})(?:${[...MONTH_BY_NAME.keys()]
   .toSorted((a, b) => b.length - a.length)
@@ -80,7 +132,9 @@ const DAY =
   "((?<![\\p{L}\\p{N}.,])(?:0?[1-9]|[12]\\d|3[01])(?![\\p{N}])(?:st|nd|rd|th)?\\.?)";
 const YEAR = "((?<![\\p{N}])(?:1[89]|20)\\d{2}(?![\\p{N}]))";
 const TO = "\\s*(?:-|to|until|till|through|and)\\s*";
-const OF = "\\s+(?:of\\s+)?";
+const OF = "\\s+(?:(?:of|de)\\s+)?";
+// "10 de agosto de 2021": Spanish and Portuguese join the year with "de".
+const THEN_YEAR = `,?\\s+(?:de\\s+)?${YEAR}`;
 
 /** A date the words name: `year`, `month` and `day` as far as given. An
  *  `unclear` one is date-shaped but cannot be read safely. */
@@ -128,7 +182,12 @@ const date = (
   year: number | null,
   month: number | null,
   day: number | null,
-): Mention => ({ type: "date", year, month, day });
+): Mention => ({
+  type: "date",
+  year,
+  month,
+  day,
+});
 
 /** Year, month and day mentions; a month name that is not one (a verb)
  *  reads as nothing. */
@@ -160,28 +219,28 @@ const PATTERNS: readonly Pattern[] = [
     () => [{ type: "unclear" }],
   ),
   // 2-20 August 2021, between 2 and 20 August: the month covers the range.
-  pattern(`${DAY}${TO}${DAY}${OF}${MONTH},?(?:\\s+${YEAR})?`, (groups) =>
+  pattern(`${DAY}${TO}${DAY}${OF}${MONTH}(?:${THEN_YEAR})?`, (groups) =>
     named(groups[3], groups[2], null),
   ),
   // August 2-20, 2021
-  pattern(`${MONTH}\\s+${DAY}${TO}${DAY},?(?:\\s+${YEAR})?`, (groups) =>
+  pattern(`${MONTH}\\s+${DAY}${TO}${DAY}(?:${THEN_YEAR})?`, (groups) =>
     named(groups[3], groups[0], null),
   ),
   // 10 August 2021, 10th of August, 10. srpna 2021
-  pattern(`${DAY}${OF}${MONTH},?(?:\\s+${YEAR})?`, ([d, m, y]) =>
+  pattern(`${DAY}${OF}${MONTH}(?:${THEN_YEAR})?`, ([d, m, y]) =>
     named(y, m, dayOf(d)),
   ),
   // August 10, 2021
-  pattern(`${MONTH}\\s+${DAY},?(?:\\s+${YEAR})?`, ([m, d, y]) =>
+  pattern(`${MONTH}\\s+${DAY}(?:${THEN_YEAR})?`, ([m, d, y]) =>
     named(y, m, dayOf(d)),
   ),
   // July to August 2021
-  pattern(`${MONTH}${TO}${MONTH},?\\s+${YEAR}`, ([first, second, y]) => {
+  pattern(`${MONTH}${TO}${MONTH}${THEN_YEAR}`, ([first, second, y]) => {
     const months = [...named(y, first, null), ...named(y, second, null)];
     return months.length === 2 ? months : [];
   }),
   // August 2021
-  pattern(`${MONTH},?\\s+${YEAR}`, ([m, y]) => named(y, m, null)),
+  pattern(`${MONTH}${THEN_YEAR}`, ([m, y]) => named(y, m, null)),
   // 2019 to 2021, 2011-12
   pattern(
     `${YEAR}(?:${TO}(\\d{4})|-(\\d{2}))(?![\\p{N}])`,

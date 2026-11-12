@@ -8,7 +8,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { GENITIVE_MONTH_NAMES } from "@stll/legal-ast/printed-paragraph-labels";
 import { assertProperty } from "@stll/property-testing";
 
 import type { PartialDate } from "@/api/lib/lists/fact-details";
@@ -32,6 +31,85 @@ const MONTHS = [
   "November",
   "December",
 ] as const;
+
+/** Month names as written after a day, spelled out here rather than taken
+ *  from the platform the reader uses, so missing calendar data fails. */
+const IN_DATE_MONTHS = {
+  cs: [
+    "ledna",
+    "února",
+    "března",
+    "dubna",
+    "května",
+    "června",
+    "července",
+    "srpna",
+    "září",
+    "října",
+    "listopadu",
+    "prosince",
+  ],
+  sk: [
+    "januára",
+    "februára",
+    "marca",
+    "apríla",
+    "mája",
+    "júna",
+    "júla",
+    "augusta",
+    "septembra",
+    "októbra",
+    "novembra",
+    "decembra",
+  ],
+  pl: [
+    "stycznia",
+    "lutego",
+    "marca",
+    "kwietnia",
+    "maja",
+    "czerwca",
+    "lipca",
+    "sierpnia",
+    "września",
+    "października",
+    "listopada",
+    "grudnia",
+  ],
+  de: [
+    "Januar",
+    "Februar",
+    "März",
+    "April",
+    "Mai",
+    "Juni",
+    "Juli",
+    "August",
+    "September",
+    "Oktober",
+    "November",
+    "Dezember",
+  ],
+  es: [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+  ],
+} as const;
+
+const inDate = (locale: keyof typeof IN_DATE_MONTHS, month: number) =>
+  IN_DATE_MONTHS[locale][month - 1] ??
+  expect.unreachable("A month outside the calendar");
 
 const pad = (value: number, width = 2) => String(value).padStart(width, "0");
 const iso = (year: number, month: number, day: number) =>
@@ -84,13 +162,17 @@ const DAY_SPELLINGS: readonly ((day: Day) => string)[] = [
   ({ year, month, day }) => `${String(day)}. ${String(month)}. ${String(year)}`,
   ({ year, month, day }) => `${pad(day)}.${pad(month)}.${String(year)}`,
   ({ year, month, day }) =>
-    `${String(day)}. ${GENITIVE_MONTH_NAMES.cs[month - 1] ?? ""} ${String(year)}`,
+    `${String(day)}. ${inDate("cs", month)} ${String(year)}`,
   ({ year, month, day }) =>
-    `${String(day)}. ${GENITIVE_MONTH_NAMES.sk[month - 1] ?? ""} ${String(year)}`,
+    `${String(day)}. ${inDate("sk", month)} ${String(year)}`,
   ({ year, month, day }) =>
-    `${String(day)} ${GENITIVE_MONTH_NAMES.pl[month - 1] ?? ""} ${String(year)}`,
+    `${String(day)} ${inDate("pl", month)} ${String(year)}`,
   ({ year, month, day }) =>
     `${monthName(month).toUpperCase()} ${String(day)}, ${String(year)}`,
+  ({ year, month, day }) =>
+    `${String(day)}. ${inDate("de", month)} ${String(year)}`,
+  ({ year, month, day }) =>
+    `${String(day)} de ${inDate("es", month)} de ${String(year)}`,
 ];
 
 /** Prose with no digits and no month names: what claims say around dates. */
@@ -355,7 +437,9 @@ describe("claim date reader", () => {
         (year, before, filler) => {
           expect(
             readClaimTextDate(`${filler} ${before}${String(year)} ${filler}`),
-          ).toEqual({ type: "silent" });
+          ).toEqual({
+            type: "silent",
+          });
         },
       ),
     );
@@ -418,6 +502,8 @@ describe("claim asserted date", () => {
   test("dates no year covers stay undated whatever the grader says", () => {
     expect(
       claimAssertedDate("From 2019 to 2021 I worked there.", graderDate),
-    ).toEqual({ type: "none" });
+    ).toEqual({
+      type: "none",
+    });
   });
 });
