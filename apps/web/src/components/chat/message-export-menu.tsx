@@ -67,9 +67,7 @@ type MessageExportMenuProps = {
   onOpenChange: (open: boolean) => void;
   open: boolean;
   threadRef: ChatThreadRef;
-  // Optional only for dev HMR compatibility: an already-mounted child can
-  // briefly receive the previous parent's prop shape during a module swap.
-  message?: PersistedChatMessage | undefined;
+  message: PersistedChatMessage;
 };
 
 const compileArtifactDraft = async (artifact: CreateDocumentDraft) => {
@@ -90,8 +88,7 @@ export const MessageExportMenu = ({
 }: MessageExportMenuProps) => {
   const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
-  const hasCitations =
-    message !== undefined && hasMessageExportCitations(message);
+  const hasCitations = hasMessageExportCitations(message);
   const [citationStyle, setCitationStyle] = useState<CitationStyle>(
     hasCitations ? "footnotes" : "none",
   );
@@ -110,12 +107,6 @@ export const MessageExportMenu = ({
     const result = await Result.tryPromise(async () => {
       const downloads: { blob: Blob; fileName: string }[] = [];
       if (includeMessage) {
-        if (message === undefined) {
-          throw new ClientOperationError({
-            action: "export-chat-message",
-            message: "Chat message is unavailable during a live update",
-          });
-        }
         const response = await idempotentSubmit.run({
           operation: `chat.${threadRef.threadId}.export`,
           body: {
@@ -286,7 +277,6 @@ export const MessageExportMenu = ({
             aria-live="polite"
             disabled={
               isExportPending ||
-              message === undefined ||
               (!includeMessage && (artifact === undefined || !includeArtifact))
             }
             onClick={() => {
