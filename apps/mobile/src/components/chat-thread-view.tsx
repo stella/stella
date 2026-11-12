@@ -20,6 +20,8 @@ import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
 import { useChatTurn } from "@/components/use-chat-turn";
 import type { LiveTurn } from "@/components/use-chat-turn";
+import { useMarkChatReadWhileOpen } from "@/components/use-mark-chat-read";
+import { WriteFailureNotice } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -48,12 +50,15 @@ const EMPTY_PAGE: ChatMessagesPage = {
 export const ChatThreadView = ({
   fresh,
   matterId,
+  shareId,
   source,
   threadId,
 }: {
   fresh: boolean;
   /** The thread's matter; the server refuses a matter's thread read without it. */
   matterId: string | undefined;
+  /** A share from another app a new conversation starts with. */
+  shareId: string | undefined;
   source: AccessTokenSource;
   threadId: string;
 }) => {
@@ -87,6 +92,7 @@ export const ChatThreadView = ({
         matterId={matterId}
         onReload={reload}
         refreshing={refreshing}
+        shareId={shareId}
         source={source}
         threadId={threadId}
       />
@@ -99,6 +105,7 @@ const LoadedThread = ({
   matterId,
   onReload,
   refreshing,
+  shareId,
   source,
   threadId,
 }: {
@@ -106,6 +113,7 @@ const LoadedThread = ({
   matterId: string | undefined;
   onReload: () => void;
   refreshing: boolean;
+  shareId: string | undefined;
   source: AccessTokenSource;
   threadId: string;
 }) => {
@@ -131,6 +139,7 @@ const LoadedThread = ({
       matterId={matterId}
       onReload={onReload}
       refreshing={refreshing}
+      shareId={shareId}
       source={source}
       threadId={threadId}
     />
@@ -149,6 +158,7 @@ const ThreadMessages = ({
   matterId,
   onReload,
   refreshing,
+  shareId,
   source,
   threadId,
 }: {
@@ -156,6 +166,7 @@ const ThreadMessages = ({
   matterId: string | undefined;
   onReload: () => void;
   refreshing: boolean;
+  shareId: string | undefined;
   source: AccessTokenSource;
   threadId: string;
 }) => {
@@ -192,6 +203,13 @@ const ThreadMessages = ({
     threadId,
   });
   const { live } = turn;
+  const markFailure = useMarkChatReadWhileOpen({
+    answer: live?.answer.status === "streaming" ? "streaming" : "settled",
+    matterId,
+    revision: entries.at(-1)?.id ?? null,
+    source,
+    threadId,
+  });
   const shown = entries.filter(
     (entry) =>
       entry.id !== live?.answer.messageId && entry.id !== live?.question?.id,
@@ -238,13 +256,16 @@ const ThreadMessages = ({
               {t("greetingSubtitle")}
             </Text>
           </View>
-          {/* The composer says why a send was refused, as in a thread. */}
+          {/* The composer says why a send was refused, as in a thread. A
+              share starts only an empty conversation, so only this one
+              takes it. */}
           <ChatComposer
             busy={turn.busy}
             canStop={turn.canStop}
             onSend={turn.send}
             onStop={turn.stop}
             sendError={turn.sendError}
+            shareId={shareId}
           />
         </View>
       </View>
@@ -290,12 +311,21 @@ const ThreadMessages = ({
         renderItem={({ item }) => <ChatMessage entry={item} />}
       />
       <View style={screenStyles.readable}>
+        {markFailure === null ? null : (
+          <View style={styles.markFailure}>
+            <WriteFailureNotice
+              failure={markFailure}
+              message={t("markReadFailed")}
+            />
+          </View>
+        )}
         <ChatComposer
           busy={turn.busy}
           canStop={turn.canStop}
           onSend={turn.send}
           onStop={turn.stop}
           sendError={turn.sendError}
+          shareId={undefined}
         />
       </View>
     </View>
@@ -375,6 +405,10 @@ const styles = StyleSheet.create({
   },
   live: {
     gap: 16,
+  },
+  markFailure: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   notice: {
     fontSize: 13,

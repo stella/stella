@@ -21,6 +21,7 @@ import { useChatAttachments } from "@/components/use-chat-attachments";
 import type { AttachmentNotice } from "@/components/use-chat-attachments";
 import { useDictation } from "@/components/use-dictation";
 import type { DictationNotice } from "@/components/use-dictation";
+import { useSharedDraft } from "@/components/use-shared-draft";
 import {
   ArrowUpIcon,
   CheckIcon,
@@ -68,6 +69,7 @@ export const ChatComposer = ({
   onSend,
   onStop,
   sendError,
+  shareId,
 }: {
   busy: boolean;
   canStop: boolean;
@@ -76,10 +78,20 @@ export const ChatComposer = ({
   onStop: () => void;
   /** Why the last message was not sent, if it was not. */
   sendError: SendRefusal | undefined;
+  /** A share from another app the conversation starts with (`src/app/share`). */
+  shareId: string | undefined;
 }) => {
   const t = useTranslations("chat");
   const [draft, setDraft] = useState("");
   const files = useChatAttachments();
+  useSharedDraft({
+    addFiles: files.addFiles,
+    onFailed: files.shareFailed,
+    onText: (text) => {
+      setDraft((typed) => (typed === "" ? text : `${typed}\n\n${text}`));
+    },
+    shareId,
+  });
   const dictation = useDictation((text) => {
     setDraft((typed) => appendDictation(typed, text));
   });
@@ -290,6 +302,7 @@ function useNoticeText(
 ): string | undefined {
   const t = useTranslations("chat");
   const scanT = useTranslations("scan");
+  const shareT = useTranslations("share");
   if (dictationNotice !== undefined) {
     const dictationText = {
       denied: t("dictationDenied"),
@@ -309,6 +322,7 @@ function useNoticeText(
       "pick-failed": t("pickFailed"),
       "scan-failed": scanT("failed"),
       "pdf-failed": scanT("pdfFailed"),
+      "share-failed": shareT("unavailable"),
     } as const satisfies Record<AttachmentNotice, string>;
     return noticeText[notice];
   }

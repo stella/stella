@@ -140,7 +140,7 @@ export type AppTokenRequest = {
   text: string;
 };
 
-export const appTokenRequests = (
+const appTokenRequests = (
   file: string,
   jobs: Readonly<Record<string, Job>>,
 ): AppTokenRequest[] =>
@@ -174,7 +174,7 @@ export const appTokenRequests = (
       });
   });
 
-export const appTokenProblems = (request: AppTokenRequest): string[] => {
+const appTokenProblems = (request: AppTokenRequest): string[] => {
   const grants = INSTALLATION_GRANTS[request.app];
   if (grants === undefined) {
     return [

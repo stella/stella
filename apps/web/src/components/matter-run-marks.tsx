@@ -1,50 +1,12 @@
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { StatusMark } from "@stll/ui/status-mark";
-import { cn } from "@stll/ui/utils";
+import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
+import type { ChatActiveRunState } from "@stll/api-contract/chat";
+import { RunStateMark } from "@stll/ui/run-state-mark";
 
 import { topMatterRunState } from "@/features/chat/active-runs.logic";
-import type {
-  ActiveChatRunState,
-  MatterRunStatus,
-} from "@/features/chat/active-runs.logic";
+import type { MatterRunStatus } from "@/features/chat/active-runs.logic";
 import { useFormatter } from "@/i18n/formatting-context";
-
-/** The mark for one state; its meaning is named by the element around it. */
-const RunStateGlyph = ({
-  size,
-  state,
-}: {
-  /** `row` sits in a matter's second line, `badge` on the collapsed icon. */
-  size: "badge" | "row";
-  state: ActiveChatRunState;
-}) => {
-  switch (state) {
-    case "needs-you":
-      return (
-        <span
-          aria-hidden
-          className={cn(
-            "text-warning-foreground leading-none font-bold",
-            size === "row" ? "text-xs" : "text-3xs",
-          )}
-        >
-          !
-        </span>
-      );
-    case "working":
-      return (
-        <StatusMark
-          className={cn(size === "row" ? "size-3" : "size-2.5")}
-          status="running"
-        />
-      );
-    default:
-      state satisfies never;
-      return panic("Unhandled active chat run state");
-  }
-};
 
 /**
  * What the reader's chats in a matter are doing, at the end of the matter's
@@ -68,17 +30,17 @@ const OpenRunMarks = ({ status }: { status: MatterRunStatus }) => {
     {
       count: status.needsYou,
       label: t("chat.matterRuns.needsYou", { count: status.needsYou }),
-      state: "needs-you",
+      state: CHAT_ACTIVE_RUN_STATE.needsYou,
     },
     {
       count: status.working,
       label: t("chat.matterRuns.working", { count: status.working }),
-      state: "working",
+      state: CHAT_ACTIVE_RUN_STATE.working,
     },
   ] as const satisfies readonly {
     count: number;
     label: string;
-    state: ActiveChatRunState;
+    state: ChatActiveRunState;
   }[];
   const shown = marks.filter(({ count }) => count > 0);
   return (
@@ -93,7 +55,7 @@ const OpenRunMarks = ({ status }: { status: MatterRunStatus }) => {
           key={state}
           role="img"
         >
-          <RunStateGlyph size="row" state={state} />
+          <RunStateMark size="row" state={state} />
           {count > 1 ? <span aria-hidden>{format.number(count)}</span> : null}
         </span>
       ))}
@@ -116,7 +78,7 @@ export const MatterRunBadge = ({
     return null;
   }
   const label =
-    state === "needs-you"
+    state === CHAT_ACTIVE_RUN_STATE.needsYou
       ? t("chat.matterRuns.needsYou", { count: status.needsYou })
       : t("chat.matterRuns.working", { count: status.working });
   return (
@@ -126,7 +88,7 @@ export const MatterRunBadge = ({
       data-slot="matter-run-badge"
       role="img"
     >
-      <RunStateGlyph size="badge" state={state} />
+      <RunStateMark size="badge" state={state} />
     </span>
   );
 };

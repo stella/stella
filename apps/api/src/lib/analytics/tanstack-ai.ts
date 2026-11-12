@@ -7,6 +7,7 @@ import {
 import { Result } from "better-result";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import type { AIErrorKind } from "@stll/api-contract";
 import {
   sanitizeErrorAttributesForOutput,
   sanitizeErrorForOutput,
@@ -59,6 +60,7 @@ import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
 
 import { getServerAnalytics } from "./client";
 import {
+  type AIFailureReason,
   type AnalyticsPrimitive,
   type CountBucket,
   type LatencyBucket,
@@ -159,6 +161,11 @@ export type TanStackAIAnalyticsCallbacks = {
   ) => TanStackAIAnalyticsCallbacks;
   middleware: ChatMiddleware;
   captureError: (error: unknown) => void;
+};
+
+type TanStackAIFeatureAnalytics = TanStackAIAnalyticsCallbacks & {
+  /** A request refused before any model call: a failure, but no generation. */
+  captureRefusal: (error: unknown) => void;
 };
 
 const SERVER_DISTINCT_ID = "server";
@@ -417,7 +424,7 @@ const createFamilyMember = (
   config: Omit<TanStackAIAnalyticsProps, "analytics">,
   resolvedModel:
     Omit<ResolvedTanStackTextModelInfo, "availability"> | undefined,
-): TanStackAIAnalyticsCallbacks => {
+): TanStackAIFeatureAnalytics => {
   const { analytics } = family;
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
   const modelTask = config.modelTask ?? "chat";
@@ -503,6 +510,60 @@ const createFamilyMember = (
 
       return modelInfo;
     };
+
+  const captureGenerationFailed = ({
+    error,
+    failureReason,
+    failureKind,
+    providerStatus,
+    resolvedModelInfo,
+  }: {
+    error: unknown;
+    failureReason: AIFailureReason;
+    failureKind: AIErrorKind;
+    providerStatus: string | undefined;
+    resolvedModelInfo: ResolvedTanStackTextModelInfo | null;
+  }) => {
+    analytics.capture({
+      distinctId,
+      ...groups,
+      event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+      properties: {
+        ...pickSafeMetadata(config.properties),
+        error_message_kind: "non_standard",
+        error_type: errorTag(error),
+        failure_reason: failureReason,
+        failure_kind: failureKind,
+        ...(providerStatus === undefined
+          ? {}
+          : { provider_status: providerStatus }),
+        feature: config.feature,
+        latency_bucket: bucketLatency(
+          (performance.now() - startedAt) / ONE_SECOND_MS,
+        ),
+        ...(resolvedModelInfo
+          ? {
+              model: resolvedModelInfo.modelId,
+              model_key_source: resolvedModelInfo.keySource,
+              provider: resolvedModelInfo.provider,
+              ...(resolvedModelInfo.region
+                ? { region: resolvedModelInfo.region }
+                : {}),
+            }
+          : {}),
+      },
+    });
+  };
+
+  const captureRefusal = (error: unknown) => {
+    captureGenerationFailed({
+      error,
+      failureReason: "validation",
+      failureKind: "unknown",
+      providerStatus: undefined,
+      resolvedModelInfo: resolveAnalyticsModelInfo(),
+    });
+  };
 
   const captureGenerationError = (
     error: unknown,
@@ -619,34 +680,12 @@ const createFamilyMember = (
       },
     });
 
-    analytics.capture({
-      distinctId,
-      ...groups,
-      event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
-      properties: {
-        ...pickSafeMetadata(config.properties),
-        error_message_kind: "non_standard",
-        error_type: errorTag(error),
-        failure_reason: "provider",
-        failure_kind: kind,
-        ...(providerStatus === undefined
-          ? {}
-          : { provider_status: providerStatus }),
-        feature: config.feature,
-        latency_bucket: bucketLatency(
-          (performance.now() - startedAt) / ONE_SECOND_MS,
-        ),
-        ...(resolvedModelInfo
-          ? {
-              model: resolvedModelInfo.modelId,
-              model_key_source: resolvedModelInfo.keySource,
-              provider: resolvedModelInfo.provider,
-              ...(resolvedModelInfo.region
-                ? { region: resolvedModelInfo.region }
-                : {}),
-            }
-          : {}),
-      },
+    captureGenerationFailed({
+      error,
+      failureReason: "provider",
+      failureKind: kind,
+      providerStatus,
+      resolvedModelInfo,
     });
   };
 
@@ -842,6 +881,7 @@ const createFamilyMember = (
 
   return {
     captureError: captureGenerationError,
+    captureRefusal,
     forModel: (model) => createFamilyMember(family, config, model),
     usageMetering: config.usageMetering,
     middleware: {
@@ -946,7 +986,7 @@ const createFamilyMember = (
 export const createTanStackAIAnalyticsCallbacks = ({
   analytics = getServerAnalytics(),
   ...config
-}: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks =>
+}: TanStackAIAnalyticsProps): TanStackAIFeatureAnalytics =>
   createFamilyMember(
     { analytics, generationFailures: { recorded: false } },
     config,

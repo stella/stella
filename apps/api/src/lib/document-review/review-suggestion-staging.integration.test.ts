@@ -18,12 +18,13 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { DOCX_SUGGESTIONS_PENDING_MAX } from "@stll/api-contract";
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import {
+  documentReviewFindingDecisions,
   documentReviewFindings,
   documentReviewRuns,
   docxSuggestions,
@@ -266,6 +267,20 @@ const findingState = async (findingId: SafeId<"documentReviewFinding">) => {
   return rows.at(0);
 };
 
+/** One finding's decision history, oldest first. */
+const decisionHistory = async (findingId: SafeId<"documentReviewFinding">) =>
+  await testDb
+    .select({
+      decision: documentReviewFindingDecisions.decision,
+      actorId: documentReviewFindingDecisions.actorId,
+    })
+    .from(documentReviewFindingDecisions)
+    .where(eq(documentReviewFindingDecisions.findingId, findingId))
+    .orderBy(
+      asc(documentReviewFindingDecisions.createdAt),
+      asc(documentReviewFindingDecisions.id),
+    );
+
 const auditEvents: AuditEvent[] = [];
 const recordAuditEvent: AuditRecorder = async (_tx, event) => {
   auditEvents.push(...(Array.isArray(event) ? event : [event]));
@@ -409,6 +424,11 @@ describe("review fixes staged as folio suggestions", () => {
     });
     expect(auditEvents).toHaveLength(1);
     expect(auditEvents.at(0)?.resourceId).toBe(runId);
+    // The decision taken on the suggestion surface enters the same history
+    // the review list writes.
+    expect(await decisionHistory(findingId)).toEqual([
+      { decision: "accepted", actorId: ids.userA1 },
+    ]);
 
     // Reverting withdraws both, leaving the finding as the engine produced it.
     const reverted = await runHandler(revertDocxSuggestion, {
@@ -425,6 +445,11 @@ describe("review fixes staged as folio suggestions", () => {
       applicationStatus: "pending",
       appliedBy: null,
     });
+    // Reopening is a transition too: it appends, it never erases.
+    expect(await decisionHistory(findingId)).toEqual([
+      { decision: "accepted", actorId: ids.userA1 },
+      { decision: null, actorId: ids.userA1 },
+    ]);
   });
 
   test("rejecting the staged suggestion dismisses the finding without applying it", async () => {
@@ -454,6 +479,9 @@ describe("review fixes staged as folio suggestions", () => {
       applicationStatus: "pending",
       appliedBy: null,
     });
+    expect(await decisionHistory(findingId)).toEqual([
+      { decision: "rejected", actorId: ids.userA1 },
+    ]);
   });
 });
 

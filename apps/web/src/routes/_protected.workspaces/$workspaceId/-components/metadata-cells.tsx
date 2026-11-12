@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
@@ -58,9 +59,9 @@ export const VersionCell = ({ entity }: { entity: WorkspaceEntity }) => {
   }
 
   return (
-    <span className="text-muted-foreground truncate text-xs">
+    <TruncatedText className="text-muted-foreground text-xs">
       {entity.version}
-    </span>
+    </TruncatedText>
   );
 };
 
@@ -106,7 +107,9 @@ export const VersionHistoryCell = ({
       tooltip={label}
       variant="muted"
     >
-      <span className="truncate text-xs">{entity.version}</span>
+      <TruncatedText className="text-xs" hint={false}>
+        {entity.version}
+      </TruncatedText>
     </Button>
   );
 };

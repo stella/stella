@@ -80,11 +80,6 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const testFetchState = createTestFetch();
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
-
 // A settled short slice is short forever — that is what settled means — so it
 // is never re-walked and its `checkedAt` never moves on its own. The candidate
 // read is a bounded oldest-first window, so without a deliberate touch enough
@@ -193,6 +188,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   logs.restore();
 });
 

@@ -50,6 +50,7 @@ import {
 import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
@@ -275,8 +276,12 @@ type PromptBarProps = {
    * Only meaningful together with `attachmentsEnabled` (the (+) menu
    * renders inside that block). The Skills/Context submenus are wired to
    * this bar's own editor, so their props omit `editor` (supplied here).
+   *
+   * `models` is required: a bar that starts or continues a thread states its
+   * model menu (with where its turns run), or `null` when the surface pins
+   * the model, so none can drop the Run on choice by leaving a prop out.
    */
-  models?: ComposerModelsMenuProps | undefined;
+  models: ComposerModelsMenuProps | null;
   /**
    * The (+) menu's leading "New chat" row: the same action the dock's
    * new-chat button carries. `null` hides the row (nothing to leave yet).
@@ -914,7 +919,7 @@ export const PromptBar = (props: PromptBarProps) => {
               size="sm"
               variant="decorative"
             />
-            <span className="truncate">{t("chat.thinking")}</span>
+            <TruncatedText>{t("chat.thinking")}</TruncatedText>
           </div>
         )}
         {isEmpty && !busy && isSendBlocked && (
@@ -929,11 +934,11 @@ export const PromptBar = (props: PromptBarProps) => {
               size="sm"
               variant="decorative"
             />
-            <span className="truncate">
+            <TruncatedText>
               {sendDisabledReason === "editor-loading"
                 ? t("chat.editorLoading")
                 : t("folio.savingDocument")}
-            </span>
+            </TruncatedText>
           </div>
         )}
         {isEmpty &&
@@ -1291,7 +1296,7 @@ const ValueKindChip = ({ valueKind }: { valueKind: string }) => {
   return (
     <span className="text-foreground inline-flex min-w-0 items-center gap-1 font-medium">
       <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
-      <span className="truncate">{t(meta.labelKey)}</span>
+      <TruncatedText>{t(meta.labelKey)}</TruncatedText>
     </span>
   );
 };

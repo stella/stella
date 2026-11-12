@@ -678,7 +678,17 @@
           "type": "string"
         },
         "country": {
-          "enum": ["AUT", "CZE", "EU", "GBR", "HUN", "POL", "SVK", "USA"],
+          "enum": [
+            "AUT",
+            "BRA",
+            "CZE",
+            "EU",
+            "GBR",
+            "HUN",
+            "POL",
+            "SVK",
+            "USA"
+          ],
           "type": "string"
         },
         "reason": {
@@ -1032,7 +1042,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "case_law_coverage",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before declaring a decision missing. A listed country not yet admitted, without coverage, returns status unavailable and reason.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1049,6 +1059,7 @@
               "spelling": "alpha-3",
               "admitted": [
                 "AUT",
+                "BRA",
                 "CZE",
                 "EU",
                 "GBR",
@@ -1079,7 +1090,17 @@
           "type": "string"
         },
         "country": {
-          "enum": ["AUT", "CZE", "EU", "GBR", "HUN", "POL", "SVK", "USA"],
+          "enum": [
+            "AUT",
+            "BRA",
+            "CZE",
+            "EU",
+            "GBR",
+            "HUN",
+            "POL",
+            "SVK",
+            "USA"
+          ],
           "type": "string"
         },
         "reason": {
@@ -2903,7 +2924,17 @@
           "type": "string"
         },
         "country": {
-          "enum": ["AUT", "CZE", "EU", "GBR", "HUN", "POL", "SVK", "USA"],
+          "enum": [
+            "AUT",
+            "BRA",
+            "CZE",
+            "EU",
+            "GBR",
+            "HUN",
+            "POL",
+            "SVK",
+            "USA"
+          ],
           "type": "string"
         },
         "reason": {
@@ -13544,6 +13575,9 @@
         {
           "type": "object",
           "properties": {
+            "aiInstructions": {
+              "type": "string"
+            },
             "managedAIResidency": {
               "enum": ["eu", "us"],
               "type": "string"

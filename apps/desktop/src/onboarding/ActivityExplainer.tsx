@@ -11,6 +11,7 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { PermissionsSection } from "../mainview/PermissionsSection";
@@ -97,9 +98,9 @@ export const ActivityExplainer = ({ permissions }: ActivityExplainerProps) => {
                 className="size-2 shrink-0 rounded-full"
                 style={{ backgroundColor: STORY_MATTER_COLOR }}
               />
-              <span className="truncate text-xs font-medium">
+              <TruncatedText className="text-xs font-medium">
                 {activity("welcomePreviewMatter")}
-              </span>
+              </TruncatedText>
             </div>
           </StoryStage>
           <StoryArrow />

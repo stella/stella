@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/agent-auth/routes";
 import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
+import { emailAIRoute } from "@/api/handlers/ai/routes";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
@@ -277,6 +278,7 @@ export const apiRoutes = mount([
       chatMcpAppsRoute,
       chatRunOutputsRoute,
       dictationRoute,
+      emailAIRoute,
       userFilesRoute,
       skillsRoute,
       usageRoute,
