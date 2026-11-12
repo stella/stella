@@ -46,6 +46,9 @@ use crate::runner_protocol::{
   POLICY_VIOLATION_CODE, PROTOCOL, RunRef, RunRejected, ServerMessage, Welcome,
 };
 
+/// How long a connection waits for the first probes before its hello.
+const FIRST_REPORTS_WAIT: Duration = Duration::from_secs(20);
+
 /// `hello` lists at most this many runs; the contract refuses more.
 const MAX_ACTIVE_RUNS: usize = 64;
 
@@ -352,6 +355,7 @@ impl Runner {
     };
     self.ensure_journal(&authorized.namespace).await;
     self.host.connecting(&authorized.api_base_url);
+    self.wait_for_first_reports().await;
     self.reattach();
     let (request, secure) = match upgrade_request(&authorized, self.config.desktop_id) {
       Ok(request) => request,
@@ -423,6 +427,29 @@ impl Runner {
     self.backoff.reset();
     self.publish(RunnerState::Connected);
     self.serve(&mut socket, notices).await
+  }
+
+  /// Wait, up to `FIRST_REPORTS_WAIT`, until every installed harness has
+  /// been probed, so the hello says what each can do. Runs the API sent
+  /// while the computer was away then start on a known report instead of
+  /// being refused as not installed.
+  async fn wait_for_first_reports(&self) {
+    let Some(mut changes) = self.reports.changes() else {
+      return;
+    };
+    let settled = async {
+      while !self.reports.settled() {
+        if changes.changed().await.is_err() {
+          return;
+        }
+      }
+    };
+    if tokio::time::timeout(FIRST_REPORTS_WAIT, settled)
+      .await
+      .is_err()
+    {
+      tracing::info!("desktop runner connects before every harness was probed");
+    }
   }
 
   fn hello(&self) -> Hello {

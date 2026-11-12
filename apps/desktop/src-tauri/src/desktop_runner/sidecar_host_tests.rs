@@ -21,7 +21,7 @@ use super::sidecar_host::{
 use super::tests::{Connection, Gateway, Setup};
 use crate::harness_sidecar::tests::Fixture;
 use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar, SkillFolderRef};
-use crate::runner_protocol::{ApprovalDecision, Harness, RunApproval};
+use crate::runner_protocol::{ApprovalDecision, Harness, HarnessReport, RunApproval};
 
 const WAIT: Duration = Duration::from_secs(10);
 const VERSION: &str = "0.50.0";
@@ -674,6 +674,54 @@ fn an_install_that_ends_is_probed_and_reported_without_waiting_for_the_interval(
     runner.stop().await;
   });
   stop_holders(&place);
+}
+
+#[test]
+fn a_ready_harness_stays_ready_through_one_failed_probe_and_the_next_decides() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let _connection = connect(&gateway, &[], "ready").await;
+    let failed = json!({
+      "type": "failed",
+      "reason": "harness_unavailable",
+      "message": "the CLI did not answer in time",
+    });
+    place.probe_answers(&failed);
+    let probes = place.received("harness.probe").len();
+    place.install_settles();
+    until("the failed probe", || {
+      place.received("harness.probe").len() > probes
+    })
+    .await;
+    // One failed probe keeps the harness ready.
+    until("the probe's outcome", || {
+      host.kept_through_failure(Harness::Codex)
+    })
+    .await;
+    assert!(matches!(
+      host.reports().iter().find(|report| codex_report(report)),
+      Some(HarnessReport::Ready(_))
+    ));
+    // The next failed probe decides.
+    place.install_settles();
+    until("the second failed probe", || {
+      matches!(
+        host.reports().iter().find(|report| codex_report(report)),
+        Some(HarnessReport::Unavailable(_))
+      )
+    })
+    .await;
+    runner.stop().await;
+  });
+  stop_holders(&place);
+}
+
+fn codex_report(report: &HarnessReport) -> bool {
+  serde_json::to_value(report).is_ok_and(|value| value["id"] == "codex")
 }
 
 #[test]

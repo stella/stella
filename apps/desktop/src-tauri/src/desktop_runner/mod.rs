@@ -358,6 +358,18 @@ fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
   ))
 }
 
+fn sign_in_changes() -> &'static tokio::sync::watch::Sender<u64> {
+  static CHANGES: std::sync::OnceLock<tokio::sync::watch::Sender<u64>> =
+    std::sync::OnceLock::new();
+  CHANGES.get_or_init(|| tokio::sync::watch::channel(0).0)
+}
+
+/// A harness sign-in, sign-out or credential changed: its report is probed
+/// again now rather than at the next periodic probe.
+pub(crate) fn harness_sign_in_changed() {
+  sign_in_changes().send_modify(|count| *count = count.wrapping_add(1));
+}
+
 /// The CLIs the installer manages, and Codex on the user's ChatGPT plan when
 /// it is connected.
 struct ManagedHarnesses {
@@ -370,6 +382,14 @@ impl LocalHarnesses for ManagedHarnesses {
   }
 
   fn on_install_settled(&self, settled: InstallSettled) {
+    // A sign-in, sign-out or new credential changes what a probe finds too.
+    let mut sign_ins = sign_in_changes().subscribe();
+    let signed = Arc::clone(&settled);
+    tauri::async_runtime::spawn(async move {
+      while sign_ins.changed().await.is_ok() {
+        signed();
+      }
+    });
     let Some(installation) = self.app.try_state::<HarnessInstallation>() else {
       return;
     };
