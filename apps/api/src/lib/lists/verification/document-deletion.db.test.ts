@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 
 import {
   legalListClaimCarryOutcomes,
+  legalGraphEdges,
   legalListClaimReviewEvents,
   legalListClaims,
   legalListVerificationBlocks,
@@ -46,6 +47,7 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id varchar(128), UNIQUE (id, organization_id));
           CREATE TABLE entities (id uuid PRIMARY KEY, workspace_id uuid, UNIQUE (id, workspace_id));
           CREATE TABLE legal_list_items (entity_id uuid, list_id uuid, workspace_id uuid, UNIQUE (entity_id, list_id, workspace_id));
+          CREATE TABLE legal_list_item_sources (id uuid PRIMARY KEY);
           CREATE VIEW stella_authorized_workspaces AS SELECT NULL::uuid AS authorized_workspace_id WHERE false;
           GRANT USAGE ON SCHEMA ${schema} TO stella;
           GRANT SELECT ON stella_authorized_workspaces TO stella;
@@ -89,6 +91,7 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           "20261110120000_legal_list_claim_qualifiers",
           "20261112025400_legal_list_claim_carry_over",
           "20261112080005_legal_list_verification_run_scope",
+          "20261112054148_legal_graph_edges",
         ]) {
           await applyMigration(name);
         }
@@ -180,6 +183,24 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
                 sourceClaimId: claimId,
                 outcome: "unmatched",
                 targetClaimId: null,
+              }),
+          );
+          // The claim's citation in the matter graph, of an entity no run
+          // here is about, so only the claim removes it.
+          await fixtureScoped(
+            async (tx) =>
+              await tx.insert(legalGraphEdges).values({
+                workspaceId,
+                kind: "cites",
+                fromKind: "claim",
+                fromClaimId: claimId,
+                fromClaimRunId: runId,
+                toKind: "fact",
+                toEntityId: retainedDocumentId,
+                stance: "supports",
+                provenanceReason: "claim-anchor",
+                producerKind: "run",
+                producerId: runId,
               }),
           );
           await fixtureScoped(

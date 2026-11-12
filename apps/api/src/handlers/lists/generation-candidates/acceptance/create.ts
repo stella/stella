@@ -27,6 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import type { CreateTaskFactDetails } from "@/api/lib/tasks/create-task-entity";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
@@ -531,9 +532,13 @@ const finalizeAcceptance = async ({
   ) {
     return { status: "source-missing" as const };
   }
+  const itemSources = liveSources.map((source) => ({
+    id: createSafeId<"legalListItemSource">(),
+    source,
+  }));
   await tx.insert(legalListItemSources).values(
-    liveSources.map((source) => ({
-      id: createSafeId<"legalListItemSource">(),
+    itemSources.map(({ id, source }) => ({
+      id,
       workspaceId,
       listId: body.listId,
       itemEntityId: entityId,
@@ -623,6 +628,12 @@ const finalizeAcceptance = async ({
       message: "Candidate claim was lost",
     });
   }
+  // After the candidate reads as accepted, so each edge names the
+  // extraction run that proposed its passage.
+  await writeGraphEdges(tx, workspaceId, {
+    type: "fact-sources",
+    sourceIds: itemSources.map(({ id }) => id),
+  });
 
   await commitSettledRun(tx, {
     runId: body.runId,
