@@ -702,6 +702,31 @@ export const renewRunnerSession = async (
     };
   });
 
+/** One report the computer makes about itself over its socket. */
+type ComputerReport =
+  | Pick<typeof runner.$inferInsert, "harnesses">
+  | (Pick<typeof runner.$inferInsert, "linkedFolders"> & {
+      approvedFolderIds: SQL;
+    });
+
+/**
+ * Store a report of the computer on its runner row while this socket holds
+ * it; `false` when the socket is not current.
+ */
+const writeComputerReport = async (
+  tx: Transaction,
+  { binding, sessionId }: SessionOptions,
+  report: ComputerReport,
+): Promise<boolean> => {
+  // audit: skip - runner socket bookkeeping; the row stores the computer's own harness and linked folder reports
+  const updated = await tx
+    .update(runner)
+    .set(report)
+    .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+    .returning({ desktopId: runner.desktopId });
+  return updated.length > 0;
+};
+
 type HarnessStatusOptions = SessionOptions & {
   report: DesktopRunnerHarnessReport;
 };
@@ -712,11 +737,10 @@ export const recordHarnessStatus = async (
   { binding, sessionId, report }: HarnessStatusOptions,
 ): Promise<boolean> =>
   await withAggregateTransaction(db, async (tx) => {
-    const current = and(runnerKey(binding), eq(runner.sessionId, sessionId));
     const [row] = await tx
       .select({ harnesses: runner.harnesses })
       .from(runner)
-      .where(current)
+      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
       .limit(1);
     if (row === undefined) {
       return false;
@@ -727,9 +751,7 @@ export const recordHarnessStatus = async (
       ),
       report,
     ];
-    // audit: skip - runner socket bookkeeping; the run's caller audits the work
-    await tx.update(runner).set({ harnesses }).where(current);
-    return true;
+    return await writeComputerReport(tx, { binding, sessionId }, { harnesses });
   });
 
 type LinkedFoldersOptions = SessionOptions & {
@@ -743,19 +765,19 @@ type LinkedFoldersOptions = SessionOptions & {
 export const recordLinkedFolders = async (
   db: DesktopRunnerDb,
   { binding, sessionId, folders }: LinkedFoldersOptions,
-): Promise<boolean> => {
-  const current = and(runnerKey(binding), eq(runner.sessionId, sessionId));
-  // audit: skip - runner socket bookkeeping; the folders are the computer's report
-  const updated = await db
-    .update(runner)
-    .set({
-      linkedFolders: [...folders],
-      approvedFolderIds: keptFolderApprovals(folders),
-    })
-    .where(current)
-    .returning({ desktopId: runner.desktopId });
-  return updated.length > 0;
-};
+): Promise<boolean> =>
+  await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await writeComputerReport(
+        tx,
+        { binding, sessionId },
+        {
+          linkedFolders: [...folders],
+          approvedFolderIds: keptFolderApprovals(folders),
+        },
+      ),
+  );
 
 type ApproveLinkedFolderOptions = {
   owner: RunOwner;
