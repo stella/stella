@@ -842,6 +842,54 @@ const answerIdsOf = async (real: Real): Promise<SafeId<"chatMessage">[]> =>
       role === "assistant" ? [toSafeId<"chatMessage">(id)] : [],
   );
 
+/** Forks the thread at the answer of `turn` and continues on the fork. */
+const forkFrom = async (turn: number, model: Model, real: Real) => {
+  const { ledger } = real;
+  const failuresBefore = ledger.failures;
+  const answers = await answerIdsOf(real);
+  // The fixture must reach the fault: one answer per turn.
+  expect(answers).toHaveLength(ledger.turn);
+  const upToMessageId =
+    answers.at(turn - 1) ?? expect.unreachable(`No answer for turn ${turn}`);
+  const forkThreadId = newThread();
+  const forked = await createForkThread({
+    indexChatThread: async () => undefined,
+  }).handler(
+    asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
+      body: { newThreadId: forkThreadId, upToMessageId },
+      getWorkspaceAccess: async () => null,
+      memberRole: sessionMemberRole("owner"),
+      params: { threadId: real.threadId },
+      query: {},
+      recordAuditEvent: async () => undefined,
+      request: new Request("http://localhost/v1/chat/threads/fork"),
+      route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
+      safeDb,
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userA1 },
+    }),
+  );
+  expect(forked).toMatchObject({ threadId: forkThreadId });
+  const outcome =
+    turn === ledger.turn ? ledger.latest : ledger.outcomes.get(turn);
+  ledger.calls = ledger.calls.filter((call) => call.turn <= turn);
+  for (const later of [...ledger.waiting.keys()].filter((t) => t > turn)) {
+    ledger.waiting.delete(later);
+  }
+  ledger.pending = [];
+  ledger.latest =
+    outcome === undefined || outcome === "awaiting" ? "cancelled" : outcome;
+  ledger.turn = turn;
+  // A conversation grant stays with the thread it was given in.
+  if (ledger.grant === "conversation") {
+    ledger.grant = "none";
+  }
+  real.client.dispose();
+  real.threadId = forkThreadId;
+  real.client = await real.harness.openWebClient(forkThreadId);
+  await verify(model, real, { failuresBefore });
+};
+
 /**
  * "Fork from here" on an answer, which the page offers on every answer but
  * a running latest one. The fork holds the thread up to that answer, with
@@ -859,51 +907,7 @@ class ForkFrom implements fc.AsyncCommand<Model, Real> {
   targetTurn = (model: Readonly<Model>): number =>
     (this.pick % (isBusy(model) ? model.turn - 1 : model.turn)) + 1;
   run = async (model: Model, real: Real) => {
-    const { ledger } = real;
-    const failuresBefore = ledger.failures;
-    const turn = this.targetTurn(model);
-    const answers = await answerIdsOf(real);
-    // The fixture must reach the fault: one answer per turn.
-    expect(answers).toHaveLength(ledger.turn);
-    const upToMessageId =
-      answers.at(turn - 1) ?? expect.unreachable(`No answer for turn ${turn}`);
-    const forkThreadId = newThread();
-    const forked = await createForkThread({
-      indexChatThread: async () => undefined,
-    }).handler(
-      asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
-        body: { newThreadId: forkThreadId, upToMessageId },
-        getWorkspaceAccess: async () => null,
-        memberRole: sessionMemberRole("owner"),
-        params: { threadId: real.threadId },
-        query: {},
-        recordAuditEvent: async () => undefined,
-        request: new Request("http://localhost/v1/chat/threads/fork"),
-        route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
-        safeDb,
-        session: { activeOrganizationId: ids.orgA },
-        user: { id: ids.userA1 },
-      }),
-    );
-    expect(forked).toMatchObject({ threadId: forkThreadId });
-    const outcome =
-      turn === ledger.turn ? ledger.latest : ledger.outcomes.get(turn);
-    ledger.calls = ledger.calls.filter((call) => call.turn <= turn);
-    for (const later of [...ledger.waiting.keys()].filter((t) => t > turn)) {
-      ledger.waiting.delete(later);
-    }
-    ledger.pending = [];
-    ledger.latest =
-      outcome === undefined || outcome === "awaiting" ? "cancelled" : outcome;
-    ledger.turn = turn;
-    // A conversation grant stays with the thread it was given in.
-    if (ledger.grant === "conversation") {
-      ledger.grant = "none";
-    }
-    real.client.dispose();
-    real.threadId = forkThreadId;
-    real.client = await real.harness.openWebClient(forkThreadId);
-    await verify(model, real, { failuresBefore });
+    await forkFrom(this.targetTurn(model), model, real);
   };
   toString = () => `ForkFrom(${String(this.pick)})`;
 }

@@ -103,17 +103,28 @@ export const readReplayWriterRegistry = (
   });
 };
 
+/**
+ * Pending owners a file gained. Debt is counted per file, not per line: an
+ * edit above a pending owner moves its line without adding debt, while a new
+ * pending owner raises its file's count wherever it lands.
+ */
 export const addedPendingOwners = (
   current: readonly ReplayWriterOwner[],
   previous: readonly ReplayWriterOwner[],
 ) => {
-  const prior = new Set(
-    previous
-      .filter((owner) => owner.kind === "pending")
-      .map(({ file, line }) => `${file}:${line}`),
-  );
-  return current.filter(
-    (owner) =>
-      owner.kind === "pending" && !prior.has(`${owner.file}:${owner.line}`),
-  );
+  const priorCount = new Map<string, number>();
+  for (const owner of previous) {
+    if (owner.kind === "pending") {
+      priorCount.set(owner.file, (priorCount.get(owner.file) ?? 0) + 1);
+    }
+  }
+  const seen = new Map<string, number>();
+  return current.filter((owner) => {
+    if (owner.kind !== "pending") {
+      return false;
+    }
+    const count = (seen.get(owner.file) ?? 0) + 1;
+    seen.set(owner.file, count);
+    return count > (priorCount.get(owner.file) ?? 0);
+  });
 };

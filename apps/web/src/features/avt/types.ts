@@ -34,11 +34,71 @@ export type RecordConflict = NonNullable<ClaimVerdict["recordConflict"]>;
 
 export type EvidenceFact = VerificationRun["evidence"]["facts"][number];
 export type FactId = EvidenceFact["factEntityId"];
+/** A fact's footing: a document's record, only testimony, or no source. */
+export type FactTier = VerificationRun["factStandings"][number]["tier"];
+/** What a document is to a list's facts: a record or a person's account. */
+export type SourceKind =
+  ListsRoutes["source-documents"]["patch"]["body"]["sourceKind"];
 
 export type ClaimReviewEvent =
   ListsRoutes["claim-reviews"]["post"]["body"]["event"];
+export type ClaimReviewEventKind = ClaimReviewEvent["kind"];
 export type ClaimReviewStatus = NonNullable<ClaimReview["status"]>;
 export type ClaimOverrideState = NonNullable<ClaimReview["override"]>;
+
+export type ReviewHistoryPage =
+  ListsRoutes["claim-reviews"]["get"]["response"][200];
+export type ReviewHistoryEntry = ReviewHistoryPage["items"][number];
+export type ClaimDisposition = ReviewHistoryEntry["before"];
+
+type ReviewStatusMeta = {
+  labelKey: TranslationKey;
+  tone: ReviewStatusTone;
+  /** A settled claim has had its human decision; needs-evidence keeps it
+   *  open, so it stays in the queue and outside bulk acceptance. */
+  settles: boolean;
+  /** The status as an ICU select value (a select key cannot hold "-"). */
+  selectKey: "reviewed" | "disputed" | "needsEvidence";
+};
+
+export const REVIEW_STATUS_META = {
+  reviewed: {
+    labelKey: "avt.review.status.reviewed",
+    tone: "success",
+    settles: true,
+    selectKey: "reviewed",
+  },
+  disputed: {
+    labelKey: "avt.review.status.disputed",
+    tone: "destructive",
+    settles: true,
+    selectKey: "disputed",
+  },
+  "needs-evidence": {
+    labelKey: "avt.review.status.needsEvidence",
+    tone: "warning",
+    settles: false,
+    selectKey: "needsEvidence",
+  },
+} as const satisfies Record<ClaimReviewStatus, ReviewStatusMeta>;
+
+export const REVIEW_EVENT_KIND_LABEL_KEYS = {
+  status: "avt.history.kinds.status",
+  override: "avt.history.kinds.override",
+  note: "common.notes",
+  reopen: "avt.history.kinds.reopen",
+  "record-conflict": "avt.history.kinds.recordConflict",
+} as const satisfies Record<ClaimReviewEventKind, TranslationKey>;
+
+export const isReviewEventKind = (
+  value: string,
+): value is ClaimReviewEventKind =>
+  Object.hasOwn(REVIEW_EVENT_KIND_LABEL_KEYS, value);
+
+/** Every kind of review action, in the label map's order. */
+export const REVIEW_EVENT_KINDS = Object.keys(
+  REVIEW_EVENT_KIND_LABEL_KEYS,
+).filter(isReviewEventKind);
 
 export type ListItem =
   ListsRoutes[":listId"]["items"]["get"]["response"][200]["items"][number];
@@ -64,6 +124,12 @@ true satisfies Exclude<
   ? true
   : never;
 
+export type GenerationRunSummary =
+  ListsRoutes[":listId"]["generations"]["get"]["response"][200]["items"][number];
+export type GenerationRunErrorCode = NonNullable<
+  GenerationRunSummary["errorCode"]
+>;
+
 export const FACT_CONFIDENCES = [
   "high",
   "medium",
@@ -81,6 +147,13 @@ export const CONFIDENCE_LABEL_KEYS = {
   high: "common.high",
   medium: "common.medium",
   low: "common.low",
+} as const satisfies Record<FactConfidence, TranslationKey>;
+
+/** A confidence as a phrase that stands alone in a row ("High confidence"). */
+export const CONFIDENCE_PHRASE_KEYS = {
+  high: "avt.anchorFacts.confidenceLevels.high",
+  medium: "avt.anchorFacts.confidenceLevels.medium",
+  low: "avt.anchorFacts.confidenceLevels.low",
 } as const satisfies Record<FactConfidence, TranslationKey>;
 
 type StateMeta = {
@@ -177,3 +250,16 @@ export const RUN_ERROR_KEYS = {
   internal: "avt.runs.errors.internal",
   access_revoked: "avt.runs.errors.accessRevoked",
 } as const satisfies Record<VerificationErrorCode, TranslationKey>;
+
+/** Why a fact extraction failed, in words a reviewer can act on. */
+export const EXTRACTION_ERROR_KEYS = {
+  source_unavailable: "avt.extraction.errors.sourceUnavailable",
+  unsupported_format: "avt.extraction.errors.unsupportedFormat",
+  no_text: "avt.extraction.errors.noText",
+  ai_unavailable: "avt.extraction.errors.aiUnavailable",
+  extraction_failed: "avt.extraction.errors.extractionFailed",
+  enqueue_failed: "avt.extraction.errors.enqueueFailed",
+  access_revoked: "avt.extraction.errors.accessRevoked",
+  run_limit_reached: "errors.apiCodes.usageLimitExceeded",
+  internal: "avt.extraction.errors.internal",
+} as const satisfies Record<GenerationRunErrorCode, TranslationKey>;

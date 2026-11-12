@@ -17,6 +17,7 @@ import {
   localRunMaxApprovals,
   localRunModelLabel,
   localRunTargetFor,
+  localRunTargetState,
   permissionView,
   runTargetValue,
   sameRunTarget,
@@ -343,5 +344,51 @@ describe("the selected run target", () => {
     ).toBeNull();
     expect(localRunModelLabel({ status: "hidden" }, target)).toBeNull();
     expect(localRunModelLabel(undefined, target)).toBeNull();
+  });
+});
+
+describe("whether the chosen computer can take a turn now", () => {
+  const CODEX = {
+    kind: "local",
+    harness: "codex",
+    model: "gpt-5-codex",
+    approvals: "ask",
+  } as const;
+  const enabled = (
+    runners: ChatLocalRunnerReadiness[],
+  ): ChatLocalRunReadiness => ({
+    status: "enabled",
+    runners,
+    maxApprovals: NO_LIMIT,
+  });
+
+  test("a ready harness that offers the model can take it", () => {
+    expect(
+      localRunTargetState(enabled([runner([READY_CODEX])]), CODEX),
+    ).toEqual({ type: "ready" });
+  });
+
+  test("a model the ready harness no longer offers cannot", () => {
+    expect(
+      localRunTargetState(enabled([runner([READY_CODEX])]), {
+        ...CODEX,
+        model: "gpt-4-codex",
+      }),
+    ).toEqual({ type: "model_unavailable" });
+  });
+
+  test("an offline computer says so, whatever model it last offered", () => {
+    expect(
+      localRunTargetState(enabled([runner([READY_CODEX], false)]), CODEX),
+    ).toEqual({
+      type: "harness",
+      option: { harness: "codex", state: "offline" },
+    });
+  });
+
+  test("a member who may not run turns on a computer is told so", () => {
+    expect(localRunTargetState({ status: "hidden" }, CODEX)).toEqual({
+      type: "not_allowed",
+    });
   });
 });

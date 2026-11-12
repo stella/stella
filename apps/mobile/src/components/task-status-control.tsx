@@ -1,34 +1,22 @@
-import { Suspense, use, useState, useTransition } from "react";
+import { Suspense, use, useState } from "react";
 
 import { Result } from "better-result";
 import { ActivityIndicator, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
-import {
-  TASK_CLOSED_STATUSES,
-  TASK_STATUS,
-} from "@stll/api-contract/entity-options";
-import type { TaskStatus } from "@stll/api-contract/entity-options";
+import { isTaskStatus, TASK_STATUS } from "@stll/api-contract/entity-options";
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
-import { useChanged } from "@/components/changes";
 import { TaskAssignees } from "@/components/task-assignees";
-import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
-import type { WriteFailure } from "@/components/write-failure";
+import { useTaskStatus } from "@/components/use-task-status";
+import { WriteFailureNotice } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
-import { readTask, setTaskStatus } from "@/state/tasks";
+import { readTask } from "@/state/tasks";
 import type { TaskDetail } from "@/state/tasks";
 import { useAppColors } from "@/theme";
-
-const CLOSED: ReadonlySet<string> = new Set(TASK_CLOSED_STATUSES);
-
-const STATUS_KEYS: ReadonlySet<string> = new Set(Object.values(TASK_STATUS));
-
-const isStatus = (status: string): status is TaskStatus =>
-  STATUS_KEYS.has(status);
 
 /**
  * A task's status and due day under its sheet's title, with the one change
@@ -77,53 +65,48 @@ const LoadedTaskStatus = ({
   source: AccessTokenSource;
   taskId: string;
 }) => {
+  const loaded = use(load);
+  if (Result.isError(loaded)) {
+    return null;
+  }
+  return (
+    <TaskStatusBody
+      matterId={matterId}
+      source={source}
+      task={loaded.value}
+      taskId={taskId}
+    />
+  );
+};
+
+const TaskStatusBody = ({
+  matterId,
+  source,
+  task,
+  taskId,
+}: {
+  matterId: string;
+  source: AccessTokenSource;
+  task: TaskDetail;
+  taskId: string;
+}) => {
   const t = useTranslations("tasks");
   const matter = useTranslations("matter");
   const format = useFormatter();
-  const { end } = useSession();
-  const changed = useChanged();
-  const loaded = use(load);
-  const [status, setStatus] = useState(
-    Result.isOk(loaded) ? (loaded.value.status ?? TASK_STATUS.OPEN) : null,
-  );
-  const [failure, setFailure] = useState<WriteFailure | null>(null);
-  const [saving, startSaving] = useTransition();
-
-  if (Result.isError(loaded) || status === null) {
-    return null;
-  }
-  const done = CLOSED.has(status);
-  const next = done ? TASK_STATUS.OPEN : TASK_STATUS.DONE;
-  const { dueDate } = loaded.value;
-
-  const change = () => {
-    startSaving(async () => {
-      setFailure(null);
-      const saved = await setTaskStatus({
-        fetch,
-        matterId,
-        source,
-        status: next,
-        taskId,
-      });
-      if (Result.isOk(saved)) {
-        setStatus(next);
-        changed("tasks");
-        return;
-      }
-      if (saved.error._tag === "SignedOutError") {
-        end(source);
-        return;
-      }
-      setFailure(writeFailure(saved.error));
-    });
-  };
+  const { assignees, dueDate, status: reported } = task;
+  const { change, closed, failure, saving, status } = useTaskStatus({
+    from: task,
+    matterId,
+    source,
+    status: reported ?? TASK_STATUS.OPEN,
+    taskId,
+  });
 
   return (
     <View className="gap-3">
       <Text variant="caption">
         {[
-          isStatus(status) ? matter(`status.${status}`) : status,
+          isTaskStatus(status) ? matter(`status.${status}`) : status,
           dueDate === null || dueDate === undefined
             ? undefined
             : t("dueOn", {
@@ -141,13 +124,13 @@ const LoadedTaskStatus = ({
         disabled={saving}
         loading={saving}
         onPress={change}
-        variant={done ? "outline" : "default"}
+        variant={closed ? "outline" : "default"}
       >
-        {done ? t("reopen") : t("markDone")}
+        {closed ? t("reopen") : t("markDone")}
       </Button>
       <WriteFailureNotice failure={failure} message={t("statusFailed")} />
       <TaskAssignees
-        initial={loaded.value.assignees}
+        initial={assignees}
         matterId={matterId}
         source={source}
         taskId={taskId}

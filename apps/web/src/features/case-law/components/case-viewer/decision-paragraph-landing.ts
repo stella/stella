@@ -9,7 +9,12 @@ import {
 } from "@stll/decision-reader/reader-landing";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
+import {
+  heldAnchorTarget,
+  type HeldDecisionAnchor,
+} from "@/features/case-law/decision-anchor-resolution.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 import { decisionParagraphLanding } from "./decision-paragraph-landing.logic";
@@ -33,8 +38,10 @@ export const applyDecisionParagraphLanding = (
     }
     case "invalid":
     case "text-unavailable":
+    case "anchor-pending":
       return undefined;
     case "not-found":
+    case "anchor-gone":
       return holdTop(container);
     case "range":
       anchorIds = paragraphLanding.anchorIds;
@@ -90,6 +97,8 @@ type DecisionParagraphLandingSyncOptions = {
   /** The decision's stored AST; its reference, not a per-render parse, keys the landing. */
   documentAst: unknown;
   fragment: string | undefined;
+  /** Where the fragment's block anchor points in the shown document. */
+  fragmentAnchor: HeldDecisionAnchor | undefined;
   sessionId?: string | undefined;
 };
 
@@ -102,8 +111,19 @@ export const useDecisionParagraphLanding = ({
   containerRef,
   documentAst,
   fragment,
+  fragmentAnchor,
   sessionId,
 }: DecisionParagraphLandingSyncOptions) => {
+  // The landing reruns when the resolution's state or target changes, never
+  // on a new object carrying the same answer.
+  const fragmentAnchorType = fragmentAnchor?.type;
+  const fragmentAnchorTarget =
+    fragmentAnchor === undefined ? undefined : heldAnchorTarget(fragmentAnchor);
+  const resolveFragmentAnchor = useLatestCallback(
+    () =>
+      fragmentAnchor ??
+      panic("A block anchor fragment must arrive with its resolution"),
+  );
   useExternalSyncEffect(() => {
     const container = containerRef.current;
     if (container === null) {
@@ -111,7 +131,19 @@ export const useDecisionParagraphLanding = ({
     }
     return applyDecisionParagraphLanding(
       container,
-      decisionParagraphLanding(parseDocumentAst(documentAst), fragment),
+      decisionParagraphLanding(
+        parseDocumentAst(documentAst),
+        fragment,
+        resolveFragmentAnchor,
+      ),
     );
-  }, [containerRef, documentAst, fragment, sessionId]);
+  }, [
+    containerRef,
+    documentAst,
+    fragment,
+    fragmentAnchorType,
+    fragmentAnchorTarget,
+    resolveFragmentAnchor,
+    sessionId,
+  ]);
 };

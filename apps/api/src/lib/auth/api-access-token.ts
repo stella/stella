@@ -56,6 +56,19 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/dictation/transcribe.ts",
   },
+  // The Outlook add-in's email helpers: a summary of the open email and a
+  // reply draft. Each sends only the email text in its body to the model and
+  // stores nothing; they are add-in buttons, not agent capabilities.
+  "POST /v1/ai/summarize": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/summarize.ts",
+    uncataloged: "native_tool_ui",
+  },
+  "POST /v1/ai/draft-email": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/draft-email.ts",
+    uncataloged: "native_tool_ui",
+  },
   "GET /v1/workspaces/:workspaceId/vocabulary": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/vocabulary/get.ts",
@@ -165,6 +178,15 @@ export const API_OAUTH_ROUTES = {
   "GET /v1/chat/threads": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/threads/list.ts",
+  },
+  // The reader's own marks on a chat in the chats list.
+  "PATCH /v1/chat/threads/:threadId/read-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/read-state/update.ts",
+  },
+  "PATCH /v1/chat/threads/:threadId/pin-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/pin-state/update.ts",
   },
   "GET /v1/chat/threads/:threadId/messages": {
     scope: "stella:chat",
@@ -306,6 +328,7 @@ export const API_OAUTH_ROUTES = {
       | "upload_mechanics"
       | "search_ui"
       | "native_device"
+      | "native_tool_ui"
       | "session_token_exchange"
       | "chat_thread_ui"
       | "plumbing";

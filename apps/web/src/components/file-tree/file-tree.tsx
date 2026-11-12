@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -205,9 +206,9 @@ export const FileTree = ({
                 {renderName ? (
                   renderName(node)
                 ) : (
-                  <BidiText as="span" className="truncate" title={node.name}>
+                  <TruncatedText render={<BidiText as="span" />}>
                     {node.name}
-                  </BidiText>
+                  </TruncatedText>
                 )}
               </FileTreeNameCell>
             </div>
