@@ -2,6 +2,7 @@ import type { Page, Request, Response, Route } from "@playwright/test";
 import { panic } from "better-result";
 
 import { apiStatus, apiUploadDocx } from "../helpers/api";
+import { apiJson, respond } from "../helpers/route-mock";
 import {
   isNon2xxStatus,
   networkRequestLabel,
@@ -68,7 +69,7 @@ const buildMultiPagePdf = (): Buffer => {
 };
 
 const currentDesktop = {
-  type: "current",
+  type: "current" as const,
   desktop: {
     version: "1.0.0",
     protocol: 1,
@@ -87,13 +88,14 @@ const holdHandoffs = async (page: Page) => {
 };
 
 const releaseHandoff = async (route: Route) => {
-  await route.fulfill({
-    json: {
+  await respond(
+    route,
+    apiJson("v1/entities/:entityId/pdf-signing-handoffs", "post", {
       deepLinkUrl: "stella://pdf-sign/open?handoff=e2e",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
       sessionId: "90123344-5566-7788-9900-aabbccddeeff",
-    },
-  });
+    }),
+  );
 };
 
 const viewerSignControl = (page: Page) =>
@@ -167,7 +169,10 @@ test.describe("PDF save and sign on the document route", () => {
     const { cookies } = await request.storageState();
     await page.context().addCookies(cookies);
     await page.route("**/v1/desktop/presence", async (route) => {
-      await route.fulfill({ json: currentDesktop });
+      await respond(
+        route,
+        apiJson("v1/desktop/presence", "get", currentDesktop),
+      );
     });
     await expect
       .poll(

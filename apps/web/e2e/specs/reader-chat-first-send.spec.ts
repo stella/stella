@@ -15,6 +15,7 @@ import {
   DOCKED_CHAT_LEGAL_ROUTES,
   installDockedLegalFixtures,
 } from "../helpers/docked-chat-legal-fixtures";
+import { apiJson, eventStream, respond } from "../helpers/route-mock";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 
@@ -37,7 +38,12 @@ test.use({ locale: "en-US" });
 const openFreshReader = async (page: Page) => {
   await installDockedLegalFixtures(page);
   await page.route("**/v1/chat/threads/*/suggested-prompts*", async (route) => {
-    await route.fulfill({ json: { prompts: [] } });
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/suggested-prompts", "post", {
+        prompts: [],
+      }),
+    );
   });
   await openMemberDecision(page, {
     bootPath: DECISION_READER_BOOT_PATH,
@@ -65,13 +71,14 @@ test("a fresh decision reader succeeds on its first chat question", async ({
     parts: [{ type: "text", content: ANSWER }],
   } satisfies (typeof dockedChatMessagePage.messages)[number];
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-    await route.fulfill({
-      json: {
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/messages", "get", {
         ...dockedChatMessagePage,
         messages: answered ? [completedMessage] : [],
         threadExists: answered,
-      },
-    });
+      }),
+    );
   });
   await page.route(/\/v1\/chat\/?$/u, async (route) => {
     const body: unknown = route.request().postDataJSON();
@@ -104,12 +111,7 @@ test("a fresh decision reader succeeds on its first chat question", async ({
         runId: send.runId,
       },
     ] satisfies StreamChunk[];
-    await route.fulfill({
-      contentType: "text/event-stream",
-      body: events
-        .map((event) => `data: ${JSON.stringify(event)}\n\n`)
-        .join(""),
-    });
+    await respond(route, eventStream(events));
   });
 
   const composer = await openFreshReader(page);
@@ -135,9 +137,14 @@ test("a fresh reader shows connection guidance when its first chat request canno
   }
   browserErrors.expectCaptured(/Failed to load resource:.*ERR_FAILED/u);
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-    await route.fulfill({
-      json: { ...dockedChatMessagePage, messages: [], threadExists: false },
-    });
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/messages", "get", {
+        ...dockedChatMessagePage,
+        messages: [],
+        threadExists: false,
+      }),
+    );
   });
   let sends = 0;
   await page.route(/\/v1\/chat\/?$/u, async (route) => {
