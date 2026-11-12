@@ -71,7 +71,7 @@ const wordsOf = (element: Element): string => {
   for (const chrome of copy.querySelectorAll("[data-reader-chrome]")) {
     chrome.remove();
   }
-  return (copy.textContent ?? "").trim();
+  return copy.textContent.trim();
 };
 
 /** The element that draws the formula's words. */
@@ -122,7 +122,7 @@ describe("the opening formula in the reader", () => {
     // The preamble after it stays the court's running text.
     const recital =
       [...root.querySelectorAll("p")].find((element) =>
-        element.textContent?.includes("rozhodl v senátě"),
+        element.textContent.includes("rozhodl v senátě"),
       ) ?? panic("The recital is not drawn");
     expect(classesOf(recital)).toContain(READER_PROSE_CLASS);
   });
