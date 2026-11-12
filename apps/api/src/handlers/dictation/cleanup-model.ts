@@ -36,14 +36,12 @@ const quoted = (phrases: readonly string[]): string =>
 const APP_KIND_REGISTERS = {
   email:
     "formal, in complete sentences that each start with a capital and end with their mark",
-  chat:
-    "brief and informal: a short message gets no closing period unless one was dictated, and casual words stay casual",
+  chat: "brief and informal: a short message gets no closing period unless one was dictated, and casual words stay casual",
   document:
     "formal and precise, as in legal drafting: complete sentences, careful punctuation, and numbers, dates and defined terms written exactly",
   browser:
     "neutral: the rules above as they are, since the page may be anything",
-  code:
-    "minimal: no capital or mark that was not dictated, and names, paths and commands exactly as spoken",
+  code: "minimal: no capital or mark that was not dictated, and names, paths and commands exactly as spoken",
   terminal:
     "minimal: no capital or mark that was not dictated, and commands, paths and flags exactly as spoken",
   other: "neutral: the rules above as they are",
