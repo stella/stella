@@ -397,17 +397,17 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   [CASE_LAW_DECISION_VIEWS[0]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   case_law_decision_citation_stats: {
-    decision_id: "permitted",
-    direction: "permitted",
-    related_year: "permitted",
-    related_country: "permitted",
-    related_source_id: "permitted",
-    polarity: "permitted",
-    count: "permitted",
+    decision_id: "required",
+    direction: "required",
+    related_year: "required",
+    related_country: "required",
+    related_source_id: "required",
+    polarity: "required",
+    count: "required",
   },
   case_law_decision_citation_stats_state: {
-    decision_id: "permitted",
-    status: "permitted",
+    decision_id: "required",
+    status: "required",
   },
   // The text-search configuration a language's query is parsed with. It is
   // read from the database whose search documents it has to match.

@@ -571,6 +571,21 @@
       "showBefore": "Zobraziť text pred ¶ {from}",
       "verifyParagraphs": "Overiť odseky"
     },
+    "staleness": {
+      "failed": "Tvrdenia sa nepodarilo skontrolovať znova",
+      "finished": "{count, plural, one {# tvrdenie znova skontrolované} few {# tvrdenia znova skontrolované} many {# tvrdenia znova skontrolovaného} other {# tvrdení znova skontrolovaných}}",
+      "partial": "Znova skontrolované: {rechecked, number}, nepodarilo sa: {failed, plural, one {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt zmenený",
+        "factHeld": "Fakt vylúčený",
+        "factRemoved": "Fakt odobraný",
+        "newFactRelated": "Nový súvisiaci fakt"
+      },
+      "recheckAll": "Skontrolovať všetko znova",
+      "recheckLocked": "Kontroluje sa znova spolu s ostatnými zastaranými tvrdeniami",
+      "runLine": "{count, plural, one {# tvrdenie môže byť zastarané} few {# tvrdenia môžu byť zastarané} many {# tvrdenia môže byť zastaraného} other {# tvrdení môže byť zastaraných}}",
+      "running": "{count, plural, one {Znova sa kontroluje # tvrdenie…} few {Znova sa kontrolujú # tvrdenia…} many {Znova sa kontroluje # tvrdenia…} other {Znova sa kontroluje # tvrdení…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "V rozpore",
@@ -2160,6 +2175,7 @@
     "stopFailed": "Odpoveď sa nepodarilo zastaviť. Skúste to znova.",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
+    "stopping": "Zastavujem…",
     "suggestTitle": "Navrhnúť názov",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nie sú dostupné pre anonymizované konverzácie.",
     "suggestedFollowupsLabel": "Navrhované nadväzujúce otázky",
@@ -2696,6 +2712,7 @@
     "organization": "Organizácia",
     "organizationName": "Názov organizácie",
     "organizations": "Organizácie",
+    "outOfDate": "Neaktuálne",
     "page": "Stránka {page}",
     "paymentRetryNotice": "Problém s platbou. Ak chcete zachovať prístup, aktualizujte spôsob platby do {date}.",
     "pin": "Pripnúť",
@@ -6101,7 +6118,6 @@
     "comments": "Komentáre",
     "commentsEmpty": "Komentár pridáte označením textu.",
     "noRevisions": "Zatiaľ žiadne revízie",
-    "outOfDate": "Neaktuálne",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Bez zhrnutia",
     "proposals": "Návrhy zmien",

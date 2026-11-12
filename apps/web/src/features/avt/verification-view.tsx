@@ -20,6 +20,7 @@ import {
   FileSearchIcon,
   FilterIcon,
   FlagIcon,
+  HistoryIcon,
 } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -40,6 +41,8 @@ import type { OriginalScrollTarget } from "@/features/avt/original-docx-view";
 import { isPdfClaimBoxDrawn } from "@/features/avt/original-pdf-claim-box";
 import { outsideSpansForBlock } from "@/features/avt/paragraph-scope.logic";
 import { RunHistorySheet } from "@/features/avt/review-history";
+import { RunStalenessLine } from "@/features/avt/run-staleness";
+import { isOutOfDate, outOfDateIdsIn } from "@/features/avt/staleness.logic";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   MatchStepper,
@@ -54,6 +57,7 @@ import type {
   VerificationRun,
 } from "@/features/avt/types";
 import { REVIEW_STATUS_META, STATE_META } from "@/features/avt/types";
+import { useBulkRecheck } from "@/features/avt/use-bulk-recheck";
 import { useClaimReviewActions } from "@/features/avt/use-claim-review-actions";
 import {
   claimFactsById,
@@ -96,6 +100,7 @@ type VerdictFilter =
   | "needsreview"
   | "needsevidence"
   | "reviewed"
+  | "outdated"
   | ClaimState;
 
 /** What the run's header can ask of the view: select a claim and bring it
@@ -155,6 +160,7 @@ export const VerificationView = ({
   const readingOrder = presentation.readingOrder;
   const counts = countClaims(run.claims, contested);
   const routineIds = routineUnsettledClaimIds(run.claims, contested);
+  const bulkRecheck = useBulkRecheck({ workspaceId, runId: run.id });
 
   const [selected, setSelected] = React.useState(readingOrder.at(0) ?? null);
   const [filter, setFilter] = React.useState<VerdictFilter>("all");
@@ -189,6 +195,8 @@ export const VerificationView = ({
       setSelected(firstMatch);
     }
   };
+
+  const outOfDateIds = outOfDateIdsIn(readingOrder, claimById);
 
   const orderedMatches =
     filter === "all"
@@ -389,6 +397,13 @@ export const VerificationView = ({
           workspaceId={workspaceId}
         />
       </AttentionBar>
+      <RunStalenessLine
+        canReview={canReview}
+        filtered={filter === "outdated"}
+        onFilter={(on) => applyFilter(on ? "outdated" : "all")}
+        outOfDateIds={outOfDateIds}
+        recheck={bulkRecheck}
+      />
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-5">
         <div className="flex h-96 flex-col overflow-hidden rounded-xl border md:col-span-3 md:h-auto md:min-h-0">
           {(hasOriginal || stepper.total > 0) && (
@@ -447,8 +462,8 @@ export const VerificationView = ({
               factsById={claimFactsById(run, selectedClaim)}
               key={selectedClaim.id}
               onReviewEvent={(event) => recordEvent(selectedClaim.id, event)}
+              recheckRun={bulkRecheck.forClaim(selectedClaim.id)}
               run={run}
-              stepper={stepper}
               workspaceId={workspaceId}
             />
           )}
@@ -767,6 +782,9 @@ const claimMatchesFilter = (
     case "needsevidence": {
       return claim.review?.status === "needs-evidence";
     }
+    case "outdated": {
+      return isOutOfDate(claim);
+    }
     case "supported":
     case "tension":
     case "contradicted":
@@ -864,6 +882,7 @@ const ClaimSpan = ({
   const reviewStatus = claim.review?.status ?? null;
   const { mark, markTextClass } = STATE_COLOR[state];
   const qualifierAnnouncement = announceQualifiers(claim);
+  const outOfDate = isOutOfDate(claim);
   return (
     // The claim's look is the review text mark, drawn by the span. A claim is
     // a run of the document's prose and wraps with it, so it is a text run,
@@ -913,6 +932,12 @@ const ClaimSpan = ({
             className="text-warning ms-0.5 inline-block size-3 align-middle"
           />
         )}
+        {outOfDate && (
+          <HistoryIcon
+            aria-hidden="true"
+            className="text-muted-foreground ms-0.5 inline-block size-3 align-middle"
+          />
+        )}
         {/* The verdict colour, the underline and each marker are visual only;
             a screen-reader user hears the verdict and markers here. */}
         <span className="sr-only">
@@ -925,6 +950,7 @@ const ClaimSpan = ({
                 : REVIEW_STATUS_META[reviewStatus].selectKey,
           })}
           {qualifierAnnouncement !== null && ` ${qualifierAnnouncement}`}
+          {outOfDate && ` ${t("common.outOfDate")}`}
         </span>
       </span>
     </ButtonTextRun>

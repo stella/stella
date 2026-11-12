@@ -132,7 +132,7 @@ type BuiltInApprovalToolName = Exclude<
  * name), and its input is the contract's (`chat-local-run-tool`).
  */
 type HarnessToolName = keyof typeof HARNESS_TOOL_TITLE_KEYS;
-type HarnessChatToolCallPart = Omit<TanStackChatToolCallPart, "name"> & {
+export type HarnessChatToolCallPart = Omit<TanStackChatToolCallPart, "name"> & {
   name: HarnessToolName;
 };
 export type ApprovalToolName =

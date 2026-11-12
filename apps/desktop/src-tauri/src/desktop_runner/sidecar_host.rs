@@ -59,6 +59,9 @@ use crate::runner_protocol::{
 const LOG_TARGET: &str = "desktop_runner::host";
 /// How often reports are probed again without a reason to.
 pub(crate) const PROBE_INTERVAL: Duration = Duration::from_secs(5 * 60);
+/// How soon a ready harness whose probe failed once is probed again. One
+/// failed probe (a busy or just-woken computer) keeps it ready until then.
+pub(crate) const FAILED_PROBE_RECHECK: Duration = Duration::from_secs(30);
 /// Retries of an output the journal could not record, doubling up to this.
 const STORAGE_RETRY_CAP: Duration = Duration::from_secs(30);
 const STORAGE_RETRY_FIRST: Duration = Duration::from_millis(250);
@@ -124,6 +127,19 @@ pub(crate) struct HostSettings {
 struct Cached {
   report: HarnessReport,
   credentials: Option<HarnessCredentials>,
+  /// A ready report kept through one probe that found the harness
+  /// unavailable; the next failed probe replaces it.
+  kept_through_failure: bool,
+}
+
+impl Cached {
+  const fn new(report: HarnessReport, credentials: Option<HarnessCredentials>) -> Self {
+    Self {
+      report,
+      credentials,
+      kept_through_failure: false,
+    }
+  }
 }
 
 /// A run this host relays.
@@ -180,6 +196,15 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl SidecarHarnessHost {
+  /// Whether the harness's ready report was kept through a failed probe.
+  #[cfg(all(test, unix))]
+  pub(crate) fn kept_through_failure(&self, harness: Harness) -> bool {
+    self
+      .shared
+      .cached(harness)
+      .is_some_and(|cached| cached.kept_through_failure)
+  }
+
   /// How many restore requests the host was handed, repeats included.
   #[cfg(all(test, unix))]
   pub(crate) fn restores_asked(&self) -> usize {
@@ -225,6 +250,37 @@ impl Shared {
       .iter()
       .find(|(id, _)| *id == harness)
       .map(|(_, cached)| cached.clone())
+  }
+
+  /// Keep a ready report through the first probe that finds the harness
+  /// unavailable. `true` when it was kept: the caller probes again soon.
+  /// The kept report takes the probe's freshly read `credentials` all the
+  /// same: a sign-in changes them (a ChatGPT profile's key changes on every
+  /// sign-in), and a run starts with the cached ones.
+  fn keep_ready_once(
+    &self,
+    harness: Harness,
+    credentials: Option<&HarnessCredentials>,
+  ) -> bool {
+    locked(&self.cache)
+      .iter_mut()
+      .find(|(id, _)| *id == harness)
+      .is_some_and(|(_, held)| {
+        let keep =
+          matches!(held.report, HarnessReport::Ready(_)) && !held.kept_through_failure;
+        if keep {
+          held.kept_through_failure = true;
+          held.credentials = credentials.cloned();
+        }
+        keep
+      })
+  }
+
+  /// Every installed harness has a report from a probe.
+  fn settled(&self) -> bool {
+    Harness::ALL.iter().all(|&harness| {
+      self.cached(harness).is_some() || self.harnesses.installed(harness).is_none()
+    })
   }
 
   /// Store a probe's result; announce it when the report changed.
@@ -552,12 +608,14 @@ pub(crate) fn skill_folders_within(
   })
 }
 
-/// Probe every harness now, then on the interval or when asked to. Folders
-/// no run has used for too long are removed on the same beat.
+/// Probe every harness now, then on the interval or when asked to, and
+/// soon after a probe that a ready harness was kept through. Folders no run
+/// has used for too long are removed on the same beat.
 async fn refresh_reports(shared: Arc<Shared>, sidecar: HarnessSidecar) {
   loop {
+    let mut recheck = false;
     for &harness in Harness::ALL {
-      probe(&shared, &sidecar, harness).await;
+      recheck |= probe(&shared, &sidecar, harness).await == Probed::KeptReady;
     }
     let held = Arc::clone(&shared);
     let removal = tokio::task::spawn_blocking(move || {
@@ -570,23 +628,37 @@ async fn refresh_reports(shared: Arc<Shared>, sidecar: HarnessSidecar) {
     if removal.await.is_err() {
       tracing::warn!(target: LOG_TARGET, "removing idle run folders stopped early");
     }
+    let wait = if recheck {
+      FAILED_PROBE_RECHECK.min(shared.settings.probe_interval)
+    } else {
+      shared.settings.probe_interval
+    };
     tokio::select! {
-      () = tokio::time::sleep(shared.settings.probe_interval) => {}
+      () = tokio::time::sleep(wait) => {}
       () = shared.refresh.notified() => {}
     }
   }
 }
 
-async fn probe(shared: &Shared, sidecar: &HarnessSidecar, harness: Harness) {
+/// What a probe did to the harness's report.
+#[derive(Debug, PartialEq, Eq)]
+enum Probed {
+  Stored,
+  /// The probe found a ready harness unavailable once; the ready report
+  /// stands until the recheck.
+  KeptReady,
+}
+
+async fn probe(shared: &Shared, sidecar: &HarnessSidecar, harness: Harness) -> Probed {
   let Some(installed) = shared.harnesses.installed(harness) else {
     shared.store(
       harness,
-      Cached {
-        report: HarnessReport::NotInstalled(MissingHarness { id: harness }),
-        credentials: None,
-      },
+      Cached::new(
+        HarnessReport::NotInstalled(MissingHarness { id: harness }),
+        None,
+      ),
     );
-    return;
+    return Probed::Stored;
   };
   let credentials = shared.harnesses.credentials(harness).await;
   let request_id = Uuid::new_v4().to_string();
@@ -609,31 +681,36 @@ async fn probe(shared: &Shared, sidecar: &HarnessSidecar, harness: Harness) {
   locked(&shared.grants).remove(&request_id);
   drop(installed);
   match outcome {
-    Ok(outcome) => shared.store(
-      harness,
-      Cached {
-        report: harness_sidecar::harness_report(harness, &outcome),
-        credentials,
-      },
-    ),
+    Ok(outcome) => {
+      let report = harness_sidecar::harness_report(harness, &outcome);
+      if matches!(report, HarnessReport::Unavailable(_))
+        && shared.keep_ready_once(harness, credentials.as_ref())
+      {
+        tracing::info!(target: LOG_TARGET, "a ready harness failed one probe; checking again soon");
+        return Probed::KeptReady;
+      }
+      shared.store(harness, Cached::new(report, credentials));
+      Probed::Stored
+    }
     // The last report stands until a probe answers again. An installed
     // harness that has none yet is unavailable, never missing.
     Err(error) => {
       tracing::warn!(target: LOG_TARGET, ?error, "a harness could not be probed");
       if shared.cached(harness).is_none() {
-        shared.store(
-          harness,
-          Cached {
-            report: HarnessReport::Unavailable(UnavailableHarness {
-              id: harness,
-              reason: HarnessUnavailableReason::ProbeFailed,
-            }),
-            credentials,
-          },
-        );
+        shared.store(harness, Cached::new(probe_pending(harness), credentials));
       }
+      Probed::Stored
     }
   }
+}
+
+/// The report of an installed harness no probe has answered for yet: not
+/// available for now, never missing.
+const fn probe_pending(harness: Harness) -> HarnessReport {
+  HarnessReport::Unavailable(UnavailableHarness {
+    id: harness,
+    reason: HarnessUnavailableReason::ProbeFailed,
+  })
 }
 
 /// The origin an API base URL serves from: what the holder's MCP proxy may
@@ -782,8 +859,8 @@ impl HarnessHost for SidecarHarnessHost {
       }
     }
     tokio::spawn(refresh_reports(Arc::clone(&self.shared), sidecar.clone()));
-    // A CLI installed or updated after the app started is reported ready
-    // without waiting for the next periodic probe.
+    // A CLI installed or updated after the app started, or a sign-in or
+    // sign-out, is reported without waiting for the next periodic probe.
     let shared = Arc::clone(&self.shared);
     self
       .shared
@@ -826,6 +903,10 @@ impl HarnessHost for SidecarHarnessHost {
     let folder_id = Uuid::parse_str(&start.folder_id)
       .map_err(|_not_uuid| RejectReason::UnknownRun)?;
     let cached = self.shared.cached(start.harness);
+    if cached.is_none() && self.shared.harnesses.installed(start.harness).is_some() {
+      // Installed, but its first probe has not answered: not missing.
+      return Err(RejectReason::HarnessUnavailable);
+    }
     if let Some(reason) = refusal(cached.as_ref().map(|cached| &cached.report), &start)
     {
       return Err(reason);
@@ -1024,13 +1105,19 @@ impl HarnessReports for SidecarHarnessHost {
   fn reports(&self) -> Vec<HarnessReport> {
     Harness::ALL
       .iter()
-      .map(|&harness| {
-        self.shared.cached(harness).map_or(
-          HarnessReport::NotInstalled(MissingHarness { id: harness }),
-          |cached| cached.report,
-        )
+      .map(|&harness| match self.shared.cached(harness) {
+        Some(cached) => cached.report,
+        // Installed and not probed yet: being checked, never missing.
+        None if self.shared.harnesses.installed(harness).is_some() => {
+          probe_pending(harness)
+        }
+        None => HarnessReport::NotInstalled(MissingHarness { id: harness }),
       })
       .collect()
+  }
+
+  fn settled(&self) -> bool {
+    self.shared.settled()
   }
 
   fn changes(&self) -> Option<watch::Receiver<u64>> {

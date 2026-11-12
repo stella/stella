@@ -160,6 +160,8 @@ export const resolveClaimView = (
     refs: [],
     review: claim.review,
     recheck: claim.recheck,
+    // The server reads a reopened claim's staleness as it reads a run's.
+    staleness: claim.staleness,
   };
 };
 

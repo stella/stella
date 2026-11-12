@@ -44,14 +44,24 @@ import {
   readVerifiedClaim,
   rejectLinkedFact,
 } from "@/api/lib/lists/verification/read-run";
-import { recheckClaim } from "@/api/lib/lists/verification/recheck";
-import type { RecheckClaimArgs } from "@/api/lib/lists/verification/recheck";
+import {
+  recheckClaim,
+  recheckClaims,
+} from "@/api/lib/lists/verification/recheck";
+import type {
+  RecheckClaimArgs,
+  RecheckRequest,
+} from "@/api/lib/lists/verification/recheck";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import {
+  getTestDb,
+  releaseTestDb,
+  withQueryLogger,
+} from "@/api/tests/security/test-utils";
 import type {
   TestDatabase,
   TestDatabaseTransaction,
@@ -71,8 +81,11 @@ const boardMinute = createSafeId<"entity">();
 const bankTransfer = createSafeId<"entity">();
 const gapClaim = createSafeId<"legalListClaim">();
 const opinionClaim = createSafeId<"legalListClaim">();
+/** A second claim without coverage, for re-checking several at once. */
+const secondGapClaim = createSafeId<"legalListClaim">();
 
 const CLAIM_TEXT = "The invoice was paid on 5 April 2021";
+const SECOND_CLAIM_TEXT = "The board approved the invoice paid on 5 April 2021";
 const grants = {
   [LEGAL_LISTS_FEATURE_ID]: [{ type: "organization", organizationId }],
   [LIST_VERIFICATION_FEATURE_ID]: [{ type: "organization", organizationId }],
@@ -186,15 +199,26 @@ testState.beforeAll(async () => {
       },
       status: "completed",
     });
-    await tx.insert(legalListVerificationBlocks).values({
-      runId,
-      workspaceId,
-      ordinal: 0,
-      blockId: "p1",
-      kind: "docx-block",
-      pageNumber: null,
-      text: `${CLAIM_TEXT}. I believe it was proper.`,
-    });
+    await tx.insert(legalListVerificationBlocks).values([
+      {
+        runId,
+        workspaceId,
+        ordinal: 0,
+        blockId: "p1",
+        kind: "docx-block",
+        pageNumber: null,
+        text: `${CLAIM_TEXT}. I believe it was proper.`,
+      },
+      {
+        runId,
+        workspaceId,
+        ordinal: 1,
+        blockId: "p2",
+        kind: "docx-block",
+        pageNumber: null,
+        text: `${SECOND_CLAIM_TEXT}.`,
+      },
+    ]);
     await tx.insert(legalListClaims).values([
       {
         id: gapClaim,
@@ -228,6 +252,22 @@ testState.beforeAll(async () => {
           end: CLAIM_TEXT.length + 25,
         },
       },
+      {
+        id: secondGapClaim,
+        workspaceId,
+        runId,
+        position: 2,
+        type: "fact",
+        state: "nocover",
+        score: null,
+        text: SECOND_CLAIM_TEXT,
+        anchor: {
+          type: "docx-block",
+          blockId: "p2",
+          start: 0,
+          end: SECOND_CLAIM_TEXT.length,
+        },
+      },
     ]);
     await tx
       .insert(legalListVerificationBudgets)
@@ -253,6 +293,27 @@ const testSafeDb: SafeDb = async (fn) =>
     catch: (cause) =>
       new DatabaseError({ message: "test transaction failed", cause }),
   });
+
+/** A `SafeDb` that counts every statement it runs. */
+const countingSafeDb = () => {
+  const counted = { statements: 0 };
+  const database = withQueryLogger(testDb, {
+    logQuery: () => {
+      counted.statements += 1;
+    },
+  });
+  const safeDb: SafeDb = async (fn) =>
+    await Result.tryPromise({
+      try: async () =>
+        await database.transaction(async (tx: TestDatabaseTransaction) => {
+          await tx.execute(sql.raw("RESET ROLE"));
+          return await fn(asTestRaw<Transaction>(tx));
+        }),
+      catch: (cause) =>
+        new DatabaseError({ message: "test transaction failed", cause }),
+    });
+  return { counted, safeDb };
+};
 
 /** The grader's answer: the claim rests on the second fact it was shown. */
 const fakeGrader = () => {
@@ -283,36 +344,78 @@ const TEST_AI_CONFIG = {
   decision: null,
 } satisfies OrgAIConfig;
 
+const recheckContext = () => ({
+  safeDb: testSafeDb,
+  workspaceId,
+  runId,
+  organizationId,
+  userId,
+  admission: testModelAdmission(organizationId, "list-verification.recheck"),
+  // The organization's own key: the model resolves without a deployment
+  // key, and the grader itself is the injected fake.
+  orgAIConfig: TEST_AI_CONFIG,
+  managedAIResidency: "eu" as const,
+  promptCachingEnabled: false,
+  recordAuditEvent: async () => undefined,
+  signal: new AbortController().signal,
+  caps: { active: 100, startsPerDay: 1000 },
+});
+
 const recheck = async (
   args: Pick<RecheckClaimArgs, "claimId" | "requestKey"> &
     Pick<RecheckClaimArgs, "generateObjectForTask">,
 ) => {
   const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
   try {
-    const outcome = await recheckClaim({
-      ...args,
-      safeDb: testSafeDb,
-      workspaceId,
-      runId,
-      organizationId,
-      userId,
-      admission: testModelAdmission(
-        organizationId,
-        "list-verification.recheck",
-      ),
-      // The organization's own key: the model resolves without a deployment
-      // key, and the grader itself is the injected fake.
-      orgAIConfig: TEST_AI_CONFIG,
-      managedAIResidency: "eu",
-      promptCachingEnabled: false,
-      recordAuditEvent: async () => undefined,
-      signal: new AbortController().signal,
-      caps: { active: 100, startsPerDay: 1000 },
-    });
+    const outcome = await recheckClaim({ ...args, ...recheckContext() });
     return outcome.unwrap("The re-check could not reach the database");
   } finally {
     restoreMode();
   }
+};
+
+/** Re-check several claims in one request; each claim's outcome by id. */
+const recheckMany = async (
+  requests: readonly RecheckRequest[],
+  generateObjectForTask: RecheckClaimArgs["generateObjectForTask"],
+  safeDb: SafeDb = testSafeDb,
+) => {
+  const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+  try {
+    const outcomes = await recheckClaims({
+      ...recheckContext(),
+      safeDb,
+      requests,
+      generateObjectForTask,
+    });
+    return Object.fromEntries(
+      outcomes.unwrap("The re-checks could not reach the database"),
+    );
+  } finally {
+    restoreMode();
+  }
+};
+
+/** A grader that answers only the claims it is told to, each supported by
+ *  the second fact it was shown. */
+const graderAnswering = (promptIds: readonly string[]) => {
+  const requests: string[] = [];
+  const generate = asTestRaw<typeof generateTanStackObjectForTask>(
+    async (request: unknown) => {
+      requests.push(JSON.stringify(request));
+      return {
+        grades: promptIds.map((claimId) => ({
+          claimId,
+          verdict: "supported",
+          score: 80,
+          refs: [{ factId: "F2", rel: "supports" }],
+          conflict: null,
+          qualifiers: [],
+        })),
+      };
+    },
+  );
+  return { requests, generate };
 };
 
 const claimRow = async (claimId: SafeId<"legalListClaim">) =>
@@ -396,6 +499,51 @@ test("a re-check appends its grade and never rewrites the claim", async () => {
   expect(claim?.recheck?.facts.map((fact) => fact.text)).toEqual([
     "Invoice paid 5 April 2021",
   ]);
+  // The new grade read the list as it stands, so nothing on it is new to
+  // the claim any more.
+  expect(claim?.staleness).toEqual([]);
+});
+
+test("a fact added after the run marks the claim it bears on, and an edit to a cited fact marks its grade", async () => {
+  // The second claim was graded by the run alone, which never read the
+  // transfer; the transfer's words are on its point.
+  expect((await readClaim(secondGapClaim))?.staleness).toEqual([
+    {
+      kind: "new-fact-related",
+      factEntityId: bankTransfer,
+      text: "Invoice paid 5 April 2021",
+    },
+  ]);
+  const grader = graderAnswering(["C1"]);
+  expect(
+    await recheck({
+      claimId: secondGapClaim,
+      requestKey: "second-first",
+      generateObjectForTask: grader.generate,
+    }),
+  ).toEqual({ type: "rechecked", replayed: false });
+  expect((await readClaim(secondGapClaim))?.staleness).toEqual([]);
+
+  // Its grade cites the transfer; editing the transfer outdates it.
+  await testDb
+    .update(entities)
+    .set({ name: "Invoice paid 6 April 2021" })
+    .where(eq(entities.id, bankTransfer));
+  try {
+    expect((await readClaim(secondGapClaim))?.staleness).toEqual([
+      {
+        kind: "fact-changed",
+        factEntityId: bankTransfer,
+        text: "Invoice paid 6 April 2021",
+      },
+    ]);
+  } finally {
+    await testDb
+      .update(entities)
+      .set({ name: "Invoice paid 5 April 2021" })
+      .where(eq(entities.id, bankTransfer));
+  }
+  expect((await readClaim(secondGapClaim))?.staleness).toEqual([]);
 });
 
 test("the same request key grades the claim once", async () => {
@@ -517,6 +665,113 @@ test("a claim set aside as not verifiable is reopened before a re-check", async 
     }),
   ).toEqual({ type: "recheck-set-aside-claim" });
   expect(grader.requests).toHaveLength(0);
+});
+
+test("several claims are graded in one call, each under its own key, and a repeat grades none again", async () => {
+  const requests = [
+    { claimId: gapClaim, requestKey: "bulk-gap" },
+    { claimId: secondGapClaim, requestKey: "bulk-second" },
+  ];
+  const before = {
+    gap: (await recheckEvents(gapClaim)).length,
+    second: (await recheckEvents(secondGapClaim)).length,
+  };
+  const grader = graderAnswering(["C1", "C2"]);
+  expect(await recheckMany(requests, grader.generate)).toEqual({
+    [gapClaim]: { type: "rechecked", replayed: false },
+    [secondGapClaim]: { type: "rechecked", replayed: false },
+  });
+  expect(grader.requests).toHaveLength(1);
+  expect(await recheckEvents(gapClaim)).toHaveLength(before.gap + 1);
+  expect(await recheckEvents(secondGapClaim)).toHaveLength(before.second + 1);
+
+  const repeat = graderAnswering(["C1", "C2"]);
+  expect(await recheckMany(requests, repeat.generate)).toEqual({
+    [gapClaim]: { type: "rechecked", replayed: true },
+    [secondGapClaim]: { type: "rechecked", replayed: true },
+  });
+  expect(repeat.requests).toHaveLength(0);
+  expect(await recheckEvents(gapClaim)).toHaveLength(before.gap + 1);
+  expect(await recheckEvents(secondGapClaim)).toHaveLength(before.second + 1);
+});
+
+test("re-checking more claims runs no more statements", async () => {
+  const measure = async (requests: readonly RecheckRequest[]) => {
+    const { counted, safeDb } = countingSafeDb();
+    const outcomes = await recheckMany(
+      requests,
+      graderAnswering(["C1", "C2"]).generate,
+      safeDb,
+    );
+    expect(
+      Object.values(outcomes).every((outcome) => outcome.type === "rechecked"),
+    ).toBe(true);
+    return counted.statements;
+  };
+  const one = await measure([{ claimId: gapClaim, requestKey: "measure-one" }]);
+  const two = await measure([
+    { claimId: gapClaim, requestKey: "measure-two-gap" },
+    { claimId: secondGapClaim, requestKey: "measure-two-second" },
+  ]);
+  expect(one).toBeGreaterThan(0);
+  expect(two).toBe(one);
+});
+
+test("each claim reports its own refusal and the rest are still graded", async () => {
+  const missing = createSafeId<"legalListClaim">();
+  const before = (await recheckEvents(gapClaim)).length;
+  // The grader answers the first claim only, before and after its repair
+  // round; the second claim is left unanswered.
+  const grader = graderAnswering(["C1"]);
+  const outcomes = await recheckMany(
+    [
+      { claimId: gapClaim, requestKey: "partial-gap" },
+      { claimId: opinionClaim, requestKey: "partial-opinion" },
+      { claimId: missing, requestKey: "partial-missing" },
+      { claimId: secondGapClaim, requestKey: "partial-second" },
+    ],
+    grader.generate,
+  );
+  expect(outcomes).toMatchObject({
+    [gapClaim]: { type: "rechecked", replayed: false },
+    [opinionClaim]: { type: "recheck-set-aside-claim" },
+    [missing]: { type: "not-found" },
+    [secondGapClaim]: { type: "grading-failed" },
+  });
+  expect(await recheckEvents(gapClaim)).toHaveLength(before + 1);
+  expect(
+    (await recheckEvents(secondGapClaim)).some(
+      ({ payload }) =>
+        payload.kind === "recheck" && payload.requestKey === "partial-second",
+    ),
+  ).toBe(false);
+});
+
+test("an organization at its daily limit is refused before any of several claims is graded", async () => {
+  await testDb
+    .update(legalListVerificationBudgets)
+    .set({ startsToday: sql`${legalListVerificationBudgets.dailyLimit}` })
+    .where(eq(legalListVerificationBudgets.organizationId, organizationId));
+  const grader = graderAnswering(["C1", "C2"]);
+  try {
+    const outcomes = await recheckMany(
+      [
+        { claimId: gapClaim, requestKey: "bulk-over-budget-gap" },
+        { claimId: secondGapClaim, requestKey: "bulk-over-budget-second" },
+      ],
+      grader.generate,
+    );
+    expect(Object.values(outcomes).map((outcome) => outcome.type)).toEqual([
+      "run-limit",
+      "run-limit",
+    ]);
+    expect(grader.requests).toHaveLength(0);
+  } finally {
+    await testDb
+      .update(legalListVerificationBudgets)
+      .set({ startsToday: 0 })
+      .where(eq(legalListVerificationBudgets.organizationId, organizationId));
+  }
 });
 
 test("only a fact of the verified list that is checked against can be linked", async () => {

@@ -1173,6 +1173,11 @@ const CREATE_MUTATION_DISPOSITIONS = {
     reason:
       "Money movement keeps its current payment transaction and is never replayed.",
   },
+  "src/handlers/lists/verifications/claim-rechecks/bulk/create.ts": {
+    type: "non-replay",
+    reason:
+      "Each claim's receipt is the request key recorded on its review event and checked under the claim's lock, so a repeat reports that claim replayed; the model calls run between two transactions, outside one scoped request receipt.",
+  },
   "src/handlers/lists/verifications/claim-rechecks/create.ts": {
     type: "non-replay",
     reason:

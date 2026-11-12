@@ -571,6 +571,21 @@
       "showBefore": "Näita teksti enne ¶ {from}",
       "verifyParagraphs": "Kontrolli lõike"
     },
+    "staleness": {
+      "failed": "Väiteid ei saanud uuesti kontrollida",
+      "finished": "{count, plural, one {# väide kontrollitud uuesti} other {# väidet kontrollitud uuesti}}",
+      "partial": "Uuesti kontrollitud: {rechecked, number}, ebaõnnestus: {failed, plural, one {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt muudetud",
+        "factHeld": "Fakt välja jäetud",
+        "factRemoved": "Fakt eemaldatud",
+        "newFactRelated": "Uus seotud fakt"
+      },
+      "recheckAll": "Kontrolli kõik uuesti",
+      "recheckLocked": "Kontrollitakse uuesti koos teiste aegunud väidetega",
+      "runLine": "{count, plural, one {# väide võib olla aegunud} other {# väidet võivad olla aegunud}}",
+      "running": "{count, plural, one {# väidet kontrollitakse uuesti…} other {# väidet kontrollitakse uuesti…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Vastuolus",
@@ -2160,6 +2175,7 @@
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
+    "stopping": "Peatamine…",
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
     "suggestedFollowupsLabel": "Soovitatud jätkuküsimused",
@@ -2696,6 +2712,7 @@
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
     "organizations": "Organisatsioonid",
+    "outOfDate": "Aegunud",
     "page": "Lehekülg {page}",
     "paymentRetryNotice": "Makseprobleem. Juurdepääsu säilitamiseks uuendage oma makseviisi hiljemalt {date}.",
     "pin": "Kinnita",
@@ -6101,7 +6118,6 @@
     "comments": "Kommentaarid",
     "commentsEmpty": "Kommenteerimiseks vali tekst.",
     "noRevisions": "Versioone veel pole",
-    "outOfDate": "Aegunud",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Kokkuvõte puudub",
     "proposals": "Muudatusettepanekud",
