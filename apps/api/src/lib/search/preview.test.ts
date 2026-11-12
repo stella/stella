@@ -1,10 +1,20 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
-import { buildSearchPreviewQuery } from "@/api/lib/search/preview";
+import {
+  buildCaseLawDecisionPreviewQuery,
+  buildSearchPreviewQuery,
+  readSearchPreview,
+} from "@/api/lib/search/preview";
 import type { GlobalSearchResultType } from "@/api/lib/search/types";
+import {
+  clearRootDbMocks,
+  rootDbExecuteMock,
+  rootDbTestDouble,
+} from "@/api/tests/helpers/mock-root-db";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-4000-8000-000000000001",
@@ -256,5 +266,102 @@ describe("search preview authorization scope", () => {
     // The hit came from the corpus search engine: the decision is read by id
     // and not asked to match the global tsquery again.
     expect(compiled.sql).not.toContain("clsd.tsv @@");
+  });
+});
+
+describe("case-law preview without a search projection row", () => {
+  // Canonical corpus storage writes no projection row, yet the corpus search
+  // engine still returns the decision as a hit.
+  const { scopedDb } = createScopedDbMock(rootDbTestDouble);
+  const dialect = new PgDialect();
+  const query = {
+    query: "náhrada škody",
+    resultId,
+    type: "case-law",
+    organizationId,
+    userId,
+    accessibleWorkspaceIds,
+  } as const;
+  const decisionRow = {
+    id: resultId,
+    title: "25 Cdo 1234/2024 - Nejvyšší soud",
+    fulltext: null,
+    text_s3_key: "case-law/text/abc",
+    content_hash: "a".repeat(64),
+  };
+
+  beforeEach(() => {
+    clearRootDbMocks();
+  });
+
+  const answering = (decision: Record<string, unknown> | null) => {
+    rootDbExecuteMock.mockImplementation(async (statement) => {
+      const text = dialect.sqlToQuery(statement).sql;
+      return await Promise.resolve(
+        text.includes("case_law_search_documents") || decision === null
+          ? []
+          : [decision],
+      );
+    });
+  };
+
+  test("reads the decision's stored text and opens on the query's words", async () => {
+    answering(decisionRow);
+    const reads: unknown[] = [];
+    const preview = await readSearchPreview(query, scopedDb, {
+      readCaseLawText: async (source) => {
+        reads.push(source);
+        return await Promise.resolve(
+          `${"Úvod. ".repeat(4000)}Žalobce se domáhal náhrady škody za vadné plnění.`,
+        );
+      },
+    });
+
+    expect(reads).toEqual([
+      {
+        id: resultId,
+        fulltext: null,
+        textS3Key: "case-law/text/abc",
+        contentHash: "a".repeat(64),
+      },
+    ]);
+    const value = preview.unwrap();
+    expect(value?.type).toBe("plain-text");
+    const content = value?.type === "plain-text" ? value.content : "";
+    expect(content.startsWith("25 Cdo 1234/2024 - Nejvyšší soud ")).toBe(true);
+    expect(content).toContain("náhrady škody");
+  });
+
+  test("shows the title alone when the decision has no text", async () => {
+    answering(decisionRow);
+    const preview = await readSearchPreview(query, scopedDb, {
+      readCaseLawText: async () => await Promise.resolve(null),
+    });
+
+    expect(preview.unwrap()).toEqual({
+      type: "plain-text",
+      content: "25 Cdo 1234/2024 - Nejvyšší soud",
+    });
+  });
+
+  test("a decision the public may not read has no preview", async () => {
+    answering(null);
+    const preview = await readSearchPreview(query, scopedDb, {
+      readCaseLawText: async () => await Promise.resolve("unused"),
+    });
+
+    expect(preview.unwrap()).toBeNull();
+  });
+
+  test("the decision read keeps the published and redistributable gate", () => {
+    const compiled = dialect.sqlToQuery(
+      buildCaseLawDecisionPreviewQuery(resultId),
+    );
+    expect(compiled.sql).toContain("FROM case_law_published_decisions d");
+    expect(compiled.sql).toContain(
+      "JOIN case_law_sources\n    ON case_law_sources.id = d.source_id",
+    );
+    expect(compiled.sql).toContain("allowsRedistribution");
+    expect(compiled.params).toContain(resultId);
   });
 });
