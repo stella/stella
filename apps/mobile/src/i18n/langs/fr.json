@@ -70,6 +70,7 @@
     "inputRequest": "Entrée",
     "questionTitle": "Demande de précision",
     "questionChooseSeveral": "Choisissez toutes les réponses qui s’appliquent",
+    "questionSelectAll": "Tout sélectionner",
     "questionOwnWords": "Écrire la vôtre",
     "questionShowOptions": "Afficher les options",
     "questionPlaceholder": "Votre réponse",

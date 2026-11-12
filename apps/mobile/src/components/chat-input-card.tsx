@@ -4,6 +4,22 @@ import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import {
+  ASK_USER_SELECTION,
+  type AskUserAnswer,
+  type AskUserQuestion,
+  askUserSelectionOf,
+} from "@stll/api-contract/chat-ask-user";
+import {
+  answersInOwnWords as askUserAnswersInOwnWords,
+  askUserAnswersOf,
+  type AskUserDraft,
+  askUserDraftOf,
+  askUserOptionsOf,
+  initialAskUserDrafts,
+  pickAllAskUserOptions,
+  pickAskUserOption,
+} from "@stll/api-contract/chat-ask-user-draft";
+import {
   answersInOwnWords,
   canSubmitLocalRunAnswers,
   type ChatLocalRunQuestion,
@@ -27,6 +43,7 @@ import { pendingInputKey } from "@/state/chat-pending-input";
 import type {
   PendingAnswer,
   PendingApproval,
+  PendingAsk,
   PendingInput,
 } from "@/state/chat-pending-input";
 
@@ -35,8 +52,9 @@ export type InputNotice = "failed" | "alreadyAnswered";
 
 /**
  * What a paused turn waits for, answered from the phone: the calls it asks
- * to run, allowed or denied, or the question a coding agent on the person's
- * computer asked, with its options and the person's own words. Input only
+ * to run, allowed or denied, the model's clarifying questions, or the
+ * question a coding agent on the person's computer asked, each with its
+ * options and the person's own words. Input only
  * the web app can give is named as such. `busy` holds the card while an
  * answer is on its way.
  */
@@ -73,25 +91,221 @@ export const ChatInputCard = ({
         // An earlier pause was answered already; this is the one after it.
         <Text variant="caption">{t("alreadyAnswered")}</Text>
       ) : null}
-      {pending.type === "approvals" ? (
-        <ApprovalsCard
-          approvals={pending.approvals}
-          busy={busy}
-          // A new pause starts with nothing decided; the same one keeps it.
-          key={pendingInputKey(pending)}
-          onAnswer={onAnswer}
-        />
-      ) : (
-        <QuestionCard
-          busy={busy}
-          key={pendingInputKey(pending)}
-          onAnswer={onAnswer}
-          pause={pending.pause}
-        />
-      )}
+      <PendingCard
+        busy={busy}
+        // A new pause starts with nothing entered; the same one keeps it.
+        key={pendingInputKey(pending)}
+        onAnswer={onAnswer}
+        pending={pending}
+      />
       {notice === "failed" ? (
         <Text variant="error">{t("answerSendFailed")}</Text>
       ) : null}
+    </View>
+  );
+};
+
+/** The card for one kind of pause. */
+const PendingCard = ({
+  busy,
+  onAnswer,
+  pending,
+}: {
+  busy: boolean;
+  onAnswer: (answer: PendingAnswer) => void;
+  pending: Exclude<PendingInput, { type: "elsewhere" }>;
+}) => {
+  if (pending.type === "approvals") {
+    return (
+      <ApprovalsCard
+        approvals={pending.approvals}
+        busy={busy}
+        onAnswer={onAnswer}
+      />
+    );
+  }
+  if (pending.type === "ask-user") {
+    return <AskUserCard asks={pending.asks} busy={busy} onAnswer={onAnswer} />;
+  }
+  return <QuestionCard busy={busy} onAnswer={onAnswer} pause={pending.pause} />;
+};
+
+/**
+ * The model's clarifying questions, as the web's card asks them: each
+ * question with its option chips (several of them on a multiple-choice
+ * question, with Select all), and the person's own words in place of the
+ * options. Submit answers them all at once, as the server takes them.
+ */
+const AskUserCard = ({
+  asks,
+  busy,
+  onAnswer,
+}: {
+  asks: readonly PendingAsk[];
+  busy: boolean;
+  onAnswer: (answer: PendingAnswer) => void;
+}) => {
+  const t = useTranslations("chat");
+  const [drafts, setDrafts] = useState<
+    Readonly<Record<string, Readonly<Record<number, AskUserDraft>>>>
+  >(() =>
+    Object.fromEntries(
+      asks.map(({ interruptId, questions }) => [
+        interruptId,
+        initialAskUserDrafts(questions),
+      ]),
+    ),
+  );
+  const draftsOf = (interruptId: string) =>
+    Object.hasOwn(drafts, interruptId) ? (drafts[interruptId] ?? {}) : {};
+  const answers = asks.flatMap(({ interruptId, questions }) => {
+    const given = askUserAnswersOf(questions, draftsOf(interruptId));
+    return given === null ? [] : [[interruptId, given] as const];
+  });
+  const complete = answers.length === asks.length;
+
+  return (
+    <View className="gap-4">
+      <Text variant="label">{t("questionTitle")}</Text>
+      {asks.flatMap(({ interruptId, questions }) =>
+        questions.map((question, index) => (
+          <AskUserField
+            busy={busy}
+            draft={askUserDraftOf(draftsOf(interruptId), index)}
+            // A question is answered by its place in its ask.
+            key={`${interruptId}:${String(index)}`}
+            onChange={(next) => {
+              setDrafts((current) => {
+                const ask = Object.hasOwn(current, interruptId)
+                  ? (current[interruptId] ?? {})
+                  : {};
+                return {
+                  ...current,
+                  [interruptId]: {
+                    ...ask,
+                    [index]: next(askUserDraftOf(ask, index)),
+                  },
+                };
+              });
+            }}
+            question={question}
+          />
+        )),
+      )}
+      <Button
+        className="self-start"
+        disabled={busy || !complete}
+        loading={busy}
+        onPress={() => {
+          onAnswer({
+            type: "ask-user",
+            answers: Object.fromEntries<readonly AskUserAnswer[]>(answers),
+          });
+        }}
+        size="sm"
+      >
+        {t("submitAnswers")}
+      </Button>
+    </View>
+  );
+};
+
+/** One of the model's questions: its option chips, or the person's own words. */
+const AskUserField = ({
+  busy,
+  draft,
+  onChange,
+  question,
+}: {
+  busy: boolean;
+  draft: AskUserDraft;
+  onChange: (next: (draft: AskUserDraft) => AskUserDraft) => void;
+  question: AskUserQuestion;
+}) => {
+  const t = useTranslations("chat");
+  const options = askUserOptionsOf(question);
+  const ownWords = askUserAnswersInOwnWords(question, draft);
+  const multiple = askUserSelectionOf(question) === ASK_USER_SELECTION.multiple;
+
+  return (
+    <View className="gap-2">
+      <Text>{question.question}</Text>
+      {question.reason === "" ? null : (
+        <Text variant="caption">{question.reason}</Text>
+      )}
+      {multiple && !ownWords ? (
+        <Text variant="caption">{t("questionChooseSeveral")}</Text>
+      ) : null}
+      {ownWords ? (
+        <View className="gap-2">
+          <Input
+            accessibilityLabel={question.question}
+            disabled={busy}
+            onChangeText={(text) => {
+              onChange((current) => ({ ...current, text }));
+            }}
+            placeholder={t("questionPlaceholder")}
+            size="sm"
+            value={draft.text}
+          />
+          {options.length > 0 ? (
+            <Button
+              className="self-start"
+              disabled={busy}
+              onPress={() => {
+                onChange((current) => ({ ...current, ownWords: false }));
+              }}
+              size="sm"
+              variant="muted"
+            >
+              {t("questionShowOptions")}
+            </Button>
+          ) : null}
+        </View>
+      ) : (
+        <View className="flex-row flex-wrap gap-2">
+          {options.map((option) => (
+            <Button
+              accessibilityRole={multiple ? "checkbox" : "radio"}
+              accessibilityState={{ checked: draft.picked.includes(option) }}
+              disabled={busy}
+              key={option}
+              onPress={() => {
+                onChange((current) =>
+                  pickAskUserOption(question, current, option),
+                );
+              }}
+              selected={draft.picked.includes(option)}
+              size="sm"
+              variant="outline"
+            >
+              {option}
+            </Button>
+          ))}
+          {multiple ? (
+            <Button
+              disabled={busy}
+              onPress={() => {
+                onChange((current) => pickAllAskUserOptions(question, current));
+              }}
+              size="sm"
+              variant="muted"
+            >
+              {t("questionSelectAll")}
+            </Button>
+          ) : null}
+          <Button
+            disabled={busy}
+            onPress={() => {
+              onChange((current) => ({ ...current, ownWords: true }));
+            }}
+            size="sm"
+            variant="muted"
+          >
+            {t("questionOwnWords")}
+          </Button>
+        </View>
+      )}
     </View>
   );
 };
