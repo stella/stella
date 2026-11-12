@@ -493,6 +493,7 @@ export const ENUM_COLUMNS = {
   oauth_client: ["registration_origin"],
   office_file_evidence: ["entity_feature_gate", "format"],
   organization_access_states: ["origin"],
+  organization_data_exports: ["version_scope"],
   organization_settings: [
     "ai_billing_drafts_mode",
     "document_processing_mode",
