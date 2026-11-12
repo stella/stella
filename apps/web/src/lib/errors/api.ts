@@ -25,6 +25,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { BROWSER_SITE_GRANT_REFUSAL_CODE } from "@stll/api-contract/browser-site-grants";
 import {
   CHAT_LOCAL_RUN_REFUSAL,
   type ChatLocalRunRefusal,
@@ -41,6 +42,10 @@ import {
   publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
+import {
+  SHAREPOINT_REFUSAL_CODE,
+  type SharepointRefusalCode,
+} from "@stll/api-contract/sharepoint";
 import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
@@ -297,6 +302,23 @@ const CHAT_INPUT_REFUSAL_ERROR_KEYS = {
   [CHAT_INPUT_REFUSAL_CODE.toolsUnsupported]: "chat.sendErrorToolsUnsupported",
 } as const satisfies Record<ChatInputRefusalCode, TranslationKey>;
 
+/** Why a SharePoint or OneDrive read or import was refused. */
+const SHAREPOINT_REFUSAL_ERROR_KEYS = {
+  [SHAREPOINT_REFUSAL_CODE.notConnected]:
+    "errors.apiCodes.sharepointNotConnected",
+  [SHAREPOINT_REFUSAL_CODE.reconnectRequired]:
+    "errors.apiCodes.sharepointReconnectRequired",
+  [SHAREPOINT_REFUSAL_CODE.accessDenied]:
+    "errors.apiCodes.sharepointAccessDenied",
+  [SHAREPOINT_REFUSAL_CODE.notFound]: "errors.apiCodes.sharepointNotFound",
+  [SHAREPOINT_REFUSAL_CODE.throttled]: "errors.apiCodes.sharepointThrottled",
+  [SHAREPOINT_REFUSAL_CODE.invalidCursor]:
+    "errors.apiCodes.sharepointInvalidCursor",
+  [SHAREPOINT_REFUSAL_CODE.notAFile]: "errors.apiCodes.sharepointNotAFile",
+  [SHAREPOINT_REFUSAL_CODE.fileTooLarge]:
+    "errors.apiCodes.sharepointFileTooLarge",
+} as const satisfies Record<SharepointRefusalCode, TranslationKey>;
+
 const CODE_ERROR_KEYS = {
   [TIME_ENTRY_RATE_REQUIRED_CODE]: "billing.rates.effectiveRateRequired",
   [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
@@ -306,6 +328,7 @@ const CODE_ERROR_KEYS = {
   ...CHAT_INPUT_REFUSAL_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   ...INVOICE_ISSUE_ERROR_KEYS,
+  ...SHAREPOINT_REFUSAL_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
   [MATTER_CONTACT_CAPACITY_CODE.reached]:
@@ -318,6 +341,8 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.organizationDataBoxLimitReached",
   [ORGANIZATION_DATA_BOX_REFUSAL_CODE.changedConcurrently]:
     "errors.apiCodes.organizationDataBoxesChanged",
+  [BROWSER_SITE_GRANT_REFUSAL_CODE.limitReached]:
+    "errors.apiCodes.browserSiteGrantLimitReached",
   [CHAT_MESSAGE_EMPTY_ERROR_CODE]: "chat.sendErrorMessageEmpty",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
@@ -377,6 +402,15 @@ const isUsageRejectionReason = (
   reason: string,
 ): reason is keyof typeof USAGE_REJECTION_REASON_KEYS =>
   Object.hasOwn(USAGE_REJECTION_REASON_KEYS, reason);
+
+/**
+ * The localized message for a refusal code carried outside an HTTP error (a
+ * per-item result of a batch), or `undefined` when the code has no message.
+ */
+export const apiCodeMessage = (code: string): string | undefined =>
+  Object.hasOwn(CODE_ERROR_KEYS, code) && isKnownErrorCode(code)
+    ? translateError(CODE_ERROR_KEYS[code])
+    : undefined;
 
 /** The message for the first field a rejected request named. */
 const validationIssueMessage = (issue: ApiValidationIssue): string => {

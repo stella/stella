@@ -28,8 +28,9 @@ import {
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   chatLocalRunComputerEventSchema,
+  type ChatLocalRunComputerWait,
+  type ChatLocalRunQuestionReply,
 } from "@stll/api-contract/chat-run-target";
-import type { ChatLocalRunQuestionReply } from "@stll/api-contract/chat-run-target";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -162,10 +163,11 @@ type ChatRuntimeSnapshot = {
   status: ChatClientState;
   stop: ChatStopState;
   turnAbandoned: boolean;
-  /** The turn runs on the member's computer, which went away mid-turn; the
-   *  turn goes on once it reconnects. A rejoin replays the run's events, so
-   *  a reload reads the same. */
-  waitingForComputer: boolean;
+  /** The turn runs on the member's computer and waits on it: for it to pick
+   *  the run up (counted from the send), or to come back after it went away
+   *  mid-turn; `null` while it runs. A rejoin replays the run's events, so a
+   *  reload reads the same. */
+  computerWait: ChatLocalRunComputerWait | null;
 };
 
 type TanStackClientToolResult = Parameters<
@@ -461,7 +463,7 @@ export const createChatRuntime = ({
     status: "ready",
     stop: { status: "idle" },
     turnAbandoned: false,
-    waitingForComputer: false,
+    computerWait: null,
   };
   /** The server turn the latest request runs; null from a new message until
    *  the server names its turn. */
@@ -1021,14 +1023,15 @@ export const createChatRuntime = ({
         return;
       }
       setSnapshot({
-        waitingForComputer: parsed.output.status === "waiting",
+        computerWait:
+          parsed.output.status === "connected" ? null : parsed.output,
       });
     },
     onLoadingChange: (isLoading) => {
       setSnapshot({
         isLoading,
         // A wait belongs to the request that reported it.
-        waitingForComputer: false,
+        computerWait: null,
         ...(!isLoading ? { reconnecting: false } : {}),
         ...(isLoading && stopBeforeHeaders === "none" && !isStoppedTurn()
           ? { turnAbandoned: false }

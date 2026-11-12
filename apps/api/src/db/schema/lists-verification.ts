@@ -1,10 +1,13 @@
 import {
   CLAIM_ANCHOR_TYPES,
+  CLAIM_CARRY_OUTCOMES,
   CLAIM_FRAMINGS,
   CLAIM_REVIEW_EVENT_KINDS,
+  CLAIM_REVIEW_REASON_RULE,
   CLAIM_STATE,
   CLAIM_STATES,
   CLAIM_TYPES,
+  MATCHED_CLAIM_CARRY_OUTCOMES,
   SCORED_CLAIM_STATES,
   VERIFICATION_LIMITS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
@@ -15,9 +18,11 @@ import type {
   ClaimAnchor,
   ClaimRef,
   ClaimReviewEventPayload,
+  ClaimReviewReasonRule,
   RecordConflict,
   VerificationEvidence,
 } from "@/api/lib/lists/verification/contract";
+import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
 import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
 
 import {
@@ -62,8 +67,26 @@ const CLAIM_FRAMING_SQL_VALUES = quoted(CLAIM_FRAMINGS);
 const CLAIM_STATE_SQL_VALUES = quoted(CLAIM_STATES);
 const SCORED_CLAIM_STATE_SQL_VALUES = quoted(SCORED_CLAIM_STATES);
 const REVIEW_EVENT_KIND_SQL_VALUES = quoted(CLAIM_REVIEW_EVENT_KINDS);
+const CARRY_OUTCOME_SQL_VALUES = quoted(CLAIM_CARRY_OUTCOMES);
+const MATCHED_CARRY_OUTCOME_SQL_VALUES = quoted(MATCHED_CLAIM_CARRY_OUTCOMES);
+const reviewKindsWhereReason = (rules: readonly ClaimReviewReasonRule[]) =>
+  quoted(
+    CLAIM_REVIEW_EVENT_KINDS.filter((kind) =>
+      rules.includes(CLAIM_REVIEW_REASON_RULE[kind]),
+    ),
+  );
+const REASON_REQUIRED_KIND_SQL_VALUES = reviewKindsWhereReason(["required"]);
+const REASON_ALLOWED_KIND_SQL_VALUES = reviewKindsWhereReason([
+  "required",
+  "optional",
+]);
+const NOTE_MAX_SQL = sql.raw(String(VERIFICATION_LIMITS.NOTE_MAX));
 const NOTVERIFIABLE_SQL = sql.raw(`'${CLAIM_STATE.NOTVERIFIABLE}'`);
 const RECORDCONFLICT_SQL = sql.raw(`'${CLAIM_STATE.RECORDCONFLICT}'`);
+const NOCOVER_SQL = sql.raw(`'${CLAIM_STATE.NOCOVER}'`);
+const RECORD_SILENT_SQL = sql.raw(
+  `'${"record-silent" satisfies GraderClaimQualifier["kind"]}'`,
+);
 
 const verificationBudgetOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
   FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_verification_budgets'::regclass)`;
@@ -385,6 +408,9 @@ export const legalListClaims = p.pgTable(
     anchor: jsonb().$type<ClaimAnchor>().notNull(),
     refs: jsonb().$type<ClaimRef[]>().notNull().default([]),
     recordConflict: jsonb("record_conflict").$type<RecordConflict>(),
+    // Caveats the grader gave with the verdict. Qualifiers computed from the
+    // facts as they stand now are never stored.
+    qualifiers: jsonb().$type<GraderClaimQualifier[]>().notNull().default([]),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -441,6 +467,14 @@ export const legalListClaims = p.pgTable(
       "legal_list_claims_refs_shape_check",
       sql`jsonb_typeof(${table.refs}) = 'array'`,
     ),
+    // Only missing coverage can be explained by a record that is not
+    // expected to speak to the point.
+    p.check(
+      "legal_list_claims_qualifiers_check",
+      sql`jsonb_typeof(${table.qualifiers}) = 'array'
+        AND (${table.state} = ${NOCOVER_SQL}
+          OR NOT ${table.qualifiers} @> jsonb_build_array(jsonb_build_object('kind', ${RECORD_SILENT_SQL})))`,
+    ),
     p.check(
       "legal_list_claims_anchor_shape_check",
       sql`${table.anchor}->>'type' IN (${CLAIM_ANCHOR_TYPE_SQL_VALUES})`,
@@ -478,16 +512,29 @@ export const legalListClaimReviewEvents = p.pgTable(
     runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
     claimId: safeUuid<"legalListClaim">("claim_id").notNull(),
     kind: p.text("kind", { enum: CLAIM_REVIEW_EVENT_KINDS }).notNull(),
+    // Typed as written now, so a writer cannot leave out a required reason.
+    // Rows from before reasons were required lack one: readers that report
+    // reasons widen to `StoredClaimReviewEventPayload` (`reviewReasonOf`).
     payload: jsonb().$type<ClaimReviewEventPayload>().notNull(),
     actorId: p
       .text("actor_id")
       .references(() => user.id, { onDelete: "set null" }),
     // The insert's own clock, not the transaction's start: events are folded
     // in this order, and a reviewer whose transaction began earlier but took
-    // the claim's lock later must still sort after the event they saw.
+    // the claim's lock later must still sort after the event they saw. A
+    // carried event keeps its origin's time, so it folds in the order the
+    // reviewer acted and before anything done on the new run.
     createdAt: timestamptz("created_at")
       .notNull()
       .default(sql`clock_timestamp()`),
+    // A decision carried from the previous run of the document: the run and
+    // the event it copies. Null for an action taken on this run.
+    carriedFromRunId: safeUuid<"legalListVerificationRun">(
+      "carried_from_run_id",
+    ),
+    carriedFromEventId: safeUuid<"legalListClaimReviewEvent">(
+      "carried_from_event_id",
+    ),
   },
   (table) => [
     ...entityFeatureGateChecks(table),
@@ -514,6 +561,22 @@ export const legalListClaimReviewEvents = p.pgTable(
     p.check(
       "legal_list_claim_review_events_payload_kind_check",
       sql`${table.payload}->>'kind' = ${table.kind}`,
+    ),
+    // A reason, when given, is text with something besides spaces in it;
+    // actions that change the verdict must give one. Added NOT VALID and
+    // never validated: events recorded before reasons were required keep
+    // their payload as written and read back as "no reason recorded". A
+    // carried event is a copy of one of those as written, so it may lack a
+    // reason its kind now requires.
+    p.check(
+      "legal_list_claim_review_events_reason_check",
+      sql`CASE WHEN ${table.payload}->'reason' IS NULL
+        THEN ${table.kind} NOT IN (${REASON_REQUIRED_KIND_SQL_VALUES})
+          OR ${table.carriedFromEventId} IS NOT NULL
+        ELSE ${table.kind} IN (${REASON_ALLOWED_KIND_SQL_VALUES})
+          AND jsonb_typeof(${table.payload}->'reason') = 'string'
+          AND char_length(btrim(${table.payload}->>'reason')) BETWEEN 1 AND ${NOTE_MAX_SQL}
+        END`,
     ),
     ...entityFeaturePolicies(
       table,
@@ -546,5 +609,117 @@ export const legalListClaimReviewEvents = p.pgTable(
     p
       .index("legal_list_claim_review_events_ef_claim_id_idx")
       .on(table.workspaceId, table.claimId),
+    // A carried event names both its origin run and its origin event.
+    p.check(
+      "legal_list_claim_review_events_carried_from_check",
+      sql`(${table.carriedFromRunId} IS NULL) = (${table.carriedFromEventId} IS NULL)`,
+    ),
+  ],
+);
+
+/**
+ * What became of each reviewed claim of the previous run of a document when
+ * the next run completed (`lib/lists/verification/carry-over.ts`): carried to
+ * a matching claim, matched but with decisions withdrawn because the verdict
+ * changed, or left behind (no match, or more than one). Written once, with
+ * the carried events, in the transaction that completes the run; the
+ * previous run is never changed.
+ */
+export const legalListClaimCarryOutcomes = p.pgTable(
+  "legal_list_claim_carry_outcomes",
+  {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureOrganizationGateColumns(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    // The run the decisions were carried to.
+    runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
+    sourceRunId:
+      safeUuid<"legalListVerificationRun">("source_run_id").notNull(),
+    sourceClaimId: safeUuid<"legalListClaim">("source_claim_id").notNull(),
+    outcome: p.text("outcome", { enum: CLAIM_CARRY_OUTCOMES }).notNull(),
+    // The matching claim of this run; null when nothing matched.
+    targetClaimId: safeUuid<"legalListClaim">("target_claim_id"),
+  },
+  (table) => [
+    ...entityFeatureGateChecks(table),
+    // One outcome per source claim: a replayed completion carries nothing
+    // twice.
+    p.primaryKey({
+      name: "legal_list_claim_carry_outcomes_pkey",
+      columns: [table.runId, table.sourceClaimId],
+    }),
+    // And one source claim per target claim, so no claim receives two
+    // claims' decisions.
+    p
+      .unique("legal_list_claim_carry_outcomes_target_unq")
+      .on(table.runId, table.targetClaimId),
+    p
+      .foreignKey({
+        name: "legal_list_claim_carry_outcomes_run_fk",
+        columns: [table.runId, table.workspaceId],
+        foreignColumns: [
+          legalListVerificationRuns.id,
+          legalListVerificationRuns.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "legal_list_claim_carry_outcomes_source_claim_fk",
+        columns: [table.sourceClaimId, table.sourceRunId, table.workspaceId],
+        foreignColumns: [
+          legalListClaims.id,
+          legalListClaims.runId,
+          legalListClaims.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "legal_list_claim_carry_outcomes_target_claim_fk",
+        columns: [table.targetClaimId, table.runId, table.workspaceId],
+        foreignColumns: [
+          legalListClaims.id,
+          legalListClaims.runId,
+          legalListClaims.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .index("legal_list_claim_carry_outcomes_run_idx")
+      .on(table.workspaceId, table.runId),
+    p
+      .index("legal_list_claim_carry_outcomes_source_claim_idx")
+      .on(table.workspaceId, table.sourceClaimId),
+    // The feature gate finds a claim's outcomes by either claim.
+    p
+      .index("legal_list_claim_carry_outcomes_target_claim_idx")
+      .on(table.workspaceId, table.targetClaimId),
+    p.check(
+      "legal_list_claim_carry_outcomes_outcome_check",
+      sql`${table.outcome} IN (${CARRY_OUTCOME_SQL_VALUES})`,
+    ),
+    // A target claim exactly when one matched.
+    p.check(
+      "legal_list_claim_carry_outcomes_target_check",
+      sql`(${table.targetClaimId} IS NOT NULL) = (${table.outcome} IN (${MATCHED_CARRY_OUTCOME_SQL_VALUES}))`,
+    ),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [
+          table.runId,
+          { kind: "owned-by-parent", parent: legalListVerificationRuns },
+        ],
+        [
+          table.sourceClaimId,
+          { kind: "owned-by-parent", parent: legalListClaims },
+        ],
+        [
+          table.targetClaimId,
+          { kind: "owned-by-parent", parent: legalListClaims },
+        ],
+      ]),
+    }),
   ],
 );

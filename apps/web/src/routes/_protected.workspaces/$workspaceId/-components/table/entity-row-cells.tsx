@@ -13,6 +13,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -877,9 +878,9 @@ const FolderCell = ({
           }}
           variant="plain"
         >
-          <span className="min-w-0 overflow-hidden text-sm text-ellipsis whitespace-pre">
+          <TruncatedText className="text-sm whitespace-pre">
             {name}
-          </span>
+          </TruncatedText>
         </Button>
       )}
     </div>

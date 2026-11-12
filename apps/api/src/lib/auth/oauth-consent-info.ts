@@ -14,12 +14,14 @@ import {
   MOBILE_CLIENT_METADATA_PATH,
   MOBILE_REDIRECT_URIS,
 } from "@stll/api-contract/mobile-client";
+import { OUTLOOK_CLIENT_METADATA_PATH } from "@stll/api-contract/outlook-client";
 import {
   CLI_CLIENT_METADATA_PATH,
   LOOPBACK_REDIRECT_PATH,
 } from "@stll/cli/client-metadata-document";
 
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
+import { getOutlookAddinRedirectUri } from "@/api/lib/auth/outlook-addin-origin";
 import type { OAUTH_REGISTRATION_SCOPE_POLICY } from "@/api/lib/db/oauth-scope-policy";
 import { isLoopbackRedirectUri } from "@/api/lib/oauth-loopback-registration";
 
@@ -28,7 +30,7 @@ type HttpsUrl = `https://${string}`;
 /** The brands only stella's own origins can verify. */
 type FirstPartyBrand = Extract<
   VerifiedOAuthClientBrand,
-  "stella" | "stella_ios" | "stella_cli"
+  "stella" | "stella_ios" | "stella_cli" | "stella_outlook"
 >;
 
 /**
@@ -181,11 +183,14 @@ const findVerifiedUrl = <Entry extends VerifiedClientUrl>(
  * - `exact`: one of `uris`, as written (private-use schemes).
  * - `document_origin`: `path` on the origin that publishes the client's
  *   document.
+ * - `outlook_addin`: the one callback on the task-pane origin this deployment
+ *   configures; none when it configures no origin.
  */
 type FirstPartyRedirect =
   | { readonly type: "loopback"; readonly path: `/${string}` }
   | { readonly type: "exact"; readonly uris: readonly string[] }
-  | { readonly type: "document_origin"; readonly path: `/${string}` };
+  | { readonly type: "document_origin"; readonly path: `/${string}` }
+  | { readonly type: "outlook_addin" };
 
 type FirstPartyOAuthClientEntry = {
   /**
@@ -216,6 +221,11 @@ export const FIRST_PARTY_OAUTH_CLIENTS = {
     documentPath: MOBILE_CLIENT_METADATA_PATH,
     redirect: { type: "exact", uris: MOBILE_REDIRECT_URIS },
     brand: "stella_ios",
+  },
+  outlook: {
+    documentPath: OUTLOOK_CLIENT_METADATA_PATH,
+    redirect: { type: "outlook_addin" },
+    brand: "stella_outlook",
   },
   // stella connecting to an MCP server as a client.
   mcp_connector: {
@@ -273,6 +283,8 @@ export const isFirstPartyRedirectAllowed = (
       return redirect.uris.includes(redirectUri);
     case "document_origin":
       return redirectUri === new URL(redirect.path, origin).href;
+    case "outlook_addin":
+      return redirectUri === getOutlookAddinRedirectUri();
     default:
       redirect satisfies never;
       return panic("Unhandled first-party redirect shape");

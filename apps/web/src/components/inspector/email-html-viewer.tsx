@@ -18,6 +18,7 @@ import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { AlertTriangleIcon, PaperclipIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { textMarkClass } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
@@ -41,7 +42,7 @@ import {
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { getFileSizeDisplay } from "@/lib/file-size";
+import { formatFileSize } from "@/lib/file-size";
 import {
   EMAIL_CITATION_SCROLL_EVENT,
   isEmailCitationTargetDetail,
@@ -354,9 +355,8 @@ export const EmailHtmlViewer = ({
               data-stella-email-anchor={EMAIL_HEADER_CITATION_ID.date}
               label={t("common.date")}
             >
-              <span
+              <TruncatedText
                 className={cn(
-                  "block truncate",
                   activeCitationBlockId === EMAIL_HEADER_CITATION_ID.date &&
                     ACTIVE_CITATION_CLASS,
                 )}
@@ -364,7 +364,7 @@ export const EmailHtmlViewer = ({
                 <time dateTime={parsedDate?.toISOString()}>
                   {formattedDate}
                 </time>
-              </span>
+              </TruncatedText>
             </DetailsItem>
           ) : null}
         </DetailsGrid>
@@ -436,13 +436,16 @@ export const EmailHtmlViewer = ({
                           attachment.mimeType ?? "application/octet-stream"
                         }
                       />
-                      <BidiText as="span" className="max-w-48 min-w-0 truncate">
+                      <TruncatedText
+                        className="max-w-48"
+                        render={<BidiText as="span" />}
+                      >
                         {attachment.fileName ??
                           t("emailViewer.unnamedAttachment")}
-                      </BidiText>
+                      </TruncatedText>
                       {attachment.sizeBytes > 0 ? (
                         <span className="text-muted-foreground shrink-0">
-                          {formatAttachmentSize(attachment.sizeBytes, format)}
+                          {formatFileSize(attachment.sizeBytes, format)}
                         </span>
                       ) : null}
                     </span>
@@ -489,19 +492,6 @@ export const EmailHtmlViewer = ({
       </div>
     </article>
   );
-};
-
-const formatAttachmentSize = (
-  sizeBytes: number,
-  format: ReturnType<typeof useFormatter>,
-): string => {
-  const size = getFileSizeDisplay(sizeBytes);
-  return format.number(size.value, {
-    maximumFractionDigits: 1,
-    style: "unit",
-    unit: size.unit,
-    unitDisplay: "short",
-  });
 };
 
 const EmailParticipantRow = ({

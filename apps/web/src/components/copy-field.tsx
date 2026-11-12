@@ -4,7 +4,7 @@ import {
   InputGroupInput,
 } from "@stll/ui/input-group";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 
 type CopyFieldProps = {
   label: string;
@@ -20,7 +20,7 @@ export const CopyField = ({ label, value }: CopyFieldProps) => (
     <InputGroup>
       <InputGroupInput className="font-mono text-sm" readOnly value={value} />
       <InputGroupAddon align="inline-end">
-        <CopyActionButton
+        <CopyControl
           iconClassName="size-4"
           iconOnly
           size="icon-sm"

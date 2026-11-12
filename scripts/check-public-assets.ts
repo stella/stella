@@ -107,8 +107,10 @@ export const findDuplicateRasterAssets = async ({
 const PUBLIC_ASSET = /^apps\/[^/]+\/public\/(?<publicPath>.+)$/u;
 const CONSUMER_TEXT =
   /\.(?:astro|cjs|css|html|js|json|jsonc|jsx|md|mdx|mjs|mts|svg|ts|tsx|txt|webmanifest|xml)$/u;
+// An app's root HTML, bundler config, or XML manifest (an Office add-in
+// manifest names its icons by public path) is a consumer too.
 const CONSUMER_LOCATION =
-  /^(?:apps\/[^/]+\/(?:src|public)\/|apps\/[^/]+\/[^/]+\.(?:html|config\.[cm]?[jt]s)$|packages\/[^/]+\/src\/)/u;
+  /^(?:apps\/[^/]+\/(?:src|public)\/|apps\/[^/]+\/[^/]+\.(?:html|xml|config\.[cm]?[jt]s)$|packages\/[^/]+\/src\/)/u;
 
 // Fetched by convention, never named by a consumer. Each entry says who reads
 // it; anything else unreferenced is dead weight and fails the check.

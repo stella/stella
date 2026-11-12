@@ -81,6 +81,7 @@ type ThreadResponse =
 const savedThread = {
   activeSkill: builder,
   activeTurnId: null,
+  newestLocalTurn: null,
   attachedFiles: { fileCount: 0, files: [] },
   context: {
     estimatedTokens: 0,
@@ -247,6 +248,13 @@ const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
       if (pathname.endsWith("/chat/skill-availability")) {
         return Response.json({ unavailable: [] });
       }
+      // The open chat keeps itself read.
+      if (
+        pathname.endsWith(`/chat/threads/${threadRef.threadId}/read-state`) &&
+        request.method === "PATCH"
+      ) {
+        return Response.json({ readState: "read" });
+      }
       if (pathname.startsWith("/api/auth/")) {
         return Response.json(null);
       }
@@ -397,7 +405,7 @@ test("an evicted builder's chat lives and goes with the thread entry the page re
   const firstVisit = await openThreadPage(client);
   await send(firstVisit, 1);
   await testing.waitFor(() =>
-    expect(firstVisit.queryByText(ANSWER)).not.toBeNull(),
+    expect(firstVisit.queryByText(ANSWER) === null).toBe(false),
   );
   expect(
     client

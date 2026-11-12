@@ -6,6 +6,7 @@ import {
   JOURNEY_PREREQUISITES_PATH,
   journeyPrerequisitesForwardSchema,
   journeyPrerequisitesReportSchema,
+  SCHEDULED_JOB_MAX_RUNTIME_MS,
 } from "@stll/api-contract/journey-prerequisites";
 import type {
   JourneyPrerequisiteId,
@@ -19,8 +20,12 @@ import {
 } from "../journeys/env";
 import { E2E_API_ORIGIN } from "./api";
 
-/** Long enough for an overdue job behind one running job, then its own run. */
-export const JOURNEY_PREREQUISITE_TIMEOUT_MS = 10 * 60_000;
+/**
+ * The brought-forward run may use its whole budget (a slow external publisher
+ * is not a failure), plus a minute for the scheduler to claim it.
+ */
+export const JOURNEY_PREREQUISITE_TIMEOUT_MS =
+  SCHEDULED_JOB_MAX_RUNTIME_MS + 60_000;
 const JOURNEY_PREREQUISITE_POLL_MS = 5000;
 const REQUEST_TIMEOUT_MS = 15_000;
 

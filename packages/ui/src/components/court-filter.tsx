@@ -10,6 +10,7 @@ import { DirectionalIcon } from "./directional-icon";
 import { Field, FieldLabel } from "./field";
 import { ScrollArea } from "./scroll-area";
 import { SearchField } from "./search-field";
+import { TruncatedText } from "./truncated-text";
 
 type CourtOption = { value: string; label?: string; badgeText?: string };
 type CourtFilterGroup = {
@@ -114,16 +115,15 @@ const SingleCourtGroup = ({ group, options }: SingleCourtGroupProps) => {
                       }
                     }}
                   />
-                  <BidiText
-                    as="span"
+                  <TruncatedText
                     className={cn(
-                      "text-foreground min-w-0 flex-1 truncate",
+                      "text-foreground flex-1",
                       checked && "font-medium",
                     )}
-                    title={label ?? value}
+                    render={<BidiText as="span" />}
                   >
                     {label ?? value}
-                  </BidiText>
+                  </TruncatedText>
                   {badgeText !== undefined && (
                     <bdi className="text-muted-foreground text-2xs shrink-0 tabular-nums">
                       {badgeText}

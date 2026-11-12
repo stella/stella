@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-regional] recapture upgrades a document-only stored payload to the crawl's envelope; crawl and replay build decisions as before.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -82,6 +83,7 @@ import {
   excludedSourceSurface,
   isPersistableSourceDocumentId,
   legacyExcludedSourceField,
+  listingIdentityKey,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -96,12 +98,15 @@ import type {
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
+  ReconciliationListingItem,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
+  StoredRawRecaptureInput,
+  StoredRawRecaptureOutcome,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -2267,6 +2272,161 @@ const reparseCzRegionalStoredRaw = (
 };
 
 /**
+ * The media type rows carried before this adapter stored an envelope: the
+ * document payload alone, without the listing row that keyed it.
+ */
+const CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE = "application/json";
+
+const PUBLICATION_DAY = /^\d{4}-\d{2}-\d{2}/u;
+
+/**
+ * The day listing that names a document-only row: its publication day, which
+ * the document payload states and the opendata endpoint is addressed by.
+ */
+const czRegionalRecaptureLookupOf = (
+  stored: StoredRawReparseInput,
+): string | null => {
+  if (stored.contentType !== CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE) {
+    return null;
+  }
+  const document = readCzRegionalDocument(new TextDecoder().decode(stored.raw));
+  const publishedAt = toOptionalValue(document.parsed?.metadata?.publishedAt);
+  return publishedAt === undefined
+    ? null
+    : (PUBLICATION_DAY.exec(publishedAt)?.[0] ?? null);
+};
+
+/**
+ * The publisher's id of the decision a document-only row holds: the id the
+ * held document states. The row's own id came from the crawl's listing, not
+ * from the bytes, so it alone never proves which document the row holds.
+ */
+const czRegionalHeldDocumentId = (
+  stored: StoredRawReparseInput,
+): string | undefined =>
+  stored.contentType === CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE
+    ? toOptionalValue(
+        readCzRegionalDocument(new TextDecoder().decode(stored.raw)).parsed
+          ?.uuid,
+      )
+    : undefined;
+
+/**
+ * Whether a listed item is the stored row, by the identity rule the crawl and
+ * the reconciliation key rows by: the publisher's document id where the row
+ * or its held document states one, the docket otherwise.
+ */
+const czRegionalMatchesStored = (
+  item: ReconciliationListingItem,
+  stored: StoredRawReparseInput,
+): boolean => {
+  const listed = listingIdentityKey(item.identity);
+  const sourceDocumentId =
+    stored.sourceDocumentId ?? czRegionalHeldDocumentId(stored);
+  const held = listingIdentityKey(
+    sourceDocumentId === undefined
+      ? {
+          type: "case-number",
+          caseNumber: stored.caseNumber,
+          language: CZ_REGIONAL_LANGUAGE,
+        }
+      : { type: "document", sourceDocumentId },
+  );
+  return listed !== null && listed === held;
+};
+
+const sameDocket = (left: string, right: string): boolean =>
+  left.toLocaleLowerCase("cs") === right.toLocaleLowerCase("cs");
+
+/**
+ * Upgrade a document-only row to the envelope the crawl stores today, from the
+ * day listing's own row for it.
+ *
+ * The envelope comes out of {@link assembleCzRegionalDecision}, the builder the
+ * crawl uses, so a recaptured row and a freshly crawled one store the same
+ * bytes. The listed row has to be proved to name the decision the held
+ * document is: the held document states its id, the listing links that id,
+ * the row's own id (where it holds one) is the same, and the docket is the
+ * row's. A docket alone proves nothing, so anything less is reported rather
+ * than written.
+ */
+const recaptureCzRegionalStoredRaw = ({
+  listingPayload,
+  stored,
+}: StoredRawRecaptureInput): StoredRawRecaptureOutcome => {
+  if (stored.contentType !== CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE) {
+    return {
+      type: "not-recapturable",
+      detail: `stored under ${stored.contentType ?? "no content type"}, which keeps its listing row already or holds no document`,
+    };
+  }
+  const read = readCzRegionalListingItem(listingPayload);
+  if (read.type === "unidentifiable") {
+    return {
+      type: "not-recapturable",
+      detail: "the listed item states no docket and court",
+    };
+  }
+  const document = readCzRegionalDocument(new TextDecoder().decode(stored.raw));
+  const heldDocumentId = toOptionalValue(document.parsed?.uuid);
+  if (heldDocumentId === undefined) {
+    return {
+      type: "not-recapturable",
+      detail:
+        "the held document states no id, so no listed item is provably its own",
+    };
+  }
+  if (
+    stored.sourceDocumentId !== null &&
+    stored.sourceDocumentId !== heldDocumentId
+  ) {
+    return {
+      type: "identity-mismatch",
+      detail: `the row names ${stored.sourceDocumentId}, the held document is ${heldDocumentId}`,
+    };
+  }
+  const listedDocumentId = documentIdFromLink(toOptionalValue(read.item.odkaz));
+  if (listedDocumentId === undefined) {
+    return {
+      type: "not-recapturable",
+      detail: `the listed item links no document, so it is not provably ${heldDocumentId}`,
+    };
+  }
+  if (listedDocumentId !== heldDocumentId) {
+    return {
+      type: "identity-mismatch",
+      detail: `the listing links ${listedDocumentId}, the held document is ${heldDocumentId}`,
+    };
+  }
+  const built = assembleCzRegionalDecision({
+    item: read.item,
+    rawListing: listingPayload,
+    document,
+    chain: null,
+  });
+  if (built.type === "unkeyable") {
+    return {
+      type: "not-recapturable",
+      detail: "the listed item and the held document name no court decision",
+    };
+  }
+  const { decision } = built;
+  if (!sameDocket(decision.caseNumber, stored.caseNumber)) {
+    return {
+      type: "identity-mismatch",
+      detail: `the listing states ${decision.caseNumber}, the row ${stored.caseNumber}`,
+    };
+  }
+  return decision.sourceRaw === undefined
+    ? panic("The regional assembler built a decision without its envelope")
+    : {
+        type: "recaptured",
+        raw: decision.sourceRaw,
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      };
+};
+
+/**
  * Every payload this service serves for one decision, and whether the row
  * keeps it.
  *
@@ -2665,6 +2825,14 @@ export const czRegionalAdapter = defineSourceAdapter({
     // for is not marked and stays held: there is nothing left to ask for, and
     // re-listing it on every pass would never let the day settle.
     heldRequiresDetail: true,
+    // Rows stored before the envelope hold the document alone; the day
+    // listing restates the row that keyed them.
+    recapture: {
+      lookupOf: czRegionalRecaptureLookupOf,
+      listLookup: listCzRegionalSlicePage,
+      matchesStored: czRegionalMatchesStored,
+      recaptureStoredRaw: recaptureCzRegionalStoredRaw,
+    },
     listSlicePage: listCzRegionalSlicePage,
     buildDecision: buildCzRegionalFromPayload,
   },

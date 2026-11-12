@@ -2494,10 +2494,9 @@ export const findDecisionIdsByIdentity = async ({
       await caseLawDb(async (tx) => {
         const rows = await decisionIdsByIdentityQuery({
           country,
-          familyKey: await docketFamilyKeyToRead({
+          familyKey: docketFamilyKeyToRead({
             country,
             locator: decisionIdentityLocatorOf(identity),
-            tx,
           }),
           identity,
           tx,

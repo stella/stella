@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/lib/lists/verification/read-run.ts",
+    "from": "d690dc48e75a035f071076c4b620b16524d006cd695b1fc183aaac7f0eb79626",
+    "to": "e82fb9d3045892b6b632205a7fef2591a4fe26c0c9eebee838e9e7b204b58973",
+    "reason": "The bulk-review claim lock also selects the claim's score and stored qualifiers, so the routine rule can read them; the locked rows, lock order and count are unchanged."
+  }
+]

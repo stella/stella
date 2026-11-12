@@ -177,26 +177,44 @@ export type {
 } from "./chat-local-run-question";
 
 /**
- * The CUSTOM stream event a turn running on a computer sends when that
- * computer goes away mid-turn and when it is back. The turn stays open while
- * the computer is away and continues once it reconnects, so the chat shows
- * the wait instead of a stalled answer. A rejoined stream replays these
- * events from the run log, so a reload shows the same state.
+ * The CUSTOM stream event a turn running on a computer sends while its run
+ * waits for the computer to pick it up, once it did, and when that computer
+ * goes away mid-turn and is back. The turn stays open while the computer is
+ * away and continues once it reconnects, so the chat shows the wait instead
+ * of a stalled answer; a run no computer picks up in time ends the turn as
+ * `local_runner_not_reached`. A rejoined stream replays these events from the
+ * run log, so a reload shows the same state.
  */
 export const CHAT_LOCAL_RUN_COMPUTER_EVENT = "stella.local-run.computer";
 
+/**
+ * Where a turn on the member's computer stands: `delivering` until the
+ * computer picks the run up (`since` is when the turn was sent), `waiting`
+ * while a computer that took it is away, `connected` otherwise.
+ */
 export const CHAT_LOCAL_RUN_COMPUTER_STATUSES = [
+  "delivering",
   "waiting",
   "connected",
 ] as const;
 export type ChatLocalRunComputerStatus =
   (typeof CHAT_LOCAL_RUN_COMPUTER_STATUSES)[number];
 
-export const chatLocalRunComputerEventSchema = v.strictObject({
-  status: v.picklist(CHAT_LOCAL_RUN_COMPUTER_STATUSES),
-});
+export const chatLocalRunComputerEventSchema = v.variant("status", [
+  v.strictObject({
+    status: v.literal("delivering"),
+    since: apiDateTimeSchema,
+  }),
+  v.strictObject({ status: v.literal("waiting") }),
+  v.strictObject({ status: v.literal("connected") }),
+]);
 export type ChatLocalRunComputerEvent = v.InferOutput<
   typeof chatLocalRunComputerEventSchema
+>;
+/** What the chat shows while a turn waits on the member's computer. */
+export type ChatLocalRunComputerWait = Exclude<
+  ChatLocalRunComputerEvent,
+  { status: "connected" }
 >;
 
 /**

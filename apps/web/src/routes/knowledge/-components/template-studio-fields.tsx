@@ -48,6 +48,7 @@ import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { SKILL_CHIP_CATALOG } from "@/components/chat-editor-slash-items";
@@ -654,9 +655,7 @@ const OutlineRow = ({
             <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
               <TextQuoteIcon className="size-4" />
             </span>
-            <span className="truncate" dir="auto">
-              {node.name}
-            </span>
+            <TruncatedText dir="auto">{node.name}</TruncatedText>
           </span>
         </Tooltip>
         <Button
@@ -798,7 +797,7 @@ const OutlineGroupRow = ({
             <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
               <GroupIcon className="size-4" />
             </span>
-            <span className="truncate">{groupLabel}</span>
+            <TruncatedText>{groupLabel}</TruncatedText>
             {conditionField === undefined ? null : (
               <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
                 {fieldHasLoopBounds(conditionField) ? (
@@ -850,22 +849,25 @@ const FieldRowLabel = ({ label, path }: { label: string; path: string }) => {
   if (label === "") {
     return (
       <>
-        <code className="truncate">{path}</code>
+        <TruncatedText render={<code />}>{path}</TruncatedText>
         <PencilIcon className="text-muted-foreground size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
       </>
     );
   }
   return (
     <>
-      <span className="text-foreground min-w-0 truncate font-medium">
+      <TruncatedText className="text-foreground font-medium">
         {label}
-      </span>
+      </TruncatedText>
       {/* The field code only enters the layout on hover, so the label gets
           the full width and truncates solely when the code is actually
           shown — not pre-shrunk to reserve space for a hidden element. */}
-      <code className="text-muted-foreground text-3xs hidden min-w-0 truncate group-hover:block">
+      <TruncatedText
+        className="text-muted-foreground text-3xs hidden group-hover:block"
+        render={<code />}
+      >
         {path}
-      </code>
+      </TruncatedText>
     </>
   );
 };
@@ -1709,17 +1711,13 @@ const ClauseSlotEditor = ({
     // Non-interactive presentation: same slot-name display, no edit affordance.
     return (
       <div className="text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 px-1 py-0.5">
-        <Tooltip
-          content={slotName}
-          render={
-            <code
-              className="overflow-hidden text-xs text-ellipsis whitespace-pre"
-              dir="auto"
-            />
-          }
+        <TruncatedText
+          className="text-xs whitespace-pre"
+          dir="auto"
+          render={<code />}
         >
           {slotName}
-        </Tooltip>
+        </TruncatedText>
       </div>
     );
   }
@@ -1754,12 +1752,14 @@ const ClauseSlotEditor = ({
         }
       >
         <span className="hover:bg-muted/60 text-muted-foreground flex w-full items-center gap-1.5 rounded-sm px-1 py-0.5">
-          <code
-            className="overflow-hidden text-xs text-ellipsis whitespace-pre"
+          <TruncatedText
+            className="text-xs whitespace-pre"
             dir="auto"
+            hint={false}
+            render={<code />}
           >
             {slotName}
-          </code>
+          </TruncatedText>
           <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
         </span>
       </Tooltip>
@@ -1822,9 +1822,13 @@ const FieldPathEditor = ({
         }
       >
         <span className="hover:bg-muted/60 text-muted-foreground flex w-full items-center gap-1.5 rounded-sm px-1 py-0.5">
-          <code className="overflow-hidden text-xs text-ellipsis whitespace-pre">
+          <TruncatedText
+            className="text-xs whitespace-pre"
+            hint={false}
+            render={<code />}
+          >
             {path}
-          </code>
+          </TruncatedText>
           <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
         </span>
       </Tooltip>

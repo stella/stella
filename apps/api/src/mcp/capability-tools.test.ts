@@ -68,11 +68,6 @@ import {
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
-beforeEach(() => {
-  consumeRateLimitMock.mockReset();
-  loadOrgSettingsMock.mockClear();
-});
-
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
   orgAIConfigStatus: "ok" as const,
@@ -330,6 +325,8 @@ const callCapability = async (args: Record<string, unknown>) =>
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  consumeRateLimitMock.mockReset();
+  loadOrgSettingsMock.mockClear();
   analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
   consumeRateLimitMock.mockReset();
@@ -346,6 +343,10 @@ describe("list verification access grants across MCP tools", () => {
   const resourceId = "a2222222-2222-4222-8222-222222222222";
   const params = { matterId };
   const inputs = {
+    "lists.fact-extractions.create": {
+      params,
+      body: { listId: resourceId, entityIds: [resourceId] },
+    },
     "lists.verifications.create": {
       params,
       body: {
@@ -374,6 +375,18 @@ describe("list verification access grants across MCP tools", () => {
     "lists.verifications.claim-reviews.bulk.create": {
       params,
       body: { runId: resourceId, claimIds: [resourceId] },
+    },
+    "lists.verifications.claim-reviews.list": {
+      params,
+      query: { runId: resourceId, claimId: resourceId },
+    },
+    "lists.verifications.claim-rechecks.create": {
+      params,
+      body: {
+        runId: resourceId,
+        claimId: resourceId,
+        requestKey: "synthetic-recheck",
+      },
     },
     "lists.verifications.claim-comments.create": {
       params,
@@ -415,6 +428,18 @@ describe("list verification access grants across MCP tools", () => {
     "lists.sample-case.create": {
       params,
       body: { filePropertyName: "Documents" },
+    },
+    "lists.source-documents.list": {
+      params,
+      body: { listId: resourceId, documentEntityIds: [resourceId] },
+    },
+    "lists.source-documents.update": {
+      params,
+      body: {
+        listId: resourceId,
+        documentEntityId: resourceId,
+        sourceKind: "testimony",
+      },
     },
   } as const;
   // Irreversible capabilities only run, or validate, once the human confirmed.
@@ -540,6 +565,18 @@ describe("list verification access grants across MCP tools", () => {
           },
         },
       },
+      // The review history names its run's reviewers; none here.
+      selectDistinct: () => {
+        resourceLookups += 1;
+        const query: unknown[] = [];
+        return Object.assign(query, {
+          from: () => query,
+          innerJoin: () => query,
+          where: () => query,
+          orderBy: () => query,
+          limit: () => query,
+        });
+      },
       selectDistinctOn: () => {
         resourceLookups += 1;
         const query: unknown[] = [];
@@ -555,9 +592,16 @@ describe("list verification access grants across MCP tools", () => {
         resourceLookups += 1;
         return aggregateExecutionRows(statement, false);
       },
-      // Writes land nowhere; the only insert here is a history append.
+      // Writes land nowhere: a history append, and a document's source kind
+      // upserted on its list, which counts as the write it is.
       insert: () => ({
-        values: () => ({ onConflictDoNothing: async () => [] }),
+        values: () => ({
+          onConflictDoNothing: async () => [],
+          onConflictDoUpdate: async () => {
+            mutations += 1;
+            return [];
+          },
+        }),
       }),
       // A reader comment is written through its own guarded predicate; no
       // stored comment has the synthetic id, so the write reaches no row.
@@ -990,17 +1034,35 @@ describe("list verification access grants across MCP tools", () => {
         expect(fixture.mutations()).toBe(1);
         continue;
       }
+      // The fixture holds the list and document every id probe asks for,
+      // and no classified document, so the document reads as a record.
+      if (capability === "lists.source-documents.update") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          listId: resourceId,
+          documentEntityId: resourceId,
+          sourceKind: "testimony",
+        });
+        expect(fixture.mutations()).toBe(1);
+        continue;
+      }
       expect(fixture.resourceLookups()).toBeGreaterThan(0);
       expect(fixture.mutations()).toBe(0);
       if (
         capability === "lists.verifications.list" ||
-        capability === "lists.verifications.claim-comments.list"
+        capability === "lists.verifications.claim-comments.list" ||
+        capability === "lists.verifications.claim-reviews.list"
       ) {
         expect(result.isError).not.toBe(true);
         expect(
           asTestRaw<{ items: unknown[] }>(parseToolPayload(result)),
         ).toMatchObject({
           items: [],
+        });
+      } else if (capability === "lists.source-documents.list") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          documents: [{ documentEntityId: resourceId, sourceKind: "document" }],
         });
       } else if (capability === "lists.verifications.latest.list") {
         expect(result.isError).not.toBe(true);
@@ -4601,15 +4663,25 @@ describe("personal search history capabilities", () => {
   });
 
   test("lists own history without a kind filter when kind is omitted", async () => {
-    const queries: string[] = [];
+    const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
     const database = createScopedDbMock({
-      select: () => ({
-        from: () => ({
-          where: (condition: SQL) => {
-            queries.push(new PgDialect().sqlToQuery(condition).sql);
-            return { orderBy: () => ({ limit: async () => [] }) };
-          },
-        }),
+      select: (projection: SelectedFields) => ({
+        from: (table: PgTable) => {
+          const query = new QueryBuilder().select(projection).from(table);
+          return {
+            where: (condition: SQL) => {
+              const scopedQuery = query.where(condition);
+              return Object.assign(scopedQuery, {
+                orderBy: () => ({
+                  limit: async () => {
+                    queries.push(scopedQuery.toSQL());
+                    return [];
+                  },
+                }),
+              });
+            },
+          };
+        },
       }),
     });
     const result = await handleCapabilityCall({
@@ -4626,9 +4698,10 @@ describe("personal search history capabilities", () => {
       scope: { organizationId: "org_1", userId: "user_1" },
     });
     expect(queries).toHaveLength(1);
-    expect(queries.at(0)).not.toContain('"kind"');
-    expect(queries.at(0)).toContain('"organization_id"');
-    expect(queries.at(0)).toContain('"user_id"');
+    expect(queries.at(0)?.sql).not.toMatch(/"kind"\s*=\s*\$/u);
+    expect(queries.at(0)?.sql).toContain('"organization_id"');
+    expect(queries.at(0)?.sql).toContain('"user_id"');
+    expect(queries.at(0)?.params).toEqual(["org_1", "user_1"]);
   });
 
   test("deletes and clears own history through the shared handlers", async () => {
@@ -4735,7 +4808,13 @@ describe("personal search history capabilities", () => {
           return {
             where: () => ({
               returning: async () => [
-                { id: entryId, kind: "search", lookupKey },
+                {
+                  id: entryId,
+                  kind: "search",
+                  lookupKey,
+                  baseLookupKey: null,
+                  country: "CZE",
+                },
               ],
             }),
           };
