@@ -180,14 +180,56 @@ impl DictationState {
     let mut inner = self.0.lock().unwrap_or_else(|error| error.into_inner());
     apply(&mut inner)
   }
+
+  /// Writes `value` to `preference` and only then applies `apply`, under one
+  /// lock: the state never holds a preference that is not stored, so a
+  /// failed write changes nothing and a retry writes again.
+  fn store<T>(
+    &self,
+    preference: &DevicePreference,
+    value: &str,
+    apply: impl FnOnce(&mut Inner) -> T,
+  ) -> Result<T, String> {
+    let mut inner = self.0.lock().unwrap_or_else(|error| error.into_inner());
+    preference.write(value)?;
+    Ok(apply(&mut inner))
+  }
+}
+
+fn publish(app: &AppHandle) {
+  if let Err(error) = app.emit(CHANGED_EVENT, ()) {
+    tracing::warn!(%error, "dictation change event failed");
+  }
 }
 
 fn change<T>(app: &AppHandle, apply: impl FnOnce(&mut Inner) -> T) -> T {
   let value = app.state::<DictationState>().update(apply);
-  if let Err(error) = app.emit(CHANGED_EVENT, ()) {
-    tracing::warn!(%error, "dictation change event failed");
-  }
+  publish(app);
   value
+}
+
+/// A preference change: stored first, then applied and published.
+fn change_preference<T>(
+  app: &AppHandle,
+  file_name: &str,
+  value: &str,
+  apply: impl FnOnce(&mut Inner) -> T,
+) -> Result<T, String> {
+  let value = app.state::<DictationState>().store(
+    &DevicePreference::in_app_data(file_name),
+    value,
+    apply,
+  )?;
+  publish(app);
+  Ok(value)
+}
+
+const fn stored_switch(enabled: bool) -> &'static str {
+  if enabled {
+    ENABLED_VALUE
+  } else {
+    DISABLED_VALUE
+  }
 }
 
 /// A build that can run the model, for an account the server enabled.
@@ -351,17 +393,17 @@ pub fn dictation_set_enabled(
   if !available(&app) {
     return Err("dictation is not available on this computer".to_string());
   }
-  let unchanged = change(&app, |inner| {
-    let unchanged = inner.enabled == enabled;
-    inner.enabled = enabled;
-    unchanged
-  });
+  let unchanged = change_preference(
+    &app,
+    PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| {
+      let unchanged = inner.enabled == enabled;
+      inner.enabled = enabled;
+      unchanged
+    },
+  )?;
   if !unchanged {
-    DevicePreference::in_app_data(PREFERENCE_FILE_NAME).write(if enabled {
-      ENABLED_VALUE
-    } else {
-      DISABLED_VALUE
-    })?;
     if enabled {
       start(&app);
     } else {
@@ -380,18 +422,12 @@ pub fn dictation_set_cleanup(
   if !available(&app) {
     return Err("dictation is not available on this computer".to_string());
   }
-  let unchanged = change(&app, |inner| {
-    let unchanged = inner.cleanup == enabled;
-    inner.cleanup = enabled;
-    unchanged
-  });
-  if !unchanged {
-    DevicePreference::in_app_data(CLEANUP_PREFERENCE_FILE_NAME).write(if enabled {
-      ENABLED_VALUE
-    } else {
-      DISABLED_VALUE
-    })?;
-  }
+  change_preference(
+    &app,
+    CLEANUP_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| inner.cleanup = enabled,
+  )?;
   Ok(read_snapshot(&app, &state))
 }
 
@@ -408,15 +444,12 @@ pub fn dictation_set_language(
   if choice.stored() != language {
     return Err("this language is not available for dictation".to_string());
   }
-  let unchanged = change(&app, |inner| {
-    let unchanged = inner.language == choice;
-    inner.language = choice.clone();
-    unchanged
-  });
-  if !unchanged {
-    DevicePreference::in_app_data(LANGUAGE_PREFERENCE_FILE_NAME)
-      .write(choice.stored())?;
-  }
+  change_preference(
+    &app,
+    LANGUAGE_PREFERENCE_FILE_NAME,
+    choice.stored(),
+    |inner| inner.language = choice,
+  )?;
   Ok(read_snapshot(&app, &state))
 }
 
@@ -568,6 +601,58 @@ mod tests {
         serde_json::json!(name)
       );
     }
+  }
+
+  fn state(cleanup: bool) -> DictationState {
+    DictationState(Mutex::new(Inner {
+      enabled: true,
+      cleanup,
+      language: Choice::Automatic,
+      model: ModelState::Missing,
+      phase: Phase::Idle,
+      failure: None,
+      shortcut_taken: false,
+      commands: None,
+    }))
+  }
+
+  fn temp_preference() -> (DevicePreference, PathBuf) {
+    let dir =
+      std::env::temp_dir().join(format!("stella-dictation-{}", uuid::Uuid::new_v4()));
+    (DevicePreference::at(dir.join("dictation-cleanup")), dir)
+  }
+
+  #[test]
+  fn a_preference_that_cannot_be_stored_leaves_the_state_unchanged() {
+    let (_, dir) = temp_preference();
+    // A directory where the file belongs refuses the write.
+    let blocked = dir.join("dictation-cleanup");
+    crate::local_store::create_private_dir(&blocked).unwrap();
+    let state = state(true);
+    let mut applied = false;
+    assert!(
+      state
+        .store(&DevicePreference::at(blocked), DISABLED_VALUE, |inner| {
+          applied = true;
+          inner.cleanup = false;
+        })
+        .is_err()
+    );
+    assert!(!applied);
+    assert!(state.update(|inner| inner.cleanup));
+    std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn a_stored_preference_is_applied_and_reads_back() {
+    let (preference, dir) = temp_preference();
+    let state = state(true);
+    state
+      .store(&preference, DISABLED_VALUE, |inner| inner.cleanup = false)
+      .unwrap();
+    assert!(!state.update(|inner| inner.cleanup));
+    assert_eq!(preference.read().as_deref(), Some(DISABLED_VALUE));
+    std::fs::remove_dir_all(dir).unwrap();
   }
 
   #[test]

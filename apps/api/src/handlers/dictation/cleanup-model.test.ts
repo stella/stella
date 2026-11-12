@@ -1,4 +1,8 @@
 import { expect, test } from "bun:test";
+import * as v from "valibot";
+
+import { desktopDictationCleanupResponseSchema } from "@stll/api-contract/desktop-dictation-cleanup";
+import plausibilityCases from "@stll/api-contract/desktop-dictation-cleanup.plausibility";
 
 import {
   acceptDictationCleanup,
@@ -135,6 +139,25 @@ test("spoken commands do not count as dictated content an answer must keep", () 
   expect(corrected.isOk()).toBe(true);
 });
 
+// The desktop runs the same cases against its own check
+// (dictation_cleanup.rs), so both sides refuse the same answers.
+test.each(plausibilityCases)("plausibility: $name", (scenario) => {
+  const { segments } = v.parse(desktopDictationCleanupResponseSchema, {
+    segments: scenario.segments,
+  });
+  const accepted = acceptDictationCleanup(
+    {
+      segments: segments.map((segment) =>
+        segment.type === "text"
+          ? segment
+          : { type: segment.type, text: "", bold: false },
+      ),
+    },
+    scenario.transcript,
+  );
+  expect(accepted.isOk()).toBe(scenario.plausible);
+});
+
 test("an answer that breaks lines far more often than the dictation could ask is refused", () => {
   const transcript = "ano ne ano ne ano ne ano ne";
   const words = transcript.split(" ");
@@ -190,6 +213,8 @@ test("the instructions name the transcript as data and every required command", 
     "nový řádek",
     "nový odstavec",
     "tučně",
+    "nueva línea",
+    "negrita X",
     "tečka",
     "čárka",
     "otazník",

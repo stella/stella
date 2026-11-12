@@ -15,16 +15,30 @@ export const dictationCleanupLocalResultSchema = v.object({
   output: dictationCleanupModelOutputSchema,
 });
 
+/** Bold the way the desktop types it: the spaces around the phrase stay
+ *  outside the bold. */
+const renderBold = (text: string) => {
+  const phrase = text.trim();
+  if (phrase.length === 0) {
+    return text;
+  }
+  const start = text.length - text.trimStart().length;
+  return `${text.slice(0, start)}**${phrase}**${text.slice(start + phrase.length)}`;
+};
+
 /** The segments as text: "\n" per line break, "\n\n" per paragraph break,
- *  bold as **text**. */
+ *  bold as **text**. An asterisk the answer types is escaped, so typed
+ *  asterisks never read as bold. */
 export const renderDictationSegments = (
   segments: readonly DesktopDictationSegment[],
 ) =>
   segments
     .map((segment) => {
       switch (segment.type) {
-        case "text":
-          return segment.bold ? `**${segment.text.trim()}**` : segment.text;
+        case "text": {
+          const text = segment.text.replaceAll("*", "\\*");
+          return segment.bold ? renderBold(text) : text;
+        }
         case "lineBreak":
           return "\n";
         case "paragraphBreak":

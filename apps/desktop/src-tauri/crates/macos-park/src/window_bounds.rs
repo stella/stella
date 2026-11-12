@@ -106,8 +106,9 @@ fn is_normal_window_of(window: &CFDictionary<CFString, CFType>, pid: i32) -> boo
 }
 
 /// The window server's number for the frontmost on-screen normal window of
-/// process `pid`: the window the app shows in front, which has its focus
-/// while the app is frontmost.
+/// process `pid`: the document or main window the app shows in front. Panels
+/// and other layers above it belong to the same process and are not
+/// counted, so this tells the app's normal windows apart.
 pub fn frontmost_window_number(pid: i32) -> Option<u32> {
   let windows = on_screen_windows()?;
   let window = windows

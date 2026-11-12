@@ -23,6 +23,20 @@ test("the native contract file matches the typed cleanup contract", () => {
   expect(DESKTOP_DICTATION_CLEANUP_PATH.startsWith("/v1/desktop/")).toBe(true);
 });
 
+test("formatting commands and correction markers are distinct phrases", () => {
+  const { formattingCommands, correctionMarkers } =
+    DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY;
+  const commands = Object.values(formattingCommands).flat();
+  const phrases = [...commands, ...correctionMarkers];
+  // A phrase in both lists would make one spoken word both a command the
+  // answer replaces and a correction that discards words.
+  expect(new Set(phrases).size).toBe(phrases.length);
+  for (const phrase of phrases) {
+    expect(phrase).toBe(phrase.trim().toLowerCase());
+    expect(phrase.length).toBeGreaterThan(0);
+  }
+});
+
 test("the shared response fixture is a valid cleanup answer", () => {
   // The native client reads the same file, so it is checked as an answer
   // off the wire, not as the type its JSON import infers.

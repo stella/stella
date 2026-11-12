@@ -76,6 +76,33 @@ describe("local dictation cleanup scoring", () => {
     ).toBe("Lhůta je **42** dní.\n\nKonec");
   });
 
+  test("keeps the spaces around a bold phrase outside the bold, as the desktop types them", () => {
+    expect(
+      renderDictationSegments([
+        { type: "text", text: "Lhůta je", bold: false },
+        { type: "text", text: " 42 ", bold: true },
+        { type: "text", text: "dní.", bold: false },
+      ]),
+    ).toBe("Lhůta je **42** dní.");
+  });
+
+  test("fails an answer that types asterisks instead of bold", () => {
+    const scores = scoreDictationCleanup(
+      results((expected) =>
+        expected === "Lhůta je **42** dní."
+          ? {
+              segments: [
+                { type: "text", text: "Lhůta je **42** dní.", bold: false },
+              ],
+            }
+          : perfect(expected),
+      ),
+    );
+    expect(
+      scores.find(({ caseId }) => caseId === "cs-bold-number"),
+    ).toMatchObject({ accepted: true, pass: false });
+  });
+
   test("requires exactly one result for every fixture", () => {
     const all = results(perfect);
     expect(() => scoreDictationCleanup(all.slice(1))).toThrow(

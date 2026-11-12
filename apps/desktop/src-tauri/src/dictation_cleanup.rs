@@ -11,7 +11,7 @@
   allow(dead_code, reason = "only builds with the speech engine clean up text")
 )]
 
-use std::{future::Future, sync::OnceLock, time::Duration};
+use std::{collections::BTreeMap, future::Future, sync::OnceLock, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -43,7 +43,16 @@ struct Contract {
   min_answer_text_percent: usize,
   min_break_allowance: usize,
   transcript_characters_per_break: usize,
-  command_words: Vec<String>,
+  sentence_end_marks: String,
+  /// Phrases by the mark, break or bold they become; every kind counts.
+  formatting_commands: BTreeMap<String, Vec<String>>,
+  correction_markers: Vec<String>,
+}
+
+/// The contract's phrases as the words a transcript is matched on.
+struct Phrases {
+  formatting_commands: Vec<Vec<String>>,
+  correction_markers: Vec<Vec<String>>,
 }
 
 const CONTRACT: &str =
@@ -54,6 +63,28 @@ fn contract() -> &'static Contract {
   PARSED.get_or_init(|| {
     serde_json::from_str(CONTRACT)
       .expect("the committed dictation cleanup contract must be valid")
+  })
+}
+
+fn phrases() -> &'static Phrases {
+  static PARSED: OnceLock<Phrases> = OnceLock::new();
+  PARSED.get_or_init(|| {
+    let contract = contract();
+    Phrases {
+      formatting_commands: contract
+        .formatting_commands
+        .values()
+        .flatten()
+        .map(String::as_str)
+        .map(phrase_words)
+        .collect(),
+      correction_markers: contract
+        .correction_markers
+        .iter()
+        .map(String::as_str)
+        .map(phrase_words)
+        .collect(),
+    }
   })
 }
 
@@ -132,34 +163,143 @@ fn content_length(text: &str) -> usize {
     .count()
 }
 
-/// The transcript's letters and digits outside spoken command words, which a
-/// correct answer replaces by punctuation, breaks or bold.
-fn dictated_content_length(transcript: &str, command_words: &[String]) -> usize {
-  transcript
-    .to_lowercase()
-    .split_whitespace()
-    .map(|word| {
-      word
-        .chars()
-        .filter(|character| character.is_alphanumeric())
-        .collect::<String>()
-    })
-    .filter(|word| {
-      !word.is_empty() && !command_words.iter().any(|command| command == word)
-    })
-    .map(|word| word.chars().count())
-    .sum()
+/// A word lowercased and reduced to its letters and digits.
+fn word_content(word: &str) -> String {
+  word
+    .chars()
+    .filter(|character| character.is_alphanumeric())
+    .collect()
 }
 
-/// Whether the answer kept the dictation: it has text unless only commands
-/// were dictated, that text keeps at least the contract's share of the
-/// dictated letters and digits outside command words, and it breaks lines no
-/// more often than the dictation could have asked for. The server applies
-/// the same bounds; this side holds them too, so an answer that lost content
-/// is never typed.
+fn phrase_words(phrase: &str) -> Vec<String> {
+  phrase
+    .to_lowercase()
+    .split_whitespace()
+    .map(word_content)
+    .filter(|word| !word.is_empty())
+    .collect()
+}
+
+/// The transcript's words, lowercased and reduced to letters and digits,
+/// with a sentence end (`None`) after each word that a sentence end mark
+/// follows ("weeks." ends a sentence, "3.5" does not).
+fn transcript_tokens(transcript: &str) -> Vec<Option<String>> {
+  let marks = &contract().sentence_end_marks;
+  let mut tokens = Vec::new();
+  for chunk in transcript.to_lowercase().split_whitespace() {
+    let word = word_content(chunk);
+    let mut ends = false;
+    for character in chunk.chars() {
+      if character.is_alphanumeric() {
+        ends = false;
+      } else if marks.contains(character) {
+        ends = true;
+      }
+    }
+    if !word.is_empty() {
+      tokens.push(Some(word));
+    }
+    if ends {
+      tokens.push(None);
+    }
+  }
+  tokens
+}
+
+/// The longest of `phrases` that the tokens from `start` spell, if any.
+fn longest_match<'a>(
+  phrases: &'a [Vec<String>],
+  tokens: &[Option<String>],
+  start: usize,
+) -> &'a [String] {
+  phrases.iter().fold(&[][..], |longest, words| {
+    let spelled = words.iter().enumerate().all(|(offset, word)| {
+      tokens.get(start + offset).and_then(Option::as_deref) == Some(word.as_str())
+    });
+    if words.len() > longest.len() && spelled {
+      words.as_slice()
+    } else {
+      longest
+    }
+  })
+}
+
+/// Dictated content or a correction marker, by its letters and digits;
+/// `Stop` for a formatting command or a sentence end.
+#[derive(Clone, Copy)]
+enum Spoken {
+  Content(usize),
+  Marker(usize),
+  Stop,
+}
+
+/// What the transcript dictated outside complete formatting commands, and
+/// how much of it a correct answer may drop: a correction marker with
+/// dictated words on both sides within its sentence drops itself and at most
+/// as much of the words before it as the correction after it holds. A
+/// formatting command, another marker or a sentence end closes the words a
+/// marker reaches. `cleanup-model.ts` measures the same way.
+fn dictated_content(transcript: &str) -> (usize, usize) {
+  let phrases = phrases();
+  let tokens = transcript_tokens(transcript);
+  let mut spoken = Vec::new();
+  let mut index = 0;
+  while index < tokens.len() {
+    let command = longest_match(&phrases.formatting_commands, &tokens, index);
+    let marker = longest_match(&phrases.correction_markers, &tokens, index);
+    match &tokens[index] {
+      None => {
+        spoken.push(Spoken::Stop);
+        index += 1;
+      }
+      Some(_) if !command.is_empty() && command.len() >= marker.len() => {
+        spoken.push(Spoken::Stop);
+        index += command.len();
+      }
+      Some(_) if !marker.is_empty() => {
+        spoken.push(Spoken::Marker(
+          marker.iter().map(|word| word.chars().count()).sum(),
+        ));
+        index += marker.len();
+      }
+      Some(word) => {
+        spoken.push(Spoken::Content(word.chars().count()));
+        index += 1;
+      }
+    }
+  }
+  let content = |item: &Spoken| match item {
+    Spoken::Content(length) => Some(*length),
+    Spoken::Marker(_) | Spoken::Stop => None,
+  };
+  let mut dictated = 0;
+  let mut discardable = 0;
+  for (at, item) in spoken.iter().enumerate() {
+    match *item {
+      Spoken::Content(length) => dictated += length,
+      Spoken::Marker(length) => {
+        dictated += length;
+        let before: usize = spoken[..at].iter().rev().map_while(content).sum();
+        let after: usize = spoken[at + 1..].iter().map_while(content).sum();
+        if before > 0 && after > 0 {
+          discardable += length + before.min(after);
+        }
+      }
+      Spoken::Stop => {}
+    }
+  }
+  (dictated, discardable)
+}
+
+/// Whether the answer kept the dictation: it has text unless only formatting
+/// commands were dictated, that text keeps at least the contract's share of
+/// the dictated letters and digits a correct answer keeps, and it breaks
+/// lines no more often than the dictation could have asked for. The server
+/// applies the same bounds; this side holds them too, so an answer that lost
+/// content is never typed.
 pub fn plausible(transcript: &str, segments: &[Segment]) -> bool {
   let contract = contract();
-  let dictated = dictated_content_length(transcript, &contract.command_words);
+  let (dictated, discardable) = dictated_content(transcript);
   let mut kept = 0;
   let mut texts = 0;
   let mut breaks = 0;
@@ -175,10 +315,12 @@ pub fn plausible(transcript: &str, segments: &[Segment]) -> bool {
   let allowed_breaks = contract
     .min_break_allowance
     .max(transcript.chars().count() / contract.transcript_characters_per_break);
-  // Only a dictation of commands alone ("nový řádek") may become breaks alone.
+  // Only a dictation of formatting commands alone ("nový řádek") may become
+  // breaks alone; "No, sorry." is dictated text.
   let has_text = texts > 0 || (dictated == 0 && breaks > 0);
   has_text
-    && kept * 100 >= dictated * contract.min_answer_text_percent
+    && kept * 100
+      >= dictated.saturating_sub(discardable) * contract.min_answer_text_percent
     && breaks <= allowed_breaks
 }
 
@@ -424,6 +566,37 @@ mod tests {
         plain(" dní."),
       ]
     ));
+  }
+
+  const PLAUSIBILITY_CASES: &str = include_str!(
+    "../../../../packages/api-contract/src/desktop-dictation-cleanup.plausibility.json"
+  );
+
+  #[derive(Deserialize)]
+  struct PlausibilityCase {
+    name: String,
+    transcript: String,
+    segments: Vec<WireSegment>,
+    plausible: bool,
+  }
+
+  /// The server runs the same cases (cleanup-model.test.ts), so both sides
+  /// refuse the same answers.
+  #[test]
+  fn the_shared_plausibility_cases_hold() {
+    let cases: Vec<PlausibilityCase> =
+      serde_json::from_str(PLAUSIBILITY_CASES).unwrap();
+    assert!(!cases.is_empty());
+    for case in cases {
+      let segments: Vec<Segment> =
+        case.segments.into_iter().map(Segment::from).collect();
+      assert_eq!(
+        plausible(&case.transcript, &segments),
+        case.plausible,
+        "{}",
+        case.name
+      );
+    }
   }
 
   #[test]

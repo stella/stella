@@ -16,16 +16,23 @@ export const DESKTOP_DICTATION_CLEANUP_LIMITS = {
 } as const;
 
 /** How far a cleaned answer may shrink from what was dictated. Cleanup
- *  drops spoken commands and fixes spellings, so the transcript is measured
- *  by its letters and digits outside `commandWords`. An answer that keeps
- *  less than this share of them, or breaks a line far more often than the
- *  dictation could have asked for, lost content and is replaced by the raw
- *  transcript. A dictation of commands only may be answered by breaks only. */
+ *  replaces spoken `formattingCommands` by marks, breaks or bold, so the
+ *  transcript is measured by its letters and digits outside complete
+ *  commands. A self-correction drops its `correctionMarkers` phrase and the
+ *  alternative it discards: within one sentence (up to a `sentenceEndMarks`
+ *  character or a command), a marker with dictated words on both sides may
+ *  drop itself and as much of the words before it as the correction after
+ *  it holds. An answer that keeps less than `minAnswerTextPercent` of the
+ *  rest, or breaks a line far more often than the dictation could have asked
+ *  for, lost content and is replaced by the raw transcript. Only a dictation
+ *  of formatting commands alone may be answered by breaks alone. */
 export const DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY = {
-  commandWords: contract.commandWords,
   minAnswerTextPercent: contract.minAnswerTextPercent,
   minBreakAllowance: contract.minBreakAllowance,
   transcriptCharactersPerBreak: contract.transcriptCharactersPerBreak,
+  sentenceEndMarks: contract.sentenceEndMarks,
+  formattingCommands: contract.formattingCommands,
+  correctionMarkers: contract.correctionMarkers,
 } as const;
 
 /** Characters the desktop never types: controls, the Unicode line and
