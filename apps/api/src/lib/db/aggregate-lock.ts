@@ -54,6 +54,7 @@ import {
   fields,
   invoiceLines,
   invoices,
+  legislationDocuments,
   organizationDataExports,
   organizationSettings,
   pdfSigningSessions,
@@ -2487,6 +2488,23 @@ export const lockCaseLawDecisionRows = async ({
     ORDER BY id
     FOR UPDATE
   `);
+};
+
+/** Hold every summary endpoint in one ordered batch before checking revisions. */
+export const lockLegislationVersionRows = async (
+  tx: Transaction,
+  documentIds: readonly SafeId<"legislationDocument">[],
+): Promise<void> => {
+  if (documentIds.length === 0) {
+    return;
+  }
+  await tx
+    .select({ id: legislationDocuments.id })
+    .from(legislationDocuments)
+    .where(inArray(legislationDocuments.id, documentIds))
+    .orderBy(asc(legislationDocuments.id))
+    .limit(documentIds.length)
+    .for("update");
 };
 
 /** Acquire one replay reservation after its checkpoint and before its decision. */

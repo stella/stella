@@ -2391,6 +2391,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/search/case-law",
+      "reason": "Writes nothing; the corpus search engine answers it per country with a bounded page. Awaits the write harness like the other search POST routes."
+    },
+    {
       "id": "POST /v1/search/facets",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },

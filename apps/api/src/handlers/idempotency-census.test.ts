@@ -771,6 +771,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "external-effect",
   },
+  "POST /v1/search/case-law": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/search/facets": {
     type: "non-replay",
     reason: "current-state",
