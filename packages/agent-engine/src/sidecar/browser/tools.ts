@@ -330,7 +330,7 @@ const stepGates = (approvals: DesktopRunnerApprovalMode): StepGates => {
 };
 
 /** Whether `command` waits for the member under `approvals`. */
-export const browserStepGate = (
+const browserStepGate = (
   approvals: DesktopRunnerApprovalMode,
   command: BrowserControlCommand,
 ): BrowserGate => {

@@ -60,7 +60,7 @@ type BrowserBridgeRequest = {
 };
 
 /** Which command to stop: the chat's controller and its run. */
-export type BrowserBridgeCancel = { controllerId: string; turnId: string };
+type BrowserBridgeCancel = { controllerId: string; turnId: string };
 
 export type BrowserBridge = {
   readonly endpoint: string;
