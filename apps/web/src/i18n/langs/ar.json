@@ -2081,6 +2081,7 @@
     "richContentTitle": "محتوى تفاعلي",
     "richContentUnavailable": "لا يمكن عرض هذا المحتوى بأمان.",
     "runOn": {
+      "checkFailed": "تعذّر التحقق من حاسوبك",
       "chipLabel": "مكان التشغيل: {place}",
       "cloud": "السحابة",
       "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",

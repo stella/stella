@@ -2081,6 +2081,7 @@
     "richContentTitle": "Interaktív tartalom",
     "richContentUnavailable": "Ez a tartalom nem jeleníthető meg biztonságosan.",
     "runOn": {
+      "checkFailed": "Nem sikerült ellenőrizni a számítógépét",
       "chipLabel": "Futás helye: {place}",
       "cloud": "Felhő",
       "cloudDescription": "A felhőben fut. Bárhonnan elérhető.",

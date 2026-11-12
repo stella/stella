@@ -1169,6 +1169,7 @@ fn probe_outcomes_become_runner_reports() {
       models: vec![HarnessModel {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
+        is_default: true,
       }],
     })
   );

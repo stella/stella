@@ -37,6 +37,7 @@ import {
 import { localRunnersOptions } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
@@ -173,6 +174,30 @@ const PlaceLabel = ({
   </span>
 );
 
+const NO_HARNESS_OPTIONS: readonly ChatLocalHarnessOption[] = [];
+
+/**
+ * The member's computers could not be read: nothing is claimed about them,
+ * and the member can read them again.
+ */
+const ReadinessRetry = ({ retry }: { retry: () => Promise<unknown> }) => {
+  const t = useTranslations();
+  return (
+    <>
+      <p className="text-muted-foreground text-2xs px-2 pb-1.5 text-pretty">
+        {t("chat.runOn.checkFailed")}
+      </p>
+      <MenuItem
+        onClick={() => {
+          detached(retry(), "chat-run-on.retry-readiness");
+        }}
+      >
+        {t("common.retry")}
+      </MenuItem>
+    </>
+  );
+};
+
 type ChatRunTargetMenuProps = {
   activeOrganizationId: string;
   /** Reads the member's computers only while the menu is open. */
@@ -205,7 +230,8 @@ export const ChatRunTargetMenu = ({
     runnersView.type === "items" ? runnersView.items : undefined;
   // Until the member's computers are read, no agent is listed; a member who
   // may not run turns on a computer sees only the way back to the cloud.
-  const options = chatLocalHarnessOptions(readiness) ?? [];
+  const listed = chatLocalHarnessOptions(readiness);
+  const options = listed === null ? NO_HARNESS_OPTIONS : listed;
   const choose = (target: ChatRunTarget) => {
     if (!sameRunTarget(target, selected)) {
       onSelect(target);
@@ -232,6 +258,9 @@ export const ChatRunTargetMenu = ({
         <p className="text-muted-foreground text-2xs px-2 pb-1.5 text-pretty">
           {t("chat.runOn.yourComputerDescription")}
         </p>
+        {runnersView.type === "error" && (
+          <ReadinessRetry retry={runnersView.retry} />
+        )}
         {options.map((option) => {
           const name = CHAT_LOCAL_HARNESS_NAMES[option.harness];
           if (option.state !== "ready") {
@@ -334,6 +363,16 @@ export const LocalModelOptions = ({
   const readiness =
     runnersView.type === "items" ? runnersView.items : undefined;
   const harness = CHAT_LOCAL_HARNESS_NAMES[selected.harness];
+  if (runnersView.type === "error") {
+    return <ReadinessRetry retry={runnersView.retry} />;
+  }
+  if (runnersView.type === "pending") {
+    return (
+      <p className="text-muted-foreground px-2.5 py-2 text-xs">
+        {t("common.loading")}
+      </p>
+    );
+  }
   const option = chatLocalHarnessOptions(readiness)?.find(
     (candidate) => candidate.harness === selected.harness,
   );
@@ -346,8 +385,11 @@ export const LocalModelOptions = ({
       </p>
     );
   }
-  const recommended = defaultHarnessModel(option);
-  const others = option.models.filter(({ id }) => id !== recommended.id);
+  // An agent that marks no default (an older desktop) gets its models in
+  // its own order, none called recommended.
+  const recommended =
+    option.models.find(({ isDefault }) => isDefault === true) ?? null;
+  const others = option.models.filter(({ id }) => id !== recommended?.id);
   const offered = option.models.some(({ id }) => id === selected.model);
   const choose = (model: string) => {
     if (model !== selected.model) {
@@ -366,15 +408,17 @@ export const LocalModelOptions = ({
       <MenuGroupLabel>
         {t("chat.runOn.harnessModels", { harness })}
       </MenuGroupLabel>
-      <MenuRadioItem
-        onClick={() => choose(recommended.id)}
-        value={recommended.id}
-      >
-        <PlaceLabel
-          description={recommended.label}
-          title={t("chat.runOn.modelDefault")}
-        />
-      </MenuRadioItem>
+      {recommended !== null && (
+        <MenuRadioItem
+          onClick={() => choose(recommended.id)}
+          value={recommended.id}
+        >
+          <PlaceLabel
+            description={recommended.label}
+            title={t("chat.runOn.modelDefault")}
+          />
+        </MenuRadioItem>
+      )}
       {others.map((model) => (
         <MenuRadioItem
           key={model.id}

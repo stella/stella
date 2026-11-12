@@ -187,7 +187,8 @@
             "models": [
               {
                 "id": "model-large",
-                "label": "Large model"
+                "label": "Large model",
+                "isDefault": true
               },
               {
                 "id": "model-small",

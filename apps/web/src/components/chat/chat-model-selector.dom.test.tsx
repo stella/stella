@@ -80,15 +80,18 @@ const CLOUD_MODEL = {
 
 const renderChips = (
   initial: ChatRunTarget,
-  readiness: ChatLocalRunReadiness = READINESS,
+  /** `unreadable`: reading the member's computers fails. */
+  readiness: ChatLocalRunReadiness | "unreadable" = READINESS,
 ) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  queryClient.setQueryData(
-    localRunnersOptions(ORGANIZATION_ID).queryKey,
-    readiness,
-  );
+  if (readiness !== "unreadable") {
+    queryClient.setQueryData(
+      localRunnersOptions(ORGANIZATION_ID).queryKey,
+      readiness,
+    );
+  }
   queryClient.setQueryData(modelOptionsOptions(ORGANIZATION_ID).queryKey, {
     options: [CLOUD_MODEL],
     defaultValue: CLOUD_MODEL.value,
@@ -191,8 +194,8 @@ test("the where chip switches the place, and the model chip lists that place's m
   await choose(places, "Codex");
   expect(chosen).toEqual([LOCAL_TARGET]);
 
-  // On the computer: the agent's models, its recommended one first, and
-  // none of stella's.
+  // On the computer: the agent's models and none of stella's. This agent
+  // marks no default, so none is called recommended.
   expect(await screen.findByRole("button", { name: CODEX_PLACE })).toBeTruthy();
   const localModels = await openMenu("GPT-5 Codex");
   expect(within(localModels).getByText("Codex models")).toBeTruthy();
@@ -200,7 +203,7 @@ test("the where chip switches the place, and the model chip lists that place's m
     within(localModels)
       .getAllByRole("menuitemradio")
       .map((item) => item.textContent.replace(/^Selected/u, "")),
-  ).toEqual([`${messages.chat.runOn.modelDefault}GPT-5 Codex`]);
+  ).toEqual(["GPT-5 Codex"]);
   expect(within(localModels).queryByPlaceholderText(SEARCH)).toBeNull();
   expect(within(localModels).queryByText(CLOUD_MODEL.displayName)).toBeNull();
   await closeMenu();
@@ -295,4 +298,55 @@ test("a member who may not run turns on a computer sees the model chip alone", a
   renderChips({ kind: "cloud" }, { status: "hidden" });
   expect(await screen.findByRole("button", { name: AUTO_LABEL })).toBeTruthy();
   expect(screen.queryByRole("button", { name: CLOUD_PLACE })).toBeNull();
+});
+
+/** Reading the member's computers answers with a server error. */
+const failRunnerReads = () => {
+  const served = globalThis.fetch;
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const { pathname } = new URL(new Request(input, init).url);
+      return pathname.endsWith("/chat/local-runners")
+        ? Response.json({ message: "unavailable" }, { status: 503 })
+        : await served(input, init);
+    },
+    { preconnect: () => undefined },
+  );
+  return () => {
+    globalThis.fetch = served;
+  };
+};
+
+test("a failed read of the computers keeps the where chip, says so, and offers a retry", async () => {
+  const restore = failRunnerReads();
+  try {
+    renderChips({ kind: "cloud" }, "unreadable");
+    const places = await openMenu(CLOUD_PLACE);
+    expect(
+      await within(places).findByText(messages.chat.runOn.checkFailed),
+    ).toBeTruthy();
+    expect(
+      within(places).getByRole("menuitem", { name: messages.common.retry }),
+    ).toBeTruthy();
+  } finally {
+    restore();
+  }
+});
+
+test("a chat on the computer whose read failed says so on both chips, claiming nothing else", async () => {
+  const restore = failRunnerReads();
+  try {
+    renderChips(LOCAL_TARGET, "unreadable");
+    const failed = `${CODEX_PLACE}. ${messages.chat.runOn.checkFailed}`;
+    expect(await screen.findByRole("button", { name: failed })).toBeTruthy();
+    const models = await openMenu("gpt-5-codex");
+    expect(
+      await within(models).findByText(messages.chat.runOn.checkFailed),
+    ).toBeTruthy();
+    expect(
+      within(models).queryByText(messages.chat.localRun.stateUnavailable),
+    ).toBeNull();
+  } finally {
+    restore();
+  }
 });

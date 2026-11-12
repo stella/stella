@@ -2081,6 +2081,7 @@
     "richContentTitle": "Interactive content",
     "richContentUnavailable": "This content cannot be displayed safely.",
     "runOn": {
+      "checkFailed": "Couldn't check your computer",
       "chipLabel": "Runs on: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Runs in the cloud. Works anywhere.",

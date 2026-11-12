@@ -588,6 +588,7 @@ pub(crate) fn harness_report(
         .map(|model| HarnessModel {
           id: model.id.clone(),
           label: model.label.clone(),
+          is_default: model.is_default,
         })
         .collect();
       if models.is_empty() {

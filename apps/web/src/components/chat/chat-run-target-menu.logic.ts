@@ -47,6 +47,10 @@ export const CHAT_LOCAL_HARNESS_NAMES = {
 } as const satisfies Record<ChatLocalRunHarness, string>;
 
 type HarnessState = ChatLocalHarnessReadiness["state"];
+type ReadyHarnessReport = Extract<
+  ChatLocalHarnessReadiness,
+  { state: "ready" }
+>;
 
 /**
  * One harness as the Run on menu offers it: ready with its models, or why it
@@ -57,7 +61,9 @@ export type ChatLocalHarnessOption =
   | {
       harness: ChatLocalRunHarness;
       state: "ready";
-      models: readonly { id: string; label: string }[];
+      /** As the harness reports them; `isDefault` marks the one it runs
+       *  when none is named. */
+      models: ReadyHarnessReport["models"];
       /** The permission modes the computer can run the harness in. */
       approvalModes: readonly DesktopRunnerApprovalMode[];
     }

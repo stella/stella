@@ -1643,6 +1643,7 @@
   "chat.richContentLoading": "Loading interactive content…",
   "chat.richContentTitle": "Interactive content",
   "chat.richContentUnavailable": "This content cannot be displayed safely.",
+  "chat.runOn.checkFailed": "Couldn't check your computer",
   "chat.runOn.chipLabel": "Runs on: {place}",
   "chat.runOn.cloud": "Cloud",
   "chat.runOn.cloudDescription": "Runs in the cloud. Works anywhere.",

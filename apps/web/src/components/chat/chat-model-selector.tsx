@@ -103,8 +103,14 @@ const ChatRunOnChip = ({
   );
   const readiness =
     runnersView.type === "items" ? runnersView.items : undefined;
-  // A member who may not run turns on a computer has one place: no chip.
-  if (readiness?.status !== "enabled" && selected.kind !== "local") {
+  const readFailed = runnersView.type === "error";
+  // A member who may not run turns on a computer has one place: no chip. A
+  // failed read proves nothing, so the chip stays and says so.
+  if (
+    !readFailed &&
+    readiness?.status !== "enabled" &&
+    selected.kind !== "local"
+  ) {
     return null;
   }
   const view = (() => {
@@ -119,11 +125,17 @@ const ChatRunOnChip = ({
     const harness = CHAT_LOCAL_HARNESS_NAMES[selected.harness];
     const targetState =
       readiness === undefined ? null : localRunTargetState(readiness, selected);
-    // The model's own state is the model chip's to say.
-    const state =
-      targetState === null || targetState.type === "model_unavailable"
+    // A failed read claims nothing about the agent; the model's own state
+    // is the model chip's to say.
+    const placeState = () => {
+      if (readFailed) {
+        return t("chat.runOn.checkFailed");
+      }
+      return targetState === null || targetState.type === "model_unavailable"
         ? null
         : stateLabel(targetState);
+    };
+    const state = placeState();
     const selection = t("chat.runOn.localSelection", { harness });
     const place = t("chat.runOn.localPlace", { harness });
     return {
@@ -144,12 +156,11 @@ const ChatRunOnChip = ({
         render={
           <Button
             aria-label={name}
-            className="text-muted-foreground hover:text-foreground gap-1.5"
             data-composer-chip="run-on"
             // Until the stored choice is known, nothing can be picked on it.
             disabled={disabled}
             size="xs"
-            variant="ghost"
+            variant="muted"
           />
         }
         tooltip={name}

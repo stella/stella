@@ -2081,6 +2081,7 @@
     "richContentTitle": "Interaktiver Inhalt",
     "richContentUnavailable": "Dieser Inhalt kann nicht sicher angezeigt werden.",
     "runOn": {
+      "checkFailed": "Ihr Computer konnte nicht geprüft werden",
       "chipLabel": "Läuft auf: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Läuft in der Cloud. Funktioniert überall.",

@@ -2081,6 +2081,7 @@
     "richContentTitle": "Interaktiivne sisu",
     "richContentUnavailable": "Seda sisu ei saa turvaliselt kuvada.",
     "runOn": {
+      "checkFailed": "Sinu arvutit ei õnnestunud kontrollida",
       "chipLabel": "Töötab: {place}",
       "cloud": "Pilv",
       "cloudDescription": "Töötab pilves. Kasutatav kõikjalt.",

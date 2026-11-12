@@ -2081,6 +2081,7 @@
     "richContentTitle": "Interaktívny obsah",
     "richContentUnavailable": "Tento obsah nemožno bezpečne zobraziť.",
     "runOn": {
+      "checkFailed": "Počítač sa nepodarilo skontrolovať",
       "chipLabel": "Kde beží: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Beží v cloude. Funguje odkiaľkoľvek.",

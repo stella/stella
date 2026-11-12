@@ -2081,6 +2081,7 @@
     "richContentTitle": "Interaktīvs saturs",
     "richContentUnavailable": "Šo saturu nevar droši parādīt.",
     "runOn": {
+      "checkFailed": "Neizdevās pārbaudīt jūsu datoru",
       "chipLabel": "Darbojas: {place}",
       "cloud": "Mākonis",
       "cloudDescription": "Darbojas mākonī. Pieejams no jebkuras vietas.",

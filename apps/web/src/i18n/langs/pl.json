@@ -2081,6 +2081,7 @@
     "richContentTitle": "Treść interaktywna",
     "richContentUnavailable": "Nie można bezpiecznie wyświetlić tej treści.",
     "runOn": {
+      "checkFailed": "Nie udało się sprawdzić Twojego komputera",
       "chipLabel": "Gdzie działa: {place}",
       "cloud": "Chmura",
       "cloudDescription": "Działa w chmurze. Dostępne z każdego miejsca.",

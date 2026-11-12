@@ -267,9 +267,14 @@ impl std::fmt::Debug for QuestionAnswers {
 pub(crate) type JsonObject = Map<String, Value>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct HarnessModel {
   pub(crate) id: String,
   pub(crate) label: String,
+  /// The model the harness runs when none is named; the chat offers it
+  /// first as the recommended one. Sent only when set.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub(crate) is_default: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

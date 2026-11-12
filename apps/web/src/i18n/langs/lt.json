@@ -2081,6 +2081,7 @@
     "richContentTitle": "Interaktyvus turinys",
     "richContentUnavailable": "Šio turinio negalima saugiai rodyti.",
     "runOn": {
+      "checkFailed": "Nepavyko patikrinti jūsų kompiuterio",
       "chipLabel": "Kur veikia: {place}",
       "cloud": "Debesis",
       "cloudDescription": "Veikia debesyje. Pasiekiama iš bet kur.",
