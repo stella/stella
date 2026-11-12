@@ -51,6 +51,7 @@ import {
   installPgliteDecisionDocketFilingYear,
   installPgliteDesktopPresenceRls,
   installPgliteEntityFeatureGateMaintenance,
+  installPgliteFindingDecisionHistory,
   installPgliteFlowTransitions,
   installPgliteInvoiceObjects,
   installPgliteLegislationExpressionIdentity,
@@ -915,6 +916,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPglitePlaybookDocumentTypeKey(db);
+  await installPgliteFindingDecisionHistory(db);
   await db.transaction(async (tx) => {
     await installPgliteCorrespondenceSources(tx);
   });

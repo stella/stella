@@ -533,8 +533,8 @@ test.each(unavailableSurfaceCases)(
     );
     await waitFor(() => {
       expect(
-        screen.queryByText(messages.chat.sendErrorProviderUnavailable),
-      ).toBeNull();
+        screen.queryByText(messages.chat.sendErrorProviderUnavailable) === null,
+      ).toBe(true);
     });
     expect(await gates.get("gate")?.ensureAIAvailable()).toBe(true);
     expect(screen.getByRole("button", { name: messages.common.cancel })).toBe(
@@ -611,8 +611,8 @@ test.each(settingsReadFailures)(
       screen.getByRole("button", { name: messages.common.retry }),
     );
     await waitFor(() => {
-      expect(screen.queryByRole("alert")).toBeNull();
-      expect(screen.queryByRole("status")).toBeNull();
+      expect(screen.queryByRole("alert") === null).toBe(true);
+      expect(screen.queryByRole("status") === null).toBe(true);
     });
     expect(
       screen.queryByRole("button", { name: messages.common.cancel }) !== null,
@@ -638,7 +638,7 @@ test("settings admission reports failed refreshes instead of retaining cached ma
   providerConfiguration = "permission_required";
   fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
   await waitFor(() => {
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("alert") === null).toBe(true);
   });
   expect(
     screen.queryByRole("button", { name: messages.common.cancel }),

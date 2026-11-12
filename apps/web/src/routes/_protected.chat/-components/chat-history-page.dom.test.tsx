@@ -488,7 +488,7 @@ describe("chat history page", () => {
     );
     expect(searchChanges).toEqual([{ q: "lease" }]);
     await testing.waitFor(() =>
-      expect(ui.queryByText(TODAY_GLOBAL.title)).toBeNull(),
+      expect(ui.queryByText(TODAY_GLOBAL.title) === null).toBe(true),
     );
     expect(threadLink(ui, OLDER_IN_B.title)).toBeDefined();
   });
@@ -674,7 +674,7 @@ describe("chat history page", () => {
     );
 
     await testing.waitFor(() =>
-      expect(ui.queryByText(THIS_WEEK_IN_A.title)).toBeNull(),
+      expect(ui.queryByText(THIS_WEEK_IN_A.title) === null).toBe(true),
     );
     expect(
       deleteRequests.map((url) => [

@@ -33,6 +33,24 @@ const connectionIn = (
   };
 };
 
+/** One migration's statements, pointed at this test's schema instead of public. */
+const migrationIn = async (folder: string, schema: string) =>
+  (
+    await Bun.file(
+      new URL(`../../../drizzle/${folder}/migration.sql`, import.meta.url),
+    ).text()
+  )
+    .replaceAll(
+      "public.stella_authorized_workspaces",
+      () => `${schema}.stella_authorized_workspaces`,
+    )
+    .replaceAll(
+      "public.stella_document_review_",
+      () => `${schema}.stella_document_review_`,
+    )
+    .replaceAll("public.document_review_", () => `${schema}.document_review_`)
+    .split("--> statement-breakpoint");
+
 describe.skipIf(!enabled)("document review finding decision history", () => {
   test("backfills through the production repair, converges, and enforces append-only workspace isolation", async () => {
     if (databaseUrl === undefined) {
@@ -184,6 +202,148 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
       } finally {
         // swallow-ok: cleanup must continue if the transaction already reset the role
         await client.unsafe("RESET ROLE").catch(() => undefined);
+        await client.unsafe(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+      }
+    });
+  });
+
+  /**
+   * The history is the database's, so no writer can skip it: raw SQL that
+   * names no handler, no helper and no event table still leaves every decided
+   * finding with its events, and the online repair reading complete. This is
+   * what keeps the repair from regressing under any future write path.
+   */
+  test("every decision change gets its event, whichever statement makes it", async () => {
+    if (databaseUrl === undefined) {
+      panic("DATABASE_URL required");
+    }
+
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { sql: client, db } = openClient();
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const schema = `finding_decision_trigger_${suffix}`;
+      const workspace = Bun.randomUUIDv7();
+      const decidedBeforeHistory = Bun.randomUUIDv7();
+      const insertedDecided = Bun.randomUUIDv7();
+      const reviewed = Bun.randomUUIDv7();
+      const decider = `decider_${suffix}`;
+      const reopener = `reopener_${suffix}`;
+
+      await client.unsafe(`CREATE SCHEMA ${schema}`);
+      try {
+        await client.unsafe(`SET search_path TO ${schema}, public`);
+        await client.unsafe(`
+          CREATE TABLE "user" (id text PRIMARY KEY);
+          CREATE TABLE document_review_findings (
+            id uuid PRIMARY KEY,
+            workspace_id uuid NOT NULL,
+            decision text NOT NULL,
+            decided_by text,
+            decided_at timestamptz
+          );
+          CREATE VIEW stella_authorized_workspaces AS
+            SELECT NULL::uuid AS authorized_workspace_id WHERE false;
+          INSERT INTO "user" VALUES ('${decider}'), ('${reopener}');
+          INSERT INTO document_review_findings VALUES
+            ('${decidedBeforeHistory}', '${workspace}', 'accepted', '${decider}', '2026-01-01T00:00:00Z'),
+            ('${reviewed}', '${workspace}', 'open', NULL, NULL);
+        `);
+        await db.transaction(async (tx) => {
+          for (const folder of [
+            "20261028130100_document_review_finding_decision_history",
+            "20261111230000_document_review_finding_decision_trigger",
+          ]) {
+            for (const statement of await migrationIn(folder, schema)) {
+              await tx.execute(sql.raw(statement));
+            }
+          }
+        });
+
+        const history = async (findingId: string) => [
+          ...(await client<
+            { id: string; decision: string | null; actorId: string | null }[]
+          >`SELECT id::text AS id, decision, actor_id AS "actorId"
+              FROM document_review_finding_decisions
+             WHERE finding_id = ${findingId}
+             ORDER BY created_at, id`),
+        ];
+
+        // Inserted already decided: the insert itself is the decision.
+        await client.unsafe(`
+          INSERT INTO document_review_findings VALUES
+            ('${insertedDecided}', '${workspace}', 'dismissed', '${decider}', '2026-02-01T00:00:00Z')
+        `);
+        expect(await history(insertedDecided)).toEqual([
+          expect.objectContaining({ decision: "rejected", actorId: decider }),
+        ]);
+
+        // Decided, changed, restated and reopened by plain UPDATEs.
+        await client.unsafe(`
+          UPDATE document_review_findings
+             SET decision = 'accepted', decided_by = '${decider}', decided_at = '2026-03-01T00:00:00Z'
+           WHERE id = '${reviewed}'
+        `);
+        await client.unsafe(`
+          UPDATE document_review_findings SET decided_at = decided_at
+           WHERE id = '${reviewed}'
+        `);
+        await client.begin(async (tx) => {
+          await tx.unsafe(
+            `SELECT set_config('app.user_id', '${reopener}', true)`,
+          );
+          await tx.unsafe(`
+            UPDATE document_review_findings
+               SET decision = 'open', decided_by = NULL, decided_at = NULL
+             WHERE id = '${reviewed}'
+          `);
+        });
+        expect(await history(reviewed)).toEqual([
+          expect.objectContaining({ decision: "accepted", actorId: decider }),
+          expect.objectContaining({ decision: null, actorId: reopener }),
+        ]);
+
+        // Decided before the history began: its baseline comes first, keyed
+        // by the finding, then the change.
+        await client.unsafe(`
+          UPDATE document_review_findings
+             SET decision = 'dismissed', decided_by = '${reopener}', decided_at = '2026-04-01T00:00:00Z'
+           WHERE id = '${decidedBeforeHistory}'
+        `);
+        expect(await history(decidedBeforeHistory)).toEqual([
+          { id: decidedBeforeHistory, decision: "accepted", actorId: decider },
+          expect.objectContaining({ decision: "rejected", actorId: reopener }),
+        ]);
+
+        // A task of the previous release, mid-deploy, still appends the event
+        // itself after the trigger wrote it: the same change is kept once.
+        await client.begin(async (tx) => {
+          await tx.unsafe(`
+            UPDATE document_review_findings
+               SET decision = 'accepted', decided_by = '${decider}', decided_at = '2026-05-01T00:00:00Z'
+             WHERE id = '${reviewed}'
+          `);
+          await tx.unsafe(`
+            INSERT INTO document_review_finding_decisions
+              (id, workspace_id, finding_id, decision, actor_id, created_at)
+            VALUES (gen_random_uuid(), '${workspace}', '${reviewed}',
+              'accepted', '${decider}', '2026-05-01T00:00:00Z')
+          `);
+        });
+        // Ordered by moment: the reopening carries its own clock, later than
+        // both stamped decisions.
+        expect(await history(reviewed)).toEqual([
+          expect.objectContaining({ decision: "accepted", actorId: decider }),
+          expect.objectContaining({ decision: "accepted", actorId: decider }),
+          expect.objectContaining({ decision: null, actorId: reopener }),
+        ]);
+
+        // So the repair has nothing left to do, whatever wrote the rows.
+        expect(
+          await DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL.readCompletion(
+            connectionIn(client, schema),
+          ),
+        ).toEqual({ type: "complete" });
+      } finally {
         await client.unsafe(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
       }
     });

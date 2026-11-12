@@ -806,7 +806,7 @@ mechanics, and similar), not gaps in coverage.
 | provider_secret | 33 |
 | public_indexing | 10 |
 | realtime_stream | 9 |
-| search_ui | 20 |
+| search_ui | 21 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 22 |

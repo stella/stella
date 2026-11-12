@@ -237,7 +237,7 @@ test("member can change a manual bulk draft's content type and save while AI dra
         ],
       },
     ]);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("dialog") === null).toBe(true);
   });
   expect(unexpectedRequests).toEqual([]);
 });

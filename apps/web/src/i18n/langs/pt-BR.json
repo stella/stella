@@ -5429,8 +5429,6 @@
   "search": {
     "aiRefine": "Melhore a consulta com IA",
     "caseLawEmptyState": "Comece a digitar para pesquisar decisões judiciais.",
-    "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes} many {# decisões correspondentes}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes} many {#+ decisões correspondentes}}",
     "chatCoveragePartial": "Nem todas as conversas foram pesquisadas por completo.",
     "continueInChat": "Continuar no chat",
     "dateFrom": "De",
@@ -6092,6 +6090,11 @@
     "title": "Legislação",
     "validity": "Vigente de {from} a {to}",
     "versionAppliedInDecision": "Versão aplicada na decisão <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# dispositivo incluído} other {# dispositivos incluídos} many {# dispositivos incluídos}}",
+    "versionChangesChanged": "{count, plural, one {# dispositivo alterado} other {# dispositivos alterados} many {# dispositivos alterados}}",
+    "versionChangesNone": "Redação inalterada",
+    "versionChangesRemoved": "{count, plural, one {# dispositivo suprimido} other {# dispositivos suprimidos} many {# dispositivos suprimidos}}",
+    "versionChangesWords": "{inserted, plural, one {# palavra incluída} other {# palavras incluídas} many {# palavras incluídas}}, {deleted, plural, one {# palavra suprimida} other {# palavras suprimidas} many {# palavras suprimidas}}",
     "wordingVersionUnknown": "Data da versão da redação indisponível"
   },
   "styleSets": {
