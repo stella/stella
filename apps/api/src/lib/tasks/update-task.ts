@@ -42,7 +42,7 @@ import {
   decideGateForTask,
   gateDecisionForTaskStatus,
 } from "@/api/lib/flows/review-gate-task";
-import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
+import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
 import {
   agendaFieldsBodySchema,
   validateAgendaFields,
@@ -843,7 +843,7 @@ const applyTaskUpdate = async function* ({
         });
         // An item that becomes a fact brings its Spots into the matter graph.
         if (listItemType === LIST_ITEM_TYPE.FACT) {
-          await writeGraphEdges(tx, workspaceId, {
+          await writeFactSourceEdges(tx, workspaceId, {
             type: "item-became-fact",
             itemEntityId: body.taskId,
           });

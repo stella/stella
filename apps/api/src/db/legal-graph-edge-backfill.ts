@@ -51,10 +51,10 @@ import {
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { GraphEdgeProducerKind } from "@/api/lib/lists/graph/contract";
 import {
-  factSourcesSql,
   recheckCitesSql,
   runCitesSql,
 } from "@/api/lib/lists/graph/edge-writer";
+import { factSourcesSql } from "@/api/lib/lists/graph/fact-source-edges";
 import type { ClaimReviewEventKind } from "@/api/lib/lists/verification/contract";
 import { isRecord } from "@/api/lib/type-guards";
 

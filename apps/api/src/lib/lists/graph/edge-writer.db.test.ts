@@ -7,7 +7,7 @@
 
 import { panic } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq, getTableName, sql } from "drizzle-orm";
 import fc from "fast-check";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
@@ -39,8 +39,11 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { graphEdgeDecisionOf } from "@/api/lib/lists/graph/contract";
+import { GRAPH_EDGES_TABLE } from "@/api/lib/lists/graph/edge-insert";
 import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
 import type { GraphEdgeWrite } from "@/api/lib/lists/graph/edge-writer";
+import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
+import type { FactSourceEdgeWrite } from "@/api/lib/lists/graph/fact-source-edges";
 import type {
   ClaimRef,
   ClaimReviewEventPayload,
@@ -375,7 +378,19 @@ const PRODUCER_OF_WRITE = [
   ["reviewer"],
 ] as const;
 
-const writesOf = (matter: Matter): GraphEdgeWrite[] => [
+type AnyWrite = GraphEdgeWrite | FactSourceEdgeWrite;
+
+/** Each write through the writer that owns it. */
+const applyWrite = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+  write: AnyWrite,
+): Promise<number> =>
+  write.type === "run" || write.type === "recheck"
+    ? await writeGraphEdges(tx, workspaceId, write)
+    : await writeFactSourceEdges(tx, workspaceId, write);
+
+const writesOf = (matter: Matter): AnyWrite[] => [
   { type: "run", runId: matter.runId },
   { type: "recheck", eventId: matter.recheckId },
   {
@@ -438,6 +453,10 @@ afterAll(async () => {
 });
 
 describe("graph edge writers", () => {
+  test("the writers insert into the schema's edge table", () => {
+    expect(GRAPH_EDGES_TABLE).toBe(getTableName(legalGraphEdges));
+  });
+
   test("each producer writes one edge per live link it holds, and a replay writes none", async () => {
     const matter = await seedMatter();
     const counts = [];
@@ -445,7 +464,7 @@ describe("graph edge writers", () => {
       counts.push(
         await scoped(
           matter.workspaceId,
-          async (tx) => await writeGraphEdges(tx, matter.workspaceId, write),
+          async (tx) => await applyWrite(tx, matter.workspaceId, write),
         ),
       );
     }
@@ -464,7 +483,7 @@ describe("graph edge writers", () => {
       expect(
         await scoped(
           matter.workspaceId,
-          async (tx) => await writeGraphEdges(tx, matter.workspaceId, write),
+          async (tx) => await applyWrite(tx, matter.workspaceId, write),
         ),
       ).toBe(0);
     }
@@ -586,7 +605,7 @@ describe("graph edge writers", () => {
       await scoped(
         matter.workspaceId,
         async (tx) =>
-          await writeGraphEdges(tx, matter.workspaceId, {
+          await writeFactSourceEdges(tx, matter.workspaceId, {
             type: "item-became-fact",
             itemEntityId: matter.taskId,
           }),
@@ -789,7 +808,7 @@ describe("graph edge decisions", () => {
             for (const [index, current] of steps.entries()) {
               if (current.type === "write") {
                 const write = writes[current.write] ?? panic("write index");
-                await writeGraphEdges(tx, matter.workspaceId, write);
+                await applyWrite(tx, matter.workspaceId, write);
                 applied.add(current.write);
               } else {
                 const at = new Date(Date.UTC(2026, 0, 1, 0, 0, index));

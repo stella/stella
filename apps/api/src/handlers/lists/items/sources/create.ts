@@ -18,7 +18,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
-import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
+import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
 import { parseLegalListSourceLocator } from "@/api/lib/lists/source-locator";
 
 const bodySchema = v.object({
@@ -109,7 +109,7 @@ const createItemSource = createSafeHandler(
           createdBy: user.id,
         } satisfies typeof legalListItemSources.$inferInsert;
         await tx.insert(legalListItemSources).values(sourceValues);
-        await writeGraphEdges(tx, workspaceId, {
+        await writeFactSourceEdges(tx, workspaceId, {
           type: "fact-sources",
           sourceIds: [id],
           producer: { type: "reviewer" },

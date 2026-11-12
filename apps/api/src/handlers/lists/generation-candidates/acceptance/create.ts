@@ -27,7 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
-import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
+import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import type { CreateTaskFactDetails } from "@/api/lib/tasks/create-task-entity";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
@@ -630,7 +630,7 @@ const finalizeAcceptance = async ({
   }
   // After the candidate reads as accepted, so each edge names the
   // extraction run that proposed its passage.
-  await writeGraphEdges(tx, workspaceId, {
+  await writeFactSourceEdges(tx, workspaceId, {
     type: "fact-sources",
     sourceIds: itemSources.map(({ id }) => id),
     producer: { type: "extraction", runId: body.runId },

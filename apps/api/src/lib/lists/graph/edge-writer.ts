@@ -1,56 +1,43 @@
-// The only writers of `legal_graph_edges`. Each derives its edges in SQL from
-// the rows that already hold the link (a claim's grade refs, a re-check's
-// grade, a fact's Spot), so the live writers and the online backfill run the
-// same statements and cannot disagree on what an edge is. Every statement
-// inserts with `ON CONFLICT DO NOTHING` on the edge identity: a replay
-// converges on the rows already written and never changes one.
+// The writer of `cites` edges, and with `fact-source-edges.ts` the only
+// writers of `legal_graph_edges`. Each derives its edges in SQL from the rows
+// that already hold the link (a claim's grade refs, a re-check's grade), so
+// the live writers and the online backfill run the same statements and
+// cannot disagree on what an edge is. Every statement inserts with
+// `ON CONFLICT DO NOTHING` on the edge identity: a replay converges on the
+// rows already written and never changes one.
 
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import {
   entities,
-  legalGraphEdges,
   legalListClaimReviewEvents,
   legalListClaims,
-  legalListGenerationCandidates,
-  legalListGenerationCandidateSources,
-  legalListItemSources,
 } from "@/api/db/schema";
-import type { LegalListGenerationCandidateStatus } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { executedRows } from "@/api/lib/db/executed-rows";
 import type {
   GraphEdgeKind,
   GraphEdgeProducerKind,
   GraphNodeKind,
   GraphProvenanceReason,
 } from "@/api/lib/lists/graph/contract";
+import {
+  executeEdgeInsert,
+  INSERT_EDGE,
+} from "@/api/lib/lists/graph/edge-insert";
+import type { EdgeWriteTransaction } from "@/api/lib/lists/graph/edge-insert";
 import type { ClaimReviewEventKind } from "@/api/lib/lists/verification/contract";
 
 const CITES = "cites" satisfies GraphEdgeKind;
-const SOURCED_FROM = "sourced-from" satisfies GraphEdgeKind;
 const CLAIM = "claim" satisfies GraphNodeKind;
 const FACT = "fact" satisfies GraphNodeKind;
-const DOCUMENT = "document" satisfies GraphNodeKind;
 const CLAIM_ANCHOR = "claim-anchor" satisfies GraphProvenanceReason;
 const RUN = "run" satisfies GraphEdgeProducerKind;
 const RECHECK = "recheck" satisfies GraphEdgeProducerKind;
-const EXTRACTION = "extraction" satisfies GraphEdgeProducerKind;
-const REVIEWER = "reviewer" satisfies GraphEdgeProducerKind;
 const RECHECK_EVENT = "recheck" satisfies ClaimReviewEventKind;
-const ACCEPTED_CANDIDATE =
-  "accepted" satisfies LegalListGenerationCandidateStatus;
-
-const INSERT_EDGE = sql`INSERT INTO ${legalGraphEdges} (
-    workspace_id, kind, from_kind, from_claim_id, from_claim_run_id,
-    from_entity_id, to_kind, to_entity_id, stance, source_id,
-    provenance_reason, producer_kind, producer_id
-  )`;
 
 /** A ref's fact id as a uuid, or null for anything else, so a malformed ref
  *  matches no fact instead of failing the cast. */
@@ -96,90 +83,12 @@ export const recheckCitesSql = (scope: SQL) => sql`${INSERT_EDGE}
   ON CONFLICT DO NOTHING
   RETURNING id`;
 
-/**
- * Who asserted a fact's Spot. The live writers know it: the reviewer who
- * added the Spot, or the extraction run whose proposal was accepted. A
- * Spot whose origin was not recorded (the backfill's rows, a task turned
- * into a fact) is credited to the extraction run whose accepted proposal
- * carried the very same passage and quote, else to the reviewer.
- */
-export type SpotProducer =
-  | { type: "reviewer" }
-  | { type: "extraction"; runId: SafeId<"legalListGenerationRun"> }
-  | { type: "inferred" };
-
-const spotProducerSql = (producer: SpotProducer) => {
-  switch (producer.type) {
-    case "reviewer": {
-      return { kind: sql`${REVIEWER}`, id: sql`source.id` };
-    }
-    case "extraction": {
-      return { kind: sql`${EXTRACTION}`, id: sql`${producer.runId}::uuid` };
-    }
-    case "inferred": {
-      return {
-        kind: sql`CASE WHEN origin.run_id IS NULL THEN ${REVIEWER} ELSE ${EXTRACTION} END`,
-        id: sql`COALESCE(origin.run_id, source.id)`,
-      };
-    }
-    default: {
-      producer satisfies never;
-      return panic(`Unhandled Spot producer: ${String(producer)}`);
-    }
-  }
-};
-
-/**
- * A fact is sourced from the document each of its Spots sits in, as
- * `producer` asserted it. Only fact items are facts; a source on any other
- * item writes nothing. `scope` filters `source`.
- */
-export const factSourcesSql = (scope: SQL, producer: SpotProducer) => {
-  const asserted = spotProducerSql(producer);
-  return sql`${INSERT_EDGE}
-  SELECT source.workspace_id, ${SOURCED_FROM}, ${FACT}, NULL, NULL,
-    source.item_entity_id, ${DOCUMENT}, source.source_entity_id, NULL,
-    source.id, NULL, ${asserted.kind}, ${asserted.id}
-  FROM ${legalListItemSources} source
-  JOIN ${entities} item
-    ON item.id = source.item_entity_id
-    AND item.workspace_id = source.workspace_id
-    AND item.list_item_type = ${LIST_ITEM_TYPE.FACT}
-  LEFT JOIN LATERAL (
-    SELECT candidate.run_id
-    FROM ${legalListGenerationCandidates} candidate
-    JOIN ${legalListGenerationCandidateSources} proposed
-      ON proposed.candidate_id = candidate.id
-      AND proposed.run_id = candidate.run_id
-      AND proposed.workspace_id = candidate.workspace_id
-    WHERE candidate.accepted_entity_id = source.item_entity_id
-      AND candidate.workspace_id = source.workspace_id
-      AND candidate.status = ${ACCEPTED_CANDIDATE}
-      AND proposed.source_entity_version_id = source.source_entity_version_id
-      AND proposed.locator = source.locator
-      AND proposed.quote IS NOT DISTINCT FROM source.quote
-    ORDER BY candidate.run_id
-    LIMIT 1
-  ) origin ON ${producer.type === "inferred" ? sql`true` : sql`false`}
-  WHERE ${scope}
-  ON CONFLICT DO NOTHING
-  RETURNING id`;
-};
-
 export type GraphEdgeWrite =
   /** The grades a run wrote and the re-checks carried to its claims,
    *  when it completes. */
   | { type: "run"; runId: SafeId<"legalListVerificationRun"> }
   /** One re-check's grade, when it is recorded. */
-  | { type: "recheck"; eventId: SafeId<"legalListClaimReviewEvent"> }
-  /** A fact's Spots, when they are added or the fact is accepted. */
-  | {
-      type: "fact-sources";
-      sourceIds: readonly SafeId<"legalListItemSource">[];
-      producer: Exclude<SpotProducer, { type: "inferred" }>;
-    }
-  /** Every Spot of an item that has just become a fact. */
-  | { type: "item-became-fact"; itemEntityId: SafeId<"entity"> };
+  | { type: "recheck"; eventId: SafeId<"legalListClaimReviewEvent"> };
 
 const writeSql = (
   workspaceId: SafeId<"workspace">,
@@ -202,21 +111,6 @@ const writeSql = (
         sql`event.workspace_id = ${workspaceId} AND event.id = ${write.eventId}`,
       );
     }
-    case "fact-sources": {
-      return factSourcesSql(
-        sql`source.workspace_id = ${workspaceId} AND source.id IN (${sql.join(
-          write.sourceIds.map((id) => sql`${id}`),
-          sql`, `,
-        )})`,
-        write.producer,
-      );
-    }
-    case "item-became-fact": {
-      return factSourcesSql(
-        sql`source.workspace_id = ${workspaceId} AND source.item_entity_id = ${write.itemEntityId}`,
-        { type: "inferred" },
-      );
-    }
     default: {
       write satisfies never;
       return panic(`Unhandled graph edge write: ${String(write)}`);
@@ -224,18 +118,9 @@ const writeSql = (
   }
 };
 
-/**
- * Write the edges one producing act asserts, in the caller's transaction so
- * they commit with the act. Returns how many were new: zero on a replay.
- */
+/** Write the `cites` edges one verification act asserts, in its transaction. */
 export const writeGraphEdges = async (
-  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "execute">,
+  tx: EdgeWriteTransaction,
   workspaceId: SafeId<"workspace">,
   write: GraphEdgeWrite,
-): Promise<number> => {
-  if (write.type === "fact-sources" && write.sourceIds.length === 0) {
-    return 0;
-  }
-  // audit: skip — edges are derived from the act the caller audits in this transaction.
-  return executedRows(await tx.execute(writeSql(workspaceId, write))).length;
-};
+): Promise<number> => await executeEdgeInsert(tx, writeSql(workspaceId, write));
