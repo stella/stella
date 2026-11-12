@@ -1709,10 +1709,14 @@ const recaptureCzNsStoredRaw = ({
   if (held.type === "contradictory") {
     return { type: "identity-mismatch", detail: held.detail };
   }
-  if (held.type === "named" && !sameUnid(listingPayload.unid, held.unid)) {
+  // Exact, as replay and the stored identity compare it: a row spelling its
+  // id in another case would rebuild to an identity replay then refuses.
+  if (held.type === "named" && listingPayload.unid !== held.unid) {
     return {
       type: "identity-mismatch",
-      detail: `the listing names ${listingPayload.unid}, the row ${held.unid}`,
+      detail: sameUnid(listingPayload.unid, held.unid)
+        ? `the listing spells ${listingPayload.unid}, the row ${held.unid}: the same id in another case`
+        : `the listing names ${listingPayload.unid}, the row ${held.unid}`,
     };
   }
   if (!listsStoredDocket(listingPayload, stored)) {

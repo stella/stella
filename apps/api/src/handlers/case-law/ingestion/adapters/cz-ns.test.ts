@@ -584,6 +584,23 @@ describe("a row the court lists without its stored identity is recaptured by doc
     ).toMatchObject({ type: "identity-mismatch" });
   });
 
+  test("a row spelling its id in another case is reported, not rebuilt", async () => {
+    const served = await servePublisher();
+    const decision = await crawled();
+
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: LISTED_ROW,
+        stored: legacyRow(decision, served, {
+          sourceDocumentId: LISTED_ROW.unid.toLowerCase(),
+        }),
+      }),
+    ).toMatchObject({
+      type: "identity-mismatch",
+      detail: expect.stringContaining("the same id in another case"),
+    });
+  });
+
   test("a row naming no id anywhere is found by its docket alone", async () => {
     const served = await servePublisher();
     const decision = await crawled();
