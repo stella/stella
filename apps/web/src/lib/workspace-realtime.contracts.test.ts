@@ -20,6 +20,11 @@ import {
 import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import {
+  avtKeys,
+  reviewHistoryOptions,
+  verificationRunOptions,
+} from "@/features/avt/queries";
 import { linkIconOptions } from "@/features/chat/link-icons";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
@@ -64,6 +69,7 @@ import { applyResourceQueryActions } from "@/testing/resource-query-actions.test
 const WORKSPACE_ID = "workspace-rename";
 const OTHER_WORKSPACE_ID = "workspace-other";
 const FIELD_ID = "field-file";
+const RUN_ID = "00000000-0000-4000-8000-0000000000a1";
 const ENTITY_ID = "00000000-0000-4000-8000-0000000000e1";
 const ORGANIZATION_ID = "organization-rename";
 const USER_ID = "user-rename";
@@ -174,9 +180,33 @@ const previousInvalidationFor = (factory: string): PreviousInvalidation => {
       });
       return { target, readers: [{ queryKey, meta }] };
     }
+    case "avtKeys.reviewHistoryOfRun": {
+      const target = avtKeys.reviewHistoryOfRun(WORKSPACE_ID, RUN_ID);
+      const { queryKey, meta } = reviewHistoryOptions({
+        workspaceId: WORKSPACE_ID,
+        runId: RUN_ID,
+      });
+      return { target, readers: [{ queryKey, meta }] };
+    }
+    case "avtKeys.run": {
+      const target = avtKeys.run(WORKSPACE_ID, RUN_ID);
+      const { queryKey, meta } = verificationRunOptions(WORKSPACE_ID, RUN_ID);
+      return { target, readers: [{ queryKey, meta }] };
+    }
     default:
       throw new TypeError(`No production key resolver for ${factory}`);
   }
+};
+
+/** Whether a reader declares that this write keeps its cache current in
+ *  place, so the write's commit leaves it fresh. */
+const keptCurrentBy = (meta: QueryMeta | undefined, mutation: string) => {
+  const reads = meta?.resourceReads;
+  return (
+    reads !== undefined &&
+    !("type" in reads) &&
+    reads.keptCurrentBy?.some((name) => name === mutation) === true
+  );
 };
 
 const isQueryKeyPrefix = (prefix: QueryKey, key: QueryKey) =>
@@ -290,13 +320,16 @@ test("each migrated mutation still invalidates every prior cache target", async 
         }),
       });
       await write({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID });
+      // A prior target is still covered: marked stale, or kept current in
+      // place by the write itself (the reader names it), never dropped.
       for (const { readers } of targets) {
-        for (const { queryKey } of readers) {
+        for (const { queryKey, meta } of readers) {
+          const inPlace = keptCurrentBy(meta, mutation);
           expect({
             mutation,
             queryKey,
             invalidated: queryClient.getQueryState(queryKey)?.isInvalidated,
-          }).toEqual({ mutation, queryKey, invalidated: true });
+          }).toEqual({ mutation, queryKey, invalidated: !inPlace });
         }
       }
     } finally {

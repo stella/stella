@@ -1572,6 +1572,58 @@ test("a claim's history opens from one row and reads who did what, why, and what
   expect(requests).toEqual([]);
 });
 
+test("a review decision never reads its run again and reads its open history once", async () => {
+  const { client, run } = await mount();
+  const claim = run.claims.at(1) ?? panic("Missing seeded tension claim");
+  const history = (items: ReviewHistoryPage["items"]) =>
+    ({
+      items,
+      nextCursor: null,
+      limit: 50,
+      reviewers: { type: "complete", items: [] },
+    }) satisfies ReviewHistoryPage;
+  client.setQueryData(
+    reviewHistoryOptions({ workspaceId, runId: run.id, claimId: claim.id })
+      .queryKey,
+    { pages: [history([])], pageParams: [null] },
+  );
+  selectClaim(2);
+  fireEvent.click(screen.getByRole("button", { name: /^History/u }));
+  expect(requests).toEqual([]);
+  const reviewed = {
+    ...EMPTY_CLAIM_REVIEW,
+    status: "reviewed",
+    statusOrigin: "single",
+    decidedAt: at,
+    decidedBy: actorId,
+    eventCount: 1,
+  } as const;
+  answers.push(Response.json({ claimId: claim.id, review: reviewed }));
+  answers.push(Response.json(history([])));
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.confirm.verdict }),
+  );
+  await waitFor(() => expect(requests).toHaveLength(2));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  // The decision writes the claim's review into the run in place: the run is
+  // never read again. The review history open beside it is read once.
+  expect(requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
+    `POST /v1/lists/${workspaceId}/claim-reviews`,
+    `GET /v1/lists/${workspaceId}/claim-reviews`,
+  ]);
+  expect(
+    client
+      .getQueryData(verificationRunOptions(workspaceId, run.id).queryKey)
+      ?.claims.at(1)?.review,
+  ).toEqual(reviewed);
+  expect(
+    client.getQueryState(verificationRunOptions(workspaceId, run.id).queryKey)
+      ?.isInvalidated,
+  ).toBe(false);
+});
+
 test("decisions carried from the previous run sit under one divider naming that run", async () => {
   const seeded = seededRun();
   const target = seeded.claims.at(0) ?? panic("Missing claim");
