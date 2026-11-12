@@ -68,11 +68,7 @@ const SPACED_CHARACTERS = /[\p{Cc}\u2028\u2029]+/gu;
 const DROPPED_CHARACTERS = /[\u202A-\u202E\u2066-\u2069]/gu;
 
 export type DictationCleanupRejection =
-  | "too-long"
-  | "too-short"
-  | "no-text"
-  | "too-many-breaks"
-  | "invalid";
+  "too-long" | "too-short" | "no-text" | "too-many-breaks" | "invalid";
 
 const COMMAND_WORDS: ReadonlySet<string> = new Set(
   DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY.commandWords,

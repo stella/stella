@@ -146,9 +146,9 @@ test("an answer that breaks lines far more often than the dictation could ask is
       { type: "text" as const, text: word, bold: false },
     ]);
   // Four breaks are always allowed; a 27-character transcript allows no more.
-  expect(acceptDictationCleanup({ segments: answer(4) }, transcript).isOk()).toBe(
-    true,
-  );
+  expect(
+    acceptDictationCleanup({ segments: answer(4) }, transcript).isOk(),
+  ).toBe(true);
   const flooded = acceptDictationCleanup({ segments: answer(5) }, transcript);
   expect(flooded.isErr() ? flooded.error : null).toBe("too-many-breaks");
 });

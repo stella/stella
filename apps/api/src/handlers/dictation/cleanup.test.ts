@@ -268,7 +268,9 @@ test("an answer that adds content is refused rather than typed", async () => {
 
 test("an answer that lost most of the dictation is refused rather than typed", async () => {
   const { response } = await exercise({
-    input: { transcript: "the parties agree to extend the deadline by two weeks" },
+    input: {
+      transcript: "the parties agree to extend the deadline by two weeks",
+    },
     answer: () => ({
       segments: [{ type: "text", text: "The parties agree.", bold: false }],
     }),

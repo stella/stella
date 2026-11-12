@@ -216,9 +216,7 @@ test.each([
       ...overrides,
     });
 
-    expect(container.querySelector("#dictation-language") !== null).toBe(
-      shown,
-    );
+    expect(container.querySelector("#dictation-language") !== null).toBe(shown);
   },
 );
 
