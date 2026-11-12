@@ -6,7 +6,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import { stepOutputFile } from "./step-outputs";
 
-const read = (file: Uint8Array) => {
+const read = (file: ReturnType<typeof stepOutputFile>) => {
   const newline = file.indexOf(0x0a);
   const header: unknown = JSON.parse(
     new TextDecoder().decode(file.subarray(0, newline)),
