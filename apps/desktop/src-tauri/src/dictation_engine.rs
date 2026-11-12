@@ -24,6 +24,7 @@ use crate::{
   dictation::{self, Command, Failure, Phase},
   dictation_audio::{MODEL_SAMPLE_RATE, holds_speech, resample, to_mono},
   dictation_cleanup,
+  dictation_cloud::{self, Destination},
   dictation_focus::{self, FocusTarget, Insertion},
   dictation_format::AppClass,
   dictation_input,
@@ -60,7 +61,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
     match commands.recv_timeout(WORKER_IDLE) {
       Ok(Command::Press) if recorder.is_none() => {
         dictation::clear_failure(app);
-        match begin() {
+        match begin(app) {
           Ok(started) => {
             dictation::set_phase(app, Phase::Recording);
             // Read once recording runs, so the lookup never delays capture.
@@ -88,8 +89,10 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
   }
 }
 
-fn begin() -> Result<Recorder, Failure> {
-  if dictation::installed_model().is_none() {
+fn begin(app: &AppHandle) -> Result<Recorder, Failure> {
+  // stella AI transcribes without the speech model on this computer.
+  let (destination, _) = dictation::destination(app);
+  if destination == Destination::Local && dictation::installed_model().is_none() {
     return Err(Failure::ModelMissing);
   }
   if !dictation_input::request_access() {
@@ -114,10 +117,30 @@ fn finish(
   if !holds_speech(&samples) {
     return Ok(());
   }
-  let model = dictation::installed_model().ok_or(Failure::ModelMissing)?;
   let language = dictation::language(app);
-  let text = transcribe(worker, &model, &samples, language.hint)
-    .ok_or(Failure::Transcription)?;
+  let (destination, cloud_model) = dictation::destination(app);
+  let model = dictation::installed_model();
+  let text = dictation_cloud::transcribe_with(
+    destination,
+    model.is_some(),
+    || {
+      dictation_cloud::transcribe(
+        app,
+        &samples,
+        MODEL_SAMPLE_RATE,
+        cloud_model.as_deref(),
+        language.hint,
+      )
+      .inspect_err(|error| {
+        tracing::info!(%error, "stella AI transcription failed");
+      })
+      .ok()
+    },
+    || {
+      let model = model.as_deref()?;
+      transcribe(worker, model, &samples, language.hint)
+    },
+  )?;
   let text = text.trim();
   if text.is_empty() {
     return Ok(());

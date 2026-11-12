@@ -582,9 +582,21 @@
   "dictation": {
     "title": "Dikteerimine",
     "description": "Hoidke all klahve {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata. Kui tehisintellektiga parandamine on sisse lülitatud, saadetakse teisendatud tekst (mitte heli) stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale vigade ja vormingu parandamiseks; stella seda ei salvesta.",
+    "descriptionCloud": "Hoidke all klahvi {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne teisendab stella AI ja stella seda ei salvesta.",
     "cleanup": {
       "title": "Paranda tehisintellektiga",
-      "description": "Kõne teisendatakse endiselt selles arvutis ja heli ei lahku sealt kunagi. Kui parandamine on sisse lülitatud, saadetakse teisendatud tekst stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale, kes parandab tuvastusvead ning rakendab dikteeritud kirjavahemärgid ja vormingu, näiteks „uus rida“ või „paks“. stella seda ei salvesta."
+      "description": "Kõne teisendatakse endiselt selles arvutis ja heli ei lahku sealt kunagi. Kui parandamine on sisse lülitatud, saadetakse teisendatud tekst stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale, kes parandab tuvastusvead ning rakendab dikteeritud kirjavahemärgid ja vormingu, näiteks „uus rida“ või „paks“. stella seda ei salvesta.",
+      "descriptionCloud": "Kui parandamine on sisse lülitatud, parandab stella AI ka teisendatud teksti tuvastusvead ning rakendab dikteeritud kirjavahemärgid ja vormingu, näiteks „uus rida“ või „paks“."
+    },
+    "destination": {
+      "title": "Teisenda kasutades",
+      "local": "Seda arvutit",
+      "cloud": "stella AI",
+      "cloudDescription": "Heli lahkub sellest arvutist: see saadetakse teisendamiseks stellale ja stella tehisintellekti teenusepakkuja kaudu valitud mudeli pakkujale. stella seda ei salvesta.",
+      "unavailableRegion": "stella AI ei paku teie organisatsiooni piirkonnas veel kõne teisendamist.",
+      "unavailableProvider": "Teie organisatsiooni tehisintellekti teenusepakkuja ei paku kõne teisendamist.",
+      "unavailable": "stella AI teisendamine pole praegu saadaval.",
+      "model": "Teisendusmudel"
     },
     "language": {
       "title": "Dikteerimise keel",
@@ -606,7 +618,8 @@
       "transcription": "Tekstiks muutmine ebaõnnestus. Proovige uuesti.",
       "focusChanged": "Lülitusite enne teksti valmimist teise rakendusse, seega midagi ei sisestatud. Proovige uuesti.",
       "focusUnconfirmed": "stella ei suutnud kinnitada, milline rakendus on fookuses, seega midagi ei sisestatud. Proovige uuesti.",
-      "shortcutHeld": "Vabastage otsetee klahvid, et teksti saaks sisestada. Midagi ei sisestatud; proovige uuesti."
+      "shortcutHeld": "Vabastage otsetee klahvid, et teksti saaks sisestada. Midagi ei sisestatud; proovige uuesti.",
+      "cloudTranscription": "stella AI ei suutnud seda dikteerimist teisendada ja kõnemudelit pole selles arvutis. Proovige uuesti või valige „Teisenda kasutades“ all „Seda arvutit“ ja laadige mudel alla."
     }
   },
   "shortcut": {

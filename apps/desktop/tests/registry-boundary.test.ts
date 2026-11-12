@@ -99,6 +99,7 @@ const accountBearerOwners = {
   "time_entry_submit.rs": "account: &AccountRequest",
   "billing_draft_submit.rs": "account: &AccountRequest",
   "dictation_cleanup.rs": "account: &AccountRequest",
+  "dictation_cloud.rs": "account: &AccountRequest",
 } as const;
 
 const assertBearerOwner = (file: string, source: string) => {

@@ -1,6 +1,11 @@
 //! Turns captured microphone audio into what the speech model reads: 16 kHz
 //! mono samples. Pure functions, so they are tested without a microphone.
 
+#![cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine capture audio")
+)]
+
 pub const MODEL_SAMPLE_RATE: u32 = 16_000;
 /// Shorter holds are accidental presses.
 const MIN_SPEECH_SAMPLES: usize = MODEL_SAMPLE_RATE as usize * 3 / 10;

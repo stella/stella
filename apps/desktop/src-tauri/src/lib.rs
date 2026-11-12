@@ -40,9 +40,9 @@ mod device_preference;
 mod device_proof;
 mod diagnostics;
 mod dictation;
-#[cfg(dictation)]
 mod dictation_audio;
 mod dictation_cleanup;
+mod dictation_cloud;
 #[cfg(dictation)]
 mod dictation_engine;
 mod dictation_focus;
@@ -306,6 +306,9 @@ pub fn run() {
             }
             feature_gate::DesktopFeature::Dictation => {
               dictation::apply_feature_gate(app, enabled);
+            }
+            feature_gate::DesktopFeature::DictationCloud => {
+              dictation::apply_cloud_gate(app);
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);

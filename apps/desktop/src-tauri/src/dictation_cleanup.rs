@@ -410,12 +410,11 @@ async fn send(
   parse_segments(&body)
 }
 
-async fn request(
+/// The linked account the server enabled dictation for, and no other: what
+/// dictation sends goes only there.
+pub(crate) async fn dictation_account(
   app: &AppHandle,
-  transcript: &str,
-  languages: &[&str],
-) -> Result<Vec<Segment>, String> {
-  // The account that enabled dictation, and no other, receives the text.
+) -> Result<AccountRequest, String> {
   let (_, namespace) = app
     .try_state::<FeatureGates>()
     .and_then(|gates| gates.account_binding(DesktopFeature::Dictation))
@@ -427,6 +426,15 @@ async fn request(
   if account.local_data_namespace() != namespace {
     return Err(UNAVAILABLE.to_string());
   }
+  Ok(account)
+}
+
+async fn request(
+  app: &AppHandle,
+  transcript: &str,
+  languages: &[&str],
+) -> Result<Vec<Segment>, String> {
+  let account = dictation_account(app).await?;
   let segments = send(
     &account,
     transcript,
@@ -446,7 +454,10 @@ async fn request(
 /// Runs `future` on the shared runtime from a plain thread, for at most
 /// `limit`. The timer is built inside the runtime: created on the calling
 /// thread, which has no runtime of its own, it would panic.
-fn bounded<T>(limit: Duration, future: impl Future<Output = T>) -> Option<T> {
+pub(crate) fn bounded<T>(
+  limit: Duration,
+  future: impl Future<Output = T>,
+) -> Option<T> {
   tauri::async_runtime::block_on(
     async move { tokio::time::timeout(limit, future).await },
   )

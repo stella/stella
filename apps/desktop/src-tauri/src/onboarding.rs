@@ -486,7 +486,9 @@ pub fn show_if_pending(app: &AppHandle, background_launch: bool) {
 pub fn feature_enabled(app: &AppHandle, feature: DesktopFeature) {
   let introduction = match feature {
     DesktopFeature::ActivityTimeline => Introduction::ActivityTimeline,
-    DesktopFeature::Dictation | DesktopFeature::LocalAgents => return,
+    DesktopFeature::Dictation
+    | DesktopFeature::DictationCloud
+    | DesktopFeature::LocalAgents => return,
   };
   if app.get_webview_window(ONBOARDING_WINDOW_LABEL).is_some() {
     return;
