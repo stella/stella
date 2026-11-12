@@ -37,7 +37,10 @@ import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redire
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
-import { dictationScalingScenario } from "./dictation";
+import {
+  desktopDictationModelsScalingScenario,
+  dictationScalingScenario,
+} from "./dictation";
 import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
@@ -125,6 +128,7 @@ const measuredApiScenarios = [
   ...invoicePaymentScalingScenarios,
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
+  desktopDictationModelsScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,
   softLawSearchScalingScenario,

@@ -584,9 +584,21 @@
   "dictation": {
     "title": "Diktavimas",
     "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma. Įjungus DI taisymą, perrašytas tekstas (ne garsas) per stella siunčiamas jūsų organizacijos DI teikėjui, kad būtų ištaisytos klaidos ir formatavimas; stella jo nesaugo.",
+    "descriptionCloud": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras programoje, kurią naudojate. Kalbą paverčia tekstu stella AI, o stella jos nesaugo.",
     "cleanup": {
       "title": "Taisyti su DI",
-      "description": "Kalba ir toliau paverčiama tekstu šiame kompiuteryje, o garsas niekada jo nepalieka. Įjungus taisymą, gautas tekstas per stella siunčiamas jūsų organizacijos DI teikėjui, kuris ištaiso atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“. stella jo nesaugo."
+      "description": "Kalba ir toliau paverčiama tekstu šiame kompiuteryje, o garsas niekada jo nepalieka. Įjungus taisymą, gautas tekstas per stella siunčiamas jūsų organizacijos DI teikėjui, kuris ištaiso atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“. stella jo nesaugo.",
+      "descriptionCloud": "Įjungus taisymą, stella AI taip pat ištaiso gauto teksto atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“."
+    },
+    "destination": {
+      "title": "Paversti naudojant",
+      "local": "Šį kompiuterį",
+      "cloud": "stella AI",
+      "cloudDescription": "Garsas palieka šį kompiuterį: jis siunčiamas į stella, o per stella DI teikėją – pasirinkto modelio teikėjui, kad būtų paverstas tekstu. stella jo nesaugo.",
+      "unavailableRegion": "stella AI jūsų organizacijos regione dar nesiūlo kalbos pavertimo tekstu.",
+      "unavailableProvider": "Jūsų organizacijos DI paslaugų teikėjas nesiūlo kalbos pavertimo tekstu.",
+      "unavailable": "Pavertimas naudojant stella AI šiuo metu nepasiekiamas.",
+      "model": "Pavertimo modelis"
     },
     "language": {
       "title": "Diktavimo kalba",
@@ -608,7 +620,8 @@
       "transcription": "Perrašyti nepavyko. Bandykite dar kartą.",
       "focusChanged": "Perjungėte į kitą programą, kol tekstas dar nebuvo paruoštas, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
       "focusUnconfirmed": "stella negalėjo patvirtinti, kuri programa yra aktyvi, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
-      "shortcutHeld": "Atleiskite sparčiųjų klavišų mygtukus, kad būtų galima įvesti tekstą. Nieko nebuvo įvesta; bandykite dar kartą."
+      "shortcutHeld": "Atleiskite sparčiųjų klavišų mygtukus, kad būtų galima įvesti tekstą. Nieko nebuvo įvesta; bandykite dar kartą.",
+      "cloudTranscription": "stella AI nepavyko paversti šio diktavimo tekstu, o kalbos modelio šiame kompiuteryje nėra. Bandykite dar kartą arba ties „Paversti naudojant“ pasirinkite „Šį kompiuterį“ ir atsisiųskite modelį."
     }
   },
   "shortcut": {

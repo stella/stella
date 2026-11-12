@@ -584,9 +584,21 @@
   "dictation": {
     "title": "Ditado",
     "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada. Com a revisão por IA ativada, o texto transcrito, não o áudio, é enviado pela stella ao provedor de IA da sua organização para corrigir erros e formatação; a stella não o armazena.",
+    "descriptionCloud": "Mantenha {shortcut} pressionado e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita pela stella AI e não é armazenada pela stella.",
     "cleanup": {
       "title": "Revisar com IA",
-      "description": "A fala continua sendo transcrita neste computador, e o áudio nunca sai dele. Com a revisão ativada, o texto transcrito é enviado pela stella ao provedor de IA da sua organização para corrigir erros de reconhecimento e aplicar a pontuação e a formatação ditadas, como “nova linha” ou “negrito”. A stella não o armazena."
+      "description": "A fala continua sendo transcrita neste computador, e o áudio nunca sai dele. Com a revisão ativada, o texto transcrito é enviado pela stella ao provedor de IA da sua organização para corrigir erros de reconhecimento e aplicar a pontuação e a formatação ditadas, como “nova linha” ou “negrito”. A stella não o armazena.",
+      "descriptionCloud": "Com a revisão ativada, a stella AI também corrige erros de reconhecimento no texto transcrito e aplica a pontuação e a formatação ditadas, como “nova linha” ou “negrito”."
+    },
+    "destination": {
+      "title": "Transcrever com",
+      "local": "Este computador",
+      "cloud": "stella AI",
+      "cloudDescription": "O áudio sai deste computador: é enviado à stella e, por meio do provedor de IA da stella, ao provedor do modelo selecionado para transcrição. A stella não o armazena.",
+      "unavailableRegion": "A stella AI ainda não oferece transcrição na região da sua organização.",
+      "unavailableProvider": "O provedor de IA da sua organização não oferece transcrição.",
+      "unavailable": "A transcrição pela stella AI não está disponível no momento.",
+      "model": "Modelo de transcrição"
     },
     "language": {
       "title": "Idioma do ditado",
@@ -608,7 +620,8 @@
       "transcription": "A transcrição falhou. Tente novamente.",
       "focusChanged": "Você mudou para outro aplicativo antes de o texto ficar pronto, então nada foi digitado. Tente novamente.",
       "focusUnconfirmed": "A stella não conseguiu confirmar qual aplicativo está em foco, então nada foi digitado. Tente novamente.",
-      "shortcutHeld": "Solte as teclas do atalho para digitar. Nada foi digitado; tente novamente."
+      "shortcutHeld": "Solte as teclas do atalho para digitar. Nada foi digitado; tente novamente.",
+      "cloudTranscription": "A stella AI não conseguiu transcrever este ditado e o modelo de voz não está neste computador. Tente novamente ou, em “Transcrever com”, escolha “Este computador” e baixe o modelo."
     }
   },
   "shortcut": {

@@ -24,6 +24,8 @@ import {
   DESKTOP_PLATFORM,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { DictationDestination } from "./DictationDestination";
+import type { DictationDestinationValue } from "./DictationDestination";
 
 type DictationModel =
   | { status: "missing" | "failed" | "ready" }
@@ -44,10 +46,19 @@ type DictationSnapshot = {
   /** Whether the transcribed text goes through stella to the organization's
    *  AI provider before it is typed. */
   cleanup: boolean;
+  /** Whether the server enables transcription by stella AI; without it the
+   *  choice of destination is not offered. */
+  cloudAvailable: boolean;
+  /** The stella AI model the user picked; null: the region's default. */
+  cloudModel: string | null;
+  /** Where speech is transcribed: always this computer while stella AI is
+   *  not available. */
+  destination: DictationDestinationValue;
   enabled: boolean;
   language: DictationLanguage;
   failure:
     | "accessibility"
+    | "cloudTranscription"
     | "focusChanged"
     | "focusUnconfirmed"
     | "microphone"
@@ -65,10 +76,12 @@ type DictationSnapshot = {
 const BYTES_PER_MEGABYTE = 1_000_000;
 const PERCENT = 100;
 
-/** The language choice changes something only when cleanup reads it or the
- *  installed speech model takes a language hint; otherwise it is hidden. */
+/** The language choice changes something only when cleanup reads it, stella
+ *  AI transcribes with it, or the installed speech model takes a language
+ *  hint; otherwise it is hidden. */
 const languageHasEffect = (snapshot: DictationSnapshot): boolean =>
   snapshot.cleanup ||
+  snapshot.destination === "cloud" ||
   (snapshot.model.status === "ready" && snapshot.language.supported.length > 0);
 
 const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
@@ -159,6 +172,24 @@ export const DictationSetting = ({
     }
   };
 
+  const setDestination = async (destination: DictationDestinationValue) => {
+    const result = await Result.tryPromise(async () =>
+      invoke<DictationSnapshot>("dictation_set_destination", { destination }),
+    );
+    if (Result.isOk(result)) {
+      setSnapshot(result.value);
+    }
+  };
+
+  const setCloudModel = async (modelId: string) => {
+    const result = await Result.tryPromise(async () =>
+      invoke<DictationSnapshot>("dictation_set_cloud_model", { modelId }),
+    );
+    if (Result.isOk(result)) {
+      setSnapshot(result.value);
+    }
+  };
+
   const download = async () => {
     const result = await Result.tryPromise(async () =>
       invoke<DictationSnapshot>("dictation_download_model"),
@@ -177,7 +208,9 @@ export const DictationSetting = ({
             className="text-muted-foreground mt-1 text-sm leading-relaxed"
             id="dictation-description"
           >
-            {t("description", { shortcut })}
+            {snapshot.destination === "cloud"
+              ? t("descriptionCloud", { shortcut })
+              : t("description", { shortcut })}
           </p>
         </div>
         <Switch
@@ -197,7 +230,9 @@ export const DictationSetting = ({
               className="text-muted-foreground mt-1 text-sm leading-relaxed"
               id="dictation-cleanup-description"
             >
-              {t("cleanup.description")}
+              {snapshot.destination === "cloud"
+                ? t("cleanup.descriptionCloud")
+                : t("cleanup.description")}
             </p>
           </div>
           <Switch
@@ -210,6 +245,18 @@ export const DictationSetting = ({
           />
         </div>
       )}
+      {snapshot.enabled && snapshot.cloudAvailable && (
+        <DictationDestination
+          cloudModel={snapshot.cloudModel}
+          destination={snapshot.destination}
+          onDestinationChange={(destination) => {
+            void setDestination(destination);
+          }}
+          onModelChange={(modelId) => {
+            void setCloudModel(modelId);
+          }}
+        />
+      )}
       {snapshot.enabled && languageHasEffect(snapshot) && (
         <DictationLanguageRow
           language={snapshot.language}
@@ -219,7 +266,7 @@ export const DictationSetting = ({
           }}
         />
       )}
-      {snapshot.enabled && (
+      {snapshot.enabled && snapshot.destination === "local" && (
         <DictationModelRow
           model={snapshot.model}
           modelBytes={snapshot.modelBytes}

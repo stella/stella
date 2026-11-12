@@ -2,7 +2,8 @@
 //! computer: audio never leaves it, and neither audio nor text is stored.
 //! With AI cleanup on (the default), the transcribed text, never the audio,
 //! goes through stella to the organization's AI provider before it is typed,
-//! and stella does not store it.
+//! and stella does not store it. Only when the user chooses stella AI for
+//! transcription does the audio leave this computer.
 //!
 //! This module owns the preferences, the speech model file and the shortcut.
 //! `dictation_engine` owns capture, transcription and insertion on one thread.
@@ -29,6 +30,7 @@ use crate::{
   clipboard_shortcut::ShortcutKeys,
   config::APP_DATA_DIR_NAME,
   device_preference::DevicePreference,
+  dictation_cloud::{self, CloudModels, Destination},
   dictation_language::{self, Choice, LanguageSnapshot},
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
@@ -39,6 +41,11 @@ const PREFERENCE_FILE_NAME: &str = "dictation-enabled";
 const CLEANUP_PREFERENCE_FILE_NAME: &str = "dictation-cleanup";
 /// `auto` or a language code the speech model lists.
 const LANGUAGE_PREFERENCE_FILE_NAME: &str = "dictation-language";
+/// `local` (this computer, the default) or `cloud` (stella AI).
+const DESTINATION_PREFERENCE_FILE_NAME: &str = "dictation-destination";
+/// The stella AI transcription model the user picked; absent: the default.
+const CLOUD_MODEL_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model";
+const MAX_MODEL_ID_BYTES: usize = 128;
 const ENABLED_VALUE: &str = "on";
 const DISABLED_VALUE: &str = "off";
 /// Payload-free: windows read the new state through the snapshot command.
@@ -97,6 +104,9 @@ pub enum Failure {
   /// Shortcut keys were still held down when the text was ready; typing
   /// would have combined them with the text, so nothing was typed.
   ShortcutHeld,
+  /// stella AI could not transcribe, and this computer has no speech model to
+  /// fall back to.
+  CloudTranscription,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -106,6 +116,13 @@ pub struct DictationSnapshot {
   enabled: bool,
   cleanup: bool,
   language: LanguageSnapshot,
+  /// Whether the server enables stella AI transcription for this account;
+  /// without it the window offers no choice of destination.
+  cloud_available: bool,
+  /// The destination dictation uses: this computer whenever stella AI is
+  /// not available, whatever the stored preference says.
+  destination: Destination,
+  cloud_model: Option<String>,
   model: ModelState,
   model_bytes: u64,
   phase: Phase,
@@ -118,6 +135,8 @@ struct Inner {
   enabled: bool,
   cleanup: bool,
   language: Choice,
+  destination: Destination,
+  cloud_model: Option<String>,
   model: ModelState,
   phase: Phase,
   failure: Option<Failure>,
@@ -140,10 +159,20 @@ impl DictationState {
         .read()
         .as_deref(),
     );
+    let destination = Destination::parse(
+      DevicePreference::in_app_data(DESTINATION_PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
+    let cloud_model = DevicePreference::in_app_data(CLOUD_MODEL_PREFERENCE_FILE_NAME)
+      .read()
+      .filter(|model_id| valid_model_id(model_id));
     Self(Mutex::new(Inner {
       enabled,
       cleanup,
       language,
+      destination,
+      cloud_model,
       model: if installed_model().is_some() {
         ModelState::Ready
       } else {
@@ -159,6 +188,7 @@ impl DictationState {
   fn snapshot(
     &self,
     available: bool,
+    cloud_available: bool,
     inferred: Vec<&'static str>,
   ) -> DictationSnapshot {
     let inner = self.0.lock().unwrap_or_else(|error| error.into_inner());
@@ -167,6 +197,9 @@ impl DictationState {
       enabled: inner.enabled,
       cleanup: inner.cleanup,
       language: LanguageSnapshot::new(&inner.language, inferred),
+      cloud_available,
+      destination: inner.destination.effective(cloud_available),
+      cloud_model: inner.cloud_model.clone(),
       model: inner.model,
       model_bytes: MODEL_BYTES,
       phase: inner.phase,
@@ -279,6 +312,60 @@ pub fn language(app: &AppHandle) -> SpeakerLanguage {
   }
 }
 
+fn valid_model_id(model_id: &str) -> bool {
+  !model_id.is_empty()
+    && model_id.len() <= MAX_MODEL_ID_BYTES
+    && !model_id.chars().any(char::is_control)
+}
+
+/// Whether the server enables stella AI transcription alongside dictation.
+fn cloud_available(app: &AppHandle) -> bool {
+  available(app) && dictation_cloud::enabled(app)
+}
+
+/// Where a dictation is transcribed, and the stella AI model it uses there.
+/// A stored `cloud` without the server's decision is this computer.
+pub fn destination(app: &AppHandle) -> (Destination, Option<String>) {
+  let cloud_available = cloud_available(app);
+  app.state::<DictationState>().update(|inner| {
+    (
+      inner.destination.effective(cloud_available),
+      inner.cloud_model.clone(),
+    )
+  })
+}
+
+/// Read before every chunk sent to stella AI: dictation is still on and
+/// still set to stella AI, and the server still enables both.
+pub fn cloud_chosen(app: &AppHandle) -> bool {
+  let cloud_available = cloud_available(app);
+  app.state::<DictationState>().update(|inner| {
+    inner.enabled && inner.destination.effective(cloud_available) == Destination::Cloud
+  })
+}
+
+/// Replaces a stored model the region no longer offers, or none, with the
+/// one dictation now uses, so the window shows and keeps what is used.
+pub fn adopt_cloud_model(app: &AppHandle, model_id: &str) -> Result<(), String> {
+  if !valid_model_id(model_id) {
+    return Err("this transcription model is not offered".to_string());
+  }
+  let stored = app
+    .state::<DictationState>()
+    .update(|inner| inner.cloud_model.clone());
+  if stored.as_deref() == Some(model_id) {
+    return Ok(());
+  }
+  change_preference(app, CLOUD_MODEL_PREFERENCE_FILE_NAME, model_id, |inner| {
+    inner.cloud_model = Some(model_id.to_string());
+  })
+}
+
+/// The server's stella AI decision changed: windows read the new snapshot.
+pub fn apply_cloud_gate(app: &AppHandle) {
+  change(app, |_inner| ());
+}
+
 /// Whether a finished dictation goes through AI cleanup before it is typed.
 pub fn cleanup_enabled(app: &AppHandle) -> bool {
   app.state::<DictationState>().update(|inner| inner.cleanup)
@@ -373,7 +460,7 @@ fn read_snapshot(app: &AppHandle, state: &DictationState) -> DictationSnapshot {
   } else {
     Vec::new()
   };
-  state.snapshot(available, inferred)
+  state.snapshot(available, cloud_available(app), inferred)
 }
 
 #[tauri::command]
@@ -450,6 +537,68 @@ pub fn dictation_set_language(
     choice.stored(),
     |inner| inner.language = choice,
   )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+#[tauri::command]
+pub fn dictation_set_destination(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  destination: Destination,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  if destination == Destination::Cloud && !cloud_available(&app) {
+    return Err("stella AI transcription is not available".to_string());
+  }
+  if state.update(|inner| inner.destination) != destination {
+    change_preference(
+      &app,
+      DESTINATION_PREFERENCE_FILE_NAME,
+      destination.stored(),
+      |inner| inner.destination = destination,
+    )?;
+  }
+  Ok(read_snapshot(&app, &state))
+}
+
+/// The models stella AI offers this organization; the window picks from it.
+/// A stored model the region no longer offers is replaced by the one
+/// dictation would use, so the window shows what is used.
+#[tauri::command]
+pub async fn dictation_get_cloud_models(app: AppHandle) -> Result<CloudModels, String> {
+  if !cloud_available(&app) {
+    return Err("stella AI transcription is not available".to_string());
+  }
+  let offered = dictation_cloud::models(&app).await?;
+  let stored = app
+    .state::<DictationState>()
+    .update(|inner| inner.cloud_model.clone());
+  if let Some(choice) = dictation_cloud::choose_model(stored.as_deref(), &offered)
+    && choice.replaces_stored
+  {
+    adopt_cloud_model(&app, &choice.model_id)?;
+  }
+  Ok(offered)
+}
+
+#[tauri::command]
+pub async fn dictation_set_cloud_model(
+  app: AppHandle,
+  model_id: String,
+) -> Result<DictationSnapshot, String> {
+  if !cloud_available(&app) {
+    return Err("stella AI transcription is not available".to_string());
+  }
+  // Only a model the organization is offered right now can be chosen.
+  if !valid_model_id(&model_id)
+    || !dictation_cloud::models(&app).await?.offers(&model_id)
+  {
+    return Err("this transcription model is not offered".to_string());
+  }
+  adopt_cloud_model(&app, &model_id)?;
+  let state = app.state::<DictationState>();
   Ok(read_snapshot(&app, &state))
 }
 
@@ -595,6 +744,7 @@ mod tests {
       (Failure::FocusChanged, "focusChanged"),
       (Failure::FocusUnconfirmed, "focusUnconfirmed"),
       (Failure::ShortcutHeld, "shortcutHeld"),
+      (Failure::CloudTranscription, "cloudTranscription"),
     ] {
       assert_eq!(
         serde_json::to_value(failure).unwrap(),
@@ -608,6 +758,8 @@ mod tests {
       enabled: true,
       cleanup,
       language: Choice::Automatic,
+      destination: Destination::parse(None),
+      cloud_model: None,
       model: ModelState::Missing,
       phase: Phase::Idle,
       failure: None,

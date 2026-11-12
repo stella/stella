@@ -584,9 +584,21 @@
   "dictation": {
     "title": "Diktovanie",
     "description": "Podržte {shortcut} a hovorte. Text sa zobrazí v aplikácii, ktorú práve používate. Reč sa prevádza na tomto počítači a neukladá sa. So zapnutou úpravou pomocou AI sa prevedený text (nie zvuk) odošle cez stellu poskytovateľovi AI vašej organizácie, ktorý opraví chyby a formátovanie; stella ho neukladá.",
+    "descriptionCloud": "Podržte {shortcut} a hovorte. Text sa zobrazí v aplikácii, ktorú práve používate. Reč prevádza stella AI a stella ju neukladá.",
     "cleanup": {
       "title": "Upraviť pomocou AI",
-      "description": "Reč sa naďalej prevádza na tomto počítači a zvuk ho nikdy neopustí. So zapnutou úpravou sa prevedený text odošle cez stellu poskytovateľovi AI vašej organizácie, ktorý opraví chyby rozpoznávania a použije vyslovenú interpunkciu a formátovanie, napríklad „nový riadok“ alebo „tučne“. stella ho neukladá."
+      "description": "Reč sa naďalej prevádza na tomto počítači a zvuk ho nikdy neopustí. So zapnutou úpravou sa prevedený text odošle cez stellu poskytovateľovi AI vašej organizácie, ktorý opraví chyby rozpoznávania a použije vyslovenú interpunkciu a formátovanie, napríklad „nový riadok“ alebo „tučne“. stella ho neukladá.",
+      "descriptionCloud": "So zapnutou úpravou stella AI tiež opraví chyby rozpoznávania v prevedenom texte a použije vyslovenú interpunkciu a formátovanie, napríklad „nový riadok“ alebo „tučne“."
+    },
+    "destination": {
+      "title": "Prevádzať pomocou",
+      "local": "Tento počítač",
+      "cloud": "stella AI",
+      "cloudDescription": "Zvuk opustí tento počítač: na prevod sa odošle do stelly a cez poskytovateľa AI stelly poskytovateľovi vybraného modelu. stella ho neukladá.",
+      "unavailableRegion": "stella AI zatiaľ v oblasti vašej organizácie prevod reči neponúka.",
+      "unavailableProvider": "Poskytovateľ AI vašej organizácie prevod reči neponúka.",
+      "unavailable": "Prevod pomocou stella AI teraz nie je k dispozícii.",
+      "model": "Model prevodu"
     },
     "language": {
       "title": "Jazyk diktovania",
@@ -608,7 +620,8 @@
       "transcription": "Prevod zlyhal. Skúste to znova.",
       "focusChanged": "Kým bol text pripravený, prepli ste do inej aplikácie, takže sa nič nenapísalo. Skúste to znova.",
       "focusUnconfirmed": "stella nemohla overiť, ktorá aplikácia je aktívna, takže sa nič nenapísalo. Skúste to znova.",
-      "shortcutHeld": "Pustite klávesy skratky, aby sa text mohol napísať. Nič sa nenapísalo, skúste to znova."
+      "shortcutHeld": "Pustite klávesy skratky, aby sa text mohol napísať. Nič sa nenapísalo, skúste to znova.",
+      "cloudTranscription": "stella AI tento diktát nepreviedla a rečový model v tomto počítači nie je. Skúste to znova alebo pri „Prevádzať pomocou“ zvoľte „Tento počítač“ a model stiahnite."
     }
   },
   "shortcut": {

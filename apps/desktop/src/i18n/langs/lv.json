@@ -584,9 +584,21 @@
   "dictation": {
     "title": "Diktēšana",
     "description": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runa tiek pārveidota šajā datorā un netiek saglabāta. Ja MI labošana ir ieslēgta, pārvērstais teksts (ne audio) caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, lai izlabotu kļūdas un formatējumu; stella to nesaglabā.",
+    "descriptionCloud": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runu tekstā pārvērš stella AI, un stella to nesaglabā.",
     "cleanup": {
       "title": "Labot ar MI",
-      "description": "Runa joprojām tiek pārvērsta tekstā šajā datorā, un audio to nekad nepamet. Ja labošana ir ieslēgta, pārvērstais teksts caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, kas izlabo atpazīšanas kļūdas un piemēro diktētās pieturzīmes un formatējumu, piemēram, “jauna rinda” vai “treknraksts”. stella to nesaglabā."
+      "description": "Runa joprojām tiek pārvērsta tekstā šajā datorā, un audio to nekad nepamet. Ja labošana ir ieslēgta, pārvērstais teksts caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, kas izlabo atpazīšanas kļūdas un piemēro diktētās pieturzīmes un formatējumu, piemēram, “jauna rinda” vai “treknraksts”. stella to nesaglabā.",
+      "descriptionCloud": "Ja labošana ir ieslēgta, stella AI arī izlabo atpazīšanas kļūdas pārvērstajā tekstā un piemēro diktētās pieturzīmes un formatējumu, piemēram, “jauna rinda” vai “treknraksts”."
+    },
+    "destination": {
+      "title": "Pārvērst ar",
+      "local": "Šo datoru",
+      "cloud": "stella AI",
+      "cloudDescription": "Audio pamet šo datoru: pārvēršanai tekstā tas tiek nosūtīts uz stella un caur stella MI pakalpojumu sniedzēju izvēlētā modeļa nodrošinātājam. stella to nesaglabā.",
+      "unavailableRegion": "stella AI jūsu organizācijas reģionā vēl nepiedāvā runas pārvēršanu tekstā.",
+      "unavailableProvider": "Jūsu organizācijas MI pakalpojumu sniedzējs nepiedāvā runas pārvēršanu tekstā.",
+      "unavailable": "Pārvēršana ar stella AI pašlaik nav pieejama.",
+      "model": "Pārvēršanas modelis"
     },
     "language": {
       "title": "Diktēšanas valoda",
@@ -608,7 +620,8 @@
       "transcription": "Pārveide neizdevās. Mēģiniet vēlreiz.",
       "focusChanged": "Jūs pārslēdzāties uz citu lietotni, pirms teksts bija gatavs, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
       "focusUnconfirmed": "stella nevarēja pārliecināties, kurā lietotnē ir fokuss, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
-      "shortcutHeld": "Atlaidiet īsinājumtaustiņus, lai varētu ievadīt tekstu. Nekas netika ievadīts; mēģiniet vēlreiz."
+      "shortcutHeld": "Atlaidiet īsinājumtaustiņus, lai varētu ievadīt tekstu. Nekas netika ievadīts; mēģiniet vēlreiz.",
+      "cloudTranscription": "stella AI neizdevās pārvērst šo diktātu tekstā, un runas modeļa šajā datorā nav. Mēģiniet vēlreiz vai pie “Pārvērst ar” izvēlieties “Šo datoru” un lejupielādējiet modeli."
     }
   },
   "shortcut": {

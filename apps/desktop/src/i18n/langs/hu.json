@@ -584,9 +584,21 @@
   "dictation": {
     "title": "Diktálás",
     "description": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg a használt alkalmazásban jelenik meg. A beszéd átírása ezen a számítógépen történik, és nem kerül tárolásra. Ha az AI-javítás be van kapcsolva, az átírt szöveg – nem a hang – a stellán keresztül a szervezete AI-szolgáltatójához kerül a hibák és a formázás javítására; a stella nem tárolja.",
+    "descriptionCloud": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg abban az alkalmazásban jelenik meg, amelyet éppen használ. A beszédet a stella AI írja át, és a stella nem tárolja.",
     "cleanup": {
       "title": "Javítás AI-jal",
-      "description": "A beszéd átírása továbbra is ezen a számítógépen történik, a hang soha nem hagyja el. Ha a javítás be van kapcsolva, az átírt szöveg a stellán keresztül a szervezete AI-szolgáltatójához kerül, amely kijavítja a felismerési hibákat, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”. A stella nem tárolja."
+      "description": "A beszéd átírása továbbra is ezen a számítógépen történik, a hang soha nem hagyja el. Ha a javítás be van kapcsolva, az átírt szöveg a stellán keresztül a szervezete AI-szolgáltatójához kerül, amely kijavítja a felismerési hibákat, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”. A stella nem tárolja.",
+      "descriptionCloud": "Ha a javítás be van kapcsolva, a stella AI az átírt szöveg felismerési hibáit is kijavítja, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”."
+    },
+    "destination": {
+      "title": "Átírás ezzel",
+      "local": "Ez a számítógép",
+      "cloud": "stella AI",
+      "cloudDescription": "A hang elhagyja ezt a számítógépet: átírásra a stellához, majd a stella AI-szolgáltatóján keresztül a kiválasztott modell szolgáltatójához kerül. A stella nem tárolja.",
+      "unavailableRegion": "A stella AI a szervezete régiójában még nem kínál átírást.",
+      "unavailableProvider": "A szervezete AI-szolgáltatója nem kínál átírást.",
+      "unavailable": "A stella AI átírás most nem érhető el.",
+      "model": "Átírási modell"
     },
     "language": {
       "title": "Diktálás nyelve",
@@ -608,7 +620,8 @@
       "transcription": "Az átírás nem sikerült. Próbálja újra.",
       "focusChanged": "Másik alkalmazásra váltott, mielőtt a szöveg elkészült, ezért semmi sem lett beírva. Próbálja újra.",
       "focusUnconfirmed": "A stella nem tudta megállapítani, melyik alkalmazás aktív, ezért semmi sem lett beírva. Próbálja újra.",
-      "shortcutHeld": "Engedje fel a billentyűparancs gombjait a gépeléshez. Semmi sem lett beírva; próbálja újra."
+      "shortcutHeld": "Engedje fel a billentyűparancs gombjait a gépeléshez. Semmi sem lett beírva; próbálja újra.",
+      "cloudTranscription": "A stella AI nem tudta átírni ezt a diktálást, és a beszédmodell nincs ezen a számítógépen. Próbálja újra, vagy az „Átírás ezzel” beállításnál válassza az „Ez a számítógép” lehetőséget, és töltse le a modellt."
     }
   },
   "shortcut": {

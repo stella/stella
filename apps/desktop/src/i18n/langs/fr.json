@@ -584,9 +584,21 @@
   "dictation": {
     "title": "Dictée",
     "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée. Lorsque la correction par IA est activée, le texte transcrit, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs et la mise en forme ; stella ne le conserve pas.",
+    "descriptionCloud": "Maintenez {shortcut} et parlez. Le texte apparaît dans l’application que vous utilisez. La parole est transcrite par stella AI et n’est pas conservée par stella.",
     "cleanup": {
       "title": "Corriger avec l’IA",
-      "description": "La parole est toujours transcrite sur cet ordinateur et l’audio ne le quitte jamais. Lorsque la correction est activée, le texte transcrit est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs de reconnaissance et appliquer la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras ». stella ne le conserve pas."
+      "description": "La parole est toujours transcrite sur cet ordinateur et l’audio ne le quitte jamais. Lorsque la correction est activée, le texte transcrit est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs de reconnaissance et appliquer la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras ». stella ne le conserve pas.",
+      "descriptionCloud": "Lorsque la correction est activée, stella AI corrige aussi les erreurs de reconnaissance du texte transcrit et applique la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras »."
+    },
+    "destination": {
+      "title": "Transcrire avec",
+      "local": "Cet ordinateur",
+      "cloud": "stella AI",
+      "cloudDescription": "L’audio quitte cet ordinateur : il est envoyé à stella puis, via le fournisseur d’IA de stella, au fournisseur du modèle choisi pour être transcrit. stella ne le conserve pas.",
+      "unavailableRegion": "stella AI ne propose pas encore de transcription dans la région de votre organisation.",
+      "unavailableProvider": "Le fournisseur d’IA de votre organisation ne propose pas de transcription.",
+      "unavailable": "La transcription par stella AI n’est pas disponible pour le moment.",
+      "model": "Modèle de transcription"
     },
     "language": {
       "title": "Langue de dictée",
@@ -608,7 +620,8 @@
       "transcription": "La transcription a échoué. Réessayez.",
       "focusChanged": "Vous êtes passé à une autre application avant que le texte soit prêt, rien n’a donc été saisi. Réessayez.",
       "focusUnconfirmed": "stella n’a pas pu confirmer quelle application est au premier plan, rien n’a donc été saisi. Réessayez.",
-      "shortcutHeld": "Relâchez les touches du raccourci pour saisir le texte. Rien n’a été saisi ; réessayez."
+      "shortcutHeld": "Relâchez les touches du raccourci pour saisir le texte. Rien n’a été saisi ; réessayez.",
+      "cloudTranscription": "stella AI n’a pas pu transcrire cette dictée et le modèle vocal n’est pas sur cet ordinateur. Réessayez, ou choisissez « Cet ordinateur » pour « Transcrire avec » et téléchargez le modèle."
     }
   },
   "shortcut": {

@@ -584,9 +584,21 @@
   "dictation": {
     "title": "Diktieren",
     "description": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird auf diesem Computer umgewandelt und nicht gespeichert. Ist die KI-Überarbeitung aktiviert, wird der umgewandelte Text, nicht der Ton, über stella an den KI-Anbieter Ihrer Organisation gesendet, um Fehler und Formatierung zu korrigieren; stella speichert ihn nicht.",
+    "descriptionCloud": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird von stella AI umgewandelt und von stella nicht gespeichert.",
     "cleanup": {
       "title": "Mit KI überarbeiten",
-      "description": "Die Sprache wird weiterhin auf diesem Computer umgewandelt, und der Ton verlässt ihn nie. Ist die Überarbeitung aktiviert, wird der umgewandelte Text über stella an den KI-Anbieter Ihrer Organisation gesendet, um Erkennungsfehler zu korrigieren und gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ anzuwenden. stella speichert ihn nicht."
+      "description": "Die Sprache wird weiterhin auf diesem Computer umgewandelt, und der Ton verlässt ihn nie. Ist die Überarbeitung aktiviert, wird der umgewandelte Text über stella an den KI-Anbieter Ihrer Organisation gesendet, um Erkennungsfehler zu korrigieren und gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ anzuwenden. stella speichert ihn nicht.",
+      "descriptionCloud": "Ist die Überarbeitung aktiviert, korrigiert stella AI außerdem Erkennungsfehler im umgewandelten Text und wendet gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ an."
+    },
+    "destination": {
+      "title": "Umwandeln mit",
+      "local": "Diesem Computer",
+      "cloud": "stella AI",
+      "cloudDescription": "Der Ton verlässt diesen Computer: Er wird zur Umwandlung an stella und über den KI-Anbieter von stella an den Anbieter des ausgewählten Modells gesendet. stella speichert ihn nicht.",
+      "unavailableRegion": "stella AI bietet in der Region Ihrer Organisation noch keine Umwandlung an.",
+      "unavailableProvider": "Der KI-Anbieter Ihrer Organisation bietet keine Umwandlung an.",
+      "unavailable": "Die Umwandlung mit stella AI ist gerade nicht verfügbar.",
+      "model": "Umwandlungsmodell"
     },
     "language": {
       "title": "Diktiersprache",
@@ -608,7 +620,8 @@
       "transcription": "Die Umwandlung ist fehlgeschlagen. Versuchen Sie es erneut.",
       "focusChanged": "Sie haben zu einer anderen App gewechselt, bevor der Text fertig war, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
       "focusUnconfirmed": "stella konnte nicht feststellen, welche App den Fokus hat, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
-      "shortcutHeld": "Lassen Sie die Tasten des Tastenkürzels los, damit getippt werden kann. Es wurde nichts eingegeben; versuchen Sie es erneut."
+      "shortcutHeld": "Lassen Sie die Tasten des Tastenkürzels los, damit getippt werden kann. Es wurde nichts eingegeben; versuchen Sie es erneut.",
+      "cloudTranscription": "stella AI konnte dieses Diktat nicht umwandeln, und das Sprachmodell ist nicht auf diesem Computer. Versuchen Sie es erneut, oder wählen Sie bei „Umwandeln mit“ die Option „Diesem Computer“ und laden Sie das Modell herunter."
     }
   },
   "shortcut": {
