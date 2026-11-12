@@ -12,13 +12,13 @@ import { classifyFailure } from "@stll/errors";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawSearchDocuments,
   chatMessages,
   chatThreads,
   contactSearchDocuments,
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
+import { searchProvenanceAnswer } from "@/api/handlers/search/provenance-error";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { status } from "@/api/http/status";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -49,7 +49,6 @@ import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
-  brandPersistedCaseLawDecisionId,
   brandPersistedContactId,
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
@@ -106,7 +105,9 @@ type SearchSummaryCitationPolicy = "cite" | "exclude";
 const SEARCH_SUMMARY_CITATION_POLICY = {
   matter: "cite",
   contact: "cite",
-  "case-law": "cite",
+  // Global search answers no case-law hits (the palette asks the corpus
+  // search engine for them), so there is no case-law context to cite.
+  "case-law": "exclude",
   document: "cite",
   folder: "cite",
   task: "cite",
@@ -816,7 +817,7 @@ export const createSearchSummaryChatThread = async ({
   // Derive the embedded data scope from the actual cited and
   // ranked context. The AI summary draws from every context, not
   // only those it explicitly cited, so include all of them. Org-
-  // scoped hit types (case-law, contact) have no workspaceId and
+  // scoped hit types (contact) have no workspaceId and
   // are correctly excluded — RLS for those is enforced elsewhere.
   const dataWorkspaceIds = uniqueWorkspaceIds(
     contextsResult
@@ -986,8 +987,11 @@ const loadSummaryContexts = async ({
     { scopedDb },
   );
 
+  if (searchResult.isErr()) {
+    return searchProvenanceAnswer(searchResult.error);
+  }
   return await buildSearchResultContexts({
-    hits: searchResult.hits,
+    hits: searchResult.value.hits,
     organizationId,
     accessibleWorkspaceIds,
     scopedDb,
@@ -1006,11 +1010,6 @@ const toModelSearchResultContext = (context: SearchResultContext) => ({
 const citationHref = (context: SearchResultContext): string | null => {
   const hit = context.hit;
   switch (hit.type) {
-    case "case-law":
-      return toChatResourceHref({
-        type: RESOURCE_TYPE.CASE_LAW_DECISION,
-        resource: hit.resource,
-      });
     case "matter":
       return toChatResourceHref({
         type: RESOURCE_TYPE.WORKSPACE,
@@ -1068,7 +1067,7 @@ const buildChatSummaryText = ({
 const extractHitWorkspaceId = (
   hit: CitableSearchHit,
 ): SafeId<"workspace"> | null => {
-  if (hit.type === "case-law" || hit.type === "contact") {
+  if (hit.type === "contact") {
     return null;
   }
   return brandPersistedWorkspaceId(hit.workspaceId);
@@ -1080,11 +1079,7 @@ const uniqueWorkspaceIds = (
 
 const toChatSourceDocuments = (context: SearchResultContext) => {
   const hit = context.hit;
-  if (
-    hit.type === "case-law" ||
-    hit.type === "contact" ||
-    hit.type === "matter"
-  ) {
+  if (hit.type === "contact" || hit.type === "matter") {
     return [];
   }
 
@@ -1171,35 +1166,6 @@ const loadSearchHitContent = async ({
   accessibleWorkspaceIds,
   scopedDb,
 }: LoadSearchHitContentOptions): Promise<string> => {
-  if (hit.type === "case-law") {
-    // The pg-fts projection is the only body source here, and that is
-    // consistent: `searchGlobal` selects case-law hits FROM
-    // case_law_search_documents whatever LEGAL_SEARCH_PROVIDER says, so a
-    // decision without a projection row is never a hit in the first place.
-    // Do not reach for the corpus objects as a fallback — importing that
-    // read into a route module costs ~1.5M type instantiations (see the
-    // typecheck-cost baseline) for a branch this query cannot produce.
-    //
-    // The limitation this leaves is global search's, not this handler's:
-    // under canonical storage new decisions get no projection row, so
-    // `searchGlobal`'s case-law section stops seeing them entirely and both
-    // the UI and this summariser lose them together. That section needs a
-    // corpus-aware path before any database goes canonical.
-    const rows = await scopedDb((tx) =>
-      tx
-        .select({ searchableText: caseLawSearchDocuments.searchableText })
-        .from(caseLawSearchDocuments)
-        .where(
-          eq(
-            caseLawSearchDocuments.decisionId,
-            brandPersistedCaseLawDecisionId(hit.decisionId),
-          ),
-        )
-        .limit(1),
-    );
-    return compactContent(rows.at(0)?.searchableText);
-  }
-
   if (hit.type === "contact") {
     const rows = await scopedDb((tx) =>
       tx

@@ -12,10 +12,12 @@ import {
   sql,
 } from "drizzle-orm";
 
-import type {
-  ChatLocalFilesUndoComputerRefusal,
-  ChatLocalFilesUndoRefusal,
-  ChatLocalFilesUndoState,
+import {
+  CHAT_LOCAL_FILES_UNDONE_METADATA_KEY,
+  type ChatLocalFilesUndoComputerRefusal,
+  type ChatLocalFilesUndone,
+  type ChatLocalFilesUndoRefusal,
+  type ChatLocalFilesUndoState,
 } from "@stll/api-contract/chat-local-files-undo";
 import {
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
@@ -24,12 +26,18 @@ import {
 } from "@stll/api-contract/desktop-runner";
 
 import {
+  chatMessages,
   chatTurns,
   desktopRunnerEvents,
   desktopRunnerFolderRestores,
   desktopRunnerRuns,
   desktopRunners,
 } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import {
@@ -48,6 +56,7 @@ import type {
   RunnerBinding,
   RunOwner,
 } from "@/api/lib/desktop-runner/store";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Folder restores: a member's request to put a chat's folder back as the
@@ -446,6 +455,47 @@ const ofComputer = (binding: RunnerBinding): SQL =>
   ) ?? panic("A computer's restores are named by its binding");
 
 /**
+ * The restores of device keys a relink retired, queued or sent, end as
+ * expired: no socket of those keys takes or answers one again, and a sent
+ * one would otherwise block the thread's runs on that computer forever.
+ */
+export const expireFolderRestoresOfKeys = async (
+  tx: Parameters<typeof transitionLifecycleBatch>[0]["tx"] &
+    Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    desktopId,
+    deviceJkts,
+    now,
+  }: {
+    owner: RunOwner;
+    desktopId: string;
+    deviceJkts: readonly string[];
+    now: Date;
+  },
+) => {
+  const ofKeys = and(
+    eq(restores.userId, owner.userId),
+    eq(restores.organizationId, owner.organizationId),
+    eq(restores.desktopId, desktopId),
+    inArray(restores.deviceJkt, [...deviceJkts]),
+  );
+  const unsettled = await tx
+    .select({ id: restores.id })
+    .from(restores)
+    .where(and(ofKeys, inArray(restores.state, ["queued", "sent"])));
+  await transitionLifecycleBatch({
+    tx,
+    spec: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+    ids: unsettled.map(({ id }) => id),
+    moves: { state: { from: ["queued", "sent"], to: "expired" } },
+    guard: ofKeys ?? panic("A key's restores are named by its account"),
+    set: { settledAt: now },
+    recordTransitionAuditEvent: skipRestoreAudit,
+  });
+};
+
+/**
  * The restores this socket sends now: queued ones still in time, marked sent
  * before they go out, and on a new socket the sent ones not answered yet. A
  * queued one past its time is expired instead. Only the computer's current
@@ -571,7 +621,71 @@ export const settleFolderRestore = async (
       set: { reason: outcome === "restored" ? null : outcome, settledAt: now },
       recordTransitionAuditEvent: skipRestoreAudit,
     });
-    return settled.type === "transitioned" ? "settled" : "unknown";
+    if (settled.type !== "transitioned") {
+      return "unknown";
+    }
+    if (to === "restored") {
+      // The lasting marker rides on the turn's answer, in the same
+      // transaction: the page renders it from the message it already reads,
+      // after newer turns and a move to the cloud alike. Only the server
+      // writes this key; incoming client metadata never carries it.
+      const marker = {
+        [CHAT_LOCAL_FILES_UNDONE_METADATA_KEY]: {
+          at: now.toISOString(),
+        } satisfies ChatLocalFilesUndone,
+      };
+      // At most one row: the turn's answer.
+      const [answer] = await tx
+        .update(chatMessages)
+        .set({
+          content: sql`jsonb_set(${chatMessages.content}, '{metadata}', coalesce(${chatMessages.content} -> 'metadata', '{}'::jsonb) || ${JSON.stringify(marker)}::text::jsonb)`,
+        })
+        .where(
+          eq(
+            chatMessages.id,
+            sql`(select ${chatTurns.assistantMessageId} from ${chatTurns} join ${restores} on ${restores.chatTurnId} = ${chatTurns.id} where ${restores.id} = ${restoreId})`,
+          ),
+        )
+        .returning({
+          id: chatMessages.id,
+          workspaceId: chatMessages.workspaceId,
+        });
+      if (answer === undefined) {
+        // A turn stopped before it answered keeps no answer to mark; the
+        // restore still settles, and the folder is back as it was.
+        logger.info("desktop_runner.folder_restore.no_answer_to_mark", {
+          "desktop_runner.restore_id": restoreId,
+        });
+        return "settled";
+      }
+      // The computer, not the member, changed the answer: the desktop
+      // runner records it on the member's behalf.
+      const recordAuditEvent = createBackgroundAuditRecorder({
+        execution: {
+          performer: {
+            type: "service",
+            id: "desktop-runner",
+            name: "Desktop runner",
+          },
+          trigger: {
+            type: "system",
+            source: "folder_restore",
+            sourceId: restoreId,
+          },
+        },
+        organizationId: binding.organizationId,
+        userId: binding.userId,
+        workspaceId: null,
+      });
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+        resourceId: answer.id,
+        workspaceId: answer.workspaceId,
+        metadata: { reason: "local_files_undone", undoId: restoreId },
+      });
+    }
+    return "settled";
   });
 
 type QueuedSessionsOptions = {

@@ -15,6 +15,7 @@
     "noMatchesDescription": "Žádný název konverzace ani spisu neobsahuje „{search}“.",
     "search": "Hledat konverzace",
     "loadFailed": "Vaše konverzace se nepodařilo načíst.",
+    "runsLoadFailed": "Nepodařilo se zjistit, které konverzace na vás čekají.",
     "retry": "Zkusit znovu",
     "untitled": "Konverzace bez názvu",
     "loadMoreFailed": "Načíst další",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "Tuto konverzaci se nepodařilo načíst.",
     "greeting": "Na čem chcete pracovat?",
     "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
+    "markRead": "Přečteno",
+    "markUnread": "Nepřečteno",
+    "pin": "Připnout",
+    "unpin": "Odepnout",
+    "unread": "Nepřečteno",
+    "markReadFailed": "Konverzaci se nepodařilo označit jako přečtenou.",
+    "markUnreadFailed": "Konverzaci se nepodařilo označit jako nepřečtenou.",
+    "pinFailed": "Konverzaci se nepodařilo připnout.",
+    "unpinFailed": "Konverzaci se nepodařilo odepnout.",
     "sections": {
+      "needsYou": "Čeká na vás",
+      "working": "Probíhá",
+      "pinned": "Připnuté",
       "today": "Dnes",
       "yesterday": "Včera",
       "week": "Posledních 7 dní",
@@ -62,7 +75,12 @@
     "sendFileRefused": "Soubor se nepodařilo odeslat, takže se zpráva neodeslala. Odeberte soubor a zkuste to znovu.",
     "sendFileNotAnonymizable": "Tato konverzace je anonymizovaná a stella nedokázala anonymizovat jeden ze souborů, takže se nic neodeslalo. Odeberte soubor a zkuste to znovu.",
     "pickTitle": "Vyberte konverzaci",
-    "pickDescription": "Vyberte vlákno ze seznamu nebo začněte nové tlačítkem +."
+    "pickDescription": "Vyberte vlákno ze seznamu nebo začněte nové tlačítkem +.",
+    "runBanner": {
+      "needsYou": "Čeká na vás",
+      "finished": "Dokončeno",
+      "openHint": "Otevře konverzaci"
+    }
   },
   "tasks": {
     "emptyTitle": "Žádné otevřené úkoly",
@@ -151,7 +169,11 @@
     "scanDocument": "Naskenovat dokument",
     "newTask": "Nový úkol",
     "uploadDocument": "Nahrát dokument",
-    "uploadFailed": "Dokument se nepodařilo nahrát. Zkuste to znovu."
+    "uploadFailed": "Dokument se nepodařilo nahrát. Zkuste to znovu.",
+    "startTimer": "Spustit časovač",
+    "pauseTimer": "Pozastavit časovač",
+    "resumeTimer": "Pokračovat v časovači",
+    "timerRunning": "Časovač běží"
   },
   "entity": {
     "type": "Typ",

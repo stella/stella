@@ -14,6 +14,7 @@ import path from "node:path";
 
 import { waitFor } from "@stll/test-kit";
 
+import { PROTOCOL_LOG_OFF } from "../protocol-log";
 import { SidecarHost } from "./host";
 import type { SidecarHostOutput, SidecarRunStart } from "./protocol";
 
@@ -111,6 +112,7 @@ const startHost = (at: Place): Host => {
       return true;
     },
     log: () => {},
+    protocolLog: PROTOCOL_LOG_OFF,
     environment: {
       PATH: process.env["PATH"] ?? "",
       FAKE_HARNESS_LOG: at.fakeLog,

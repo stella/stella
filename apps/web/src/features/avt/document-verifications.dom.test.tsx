@@ -69,6 +69,7 @@ const mountDocuments = (locale: "en" | "cs" = "en") => {
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       parentId: null,
+      sizeBytes: 18_000,
     },
   ]);
   client.setQueryData(
@@ -117,6 +118,18 @@ beforeEach(() => {
           new URL(request.url).pathname.endsWith("/verifications/latest")
         ) {
           return Response.json({ runs: [] });
+        }
+        if (
+          request.method === "POST" &&
+          new URL(request.url).pathname.endsWith("/source-documents/kinds")
+        ) {
+          // Every document is a record; the kind read is not what these
+          // tests are about.
+          return Response.json({
+            documents: [
+              { documentEntityId: target.entityId, sourceKind: "document" },
+            ],
+          });
         }
         if (
           request.method !== "POST" ||

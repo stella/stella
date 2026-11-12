@@ -31,6 +31,7 @@ import {
   DELEGATED_CHECKS_ENV,
   UNCHANGED_CHECKS_ENV,
 } from "./generated-files-guard";
+import { stepConditionCovers } from "./github-expression";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
@@ -58,6 +59,9 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
                 "CI_CHECK_KIND",
                 "CI_CHECK_INPUTS",
                 "CI_CHECK_CONTEXT",
+                // The pool supplies this to every child; it does not alter a
+                // check's command or classification.
+                "CI_COMPARISON_BASE",
                 // Matrix metadata selects a disjoint slice of the same pool;
                 // it does not change the check represented by this step.
                 "CI_CHECK_POOL_PARTITION",
@@ -463,6 +467,7 @@ const preparationSteps = new Set([
   "Generate web compiler sources",
   "Download generated sources",
   "Restore generated sources",
+  "Configure flaky-test quarantine",
 ]);
 const prerequisites = new Set([...setupPrerequisites, ...preparationSteps]);
 const partitions = partitionIds.map((id) => v.parse(headJobSchema, jobs[id]));
@@ -498,6 +503,7 @@ const CONTINUATION_PREFIXES = {
   checkout: `\${{ !cancelled() && steps.checkout.outcome == 'success'`,
   install: `\${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure'`,
   installPackages: `\${{ !cancelled() && steps.install.outcome == 'success'`,
+  checkoutInstallPackages: `\${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success'`,
 } as const;
 const outcomeDependencies: Record<string, string> = {
   "Changeset present for published package changes": "policy",
@@ -633,6 +639,28 @@ const withPrDepthCheckoutRef = (step: Step): Step => {
     return step;
   }
   return { ...step, with: { ...inputs, ref: PR_DEPTH_CHECKOUT_REF } };
+};
+// A blobless checkout moved to the shared action that retries it: the same
+// inputs, with the filter now owned by the action. Any other change to the
+// checkout stays significant.
+const withSharedPartialCloneCheckout = (step: Step): Step => {
+  if (usesOf(step) !== "actions/checkout@<pinned>") {
+    return step;
+  }
+  const inputs = v.parse(
+    v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
+    step,
+  ).with;
+  if (inputs?.["filter"] !== "blob:none") {
+    return step;
+  }
+  return {
+    ...step,
+    uses: "stella/.github/actions/partial-clone-checkout@<pinned>",
+    with: Object.fromEntries(
+      Object.entries(inputs).filter(([key]) => key !== "filter"),
+    ),
+  };
 };
 const ownedInstallFlags = '["--frozen-lockfile","--ignore-scripts"]';
 const scopedInstallActions = new Set([
@@ -1187,6 +1215,16 @@ const stepFields = (step: Step | undefined) =>
 const currentBaselineStep = (step: ReturnType<typeof legSteps>[number]) => {
   const fields = stepFields(step);
   if (
+    step.name === "Test remaining repository scripts" &&
+    isDeepStrictEqual(fields.env, {
+      BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+    })
+  ) {
+    const migrated = { ...step };
+    delete migrated["env"];
+    return migrated;
+  }
+  if (
     step.name === "Bridge-version guard" &&
     fields.if?.includes("github.event_name == 'pull_request'") &&
     (!v.is(v.record(v.string(), v.unknown()), fields.env) ||
@@ -1663,6 +1701,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     const originalSetup = setupSteps(originalSteps)
       .map(withTaskResultCacheSetup)
       .map(withPrDepthCheckoutRef)
+      .map(withSharedPartialCloneCheckout)
       .map((step) => withInstallCache(step, base))
       .map((step) => {
         if (
@@ -2468,6 +2507,9 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
     if (step.name === "Checkout") {
       continue;
     }
+    if (step.name === "Configure flaky-test quarantine") {
+      continue;
+    }
     if (leg === "ci-checks-rest" && preInstallGuards.has(step.name)) {
       expect(index, preInstallGuards.get(step.name)).toBeLessThan(installIndex);
       expect(step["id"]).toBe(stepIds[step.name]);
@@ -2492,7 +2534,20 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
           ? CONTINUATION_PREFIXES.installPackages
           : CONTINUATION_PREFIXES.install;
     }
-    expect(condition.startsWith(prefix), step.name).toBe(true);
+    const stableStepIds = new Set(
+      steps.slice(0, index).flatMap((earlier) => {
+        const id = earlier["id"];
+        return typeof id === "string" ? [id.toLowerCase()] : [];
+      }),
+    );
+    expect(
+      stepConditionCovers({
+        earlier: `${prefix} }}`,
+        later: condition,
+        stableStepIds,
+      }),
+      step.name,
+    ).toBe(true);
     expect(withoutContinuation(step), step.name).not.toEqual(step);
     if (step.name === "Install dependencies") {
       const safety = leg === "ci-checks-rest" ? SAFETY_SUFFIX : "";

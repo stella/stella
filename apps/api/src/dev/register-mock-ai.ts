@@ -26,6 +26,10 @@ import {
   mockAiContinuousChunks,
 } from "@/api/dev/mock-ai-cancellation";
 import {
+  mockClaimGrades,
+  mockExtractedClaims,
+} from "@/api/dev/mock-ai-list-verification";
+import {
   mockAiStreamKindChunks,
   mockAiStreamKindOf,
 } from "@/api/dev/mock-ai-stream-kinds";
@@ -758,11 +762,128 @@ const TMPL_SUPPLY_PREFILL_FIXTURE: {
 // lists.generation.extract-facts (apps/api/src/lib/lists/generation/
 // fact-extract.ts). The worker keeps only facts whose quote it can find in
 // the block the fact names, so a fixed answer would ground nothing in a real
-// document. This one answers from the request instead: the opening sentence
-// of each of the first three blocks it is asked about, the second held as
-// contested, so a local run shows included and held facts with sources.
+// document. This one quotes the opening sentence of the prose blocks it is
+// asked about and states the fact that sentence supports, in a reviewer's
+// words, with the date the sentence gives. A sentence no rule recognises
+// proposes nothing, so a fact never cites a passage about something else.
+// A person's account is held as contested, so a run shows included and held
+// facts with sources.
 const MOCK_FACTS_PER_WINDOW = 3;
-const MOCK_FACT_MAX = 200;
+const MOCK_QUOTE_MAX = 200;
+// A heading or a label is not a passage a fact can rest on.
+const MOCK_QUOTE_MIN = 40;
+
+const MONTHS = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
+
+/** The first date a sentence states, as YYYY-MM-DD or YYYY, else null. */
+const mockDateIn = (sentence: string) => {
+  const day =
+    /\b(?<day>\d{1,2}) (?<month>[A-Z][a-z]+) (?<year>(?:19|20)\d{2})\b/u.exec(
+      sentence,
+    )?.groups;
+  const month = MONTHS.indexOf(day?.["month"]?.toLowerCase() ?? "");
+  if (day?.["day"] !== undefined && day["year"] !== undefined && month !== -1) {
+    return `${day["year"]}-${String(month + 1).padStart(2, "0")}-${day["day"].padStart(2, "0")}`;
+  }
+  return /\b(?:19|20)\d{2}\b/u.exec(sentence)?.[0] ?? null;
+};
+
+type MockFactRule = {
+  matches: RegExp;
+  fact: string;
+  kind: "document" | "testimony";
+  medium: string;
+};
+
+// Checked in order; the first rule a sentence matches states its fact.
+const MOCK_FACT_RULES: readonly MockFactRule[] = [
+  {
+    matches: /\b(?:said|says|told|recalls?|stated)\b/iu,
+    fact: "A witness describes the decision as settled.",
+    kind: "testimony",
+    medium: "Witness statement",
+  },
+  {
+    matches: /\bboard\b.*\bapprov/iu,
+    fact: "The board approved the decision.",
+    kind: "document",
+    medium: "Board minutes",
+  },
+  {
+    matches: /\bentered into\b/iu,
+    fact: "The parties concluded the agreement.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bterminat/iu,
+    fact: "Either party may end the agreement on written notice.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\binsurance\b/iu,
+    fact: "The supplier must keep product liability insurance in place.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bliabilit.*\b(?:exceed|cap)/iu,
+    fact: "The supplier's total liability is capped at the annual fees.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\b(?:excludes or limits|death or personal injury)\b/iu,
+    fact: "Liability for death, personal injury and fraud is not limited.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\b(?:payment|invoices?|shall pay)\b/iu,
+    fact: "The agreement sets when and how payment falls due.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bdeliver/iu,
+    fact: "The supplier delivers on the agreed schedule.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bconfidential/iu,
+    fact: "The parties must keep the terms confidential.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bgoverned by\b/iu,
+    fact: "The agreement names the law that governs it.",
+    kind: "document",
+    medium: "Contract",
+  },
+];
+
+// A heading ("NEGOTIATION DRAFT v4") is mostly capitals; prose is not.
+const isMostlyLowercase = (text: string) => {
+  const letters = text.match(/\p{L}/gu)?.length ?? 0;
+  const lower = text.match(/\p{Ll}/gu)?.length ?? 0;
+  return letters > 0 && lower / letters > 0.5;
+};
 
 const mockExtractedFacts = (messages: readonly ModelMessage[]) => {
   const request = getLatestUserText([...messages]);
@@ -783,23 +904,31 @@ const mockExtractedFacts = (messages: readonly ModelMessage[]) => {
         .split(/(?<=[.!?])\s/u)
         .at(0)
         ?.trim()
-        .slice(0, MOCK_FACT_MAX);
-      return sentence === undefined || sentence.length < 12
-        ? []
-        : [{ blockId, sentence }];
+        .slice(0, MOCK_QUOTE_MAX);
+      if (
+        sentence === undefined ||
+        sentence.length < MOCK_QUOTE_MIN ||
+        !isMostlyLowercase(sentence)
+      ) {
+        return [];
+      }
+      const rule = MOCK_FACT_RULES.find(({ matches }) =>
+        matches.test(sentence),
+      );
+      return rule === undefined ? [] : [{ blockId, sentence, rule }];
     })
     .slice(0, MOCK_FACTS_PER_WINDOW)
-    .map(({ blockId, sentence }, index) => ({
+    .map(({ blockId, sentence, rule }) => ({
       blockId,
       quote: sentence,
-      fact: sentence,
-      occurredOn: /\b(?:19|20)\d{2}\b/u.exec(sentence)?.[0] ?? null,
-      evidenceKind: index === 0 ? "document" : "testimony",
-      medium: index === 0 ? "Document" : "Statement",
-      confidence: index === 2 ? "medium" : "high",
+      fact: rule.fact,
+      occurredOn: mockDateIn(sentence),
+      evidenceKind: rule.kind,
+      medium: rule.medium,
+      confidence: rule.kind === "testimony" ? "medium" : "high",
       contestedMeaning:
-        index === 1
-          ? "Mock: the passage could describe more than one event."
+        rule.kind === "testimony"
+          ? "An account of what was said, not a record of the decision."
           : null,
     }));
 };
@@ -816,6 +945,21 @@ export const mockStructuredData = (
     JSON.stringify(properties["facts"]).includes("contestedMeaning")
   ) {
     return { facts: mockExtractedFacts(messages) };
+  }
+
+  // lists.verification.extract and lists.verification.grade — answered from
+  // the request (apps/api/src/dev/mock-ai-list-verification.ts).
+  if (
+    "claims" in properties &&
+    JSON.stringify(properties["claims"]).includes("framing")
+  ) {
+    return { claims: mockExtractedClaims(getLatestUserText([...messages])) };
+  }
+  if (
+    "grades" in properties &&
+    JSON.stringify(properties["grades"]).includes("qualifiers")
+  ) {
+    return { grades: mockClaimGrades(getLatestUserText([...messages])) };
   }
 
   // playbook.verdict — tier-match. Return a plain "deviation" with no `matched`

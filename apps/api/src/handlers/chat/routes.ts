@@ -33,6 +33,8 @@ import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import tableChart from "@/api/handlers/chat/table-chart";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
+import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
+import updateChatThreadReadState from "@/api/handlers/chat/threads/read-state/update";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
 import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
@@ -80,6 +82,8 @@ export const chatRoute = routes(
     "/improve-prompt": { POST: improvePrompt },
     "/threads/:threadId": { DELETE: deleteThread, PATCH: updateThread },
     "/threads/:threadId/model": { PATCH: updateThreadModel },
+    "/threads/:threadId/read-state": { PATCH: updateChatThreadReadState },
+    "/threads/:threadId/pin-state": { PATCH: updateChatThreadPinState },
     "/threads/:threadId/title": { PATCH: renameThread, GET: getThreadTitle },
     "/threads/:threadId/title/suggest": { POST: suggestThreadTitle },
     "/threads/:threadId/messages": { GET: getMessages },

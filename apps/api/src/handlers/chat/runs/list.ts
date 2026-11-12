@@ -15,6 +15,7 @@ import { chatThreads, chatTurns, workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/chat/artefact-provenance";
 import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import {
@@ -227,6 +228,7 @@ export const createListActiveChatRuns = ({
               threadId: chatTurns.threadId,
               title: chatThreads.title,
               titleSource: chatThreads.titleSource,
+              ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
               workspaceId: chatTurns.workspaceId,
             })
             .from(chatTurns)

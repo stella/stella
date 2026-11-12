@@ -28,6 +28,13 @@ const visualLoaders = {
       return { default: TaskMetadataPlayground };
     },
   },
+  "overview-stat-cards": {
+    load: async () => {
+      const { OverviewStatCardsPlayground } =
+        await import("./-components/overview-stat-cards-playground");
+      return { default: OverviewStatCardsPlayground };
+    },
+  },
   "column-composer": {
     load: async () => {
       const { ColumnComposerPlayground } =
@@ -159,6 +166,13 @@ const visualLoaders = {
       const { ChatLinkIconsPlayground } =
         await import("./-components/chat-link-icons-playground");
       return { default: ChatLinkIconsPlayground };
+    },
+  },
+  "ask-user": {
+    load: async () => {
+      const { AskUserPlayground } =
+        await import("./-components/ask-user-playground");
+      return { default: AskUserPlayground };
     },
   },
   "reader-answers": {

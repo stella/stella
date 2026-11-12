@@ -61,6 +61,15 @@ describe.serial("replay writer classifications", () => {
     } as const;
     expect(addedPendingOwners([...original, extra], original)).toEqual([extra]);
     expect(addedPendingOwners(original.slice(1), original)).toEqual([]);
+    // An edit above a pending owner moves its line; that adds no debt.
+    const moved = original.map((owner, index) =>
+      index === 0 ? { ...owner, line: owner.line + 3 } : owner,
+    );
+    expect(addedPendingOwners(moved, original)).toEqual([]);
+    const sameFile = { ...extra, file: original[0]?.file ?? extra.file };
+    expect(addedPendingOwners([...original, sameFile], original)).toHaveLength(
+      1,
+    );
     expect(
       readReplayWriterRegistry(
         readFileSync(

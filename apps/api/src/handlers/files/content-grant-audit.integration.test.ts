@@ -1,3 +1,5 @@
+import { PDF } from "@libpdf/core";
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -10,10 +12,11 @@ import {
 import { eq, inArray } from "drizzle-orm";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { session } from "@/api/db/auth-schema";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   entities,
@@ -27,14 +30,23 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { readDocumentProperties } from "@/api/handlers/files/document-properties";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
-import { readEmailHtmlPreviewHandler } from "@/api/handlers/files/get";
+import {
+  printPdfHandler,
+  readEmailHtmlPreviewHandler,
+  stampedDownloadHandler,
+} from "@/api/handlers/files/get";
+import { readMarkedDownload } from "@/api/handlers/files/marked-download";
+import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -656,10 +668,12 @@ const readAttachment = async ({
   seeded,
   disposition,
   recordAuditEvent,
+  scopedDb = scopedDbA(),
 }: {
   seeded: SeededFile;
   disposition: "inline" | "download";
   recordAuditEvent: AuditRecorder;
+  scopedDb?: ScopedDb;
 }) =>
   await emailAttachmentEndpoint.handler(
     asTestRaw<AttachmentContext>({
@@ -679,7 +693,7 @@ const readAttachment = async ({
       request: new Request("https://api.example.test/files/email-attachment"),
       route:
         "/v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId" satisfies ApiRoutePath,
-      scopedDb: scopedDbA(),
+      scopedDb,
       safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -728,6 +742,250 @@ describe("email attachment", () => {
 
       const delivered = response instanceof Response && response.status === 200;
       expect(delivered).toBe(false);
+      expect(await auditRowsFor(seeded.entityId)).toEqual([]);
+    },
+  );
+});
+
+// Streamed deliveries read or derive the bytes outside any lock and record the
+// delivery afterwards. A version tombstoned in between must answer as a
+// missing file and leave no row, the same refusal a link for a tombstoned
+// version gets.
+
+/**
+ * Matter A's scoped database, tombstoning `entityVersionId` once the first
+ * transaction (the handler's lookup) has committed: the withdrawal lands
+ * while the handler reads and transforms the bytes.
+ */
+const withdrawnAfterLookup = (entityVersionId: SafeId<"entityVersion">) => {
+  const scopedDb = scopedDbA();
+  let transactions = 0;
+  return asTestRaw<ScopedDb>(async (fn: Parameters<ScopedDb>[0]) => {
+    const result = await scopedDb(fn);
+    transactions += 1;
+    if (transactions === 1) {
+      await testDb
+        .update(entityVersions)
+        .set({ deletedAt: new Date("2026-02-01T00:00:00.000Z") })
+        .where(eq(entityVersions.id, entityVersionId));
+    }
+    return result;
+  });
+};
+
+const docxBytes = async () => {
+  const zip = new ZipArchive();
+  zip.set(
+    "[Content_Types].xml",
+    [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+      '<Default Extension="xml" ContentType="application/xml"/>',
+      `<Override PartName="/${DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mainPartPath}" ContentType="${DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mainPartContentType}"/>`,
+      "</Types>",
+    ].join(""),
+  );
+  zip.set(
+    DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mainPartPath,
+    [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+      "<w:body><w:p><w:r><w:t>Smlouva</w:t></w:r></w:p><w:sectPr/></w:body>",
+      "</w:document>",
+    ].join(""),
+  );
+  return await zip.generate({ compression: "store" });
+};
+
+const pdfBytes = async () => {
+  const pdf = PDF.create();
+  pdf.addPage({ size: "a4" }).drawText("Rozsudek", { x: 72, y: 700, size: 12 });
+  return await pdf.save();
+};
+
+const seedStored = async (stored: StoredFile, bytes: Uint8Array) => {
+  const seeded = await seedFile(stored);
+  fake.put(
+    envBase.S3_BUCKET,
+    fileKeyFor(seeded.fileId, stored.mimeType),
+    bytes,
+    stored.mimeType,
+  );
+  return seeded;
+};
+
+const seedStampableDocx = async () => {
+  const seeded = await seedStored(
+    { fileName: "smlouva.docx", mimeType: DOCX_MIME_TYPE, pdfFileId: null },
+    await docxBytes(),
+  );
+  await testDb
+    .update(entityVersions)
+    .set({
+      stamp: "2026/001/001.v1",
+      verificationCode: Bun.randomUUIDv7().slice(-12),
+    })
+    .where(eq(entityVersions.id, seeded.entityVersionId));
+  return seeded;
+};
+
+const seedPdf = async () =>
+  await seedStored(
+    { fileName: "rozsudek.pdf", mimeType: PDF_MIME_TYPE, pdfFileId: null },
+    await pdfBytes(),
+  );
+
+type StreamedPath = {
+  name: string;
+  seed: () => Promise<SeededFile>;
+  /** The HTTP status the path answered with. */
+  read: (seeded: SeededFile, scopedDb: ScopedDb) => Promise<number>;
+};
+
+/** A plain object answer is the JSON body of a 200. */
+const answeredStatus = (answer: unknown) => {
+  if (answer instanceof Response) {
+    return answer.status;
+  }
+  return answer instanceof HttpStatusResponse ? answer.code : 200;
+};
+
+const STREAMED_PATHS: readonly StreamedPath[] = [
+  {
+    name: "an email preview",
+    seed: seedEmail,
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await readEmailHtmlPreviewHandler({
+          scopedDb,
+          fieldId,
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          recordAuditEvent: recorderA(),
+        }),
+      ),
+  },
+  {
+    name: "an email attachment",
+    seed: seedEmail,
+    read: async (seeded, scopedDb) =>
+      answeredStatus(
+        await readAttachment({
+          seeded,
+          disposition: "download",
+          recordAuditEvent: recorderA(),
+          scopedDb,
+        }),
+      ),
+  },
+  {
+    name: "a print PDF",
+    seed: seedPdf,
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await printPdfHandler({
+          scopedDb,
+          fieldId,
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          recordAuditEvent: recorderA(),
+        }),
+      ),
+  },
+  {
+    name: "a marked PDF download",
+    seed: seedPdf,
+    read: async ({ fieldId }, scopedDb) => {
+      const result = await Result.gen(async function* () {
+        return yield* readMarkedDownload({
+          fieldId,
+          mode: "highlights",
+          organizationId: ids.orgA,
+          recordAuditEvent: recorderA(),
+          requestSignal: new AbortController().signal,
+          safeDb: asTestRaw<SafeDb>(
+            createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+          ),
+          scopedDb,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        });
+      });
+      if (Result.isError(result)) {
+        return result.error instanceof HandlerError ? result.error.status : 500;
+      }
+      return answeredStatus(result.value);
+    },
+  },
+  {
+    name: "a stamped download",
+    seed: seedStampableDocx,
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await stampedDownloadHandler({
+          scopedDb,
+          fieldId,
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          recordAuditEvent: recorderA(),
+          metadata: "keep",
+        }),
+      ),
+  },
+  {
+    name: "a download without metadata",
+    seed: seedPdf,
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await readScrubbedDownload({
+          scopedDb,
+          fieldId,
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          recordAuditEvent: recorderA(),
+        }),
+      ),
+  },
+  {
+    name: "a document properties read",
+    seed: async () =>
+      await seedStored(
+        { fileName: "smlouva.docx", mimeType: DOCX_MIME_TYPE, pdfFileId: null },
+        await docxBytes(),
+      ),
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await readDocumentProperties({
+          canUpdateEntity: false,
+          scopedDb,
+          fieldId,
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          recordAuditEvent: recorderA(),
+        }),
+      ),
+  },
+];
+
+describe("a version withdrawn while its bytes are prepared", () => {
+  test.each(STREAMED_PATHS)(
+    "$name of a live version commits one row",
+    async ({ seed, read }) => {
+      const seeded = await seed();
+
+      expect(await read(seeded, scopedDbA())).toBe(200);
+      expect(await auditRowsFor(seeded.entityId)).toHaveLength(1);
+    },
+  );
+
+  test.each(STREAMED_PATHS)(
+    "$name answers 404 and records nothing",
+    async ({ seed, read }) => {
+      const seeded = await seed();
+
+      expect(
+        await read(seeded, withdrawnAfterLookup(seeded.entityVersionId)),
+      ).toBe(404);
       expect(await auditRowsFor(seeded.entityId)).toEqual([]);
     },
   );

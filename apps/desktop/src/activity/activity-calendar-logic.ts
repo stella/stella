@@ -534,6 +534,98 @@ const toSuggestion = (group: DayReviewGroup): ActivitySuggestion => {
   };
 };
 
+/** Whole numbers that add up to the rounded sum of `values`: each value is
+ * rounded down, then the largest remainders take the minutes left over. */
+const roundedTogether = (values: readonly number[]): number[] => {
+  const floors = values.map((value) => Math.floor(value));
+  let left =
+    Math.round(values.reduce((sum, value) => sum + value, 0)) -
+    floors.reduce((sum, value) => sum + value, 0);
+  const byRemainder = values
+    .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+    .sort(
+      (first, second) =>
+        second.remainder - first.remainder || first.index - second.index,
+    );
+  for (const { index } of byRemainder) {
+    if (left <= 0) {
+      break;
+    }
+    floors[index] = (floors[index] ?? 0) + 1;
+    left -= 1;
+  }
+  return floors;
+};
+
+/** One dashed piece of a suggestion in the Time entries column. */
+export type SuggestionPiece = DayCalendarRange & {
+  /** The piece's own time in whole minutes. Pieces round together, so
+   * their minutes add up to the suggestion's {@link SuggestionSummary}. */
+  minutes: number;
+};
+
+/**
+ * A suggestion's pieces, each with its own time: what was recorded in it for
+ * a matched suggestion, its whole length for a selected range, so pauses
+ * inside a piece never count and the pieces make up the suggestion's
+ * duration.
+ */
+export const suggestionPieces = (
+  suggestion: ActivitySuggestion,
+): SuggestionPiece[] => {
+  const durations = suggestion.runs.map((run) =>
+    suggestion.type === "manual"
+      ? run.endMs - run.startMs
+      : suggestion.segments.reduce(
+          (sum, segment) =>
+            sum +
+            Math.max(
+              0,
+              Math.min(segment.endMs, run.endMs) -
+                Math.max(segment.startMs, run.startMs),
+            ),
+          0,
+        ),
+  );
+  const minutes = roundedTogether(
+    durations.map((durationMs) => durationMs / MINUTE_MS),
+  );
+  return suggestion.runs.map((run, index) => ({
+    endMs: run.endMs,
+    minutes: minutes[index] ?? 0,
+    startMs: run.startMs,
+  }));
+};
+
+/** What a suggestion card's header says about its time: the range for a
+ * suggestion in one piece, else how many pieces; with the minutes they hold
+ * and the tenths of an hour they bill. */
+export type SuggestionSummary = {
+  minutes: number;
+  tenths: number;
+} & (
+  | { endMs: number; startMs: number; type: "range" }
+  | { count: number; type: "pieces" }
+);
+
+export const suggestionSummary = (
+  suggestion: ActivitySuggestion,
+): SuggestionSummary => {
+  const pieces = suggestionPieces(suggestion);
+  const minutes = pieces.reduce((sum, piece) => sum + piece.minutes, 0);
+  const tenths = suggestion.roundedTenths;
+  if (pieces.length > 1) {
+    return { count: pieces.length, minutes, tenths, type: "pieces" };
+  }
+  return {
+    endMs: suggestion.endMs,
+    minutes,
+    startMs: suggestion.startMs,
+    tenths,
+    type: "range",
+  };
+};
+
 /** Every matched group not yet drafted and not left out, in day order. */
 export const matchedSuggestions = (
   groups: readonly DayReviewGroup[],
@@ -741,31 +833,76 @@ export type EvidenceRow = {
   appIdentifier: string;
   durationMs: number;
   id: string;
+  /** A title or app name as recorded; for `untitled`, the app's name. */
   label: string;
   /** The matter holding most of the row's time, if any. */
   matter: DesktopTimeEntryMatterCandidate | null;
   /** Share of the suggestion's time, 0 to 1. */
   share: number;
+  /** `untitled` is an app's time with no title beyond the app's name. */
+  type: "named" | "untitled";
 };
 
-/** The Titles tab: every title across the suggestion's apps. */
-export const titleRows = (suggestion: ActivitySuggestion): EvidenceRow[] =>
-  suggestion.evidence
-    .flatMap(({ identifier, details }) =>
-      details.map(({ title, durationMs, matter }) => ({
-        appIdentifier: identifier,
-        durationMs,
-        id: `${identifier}:${title}`,
-        label: title,
-        matter,
-        share: shareOf(durationMs, suggestion.durationMs),
-      })),
-    )
-    .sort(
-      (left, right) =>
-        right.durationMs - left.durationMs ||
-        left.label.localeCompare(right.label),
+/** Whether a segment recorded a title beyond its app's name, read as the
+ * Titles tab reads it. */
+const hasOwnTitle = (segment: MatchedSegment) =>
+  segment.evidence.some((detail) => {
+    const title = withoutAppSuffix(detail, segment.appName).trim();
+    return (
+      title.length > 0 && title.toLowerCase() !== segment.appName.toLowerCase()
     );
+  });
+
+/** The Titles tab: every title across the suggestion's apps, and each app's
+ * time without one, so the tab accounts for all of the suggestion's time. */
+/** Whether any of a suggestion's time recorded a window title of its own;
+ * untitled time alone is not a title. */
+export const hasWindowTitles = (suggestion: ActivitySuggestion) =>
+  titleRows(suggestion).some(({ type }) => type === "named");
+
+export const titleRows = (suggestion: ActivitySuggestion): EvidenceRow[] => {
+  const named = suggestion.evidence.flatMap(({ identifier, details }) =>
+    details.map(({ title, durationMs, matter }): EvidenceRow => ({
+      appIdentifier: identifier,
+      durationMs,
+      id: `${identifier}:${title}`,
+      label: title,
+      matter,
+      share: shareOf(durationMs, suggestion.durationMs),
+      type: "named",
+    })),
+  );
+  const untitled = suggestion.apps.flatMap(
+    ({ identifier, name }): EvidenceRow[] => {
+      const segments = suggestion.segments.filter(
+        (segment) =>
+          segment.appIdentifier === identifier && !hasOwnTitle(segment),
+      );
+      let durationMs = 0;
+      for (const segment of segments) {
+        durationMs += segment.endMs - segment.startMs;
+      }
+      return durationMs > 0
+        ? [
+            {
+              appIdentifier: identifier,
+              durationMs,
+              id: `untitled:${identifier}`,
+              label: name,
+              matter: leadingMatter(segments),
+              share: shareOf(durationMs, suggestion.durationMs),
+              type: "untitled",
+            },
+          ]
+        : [];
+    },
+  );
+  return [...named, ...untitled].sort(
+    (left, right) =>
+      right.durationMs - left.durationMs ||
+      left.label.localeCompare(right.label),
+  );
+};
 
 /** The Apps tab: each app's time in the suggestion. */
 export const appRows = (suggestion: ActivitySuggestion): EvidenceRow[] =>
@@ -780,6 +917,7 @@ export const appRows = (suggestion: ActivitySuggestion): EvidenceRow[] =>
       ),
     ),
     share: shareOf(durationMs, suggestion.durationMs),
+    type: "named",
   }));
 
 function shareOf(durationMs: number, totalMs: number) {

@@ -203,6 +203,9 @@ pub(crate) struct SidecarSettings {
   /// How long `shutdown` waits for the holders to stop their runs.
   pub(crate) shutdown_grace: Duration,
   pub(crate) backoff: ReconnectBackoff,
+  /// Folders only holders of earlier versions may still use, removed once
+  /// none of them is left (see [`remove_retired_dirs_when_alone`]).
+  pub(crate) retired_dirs: Vec<PathBuf>,
 }
 
 /// One thing a run produced, in order; the runner's `RunOutput`.
@@ -1010,6 +1013,7 @@ impl Supervisor {
       self.attach(current.clone(), opened, LinkRole::Current);
     }
     let Ok(entries) = std::fs::read_dir(&self.settings.holder_root) else {
+      self.remove_retired_dirs();
       return;
     };
     for entry in entries.flatten() {
@@ -1032,6 +1036,16 @@ impl Supervisor {
         Err(OpenError::Failed | OpenError::Incompatible | OpenError::NoEndpoint) => {}
       }
     }
+    self.remove_retired_dirs();
+  }
+
+  /// Remove the retired folders once no older holder is left to use them.
+  fn remove_retired_dirs(&self) {
+    remove_retired_dirs_when_alone(
+      &self.settings.holder_root,
+      &self.current_dir(),
+      &self.settings.retired_dirs,
+    );
   }
 
   /// Where each run this supervisor delivers on `dir` stopped.
@@ -1463,6 +1477,7 @@ impl Supervisor {
     // endpoint, so a later app can still reach it and resume its runs.
     if role == LinkRole::Draining && gone {
       remove_holder_dir(dir);
+      self.remove_retired_dirs();
     }
   }
 
@@ -1531,7 +1546,7 @@ impl Supervisor {
         tracing::warn!(
           target: LOG_TARGET,
           reason = rejected.reason.wire_name(),
-          message_type = rejected.message_type.as_deref().unwrap_or(""),
+          message_type = HostMessage::logged_tag(rejected.message_type.as_deref()),
           "harness holder rejected a message"
         );
         // A run start the holder refused, for any reason, never begins. The
@@ -1726,6 +1741,40 @@ fn forget_endpoint(dir: &Path, stale: &OsStr) {
   }
 }
 
+/// Remove `retired` once the bundled version's folder is the only holder
+/// folder left under `holder_root`: an older holder keeps running its runs
+/// after an update, with whatever folders its version used, until it drains
+/// and its folder goes. When the holder folders cannot be listed, the retired
+/// ones stay for a later pass.
+pub(crate) fn remove_retired_dirs_when_alone(
+  holder_root: &Path,
+  current: &Path,
+  retired: &[PathBuf],
+) {
+  if retired.is_empty() {
+    return;
+  }
+  let older_left = match std::fs::read_dir(holder_root) {
+    Ok(entries) => entries.flatten().any(|entry| {
+      let dir = entry.path();
+      dir != current && dir.is_dir()
+    }),
+    Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+  };
+  if older_left {
+    return;
+  }
+  for dir in retired {
+    match std::fs::remove_dir_all(dir) {
+      Ok(()) => {}
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+      Err(error) => {
+        tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "a retired run folder was not removed");
+      }
+    }
+  }
+}
+
 fn remove_holder_dir(dir: &Path) {
   if let Err(error) = std::fs::remove_dir_all(dir) {
     tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "an old harness holder folder was not removed");
@@ -1807,4 +1856,57 @@ async fn read_messages<R: AsyncRead + Unpin>(
     }
   }
   let _delivered = send(LinkEvent::Closed).await;
+}
+
+#[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
+mod retired_dir_tests {
+  use super::*;
+
+  struct Place(PathBuf);
+
+  impl Place {
+    fn new() -> Self {
+      let root =
+        std::env::temp_dir().join(format!("retired-dirs-{}", uuid::Uuid::new_v4()));
+      std::fs::create_dir_all(root.join("holders/1.5.0")).unwrap();
+      std::fs::create_dir_all(root.join("shared-cache/xdg")).unwrap();
+      Self(root)
+    }
+  }
+
+  impl Drop for Place {
+    fn drop(&mut self) {
+      drop(std::fs::remove_dir_all(&self.0));
+    }
+  }
+
+  #[test]
+  fn a_retired_folder_stays_while_an_older_holder_is_left_and_goes_after() {
+    let place = Place::new();
+    let holders = place.0.join("holders");
+    let current = holders.join("1.5.0");
+    let retired = vec![place.0.join("shared-cache")];
+    std::fs::create_dir_all(holders.join("1.4.0")).unwrap();
+    remove_retired_dirs_when_alone(&holders, &current, &retired);
+    assert!(retired[0].join("xdg").is_dir());
+    std::fs::remove_dir_all(holders.join("1.4.0")).unwrap();
+    remove_retired_dirs_when_alone(&holders, &current, &retired);
+    assert!(!retired[0].exists());
+  }
+
+  #[test]
+  fn a_retired_folder_goes_when_no_holder_ever_ran() {
+    let place = Place::new();
+    let retired = vec![place.0.join("shared-cache")];
+    remove_retired_dirs_when_alone(
+      &place.0.join("no-holders"),
+      &place.0.join("no-holders/1.5.0"),
+      &retired,
+    );
+    assert!(!retired[0].exists());
+  }
 }

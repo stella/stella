@@ -36,6 +36,9 @@ export const statements = {
   chat: ["create", "update", "delete"],
   organizationSettings: ["update"],
   auditLog: ["read"],
+  // A copy of everything the organization stores, for backup and
+  // portability. Management-only: the archive spans every client matter.
+  dataExport: ["create", "read"],
   agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: ["create", "update"],
   // The organization's case-law question columns and the AI runs that fill
@@ -60,6 +63,11 @@ export const statements = {
   // them, a desktop registry key. What the organization permits to be linked
   // at all stays under `organizationSettings`.
   integration: ["create", "update", "delete"],
+  // Internal conflict-of-interest checks. Running one searches every matter
+  // of the firm, including matters the runner cannot open, so it is a grant
+  // of its own; reviewing (waiving a conflict, clearing a potential one) is
+  // the four-eyes half and stays with firm management.
+  conflictCheck: ["run", "review"],
 } as const;
 
 type PermissionMap = {
@@ -100,6 +108,7 @@ const externalStellaGrants = {
   chat: [],
   organizationSettings: [],
   auditLog: [],
+  dataExport: [],
   agentSkill: [],
   firmMemory: [],
   caseLawResearch: [],
@@ -107,6 +116,7 @@ const externalStellaGrants = {
   savedSearch: [],
   searchHistory: ["read", "create", "delete"],
   integration: [],
+  conflictCheck: [],
 } satisfies StellaPermissionMap;
 
 const internStellaGrants = {
@@ -144,6 +154,7 @@ const memberStellaGrants = {
   chat: ["create", "update", "delete"],
   organizationSettings: [],
   auditLog: [],
+  dataExport: [],
   agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: [],
   // Staff author and run research columns in full, as they do agent skills:
@@ -155,6 +166,7 @@ const memberStellaGrants = {
   savedSearch: ["create", "update", "delete"],
   searchHistory: ["read", "create", "delete"],
   integration: ["create", "update", "delete"],
+  conflictCheck: ["run"],
 } satisfies StellaPermissionMap;
 
 const managementStellaGrants = {
@@ -164,7 +176,9 @@ const managementStellaGrants = {
   rate: ["read", "create", "update", "delete"],
   organizationSettings: ["update"],
   auditLog: ["read"],
+  dataExport: ["create", "read"],
   firmMemory: ["create", "update"],
+  conflictCheck: ["run", "review"],
 } satisfies StellaPermissionMap;
 
 /**

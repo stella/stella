@@ -9,6 +9,7 @@ import {
 import { panic } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
   chatLocalRunApprovalReason,
@@ -49,6 +50,10 @@ import { shownToolInput, shownToolResult } from "./tool-parts";
 /** CUSTOM event reporting how the turn's context was established. */
 export const HARNESS_CONTINUATION_EVENT = "harness.continuation";
 
+/** CUSTOM event carrying the harness's native session id. */
+export const harnessSessionIdEvent = (harness: AgentHarness) =>
+  `${harness}.session-id`;
+
 /** Tool name for a harness question, matching Codex's native item name. */
 export const HARNESS_QUESTION_TOOL = CHAT_LOCAL_RUN_QUESTION_TOOL;
 
@@ -69,6 +74,9 @@ export type HarnessChunkContext = {
 const FAILURE_CODE = {
   auth_required: "harness.auth_required",
   usage_limit: "harness.usage_limit",
+  // The provider's own transient outage, not the harness's: the chat's code
+  // for it, so the member reads "try again in a moment".
+  model_at_capacity: AI_FAILURE_CODES.provider_unavailable,
   provider_error: "harness.provider_error",
   harness_exited: "harness.exited",
   protocol_violation: "harness.protocol_violation",
@@ -155,7 +163,7 @@ class ChunkMapper {
         this.push(
           {
             type: EventType.CUSTOM,
-            name: `${this.context.harness}.session-id`,
+            name: harnessSessionIdEvent(this.context.harness),
             value: { sessionId: event.sessionId },
           },
           {

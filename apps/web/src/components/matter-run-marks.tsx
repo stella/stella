@@ -1,15 +1,15 @@
 import { useState } from "react";
 
 import { Link } from "@tanstack/react-router";
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
 import type { ChatTurnInteractionType } from "@stll/api-contract/chat";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
-import { StatusMark } from "@stll/ui/status-mark";
-import { cn } from "@stll/ui/utils";
+import { RunStateMark } from "@stll/ui/run-state-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { topMatterRunState } from "@/features/chat/active-runs.logic";
 import type {
@@ -18,41 +18,6 @@ import type {
 } from "@/features/chat/active-runs.logic";
 import { useFormatter, useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
-
-/** The mark for one state; its meaning is named by the element around it. */
-const RunStateGlyph = ({
-  size,
-  state,
-}: {
-  /** `row` sits in a matter's second line, `badge` on the collapsed icon. */
-  size: "badge" | "row";
-  state: ActiveChatRunState;
-}) => {
-  switch (state) {
-    case "needs-you":
-      return (
-        <span
-          aria-hidden
-          className={cn(
-            "text-warning-foreground leading-none font-bold",
-            size === "row" ? "text-xs" : "text-3xs",
-          )}
-        >
-          !
-        </span>
-      );
-    case "working":
-      return (
-        <StatusMark
-          className={cn(size === "row" ? "size-3" : "size-2.5")}
-          status="running"
-        />
-      );
-    default:
-      state satisfies never;
-      return panic("Unhandled active chat run state");
-  }
-};
 
 /**
  * What the reader's chats in a matter are doing, at the end of the matter's
@@ -80,7 +45,7 @@ const OpenRunMarks = ({ runs }: { runs: MatterRuns }) => {
           key={state}
           role="img"
         >
-          <RunStateGlyph size="row" state={state} />
+          <RunStateMark size="row" state={state} />
           {count > 1 ? <span aria-hidden>{format.number(count)}</span> : null}
         </span>
       ))}
@@ -97,14 +62,14 @@ export const useRunCounts = (runs: MatterRuns | undefined) => {
       label: t("chat.matterRuns.needsYou", {
         count: runs?.needsYou.length ?? 0,
       }),
-      state: "needs-you",
+      state: CHAT_ACTIVE_RUN_STATE.needsYou,
     },
     {
       count: runs?.working.length ?? 0,
       label: t("chat.matterRuns.working", {
         count: runs?.working.length ?? 0,
       }),
-      state: "working",
+      state: CHAT_ACTIVE_RUN_STATE.working,
     },
   ] as const satisfies readonly {
     count: number;
@@ -169,7 +134,7 @@ const MatterRunsPopover = ({
         }
       >
         <span className="bg-sidebar flex size-3 items-center justify-center rounded-full">
-          <RunStateGlyph size="badge" state={state} />
+          <RunStateMark size="badge" state={state} />
         </span>
       </PopoverTrigger>
       <PopoverPopup
@@ -234,12 +199,10 @@ const MatterRunRow = ({
       to="/chat/workspaces/$workspaceId/$threadId"
     >
       <span className="flex size-4 shrink-0 items-center justify-center pt-0.5">
-        <RunStateGlyph size="row" state={state} />
+        <RunStateMark size="row" state={state} />
       </span>
       <span className="flex min-w-0 flex-col">
-        <BidiText as="span" className="truncate">
-          {title}
-        </BidiText>
+        <TruncatedText render={<BidiText as="span" />}>{title}</TruncatedText>
         <span className="text-muted-foreground text-xs">
           {detail} · {since}
         </span>

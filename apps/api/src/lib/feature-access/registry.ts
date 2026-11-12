@@ -5,6 +5,7 @@
 // parser-output-unchanged: registering desktop local agent access leaves ingestion features and parsed records unchanged.
 // parser-output-unchanged: requiring time billing for the desktop activity timeline leaves parsed records unchanged.
 // parser-output-unchanged: registering desktop dictation access leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: registering conflict-check access leaves ingestion features and parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -41,6 +42,8 @@ export const AI_MEMORY_FEATURE_ID = "ai-memory";
 export const REMEMBER_TOOL_NAME = "remember";
 
 export const LEGAL_LISTS_FEATURE_ID = "legal-lists";
+
+export const CONFLICT_CHECK_FEATURE_ID = "conflict-check";
 
 export const SELF_SERVE_FEATURE_IDS = ["time-billing", "local-agents"] as const;
 export const LIST_VERIFICATION_FEATURE_ID = "list-verification";
@@ -89,6 +92,28 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
           admission: "isFeatureDeployed",
           specifier: "@/api/lib/feature-access/deployment",
         },
+      ],
+    },
+  },
+  // Internal conflict-of-interest checks: dark-launched behind the
+  // deployment flag, then opened per organization by an operator grant.
+  [CONFLICT_CHECK_FEATURE_ID]: {
+    enrolment: "invitation",
+    deploymentFeature: "FEATURE_CONFLICT_CHECK",
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/conflict-checks"],
+      // The tables stay unowned: organization reset, account export and the
+      // status inventory name them, and none of those reads a check.
+      tableSchemaFiles: [],
+      coreModules: [
+        "apps/api/src/lib/conflict-check/decision.ts",
+        "apps/api/src/lib/conflict-check/identifiers.ts",
+        "apps/api/src/lib/conflict-check/links.ts",
+        "apps/api/src/lib/conflict-check/operation.ts",
+        "apps/api/src/lib/conflict-check/outcome.ts",
+        "apps/api/src/lib/conflict-check/party-index.ts",
+        "apps/api/src/lib/conflict-check/project.ts",
+        "apps/api/src/lib/conflict-check/screen.ts",
       ],
     },
   },

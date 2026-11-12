@@ -3,6 +3,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import {
   chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   newNotificationRealtimeEvent,
   RESOURCE_TYPE,
   resourceSetUpdatedRealtimeEvent,
@@ -46,6 +47,7 @@ const { act, cleanup, renderHook } = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { activeChatRunsOptions } = await import("@/features/chat/active-runs");
+const { groupedChatThreadsOptions } = await import("@/features/chat/queries");
 const { contactsKeys } = await import("@/lib/contacts/queries");
 const { notificationsOptions } = await import("@/lib/notification-queries");
 const { useUserEventRefreshes } = await import("./user-events-sse");
@@ -71,7 +73,18 @@ const mount = () => {
     activeOrganizationId: ORGANIZATION,
     userId: USER,
   }).queryKey;
-  for (const key of [activeRuns, contactsList, otherFirmContacts]) {
+  // The history's pinned section: any grouped list of the reader's chats.
+  const chatThreads = groupedChatThreadsOptions({
+    activeOrganizationId: ORGANIZATION,
+    pinState: "pinned",
+    userId: USER,
+  }).queryKey;
+  for (const key of [
+    activeRuns,
+    chatThreads,
+    contactsList,
+    otherFirmContacts,
+  ]) {
     queryClient.setQueryData(key, { seeded: true });
   }
   // The notification refresh trims an infinite list to its first page.
@@ -93,6 +106,7 @@ const mount = () => {
     queryClient.getQueryState(key)?.isInvalidated === true;
   return {
     activeRuns,
+    chatThreads,
     contactsList,
     isStale,
     notifications,
@@ -129,13 +143,26 @@ test("a notification event refreshes the notifications", async () => {
   expect(view.isStale(view.contactsList)).toBe(false);
 });
 
-test("a chat run change refreshes the active runs only", async () => {
+test("a chat run change refreshes the active runs and the chat lists, whose rows turn unread", async () => {
   const view = mount();
   await act(async () => {
     FakeEventSource.opened.at(0)?.push(chatRunsChangedRealtimeEvent());
   });
 
   expect(view.isStale(view.activeRuns)).toBe(true);
+  expect(view.isStale(view.chatThreads)).toBe(true);
+  expect(view.isStale(view.notifications)).toBe(false);
+  expect(view.isStale(view.contactsList)).toBe(false);
+});
+
+test("a chat read or pin change refreshes the chat lists only", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened.at(0)?.push(chatThreadsChangedRealtimeEvent());
+  });
+
+  expect(view.isStale(view.chatThreads)).toBe(true);
+  expect(view.isStale(view.activeRuns)).toBe(false);
   expect(view.isStale(view.notifications)).toBe(false);
   expect(view.isStale(view.contactsList)).toBe(false);
 });
@@ -161,6 +188,7 @@ test("a reopen after a drop re-reads everything the stream keeps fresh", async (
   });
 
   expect(view.isStale(view.activeRuns)).toBe(true);
+  expect(view.isStale(view.chatThreads)).toBe(true);
   expect(view.isStale(view.notifications)).toBe(true);
   expect(view.isStale(view.contactsList)).toBe(true);
   expect(view.isStale(view.otherFirmContacts)).toBe(false);

@@ -22,10 +22,8 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
-import {
-  gradeClaims,
-  gradedClaimType,
-} from "@/api/lib/lists/verification/claim-grade";
+import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
+import { gradedClaimType } from "@/api/lib/lists/verification/contract";
 import type { VerificationEvidenceFact } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import {
@@ -285,6 +283,7 @@ describe("gradeClaims", () => {
         text: "I first met him on 9 March 2021. We spoke briefly.",
         anchor: { start: 0, end: "I first met him on 9 March 2021".length },
       },
+      linkedFactIds: [],
     },
     {
       key: "1",
@@ -293,6 +292,7 @@ describe("gradeClaims", () => {
         text: "The amount was EUR 40,000 in total.",
         anchor: { start: 0, end: "The amount was EUR 40,000".length },
       },
+      linkedFactIds: [],
     },
   ];
 
@@ -307,6 +307,7 @@ describe("gradeClaims", () => {
           score: null,
           refs: [],
           conflict: null,
+          qualifiers: [],
         },
       ],
     });
@@ -319,6 +320,7 @@ describe("gradeClaims", () => {
             text: context,
             anchor: { start: 3000, end: 3000 + text.length },
           },
+          linkedFactIds: [],
         },
       ],
       facts: [fact(FACT_A, "An unrelated meeting")],
@@ -345,6 +347,7 @@ describe("gradeClaims", () => {
           score: null,
           refs: [],
           conflict: null,
+          qualifiers: [],
         },
       ],
     });
@@ -357,6 +360,7 @@ describe("gradeClaims", () => {
             text: context,
             anchor: { start, end: start + text.length },
           },
+          linkedFactIds: [],
         },
       ],
       facts: [fact(FACT_A, "An unrelated meeting")],
@@ -392,6 +396,7 @@ describe("gradeClaims", () => {
             score: 91.6,
             refs: [{ factId: "F1", rel: "supports" }],
             conflict: null,
+            qualifiers: [],
           },
           {
             claimId: "C2",
@@ -399,6 +404,7 @@ describe("gradeClaims", () => {
             score: 20,
             refs: [],
             conflict: null,
+            qualifiers: [],
           },
         ],
       },
@@ -410,6 +416,7 @@ describe("gradeClaims", () => {
             score: 20,
             refs: [{ factId: "F2", rel: "conflicts" }],
             conflict: null,
+            qualifiers: [],
           },
         ],
       },
@@ -431,6 +438,7 @@ describe("gradeClaims", () => {
         score: 92,
         recordConflict: null,
         refs: [{ factEntityId: FACT_A, rel: "supports" }],
+        qualifiers: [],
       });
       expect(outcome.grades.get("1")?.refs).toEqual([
         { factEntityId: FACT_B, rel: "conflicts" },
@@ -447,6 +455,7 @@ describe("gradeClaims", () => {
           score: null,
           refs: [{ factId: "F1", rel: "record" }],
           conflict: null,
+          qualifiers: [],
         },
         {
           claimId: "C2",
@@ -454,6 +463,7 @@ describe("gradeClaims", () => {
           score: null,
           refs: [],
           conflict: null,
+          qualifiers: [],
         },
       ],
     });
@@ -466,6 +476,7 @@ describe("gradeClaims", () => {
             text: "The arrangement was proper.",
             anchor: { start: 0, end: "The arrangement was proper".length },
           },
+          linkedFactIds: [],
         },
         {
           key: "fact",
@@ -474,6 +485,7 @@ describe("gradeClaims", () => {
             text: "The payment was approved.",
             anchor: { start: 0, end: "The payment was approved".length },
           },
+          linkedFactIds: [],
         },
       ],
       facts: [fact(FACT_A, "An unrelated meeting took place")],
@@ -487,12 +499,14 @@ describe("gradeClaims", () => {
         score: null,
         recordConflict: null,
         refs: [],
+        qualifiers: [],
       });
       expect(outcome.grades.get("fact")).toEqual({
         state: "nocover",
         score: null,
         recordConflict: null,
         refs: [],
+        qualifiers: [],
       });
       // Stored types must match the verdicts: only a fact is checkable.
       const types = [...outcome.grades.values()].map(gradedClaimType);
@@ -514,6 +528,7 @@ describe("gradeClaims", () => {
             values: ["9 March 2021", "3 May 2021"],
             verdictIfGoverning: ["supported", "contradicted"],
           },
+          qualifiers: [],
         },
       ],
     });
@@ -534,8 +549,128 @@ describe("gradeClaims", () => {
           governingStates: ["supported", "contradicted"],
         },
         refs: [],
+        qualifiers: [],
       },
     );
+  });
+
+  test("qualifiers are kept with the verdict they fit", async () => {
+    answers.push({
+      grades: [
+        {
+          claimId: "C1",
+          verdict: "nocover",
+          score: null,
+          refs: [],
+          conflict: null,
+          qualifiers: [
+            {
+              kind: "record-silent",
+              explanation: "  The witness's own impression.  ",
+            },
+          ],
+        },
+        {
+          claimId: "C2",
+          verdict: "tension",
+          score: 45,
+          refs: [{ factId: "F2", rel: "conflicts" }],
+          conflict: null,
+          qualifiers: [
+            {
+              kind: "scope-mismatch",
+              explanation: "The fact covers 2020, the claim 2021.",
+            },
+          ],
+        },
+      ],
+    });
+    const result = await gradeClaims({
+      claims,
+      facts: [
+        fact(FACT_A, "Meeting on 9 March 2021"),
+        fact(FACT_B, "EUR 30,000 paid in 2020"),
+      ],
+      deps,
+    });
+    expect(captured).toHaveLength(1);
+    const outcome = Result.isOk(result) ? result.value : null;
+    expect(
+      outcome?.type === "graded"
+        ? [...outcome.grades.values()].map(({ state, qualifiers }) => ({
+            state,
+            qualifiers,
+          }))
+        : null,
+    ).toEqual([
+      {
+        state: "nocover",
+        qualifiers: [
+          {
+            kind: "record-silent",
+            explanation: "The witness's own impression.",
+          },
+        ],
+      },
+      {
+        state: "tension",
+        qualifiers: [
+          {
+            kind: "scope-mismatch",
+            explanation: "The fact covers 2020, the claim 2021.",
+          },
+        ],
+      },
+    ]);
+  });
+
+  // Each answer breaks one pairing rule; the repair round names the rule
+  // back, and a grade is only ever kept once it holds.
+  test.each([
+    {
+      rule: "record silent beside a verdict other than no coverage",
+      qualifiers: [{ kind: "record-silent", explanation: "Background." }],
+      reason: "gives record-silent with a contradicted verdict",
+    },
+    {
+      rule: "a qualifier without an explanation",
+      qualifiers: [{ kind: "scope-mismatch", explanation: "   " }],
+      reason: "gives scope-mismatch without an explanation",
+    },
+    {
+      rule: "the same qualifier twice",
+      qualifiers: [
+        { kind: "scope-mismatch", explanation: "Another year." },
+        { kind: "scope-mismatch", explanation: "Another place." },
+      ],
+      reason: "gives scope-mismatch more than once",
+    },
+  ])("repairs $rule", async ({ qualifiers, reason }) => {
+    const broken = {
+      claimId: "C1",
+      verdict: "contradicted",
+      score: 10,
+      refs: [{ factId: "F1", rel: "conflicts" }],
+      conflict: null,
+      qualifiers,
+    };
+    answers.push(
+      { grades: [broken] },
+      { grades: [{ ...broken, qualifiers: [] }] },
+    );
+    const result = await gradeClaims({
+      claims: claims.slice(0, 1),
+      facts: [fact(FACT_A, "Meeting on 9 March 2021")],
+      deps,
+    });
+    expect(captured).toHaveLength(2);
+    expect(JSON.stringify(captured.at(1)?.messages)).toContain(
+      `- C1: ${reason}`,
+    );
+    const outcome = Result.isOk(result) ? result.value : null;
+    expect(
+      outcome?.type === "graded" ? outcome.grades.get("0")?.qualifiers : null,
+    ).toEqual([]);
   });
 
   test("a claim still unanswered after repair makes the grading incomplete", async () => {
@@ -616,6 +751,7 @@ test("access removal after extraction blocks the later grading batch", async () 
           panic("Expected extracted block"),
         anchor: claim.anchor,
       },
+      linkedFactIds: [],
     })),
     facts: [fact(FACT_A, "The meeting took place on 9 March 2021")],
     deps: currentDeps,

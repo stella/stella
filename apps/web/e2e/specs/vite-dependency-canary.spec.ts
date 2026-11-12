@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 import { createUploadedDocumentRoute } from "../helpers/document";
+import { respond, staticBody } from "../helpers/route-mock";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 import {
@@ -137,10 +138,13 @@ test.describe("Temporal browser runtime", () => {
     await page.route(
       "**/e2e/temporal-runtime?*",
       async (route) =>
-        await route.fulfill({
-          contentType: "text/html",
-          body: "<!doctype html><html><head><title>Temporal runtime</title></head><body></body></html>",
-        }),
+        await respond(
+          route,
+          staticBody({
+            contentType: "text/html",
+            body: "<!doctype html><html><head><title>Temporal runtime</title></head><body></body></html>",
+          }),
+        ),
     );
     const implementationRequests: string[] = [];
     page.on("request", (request) => {

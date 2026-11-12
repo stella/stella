@@ -1,8 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { Temporal } from "temporal-polyfill/full";
 
+import { TASK_STATUS, TASK_STATUSES } from "@stll/api-contract/entity-options";
+
 import type { TaskSummary } from "./tasks";
-import { dayAt, dueOf, groupByDue } from "./tasks";
+import {
+  dayAt,
+  dueOf,
+  groupByDue,
+  isTaskClosed,
+  nextTaskStatus,
+} from "./tasks";
 
 const TODAY = Temporal.PlainDate.from("2026-10-28");
 
@@ -54,5 +62,25 @@ describe("tasks by due date", () => {
       ["later", ["2"]],
       ["none", ["1"]],
     ]);
+  });
+});
+
+describe("a task's one-step status change", () => {
+  test.each(TASK_STATUSES)(
+    "from %s crosses between open and finished",
+    (status) => {
+      const next = nextTaskStatus(status);
+      expect(isTaskClosed(next)).toBe(!isTaskClosed(status));
+      expect(isTaskClosed(nextTaskStatus(next))).toBe(isTaskClosed(status));
+    },
+  );
+
+  test("finishes as done and reopens as open", () => {
+    expect(nextTaskStatus(TASK_STATUS.IN_REVIEW)).toBe(TASK_STATUS.DONE);
+    expect(nextTaskStatus(TASK_STATUS.CANCELLED)).toBe(TASK_STATUS.OPEN);
+  });
+
+  test("treats a status the app does not know as open", () => {
+    expect(nextTaskStatus("waiting_on_client")).toBe(TASK_STATUS.DONE);
   });
 });
