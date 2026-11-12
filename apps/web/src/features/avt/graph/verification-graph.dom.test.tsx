@@ -301,7 +301,7 @@ test("the filters narrow the claims and hide held facts", async () => {
   });
   expect(held.getAttribute("aria-checked")).toBe("false");
   await waitFor(() => {
-    expect(within(list()).queryByText(GRAPH_TEXT.heldNote)).toBeNull();
+    expect(within(list()).queryByText(GRAPH_TEXT.heldNote) === null).toBe(true);
   });
   expect(claimShown(GRAPH_TEXT.meeting)).toBe(true);
 
