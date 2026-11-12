@@ -553,6 +553,24 @@
       "failed": "Nav saglabāts",
       "failedTitle": "Jūsu izmaiņas netika saglabātas"
     },
+    "scope": {
+      "checkedDocument": "Pārbaudītas tikai rindkopas <num>{range}</num>.",
+      "checkedOrdinal": "Pārbaudītas tikai rindkopas <num>{range}</num>, skaitot pēc kārtas: šis dokuments savas rindkopas nenumurē.",
+      "errors": {
+        "empty": "Šajās rindkopās nav pārbaudāma teksta.",
+        "garbage": "Ievadiet rindkopu numurus, piemēram, 82–136.",
+        "notFound": "Šo rindkopu šajā dokumentā nav.",
+        "numberingUnclear": "Šī dokumenta rindkopu numurus nevar nolasīt. Pārbaudiet visu dokumentu.",
+        "required": "Ievadiet rindkopas, kuras pārbaudīt.",
+        "reversed": "Diapazons beidzas, pirms sākas.",
+        "tooWide": "Vienlaikus pārbaudiet ne vairāk kā 500 rindkopas."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "Šajās rindkopās netika atrasts neviens apgalvojums.",
+      "showBefore": "Rādīt tekstu pirms ¶ {from}",
+      "verifyParagraphs": "Pārbaudīt rindkopas"
+    },
     "states": {
       "contradicted": {
         "chip": "Pretrunā",

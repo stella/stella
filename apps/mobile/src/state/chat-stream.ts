@@ -16,6 +16,7 @@ import type { ApiError } from "@/state/api-request";
 import { attachmentParts } from "@/state/chat-attachments";
 import type { ReadyFile } from "@/state/chat-attachments";
 import type { ChatEntry } from "@/state/chat-messages";
+import type { LocalRunTarget } from "@/state/chat-pending-input";
 
 /** One server-sent event: the id it carried, if any, and its data lines joined. */
 type SseEvent = {
@@ -102,7 +103,8 @@ export const parseChatEvent = (data: string): ChatEvent | undefined => {
 
 /**
  * How an answer ended: still arriving, done, stopped by the person, waiting
- * for input only the web app can give (an approval or a question), or failed.
+ * for the person's input (an approval or a question; the stored thread says
+ * which), or failed.
  */
 export type AnswerStatus =
   "streaming" | "finished" | "stopped" | "needs-input" | "failed";
@@ -213,10 +215,7 @@ export const chatSendBody = ({
   readonly threadId: string;
 }) => {
   const forwarded = {
-    threadId,
-    runId,
-    ...(matterId === undefined ? {} : { workspaceId: matterId }),
-    sendMode: anonymized ? "anonymized" : "rawOverride",
+    ...turnScope({ anonymized, matterId, runId, threadId }),
     message: {
       id: messageId,
       role: "user",
@@ -236,6 +235,80 @@ export const chatSendBody = ({
     forwardedProps: forwarded,
     data: forwarded,
   };
+};
+
+/**
+ * What every request about a thread's turn names: the thread, the new run,
+ * the thread's matter, and how its text is sent.
+ */
+const turnScope = ({
+  anonymized,
+  matterId,
+  runId,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly matterId: string | undefined;
+  readonly runId: string;
+  readonly threadId: string;
+}) => ({
+  threadId,
+  runId,
+  ...(matterId === undefined ? {} : { workspaceId: matterId }),
+  sendMode: anonymized ? "anonymized" : "rawOverride",
+});
+
+/**
+ * A continuation: the answer to what a paused turn waits for, which resumes
+ * it in a new run. The paused assistant message goes back with the calls the
+ * answer settles, the paused run is named as the parent, and each interrupt
+ * gets its resume item, at the top level and again in the forwarded props,
+ * as the web sends one. A turn a coding agent on the person's computer runs
+ * names the thread's local run target, so the server hands the answer to the
+ * computer that paused.
+ */
+export const chatContinueBody = ({
+  anonymized,
+  continuation: { messageId, parentRunId, parts, resume },
+  matterId,
+  runId,
+  runTarget,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly continuation: ChatContinuation;
+  readonly matterId: string | undefined;
+  readonly runId: string;
+  readonly runTarget: LocalRunTarget | undefined;
+  readonly threadId: string;
+}) => {
+  const forwarded = {
+    ...turnScope({ anonymized, matterId, runId, threadId }),
+    ...(runTarget === undefined ? {} : { runTarget }),
+    message: { id: messageId, role: "assistant", parts },
+    parentRunId,
+    resume,
+  };
+  return {
+    threadId,
+    runId,
+    state: {},
+    messages: [{ id: messageId, role: "assistant" }],
+    tools: [],
+    context: [],
+    forwardedProps: forwarded,
+    data: forwarded,
+    parentRunId,
+    resume,
+  };
+};
+
+/** The paused message an answer continues, and what the answer carries. */
+type ChatContinuation = {
+  readonly messageId: string;
+  readonly parentRunId: string;
+  readonly parts: readonly unknown[];
+  readonly resume: readonly unknown[];
 };
 
 /**
@@ -458,6 +531,55 @@ export const sendChatMessage = async ({
         messageId,
         runId,
         text,
+        threadId,
+      }),
+    ),
+    fetch,
+    method: "POST",
+    onEvent,
+    onTurn,
+    path: "/v1/chat",
+    signal,
+    source,
+  });
+
+/**
+ * Answers what a paused turn waits for and streams the answer's run, as a
+ * send does: the server names the new turn before any event.
+ */
+export const continueChatTurn = async ({
+  anonymized,
+  continuation,
+  fetch,
+  matterId,
+  onEvent,
+  onTurn,
+  runId,
+  runTarget,
+  signal,
+  source,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly continuation: ChatContinuation;
+  readonly fetch: StreamFetch;
+  readonly matterId: string | undefined;
+  readonly onEvent: (event: ChatEvent) => void;
+  readonly onTurn: (turnId: string) => void;
+  readonly runId: string;
+  readonly runTarget: LocalRunTarget | undefined;
+  readonly signal: AbortSignal;
+  readonly source: AccessTokenSource;
+  readonly threadId: string;
+}): Promise<Result<StreamEnd, StreamBreak>> =>
+  await readChatStream({
+    body: JSON.stringify(
+      chatContinueBody({
+        anonymized,
+        continuation,
+        matterId,
+        runId,
+        runTarget,
         threadId,
       }),
     ),

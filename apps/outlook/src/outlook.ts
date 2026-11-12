@@ -144,6 +144,46 @@ export const subscribeMailboxItemChanges = (
   subscriber: () => void,
 ): (() => void) => subscribeOfficeMailboxItemChanges(subscriber);
 
+/**
+ * Compose edits Outlook reports to the pane: recipients (Mailbox 1.7) and
+ * attachments (Mailbox 1.8). Checks on a draft read these, so a recipient or
+ * file added after the pane loaded must reach them.
+ */
+const COMPOSE_FIELD_EVENTS = [
+  { event: "RecipientsChanged", version: "1.7" },
+  { event: "AttachmentsChanged", version: "1.8" },
+] as const;
+
+/**
+ * Calls `subscriber` when the user changes the recipients or attachments of
+ * the message being composed. Read items, and hosts without the events,
+ * never call it.
+ */
+export const subscribeComposeFieldChanges = (
+  subscriber: () => void,
+): (() => void) => {
+  const office = getOfficeRuntime();
+  const item = getCurrentOfficeItem();
+  if (!office || !item || getMode(item) !== "compose") {
+    return () => undefined;
+  }
+  const eventTypes = COMPOSE_FIELD_EVENTS.filter(({ version }) =>
+    supportsOfficeRequirement({
+      name: "Mailbox",
+      requirements: office.context.requirements,
+      version,
+    }),
+  ).map(({ event }) => office.EventType[event]);
+  for (const eventType of eventTypes) {
+    item.addHandlerAsync?.(eventType, () => subscriber());
+  }
+  return () => {
+    for (const eventType of eventTypes) {
+      item.removeHandlerAsync?.(eventType);
+    }
+  };
+};
+
 export const loadMailSnapshot = async (
   itemInstanceKey: string,
 ): Promise<MailSnapshot> => {

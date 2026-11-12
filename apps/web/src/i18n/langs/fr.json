@@ -553,6 +553,24 @@
       "failed": "Non enregistré",
       "failedTitle": "Votre modification n’a pas été enregistrée"
     },
+    "scope": {
+      "checkedDocument": "Seuls les paragraphes <num>{range}</num> ont été vérifiés.",
+      "checkedOrdinal": "Seuls les paragraphes <num>{range}</num> ont été vérifiés, comptés dans l’ordre : ce document ne numérote pas ses paragraphes.",
+      "errors": {
+        "empty": "Ces paragraphes ne contiennent aucun texte à vérifier.",
+        "garbage": "Saisissez des numéros de paragraphe, par exemple 82–136.",
+        "notFound": "Ces paragraphes ne figurent pas dans ce document.",
+        "numberingUnclear": "La numérotation des paragraphes de ce document est illisible. Vérifiez le document entier.",
+        "required": "Saisissez les paragraphes à vérifier.",
+        "reversed": "La plage se termine avant de commencer.",
+        "tooWide": "Vérifiez au plus 500 paragraphes à la fois."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "Aucune affirmation n’a été trouvée dans ces paragraphes.",
+      "showBefore": "Afficher le texte avant le ¶ {from}",
+      "verifyParagraphs": "Vérifier des paragraphes"
+    },
     "states": {
       "contradicted": {
         "chip": "Contredite",

@@ -553,6 +553,24 @@
       "failed": "Nie zapisano",
       "failedTitle": "Twoja zmiana nie została zapisana"
     },
+    "scope": {
+      "checkedDocument": "Sprawdzono tylko akapity <num>{range}</num>.",
+      "checkedOrdinal": "Sprawdzono tylko akapity <num>{range}</num>, liczone według kolejności: ten dokument nie numeruje akapitów.",
+      "errors": {
+        "empty": "Te akapity nie zawierają tekstu do sprawdzenia.",
+        "garbage": "Wpisz numery akapitów, np. 82–136.",
+        "notFound": "Tych akapitów nie ma w tym dokumencie.",
+        "numberingUnclear": "Nie da się odczytać numeracji akapitów tego dokumentu. Sprawdź cały dokument.",
+        "required": "Wpisz akapity do sprawdzenia.",
+        "reversed": "Zakres kończy się, zanim się zaczyna.",
+        "tooWide": "Sprawdzaj najwyżej 500 akapitów naraz."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "W tych akapitach nie znaleziono żadnych twierdzeń.",
+      "showBefore": "Pokaż tekst przed ¶ {from}",
+      "verifyParagraphs": "Sprawdź akapity"
+    },
     "states": {
       "contradicted": {
         "chip": "Sprzeczne",

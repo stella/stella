@@ -329,6 +329,9 @@ test("a failed kind read says so where the switches are and recovers on retry", 
     view.getByRole("switch", { name: messages.avt.documents.testimony });
   expect(Object.hasOwn(toggle().dataset, "disabled")).toBe(true);
   fireEvent.click(view.getByRole("button", { name: messages.common.retry }));
+  // Polled assertions compare booleans: while the message is still shown, a
+  // failing matcher on the DOM node formats the whole node graph, which
+  // takes seconds per poll and starves the retry it is waiting for.
   await waitFor(() =>
     expect(
       view.queryByText(messages.avt.documents.kindsLoadFailed) === null,
