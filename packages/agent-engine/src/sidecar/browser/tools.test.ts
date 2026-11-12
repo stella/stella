@@ -15,12 +15,14 @@ import {
   CHAT_LOCAL_RUN_TOOL_NAMES,
   shownChatLocalRunToolResult,
 } from "@stll/api-contract/chat-local-run-tool";
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import { localBrowserResult } from "./local-result";
 import {
+  APPROVAL_DECISION,
+  type BrowserApprovalRequest,
   createLocalBrowserSession,
   localBrowserToolList,
-  TYPING_DECISION,
 } from "./tools";
 
 const ABSENT = { type: BROWSER_CONTROL_TARGET_METADATA.absent } as const;
@@ -68,13 +70,32 @@ type Sent = {
   observedTab: BrowserObservedTab | null;
 };
 
-const recorder = (results: BrowserControlResult[]) => {
+const recorder = (
+  results: BrowserControlResult[],
+  {
+    approvals = "auto",
+    decision = APPROVAL_DECISION.approve,
+  }: {
+    approvals?: DesktopRunnerApprovalMode;
+    decision?: (typeof APPROVAL_DECISION)[keyof typeof APPROVAL_DECISION];
+  } = {},
+) => {
   const sent: Sent[] = [];
-  const asked: string[] = [];
+  const asked: Omit<BrowserApprovalRequest, "signal">[] = [];
+  const finished: string[] = [];
   const context = {
-    approveTyping: async ({ url }: { url: string }) => {
-      asked.push(url);
-      return TYPING_DECISION.approve;
+    approvals,
+    approve: async ({
+      signal: _signal,
+      ...request
+    }: BrowserApprovalRequest) => {
+      asked.push(request);
+      return {
+        decision,
+        finish: (status: string) => {
+          finished.push(status);
+        },
+      };
     },
     send: async (
       command: BrowserControlCommand,
@@ -83,8 +104,9 @@ const recorder = (results: BrowserControlResult[]) => {
       sent.push({ command, observedTab });
       return localBrowserResult(results.shift() ?? page("unexpected"));
     },
+    signal: new AbortController().signal,
   };
-  return { asked, context, send: context.send, sent };
+  return { asked, context, finished, send: context.send, sent };
 };
 
 const parsed = (result: { content: { text: string }[] }): unknown =>
@@ -235,7 +257,7 @@ describe("the local browser tools", () => {
   });
 });
 
-describe("typing outside a search field", () => {
+describe("browser steps by the run's approval mode", () => {
   const searchPage = (revision: string): BrowserControlResult => {
     const base = page(revision);
     return base.status === "success"
@@ -253,45 +275,123 @@ describe("typing outside a search field", () => {
       : base;
   };
 
-  test("a search field takes the text without asking", async () => {
+  const SEARCH = { ref: "e:0:1.0", text: "notice" } as const;
+  const LINK = { ref: "e:0:2.0" } as const;
+
+  /** Reads the page, then opens, reads, types and clicks once each. */
+  const steps = async (
+    approvals: DesktopRunnerApprovalMode,
+    field: "search" | "other",
+  ) => {
+    const read = field === "search" ? searchPage : page;
     const session = createLocalBrowserSession();
-    const browser = recorder([searchPage("r-1"), searchPage("r-2")]);
+    const browser = recorder(
+      [read("r-1"), read("r-2"), read("r-3"), read("r-4"), read("r-5")],
+      { approvals },
+    );
     await session.call("snapshot", {}, browser.context);
     await session.call(
-      "type",
-      { ref: "e:0:1.0", text: "notice" },
+      "open",
+      { url: "https://fixture-library.test/search" },
       browser.context,
     );
-    expect(browser.asked).toEqual([]);
-    expect(browser.sent.at(-1)?.command.action).toBe("fill");
+    await session.call("snapshot", {}, browser.context);
+    await session.call("type", SEARCH, browser.context);
+    await session.call("click", LINK, browser.context);
+    return browser;
+  };
+
+  const CASES = [
+    { approvals: "ask", field: "search", asked: ["click"] },
+    { approvals: "ask", field: "other", asked: ["type", "click"] },
+    { approvals: "auto", field: "search", asked: [] },
+    { approvals: "auto", field: "other", asked: ["type"] },
+    { approvals: "full_auto", field: "search", asked: [] },
+    { approvals: "full_auto", field: "other", asked: [] },
+  ] as const satisfies readonly {
+    approvals: DesktopRunnerApprovalMode;
+    field: "search" | "other";
+    asked: readonly ("click" | "type")[];
+  }[];
+
+  for (const { approvals, asked, field } of CASES) {
+    test(`${approvals}: a ${field} field asks before ${asked.join(", ") || "nothing"}`, async () => {
+      const browser = await steps(approvals, field);
+      expect(browser.asked.map(({ action }) => action)).toEqual([...asked]);
+      expect(browser.finished).toEqual(asked.map(() => "completed"));
+      expect(browser.sent.map(({ command }) => command.action)).toEqual([
+        "snapshot",
+        "open",
+        "snapshot",
+        "fill",
+        "click",
+      ]);
+    });
+  }
+
+  test("the member sees the element's role and name and the page address", async () => {
+    const browser = await steps("ask", "other");
+    expect(browser.asked).toEqual([
+      {
+        action: "type",
+        name: "Search",
+        role: "textbox",
+        url: "https://fixture-library.test/search",
+      },
+      {
+        action: "click",
+        name: "Decision 1",
+        role: "link",
+        url: "https://fixture-library.test/search",
+      },
+    ]);
   });
 
-  test("any other field waits for the member, and a refusal types nothing", async () => {
+  test("a refusal runs nothing and reads as declined", async () => {
     const session = createLocalBrowserSession();
-    const browser = recorder([page("r-1")]);
+    const browser = recorder([page("r-1")], {
+      approvals: "ask",
+      decision: APPROVAL_DECISION.deny,
+    });
     await session.call("snapshot", {}, browser.context);
-    const refused = await session.call(
+    const typed = await session.call("type", SEARCH, browser.context);
+    const clicked = await session.call("click", LINK, browser.context);
+    expect(browser.asked.map(({ action }) => action)).toEqual([
       "type",
-      { ref: "e:0:1.0", text: "notice" },
-      {
-        ...browser.context,
-        approveTyping: async ({ url }) => {
-          browser.asked.push(url);
-          return TYPING_DECISION.deny;
-        },
-      },
-    );
-    expect(browser.asked).toEqual(["https://fixture-library.test/search"]);
+      "click",
+    ]);
+    expect(browser.finished).toEqual([]);
     expect(browser.sent.map(({ command }) => command.action)).toEqual([
       "snapshot",
     ]);
-    expect(refused.isError).toBe(true);
-    expect(
-      shownChatLocalRunToolResult(
-        CHAT_LOCAL_RUN_TOOL_NAMES.browser,
-        refused.content.at(0)?.text ?? "",
-        true,
-      ),
-    ).toBe(JSON.stringify({ status: "declined" }));
+    for (const refused of [typed, clicked]) {
+      expect(refused.isError).toBe(true);
+      expect(
+        shownChatLocalRunToolResult(
+          CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+          refused.content.at(0)?.text ?? "",
+          true,
+        ),
+      ).toBe(JSON.stringify({ status: "declined" }));
+    }
+  });
+
+  test("an approved step that failed is reported failed", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder(
+      [
+        page("r-1"),
+        {
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          status: "error",
+          code: BROWSER_CONTROL_ERROR_CODE.elementNotFound,
+          message: "Gone.",
+        },
+      ],
+      { approvals: "ask" },
+    );
+    await session.call("snapshot", {}, browser.context);
+    await session.call("click", LINK, browser.context);
+    expect(browser.finished).toEqual(["failed"]);
   });
 });

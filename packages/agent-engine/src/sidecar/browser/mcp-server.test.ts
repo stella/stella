@@ -23,9 +23,12 @@ import type { BrowserBridge } from "./bridge";
 import { localBrowserResult } from "./local-result";
 import { startLocalBrowserMcp } from "./mcp-server";
 import { installNativeHost } from "./native-host-manifest";
-import { TYPING_DECISION } from "./tools";
+import { APPROVAL_DECISION } from "./tools";
 
-const approveTyping = async () => TYPING_DECISION.approve;
+const approve = async () => ({
+  decision: APPROVAL_DECISION.approve,
+  finish: () => undefined,
+});
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -93,7 +96,8 @@ describe("the local browser MCP endpoint", () => {
   test("serves the four tools to the run it was registered for", async () => {
     const { mcp, requests } = start();
     const binding = mcp.register({
-      approveTyping,
+      approvals: "auto",
+      approve,
       runId: "run-1",
       threadId: "thread-1",
     });
@@ -165,12 +169,14 @@ describe("the local browser MCP endpoint", () => {
   test("refuses another run's secret, a browser page and an ended run", async () => {
     const { cancels, mcp } = start();
     const first = mcp.register({
-      approveTyping,
+      approvals: "auto",
+      approve,
       runId: "run-1",
       threadId: "thread-1",
     });
     const second = mcp.register({
-      approveTyping,
+      approvals: "auto",
+      approve,
       runId: "run-2",
       threadId: "thread-2",
     });

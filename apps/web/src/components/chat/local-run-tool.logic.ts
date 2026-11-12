@@ -134,7 +134,10 @@ export const localRunToolView = ({
     case CHAT_LOCAL_RUN_TOOL_NAMES.browser:
       return {
         titleKey: needsMember(output) ? SIGN_IN_TITLE_KEY : null,
-        subtitle: call.input.url === undefined ? null : text(call.input.url),
+        subtitle:
+          call.input.action === "open" && call.input.url !== undefined
+            ? text(call.input.url)
+            : null,
       };
     default:
       call satisfies never;

@@ -3,12 +3,13 @@ import { timingSafeEqual } from "node:crypto";
 import * as v from "valibot";
 
 import { isChatLocalRunBrowserAction } from "@stll/api-contract/chat-local-run-tool";
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import { LOCAL_BROWSER_MCP_SERVER_NAME } from "../../harness/tool-parts";
 import type { StellaSandboxMcpBinding } from "../../sandbox";
 import type { BrowserBridge } from "./bridge";
 import {
-  type ApproveTyping,
+  type ApproveAction,
   createLocalBrowserSession,
   localBrowserToolList,
 } from "./tools";
@@ -58,7 +59,8 @@ const toolCallParamsSchema = v.object({
 type HeldRun = {
   secret: Buffer;
   threadId: string;
-  approveTyping: ApproveTyping;
+  approvals: DesktopRunnerApprovalMode;
+  approve: ApproveAction;
 };
 
 export type LocalBrowserMcp = {
@@ -68,8 +70,10 @@ export type LocalBrowserMcp = {
   register: (run: {
     runId: string;
     threadId: string;
-    /** Asks the run's member to allow typing outside a search field. */
-    approveTyping: ApproveTyping;
+    /** The run's approval mode: which browser steps wait for the member. */
+    approvals: DesktopRunnerApprovalMode;
+    /** Asks the run's member to allow one browser step. */
+    approve: ApproveAction;
   }) => StellaSandboxMcpBinding;
   /** Ends the run's access and stops its command in the extension. */
   unregister: (runId: string) => void;
@@ -189,7 +193,9 @@ export const startLocalBrowserMcp = ({
           params.output.name,
           params.output.arguments,
           {
-            approveTyping: held.approveTyping,
+            approvals: held.approvals,
+            approve: held.approve,
+            signal,
             send: async (command, observedTab) =>
               await bridge.request(
                 {
@@ -263,12 +269,13 @@ export const startLocalBrowserMcp = ({
 
   return {
     origin,
-    register: ({ approveTyping, runId, threadId }) => {
+    register: ({ approvals, approve, runId, threadId }) => {
       const secret = Buffer.from(
         crypto.getRandomValues(new Uint8Array(SECRET_BYTES)),
       ).toString("base64url");
       runs.set(runId, {
-        approveTyping,
+        approvals,
+        approve,
         secret: Buffer.from(secret),
         threadId,
       });

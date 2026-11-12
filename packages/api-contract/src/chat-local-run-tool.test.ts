@@ -228,6 +228,15 @@ describe("a browser step on the member's computer", () => {
     });
     expect(
       parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "click",
+        url: "https://fixture-library.test/private",
+      }),
+    ).toEqual({
+      name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      input: { action: "click" },
+    });
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
         action: "evaluate",
       }),
     ).toBeNull();

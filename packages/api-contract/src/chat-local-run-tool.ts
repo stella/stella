@@ -194,10 +194,22 @@ export const chatLocalRunToolCallSchema = v.variant("name", [
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.browser),
-    input: v.object({
-      action: v.picklist(CHAT_LOCAL_RUN_BROWSER_ACTIONS),
-      url: v.optional(shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.url)),
-    }),
+    // Only `open` keeps an address: the one the agent chose. Any other
+    // step keeps its kind alone, whatever else it carries.
+    input: v.union([
+      v.object({
+        action: v.literal("open"),
+        url: v.optional(shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.url)),
+      }),
+      v.object({
+        action: v.picklist(
+          CHAT_LOCAL_RUN_BROWSER_ACTIONS.filter(
+            (action): action is Exclude<ChatLocalRunBrowserAction, "open"> =>
+              action !== "open",
+          ),
+        ),
+      }),
+    ]),
   }),
 ]);
 export type ChatLocalRunToolCall = v.InferOutput<
@@ -246,6 +258,9 @@ export const CHAT_LOCAL_RUN_TOOL_STATUSES = [
   "in_progress",
   "interrupted",
 ] as const;
+
+export type ChatLocalRunToolStatus =
+  (typeof CHAT_LOCAL_RUN_TOOL_STATUSES)[number];
 
 const statusSchema = v.picklist(CHAT_LOCAL_RUN_TOOL_STATUSES);
 const statusOnly = v.object({ status: statusSchema });

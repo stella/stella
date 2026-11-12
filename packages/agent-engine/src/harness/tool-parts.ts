@@ -127,8 +127,14 @@ export const mcpToolCall = ({
   if (!isChatLocalRunBrowserAction(tool)) {
     return unsupportedItem(id, `${server}:${tool}`).toolCall;
   }
+  if (tool !== "open") {
+    return nativeToolCall(id, {
+      name: HARNESS_TOOL_NAMES.browser,
+      input: { action: tool },
+    });
+  }
   const url: unknown =
-    tool === "open" && typeof input === "object" && input !== null
+    typeof input === "object" && input !== null
       ? Reflect.get(input, "url")
       : undefined;
   return nativeToolCall(id, {

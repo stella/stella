@@ -208,7 +208,7 @@ const threadParams = (
               url: input.browser.url,
               http_headers: { Authorization: `Bearer ${input.browser.token}` },
               default_tools_approval_mode: "approve",
-              // Typing outside a search field waits for the member's answer.
+              // A step the member must allow waits for the member's answer.
               tool_timeout_sec: BROWSER_TOOL_TIMEOUT_SECONDS,
             },
           }),

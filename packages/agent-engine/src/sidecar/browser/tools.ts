@@ -19,6 +19,7 @@ import {
   CHAT_LOCAL_RUN_NEEDS_MEMBER,
   type ChatLocalRunBrowserAction,
 } from "@stll/api-contract/chat-local-run-tool";
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import { browserBridgeError } from "./bridge";
 import {
@@ -115,7 +116,7 @@ const TOOL_DEFINITIONS = {
   },
   click: {
     description:
-      "Click an element of the page this chat last read, by its ref, and read the page that follows. A ref from an older read, or a page that changed since, is refused: call snapshot and use a ref from it.",
+      "Click an element of the page this chat last read, by its ref, and read the page that follows. Depending on the member's approval setting, the click may wait for the member to allow it in chat; a refusal comes back as declined. A ref from an older read, or a page that changed since, is refused: call snapshot and use a ref from it.",
     inputSchema: {
       type: "object",
       properties: { ref: REF_PROPERTY },
@@ -124,7 +125,7 @@ const TOOL_DEFINITIONS = {
   },
   type: {
     description:
-      "Replace the text of a field on the page this chat last read, by its ref, and read the page again. It does not submit: click the page's button afterwards. A search field (role searchbox) takes the text at once; any other field waits for the member to allow it in chat, and a refusal comes back as declined. Never type passwords or verification codes; the member signs in themselves.",
+      "Replace the text of a field on the page this chat last read, by its ref, and read the page again. It does not submit: click the page's button afterwards. Depending on the member's approval setting, typing into any field other than a search field (role searchbox) may wait for the member to allow it in chat; a refusal comes back as declined. Never type passwords or verification codes; the member signs in themselves.",
     inputSchema: {
       type: "object",
       properties: {
@@ -253,21 +254,98 @@ type PageSeen = {
 /** The role the extension gives a search field, or a field in a search form. */
 const SEARCH_FIELD_ROLE = "searchbox";
 
-export const TYPING_DECISION = {
+export const APPROVAL_DECISION = {
   approve: "approve",
   deny: "deny",
 } as const;
 
-export type TypingDecision =
-  (typeof TYPING_DECISION)[keyof typeof TYPING_DECISION];
+type ApprovalDecisionKind =
+  (typeof APPROVAL_DECISION)[keyof typeof APPROVAL_DECISION];
+
+/** A browser step that changes the page, as the member is asked about it. */
+export type BrowserApprovalRequest = {
+  action: "click" | "type";
+  /** The element's role and accessible name, as the page reads them. */
+  role: string;
+  name: string;
+  /** The page's address. */
+  url: string;
+  /** Aborts when the agent's call ends; the question is then withdrawn. */
+  signal: AbortSignal;
+};
+
+/** The member's answer, and how the approved step's outcome is reported. */
+export type ApprovalTicket = {
+  decision: ApprovalDecisionKind;
+  finish: (status: "completed" | "failed") => void;
+};
+
+/** Asks the member, in chat, to allow one browser step. */
+export type ApproveAction = (
+  request: BrowserApprovalRequest,
+) => Promise<ApprovalTicket>;
+
+const BROWSER_GATE = {
+  /** The step runs. */
+  run: "run",
+  /** The member is asked first. */
+  ask: "ask",
+} as const;
+
+type BrowserGate = (typeof BROWSER_GATE)[keyof typeof BROWSER_GATE];
 
 /**
- * Asks the member, in chat, to allow typing into a field that is not a
- * search field on the page at `url`.
+ * When a click or a typing step asks the member, by the run's approval
+ * mode. Opening, reading and typing into a search field never ask; a
+ * sign-in page still goes to the member at every level. One gate for
+ * every harness: the server asks, whatever the harness itself was told to
+ * allow.
  */
-export type ApproveTyping = (request: {
-  url: string;
-}) => Promise<TypingDecision>;
+const BROWSER_GATES = {
+  ask: {
+    click: BROWSER_GATE.ask,
+    search: BROWSER_GATE.run,
+    type: BROWSER_GATE.ask,
+  },
+  auto: {
+    click: BROWSER_GATE.run,
+    search: BROWSER_GATE.run,
+    type: BROWSER_GATE.ask,
+  },
+  full_auto: {
+    click: BROWSER_GATE.run,
+    search: BROWSER_GATE.run,
+    type: BROWSER_GATE.run,
+  },
+} as const satisfies Record<
+  DesktopRunnerApprovalMode,
+  Record<"click" | "search" | "type", BrowserGate>
+>;
+
+/** Whether `command` waits for the member under `approvals`. */
+export const browserStepGate = (
+  approvals: DesktopRunnerApprovalMode,
+  command: BrowserControlCommand,
+): BrowserGate => {
+  switch (command.action) {
+    case BROWSER_CONTROL_ACTION.click:
+      return BROWSER_GATES[approvals].click;
+    case BROWSER_CONTROL_ACTION.fill:
+      return BROWSER_GATES[approvals][
+        command.target.role === SEARCH_FIELD_ROLE ? "search" : "type"
+      ];
+    case BROWSER_CONTROL_ACTION.open:
+    case BROWSER_CONTROL_ACTION.snapshot:
+    case BROWSER_CONTROL_ACTION.goBack:
+    case BROWSER_CONTROL_ACTION.pressKey:
+    case BROWSER_CONTROL_ACTION.select:
+    case BROWSER_CONTROL_ACTION.switchTab:
+      return BROWSER_GATE.run;
+    default:
+      command satisfies never;
+      return panic("Unhandled browser command");
+  }
+};
 
 /** Reaches the extension for one call: its run, and its stop. */
 type LocalBrowserSend = (
@@ -303,8 +381,23 @@ const unknownRef = (): BuiltCommand => ({
 
 type LocalBrowserCallContext = {
   send: LocalBrowserSend;
-  approveTyping: ApproveTyping;
+  /** The run's approval mode: which steps wait for the member. */
+  approvals: DesktopRunnerApprovalMode;
+  approve: ApproveAction;
+  /** Aborts when the agent's call ends. */
+  signal: AbortSignal;
 };
+
+const declinedResult = (): LocalBrowserToolResult =>
+  textResult(
+    {
+      status: "declined",
+      code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+      message: "The member declined this step.",
+      hint: "Ask the member how to go on, or go on without this step.",
+    },
+    true,
+  );
 
 /** One chat's browser tools. */
 export const createLocalBrowserSession = () => {
@@ -390,33 +483,36 @@ export const createLocalBrowserSession = () => {
     call: async (
       tool: ChatLocalRunBrowserAction,
       input: unknown,
-      { approveTyping, send }: LocalBrowserCallContext,
+      { approvals, approve, send, signal }: LocalBrowserCallContext,
     ): Promise<LocalBrowserToolResult> => {
       const next = command(tool, input);
       if (next.type === "refused") {
         return next.result;
       }
-      // A search is the agent's to type; anything else the member allows.
+      const step = next.command;
+      let ticket: ApprovalTicket | null = null;
       if (
-        next.command.action === BROWSER_CONTROL_ACTION.fill &&
-        next.command.target.role !== SEARCH_FIELD_ROLE &&
-        (await approveTyping({ url: next.command.page.url })) ===
-          TYPING_DECISION.deny
+        (step.action === BROWSER_CONTROL_ACTION.click ||
+          step.action === BROWSER_CONTROL_ACTION.fill) &&
+        browserStepGate(approvals, step) === BROWSER_GATE.ask
       ) {
-        return textResult(
-          {
-            status: "declined",
-            code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
-            message: "The member declined typing into this field.",
-            hint: "Ask the member what to enter, or go on without typing here.",
-          },
-          true,
-        );
+        ticket = await approve({
+          action:
+            step.action === BROWSER_CONTROL_ACTION.click ? "click" : "type",
+          name: step.target.name,
+          role: step.target.role,
+          signal,
+          url: step.page.url,
+        });
+        if (ticket.decision === APPROVAL_DECISION.deny) {
+          return declinedResult();
+        }
       }
       // The one place page content is read: to answer the agent here.
       const result = readLocalBrowserResult(
-        await send(next.command, seen?.observedTab ?? null),
+        await send(step, seen?.observedTab ?? null),
       );
+      ticket?.finish(result.status === "success" ? "completed" : "failed");
       if (result.status === "success") {
         const { snapshot } = result;
         seen = {
