@@ -571,6 +571,21 @@
       "showBefore": "Text vor ¶ {from} anzeigen",
       "verifyParagraphs": "Absätze prüfen"
     },
+    "staleness": {
+      "failed": "Die Behauptungen konnten nicht erneut geprüft werden",
+      "finished": "{count, plural, one {# Behauptung erneut geprüft} other {# Behauptungen erneut geprüft}}",
+      "partial": "{rechecked, number} erneut geprüft, {failed, plural, one {# fehlgeschlagen} other {# fehlgeschlagen}}",
+      "reasons": {
+        "factChanged": "Fakt geändert",
+        "factHeld": "Fakt ausgeschlossen",
+        "factRemoved": "Fakt entfernt",
+        "newFactRelated": "Neuer zugehöriger Fakt"
+      },
+      "recheckAll": "Alle erneut prüfen",
+      "recheckLocked": "Wird mit den anderen veralteten Behauptungen erneut geprüft",
+      "runLine": "{count, plural, one {# Behauptung ist möglicherweise veraltet} other {# Behauptungen sind möglicherweise veraltet}}",
+      "running": "{count, plural, one {# Behauptung wird erneut geprüft…} other {# Behauptungen werden erneut geprüft…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Widersprochen",
@@ -1944,6 +1959,7 @@
       "refusalNoComputer": "Keiner Ihrer Computer ist verbunden. Öffnen Sie stella desktop und senden Sie erneut.",
       "refusalPermissionAboveLimit": "Ihre Organisation erlaubt diese Berechtigungen für den Coding-Agenten auf Ihrem Computer nicht. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalPermissionUnavailable": "Der Coding-Agent auf Ihrem Computer kann mit diesen Berechtigungen nicht laufen. Wählen Sie unter „Berechtigungen“ eine andere Option.",
+      "refusalReasoningEffortUnavailable": "Der Coding-Agent auf Ihrem Computer bietet diesen Denkaufwand für das Modell nicht an. Wählen Sie unter „Denkaufwand“ einen anderen.",
       "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
       "runOn": "Ausführen auf",
@@ -2162,6 +2178,7 @@
     "stopFailed": "Die Antwort konnte nicht gestoppt werden. Versuchen Sie es erneut.",
     "stopResponse": "Stoppen",
     "stopped": "Gestoppt",
+    "stopping": "Wird angehalten…",
     "suggestTitle": "Titel vorschlagen",
     "suggestTitleUnavailableAnonymized": "Für anonymisierte Konversationen sind keine Titelvorschläge verfügbar.",
     "suggestedFollowupsLabel": "Vorgeschlagene Folgefragen",
@@ -2699,6 +2716,7 @@
     "organization": "Organisation",
     "organizationName": "Organisationsname",
     "organizations": "Organisationen",
+    "outOfDate": "Veraltet",
     "page": "Seite {page}",
     "paymentRetryNotice": "Zahlungsproblem. Aktualisieren Sie Ihre Zahlungsmethode bis zum {date}, um den Zugriff zu behalten.",
     "pin": "Anheften",
@@ -4477,7 +4495,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Erstellen Sie Standpunkt für Standpunkt ein Playbook für die Vertragsprüfung, gestützt auf Ihre bereits unterzeichneten Verträge, ein kurzes Gespräch und marktübliche Standards.",
-          "name": "Playbook erstellen"
+          "name": "Playbook erstellen",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Füge einem meiner bestehenden Playbooks Standpunkte hinzu.",
+              "name": "Playbook erweitern"
+            },
+            "fromContracts": {
+              "body": "Erstelle ein Playbook für Vertraulichkeitsvereinbarungen auf Grundlage meiner bereits unterzeichneten Vereinbarungen.",
+              "name": "Mit früheren Verträgen beginnen"
+            },
+            "fromMarketStandards": {
+              "body": "Erstelle ein Playbook für Lieferantenverträge, ausgehend von marktüblichen Standpunkten.",
+              "name": "Mit Marktstandards beginnen"
+            }
+          }
         }
       },
       "builtInSection": "Integrierte Skills",
@@ -4727,6 +4759,10 @@
       "optionPlaceholder": "Optionswert",
       "optionsLabel": "Optionen",
       "outline": "Gliederung",
+      "pendingPane": {
+        "description": "Beantworten Sie die Fragen im Chat. Sobald Sie das erste Speichern freigeben, öffnet sich das Playbook hier, und Sie können es neben der Unterhaltung bearbeiten.",
+        "title": "Ihr Playbook erscheint hier"
+      },
       "positionOfTotal": "Standpunkt {index} von {total}",
       "positionRemoved": "Standpunkt entfernt",
       "positions": "Standpunkte",
@@ -6086,7 +6122,6 @@
     "comments": "Kommentare",
     "commentsEmpty": "Text markieren, um ihn zu kommentieren.",
     "noRevisions": "Noch keine Fassungen",
-    "outOfDate": "Veraltet",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Keine Zusammenfassung",
     "proposals": "Änderungsvorschläge",

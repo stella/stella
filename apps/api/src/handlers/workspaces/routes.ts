@@ -29,6 +29,7 @@ import infosoudImportAgenda from "@/api/handlers/workspaces/infosoud-import-agen
 import infosoudLookup from "@/api/handlers/workspaces/infosoud-lookup";
 import readJustifications from "@/api/handlers/workspaces/justifications/list";
 import readWorkspaces from "@/api/handlers/workspaces/list";
+import listWorkspaceMemberCandidates from "@/api/handlers/workspaces/member-candidates/list";
 import listWorkspaceMemberPreviews from "@/api/handlers/workspaces/member-previews/list";
 import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
 import readWorkspaceMembers from "@/api/handlers/workspaces/members/list";
@@ -116,6 +117,7 @@ export const workspacesRoute = mount(
   [
     routes({
       "/": { GET: readWorkspaces, PUT: createWorkspaces },
+      "/member-candidates": { GET: listWorkspaceMemberCandidates },
       "/member-previews": { GET: listWorkspaceMemberPreviews },
       "/navigation": { GET: readWorkspaceNavigation },
       "/active": { GET: readActiveWorkspace },

@@ -12,6 +12,7 @@ import {
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DESKTOP_RUNNER_OUTPUT_EVENT,
+  DESKTOP_RUNNER_REASONING_EFFORTS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
 } from "@stll/api-contract/desktop-runner";
 import { hmacSha256Hex } from "@stll/sha256/node";
@@ -743,7 +744,7 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
   "turn/start": {
     threadId: IDENTIFIER,
     model: OPAQUE,
-    effort: vocabulary(["none", "minimal", "low", "medium", "high", "xhigh"]),
+    effort: vocabulary(DESKTOP_RUNNER_REASONING_EFFORTS),
     input: list({
       type: vocabulary(["text", "image", "localImage", "skill", "mention"]),
       text: SIZE,
@@ -910,6 +911,7 @@ const SIDECAR_HOST_FIELDS: Readonly<
     harnessSessionId: IDENTIFIER,
     ...SIDECAR_LAUNCH,
     model: OPAQUE,
+    reasoningEffort: vocabulary(DESKTOP_RUNNER_REASONING_EFFORTS),
     policy: object({
       network: vocabulary(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: vocabulary(DESKTOP_RUNNER_FS_POLICIES),

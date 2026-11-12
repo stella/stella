@@ -218,7 +218,7 @@ const Screens = () => {
               options={{
                 ...pushedScreen,
                 presentation: "formSheet",
-                sheetAllowedDetents: [0.5, 1],
+                sheetAllowedDetents: [0.75, 1],
                 sheetGrabberVisible: true,
               }}
             />

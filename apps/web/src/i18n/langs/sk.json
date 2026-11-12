@@ -571,6 +571,21 @@
       "showBefore": "Zobraziť text pred ¶ {from}",
       "verifyParagraphs": "Overiť odseky"
     },
+    "staleness": {
+      "failed": "Tvrdenia sa nepodarilo skontrolovať znova",
+      "finished": "{count, plural, one {# tvrdenie znova skontrolované} few {# tvrdenia znova skontrolované} many {# tvrdenia znova skontrolovaného} other {# tvrdení znova skontrolovaných}}",
+      "partial": "Znova skontrolované: {rechecked, number}, nepodarilo sa: {failed, plural, one {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt zmenený",
+        "factHeld": "Fakt vylúčený",
+        "factRemoved": "Fakt odobraný",
+        "newFactRelated": "Nový súvisiaci fakt"
+      },
+      "recheckAll": "Skontrolovať všetko znova",
+      "recheckLocked": "Kontroluje sa znova spolu s ostatnými zastaranými tvrdeniami",
+      "runLine": "{count, plural, one {# tvrdenie môže byť zastarané} few {# tvrdenia môžu byť zastarané} many {# tvrdenia môže byť zastaraného} other {# tvrdení môže byť zastaraných}}",
+      "running": "{count, plural, one {Znova sa kontroluje # tvrdenie…} few {Znova sa kontrolujú # tvrdenia…} many {Znova sa kontroluje # tvrdenia…} other {Znova sa kontroluje # tvrdení…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "V rozpore",
@@ -1944,6 +1959,7 @@
       "refusalNoComputer": "Žiadny z vašich počítačov nie je pripojený. Otvorte stella desktop a odošlite správu znova.",
       "refusalPermissionAboveLimit": "Vaša organizácia tieto oprávnenia programovaciemu agentovi vo vašom počítači nepovoľuje. Vyberte inú možnosť v ponuke Oprávnenia.",
       "refusalPermissionUnavailable": "Programovací agent vo vašom počítači s týmito oprávneniami bežať nemôže. Vyberte inú možnosť v ponuke Oprávnenia.",
+      "refusalReasoningEffortUnavailable": "Programovací agent vo vašom počítači túto úroveň uvažovania pre daný model neponúka. Vyberte inú v ponuke Úroveň uvažovania.",
       "refusalTooLarge": "Táto konverzácia je príliš dlhá na odovzdanie do vášho počítača. Na spustenie tam začnite nový chat.",
       "refusalUnavailable": "Spúšťanie chatov vo vašom počítači nie je pre váš účet dostupné.",
       "runOn": "Spustiť na",
@@ -2162,6 +2178,7 @@
     "stopFailed": "Odpoveď sa nepodarilo zastaviť. Skúste to znova.",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
+    "stopping": "Zastavujem…",
     "suggestTitle": "Navrhnúť názov",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nie sú dostupné pre anonymizované konverzácie.",
     "suggestedFollowupsLabel": "Navrhované nadväzujúce otázky",
@@ -2699,6 +2716,7 @@
     "organization": "Organizácia",
     "organizationName": "Názov organizácie",
     "organizations": "Organizácie",
+    "outOfDate": "Neaktuálne",
     "page": "Stránka {page}",
     "paymentRetryNotice": "Problém s platbou. Ak chcete zachovať prístup, aktualizujte spôsob platby do {date}.",
     "pin": "Pripnúť",
@@ -4477,7 +4495,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Vytvorte playbook na kontrolu zmlúv pozíciu po pozícii na základe vašich predtým podpísaných zmlúv, krátkeho rozhovoru a bežných trhových štandardov.",
-          "name": "Vytvoriť playbook"
+          "name": "Vytvoriť playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pridaj pozície do jedného z mojich existujúcich playbookov.",
+              "name": "Rozšíriť playbook"
+            },
+            "fromContracts": {
+              "body": "Vytvor playbook pre dohody o mlčanlivosti z mojich predtým podpísaných dohôd.",
+              "name": "Začať z predošlých zmlúv"
+            },
+            "fromMarketStandards": {
+              "body": "Vytvor playbook pre dodávateľské zmluvy a vychádzaj z bežných trhových pozícií.",
+              "name": "Začať z trhových štandardov"
+            }
+          }
         }
       },
       "builtInSection": "Vstavané zručnosti",
@@ -4727,6 +4759,10 @@
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",
+      "pendingPane": {
+        "description": "Odpovedzte na otázky v chate. Keď schválite prvé uloženie, playbook sa otvorí tu a môžete ho upravovať popri konverzácii.",
+        "title": "Váš playbook sa zobrazí tu"
+      },
       "positionOfTotal": "Pozícia {index} z {total}",
       "positionRemoved": "Pozícia odstránená",
       "positions": "Pozície",
@@ -6086,7 +6122,6 @@
     "comments": "Komentáre",
     "commentsEmpty": "Komentár pridáte označením textu.",
     "noRevisions": "Zatiaľ žiadne revízie",
-    "outOfDate": "Neaktuálne",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Bez zhrnutia",
     "proposals": "Návrhy zmien",

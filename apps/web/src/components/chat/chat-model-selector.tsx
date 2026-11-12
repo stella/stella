@@ -20,8 +20,8 @@ import {
   ChatModelOptionsMenu,
   chatRunOnTarget,
   type ComposerModelsMenuProps,
-  EFFORT_LABEL_KEY,
 } from "@/components/chat/chat-model-options-menu";
+import { EFFORT_LABEL_KEY } from "@/components/chat/chat-model-options-menu.logic";
 import { useLocalRunTargetStateLabel } from "@/components/chat/chat-run-target-menu";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
@@ -114,9 +114,10 @@ export const ChatModelSelector = ({
 
 /**
  * The harness and model a thread on the member's computer runs with, named
- * as the harness reports the model, and why it cannot take a turn now when
- * the member's computers say so (offline, signed out, the model no longer
- * offered): the bar says it rather than the turn moving to stella. `null` for a thread on stella's
+ * as the harness reports the model, with the reasoning effort when one is
+ * chosen, and why it cannot take a turn now when the member's computers say
+ * so (offline, signed out, the model no longer offered): the bar says it
+ * rather than the turn moving to stella. `null` for a thread on stella's
  * models.
  */
 const useLocalRunTrigger = (
@@ -136,7 +137,14 @@ const useLocalRunTrigger = (
   }
   const readiness =
     runnersView.type === "items" ? runnersView.items : undefined;
-  const model = localRunModelLabel(readiness, target) ?? target.model;
+  const modelLabel = localRunModelLabel(readiness, target) ?? target.model;
+  const model =
+    target.reasoningEffort === null
+      ? modelLabel
+      : t("chat.modelSelector.selectionLabel", {
+          model: modelLabel,
+          effort: t(EFFORT_LABEL_KEY[target.reasoningEffort]),
+        });
   const selection = t("chat.localRun.selectionLabel", {
     harness: CHAT_LOCAL_HARNESS_NAMES[target.harness],
     model,

@@ -571,6 +571,21 @@
       "showBefore": "A(z) {from}. ¶ előtti szöveg megjelenítése",
       "verifyParagraphs": "Bekezdések ellenőrzése"
     },
+    "staleness": {
+      "failed": "Az állításokat nem sikerült újra ellenőrizni",
+      "finished": "{count, plural, one {# állítás újraellenőrizve} other {# állítás újraellenőrizve}}",
+      "partial": "Újraellenőrizve: {rechecked, number}, sikertelen: {failed, plural, one {#} other {#}}",
+      "reasons": {
+        "factChanged": "Tény módosult",
+        "factHeld": "Tény kihagyva",
+        "factRemoved": "Tény eltávolítva",
+        "newFactRelated": "Új kapcsolódó tény"
+      },
+      "recheckAll": "Összes újraellenőrzése",
+      "recheckLocked": "A többi elavult állítással együtt újraellenőrzés alatt",
+      "runLine": "{count, plural, one {# állítás elavult lehet} other {# állítás elavult lehet}}",
+      "running": "{count, plural, one {# állítás újraellenőrzése…} other {# állítás újraellenőrzése…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Cáfolt",
@@ -1944,6 +1959,7 @@
       "refusalNoComputer": "Egyik számítógépe sem csatlakozik. Nyissa meg a stella desktopot, majd küldje el újra.",
       "refusalPermissionAboveLimit": "A szervezete nem adja meg ezeket az engedélyeket a számítógépén futó kódoló ügynöknek. Válasszon másik lehetőséget az Engedélyek menüben.",
       "refusalPermissionUnavailable": "A számítógépén futó kódoló ügynök nem futhat ezekkel az engedélyekkel. Válasszon másik lehetőséget az Engedélyek menüben.",
+      "refusalReasoningEffortUnavailable": "A számítógépén futó kódoló ügynök nem kínálja ezt a gondolkodási szintet a modellhez. Válasszon másikat a Gondolkodási szint menüben.",
       "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
       "runOn": "Futtatás itt",
@@ -2162,6 +2178,7 @@
     "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
+    "stopping": "Leállítás…",
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
     "suggestedFollowupsLabel": "Javasolt követő kérdések",
@@ -2699,6 +2716,7 @@
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
     "organizations": "Szervezetek",
+    "outOfDate": "Elavult",
     "page": "{page}. oldal",
     "paymentRetryNotice": "Fizetési probléma. A hozzáférés megtartásához frissítse a fizetési módját eddig: {date}.",
     "pin": "Rögzítés",
@@ -4477,7 +4495,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Hozzon létre szerződés-felülvizsgálati playbookot álláspontról álláspontra, a korábban aláírt szerződései, egy rövid interjú és a szokásos piaci standardok alapján.",
-          "name": "Playbook létrehozása"
+          "name": "Playbook létrehozása",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Adj hozzá álláspontokat az egyik meglévő playbookomhoz.",
+              "name": "Playbook bővítése"
+            },
+            "fromContracts": {
+              "body": "Készíts playbookot titoktartási megállapodásokhoz a korábban aláírt megállapodásaim alapján.",
+              "name": "Kiindulás korábbi szerződésekből"
+            },
+            "fromMarketStandards": {
+              "body": "Készíts playbookot beszállítói szerződésekhez a szokásos piaci álláspontokból kiindulva.",
+              "name": "Kiindulás a piaci standardokból"
+            }
+          }
         }
       },
       "builtInSection": "Beépített készségek",
@@ -4727,6 +4759,10 @@
       "optionPlaceholder": "Lehetőség értéke",
       "optionsLabel": "Lehetőségek",
       "outline": "Vázlat",
+      "pendingPane": {
+        "description": "Válaszoljon a kérdésekre a csevegésben. Miután jóváhagyta az első mentést, a playbook itt nyílik meg, és a beszélgetés mellett szerkesztheti.",
+        "title": "A playbook itt fog megjelenni"
+      },
       "positionOfTotal": "{index}. álláspont, összesen {total}",
       "positionRemoved": "Álláspont eltávolítva",
       "positions": "Álláspontok",
@@ -6086,7 +6122,6 @@
     "comments": "Megjegyzések",
     "commentsEmpty": "Jelöljön ki szöveget a megjegyzéshez.",
     "noRevisions": "Még nincs változat",
-    "outOfDate": "Elavult",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Nincs összefoglaló",
     "proposals": "Módosítási javaslatok",

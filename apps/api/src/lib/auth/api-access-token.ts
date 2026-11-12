@@ -69,6 +69,14 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/ai/draft-email.ts",
     uncataloged: "native_tool_ui",
   },
+  // A question about the open email. Naming a matter adds that matter's
+  // search results, read under the token's own scopes, so a token without
+  // `stella:read` gets an answer from the email alone.
+  "POST /v1/ai/ask-email": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/ask-email.ts",
+    uncataloged: "native_tool_ui",
+  },
   "GET /v1/workspaces/:workspaceId/vocabulary": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/vocabulary/get.ts",
@@ -94,6 +102,21 @@ export const API_OAUTH_ROUTES = {
   "PUT /v1/workspaces": {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/workspaces/create.ts",
+  },
+  // A new matter's client and team, as the web's create dialog offers them:
+  // an address-book contact found by name or created on the spot, and the
+  // organization's people to share the matter with.
+  "GET /v1/contacts/search": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/contacts/search.ts",
+  },
+  "PUT /v1/contacts": {
+    scope: "stella:contacts_write",
+    handler: "apps/api/src/handlers/contacts/create.ts",
+  },
+  "GET /v1/workspaces/member-candidates": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/member-candidates/list.ts",
   },
   "PUT /v1/tasks/:workspaceId": {
     scope: "stella:matters_write",

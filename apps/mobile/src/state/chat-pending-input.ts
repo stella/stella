@@ -1,6 +1,15 @@
 import * as v from "valibot";
 
-import { isHarnessChatToolCall } from "@stll/api-contract/chat";
+import {
+  ASK_USER_TOOL_NAME,
+  isHarnessChatToolCall,
+} from "@stll/api-contract/chat";
+import {
+  type AskUserAnswer,
+  askUserAnswersRefusal,
+  askUserInputSchema,
+  type AskUserQuestion,
+} from "@stll/api-contract/chat-ask-user";
 import {
   type ChatLocalRunQuestionReply,
   type LocalRunQuestionPause,
@@ -40,6 +49,7 @@ const localRunTargetSchema = v.object({
   harness: v.pipe(v.string(), v.minLength(1)),
   model: v.pipe(v.string(), v.minLength(1)),
   approvals: v.optional(v.string()),
+  reasoningEffort: v.optional(v.nullable(v.string())),
 });
 
 export type LocalRunTarget = v.InferOutput<typeof localRunTargetSchema>;
@@ -78,6 +88,17 @@ export type PendingApproval = {
 };
 
 /**
+ * The model's clarifying questions (the `ask-user` tool), which the person
+ * answers with an option or their own words. The browser resolves the call,
+ * so its interrupt is the call's client-tool interrupt.
+ */
+export type PendingAsk = {
+  readonly interruptId: string;
+  readonly questions: readonly AskUserQuestion[];
+  readonly call: StoredToolCall;
+};
+
+/**
  * Whose calls a paused turn holds: stella's own models (`cloud`), or a
  * coding agent on the person's computer (`harness`), whose answer the
  * server forwards to that computer and which a continuation must say runs
@@ -96,15 +117,19 @@ type Resumable = {
 };
 
 /**
- * What a paused turn waits for: approvals of the calls it wants to run, a
- * question a coding agent on the person's computer asked, or input this
- * phone cannot give (a file, a browser action, a saved secret), which the
- * person gives in the web app.
+ * What a paused turn waits for: approvals of the calls it wants to run, the
+ * model's clarifying questions, a question a coding agent on the person's
+ * computer asked, or input this phone cannot give (a file, a browser action,
+ * a saved secret), which the person gives in the web app.
  */
 export type PendingInput =
   | (Resumable & {
       readonly type: "approvals";
       readonly approvals: readonly PendingApproval[];
+    })
+  | (Resumable & {
+      readonly type: "ask-user";
+      readonly asks: readonly PendingAsk[];
     })
   | (Resumable & {
       readonly type: "question";
@@ -156,6 +181,7 @@ export const pendingInputOf = ({
   });
 
   const approvals: PendingApproval[] = [];
+  const asks: PendingAsk[] = [];
   const questions: { pause: LocalRunQuestionPause; call: StoredToolCall }[] =
     [];
   for (const interrupt of pendingInterrupts) {
@@ -169,6 +195,11 @@ export const pendingInputOf = ({
         return ELSEWHERE;
       }
       questions.push({ pause, call });
+      continue;
+    }
+    const ask = askOf(interrupt, calls);
+    if (ask !== undefined) {
+      asks.push(ask);
       continue;
     }
     const call = calls.find(
@@ -196,6 +227,7 @@ export const pendingInputOf = ({
   );
   const answered = [
     ...approvals.map(({ call }) => call),
+    ...asks.map(({ call }) => call),
     ...questions.map(({ call }) => call),
   ];
   const owner = ownerOf(answered, runTarget);
@@ -209,14 +241,41 @@ export const pendingInputOf = ({
     owner,
   };
   if (question !== undefined) {
-    return approvals.length === 0
+    return approvals.length === 0 && asks.length === 0
       ? { ...resumable, type: "question", ...question }
+      : ELSEWHERE;
+  }
+  if (asks.length > 0) {
+    return approvals.length === 0
+      ? { ...resumable, type: "ask-user", asks }
       : ELSEWHERE;
   }
   return approvals.length === 0
     ? ELSEWHERE
     : { ...resumable, type: "approvals", approvals };
 };
+
+/**
+ * The model's questions an interrupt waits on: an `ask-user` call the
+ * browser resolves, still waiting for its answer, whose questions parse. A
+ * call whose questions do not parse could only be answered with something
+ * the server refuses, so it is left to the web app.
+ */
+function askOf(
+  interrupt: { readonly id: string; readonly toolCallId?: string | undefined },
+  calls: readonly StoredToolCall[],
+): PendingAsk | undefined {
+  const call = calls.find(
+    ({ id, name, state }) =>
+      id === interrupt.toolCallId &&
+      name === ASK_USER_TOOL_NAME &&
+      state === "input-complete",
+  );
+  const input = v.safeParse(askUserInputSchema, call?.input);
+  return call === undefined || !input.success
+    ? undefined
+    : { interruptId: interrupt.id, questions: input.output.questions, call };
+}
 
 /**
  * Who answers the calls: all stella's, or all the computer's, never a mix.
@@ -251,6 +310,11 @@ export type PendingAnswer =
       readonly allowed: Readonly<Record<string, boolean>>;
     }
   | {
+      readonly type: "ask-user";
+      /** Each ask's answers, by its interrupt id. */
+      readonly answers: Readonly<Record<string, readonly AskUserAnswer[]>>;
+    }
+  | {
       readonly type: "question";
       readonly answers: ChatLocalRunQuestionReply["answers"] | null;
     };
@@ -267,7 +331,9 @@ type ResumeItem =
  * What a continuation carries for one answer: the paused message's answered
  * calls, each the stored call with only its answer changed, and the resume
  * item of each interrupt. An approval moves its call to
- * `approval-responded`; a question's call stays as stored, its answer
+ * `approval-responded`; the model's questions move their call to `complete`
+ * with the answers as its output, and add the result that answers it, as the
+ * web does; a coding agent's question's call stays as stored, its answer
  * riding in the resume payload. Undefined when the answer does not answer
  * every interrupt.
  */
@@ -294,6 +360,11 @@ export const continuationOf = (
             },
       ],
     };
+  }
+  if (pending.type === "ask-user") {
+    return answer.type === "ask-user"
+      ? askContinuationOf(pending.asks, answer.answers)
+      : undefined;
   }
   if (answer.type !== "approvals") {
     return undefined;
@@ -322,6 +393,50 @@ export const continuationOf = (
     })),
   };
 };
+
+/**
+ * The answered `ask-user` calls and their results, or undefined unless every
+ * ask has answers the server accepts.
+ */
+function askContinuationOf(
+  asks: readonly PendingAsk[],
+  answers: Readonly<Record<string, readonly AskUserAnswer[]>>,
+):
+  | { readonly parts: readonly unknown[]; readonly resume: ResumeItem[] }
+  | undefined {
+  const answered = asks.flatMap((ask) => {
+    const given = Object.hasOwn(answers, ask.interruptId)
+      ? answers[ask.interruptId]
+      : undefined;
+    return given === undefined ||
+      askUserAnswersRefusal(ask.questions, given) !== null
+      ? []
+      : [{ ask, output: { answers: given } }];
+  });
+  if (answered.length !== asks.length) {
+    return undefined;
+  }
+  return {
+    parts: [
+      ...answered.map(({ ask, output }) => ({
+        ...ask.call,
+        state: "complete",
+        output,
+      })),
+      ...answered.map(({ ask, output }) => ({
+        type: "tool-result",
+        toolCallId: ask.call.id,
+        content: JSON.stringify(output),
+        state: "complete",
+      })),
+    ],
+    resume: answered.map(({ ask, output }) => ({
+      interruptId: ask.interruptId,
+      status: "resolved",
+      payload: output,
+    })),
+  };
+}
 
 /** Whether two reads name the same pause, so an answer to one still fits the other. */
 export const isSamePendingInput = (
@@ -364,9 +479,13 @@ export const showsPendingInput = (live: LiveTurnView | null): boolean =>
  */
 export const pendingInputKey = (
   pending: Exclude<PendingInput, { type: "elsewhere" }>,
-): string =>
-  pending.type === "question"
-    ? `question:${pending.pause.interruptId}`
-    : `approvals:${pending.parentRunId}:${pending.approvals
-        .map(({ interruptId }) => interruptId)
-        .join(",")}`;
+): string => {
+  if (pending.type === "question") {
+    return `question:${pending.pause.interruptId}`;
+  }
+  const interrupts =
+    pending.type === "ask-user" ? pending.asks : pending.approvals;
+  return `${pending.type}:${pending.parentRunId}:${interrupts
+    .map(({ interruptId }) => interruptId)
+    .join(",")}`;
+};

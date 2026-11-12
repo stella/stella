@@ -339,15 +339,123 @@ describe("an answer the server refuses", () => {
   });
 });
 
-describe("a turn waiting for input only the web app gives", () => {
-  test("names the web app for a question a cloud tool asks", () => {
-    const askUser = recorded("ask-user");
-    expect(pendingOfPage(exchange(askUser, 0))).toEqual({ type: "elsewhere" });
+describe("a turn waiting for the model's questions", () => {
+  const askUser = recorded("ask-user");
+  const question = "Which side?";
+
+  test("is read from the stored thread with the questions it asks", () => {
+    const pending = answerable(pendingOfPage(exchange(askUser, 0)));
+    expect(pending.owner).toEqual({ type: "cloud" });
+    expect(pending.parentRunId).toBe("run-recorded-1");
+    expect(
+      pending.type === "ask-user"
+        ? pending.asks.map(({ interruptId, questions }) => ({
+            interruptId,
+            questions,
+          }))
+        : pending.type,
+    ).toEqual([
+      {
+        interruptId: "client_tool_call-1",
+        questions: [{ question, reason: "It decides the draft." }],
+      },
+    ]);
+  });
+
+  test("is answered with the continuation the web sends", () => {
+    const pending = answerable(pendingOfPage(exchange(askUser, 0)));
+    const { request } = exchange(askUser, 1);
+    const body = wireBody({
+      answer: {
+        type: "ask-user",
+        answers: { "client_tool_call-1": [{ question, answer: "Buyer" }] },
+      },
+      pending,
+      runId: request.runId,
+    });
+    expect(body.parentRunId).toBe(request.parentRunId);
+    expect(body.resume).toEqual(request.resume);
+    expect(body.data).toEqual(body.forwardedProps);
+    expect(body.forwardedProps["resume"]).toEqual(body.resume);
+    // The call moves to its answer and its result follows, as the web
+    // sends them; the call's own fields stay the server's stored copy.
+    const answerOf = (part: unknown) =>
+      v.parse(
+        v.looseObject({
+          type: v.string(),
+          id: v.optional(v.string()),
+          toolCallId: v.optional(v.string()),
+          state: v.optional(v.string()),
+          output: v.optional(v.unknown()),
+          content: v.optional(v.string()),
+        }),
+        part,
+      );
+    const pick = ({
+      content,
+      id,
+      output,
+      state,
+      toolCallId,
+      type,
+    }: ReturnType<typeof answerOf>) => ({
+      // The result carries the answers as JSON; its key order is the
+      // serializer's, not part of the answer.
+      content:
+        content === undefined ? undefined : (JSON.parse(content) as unknown),
+      id,
+      output,
+      state,
+      toolCallId,
+      type,
+    });
+    expect(
+      v
+        .parse(v.array(v.unknown()), body.forwardedProps.message.parts)
+        .map((part) => pick(answerOf(part))),
+    ).toEqual(
+      request.forwardedProps.message.parts.map((part) => pick(answerOf(part))),
+    );
+  });
+
+  test("is sent only once every question has an answer the server takes", () => {
+    const pending = answerable(pendingOfPage(exchange(askUser, 0)));
+    for (const answers of [
+      {},
+      { "client_tool_call-1": [] },
+      { "client_tool_call-1": [{ question: "Another?", answer: "Buyer" }] },
+      { "client_tool_call-1": [{ question, selected: ["Buyer"] }] },
+    ]) {
+      expect(continuationOf(pending, { type: "ask-user", answers })).toBe(
+        undefined,
+      );
+    }
+    expect(
+      continuationOf(pending, {
+        type: "approvals",
+        allowed: { "client_tool_call-1": true },
+      }),
+    ).toBe(undefined);
+  });
+
+  test("keeps what was entered while the same pause is read again", () => {
+    const first = answerable(pendingOfPage(exchange(askUser, 0)));
+    const again = answerable(pendingOfPage(exchange(askUser, 0)));
+    expect(pendingInputKey(first)).toBe(pendingInputKey(again));
+    expect(isSamePendingInput(first, again)).toBe(true);
   });
 
   test("names nothing once the turn has settled", () => {
-    const askUser = recorded("ask-user");
     expect(pendingOfPage(exchange(askUser, 1))).toBeNull();
+  });
+});
+
+describe("a turn waiting for input only the web app gives", () => {
+  test("names the web app for a tool only a browser tab runs", () => {
+    const clientTool = recorded("client-tool");
+    expect(pendingOfPage(exchange(clientTool, 0))).toEqual({
+      type: "elsewhere",
+    });
   });
 });
 
@@ -378,6 +486,7 @@ const LOCAL_TARGET = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 } as const satisfies ChatLocalRunTarget;
 
 const QUESTION_REQUEST_ID = "0198f3a4-6b1c-7d2e-8f3a-4b5c6d7e8f90";

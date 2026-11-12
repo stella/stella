@@ -571,6 +571,21 @@
       "showBefore": "Näita teksti enne ¶ {from}",
       "verifyParagraphs": "Kontrolli lõike"
     },
+    "staleness": {
+      "failed": "Väiteid ei saanud uuesti kontrollida",
+      "finished": "{count, plural, one {# väide kontrollitud uuesti} other {# väidet kontrollitud uuesti}}",
+      "partial": "Uuesti kontrollitud: {rechecked, number}, ebaõnnestus: {failed, plural, one {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt muudetud",
+        "factHeld": "Fakt välja jäetud",
+        "factRemoved": "Fakt eemaldatud",
+        "newFactRelated": "Uus seotud fakt"
+      },
+      "recheckAll": "Kontrolli kõik uuesti",
+      "recheckLocked": "Kontrollitakse uuesti koos teiste aegunud väidetega",
+      "runLine": "{count, plural, one {# väide võib olla aegunud} other {# väidet võivad olla aegunud}}",
+      "running": "{count, plural, one {# väidet kontrollitakse uuesti…} other {# väidet kontrollitakse uuesti…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Vastuolus",
@@ -1944,6 +1959,7 @@
       "refusalNoComputer": "Ükski sinu arvuti pole ühendatud. Ava stella desktop ja saada uuesti.",
       "refusalPermissionAboveLimit": "Sinu organisatsioon ei luba sinu arvutis töötavale programmeerimisagendile neid õigusi. Vali menüüs Õigused mõni muu valik.",
       "refusalPermissionUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa nende õigustega töötada. Vali menüüs Õigused mõni muu valik.",
+      "refusalReasoningEffortUnavailable": "Sinu arvutis töötav programmeerimisagent ei paku selle mudeli jaoks seda arutlustaset. Vali menüüs Arutlustase mõni teine.",
       "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
       "runOn": "Käivita",
@@ -2162,6 +2178,7 @@
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
+    "stopping": "Peatamine…",
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
     "suggestedFollowupsLabel": "Soovitatud jätkuküsimused",
@@ -2699,6 +2716,7 @@
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
     "organizations": "Organisatsioonid",
+    "outOfDate": "Aegunud",
     "page": "Lehekülg {page}",
     "paymentRetryNotice": "Makseprobleem. Juurdepääsu säilitamiseks uuendage oma makseviisi hiljemalt {date}.",
     "pin": "Kinnita",
@@ -4477,7 +4495,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Looge lepingute ülevaatamise playbook seisukoht seisukoha haaval, tuginedes oma varem allkirjastatud lepingutele, lühikesele intervjuule ja turul tavapärastele standarditele.",
-          "name": "Loo playbook"
+          "name": "Loo playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Lisa seisukohti ühte minu olemasolevasse playbooki.",
+              "name": "Täienda playbooki"
+            },
+            "fromContracts": {
+              "body": "Koosta konfidentsiaalsuslepingute playbook minu varem allkirjastatud lepingute põhjal.",
+              "name": "Alusta varasematest lepingutest"
+            },
+            "fromMarketStandards": {
+              "body": "Koosta tarnelepingute playbook, lähtudes turul tavapärastest seisukohtadest.",
+              "name": "Alusta turustandarditest"
+            }
+          }
         }
       },
       "builtInSection": "Sisseehitatud oskused",
@@ -4727,6 +4759,10 @@
       "optionPlaceholder": "Valiku väärtus",
       "optionsLabel": "Valikud",
       "outline": "Struktuur",
+      "pendingPane": {
+        "description": "Vasta vestluses küsimustele. Kui kinnitad esimese salvestamise, avaneb playbook siin ja saad seda vestluse kõrval muuta.",
+        "title": "Sinu playbook ilmub siia"
+      },
       "positionOfTotal": "Seisukoht {index}/{total}",
       "positionRemoved": "Seisukoht eemaldatud",
       "positions": "Seisukohad",
@@ -6086,7 +6122,6 @@
     "comments": "Kommentaarid",
     "commentsEmpty": "Kommenteerimiseks vali tekst.",
     "noRevisions": "Versioone veel pole",
-    "outOfDate": "Aegunud",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Kokkuvõte puudub",
     "proposals": "Muudatusettepanekud",
