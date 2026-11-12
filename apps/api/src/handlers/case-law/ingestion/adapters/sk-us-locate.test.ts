@@ -75,10 +75,11 @@ describe("a stored sk-us row is located in its month's listing", () => {
   });
 
   test("a row without an id is matched by the id its download URL names", async () => {
-    const [first, second] = await listedMonth();
-    if (first === undefined || second === undefined) {
-      return panic("the recorded month lists fewer than two rows");
-    }
+    const [listedFirst, listedSecond] = await listedMonth();
+    const first =
+      listedFirst ?? panic("the recorded month lists fewer than two rows");
+    const second =
+      listedSecond ?? panic("the recorded month lists fewer than two rows");
     const stored = legacyRow({
       documentUrl: `${DOWNLOAD}/${documentIdOf(first)}`,
     });
@@ -105,10 +106,7 @@ describe("a stored sk-us row is located in its month's listing", () => {
 
   test("the located payload is the listed row, read as the crawl reads it", async () => {
     const month = await listedMonth();
-    const [first] = month;
-    if (first === undefined) {
-      return panic("the recorded month lists no rows");
-    }
+    const first = month[0] ?? panic("the recorded month lists no rows");
 
     const located = await locateListedPayload({
       reconciliation: reconciliationServing(async ({ slice }) => ({
@@ -126,10 +124,8 @@ describe("a stored sk-us row is located in its month's listing", () => {
   });
 
   test("a row whose document file is all it holds is never upgraded from it", async () => {
-    const [first] = await listedMonth();
-    if (first === undefined) {
-      return panic("the recorded month lists no rows");
-    }
+    const first =
+      (await listedMonth())[0] ?? panic("the recorded month lists no rows");
 
     expect(recapture.recaptureStoredRaw).toBeUndefined();
     expect(
