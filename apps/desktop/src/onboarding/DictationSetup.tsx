@@ -16,7 +16,7 @@ import {
 import { DESKTOP_TELEMETRY_WINDOWS } from "../telemetry/desktop-telemetry";
 import type { DictationControls, DictationSnapshot } from "./use-dictation";
 
-const BYTES_PER_MEGABYTE = 1000000;
+const BYTES_PER_MEGABYTE = 1_000_000;
 const PERCENT = 100;
 
 type DictationSetupProps = {

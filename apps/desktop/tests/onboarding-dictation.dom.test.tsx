@@ -101,7 +101,7 @@ test("turning dictation on starts the model download and shows its progress", as
   native.dictation = {
     ...DICTATION_OFF,
     enabled: true,
-    model: { received: 370181584, status: "downloading", total: 740363168 },
+    model: { received: 370_181_584, status: "downloading", total: 740_363_168 },
   };
   await act(async () => {
     await emit("dictation-changed");

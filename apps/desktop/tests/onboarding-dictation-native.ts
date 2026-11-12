@@ -1,4 +1,5 @@
 import { mockIPC } from "@tauri-apps/api/mocks";
+import { panic } from "better-result";
 
 import type { OnboardingSnapshot } from "../src/onboarding/onboarding-types";
 import type { DictationSnapshot } from "../src/onboarding/use-dictation";
@@ -16,7 +17,7 @@ export const DICTATION_OFF = {
   failure: null,
   keys: { code: "Space", modifiers: ["control", "alt"] },
   model: { status: "missing" },
-  modelBytes: 740363168,
+  modelBytes: 740_363_168,
   phase: "idle",
   shortcutTaken: false,
 } satisfies DictationSnapshot;
@@ -79,17 +80,17 @@ export const installNativeSide = (native: NativeSide) => {
           return dictation;
         case "dictation_set_enabled":
           if (!("enabled" in dictation)) {
-            throw new Error("dictation is not available on this computer");
+            panic("dictation is not available on this computer");
           }
           native.dictation = { ...dictation, enabled: enabledArgument(args) };
           return native.dictation;
         case "dictation_download_model":
           if (!("enabled" in dictation)) {
-            throw new Error("dictation is not available on this computer");
+            panic("dictation is not available on this computer");
           }
           native.dictation = {
             ...dictation,
-            model: { received: 0, status: "downloading", total: 740363168 },
+            model: { received: 0, status: "downloading", total: 740_363_168 },
           };
           return native.dictation;
         default:

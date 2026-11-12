@@ -44,7 +44,7 @@ export const DICTATION_READY = {
   failure: null,
   keys: { code: "Space", modifiers: ["control", "alt"] },
   model: { status: "ready" },
-  modelBytes: 740363168,
+  modelBytes: 740_363_168,
   phase: "idle",
   shortcutTaken: false,
 } as const satisfies DictationSnapshot;
