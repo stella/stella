@@ -248,7 +248,7 @@
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx": 2,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx": 2,
     "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx": 1,
-    "apps/web/src/routes/auth/route.tsx": 5,
+    "apps/web/src/routes/auth/route.tsx": 4,
     "apps/web/src/routes/knowledge/-components/template-studio-conditions.tsx": 1,
     "apps/web/src/routes/knowledge/-components/template-wizard.tsx": 1,
     "apps/web/src/routes/onboarding/-components/catalogue-stack-preview.tsx": 1,
