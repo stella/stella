@@ -85,6 +85,13 @@ const RUN_EVENTS = [
   },
   { type: "TOOL_CALL_ARGS", toolCallId: "call-1", delta: "{}" },
   { type: "TOOL_CALL_END", toolCallId: "call-1" },
+  {
+    type: "TOOL_CALL_RESULT",
+    messageId: ANSWER_ID,
+    toolCallId: "call-1",
+    content: '{"templates":[]}',
+    role: "tool",
+  },
   { type: "TEXT_MESSAGE_START", messageId: ANSWER_ID, role: "assistant" },
   { type: "TEXT_MESSAGE_CONTENT", messageId: ANSWER_ID, delta: "Two found." },
   { type: "TEXT_MESSAGE_END", messageId: ANSWER_ID },
@@ -118,6 +125,10 @@ const reduce = (events: readonly ChatEvent[]): StreamedAnswer => {
   return answer;
 };
 
+/** The answer's texts, in order. */
+const textsOf = (answer: StreamedAnswer): string[] =>
+  answer.parts.flatMap((part) => (part.type === "text" ? [part.content] : []));
+
 describe("reading server-sent events", () => {
   test("yields the same events wherever the body is cut", () => {
     const body = `: heartbeat\r\nid: 7\r\ndata: {"a":1}\r\n\r\ndata: line one\ndata: line two\nretry: 10\n\n`;
@@ -146,12 +157,21 @@ describe("drawing an answer from its events", () => {
     (event) => parseChatEvent(JSON.stringify(event)) ?? [],
   );
 
-  test("keeps the text segments, the tools between them, and the end", () => {
+  test("keeps the texts, the tools between them in order, and the end", () => {
     const answer = reduce(events);
     expect(answer).toEqual({
       messageId: ANSWER_ID,
-      segments: ["Checking the register", "Two found."],
-      tools: ["list_templates"],
+      parts: [
+        { type: "text", content: "Checking the register" },
+        {
+          type: "tool-call",
+          id: "call-1",
+          name: "list_templates",
+          state: "complete",
+          output: { templates: [] },
+        },
+        { type: "text", content: "Two found." },
+      ],
       status: "finished",
     });
     expect(answerEntry(answer, "2026-10-20T10:00:00.000Z")).toEqual({
@@ -159,8 +179,39 @@ describe("drawing an answer from its events", () => {
       role: "assistant",
       createdAt: "2026-10-20T10:00:00.000Z",
       text: "Checking the register\n\nTwo found.",
-      tools: ["list_templates"],
+      blocks: [
+        { type: "text", key: "0", markdown: "Checking the register" },
+        {
+          type: "steps",
+          key: "1",
+          steps: [{ type: "tool", label: "list_templates", status: "done" }],
+          work: new Map([["research", 1]]),
+        },
+        { type: "text", key: "2", markdown: "Two found." },
+      ],
       files: [],
+    });
+  });
+
+  test("a step is running until its result comes back, and failed when the result says so", () => {
+    // Up to the tool call's start: no result yet.
+    const started = reduce(events.slice(0, 4));
+    expect(answerEntry(started, "2026-10-20T10:00:00.000Z").blocks[1]).toEqual({
+      type: "steps",
+      key: "1",
+      steps: [{ type: "tool", label: "list_templates", status: "running" }],
+      work: new Map(),
+    });
+    const failed = applyChatEvent(started, {
+      type: "TOOL_CALL_RESULT",
+      toolCallId: "call-1",
+      content: '{"error":"Unavailable"}',
+    });
+    expect(answerEntry(failed, "2026-10-20T10:00:00.000Z").blocks[1]).toEqual({
+      type: "steps",
+      key: "1",
+      steps: [{ type: "tool", label: "list_templates", status: "failed" }],
+      work: new Map(),
     });
   });
 
@@ -372,7 +423,7 @@ describe("sending a message", () => {
       lastEventId: String(RUN_EVENTS.length),
     });
     expect(order[0]).toBe(`turn ${TURN_ID}`);
-    expect(reduce(events).segments).toEqual([
+    expect(textsOf(reduce(events))).toEqual([
       "Checking the register",
       "Two found.",
     ]);
@@ -510,7 +561,7 @@ describe("rejoining a turn", () => {
       threadId: THREAD_ID,
       turnId: TURN_ID,
     });
-    expect(reduce(events).segments).toEqual(["Checking the "]);
+    expect(textsOf(reduce(events))).toEqual(["Checking the "]);
     expect(
       Result.isError(joined)
         ? [joined.error.error._tag, joined.error.lastEventId]

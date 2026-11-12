@@ -1,7 +1,7 @@
+import { isReferenceHref } from "@stll/api-contract/chat-reference-href";
 import { ChatLink } from "@stll/chat/link";
 
 import { MarkdownReferenceChip } from "@/components/references/reference-chip";
-import { isReferenceHref } from "@/components/references/reference.logic";
 
 /** Renders reference links (`#stella-entity=`, `#stella-decision=`, …) as
  *  the shared reference chip; all other links render as normal anchors. */

@@ -2022,6 +2022,22 @@ describe("extractTitle", () => {
 
     expect(extractTitle(parts)).toBe("hello world");
   });
+
+  test("names each mentioned document by the label its chip showed", () => {
+    // The composer's HTML: a chip carries its name only as an attribute.
+    const chip = (label: string) =>
+      `<entity-mention data-category="entity" data-id="00000000-0000-4000-8000-000000000001" data-label="${label}" data-source-workspace-id="00000000-0000-4000-8000-000000000002"></entity-mention>`;
+    const parts = [
+      {
+        type: "text",
+        content: `<p>Draft a new loan agreement based on ${chip("loan_terms.docx")} and ${chip("Old &lt;draft&gt;.pdf")}</p>`,
+      },
+    ] satisfies ChatMessage["parts"];
+
+    expect(extractTitle(parts)).toBe(
+      "Draft a new loan agreement based on loan_terms.docx and Old <draft>.pdf",
+    );
+  });
 });
 
 describe("matter scope with no matter yet", () => {
