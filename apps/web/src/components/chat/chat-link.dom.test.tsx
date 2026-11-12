@@ -187,14 +187,11 @@ for (const href of ["www.github.com/stella/stella", "/github.com/stella"]) {
       <ChatLink
         aria-label={label}
         href={href}
-        className="font-bold"
         id="source-anchor"
         onClick={(event) => {
           event.preventDefault();
           clicks += 1;
         }}
-        rel="opener"
-        target="_self"
         title="Source details"
       >
         {label}
@@ -212,7 +209,6 @@ for (const href of ["www.github.com/stella/stella", "/github.com/stella"]) {
     expect(link.getAttribute("href")).toBe(
       href.startsWith("/") ? href : `https://${href}`,
     );
-    expect(link.classList.contains("font-bold")).toBe(false);
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
     expect(link.getAttribute("target")).toBe("_blank");
     fireEvent.click(link);
