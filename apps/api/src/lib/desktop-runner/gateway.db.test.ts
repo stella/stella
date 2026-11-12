@@ -1202,7 +1202,7 @@ describe("approval modes and reasoning efforts", () => {
           state: "ready",
           version: HARNESS_VERSION,
           capabilities: ["approvals"],
-          // Codex runs in one approval mode.
+          // A harness that offers only Ask.
           approvalModes: ["ask"],
           models: [{ id: MODEL, label: "GPT-5 Codex" }],
         },
