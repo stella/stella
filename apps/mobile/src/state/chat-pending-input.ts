@@ -40,6 +40,7 @@ const localRunTargetSchema = v.object({
   harness: v.pipe(v.string(), v.minLength(1)),
   model: v.pipe(v.string(), v.minLength(1)),
   approvals: v.optional(v.string()),
+  reasoningEffort: v.optional(v.nullable(v.string())),
 });
 
 export type LocalRunTarget = v.InferOutput<typeof localRunTargetSchema>;

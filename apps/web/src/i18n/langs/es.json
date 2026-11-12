@@ -1942,6 +1942,7 @@
       "refusalNoComputer": "Ninguno de tus ordenadores está conectado. Abre stella desktop y vuelve a enviar.",
       "refusalPermissionAboveLimit": "Tu organización no permite estos permisos para el agente de programación de tu ordenador. Elige otra opción en Permisos.",
       "refusalPermissionUnavailable": "El agente de programación de tu ordenador no puede ejecutarse con estos permisos. Elige otra opción en Permisos.",
+      "refusalReasoningEffortUnavailable": "El agente de programación de tu ordenador no ofrece este nivel de razonamiento para el modelo. Elige otro en Nivel de razonamiento.",
       "refusalTooLarge": "Esta conversación es demasiado larga para pasarla a tu ordenador. Empieza un chat nuevo para ejecutarla allí.",
       "refusalUnavailable": "Ejecutar chats en tu ordenador no está disponible para tu cuenta.",
       "runOn": "Ejecutar en",

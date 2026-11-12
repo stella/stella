@@ -1942,6 +1942,7 @@
       "refusalNoComputer": "Żaden z Twoich komputerów nie jest połączony. Otwórz stella desktop i wyślij ponownie.",
       "refusalPermissionAboveLimit": "Twoja organizacja nie pozwala agentowi programistycznemu na Twoim komputerze działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
       "refusalPermissionUnavailable": "Agent programistyczny na Twoim komputerze nie może działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
+      "refusalReasoningEffortUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje tego poziomu rozumowania dla modelu. Wybierz inny w menu Poziom rozumowania.",
       "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
       "runOn": "Uruchom na",

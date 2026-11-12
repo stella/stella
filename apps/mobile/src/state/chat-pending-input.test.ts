@@ -378,6 +378,7 @@ const LOCAL_TARGET = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 } as const satisfies ChatLocalRunTarget;
 
 const QUESTION_REQUEST_ID = "0198f3a4-6b1c-7d2e-8f3a-4b5c6d7e8f90";

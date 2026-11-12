@@ -644,6 +644,7 @@ const startInput = (
   harness,
   harnessVersion: HARNESS_VERSION,
   model: MODEL,
+  reasoningEffort: null,
   approvals,
   harnessSessionId: null,
   instructions: "Summarize the matter.",
@@ -1154,8 +1155,8 @@ describe("leases", () => {
   });
 });
 
-describe("approval modes", () => {
-  test("a run starts in the thread's approval mode, and a mode the computer does not report is refused", async () => {
+describe("approval modes and reasoning efforts", () => {
+  test("a run starts in the thread's approval mode and effort, and ones the computer does not report are refused", async () => {
     // A runner row as its socket's hello leaves it; no socket is needed to
     // queue a start.
     const desktopId = Bun.randomUUIDv7();
@@ -1186,7 +1187,7 @@ describe("approval modes", () => {
           version: HARNESS_VERSION,
           capabilities: ["approvals"],
           approvalModes: ["ask", "auto", "full_auto"],
-          models: [{ id: MODEL, label: "Model" }],
+          models: [{ id: MODEL, label: "Model", reasoningEfforts: ["high"] }],
         },
       ],
       connectedAt: now(),
@@ -1216,6 +1217,34 @@ describe("approval modes", () => {
         (await control.startRun(startInput(desktopId, approvals))).unwrap(),
       ).toEqual({ type: "approvals_unavailable" });
     }
+    const effortful = (
+      await control.startRun({
+        ...startInput(desktopId, "ask", "claude-code"),
+        reasoningEffort: "high",
+      })
+    ).unwrap();
+    const effortfulId =
+      effortful.type === "assigned"
+        ? effortful.runId
+        : panic(`the run was not assigned: ${effortful.type}`);
+    runIds.push(effortfulId);
+    const [queuedEffort] = await db
+      .select({ payload: desktopRunnerCommands.payload })
+      .from(desktopRunnerCommands)
+      .where(eq(desktopRunnerCommands.runId, effortfulId));
+    expect(queuedEffort?.payload).toMatchObject({
+      type: "run.start",
+      reasoningEffort: "high",
+    });
+    // Codex lists no efforts for the model here.
+    expect(
+      (
+        await control.startRun({
+          ...startInput(desktopId),
+          reasoningEffort: "high",
+        })
+      ).unwrap(),
+    ).toEqual({ type: "reasoning_effort_unavailable" });
     // The account's other tests count its installations and open runs.
     await db
       .delete(desktopRunnerRuns)
@@ -2672,6 +2701,7 @@ describe("chat turns on a computer", () => {
       harness: "codex",
       harnessVersion: HARNESS_VERSION,
       model: CHAT_MODEL,
+      reasoningEffort: null,
       approvals: "ask",
     },
   });

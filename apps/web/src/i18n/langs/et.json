@@ -1942,6 +1942,7 @@
       "refusalNoComputer": "Ükski sinu arvuti pole ühendatud. Ava stella desktop ja saada uuesti.",
       "refusalPermissionAboveLimit": "Sinu organisatsioon ei luba sinu arvutis töötavale programmeerimisagendile neid õigusi. Vali menüüs Õigused mõni muu valik.",
       "refusalPermissionUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa nende õigustega töötada. Vali menüüs Õigused mõni muu valik.",
+      "refusalReasoningEffortUnavailable": "Sinu arvutis töötav programmeerimisagent ei paku selle mudeli jaoks seda arutlustaset. Vali menüüs Arutlustase mõni teine.",
       "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
       "runOn": "Käivita",

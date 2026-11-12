@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { knownReasoningEfforts } from "@stll/api-contract/desktop-runner";
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
 import type { ProtocolLog } from "../../protocol-log";
@@ -302,8 +303,10 @@ const listModels = async (
           id: model.id,
           displayName: model.displayName,
           isDefault: model.isDefault,
-          reasoningEfforts: model.supportedReasoningEfforts.map(
-            ({ reasoningEffort }) => reasoningEffort,
+          reasoningEfforts: knownReasoningEfforts(
+            model.supportedReasoningEfforts.map(
+              ({ reasoningEffort }) => reasoningEffort,
+            ),
           ),
           inputModalities: model.inputModalities,
         });
@@ -485,6 +488,11 @@ const startTurn = async (
   const started = await client.request("turn/start", {
     threadId,
     input: turnInputItems(files, prompt.value),
+    // Codex keeps it for later turns of the process, so a capacity
+    // continuation runs at it too; omitted, the harness's own setting holds.
+    ...(input.reasoningEffort === null
+      ? {}
+      : { effort: input.reasoningEffort }),
   });
   const parsed = Result.isOk(started)
     ? v.safeParse(TurnStartResponseSchema, started.value)
