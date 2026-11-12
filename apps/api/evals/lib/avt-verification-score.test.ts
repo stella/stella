@@ -138,7 +138,13 @@ describe("matching a labelled claim to an extracted one", () => {
     ).toBe(1);
   });
 
-  test("covering less than half, or another passage, is no match", () => {
+  test("an extracted claim keeping only part of the label still answers for it", () => {
+    expect(
+      matchLabelledSpan(label, [{ passageIndex: 2, start: 10, end: 16 }]),
+    ).toBe(0);
+  });
+
+  test("sharing less than half of the shorter span, or another passage, is no match", () => {
     expect(
       matchLabelledSpan(label, [
         { passageIndex: 2, start: 25, end: 60 },

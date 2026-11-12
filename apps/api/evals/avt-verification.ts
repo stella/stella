@@ -445,6 +445,9 @@ type CaseRun = {
   failure: string | null;
   /** Per labelled claim: the extracted words it was matched to. */
   matchedText: Record<string, string>;
+  /** Every claim extraction listed, in reading order (pipeline). */
+  extractedClaims?:
+    { blockId: string; type: string; text: string }[] | undefined;
 };
 
 type CaseInput = {
@@ -625,6 +628,11 @@ const pipelineMode = async (input: CaseInput): Promise<CaseRun> => {
     durationMs,
     failure: gradingFailure(graded),
     matchedText,
+    extractedClaims: claims.map((claim) => ({
+      blockId: passages[claim.blockIndex]?.block.id ?? "",
+      type: claim.type,
+      text: claim.text,
+    })),
   };
 };
 
@@ -955,6 +963,15 @@ const savedResultsSchema = v.object({
           durationMs: v.number(),
           failure: v.nullable(v.string()),
           matchedText: v.record(v.string(), v.string()),
+          extractedClaims: v.optional(
+            v.array(
+              v.object({
+                blockId: v.string(),
+                type: v.string(),
+                text: v.string(),
+              }),
+            ),
+          ),
         }),
       ),
       outcomes: v.array(
