@@ -30,7 +30,8 @@ export const CONTROL_TRANSPORT = {
 type ControlTransport =
   (typeof CONTROL_TRANSPORT)[keyof typeof CONTROL_TRANSPORT];
 
-const readControlOwner = async (): Promise<string | null> => {
+/** The desktop chat holding the browser; `null` while the web connection does. */
+export const readControlOwner = async (): Promise<string | null> => {
   const stored = await chrome.storage.session.get(
     BROWSER_CONTROL_OWNER_STORAGE_KEY,
   );
