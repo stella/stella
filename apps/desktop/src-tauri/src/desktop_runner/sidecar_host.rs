@@ -255,15 +255,17 @@ impl Shared {
   /// Keep a ready report through the first probe that finds the harness
   /// unavailable. `true` when it was kept: the caller probes again soon.
   fn keep_ready_once(&self, harness: Harness) -> bool {
-    let mut cache = locked(&self.cache);
-    let Some((_, held)) = cache.iter_mut().find(|(id, _)| *id == harness) else {
-      return false;
-    };
-    if !matches!(held.report, HarnessReport::Ready(_)) || held.kept_through_failure {
-      return false;
-    }
-    held.kept_through_failure = true;
-    true
+    locked(&self.cache)
+      .iter_mut()
+      .find(|(id, _)| *id == harness)
+      .is_some_and(|(_, held)| {
+        let keep =
+          matches!(held.report, HarnessReport::Ready(_)) && !held.kept_through_failure;
+        if keep {
+          held.kept_through_failure = true;
+        }
+        keep
+      })
   }
 
   /// Every installed harness has a report from a probe.
