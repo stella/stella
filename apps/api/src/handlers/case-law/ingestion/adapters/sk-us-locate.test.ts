@@ -60,8 +60,7 @@ const legacyRow = (
   ...overrides,
 });
 
-const recapture =
-  skUsAdapter.reconciliation.recapture ?? panic("sk-us declares no recapture");
+const recapture = skUsAdapter.reconciliation.recapture;
 
 /** The real adapter, with its month listing served from the recording. */
 const reconciliationServing = (listLookup: SourceRecapture["listLookup"]) => ({
