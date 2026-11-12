@@ -60,6 +60,17 @@ type StartClaudeCliOptions = {
   handlers: ClaudeCliHandlers;
 };
 
+/**
+ * Requests that may wait longer than the usual deadline. Initialize covers
+ * the CLI's first launch (an antivirus scan, a busy computer); registering
+ * stella's MCP server waits on the CLI's own connect, itself up to 30
+ * seconds a server, so its deadline sits well above that.
+ */
+const SLOW_REQUEST_MS: Partial<Record<ClaudeHostControlRequest, number>> = {
+  initialize: 2 * 60_000,
+  mcp_set_servers: 90_000,
+};
+
 export type ClaudeCliClient = {
   /** Sends a control request and settles with its response payload. */
   request: (
@@ -173,11 +184,16 @@ export const startClaudeCli = ({
     request: async (subtype, fields = {}) => {
       const requestId = `stella-${String(state.nextId)}`;
       state.nextId += 1;
-      return await cli.request(requestId, subtype, {
-        type: "control_request",
-        request_id: requestId,
-        request: { ...fields, subtype },
-      });
+      return await cli.request(
+        requestId,
+        subtype,
+        {
+          type: "control_request",
+          request_id: requestId,
+          request: { ...fields, subtype },
+        },
+        SLOW_REQUEST_MS[subtype],
+      );
     },
     send: cli.write,
     respond: (requestId, response) => {

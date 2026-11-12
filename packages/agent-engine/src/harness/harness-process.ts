@@ -62,10 +62,12 @@ type HarnessProcess<TId, TError> = {
    * Writes `message` as the request `id` and waits for `settle` with that id,
    * the deadline, or the process's exit, whichever comes first.
    */
+  /** `timeoutMs` overrides the process's request deadline for this one. */
   request: (
     id: TId,
     label: string,
     message: object,
+    timeoutMs?: number,
   ) => Promise<Result<unknown, TError>>;
   /** Answers the pending request `id`; false when none is pending. */
   settle: (id: TId, result: Result<unknown, TError>) => boolean;
@@ -209,7 +211,7 @@ export const startHarnessProcess = <TId, TError>({
   return Result.ok({
     pid: child.pid,
     write,
-    request: async (id, label, outgoing) => {
+    request: async (id, label, outgoing, timeoutMs) => {
       if (state.closed) {
         return Result.err(unanswered("closed", "The harness is not running."));
       }
@@ -230,7 +232,7 @@ export const startHarnessProcess = <TId, TError>({
         );
         // A harness that stops answering cannot be trusted with the session.
         terminate();
-      }, deadlines.requestMs);
+      }, timeoutMs ?? deadlines.requestMs);
       write(outgoing);
       const result = await promise;
       clearTimeout(deadline);
