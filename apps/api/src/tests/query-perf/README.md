@@ -38,7 +38,14 @@ it before closing the connection.
   shape at a fraction of its size, measured as the owner role scheduled jobs
   run as. Statements run against it with fixed inputs. A scheduled job is
   measured per run: its registered task runs once through a client that
-  records every statement, and each recorded read is analyzed. Each case-law
+  records every statement, and each recorded statement is analyzed. A
+  statement whose plan modifies rows, or that calls a routine listed in
+  `QUERY_PERF_WRITING_FUNCTIONS`, is a write; every other statement is a read.
+  The job's `reads.pages` bounds its read pages; a job that writes declares
+  `writes` (pages per written row and a per-run ceiling), a job that writes
+  nothing declares none, and `combinedPagesPerRun` keeps an existing whole-run
+  envelope. Rows written come from the plan's row counts, not from returned
+  rows. Each case-law
   scenario (a converged generation, and a generation whose whole queue is
   waiting) exists at one size and at twice that size; the run must stay in
   its budget at both and read the same pages at both (10% plus 64 pages for

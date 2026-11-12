@@ -11,6 +11,7 @@ import {
 
 import {
   chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
   newNotificationRealtimeEvent,
   type OrganizationRealtimeEvent,
@@ -129,7 +130,11 @@ const FANOUT_CASES: { [C in RealtimeChannel]: readonly ChannelEvent[C][] } = {
     },
   ],
   organization: [resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY)],
-  user: [newNotificationRealtimeEvent(), chatRunsChangedRealtimeEvent()],
+  user: [
+    newNotificationRealtimeEvent(),
+    chatRunsChangedRealtimeEvent(),
+    chatThreadsChangedRealtimeEvent(),
+  ],
   session: [
     {
       type: REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED,
@@ -419,7 +424,7 @@ const userStreams = ({
   Array.from({ length: count }, (_unused, index) =>
     subscribeUser({
       organizationId,
-      sessionId: sessionFor(userId, index),
+      holder: { id: sessionFor(userId, index), kind: "session" },
       signal,
       userId,
     }),

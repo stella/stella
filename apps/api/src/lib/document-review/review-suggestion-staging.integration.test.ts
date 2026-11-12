@@ -11,23 +11,27 @@
 import { panic } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   describe,
   expect,
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { DOCX_SUGGESTIONS_PENDING_MAX } from "@stll/api-contract";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
-import type { Transaction } from "@/api/db/root";
 import {
+  documentReviewFindingDecisions,
   documentReviewFindings,
   documentReviewRuns,
   docxSuggestions,
   entities,
   entityVersions,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
@@ -35,14 +39,27 @@ import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { REVIEW_FIX_STAGING } from "@/api/lib/document-review/review-suggestion-staging";
 import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
 } from "@/api/lib/document-review/run-contract";
 import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
-import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
+import {
+  finalizeReviewRun,
+  finalizeWorkerRun,
+} from "@/api/lib/document-review/run-finalize";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import {
+  createRootMembershipScopedDb,
+  createRootRunActor,
+} from "@/api/lib/root-scoped-db";
+import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
+import {
+  applicationRoleDatabase,
+  memberScopedDb,
+} from "@/api/tests/helpers/application-role-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -202,15 +219,26 @@ const finalize = async (
   target: ReviewTarget,
   expectedFindingCount: number,
 ) =>
-  await finalizeReviewRun({
-    tx: asTestRaw<Transaction>(testDb),
-    workspaceId: ids.wsA1,
-    runId,
-    entityId: target.entityId,
-    fileFieldId: target.fileFieldId,
-    executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
-    expectedFindingCount,
-  });
+  await memberScopedDb(testDb, {
+    organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1],
+    userId: ids.userA1,
+  })(
+    async (tx) =>
+      await finalizeReviewRun({
+        tx,
+        workspaceId: ids.wsA1,
+        runId,
+        entityId: target.entityId,
+        fileFieldId: target.fileFieldId,
+        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+        fixStaging: {
+          type: REVIEW_FIX_STAGING.stage,
+          sourceDataWorkspaceIds: [],
+        },
+        expectedFindingCount,
+      }),
+  );
 
 const suggestionsFor = async (findingId: SafeId<"documentReviewFinding">) =>
   await testDb
@@ -238,6 +266,20 @@ const findingState = async (findingId: SafeId<"documentReviewFinding">) => {
     .where(eq(documentReviewFindings.id, findingId));
   return rows.at(0);
 };
+
+/** One finding's decision history, oldest first. */
+const decisionHistory = async (findingId: SafeId<"documentReviewFinding">) =>
+  await testDb
+    .select({
+      decision: documentReviewFindingDecisions.decision,
+      actorId: documentReviewFindingDecisions.actorId,
+    })
+    .from(documentReviewFindingDecisions)
+    .where(eq(documentReviewFindingDecisions.findingId, findingId))
+    .orderBy(
+      asc(documentReviewFindingDecisions.createdAt),
+      asc(documentReviewFindingDecisions.id),
+    );
 
 const auditEvents: AuditEvent[] = [];
 const recordAuditEvent: AuditRecorder = async (_tx, event) => {
@@ -313,6 +355,7 @@ describe("review fixes staged as folio suggestions", () => {
       carried: 0,
       staged: 1,
       skippedForPendingLimit: 0,
+      skippedForUnreadableReference: 0,
     });
 
     const staged = await suggestionsFor(fixedFindingId);
@@ -344,6 +387,7 @@ describe("review fixes staged as folio suggestions", () => {
       carried: 0,
       staged: 0,
       skippedForPendingLimit: 0,
+      skippedForUnreadableReference: 0,
     });
     expect(await suggestionsFor(fixedFindingId)).toHaveLength(1);
   });
@@ -380,6 +424,11 @@ describe("review fixes staged as folio suggestions", () => {
     });
     expect(auditEvents).toHaveLength(1);
     expect(auditEvents.at(0)?.resourceId).toBe(runId);
+    // The decision taken on the suggestion surface enters the same history
+    // the review list writes.
+    expect(await decisionHistory(findingId)).toEqual([
+      { decision: "accepted", actorId: ids.userA1 },
+    ]);
 
     // Reverting withdraws both, leaving the finding as the engine produced it.
     const reverted = await runHandler(revertDocxSuggestion, {
@@ -396,6 +445,11 @@ describe("review fixes staged as folio suggestions", () => {
       applicationStatus: "pending",
       appliedBy: null,
     });
+    // Reopening is a transition too: it appends, it never erases.
+    expect(await decisionHistory(findingId)).toEqual([
+      { decision: "accepted", actorId: ids.userA1 },
+      { decision: null, actorId: ids.userA1 },
+    ]);
   });
 
   test("rejecting the staged suggestion dismisses the finding without applying it", async () => {
@@ -425,6 +479,9 @@ describe("review fixes staged as folio suggestions", () => {
       applicationStatus: "pending",
       appliedBy: null,
     });
+    expect(await decisionHistory(findingId)).toEqual([
+      { decision: "rejected", actorId: ids.userA1 },
+    ]);
   });
 });
 
@@ -579,6 +636,7 @@ describe("review fixes and the document's pending suggestion cap", () => {
       carried: 0,
       staged: 0,
       skippedForPendingLimit: 1,
+      skippedForUnreadableReference: 0,
     });
     expect(await suggestionsFor(findingId)).toHaveLength(0);
 
@@ -595,6 +653,7 @@ describe("review fixes and the document's pending suggestion cap", () => {
       carried: 0,
       staged: 1,
       skippedForPendingLimit: 0,
+      skippedForUnreadableReference: 0,
     });
 
     // At the cap again, the fix is already staged: it would insert nothing,
@@ -605,7 +664,316 @@ describe("review fixes and the document's pending suggestion cap", () => {
       carried: 0,
       staged: 0,
       skippedForPendingLimit: 0,
+      skippedForUnreadableReference: 0,
     });
     expect(await suggestionsFor(findingId)).toHaveLength(1);
+  });
+});
+
+describe("a review whose reference text comes from another matter", () => {
+  const database = () => applicationRoleDatabase(testDb);
+
+  const pinnedReference = (workspaceId: SafeId<"workspace">) => ({
+    workspaceId,
+    fileFieldId: ids.fieldA2,
+    entityId: ids.entityA2,
+    entityVersionId: ids.entityVersionA2,
+    contentSha256: CONTENT_SHA256,
+    workspaceName: "Reference matter",
+    name: "Reference document",
+  });
+
+  const withReferences = (
+    ...workspaceIds: SafeId<"workspace">[]
+  ): DocumentReviewRunBasis => ({
+    ...basis,
+    references: workspaceIds.map(pinnedReference),
+  });
+
+  /** A playbook saved out of an earlier review: its positions quote another
+   *  matter, and the run itself pins no references. */
+  const withQuotedPosition = (
+    workspaceId: SafeId<"workspace">,
+    enabled = true,
+  ): DocumentReviewRunBasis => ({
+    ...basis,
+    playbook: {
+      ...basis.playbook,
+      definitionSnapshot: {
+        name: basis.playbook.definitionSnapshot.name,
+        positions: {
+          version: 3,
+          items: [
+            {
+              mode: "graded",
+              sourceId: FIXED_POSITION_ID,
+              issue: FIXED_ISSUE,
+              severity: "blocker",
+              standard: {
+                source: "reference",
+                termKind: "parameter",
+                passages: [
+                  {
+                    id: Bun.randomUUIDv7(),
+                    workspaceId,
+                    entityId: ids.entityA2,
+                    fileFieldId: ids.fieldA2,
+                    entityVersionId: ids.entityVersionA2,
+                    blockId: "para-9",
+                  },
+                ],
+              },
+              ask: { mode: "auto" },
+              enabled,
+            },
+          ],
+        },
+      },
+    },
+  });
+
+  /** Completes through the worker's own handles, under the application role. */
+  const finalizeAsWorker = async (runBasis: DocumentReviewRunBasis) => {
+    const target = reviewTarget();
+    const runId = await seedRunningRun(target, 1, runBasis);
+    const findingId = await seedFinding(runId, target, payloadWithFix);
+    const finish = async () =>
+      await finalizeWorkerRun({
+        actor: createRootRunActor(
+          {
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+            runId,
+          },
+          brandPersistedDocumentReviewRunId,
+          database(),
+        ),
+        basis: runBasis,
+        entityId: target.entityId,
+        fileFieldId: target.fileFieldId,
+        expectedFindingCount: 1,
+      });
+    return { runId, findingId, finish };
+  };
+
+  const stagedSources = async (
+    findingId: SafeId<"documentReviewFinding">,
+  ): Promise<string[][]> => {
+    const rows = await testDb
+      .select({ sources: docxSuggestions.sourceDataWorkspaceIds })
+      .from(docxSuggestions)
+      .where(eq(docxSuggestions.originReviewFindingId, findingId));
+    return rows.map(({ sources }) => sources);
+  };
+
+  const runState = async (runId: SafeId<"documentReviewRun">) => {
+    const rows = await testDb
+      .select({
+        status: documentReviewRuns.status,
+        fixesWithheld: documentReviewRuns.fixesWithheld,
+      })
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.id, runId));
+    return rows.at(0);
+  };
+
+  const withoutReferenceMembership = async <T>(
+    fn: () => Promise<T>,
+  ): Promise<T> => {
+    const removed = await testDb
+      .delete(workspaceMembers)
+      .where(eq(workspaceMembers.id, ids.memberA1wsA2))
+      .returning();
+    try {
+      return await fn();
+    } finally {
+      await testDb.insert(workspaceMembers).values(removed);
+    }
+  };
+
+  const STAGED = {
+    type: "completed" as const,
+    committed: 1,
+    carried: 0,
+    staged: 1,
+    skippedForPendingLimit: 0,
+    skippedForUnreadableReference: 0,
+  };
+  const WITHHELD = {
+    type: "completed" as const,
+    committed: 1,
+    carried: 0,
+    staged: 0,
+    skippedForPendingLimit: 0,
+    skippedForUnreadableReference: 1,
+  };
+
+  afterEach(async () => {
+    await testDb
+      .delete(docxSuggestions)
+      .where(isNotNull(docxSuggestions.originReviewFindingId));
+  });
+
+  test.each([
+    ["a pinned reference", () => withReferences(ids.wsA2)],
+    [
+      "a position quoted by a saved playbook",
+      () => withQuotedPosition(ids.wsA2),
+    ],
+  ])(
+    "stages fixes that record %s's matter when the requester can open it",
+    async (_label, runBasis) => {
+      const { runId, findingId, finish } = await finalizeAsWorker(runBasis());
+
+      expect(await finish()).toEqual(STAGED);
+      expect(await runState(runId)).toEqual({
+        status: "completed",
+        fixesWithheld: 0,
+      });
+      expect(await stagedSources(findingId)).toEqual([[ids.wsA2]]);
+
+      // A replay converges on the rows the first pass wrote.
+      expect(await finish()).toEqual({ ...STAGED, staged: 0 });
+      expect(await stagedSources(findingId)).toEqual([[ids.wsA2]]);
+    },
+  );
+
+  test("a reference in the reviewed matter records no other source", async () => {
+    const { findingId, finish } = await finalizeAsWorker(
+      withReferences(ids.wsA1),
+    );
+
+    expect(await finish()).toEqual(STAGED);
+    expect(await stagedSources(findingId)).toEqual([[]]);
+  });
+
+  test("withholds fixes and completes when the requester lost the reference matter", async () => {
+    await withoutReferenceMembership(async () => {
+      const { runId, findingId, finish } = await finalizeAsWorker(
+        withReferences(ids.wsA2),
+      );
+
+      expect(await finish()).toEqual(WITHHELD);
+      expect(await runState(runId)).toEqual({
+        status: "completed",
+        fixesWithheld: 1,
+      });
+      expect(await stagedSources(findingId)).toEqual([]);
+      expect(await findingState(findingId)).toMatchObject({ decision: "open" });
+
+      expect(await finish()).toEqual(WITHHELD);
+      expect(await stagedSources(findingId)).toEqual([]);
+    });
+  });
+
+  test("a disabled position's matter neither withholds fixes nor is recorded", async () => {
+    // The requester cannot open wsB1, but the position quoting it is disabled.
+    const { findingId, finish } = await finalizeAsWorker(
+      withQuotedPosition(ids.wsB1, false),
+    );
+
+    expect(await finish()).toEqual(STAGED);
+    expect(await stagedSources(findingId)).toEqual([[]]);
+  });
+
+  test("a replay that can stage withheld fixes clears the withheld count", async () => {
+    const { runId, findingId, finish } = await finalizeAsWorker(
+      withReferences(ids.wsA2),
+    );
+    await withoutReferenceMembership(async () => {
+      expect(await finish()).toEqual(WITHHELD);
+    });
+
+    expect(await finish()).toEqual(STAGED);
+    expect(await runState(runId)).toEqual({
+      status: "completed",
+      fixesWithheld: 0,
+    });
+    expect(await stagedSources(findingId)).toEqual([[ids.wsA2]]);
+  });
+
+  test("a replay after losing the reference matter does not count fixes already staged", async () => {
+    const { runId, findingId, finish } = await finalizeAsWorker(
+      withReferences(ids.wsA2),
+    );
+    expect(await finish()).toEqual(STAGED);
+
+    await withoutReferenceMembership(async () => {
+      expect(await finish()).toEqual({
+        ...WITHHELD,
+        skippedForUnreadableReference: 0,
+      });
+    });
+    expect(await runState(runId)).toEqual({
+      status: "completed",
+      fixesWithheld: 0,
+    });
+    expect(await stagedSources(findingId)).toEqual([[ids.wsA2]]);
+  });
+
+  test("withholds every fix when only one of two reference matters is readable", async () => {
+    // The requester is a member of wsB1, but it belongs to another organization.
+    const { runId, findingId, finish } = await finalizeAsWorker(
+      withReferences(ids.wsA2, ids.wsB1),
+    );
+
+    expect(await finish()).toEqual(WITHHELD);
+    expect(await runState(runId)).toEqual({
+      status: "completed",
+      fixesWithheld: 1,
+    });
+    expect(await stagedSources(findingId)).toEqual([]);
+  });
+
+  test("withholds fixes when a reference matter is being deleted", async () => {
+    const { runId, findingId, finish } = await finalizeAsWorker(
+      withReferences(ids.wsA2),
+    );
+    await testDb
+      .update(workspaces)
+      .set({ status: WORKSPACE_STATUS.deleting })
+      .where(eq(workspaces.id, ids.wsA2));
+    try {
+      expect(await finish()).toEqual(WITHHELD);
+      expect(await runState(runId)).toEqual({
+        status: "completed",
+        fixesWithheld: 1,
+      });
+      expect(await stagedSources(findingId)).toEqual([]);
+    } finally {
+      await testDb
+        .update(workspaces)
+        .set({ status: WORKSPACE_STATUS.active })
+        .where(eq(workspaces.id, ids.wsA2));
+    }
+  });
+
+  test("a staged fix is readable only while its reader can open the source matter", async () => {
+    const { findingId, finish } = await finalizeAsWorker(
+      withReferences(ids.wsA2),
+    );
+    await finish();
+    const readerSees = async () =>
+      await createRootMembershipScopedDb(
+        { organizationId: ids.orgA, userId: ids.userA1 },
+        database(),
+      )(
+        async (tx) =>
+          await tx
+            .select({ id: docxSuggestions.id })
+            .from(docxSuggestions)
+            .where(
+              and(
+                eq(docxSuggestions.originReviewFindingId, findingId),
+                eq(docxSuggestions.workspaceId, ids.wsA1),
+              ),
+            ),
+      );
+
+    expect(await readerSees()).toHaveLength(1);
+    await withoutReferenceMembership(async () => {
+      expect(await readerSees()).toHaveLength(0);
+    });
   });
 });

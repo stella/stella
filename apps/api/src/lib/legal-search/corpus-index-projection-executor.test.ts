@@ -13,10 +13,14 @@ import {
 import {
   advanceCorpusProjectionAppendTails,
   classifyCorpusProjectionPayloadReadFailure,
+  corpusProjectionAppendLeaseMs,
   corpusProjectionAppendStartMarginMs,
   ingestCorpusProjectionRequest,
 } from "@/api/lib/legal-search/corpus-index-projection-executor";
-import { CORPUS_PROJECTION_LEASE_MAX_MS } from "@/api/lib/legal-search/corpus-index-projection-store";
+import {
+  CORPUS_PROJECTION_LEASE_MAX_MS,
+  CORPUS_PROJECTION_LEASE_MIN_MS,
+} from "@/api/lib/legal-search/corpus-index-projection-store";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 
 const V5_APPEND_START_MARGIN_MS = corpusProjectionAppendStartMarginMs(
@@ -410,4 +414,41 @@ test("an append starts only with lease left for its whole ingest", () => {
   ).toBeGreaterThan(
     corpusProjectionAppendStartMarginMs(CORPUS_INDEX_MANIFESTS.case_law_v7),
   );
+});
+
+/**
+ * A cycle's lease is its generation's start margin plus a fill window, so no
+ * generation can be reserved already inside its margin: that state appended
+ * one revision per request for every long commit window. Even the shortest
+ * fill window leaves a positive window under the store's longest lease, and
+ * the lease always outlasts the ingest it covers.
+ */
+test("every generation's append lease leaves a fill window beyond its margin", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    const marginMs = corpusProjectionAppendStartMarginMs(manifest);
+    const ingestTimeoutMs = corpusIndexCommittedIngestTimeoutMs(
+      manifest.engine.indexConfig.indexing_settings.commit_timeout_secs,
+    );
+    for (const fillWindowMs of [
+      CORPUS_PROJECTION_LEASE_MIN_MS,
+      5 * 60_000,
+      CORPUS_PROJECTION_LEASE_MAX_MS,
+    ]) {
+      const leaseMs = corpusProjectionAppendLeaseMs({ manifest, fillWindowMs });
+      expect(leaseMs - marginMs).toBeGreaterThanOrEqual(
+        Math.min(fillWindowMs, CORPUS_PROJECTION_LEASE_MAX_MS - marginMs),
+      );
+      expect(leaseMs - marginMs).toBeGreaterThanOrEqual(
+        CORPUS_PROJECTION_LEASE_MIN_MS,
+      );
+      expect(leaseMs).toBeGreaterThan(ingestTimeoutMs);
+      expect(leaseMs).toBeLessThanOrEqual(CORPUS_PROJECTION_LEASE_MAX_MS);
+    }
+  }
+  expect(() =>
+    corpusProjectionAppendLeaseMs({
+      manifest: CORPUS_INDEX_MANIFESTS.case_law_v7,
+      fillWindowMs: CORPUS_PROJECTION_LEASE_MIN_MS - 1,
+    }),
+  ).toThrow("fill window");
 });

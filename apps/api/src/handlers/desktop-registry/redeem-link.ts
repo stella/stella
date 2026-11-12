@@ -2,8 +2,8 @@ import { Result } from "better-result";
 
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 import {
-  DESKTOP_ACCOUNT_POLICY,
   DESKTOP_ACCOUNT_PROTOCOL_HEADER,
+  readDesktopLinkProtocol,
 } from "@stll/api-contract/desktop-registry";
 import { Temporal } from "@stll/time";
 
@@ -76,8 +76,9 @@ const verifyLinkCaller =
   (services: typeof redemptionServices): VerifyCaller<LinkedDesktopCaller> =>
   async ({ body, request }) => {
     if (
-      request.headers.get(DESKTOP_ACCOUNT_PROTOCOL_HEADER) !==
-      String(DESKTOP_ACCOUNT_POLICY.linkProtocol)
+      readDesktopLinkProtocol(
+        request.headers.get(DESKTOP_ACCOUNT_PROTOCOL_HEADER),
+      ) === null
     ) {
       return Result.err(
         new HandlerError({

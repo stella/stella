@@ -29,7 +29,10 @@ export const invokeCapability = async <TResult>(
 ): Promise<TResult> => await call(capabilityRequest(capability));
 
 export type AppOnlyWriteId =
+  | "chat.browser-site-grants.create"
+  | "chat.browser-site-grants.delete"
   | "chat.mcp-apps.call"
+  | "chat.threads.model.update"
   | "files.document-properties.update"
   | "files.email-attachment.save"
   | "folio-collaboration.join"

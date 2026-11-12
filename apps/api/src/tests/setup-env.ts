@@ -100,6 +100,7 @@ process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 process.env["TRANSACTIONAL_EMAIL_FROM"] ??= "test@example.com";
 process.env["FRONTEND_URL"] ??= "http://localhost:3000";
+process.env["OUTLOOK_ADDIN_ORIGIN"] ??= "https://outlook.stella.example";
 // Never reached by tests: corpus-index tests stub global fetch and only
 // assert on the request contract.
 process.env["CORPUS_INDEX_Q09_ENDPOINT"] ??= "http://localhost:7290";

@@ -280,6 +280,10 @@ export const LIMITS = {
   mcpPageSizeMin: 1,
   /** Shortest value a required MCP text or list input takes: not empty. */
   mcpNonEmptyMin: 1,
+  softLawAuthorityMaxLength: 64,
+  softLawJurisdictionMinLength: 2,
+  softLawJurisdictionMaxLength: 3,
+  isoDateLength: 10,
   /** Characters of a language code an MCP filter takes (`cs`, `pt-BR`). */
   mcpLanguageCodeMaxChars: 8,
   /** Characters of an ISO calendar date an MCP filter takes (YYYY-MM-DD). */
@@ -448,14 +452,21 @@ export const LIMITS = {
    * Conservative until the engine's term-set cost is measured at scale; a
    * provision cited more widely is checked candidate by candidate instead.
    */
-  caseLawProvisionIdSetMax: 5000,
+  caseLawProvisionIdSetMax: 2000,
   /**
    * Physical citation links one provision scope read examines before it
    * calls the provision broad. Larger than the id-set bound, so links of other
    * countries, levels or unpublished decisions do not make a narrow citing
-   * set broad, and still a fixed read.
+   * set broad, and small because the walk runs on every provision-filtered
+   * search, before any of the work that search is for.
    */
-  caseLawProvisionScopeLinkScanMax: 20_000,
+  caseLawProvisionScopeLinkScanMax: 4000,
+  /**
+   * Each statement of a provision scope read. Past it the provision is read
+   * as broad, which the candidate-by-candidate path answers correctly, so a
+   * cold index costs the request this much rather than its whole budget.
+   */
+  caseLawProvisionScopeStatementBudgetMs: 1500,
   /** Physical citation rows examined by one correlated provision probe. */
   caseLawProvisionLinkProbeMax: 128,
   /**
@@ -993,7 +1004,7 @@ export const FILE_SIZE_LIMIT_BYTES = {
   /** Structured data imports (clause JSON, contact sheets). */
   dataImport: 10 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */
-  skillPack: 2 * 1024 * 1024,
+  skillPack: 50 * 1024 * 1024,
   /** Chat context file attachments. */
   chatContextFile: CHAT_CONTEXT_FILE_MAX_BYTES,
 } as const;

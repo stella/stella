@@ -40,7 +40,9 @@ import { createDetached } from "@stll/errors";
 
 import {
   FAKE_CONTEXT_WINDOW,
+  FAKE_LONG_COMMAND,
   FAKE_MCP_CALL,
+  FAKE_PRIVATE_TEXT,
   FAKE_RESUMED_THREAD_ID,
   FAKE_TEXT_ONLY_MODEL,
   FAKE_THREAD_ID,
@@ -52,6 +54,7 @@ import {
   FAKE_STELLA_SERVER,
   FAKE_STELLA_STEPS,
 } from "../../../scripts/fake-stella-turn";
+import { PROTOCOL_LOG_OFF } from "../../protocol-log";
 import type { HarnessTurn, HarnessTurnInput } from "../adapter";
 import { type HarnessEvent, harnessSessionId } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
@@ -64,7 +67,7 @@ import {
   CODEX_SERVER_REQUESTS,
   InitializeResponseSchema,
 } from "./protocol";
-import { CODEX_APPROVAL_OPTIONS } from "./turn";
+import { CODEX_APPROVAL_OPTIONS, type CodexCapacityRetry } from "./turn";
 
 const FAKE_SERVER = path.join(
   import.meta.dir,
@@ -83,7 +86,21 @@ afterEach(() => {
   }
 });
 
-const FAST_CAPACITY_RETRY = { maxAttempts: 5, baseDelayMs: 5, maxDelayMs: 20 };
+/** Continues a turn at capacity at once, recording each delay it skipped. */
+const capacityRetryRecording = () => {
+  const delays: number[] = [];
+  const capacityRetry: CodexCapacityRetry = {
+    maxAttempts: 5,
+    baseDelayMs: 10,
+    maxDelayMs: 50,
+    sleep: async (delayMs) => {
+      delays.push(delayMs);
+    },
+  };
+  return { delays, capacityRetry };
+};
+
+const FAST_CAPACITY_RETRY = capacityRetryRecording().capacityRetry;
 
 const harnessFor = (
   scenario: FakeScenario,
@@ -99,6 +116,7 @@ const harnessFor = (
   mkdirSync(workspaceDir);
   const adapter = createCodexHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_SERVER, scenario] },
+    protocolLog: PROTOCOL_LOG_OFF,
     codexHome,
     environment: {
       ...environment,
@@ -158,6 +176,7 @@ const turnInput = (
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
   skillFolders: [],
+  networkHosts: [],
   toolPath: [],
   ...overrides,
 });
@@ -482,7 +501,12 @@ describe("Codex adapter over a stdio app-server", () => {
         content: JSON.stringify({ status: "completed" }),
         status: "succeeded",
       });
-      expect(completed[1]?.result.content).toContain("notes.md");
+      // An unrelated command keeps its own result, which never carries its
+      // output.
+      expect(completed[1]?.result.content).not.toContain("notes.md");
+      expect(JSON.parse(completed[1]?.result.content ?? "")).toMatchObject({
+        status: "completed",
+      });
     });
 
     test("a turn whose skills cannot be established does not run", async () => {
@@ -533,6 +557,7 @@ describe("Codex adapter over a stdio app-server", () => {
       model: "gpt-test",
       runId: "run-1",
       threadId: "stella-thread-1",
+      workspaceDir: "/workspace",
       generateId: counter(),
       now: () => 0,
     })) {
@@ -618,7 +643,8 @@ describe("Codex adapter over a stdio app-server", () => {
     }
     const stored = fold(cloud);
     expect(stored.flatMap(({ parts }) => parts).length).toBeGreaterThan(4);
-    expect(fold(local)).toEqual(stored);
+    expect(withoutCommandOutput(stored)).toEqual(fold(local));
+    expect(JSON.stringify(local)).not.toContain("aggregated_output");
   });
 
   test("an approval offers the native decisions and replies with the chosen one verbatim", async () => {
@@ -773,6 +799,7 @@ describe("Codex adapter over a stdio app-server", () => {
         executable: process.execPath,
         args: [FAKE_SERVER, "unresponsive"],
       },
+      protocolLog: PROTOCOL_LOG_OFF,
       detached: createDetached((error) => {
         backgroundErrors.push(error);
       }),
@@ -985,6 +1012,11 @@ describe("Codex adapter over a stdio app-server", () => {
       type: "retrying",
       message: "Reconnecting",
     });
+    // A usage limit is the member's allowance, not the model's capacity: the
+    // turn is not continued.
+    expect(
+      limited.received().filter(({ method }) => method === "turn/start"),
+    ).toHaveLength(1);
     expect(terminal(limited.events)).toEqual({
       type: "turn.failed",
       failure: {
@@ -995,42 +1027,81 @@ describe("Codex adapter over a stdio app-server", () => {
     });
   });
 
-  test("a turn the model's capacity ended continues on the same thread with empty input", async () => {
-    const { events, received } = await run("capacity_retry");
+  /** Runs a scenario whose continuations record their delays. */
+  const runRecordingDelays = async (scenario: FakeScenario) => {
+    const { delays, capacityRetry } = capacityRetryRecording();
+    const harness = harnessFor(scenario, capacityRetry);
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const collected = collect(started.value);
+    await collected.done;
+    await started.value.dispose();
+    const starts = harness
+      .received()
+      .filter(({ method }) => method === "turn/start");
+    return { events: collected.events, delays, starts };
+  };
+
+  test("a turn the model's capacity ended continues on the same thread with empty input, repeating nothing", async () => {
+    const { events, delays, starts } =
+      await runRecordingDelays("capacity_retry");
     expect(events).toContainEqual({
       type: "retrying",
       message: "Selected model is at capacity. Please try a different model.",
     });
-    expect(events).toContainEqual(
-      expect.objectContaining({ type: "text.completed", text: "Recovered." }),
-    );
+    // The message completed before the failure stays in the thread; the
+    // continuation writes only what follows it.
+    expect(
+      events.flatMap((event) =>
+        event.type === "text.completed" ? [event.text] : [],
+      ),
+    ).toEqual(["Reading.", "Recovered."]);
     expect(terminal(events)).toMatchObject({ type: "turn.completed" });
-    const starts = received().filter(({ method }) => method === "turn/start");
+    expect(delays).toEqual([10]);
     expect(starts).toHaveLength(2);
     expect(starts[1]?.params).toEqual({ threadId: FAKE_THREAD_ID, input: [] });
   });
 
-  test("a turn still at capacity after five continuations fails with the native code", async () => {
-    const { events, received } = await run("capacity_exhausted");
+  test("a turn still at capacity after five continuations, each waiting twice as long up to the cap, fails as the model at capacity", async () => {
+    const { events, delays, starts } =
+      await runRecordingDelays("capacity_exhausted");
     expect(events.filter(({ type }) => type === "retrying")).toHaveLength(5);
+    expect(delays).toEqual([10, 20, 40, 50, 50]);
     expect(terminal(events)).toEqual({
       type: "turn.failed",
       failure: {
-        type: "provider_error",
+        type: "model_at_capacity",
         message: "Selected model is at capacity. Please try a different model.",
-        code: "serverOverloaded",
       },
     });
-    expect(
-      received().filter(({ method }) => method === "turn/start"),
-    ).toHaveLength(6);
+    expect(starts).toHaveLength(6);
+  });
+
+  test("a turn at capacity while a message streams in part fails instead of writing it again", async () => {
+    const { events, delays, starts } = await runRecordingDelays(
+      "capacity_mid_message",
+    );
+    expect(events.map(({ type }) => type)).not.toContain("retrying");
+    expect(delays).toEqual([]);
+    expect(terminal(events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "model_at_capacity",
+        message: "Selected model is at capacity. Please try a different model.",
+      },
+    });
+    expect(starts).toHaveLength(1);
   });
 
   test("stopping a turn while it waits to continue ends it as interrupted", async () => {
+    const wait = Promise.withResolvers<undefined>();
     const harness = harnessFor("capacity_retry", {
-      maxAttempts: 5,
-      baseDelayMs: 60_000,
-      maxDelayMs: 60_000,
+      ...FAST_CAPACITY_RETRY,
+      sleep: async () => wait.promise,
     });
     const started = await harness.adapter.startTurn(
       turnInput(harness.workspaceDir),
@@ -1045,6 +1116,8 @@ describe("Codex adapter over a stdio app-server", () => {
       }
     });
     await collected.done;
+    // The wait ends after the stop; the stopped turn does not continue.
+    wait.resolve(undefined);
     await turn.dispose();
     expect(terminal(collected.events)).toEqual({ type: "turn.interrupted" });
     const methods = harness.received().map(({ method }) => method);
@@ -1133,6 +1206,7 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(() =>
       createCodexHarnessAdapter({
         launch: { executable: process.execPath, args: [] },
+        protocolLog: PROTOCOL_LOG_OFF,
         codexHome: path.join(process.env["HOME"] ?? "/", ".codex"),
         environment: {},
         clientVersion: "0.0.1",
@@ -1145,6 +1219,35 @@ describe("Codex adapter over a stdio app-server", () => {
 });
 
 /** Fold chunks the way persistence does and return what would be stored. */
+/**
+ * A cloud turn's parts as a local turn keeps them: a command's output stays
+ * on the member's computer, so its result keeps only its exit code and
+ * status, in the same order.
+ */
+const withoutCommandOutput = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    if (!value.includes('"aggregated_output"')) {
+      return value;
+    }
+    const { aggregated_output: _output, ...kept } = v.parse(
+      v.record(v.string(), v.unknown()),
+      JSON.parse(value),
+    );
+    return JSON.stringify(kept);
+  }
+  if (Array.isArray(value)) {
+    return value.map(withoutCommandOutput);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "aggregated_output")
+        .map(([key, entry]) => [key, withoutCommandOutput(entry)]),
+    );
+  }
+  return value;
+};
+
 const storedMessages = (chunks: readonly StreamChunk[]) => {
   const processor = new StreamProcessor({ initialMessages: [] });
   for (const chunk of chunks) {
@@ -1164,6 +1267,7 @@ const localChunks = async (events: readonly HarnessEvent[]) => {
     model: "gpt-test",
     runId: "run-1",
     threadId: "stella-thread-1",
+    workspaceDir: "/workspace",
     generateId: () => `result-${(next += 1)}`,
     now: () => 0,
   })) {
@@ -1309,6 +1413,73 @@ describe("Codex items as chat parts", () => {
     expect(
       parts.flatMap((part) => (part.type === "text" ? [part.content] : [])),
     ).toEqual([FAKE_STELLA_ANSWER]);
+  });
+
+  test("a native step shows its command, file names and plan titles, and never the text it carries", async () => {
+    const { events } = await run("native_tools");
+    const parts = storedMessages(await localChunks(events)).flatMap(
+      ({ parts: stored }) => stored,
+    );
+    const calls = parts.flatMap((part) =>
+      part.type === "tool-call"
+        ? [{ id: part.id, name: part.name, input: part.input }]
+        : [],
+    );
+    const plan = (items: string[]) => ({
+      tool: "update_plan",
+      detail: { kind: "plan", items },
+    });
+    expect(calls).toEqual([
+      {
+        id: "turn-1:plan:1",
+        name: "harness_native_tool",
+        input: plan(["Read the lease", "Draft the notice"]),
+      },
+      // A heredoc shows the line that runs it, never the lines it writes.
+      {
+        id: "call-heredoc",
+        name: "command_execution",
+        input: { command: `/bin/zsh -lc "cat > notes.md <<'EOF'…` },
+      },
+      {
+        id: "call-long",
+        name: "command_execution",
+        input: { command: `${FAKE_LONG_COMMAND.slice(0, 299)}…` },
+      },
+      {
+        id: "call-edit",
+        name: "file_change",
+        input: {
+          changes: [
+            { path: "drafts/lease.md", kind: "update" },
+            { path: "drafts/notice.md", kind: "add" },
+          ],
+        },
+      },
+      {
+        id: "turn-1:plan:2",
+        name: "harness_native_tool",
+        input: plan(["Read the lease", "Draft the notice"]),
+      },
+    ]);
+    // A command's exit status stays on its result.
+    expect(
+      parts.find(
+        (part) => part.type === "tool-call" && part.id === "call-heredoc",
+      ),
+    ).toMatchObject({ output: { exit_code: 1, status: "failed" } });
+    // A command's output never leaves, in its call, its result or the part.
+    expect(JSON.stringify(parts)).not.toContain("permission denied");
+    expect(JSON.stringify(parts)).not.toContain("aggregated_output");
+    const callText = JSON.stringify(
+      parts
+        .filter((part) => part.type === "tool-call")
+        .map(({ input }) => input),
+    );
+    for (const text of Object.values(FAKE_PRIVATE_TEXT)) {
+      expect(callText).not.toContain(text);
+    }
+    expect(callText).not.toContain("y".repeat(300));
   });
 
   test("harness-native items become generic activity and never carry the native payload", async () => {
@@ -1475,6 +1646,7 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
     mkdirSync(codexHome);
     const started = startAppServer({
       launch: { executable: codex ?? "", args: ["app-server"] },
+      protocolLog: PROTOCOL_LOG_OFF,
       detached: createDetached((error) => {
         cliErrors.push(error);
       }),

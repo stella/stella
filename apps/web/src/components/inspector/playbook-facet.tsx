@@ -13,7 +13,11 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
-import { DOCUMENT_REVIEW_LIMITS, REVIEW_FLAGS } from "@stll/api-contract";
+import {
+  DOCUMENT_REVIEW_LIMITS,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
+  REVIEW_FLAGS,
+} from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import type { DocxEditorRef } from "@stll/folio-react";
 import { Temporal } from "@stll/time";
@@ -61,6 +65,7 @@ import { TextSeparator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
@@ -481,6 +486,7 @@ export const PlaybookFacet = ({
         entityId,
         fileFieldId,
         unexpectedErrorMessage: t("common.unexpectedError"),
+        documentsTooLargeMessage: t("inspector.review.documentsTooLarge"),
         startMode,
         seededPositions,
       }),
@@ -1409,7 +1415,7 @@ const ReviewRunPanel = ({
       <ErrorState
         detail={run.errorCode}
         message={t(
-          run.errorCode === "document_too_large"
+          run.errorCode === DOCUMENT_TOO_LARGE_ERROR_CODE
             ? "inspector.review.documentTooLarge"
             : "inspector.review.failed",
         )}
@@ -1475,6 +1481,7 @@ const ReviewRunPanel = ({
       runId={run.id}
       saveAsPlaybookPending={saveAsPlaybook.isPending}
       suggestions={suggestions}
+      fixesWithheld={run.status === "completed" ? run.fixesWithheld : 0}
       tableRunNotice={resolveTableRunNotice({
         shownRun: run,
         runs: history.runs,
@@ -2045,26 +2052,26 @@ const LaunchBasisSummary = ({
   const t = useTranslations();
   if (playbookName.length > 0 && referenceCount > 0) {
     return (
-      <p className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
         {t("inspector.review.basisCombined", {
           name: playbookName,
           count: referenceCount,
         })}
-      </p>
+      </TruncatedText>
     );
   }
   if (playbookName.length > 0) {
     return (
-      <p className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
         {t("inspector.review.basisPlaybook", { name: playbookName })}
-      </p>
+      </TruncatedText>
     );
   }
   if (referenceCount > 0) {
     return (
-      <p className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
         {t("inspector.review.basisReferences", { count: referenceCount })}
-      </p>
+      </TruncatedText>
     );
   }
   return null;
@@ -2141,9 +2148,12 @@ const PlaybookPicker = ({
                   >
                     <ClipboardCheckIcon className="text-muted-foreground size-3.5 shrink-0" />
                     {/* Menu rows name their item in regular weight. */}
-                    <BidiText className="min-w-0 flex-1 truncate font-normal">
+                    <TruncatedText
+                      className="flex-1 font-normal"
+                      render={<BidiText />}
+                    >
                       {playbook.name}
-                    </BidiText>
+                    </TruncatedText>
                     <PlaybookStatusBadge status={playbook.status} />
                     <CheckIcon
                       aria-hidden="true"
@@ -2247,14 +2257,17 @@ const ReferenceFilePicker = ({
                 className="size-3.5 shrink-0"
                 mimeType={DOCX_MIME}
               />
-              <BidiText className="min-w-0 flex-1 truncate text-xs">
+              <TruncatedText className="flex-1 text-xs" render={<BidiText />}>
                 {reference.name}
-              </BidiText>
+              </TruncatedText>
               {reference.workspaceId !== workspaceId &&
                 reference.workspaceName !== null && (
-                  <BidiText className="text-muted-foreground text-2xs max-w-28 shrink-0 truncate">
+                  <TruncatedText
+                    className="text-muted-foreground text-2xs max-w-28 shrink-0"
+                    render={<BidiText />}
+                  >
                     {reference.workspaceName}
-                  </BidiText>
+                  </TruncatedText>
                 )}
               <Button
                 aria-label={t("inspector.review.removeReference", {
@@ -2334,9 +2347,12 @@ const ReferenceFilePicker = ({
                       className="size-3.5 shrink-0"
                       mimeType={DOCX_MIME}
                     />
-                    <BidiText className="min-w-0 flex-1 truncate text-xs">
+                    <TruncatedText
+                      className="flex-1 text-xs"
+                      render={<BidiText />}
+                    >
                       {source.name}
-                    </BidiText>
+                    </TruncatedText>
                     <PlusIcon className="text-muted-foreground size-3.5 shrink-0 opacity-60 transition-opacity duration-150 group-hover:opacity-100" />
                   </span>
                 </Button>
@@ -2493,7 +2509,7 @@ const ProposalStreamView = ({
   return (
     <div className="bg-background flex h-full flex-col">
       <div className="flex min-h-11 shrink-0 items-center gap-2 border-b px-4">
-        <span className="text-muted-foreground truncate text-xs tabular-nums">
+        <TruncatedText className="text-muted-foreground text-xs tabular-nums">
           {streaming
             ? t("inspector.review.proposing", {
                 count: proposal.positions.length,
@@ -2501,7 +2517,7 @@ const ProposalStreamView = ({
             : t("knowledge.playbooks.starters.positionCount", {
                 count: proposal.positions.length,
               })}
-        </span>
+        </TruncatedText>
         {!streaming && proposal.skipped.length > 0 && (
           <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
             {SUMMARY_SEPARATOR}
@@ -2760,6 +2776,8 @@ type ResultsViewProps = {
   freshness: ReviewRunFreshness;
   tableRunNotice: TableRunNotice;
   withheldSources: readonly ReviewRunWithheldSource[];
+  /** Fixes the run left unstaged because a reference matter was unavailable. */
+  fixesWithheld: number;
   history: ReviewRunHistoryView;
   /** Set while the worker is still committing findings; `null` once the run
    *  has settled. */
@@ -2820,6 +2838,7 @@ const ResultsView = ({
   freshness,
   tableRunNotice,
   withheldSources,
+  fixesWithheld,
   history,
   progress: runProgress,
   readOnly,
@@ -3055,6 +3074,12 @@ const ResultsView = ({
         onReviewAgain={onReviewAgain}
       />
 
+      {fixesWithheld > 0 && (
+        <p className="text-muted-foreground shrink-0 border-b px-3 py-1.5 text-xs">
+          {t("inspector.review.fixesWithheldNotice")}
+        </p>
+      )}
+
       {resultsBody}
     </div>
   );
@@ -3253,12 +3278,12 @@ const ReviewHistoryRow = ({
           <span className="text-foreground shrink-0 text-xs tabular-nums">
             {format.dateTime(new Date(run.createdAt), HISTORY_RUN_DATE_FORMAT)}
           </span>
-          <BidiText
-            as="span"
-            className="text-muted-foreground min-w-0 flex-1 truncate text-xs"
+          <TruncatedText
+            className="text-muted-foreground flex-1 text-xs"
+            render={<BidiText as="span" />}
           >
             {basis}
-          </BidiText>
+          </TruncatedText>
           <span className="text-muted-foreground shrink-0 text-xs">
             {t(RUN_STATUS_LABEL_KEYS[run.status])}
           </span>

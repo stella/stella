@@ -106,6 +106,11 @@ export default {
           "Queue transport: worker owns its dedicated blocking connection.",
       },
       {
+        path: "apps/api/src/lib/lists/generation/run-queue.ts",
+        reason:
+          "Queue transport: worker owns its dedicated blocking connection.",
+      },
+      {
         path: "apps/api/src/lib/lists/verification/run-queue.ts",
         reason:
           "Queue transport: worker owns its dedicated blocking connection.",

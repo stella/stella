@@ -12,6 +12,7 @@ import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 import { Button } from "@stll/ui/button";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { MatterSwitcher } from "@/components/breadcrumbs/matter-switcher";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
@@ -206,7 +207,7 @@ export const WorkspaceBreadcrumb = ({
     <>
       <BreadcrumbItem className="min-w-8 shrink">
         <Link
-          className="hover:text-foreground min-w-0 truncate"
+          className="hover:text-foreground min-w-0"
           onClick={() => {
             // Clear active filters and group by client so the full grouped
             // list is shown; the route then scrolls to and flashes this
@@ -215,10 +216,11 @@ export const WorkspaceBreadcrumb = ({
             updateMattersConfig({ groupBy: "client", filters: {} });
           }}
           search={{ focusClient: client.id }}
-          title={client.displayName}
           to="/workspaces"
         >
-          <BidiText>{client.displayName}</BidiText>
+          <TruncatedText render={<BidiText />}>
+            {client.displayName}
+          </TruncatedText>
         </Link>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
@@ -227,14 +229,13 @@ export const WorkspaceBreadcrumb = ({
     <>
       <BreadcrumbItem className="min-w-8 shrink">
         <Link
-          className="hover:text-foreground text-muted-foreground min-w-0 truncate"
+          className="hover:text-foreground text-muted-foreground min-w-0"
           onClick={() => {
             updateMattersConfig({ clientFilter: null });
           }}
           to="/workspaces"
-          title={t("workspaces.parties.personalLabel")}
         >
-          {t("workspaces.parties.personalLabel")}
+          <TruncatedText>{t("workspaces.parties.personalLabel")}</TruncatedText>
         </Link>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
@@ -361,15 +362,14 @@ export const WorkspaceBreadcrumb = ({
                   params={{
                     workspaceId,
                   }}
-                  title={displayName}
                   to="/workspaces/$workspaceId"
                 >
-                  <BidiText
-                    as="span"
-                    className="overflow-hidden text-ellipsis whitespace-pre"
+                  <TruncatedText
+                    className="whitespace-pre"
+                    render={<BidiText as="span" />}
                   >
                     {displayName}
-                  </BidiText>
+                  </TruncatedText>
                   {showMatterNumber && workspace.reference && !isEditingRef ? (
                     <span
                       className="text-foreground-muted shrink-0 text-sm whitespace-pre"
@@ -432,7 +432,7 @@ export const WorkspaceBreadcrumb = ({
         <Link
           activeOptions={{ exact: true, includeSearch: false }}
           activeProps={{ className: "text-foreground font-semibold" }}
-          className="hover:text-foreground max-w-80 overflow-hidden font-semibold text-ellipsis whitespace-pre"
+          className="hover:text-foreground max-w-80 min-w-0 font-semibold"
           dir="auto"
           onClick={() => {
             startEditingName();
@@ -442,10 +442,14 @@ export const WorkspaceBreadcrumb = ({
             startEditingName();
           }}
           params={{ workspaceId }}
-          title={displayName}
           to="/workspaces/$workspaceId"
         >
-          <BidiText as="span">{displayName}</BidiText>
+          <TruncatedText
+            className="whitespace-pre"
+            render={<BidiText as="span" />}
+          >
+            {displayName}
+          </TruncatedText>
         </Link>
         {referenceSegment}
         {isEditingRef ? null : <MatterSwitcher matter={workspace} />}

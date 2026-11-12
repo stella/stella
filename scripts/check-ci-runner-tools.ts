@@ -8,6 +8,7 @@ import path from "node:path";
  * scope; script literal argv checks exclude template/f-string interpolation.
  */
 import { repoRelativePath } from "../packages/portable-path/src/index";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import {
   conditionOperands,
   impliesCondition,
@@ -1427,7 +1428,7 @@ export const runnerToolProblems = ({
       const inputs = step["with"];
       if (
         typeof step["uses"] !== "string" ||
-        !step["uses"].startsWith("actions/checkout@") ||
+        !isRepositoryCheckoutAction(step["uses"]) ||
         !isRecord(inputs)
       ) {
         continue;

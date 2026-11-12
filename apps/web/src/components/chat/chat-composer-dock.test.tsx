@@ -19,6 +19,7 @@ describe("chat composer dock", () => {
           <FormattingProvider locale="en" timeZone="UTC">
             <ChatComposerDock
               leadingContext={<ChatMatterPickerPending />}
+              models={null}
               status="pending"
               threadRef={{
                 scope: "global",

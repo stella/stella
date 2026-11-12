@@ -1,0 +1,204 @@
+import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
+
+import {
+  CHAT_LOCAL_RUN_TOOL_LIMITS,
+  CHAT_LOCAL_RUN_TOOL_NAMES,
+  CHAT_LOCAL_RUN_TOOL_STATUSES,
+  chatLocalRunApprovalMessage,
+  chatLocalRunShownText,
+  parseChatLocalRunToolCall,
+  shownChatLocalRunToolResult,
+} from "./chat-local-run-tool";
+
+const text = fc.string({ unit: "binary", maxLength: 700 });
+
+describe("what a local run's native step shows", () => {
+  test("shown text is one line within its limit, and showing it again changes nothing", () => {
+    assertProperty(
+      "shown text is one line within its limit, and showing it again changes nothing",
+      fc.property(text, fc.integer({ min: 2, max: 600 }), (raw, limit) => {
+        const shown = chatLocalRunShownText(raw, limit);
+        expect(shown.length).toBeLessThanOrEqual(limit);
+        expect(shown).not.toMatch(/[\n\r\u2028\u2029]/u);
+        expect(chatLocalRunShownText(shown, limit)).toBe(shown);
+        // Nothing is shown that was not in the line it came from.
+        const kept = shown.endsWith("…") ? shown.slice(0, -1) : shown;
+        expect(raw.trimStart().startsWith(kept)).toBe(true);
+      }),
+    );
+  });
+
+  test("a heredoc shows the line that runs it, never the text it writes", () => {
+    const call = parseChatLocalRunToolCall(
+      CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution,
+      {
+        command: "cat > notes.md <<'EOF'\nPrivate settlement terms\nEOF",
+      },
+    );
+    expect(call?.input).toEqual({ command: "cat > notes.md <<'EOF'…" });
+  });
+
+  test("a cut never leaves half of a character", () => {
+    const shown = chatLocalRunShownText(`${"a".repeat(8)}😀😀`, 10);
+    expect(shown).toBe(`${"a".repeat(8)}…`);
+  });
+
+  test("a call keeps only its schema's fields, and parsing what it kept gives the same call", () => {
+    const extra = fc.dictionary(
+      fc.constantFrom("output", "content", "diff", "old_string", "prompt"),
+      fc.string(),
+    );
+    const calls = fc.oneof(
+      fc.record({
+        name: fc.constant(CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution),
+        input: fc.record({ command: text }),
+      }),
+      fc.record({
+        name: fc.constant(CHAT_LOCAL_RUN_TOOL_NAMES.fileChange),
+        input: fc.record({
+          changes: fc.array(
+            fc.record({
+              path: text,
+              kind: fc.constantFrom("add", "delete", "update"),
+            }),
+            { maxLength: 80 },
+          ),
+        }),
+      }),
+      fc.record({
+        name: fc.constant(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool),
+        input: fc.record({
+          tool: text,
+          detail: fc.oneof(
+            fc.record({ kind: fc.constant("read"), path: text }),
+            fc.record({ kind: fc.constant("fetch"), url: text }),
+            fc.record({
+              kind: fc.constant("plan"),
+              items: fc.array(text, { maxLength: 80 }),
+            }),
+          ),
+        }),
+      }),
+    );
+    assertProperty(
+      "a call keeps only its schema's fields, and parsing what it kept gives the same call",
+      fc.property(calls, extra, (call, added) => {
+        const parsed = parseChatLocalRunToolCall(call.name, {
+          ...call.input,
+          ...added,
+        });
+        if (parsed === null) {
+          throw new Error("a well-formed call did not parse");
+        }
+        for (const key of Object.keys(added)) {
+          expect(Object.keys(parsed.input)).not.toContain(key);
+        }
+        expect(parseChatLocalRunToolCall(parsed.name, parsed.input)).toEqual(
+          parsed,
+        );
+        if (parsed.name === CHAT_LOCAL_RUN_TOOL_NAMES.fileChange) {
+          expect(parsed.input.changes.length).toBeLessThanOrEqual(
+            CHAT_LOCAL_RUN_TOOL_LIMITS.files,
+          );
+        }
+        if (parsed.name === CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution) {
+          expect(parsed.input.command.length).toBeLessThanOrEqual(
+            CHAT_LOCAL_RUN_TOOL_LIMITS.command,
+          );
+        }
+      }),
+    );
+  });
+
+  test("a native tool whose detail does not parse keeps its name, and anything else keeps nothing", () => {
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool, {
+        tool: "Read",
+        detail: { kind: "read", path: 42, content: "Private text" },
+      }),
+    ).toEqual({
+      name: CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool,
+      input: { tool: "Read" },
+    });
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution, {
+        output: "Private text",
+      }),
+    ).toBeNull();
+  });
+
+  test("a native step's result keeps how it ended and never what it produced", () => {
+    assertProperty(
+      "a native step's result keeps how it ended and never what it produced",
+      fc.property(
+        fc.constantFrom(...Object.values(CHAT_LOCAL_RUN_TOOL_NAMES)),
+        fc.constantFrom(...CHAT_LOCAL_RUN_TOOL_STATUSES),
+        fc.option(fc.integer({ min: -255, max: 255 }), { nil: undefined }),
+        text,
+        fc.boolean(),
+        (name, status, exitCode, produced, failed) => {
+          const reported = JSON.stringify({
+            status,
+            ...(exitCode === undefined ? {} : { exit_code: exitCode }),
+            changes: [{ path: "a.md", kind: "update", diff: produced }],
+            aggregated_output: produced,
+            content: produced,
+          });
+          const shown = shownChatLocalRunToolResult(name, reported, failed);
+          const kept: unknown = JSON.parse(shown);
+          expect(kept).toMatchObject({ status });
+          expect(Object.keys(kept ?? {})).not.toContain("aggregated_output");
+          expect(Object.keys(kept ?? {})).not.toContain("content");
+          expect(shown).not.toContain("diff");
+          expect(shownChatLocalRunToolResult(name, shown, failed)).toBe(shown);
+        },
+      ),
+    );
+  });
+
+  test("a result that is not the step's keeps only whether it failed", () => {
+    for (const content of ["1→Private settlement terms", '{"status":"done"}']) {
+      expect(
+        shownChatLocalRunToolResult(
+          CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool,
+          content,
+          true,
+        ),
+      ).toBe(JSON.stringify({ status: "failed" }));
+    }
+    expect(
+      shownChatLocalRunToolResult(
+        CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution,
+        JSON.stringify({ aggregated_output: "Private", status: "completed" }),
+        false,
+      ),
+    ).toBe(JSON.stringify({ status: "completed" }));
+  });
+
+  test("an approval names a command by its shown line, and anything else by a shown reason or its tool", () => {
+    expect(
+      chatLocalRunApprovalMessage({
+        toolName: CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution,
+        input: { command: "cat > notes.md <<'EOF'\nPrivate terms\nEOF" },
+        reason: "Private terms",
+      }),
+    ).toBe("cat > notes.md <<'EOF'…");
+    expect(
+      chatLocalRunApprovalMessage({
+        toolName: CHAT_LOCAL_RUN_TOOL_NAMES.fileChange,
+        input: { changes: [] },
+        reason: "Edits notes\nPrivate terms",
+      }),
+    ).toBe("Edits notes…");
+    expect(
+      chatLocalRunApprovalMessage({
+        toolName: "mcp__docs__read",
+        input: { id: "1" },
+        reason: null,
+      }),
+    ).toBe("Approval required to run mcp__docs__read");
+  });
+});

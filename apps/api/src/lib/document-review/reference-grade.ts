@@ -491,7 +491,7 @@ const normalizeConsensus = (
 /** The position's own passages, grouped by the document they came from. This
  *  is the standard by construction, so it does not depend on what the model
  *  chose to cite back. */
-const passageCitations = (
+export const referencePassageCitations = (
   passages: readonly PinnedReferencePassage[],
 ): ReferenceGrading["referenceCitations"] => {
   const byFileFieldId = new Map<string, { id: string; blockId: string }[]>();
@@ -510,9 +510,10 @@ const passageCitations = (
   }));
 };
 
-/** The judgment a position falls back to when the model said nothing about
- *  it: flagged for a human rather than silently passed. */
-export const ungradedReferenceGrading = (
+/** The judgment for a position the model answered without grounding: its
+ *  conclusion cites nothing in the target, so the documents gave it nothing to
+ *  compare. A failed or skipped grading is not this; the caller flags it. */
+export const insufficientEvidenceGrading = (
   position: ReferenceStandardPosition,
 ): ReferenceGrading => ({
   verdict: ASSESSMENT_VERDICTS["not-comparable"],
@@ -525,7 +526,7 @@ export const ungradedReferenceGrading = (
   explanation: { type: "insufficient-evidence" },
   recommendation: null,
   citations: [],
-  referenceCitations: passageCitations(position.passages),
+  referenceCitations: referencePassageCitations(position.passages),
   fix: null,
 });
 
@@ -594,7 +595,7 @@ export const normalizeReferenceGrading = ({
   );
   const grounded = isGrounded(raw.assessment, citations.length > 0);
   if (!grounded) {
-    return ungradedReferenceGrading(position);
+    return insufficientEvidenceGrading(position);
   }
 
   const standardBlocks = new Map(
@@ -629,7 +630,7 @@ export const normalizeReferenceGrading = ({
     explanation: { type: "comparison", text: rationaleProse.text },
     recommendation: recommendation.length > 0 ? recommendation : null,
     citations,
-    referenceCitations: passageCitations(position.passages),
+    referenceCitations: referencePassageCitations(position.passages),
     fix,
   };
 };

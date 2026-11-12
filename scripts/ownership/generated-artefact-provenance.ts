@@ -6,14 +6,29 @@ export default {
   capability: "Constructing and persisting generated artefacts",
   owner: [
     "apps/api/src/lib/ai-generation/provenance.ts",
+    "apps/api/src/lib/chat/artefact-provenance.ts",
     ...MODEL_OPERATIONS.owner,
   ],
   summary:
     "Registered model operations use the typed generated/authored value boundary. The provenance census freezes existing raw calls in a shrink-only transition list; new operations require explicit sources. The owner writes value and provenance atomically and delegates read projection to withdrawn-copy projection.",
   enforcement: {
     kind: "import",
-    specifiers: ["@/api/lib/ai-generation/provenance"],
-    names: ["generateArtefact", "authorArtefact", "writeThreadArtefactTitle"],
-    allowed: [],
+    specifiers: [
+      "@/api/lib/ai-generation/provenance",
+      "@/api/lib/chat/artefact-provenance",
+    ],
+    names: [
+      "generateArtefact",
+      "authorArtefact",
+      "writeThreadArtefactTitle",
+      "copyThreadArtefactTitle",
+    ],
+    allowed: [
+      {
+        path: "apps/api/src/handlers/chat/fork/create.ts",
+        reason:
+          "Copies a persisted title through the provenance owner without dispatching a model.",
+      },
+    ],
   },
 } as const satisfies OwnershipEntry;

@@ -97,8 +97,8 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/business-registries",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/business-registries",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/business-registries",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/business-registries",
     "prepack": "bun run build",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
