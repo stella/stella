@@ -50,6 +50,7 @@ import {
 } from "@/api/lib/case-law/decision-read-vocabulary";
 import { DECISION_QUERY_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
+import { publicReadRunningFields } from "@/api/lib/chat/projection-fields";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
@@ -1730,6 +1731,8 @@ const caseLawDecisionProjection = v.strictObject({
   courtAbbreviation: v.optional(v.string()),
   decisionDate: v.optional(v.string()),
   decisionId: passthroughId(),
+  // Set when the entry was read as another language's version of this id.
+  requestedDecisionId: v.optional(passthroughId()),
   decisionType: v.optional(v.string()),
   ecli: v.optional(v.string()),
   identifiers: decisionIdentifiersProjection,
@@ -1813,6 +1816,25 @@ const caseLawDecisionProjection = v.strictObject({
         }),
       ),
       truncated: v.optional(v.literal(true)),
+      resumeAfter: v.optional(
+        v.pipe(
+          v.string(),
+          v.description(
+            "Pass as resume_after with the same query and section to read the next matches.",
+          ),
+        ),
+      ),
+      section: v.optional(
+        v.strictObject({
+          status: v.picklist(["found", "not_found"]),
+          heading: v.optional(v.string()),
+          position: v.optional(v.number()),
+          hitsBefore: v.optional(v.number()),
+          reason: v.optional(
+            v.picklist(["no_assessment_heading", "language_unsupported"]),
+          ),
+        }),
+      ),
       // Only on an empty answer: which words matched nothing, and the next call.
       warnings: v.optional(
         v.array(
@@ -1958,6 +1980,10 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
       ),
       total: searchTotalProjection,
     }),
+  ),
+  // One query, so nothing has finished until everything has.
+  projectionBranch(
+    v.strictObject({ ...publicReadRunningFields, partial: v.null() }),
   ),
 ]);
 
@@ -2794,6 +2820,7 @@ export const REMOVE_MATTER_MEMBER_PROJECTION = v.strictObject({
 });
 
 export const UPDATE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
+  aiInstructions: v.optional(v.string()),
   managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),

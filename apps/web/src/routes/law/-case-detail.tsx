@@ -3,7 +3,9 @@ import { lazy, Suspense, useRef, useState } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { DECISION_ANCHOR_RESOLUTION } from "@stll/api-contract/case-law-anchor-redirects";
 import { decisionHasNoDocument } from "@stll/decision-reader/decision-body-state.logic";
+import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
 import { Minimize2Icon } from "@stll/ui/icons";
 
@@ -30,8 +32,10 @@ import { OpenOriginalButton } from "@/components/legal-reader/open-original-butt
 import Tooltip from "@/components/tooltip";
 import { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
+import { fragmentBlockAnchor } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { decisionCaseListLink } from "@/features/case-law/decision-case-list-link";
+import { useHeldDecisionAnchors } from "@/features/case-law/use-held-decision-anchors";
 import { useRecordOpenedLawDocument } from "@/features/law-search-history/law-search-history-query";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -89,6 +93,44 @@ export function PublicDecisionViewer({
     select: ({ location }) =>
       location.hash === "" ? undefined : location.hash,
   });
+  // A fragment a reparse moved is replaced in place, so the address bar,
+  // a copied link and the back button name the block it lands on now.
+  const routeBlockAnchor = fragmentBlockAnchor(routeAnchorId);
+  // A decision without a document holds no anchors of its own.
+  const shownAst = parseDocumentAst(decision.documentAst);
+  const resolveRouteAnchor = useHeldDecisionAnchors({
+    decisionId: decision.id,
+    anchors: routeBlockAnchor === undefined ? [] : [routeBlockAnchor],
+    currentAnchors: new Set(
+      shownAst === null ? [] : shownAst.blocks.map(({ anchorId }) => anchorId),
+    ),
+  });
+  const routeAnchorResolution =
+    routeBlockAnchor === undefined
+      ? undefined
+      : resolveRouteAnchor(routeBlockAnchor);
+  const movedRouteAnchor =
+    routeAnchorResolution?.type === DECISION_ANCHOR_RESOLUTION.MOVED
+      ? routeAnchorResolution.anchorId
+      : undefined;
+  const replaceRouteHash = useNavigate();
+  useExternalSyncEffect(() => {
+    if (movedRouteAnchor === undefined) {
+      return;
+    }
+    detached(
+      replaceRouteHash({
+        to: ".",
+        // Only the fragment moves; the page's search (case-file notice,
+        // initial query) stays.
+        search: true,
+        hash: movedRouteAnchor,
+        replace: true,
+        resetScroll: false,
+      }),
+      "case-law.replace-moved-anchor",
+    );
+  }, [movedRouteAnchor, replaceRouteHash]);
   const [citationLanding, setCitationLanding] = useState<{
     route: string;
     anchorId: string;

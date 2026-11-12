@@ -36,10 +36,6 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { OWNERSHIP } from "../../../../scripts/ownership";
 
-beforeEach(() => {
-  decryptAIConfigMock.mockClear();
-});
-
 const decryptedAIConfig: OrgAIConfig = {
   providers: [
     {
@@ -59,6 +55,7 @@ const decryptedAIConfig: OrgAIConfig = {
 const decryptAIConfigMock = mock(async () => Result.ok(decryptedAIConfig));
 
 beforeEach(() => {
+  decryptAIConfigMock.mockClear();
   decryptAIConfigMock.mockClear();
 });
 

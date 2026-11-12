@@ -1,0 +1,5 @@
+{
+  "metric": "nullish-array-fallback",
+  "delta": 1,
+  "reason": "ask-user options are optional in the tool schema: a question without them is answered in free text, so an absent list means no options, not a failed read."
+}

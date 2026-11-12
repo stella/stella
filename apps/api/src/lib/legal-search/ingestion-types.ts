@@ -198,7 +198,9 @@ export type RawIngestionResult = {
    * Exact source URLs emitted by an older adapter version for this same
    * publisher document. This is a narrowly scoped identity-migration hint:
    * the pipeline may use it to attach a newly learned `sourceDocumentId` to
-   * the right legacy null-id row without guessing from a shared docket.
+   * the right legacy null-id row without guessing from a shared docket. A URL
+   * that holds the document id itself proves the row even over a contradicting
+   * ECLI: a publisher can reissue one when it adds a sibling to the docket.
    */
   legacySourceUrls?: readonly string[] | undefined;
   /**

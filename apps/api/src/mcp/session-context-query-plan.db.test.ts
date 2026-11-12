@@ -52,6 +52,8 @@ const testFetchState = createTestFetch();
 const routeServer = serveRoutesForTest(apiKeysRoute);
 afterAll(async () => {
   await routeServer.stop();
+  testFetchState.restore();
+  await releaseAgentAuthTestDb();
 });
 
 /**
@@ -174,11 +176,6 @@ beforeAll(async () => {
     },
     { preconnect: passThroughFetch.preconnect },
   );
-});
-
-afterAll(async () => {
-  testFetchState.restore();
-  await releaseAgentAuthTestDb();
 });
 
 const createdKeySchema = v.looseObject({ key: v.string() });

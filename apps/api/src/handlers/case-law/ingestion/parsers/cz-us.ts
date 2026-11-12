@@ -67,6 +67,7 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
   CZ_TAKTO,
   CZ_TAKTO_TAIL_RE,
+  czechBenchRecitalStart,
   isCzechBareSignatoryName,
   isCzechOpeningFormula,
   isCzechTaktoLine,
@@ -86,6 +87,10 @@ import {
   normalizeInlineLine,
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
+import {
+  DOT_PARAGRAPH_MARKER_RE,
+  ITEM_OPENING_RE,
+} from "@stll/legal-ast/printed-paragraph-labels";
 
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -689,9 +694,6 @@ const ODUVODNENI_RE =
  */
 const SECTION_ROMAN_RE = /^(?=[IVX])(?<roman>X{0,3}(?:IX|IV|V?I{0,3}))\.?\s*$/u;
 
-/** Numbered paragraph: "1. ...", "2. ..." */
-const NUMBERED_PARA_RE = /^(?:\d+)\.\s+/u;
-
 /** The court's first reasoning paragraph, which no ruling item opens with. */
 const FIRST_REASONING_PARAGRAPH_RE = /^(?:\[1\]|1\.)\s/u;
 
@@ -700,7 +702,6 @@ const FIRST_REASONING_PARAGRAPH_RE = /^(?:\[1\]|1\.)\s/u;
  * where a sentence or a printed line goes on. A title may end with a full
  * stop ("… zákona č. 128/1946 Sb."); a long line that does is a sentence.
  */
-const ITEM_OPENING_RE = /^(?:\d{1,3}[.)]|\p{L}\)|[-–•])\s/u;
 const UNFINISHED_TITLE_RE = /[,;:-]$/u;
 const TITLE_SENTENCE_MAX_WORDS = 10;
 
@@ -823,6 +824,7 @@ const classifyUsBodyLine = ({
   // "takto:" separator
   if (isCzechTaktoLine(plainText) || isCzechTaktoLine(collapsed)) {
     state.inRuling = true;
+    markBenchRecital(blocks);
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -1101,6 +1103,26 @@ const opensRuling = (
     PLENARY_BENCH_RE.test(plainText) ||
     NALEZ_CAPTION_RE.test(plainText));
 
+/**
+ * The bench recital printed before a "takto:" of its own line (`Ústavní
+ * soud České republiky` / `v senátě rozhodl ve věci …`) introduces the
+ * ruling, as the shared Czech grammar reads it.
+ */
+const markBenchRecital = (blocks: Block[]): void => {
+  // The title is kept apart from the body's blocks, which open after it.
+  const start = czechBenchRecitalStart(blocks, blocks.length, {
+    opensAfterHeadMatter: true,
+  });
+  if (start === undefined) {
+    return;
+  }
+  for (const [index, block] of blocks.entries()) {
+    if (index >= start && block.type === "paragraph") {
+      blocks[index] = { ...block, role: "intro" };
+    }
+  }
+};
+
 /** A paragraph's role: its separate opinion's, or the ruling's opener. */
 const paragraphRole = (
   state: UsClassificationState,
@@ -1131,7 +1153,7 @@ const opinionHeading = (
   line: ParsedLineData,
 ): SeparateOpinionHeading | undefined =>
   separateOpinionHeading(
-    stripInlineLinePrefix(line, NUMBERED_PARA_RE).line.plainText,
+    stripInlineLinePrefix(line, DOT_PARAGRAPH_MARKER_RE).line.plainText,
     DISSENT_HEADING_MAX_CHARS,
   );
 

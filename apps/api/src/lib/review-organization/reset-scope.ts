@@ -116,6 +116,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "chat_run_logs",
   "chat_secrets",
   "chat_threads",
+  "chat_browser_site_grants",
   "chat_tool_grants",
   "chat_turns",
   "clause_categories",
@@ -134,6 +135,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "correspondence_drop_logs",
   "correspondence_filers",
   "desktop_presence",
+  "desktop_runner_folder_restores",
   "desktop_runner_runs",
   "desktop_runners",
   "desktop_time_entry_batches",
@@ -211,14 +213,23 @@ export const REVIEW_RESET_CLEARED_TABLES = [
 
 /**
  * Cleared tables the sweep empties in one statement, each group contiguous in
- * the sweep order. Every member is deleted on the owner connection, never in
- * a member-scoped transaction (the sweep refuses a group that is not).
+ * the sweep order. A group's members are all deleted on the owner connection,
+ * or all in the one member-scoped transaction; the sweep refuses a group that
+ * mixes the two.
  */
 export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_RESET_CLEARED_TABLES)[number][])[] =
   [
     // A desktop's presence and its runner rows: device bookkeeping the owner
     // removes directly, with the runs' commands and events by cascade.
-    ["desktop_presence", "desktop_runner_runs", "desktop_runners"],
+    [
+      "desktop_presence",
+      "desktop_runner_folder_restores",
+      "desktop_runner_runs",
+      "desktop_runners",
+    ],
+    // The member's standing approvals, for websites and for tools: both
+    // member-scoped, keyed on the same member and organization.
+    ["chat_browser_site_grants", "chat_tool_grants"],
     // Independent search history deletion barriers under one owner policy.
     ["search_history_country_clears", "search_history_tombstones"],
   ];
@@ -430,10 +441,26 @@ export const sweepReviewOrganization = async (
       }
     };
     if (shared !== undefined) {
-      if (shared.some((member) => applicationTables.has(member))) {
-        return panic("A shared reset statement holds a member-scoped table");
+      const scoped = shared.filter((member) => applicationTables.has(member));
+      if (scoped.length === 0) {
+        await clear(tx);
+        return Result.ok(undefined);
       }
-      await clear(tx);
+      if (scoped.length !== shared.length) {
+        return panic(
+          "A shared reset statement mixes member-scoped and owner tables",
+        );
+      }
+      await runScopedWorkInTransaction({
+        tx,
+        organizationId,
+        userId,
+        workspaceScope: {
+          type: WORKSPACE_ACCESS_MODE.explicit,
+          workspaceIds,
+        },
+        fn: clear,
+      });
       return Result.ok(undefined);
     }
     // Explicit owner cleanup policies cover user and feature-hidden rows.

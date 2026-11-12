@@ -67,13 +67,6 @@ const testFetchState = createTestFetch();
 // accepts it; every other issuer stays rejected.
 
 let priorStorageSetting = false;
-beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
-});
 
 type Json = Record<string, unknown>;
 
@@ -120,6 +113,8 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
   // Stub only the issuer JWKS URL; everything else hits the real fetch.
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
@@ -150,6 +145,7 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
   testFetchState.restore();
   await rootDb
     .delete(agentTrustedIssuer)

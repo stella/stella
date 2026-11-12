@@ -32,7 +32,9 @@ use tokio_tungstenite::{
 };
 use uuid::Uuid;
 
-use super::harness::{Forwarded, HarnessHost, HarnessReports, JournaledRun, RunSink};
+use super::harness::{
+  FolderAnswer, Forwarded, HarnessHost, HarnessReports, JournaledRun, RunSink,
+};
 use super::journal::{
   Change, Decision, Journal, RunRecord, SharedJournal, run_of, seq_of,
 };
@@ -811,6 +813,12 @@ impl Runner {
         if done == Some(true) {
           self.tokens.remove(&ack.run_id);
         }
+        Ok(())
+      }
+      ServerMessage::FolderRestore(restore) => {
+        let answer =
+          FolderAnswer::new(restore.restore_id.clone(), Arc::clone(&self.journal));
+        self.host.restore_folder(restore, answer);
         Ok(())
       }
       // Answered by the caller; a second `welcome` never comes.
