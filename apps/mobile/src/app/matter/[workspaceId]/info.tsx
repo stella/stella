@@ -61,7 +61,7 @@ const MatterInfo = ({
   source: AccessTokenSource;
 }) => {
   const colors = useAppColors();
-  const load = () => readMatter({ fetch, matterId, source });
+  const load = async () => await readMatter({ fetch, matterId, source });
   const [detail, setDetail] = useState<DetailLoad>(load);
   return (
     <ScrollView

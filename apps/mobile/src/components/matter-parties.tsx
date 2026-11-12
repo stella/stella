@@ -45,7 +45,7 @@ export const MatterParties = ({
   source: AccessTokenSource;
 }) => {
   const colors = useAppColors();
-  const load = () => listMatterParties({ fetch, matterId, source });
+  const load = async () => await listMatterParties({ fetch, matterId, source });
   const [parties, setParties] = useState<PartiesLoad>(load);
 
   return (

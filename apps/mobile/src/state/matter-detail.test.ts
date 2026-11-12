@@ -47,7 +47,7 @@ const server = (respond: (call: Call) => Response) => {
   const fetch: Fetch = async (input, init) => {
     const headers = new Headers(init?.headers);
     const call = {
-      route: `${init?.method ?? "GET"} ${String(input).replace(SESSION.serverUrl, "")}`,
+      route: `${init?.method ?? "GET"} ${input.replace(SESSION.serverUrl, "")}`,
       idempotencyKey: headers.get("idempotency-key"),
       body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
     };

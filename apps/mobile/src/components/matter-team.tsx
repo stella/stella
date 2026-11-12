@@ -48,7 +48,8 @@ export const MatterTeam = ({
   source: AccessTokenSource;
 }) => {
   const colors = useAppColors();
-  const loadMembers = () => listMatterMembers({ fetch, matterId, source });
+  const loadMembers = async () =>
+    await listMatterMembers({ fetch, matterId, source });
   const [members, setMembers] = useState<MembersLoad>(loadMembers);
 
   return (
@@ -120,6 +121,15 @@ const LoadedTeam = ({
     ...team.map((member) => ({ userId: member.userId, name: nameOf(member) })),
   ];
   const busy = disabled || saving;
+
+  // The organization's people load the first time the list opens.
+  const toggleCandidates = () => {
+    if (candidates !== null) {
+      setCandidates(null);
+      return;
+    }
+    setCandidates(listMemberCandidates({ fetch, source }));
+  };
 
   const chooseLead = (userId: string | null) => {
     setChoosingLead(false);
@@ -256,17 +266,7 @@ const LoadedTeam = ({
           ))}
         </View>
         {disabled ? null : (
-          <Button
-            disabled={busy}
-            onPress={() => {
-              setCandidates((current) =>
-                current === null
-                  ? listMemberCandidates({ fetch, source })
-                  : null,
-              );
-            }}
-            variant="outline"
-          >
+          <Button disabled={busy} onPress={toggleCandidates} variant="outline">
             {candidates === null ? t("addMember") : t("done")}
           </Button>
         )}
