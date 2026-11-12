@@ -198,7 +198,10 @@ struct Redeemed {
 /// member's web session, then `/redeem-link` with the device's proof. A new
 /// link is a new computer with a new desktop id; a relink (`computer`) keeps
 /// the computer's.
-async fn link(settings: &Settings, computer: Option<uuid::Uuid>) -> Result<Linked, String> {
+async fn link(
+  settings: &Settings,
+  computer: Option<uuid::Uuid>,
+) -> Result<Linked, String> {
   let pkcs8 = DeviceKey::generate()?;
   let device = DeviceKey::from_pkcs8(&pkcs8)?;
   let jkt = device.thumbprint()?;
