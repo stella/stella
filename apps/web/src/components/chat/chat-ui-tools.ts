@@ -690,8 +690,10 @@ export const isPendingApprovalPart = (
   );
 };
 
+// Any part: a coding agent's step is an approval part too, outside the
+// registered tool names.
 export const isApprovalRespondedPart = (
-  part: ChatPart,
+  part: unknown,
 ): part is ApprovalToolPart & {
   approval: { approved: boolean; id: string; needsApproval: boolean };
   state: "approval-responded";
