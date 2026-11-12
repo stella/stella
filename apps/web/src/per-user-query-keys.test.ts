@@ -881,6 +881,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "workspaces/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
+  "workspaces/member-candidates/list.ts": {
+    kind: "not-per-user",
+    reason: JOINS_NAMES,
+  },
   "workspaces/read-active.ts": {
     kind: "no-web-caller",
     calls: ["api.workspaces.active.get"],

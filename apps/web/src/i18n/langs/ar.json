@@ -571,6 +571,21 @@
       "showBefore": "إظهار النص قبل ¶ {from}",
       "verifyParagraphs": "التحقق من فقرات"
     },
+    "staleness": {
+      "failed": "تعذّرت إعادة فحص الادعاءات",
+      "finished": "{count, plural, zero {لم يُعَد فحص أي ادعاء} one {أُعيد فحص ادعاء واحد} two {أُعيد فحص ادعاءين} few {أُعيد فحص # ادعاءات} many {أُعيد فحص # ادعاءً} other {أُعيد فحص # ادعاء}}",
+      "partial": "أُعيد الفحص: {rechecked, number}، تعذّر: {failed, plural, zero {#} one {#} two {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "تغيّرت الواقعة",
+        "factHeld": "استُبعدت الواقعة",
+        "factRemoved": "أُزيلت الواقعة",
+        "newFactRelated": "واقعة جديدة ذات صلة"
+      },
+      "recheckAll": "إعادة فحص الكل",
+      "recheckLocked": "يُعاد فحصه مع الادعاءات القديمة الأخرى",
+      "runLine": "{count, plural, zero {لا ادعاءات قد تكون قديمة} one {ادعاء واحد قد يكون قديمًا} two {ادعاءان قد يكونان قديمين} few {# ادعاءات قد تكون قديمة} many {# ادعاءً قد يكون قديمًا} other {# ادعاء قد يكون قديمًا}}",
+      "running": "{count, plural, zero {لا ادعاءات قيد إعادة الفحص…} one {جارٍ إعادة فحص ادعاء واحد…} two {جارٍ إعادة فحص ادعاءين…} few {جارٍ إعادة فحص # ادعاءات…} many {جارٍ إعادة فحص # ادعاءً…} other {جارٍ إعادة فحص # ادعاء…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "متعارض",
@@ -1944,6 +1959,7 @@
       "refusalNoComputer": "لا يوجد أي حاسوب من حواسيبك متصل. افتح stella desktop ثم أرسل مجددًا.",
       "refusalPermissionAboveLimit": "لا تسمح مؤسستك لوكيل البرمجة على حاسوبك بهذه الأذونات. اختر خيارًا آخر من قائمة الأذونات.",
       "refusalPermissionUnavailable": "لا يمكن لوكيل البرمجة على حاسوبك العمل بهذه الأذونات. اختر خيارًا آخر من قائمة الأذونات.",
+      "refusalReasoningEffortUnavailable": "لا يقدّم وكيل البرمجة على حاسوبك مستوى الاستدلال هذا لهذا النموذج. اختر مستوى آخر من قائمة مستوى الاستدلال.",
       "refusalTooLarge": "هذه الدردشة أطول من أن تُنقل إلى حاسوبك. ابدأ دردشة جديدة لتشغيلها هناك.",
       "refusalUnavailable": "تشغيل الدردشات على حاسوبك غير متاح لحسابك.",
       "runOn": "التشغيل على",
@@ -2162,6 +2178,7 @@
     "stopFailed": "تعذّر إيقاف الإجابة. حاول مرة أخرى.",
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
+    "stopping": "جارٍ الإيقاف…",
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
     "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
@@ -2698,6 +2715,7 @@
     "organization": "المؤسسة",
     "organizationName": "اسم المؤسسة",
     "organizations": "المؤسسات",
+    "outOfDate": "غير محدَّث",
     "page": "الصفحة {page}",
     "paymentRetryNotice": "هناك مشكلة في الدفع. حدّث طريقة الدفع بحلول {date} للحفاظ على إمكانية الوصول.",
     "pin": "تثبيت",
@@ -6104,7 +6122,6 @@
     "comments": "التعليقات",
     "commentsEmpty": "حدّد نصًا للتعليق عليه.",
     "noRevisions": "لا توجد مراجعات بعد",
-    "outOfDate": "غير محدَّث",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "بلا ملخص",
     "proposals": "الاقتراحات",

@@ -192,6 +192,52 @@ describe("which routes an API access token opens", () => {
     ).toEqual({ admitted: true });
   });
 
+  test("a new matter's client is created with the contacts scope, not the matters one", () => {
+    const create = { method: "PUT", route: "/v1/contacts" } as const;
+    expect(
+      admitApiAccessTokenRoute({
+        ...create,
+        scopes: ["stella:read", "stella:matters_write"],
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    expect(
+      admitApiAccessTokenRoute({
+        ...create,
+        scopes: ["stella:contacts_write"],
+      }),
+    ).toEqual({ admitted: true });
+    for (const route of [
+      "/v1/contacts/search",
+      "/v1/workspaces/member-candidates",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "GET",
+          route,
+          scopes: ["stella:read"],
+        }),
+      ).toEqual({ admitted: true });
+    }
+    // The rest of the address book stays closed: editing, deleting,
+    // importing and exporting contacts.
+    for (const [method, route] of [
+      ["GET", "/v1/contacts"],
+      ["DELETE", "/v1/contacts"],
+      ["POST", "/v1/contacts/:contactId"],
+      ["DELETE", "/v1/contacts/:contactId"],
+      ["PUT", "/v1/contacts/import"],
+      ["GET", "/v1/contacts/export"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({
+          method,
+          route,
+          scopes: ["stella:read", "stella:contacts_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
   test("an upload opens at its domain scope, its folder steps never", () => {
     for (const route of [
       "/v1/uploads/:workspaceId/presign",
@@ -278,7 +324,30 @@ describe("which routes an API access token opens", () => {
       "GET /v1/chat/threads/:threadId/turns/:turnId/join",
       "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
       "GET /v1/chat/runs/active",
+      "POST /v1/chat/tool-grants",
     ]);
+  });
+
+  test("a standing approval given in a conversation is stored at the chat scope", () => {
+    const grant = { method: "POST", route: "/v1/chat/tool-grants" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...grant, scopes: ["stella:chat"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...grant,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    // Listing and removing grants stay with signed-in browsers.
+    for (const [method, route] of [
+      ["GET", "/v1/chat/tool-grants"],
+      ["DELETE", "/v1/chat/tool-grants/:grantId"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: MOBILE_SCOPES }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
   });
 
   test("the chats list's active runs open at the chat scope", () => {

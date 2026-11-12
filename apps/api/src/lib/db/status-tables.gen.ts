@@ -451,7 +451,13 @@ export const ENUM_COLUMNS = {
   ],
   legal_list_claim_carry_outcomes: ["entity_feature_gate", "outcome"],
   legal_list_claim_review_events: ["entity_feature_gate", "kind"],
-  legal_list_claims: ["entity_feature_gate", "framing", "type"],
+  legal_list_claims: [
+    "asserted_on_precision",
+    "asserted_on_source",
+    "entity_feature_gate",
+    "framing",
+    "type",
+  ],
   legal_list_fact_details: [
     "confidence",
     "entity_feature_gate",

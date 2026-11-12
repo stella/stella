@@ -16,6 +16,9 @@
  * A pairing is made only when it is the single candidate on both sides.
  * Several candidates are `ambiguous`, none is `unmatched`: a guess would
  * put one claim's decisions on another, so either carries nothing.
+ *
+ * It also owns what a claim's words are (`claimWords`), which staleness
+ * reads to say whether a new fact is on a claim's point.
  */
 
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -56,8 +59,9 @@ export const normaliseClaimText = (text: string): string =>
     .replaceAll(SPACE_PATTERN, " ")
     .trim();
 
-const wordsOf = (normalised: string): string[] =>
-  normalised.match(WORD_PATTERN) ?? [];
+/** A text's words as matching compares them, in order. */
+export const claimWords = (text: string): string[] =>
+  normaliseClaimText(text).match(WORD_PATTERN) ?? [];
 
 /** Fewest word insertions, deletions and substitutions turning one word
  *  sequence into the other. */
@@ -89,8 +93,8 @@ const wordEditDistance = (
  * however many words they share. 0 when either side has no words.
  */
 export const claimTextSimilarity = (left: string, right: string): number => {
-  const leftWords = wordsOf(normaliseClaimText(left));
-  const rightWords = wordsOf(normaliseClaimText(right));
+  const leftWords = claimWords(left);
+  const rightWords = claimWords(right);
   const longer = Math.max(leftWords.length, rightWords.length);
   if (leftWords.length === 0 || rightWords.length === 0) {
     return 0;

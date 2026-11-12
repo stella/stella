@@ -1,3 +1,5 @@
+import type { Ref } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
@@ -6,6 +8,9 @@ import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
 import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+import type { ChatEditorController } from "@/components/chat-editor-provider";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 
@@ -24,7 +29,7 @@ globalThis.fetch = Object.assign(
   { preconnect: () => undefined },
 );
 
-const { act } = await import("react");
+const { act, createRef, useImperativeHandle } = await import("react");
 const { cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
@@ -37,6 +42,15 @@ const { openChatThreadDomPage } =
 const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
 const { toSafeId } = await import("@/lib/safe-id");
+const { useChatDraftStore } = await import("@/lib/chat-draft-store");
+const { getChatThreadKey, toChatThreadId } =
+  await import("@/lib/chat-thread-ref");
+const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
+const { ChatEditorProvider, useChatEditor } =
+  await import("@/components/chat-editor-provider");
+const { PromptEditorContent } = await import("@/components/prompt-editor");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 
 afterEach(async () => {
   await act(async () => cleanup());
@@ -89,22 +103,59 @@ const pause: LocalRunQuestionPause = {
   questions: [governingLaw, signatories, passphrase],
 };
 
-const mountCard = () => {
+const THREAD = {
+  scope: "global",
+  threadId: toChatThreadId("00000000-0000-7000-8000-0000000000d1"),
+} as const satisfies ChatThreadRef;
+const DRAFT_KEY = getChatThreadKey(THREAD);
+
+/** The thread's composer, on screen beside the card. */
+const Composer = ({ ref }: { ref: Ref<ChatEditorController> }) => {
+  const controller = useChatEditor({ threadRef: THREAD });
+  useImperativeHandle(ref, () => controller, [controller]);
+  return <PromptEditorContent editor={controller.editor} />;
+};
+
+const mountCard = (
+  delivery: "sent" | "not_sent" = "sent",
+  composer: "none" | "live" = "none",
+) => {
   const answers: { interruptId: string; answers: unknown }[] = [];
-  const view = render(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <FormattingProvider locale="en" timeZone="UTC">
-        <LocalRunQuestionCard
-          onAnswer={async (interruptId, given) => {
-            answers.push({ interruptId, answers: given });
-            await Promise.resolve();
-          }}
-          pause={pause}
-        />
-      </FormattingProvider>
-    </IntlProvider>,
+  const live = createRef<ChatEditorController>();
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const tree = (card: "shown" | "gone") => (
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <ChatThreadTestRouter>
+            <ChatEditorProvider>
+              {card === "shown" && (
+                <LocalRunQuestionCard
+                  threadRef={THREAD}
+                  onAnswer={async (interruptId, given) => {
+                    answers.push({ interruptId, answers: given });
+                    await Promise.resolve();
+                    return delivery;
+                  }}
+                  pause={pause}
+                />
+              )}
+              {composer === "live" && <Composer ref={live} />}
+            </ChatEditorProvider>
+          </ChatThreadTestRouter>
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>
   );
-  return { answers, view };
+  const view = render(tree("shown"));
+  const closeCard = async () => {
+    await act(async () => {
+      view.rerender(tree("gone"));
+    });
+  };
+  return { answers, view, live, closeCard };
 };
 
 const button = (name: string) => screen.getByRole("button", { name });
@@ -194,6 +245,61 @@ describe("local run question card", () => {
     expect(
       screen.queryByRole("button", { name: messages.chat.askUser.submit }),
     ).toBeNull();
+  });
+
+  test("an answer that did not go out leaves the card usable, not on a spinner", async () => {
+    mountCard("not_sent");
+    fireEvent.click(button(messages.chat.localRunQuestion.dismiss));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", {
+          name: messages.chat.localRunQuestion.dismiss,
+        }) === null,
+      ).toBe(false);
+    });
+  });
+
+  test("own words left unsent go to the composer when the card closes; a secret's never do", async () => {
+    useChatDraftStore.setState({ draftsByThreadKey: {} });
+    const { view } = mountCard();
+    fireEvent.click(button(messages.chat.askUser.custom));
+    fireEvent.change(screen.getByLabelText(signatories.prompt), {
+      target: { value: "The guarantor signs too" },
+    });
+    fireEvent.change(screen.getByLabelText(passphrase.prompt), {
+      target: { value: "open sesame" },
+    });
+    // The turn ended without the answer: the card goes.
+    await act(async () => {
+      view.unmount();
+    });
+    const draft = JSON.stringify(
+      useChatDraftStore.getState().getDraft(DRAFT_KEY)?.doc ?? null,
+    );
+    expect(draft).toContain("The guarantor signs too");
+    expect(draft).not.toContain("open sesame");
+  });
+
+  test("own words left unsent follow what the member just typed in the live composer", async () => {
+    useChatDraftStore.setState({ draftsByThreadKey: {} });
+    const { live, closeCard } = mountCard("sent", "live");
+    await waitFor(() => {
+      expect(live.current?.editor?.isInitialized).toBe(true);
+    });
+    const editor = live.current?.editor ?? panic("no live composer");
+    fireEvent.click(button(messages.chat.askUser.custom));
+    fireEvent.change(screen.getByLabelText(signatories.prompt), {
+      target: { value: "The guarantor signs too" },
+    });
+    // Typed a moment ago: the stored draft has not caught up yet.
+    act(() => {
+      editor.chain().focus("end").insertContent("Also check clause 4. ").run();
+    });
+    await closeCard();
+    // Its own paragraph, so it never runs into what was typed.
+    expect(editor.getText()).toBe(
+      "Also check clause 4. \n\nThe guarantor signs too",
+    );
   });
 
   test("dismiss sends no answers", () => {

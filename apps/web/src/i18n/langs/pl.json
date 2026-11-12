@@ -571,6 +571,21 @@
       "showBefore": "Pokaż tekst przed ¶ {from}",
       "verifyParagraphs": "Sprawdź akapity"
     },
+    "staleness": {
+      "failed": "Nie udało się ponownie sprawdzić twierdzeń",
+      "finished": "{count, plural, one {Ponownie sprawdzono # twierdzenie} few {Ponownie sprawdzono # twierdzenia} many {Ponownie sprawdzono # twierdzeń} other {Ponownie sprawdzono # twierdzenia}}",
+      "partial": "Ponownie sprawdzono: {rechecked, number}, nie udało się: {failed, plural, one {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt zmieniony",
+        "factHeld": "Fakt wykluczony",
+        "factRemoved": "Fakt usunięty",
+        "newFactRelated": "Nowy powiązany fakt"
+      },
+      "recheckAll": "Sprawdź wszystkie ponownie",
+      "recheckLocked": "Jest ponownie sprawdzane razem z innymi nieaktualnymi twierdzeniami",
+      "runLine": "{count, plural, one {# twierdzenie może być nieaktualne} few {# twierdzenia mogą być nieaktualne} many {# twierdzeń może być nieaktualnych} other {# twierdzenia może być nieaktualnego}}",
+      "running": "{count, plural, one {Ponowne sprawdzanie # twierdzenia…} few {Ponowne sprawdzanie # twierdzeń…} many {Ponowne sprawdzanie # twierdzeń…} other {Ponowne sprawdzanie # twierdzenia…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Sprzeczne",
@@ -1944,6 +1959,7 @@
       "refusalNoComputer": "Żaden z Twoich komputerów nie jest połączony. Otwórz stella desktop i wyślij ponownie.",
       "refusalPermissionAboveLimit": "Twoja organizacja nie pozwala agentowi programistycznemu na Twoim komputerze działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
       "refusalPermissionUnavailable": "Agent programistyczny na Twoim komputerze nie może działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
+      "refusalReasoningEffortUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje tego poziomu rozumowania dla modelu. Wybierz inny w menu Poziom rozumowania.",
       "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
       "runOn": "Uruchom na",
@@ -2162,6 +2178,7 @@
     "stopFailed": "Nie udało się zatrzymać odpowiedzi. Spróbuj ponownie.",
     "stopResponse": "Zatrzymaj",
     "stopped": "Zatrzymano",
+    "stopping": "Zatrzymywanie…",
     "suggestTitle": "Zaproponuj tytuł",
     "suggestTitleUnavailableAnonymized": "Propozycje tytułu są niedostępne dla rozmów zanonimizowanych.",
     "suggestedFollowupsLabel": "Sugerowane pytania uzupełniające",
@@ -2698,6 +2715,7 @@
     "organization": "Organizacja",
     "organizationName": "Nazwa organizacji",
     "organizations": "Organizacje",
+    "outOfDate": "Nieaktualna",
     "page": "Strona {page}",
     "paymentRetryNotice": "Problem z płatnością. Zaktualizuj metodę płatności do {date}, aby zachować dostęp.",
     "pin": "Przypnij",
@@ -6104,7 +6122,6 @@
     "comments": "Komentarze",
     "commentsEmpty": "Zaznacz tekst, aby go skomentować.",
     "noRevisions": "Brak wersji",
-    "outOfDate": "Nieaktualna",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Bez podsumowania",
     "proposals": "Propozycje zmian",

@@ -291,6 +291,7 @@ export const ChatTabPanel = ({
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     turnAbandoned,
@@ -833,6 +834,7 @@ export const ChatTabPanel = ({
             onStop={() => {
               stop();
             }}
+            stopping={stopPending}
             onNewThread={messages.length > 0 ? startNewThread : null}
             onSubmit={handleComposerSubmit}
             pendingCount={0}

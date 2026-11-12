@@ -7,6 +7,7 @@ import type {
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DesktopRunnerApprovalMode,
+  DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 
 import type { StellaSandboxMcpBinding } from "../sandbox";
@@ -89,6 +90,11 @@ export type HarnessTurnInput = {
   toolPath: readonly string[];
   /** A model id the harness itself reported through `probe`. */
   model: string;
+  /**
+   * An effort `probe` reported for the model, asked of it for this turn;
+   * `null` leaves it to the harness.
+   */
+  reasoningEffort: DesktopRunnerReasoningEffort | null;
   /** Developer instructions for the harness. */
   instructions: string;
   policy: HarnessRunPolicy;
@@ -169,7 +175,8 @@ export type HarnessModel = {
   id: string;
   displayName: string;
   isDefault: boolean;
-  reasoningEfforts: readonly string[];
+  /** The efforts a turn may ask of the model, of those stella knows. */
+  reasoningEfforts: readonly DesktopRunnerReasoningEffort[];
   inputModalities: readonly string[];
 };
 

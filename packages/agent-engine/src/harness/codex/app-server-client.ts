@@ -50,6 +50,17 @@ type StartAppServerOptions = {
   handlers: AppServerHandlers;
 };
 
+/**
+ * Startup requests, which wait on the startup deadline: initialize covers
+ * the CLI's first launch (an antivirus scan, a busy computer); starting or
+ * resuming a thread waits for its MCP servers, stella's among them.
+ */
+const STARTUP_REQUESTS: ReadonlySet<CodexClientRequestMethod> = new Set([
+  "initialize",
+  "thread/start",
+  "thread/resume",
+]);
+
 export type AppServerClient = {
   request: (
     method: CodexClientRequestMethod,
@@ -135,7 +146,12 @@ export const startAppServer = ({
     request: async (method, params) => {
       const id = state.nextId;
       state.nextId += 1;
-      return await server.request(id, method, { id, method, params });
+      return await server.request(
+        id,
+        method,
+        { id, method, params },
+        STARTUP_REQUESTS.has(method) ? deadlines.startupRequestMs : undefined,
+      );
     },
     notify: (method, params) => {
       server.write(params === undefined ? { method } : { method, params });

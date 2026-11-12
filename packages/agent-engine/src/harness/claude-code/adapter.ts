@@ -7,6 +7,7 @@ import * as v from "valibot";
 import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   type DesktopRunnerApprovalMode,
+  knownReasoningEfforts,
 } from "@stll/api-contract/desktop-runner";
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
@@ -95,6 +96,8 @@ export type ClaudeCodeHarnessAdapterOptions = {
   gracePeriodMs: number;
   /** How long any control request to the harness waits for its answer. */
   requestTimeoutMs: number;
+  /** See `HarnessProcessDeadlines.startupRequestMs`. */
+  startupRequestTimeoutMs?: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
   /** Where the CLI's protocol lines go, redacted. */
@@ -400,6 +403,7 @@ const connect = async ({
     detached: createDetached(options.onBackgroundError),
     deadlines: {
       requestMs: options.requestTimeoutMs,
+      startupRequestMs: options.startupRequestTimeoutMs,
       terminateMs: options.gracePeriodMs,
     },
     cwd,
@@ -507,7 +511,7 @@ const modelsOf = ({ models }: Initialized): HarnessModel[] => {
     id: model.value,
     displayName: model.displayName,
     isDefault: index === defaultIndex,
-    reasoningEfforts: model.supportedEffortLevels ?? [],
+    reasoningEfforts: knownReasoningEfforts(model.supportedEffortLevels),
     inputModalities: TEXT_ONLY,
   }));
 };
@@ -626,6 +630,9 @@ const turnArgs = (
   target.sessionId,
   "--model",
   input.model,
+  ...(input.reasoningEffort === null
+    ? []
+    : ["--effort", input.reasoningEffort]),
 ];
 
 type OpenedSession = {

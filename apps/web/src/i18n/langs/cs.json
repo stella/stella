@@ -571,6 +571,21 @@
       "showBefore": "Zobrazit text před ¶ {from}",
       "verifyParagraphs": "Ověřit odstavce"
     },
+    "staleness": {
+      "failed": "Tvrzení se nepodařilo zkontrolovat znovu",
+      "finished": "{count, plural, one {# tvrzení znovu zkontrolováno} few {# tvrzení znovu zkontrolována} many {# tvrzení znovu zkontrolováno} other {# tvrzení znovu zkontrolováno}}",
+      "partial": "Znovu zkontrolováno: {rechecked, number}, nezdařilo se: {failed, plural, one {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt změněn",
+        "factHeld": "Fakt vyloučen",
+        "factRemoved": "Fakt odebrán",
+        "newFactRelated": "Nový související fakt"
+      },
+      "recheckAll": "Zkontrolovat vše znovu",
+      "recheckLocked": "Kontroluje se znovu spolu s ostatními zastaralými tvrzeními",
+      "runLine": "{count, plural, one {# tvrzení může být zastaralé} few {# tvrzení mohou být zastaralá} many {# tvrzení může být zastaralého} other {# tvrzení může být zastaralých}}",
+      "running": "{count, plural, one {Znovu se kontroluje # tvrzení…} few {Znovu se kontrolují # tvrzení…} many {Znovu se kontroluje # tvrzení…} other {Znovu se kontroluje # tvrzení…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "V rozporu",
@@ -1944,6 +1959,7 @@
       "refusalNoComputer": "Žádný z vašich počítačů není připojen. Otevřete stella desktop a odešlete zprávu znovu.",
       "refusalPermissionAboveLimit": "Vaše organizace tato oprávnění programovacímu agentovi ve vašem počítači nepovoluje. Vyberte jinou možnost v nabídce Oprávnění.",
       "refusalPermissionUnavailable": "Programovací agent ve vašem počítači s těmito oprávněními běžet nemůže. Vyberte jinou možnost v nabídce Oprávnění.",
+      "refusalReasoningEffortUnavailable": "Programovací agent ve vašem počítači tuto úroveň uvažování pro daný model nenabízí. Vyberte jinou v nabídce Úroveň uvažování.",
       "refusalTooLarge": "Tato konverzace je příliš dlouhá na předání do vašeho počítače. Pro spuštění tam začněte nový chat.",
       "refusalUnavailable": "Spouštění chatů ve vašem počítači není pro váš účet dostupné.",
       "runOn": "Spustit na",
@@ -2162,6 +2178,7 @@
     "stopFailed": "Odpověď se nepodařilo zastavit. Zkuste to znovu.",
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",
+    "stopping": "Zastavuji…",
     "suggestTitle": "Navrhnout název",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nejsou dostupné pro anonymizované konverzace.",
     "suggestedFollowupsLabel": "Navrhované navazující dotazy",
@@ -2698,6 +2715,7 @@
     "organization": "Organizace",
     "organizationName": "Název organizace",
     "organizations": "Organizace",
+    "outOfDate": "Neaktuální",
     "page": "Stránka {page}",
     "paymentRetryNotice": "Problém s platbou. Pro zachování přístupu aktualizujte platební metodu do {date}.",
     "pin": "Připnout",
@@ -6104,7 +6122,6 @@
     "comments": "Komentáře",
     "commentsEmpty": "Komentář přidáte označením textu.",
     "noRevisions": "Zatím žádné revize",
-    "outOfDate": "Neaktuální",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Bez shrnutí",
     "proposals": "Návrhy změn",

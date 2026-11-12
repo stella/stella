@@ -571,6 +571,21 @@
       "showBefore": "Show the text before ¶ {from}",
       "verifyParagraphs": "Verify paragraphs"
     },
+    "staleness": {
+      "failed": "The claims could not be checked again",
+      "finished": "{count, plural, one {# claim re-checked} other {# claims re-checked}}",
+      "partial": "{rechecked, number} re-checked, {failed, plural, one {# failed} other {# failed}}",
+      "reasons": {
+        "factChanged": "Fact changed",
+        "factHeld": "Fact held",
+        "factRemoved": "Fact removed",
+        "newFactRelated": "New related fact"
+      },
+      "recheckAll": "Re-check all",
+      "recheckLocked": "Being re-checked with the other out-of-date claims",
+      "runLine": "{count, plural, one {# claim may be out of date} other {# claims may be out of date}}",
+      "running": "{count, plural, one {Re-checking # claim…} other {Re-checking # claims…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Contradicted",
@@ -1944,6 +1959,7 @@
       "refusalNoComputer": "None of your computers is connected. Open stella desktop, then send again.",
       "refusalPermissionAboveLimit": "Your organization does not allow these permissions for the coding agent on your computer. Choose another option under Permissions.",
       "refusalPermissionUnavailable": "The coding agent on your computer cannot run with these permissions. Choose another option under Permissions.",
+      "refusalReasoningEffortUnavailable": "The coding agent on your computer does not offer this reasoning effort for the model. Choose another one under Reasoning effort.",
       "refusalTooLarge": "This conversation is too long to hand to your computer. Start a new chat to run it there.",
       "refusalUnavailable": "Running chats on your computer is not available for your account.",
       "runOn": "Run on",
@@ -2162,6 +2178,7 @@
     "stopFailed": "Couldn't stop the answer. Try again.",
     "stopResponse": "Stop",
     "stopped": "Stopped",
+    "stopping": "Stopping…",
     "suggestTitle": "Suggest a title",
     "suggestTitleUnavailableAnonymized": "Title suggestions are unavailable for anonymized conversations.",
     "suggestedFollowupsLabel": "Suggested follow-up prompts",
@@ -2698,6 +2715,7 @@
     "organization": "Organization",
     "organizationName": "Organization name",
     "organizations": "Organizations",
+    "outOfDate": "Out of date",
     "page": "Page {page}",
     "paymentRetryNotice": "Payment issue. Update your payment method by {date} to keep access.",
     "pin": "Pin",
@@ -6104,7 +6122,6 @@
     "comments": "Comments",
     "commentsEmpty": "Select text in the body to comment on it.",
     "noRevisions": "No revisions yet",
-    "outOfDate": "Out of date",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "No summary",
     "proposals": "Proposals",

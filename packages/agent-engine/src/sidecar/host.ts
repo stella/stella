@@ -98,6 +98,12 @@ const HARNESS_GRACE_MS = 5000;
  * catches a harness that stopped answering.
  */
 const HARNESS_REQUEST_TIMEOUT_MS = 30_000;
+/**
+ * How long a startup request waits: the CLI's first launch, which a busy
+ * computer or an antivirus scan slows, and connecting stella's MCP server,
+ * which the CLI itself gives up to 30 seconds.
+ */
+const HARNESS_STARTUP_REQUEST_TIMEOUT_MS = 2 * 60_000;
 const MAX_PROBED_MODELS = 100;
 
 export type HarnessLaunch = {
@@ -196,6 +202,7 @@ const ADAPTERS = {
       clientVersion: launch.clientVersion,
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
+      startupRequestTimeoutMs: HARNESS_STARTUP_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
       protocolLog: options.protocolLog,
       ...(options.onProcess === null ? {} : { onProcess: options.onProcess }),
@@ -219,6 +226,7 @@ const ADAPTERS = {
       environment: launchEnvironment(options.environment, launch.launch),
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
+      startupRequestTimeoutMs: HARNESS_STARTUP_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
       protocolLog: options.protocolLog,
       platform: process.platform,
@@ -316,6 +324,7 @@ const probeOutcome = ({
       id: model.id,
       label: model.displayName === "" ? model.id : model.displayName,
       isDefault: model.isDefault,
+      reasoningEfforts: [...model.reasoningEfforts],
     })),
   };
 };
@@ -849,6 +858,7 @@ export class SidecarHost {
       networkHosts: declared.hosts,
       toolPath: message.toolPath,
       model: message.model,
+      reasoningEffort: message.reasoningEffort,
       instructions: message.instructions,
       policy: message.policy,
       mcp: binding.value,

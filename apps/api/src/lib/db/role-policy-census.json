@@ -7402,6 +7402,16 @@
   {
     "schema": "public",
     "table": "legal_list_claims",
+    "policy": "legal_list_claims_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('legal_list_claims'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('legal_list_claims'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "legal_list_claims",
     "policy": "workspace_delete",
     "command": "DELETE",
     "roles": ["stella"],
