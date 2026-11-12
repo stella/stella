@@ -248,6 +248,7 @@ export const ACTION_KIND_KILL_SWITCH = {
   "bilingual.background": "bilingual-documents",
   "list-verification.start": "list-verification",
   "list-verification.background": "list-verification",
+  "list-verification.recheck": "list-verification",
   "list-fact-extraction.start": "list-fact-extraction",
   "list-fact-extraction.background": "list-fact-extraction",
   "report-export.start": "report-export",

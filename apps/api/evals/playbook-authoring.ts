@@ -40,6 +40,7 @@ import { writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
+import { ASK_USER_SELECTION } from "@stll/api-contract/chat-ask-user";
 
 import { resolveActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
@@ -875,6 +876,10 @@ const askedQuestionsOf = (input: unknown): AskedQuestion[] => {
       question: text(question["question"]),
       reason: text(question["reason"]),
       options: Array.isArray(options) ? options.map(text) : [],
+      selection:
+        question["selection"] === ASK_USER_SELECTION.multiple
+          ? ASK_USER_SELECTION.multiple
+          : ASK_USER_SELECTION.single,
       default: typeof preset === "string" ? preset : undefined,
     };
   });
@@ -1294,10 +1299,12 @@ const createBehaviorTools = ({
     written(input);
     answers += 1;
     return {
-      answers: questions.map((question) => ({
-        question: question.question,
-        answer: scenario.answer(question, events),
-      })),
+      answers: questions.map((question) => {
+        const answer = scenario.answer(question, events);
+        return typeof answer === "string"
+          ? { question: question.question, answer }
+          : { question: question.question, selected: [...answer] };
+      }),
     };
   });
 

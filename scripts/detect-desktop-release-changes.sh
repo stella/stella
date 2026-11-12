@@ -130,6 +130,8 @@ rebuild_paths=(
   "packages/fetch/"
   "packages/portable-path/"
   "packages/sha256/"
+  "packages/skills/src/frontmatter.ts"
+  "packages/skills/src/network-hosts.ts"
   "packages/api-contract/src/agent-harness.ts"
   "packages/api-contract/src/ai-errors.ts"
   "packages/api-contract/src/api-date.ts"

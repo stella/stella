@@ -5,6 +5,7 @@
     "": {
       "name": "stella",
       "devDependencies": {
+        "@better-auth/core": "catalog:",
         "@changesets/changelog-github": "^1.0.1",
         "@changesets/cli": "^3.0.3",
         "@emnapi/core": "1.11.3",
@@ -266,6 +267,7 @@
       "devDependencies": {
         "@happy-dom/global-registrator": "21.0.4",
         "@playwright/test": "^1.64.1",
+        "@stll/agent-engine": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
@@ -720,6 +722,7 @@
         "@stll/fetch": "workspace:*",
         "@stll/portable-path": "workspace:*",
         "@stll/sha256": "workspace:*",
+        "@stll/skills": "workspace:*",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-codex": "catalog:",
         "@tanstack/ai-persistence": "catalog:",

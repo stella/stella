@@ -805,6 +805,60 @@ test("recents list only the selected jurisdiction's searches and opened decision
   }
 });
 
+test("clear confirmation resets across countries and submits the selected country", async () => {
+  const fixture = await mountServerHistory(({ url, method }) =>
+    Response.json(
+      method === "DELETE"
+        ? { deleted: 1 }
+        : {
+            scope: {
+              userId: "scoped-history-reader",
+              organizationId: "scoped-history-org-a",
+            },
+            items: [
+              {
+                ...seed[0],
+                query: `History ${String(url.searchParams.get("country"))}`,
+              },
+            ],
+            nextCursor: null,
+            limit: 20,
+          },
+    ),
+  );
+  try {
+    await waitFor(() => expect(screen.getByText("History CZE")).toBeTruthy());
+    await click(messages.lawHome.clearRecent);
+    const staleConfirm = screen.getByRole("button", {
+      name: messages.common.delete,
+    });
+    await fixture.setCountry("POL");
+    await waitFor(() => expect(screen.getByText("History POL")).toBeTruthy());
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await act(async () => fireEvent.click(staleConfirm));
+    expect(
+      fixture.requests.filter(({ method }) => method === "DELETE"),
+    ).toHaveLength(0);
+    await fixture.setCountry("CZE");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await fixture.setCountry("POL");
+    await click(messages.lawHome.clearRecent);
+    await click(messages.common.delete);
+    await waitFor(() =>
+      expect(
+        fixture.requests.filter(({ method }) => method === "DELETE"),
+      ).toHaveLength(1),
+    );
+    expect(
+      fixture.requests
+        .find(({ method }) => method === "DELETE")
+        ?.url.searchParams.get("country"),
+    ).toBe("POL");
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 test("clear confirmation belongs to its opening organization and cannot survive an organization round trip", async () => {
   const organizationA = "scoped-history-org-a";
   const organizationB = "scoped-history-org-b";
@@ -1100,8 +1154,9 @@ test("clearing visible recents waits for a delayed import and leaves server and 
     await waitFor(() => {
       expect(serverQueries).toEqual([]);
       expect(
-        screen.queryByRole("button", { name: /Local query|Earlier query/u }),
-      ).toBeNull();
+        screen.queryByRole("button", { name: /Local query|Earlier query/u }) ===
+          null,
+      ).toBe(true);
     });
   } finally {
     finishImport.resolve(undefined);
@@ -1181,7 +1236,9 @@ test("removing a saved query waits for a delayed import and leaves it absent", a
       queryKey: ["law-search-history"],
     });
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: /Saved query/u })).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /Saved query/u }) === null,
+      ).toBe(true);
       expect(serverEntries).toEqual([]);
       expect(storage.getItem(key)).toBeNull();
     });
@@ -1419,9 +1476,11 @@ for (const [operation, title] of [
         expect(deleteAttempts).toBe(2);
         expect(serverEntries).toEqual([]);
         expect(storage.getItem(key)).toBeNull();
-        expect(screen.queryByText(messages.lawHome.importFailed)).toBeNull();
+        expect(screen.queryByText(messages.lawHome.importFailed) === null).toBe(
+          true,
+        );
         expect(screen.getByText(messages.lawHome.noRecent)).toBeTruthy();
-        expect(screen.queryByRole("alertdialog")).toBeNull();
+        expect(screen.queryByRole("alertdialog") === null).toBe(true);
         expect(imports).toBe(1);
       });
     } finally {

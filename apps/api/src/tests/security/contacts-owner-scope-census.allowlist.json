@@ -137,6 +137,26 @@
       "updateContactHandler.outcome.rows": 1
     }
   },
+  "apps/api/src/handlers/data-exports/archive-path-plan.ts::names-contacts-table": {
+    "reason": "Names the `contacts` record of the export archive's path plan, not the contacts table; it reads and writes no contact row.",
+    "sites": {
+      "planOrganizationPaths.records.contacts": 1
+    }
+  },
+  "apps/api/src/handlers/data-exports/build-export.ts::names-contacts-table": {
+    "reason": "Names the `contacts` entry of the archive's organization part; the rows come from export-source.ts, and this module reads no contact row.",
+    "sites": {
+      "organizationEntries.tables.contacts": 1
+    }
+  },
+  "apps/api/src/handlers/data-exports/export-source.ts::names-contacts-table": {
+    "reason": "Organization data export: every read runs on the requesting member's `ScopedDb` (the member run queue's actor), so the organization's row policies apply, and each contacts query also filters on the export's `organizationId`. It writes no contact row.",
+    "sites": {
+      "measureRecords.organizationTables": 1,
+      "readMatterRecords.readContactLinksPage": 1,
+      "readOrganizationRows.readContactRowsPage": 1
+    }
+  },
   "apps/api/src/handlers/desktop-time-entries/batch.ts::names-contacts-table": {
     "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
     "sites": {
@@ -245,6 +265,18 @@
     "reason": "Invoice prefill reader: runs in the invoice and client-invoice handlers' organization-scoped `safeDb` transactions.",
     "sites": {
       "readInvoicePrefillContext.matters": 1
+    }
+  },
+  "apps/api/src/lib/conflict-check/party-index.ts::names-contacts-table": {
+    "reason": "Conflict check address-book read: its contacts statement runs in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "loadContactPartyIndex.rows": 1
+    }
+  },
+  "apps/api/src/lib/data-export/archive-plan.ts::names-contacts-table": {
+    "reason": "Names the `contacts` record of the export archive, not the contacts table; it reads and writes no contact row.",
+    "sites": {
+      "DATA_EXPORT_ORGANIZATION_RECORD_NAMES.contacts": 1
     }
   },
   "apps/api/src/lib/db/aggregate-lock.ts::names-contacts-table": {
