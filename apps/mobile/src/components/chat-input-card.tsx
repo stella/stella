@@ -13,7 +13,9 @@ import {
   type LocalRunQuestionPause,
   toggleLocalRunOption,
 } from "@stll/api-contract/chat-local-run-question";
+import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import {
+  getCompleteConnectorInputRows,
   getReadableInputRows,
   humanizeIdentifier,
 } from "@stll/api-contract/chat-tool-input-rows";
@@ -168,11 +170,17 @@ const ApprovalRow = ({
   onDecide: (approved: boolean) => void;
 }) => {
   const t = useTranslations("chat");
-  const rows = getReadableInputRows({
+  const rowOptions = {
     emptyLabel: t("inputEmpty"),
     input: approval.input,
     requestLabel: t("inputRequest"),
-  });
+  };
+  // A credential-backed call sends exactly these arguments once approved, so
+  // the phone shows every one in full, as the web does.
+  const rows =
+    approval.toolName === USE_CONNECTOR_SECRET_TOOL_NAME
+      ? getCompleteConnectorInputRows(rowOptions)
+      : getReadableInputRows(rowOptions);
 
   return (
     <View className="gap-2">

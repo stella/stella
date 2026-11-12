@@ -19,6 +19,7 @@ import {
 } from "@stll/api-contract/chat-secret";
 import {
   formatReadableInputValue,
+  getCompleteConnectorInputRows,
   getReadableInputRows,
   humanizeIdentifier,
 } from "@stll/api-contract/chat-tool-input-rows";
@@ -70,7 +71,6 @@ import {
   buildRegistryWriteSummaryRows,
   findCachedReaderAnnotationRows,
   findReaderAnnotationMark,
-  getCompleteConnectorInputRows,
   getReaderAnnotationEditTargetId,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";

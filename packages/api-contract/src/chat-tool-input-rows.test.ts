@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  getCompleteConnectorInputRows,
   getReadableInputRows,
   humanizeIdentifier,
 } from "./chat-tool-input-rows";
@@ -54,5 +55,36 @@ describe("a tool call's input, as an approval shows it", () => {
       "Mcp external delete",
     );
     expect(humanizeIdentifier("request-user_input")).toBe("Request user input");
+  });
+});
+
+describe("a credential-backed call's input, as an approval shows it", () => {
+  // The connector receives exactly these arguments once the call is approved.
+  const recipients = Array.from(
+    { length: 30 },
+    (_, index) => `recipient-${String(index)}@example.test`,
+  );
+  const input = {
+    body: "x".repeat(400),
+    to: { recipients },
+  };
+
+  test("shows every argument in full, nested ones included", () => {
+    const rows = getCompleteConnectorInputRows({ ...LABELS, input });
+    expect(rows).toEqual([
+      { key: "body", label: "Body", value: "x".repeat(400) },
+      {
+        key: "to",
+        label: "To",
+        value: JSON.stringify({ recipients }, null, 2),
+      },
+    ]);
+  });
+
+  test("where the generic summary would shorten them", () => {
+    const rows = getReadableInputRows({ ...LABELS, input });
+    expect(rows.find((row) => row.key === "body")?.value.length).toBeLessThan(
+      400,
+    );
   });
 });
