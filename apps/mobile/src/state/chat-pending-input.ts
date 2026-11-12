@@ -321,7 +321,7 @@ function clientStepOf(
     call !== undefined && Object.hasOwn(ELSEWHERE_TOOLS, call.name)
       ? (ELSEWHERE_TOOLS[call.name] ?? "other")
       : "other";
-  if (call === undefined || call.state !== "input-complete") {
+  if (call?.state !== "input-complete") {
     return { type: "elsewhere", reason };
   }
   if (call.name === ASK_USER_TOOL_NAME) {

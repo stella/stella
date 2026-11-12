@@ -24,8 +24,8 @@ const DOCX_MIME_TYPE =
 
 /** The draft's pages never ask the app for bytes, edit or save. */
 const IGNORED = () => undefined;
-const NO_BYTES = async () => "";
-const NOT_SAVED = async () => false;
+const NO_BYTES = async () => await Promise.resolve("");
+const NOT_SAVED = async () => await Promise.resolve(false);
 
 /**
  * The drafts an answer wrote with `create-document`, each a file under the
