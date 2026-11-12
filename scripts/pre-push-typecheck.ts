@@ -25,6 +25,11 @@ type TypecheckBudgetExclusion = {
 
 export const TYPECHECK_BUDGET_EXCLUSIONS = [
   {
+    name: "@stll/api",
+    measuredTime: "1651.9 s",
+    measuredMemory: "1.10 GB",
+  },
+  {
     name: "@stll/web",
     measuredTime: "75.6 s",
     measuredMemory: "1.14 GB",

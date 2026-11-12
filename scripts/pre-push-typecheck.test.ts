@@ -212,7 +212,7 @@ test("a stale budget exclusion is rejected", () => {
           measuredMemory: "401 MB",
         },
       ],
-      new Set(["@stll/web", "@stll/small"]),
+      new Set(["@stll/api", "@stll/web", "@stll/small"]),
     ),
   ).toThrow("budget exclusion names unknown package @stll/unknown");
 });
