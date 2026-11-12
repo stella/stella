@@ -153,6 +153,8 @@ const openCombobox = (
               decision: null,
               id: `thread-${workspaceId}`,
               origin: "original" as const,
+              pinState: "unpinned" as const,
+              readState: "read" as const,
               title: "Chat",
               updatedAt,
               usedAnonymization: false,

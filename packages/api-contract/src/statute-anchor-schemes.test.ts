@@ -63,6 +63,7 @@ describe("statute anchor schemes", () => {
       ),
     ).toEqual({
       AUT: { type: "flat" },
+      BRA: { type: "flat" },
       CZE: { type: "nested", separator: "-" },
       EU: { type: "nested", separator: "-" },
       GBR: { type: "flat" },

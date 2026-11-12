@@ -15,6 +15,7 @@ import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { CopyControl } from "@/components/copy-control";
@@ -212,9 +213,9 @@ export const ReaderAnswerCard = ({
       ref={observe}
     >
       <div className="flex items-center justify-between gap-1">
-        <span className="text-foreground-muted line-clamp-1">
+        <TruncatedText className="text-foreground-muted">
           {answer.anchor.spans.map(({ quote }) => quote).join(" ")}
-        </span>
+        </TruncatedText>
         <Button
           className="min-h-11 shrink-0"
           size="sm"

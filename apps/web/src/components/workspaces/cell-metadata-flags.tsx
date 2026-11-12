@@ -20,6 +20,7 @@ import {
   MenuItem,
   MenuSeparator,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { useLatest } from "@stll/ui/use-latest";
 import { cn } from "@stll/ui/utils";
 
@@ -310,10 +311,10 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
         name={displayName}
       />
       <span className="min-w-0">
-        <span className="block truncate font-medium">
+        <TruncatedText className="font-medium" hint={false}>
           {t("workspaces.table.lock.locked")}
-        </span>
-        <span className="text-muted-foreground block truncate text-xs">
+        </TruncatedText>
+        <TruncatedText className="text-muted-foreground text-xs" hint={false}>
           {displayName ? (
             <>
               <BidiText>{displayName}</BidiText>
@@ -323,7 +324,7 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
           ) : (
             relativeTime
           )}
-        </span>
+        </TruncatedText>
       </span>
     </span>
   ) : (
@@ -382,8 +383,10 @@ const FlagProvenanceTooltip = ({
         name={displayName}
       />
       <span className="min-w-0">
-        <span className="block truncate font-medium">{label}</span>
-        <span className="text-muted-foreground block truncate text-xs">
+        <TruncatedText className="font-medium" hint={false}>
+          {label}
+        </TruncatedText>
+        <TruncatedText className="text-muted-foreground text-xs" hint={false}>
           {displayName ? (
             <>
               <BidiText>{displayName}</BidiText>
@@ -393,7 +396,7 @@ const FlagProvenanceTooltip = ({
           ) : (
             relativeTime
           )}
-        </span>
+        </TruncatedText>
       </span>
     </span>
   );
@@ -451,9 +454,9 @@ export const CellMetadataMenuSection = ({
           <MenuSeparator />
           <MenuItem className="min-h-7 py-0.5 text-sm" onClick={clearFlags}>
             <XIcon className="size-3.5 shrink-0 opacity-75" />
-            <span className="min-w-0 flex-1 truncate">
+            <TruncatedText className="flex-1">
               {t("workspaces.table.clearFlags")}
-            </span>
+            </TruncatedText>
           </MenuItem>
         </>
       )}

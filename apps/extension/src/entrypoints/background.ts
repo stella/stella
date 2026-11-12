@@ -28,6 +28,7 @@ import {
   holdDownloadForJudgement,
   judgeDownload,
   loadDownloadScope,
+  noteNavigation,
   setDownloadScope,
   takeDownloadNotices,
 } from "../lib/download-guard";
@@ -179,6 +180,10 @@ const registerOptionalListeners = (): void => {
     });
     chrome.webNavigation.onCommitted.addListener((details) => {
       sortCommittedNavigation(details).catch(() => undefined);
+    });
+    // A download a navigation turns into is traced to the tab that made it.
+    chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+      noteNavigation(details).catch(() => undefined);
     });
   }
 };

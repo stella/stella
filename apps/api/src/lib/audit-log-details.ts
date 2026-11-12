@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/feature-access/registry";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
+import { SOURCE_KIND_SET_OPERATION } from "@/api/lib/lists/source-kind";
 
 export type ChatAuditResourceType =
   | typeof AUDIT_RESOURCE_TYPE.CHAT_THREAD
@@ -42,6 +43,7 @@ const CHAT_THREAD_SETTING_FIELDS = [
   "chatLocalRunTarget",
   "contextMatterIds",
   "dataWorkspaceIds",
+  "pinState",
   "titleChanged",
   "titleSource",
   "webSearchEnabled",
@@ -295,11 +297,16 @@ export const AUDIT_DETAIL_POLICY = {
     operations: {
       sample_case_loaded: VERIFICATION_AUDIT_DETAILS,
       sample_case_released: VERIFICATION_AUDIT_DETAILS,
+      [SOURCE_KIND_SET_OPERATION]: VERIFICATION_AUDIT_DETAILS,
     },
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION]: {
     default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
-    operations: {},
+    operations: {
+      fact_extraction_started: VERIFICATION_AUDIT_DETAILS,
+      fact_extraction_completed: VERIFICATION_AUDIT_DETAILS,
+      fact_extraction_failed: VERIFICATION_AUDIT_DETAILS,
+    },
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM]: {
     default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },

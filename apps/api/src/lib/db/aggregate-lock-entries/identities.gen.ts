@@ -37,6 +37,7 @@ import type { Identity as OrgFeatureAdmissionIdentity } from "./orgFeatureAdmiss
 import type { Identity as OrganizationIdentity } from "./organization";
 import type { Identity as OrganizationDataBoxesIdentity } from "./organizationDataBoxes";
 import type { Identity as OrganizationObjectIntentIdentity } from "./organizationObjectIntent";
+import type { Identity as OrganizationSettingsIdentity } from "./organizationSettings";
 import type { Identity as PersonalCatalogIdentity } from "./personalCatalog";
 import type { Identity as ProcessingClaimIdentity } from "./processingClaim";
 import type { Identity as ProfessionalUseAcceptanceIdentity } from "./professionalUseAcceptance";
@@ -95,6 +96,7 @@ export type AggregateIdentities = {
   "organization": OrganizationIdentity;
   "organizationDataBoxes": OrganizationDataBoxesIdentity;
   "organizationObjectIntent": OrganizationObjectIntentIdentity;
+  "organizationSettings": OrganizationSettingsIdentity;
   "personalCatalog": PersonalCatalogIdentity;
   "processingClaim": ProcessingClaimIdentity;
   "professionalUseAcceptance": ProfessionalUseAcceptanceIdentity;

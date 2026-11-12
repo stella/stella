@@ -27,12 +27,17 @@ import type { DesktopKeyLiveness } from "@/api/lib/business-registries/desktop/l
 import { isFoldableChunk } from "@/api/lib/desktop-runner/chunk";
 import type { RunnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
 import {
+  claimFolderRestores,
+  settleFolderRestore,
+} from "@/api/lib/desktop-runner/folder-restores";
+import {
   openRunAnswer,
   storedRunAnswerSchema,
 } from "@/api/lib/desktop-runner/sealed-answers";
 import {
   claimRunnerSession,
   type DesktopRunnerDb,
+  markRunStartsSending,
   type PendingCommand,
   persistRunMessage,
   readPendingCommands,
@@ -40,6 +45,7 @@ import {
   recordRunAccepted,
   recordRunRejected,
   releaseRunnerSession,
+  releaseUnsentRunStarts,
   renewRunnerSession,
   type RunHolder,
   type RunnerBinding,
@@ -409,56 +415,161 @@ const outgoing = async (
   };
 };
 
-/** Send every command queued after the last one sent, page by page. */
-const deliverPending = async (state: SessionState) => {
+/** Folder restores one delivery sends at most; the next delivery sends more. */
+const RESTORE_PAGE_SIZE = 100;
+
+/**
+ * Send the computer's folder restores: those queued, and on a new socket
+ * (`resendSent`) those sent before that it has not answered. Each is marked
+ * sent before it goes out, so a restore that expired is never sent; a frame
+ * lost with its socket is sent again on the next one.
+ */
+const deliverRestores = async (state: SessionState, resendSent: boolean) => {
+  const due = await claimFolderRestores(state.context.db, {
+    binding: state.binding,
+    sessionId: state.sessionId,
+    now: state.context.now(),
+    resendSent,
+    limit: RESTORE_PAGE_SIZE,
+  });
+  for (const { restoreId, folderId, runId } of due) {
+    const sent = send(state, {
+      type: DESKTOP_RUNNER_SERVER_MESSAGE.folderRestore,
+      restoreId,
+      folderId,
+      runId,
+    });
+    if (sent === "closed") {
+      return;
+    }
+    if (sent === "backpressure") {
+      state.backpressured = true;
+    }
+  }
+};
+
+type DeliverOptions = {
+  /** A new socket also sends again the restores sent to an earlier one. */
+  resendSent: boolean;
+};
+
+/**
+ * Send the computer's folder restores, then every command queued after the
+ * last one sent, page by page.
+ */
+const deliverPending = async (
+  state: SessionState,
+  { resendSent }: DeliverOptions,
+) => {
   if (state.phase.type !== "ready") {
     return;
   }
   const { held } = state.phase;
+  if (!state.backpressured) {
+    await deliverRestores(state, resendSent);
+  }
   for (;;) {
     // Commands wait in the queue, not in the socket's buffer, until it drains.
     if (state.backpressured) {
       return;
     }
     // db-await-in-loop: keyset page per iteration; the page is the batch
-    const pending = await readPendingCommands(state.context.db, {
-      binding: state.binding,
-      sessionId: state.sessionId,
-      afterId: state.deliveredThrough,
-      limit: COMMAND_PAGE_SIZE,
-    });
-    if (pending.type === "superseded") {
-      close(state, DESKTOP_RUNNER_CLOSE.superseded);
+    const page = await deliverPage(state, held);
+    if (page !== "full") {
       return;
     }
-    for (const command of pending.commands) {
-      const resend =
-        command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runStart ||
-        !held.has(command.runId);
-      const sent = resend
-        ? send(state, await outgoing(state, command))
-        : "sent";
+  }
+};
+
+/**
+ * One page of the socket's queue: read, composed (tokens minted), then
+ * checked at the send boundary and written with nothing awaited in between,
+ * so a relink that retires this socket's key, or ends a run, lands before
+ * the check and nothing of it goes out. A `run.start` whose run ended since
+ * the read is skipped; one recorded as delivered that never went out (the
+ * socket closed or filled up) is released, so it keeps the pickup window.
+ * `full` when another page may follow.
+ */
+const deliverPage = async (
+  state: SessionState,
+  held: ReadonlySet<string>,
+): Promise<"full" | "done"> => {
+  const { db } = state.context;
+  const pending = await readPendingCommands(db, {
+    binding: state.binding,
+    sessionId: state.sessionId,
+    afterId: state.deliveredThrough,
+    limit: COMMAND_PAGE_SIZE,
+  });
+  if (pending.type === "superseded") {
+    close(state, DESKTOP_RUNNER_CLOSE.superseded);
+    return "done";
+  }
+  const composed: {
+    command: PendingCommand;
+    message: DesktopRunnerServerMessage | null;
+  }[] = [];
+  for (const command of pending.commands) {
+    const resend =
+      command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runStart ||
+      !held.has(command.runId);
+    composed.push({
+      command,
+      message: resend ? await outgoing(state, command) : null,
+    });
+  }
+  const starts = composed.flatMap(({ command, message }) =>
+    message !== null && command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runStart
+      ? [command.runId]
+      : [],
+  );
+  const now = state.context.now();
+  const boundary = await markRunStartsSending(db, {
+    binding: state.binding,
+    sessionId: state.sessionId,
+    runIds: starts,
+    now,
+  });
+  if (boundary.type === "superseded") {
+    close(state, DESKTOP_RUNNER_CLOSE.superseded);
+    return "done";
+  }
+  const unsent = new Set(boundary.open);
+  const written = (() => {
+    for (const { command, message } of composed) {
+      const ended =
+        message !== null &&
+        command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runStart &&
+        !boundary.open.has(command.runId);
+      const sent = message === null || ended ? "sent" : send(state, message);
       if (sent === "closed") {
-        return;
+        return "stopped";
       }
+      unsent.delete(command.runId);
       // A buffered frame was taken; the next command waits for the drain.
       state.deliveredThrough = command.id;
       if (sent === "backpressure") {
         state.backpressured = true;
-        return;
+        return "stopped";
       }
     }
-    if (pending.commands.length < COMMAND_PAGE_SIZE) {
-      return;
-    }
-  }
+    return "all";
+  })();
+  await releaseUnsentRunStarts(db, {
+    binding: state.binding,
+    runIds: [...unsent],
+    now,
+  });
+  return written === "all" && pending.commands.length === COMMAND_PAGE_SIZE
+    ? "full"
+    : "done";
 };
 
 const deliver = async (state: SessionState) => {
   // One queued delivery reads everything queued before it runs.
   state.queuedDelivery ??= step(state, "deliver", async () => {
     state.queuedDelivery = null;
-    await deliverPending(state);
+    await deliverPending(state, { resendSent: false });
   });
   await state.queuedDelivery;
 };
@@ -625,10 +736,21 @@ const onHello = async (
     close(state, DESKTOP_RUNNER_CLOSE.tooManyRunners);
     return;
   }
+  // A newer key of the account replaced this one on the installation; the
+  // desktop holding it stops rather than take the installation back.
+  if (claim.type === "retired") {
+    close(state, DESKTOP_RUNNER_CLOSE.superseded);
+    return;
+  }
   // Claimed, so the closing socket's release marks the runner disconnected.
   state.claimed = true;
   if (claim.previous !== null) {
     context.ringPrevious(claim.previous);
+  }
+  // A socket still open under a key this claim retired reads its queue at
+  // once, finds itself retired and closes, instead of at its next heartbeat.
+  for (const retired of claim.retired) {
+    context.ringPrevious(retired);
   }
   // The socket may have closed while the claim was stored: then nothing is
   // scheduled or minted for it.
@@ -667,7 +789,7 @@ const onHello = async (
       await sendToken(state, run.runId, run.workspaceIds);
     }
   }
-  await deliverPending(state);
+  await deliverPending(state, { resendSent: true });
 };
 
 const handleMessage = async (
@@ -728,6 +850,16 @@ const handleMessage = async (
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished:
       await storeSequenced(state, message);
+      return;
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored:
+      // An answer to a restore this computer was not sent, or answered
+      // before, changes nothing: the restore stays as its first answer left it.
+      await settleFolderRestore(db, {
+        binding,
+        restoreId: message.restoreId,
+        outcome: message.outcome,
+        now: now(),
+      });
       return;
     default: {
       message satisfies never;

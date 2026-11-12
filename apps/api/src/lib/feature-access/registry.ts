@@ -206,12 +206,15 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     ownership: {
       handlerDirectories: [
         "apps/api/src/handlers/lists/verifications",
+        "apps/api/src/handlers/lists/fact-extractions",
         "apps/api/src/handlers/lists/sample-case",
         "apps/api/src/handlers/lists/items/fact-details",
         "apps/api/src/handlers/lists/items/sources/verification",
       ],
       tableSchemaFiles: ["apps/api/src/db/schema/lists-verification.ts"],
       coreModules: [
+        "apps/api/src/lib/lists/generation/fact-extract.ts",
+        "apps/api/src/lib/lists/generation/run-queue.ts",
         "apps/api/src/lib/lists/verification/access-context.ts",
         "apps/api/src/lib/lists/verification/claim-extract.ts",
         "apps/api/src/lib/lists/verification/claim-grade.ts",

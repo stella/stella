@@ -66,6 +66,7 @@ const files = [
     fileName: "agreement.pdf",
     parentId: null,
     mimeType: PDF_MIME,
+    sizeBytes: 240_000,
   },
   {
     entityId: "019a0000-0000-7000-8000-000000000008",
@@ -74,11 +75,14 @@ const files = [
     fileName: "statement.docx",
     parentId: null,
     mimeType: DOCX_MIME,
+    sizeBytes: 36_000,
   },
 ];
 const utcTimeZone =
   parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const settings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
   capabilities: {},

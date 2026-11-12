@@ -2332,9 +2332,20 @@ impl ActivityManager {
     }
   }
 
-  /// The chosen browsers, then the browsers among the day's apps.
+  /// The chosen browsers, the browsers among the apps with a saved choice,
+  /// then the browsers among the day's apps, so every app the settings list
+  /// shows is known to be a browser or not.
   fn browser_apps(&self, segments: &[ActivitySegment]) -> Vec<AppExclusion> {
     let mut browser_apps = self.settings.browser_title_apps.clone();
+    browser_apps.extend(
+      self
+        .settings
+        .app_name_only_apps
+        .iter()
+        .chain(&self.settings.excluded_apps)
+        .filter(|app| crate::activity_details::is_browser(&app.identifier, &app.name))
+        .cloned(),
+    );
     for segment in segments {
       if crate::activity_details::is_browser(&segment.app_identifier, &segment.app_name)
         && let Some(app) = AppExclusion::new(&segment.app_identifier, &segment.app_name)
@@ -3883,6 +3894,49 @@ mod tests {
       snapshot.browser_apps[0].identifier,
       snapshot.browser_title_apps[0].identifier
     );
+  }
+
+  #[test]
+  fn browsers_with_a_saved_choice_remain_disclosed_on_days_without_observations() {
+    let mut manager = recording_manager();
+    manager
+      .set_app_detail_capture(
+        "com.google.chrome",
+        "Google Chrome",
+        ActivityAppDetailCapture::AppNameOnly,
+        at(0),
+      )
+      .unwrap();
+    manager
+      .exclude_app(
+        "com.apple.safari",
+        "Safari",
+        ActivityHistoryDisposition::Keep,
+      )
+      .unwrap();
+    manager
+      .set_app_detail_capture(
+        "com.microsoft.word",
+        "Microsoft Word",
+        ActivityAppDetailCapture::AppNameOnly,
+        at(0),
+      )
+      .unwrap();
+    let caller = ActivityCaller::for_account_test(1, "fixture");
+    let snapshot = manager.day_snapshot(
+      local_date(at(0)),
+      at(5),
+      &caller,
+      0,
+      ActivityDetailsAccess::Ready,
+    );
+    assert!(snapshot.segments.is_empty());
+    let browsers = snapshot
+      .browser_apps
+      .iter()
+      .map(|app| app.identifier.as_str())
+      .collect::<Vec<_>>();
+    assert_eq!(browsers, ["com.apple.safari", "com.google.chrome"]);
   }
 
   #[test]

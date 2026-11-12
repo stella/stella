@@ -4,6 +4,7 @@ import {
   AccordionPanel,
   AccordionTrigger,
 } from "@stll/ui/accordion";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { searchNoticeDetails } from "./notice.logic";
 import type { AppSearchWarning } from "./notice.logic";
@@ -24,7 +25,7 @@ export const AppNotice = ({ details }: { details: readonly string[] }) => {
           className="h-6 items-center py-0"
           size="compact"
         >
-          <span className="min-w-0 truncate">{summary}</span>
+          <TruncatedText>{summary}</TruncatedText>
         </AccordionTrigger>
         <AccordionPanel size="compact">
           <ul className="list-disc space-y-1 ps-4">

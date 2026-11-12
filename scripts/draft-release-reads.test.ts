@@ -36,13 +36,13 @@ const scriptReadsRelease = (name: string): boolean => {
 
 // Inline commands, plus repository scripts a step runs (directly or after
 // copying them to the runner's temp directory).
-export const readsRelease = (run: string): boolean =>
+const readsRelease = (run: string): boolean =>
   RELEASE_READ.test(run) ||
   [...run.matchAll(/[\w./$-]*?([\w-]+\.sh)\b/gu)].some(([, name]) =>
     name === undefined ? false : scriptReadsRelease(name),
   );
 
-export const canSeeDrafts = (permissions: unknown): boolean =>
+const canSeeDrafts = (permissions: unknown): boolean =>
   permissions === "write-all" ||
   (isRecord(permissions) && permissions["contents"] === "write");
 
@@ -58,7 +58,7 @@ const mintsContentsWriteToken = (steps: unknown[]): boolean =>
 
 // A release read that swaps in another token on its own line bypasses the
 // job-level check above.
-export const swapsTokenForRelease = (line: string): boolean =>
+const swapsTokenForRelease = (line: string): boolean =>
   RELEASE_READ.test(line) && /\bGH_TOKEN=/u.test(line);
 
 const releaseReaders = () =>

@@ -10,6 +10,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/chat/artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 
@@ -39,8 +40,11 @@ const loadChatCopyProjection = async ({
       : await tx
           .select({
             id: chatThreads.id,
+            title: chatThreads.title,
+            titleSource: chatThreads.titleSource,
+            ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
             subjectDecisionId: chatThreads.subjectDecisionId,
-            parent: sql`(select jsonb_build_object('subjectDecisionId', parent.subject_decision_id, 'title', parent.title) from chat_threads parent where parent.id = ${chatThreads.parentThreadId} limit 1)`,
+            parent: sql`(select jsonb_build_object('subjectDecisionId', parent.subject_decision_id, 'title', parent.title, 'titleSource', parent.title_source, 'generationProvenance', parent.generation_provenance) from chat_threads parent where parent.id = ${chatThreads.parentThreadId} limit 1)`,
             // These windows cover the send/list readers. A separately paged older
             // page contributes its own rows through `values` before the lookup.
             messages: sql`(select jsonb_agg(r.content) from (select ${chatMessages.content} from ${chatMessages} where ${chatMessages.threadId} = ${chatThreads.id} order by ${chatMessages.createdAt} desc, ${chatMessages.id} desc limit ${LIMITS.chatSendHistoryWindowMax}) r)`,

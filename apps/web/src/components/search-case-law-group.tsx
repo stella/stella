@@ -8,6 +8,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { GlobalSearchHit } from "@/lib/api-contract";
@@ -145,20 +146,26 @@ const SearchCaseLawResults = ({
                 selectedHitId === hit.id && "bg-muted",
               )}
             >
-              <span className="block truncate text-sm font-medium" dir="auto">
+              <TruncatedText className="text-sm font-medium" dir="auto">
                 {hit.title || hit.id}
-              </span>
+              </TruncatedText>
               {hit.headline && (
-                <span
-                  className={cn(
-                    "text-muted-foreground mt-0.5 line-clamp-2 text-xs",
-                    SEARCH_HIT_DESCENDANT_MARK_CLASS,
-                  )}
+                <TruncatedText
                   dangerouslySetInnerHTML={{
                     // safe-html: server-escaped + <mark>-highlighted by global search mappers
                     __html: hit.headline,
                   }}
                   dir="auto"
+                  hint={false}
+                  lines={2}
+                  render={
+                    <span
+                      className={cn(
+                        "text-muted-foreground mt-0.5 text-xs",
+                        SEARCH_HIT_DESCENDANT_MARK_CLASS,
+                      )}
+                    />
+                  }
                 />
               )}
             </span>
