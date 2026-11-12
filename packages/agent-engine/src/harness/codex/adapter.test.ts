@@ -22,6 +22,7 @@ import {
   test,
 } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -1035,9 +1036,8 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(Result.isError(started) && started.error.reason).toBe(
       "start_rejected",
     );
-    expect(harness.received().map(({ method }) => method)).not.toContain(
-      "thread/start",
-    );
+    // The fake app-server writes its log as it starts: it never started.
+    expect(existsSync(harness.logPath)).toBe(false);
   });
 
   test("a signed-out harness refuses the turn before any session starts", async () => {
