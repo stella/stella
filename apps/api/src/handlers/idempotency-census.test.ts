@@ -1181,8 +1181,6 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "The source form resolves a live document version before creation, so a manual retry can submit a different version for the same user intent.",
   "src/handlers/properties/create.ts":
     "Property creation participates in upload task chains whose completion is outside this create operation.",
-  "src/handlers/tasks/create.ts":
-    "Task creation is followed by field writes, so the create response does not represent the completed task workflow.",
   "src/handlers/views/create.ts":
     "View selection and template workflows generate fresh caller IDs, so a create receipt cannot represent the complete selection intent.",
   "src/handlers/workspaces/create.ts":
