@@ -109,9 +109,13 @@ for (const [locale, catalog] of Object.entries({
         Response.json({ message: "Read unavailable" }, { status: 503 }),
       );
     });
-    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("alert") === null).toBe(false),
+    );
     fireEvent.click(screen.getByRole("button", { name: catalog.common.retry }));
-    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("alert") === null).toBe(true),
+    );
     expect(attempts).toBe(2);
     expect(screen.queryByRole("button")).toBeNull();
   });
@@ -134,7 +138,9 @@ for (const count of [0, 2]) {
     await act(async () => {
       await client.invalidateQueries({ queryKey: options.queryKey });
     });
-    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("alert") === null).toBe(false),
+    );
     if (count > 0) {
       expect(screen.getByText(String(count))).toBeTruthy();
     }

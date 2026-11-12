@@ -5,6 +5,7 @@
     "": {
       "name": "stella",
       "devDependencies": {
+        "@better-auth/core": "catalog:",
         "@changesets/changelog-github": "^1.0.1",
         "@changesets/cli": "^3.0.3",
         "@emnapi/core": "1.11.3",
@@ -266,6 +267,7 @@
       "devDependencies": {
         "@happy-dom/global-registrator": "21.0.4",
         "@playwright/test": "^1.64.1",
+        "@stll/agent-engine": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
@@ -720,6 +722,7 @@
         "@stll/fetch": "workspace:*",
         "@stll/portable-path": "workspace:*",
         "@stll/sha256": "workspace:*",
+        "@stll/skills": "workspace:*",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-codex": "catalog:",
         "@tanstack/ai-persistence": "catalog:",
@@ -758,7 +761,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -927,7 +930,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.4.3",
+      "version": "0.4.4",
       "dependencies": {
         "@ag-ui/core": "1.0.3",
         "@stll/ai-catalog": "workspace:^",
@@ -976,7 +979,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "6.9.0",
+      "version": "6.10.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1676,7 +1679,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.68.0",
+      "version": "0.69.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1776,7 +1779,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.17.0",
+      "version": "0.17.1",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",

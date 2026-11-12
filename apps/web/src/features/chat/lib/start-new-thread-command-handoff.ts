@@ -26,6 +26,39 @@ type StartNewThreadCommandHandoffArgs = {
 };
 
 /**
+ * The new thread's data a hand-off starts its runtime on, carrying where the
+ * first send runs. Until the server's read of the thread reflects that turn,
+ * the destination page reads this entry, so it shows the target the turn
+ * runs on rather than the draft's stored one (Auto on stella for a chat that
+ * started on the member's last choice).
+ */
+export const readHandoffThread = async ({
+  activeOrganizationId,
+  context,
+  queryClient,
+  threadRef,
+}: {
+  activeOrganizationId: string;
+  context: ChatThreadOptionsContext;
+  queryClient: QueryClient;
+  threadRef: ChatThreadRef;
+}) => {
+  const options = chatThreadOptions({
+    activeOrganizationId,
+    context,
+    key: threadRef,
+  });
+  const data = await queryClient.query({ ...options, staleTime: "static" });
+  const runTarget = context.getRunTarget?.();
+  if (runTarget === undefined) {
+    return data;
+  }
+  const seeded = { ...data, runTarget };
+  queryClient.setQueryData(options.queryKey, seeded);
+  return seeded;
+};
+
+/**
  * Starts `/new <message>` on a fresh thread before its destination mounts.
  *
  * The caller changes surface only after this returns, so a setup failure
@@ -52,13 +85,11 @@ export const startNewThreadCommandHandoff = async ({
     setThreadActiveSkill(threadRef, activeSkill);
   }
   const [data, { acquireChatRuntime }] = await Promise.all([
-    queryClient.query({
-      ...chatThreadOptions({
-        activeOrganizationId,
-        context,
-        key: threadRef,
-      }),
-      staleTime: "static",
+    readHandoffThread({
+      activeOrganizationId,
+      context,
+      queryClient,
+      threadRef,
     }),
     import("@/features/chat/chat-runtime-registry"),
   ]);

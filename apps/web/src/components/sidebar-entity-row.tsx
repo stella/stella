@@ -17,10 +17,9 @@ import { useTaskStatusAction } from "@/components/workspaces/tasks/task-status-m
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
-import { useRenameEntityForUser } from "@/lib/workspaces/mutations/entities";
+import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
 type SidebarEntityRowProps = {
-  activeOrganizationId: string;
   children: ReactNode;
   entityId: string;
   entityKind: string;
@@ -30,12 +29,10 @@ type SidebarEntityRowProps = {
   /** A task's status, which its menu can change; `null` for other kinds. */
   taskStatus: TaskStatus | null;
   workspaceId: string;
-  userId: string;
 };
 
 /** Activity summaries have identity, but no full row or file-cell payload. */
 export const SidebarEntityRow = ({
-  activeOrganizationId,
   children,
   entityId,
   entityKind,
@@ -44,15 +41,10 @@ export const SidebarEntityRow = ({
   onOpen,
   taskStatus,
   workspaceId,
-  userId,
 }: SidebarEntityRowProps) => {
   const t = useTranslations();
   const returnFocus = useRef<HTMLButtonElement | null>(null);
-  const renameEntity = useRenameEntityForUser({
-    activeOrganizationId,
-    inspectorStore: undefined,
-    userId,
-  });
+  const renameEntity = useRenameEntity();
   const canUpdate = usePermissions({ entity: ["update"] });
   const taskStatusAction = useTaskStatusAction(workspaceId);
   const canDelete = usePermissions({ entity: ["delete"] });

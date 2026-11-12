@@ -39,6 +39,7 @@ import {
 } from "./outline-rail.logic";
 import { ScrollArea } from "./scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+import { TruncatedText } from "./truncated-text";
 
 /**
  * How prominently an entry reads next to the entries around it. A caller
@@ -368,11 +369,13 @@ const OutlineRowView = ({
         }
       >
         {item.title === undefined ? (
-          <span className="min-w-0 truncate">{item.label}</span>
+          <TruncatedText hint={false}>{item.label}</TruncatedText>
         ) : (
           <>
             <span className="shrink-0 font-medium">{item.label}</span>
-            <span className="min-w-0 truncate font-normal">{item.title}</span>
+            <TruncatedText className="font-normal" hint={false}>
+              {item.title}
+            </TruncatedText>
           </>
         )}
       </TooltipTrigger>

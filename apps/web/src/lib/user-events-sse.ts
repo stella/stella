@@ -1,15 +1,15 @@
 import type { QueryKey } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
 
 import {
   parseOrganizationRealtimeEvent,
   parseUserRealtimeEvent,
-  REALTIME_EVENT_TYPE,
   RESOURCE_TYPE,
   resourceSetUpdatedRealtimeEvent,
+  USER_EVENT_READ,
+  USER_EVENT_READS,
 } from "@stll/api-contract";
-import type { UserRealtimeEvent } from "@stll/api-contract";
+import type { UserEventRead, UserRealtimeEvent } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import { activeChatRunsOptions } from "@/features/chat/active-runs";
@@ -190,21 +190,15 @@ export const useUserEventRefreshes = ({
     queryKey: chatKeys.groupedThreadLists(organizationId, userId),
   });
 
+  const refreshes = {
+    [USER_EVENT_READ.ACTIVE_CHAT_RUNS]: activeChatRuns,
+    [USER_EVENT_READ.CHAT_THREADS]: chatThreadLists,
+    [USER_EVENT_READ.NOTIFICATIONS]: notifications,
+  } satisfies Record<UserEventRead, () => UserEventRefresh>;
+
   useUserEventsSSE(organizationId, {
-    onEvent: ({ type: eventType }) => {
-      switch (eventType) {
-        case REALTIME_EVENT_TYPE.NEW_NOTIFICATION:
-          return [notifications()];
-        case REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED:
-          // A run that ends with an answer makes its chat unread.
-          return [activeChatRuns(), chatThreadLists()];
-        case REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED:
-          return [chatThreadLists()];
-        default:
-          eventType satisfies never;
-          return panic("Unhandled user realtime event");
-      }
-    },
+    onEvent: ({ type }) =>
+      USER_EVENT_READS[type].map((read) => refreshes[read]()),
     onResync: () => [
       notifications(),
       activeChatRuns(),

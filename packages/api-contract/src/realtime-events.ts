@@ -195,6 +195,34 @@ export type OrganizationRealtimeEvent = v.InferOutput<
 >;
 export type UserRealtimeEvent = v.InferOutput<typeof userRealtimeEventSchema>;
 
+/** A read a client keeps of the person's own state, made again when a user
+ * event says it changed. */
+export const USER_EVENT_READ = {
+  ACTIVE_CHAT_RUNS: "active-chat-runs",
+  CHAT_THREADS: "chat-threads",
+  NOTIFICATIONS: "notifications",
+} as const;
+
+export type UserEventRead =
+  (typeof USER_EVENT_READ)[keyof typeof USER_EVENT_READ];
+
+/**
+ * What each user event makes a client read again: the one table every client
+ * follows, so none reads less than an event changed. A run that ends with an
+ * answer makes its chat unread, so a runs change reads the chats too.
+ */
+export const USER_EVENT_READS = {
+  [REALTIME_EVENT_TYPE.NEW_NOTIFICATION]: [USER_EVENT_READ.NOTIFICATIONS],
+  [REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED]: [
+    USER_EVENT_READ.ACTIVE_CHAT_RUNS,
+    USER_EVENT_READ.CHAT_THREADS,
+  ],
+  [REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED]: [USER_EVENT_READ.CHAT_THREADS],
+} as const satisfies Record<
+  UserRealtimeEvent["type"],
+  readonly UserEventRead[]
+>;
+
 export const newNotificationRealtimeEvent = () =>
   ({
     type: REALTIME_EVENT_TYPE.NEW_NOTIFICATION,

@@ -645,3 +645,56 @@ jobs:
             echo "Base: $BASE_SHA; candidate: $CANDIDATE_SHA."
             echo "Phase durations and rehearsal total: not run."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Every repository script test traced against its declared inputs in
+  # scripts/script-test-inputs.json. Pull requests run only the tests their
+  # diff selects, untraced, so a declaration that stops covering a test's
+  # reads fails here, through the scheduled-run alert, within a day.
+  script-test-declarations:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
+    steps:
+      - name: Checkout
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      # The same generated sources the pull request check restores.
+      - name: Produce generated sources
+        run: |
+          bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
+          bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
+
+      - name: Trace repository script tests
+        timeout-minutes: 20
+        run: bun scripts/run-unlisted-script-tests.ts --verify-declarations --timeout 35000
+
+      - name: Trace depth repository script tests
+        if: ${{ !cancelled() }}
+        timeout-minutes: 20
+        run: bun scripts/run-unlisted-script-tests.ts --depth --verify-declarations --timeout 120000

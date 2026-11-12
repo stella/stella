@@ -191,7 +191,6 @@ impl Place {
       HostSettings {
         sidecar: self.fixture.settings_for("1.4.0", self.fixture.stand_in()),
         workspaces: self.workspaces(),
-        package_cache: self.package_cache(),
         probe_interval,
       },
       Arc::new(FakeHarnesses {
@@ -215,10 +214,6 @@ impl Place {
 
   fn workspaces(&self) -> PathBuf {
     self.fixture.root.join("runs")
-  }
-
-  fn package_cache(&self) -> PathBuf {
-    self.fixture.root.join("agent-package-cache")
   }
 
   /// Every message the holder read, of one type.
@@ -421,8 +416,10 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
     start["workspaceDir"],
     place.workspaces().join(&id).to_str().unwrap()
   );
-  assert_eq!(start["cacheDir"], place.package_cache().to_str().unwrap());
-  assert!(place.package_cache().is_dir());
+  // The chat's own cache, beside its folder, never one other chats share.
+  let cache = place.workspaces().join(format!("{id}.cache"));
+  assert_eq!(start["cacheDir"], cache.to_str().unwrap());
+  assert!(cache.is_dir());
   assert_eq!(
     start["toolPath"],
     json!([place

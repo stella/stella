@@ -40,6 +40,7 @@ import {
 } from "@stll/ui/icons";
 import { StatusMark } from "@stll/ui/status-mark";
 import { SwapText } from "@stll/ui/swap-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -148,7 +149,7 @@ import {
 } from "@/components/chat/user-message-edit";
 import type { UserMessageEditActions } from "@/components/chat/user-message-edit";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { DocumentIcon } from "@/components/document-icon";
 import { ProviderSetupGuidanceNotice } from "@/components/provider-diagnostic-content";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
@@ -1478,7 +1479,7 @@ const AssistantMessageActions = ({
         </span>
       )}
       {text && (
-        <CopyActionButton
+        <CopyControl
           className="text-muted-foreground h-6 px-1.5"
           size="xs"
           text={text}
@@ -2592,14 +2593,11 @@ const AssistantThinkingHeader = ({
   return (
     <>
       <StatusMark status="done" />
-      <span
-        className={cn(
-          "min-w-0 truncate",
-          isStreaming && CHAT_PENDING_TEXT_CLASS,
-        )}
+      <TruncatedText
+        render={<span className={cn(isStreaming && CHAT_PENDING_TEXT_CLASS)} />}
       >
         {t("chat.reasoning")}
-      </span>
+      </TruncatedText>
       {reasoningTokenCount !== null && (
         <ReasoningTokenCount count={reasoningTokenCount} />
       )}

@@ -38,8 +38,9 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { COMMUNITY_CHANNELS } from "@/components/feedback-community-items";
 import {
   buildFeedbackRequestBody,
@@ -419,11 +420,14 @@ const FeedbackReceipt = ({ onClose, response }: FeedbackReceiptProps) => {
             <span className="text-muted-foreground text-xs">
               {t("feedback.receiptLabel")}
             </span>
-            <bdi className="text-foreground truncate font-mono text-sm">
+            <TruncatedText
+              className="text-foreground font-mono text-sm"
+              render={<bdi />}
+            >
               {response.receipt}
-            </bdi>
+            </TruncatedText>
           </div>
-          <CopyActionButton
+          <CopyControl
             iconClassName="size-4"
             iconOnly
             label={t("feedback.copyReceipt")}

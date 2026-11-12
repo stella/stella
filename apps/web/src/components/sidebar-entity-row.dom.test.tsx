@@ -62,13 +62,12 @@ const mountRow = () => {
       <IntlProvider locale="en" messages={messages}>
         <ul>
           <SidebarEntityRow
-            activeOrganizationId="org-1"
             entityId="entity-1"
             entityKind="document"
             name={NAME}
             onDelete={() => undefined}
             onOpen={() => undefined}
-            userId="user-1"
+            taskStatus={null}
             workspaceId="workspace-1"
           >
             {NAME}

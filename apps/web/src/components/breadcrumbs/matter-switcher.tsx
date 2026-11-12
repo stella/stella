@@ -19,6 +19,7 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -193,13 +194,13 @@ export const MatterSwitcher = ({
               })}
               <CommandSeparator className="my-1" />
               <CommandItem onClick={openMatterList} value="__all-matters__">
-                <span className="min-w-0 truncate">
+                <TruncatedText>
                   {client === null
                     ? t("workspaces.switcher.viewAll")
                     : t("workspaces.switcher.viewAllForClient", {
                         clientName: client.displayName,
                       })}
-                </span>
+                </TruncatedText>
               </CommandItem>
             </div>
           </CommandList>

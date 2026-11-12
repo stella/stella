@@ -26,7 +26,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { textMarkClass } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -55,10 +55,10 @@ import type {
 import { REVIEW_STATUS_META, STATE_META } from "@/features/avt/types";
 import { useClaimReviewActions } from "@/features/avt/use-claim-review-actions";
 import {
+  claimFactsById,
   contestedFactIds,
   countClaims,
   effectiveState,
-  evidenceFactsById,
   isConflictState,
   isContested,
   isSettled,
@@ -97,9 +97,16 @@ type VerdictFilter =
   | "reviewed"
   | ClaimState;
 
+/** What the run's header can ask of the view: select a claim and bring it
+ *  into view, as stepping through a filter does. */
+export type VerificationViewHandle = {
+  showClaim: (claimId: VerificationClaim["id"]) => void;
+};
+
 type VerificationViewProps = {
   workspaceId: string;
   run: VerificationRun;
+  ref?: React.Ref<VerificationViewHandle>;
 };
 
 type OriginalDocumentProps = React.ComponentProps<typeof OriginalDocxView> & {
@@ -126,6 +133,7 @@ const OriginalDocument = ({
 export const VerificationView = ({
   workspaceId,
   run,
+  ref,
 }: VerificationViewProps) => {
   const format = useFormatter();
   const t = useTranslations();
@@ -139,8 +147,9 @@ export const VerificationView = ({
   // and the detail panel agree about what each claim currently is.
   const claims = run.claims.map(resolveClaimView);
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
+  // The run's pinned reading; a re-checked claim reads its own re-check's
+  // facts instead (`isContested`).
   const contested = contestedFactIds(run.evidence.facts);
-  const factsById = evidenceFactsById(run);
   const presentation = selectClaimPresentation(run.blocks, claims);
   const readingOrder = presentation.readingOrder;
   const counts = countClaims(run.claims, contested);
@@ -233,6 +242,14 @@ export const VerificationView = ({
       scrollOriginalToClaim(selectedClaim);
     }
   };
+
+  React.useImperativeHandle(ref, () => ({
+    showClaim: (id) => {
+      if (claimById.has(id)) {
+        goToMatch(id);
+      }
+    },
+  }));
 
   const stepper = matchStepper({
     orderedMatches,
@@ -425,7 +442,7 @@ export const VerificationView = ({
             <ClaimDetailPanel
               claim={selectedClaim}
               contested={contested}
-              factsById={factsById}
+              factsById={claimFactsById(run, selectedClaim)}
               key={selectedClaim.id}
               onReviewEvent={(event) => recordEvent(selectedClaim.id, event)}
               run={run}
@@ -480,16 +497,11 @@ const AttentionBar = ({
   return (
     <div className="bg-muted flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-lg border px-3 py-2 text-xs">
       <FilterIcon aria-hidden="true" className="size-3.5 shrink-0" />
-      {/* One line, whatever the width: the full sentence is in the tooltip
-          and stays in the text a screen reader reads. */}
-      <Tooltip>
-        <TooltipTrigger
-          render={<span className="line-clamp-1 min-w-0 flex-1 basis-48" />}
-        >
-          {sentence}
-        </TooltipTrigger>
-        <TooltipPopup className="max-w-80">{sentence}</TooltipPopup>
-      </Tooltip>
+      {/* One line, whatever the width: a cut sentence shows whole on hover,
+          focus or tap, and stays in the text a screen reader reads. */}
+      <TruncatedText className="min-w-0 flex-1 basis-48">
+        {sentence}
+      </TruncatedText>
       {/* The queue's views are quiet; accepting routine claims is the bar's
           one accent. */}
       <div className="flex flex-wrap items-center gap-1">
@@ -677,7 +689,12 @@ const claimMatchesFilter = (
     case "needsreview": {
       return (
         needsAttention(
-          { state, refs: claim.refs, qualifiers: claim.qualifiers },
+          {
+            state,
+            refs: claim.refs,
+            qualifiers: claim.qualifiers,
+            recheck: claim.recheck,
+          },
           contested,
         ) && !isSettled(claim.review)
       );

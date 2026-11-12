@@ -13,6 +13,7 @@ import { FileCheckIcon, InfoIcon, PlayIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { Switch } from "@stll/ui/switch";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import {
@@ -241,9 +242,14 @@ const DocumentRow = ({
   return (
     <li className="flex flex-col gap-2 p-3 md:flex-row md:items-center">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium" dir="auto" id={nameId}>
+        <TruncatedText
+          className="text-sm font-medium"
+          dir="auto"
+          id={nameId}
+          render={<p />}
+        >
           {file.name ?? file.fileName}
-        </p>
+        </TruncatedText>
         {statusLoad === "loaded" && (
           <LatestRunSummary latest={latest} listId={listId} />
         )}

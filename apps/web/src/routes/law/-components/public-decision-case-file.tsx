@@ -16,6 +16,7 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
@@ -96,9 +97,9 @@ export const CaseFileSwitcher = ({
                       href={sanitizeHref(createCaseLawDecisionPath(params))}
                     >
                       <span className="flex items-baseline gap-2">
-                        <BidiText className="min-w-0 truncate">
+                        <TruncatedText render={<BidiText />}>
                           {document.decisionType ?? t("common.documents")}
-                        </BidiText>
+                        </TruncatedText>
                         {date !== null && (
                           <time
                             className="ms-auto shrink-0 text-xs"
@@ -112,9 +113,12 @@ export const CaseFileSwitcher = ({
                         )}
                       </span>
                       {document.ecli !== null && (
-                        <BidiText className="text-muted-foreground truncate text-xs font-normal">
+                        <TruncatedText
+                          className="text-muted-foreground text-xs font-normal"
+                          render={<BidiText />}
+                        >
                           {document.ecli}
-                        </BidiText>
+                        </TruncatedText>
                       )}
                     </a>
                   </li>

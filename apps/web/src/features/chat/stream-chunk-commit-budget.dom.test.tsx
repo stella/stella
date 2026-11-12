@@ -590,8 +590,8 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
     expect(
       testing
         .within(page.view.container)
-        .queryByRole("button", { name: translations.chat.sendPrompt }),
-    ).not.toBeNull();
+        .queryByRole("button", { name: translations.chat.sendPrompt }) === null,
+    ).toBe(false);
   });
   const { firstAt, lastAt } = server.burst;
   if (firstAt === undefined || lastAt === undefined) {

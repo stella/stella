@@ -114,6 +114,14 @@ export const assertMigrationsApplied = async (): Promise<void> => {
       logger.warn("startup.online_validation_left_to_migrator");
       return;
     case "validated":
+      // Boots anyway (see `reportPendingRepair`), but an operator must know:
+      // the next migrate run repairs it, and a writer may be breaking it.
+      if (onlineReport.report.regressed.length > 0) {
+        logger.error("startup.online_repair_regressed", {
+          newestAppliedMigration: onlineReport.report.newestAppliedMigration,
+          repairs: onlineReport.report.regressed,
+        });
+      }
       if (onlineReport.report.pending.length > 0) {
         logger.warn("startup.online_migrations_pending", {
           newestAppliedMigration: onlineReport.report.newestAppliedMigration,

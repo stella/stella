@@ -244,7 +244,7 @@ export const MatterOriginLink = ({
   >
     <span className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5">
       <MatterIcon className="size-3 shrink-0" matter={{ id, color }} />
-      <span className="truncate">{name}</span>
+      <TruncatedText>{name}</TruncatedText>
     </span>
   </Button>
 );

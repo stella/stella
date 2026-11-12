@@ -47,6 +47,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.ai_memory",
   [AUDIT_RESOURCE_TYPE.ANNOUNCEMENT]:
     "settings.organization.auditResourceKinds.announcement",
+  [AUDIT_RESOURCE_TYPE.CONFLICT_CHECK]:
+    "settings.organization.auditResourceKinds.conflict_check",
   [AUDIT_RESOURCE_TYPE.BILLING_CODE]:
     "settings.organization.auditResourceKinds.billing_code",
   [AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK]:
@@ -97,6 +99,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.usage_event",
   [AUDIT_RESOURCE_TYPE.USAGE_PROVIDER_EVENT]:
     "settings.organization.auditResourceKinds.usage_provider_event",
+  [AUDIT_RESOURCE_TYPE.DATA_EXPORT]:
+    "settings.organization.auditResourceKinds.data_export",
   [AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION]:
     "settings.organization.auditResourceKinds.desktop_edit_session",
   [AUDIT_RESOURCE_TYPE.BILINGUAL_TRANSLATION_RUN]:

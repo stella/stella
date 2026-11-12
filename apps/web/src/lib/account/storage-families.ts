@@ -184,6 +184,14 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     // The chosen default only; the per-chat modes name one user's chats.
     legacy: { keys: "bare", adopt: keepPersistedFields(["defaultSendMode"]) },
   },
+  // The last Run on choice a new chat starts from: a preference.
+  {
+    area: "local",
+    prefix: "stella.chat.runOnPreference",
+    restoration: "data",
+    owner: "scoped",
+    retention: "kept-for-owner",
+  },
   // The skill each main-area chat runs with: the user's choice per chat.
   {
     area: "local",

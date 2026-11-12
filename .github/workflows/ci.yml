@@ -2613,6 +2613,7 @@ jobs:
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
+          CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
         # ci-plan's outputs reach the pool through this script's text, never
         # the environment (see ci-result's outcome step).
         run: |
@@ -2969,6 +2970,7 @@ jobs:
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
+          CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
           CI_CHECK_POOL_PARTITION: ${{ format('{0}/2', matrix.partition) }}
         # ci-plan's outputs reach the pool through this script's text, never
         # the environment (see ci-result's outcome step).
@@ -3915,6 +3917,7 @@ jobs:
         # installed there, which are outside the root lockfile. Install them
         # so this job checks the same graph a checkout with `bun run
         # setup:mcp` has.
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun run setup:mcp
         env:
           NPM_TOKEN: ""
@@ -3936,6 +3939,7 @@ jobs:
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
+          CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: |
           needs_file=$(mktemp)
           cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'
@@ -4784,6 +4788,14 @@ jobs:
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
+        env:
+          NPM_TOKEN: ""
+
+      - name: Install the docs MCP server
+        # typecheck:repo checks .claude/mcp against the packages installed
+        # there, which are outside the root lockfile.
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun run setup:mcp
         env:
           NPM_TOKEN: ""
 

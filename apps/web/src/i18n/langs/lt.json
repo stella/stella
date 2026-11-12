@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Išvada aiški, tačiau vieno susijusio fakto aiškinimas ginčijamas; prieš patvirtindami jį peržiūrėkite.",
       "contradicted": "Registras šio teiginio nepatvirtina. Prieš patvirtinant išvadą ją turi įvertinti žmogus.",
-      "nocover": "Joks atraminis faktas nesusijęs su šiuo teiginiu, todėl nėra su kuo jo palyginti. Patvirtinti neprivaloma.",
+      "nocover": "Joks sąrašo faktas dar neapima šio teiginio.",
       "notverifiable": "Atidėta kaip nepatikrinama; patvirtinti neprivaloma. Jei teiginį iš tiesų galima patikrinti, atverkite jį iš naujo toliau.",
       "recordconflict": "Du registro įrodymai prieštarauja vienas kitam. Aukščiau nuspręskite, kuris yra vadovaujamasis, arba perduokite įrodymų grupei; įrankis už jus nepasirinks.",
       "restsOnHeld": "Faktas, kuriuo grindžiama ši išvada, sulaikytas peržiūrai; patvirtinkite, kad išvada galioja ir be jo, arba patikrinkite teiginį iš naujo, kai faktas bus išspręstas.",
@@ -381,6 +381,30 @@
         "label": "Be šaltinio"
       }
     },
+    "gap": {
+      "addFact": "Pridėti faktą iš dokumento",
+      "addFactFailed": "Fakto nepavyko pridėti",
+      "factOffList": "Faktas, kurio sąraše nebėra",
+      "linkFact": "Susieti faktą",
+      "linkFailed": "Fakto nepavyko susieti",
+      "linked": "Susieti faktai",
+      "linkedMark": "Susieta",
+      "linksChanged": "Susiejimai pasikeitė nuo paskutinio patikrinimo.",
+      "noFacts": "Nė vienas sąrašo faktas netinka.",
+      "recheck": "Patikrinti iš naujo",
+      "recheckFailed": "Teiginio nepavyko patikrinti iš naujo",
+      "searchFacts": "Ieškoti sąrašo faktų",
+      "sheet": {
+        "passage": "Ištrauka",
+        "passageHint": "Dokumento žodžiai, kurie nustato faktą.",
+        "statementRequired": "Įrašykite faktą.",
+        "statementTooLong": "Faktą gali sudaryti ne daugiau kaip {limit} simbolių.",
+        "submit": "Pridėti ir patikrinti iš naujo",
+        "title": "Pridėti faktą iš dokumento"
+      },
+      "showNextSteps": "Rodyti tolesnius veiksmus",
+      "unlink": "Nutraukti ryšį su: {fact}"
+    },
     "guidance": {
       "escalate": "Perduoti",
       "manualJudgement": "Žmogaus sprendimas",
@@ -392,17 +416,22 @@
         "acceptedRoutine": "Priimta kaip įprasta",
         "conflictReopened": "Prieštaravimo sprendimas atšauktas",
         "escalated": "Perduota įrodymų grupei",
+        "factLinked": "Susietas faktas",
+        "factUnlinked": "Nutrauktas fakto ryšys",
         "governed": "Pasirinktas vadovaujamasis įrašas",
         "noteCleared": "Pastaba pašalinta",
         "noteSaved": "Pastaba išsaugota",
         "overridden": "Išvada pakeista",
         "overrideWithdrawn": "Išvados pakeitimas atšauktas",
+        "rechecked": "Teiginys patikrintas iš naujo",
         "reopened": "Atverta iš naujo kaip patikrinamas teiginys",
         "statusCleared": "Peržiūros būsena pašalinta",
         "statusDisputed": "Pažymėta kaip užginčyta",
         "statusNeedsEvidence": "Pažymėta, kad reikia įrodymų",
         "statusReviewed": "Pažymėta kaip peržiūrėta"
       },
+      "carriedFrom": "Iš {date} tikrinimo",
+      "carriedFromEarlier": "Iš ankstesnio tikrinimo",
       "empty": "Peržiūros veiksmų dar nėra.",
       "filters": {
         "allKinds": "Bet kuris veiksmas",
@@ -412,7 +441,9 @@
       },
       "formerMember": "Buvęs narys",
       "kinds": {
+        "factLink": "Fakto ryšiai",
         "override": "Pakeistos išvados",
+        "recheck": "Pakartotinės patikros",
         "recordConflict": "Prieštaravimų sprendimai",
         "reopen": "Atvėrimai iš naujo",
         "status": "Būsenos pakeitimai"
@@ -461,6 +492,11 @@
       "unresolveConflict": "Kodėl atšaukiamas šis sprendimas?",
       "withdrawOverride": "Kodėl grįžtama prie įrankio išvados?"
     },
+    "recheck": {
+      "currentVerdict": "Išvada po pakartotinės patikros",
+      "runVerdict": "Patikros išvada",
+      "summary": "Patikrinta iš naujo {checkedAt} pagal {count, plural, one {# faktą} few {# faktus} many {# fakto} other {# faktų}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Užginčyta} needsEvidence {Reikia įrodymų} other {{origin, select, bulk {Priimta kaip įprasta} other {Peržiūrėta}}}} · {decidedAt}",
       "status": {
@@ -472,6 +508,21 @@
     },
     "runs": {
       "back": "Visi dokumentai",
+      "carryOver": {
+        "openSource": "Atidaryti {date} tikrinimą",
+        "outcomes": {
+          "ambiguous": "Keli galimi atitikmenys",
+          "textChanged": "Formuluotė pasikeitė",
+          "unmatched": "Atitinkamo teiginio nėra",
+          "verdictChanged": "Išvada pasikeitė"
+        },
+        "summary": {
+          "carried": "Perkelta: {count, number}",
+          "carriedAndMissed": "Perkelta: {carried, number} · ne: {missed, number}",
+          "label": "Peržiūros iš {date} tikrinimo: perkelta {carried, number}, neperkelta {missed, number}",
+          "missed": "Neperkelta: {count, number}"
+        }
+      },
       "errors": {
         "accessRevoked": "Tikrinimas sustabdytas, nes prieiga nepasiekiama.",
         "aiUnavailable": "Dokumentams tikrinti nėra prieinamo DI modelio. Patikrinkite organizacijos DI nustatymus.",
@@ -502,7 +553,6 @@
       "failed": "Neišsaugota",
       "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas"
     },
-    "sourceMediumTooltip": "Šaltinio laikmena yra neutralus apibūdinimas. Ji savaime nemažina patikimumo.",
     "states": {
       "contradicted": {
         "chip": "Prieštarauja",
@@ -1878,7 +1928,9 @@
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
       "runOn": "Paleisti",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limitas pasiektas iki {time}",
+      "stateModelUnavailable": "Modelis nebepasiekiamas",
       "stateNeedsLogin": "Reikia prisijungti",
       "stateNotInstalled": "Neįdiegta",
       "stateOffline": "Kompiuteris neprisijungęs",
@@ -2633,6 +2685,7 @@
     "queued": "Eilėje",
     "reason": "Priežastis",
     "recommended": "Rekomenduojami",
+    "reconnect": "Prisijungti iš naujo",
     "reconnecting": "Jungiamasi iš naujo…",
     "reference": "Nuoroda",
     "refresh": "Atnaujinti",
@@ -3282,6 +3335,14 @@
       "organizationMemberLimitReached": "Ši organizacija pasiekė narių ribą.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
+      "sharepointAccessDenied": "Microsoft atsisakė suteikti prieigą prie šios svetainės, bibliotekos ar failo.",
+      "sharepointFileTooLarge": "Šis failas per didelis importuoti.",
+      "sharepointInvalidCursor": "Sąrašas pasikeitė naršant. Atidarykite aplanką iš naujo.",
+      "sharepointNotAFile": "Galima importuoti tik failus, o ne aplankus ar užrašų knygeles.",
+      "sharepointNotConnected": "Norėdami naudoti SharePoint ir OneDrive, prijunkite savo Microsoft paskyrą.",
+      "sharepointNotFound": "Šios svetainės, bibliotekos ar failo nebėra arba jis su jumis nebendrinamas.",
+      "sharepointReconnectRequired": "Jūsų Microsoft prisijungimas nebegalioja. Iš naujo prijunkite SharePoint ir OneDrive.",
+      "sharepointThrottled": "Microsoft riboja užklausas. Netrukus bandykite dar kartą.",
       "skillSourceUnreachable": "Nepavyko įkelti įgūdžio šaltinio. Patikrinkite, ar nuoroda veda į viešą „GitHub“ saugyklą, arba bandykite vėliau.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas.",
@@ -4399,6 +4460,7 @@
       "discoveredSkills": "{count, plural, one {Rastas # įgūdis} few {Rasti # įgūdžiai} other {Rasta # įgūdžių} many {Rasta # įgūdžių}}",
       "discoveryEmpty": "Šioje saugykloje ar aplanke įgūdžių nerasta.",
       "discoverySkippedInvalid": "{count, plural, one {Praleistas # netinkamas įgūdis} few {Praleisti # netinkami įgūdžiai} other {Praleista # netinkamų įgūdžių} many {Praleista # netinkamų įgūdžių}}",
+      "dropPack": "Vilkite .zip arba SKILL.md failą, kad importuotumėte įgūdį",
       "editSkill": "Redaguoti įgūdį",
       "enableSkill": "Įjungti įgūdį",
       "fileExists": "Failas šiuo keliu jau yra",
@@ -4456,6 +4518,7 @@
         }
       },
       "uploadHelp": "Naudokite SKILL.md failą arba .zip aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
+      "uploadPack": "Įkelti .zip arba SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"
     },
@@ -4508,7 +4571,6 @@
       "otherTitle": "Kitos integracijos",
       "probe": "Patikrinti",
       "recommendedFor": "Rekomenduojama: {jurisdictions}",
-      "reconnect": "Prisijungti iš naujo",
       "saveToken": "Išsaugoti tokeną",
       "tokenHelp": "Kaip gauti tokeną",
       "tokenLabel": "Bearer tokenas",
@@ -5392,8 +5454,6 @@
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",
     "caseLawEmptyState": "Pradėkite rašyti, kad ieškotumėte teismų sprendimų.",
-    "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",
     "chatCoveragePartial": "Ne visi pokalbiai išnagrinėti iki galo.",
     "continueInChat": "Tęsti pokalbyje",
     "dateFrom": "Nuo",
@@ -5751,8 +5811,10 @@
         "clause_category": "sąlygų kategorija",
         "clause_template_link": "sąlygos sąsaja su šablonu",
         "clause_variant": "sąlygos variantas",
+        "conflict_check": "interesų konflikto patikra",
         "contact": "kontaktas",
         "contact_directory": "kontaktų katalogas",
+        "data_export": "duomenų eksportas",
         "desktop_edit_session": "darbalaukio redagavimo seansas",
         "document_annotation": "dokumento anotacija",
         "document_review_run": "dokumento peržiūra",
@@ -5930,6 +5992,63 @@
       "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai"
     }
   },
+  "sharepoint": {
+    "admin": {
+      "description": "Nariai prijungia savo Microsoft paskyrą ir importuoja failus į bylas. stella skaito tik tai, ką kiekvienas narys gali atidaryti Microsoft 365.",
+      "disableConfirm": "Išjungti",
+      "disableDescription": "Visų narių Microsoft ryšys bus pašalintas, o jų išsaugotas prisijungimas ištrintas. Jau importuoti dokumentai liks savo bylose. Jei vėl įjungsite šią funkciją, nariams reikės prisijungti iš naujo.",
+      "disableInputLabel": "Įveskite {confirmation}, kad išjungtumėte",
+      "disableTitle": "Išjungti SharePoint ir OneDrive?",
+      "toggleLabel": "Leisti SharePoint ir OneDrive"
+    },
+    "askAdmin": "Jūsų organizacijai išjungta. Paprašykite administratoriaus ją įjungti.",
+    "connectFailed": "Nepavyko prijungti SharePoint ir OneDrive",
+    "connected": "SharePoint ir OneDrive prijungti",
+    "description": "Importuokite failus iš SharePoint ir OneDrive į bylas.",
+    "disconnectDescription": "Jūsų Microsoft prisijungimas bus pašalintas iš stella. Jau importuoti dokumentai liks savo bylose.",
+    "disconnectTitle": "Atjungti SharePoint ir OneDrive?",
+    "disconnected": "SharePoint ir OneDrive atjungti",
+    "import": {
+      "alreadyCurrent": "{count, plural, one {# failas jau buvo atnaujintas.} few {# failai jau buvo atnaujinti.} many {# failo jau buvo atnaujinta.} other {# failų jau buvo atnaujinta.}}",
+      "created": "Importuota",
+      "done": "Failai importuoti iš SharePoint arba OneDrive",
+      "failedReason": "Failo nepavyko nukopijuoti. Bandykite vėliau.",
+      "partial": "Nepavyko importuoti {failed, number} iš {total, plural, one {# failo} few {# failų} many {# failo} other {# failų}}.",
+      "progress": "Importuota {done, number} iš {total, number}",
+      "unchanged": "Jau naujausias",
+      "unconfirmed": "Nepatvirtinta",
+      "unconfirmedCount": "{count, plural, one {# failas nepatvirtintas; importuokite jį dar kartą.} few {# failai nepatvirtinti; importuokite juos dar kartą.} many {# failo nepatvirtinta; importuokite juos dar kartą.} other {# failų nepatvirtinta; importuokite juos dar kartą.}}",
+      "unconfirmedReason": "Importavimas sustojo prieš patvirtinant šį failą. Importuokite jį dar kartą.",
+      "versioned": "Nauja versija"
+    },
+    "oauthReasons": {
+      "consentDenied": "Microsoft prisijungimas buvo atšauktas arba prieiga nesuteikta.",
+      "expired": "Prisijungimas užtruko per ilgai. Prisijunkite iš naujo.",
+      "notConfigured": "Šis stella diegimas nėra sukonfigūruotas Microsoft prisijungimui. Kreipkitės į savo administratorių.",
+      "notEnabled": "Jūsų organizacija neįjungė SharePoint ir OneDrive.",
+      "tryAgain": "Microsoft prisijungimas nebuvo užbaigtas. Prisijunkite iš naujo.",
+      "userMismatch": "Prisijungimas buvo pradėtas iš kitos paskyros ar organizacijos. Prisijunkite iš naujo iš šios."
+    },
+    "picker": {
+      "description": "Pasirinkite failus, kuriuos nukopijuoti į šią bylą (daugiausia {max, number}).",
+      "emptyFolder": "Šis aplankas tuščias.",
+      "menuItem": "Iš SharePoint arba OneDrive",
+      "myOneDrive": "Mano OneDrive",
+      "noFollowedSites": "Ieškokite svetainės arba atidarykite Mano OneDrive.",
+      "noLibraries": "Čia nėra dokumentų bibliotekų.",
+      "notConnected": "Norėdami naršyti SharePoint ir OneDrive, prijunkite savo Microsoft paskyrą.",
+      "notImportable": "Importuoti negalima",
+      "reconnectRequired": "Jūsų Microsoft prisijungimas nebegalioja. Norėdami toliau naršyti, prisijunkite iš naujo.",
+      "searchSites": "Ieškoti svetainių",
+      "selectedCount": "{count, plural, =0 {Nepasirinkta failų} one {Pasirinktas # failas} few {Pasirinkti # failai} many {Pasirinkta # failo} other {Pasirinkta # failų}}",
+      "selectionLimit": "Daugiausia failų, kuriuos galima importuoti vienu metu: {max, number}.",
+      "sites": "Svetainės",
+      "throttledFor": "Microsoft riboja užklausas. Bandykite dar kartą po {seconds, plural, one {# sekundės} few {# sekundžių} many {# sekundės} other {# sekundžių}}.",
+      "title": "Importuoti iš SharePoint arba OneDrive"
+    },
+    "reconnectRequired": "Prisijungimas nebegalioja",
+    "title": "SharePoint ir OneDrive"
+  },
   "skillHistory": {
     "acceptStale": "Priimti ir perrašyti naujesnius pakeitimus",
     "backToCurrent": "Grįžti į dabartinę versiją",
@@ -6055,6 +6174,11 @@
     "title": "Teisės aktai",
     "validity": "Galioja nuo {from} iki {to}",
     "versionAppliedInDecision": "Sprendime <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> taikyta redakcija (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# įterpta nuostata} few {# įterptos nuostatos} many {# įterptos nuostatos} other {# įterptų nuostatų}}",
+    "versionChangesChanged": "{count, plural, one {# pakeista nuostata} few {# pakeistos nuostatos} many {# pakeistos nuostatos} other {# pakeistų nuostatų}}",
+    "versionChangesNone": "Formuluotė nepakeista",
+    "versionChangesRemoved": "{count, plural, one {# išbraukta nuostata} few {# išbrauktos nuostatos} many {# išbrauktos nuostatos} other {# išbrauktų nuostatų}}",
+    "versionChangesWords": "{inserted, plural, one {# įterptas žodis} few {# įterpti žodžiai} many {# įterpto žodžio} other {# įterptų žodžių}}, {deleted, plural, one {# išbrauktas žodis} few {# išbraukti žodžiai} many {# išbraukto žodžio} other {# išbrauktų žodžių}}",
     "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
   },
   "styleSets": {
@@ -6775,6 +6899,7 @@
     "deletedItem": "Ištrinta: {name}",
     "deletingWorkspace": "Byla trinama",
     "documentSwitcher": {
+      "download": "Atsisiųsti šį failą",
       "searchPlaceholder": "Rasti dokumentą…",
       "trigger": "Perjungti dokumentą"
     },

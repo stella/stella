@@ -38,6 +38,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   organization_settings: "Organization settings, not reviewer content.",
   billing_draft_user_settings:
     "Per-user billing draft consent and preferences, not reviewer content.",
+  conflict_checks:
+    "Conflict checks are an invitation-only feature the review organization is never granted, so no reviewer can record one there; the table stays empty for it.",
   organization_access_states: "Organization access state, set by operators.",
   organization_configured_access: "Organization access, set by operators.",
   feature_enrolments:
@@ -163,6 +165,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "number_series_allocations",
   "number_series_counters",
   "office_file_evidence",
+  "organization_data_exports",
   "pending_uploads",
   "playbook_definition_versions",
   "playbook_definitions",
@@ -178,6 +181,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "search_document_preview_passages",
   "search_documents",
   "search_history_entries",
+  "search_history_country_clears",
   "search_history_tombstones",
   "search_history_owners",
   "search_projection_repair_queue",
@@ -229,6 +233,8 @@ export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_R
     // The member's standing approvals, for websites and for tools: both
     // member-scoped, keyed on the same member and organization.
     ["chat_browser_site_grants", "chat_tool_grants"],
+    // Independent search history deletion barriers under one owner policy.
+    ["search_history_country_clears", "search_history_tombstones"],
   ];
 
 /**

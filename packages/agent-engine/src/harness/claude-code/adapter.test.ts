@@ -217,6 +217,7 @@ const turnInput = (
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
   skillFolders: [],
+  networkHosts: [],
   toolPath: [],
   ...overrides,
 });
@@ -1231,10 +1232,11 @@ describe("Claude Code approval modes", () => {
     });
   });
 
-  test("full auto lets sandboxed commands reach the network and still asks before leaving the sandbox", async () => {
+  test("full auto lets sandboxed commands reach a host the skills declare and still asks before leaving the sandbox", async () => {
     const { events, answers } = await run("sandbox_network", {
       overrides: {
         policy: { network: "open", fs: "workspace", approvals: "full_auto" },
+        networkHosts: [FAKE_SANDBOX_HOST],
       },
       onEvent: async (event, turn) => {
         if (event.type === "approval.requested") {
@@ -1270,6 +1272,35 @@ describe("Claude Code approval modes", () => {
       },
     ]);
     expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("full auto asks about a host no skill declares", async () => {
+    const { events, answers } = await run("sandbox_network", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "full_auto" },
+        networkHosts: ["aviationweather.gov"],
+      },
+      onEvent: async (event, turn) => {
+        if (event.type === "approval.requested") {
+          await turn.respond({
+            type: "approval",
+            requestId: event.request.requestId,
+            decision: "deny",
+          });
+        }
+      },
+    });
+    const approvals = events.flatMap((event) =>
+      event.type === "approval.requested" ? [event.request] : [],
+    );
+    expect(approvals).toHaveLength(2);
+    expect(approvals[0]).toMatchObject({
+      toolCall: { localInput: { host: FAKE_SANDBOX_HOST } },
+    });
+    expect(answers()[0]).toMatchObject({
+      request_id: "cli-1",
+      response: expect.objectContaining({ behavior: "deny" }),
+    });
   });
 
   test("outside full auto a request to reach a host is asked about", async () => {
