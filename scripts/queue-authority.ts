@@ -493,10 +493,14 @@ const optionValue = (call: CallExpression, key: string): Expression | null => {
   }
   let value: Expression | null = null;
   for (const property of options.properties) {
-    if (!isPropertyAssignment(property)) {
+    if (property.type === "SpreadElement" || property.computed) {
+      // May replace the option with a value this reader cannot see.
       value = null;
-    } else if (!property.computed && propertyName(property.key) === key) {
-      value = property.value;
+    } else if (propertyName(property.key) === key) {
+      // A shorthand `{ name }` is the binding of that name; a method or an
+      // accessor is no static value.
+      value =
+        property.kind === "init" && !property.method ? property.value : null;
     }
   }
   return value;
@@ -1811,7 +1815,7 @@ const selfTestWorkerConstructors = (): string[] => {
   }
   const factoryQueues = workerQueueNames(
     "apps/api/src/lib/runs/run-queue.ts",
-    'import { createDocumentRunJobs, createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; const NAME = "runs"; const JOBS = createDocumentRunJobs({ name: NAME, jobName: "run" }); export const runs = createDocumentRunQueue({ jobs: JOBS });',
+    'import { createDocumentRunJobs, createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; const name = "runs"; const JOBS = createDocumentRunJobs({ name, jobName: "run" }); const readQueuedPage = read; export const runs = createDocumentRunQueue({ jobs: JOBS, readQueuedPage });',
     () => null,
   );
   if (JSON.stringify(factoryQueues) !== JSON.stringify(["runs"])) {
