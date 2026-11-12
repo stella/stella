@@ -1212,6 +1212,13 @@
       "p99Seconds": 3,
       "peakRssMiB": 84
     },
+    "Tailwind sources cover class-shipping dependencies": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 3,
+      "p99Seconds": 3,
+      "peakRssMiB": 84
+    },
     "Database awaits in loops": {
       "minutes": 12,
       "samples": 19,

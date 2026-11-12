@@ -109,6 +109,15 @@ checks:
       bun run --cwd packages/scripts test ../../scripts/check-split-buttons.test.ts
       bun run check:split-buttons
 
+  - name: Tailwind sources cover class-shipping dependencies
+    if: ${{ !cancelled() }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
+    run: |
+      bun test scripts/check-tailwind-sources.test.ts
+      bun run check:tailwind-sources
+
   - name: Database awaits in loops
     if: ${{ !cancelled() }}
     env:
