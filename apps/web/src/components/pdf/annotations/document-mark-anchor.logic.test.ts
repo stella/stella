@@ -12,6 +12,7 @@ import type {
   MarkPageText,
 } from "@stll/api-contract/pdf-mark-placement";
 import { assertProperty } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   locateSelection,
@@ -157,6 +158,50 @@ describe("words found on a page", () => {
     );
   });
 
+  test("match a ligature glyph to the letters pdf.js selects for it", () => {
+    // LibPDF keeps the glyph's own character; pdf.js gives its letters.
+    const LIGATURES = ["\uFB00", "\uFB01", "\uFB02", "\uFB03", "\uFB04"];
+    assertProperty(
+      "quote whole glyphs that read as the selected letters",
+      fc.property(
+        fc
+          .array(
+            fc
+              .array(
+                fc.oneof(
+                  fc.stringMatching(/^[a-zčř]$/u),
+                  fc.constantFrom(...LIGATURES),
+                ),
+              )
+              .filter((word) => word.length > 0),
+          )
+          .filter((words) => words.length > 0)
+          .map((words) => words.map((word) => word.join(""))),
+        fc.nat(),
+        fc.nat(),
+        (words, from, length) => {
+          const pageText = words.join(" ");
+          const first = from % words.length;
+          const last = Math.min(words.length - 1, first + (length % 4));
+          const selected = normalizeUnicode(
+            words.slice(first, last + 1).join(" "),
+            "NFKC",
+          );
+          const range = findWordsOnPage({ near: 0, pageText, words: selected });
+          expect(range).not.toBeNull();
+          if (range === null) {
+            return;
+          }
+          const squeeze = (text: string) =>
+            normalizeUnicode(text, "NFKC").replaceAll(/\s/gu, "");
+          expect(squeeze(pageText.slice(range.start, range.end))).toBe(
+            squeeze(selected),
+          );
+        },
+      ),
+    );
+  });
+
   test("prefer the occurrence nearest where the selection began", () => {
     const pageText = "the goods\nthe goods\nthe goods";
     expect(findWordsOnPage({ near: 0, pageText, words: "the goods" })).toEqual({
@@ -164,7 +209,10 @@ describe("words found on a page", () => {
       end: 9,
     });
     expect(findWordsOnPage({ near: 19, pageText, words: "the goods" })).toEqual(
-      { start: 20, end: 29 },
+      {
+        start: 20,
+        end: 29,
+      },
     );
   });
 });
@@ -191,6 +239,33 @@ describe("a selection becoming an anchor", () => {
           startOffset: PAGE.indexOf("shall"),
           endOffset: PAGE.indexOf("within") + "within".length,
           quote: "shall deliver the goods\nwithin",
+        },
+      ],
+    });
+  });
+
+  test("quotes the page's own ligature where pdf.js selected its letters", () => {
+    const page = "waived or modi\uFB01ed upon the written\nconsent";
+    expect(
+      locateSelection({
+        layers: [
+          {
+            pageNumber: 1,
+            text: "modified upon the written consent",
+            before: 10,
+            total: 46,
+          },
+        ],
+        pages: new Map([[1, pageOf(page)]]),
+      }),
+    ).toEqual({
+      type: "located",
+      spans: [
+        {
+          pageNumber: 1,
+          startOffset: page.indexOf("modi"),
+          endOffset: page.length,
+          quote: "modi\uFB01ed upon the written\nconsent",
         },
       ],
     });
