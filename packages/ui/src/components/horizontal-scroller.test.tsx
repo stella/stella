@@ -301,3 +301,31 @@ test("keeps focus on a control that scrolled the row to its edge", () => {
   fireEvent.click(next);
   expect(scrollBy).not.toHaveBeenCalled();
 });
+
+test("keeps its controls beside the row, taking room only while they can scroll", () => {
+  const view = render(
+    <HorizontalScroller previousLabel="Previous" nextLabel="Next">
+      <button type="button">Item</button>
+    </HorizontalScroller>,
+  );
+  const viewport = divOf(view.getByText("Item").parentElement?.parentElement);
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 100 },
+    scrollWidth: { value: 300 },
+  });
+  act(() => TestResizeObserver.notify());
+  const previous = view.getByLabelText("Previous");
+  const next = view.getByLabelText("Next");
+
+  // Siblings of the viewport in reading order, so no control overlays an item.
+  expect([...(viewport.parentElement?.children ?? [])]).toEqual([
+    previous,
+    viewport,
+    next,
+  ]);
+  for (const control of [previous, next]) {
+    expect(control.className).not.toContain("absolute");
+  }
+  expect(previous.className).toContain("w-0");
+  expect(next.className).not.toContain("w-0");
+});
