@@ -103,6 +103,22 @@ export const resourceQueryOptions = <
 });
 
 export const RESOURCE_MUTATION_CONTRACTS = {
+  // The member's own reminder for when a chat's usage limit resets.
+  changeChatLimitReminder: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/chat/threads/:threadId/limit-reminder",
+      },
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/chat/threads/:threadId/limit-reminder",
+      },
+    ],
+    resources: [RESOURCE_TYPE.CHAT_THREAD],
+  },
   createInvoice: {
     writes: [
       {

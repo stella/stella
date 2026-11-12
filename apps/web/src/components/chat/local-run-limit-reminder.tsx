@@ -15,6 +15,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 /**
  * Under a turn stopped by the usage limit of the agent on the member's
@@ -40,11 +41,17 @@ export const LocalRunLimitReminder = ({
   });
   const reminder = queryView(useQuery(options));
   useQueryViewError(reminder, "LocalRunLimitReminder:query");
-  const change = useMutation({
+  const saveReminder = resourceMutation({
+    mutation: "changeChatLimitReminder",
+    queryClient,
+    scope: { type: "organization" },
     mutationFn: async (next: "set" | "cancel") =>
       next === "set"
         ? await setChatLimitReminder(threadRef)
         : await cancelChatLimitReminder(threadRef),
+  });
+  const change = useMutation({
+    mutationFn: saveReminder,
     onSuccess: (data) => {
       queryClient.setQueryData(options.queryKey, data);
     },

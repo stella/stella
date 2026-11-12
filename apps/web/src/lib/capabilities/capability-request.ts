@@ -32,6 +32,8 @@ export type AppOnlyWriteId =
   | "chat.browser-site-grants.create"
   | "chat.browser-site-grants.delete"
   | "chat.mcp-apps.call"
+  | "chat.threads.limit-reminder.cancel"
+  | "chat.threads.limit-reminder.set"
   | "chat.threads.model.update"
   | "files.document-properties.update"
   | "files.email-attachment.save"
