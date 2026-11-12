@@ -5063,6 +5063,11 @@
           "space": "value"
         },
         {
+          "name": "fitsRow",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "scrollState",
           "kind": "variable",
           "space": "value"
@@ -7468,6 +7473,11 @@
       "exports": [
         {
           "name": "HorizontalScroller",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "fitsRow",
           "kind": "variable",
           "space": "value"
         },
@@ -12446,7 +12456,7 @@
     "./src/components/form.d.ts": "import { Form as FormPrimitive } from \"@base-ui/react/form\";\nimport { type VariantProps } from \"class-variance-authority\";\ndeclare const formVariants: (props?: ({\n    density?: \"compact\" | \"default\" | \"snug\" | null | undefined;\n    layout?: \"inline\" | \"stack\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ntype FormErrors = NonNullable<FormPrimitive.Props[\"errors\"]>;\ntype FormProps = FormPrimitive.Props & VariantProps<typeof formVariants> & {\n    dirty?: boolean;\n    onDiscard?: (() => void) | undefined;\n};\ndeclare const Form: ({ className, density, layout, dirty, onDiscard, children, ...props }: FormProps) => import(\"react\").JSX.Element;\nexport { Form, formVariants };\nexport type { FormErrors, FormProps };\n",
     "./src/components/frame.d.ts": "import type * as React from \"react\";\ndeclare const Frame: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const FramePanel: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const FrameHeader: ({ className, ...props }: React.ComponentProps<\"header\">) => React.JSX.Element;\ndeclare const FrameTitle: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const FrameDescription: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const FrameFooter: ({ className, ...props }: React.ComponentProps<\"footer\">) => React.JSX.Element;\nexport { Frame, FramePanel, FrameHeader, FrameTitle, FrameDescription, FrameFooter, };\n",
     "./src/components/hex-color-picker.d.ts": "import type * as React from \"react\";\ntype HexColorPickerProps = {\n    className?: string;\n    color?: string | undefined;\n    onChange?: (hex: string) => void;\n};\ndeclare const HexColorPicker: ({ color, onChange, className, }: HexColorPickerProps) => React.JSX.Element;\nexport { HexColorPicker, type HexColorPickerProps };\n",
-    "./src/components/horizontal-scroller.d.ts": "import type { ComponentProps } from \"react\";\ntype ScrollDirection = \"ltr\" | \"rtl\";\ntype HorizontalScrollerProps = ComponentProps<\"div\"> & {\n    contentClassName?: string;\n    nextLabel: string;\n    previousLabel: string;\n    viewportClassName?: string;\n};\ntype ScrollState = {\n    canScrollEnd: boolean;\n    canScrollStart: boolean;\n};\nexport declare const HorizontalScroller: ({ children, className, nextLabel, previousLabel, contentClassName, viewportClassName, ...props }: HorizontalScrollerProps) => import(\"react\").JSX.Element;\nexport declare const scrollState: (scrollLeft: number, scrollWidth: number, clientWidth: number, direction: ScrollDirection) => ScrollState;\nexport declare const wheelDeltaPixels: (event: Pick<WheelEvent, \"deltaMode\" | \"deltaY\">, node: Pick<HTMLElement, \"clientWidth\">) => number;\nexport {};\n",
+    "./src/components/horizontal-scroller.d.ts": "import type { ComponentProps } from \"react\";\ntype ScrollDirection = \"ltr\" | \"rtl\";\ntype HorizontalScrollerProps = ComponentProps<\"div\"> & {\n    contentClassName?: string;\n    nextLabel: string;\n    previousLabel: string;\n    viewportClassName?: string;\n};\ntype ScrollState = {\n    canScrollEnd: boolean;\n    canScrollStart: boolean;\n};\nexport declare const HorizontalScroller: ({ children, className, nextLabel, previousLabel, contentClassName, viewportClassName, ...props }: HorizontalScrollerProps) => import(\"react\").JSX.Element;\nexport declare const scrollState: (scrollLeft: number, scrollWidth: number, clientWidth: number, direction: ScrollDirection) => ScrollState;\nexport declare const fitsRow: (scrollWidth: number, rowWidth: number) => boolean;\nexport declare const wheelDeltaPixels: (event: Pick<WheelEvent, \"deltaMode\" | \"deltaY\">, node: Pick<HTMLElement, \"clientWidth\">) => number;\nexport {};\n",
     "./src/components/identity-text.d.ts": "type IdentityTextProps = {\n    children: string;\n    className?: string;\n};\nexport declare const IdentityText: ({ children, className }: IdentityTextProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/inline-drop-indicator.d.ts": "import type { InlineDropPosition } from \"../lib/inline-reorder\";\nexport declare const InlineDropIndicator: ({ position, }: {\n    position: InlineDropPosition | null;\n}) => import(\"react\").JSX.Element | null;\n",
     "./src/components/inline-rename.d.ts": "import type { ComponentProps } from \"react\";\ntype InlineRenameInputProps = Omit<ComponentProps<\"input\">, \"onChange\" | \"onKeyDown\" | \"size\" | \"value\"> & {\n    fill?: boolean;\n    onCancel: () => void;\n    onCommit: () => void;\n    onValueChange: (value: string) => void;\n    value: string;\n};\nexport declare const InlineRenameInput: ({ value, onValueChange, onCommit, onCancel, onBlur, className, ref, dir, fill, ...props }: InlineRenameInputProps) => import(\"react\").JSX.Element;\nexport {};\n",

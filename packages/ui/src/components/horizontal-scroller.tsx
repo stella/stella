@@ -50,13 +50,16 @@ export const HorizontalScroller = ({
 
   const measure = useCallback((node: HTMLDivElement) => {
     writeScrollEdgeFade(node);
+    const rowWidth = node.parentElement?.clientWidth ?? node.clientWidth;
     setState(
-      scrollState(
-        node.scrollLeft,
-        node.scrollWidth,
-        node.clientWidth,
-        getComputedStyle(node).direction === "rtl" ? "rtl" : "ltr",
-      ),
+      fitsRow(node.scrollWidth, rowWidth)
+        ? { canScrollEnd: false, canScrollStart: false }
+        : scrollState(
+            node.scrollLeft,
+            node.scrollWidth,
+            node.clientWidth,
+            getComputedStyle(node).direction === "rtl" ? "rtl" : "ltr",
+          ),
     );
   }, []);
 
@@ -212,6 +215,14 @@ export const scrollState = (
     canScrollEnd: maximum > 1 && position < maximum - 1,
   };
 };
+
+/**
+ * Whether the content needs the controls at all, decided from `rowWidth`, the
+ * whole width the scroller has: the controls take room from the viewport once
+ * they show, and content that fits the row without them needs none.
+ */
+export const fitsRow = (scrollWidth: number, rowWidth: number): boolean =>
+  scrollWidth - rowWidth <= 1;
 
 const LINE_HEIGHT_PX = 16;
 

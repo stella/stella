@@ -40,7 +40,7 @@ globalThis.ResizeObserver = TestResizeObserver;
 
 const { act, cleanup, fireEvent, render } =
   await import("@testing-library/react");
-const { HorizontalScroller, scrollState, wheelDeltaPixels } =
+const { HorizontalScroller, fitsRow, scrollState, wheelDeltaPixels } =
   await import("./horizontal-scroller");
 
 afterEach(cleanup);
@@ -67,6 +67,16 @@ test("reports logical start, middle, end, no overflow, and RTL", () => {
     canScrollStart: true,
     canScrollEnd: false,
   });
+});
+
+test("decides overflow from the full row, not the viewport the controls narrowed", () => {
+  // A 300px row whose controls take 30px: content that shrank to 290px fits
+  // the row once the controls are gone, so no control is needed, although it
+  // is wider than the 270px viewport the controls left.
+  expect(fitsRow(290, 300)).toBe(true);
+  expect(scrollState(0, 290, 270, "ltr").canScrollEnd).toBe(true);
+  // Content wider than the whole row still needs them.
+  expect(fitsRow(310, 300)).toBe(false);
 });
 
 test("shows directional controls and scrolls forward", () => {
