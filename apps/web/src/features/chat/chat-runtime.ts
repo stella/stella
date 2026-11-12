@@ -1395,6 +1395,11 @@ export const createChatRuntime = ({
       captureRuntimeError(resumed.error.cause);
       return "not_sent";
     }
+    // The client resolves false, not throws, when the request failed.
+    if (!resumed.value) {
+      answeredLocalRunQuestions.delete(interruptId);
+      return "not_sent";
+    }
     return "sent";
   };
 

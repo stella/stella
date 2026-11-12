@@ -109,11 +109,11 @@ export const LocalRunQuestionCard = ({
   // they are not lost; a secret's never do.
   // Through the live composer when one is on screen, so the member's latest
   // typing there, not yet in the stored draft, stays.
-  const { appendTextToThread } = useChatEditorManager();
+  const { appendParagraphToThread } = useChatEditorManager();
   const keepUnsent = useLatestCallback(() => {
     const words = sent === null ? unsentOwnWords(questions, drafts) : "";
     if (words !== "") {
-      appendTextToThread(threadRef, words);
+      appendParagraphToThread(threadRef, words);
     }
   });
   // Only on unmount: the callback is stable, so no re-render runs it.
