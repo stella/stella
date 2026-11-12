@@ -156,10 +156,7 @@ export const ViewToolbar = ({
       : [];
 
   return (
-    <ViewToolbarChrome
-      className="md:ms-auto md:justify-end"
-      data-slot="workspace-view-toolbar"
-    >
+    <ViewToolbarChrome data-slot="workspace-view-toolbar">
       <QueryViewFeedback view={propertiesView} />
       <ExtractionRunProgress workspaceId={workspaceId} />
 

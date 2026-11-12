@@ -343,6 +343,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.verifications.claim-comments.delete` | write, destructive | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-delete` |
 | `lists.verifications.claim-comments.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-list` |
 | `lists.verifications.claim-comments.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-update` |
+| `lists.verifications.claim-rechecks.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-rechecks-create` |
 | `lists.verifications.claim-reviews.bulk.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-bulk-create` |
 | `lists.verifications.claim-reviews.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-create` |
 | `lists.verifications.claim-reviews.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-list` |
@@ -534,6 +535,15 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `seller-profiles.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles get` |
 | `seller-profiles.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles list` |
 | `seller-profiles.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles update` |
+
+## sharepoint
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `sharepoint.drives.items.list` | read | stella:read | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint drives-items-list` |
+| `sharepoint.drives.list` | read | stella:read | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint drives-list` |
+| `sharepoint.imports.create` | write | stella:documents_write | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint imports-create` |
+| `sharepoint.sites.list` | read | stella:read | FEATURE_SHAREPOINT | generic invoke → `stella capability sharepoint sites-list` |
 
 ## signals
 
@@ -803,10 +813,10 @@ mechanics, and similar), not gaps in coverage.
 | mcp_transport | 12 |
 | native_device | 5 |
 | native_tool_ui | 10 |
-| provider_secret | 36 |
+| provider_secret | 33 |
 | public_indexing | 10 |
 | realtime_stream | 9 |
-| search_ui | 20 |
+| search_ui | 21 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 22 |

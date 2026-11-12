@@ -28,7 +28,14 @@ const config = {
   contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "provider_secret" },
+  description:
+    'List the files and folders directly inside one folder of a drive; use itemId "root" for the top level. Not recursive. Items of kind file can be copied into a matter with sharepoint.imports.create.',
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    readClass: "tenant",
+    consumesServices: false,
+  },
   access: "read",
   params: requestParams,
   query: requestQuery,

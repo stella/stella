@@ -7,7 +7,7 @@ import { roles } from "@stll/permissions";
 
 const MIGRATION = path.resolve(
   import.meta.dir,
-  "../../../drizzle/20261111160200_conflict_checks/migration.sql",
+  "../../../drizzle/20261112043800_conflict_checks/migration.sql",
 );
 
 // The routines that read across matter walls admit the roles listed in their

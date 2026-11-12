@@ -49,8 +49,6 @@ const search = async (overrides: Partial<GlobalSearchQuery> = {}) =>
         scopedDb: executeRowsScopedDb(
           async (read) => await testDb.transaction(read),
         ),
-        readLanguageAlternates: async () =>
-          await Promise.resolve({ alternatesFor: () => [] }),
       },
     )
   ).unwrap();

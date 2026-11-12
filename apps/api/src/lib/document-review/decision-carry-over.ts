@@ -15,8 +15,7 @@
  * completed run (at most two rows); one reads both runs' findings (both bounded
  * by the confirmed-topic cap); one UPDATE copies every match by joining the
  * prior rows back through their ids, so no decision, decider, or timestamp is
- * round-tripped through the application. One INSERT then gives every
- * inherited decision its baseline history event.
+ * round-tripped through the application.
  */
 
 import { panic } from "better-result";
@@ -28,7 +27,6 @@ import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
-import { appendMissingBaselineDecisions } from "@/api/lib/document-review/finding-decision-history";
 import { findingFingerprint } from "@/api/lib/document-review/finding-fingerprint";
 import {
   DOCUMENT_REVIEW_DECISION,
@@ -295,15 +293,6 @@ export const carryOverDecisions = async ({
        AND prior.workspace_id = ${workspaceId}
        AND target.decision = ${DOCUMENT_REVIEW_DECISION.OPEN}
        AND cardinality(target.flags) = 0`);
-  // A decided finding carries its history: the inherited decision, with its
-  // original decider and moment, is the new finding's baseline. A match the
-  // UPDATE skipped is still open, or was decided through the handler, which
-  // wrote its own events, so the helper adds nothing for it.
-  await appendMissingBaselineDecisions(
-    tx,
-    workspaceId,
-    carried.map(({ findingId }) => findingId),
-  );
 
   return carried.length;
 };

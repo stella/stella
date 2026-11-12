@@ -19,7 +19,7 @@ import { typedPgArray } from "@/api/lib/search/sql";
 
 /**
  * The organization's matters reach a conflict check only through the two
- * database routines below (migration `20261111160200_conflict_checks`). They
+ * database routines below (migration `20261112043800_conflict_checks`). They
  * run with the owner's rights so a check covers matters its runner cannot
  * open, yet for such a matter they return only its id and a severity they
  * computed themselves: the contact's role and the matter's state stay in the

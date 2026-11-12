@@ -82,7 +82,7 @@ const SYNTHETIC_SESSION_MIGRATION_PATH = nodePath.join(
 );
 const CONFLICT_CHECKS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261111160200_conflict_checks",
+  "20261112043800_conflict_checks",
   "migration.sql",
 );
 const STORED_KEYS_ORGANIZATION_SCOPE_MIGRATION_PATH = nodePath.join(
@@ -1813,4 +1813,22 @@ export const installPgliteCaseLawPopulationCounts = async (
     await db.execute(sql.raw(statement));
   }
   await db.execute(sql`SELECT public.seed_case_law_population_counts(128)`);
+};
+
+/**
+ * Install the trigger that writes every finding decision's history event, so
+ * a writer that changes a decision in a test gets its history exactly as it
+ * would in production.
+ */
+export const installPgliteFindingDecisionHistory = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await installPgliteMigration({
+    db,
+    migrationPath: nodePath.join(
+      DRIZZLE_DIR,
+      "20261111230000_document_review_finding_decision_trigger",
+      "migration.sql",
+    ),
+  });
 };

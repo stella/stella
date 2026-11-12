@@ -5,6 +5,7 @@ import type { SQL } from "drizzle-orm";
 import { isNonNullObject } from "@stll/template-conditions/path";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
@@ -432,6 +433,10 @@ export const buildSearchPreviewQuery = ({
         LIMIT 1
       `;
     case "case-law":
+      // A point read by id. The hit came from the corpus search engine, whose
+      // matching (an any-word top-up, legal alternatives) is not this
+      // tsquery's, so the decision is not asked to match it again; the query
+      // still picks the passage the preview opens on.
       return sql`
         SELECT ${previewContent({
           body: sql`clsd.searchable_text`,
@@ -453,7 +458,6 @@ export const buildSearchPreviewQuery = ({
           table: "case-law",
         })}
         WHERE clsd.decision_id = ${resultId}
-          ${previewTextFilter(sql`clsd.tsv`, tsQuery)}
         LIMIT 1
       `;
     case "chat": {
@@ -555,10 +559,120 @@ const isSearchPreviewRow = (value: unknown): value is SearchPreviewRow =>
   "useUnaccent" in value &&
   typeof value.useUnaccent === "boolean";
 
+type CaseLawDecisionTextSource = {
+  id: string;
+  fulltext: string | null;
+  textS3Key: string | null;
+  contentHash: string | null;
+};
+
+/**
+ * A published decision's flat text wherever its corpus storage keeps it: the
+ * Postgres column, or, once storage is canonical, the stored text object (the
+ * column then stays NULL). The same read the decision reader's text fallback
+ * makes; the corpus module loads on first use, so the search routes do not
+ * pull the object-storage graph in for every other result type.
+ */
+const readCaseLawDecisionText = async ({
+  id,
+  fulltext,
+  textS3Key,
+  contentHash,
+}: CaseLawDecisionTextSource): Promise<string | null> => {
+  if (
+    corpusStorageMode === "off" ||
+    textS3Key === null ||
+    contentHash === null
+  ) {
+    return fulltext;
+  }
+  const [{ readCorpusText }, { readCorpusPayloadOrFallback }] =
+    await Promise.all([
+      import("@/api/lib/legal-search/corpus-reads"),
+      import("@/api/lib/legal-search/corpus-storage"),
+    ]);
+  return await readCorpusPayloadOrFallback({
+    documentId: id,
+    key: textS3Key,
+    step: "searchPreview.decisionText",
+    read: async () => await readCorpusText(textS3Key),
+    fallback: () => fulltext,
+  });
+};
+
+/**
+ * The published, redistributable decision a case-law hit names, for one
+ * without a search projection row. Same gate as the projection read.
+ */
+export const buildCaseLawDecisionPreviewQuery = (resultId: string): SQL => sql`
+  SELECT
+    d.id,
+    d.case_number || ' - ' || d.court AS title,
+    left(d.fulltext, ${SEARCH_PREVIEW_NORMALIZED_SOURCE_CHARACTER_LIMIT}) AS fulltext,
+    d.text_s3_key,
+    d.content_hash
+  FROM case_law_published_decisions d
+  ${publicCaseLawDecisionJoin}
+  WHERE d.id = ${resultId}
+  LIMIT 1
+`;
+
+const nullableText = (value: unknown): string | null =>
+  typeof value === "string" ? value : null;
+
+type SearchPreviewDependencies = {
+  readCaseLawText?: (
+    source: CaseLawDecisionTextSource,
+  ) => Promise<string | null>;
+};
+
+/**
+ * A case-law hit comes from the corpus search engine, which also serves
+ * decisions the Postgres search projection never held (canonical storage
+ * writes none). Such a hit is previewed from the decision itself: its title
+ * and the stretch of its text around the query's words, as plain text.
+ */
+const readCaseLawDecisionPreview = async (
+  input: SearchPreviewQuery,
+  scopedDb: ScopedDb,
+  readCaseLawText: NonNullable<SearchPreviewDependencies["readCaseLawText"]>,
+): Promise<SearchPreview | null> => {
+  const rows = await scopedDb(
+    async (tx) =>
+      await tx.execute(buildCaseLawDecisionPreviewQuery(input.resultId)),
+  );
+  const row = rows.at(0);
+  const title = nullableText(row?.["title"]);
+  const id = nullableText(row?.["id"]);
+  if (row === undefined || id === null || title === null) {
+    return null;
+  }
+  const text = await readCaseLawText({
+    id,
+    fulltext: nullableText(row["fulltext"]),
+    textS3Key: nullableText(row["text_s3_key"]),
+    contentHash: nullableText(row["content_hash"]),
+  });
+  const heading = title.slice(0, SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT);
+  const body = truncateSearchPreviewAroundCandidates({
+    candidates: getSearchPreviewLocatorCandidates(input.query),
+    maxLength: LIMITS.searchPreviewResponseCharacterLimit - heading.length - 1,
+    source: (text ?? "").slice(
+      0,
+      SEARCH_PREVIEW_NORMALIZED_SOURCE_CHARACTER_LIMIT,
+    ),
+  });
+  return {
+    type: "plain-text",
+    content: body.trim().length === 0 ? heading : `${heading} ${body}`,
+  };
+};
+
 /** Preview of one search hit, read on the request's scoped handle. */
 export const readSearchPreview = async (
   input: SearchPreviewQuery,
   scopedDb: ScopedDb,
+  { readCaseLawText = readCaseLawDecisionText }: SearchPreviewDependencies = {},
 ): Promise<Result<SearchPreview | null, ArtefactProvenanceDecodeError>> => {
   if (input.type === "chat") {
     const rows = await scopedDb(
@@ -689,7 +803,11 @@ export const readSearchPreview = async (
   );
   const preview = rows.at(0)?.["preview"];
   if (!isSearchPreviewRow(preview)) {
-    return Result.ok(null);
+    return Result.ok(
+      input.type === "case-law"
+        ? await readCaseLawDecisionPreview(input, scopedDb, readCaseLawText)
+        : null,
+    );
   }
 
   if (preview.sourceContent === null) {

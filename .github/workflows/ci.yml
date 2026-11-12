@@ -3917,6 +3917,7 @@ jobs:
         # installed there, which are outside the root lockfile. Install them
         # so this job checks the same graph a checkout with `bun run
         # setup:mcp` has.
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun run setup:mcp
         env:
           NPM_TOKEN: ""
@@ -4787,6 +4788,14 @@ jobs:
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
+        env:
+          NPM_TOKEN: ""
+
+      - name: Install the docs MCP server
+        # typecheck:repo checks .claude/mcp against the packages installed
+        # there, which are outside the root lockfile.
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun run setup:mcp
         env:
           NPM_TOKEN: ""
 
