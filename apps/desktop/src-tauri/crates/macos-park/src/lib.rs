@@ -57,7 +57,7 @@ pub use windows_languages::{keyboard_languages, preferred_languages};
 #[cfg(target_os = "macos")]
 mod window_bounds;
 #[cfg(target_os = "macos")]
-pub use window_bounds::{WindowBounds, largest_window_bounds};
+pub use window_bounds::{WindowBounds, frontmost_window_number, largest_window_bounds};
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod process_identity;

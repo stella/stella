@@ -581,14 +581,14 @@
   },
   "dictation": {
     "title": "Dikteerimine",
-    "description": "Hoidke all klahve {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata.",
+    "description": "Hoidke all klahve {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata. Kui tehisintellektiga parandamine on sisse lülitatud, saadetakse teisendatud tekst (mitte heli) stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale vigade ja vormingu parandamiseks; stella seda ei salvesta.",
     "cleanup": {
       "title": "Paranda tehisintellektiga",
-      "description": "Kõne teisendatakse endiselt selles arvutis ja heli ei lahku sealt kunagi. Kui parandamine on sisse lülitatud, saadetakse teisendatud tekst stella AI-le, mis parandab tuvastusvead ning rakendab dikteeritud kirjavahemärgid ja vormingu, näiteks „uus rida“ või „paks“."
+      "description": "Kõne teisendatakse endiselt selles arvutis ja heli ei lahku sealt kunagi. Kui parandamine on sisse lülitatud, saadetakse teisendatud tekst stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale, kes parandab tuvastusvead ning rakendab dikteeritud kirjavahemärgid ja vormingu, näiteks „uus rida“ või „paks“. stella seda ei salvesta."
     },
     "language": {
       "title": "Dikteerimise keel",
-      "description": "Parandamine jätab teksti selles keeles. Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli.",
+      "description": "Kõne tuvastatakse selles keeles ja parandamine jätab teksti sellesse keelde. Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli.",
       "automatic": "Automaatne",
       "automaticWith": "Automaatne ({languages})",
       "noResults": "Keeli ei leitud"
@@ -604,7 +604,9 @@
       "microphone": "stella ei kuule teie mikrofoni. Kontrollige mikrofoni juurdepääsu süsteemiseadetes.",
       "modelMissing": "Laadige esmalt alla kõnemudel.",
       "transcription": "Tekstiks muutmine ebaõnnestus. Proovige uuesti.",
-      "focusChanged": "Lülitusite enne teksti valmimist teise rakendusse, seega midagi ei sisestatud. Proovige uuesti."
+      "focusChanged": "Lülitusite enne teksti valmimist teise rakendusse, seega midagi ei sisestatud. Proovige uuesti.",
+      "focusUnconfirmed": "stella ei suutnud kinnitada, milline rakendus on fookuses, seega midagi ei sisestatud. Proovige uuesti.",
+      "shortcutHeld": "Vabastage otsetee klahvid, et teksti saaks sisestada. Midagi ei sisestatud; proovige uuesti."
     }
   },
   "shortcut": {

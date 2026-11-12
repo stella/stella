@@ -1,8 +1,11 @@
 //! Which app a dictation types into. The target is read when the shortcut is
-//! pressed and again right before typing; when focus moved to another app in
-//! between (transcription and cleanup take a moment), nothing is typed, so a
-//! dictation never lands in a window the speaker did not choose. Only app
-//! identity is read: never window titles or contents.
+//! pressed and again right before typing; when focus moved to another app,
+//! process or window in between (transcription and cleanup take a moment),
+//! or focus cannot be read again, nothing is typed, so a dictation never
+//! lands in a window the speaker did not choose. Only identity is read: the
+//! app, its process and the number of its focused window (the foreground
+//! window on Windows, the frontmost normal window of the frontmost app on
+//! macOS), never window titles or contents.
 
 #![cfg_attr(
   not(dictation),
@@ -11,8 +14,8 @@
 
 use tauri::AppHandle;
 
-/// The focused app: bundle identifier and process on macOS, executable,
-/// process and window on Windows.
+/// The focused app: identifier (bundle identifier on macOS, executable on
+/// Windows), process and window.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FocusTarget {
   pub identifier: Option<String>,
@@ -23,12 +26,17 @@ pub struct FocusTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Insertion {
   Allowed,
+  /// Another app, process or window has focus now.
   FocusMoved,
+  /// Focus was read at the press but cannot be read now, so whether it moved
+  /// is unknown.
+  FocusUnconfirmed,
 }
 
 /// Whether text may go to the app focused now. Without a target read at the
-/// press there is nothing to compare, and typing goes ahead as it always did;
-/// once a target was read, a focus that cannot be read again counts as moved.
+/// press there is nothing to compare, and typing goes ahead as plain text
+/// (`dictation_format` gives an unread app no formatting keystrokes); once a
+/// target was read, a focus that cannot be read again types nothing.
 pub fn insertion(
   pressed: Option<&FocusTarget>,
   now: Option<&FocusTarget>,
@@ -36,17 +44,22 @@ pub fn insertion(
   match (pressed, now) {
     (None, _) => Insertion::Allowed,
     (Some(pressed), Some(now)) if pressed == now => Insertion::Allowed,
-    (Some(_), _) => Insertion::FocusMoved,
+    (Some(_), Some(_)) => Insertion::FocusMoved,
+    (Some(_), None) => Insertion::FocusUnconfirmed,
   }
 }
 
 #[cfg(target_os = "macos")]
 pub fn current(app: &AppHandle) -> Option<FocusTarget> {
   let foreground = crate::foreground_app::current(app)?;
+  // Window numbers come from the window server and need no permission; an
+  // app without an on-screen window reads as none both times.
+  let window = stella_desktop_macos::frontmost_window_number(foreground.process_id)
+    .and_then(|number| isize::try_from(number).ok());
   Some(FocusTarget {
     identifier: foreground.identifier,
     process_id: i64::from(foreground.process_id),
-    window: None,
+    window,
   })
 }
 
@@ -112,9 +125,9 @@ mod tests {
   }
 
   #[test]
-  fn a_focus_that_cannot_be_read_again_counts_as_moved() {
-    let pressed = target("com.apple.mail", 3, None);
-    assert_eq!(insertion(Some(&pressed), None), Insertion::FocusMoved);
+  fn a_focus_that_cannot_be_read_again_is_unconfirmed_not_moved() {
+    let pressed = target("com.apple.mail", 3, Some(12));
+    assert_eq!(insertion(Some(&pressed), None), Insertion::FocusUnconfirmed);
   }
 
   #[test]

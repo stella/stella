@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
+  DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY,
   type DesktopDictationCleanupRequest,
   type DesktopDictationCleanupResponse,
   desktopDictationCleanupResponseSchema,
@@ -60,14 +61,79 @@ export const buildDictationCleanupPrompt = ({
 const ALLOWED_GROWTH_RATIO = 1.1;
 const ALLOWED_GROWTH_CHARACTERS = 16;
 
-const CONTROL_CHARACTERS = /\p{Cc}+/gu;
+// Controls and the Unicode line and paragraph separators would break a line
+// or press a key, so they become spaces; bidirectional controls would reorder
+// the text around them, so they are dropped.
+const SPACED_CHARACTERS = /[\p{Cc}\u2028\u2029]+/gu;
+const DROPPED_CHARACTERS = /[\u202A-\u202E\u2066-\u2069]/gu;
 
-export type DictationCleanupRejection = "too-long" | "invalid";
+export type DictationCleanupRejection =
+  | "too-long"
+  | "too-short"
+  | "no-text"
+  | "too-many-breaks"
+  | "invalid";
+
+const COMMAND_WORDS: ReadonlySet<string> = new Set(
+  DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY.commandWords,
+);
+const NON_CONTENT_CHARACTERS = /[^\p{L}\p{N}]/gu;
+
+/** Letters and digits, the part of a text cleanup must keep. */
+const contentLength = (text: string): number =>
+  [...text.replaceAll(NON_CONTENT_CHARACTERS, "")].length;
+
+/** The transcript's letters and digits outside spoken command words, which
+ *  a correct answer replaces by punctuation, breaks or bold. */
+const dictatedContentLength = (transcript: string): number =>
+  transcript
+    .toLowerCase()
+    .split(/\s+/u)
+    .map((word) => word.replaceAll(NON_CONTENT_CHARACTERS, ""))
+    .filter((word) => word.length > 0 && !COMMAND_WORDS.has(word))
+    .reduce((total, word) => total + [...word].length, 0);
 
 /**
- * The model's segments as the desktop types them: control characters become
- * spaces, text emptied by that is dropped, breaks lose their placeholder
- * fields, and the whole answer must stay within the transcript's size.
+ * Why an answer lost content, when it did: it keeps less than the contract's
+ * share of the dictated letters and digits outside command words, has no
+ * text although something besides commands was dictated, or breaks lines
+ * more often than the dictation could have asked for.
+ */
+const implausibility = (
+  segments: readonly DesktopDictationSegment[],
+  transcript: string,
+): DictationCleanupRejection | null => {
+  const texts = segments.flatMap((segment) =>
+    segment.type === "text" ? [segment.text] : [],
+  );
+  const dictated = dictatedContentLength(transcript);
+  // Only a dictation of commands alone ("nový řádek") may become breaks alone.
+  if (texts.length === 0 && (dictated > 0 || segments.length === 0)) {
+    return "no-text";
+  }
+  const {
+    minAnswerTextPercent,
+    minBreakAllowance,
+    transcriptCharactersPerBreak,
+  } = DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY;
+  const kept = texts.reduce((total, text) => total + contentLength(text), 0);
+  if (kept * 100 < dictated * minAnswerTextPercent) {
+    return "too-short";
+  }
+  const breaks = segments.length - texts.length;
+  const allowedBreaks = Math.max(
+    minBreakAllowance,
+    Math.floor([...transcript].length / transcriptCharactersPerBreak),
+  );
+  return breaks > allowedBreaks ? "too-many-breaks" : null;
+};
+
+/**
+ * The model's segments as the desktop types them: controls and separators
+ * become spaces, bidirectional controls are dropped, text emptied by that is
+ * dropped, breaks lose their placeholder fields, and the whole answer must
+ * stay within the transcript's size without losing content. A refused answer
+ * makes the desktop type the raw transcript.
  */
 export const acceptDictationCleanup = (
   output: DictationCleanupModelOutput,
@@ -77,7 +143,9 @@ export const acceptDictationCleanup = (
     ({ type, text, bold }): DesktopDictationSegment[] => {
       switch (type) {
         case "text": {
-          const typed = text.replaceAll(CONTROL_CHARACTERS, " ");
+          const typed = text
+            .replaceAll(DROPPED_CHARACTERS, "")
+            .replaceAll(SPACED_CHARACTERS, " ");
           return typed.length === 0 ? [] : [{ type, text: typed, bold }];
         }
         case "lineBreak":
@@ -98,6 +166,10 @@ export const acceptDictationCleanup = (
     ALLOWED_GROWTH_CHARACTERS;
   if (typedLength > allowedLength) {
     return Result.err("too-long");
+  }
+  const lost = implausibility(segments, transcript);
+  if (lost !== null) {
+    return Result.err(lost);
   }
   const checked = v.safeParse(desktopDictationCleanupResponseSchema, {
     segments,

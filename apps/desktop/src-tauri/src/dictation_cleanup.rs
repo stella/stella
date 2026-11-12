@@ -1,16 +1,17 @@
 //! Optional AI cleanup of a dictation. Only the text this computer
-//! transcribed goes to the linked account's stella AI, never the audio, and
-//! only while the server enables dictation for that same account. The answer
-//! is a list of typed segments; any failure, timeout or malformed answer
-//! leaves the raw transcript, so cleanup never blocks or loses a dictation.
-//! Neither the transcript nor the answer is logged or stored.
+//! transcribed goes through stella to the linked organization's AI provider,
+//! never the audio, and only while the server enables dictation for that same
+//! account. The answer is a list of typed segments; any failure, timeout, or
+//! malformed or implausible answer leaves the raw transcript, so cleanup never
+//! blocks or loses a dictation. Neither the transcript nor the answer is
+//! logged or stored.
 
 #![cfg_attr(
   not(dictation),
   allow(dead_code, reason = "only builds with the speech engine clean up text")
 )]
 
-use std::{sync::OnceLock, time::Duration};
+use std::{future::Future, sync::OnceLock, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -29,6 +30,7 @@ pub const TIMEOUT: Duration = Duration::from_secs(5);
 const FAILURE: &str = "dictation cleanup request failed";
 const UNAVAILABLE: &str = "dictation cleanup has no linked account";
 const INVALID: &str = "dictation cleanup answer is invalid";
+const IMPLAUSIBLE: &str = "dictation cleanup answer lost part of the dictation";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,6 +40,10 @@ struct Contract {
   max_locale_length: usize,
   max_languages: usize,
   max_segments: usize,
+  min_answer_text_percent: usize,
+  min_break_allowance: usize,
+  transcript_characters_per_break: usize,
+  command_words: Vec<String>,
 }
 
 const CONTRACT: &str =
@@ -85,7 +91,7 @@ pub fn parse_segments(body: &[u8]) -> Result<Vec<Segment>, String> {
       Segment::Text { text, .. } => {
         !text.is_empty()
           && text.chars().count() <= contract.max_transcript_length
-          && !text.chars().any(char::is_control)
+          && !text.chars().any(dictation_format::is_untyped)
       }
       Segment::LineBreak | Segment::ParagraphBreak => true,
     });
@@ -94,6 +100,59 @@ pub fn parse_segments(body: &[u8]) -> Result<Vec<Segment>, String> {
   } else {
     Err(INVALID.to_string())
   }
+}
+
+/// Letters and digits, the part of a text cleanup must keep.
+fn content_length(text: &str) -> usize {
+  text.chars().filter(|character| character.is_alphanumeric()).count()
+}
+
+/// The transcript's letters and digits outside spoken command words, which a
+/// correct answer replaces by punctuation, breaks or bold.
+fn dictated_content_length(transcript: &str, command_words: &[String]) -> usize {
+  transcript
+    .to_lowercase()
+    .split_whitespace()
+    .map(|word| {
+      word
+        .chars()
+        .filter(|character| character.is_alphanumeric())
+        .collect::<String>()
+    })
+    .filter(|word| !word.is_empty() && !command_words.iter().any(|command| command == word))
+    .map(|word| word.chars().count())
+    .sum()
+}
+
+/// Whether the answer kept the dictation: it has text unless only commands
+/// were dictated, that text keeps at least the contract's share of the
+/// dictated letters and digits outside command words, and it breaks lines no
+/// more often than the dictation could have asked for. The server applies
+/// the same bounds; this side holds them too, so an answer that lost content
+/// is never typed.
+pub fn plausible(transcript: &str, segments: &[Segment]) -> bool {
+  let contract = contract();
+  let dictated = dictated_content_length(transcript, &contract.command_words);
+  let mut kept = 0;
+  let mut texts = 0;
+  let mut breaks = 0;
+  for segment in segments {
+    match segment {
+      Segment::Text { text, .. } => {
+        texts += 1;
+        kept += content_length(text);
+      }
+      Segment::LineBreak | Segment::ParagraphBreak => breaks += 1,
+    }
+  }
+  let allowed_breaks = contract
+    .min_break_allowance
+    .max(transcript.chars().count() / contract.transcript_characters_per_break);
+  // Only a dictation of commands alone ("nový řádek") may become breaks alone.
+  let has_text = texts > 0 || (dictated == 0 && breaks > 0);
+  has_text
+    && kept * 100 >= dictated * contract.min_answer_text_percent
+    && breaks <= allowed_breaks
 }
 
 /// What to type: the cleaned segments when there are any, otherwise the
@@ -207,7 +266,22 @@ async fn request(
   )
   .await;
   drop(account);
-  segments
+  let segments = segments?;
+  if plausible(transcript, &segments) {
+    Ok(segments)
+  } else {
+    Err(IMPLAUSIBLE.to_string())
+  }
+}
+
+/// Runs `future` on the shared runtime from a plain thread, for at most
+/// `limit`. The timer is built inside the runtime: created on the calling
+/// thread, which has no runtime of its own, it would panic.
+fn bounded<T>(limit: Duration, future: impl Future<Output = T>) -> Option<T> {
+  tauri::async_runtime::block_on(
+    async move { tokio::time::timeout(limit, future).await },
+  )
+  .ok()
 }
 
 /// The cleaned segments, or `None` whenever the raw transcript should be
@@ -220,17 +294,13 @@ pub fn clean_up(
   if transcript.chars().count() > contract().max_transcript_length {
     return None;
   }
-  let outcome = tauri::async_runtime::block_on(tokio::time::timeout(
-    TIMEOUT,
-    request(app, transcript, languages),
-  ));
-  match outcome {
-    Ok(Ok(segments)) => Some(segments),
-    Ok(Err(error)) => {
+  match bounded(TIMEOUT, request(app, transcript, languages)) {
+    Some(Ok(segments)) => Some(segments),
+    Some(Err(error)) => {
       tracing::info!(%error, "dictation cleanup skipped; typing the transcript");
       None
     }
-    Err(_elapsed) => {
+    None => {
       tracing::info!("dictation cleanup timed out; typing the transcript");
       None
     }
@@ -276,12 +346,112 @@ mod tests {
       r#"{"segments":[{"type":"text","text":"a"}]}"#.to_string(),
       r#"{"segments":[{"type":"text","text":"","bold":false}]}"#.to_string(),
       r#"{"segments":[{"type":"text","text":"run\n","bold":false}]}"#.to_string(),
+      r#"{"segments":[{"type":"text","text":"a\u2028b","bold":false}]}"#.to_string(),
+      r#"{"segments":[{"type":"text","text":"a\u2029b","bold":false}]}"#.to_string(),
+      r#"{"segments":[{"type":"text","text":"a\u202Eb","bold":false}]}"#.to_string(),
+      r#"{"segments":[{"type":"text","text":"a\u2066b","bold":false}]}"#.to_string(),
       r#"{"segments":[],"extra":true}"#.to_string(),
       format!(r#"{{"segments":[{{"type":"text","text":"{long}","bold":false}}]}}"#),
       too_many,
     ] {
       assert!(parse_segments(body.as_bytes()).is_err(), "{body:.80}");
     }
+  }
+
+  fn plain(value: &str) -> Segment {
+    Segment::Text {
+      text: value.to_string(),
+      bold: false,
+    }
+  }
+
+  #[test]
+  fn an_answer_that_keeps_too_little_of_the_dictation_is_not_typed() {
+    let transcript = "the parties agree to extend the deadline by two weeks";
+    assert!(plausible(
+      transcript,
+      &[plain("The parties agree to extend the deadline.")]
+    ));
+    assert!(!plausible(transcript, &[plain("The parties agree.")]));
+  }
+
+  #[test]
+  fn spoken_commands_do_not_count_as_content_that_must_be_kept() {
+    let transcript = "nový řádek a tedy nový řádek se rozhodl odejít tečka";
+    assert!(plausible(
+      transcript,
+      &[
+        Segment::LineBreak,
+        plain("a tedy"),
+        Segment::LineBreak,
+        plain("se rozhodl odejít."),
+      ]
+    ));
+    assert!(plausible(
+      "tučně 42, ne, 24 dní tečka",
+      &[
+        Segment::Text {
+          text: "24".to_string(),
+          bold: true,
+        },
+        plain(" dní."),
+      ]
+    ));
+  }
+
+  #[test]
+  fn only_a_dictation_of_commands_may_become_breaks_alone() {
+    assert!(plausible("nový řádek", &[Segment::LineBreak]));
+    assert!(plausible("Nový odstavec.", &[Segment::ParagraphBreak]));
+    assert!(!plausible("nový řádek", &[]));
+    assert!(!plausible("smlouva nový řádek", &[Segment::LineBreak]));
+  }
+
+  /// The transcript's words, with a line break before each of the first
+  /// `breaks` words after the first.
+  fn broken(transcript: &str, breaks: usize) -> Vec<Segment> {
+    transcript
+      .split_whitespace()
+      .enumerate()
+      .flat_map(|(index, word)| {
+        let mut pieces = Vec::new();
+        if index > 0 && index <= breaks {
+          pieces.push(Segment::LineBreak);
+        }
+        pieces.push(plain(word));
+        pieces
+      })
+      .collect()
+  }
+
+  #[test]
+  fn an_answer_that_breaks_far_more_often_than_dictated_is_not_typed() {
+    // Four breaks are always allowed; 27 characters allow no more.
+    let short = "ano ne ano ne ano ne ano ne";
+    assert!(plausible(short, &broken(short, 4)));
+    assert!(!plausible(short, &broken(short, 5)));
+    // 240 characters allow one break per 20 of them.
+    let long = "slovo ".repeat(40);
+    assert!(plausible(&long, &broken(&long, 12)));
+    assert!(!plausible(&long, &broken(&long, 13)));
+  }
+
+  #[test]
+  fn the_bounded_wait_runs_from_a_thread_without_a_runtime() {
+    let outcome = std::thread::spawn(|| {
+      let started = std::time::Instant::now();
+      let pending = bounded(
+        Duration::from_millis(50),
+        std::future::pending::<Result<Vec<Segment>, String>>(),
+      );
+      let ready = bounded(Duration::from_secs(1), async { 7 });
+      (pending, ready, started.elapsed())
+    })
+    .join()
+    .expect("a plain dictation thread must not panic");
+    assert_eq!(outcome.0, None);
+    assert_eq!(outcome.1, Some(7));
+    assert!(outcome.2 < Duration::from_secs(1));
   }
 
   #[test]

@@ -4,6 +4,12 @@
 
 use crate::dictation_format::{Key, Stroke};
 
+/// How long typing waits for the speaker to let go of the shortcut.
+#[cfg(any(target_os = "windows", test))]
+const RELEASE_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+#[cfg(target_os = "windows")]
+const RELEASE_POLL: std::time::Duration = std::time::Duration::from_millis(10);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TypeTextFailed;
 
@@ -18,6 +24,48 @@ pub fn send(strokes: &[Stroke]) -> Result<(), TypeTextFailed> {
     }
   }
   Ok(())
+}
+
+/// Asks `held` every `poll` until it reports nothing held, for at most
+/// `limit`. Whether everything was released in time.
+#[cfg(any(target_os = "windows", test))]
+fn released_within(
+  limit: std::time::Duration,
+  poll: std::time::Duration,
+  mut held: impl FnMut() -> bool,
+) -> bool {
+  let deadline = std::time::Instant::now() + limit;
+  loop {
+    if !held() {
+      return true;
+    }
+    if std::time::Instant::now() >= deadline {
+      return false;
+    }
+    std::thread::sleep(poll);
+  }
+}
+
+/// Waits, briefly, until Control, Alt, Shift and the Windows keys are
+/// physically up. Windows applies a held modifier to injected keys, so the
+/// shortcut still held at release would turn the text into shortcuts. False
+/// when one is still down after [`RELEASE_WAIT`]; nothing may be typed then.
+#[cfg(target_os = "windows")]
+pub fn wait_for_released_modifiers() -> bool {
+  use winsafe::co::VK;
+
+  released_within(RELEASE_WAIT, RELEASE_POLL, || {
+    [VK::CONTROL, VK::MENU, VK::SHIFT, VK::LWIN, VK::RWIN]
+      .into_iter()
+      .any(winsafe::GetAsyncKeyState)
+  })
+}
+
+/// macOS posts every event with its own modifier flags, so a held key does
+/// not change what is typed.
+#[cfg(not(target_os = "windows"))]
+pub const fn wait_for_released_modifiers() -> bool {
+  true
 }
 
 /// Whether the system lets this app type into others. Asks when it does not.
@@ -134,3 +182,34 @@ fn send_input(events: &[winsafe::HwKbMouse]) -> Result<(), TypeTextFailed> {
 const CHUNK_PAUSE: std::time::Duration = std::time::Duration::from_millis(2);
 #[cfg(target_os = "windows")]
 const CHUNK_UNITS: usize = 64;
+
+#[cfg(test)]
+mod tests {
+  use std::time::{Duration, Instant};
+
+  use super::*;
+
+  #[test]
+  fn typing_goes_ahead_once_the_keys_are_released() {
+    let mut polls = 0;
+    assert!(released_within(
+      RELEASE_WAIT,
+      Duration::from_millis(1),
+      || {
+        polls += 1;
+        polls < 4
+      }
+    ));
+    assert_eq!(polls, 4);
+  }
+
+  #[test]
+  fn keys_held_past_the_wait_type_nothing_and_the_wait_is_bounded() {
+    let started = Instant::now();
+    let limit = Duration::from_millis(40);
+    assert!(!released_within(limit, Duration::from_millis(5), || true));
+    let waited = started.elapsed();
+    assert!(waited >= limit);
+    assert!(waited < limit * 10);
+  }
+}

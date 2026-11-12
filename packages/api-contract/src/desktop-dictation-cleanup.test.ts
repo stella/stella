@@ -4,6 +4,7 @@ import * as v from "valibot";
 import {
   DESKTOP_DICTATION_CLEANUP_LIMITS,
   DESKTOP_DICTATION_CLEANUP_PATH,
+  DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY,
   desktopDictationCleanupRequestSchema,
   desktopDictationCleanupResponseSchema,
 } from "./desktop-dictation-cleanup";
@@ -17,6 +18,7 @@ test("the native contract file matches the typed cleanup contract", () => {
     maxLocaleLength: DESKTOP_DICTATION_CLEANUP_LIMITS.localeLength,
     maxLanguages: DESKTOP_DICTATION_CLEANUP_LIMITS.languages,
     maxSegments: DESKTOP_DICTATION_CLEANUP_LIMITS.segments,
+    ...DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY,
   });
   expect(DESKTOP_DICTATION_CLEANUP_PATH.startsWith("/v1/desktop/")).toBe(true);
 });
@@ -31,6 +33,11 @@ test("a cleanup answer never carries a control character or an unknown field", (
   for (const segments of [
     [{ type: "text", text: "line\nbreak", bold: false }],
     [{ type: "text", text: "enter\r", bold: false }],
+    [{ type: "text", text: "line\u2028separator", bold: false }],
+    [{ type: "text", text: "paragraph\u2029separator", bold: false }],
+    ...["\u202A", "\u202B", "\u202C", "\u202D", "\u202E", "\u2066", "\u2067", "\u2068", "\u2069"].map(
+      (control) => [{ type: "text", text: `a${control}b`, bold: false }],
+    ),
     [{ type: "text", text: "", bold: false }],
     [{ type: "text", text: "word" }],
     [{ type: "lineBreak", text: "x" }],

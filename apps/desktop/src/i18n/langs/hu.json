@@ -581,14 +581,14 @@
   },
   "dictation": {
     "title": "Diktálás",
-    "description": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg a használt alkalmazásban jelenik meg. A beszéd átírása ezen a számítógépen történik, és nem kerül tárolásra.",
+    "description": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg a használt alkalmazásban jelenik meg. A beszéd átírása ezen a számítógépen történik, és nem kerül tárolásra. Ha az AI-javítás be van kapcsolva, az átírt szöveg – nem a hang – a stellán keresztül a szervezete AI-szolgáltatójához kerül a hibák és a formázás javítására; a stella nem tárolja.",
     "cleanup": {
       "title": "Javítás AI-jal",
-      "description": "A beszéd átírása továbbra is ezen a számítógépen történik, a hang soha nem hagyja el. Ha a javítás be van kapcsolva, az átírt szöveg a stella AI-hoz kerül, amely kijavítja a felismerési hibákat, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”."
+      "description": "A beszéd átírása továbbra is ezen a számítógépen történik, a hang soha nem hagyja el. Ha a javítás be van kapcsolva, az átírt szöveg a stellán keresztül a szervezete AI-szolgáltatójához kerül, amely kijavítja a felismerési hibákat, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”. A stella nem tárolja."
     },
     "language": {
       "title": "Diktálás nyelve",
-      "description": "A javítás ezen a nyelven hagyja a szöveget. Az automatikus beállítás a számítógép megjelenítési és billentyűzetnyelveit használja.",
+      "description": "A beszéd felismerése ezen a nyelven történik, és a javítás ezen a nyelven hagyja a szöveget. Az automatikus beállítás a számítógép megjelenítési és billentyűzetnyelveit használja.",
       "automatic": "Automatikus",
       "automaticWith": "Automatikus ({languages})",
       "noResults": "Nem található nyelv"
@@ -604,7 +604,9 @@
       "microphone": "A stella nem hallja a mikrofont. Ellenőrizze a mikrofon-hozzáférést a Rendszerbeállításokban.",
       "modelMissing": "Először töltse le a beszédmodellt.",
       "transcription": "Az átírás nem sikerült. Próbálja újra.",
-      "focusChanged": "Másik alkalmazásra váltott, mielőtt a szöveg elkészült, ezért semmi sem lett beírva. Próbálja újra."
+      "focusChanged": "Másik alkalmazásra váltott, mielőtt a szöveg elkészült, ezért semmi sem lett beírva. Próbálja újra.",
+      "focusUnconfirmed": "A stella nem tudta megállapítani, melyik alkalmazás aktív, ezért semmi sem lett beírva. Próbálja újra.",
+      "shortcutHeld": "Engedje fel a billentyűparancs gombjait a gépeléshez. Semmi sem lett beírva; próbálja újra."
     }
   },
   "shortcut": {

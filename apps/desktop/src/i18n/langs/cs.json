@@ -581,14 +581,14 @@
   },
   "dictation": {
     "title": "Diktování",
-    "description": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč se převádí na tomto počítači a neukládá se.",
+    "description": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč se převádí na tomto počítači a neukládá se. Se zapnutou úpravou pomocí AI se převedený text (ne zvuk) odešle přes stellu poskytovateli AI vaší organizace, který opraví chyby a formátování; stella ho neukládá.",
     "cleanup": {
       "title": "Upravit pomocí AI",
-      "description": "Řeč se i nadále převádí na tomto počítači a zvuk ho nikdy neopustí. Se zapnutou úpravou se převedený text odešle do stella AI, která opraví chyby rozpoznávání a použije vyslovenou interpunkci a formátování, například „nový řádek“ nebo „tučně“."
+      "description": "Řeč se i nadále převádí na tomto počítači a zvuk ho nikdy neopustí. Se zapnutou úpravou se převedený text odešle přes stellu poskytovateli AI vaší organizace, který opraví chyby rozpoznávání a použije vyslovenou interpunkci a formátování, například „nový řádek“ nebo „tučně“. stella ho neukládá."
     },
     "language": {
       "title": "Jazyk diktování",
-      "description": "Úprava ponechá text v tomto jazyce. Automaticky se použijí jazyky zobrazení a klávesnic tohoto počítače.",
+      "description": "Řeč se rozpoznává v tomto jazyce a úprava v něm text ponechá. Automaticky se použijí jazyky zobrazení a klávesnic tohoto počítače.",
       "automatic": "Automaticky",
       "automaticWith": "Automaticky ({languages})",
       "noResults": "Žádné jazyky nenalezeny"
@@ -604,7 +604,9 @@
       "microphone": "stella neslyší váš mikrofon. Zkontrolujte přístup k mikrofonu v Nastavení systému.",
       "modelMissing": "Nejprve stáhněte řečový model.",
       "transcription": "Převod se nezdařil. Zkuste to znovu.",
-      "focusChanged": "Než byl text připraven, přepnuli jste do jiné aplikace, takže se nic nenapsalo. Zkuste to znovu."
+      "focusChanged": "Než byl text připraven, přepnuli jste do jiné aplikace, takže se nic nenapsalo. Zkuste to znovu.",
+      "focusUnconfirmed": "stella nemohla ověřit, která aplikace je aktivní, takže se nic nenapsalo. Zkuste to znovu.",
+      "shortcutHeld": "Pusťte klávesy zkratky, aby se text mohl napsat. Nic se nenapsalo, zkuste to znovu."
     }
   },
   "shortcut": {

@@ -41,15 +41,18 @@ type DictationLanguage = {
 
 type DictationSnapshot = {
   available: boolean;
-  /** Whether the transcribed text goes to stella AI before it is typed. */
+  /** Whether the transcribed text goes through stella to the organization's
+   *  AI provider before it is typed. */
   cleanup: boolean;
   enabled: boolean;
   language: DictationLanguage;
   failure:
     | "accessibility"
     | "focusChanged"
+    | "focusUnconfirmed"
     | "microphone"
     | "modelMissing"
+    | "shortcutHeld"
     | "transcription"
     | null;
   keys: ShortcutKeys;
@@ -61,6 +64,12 @@ type DictationSnapshot = {
 
 const BYTES_PER_MEGABYTE = 1_000_000;
 const PERCENT = 100;
+
+/** The language choice changes something only when cleanup reads it or the
+ *  installed speech model takes a language hint; otherwise it is hidden. */
+const languageHasEffect = (snapshot: DictationSnapshot): boolean =>
+  snapshot.cleanup ||
+  (snapshot.model.status === "ready" && snapshot.language.supported.length > 0);
 
 const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   typeof value === "object" &&
@@ -201,7 +210,7 @@ export const DictationSetting = ({
           />
         </div>
       )}
-      {snapshot.enabled && (
+      {snapshot.enabled && languageHasEffect(snapshot) && (
         <DictationLanguageRow
           language={snapshot.language}
           locale={locale}

@@ -581,14 +581,14 @@
   },
   "dictation": {
     "title": "Diktavimas",
-    "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma.",
+    "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma. Įjungus DI taisymą, perrašytas tekstas (ne garsas) per stella siunčiamas jūsų organizacijos DI teikėjui, kad būtų ištaisytos klaidos ir formatavimas; stella jo nesaugo.",
     "cleanup": {
       "title": "Taisyti su DI",
-      "description": "Kalba ir toliau paverčiama tekstu šiame kompiuteryje, o garsas niekada jo nepalieka. Įjungus taisymą, gautas tekstas siunčiamas į stella AI, kuri ištaiso atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“."
+      "description": "Kalba ir toliau paverčiama tekstu šiame kompiuteryje, o garsas niekada jo nepalieka. Įjungus taisymą, gautas tekstas per stella siunčiamas jūsų organizacijos DI teikėjui, kuris ištaiso atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“. stella jo nesaugo."
     },
     "language": {
       "title": "Diktavimo kalba",
-      "description": "Taisant tekstas paliekamas šia kalba. Automatiškai naudojamos šio kompiuterio rodymo ir klaviatūrų kalbos.",
+      "description": "Diktavimas atpažįstamas šia kalba, o taisant tekstas paliekamas šia kalba. Automatiškai naudojamos šio kompiuterio rodymo ir klaviatūrų kalbos.",
       "automatic": "Automatiškai",
       "automaticWith": "Automatiškai ({languages})",
       "noResults": "Kalbų nerasta"
@@ -604,7 +604,9 @@
       "microphone": "„stella“ negirdi mikrofono. Patikrinkite prieigą prie mikrofono sistemos nustatymuose.",
       "modelMissing": "Pirmiausia atsisiųskite kalbos modelį.",
       "transcription": "Perrašyti nepavyko. Bandykite dar kartą.",
-      "focusChanged": "Perjungėte į kitą programą, kol tekstas dar nebuvo paruoštas, todėl nieko nebuvo įvesta. Bandykite dar kartą."
+      "focusChanged": "Perjungėte į kitą programą, kol tekstas dar nebuvo paruoštas, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
+      "focusUnconfirmed": "stella negalėjo patvirtinti, kuri programa yra aktyvi, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
+      "shortcutHeld": "Atleiskite sparčiųjų klavišų mygtukus, kad būtų galima įvesti tekstą. Nieko nebuvo įvesta; bandykite dar kartą."
     }
   },
   "shortcut": {

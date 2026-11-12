@@ -581,14 +581,14 @@
   },
   "dictation": {
     "title": "Dyktowanie",
-    "description": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowa jest przetwarzana na tym komputerze i nie jest zapisywana.",
+    "description": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowa jest przetwarzana na tym komputerze i nie jest zapisywana. Po włączeniu poprawiania przez AI przetworzony tekst (nie dźwięk) jest wysyłany za pośrednictwem stelli do dostawcy AI Twojej organizacji w celu poprawienia błędów i formatowania; stella go nie zapisuje.",
     "cleanup": {
       "title": "Popraw za pomocą AI",
-      "description": "Mowa nadal jest przetwarzana na tym komputerze, a dźwięk nigdy go nie opuszcza. Po włączeniu poprawiania przetworzony tekst jest wysyłany do stella AI, która poprawia błędy rozpoznawania i stosuje podyktowaną interpunkcję oraz formatowanie, na przykład „nowa linia” lub „pogrubienie”."
+      "description": "Mowa nadal jest przetwarzana na tym komputerze, a dźwięk nigdy go nie opuszcza. Po włączeniu poprawiania przetworzony tekst jest wysyłany za pośrednictwem stelli do dostawcy AI Twojej organizacji, który poprawia błędy rozpoznawania i stosuje podyktowaną interpunkcję oraz formatowanie, na przykład „nowa linia” lub „pogrubienie”. stella go nie zapisuje."
     },
     "language": {
       "title": "Język dyktowania",
-      "description": "Poprawianie zachowuje tekst w tym języku. Automatycznie używa języków interfejsu i klawiatur tego komputera.",
+      "description": "Mowa jest rozpoznawana w tym języku, a poprawianie zachowuje w nim tekst. Automatycznie używa języków interfejsu i klawiatur tego komputera.",
       "automatic": "Automatycznie",
       "automaticWith": "Automatycznie ({languages})",
       "noResults": "Nie znaleziono języków"
@@ -604,7 +604,9 @@
       "microphone": "stella nie słyszy mikrofonu. Sprawdź dostęp do mikrofonu w Ustawieniach systemowych.",
       "modelMissing": "Najpierw pobierz model mowy.",
       "transcription": "Transkrypcja nie powiodła się. Spróbuj ponownie.",
-      "focusChanged": "Przełączono na inną aplikację, zanim tekst był gotowy, więc nic nie zostało wpisane. Spróbuj ponownie."
+      "focusChanged": "Przełączono na inną aplikację, zanim tekst był gotowy, więc nic nie zostało wpisane. Spróbuj ponownie.",
+      "focusUnconfirmed": "stella nie mogła potwierdzić, która aplikacja jest aktywna, więc nic nie zostało wpisane. Spróbuj ponownie.",
+      "shortcutHeld": "Puść klawisze skrótu, aby można było wpisać tekst. Nic nie zostało wpisane; spróbuj ponownie."
     }
   },
   "shortcut": {

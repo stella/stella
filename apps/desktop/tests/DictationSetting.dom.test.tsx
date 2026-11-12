@@ -105,7 +105,21 @@ test("offers AI cleanup, on by default, with a truthful description", async () =
   expect(toggle.getAttribute("aria-checked")).toBe("true");
   const description = getByText(defaultMessages.dictation.cleanup.description);
   expect(description.textContent).toContain("audio never leaves it");
-  expect(description.textContent).toContain("stella AI");
+  expect(description.textContent).toContain(
+    "through stella to your organization’s AI provider",
+  );
+  expect(description.textContent).not.toContain("stella AI");
+});
+
+test("the dictation description says where text goes while cleanup is on", async () => {
+  const { container } = await renderSetting(ENABLED_SNAPSHOT);
+
+  const description = container.querySelector("#dictation-description");
+  expect(description?.textContent).toContain("transcribed on this computer");
+  expect(description?.textContent).toContain(
+    "the transcribed text, not the audio, is sent through stella to your organization’s AI provider",
+  );
+  expect(description?.textContent).toContain("stella does not store it");
 });
 
 test("turning cleanup off asks the native side and shows its answer", async () => {
@@ -154,6 +168,59 @@ test("explains a dictation that focus moved away from", async () => {
     defaultMessages.dictation.failure.focusChanged,
   );
 });
+
+test.each(["focusUnconfirmed", "shortcutHeld"] as const)(
+  "explains a dictation that typed nothing because of %s",
+  async (failure) => {
+    const { getByRole } = await renderSetting({
+      ...ENABLED_SNAPSHOT,
+      failure,
+    });
+
+    expect(getByRole("status").textContent).toBe(
+      defaultMessages.dictation.failure[failure],
+    );
+  },
+);
+
+test("an unread focus is not reported as switching apps", () => {
+  expect(defaultMessages.dictation.failure.focusUnconfirmed).not.toBe(
+    defaultMessages.dictation.failure.focusChanged,
+  );
+  expect(defaultMessages.dictation.failure.focusUnconfirmed).not.toContain(
+    "switched",
+  );
+});
+
+test.each([
+  ["cleanup is on", { cleanup: true, model: { status: "missing" } }, true],
+  ["the installed model takes a language hint", { cleanup: false }, true],
+  [
+    "cleanup is off and no model is installed",
+    { cleanup: false, model: { status: "missing" } },
+    false,
+  ],
+  [
+    "cleanup is off and the model lists no languages",
+    {
+      cleanup: false,
+      language: { choice: "auto", inferred: [], supported: [] },
+    },
+    false,
+  ],
+])(
+  "the dictation language row shows only when it has an effect: %s",
+  async (_case, overrides, shown) => {
+    const { container } = await renderSetting({
+      ...ENABLED_SNAPSHOT,
+      ...overrides,
+    });
+
+    expect(container.querySelector("#dictation-language") !== null).toBe(
+      shown,
+    );
+  },
+);
 
 test("automatic dictation language names the languages of this computer", async () => {
   const { container } = await renderSetting(ENABLED_SNAPSHOT);

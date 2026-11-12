@@ -581,14 +581,14 @@
   },
   "dictation": {
     "title": "Dictée",
-    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée.",
+    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée. Lorsque la correction par IA est activée, le texte transcrit, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs et la mise en forme ; stella ne le conserve pas.",
     "cleanup": {
       "title": "Corriger avec l’IA",
-      "description": "La parole est toujours transcrite sur cet ordinateur et l’audio ne le quitte jamais. Lorsque la correction est activée, le texte transcrit est envoyé à stella AI pour corriger les erreurs de reconnaissance et appliquer la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras »."
+      "description": "La parole est toujours transcrite sur cet ordinateur et l’audio ne le quitte jamais. Lorsque la correction est activée, le texte transcrit est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs de reconnaissance et appliquer la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras ». stella ne le conserve pas."
     },
     "language": {
       "title": "Langue de dictée",
-      "description": "La correction conserve le texte dans cette langue. Automatique utilise les langues de l’affichage et des claviers de cet ordinateur.",
+      "description": "La parole est reconnue dans cette langue et la correction y conserve le texte. Automatique utilise les langues de l’affichage et des claviers de cet ordinateur.",
       "automatic": "Automatique",
       "automaticWith": "Automatique ({languages})",
       "noResults": "Aucune langue trouvée"
@@ -604,7 +604,9 @@
       "microphone": "stella n'entend pas votre micro. Vérifiez l'accès au micro dans les Réglages Système.",
       "modelMissing": "Téléchargez d'abord le modèle vocal.",
       "transcription": "La transcription a échoué. Réessayez.",
-      "focusChanged": "Vous êtes passé à une autre application avant que le texte soit prêt, rien n’a donc été saisi. Réessayez."
+      "focusChanged": "Vous êtes passé à une autre application avant que le texte soit prêt, rien n’a donc été saisi. Réessayez.",
+      "focusUnconfirmed": "stella n’a pas pu confirmer quelle application est au premier plan, rien n’a donc été saisi. Réessayez.",
+      "shortcutHeld": "Relâchez les touches du raccourci pour saisir le texte. Rien n’a été saisi ; réessayez."
     }
   },
   "shortcut": {

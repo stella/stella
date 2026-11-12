@@ -125,12 +125,16 @@ fn finish(
   let cleaned = dictation::cleanup_enabled(app)
     .then(|| dictation_cleanup::clean_up(app, text, &language.speaker))
     .flatten();
+  // A modifier still held down would turn typed text into shortcuts.
+  if !dictation_input::wait_for_released_modifiers() {
+    return Err(Failure::ShortcutHeld);
+  }
   // Transcription and cleanup take a moment; text goes only to the app the
   // speaker pressed the shortcut in.
-  if dictation_focus::insertion(focus, dictation_focus::current(app).as_ref())
-    == Insertion::FocusMoved
-  {
-    return Err(Failure::FocusChanged);
+  match dictation_focus::insertion(focus, dictation_focus::current(app).as_ref()) {
+    Insertion::Allowed => {}
+    Insertion::FocusMoved => return Err(Failure::FocusChanged),
+    Insertion::FocusUnconfirmed => return Err(Failure::FocusUnconfirmed),
   }
   let class = AppClass::of(focus.and_then(|target| target.identifier.as_deref()));
   dictation_input::send(&dictation_cleanup::strokes(text, cleaned.as_deref(), class))

@@ -15,6 +15,25 @@ export const DESKTOP_DICTATION_CLEANUP_LIMITS = {
   segments: contract.maxSegments,
 } as const;
 
+/** How far a cleaned answer may shrink from what was dictated. Cleanup
+ *  drops spoken commands and fixes spellings, so the transcript is measured
+ *  by its letters and digits outside `commandWords`. An answer that keeps
+ *  less than this share of them, or breaks a line far more often than the
+ *  dictation could have asked for, lost content and is replaced by the raw
+ *  transcript. A dictation of commands only may be answered by breaks only. */
+export const DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY = {
+  commandWords: contract.commandWords,
+  minAnswerTextPercent: contract.minAnswerTextPercent,
+  minBreakAllowance: contract.minBreakAllowance,
+  transcriptCharactersPerBreak: contract.transcriptCharactersPerBreak,
+} as const;
+
+/** Characters the desktop never types: controls, the Unicode line and
+ *  paragraph separators, and the bidirectional embedding, override and
+ *  isolate controls that would reorder the text around them. */
+export const DESKTOP_DICTATION_UNTYPED_CHARACTERS =
+  /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]/u;
+
 const languageTagSchema = v.pipe(
   v.string(),
   v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.localeLength),
@@ -43,13 +62,17 @@ export type DesktopDictationCleanupRequest = v.InferOutput<
   typeof desktopDictationCleanupRequestSchema
 >;
 
-/** Text the desktop types as is: no control characters, so no keystroke
- *  other than the formatting segments below can come from it. */
+/** Text the desktop types as is: no control characters, separators or
+ *  bidirectional controls, so no keystroke other than the formatting
+ *  segments below can come from it and the text reads in the order typed. */
 const segmentTextSchema = v.pipe(
   v.string(),
   v.minLength(1),
   v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.transcriptLength),
-  v.regex(/^\P{Cc}+$/u),
+  v.check(
+    (text) => !DESKTOP_DICTATION_UNTYPED_CHARACTERS.test(text),
+    "Segment text holds a character the desktop does not type",
+  ),
 );
 
 export const desktopDictationSegmentSchema = v.variant("type", [

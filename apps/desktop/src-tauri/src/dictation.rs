@@ -1,7 +1,8 @@
 //! Hold-to-talk dictation into any app. Speech is transcribed on this
 //! computer: audio never leaves it, and neither audio nor text is stored.
 //! With AI cleanup on (the default), the transcribed text, never the audio,
-//! goes to the linked account's stella AI before it is typed.
+//! goes through stella to the organization's AI provider before it is typed,
+//! and stella does not store it.
 //!
 //! This module owns the preferences, the speech model file and the shortcut.
 //! `dictation_engine` owns capture, transcription and insertion on one thread.
@@ -91,6 +92,11 @@ pub enum Failure {
   Transcription,
   /// Another app had focus by the time the text was ready; nothing was typed.
   FocusChanged,
+  /// Focus could not be read again before typing, so nothing was typed.
+  FocusUnconfirmed,
+  /// Shortcut keys were still held down when the text was ready; typing
+  /// would have combined them with the text, so nothing was typed.
+  ShortcutHeld,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -552,10 +558,16 @@ mod tests {
 
   #[test]
   fn failures_reach_the_window_by_their_string_names() {
-    assert_eq!(
-      serde_json::to_value(Failure::FocusChanged).unwrap(),
-      serde_json::json!("focusChanged")
-    );
+    for (failure, name) in [
+      (Failure::FocusChanged, "focusChanged"),
+      (Failure::FocusUnconfirmed, "focusUnconfirmed"),
+      (Failure::ShortcutHeld, "shortcutHeld"),
+    ] {
+      assert_eq!(
+        serde_json::to_value(failure).unwrap(),
+        serde_json::json!(name)
+      );
+    }
   }
 
   #[test]

@@ -1,6 +1,8 @@
 //! Where another app's main window sits on screen, so a small guide can
-//! dock beside it. Only bounds, layer and owner are read: window titles and
-//! contents would need Screen Recording, and this never asks for them.
+//! dock beside it, and which of its windows is in front, so dictation can
+//! tell whether focus moved to another window. Only bounds, layer, number and
+//! owner are read: window titles and contents would need Screen Recording,
+//! and this never asks for them.
 
 use core_foundation::{
   array::{CFArray, CFArrayRef},
@@ -80,8 +82,8 @@ fn bounds(window: &CFDictionary<CFString, CFType>) -> Option<WindowBounds> {
   })
 }
 
-/// The largest on-screen normal window of process `pid`.
-pub fn largest_window_bounds(pid: i32) -> Option<WindowBounds> {
+/// Every on-screen window, front to back.
+fn on_screen_windows() -> Option<CFArray<CFDictionary<CFString, CFType>>> {
   // SAFETY: the call takes plain integers; its nullable Copy-rule result is
   // checked before ownership is wrapped and released by CFArray.
   let list = unsafe {
@@ -95,14 +97,30 @@ pub fn largest_window_bounds(pid: i32) -> Option<WindowBounds> {
   }
   // SAFETY: a non-null CGWindowListCopyWindowInfo result is a CFArray of
   // CFDictionary values with CFString keys, returned under the Create rule.
-  let windows: CFArray<CFDictionary<CFString, CFType>> =
-    unsafe { CFArray::wrap_under_create_rule(list) };
-  windows
+  Some(unsafe { CFArray::wrap_under_create_rule(list) })
+}
+
+fn is_normal_window_of(window: &CFDictionary<CFString, CFType>, pid: i32) -> bool {
+  number(window, "kCGWindowOwnerPID") == Some(i64::from(pid))
+    && number(window, "kCGWindowLayer") == Some(i64::from(NORMAL_LAYER))
+}
+
+/// The window server's number for the frontmost on-screen normal window of
+/// process `pid`: the window the app shows in front, which has its focus
+/// while the app is frontmost.
+pub fn frontmost_window_number(pid: i32) -> Option<u32> {
+  let windows = on_screen_windows()?;
+  let window = windows
     .iter()
-    .filter(|window| {
-      number(window, "kCGWindowOwnerPID") == Some(i64::from(pid))
-        && number(window, "kCGWindowLayer") == Some(i64::from(NORMAL_LAYER))
-    })
+    .find(|window| is_normal_window_of(window, pid))?;
+  u32::try_from(number(&window, "kCGWindowNumber")?).ok()
+}
+
+/// The largest on-screen normal window of process `pid`.
+pub fn largest_window_bounds(pid: i32) -> Option<WindowBounds> {
+  on_screen_windows()?
+    .iter()
+    .filter(|window| is_normal_window_of(window, pid))
     .filter_map(|window| bounds(&window))
     .max_by(|left, right| {
       (left.width * left.height).total_cmp(&(right.width * right.height))

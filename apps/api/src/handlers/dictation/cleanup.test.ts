@@ -46,8 +46,7 @@ afterAll(async () => {
 const USER_ID = toSafeId<"user">("dictating-member");
 const ORGANIZATION_ID = toSafeId<"organization">("dictating-firm");
 const EMAIL = "dictation@example.test";
-const TRANSCRIPT =
-  "nový řádek a tedy nový řádek se rozhodl odejít za tučně 42, ne, 24 dní tečka";
+const TRANSCRIPT = "a tedy nový řádek se rozhodl odejít za tučně 24 dní";
 
 beforeEach(() => {
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
@@ -59,7 +58,6 @@ beforeEach(() => {
 
 const CLEANED: DictationCleanupModelOutput = {
   segments: [
-    { type: "lineBreak", text: "", bold: false },
     { type: "text", text: "a tedy", bold: false },
     { type: "lineBreak", text: "", bold: false },
     { type: "text", text: "se rozhodl odejít za ", bold: false },
@@ -184,7 +182,6 @@ test("a granted desktop gets the model's segments for its transcript text", asyn
   const body: unknown = await response.json();
   expect(v.parse(desktopDictationCleanupResponseSchema, body)).toEqual({
     segments: [
-      { type: "lineBreak" },
       { type: "text", text: "a tedy", bold: false },
       { type: "lineBreak" },
       { type: "text", text: "se rozhodl odejít za ", bold: false },
@@ -267,6 +264,16 @@ test("an answer that adds content is refused rather than typed", async () => {
   });
   expect(response.status).toBe(502);
   expect(await response.text()).not.toContain("three years");
+});
+
+test("an answer that lost most of the dictation is refused rather than typed", async () => {
+  const { response } = await exercise({
+    input: { transcript: "the parties agree to extend the deadline by two weeks" },
+    answer: () => ({
+      segments: [{ type: "text", text: "The parties agree.", bold: false }],
+    }),
+  });
+  expect(response.status).toBe(502);
 });
 
 test("a line break or carriage return inside text never reaches the desktop", async () => {
