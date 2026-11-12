@@ -106,7 +106,7 @@ export type PendingApproval = {
  * answers with an option or their own words. The browser resolves the call,
  * so its interrupt is the call's client-tool interrupt.
  */
-export type PendingAsk = {
+type PendingAsk = {
   readonly interruptId: string;
   readonly questions: readonly AskUserQuestion[];
   readonly call: StoredToolCall;
