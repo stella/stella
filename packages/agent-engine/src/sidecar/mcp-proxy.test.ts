@@ -225,7 +225,7 @@ describe("the endpoint of a harness process kept for the chat's next turn", () =
       nextRun(api.origin, "/mcp-next"),
     );
     if (Result.isError(adopted)) {
-      return panic(adopted.error.message);
+      throw new TypeError(adopted.error.message);
     }
     // The process keeps the address and secret it was configured with.
     expect(adopted.value).toEqual(binding);

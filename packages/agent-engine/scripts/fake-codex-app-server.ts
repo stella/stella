@@ -1199,25 +1199,28 @@ const run = async (
   });
 
   const skills = skillDiscovery();
-  /** Model listing and skill discovery answer whenever they are asked. */
   /** The thread's background terminals, by item id, as the script set them. */
   const terminals: string[] = [];
+  /**
+   * Model listing, skill discovery and the background terminals answer
+   * whenever they are asked.
+   */
   const unscriptedAnswer = (
     method: string | undefined,
     params: unknown,
   ): object | null => {
-    switch (method) {
-      case "model/list":
-        return TURN_MODELS;
-      case "thread/backgroundTerminals/list":
-        return { data: terminals.map(backgroundTerminal), nextCursor: null };
-      case "thread/backgroundTerminals/clean":
-        log({ cleaned: [...terminals] });
-        terminals.splice(0);
-        return {};
-      default:
-        return skills.answer(method, params);
+    if (method === "model/list") {
+      return TURN_MODELS;
     }
+    if (method === "thread/backgroundTerminals/list") {
+      return { data: terminals.map(backgroundTerminal), nextCursor: null };
+    }
+    if (method === "thread/backgroundTerminals/clean") {
+      log({ cleaned: [...terminals] });
+      terminals.splice(0);
+      return {};
+    }
+    return skills.answer(method, params);
   };
   /** The next request a step scripts; skill discovery answers the rest. */
   const nextRequest = async (expected: string) => {

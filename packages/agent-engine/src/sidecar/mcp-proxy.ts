@@ -218,13 +218,14 @@ export const startMcpProxy = ({
         : null;
       const held = key === null ? undefined : endpoints.get(key);
       // A parked endpoint serves no run: nobody's token is forwarded.
-      if (held === undefined || held.token === null) {
+      const token = held?.token ?? null;
+      if (held === undefined || token === null) {
         return refusal(404);
       }
       if (!presentsSecret(request, held)) {
         return refusal(401);
       }
-      return forward(request, held, held.token);
+      return forward(request, held, token);
     },
   });
   const port = server.port ?? panic("The MCP proxy listener has no TCP port.");

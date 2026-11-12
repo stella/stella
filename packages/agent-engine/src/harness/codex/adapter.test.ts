@@ -1020,7 +1020,11 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(
       received()
         .map(({ method }) => method)
-        .filter((m) => m?.startsWith("thread/")),
+        .filter(
+          (m) =>
+            m?.startsWith("thread/") === true &&
+            !m.startsWith("thread/backgroundTerminals/"),
+        ),
     ).toEqual(["thread/resume", "thread/unarchive", "thread/resume"]);
     expect(events[0]).toMatchObject({ continuation: { type: "resumed" } });
   });
@@ -1624,7 +1628,7 @@ describe("Codex background terminals after a turn", () => {
       await completedTurn("background_terminal");
     const live = await turn.release();
     if (live === null) {
-      return panic("The turn did not keep its process.");
+      throw new Error("The turn did not keep its process.");
     }
     expect(live.harness).toBe("codex");
     expect(live.sessionId).toBe(harnessSessionId(FAKE_THREAD_ID));
@@ -1670,7 +1674,7 @@ describe("Codex background terminals after a turn", () => {
     const { turn, received } = await completedTurn("background_terminal_exits");
     const live = await turn.release();
     if (live === null) {
-      return panic("The turn did not keep its process.");
+      throw new Error("The turn did not keep its process.");
     }
     const counts: number[] = [];
     live.watch((count) => {
@@ -1688,7 +1692,7 @@ describe("Codex background terminals after a turn", () => {
     const { turn, logPath } = await completedTurn("background_terminal");
     const live = await turn.release();
     if (live === null) {
-      return panic("The turn did not keep its process.");
+      throw new Error("The turn did not keep its process.");
     }
     await live.end();
     expect(readFileSync(logPath, "utf-8")).toContain(

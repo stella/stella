@@ -101,8 +101,14 @@ export const keepLiveSession = ({
     taken: boolean;
     exited: boolean;
     ending: Promise<void> | null;
-  } = { taken: false, exited: false, ending: null };
+    /** The last count listeners were told; 0 is told once, at the end. */
+    told: number;
+  } = { taken: false, exited: false, ending: null, told: background.count };
   const notify = (count: number) => {
+    if (count === state.told) {
+      return;
+    }
+    state.told = count;
     for (const listener of listeners) {
       listener(count);
     }
