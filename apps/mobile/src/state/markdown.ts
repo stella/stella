@@ -66,7 +66,7 @@ const isEscapable = (char: string | undefined): boolean =>
   char !== undefined && char !== "" && ASCII_PUNCTUATION.includes(char);
 
 /** `text` with its backslash escapes taken out: `podklad\_ZK` is `podklad_ZK`. */
-export const unescapeMarkdown = (text: string): string => {
+const unescapeMarkdown = (text: string): string => {
   let out = "";
   for (let at = 0; at < text.length; at += 1) {
     const char = text[at];
