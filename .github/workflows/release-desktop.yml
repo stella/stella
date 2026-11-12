@@ -460,7 +460,7 @@ jobs:
             "${app_bundles[0]}"
 
       # The PKCS #11 helper is signed before Tauri bundles the app, with its
-      # own entitlements (apps/desktop/scripts/build-pkcs11-helper.ts), and
+      # own entitlements (the desktop's build:pkcs11-helper script), and
       # bundled as is; the app's signature seals it and Tauri notarizes both.
       # Only the helper may load libraries signed by another team.
       - name: Verify PKCS #11 helper signature
