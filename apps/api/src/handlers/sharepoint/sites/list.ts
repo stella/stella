@@ -26,7 +26,14 @@ const config = {
   contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "provider_secret" },
+  description:
+    "List the SharePoint sites the caller follows, or find sites by name with search. Read with the caller's own connected Microsoft account, so it shows only sites they can open. Pass a site id to sharepoint.drives.list for its document libraries.",
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    readClass: "tenant",
+    consumesServices: false,
+  },
   access: "read",
   query: requestQuery,
 } satisfies HandlerConfig;

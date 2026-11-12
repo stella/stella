@@ -1812,3 +1812,21 @@ export const installPgliteCaseLawPopulationCounts = async (
   }
   await db.execute(sql`SELECT public.seed_case_law_population_counts(128)`);
 };
+
+/**
+ * Install the trigger that writes every finding decision's history event, so
+ * a writer that changes a decision in a test gets its history exactly as it
+ * would in production.
+ */
+export const installPgliteFindingDecisionHistory = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await installPgliteMigration({
+    db,
+    migrationPath: nodePath.join(
+      DRIZZLE_DIR,
+      "20261111230000_document_review_finding_decision_trigger",
+      "migration.sql",
+    ),
+  });
+};
