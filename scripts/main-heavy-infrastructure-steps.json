@@ -799,6 +799,44 @@
       "Setup Bun"
     ]
   },
+  "e2e-local-runs": {
+    "displayName": { "prefix": "e2e-local-runs", "suffix": "" },
+    "declaredStepNames": [
+      "Build the stand-in computer",
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Fetch Rust dependencies",
+      "Install Playwright browsers",
+      "Install dependencies",
+      "Install desktop build libraries",
+      "Login to GitHub Container Registry for browser images",
+      "Prepare environment",
+      "Prepare generated sources",
+      "Restore the stand-in computer build",
+      "Run local run browser suite",
+      "Setup Bun",
+      "Setup Rust",
+      "Start docker stack and API server",
+      "Start the stand-in computer",
+      "Start web dev server",
+      "Upload Playwright report",
+      "Upload browser test timings",
+      "Upload server and computer logs",
+      "Wait for web dev server"
+    ],
+    "steps": [
+      "Checkout",
+      "Install Playwright browsers",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install Playwright browsers",
+      "Post Install dependencies",
+      "Post Restore the stand-in computer build",
+      "Post Setup Bun",
+      "Restore the stand-in computer build",
+      "Setup Bun"
+    ]
+  },
   "e2e-landing": {
     "displayName": { "prefix": "e2e-landing", "suffix": "" },
     "declaredStepNames": [
