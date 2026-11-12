@@ -22,10 +22,8 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
-import {
-  gradeClaims,
-  gradedClaimType,
-} from "@/api/lib/lists/verification/claim-grade";
+import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
+import { gradedClaimType } from "@/api/lib/lists/verification/contract";
 import type { VerificationEvidenceFact } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import {
@@ -285,6 +283,7 @@ describe("gradeClaims", () => {
         text: "I first met him on 9 March 2021. We spoke briefly.",
         anchor: { start: 0, end: "I first met him on 9 March 2021".length },
       },
+      linkedFactIds: [],
     },
     {
       key: "1",
@@ -293,6 +292,7 @@ describe("gradeClaims", () => {
         text: "The amount was EUR 40,000 in total.",
         anchor: { start: 0, end: "The amount was EUR 40,000".length },
       },
+      linkedFactIds: [],
     },
   ];
 
@@ -320,6 +320,7 @@ describe("gradeClaims", () => {
             text: context,
             anchor: { start: 3000, end: 3000 + text.length },
           },
+          linkedFactIds: [],
         },
       ],
       facts: [fact(FACT_A, "An unrelated meeting")],
@@ -359,6 +360,7 @@ describe("gradeClaims", () => {
             text: context,
             anchor: { start, end: start + text.length },
           },
+          linkedFactIds: [],
         },
       ],
       facts: [fact(FACT_A, "An unrelated meeting")],
@@ -474,6 +476,7 @@ describe("gradeClaims", () => {
             text: "The arrangement was proper.",
             anchor: { start: 0, end: "The arrangement was proper".length },
           },
+          linkedFactIds: [],
         },
         {
           key: "fact",
@@ -482,6 +485,7 @@ describe("gradeClaims", () => {
             text: "The payment was approved.",
             anchor: { start: 0, end: "The payment was approved".length },
           },
+          linkedFactIds: [],
         },
       ],
       facts: [fact(FACT_A, "An unrelated meeting took place")],
@@ -747,6 +751,7 @@ test("access removal after extraction blocks the later grading batch", async () 
           panic("Expected extracted block"),
         anchor: claim.anchor,
       },
+      linkedFactIds: [],
     })),
     facts: [fact(FACT_A, "The meeting took place on 9 March 2021")],
     deps: currentDeps,

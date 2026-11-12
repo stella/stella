@@ -192,6 +192,13 @@ export const UPLOAD_FILE_MIN_BYTES = 1;
 export const UPLOAD_DOCUMENT_MAX_BYTES = 50 * 1024 * 1024;
 
 /**
+ * Largest file uploaded into an existing skill as one resource. Its text must
+ * also fit the stored resource cap (`SKILL_PACKAGE_LIMITS.resourceMaxChars`);
+ * the browser refuses a larger file before reading it.
+ */
+export const SKILL_RESOURCE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
  * Size bounds, in PDF points, of a visible signature stamp: legible, and never
  * a page-covering box. The browser keeps a drawn stamp inside them and the
  * API refuses a stamp outside them.

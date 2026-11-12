@@ -51,6 +51,7 @@ import {
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -606,15 +607,15 @@ function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
                       className="bg-info size-2 shrink-0 rounded-full"
                     />
                   ) : null}
-                  <BidiText
-                    as="span"
+                  <TruncatedText
                     className={cn(
-                      "text-foreground truncate text-sm",
+                      "text-foreground text-sm",
                       unread ? "font-semibold" : "font-medium",
                     )}
+                    render={<BidiText as="span" />}
                   >
                     {displayTitle}
-                  </BidiText>
+                  </TruncatedText>
                   {unread ? (
                     <span className="sr-only">{t("common.unread")}</span>
                   ) : null}

@@ -23,6 +23,7 @@ import {
 import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 const VIEW_DRAG_TYPE = "@stll/workspace-ui/view-switcher/drag-type";
@@ -372,12 +373,12 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
         value={view.id}
       >
         {renderIcon(view)}
-        <BidiText
-          as="span"
-          className="max-w-36 overflow-hidden text-ellipsis whitespace-pre"
+        <TruncatedText
+          className="max-w-36 whitespace-pre"
+          render={<BidiText as="span" />}
         >
           {view.name}
-        </BidiText>
+        </TruncatedText>
       </TabsTab>
       {actions === null || actions === undefined ? null : (
         <div className="absolute inset-e-0 top-1/2 mt-1 -translate-y-1/2">

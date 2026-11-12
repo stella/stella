@@ -24,7 +24,13 @@ import { chatPinnedThreadsScalingScenario } from "./chat-threads";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { reviewHistoryScalingScenarios } from "./claim-review-history";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import {
+  conflictCheckListScalingScenario,
+  conflictCheckReadScalingScenario,
+} from "./conflict-checks";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
+import { dataExportReadScalingScenarios } from "./data-exports";
+import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
@@ -51,6 +57,7 @@ import {
   scenarioMembershipViolations,
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
+import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
@@ -68,12 +75,14 @@ import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  ...dataExportReadScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  decisionAnchorRedirectsScalingScenario,
   decisionFilterValidationScalingScenario,
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
@@ -82,6 +91,8 @@ const measuredApiScenarios = [
   chatActiveRunsScalingScenario,
   chatPinnedThreadsScalingScenario,
   browserSiteGrantsScalingScenario,
+  conflictCheckListScalingScenario,
+  conflictCheckReadScalingScenario,
   chatMcpAppBundleScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
@@ -102,6 +113,7 @@ const measuredApiScenarios = [
   organizationAuditExportScalingScenario,
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
+  ...sharepointBrowseScalingScenarios,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

@@ -94,6 +94,7 @@ export const STATUS_COLUMNS = {
     "configuredAccessStatus",
     "sourceEntitlementStatus",
   ],
+  organizationDataExports: ["status"],
   organizationFileObjects: ["status"],
   pdfSigningSessions: ["status"],
   pendingUploads: ["status"],
@@ -239,6 +240,7 @@ export const WRITABLE_STATUS_COLUMNS = {
     "configuredAccessStatus",
     "sourceEntitlementStatus",
   ],
+  organizationDataExports: ["status"],
   organizationFileObjects: ["status"],
   pdfSigningSessions: ["status"],
   pendingUploads: ["status"],
@@ -350,6 +352,7 @@ export const ENUM_COLUMNS = {
     "interaction_type",
     "interruption_reason",
   ],
+  conflict_checks: ["decision", "outcome"],
   contact_relationships: ["relationship_type"],
   contact_search_documents: ["contact_type"],
   contacts: [
@@ -391,7 +394,7 @@ export const ENUM_COLUMNS = {
   desktop_runner_commands: ["kind"],
   desktop_runner_events: ["type"],
   desktop_runner_folder_restores: ["reason"],
-  desktop_runner_runs: ["harness", "outcome", "reject_reason"],
+  desktop_runner_runs: ["harness", "lost_reason", "outcome", "reject_reason"],
   desktop_runners: ["connection"],
   document_processing_runs: ["entity_feature_gate", "kind", "request_source"],
   document_review_findings: ["decision", "flags"],
@@ -437,6 +440,7 @@ export const ENUM_COLUMNS = {
   invoice_payments: ["method", "origin"],
   invoices: ["billing_mode", "document_type", "language"],
   justifications: ["entity_feature_gate"],
+  legal_list_claim_carry_outcomes: ["entity_feature_gate", "outcome"],
   legal_list_claim_review_events: ["entity_feature_gate", "kind"],
   legal_list_claims: ["entity_feature_gate", "framing", "type"],
   legal_list_fact_details: [
@@ -491,6 +495,7 @@ export const ENUM_COLUMNS = {
   oauth_client: ["registration_origin"],
   office_file_evidence: ["entity_feature_gate", "format"],
   organization_access_states: ["origin"],
+  organization_data_exports: ["version_scope"],
   organization_settings: [
     "ai_billing_drafts_mode",
     "document_processing_mode",

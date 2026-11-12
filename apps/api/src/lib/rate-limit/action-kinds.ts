@@ -92,6 +92,7 @@ export const ACTION_KINDS = {
   "bilingual.background": MODEL_BACKGROUND,
   "list-verification.start": MODEL_ACTION,
   "list-verification.background": MODEL_BACKGROUND,
+  "list-verification.recheck": MODEL_ACTION,
   "list-fact-extraction.start": MODEL_ACTION,
   "list-fact-extraction.background": MODEL_BACKGROUND,
   "report-export.start": MODEL_ACTION,

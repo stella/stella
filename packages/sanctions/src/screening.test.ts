@@ -695,7 +695,7 @@ describe("warm screening", () => {
     ];
     realistic = buildScreeningIndex(commonLists);
     legacy = buildLegacyScreeningIndex(commonLists);
-  });
+  }, 30_000); // timeout: builds both 20,000-entry indexes
 
   test("warm common-token screening stays within its deterministic work budget", () => {
     const query = {

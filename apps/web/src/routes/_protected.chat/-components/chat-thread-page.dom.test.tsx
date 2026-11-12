@@ -405,7 +405,7 @@ test("an evicted builder's chat lives and goes with the thread entry the page re
   const firstVisit = await openThreadPage(client);
   await send(firstVisit, 1);
   await testing.waitFor(() =>
-    expect(firstVisit.queryByText(ANSWER)).not.toBeNull(),
+    expect(firstVisit.queryByText(ANSWER) === null).toBe(false),
   );
   expect(
     client

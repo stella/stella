@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Rozstrzygnięcie jest jednoznaczne, ale interpretacja jednego z uwzględnionych faktów jest sporna; warto ją sprawdzić przed zatwierdzeniem.",
       "contradicted": "Rejestr odbiega od tego twierdzenia. Zanim rozstrzygnięcie zostanie zatwierdzone, potrzebna jest decyzja człowieka.",
-      "nocover": "Żaden fakt referencyjny nie odnosi się do tego twierdzenia, więc nie ma z czym go porównać. Zatwierdzenie jest opcjonalne.",
+      "nocover": "Żaden fakt z listy nie obejmuje jeszcze tego twierdzenia.",
       "notverifiable": "Odłożone jako niemożliwe do zweryfikowania; zatwierdzenie jest opcjonalne. Jeśli twierdzenie można jednak sprawdzić, otwórz je ponownie poniżej.",
       "recordconflict": "Dwa materiały dowodowe w aktach są ze sobą sprzeczne. Powyżej wskaż, który jest nadrzędny, albo oznacz sprawę dla zespołu ds. dowodów; narzędzie nie dokona wyboru za Ciebie.",
       "restsOnHeld": "Fakt, na którym opiera się to rozstrzygnięcie, jest wstrzymany do weryfikacji; potwierdź, że rozstrzygnięcie obowiązuje również bez niego, albo sprawdź twierdzenie ponownie po wyjaśnieniu faktu.",
@@ -381,6 +381,30 @@
         "label": "Bez źródła"
       }
     },
+    "gap": {
+      "addFact": "Dodaj fakt z dokumentu",
+      "addFactFailed": "Nie udało się dodać faktu",
+      "factOffList": "Fakt, którego nie ma już na liście",
+      "linkFact": "Powiąż fakt",
+      "linkFailed": "Nie udało się powiązać faktu",
+      "linked": "Powiązane fakty",
+      "linkedMark": "Powiązany",
+      "linksChanged": "Powiązania zmieniły się od ostatniego sprawdzenia.",
+      "noFacts": "Żaden fakt na liście nie pasuje.",
+      "recheck": "Sprawdź ponownie",
+      "recheckFailed": "Nie udało się ponownie sprawdzić twierdzenia",
+      "searchFacts": "Szukaj wśród faktów na liście",
+      "sheet": {
+        "passage": "Fragment",
+        "passageHint": "Słowa w dokumencie, które ustalają fakt.",
+        "statementRequired": "Wpisz fakt.",
+        "statementTooLong": "Fakt może mieć najwyżej {limit} znaków.",
+        "submit": "Dodaj i sprawdź ponownie",
+        "title": "Dodaj fakt z dokumentu"
+      },
+      "showNextSteps": "Pokaż kolejne kroki",
+      "unlink": "Usuń powiązanie: {fact}"
+    },
     "guidance": {
       "escalate": "Przekaż dalej",
       "manualJudgement": "Wymaga decyzji",
@@ -392,17 +416,22 @@
         "acceptedRoutine": "Zaakceptowano jako rutynowe",
         "conflictReopened": "Wycofano rozstrzygnięcie sprzeczności",
         "escalated": "Oznaczono dla zespołu ds. dowodów",
+        "factLinked": "Powiązano fakt",
+        "factUnlinked": "Usunięto powiązanie faktu",
         "governed": "Wybrano wpis nadrzędny",
         "noteCleared": "Usunięto uwagę",
         "noteSaved": "Zapisano uwagę",
         "overridden": "Zmieniono rozstrzygnięcie",
         "overrideWithdrawn": "Wycofano zmianę rozstrzygnięcia",
+        "rechecked": "Ponownie sprawdzono twierdzenie",
         "reopened": "Otwarto ponownie jako możliwe do sprawdzenia twierdzenie",
         "statusCleared": "Usunięto status weryfikacji",
         "statusDisputed": "Oznaczono jako zakwestionowane",
         "statusNeedsEvidence": "Oznaczono jako wymagające dowodów",
         "statusReviewed": "Oznaczono jako zweryfikowane"
       },
+      "carriedFrom": "Z przebiegu z {date}",
+      "carriedFromEarlier": "Z wcześniejszego przebiegu",
       "empty": "Brak działań weryfikacyjnych.",
       "filters": {
         "allKinds": "Dowolne działanie",
@@ -412,7 +441,9 @@
       },
       "formerMember": "Były członek",
       "kinds": {
+        "factLink": "Powiązania faktów",
         "override": "Zmiany rozstrzygnięcia",
+        "recheck": "Ponowne sprawdzenia",
         "recordConflict": "Rozstrzygnięcia sprzeczności",
         "reopen": "Ponowne otwarcia",
         "status": "Zmiany statusu"
@@ -461,6 +492,11 @@
       "unresolveConflict": "Dlaczego wycofać to rozstrzygnięcie sprzeczności?",
       "withdrawOverride": "Dlaczego wrócić do rozstrzygnięcia narzędzia?"
     },
+    "recheck": {
+      "currentVerdict": "Rozstrzygnięcie po ponownym sprawdzeniu",
+      "runVerdict": "Rozstrzygnięcie z pierwotnego przebiegu",
+      "summary": "Ponownie sprawdzono {checkedAt} na podstawie {count, plural, one {# faktu} few {# faktów} many {# faktów} other {# faktu}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Zakwestionowane} needsEvidence {Brak dowodów} other {{origin, select, bulk {Zaakceptowane jako rutynowe} other {Zweryfikowane}}}} · {decidedAt}",
       "status": {
@@ -472,6 +508,21 @@
     },
     "runs": {
       "back": "Wszystkie dokumenty",
+      "carryOver": {
+        "openSource": "Otwórz przebieg z {date}",
+        "outcomes": {
+          "ambiguous": "Kilka możliwych dopasowań",
+          "textChanged": "Brzmienie się zmieniło",
+          "unmatched": "Brak pasującego twierdzenia",
+          "verdictChanged": "Rozstrzygnięcie się zmieniło"
+        },
+        "summary": {
+          "carried": "Przeniesione: {count, number}",
+          "carriedAndMissed": "Przeniesione: {carried, number} · nie: {missed, number}",
+          "label": "Weryfikacje z przebiegu z {date}: przeniesione {carried, number}, nieprzeniesione {missed, number}",
+          "missed": "Nieprzeniesione: {count, number}"
+        }
+      },
       "errors": {
         "accessRevoked": "Weryfikacja została zatrzymana, ponieważ dostęp jest niedostępny.",
         "aiUnavailable": "Do weryfikacji dokumentów nie jest dostępny żaden model AI. Sprawdź ustawienia AI organizacji.",
@@ -502,7 +553,6 @@
       "failed": "Nie zapisano",
       "failedTitle": "Twoja zmiana nie została zapisana"
     },
-    "sourceMediumTooltip": "Nośnik źródła: neutralny opis. Sam w sobie nie obniża poziomu pewności.",
     "states": {
       "contradicted": {
         "chip": "Sprzeczne",
@@ -1274,6 +1324,7 @@
       "count": "{count, plural, one {# język} few {# języki} many {# języków} other {# języka}}",
       "matchedIn": "Dopasowanie w języku {language}"
     },
+    "linkedPassageGone": "Wskazanego fragmentu nie ma już w tym tekście.",
     "loadingMore": "Ładowanie kolejnych...",
     "marginFilter": {
       "label": "Filtr przywołanych przepisów",
@@ -1853,6 +1904,9 @@
       "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
       "errorLimitResetsAt": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Możesz spróbować ponownie po {time}.",
       "errorNeedsLogin": "Agent programistyczny na Twoim komputerze wymaga ponownego zalogowania. Zaloguj się w stella desktop i spróbuj ponownie.",
+      "errorNotReached": "Twój komputer nie przejął tej odpowiedzi. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
+      "errorRelinked": "stella desktop został ponownie połączony na Twoim komputerze, więc ta odpowiedź została zatrzymana. Wyślij ją ponownie.",
+      "errorRestoring": "Twój komputer wciąż cofa zmiany w plikach. Wyślij to ponownie za chwilę.",
       "errorUnavailable": "Twój komputer przestał przetwarzać tę odpowiedź. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
       "filesNotShared": "Pliki, których nie udało się udostępnić, pozostają na Twoim komputerze: {fileNames}",
       "onThisComputer": "{harness} na tym komputerze",
@@ -1874,13 +1928,17 @@
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
       "runOn": "Uruchom na",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit wyczerpany do {time}",
+      "stateModelUnavailable": "Model nie jest już dostępny",
       "stateNeedsLogin": "Wymaga zalogowania",
       "stateNotInstalled": "Nie zainstalowano",
       "stateOffline": "Komputer offline",
       "stateUnavailable": "Chwilowo niedostępne",
       "stateUnsupported": "Ta wersja nie jest obsługiwana",
-      "waitingForComputer": "Oczekiwanie na ponowne połączenie Twojego komputera…"
+      "waitingForComputer": "Oczekiwanie na ponowne połączenie Twojego komputera…",
+      "waitingForPickup": "Oczekiwanie, aż Twój komputer przejmie tę odpowiedź…",
+      "waitingSentAt": "Wysłano o {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Wybierz wszystkie pasujące",
@@ -2627,6 +2685,7 @@
     "queued": "W kolejce",
     "reason": "Powód",
     "recommended": "Polecane",
+    "reconnect": "Połącz ponownie",
     "reconnecting": "Ponowne łączenie…",
     "reference": "Numer referencyjny",
     "refresh": "Odśwież",
@@ -3276,6 +3335,14 @@
       "organizationMemberLimitReached": "Ta organizacja osiągnęła limit członków.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
+      "sharepointAccessDenied": "Microsoft odmówił dostępu do tej witryny, biblioteki lub tego pliku.",
+      "sharepointFileTooLarge": "Ten plik jest zbyt duży, aby go zaimportować.",
+      "sharepointInvalidCursor": "Lista zmieniła się podczas przeglądania. Otwórz folder ponownie.",
+      "sharepointNotAFile": "Można importować tylko pliki, a nie foldery ani notesy.",
+      "sharepointNotConnected": "Połącz swoje konto Microsoft, aby korzystać z SharePoint i OneDrive.",
+      "sharepointNotFound": "Ta witryna, biblioteka lub ten plik już nie istnieje albo nie jest Ci udostępniony.",
+      "sharepointReconnectRequired": "Twoje logowanie do Microsoft wygasło. Połącz ponownie SharePoint i OneDrive.",
+      "sharepointThrottled": "Microsoft ogranicza liczbę żądań. Spróbuj ponownie za chwilę.",
       "skillSourceUnreachable": "Nie udało się wczytać źródła umiejętności. Sprawdź, czy link prowadzi do publicznego repozytorium GitHub, lub spróbuj ponownie później.",
       "thirdPartyBoundaryRefusal": "Żądanie próbowało użyć treści spoza dozwolonego kontekstu obszaru roboczego.",
       "usageLimitExceeded": "Osiągnięto limit użycia.",
@@ -4214,6 +4281,7 @@
       "documentChanged": "Ten dokument zmienił się po tej weryfikacji.",
       "documentCutNotice": "<strong>Dokument {documentName} nie został przeczytany w całości.</strong> Jest zbyt długi dla tego modelu, dlatego pominięto około {percent} tekstu. Pozycja bez odpowiedzi jest oznaczana do sprawdzenia, ponieważ odpowiedź może znajdować się w pominiętej części.",
       "documentTooLarge": "Ten dokument jest zbyt długi, aby ten model mógł przeczytać jego wystarczającą część. Wypróbuj model z większym oknem kontekstu.",
+      "documentsTooLarge": "Te dokumenty są zbyt długie, aby ten model mógł przeczytać je razem. Użyj mniejszej liczby dokumentów lub krótszych dokumentów albo wypróbuj model z większym oknem kontekstu.",
       "export": {
         "counterparty": "Pobierz dla kontrahenta",
         "counterpartyFailed": "Nie udało się wyeksportować dokumentu",
@@ -4392,6 +4460,7 @@
       "discoveredSkills": "{count, plural, one {Znaleziono # umiejętność} few {Znaleziono # umiejętności} many {Znaleziono # umiejętności} other {Znaleziono # umiejętności}}",
       "discoveryEmpty": "W tym repozytorium lub folderze nie znaleziono umiejętności.",
       "discoverySkippedInvalid": "{count, plural, one {Pominięto # nieprawidłową umiejętność} few {Pominięto # nieprawidłowe umiejętności} many {Pominięto # nieprawidłowych umiejętności} other {Pominięto # nieprawidłowych umiejętności}}",
+      "dropPack": "Upuść plik .zip lub SKILL.md, aby zaimportować umiejętność",
       "editSkill": "Edytuj umiejętność",
       "enableSkill": "Włącz umiejętność",
       "fileExists": "Plik o tej ścieżce już istnieje",
@@ -4449,6 +4518,7 @@
         }
       },
       "uploadHelp": "Użyj pliku SKILL.md lub folderu .zip zawierającego SKILL.md i opcjonalne zasoby tylko do odczytu.",
+      "uploadPack": "Prześlij .zip lub SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/sciezka/do/umiejetnosci",
       "version": "Wersja: {version}"
     },
@@ -4501,7 +4571,6 @@
       "otherTitle": "Pozostałe integracje",
       "probe": "Sprawdź",
       "recommendedFor": "Rekomendowane dla {jurisdictions}",
-      "reconnect": "Połącz ponownie",
       "saveToken": "Zapisz token",
       "tokenHelp": "Jak uzyskać token",
       "tokenLabel": "Token Bearer",
@@ -5385,8 +5454,6 @@
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",
     "caseLawEmptyState": "Zacznij pisać, aby przeszukać orzeczenia sądowe.",
-    "caseLawMatchingDecisions": "{count, plural, one {# pasujące orzeczenie} few {# pasujące orzeczenia} many {# pasujących orzeczeń} other {# pasującego orzeczenia}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ pasujące orzeczenie} few {#+ pasujące orzeczenia} many {#+ pasujących orzeczeń} other {#+ pasującego orzeczenia}}",
     "chatCoveragePartial": "Nie wszystkie czaty przeszukano w całości.",
     "continueInChat": "Kontynuuj na czacie",
     "dateFrom": "Od",
@@ -5744,8 +5811,10 @@
         "clause_category": "kategoria klauzul",
         "clause_template_link": "powiązanie klauzuli z szablonem",
         "clause_variant": "wariant klauzuli",
+        "conflict_check": "weryfikacja konfliktu interesów",
         "contact": "kontakt",
         "contact_directory": "katalog kontaktów",
+        "data_export": "eksport danych",
         "desktop_edit_session": "sesja edycji na komputerze",
         "document_annotation": "adnotacja do dokumentu",
         "document_review_run": "weryfikacja dokumentu",
@@ -5923,6 +5992,63 @@
       "usageUnitsThisPeriod": "Jednostki użycia w tym okresie"
     }
   },
+  "sharepoint": {
+    "admin": {
+      "description": "Członkowie łączą własne konto Microsoft i importują pliki do spraw. stella odczytuje tylko to, co dany członek może otworzyć w Microsoft 365.",
+      "disableConfirm": "Wyłącz",
+      "disableDescription": "Połączenia wszystkich członków z Microsoft zostaną usunięte, a zapisane logowania skasowane. Zaimportowane już dokumenty pozostaną w swoich sprawach. Jeśli ponownie włączysz tę funkcję, członkowie będą musieli połączyć się ponownie.",
+      "disableInputLabel": "Wpisz {confirmation}, aby wyłączyć",
+      "disableTitle": "Wyłączyć SharePoint i OneDrive?",
+      "toggleLabel": "Zezwalaj na SharePoint i OneDrive"
+    },
+    "askAdmin": "Wyłączone dla Twojej organizacji. Poproś administratora o włączenie.",
+    "connectFailed": "Nie udało się połączyć SharePoint i OneDrive",
+    "connected": "SharePoint i OneDrive połączone",
+    "description": "Importuj pliki z usług SharePoint i OneDrive do spraw.",
+    "disconnectDescription": "Twoje logowanie do Microsoft zostanie usunięte z aplikacji stella. Zaimportowane już dokumenty pozostaną w swoich sprawach.",
+    "disconnectTitle": "Rozłączyć SharePoint i OneDrive?",
+    "disconnected": "SharePoint i OneDrive rozłączone",
+    "import": {
+      "alreadyCurrent": "{count, plural, one {# plik był już aktualny.} few {# pliki były już aktualne.} many {# plików było już aktualnych.} other {# pliku było już aktualnych.}}",
+      "created": "Zaimportowano",
+      "done": "Zaimportowano pliki z usługi SharePoint lub OneDrive",
+      "failedReason": "Nie udało się skopiować pliku. Spróbuj ponownie później.",
+      "partial": "Nie udało się zaimportować {failed, number} z {total, plural, one {# pliku} few {# plików} many {# plików} other {# pliku}}.",
+      "progress": "Zaimportowano {done, number} z {total, number}",
+      "unchanged": "Już aktualny",
+      "unconfirmed": "Niepotwierdzone",
+      "unconfirmedCount": "{count, plural, one {# plik nie został potwierdzony; zaimportuj go ponownie.} few {# pliki nie zostały potwierdzone; zaimportuj je ponownie.} many {# plików nie zostało potwierdzonych; zaimportuj je ponownie.} other {# pliku nie potwierdzono; zaimportuj je ponownie.}}",
+      "unconfirmedReason": "Import zatrzymał się przed potwierdzeniem tego pliku. Zaimportuj go ponownie.",
+      "versioned": "Nowa wersja"
+    },
+    "oauthReasons": {
+      "consentDenied": "Logowanie do Microsoft zostało anulowane lub nie przyznano dostępu.",
+      "expired": "Logowanie trwało zbyt długo. Połącz ponownie.",
+      "notConfigured": "Ta instalacja aplikacji stella nie jest skonfigurowana do logowania przez Microsoft. Skontaktuj się z administratorem.",
+      "notEnabled": "Twoja organizacja nie włączyła SharePoint i OneDrive.",
+      "tryAgain": "Logowanie do Microsoft nie zostało ukończone. Połącz ponownie.",
+      "userMismatch": "Logowanie rozpoczęto z innego konta lub innej organizacji. Połącz ponownie z tego konta."
+    },
+    "picker": {
+      "description": "Wybierz pliki do skopiowania do tej sprawy (maksymalnie {max, number}).",
+      "emptyFolder": "Ten folder jest pusty.",
+      "menuItem": "Z usługi SharePoint lub OneDrive",
+      "myOneDrive": "Mój OneDrive",
+      "noFollowedSites": "Wyszukaj witrynę lub otwórz Mój OneDrive.",
+      "noLibraries": "Brak bibliotek dokumentów.",
+      "notConnected": "Połącz swoje konto Microsoft, aby przeglądać SharePoint i OneDrive.",
+      "notImportable": "Nie można zaimportować",
+      "reconnectRequired": "Twoje logowanie do Microsoft wygasło. Połącz ponownie, aby kontynuować przeglądanie.",
+      "searchSites": "Szukaj witryn",
+      "selectedCount": "{count, plural, =0 {Nie wybrano plików} one {Wybrano # plik} few {Wybrano # pliki} many {Wybrano # plików} other {Wybrano # pliku}}",
+      "selectionLimit": "Maksymalna liczba plików importowanych jednocześnie: {max, number}.",
+      "sites": "Witryny",
+      "throttledFor": "Microsoft ogranicza liczbę żądań. Spróbuj ponownie za {seconds, plural, one {# sekundę} few {# sekundy} many {# sekund} other {# sekundy}}.",
+      "title": "Importuj z usługi SharePoint lub OneDrive"
+    },
+    "reconnectRequired": "Logowanie wygasło",
+    "title": "SharePoint i OneDrive"
+  },
   "skillHistory": {
     "acceptStale": "Zaakceptuj i nadpisz nowsze zmiany",
     "backToCurrent": "Wróć do bieżącej wersji",
@@ -6048,6 +6174,11 @@
     "title": "Akty prawne",
     "validity": "Obowiązuje od {from} do {to}",
     "versionAppliedInDecision": "Wersja zastosowana w orzeczeniu <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# dodany przepis} few {# dodane przepisy} many {# dodanych przepisów} other {# dodanego przepisu}}",
+    "versionChangesChanged": "{count, plural, one {# zmieniony przepis} few {# zmienione przepisy} many {# zmienionych przepisów} other {# zmienionego przepisu}}",
+    "versionChangesNone": "Brzmienie bez zmian",
+    "versionChangesRemoved": "{count, plural, one {# skreślony przepis} few {# skreślone przepisy} many {# skreślonych przepisów} other {# skreślonego przepisu}}",
+    "versionChangesWords": "{inserted, plural, one {# dodane słowo} few {# dodane słowa} many {# dodanych słów} other {# dodanego słowa}}, {deleted, plural, one {# skreślone słowo} few {# skreślone słowa} many {# skreślonych słów} other {# skreślonego słowa}}",
     "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },
   "styleSets": {
@@ -6768,6 +6899,7 @@
     "deletedItem": "Usunięto: {name}",
     "deletingWorkspace": "Usuwanie sprawy",
     "documentSwitcher": {
+      "download": "Pobierz ten plik",
       "searchPlaceholder": "Znajdź dokument…",
       "trigger": "Przełącz dokument"
     },

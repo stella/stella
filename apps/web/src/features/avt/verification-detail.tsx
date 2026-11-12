@@ -1,3 +1,5 @@
+import * as React from "react";
+
 import { useQuery } from "@tanstack/react-query";
 /**
  * One verification of one document: waiting while it runs, the reason when it
@@ -12,15 +14,18 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon, PlayIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { verificationRunOptions } from "@/features/avt/queries";
+import { RunCarryOverControl } from "@/features/avt/run-carry-over";
 import { RunHistoryPicker } from "@/features/avt/run-history-picker";
 import type { VerificationRun } from "@/features/avt/types";
 import { RUN_ERROR_KEYS } from "@/features/avt/types";
 import { useStartVerification } from "@/features/avt/use-start-verification";
 import { VerificationView } from "@/features/avt/verification-view";
+import type { VerificationViewHandle } from "@/features/avt/verification-view";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
@@ -63,6 +68,9 @@ export const VerificationDetail = ({
       ? undefined
       : files?.find((file) => file.entityId === run.entityId);
   const documentName = currentFile?.name ?? null;
+  // The carry control lives in the header; the claims it shows live in the
+  // view below it.
+  const view = React.useRef<VerificationViewHandle>(null);
 
   return (
     <>
@@ -73,21 +81,31 @@ export const VerificationDetail = ({
           {t("avt.runs.back")}
         </Button>
         {documentName !== null && (
-          <h2
-            className="min-w-0 flex-1 truncate text-base font-semibold"
-            dir="auto"
-          >
-            {documentName}
+          <h2 className="min-w-0 flex-1 text-base font-semibold" dir="auto">
+            <TruncatedText>{documentName}</TruncatedText>
           </h2>
         )}
         {run !== undefined && (
-          <RunHistoryPicker
-            fileFieldId={currentFile?.fieldId ?? run.fileFieldId}
-            listId={listId}
-            onOpenRun={onOpenRun}
-            run={run}
-            workspaceId={workspaceId}
-          />
+          // The run's date and what it carried wrap together, never apart.
+          <div className="ms-auto flex items-center gap-1">
+            {run.status === "completed" &&
+              run.carryOver !== null &&
+              run.carryOver.carriedCount + run.carryOver.notCarried.length >
+                0 && (
+                <RunCarryOverControl
+                  carryOver={run.carryOver}
+                  onOpenRun={onOpenRun}
+                  onShowClaim={(claimId) => view.current?.showClaim(claimId)}
+                />
+              )}
+            <RunHistoryPicker
+              fileFieldId={currentFile?.fieldId ?? run.fileFieldId}
+              listId={listId}
+              onOpenRun={onOpenRun}
+              run={run}
+              workspaceId={workspaceId}
+            />
+          </div>
         )}
       </div>
       {isPending && <Skeleton className="h-40 w-full" />}
@@ -102,6 +120,7 @@ export const VerificationDetail = ({
           listId={listId}
           onOpenRun={onOpenRun}
           run={run}
+          view={view}
           workspaceId={workspaceId}
         />
       )}
@@ -116,6 +135,7 @@ type RunBodyProps = {
   currentFileFieldId: string | null;
   listId: string | null;
   onOpenRun: (runId: string) => void;
+  view: React.Ref<VerificationViewHandle>;
 };
 
 const RunBody = ({
@@ -124,6 +144,7 @@ const RunBody = ({
   currentFileFieldId,
   listId,
   onOpenRun,
+  view,
 }: RunBodyProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -175,7 +196,7 @@ const RunBody = ({
               {t("avt.runs.noClaims")}
             </p>
           ) : (
-            <VerificationView run={run} workspaceId={workspaceId} />
+            <VerificationView ref={view} run={run} workspaceId={workspaceId} />
           )}
         </>
       );
