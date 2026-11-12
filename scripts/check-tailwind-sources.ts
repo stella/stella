@@ -16,6 +16,7 @@
 
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
@@ -37,14 +38,35 @@ export type TailwindSourceFinding = {
   message: string;
 };
 
-type PackageJson = {
-  name?: string;
-  dependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-};
+const packageJsonSchema = v.object({
+  dependencies: v.optional(v.record(v.string(), v.string())),
+  peerDependencies: v.optional(v.record(v.string(), v.string())),
+});
+
+type PackageJson = v.InferOutput<typeof packageJsonSchema>;
 
 const readPackageJson = (file: string): PackageJson =>
-  JSON.parse(readFileSync(file, "utf-8")) as PackageJson;
+  v.parse(packageJsonSchema, JSON.parse(readFileSync(file, "utf-8")));
+
+const GLOB_CHARACTERS = new Set(["*", "{", "["]);
+
+/** The quoted argument of a `<directive> "<argument>"` line, if it is one. */
+const directiveArgument = (
+  line: string,
+  directive: string,
+): string | undefined => {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith(`${directive} `)) {
+    return undefined;
+  }
+  const rest = trimmed.slice(directive.length).trimStart();
+  const quote = rest.at(0);
+  if (quote !== '"' && quote !== "'") {
+    return undefined;
+  }
+  const end = rest.indexOf(quote, 1);
+  return end === -1 ? undefined : rest.slice(1, end);
+};
 
 const realpathOrSelf = (file: string): string =>
   existsSync(file) ? realpathSync(file) : file;
@@ -75,16 +97,23 @@ const shipsClasses = (pkg: PackageJson): boolean =>
   ].some((dep) => CLASS_SIGNALS.has(dep));
 
 /** The absolute directory each `@source` scans, before its first glob. */
+/** `@source not "…"` excludes files, so it names no root. */
 export const readSourceRoots = (entryFile: string, css: string): string[] =>
-  [...css.matchAll(/^\s*@source\s+(?!not\b)"([^"]+)"/gmu)].map((match) => {
-    const segments = (match[1] ?? "").split("/");
-    const firstGlob = segments.findIndex((part) => /[*{[]/u.test(part));
-    const staticPart =
-      firstGlob === -1 ? segments : segments.slice(0, firstGlob);
-    return realpathOrSelf(
-      path.resolve(path.dirname(entryFile), staticPart.join("/")),
-    );
-  });
+  css
+    .split("\n")
+    .map((line) => directiveArgument(line, "@source"))
+    .filter((source): source is string => source !== undefined)
+    .map((source) => {
+      const segments = source.split("/");
+      const firstGlob = segments.findIndex((part) =>
+        [...part].some((character) => GLOB_CHARACTERS.has(character)),
+      );
+      const staticPart =
+        firstGlob === -1 ? segments : segments.slice(0, firstGlob);
+      return realpathOrSelf(
+        path.resolve(path.dirname(entryFile), staticPart.join("/")),
+      );
+    });
 
 /** Class-shipping packages the app renders, by name and real directory. */
 const classShippingPackages = (
@@ -144,7 +173,9 @@ const tailwindEntries = (root: string): string[] =>
     .filter((file) => file.length > 0)
     .map((file) => path.join(root, file))
     .filter((file) =>
-      /^\s*@import\s+["']tailwindcss["']/mu.test(readFileSync(file, "utf-8")),
+      readFileSync(file, "utf-8")
+        .split("\n")
+        .some((line) => directiveArgument(line, "@import") === "tailwindcss"),
     );
 
 if (import.meta.main) {

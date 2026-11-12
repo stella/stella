@@ -35,6 +35,7 @@ const makeRepo = (css: string): { root: string; entry: string } => {
     peerDependencies: { tailwindcss: "4" },
   });
   const entry = path.join(root, "apps/web/src/app.css");
+  mkdirSync(path.dirname(entry), { recursive: true });
   writeFileSync(entry, `@import "tailwindcss";\n${css}`);
   return { root, entry };
 };

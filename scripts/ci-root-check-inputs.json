@@ -772,6 +772,14 @@
     ],
     "Test write contract inventories": ["**"],
     "Office fixture metadata": ["**"],
+    "Tailwind sources cover class-shipping dependencies": [
+      "apps/**/*.css",
+      "apps/*/package.json",
+      "packages/*/package.json",
+      "bun.lock",
+      "scripts/check-tailwind-sources.ts",
+      "scripts/check-tailwind-sources.test.ts"
+    ],
     "Bridge-version guard": [
       "apps/desktop/src-tauri/src/**",
       "apps/desktop/src/shared/rpc.ts",
@@ -848,14 +856,6 @@
     "Projection totality": ["**"],
     "Aggregate ownership": ["**"],
     "Split-button census": ["**"],
-    "Tailwind sources cover class-shipping dependencies": [
-      "apps/**/*.css",
-      "apps/*/package.json",
-      "packages/*/package.json",
-      "bun.lock",
-      "scripts/check-tailwind-sources.ts",
-      "scripts/check-tailwind-sources.test.ts"
-    ],
     "Database awaits in loops": ["**"],
     "Online unique index dependency guard": ["**"],
     "API timeout mutation guard": ["**"],
