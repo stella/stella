@@ -1966,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# conversation vous attend} other {# conversations vous attendent} many {# conversations vous attendent}}",
-      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}"
+      "waitsOn": {
+        "approval": "Attend votre approbation",
+        "askUser": "Vous pose une question",
+        "clientTool": "Reprend quand vous ouvrez cette conversation",
+        "harnessQuestion": "L’agent sur votre ordinateur a une question"
+      },
+      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}",
+      "workingNow": "En cours"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mcpReconnect": {

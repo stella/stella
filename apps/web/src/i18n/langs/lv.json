@@ -1966,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, zero {# tērzēšanu gaida jūs} one {# tērzēšana gaida jūs} other {# tērzēšanas gaida jūs}}",
-      "working": "{count, plural, zero {# tērzēšanu darbojas} one {# tērzēšana darbojas} other {# tērzēšanas darbojas}}"
+      "waitsOn": {
+        "approval": "Gaida jūsu apstiprinājumu",
+        "askUser": "Uzdod jums jautājumu",
+        "clientTool": "Turpināsies, kad atvērsiet šo tērzēšanu",
+        "harnessQuestion": "Aģentam jūsu datorā ir jautājums"
+      },
+      "working": "{count, plural, zero {# tērzēšanu darbojas} one {# tērzēšana darbojas} other {# tērzēšanas darbojas}}",
+      "workingNow": "Notiek"
     },
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mcpReconnect": {

@@ -1966,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat is waiting for you} other {# chats are waiting for you}}",
-      "working": "{count, plural, one {# chat is working} other {# chats are working}}"
+      "waitsOn": {
+        "approval": "Needs your approval",
+        "askUser": "Asks you a question",
+        "clientTool": "Continues when you open this chat",
+        "harnessQuestion": "The agent on your computer has a question"
+      },
+      "working": "{count, plural, one {# chat is working} other {# chats are working}}",
+      "workingNow": "Working"
     },
     "maxAttachmentsReached": "Maximum {count} files per message",
     "mcpReconnect": {

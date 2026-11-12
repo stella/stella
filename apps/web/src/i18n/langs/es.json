@@ -1966,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat espera su respuesta} other {# chats esperan su respuesta} many {# chats esperan su respuesta}}",
-      "working": "{count, plural, one {# chat en curso} other {# chats en curso} many {# chats en curso}}"
+      "waitsOn": {
+        "approval": "Espera su aprobación",
+        "askUser": "Le hace una pregunta",
+        "clientTool": "Continúa cuando abra este chat",
+        "harnessQuestion": "El agente de su ordenador tiene una pregunta"
+      },
+      "working": "{count, plural, one {# chat en curso} other {# chats en curso} many {# chats en curso}}",
+      "workingNow": "En curso"
     },
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
     "mcpReconnect": {
