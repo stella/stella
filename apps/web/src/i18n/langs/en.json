@@ -553,6 +553,24 @@
       "failed": "Not saved",
       "failedTitle": "Your change was not saved"
     },
+    "scope": {
+      "checkedDocument": "Checked paragraphs <num>{range}</num> only.",
+      "checkedOrdinal": "Checked paragraphs <num>{range}</num> only, counted in order: this document does not number its paragraphs.",
+      "errors": {
+        "empty": "These paragraphs have no text to check.",
+        "garbage": "Enter paragraph numbers, such as 82–136.",
+        "notFound": "These paragraphs are not in this document.",
+        "numberingUnclear": "This document's paragraph numbers cannot be read. Verify the whole document.",
+        "required": "Enter the paragraphs to verify.",
+        "reversed": "The range ends before it starts.",
+        "tooWide": "Verify at most 500 paragraphs at a time."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "No claims were found in these paragraphs.",
+      "showBefore": "Show the text before ¶ {from}",
+      "verifyParagraphs": "Verify paragraphs"
+    },
     "states": {
       "contradicted": {
         "chip": "Contradicted",
@@ -1948,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat is waiting for you} other {# chats are waiting for you}}",
-      "working": "{count, plural, one {# chat is working} other {# chats are working}}"
+      "waitsOn": {
+        "approval": "Needs your approval",
+        "askUser": "Asks you a question",
+        "clientTool": "Continues when you open this chat",
+        "harnessQuestion": "The agent on your computer has a question"
+      },
+      "working": "{count, plural, one {# chat is working} other {# chats are working}}",
+      "workingNow": "Working"
     },
     "maxAttachmentsReached": "Maximum {count} files per message",
     "mcpReconnect": {
@@ -4449,7 +4474,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Build a contract review playbook position by position, drawing on your past signed contracts, a short interview, and market-standard defaults.",
-          "name": "Build a playbook"
+          "name": "Build a playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Add positions to one of my existing playbooks.",
+              "name": "Extend a playbook"
+            },
+            "fromContracts": {
+              "body": "Build a non-disclosure agreement playbook from my past signed agreements.",
+              "name": "Start from past contracts"
+            },
+            "fromMarketStandards": {
+              "body": "Build a playbook for supplier agreements, starting from market-standard positions.",
+              "name": "Start from market standards"
+            }
+          }
         }
       },
       "builtInSection": "Built-in skills",
@@ -4699,6 +4738,10 @@
       "optionPlaceholder": "Option value",
       "optionsLabel": "Options",
       "outline": "Outline",
+      "pendingPane": {
+        "description": "Answer the questions in the chat. After you approve the first save, the playbook opens here and you can edit it next to the conversation.",
+        "title": "Your playbook will appear here"
+      },
       "positionOfTotal": "Position {index} of {total}",
       "positionRemoved": "Position removed",
       "positions": "Positions",

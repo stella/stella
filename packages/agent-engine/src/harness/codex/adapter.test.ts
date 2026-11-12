@@ -1030,6 +1030,19 @@ describe("Codex adapter over a stdio app-server", () => {
     });
   });
 
+  test("stella's MCP server failing to start fails the turn; a member's own does not", async () => {
+    const failed = await run("stella_mcp_failed");
+    expect(terminal(failed.events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "tools_unavailable",
+        message: "The harness could not connect to the stella MCP server.",
+      },
+    });
+    const theirs = await run("other_mcp_failed");
+    expect(terminal(theirs.events)?.type).toBe("turn.completed");
+  });
+
   /** Runs a scenario whose continuations record their delays. */
   const runRecordingDelays = async (scenario: FakeScenario) => {
     const { delays, capacityRetry } = capacityRetryRecording();

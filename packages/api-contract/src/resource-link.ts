@@ -78,6 +78,7 @@ export const CHAT_RESOURCE_LINK_DISPOSITION = {
   [RESOURCE_TYPE.FLOW_RUN]: { type: "unsupported" },
   [RESOURCE_TYPE.INVOICE]: { type: "unsupported" },
   [RESOURCE_TYPE.LEGAL_LIST]: { type: "unsupported" },
+  [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION]: { type: "unsupported" },
   [RESOURCE_TYPE.LEGISLATION_DOCUMENT]: { type: "unsupported" },
   [RESOURCE_TYPE.LEGISLATION_SOURCE]: { type: "unsupported" },
   [RESOURCE_TYPE.MCP_CONNECTOR]: { type: "unsupported" },

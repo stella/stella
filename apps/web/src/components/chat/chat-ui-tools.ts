@@ -1291,6 +1291,15 @@ export const consumeDocumentDeletionToolCalls = ({
 export type PlaybookSaveMessage = DocumentDeletionMessage;
 
 /**
+ * The newest save a session has not handled yet. `history` marks a save that
+ * was loaded with older messages, not made while the session watched.
+ */
+export type PlaybookSaveTarget = {
+  playbookId: string;
+  source: "history" | "live";
+};
+
+/**
  * Consume the successful `save_playbook` calls this session has not handled,
  * returning whether caches changed and the latest playbook to follow. A
  * newly completed older call still changed caches even when a later call
@@ -1306,8 +1315,8 @@ export const consumePlaybookSaveToolCalls = ({
   handledToolCallIds: Set<string>;
   historicalToolCallIds?: ReadonlySet<string>;
   messages: readonly PlaybookSaveMessage[];
-}): { playbookId: string | null } | null => {
-  let latestPlaybookId: string | null = null;
+}): { target: PlaybookSaveTarget | null } | null => {
+  let target: PlaybookSaveTarget | null = null;
   let hasNewSaves = false;
 
   for (const message of messages) {
@@ -1327,19 +1336,20 @@ export const consumePlaybookSaveToolCalls = ({
         continue;
       }
       if (handledToolCallIds.has(part["id"])) {
-        latestPlaybookId = null;
+        target = null;
         continue;
       }
 
       handledToolCallIds.add(part["id"]);
       hasNewSaves = true;
-      latestPlaybookId = historicalToolCallIds?.has(part["id"])
-        ? null
-        : part["output"]["playbookId"];
+      target = {
+        playbookId: part["output"]["playbookId"],
+        source: historicalToolCallIds?.has(part["id"]) ? "history" : "live",
+      };
     }
   }
 
-  return hasNewSaves ? { playbookId: latestPlaybookId } : null;
+  return hasNewSaves ? { target } : null;
 };
 
 /** The playbook a tool call saved, if it is a completed `save_playbook`

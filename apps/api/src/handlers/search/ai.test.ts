@@ -7,6 +7,7 @@ import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
 import {
   createSearchSummaryChatThread,
+  loadMatterSearchContexts,
   refineSearchOutputSchema,
   searchSummaryOutputSchema,
   validateSearchQueryWithPostgres,
@@ -548,4 +549,59 @@ test("search summary refuses unreadable provenance before writing a chat thread"
   });
   expect(write).not.toHaveBeenCalled();
   expect(upsertSearchDocumentMock).not.toHaveBeenCalled();
+});
+
+describe("matter search contexts", () => {
+  const workspaceId = toSafeId<"workspace">("ws_1");
+  const load = async (search: typeof searchGlobalMock) => {
+    const { scopedDb } = createScopedDbMock({});
+    return await loadMatterSearchContexts({
+      accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
+      organizationId: toSafeId<"organization">("org_1"),
+      query: "motion",
+      scopedDb,
+      search,
+      userId: toSafeId<"user">("user_1"),
+      workspaceId,
+    });
+  };
+
+  test("searches only the matter's own files", async () => {
+    searchGlobalMock.mockResolvedValueOnce(
+      Result.ok({
+        facets: { editor: [], mimeType: [], type: [], workspace: [] },
+        hits: [],
+        nextCursor: null,
+        chatCoverage: "complete",
+        totalCount: 0,
+      }),
+    );
+
+    const result = await load(searchGlobalMock);
+
+    expect(result.isOk() && result.value).toEqual([]);
+    const call = searchGlobalMock.mock.calls.at(0)?.[0];
+    expect(call).toMatchObject({
+      selectedWorkspaceIds: [workspaceId],
+      types: ["document", "folder", "task", "message", "link"],
+    });
+  });
+
+  test("answers unreadable provenance as a server error", async () => {
+    searchGlobalMock.mockResolvedValueOnce(
+      Result.err(
+        new ArtefactProvenanceDecodeError({
+          message: "Invalid stored artefact provenance",
+        }),
+      ),
+    );
+
+    const result = await load(searchGlobalMock);
+
+    expect(result.isErr() && result.error).toMatchObject({
+      status: 500,
+      message: "Search results could not be read",
+    });
+  });
 });

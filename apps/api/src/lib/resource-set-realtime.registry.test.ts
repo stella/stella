@@ -65,8 +65,6 @@ const UNCLASSIFIED_WRITE_CAPABILITIES: readonly string[] = [
   "legal-reader.annotations.delete",
   "legal-reader.annotations.update",
   "lists.verifications.claim-rechecks.create",
-  "lists.verifications.claim-reviews.bulk.create",
-  "lists.verifications.claim-reviews.create",
   "lists.verifications.create",
   "matters.cells.retry",
   "matters.correspondence.update",
