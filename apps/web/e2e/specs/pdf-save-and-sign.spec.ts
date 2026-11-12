@@ -1,6 +1,8 @@
 import type { Page, Request, Response, Route } from "@playwright/test";
 import { panic } from "better-result";
 
+import { toSafeId } from "@stll/api-contract/safe-id";
+
 import { apiStatus, apiUploadDocx } from "../helpers/api";
 import { apiJson, respond } from "../helpers/route-mock";
 import {
@@ -90,10 +92,12 @@ const holdHandoffs = async (page: Page) => {
 const releaseHandoff = async (route: Route) => {
   await respond(
     route,
-    apiJson("v1/entities/:entityId/pdf-signing-handoffs", "post", {
+    apiJson("v1/entities/:workspaceId/pdf-signing-handoffs", "post", {
       deepLinkUrl: "stella://pdf-sign/open?handoff=e2e",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      sessionId: "90123344-5566-7788-9900-aabbccddeeff",
+      sessionId: toSafeId<"pdfSigningSession">(
+        "90123344-5566-7788-9900-aabbccddeeff",
+      ),
     }),
   );
 };

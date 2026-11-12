@@ -24,12 +24,14 @@
  */
 import type { APIResponse, Route } from "@playwright/test";
 import type { StreamChunk } from "@tanstack/ai/client";
-import type { Organization } from "better-auth/plugins/organization";
+import type { signInSocial, signOut } from "better-auth/api";
+import type { emailOTP } from "better-auth/plugins/email-otp";
+import type { organization } from "better-auth/plugins/organization";
 import * as v from "valibot";
 
 import type { ApiErrorObjectValue } from "@stll/api-contract";
 
-import type { WebRoutes } from "@/generated/api-routes.gen";
+import type { WebRoutes } from "../../src/generated/api-routes.gen";
 
 type HttpMethod = "delete" | "get" | "patch" | "post" | "put";
 
@@ -46,11 +48,15 @@ type RouteNode<
     ? Tree[Path]
     : never;
 
-type OkBody<Node, Method extends HttpMethod> = Method extends keyof Node
-  ? Node[Method] extends { response: { 200: infer Body } }
-    ? Body
-    : never
-  : never;
+/** `never` for a path the tree does not hold: `keyof never` is every key, so
+ *  the node is checked before it is indexed. */
+type OkBody<Node, Method extends HttpMethod> = [Node] extends [never]
+  ? never
+  : Method extends keyof Node
+    ? Node[Method] extends { response: { 200: infer Body } }
+      ? Body
+      : never
+    : never;
 
 /** The JSON body an API route answers with on success. */
 export type ApiOk<Path extends string, Method extends HttpMethod> = OkBody<
@@ -114,22 +120,41 @@ export const contractJson = <const Schema extends v.GenericSchema>(
   return reply({ status: 200, json: body, ...(headers ? { headers } : {}) });
 };
 
-/** A record as JSON carries it: every `Date` arrives as its ISO string. */
+/** A record as JSON carries it: every `Date` arrives as its ISO string, and
+ *  a property that may be `undefined` may be missing. */
 type Json<Value> = Value extends Date
   ? string
   : Value extends readonly (infer Item)[]
     ? Json<Item>[]
     : Value extends object
-      ? { [Key in keyof Value]: Json<Value[Key]> }
+      ? {
+          [
+            Key in keyof Value as undefined extends Value[Key] ? never : Key
+          ]: Json<Value[Key]>;
+        } & {
+          [
+            Key in keyof Value as undefined extends Value[Key] ? Key : never
+          ]?: Json<Exclude<Value[Key], undefined>>;
+        }
       : Value;
 
+/** What an auth library endpoint resolves to when called without options:
+ *  the body it answers with. */
+type EndpointResult<Endpoint extends (...args: never[]) => Promise<unknown>> =
+  Json<Awaited<ReturnType<Endpoint>>>;
+
 /** The auth library's endpoints the specs answer. They sit outside the API
- *  route tree; each body is the library's own result for that endpoint. */
+ *  route tree; each body is read off the library's own endpoint, so a
+ *  library upgrade that changes one breaks its mocks here. */
 type AuthResponses = {
-  "email-otp/send-verification-otp": { success: boolean };
-  "organization/list": Json<Organization>[];
-  "sign-in/social": { url: string; redirect: boolean };
-  "sign-out": { success: boolean };
+  "email-otp/send-verification-otp": EndpointResult<
+    ReturnType<typeof emailOTP>["endpoints"]["sendVerificationOTP"]
+  >;
+  "organization/list": EndpointResult<
+    ReturnType<typeof organization>["endpoints"]["listOrganizations"]
+  >;
+  "sign-in/social": EndpointResult<ReturnType<typeof signInSocial>>;
+  "sign-out": EndpointResult<typeof signOut>;
 };
 
 /** The JSON body an auth library endpoint answers with. */
@@ -142,12 +167,16 @@ export const authJson = <const Endpoint extends keyof AuthResponses>(
   body: NoInfer<AuthOk<Endpoint>>,
 ): RouteReply => reply({ status: 200, json: body });
 
+const JSON_BODY_HINT = "use apiJson, contractJson or authJson for a JSON body";
+
 type NonJsonContentType<Type extends string> =
-  Type extends `${string}json${string}`
-    ? "use apiJson, contractJson or authJson for a JSON body"
+  Lowercase<Type> extends `${string}json${string}`
+    ? typeof JSON_BODY_HINT
     : Type;
 
-/** A non-JSON body: a page, a script, a stylesheet or a file. */
+/** A non-JSON body: a page, a script, a stylesheet or a file. The content
+ *  type is checked again at run time, in any letter case, and a header may
+ *  not set it, so no JSON body leaves without its typed builder. */
 export const staticBody = <const Type extends string>({
   contentType,
   body,
@@ -156,7 +185,18 @@ export const staticBody = <const Type extends string>({
   contentType: NonJsonContentType<Type>;
   body: string | Buffer;
   headers?: ReplyHeaders;
-}): RouteReply => reply({ contentType, body, ...(headers ? { headers } : {}) });
+}): RouteReply => {
+  if (/json/iu.test(contentType)) {
+    throw new Error(`${contentType}: ${JSON_BODY_HINT}`);
+  }
+  if (
+    headers !== undefined &&
+    Object.keys(headers).some((name) => name.toLowerCase() === "content-type")
+  ) {
+    throw new Error("Set a static body's content type with `contentType`");
+  }
+  return reply({ contentType, body, ...(headers ? { headers } : {}) });
+};
 
 /** A server-sent event stream of chat chunks. */
 export const eventStream = (events: readonly StreamChunk[]): RouteReply =>
@@ -171,7 +211,7 @@ export const emptyReply = (status: 204): RouteReply => reply({ status });
 /** Answer an intercepted request. `response` keeps a fetched response's
  *  headers when the reply replaces only its body. */
 export const respond = async (
-  route: Route,
+  route: Pick<Route, "fulfill">,
   answer: RouteReply,
   options: { response?: APIResponse } = {},
 ): Promise<void> => {
