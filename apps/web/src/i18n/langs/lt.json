@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, one {# failas jau buvo atnaujintas.} few {# failai jau buvo atnaujinti.} many {# failo jau buvo atnaujinta.} other {# failų jau buvo atnaujinta.}}",
       "created": "Importuota",
-      "done": "Failai importuoti iš SharePoint",
+      "done": "Failai importuoti iš SharePoint arba OneDrive",
       "failedReason": "Failo nepavyko nukopijuoti. Bandykite vėliau.",
       "partial": "Nepavyko importuoti {failed, number} iš {total, plural, one {# failo} few {# failų} many {# failo} other {# failų}}.",
       "progress": "Importuota {done, number} iš {total, number}",
       "unchanged": "Jau naujausias",
+      "unconfirmed": "Nepatvirtinta",
+      "unconfirmedReason": "Importavimas sustojo prieš patvirtinant šį failą. Importuokite jį dar kartą.",
       "versioned": "Nauja versija"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "Pasirinkite failus, kuriuos nukopijuoti į šią bylą (daugiausia {max, number}).",
       "emptyFolder": "Šis aplankas tuščias.",
-      "menuItem": "Iš SharePoint",
+      "menuItem": "Iš SharePoint arba OneDrive",
       "myOneDrive": "Mano OneDrive",
       "noFollowedSites": "Ieškokite svetainės arba atidarykite Mano OneDrive.",
       "noLibraries": "Čia nėra dokumentų bibliotekų.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "Daugiausia failų, kuriuos galima importuoti vienu metu: {max, number}.",
       "sites": "Svetainės",
       "throttledFor": "Microsoft riboja užklausas. Bandykite dar kartą po {seconds, plural, one {# sekundės} few {# sekundžių} many {# sekundės} other {# sekundžių}}.",
-      "title": "Importuoti iš SharePoint"
+      "title": "Importuoti iš SharePoint arba OneDrive"
     },
     "reconnectRequired": "Prisijungimas nebegalioja",
     "title": "SharePoint ir OneDrive"

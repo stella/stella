@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, zero {# failu jau bija atjaunināti.} one {# fails jau bija atjaunināts.} other {# faili jau bija atjaunināti.}}",
       "created": "Importēts",
-      "done": "Faili importēti no SharePoint",
+      "done": "Faili importēti no SharePoint vai OneDrive",
       "failedReason": "Failu neizdevās nokopēt. Mēģiniet vēlreiz vēlāk.",
       "partial": "Neizdevās importēt {failed, number} no {total, plural, zero {# failu} one {# faila} other {# failu}}.",
       "progress": "Importēti {done, number} no {total, number}",
       "unchanged": "Jau aktuāls",
+      "unconfirmed": "Nav apstiprināts",
+      "unconfirmedReason": "Importēšana apstājās, pirms šis fails tika apstiprināts. Importējiet to vēlreiz.",
       "versioned": "Jauna versija"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "Atlasiet failus, ko nokopēt uz šo lietu (ne vairāk kā {max, number}).",
       "emptyFolder": "Šī mape ir tukša.",
-      "menuItem": "No SharePoint",
+      "menuItem": "No SharePoint vai OneDrive",
       "myOneDrive": "Mans OneDrive",
       "noFollowedSites": "Meklējiet vietni vai atveriet Mans OneDrive.",
       "noLibraries": "Šeit nav dokumentu bibliotēku.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "Maksimālais failu skaits, ko var importēt vienlaikus: {max, number}.",
       "sites": "Vietnes",
       "throttledFor": "Microsoft ierobežo pieprasījumus. Mēģiniet vēlreiz pēc {seconds, plural, zero {# sekundēm} one {# sekundes} other {# sekundēm}}.",
-      "title": "Importēt no SharePoint"
+      "title": "Importēt no SharePoint vai OneDrive"
     },
     "reconnectRequired": "Pierakstīšanās beidzās",
     "title": "SharePoint un OneDrive"

@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, one {# plik był już aktualny.} few {# pliki były już aktualne.} many {# plików było już aktualnych.} other {# pliku było już aktualnych.}}",
       "created": "Zaimportowano",
-      "done": "Pliki zaimportowane z usługi SharePoint",
+      "done": "Zaimportowano pliki z usługi SharePoint lub OneDrive",
       "failedReason": "Nie udało się skopiować pliku. Spróbuj ponownie później.",
       "partial": "Nie udało się zaimportować {failed, number} z {total, plural, one {# pliku} few {# plików} many {# plików} other {# pliku}}.",
       "progress": "Zaimportowano {done, number} z {total, number}",
       "unchanged": "Już aktualny",
+      "unconfirmed": "Niepotwierdzone",
+      "unconfirmedReason": "Import zatrzymał się przed potwierdzeniem tego pliku. Zaimportuj go ponownie.",
       "versioned": "Nowa wersja"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "Wybierz pliki do skopiowania do tej sprawy (maksymalnie {max, number}).",
       "emptyFolder": "Ten folder jest pusty.",
-      "menuItem": "Z usługi SharePoint",
+      "menuItem": "Z usługi SharePoint lub OneDrive",
       "myOneDrive": "Mój OneDrive",
       "noFollowedSites": "Wyszukaj witrynę lub otwórz Mój OneDrive.",
       "noLibraries": "Brak bibliotek dokumentów.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "Maksymalna liczba plików importowanych jednocześnie: {max, number}.",
       "sites": "Witryny",
       "throttledFor": "Microsoft ogranicza liczbę żądań. Spróbuj ponownie za {seconds, plural, one {# sekundę} few {# sekundy} many {# sekund} other {# sekundy}}.",
-      "title": "Import z usługi SharePoint"
+      "title": "Importuj z usługi SharePoint lub OneDrive"
     },
     "reconnectRequired": "Logowanie wygasło",
     "title": "SharePoint i OneDrive"

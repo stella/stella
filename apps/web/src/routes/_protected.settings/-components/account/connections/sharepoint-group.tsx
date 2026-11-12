@@ -53,7 +53,8 @@ type SharepointRowState =
   | { type: "failed"; read: FailedSharepointRead };
 
 export type SharepointConnectionRow =
-  { visible: false } | { visible: true; state: SharepointRowState };
+  | { visible: false }
+  | { visible: true; state: SharepointRowState; access: SharepointAccessView };
 
 const rowState = (access: SharepointAccessView): SharepointRowState | null => {
   switch (access.type) {
@@ -81,7 +82,8 @@ export const useSharepointConnectionRow = (
   query: string,
 ): SharepointConnectionRow => {
   const t = useTranslations();
-  const state = rowState(useSharepointAccess());
+  const access = useSharepointAccess();
+  const state = rowState(access);
   if (state === null) {
     return { visible: false };
   }
@@ -94,12 +96,21 @@ export const useSharepointConnectionRow = (
     t("sharepoint.description"),
     accountLabel,
   ])
-    ? { visible: true, state }
+    ? { visible: true, state, access }
     : { visible: false };
 };
 
-/** The member's own Microsoft connection for SharePoint and OneDrive. */
-export const SharepointGroup = ({ state }: { state: SharepointRowState }) => {
+/**
+ * The member's own Microsoft connection for SharePoint and OneDrive. A failed
+ * refetch keeps the last known row and says so, with a retry.
+ */
+export const SharepointGroup = ({
+  state,
+  access,
+}: {
+  state: SharepointRowState;
+  access: SharepointAccessView;
+}) => {
   const t = useTranslations();
   return (
     <ListGroup aria-label={t("sharepoint.title")}>
@@ -111,6 +122,7 @@ export const SharepointGroup = ({ state }: { state: SharepointRowState }) => {
           <SharepointRowContent state={state} />
         </ListItem>
       </List>
+      {state.type !== "failed" && <QueryViewFeedback view={access} />}
     </ListGroup>
   );
 };

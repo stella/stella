@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, one {# súbor bol už aktuálny.} few {# súbory boli už aktuálne.} many {# súboru bolo už aktuálnych.} other {# súborov bolo už aktuálnych.}}",
       "created": "Importované",
-      "done": "Súbory importované zo služby SharePoint",
+      "done": "Súbory boli importované zo služby SharePoint alebo OneDrive",
       "failedReason": "Súbor sa nepodarilo skopírovať. Skúste to neskôr znova.",
       "partial": "Nepodarilo sa importovať {failed, number} z {total, plural, one {# súboru} few {# súborov} many {# súboru} other {# súborov}}.",
       "progress": "Importované {done, number} z {total, number}",
       "unchanged": "Už aktuálne",
+      "unconfirmed": "Nepotvrdené",
+      "unconfirmedReason": "Import sa zastavil skôr, ako bol tento súbor potvrdený. Importujte ho znova.",
       "versioned": "Nová verzia"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "Vyberte súbory na skopírovanie do tohto spisu (maximálne {max, number}).",
       "emptyFolder": "Tento priečinok je prázdny.",
-      "menuItem": "Zo služby SharePoint",
+      "menuItem": "Zo služby SharePoint alebo OneDrive",
       "myOneDrive": "Môj OneDrive",
       "noFollowedSites": "Vyhľadajte lokalitu alebo otvorte Môj OneDrive.",
       "noLibraries": "Žiadne knižnice dokumentov.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "Maximálny počet súborov importovaných naraz: {max, number}.",
       "sites": "Lokality",
       "throttledFor": "Microsoft obmedzuje počet požiadaviek. Skúste to znova o {seconds, plural, one {# sekundu} few {# sekundy} many {# sekundy} other {# sekúnd}}.",
-      "title": "Import zo služby SharePoint"
+      "title": "Import zo služby SharePoint alebo OneDrive"
     },
     "reconnectRequired": "Prihlásenie vypršalo",
     "title": "SharePoint a OneDrive"

@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, one {# fájl már naprakész volt.} other {# fájl már naprakész volt.}}",
       "created": "Importálva",
-      "done": "Fájlok importálva a SharePointból",
+      "done": "A fájlok importálva a SharePointból vagy a OneDrive-ból",
       "failedReason": "A fájlt nem sikerült átmásolni. Próbálja újra később.",
       "partial": "{total, plural, one {# fájlból} other {# fájlból}} {failed, number} importálása sikertelen volt.",
       "progress": "{total, number} fájlból {done, number} importálva",
       "unchanged": "Már naprakész",
+      "unconfirmed": "Nincs megerősítve",
+      "unconfirmedReason": "Az importálás leállt, mielőtt ez a fájl megerősítést kapott volna. Importálja újra.",
       "versioned": "Új verzió"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "Jelöljön ki legfeljebb {max, number} fájlt, hogy átmásolja ebbe az ügybe.",
       "emptyFolder": "Ez a mappa üres.",
-      "menuItem": "SharePointból",
+      "menuItem": "SharePointból vagy OneDrive-ból",
       "myOneDrive": "Saját OneDrive",
       "noFollowedSites": "Keressen egy webhelyet, vagy nyissa meg a Saját OneDrive-ot.",
       "noLibraries": "Itt nincsenek dokumentumtárak.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "Egyszerre legfeljebb {max, number} fájlt importálhat.",
       "sites": "Webhelyek",
       "throttledFor": "A Microsoft korlátozza a kéréseket. Próbálja újra {seconds, plural, one {# másodperc} other {# másodperc}} múlva.",
-      "title": "Importálás SharePointból"
+      "title": "Importálás SharePointból vagy OneDrive-ból"
     },
     "reconnectRequired": "A bejelentkezés lejárt",
     "title": "SharePoint és OneDrive"

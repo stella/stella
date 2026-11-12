@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, one {# soubor byl již aktuální.} few {# soubory byly již aktuální.} many {# souboru bylo již aktuální.} other {# souborů bylo již aktuálních.}}",
       "created": "Importováno",
-      "done": "Soubory importovány ze služby SharePoint",
+      "done": "Soubory byly importovány ze služby SharePoint nebo OneDrive",
       "failedReason": "Soubor se nepodařilo zkopírovat. Zkuste to později znovu.",
       "partial": "Nepodařilo se importovat {failed, number} z {total, plural, one {# souboru} few {# souborů} many {# souboru} other {# souborů}}.",
       "progress": "Importováno {done, number} z {total, number}",
       "unchanged": "Již aktuální",
+      "unconfirmed": "Nepotvrzeno",
+      "unconfirmedReason": "Import se zastavil dříve, než byl tento soubor potvrzen. Importujte ho znovu.",
       "versioned": "Nová verze"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "Vyberte soubory ke zkopírování do tohoto spisu (maximálně {max, number}).",
       "emptyFolder": "Tato složka je prázdná.",
-      "menuItem": "Ze služby SharePoint",
+      "menuItem": "Ze služby SharePoint nebo OneDrive",
       "myOneDrive": "Můj OneDrive",
       "noFollowedSites": "Vyhledejte web nebo otevřete Můj OneDrive.",
       "noLibraries": "Žádné knihovny dokumentů.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "Maximální počet souborů importovaných najednou: {max, number}.",
       "sites": "Weby",
       "throttledFor": "Microsoft omezuje počet požadavků. Zkuste to znovu za {seconds, plural, one {# sekundu} few {# sekundy} many {# sekundy} other {# sekund}}.",
-      "title": "Import ze služby SharePoint"
+      "title": "Import ze služby SharePoint nebo OneDrive"
     },
     "reconnectRequired": "Přihlášení vypršelo",
     "title": "SharePoint a OneDrive"

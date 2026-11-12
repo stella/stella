@@ -67,7 +67,13 @@ const ROOT_ITEMS = [
 type Connection =
   { status: "connected" | "reconnect_required" } | null | "unreadable";
 
-const mount = ({ connection }: { connection: Connection }) => {
+const mount = ({
+  connection,
+  importRounds = "single",
+}: {
+  connection: Connection;
+  importRounds?: "single" | "defer-then-fail";
+}) => {
   const imports: unknown[] = [];
   const childrenRequests: string[] = [];
   let connectionReads = 0;
@@ -120,6 +126,28 @@ const mount = ({ connection }: { connection: Connection }) => {
         pathname.includes("/sharepoint/imports/")
       ) {
         imports.push(await request.json());
+        if (importRounds === "defer-then-fail") {
+          // The first round stores one file and defers the other; the
+          // second round, which re-sends the deferred file, fails.
+          return imports.length === 1
+            ? Response.json({
+                results: [
+                  {
+                    driveId: DRIVE.id,
+                    itemId: "01CLAIM",
+                    status: "created",
+                    entityId: "entity-1",
+                    name: "Statement of claim.pdf",
+                    versionNumber: 1,
+                  },
+                  { driveId: DRIVE.id, itemId: "01REPLY", status: "deferred" },
+                ],
+              })
+            : Response.json(
+                { code: "internal_server_error", message: "Upstream failed" },
+                { status: 502 },
+              );
+        }
         return Response.json({
           results: [
             {
@@ -223,6 +251,46 @@ test("browses OneDrive, imports picked files into the open folder and lists each
     within(failedRow ?? document.body).getByText(messages.common.failed),
   ).toBeDefined();
   expect(screen.getByText(messages.sharepoint.import.created)).toBeDefined();
+});
+
+test("a later round that fails keeps the stored file and marks the rest unconfirmed", async () => {
+  const server = mount({
+    connection: { status: "connected" },
+    importRounds: "defer-then-fail",
+  });
+
+  fireEvent.click(
+    await screen.findByRole("button", { name: picker.myOneDrive }),
+  );
+  fireEvent.click(await screen.findByRole("button", { name: DRIVE.name }));
+  fireEvent.click(
+    await screen.findByRole("checkbox", { name: "Statement of claim.pdf" }),
+  );
+  fireEvent.click(screen.getByRole("checkbox", { name: "Reply.pdf" }));
+  fireEvent.click(screen.getByRole("button", { name: messages.common.import }));
+
+  const unconfirmed = await screen.findByText(
+    messages.sharepoint.import.unconfirmedReason,
+  );
+  expect(server.imports).toEqual([
+    {
+      items: [
+        { driveId: DRIVE.id, itemId: "01CLAIM" },
+        { driveId: DRIVE.id, itemId: "01REPLY" },
+      ],
+      parentId: PARENT_ID,
+    },
+    { items: [{ driveId: DRIVE.id, itemId: "01REPLY" }], parentId: PARENT_ID },
+  ]);
+  const unconfirmedRow = unconfirmed.closest("li") ?? document.body;
+  expect(within(unconfirmedRow).getByText("Reply.pdf")).toBeDefined();
+  expect(
+    within(unconfirmedRow).getByText(messages.sharepoint.import.unconfirmed),
+  ).toBeDefined();
+  const storedRow =
+    screen.getByText(messages.sharepoint.import.created).closest("li") ??
+    document.body;
+  expect(within(storedRow).getByText("Statement of claim.pdf")).toBeDefined();
 });
 
 test("the breadcrumb returns from a folder to its drive's top level", async () => {

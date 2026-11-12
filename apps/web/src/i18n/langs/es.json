@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, one {# archivo ya estaba actualizado.} many {# de archivos ya estaban actualizados.} other {# archivos ya estaban actualizados.}}",
       "created": "Importado",
-      "done": "Archivos importados desde SharePoint",
+      "done": "Archivos importados desde SharePoint u OneDrive",
       "failedReason": "No se pudo copiar el archivo. Inténtalo de nuevo más tarde.",
       "partial": "Falló la importación de {failed, number} de {total, plural, one {# archivo} many {# de archivos} other {# archivos}}.",
       "progress": "Importados {done, number} de {total, number}",
       "unchanged": "Ya actualizado",
+      "unconfirmed": "Sin confirmar",
+      "unconfirmedReason": "La importación se detuvo antes de confirmar este archivo. Vuelve a importarlo.",
       "versioned": "Nueva versión"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "Elige hasta {max, number} archivos para copiarlos a este asunto.",
       "emptyFolder": "Esta carpeta está vacía.",
-      "menuItem": "Desde SharePoint",
+      "menuItem": "Desde SharePoint u OneDrive",
       "myOneDrive": "Mi OneDrive",
       "noFollowedSites": "Busca un sitio o abre Mi OneDrive.",
       "noLibraries": "No hay bibliotecas de documentos aquí.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "Puedes importar hasta {max, number} archivos a la vez.",
       "sites": "Sitios",
       "throttledFor": "Microsoft está limitando las solicitudes. Inténtalo de nuevo en {seconds, plural, one {# segundo} many {# de segundos} other {# segundos}}.",
-      "title": "Importar desde SharePoint"
+      "title": "Importar desde SharePoint u OneDrive"
     },
     "reconnectRequired": "Inicio de sesión caducado",
     "title": "SharePoint y OneDrive"

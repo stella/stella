@@ -2,10 +2,11 @@ import { Fragment, type ReactNode, useState } from "react";
 
 import {
   useInfiniteQuery,
+  useIsMutating,
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -66,6 +67,7 @@ import {
   RETRY_AFTER_MS_DETAIL,
   unwrapApiResponse,
 } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatFileSize } from "@/lib/file-size";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -134,18 +136,34 @@ export const SharepointImportDialog = ({
   onOpenChange,
   workspaceId,
   parentId,
-}: SharepointImportDialogProps) => (
-  <Dialog onOpenChange={onOpenChange} open={open}>
-    {/* Mount only while open so each open starts at the site list. */}
-    {open ? (
-      <SharepointImportDialogBody
-        onClose={() => onOpenChange(false)}
-        parentId={parentId}
-        workspaceId={workspaceId}
-      />
-    ) : null}
-  </Dialog>
-);
+}: SharepointImportDialogProps) => {
+  // A running import keeps the dialog open: closing it would unmount the
+  // picker while files are still being written and lose their outcomes.
+  const importing =
+    useIsMutating({ mutationKey: sharepointImportMutationKey(workspaceId) }) >
+    0;
+  const requestOpenChange = (next: boolean) => {
+    if (!next && importing) {
+      return;
+    }
+    onOpenChange(next);
+  };
+  return (
+    <Dialog onOpenChange={requestOpenChange} open={open}>
+      {/* Mount only while open so each open starts at the site list. */}
+      {open ? (
+        <SharepointImportDialogBody
+          onClose={() => onOpenChange(false)}
+          parentId={parentId}
+          workspaceId={workspaceId}
+        />
+      ) : null}
+    </Dialog>
+  );
+};
+
+const sharepointImportMutationKey = (workspaceId: string) =>
+  ["sharepoint", "import", workspaceId] as const;
 
 const SharepointImportDialogBody = ({
   onClose,
@@ -201,7 +219,7 @@ const SharepointImportDialogBody = ({
         return (
           <SharepointBrowser
             onImported={(next) => {
-              if (next.failed === 0) {
+              if (next.failed === 0 && next.unconfirmed === 0) {
                 stellaToast.add({
                   title: t("sharepoint.import.done"),
                   ...(next.unchanged > 0 && {
@@ -236,7 +254,7 @@ const SharepointImportDialogBody = ({
                 max: SHAREPOINT_IMPORT_MAX_ITEMS,
               })
             : t("sharepoint.import.partial", {
-                failed: summary.failed,
+                failed: summary.failed + summary.unconfirmed,
                 total: summary.outcomes.length,
               })}
         </DialogDescription>
@@ -336,44 +354,67 @@ const postImportRound = async ({
 
 type ImportRoundResult = Awaited<ReturnType<typeof postImportRound>>[number];
 
+/**
+ * Every answer the rounds returned, and the failure that stopped a later
+ * round (`null` when the rounds ran to the end). Files the answers do not
+ * settle are reported as unconfirmed.
+ */
+type ImportRun = {
+  results: readonly ImportRoundResult[];
+  interruption: Error | null;
+};
+
 type ImportRoundsInput = {
   workspaceId: string;
   parentId: string | null;
   /** Every picked file, in pick order. */
   files: readonly SharepointSelectedFile[];
-  /** The files this round sends. */
-  pending: readonly SharepointSelectedFile[];
-  /** Every result the earlier rounds returned. */
+  /** The files the last round sent. */
+  sent: readonly SharepointSelectedFile[];
+  /** Every result the rounds so far returned. */
   results: readonly ImportRoundResult[];
   onProgress: (settled: number) => void;
 };
 
 /**
- * Sends rounds until no file is deferred. Each round sends only the files the
- * one before deferred, so it needs that answer first. A round that settles
- * nothing ends the run: its files stay deferred and the summary reports them
- * as unfinished, so a stuck budget cannot repeat forever.
+ * Re-sends the deferred files until none is left. Each round sends only the
+ * files the one before deferred, so it needs that answer first. A round that
+ * settles nothing ends the run, so a stuck budget cannot repeat forever. A
+ * round that fails ends it too, keeping what the earlier rounds stored.
  */
-const importInRounds = async ({
-  pending,
+const continueImport = async ({
+  sent,
   results,
   ...input
-}: ImportRoundsInput): Promise<readonly ImportRoundResult[]> => {
-  const round = await postImportRound({
-    workspaceId: input.workspaceId,
-    parentId: input.parentId,
-    files: pending,
-  });
-  const settled = [...results, ...round];
-  const deferred = deferredSharepointFiles(input.files, settled);
-  if (deferred.length === 0 || deferred.length >= pending.length) {
-    return settled;
+}: ImportRoundsInput): Promise<ImportRun> => {
+  const deferred = deferredSharepointFiles(input.files, results);
+  if (deferred.length === 0 || deferred.length >= sent.length) {
+    return { results, interruption: null };
   }
   input.onProgress(input.files.length - deferred.length);
-  return await importInRounds({
+  const round = await Result.tryPromise({
+    try: async () =>
+      await postImportRound({
+        workspaceId: input.workspaceId,
+        parentId: input.parentId,
+        files: deferred,
+      }),
+    catch: (cause) =>
+      cause instanceof Error
+        ? cause
+        : new ClientOperationError({
+            action: "sharepoint-import-round",
+            message: "A SharePoint import round failed",
+            cause,
+          }),
+  });
+  if (Result.isError(round)) {
+    return { results, interruption: round.error };
+  }
+  return await continueImport({
     ...input,
-    pending: deferred,
-    results: settled,
+    sent: deferred,
+    results: [...results, ...round.value],
   });
 };
 
@@ -405,42 +446,50 @@ const SharepointBrowser = ({
   // How many picked files have settled while an import runs in rounds.
   const [settledCount, setSettledCount] = useState(0);
 
+  const reportFailure = async (error: Error) => {
+    notifyUserError(error, t("errors.actionFailed"));
+    // A failed or timed-out request may still have stored some files before
+    // it ended, so the matter's documents are read again either way.
+    await queryClient.invalidateQueries({
+      queryKey: entitiesKeys.all(workspaceId),
+    });
+    // A lost grant shows the connect prompt in place of the picker.
+    const refusal = browseRefusal(error).type;
+    if (refusal === "not-connected" || refusal === "reconnect-required") {
+      await queryClient.invalidateQueries({
+        queryKey: sharepointAccessOptions(viewer).queryKey,
+      });
+    }
+  };
+
   const importFiles = useMutation({
+    mutationKey: sharepointImportMutationKey(workspaceId),
     mutationFn: async (files: readonly SharepointSelectedFile[]) => {
       setSettledCount(0);
-      return await importInRounds({
+      // The first round's failure is the import's failure; later rounds keep
+      // what the earlier ones stored.
+      const first = await postImportRound({ workspaceId, parentId, files });
+      return await continueImport({
         workspaceId,
         parentId,
         files,
-        pending: files,
-        results: [],
+        sent: files,
+        results: first,
         onProgress: setSettledCount,
       });
     },
-    onSuccess: async (results, files) => {
+    onSuccess: async ({ results, interruption }, files) => {
       const summary = summarizeSharepointImport(files, results);
-      if (summary.created + summary.versioned > 0) {
+      if (interruption !== null) {
+        await reportFailure(interruption);
+      } else if (summary.created + summary.versioned > 0) {
         await queryClient.invalidateQueries({
           queryKey: entitiesKeys.all(workspaceId),
         });
       }
       onImported(summary);
     },
-    onError: async (error) => {
-      notifyUserError(error, t("errors.actionFailed"));
-      // A failed or timed-out request may still have stored some files before
-      // it ended, so the matter's documents are read again either way.
-      await queryClient.invalidateQueries({
-        queryKey: entitiesKeys.all(workspaceId),
-      });
-      // A lost grant shows the connect prompt in place of the picker.
-      const refusal = browseRefusal(error).type;
-      if (refusal === "not-connected" || refusal === "reconnect-required") {
-        await queryClient.invalidateQueries({
-          queryKey: sharepointAccessOptions(viewer).queryKey,
-        });
-      }
-    },
+    onError: reportFailure,
   });
 
   const footerStatus = () => {
@@ -501,6 +550,7 @@ const SharepointBrowser = ({
         <LocationList
           full={full}
           location={location}
+          locked={importFiles.isPending}
           onNavigate={setLocation}
           onToggle={toggle}
           selection={selection}
@@ -513,7 +563,10 @@ const SharepointBrowser = ({
         >
           {footerStatus()}
         </p>
-        <DialogClose render={<Button variant="ghost" />}>
+        <DialogClose
+          disabled={importFiles.isPending}
+          render={<Button variant="ghost" />}
+        >
           {t("common.cancel")}
         </DialogClose>
         <Button
@@ -532,6 +585,8 @@ type LocationListProps = {
   location: SharepointPickerLocation;
   selection: readonly SharepointSelectedFile[];
   full: boolean;
+  /** The selection is being imported and cannot change. */
+  locked: boolean;
   onNavigate: (location: SharepointPickerLocation) => void;
   onToggle: (file: SharepointSelectedFile) => void;
 };
@@ -540,6 +595,7 @@ const LocationList = ({
   location,
   selection,
   full,
+  locked,
   onNavigate,
   onToggle,
 }: LocationListProps) => {
@@ -553,6 +609,7 @@ const LocationList = ({
         <FolderList
           full={full}
           location={location}
+          locked={locked}
           onNavigate={onNavigate}
           onToggle={onToggle}
           selection={selection}
@@ -850,6 +907,7 @@ const FolderList = ({
   location,
   selection,
   full,
+  locked,
   onNavigate,
   onToggle,
 }: Omit<LocationListProps, "location"> & {
@@ -906,7 +964,7 @@ const FolderList = ({
                   <Checkbox
                     aria-label={item.name}
                     checked={checked}
-                    disabled={!checked && full}
+                    disabled={locked || (!checked && full)}
                     onCheckedChange={() => onToggle(file)}
                   />
                   <ListItemMedia>
@@ -960,12 +1018,13 @@ const OUTCOME_PRESENTATION = {
   versioned: { tone: "success", label: "sharepoint.import.versioned" },
   unchanged: { tone: "neutral", label: "sharepoint.import.unchanged" },
   failed: { tone: "destructive", label: "common.failed" },
+  unconfirmed: { tone: "warning", label: "sharepoint.import.unconfirmed" },
 } as const satisfies Record<
   SharepointImportOutcome["status"],
   { tone: StatusTone; label: TranslationKey }
 >;
 
-/** Per-file outcomes after an import in which at least one file failed. */
+/** Per-file outcomes after an import in which a file failed or is unconfirmed. */
 const ImportResults = ({
   summary,
   onClose,
@@ -993,6 +1052,11 @@ const ImportResults = ({
                     <ListItemDescription variant="paragraph">
                       {apiCodeMessage(outcome.code) ??
                         t("sharepoint.import.failedReason")}
+                    </ListItemDescription>
+                  )}
+                  {outcome.status === "unconfirmed" && (
+                    <ListItemDescription variant="paragraph">
+                      {t("sharepoint.import.unconfirmedReason")}
                     </ListItemDescription>
                   )}
                 </ListItemContent>

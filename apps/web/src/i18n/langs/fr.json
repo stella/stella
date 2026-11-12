@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, one {# fichier était déjà à jour.} many {# de fichiers étaient déjà à jour.} other {# fichiers étaient déjà à jour.}}",
       "created": "Importé",
-      "done": "Fichiers importés depuis SharePoint",
+      "done": "Fichiers importés depuis SharePoint ou OneDrive",
       "failedReason": "Le fichier n’a pas pu être copié. Réessayez plus tard.",
       "partial": "L’importation a échoué pour {failed, number} sur {total, plural, one {# fichier} many {# de fichiers} other {# fichiers}}.",
       "progress": "{done, number} sur {total, number} importés",
       "unchanged": "Déjà à jour",
+      "unconfirmed": "Non confirmé",
+      "unconfirmedReason": "L'importation s'est arrêtée avant la confirmation de ce fichier. Importez-le à nouveau.",
       "versioned": "Nouvelle version"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "Choisissez jusqu’à {max, number} fichiers à copier dans ce dossier.",
       "emptyFolder": "Ce dossier est vide.",
-      "menuItem": "Depuis SharePoint",
+      "menuItem": "Depuis SharePoint ou OneDrive",
       "myOneDrive": "Mon OneDrive",
       "noFollowedSites": "Recherchez un site ou ouvrez Mon OneDrive.",
       "noLibraries": "Aucune bibliothèque de documents ici.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "Vous pouvez importer jusqu’à {max, number} fichiers à la fois.",
       "sites": "Sites SharePoint",
       "throttledFor": "Microsoft limite les requêtes. Réessayez dans {seconds, plural, one {# seconde} many {# de secondes} other {# secondes}}.",
-      "title": "Importer depuis SharePoint"
+      "title": "Importer depuis SharePoint ou OneDrive"
     },
     "reconnectRequired": "Connexion expirée",
     "title": "SharePoint et OneDrive"

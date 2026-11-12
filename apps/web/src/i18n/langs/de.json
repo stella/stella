@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, one {# Datei war bereits aktuell.} other {# Dateien waren bereits aktuell.}}",
       "created": "Importiert",
-      "done": "Dateien aus SharePoint importiert",
+      "done": "Dateien aus SharePoint oder OneDrive importiert",
       "failedReason": "Die Datei konnte nicht kopiert werden. Versuchen Sie es später erneut.",
       "partial": "Bei {failed, number} von {total, plural, one {# Datei} other {# Dateien}} ist der Import fehlgeschlagen.",
       "progress": "{done, number} von {total, number} importiert",
       "unchanged": "Bereits aktuell",
+      "unconfirmed": "Nicht bestätigt",
+      "unconfirmedReason": "Der Import wurde beendet, bevor diese Datei bestätigt war. Importieren Sie sie erneut.",
       "versioned": "Neue Version"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "Wählen Sie bis zu {max, number} Dateien aus, die in diese Akte kopiert werden sollen.",
       "emptyFolder": "Dieser Ordner ist leer.",
-      "menuItem": "Aus SharePoint",
+      "menuItem": "Aus SharePoint oder OneDrive",
       "myOneDrive": "Mein OneDrive",
       "noFollowedSites": "Suchen Sie nach einer Website oder öffnen Sie Mein OneDrive.",
       "noLibraries": "Hier gibt es keine Dokumentbibliotheken.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "Sie können bis zu {max, number} Dateien gleichzeitig importieren.",
       "sites": "Websites",
       "throttledFor": "Microsoft begrenzt die Anfragen. Versuchen Sie es in {seconds, plural, one {# Sekunde} other {# Sekunden}} erneut.",
-      "title": "Aus SharePoint importieren"
+      "title": "Aus SharePoint oder OneDrive importieren"
     },
     "reconnectRequired": "Anmeldung abgelaufen",
     "title": "SharePoint und OneDrive"

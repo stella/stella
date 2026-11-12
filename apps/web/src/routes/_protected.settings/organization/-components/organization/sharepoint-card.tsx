@@ -9,7 +9,10 @@ import { Switch } from "@stll/ui/switch";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SHAREPOINT_ACCESS } from "@/features/sharepoint/sharepoint-access.logic";
-import { useSharepointAccess } from "@/features/sharepoint/sharepoint-hooks";
+import {
+  type SharepointAccessView,
+  useSharepointAccess,
+} from "@/features/sharepoint/sharepoint-hooks";
 import { sharepointKeys } from "@/features/sharepoint/sharepoint-queries";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -50,12 +53,20 @@ export const SharepointCard = () => {
   }
   return (
     <SharepointEnablement
+      access={access}
       enabled={access.items.type === SHAREPOINT_ACCESS.enabled}
     />
   );
 };
 
-const SharepointEnablement = ({ enabled }: { enabled: boolean }) => {
+const SharepointEnablement = ({
+  access,
+  enabled,
+}: {
+  /** Shown when a refetch failed; the switch keeps the last known state. */
+  access: SharepointAccessView;
+  enabled: boolean;
+}) => {
   const t = useTranslations();
   const switchId = useId();
   const canEdit = usePermissions({ organizationSettings: ["update"] });
@@ -104,6 +115,7 @@ const SharepointEnablement = ({ enabled }: { enabled: boolean }) => {
               }}
             />
           </div>
+          <QueryViewFeedback view={access} />
         </FramePanel>
       </Frame>
       <DestructiveConfirmDialog

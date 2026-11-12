@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, one {# file was already up to date.} other {# files were already up to date.}}",
       "created": "Imported",
-      "done": "Files imported from SharePoint",
+      "done": "Files imported from SharePoint or OneDrive",
       "failedReason": "The file could not be copied. Try again later.",
       "partial": "{failed, number} of {total, plural, one {# file} other {# files}} could not be imported.",
       "progress": "Imported {done, number} of {total, number}",
       "unchanged": "Already up to date",
+      "unconfirmed": "Not confirmed",
+      "unconfirmedReason": "The import stopped before this file was confirmed. Import it again.",
       "versioned": "New version"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "Choose up to {max, number} files to copy into this matter.",
       "emptyFolder": "This folder is empty.",
-      "menuItem": "From SharePoint",
+      "menuItem": "From SharePoint or OneDrive",
       "myOneDrive": "My OneDrive",
       "noFollowedSites": "Search for a site, or open My OneDrive.",
       "noLibraries": "No document libraries here.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "You can import up to {max, number} files at a time.",
       "sites": "Sites",
       "throttledFor": "Microsoft is limiting requests. Try again in {seconds, plural, one {# second} other {# seconds}}.",
-      "title": "Import from SharePoint"
+      "title": "Import from SharePoint or OneDrive"
     },
     "reconnectRequired": "Sign-in expired",
     "title": "SharePoint and OneDrive"

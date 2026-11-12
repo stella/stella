@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, one {# fail oli juba ajakohane.} other {# faili olid juba ajakohased.}}",
       "created": "Imporditud",
-      "done": "Failid imporditud SharePointist",
+      "done": "Failid imporditi SharePointist või OneDrive'ist",
       "failedReason": "Faili ei õnnestunud kopeerida. Proovige hiljem uuesti.",
       "partial": "Ei õnnestunud importida {failed, number} faili (kokku {total, plural, one {# fail} other {# faili}}).",
       "progress": "Imporditud {done, number}/{total, number}",
       "unchanged": "Juba ajakohane",
+      "unconfirmed": "Kinnitamata",
+      "unconfirmedReason": "Import peatus enne selle faili kinnitamist. Importige see uuesti.",
       "versioned": "Uus versioon"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "Valige kuni {max, number} faili, mis sellesse toimikusse kopeerida.",
       "emptyFolder": "See kaust on tühi.",
-      "menuItem": "SharePointist",
+      "menuItem": "SharePointist või OneDrive'ist",
       "myOneDrive": "Minu OneDrive",
       "noFollowedSites": "Otsige saiti või avage Minu OneDrive.",
       "noLibraries": "Siin ei ole dokumenditeeke.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "Korraga saab importida kuni {max, number} faili.",
       "sites": "Saidid",
       "throttledFor": "Microsoft piirab päringuid. Proovige uuesti {seconds, plural, one {# sekundi} other {# sekundi}} pärast.",
-      "title": "Impordi SharePointist"
+      "title": "Impordi SharePointist või OneDrive'ist"
     },
     "reconnectRequired": "Sisselogimine aegus",
     "title": "SharePoint ja OneDrive"

@@ -211,15 +211,15 @@ type ImportResult = { driveId: string; itemId: string } & (
   | { status: "deferred" }
 );
 
-/** The code a file gets when rounds stopped while it was still deferred. */
-const UNFINISHED_IMPORT_CODE = "sharepoint_import_unfinished";
-
 export type SharepointImportOutcome = {
   key: string;
   name: string;
 } & (
   | { status: "created" | "versioned" | "unchanged" }
   | { status: "failed"; code: string }
+  // No answer settled this file: the rounds stopped while it was deferred,
+  // or a later round failed before reaching it. It may or may not be stored.
+  | { status: "unconfirmed" }
 );
 
 export type SharepointImportSummary = {
@@ -227,6 +227,7 @@ export type SharepointImportSummary = {
   versioned: number;
   unchanged: number;
   failed: number;
+  unconfirmed: number;
   /** One line per requested file, in the order the files were picked. */
   outcomes: SharepointImportOutcome[];
 };
@@ -256,7 +257,7 @@ export const deferredSharepointFiles = (
 /**
  * Per-file outcomes of one import, named after the picked files: a failed
  * result carries no name of its own. A picked file with no result, or one
- * still deferred when the rounds stopped, is a failure, never a silent
+ * still deferred when the rounds stopped, is unconfirmed, never a silent
  * success.
  */
 export const summarizeSharepointImport = (
@@ -268,7 +269,7 @@ export const summarizeSharepointImport = (
     const key = resultKey(file);
     const result = byKey.get(key);
     if (result === undefined) {
-      return { key, name: file.name, status: "failed", code: "missing" };
+      return { key, name: file.name, status: "unconfirmed" };
     }
     switch (result.status) {
       case "created":
@@ -278,12 +279,7 @@ export const summarizeSharepointImport = (
       case "failed":
         return { key, name: file.name, status: "failed", code: result.code };
       case "deferred":
-        return {
-          key,
-          name: file.name,
-          status: "failed",
-          code: UNFINISHED_IMPORT_CODE,
-        };
+        return { key, name: file.name, status: "unconfirmed" };
       default:
         result satisfies never;
         return panic("Unknown SharePoint import status");
@@ -296,6 +292,7 @@ export const summarizeSharepointImport = (
     versioned: count("versioned"),
     unchanged: count("unchanged"),
     failed: count("failed"),
+    unconfirmed: count("unconfirmed"),
     outcomes,
   };
 };

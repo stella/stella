@@ -241,7 +241,7 @@ describe("SharePoint import summary", () => {
     });
   });
 
-  test("a picked file the answer does not mention counts as failed", () => {
+  test("a picked file the answer does not mention is unconfirmed, not imported", () => {
     const summary = summarizeSharepointImport(
       [fileNumbered(1), fileNumbered(2)],
       [
@@ -254,9 +254,13 @@ describe("SharePoint import summary", () => {
       ],
     );
 
-    expect(summary.failed).toBe(1);
+    expect(summary.unconfirmed).toBe(1);
     expect(
-      summary.created + summary.versioned + summary.unchanged + summary.failed,
+      summary.created +
+        summary.versioned +
+        summary.unchanged +
+        summary.failed +
+        summary.unconfirmed,
     ).toBe(summary.outcomes.length);
   });
 });
@@ -301,17 +305,17 @@ describe("SharePoint import rounds", () => {
     });
   });
 
-  test("a file still deferred when the rounds stop is reported as failed", () => {
+  test("a file still deferred when the rounds stop is unconfirmed, and earlier results stay", () => {
     const summary = summarizeSharepointImport(picked, [
       created(1),
       created(2),
       deferred(3),
     ]);
 
-    expect(summary.failed).toBe(1);
+    expect(summary).toMatchObject({ created: 2, failed: 0, unconfirmed: 1 });
     expect(summary.outcomes.at(2)).toMatchObject({
       name: "Statement of claim 3.docx",
-      status: "failed",
+      status: "unconfirmed",
     });
   });
 });

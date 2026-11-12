@@ -5961,11 +5961,13 @@
     "import": {
       "alreadyCurrent": "{count, plural, zero {# ملف كانت محدّثة بالفعل.} one {# ملف كان محدّثًا بالفعل.} two {# ملفين كانا محدّثين بالفعل.} few {# ملفات كانت محدّثة بالفعل.} many {# ملفًا كانت محدّثة بالفعل.} other {# ملف كانت محدّثة بالفعل.}}",
       "created": "تم الاستيراد",
-      "done": "تم استيراد الملفات من SharePoint",
+      "done": "تم استيراد الملفات من SharePoint أو OneDrive",
       "failedReason": "تعذّر نسخ الملف. حاول مرة أخرى لاحقًا.",
       "partial": "تعذّر استيراد {failed, number} من أصل {total, plural, zero {# ملف} one {# ملف} two {# ملفين} few {# ملفات} many {# ملفًا} other {# ملف}}.",
       "progress": "تم استيراد {done, number} من {total, number}",
       "unchanged": "محدّث بالفعل",
+      "unconfirmed": "غير مؤكد",
+      "unconfirmedReason": "توقف الاستيراد قبل تأكيد هذا الملف. استورده مرة أخرى.",
       "versioned": "إصدار جديد"
     },
     "oauthReasons": {
@@ -5979,7 +5981,7 @@
     "picker": {
       "description": "اختر الملفات المراد نسخها إلى هذا الملف القانوني (بحد أقصى {max, number}).",
       "emptyFolder": "هذا المجلد فارغ.",
-      "menuItem": "من SharePoint",
+      "menuItem": "من SharePoint أو OneDrive",
       "myOneDrive": "OneDrive الخاص بي",
       "noFollowedSites": "ابحث عن موقع أو افتح OneDrive الخاص بي.",
       "noLibraries": "لا توجد مكتبات مستندات هنا.",
@@ -5991,7 +5993,7 @@
       "selectionLimit": "الحد الأقصى لعدد الملفات التي يمكن استيرادها دفعة واحدة: {max, number}.",
       "sites": "المواقع",
       "throttledFor": "تحدّ Microsoft من عدد الطلبات. حاول مرة أخرى بعد {seconds, plural, zero {# ثانية} one {# ثانية} two {# ثانيتين} few {# ثوانٍ} many {# ثانية} other {# ثانية}}.",
-      "title": "الاستيراد من SharePoint"
+      "title": "استيراد من SharePoint أو OneDrive"
     },
     "reconnectRequired": "انتهت صلاحية تسجيل الدخول",
     "title": "SharePoint وOneDrive"
