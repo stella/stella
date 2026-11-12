@@ -1,4 +1,4 @@
-import { PDF, PdfBool } from "@libpdf/core";
+import { PDF, PdfBool, PdfNumber, PdfString } from "@libpdf/core";
 import { beforeEach, describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
@@ -612,6 +612,8 @@ describe("two-phase PDF signing", () => {
 
   describe("a form that leaves its appearances to the viewer", () => {
     const FIELD_VALUE = "Jana Nováková";
+    const DRAWN_TOTAL = "100";
+    const CURRENT_TOTAL = "120";
 
     /**
      * What a producer relying on `/NeedAppearances true` writes: field
@@ -630,6 +632,13 @@ describe("two-phase PDF signing", () => {
       for (const widget of name.getWidgets()) {
         widget.dict.delete("AP");
       }
+      // A read-only field whose appearance shows an older value: a viewer
+      // honouring the flag draws the current one.
+      const total = form.createTextField("total");
+      page.drawField(total, { x: 20, y: 260, width: 200, height: 24 });
+      total.setValue(DRAWN_TOTAL);
+      total.acroField().set("Ff", PdfNumber.of(1));
+      total.acroField().set("V", PdfString.fromString(CURRENT_TOTAL));
       form.acroForm().getDict().set("NeedAppearances", PdfBool.of(true));
       // LibPDF sets SigFlags on adding a field, as a form with an empty
       // signature field carries them: that alone is no signature.
@@ -682,6 +691,14 @@ describe("two-phase PDF signing", () => {
           ?.getWidgets()
           .every((widget) => widget.hasNormalAppearance()),
       ).toBe(true);
+      const total = form?.getTextField("total");
+      expect(total?.isReadOnly()).toBe(true);
+      expect(
+        Buffer.from(
+          total?.getWidgets().at(0)?.getNormalAppearance()?.getDecodedData() ??
+            [],
+        ).toString("latin1"),
+      ).toContain(`(${CURRENT_TOTAL})`);
       expect(applied.warnings.map(({ code }) => code)).toEqual([]);
     });
 
