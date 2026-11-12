@@ -307,10 +307,10 @@ export const CHRONOLOGY_LIST_DOCUMENTS = 3;
 
 /**
  * The list's chronology export, measured on the mounted handler: a row per
- * fact of the list, read through every page of its graph. A list's own
- * verified documents are bounded by the export's page limit (past it the
- * export is refused); what must not grow its cost is everything else the
- * matter verified.
+ * fact of the list, read as one page of its graph. A list's own verified
+ * documents are bounded by the export's limits (past them the export is
+ * refused); what must not grow its cost is everything else the matter
+ * verified.
  */
 export const verificationChronologyScalingScenarios = [
   {

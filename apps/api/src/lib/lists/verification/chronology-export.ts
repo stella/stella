@@ -4,11 +4,12 @@
  * nobody dated last, each with the document it first comes from and the
  * claims that cite it with the verdict reviewers see now.
  *
- * Read through the verification graph (`readVerificationGraph`), page by
- * page, so a row says what the graph says: the same claims, verdicts and
- * sources, read with the same owners (`gradeOf`, `reviewedView`). Bounded:
- * a list holding more facts than the graph carries, or verified past
- * `CHRONOLOGY_EXPORT_PAGES_MAX` pages, is refused, never exported in part.
+ * Read as one page of the verification graph (`readVerificationGraph`), so
+ * a row says what the graph says: the same claims, verdicts and sources,
+ * read with the same owners (`gradeOf`, `reviewedView`). Bounded: a list
+ * holding more facts than the graph carries, or verified past
+ * `CHRONOLOGY_EXPORT_DOCUMENTS_MAX` documents or
+ * `CHRONOLOGY_EXPORT_CLAIMS_MAX` claims, is refused, never exported in part.
  */
 
 import { panic } from "better-result";
@@ -22,14 +23,8 @@ import type {
   ClaimReviewStatus,
   ClaimState,
 } from "@/api/lib/lists/verification/contract";
-import {
-  readVerificationGraph,
-  verificationGraphCursor,
-} from "@/api/lib/lists/verification/graph-read";
-import type {
-  ReadVerificationGraphOutcome,
-  VerificationGraphCursor,
-} from "@/api/lib/lists/verification/graph-read";
+import { readVerificationGraph } from "@/api/lib/lists/verification/graph-read";
+import type { ReadVerificationGraphOutcome } from "@/api/lib/lists/verification/graph-read";
 
 type GraphRead = Extract<ReadVerificationGraphOutcome, { type: "read" }>;
 export type ChronologyGraphPage = Pick<
@@ -118,39 +113,15 @@ const placeIn = (locator: LegalListSourceLocator): string | null => {
   }
 };
 
-/**
- * The chronology rows of a list read as graph pages. Every page carries the
- * list's facts; the claims and their links are the union of the pages.
- * Ties on a date keep the list's order.
- */
-export const chronologyRows = (
-  pages: readonly ChronologyGraphPage[],
-): ChronologyRow[] => {
-  const first = pages.at(0);
-  if (first === undefined) {
-    return [];
-  }
-  const facts = first.facts.filter((fact) => fact.listed);
-  const listOrder = new Map(facts.map((fact, index) => [fact.id, index]));
-  const sourceName = new Map(
-    pages.flatMap((page) =>
-      page.sources.map((source) => [source.id, source.name] as const),
-    ),
-  );
+/** Each claim citing a fact, as one line: where it sits, its words and the
+ *  verdict reviewers see. */
+const citingLines = (page: ChronologyGraphPage): Map<string, string[]> => {
   const statementName = new Map(
-    pages.flatMap((page) =>
-      page.statements.map(
-        (statement) => [statement.id, statement.name] as const,
-      ),
-    ),
+    page.statements.map((statement) => [statement.id, statement.name]),
   );
-  const claims = new Map(
-    pages.flatMap((page) =>
-      page.claims.map((claim) => [claim.id, claim] as const),
-    ),
-  );
-  const citingClaims = new Map<string, string[]>();
-  for (const citation of pages.flatMap((page) => page.citations)) {
+  const claims = new Map(page.claims.map((claim) => [claim.id, claim]));
+  const lines = new Map<string, string[]>();
+  for (const citation of page.citations) {
     const claim =
       claims.get(citation.claimId) ??
       panic("A graph citation names a claim its page does not carry");
@@ -163,20 +134,44 @@ export const chronologyRows = (
       claim.reviewStatus === null
         ? STATE_LABEL[claim.state]
         : `${STATE_LABEL[claim.state]}, ${REVIEW_LABEL[claim.reviewStatus]}`;
-    const cited = citingClaims.get(citation.factId) ?? [];
-    cited.push(`${place}: ${claim.text} (${verdict})`);
-    citingClaims.set(citation.factId, cited);
+    const line = `${place}: ${claim.text} (${verdict})`;
+    const cited = lines.get(citation.factId);
+    if (cited === undefined) {
+      lines.set(citation.factId, [line]);
+    } else {
+      cited.push(line);
+    }
   }
-  const firstSource = new Map<string, string>();
-  for (const edge of first.provenance) {
-    if (firstSource.has(edge.factId)) {
+  return lines;
+};
+
+/** The first source of each fact, with its page when it has one. */
+const firstSources = (page: ChronologyGraphPage): Map<string, string> => {
+  const sourceName = new Map(
+    page.sources.map((source) => [source.id, source.name]),
+  );
+  const first = new Map<string, string>();
+  for (const edge of page.provenance) {
+    if (first.has(edge.factId)) {
       continue;
     }
     const name = sourceName.get(edge.sourceId) ?? "";
     const place = placeIn(edge.locator);
-    firstSource.set(edge.factId, place === null ? name : `${name}, ${place}`);
+    first.set(edge.factId, place === null ? name : `${name}, ${place}`);
   }
+  return first;
+};
 
+/**
+ * The chronology rows of a list read as one graph page: the facts on the
+ * list, dated ones in the order they happened (ties keep the list's order),
+ * undated ones last.
+ */
+export const chronologyRows = (page: ChronologyGraphPage): ChronologyRow[] => {
+  const facts = page.facts.filter((fact) => fact.listed);
+  const listOrder = new Map(facts.map((fact, index) => [fact.id, index]));
+  const citing = citingLines(page);
+  const sources = firstSources(page);
   const dated = facts
     .filter((fact) => fact.occurredOn !== null)
     .toSorted(
@@ -194,8 +189,8 @@ export const chronologyRows = (
         ? ""
         : dateAtPrecision(fact.occurredOn, fact.occurredOnPrecision),
     fact: fact.text,
-    source: firstSource.get(fact.id) ?? "",
-    claims: (citingClaims.get(fact.id) ?? []).join("\n"),
+    source: sources.get(fact.id) ?? "",
+    claims: citing.get(fact.id)?.join("\n") ?? "",
   }));
 };
 
@@ -207,55 +202,34 @@ type ReadChronologyArgs = {
 
 export type ReadChronologyOutcome =
   | { type: "list-not-found" }
-  /** The list holds more facts, or was verified past more pages, than one
-   *  export reads. */
-  | { type: "too-large"; bound: "facts" | "pages" }
+  /** The list holds more facts, or was verified past more documents or
+   *  claims, than one export reads. */
+  | { type: "too-large"; bound: "facts" | "documents" }
   | { type: "read"; rows: ChronologyRow[]; runs: GraphRead["runs"] };
 
-/** The chronology of a list, read through every page of its graph. */
+/** The chronology of a list, read as one page of its graph that must hold
+ *  every verified document whole. */
 export const readVerificationChronology = async ({
   tx,
   workspaceId,
   listId,
 }: ReadChronologyArgs): Promise<ReadChronologyOutcome> => {
-  const pages: ChronologyGraphPage[] = [];
-  // A document split across pages delivers its run on each; it is audited
-  // once.
-  const runs = new Map<string, GraphRead["runs"][number]>();
-  let cursor: VerificationGraphCursor | null = null;
-  for (
-    let page = 0;
-    page < VERIFICATION_LIMITS.CHRONOLOGY_EXPORT_PAGES_MAX;
-    page += 1
-  ) {
-    // db-await-in-loop: each page resumes at the cursor the page before it issued, at most CHRONOLOGY_EXPORT_PAGES_MAX pages.
-    const read = await readVerificationGraph({
-      tx,
-      workspaceId,
-      listId,
-      cursor,
-      limit: VERIFICATION_LIMITS.GRAPH_CLAIMS_PAGE_MAX,
-    });
-    if (read.type === "list-not-found") {
-      return read;
-    }
-    if (read.graph.factOverflow) {
-      return { type: "too-large", bound: "facts" };
-    }
-    pages.push(read.graph);
-    for (const run of read.runs) {
-      runs.set(run.id, run);
-    }
-    if (read.graph.nextCursor === null) {
-      return {
-        type: "read",
-        rows: chronologyRows(pages),
-        runs: [...runs.values()],
-      };
-    }
-    cursor =
-      verificationGraphCursor.decode(read.graph.nextCursor) ??
-      panic("The graph issued a cursor it cannot read");
+  const read = await readVerificationGraph({
+    tx,
+    workspaceId,
+    listId,
+    cursor: null,
+    limit: VERIFICATION_LIMITS.CHRONOLOGY_EXPORT_CLAIMS_MAX,
+    documents: VERIFICATION_LIMITS.CHRONOLOGY_EXPORT_DOCUMENTS_MAX,
+  });
+  if (read.type === "list-not-found") {
+    return read;
   }
-  return { type: "too-large", bound: "pages" };
+  if (read.graph.factOverflow) {
+    return { type: "too-large", bound: "facts" };
+  }
+  if (read.graph.nextCursor !== null) {
+    return { type: "too-large", bound: "documents" };
+  }
+  return { type: "read", rows: chronologyRows(read.graph), runs: read.runs };
 };

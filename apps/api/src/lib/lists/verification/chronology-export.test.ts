@@ -103,7 +103,7 @@ const page = (
 
 describe("chronologyRows", () => {
   test("orders the list's facts as they happened, coarser dates first on a day, undated last", () => {
-    const rows = chronologyRows([page([], [])]);
+    const rows = chronologyRows(page([], []));
     expect(rows.map(({ date, fact: text }) => [date, text])).toEqual([
       ["2021", "Fact 3"],
       ["2021-08", "Fact 4"],
@@ -113,11 +113,10 @@ describe("chronologyRows", () => {
     ]);
   });
 
-  test("names the first source with its page, and every citing claim across pages with its verdict", () => {
-    const rows = chronologyRows([
-      page([claim(1, 1, 11)], [statement(1)]),
-      page([claim(2, 2, null)], [statement(2)]),
-    ]);
+  test("names the first source with its page, and every citing claim with where it sits and its verdict", () => {
+    const rows = chronologyRows(
+      page([claim(1, 1, 11), claim(2, 2, null)], [statement(1), statement(2)]),
+    );
     const cited = rows.find(({ fact: text }) => text === "Fact 1");
     expect(cited).toEqual({
       date: "2021-08-23",
@@ -133,7 +132,8 @@ describe("chronologyRows", () => {
     );
   });
 
-  test("a list read as no page has no rows", () => {
-    expect(chronologyRows([])).toEqual([]);
+  test("a fact off the list is no row, even when a claim cites it", () => {
+    const rows = chronologyRows(page([], []));
+    expect(rows.map(({ fact: text }) => text)).not.toContain("Fact 6");
   });
 });

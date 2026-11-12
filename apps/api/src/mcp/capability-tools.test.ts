@@ -364,10 +364,6 @@ describe("list verification access grants across MCP tools", () => {
       params,
       query: { listId: resourceId },
     },
-    "lists.verifications.chronology.export": {
-      params,
-      query: { listId: resourceId, format: "csv" },
-    },
     "lists.verifications.latest.list": {
       params,
       body: { documents: [{ entityId: resourceId, fileFieldId: resourceId }] },
@@ -971,12 +967,6 @@ describe("list verification access grants across MCP tools", () => {
           ...confirmation(capability),
         },
       });
-      if (capability === "lists.verifications.chronology.export") {
-        // A file the generic transport cannot carry is refused before
-        // validation would call it runnable.
-        expect(errorEnvelope(result).code).toBe("feature_disabled");
-        continue;
-      }
       expect(
         asTestRaw<{ valid: boolean; capability: string }>(
           parseToolPayload(result),
@@ -1092,11 +1082,6 @@ describe("list verification access grants across MCP tools", () => {
         ).toEqual({
           runs: [],
         });
-      } else if (capability === "lists.verifications.chronology.export") {
-        // A file the generic transport cannot carry: refused before it
-        // reads anything, naming the graph read as the JSON alternative.
-        expect(errorEnvelope(result).code).toBe("feature_disabled");
-        expect(fixture.resourceLookups()).toBe(0);
       } else if (capability === "lists.verifications.graph.get") {
         // The fixture's list holds nothing verified yet.
         expect(result.isError).not.toBe(true);

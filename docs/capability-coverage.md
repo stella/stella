@@ -346,7 +346,6 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.source-documents.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists source-documents-list` |
 | `lists.source-documents.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists source-documents-update` |
 | `lists.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists update` |
-| `lists.verifications.chronology.export` | read | stella:read | FEATURE_LEGAL_LISTS | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. lists.verifications.graph.get covers part of this: returns the same facts, sources and citing claims page by page as JSON; the downloadable table is not produced |
 | `lists.verifications.claim-comments.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-create` |
 | `lists.verifications.claim-comments.delete` | write, destructive | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-delete` |
 | `lists.verifications.claim-comments.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-list` |

@@ -6,8 +6,8 @@
  * standing and tier (`readFactStandings`). `graph.ts` decides what the rows
  * say; this file only gathers them.
  *
- * Bounded by construction: a page reads at most
- * `GRAPH_STATEMENTS_PAGE_MAX` documents and `limit` claims (a document with
+ * Bounded by construction: a page reads at most `documents` (by default
+ * `GRAPH_STATEMENTS_PAGE_MAX`) documents and `limit` claims (a document with
  * more continues on the next page, its run pinned in the cursor), and the
  * list's first `GRAPH_FACTS_MAX` facts. The documents are found through the
  * list-and-document index of finished runs, never by reading every run's
@@ -123,6 +123,9 @@ type ReadVerificationGraphArgs = {
   cursor: VerificationGraphCursor | null;
   /** Claims this page may carry. */
   limit: number;
+  /** Documents this page may carry; `GRAPH_STATEMENTS_PAGE_MAX` unless a
+   *  reader of the whole list (the chronology export) bounds it itself. */
+  documents?: number;
 };
 
 type StatementRow = {
@@ -140,7 +143,10 @@ const readStatementRows = async ({
   workspaceId,
   listId,
   cursor,
-}: Omit<ReadVerificationGraphArgs, "limit">): Promise<StatementRow[]> => {
+  documents,
+}: Omit<ReadVerificationGraphArgs, "limit" | "documents"> & {
+  documents: number;
+}): Promise<StatementRow[]> => {
   const after =
     cursor === null
       ? undefined
@@ -166,7 +172,7 @@ const readStatementRows = async ({
       desc(runs.createdAt),
       desc(runs.id),
     )
-    .limit(VERIFICATION_LIMITS.GRAPH_STATEMENTS_PAGE_MAX + 1);
+    .limit(documents + 1);
   if (cursor === null) {
     return rows;
   }
@@ -223,17 +229,16 @@ const planPage = async ({
   cursor,
   rows,
   limit,
+  documents,
 }: {
   tx: Pick<Transaction, "select">;
   workspaceId: SafeId<"workspace">;
   cursor: VerificationGraphCursor | null;
   rows: StatementRow[];
   limit: number;
+  documents: number;
 }): Promise<PagePlan> => {
-  const candidates = rows.slice(
-    0,
-    VERIFICATION_LIMITS.GRAPH_STATEMENTS_PAGE_MAX,
-  );
+  const candidates = rows.slice(0, documents);
   if (candidates.length === 0) {
     return { statements: [], ranges: [], totals: new Map(), next: null };
   }
@@ -602,6 +607,7 @@ export const readVerificationGraph = async ({
   listId,
   cursor,
   limit,
+  documents = VERIFICATION_LIMITS.GRAPH_STATEMENTS_PAGE_MAX,
 }: ReadVerificationGraphArgs): Promise<ReadVerificationGraphOutcome> => {
   const list = await tx
     .select({ id: legalLists.id })
@@ -614,8 +620,21 @@ export const readVerificationGraph = async ({
     return { type: "list-not-found" };
   }
 
-  const rows = await readStatementRows({ tx, workspaceId, listId, cursor });
-  const plan = await planPage({ tx, workspaceId, cursor, rows, limit });
+  const rows = await readStatementRows({
+    tx,
+    workspaceId,
+    listId,
+    cursor,
+    documents,
+  });
+  const plan = await planPage({
+    tx,
+    workspaceId,
+    cursor,
+    rows,
+    limit,
+    documents,
+  });
   const runIds = plan.statements.map((statement) => statement.runId);
   const runById = new Map(
     (await readRunsWithEvidence({ tx, workspaceId, runIds })).map((run) => [

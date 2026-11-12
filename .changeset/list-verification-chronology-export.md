@@ -2,4 +2,4 @@
 "@stll/cli": patch
 ---
 
-Add `lists.verifications.chronology.export`: downloads the chronology of one list as a DOCX or CSV table, a row per fact in the order it happened with its first source and the claims citing it with their verdict. `lists.verifications.graph.get` now gives each claim's printed paragraph number (`paragraph`) and each source link's `quote`.
+`lists.verifications.graph.get` gives each claim the printed number of the paragraph it sits in (`paragraph`) and each source link the source's `quote`; `lists.verifications.get` gives each claim its `paragraph`.

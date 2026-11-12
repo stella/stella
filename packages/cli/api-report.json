@@ -213,7 +213,6 @@
         "./capabilities/lists.source-documents.list.json",
         "./capabilities/lists.source-documents.update.json",
         "./capabilities/lists.update.json",
-        "./capabilities/lists.verifications.chronology.export.json",
         "./capabilities/lists.verifications.claim-comments.create.json",
         "./capabilities/lists.verifications.claim-comments.delete.json",
         "./capabilities/lists.verifications.claim-comments.list.json",

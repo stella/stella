@@ -59,22 +59,9 @@ const config = {
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
-  mcp: {
-    type: "capability",
-    readClass: "tenant",
-    reason: "document_processing",
-    consumesServices: false,
-  },
-  transport: {
-    type: "file-response",
-    response: { mediaTypes: [CONTENT_TYPE.docx, CONTENT_TYPE.csv] },
-    alternative: {
-      type: "partial",
-      via: ["lists.verifications.graph.get"],
-      limitation:
-        "returns the same facts, sources and citing claims page by page as JSON; the downloadable table is not produced",
-    },
-  },
+  // A file for people to download: agents read the same facts, sources and
+  // citing claims as JSON through lists.verifications.graph.get.
+  mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({}),
   query: v.object({
     listId: resourceIdSchema("legalList"),
@@ -159,7 +146,7 @@ const exportVerificationChronology = createSafeHandler(
             message:
               outcome.bound === "facts"
                 ? `The list holds more than ${String(VERIFICATION_LIMITS.GRAPH_FACTS_MAX)} facts, more than one chronology export reads.`
-                : "The list's verified documents hold more claims than one chronology export reads.",
+                : `The list's verified documents number more than ${String(VERIFICATION_LIMITS.CHRONOLOGY_EXPORT_DOCUMENTS_MAX)} or hold more than ${String(VERIFICATION_LIMITS.CHRONOLOGY_EXPORT_CLAIMS_MAX)} claims, more than one chronology export reads.`,
           }),
         );
       }

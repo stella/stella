@@ -232,6 +232,7 @@ describe("chronologyOf", () => {
         factId: graphFactId(2),
         sourceId: sourceId(2),
         locator: { type: "pdf-page", pageNumber: 14 },
+        quote: null,
         name: "Ledger export.pdf",
       },
     ]);
