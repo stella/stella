@@ -465,11 +465,7 @@ describe("a row the court lists without its stored identity is recaptured by doc
     return served;
   };
 
-  const recapture =
-    czNsAdapter.reconciliation.recapture ??
-    (() => {
-      throw new TypeError("cz-ns declares no recapture");
-    })();
+  const recapture = czNsAdapter.reconciliation.recapture;
 
   /** The decision a crawl of the listed row stores. */
   const crawled = async (): Promise<IngestionResult> => {
@@ -551,6 +547,57 @@ describe("a row the court lists without its stored identity is recaptured by doc
         }),
       }),
     ).toEqual({ type: "not-listed", lookup: DOCKET });
+  });
+
+  test("a row without its id column is still the document its URLs name", async () => {
+    const served = await servePublisher();
+    const decision = await crawled();
+    const other = "0123456789abcdef0123456789abcdef";
+    const urlOf = (url: string | undefined) =>
+      (url ?? "").replace(LISTED_ROW.unid, () => other);
+    const elsewhere = legacyRow(decision, served, {
+      sourceDocumentId: null,
+      sourceUrl: urlOf(decision.sourceUrl),
+      documentUrl: urlOf(decision.documentUrl),
+    });
+    expect(elsewhere.sourceUrl).toContain(other);
+
+    // The docket matches, but the row's URLs name another document.
+    expect(
+      await recaptureDecisionFromListing({
+        adapter: czNsAdapter,
+        stored: elsewhere,
+      }),
+    ).toEqual({ type: "not-listed", lookup: DOCKET });
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: LISTED_ROW,
+        stored: elsewhere,
+      }),
+    ).toMatchObject({ type: "identity-mismatch" });
+    // A row whose column and URLs disagree names no single document.
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: LISTED_ROW,
+        stored: { ...elsewhere, sourceDocumentId: LISTED_ROW.unid },
+      }),
+    ).toMatchObject({ type: "identity-mismatch" });
+  });
+
+  test("a row naming no id anywhere is found by its docket alone", async () => {
+    const served = await servePublisher();
+    const decision = await crawled();
+
+    const outcome = await recaptureDecisionFromListing({
+      adapter: czNsAdapter,
+      stored: legacyRow(decision, served, {
+        sourceDocumentId: null,
+        sourceUrl: null,
+        documentUrl: null,
+      }),
+    });
+
+    expect(outcome).toMatchObject({ type: "recaptured", lookup: DOCKET });
   });
 
   test("a listing row stating another docket is reported, not merged", async () => {

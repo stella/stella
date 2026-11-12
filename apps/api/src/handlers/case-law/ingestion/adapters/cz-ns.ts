@@ -1630,20 +1630,62 @@ const listCzNsDocketPage = async ({
   );
 };
 
+/** The universal id a document URL names: `/WebSearch/{unid}?openDocument`. */
+const URL_UNID =
+  /\/Web(?:Search|Print)\/(?<unid>[0-9A-Fa-f]{32})\?openDocument/u;
+
 /**
- * A listed row is the stored one when it states the row's universal id, or,
- * for a row stored without one, its docket. A docket the court published
- * several documents under matches each of them; the caller reports that as
- * ambiguous rather than choosing.
+ * The universal id a stored row names, wherever it kept one: its own column,
+ * or the document URLs a legacy row stored without that column still holds.
+ * Ids that disagree name no single decision.
+ */
+type CzNsHeldUnid =
+  | { type: "named"; unid: string }
+  | { type: "unnamed" }
+  | { type: "contradictory"; detail: string };
+
+const czNsHeldUnid = (stored: StoredRawReparseInput): CzNsHeldUnid => {
+  const named = [
+    stored.sourceDocumentId,
+    URL_UNID.exec(stored.sourceUrl ?? "")?.groups?.["unid"] ?? null,
+    URL_UNID.exec(stored.documentUrl ?? "")?.groups?.["unid"] ?? null,
+  ].filter((unid): unid is string => unid !== null);
+  const [first] = named;
+  if (first === undefined) {
+    return { type: "unnamed" };
+  }
+  const other = named.find((unid) => !sameUnid(unid, first));
+  return other === undefined
+    ? { type: "named", unid: first }
+    : {
+        type: "contradictory",
+        detail: `the row names both ${first} and ${other}`,
+      };
+};
+
+/**
+ * A listed row is the stored one when it states the universal id the row
+ * names, or, for a row that names none anywhere, its docket. A docket the
+ * court published several documents under matches each of them; the caller
+ * reports that as ambiguous rather than choosing.
  */
 const czNsMatchesStored = (
   { payload }: ReconciliationListingItem,
   stored: StoredRawReparseInput,
-): boolean =>
-  isCzNsListingRow(payload) &&
-  (stored.sourceDocumentId === null
-    ? listsStoredDocket(payload, stored)
-    : sameUnid(payload.unid, stored.sourceDocumentId));
+): boolean => {
+  if (!isCzNsListingRow(payload)) {
+    return false;
+  }
+  const held = czNsHeldUnid(stored);
+  switch (held.type) {
+    case "named":
+      return sameUnid(payload.unid, held.unid);
+    case "unnamed":
+      return listsStoredDocket(payload, stored);
+    case "contradictory":
+      return false;
+  }
+};
 
 /**
  * The envelope a crawl stores for the listed row and the pages already held,
@@ -1666,13 +1708,14 @@ const recaptureCzNsStoredRaw = ({
       detail: `no decision pages in the stored payload for ${stored.caseNumber}`,
     };
   }
-  if (
-    stored.sourceDocumentId !== null &&
-    !sameUnid(listingPayload.unid, stored.sourceDocumentId)
-  ) {
+  const held = czNsHeldUnid(stored);
+  if (held.type === "contradictory") {
+    return { type: "identity-mismatch", detail: held.detail };
+  }
+  if (held.type === "named" && !sameUnid(listingPayload.unid, held.unid)) {
     return {
       type: "identity-mismatch",
-      detail: `the listing names ${listingPayload.unid}, the row ${stored.sourceDocumentId}`,
+      detail: `the listing names ${listingPayload.unid}, the row ${held.unid}`,
     };
   }
   if (!listsStoredDocket(listingPayload, stored)) {
