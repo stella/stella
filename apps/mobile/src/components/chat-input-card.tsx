@@ -115,24 +115,19 @@ const PendingCard = ({
   onAnswer: (answer: PendingAnswer) => void;
   pending: Exclude<PendingInput, { type: "elsewhere" }>;
 }) => {
-  switch (pending.type) {
-    case "approvals":
-      return (
-        <ApprovalsCard
-          approvals={pending.approvals}
-          busy={busy}
-          onAnswer={onAnswer}
-        />
-      );
-    case "ask-user":
-      return (
-        <AskUserCard asks={pending.asks} busy={busy} onAnswer={onAnswer} />
-      );
-    case "question":
-      return (
-        <QuestionCard busy={busy} onAnswer={onAnswer} pause={pending.pause} />
-      );
+  if (pending.type === "approvals") {
+    return (
+      <ApprovalsCard
+        approvals={pending.approvals}
+        busy={busy}
+        onAnswer={onAnswer}
+      />
+    );
   }
+  if (pending.type === "ask-user") {
+    return <AskUserCard asks={pending.asks} busy={busy} onAnswer={onAnswer} />;
+  }
+  return <QuestionCard busy={busy} onAnswer={onAnswer} pause={pending.pause} />;
 };
 
 /**

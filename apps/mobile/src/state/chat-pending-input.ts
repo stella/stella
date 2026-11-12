@@ -479,16 +479,12 @@ export const showsPendingInput = (live: LiveTurnView | null): boolean =>
 export const pendingInputKey = (
   pending: Exclude<PendingInput, { type: "elsewhere" }>,
 ): string => {
-  switch (pending.type) {
-    case "question":
-      return `question:${pending.pause.interruptId}`;
-    case "ask-user":
-      return `ask-user:${pending.parentRunId}:${pending.asks
-        .map(({ interruptId }) => interruptId)
-        .join(",")}`;
-    case "approvals":
-      return `approvals:${pending.parentRunId}:${pending.approvals
-        .map(({ interruptId }) => interruptId)
-        .join(",")}`;
+  if (pending.type === "question") {
+    return `question:${pending.pause.interruptId}`;
   }
+  const interrupts =
+    pending.type === "ask-user" ? pending.asks : pending.approvals;
+  return `${pending.type}:${pending.parentRunId}:${interrupts
+    .map(({ interruptId }) => interruptId)
+    .join(",")}`;
 };
