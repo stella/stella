@@ -461,6 +461,10 @@ export const legalListClaims = p.pgTable(
     score: p.smallint(),
     text: p.varchar({ length: VERIFICATION_LIMITS.CLAIM_TEXT_MAX }).notNull(),
     anchor: jsonb().$type<ClaimAnchor>().notNull(),
+    // The printed number of the paragraph the claim sits in, read once when
+    // the run stored it; null when the document's numbering is unclear, the
+    // claim sits outside any numbered paragraph, or the run predates it.
+    paragraphNumber: p.integer("paragraph_number"),
     refs: jsonb().$type<ClaimRef[]>().notNull().default([]),
     recordConflict: jsonb("record_conflict").$type<RecordConflict>(),
     // Caveats the grader gave with the verdict. Qualifiers computed from the

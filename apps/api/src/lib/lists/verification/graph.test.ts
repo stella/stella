@@ -51,6 +51,7 @@ const graphInputArbitrary: fc.Arbitrary<GraphInput> = fc
     claims: fc.array(
       fc.record({
         statement: fc.nat(),
+        paragraph: fc.option(fc.integer({ min: 1, max: 400 }), { nil: null }),
         state: fc.constantFrom(...CLAIM_STATES),
         refs: fc.uniqueArray(
           fc.record({
@@ -102,6 +103,11 @@ const graphInputArbitrary: fc.Arbitrary<GraphInput> = fc
         documentId: documentId(n),
         documentName: `Source ${String(n)}`,
         locator: { type: "document" },
+        // Some sources carry the words the fact rests on, some none.
+        quote:
+          n % 2 === 0
+            ? null
+            : `Words of source ${String(n)} for ${String(index)}`,
       })),
     }));
     const claimInputs: GraphClaimInput[] = claims.map((claim, index) => {
@@ -112,6 +118,7 @@ const graphInputArbitrary: fc.Arbitrary<GraphInput> = fc
         id: claimId(index),
         runId: runId(claim.statement % statementCount),
         position: index,
+        paragraph: claim.paragraph,
         text: `Claim ${String(index)}`,
         state: claim.state,
         refs: claim.refs.map((ref) => ({
@@ -253,6 +260,39 @@ describe("buildVerificationGraph", () => {
         for (const edge of graph.provenance) {
           expect(sourceIds.has(edge.sourceId)).toBe(true);
         }
+        // Each edge carries the quote of the source it was drawn from.
+        expect(
+          graph.provenance.map(({ factId: fact, sourceId, quote }) => ({
+            fact,
+            sourceId,
+            quote,
+          })),
+        ).toEqual(
+          graph.facts.flatMap(({ id }) =>
+            (
+              input.facts.find((fact) => fact.factEntityId === id)?.sources ??
+              []
+            ).map((source) => ({
+              fact: id,
+              sourceId: source.documentId,
+              quote: source.quote,
+            })),
+          ),
+        );
+      }),
+    );
+  });
+
+  test("every claim keeps the printed number of the paragraph it sits in", () => {
+    assertProperty(
+      "every claim keeps the printed number of the paragraph it sits in",
+      fc.property(graphInputArbitrary, (input) => {
+        const graph = buildVerificationGraph(input);
+        expect(
+          new Map(graph.claims.map(({ id, paragraph }) => [id, paragraph])),
+        ).toEqual(
+          new Map(input.claims.map(({ id, paragraph }) => [id, paragraph])),
+        );
       }),
     );
   });
@@ -303,6 +343,7 @@ describe("buildVerificationGraph", () => {
             id: claimId(1),
             runId: runId(1),
             position: 0,
+            paragraph: null,
             text: "Orphan",
             state: "nocover",
             refs: [],

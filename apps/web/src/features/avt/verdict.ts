@@ -145,6 +145,7 @@ export const resolveClaimView = (
     text: claim.text,
     assertedOn: claim.assertedOn,
     anchor: claim.anchor,
+    paragraph: claim.paragraph,
     refs: [],
     review: claim.review,
     recheck: claim.recheck,

@@ -4,6 +4,7 @@ import verifyItemSource from "@/api/handlers/lists/items/sources/verification/up
 import createSampleCase from "@/api/handlers/lists/sample-case/create";
 import readSourceDocumentKinds from "@/api/handlers/lists/source-documents/list";
 import updateSourceDocumentKind from "@/api/handlers/lists/source-documents/update";
+import exportVerificationChronology from "@/api/handlers/lists/verifications/chronology/export";
 import createClaimComment from "@/api/handlers/lists/verifications/claim-comments/create";
 import deleteClaimComment from "@/api/handlers/lists/verifications/claim-comments/delete";
 import listClaimComments from "@/api/handlers/lists/verifications/claim-comments/list";
@@ -48,6 +49,9 @@ export const createListVerificationRoutes = (
       },
       "/verifications/latest": { POST: readLatestVerifications },
       "/verifications/graph": { GET: readVerificationGraph },
+      "/verifications/chronology/export": {
+        GET: exportVerificationChronology,
+      },
       "/verifications/:runId": { GET: readVerification },
     },
     { middleware: [featureAccessGate("list-verification", dependencies)] },

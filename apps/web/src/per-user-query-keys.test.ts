@@ -288,6 +288,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     reason:
       "The actor determines the read-audit receipts; the returned graph is shared within the matter.",
   },
+  "lists/verifications/chronology/export.ts": {
+    kind: "not-per-user",
+    reason: DOWNLOAD,
+  },
   "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
     kind: "keyed",

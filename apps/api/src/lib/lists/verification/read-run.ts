@@ -753,6 +753,9 @@ const presentClaim = ({
     text: claim.text,
     assertedOn: assertedDateOfClaim(claim, review),
     anchor: claim.anchor,
+    // The printed number of the paragraph the claim sits in, as the run
+    // stored it; null when it sits outside any numbered paragraph.
+    paragraph: claim.paragraphNumber,
     refs: graded.refs,
     review: record === null ? null : serializeClaimReview(record),
     recheck:

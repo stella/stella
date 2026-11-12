@@ -55,11 +55,22 @@ const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 type GraphAnswer = {
   statements: { id: string; name: string; claimCount: number }[];
-  claims: { id: string; statementId: string; state: string; text: string }[];
+  claims: {
+    id: string;
+    statementId: string;
+    state: string;
+    text: string;
+    paragraph: number | null;
+  }[];
   facts: { id: string; held: boolean; tier: string; listed: boolean }[];
   sources: { id: string; name: string }[];
   citations: { type: string; claimId: string; factId: string }[];
-  provenance: { factId: string; sourceId: string; locator: unknown }[];
+  provenance: {
+    factId: string;
+    sourceId: string;
+    locator: unknown;
+    quote: string | null;
+  }[];
   nextCursor: string | null;
 };
 
@@ -218,11 +229,13 @@ if (!databaseUrl || !runPostgres) {
           sourceEntityId,
           sourceEntityVersionId,
           pageNumber,
+          quote,
         }: {
           itemEntityId: SafeId<"entity">;
           sourceEntityId: SafeId<"entity">;
           sourceEntityVersionId: SafeId<"entityVersion">;
           pageNumber: number;
+          quote: string | null;
         }) => ({
           id: createSafeId<"legalListItemSource">(),
           workspaceId,
@@ -231,7 +244,7 @@ if (!databaseUrl || !runPostgres) {
           sourceEntityId,
           sourceEntityVersionId,
           locator: { type: "pdf-page" as const, pageNumber },
-          quote: null,
+          quote,
           createdBy: userId,
         });
         await db.insert(legalListItemSources).values([
@@ -240,12 +253,14 @@ if (!databaseUrl || !runPostgres) {
             sourceEntityId: ledgerId,
             sourceEntityVersionId: ledgerVersionId,
             pageNumber: 14,
+            quote: "23/08 transfer 12,000",
           }),
           source({
             itemEntityId: recalledFactId,
             sourceEntityId: interviewId,
             sourceEntityVersionId: interviewVersionId,
             pageNumber: 2,
+            quote: null,
           }),
         ]);
         await db.insert(legalListSourceDocuments).values({
@@ -343,6 +358,7 @@ if (!databaseUrl || !runPostgres) {
               type: "fact",
               text: "The ledger shows the payment.",
               anchor,
+              paragraphNumber: 11,
               state: "supported",
               score: 90,
               refs: [{ factEntityId: recordedFactId, rel: "supports" }],
@@ -464,6 +480,13 @@ if (!databaseUrl || !runPostgres) {
           conflictClaimId,
           gapClaimId,
         ]);
+        // The printed paragraph number the run stored; a claim stored
+        // without one reads as outside any numbered paragraph.
+        expect(answer.claims.map(({ paragraph }) => paragraph)).toEqual([
+          11,
+          null,
+          null,
+        ]);
         // The governed conflict reads with the governing record's verdict.
         expect(
           answer.claims.find(({ id }) => id === conflictClaimId)?.state,
@@ -494,7 +517,12 @@ if (!databaseUrl || !runPostgres) {
         ).toMatchObject({
           sourceId: ledgerId,
           locator: { type: "pdf-page", pageNumber: 14 },
+          quote: "23/08 transfer 12,000",
         });
+        expect(
+          answer.provenance.find(({ factId }) => factId === recalledFactId)
+            ?.quote,
+        ).toBeNull();
         expect(answer.nextCursor).toBeNull();
 
         // Pages of one claim neither split nor repeat any claim.

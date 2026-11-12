@@ -8,6 +8,7 @@ import { legalListVerificationRuns } from "@/api/db/schema";
 import { env } from "@/api/env";
 import factDetails from "@/api/handlers/lists/items/fact-details/update";
 import sourceReview from "@/api/handlers/lists/items/sources/verification/update";
+import chronologyExport from "@/api/handlers/lists/verifications/chronology/export";
 import createComment from "@/api/handlers/lists/verifications/claim-comments/create";
 import deleteComment from "@/api/handlers/lists/verifications/claim-comments/delete";
 import listComments from "@/api/handlers/lists/verifications/claim-comments/list";
@@ -62,6 +63,7 @@ const endpoints = {
   list,
   get,
   graph,
+  chronologyExport,
   latest,
   review,
   bulkReview,

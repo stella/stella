@@ -45,6 +45,10 @@ export type GraphClaimInput = {
   id: ClaimId;
   runId: RunId;
   position: number;
+  /** The printed number of the paragraph the claim sits in; null when the
+   *  document's numbering is unclear, the claim is outside any numbered
+   *  paragraph, or its run stored no number. */
+  paragraph: number | null;
   text: string;
   state: ClaimState;
   refs: readonly ClaimRef[];
@@ -59,6 +63,8 @@ type GraphSourceInput = {
   documentId: DocumentId;
   documentName: string;
   locator: LegalListSourceLocator;
+  /** The words of the source the fact rests on, as the list holds them. */
+  quote: string | null;
 };
 
 export type GraphFactInput = {
@@ -102,11 +108,13 @@ type GraphCitation =
       governs: boolean;
     };
 
-/** Where a fact comes from: a document, at a place in it. */
+/** Where a fact comes from: a document, at a place in it, with the words
+ *  there the fact rests on when the list holds them. */
 type GraphProvenance = {
   factId: FactId;
   sourceId: DocumentId;
   locator: LegalListSourceLocator;
+  quote: string | null;
 };
 
 /** Code-unit order: ids and names compare the same on every server. */
@@ -238,6 +246,7 @@ export const buildVerificationGraph = ({
       factId: fact.factEntityId,
       sourceId: source.documentId,
       locator: source.locator,
+      quote: source.quote,
     })),
   );
 
@@ -254,6 +263,7 @@ export const buildVerificationGraph = ({
       id: claim.id,
       statementId: claim.runId,
       position: claim.position,
+      paragraph: claim.paragraph,
       text: claim.text,
       state: claim.state,
       reviewStatus: claim.reviewStatus,

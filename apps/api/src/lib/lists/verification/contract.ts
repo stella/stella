@@ -520,4 +520,7 @@ export const VERIFICATION_LIMITS = {
   GRAPH_CLAIMS_PAGE_MAX: 500,
   /** Facts of the list the first page of its verification graph carries. */
   GRAPH_FACTS_MAX: 1000,
+  /** Pages of the verification graph one chronology export reads; a list
+   *  verified past them is refused, never exported in part. */
+  CHRONOLOGY_EXPORT_PAGES_MAX: 20,
 } as const;

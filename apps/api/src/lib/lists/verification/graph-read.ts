@@ -442,6 +442,7 @@ const readPageClaims = async ({
           id: legalListClaims.id,
           runId: legalListClaims.runId,
           position: legalListClaims.position,
+          paragraphNumber: legalListClaims.paragraphNumber,
           text: legalListClaims.text,
           state: legalListClaims.state,
           score: legalListClaims.score,
@@ -474,6 +475,7 @@ const presentClaims = (
       id: claim.id,
       runId: claim.runId,
       position: claim.position,
+      paragraph: claim.paragraphNumber,
       text: claim.text,
       state: seen.state,
       refs: seen.refs,
@@ -559,6 +561,7 @@ const graphFacts = ({
       documentName:
         source.sourceName ?? documentNames.get(source.sourceEntityId) ?? "",
       locator: source.locator,
+      quote: source.quote,
     })),
   }));
 };

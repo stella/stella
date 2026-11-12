@@ -36,7 +36,10 @@ const config = {
     "against it (`statements`, the latest finished verification of each), " +
     "their claims with the verdict as reviewers see it now (a re-check " +
     "counts, a governed record conflict takes the governing record's " +
-    "verdict), the review status and qualifiers, the list's facts (`held` " +
+    "verdict), the review status, qualifiers and the printed number of the " +
+    "paragraph each claim sits in (`paragraph`, null when the document's " +
+    "numbering is unclear or the claim is outside a numbered paragraph), " +
+    "the list's facts (`held` " +
     "when kept out of scoring, `tier`: `document`, `testimony` or " +
     "`unsourced`; a fact off the list that a claim still cites has `listed` " +
     "false), and the documents the facts come from (`sources`). " +
@@ -44,7 +47,7 @@ const config = {
     "relation its grade gives (`supports`, `conflicts`, `record`), or " +
     "`record-conflict` for each of the two records a withheld verdict sits " +
     "between. `provenance` links a fact to a source document at its " +
-    "locator. Paginated by documents with a cursor; a document with more " +
+    "locator, with the source's `quote` when the list holds one. Paginated by documents with a cursor; a document with more " +
     "claims than `limit` continues on the next page. Every page carries " +
     "the list's facts, at most 1000 of them: `factOverflow` is true when " +
     "the list holds more, so check it before treating the facts as " +

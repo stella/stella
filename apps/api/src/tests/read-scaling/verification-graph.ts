@@ -17,8 +17,10 @@ import {
   createScopedDb,
   markRlsDatabase,
 } from "@/api/db/scoped";
+import exportVerificationChronology from "@/api/handlers/lists/verifications/chronology/export";
 import readVerificationGraph from "@/api/handlers/lists/verifications/graph/get";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -55,8 +57,11 @@ export type VerificationGraphScalingFixture = {
 
 type SeedOptions = {
   db: GatedTestDb;
-  /** Documents verified against the list. */
+  /** Documents verified in the matter. */
   size: number;
+  /** How many of them were verified against the list; the rest against
+   *  another list of the matter. All of them when absent. */
+  listDocuments?: number;
   /** Grants the verification feature to the seeded organization. */
   grantFeature: (organizationId: SafeId<"organization">) => void;
 };
@@ -66,6 +71,7 @@ type SeedOptions = {
 export const seedVerificationGraphScaling = async ({
   db,
   size,
+  listDocuments = size,
   grantFeature,
 }: SeedOptions): Promise<VerificationGraphScalingFixture> => {
   const ids = {
@@ -74,6 +80,7 @@ export const seedVerificationGraphScaling = async ({
     workspaceId: createSafeId<"workspace">(),
     listId: createSafeId<"legalList">(),
   };
+  const otherListId = createSafeId<"legalList">();
   await db.insert(organization).values({
     id: ids.organizationId,
     name: "Verification graph scaling firm",
@@ -99,12 +106,20 @@ export const seedVerificationGraphScaling = async ({
     name: "Verification graph scaling matter",
     reference: ids.workspaceId,
   });
-  await db.insert(legalLists).values({
-    id: ids.listId,
-    workspaceId: ids.workspaceId,
-    name: "Chronology",
-    createdBy: ids.userId,
-  });
+  await db.insert(legalLists).values([
+    {
+      id: ids.listId,
+      workspaceId: ids.workspaceId,
+      name: "Chronology",
+      createdBy: ids.userId,
+    },
+    {
+      id: otherListId,
+      workspaceId: ids.workspaceId,
+      name: "Another chronology",
+      createdBy: ids.userId,
+    },
+  ]);
   const factIds = Array.from({ length: FACTS }, () => createSafeId<"entity">());
   await db.insert(entities).values(
     factIds.map((id, index) => ({
@@ -167,7 +182,10 @@ export const seedVerificationGraphScaling = async ({
       entityVersionId: createSafeId<"entityVersion">(),
       contentSha256: "c".repeat(64),
       status: "completed" as const,
-      evidence: { listId: ids.listId, facts: pinned },
+      evidence: {
+        listId: index < listDocuments ? ids.listId : otherListId,
+        facts: pinned,
+      },
     })),
   );
   await createScopedDb(
@@ -278,6 +296,76 @@ export const verificationGraphScalingScenarios = [
           transactionRoundTrips: counter.transactions,
           responseBytes: Buffer.byteLength(JSON.stringify(response)),
           rows: response.claims.length,
+        };
+      }),
+  },
+];
+
+/** Documents verified against the exported list; the matter's other
+ *  verified documents were checked against another list. */
+export const CHRONOLOGY_LIST_DOCUMENTS = 3;
+
+/**
+ * The list's chronology export, measured on the mounted handler: a row per
+ * fact of the list, read through every page of its graph. A list's own
+ * verified documents are bounded by the export's page limit (past it the
+ * export is refused); what must not grow its cost is everything else the
+ * matter verified.
+ */
+export const verificationChronologyScalingScenarios = [
+  {
+    name: "list verification chronology export",
+    expectedRows: FACTS,
+    definition: exportVerificationChronology,
+    measure: async ({ db, tenant }: VerificationGraphScalingFixture) =>
+      await runWithMeasuredQueryCounter(async (counter) => {
+        const recorder = createAuditRecorder({
+          organizationId: tenant.organizationId,
+          workspaceId: tenant.workspaceId,
+          userId: tenant.userId,
+          request: new Request(
+            "https://example.test/verifications/chronology/export",
+          ),
+          server: null,
+        });
+        // The download's audit names the rows the file holds.
+        let rows = 0;
+        const audit: AuditRecorder = async (tx, event) => {
+          for (const entry of Array.isArray(event) ? event : [event]) {
+            const rowCount = entry.metadata?.["rowCount"];
+            if (typeof rowCount === "number") {
+              rows = rowCount;
+            }
+          }
+          await recorder(tx, event);
+        };
+        const response = await exportVerificationChronology.handler(
+          createTestHandlerContext<
+            Parameters<typeof exportVerificationChronology.handler>[0]
+          >({
+            scopedDb: NO_DB,
+            audit,
+            workspaceId: tenant.workspaceId,
+            session: { activeOrganizationId: tenant.organizationId },
+            user: { id: tenant.userId },
+            featureAccessSnapshot: tenant.featureAccessSnapshot,
+            safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              organizationId: tenant.organizationId,
+              serverValidatedWorkspaceIds: [tenant.workspaceId],
+              userId: tenant.userId,
+              featureAccessSnapshot: tenant.featureAccessSnapshot,
+            }),
+            query: { listId: tenant.listId, format: "csv" },
+          }),
+        );
+        if (!(response instanceof Response)) {
+          return panic("Chronology export scaling requires a file");
+        }
+        return {
+          statements: counter.count,
+          transactionRoundTrips: counter.transactions,
+          responseBytes: Buffer.byteLength(await response.text()),
+          rows,
         };
       }),
   },
