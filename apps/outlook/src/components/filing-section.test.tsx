@@ -89,6 +89,13 @@ describe("FilingSection", () => {
     );
   });
 
+  test("keeps the matter in view while its finalize is retried", () => {
+    const html = render({ type: "finalizing", workspace: FILED_TO });
+    expect(html).toContain(FILED_TO.name);
+    expect(html).not.toContain(SUGGESTED.name);
+    expect(html).toContain("Finish saving");
+  });
+
   test("offers the suggested matter when nothing is pending", () => {
     const html = render({ type: "idle" });
     expect(html).toContain(SUGGESTED.name);

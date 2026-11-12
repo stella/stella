@@ -87,14 +87,19 @@ export const useMailSnapshot = ({
         void load(`item-${String(itemInstanceSequence.current)}`);
       }
     });
-    const unsubscribe = subscribeMailboxItemChanges(() => {
-      itemInstanceSequence.current += 1;
-      setState({ type: "loading" });
-      void load(`item-${String(itemInstanceSequence.current)}`);
-    });
     // Same item, new recipients or files: re-read it under the same key, so
     // the pane keeps its state and the draft checks see the current fields.
-    const unsubscribeComposeFields = subscribeComposeFieldChanges(() => {
+    // The listeners belong to one Office item, so they move with the pane.
+    const watchComposeFields = () =>
+      subscribeComposeFieldChanges(() => {
+        void load(`item-${String(itemInstanceSequence.current)}`);
+      });
+    let unsubscribeComposeFields = watchComposeFields();
+    const unsubscribe = subscribeMailboxItemChanges(() => {
+      unsubscribeComposeFields();
+      unsubscribeComposeFields = watchComposeFields();
+      itemInstanceSequence.current += 1;
+      setState({ type: "loading" });
       void load(`item-${String(itemInstanceSequence.current)}`);
     });
     return () => {

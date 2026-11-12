@@ -34,6 +34,8 @@ export type FileEmailState =
   | { type: "idle" }
   | { type: "reading" }
   | { type: "uploading" }
+  /** Retrying the finalize of an upload stored in `workspace`. */
+  | { type: "finalizing"; workspace: WorkspaceSummary }
   | (FiledMessage & { type: "complete" })
   | { message: string; retry: RetryFinalize | null; type: "error" };
 
@@ -76,6 +78,7 @@ const errorMessage = (error: unknown, messages: FileEmailMessages): string => {
 
 export const isFileEmailActive = (state: FileEmailState): boolean => {
   switch (state.type) {
+    case "finalizing":
     case "reading":
     case "uploading":
       return true;
@@ -90,14 +93,28 @@ export const isFileEmailActive = (state: FileEmailState): boolean => {
 };
 
 /**
- * The matter of an upload that went through but was not confirmed. Until it
- * is, filing finishes that upload there: a new one elsewhere could leave the
- * email in two matters.
+ * The matter of an upload that went through but was not confirmed, also
+ * while its finalize is retried. Until it is confirmed, filing finishes that
+ * upload there: a new one elsewhere could leave the email in two matters.
  */
 export const pendingFinalizeWorkspace = (
   state: FileEmailState,
-): WorkspaceSummary | null =>
-  state.type === "error" ? (state.retry?.workspace ?? null) : null;
+): WorkspaceSummary | null => {
+  switch (state.type) {
+    case "error":
+      return state.retry?.workspace ?? null;
+    case "finalizing":
+      return state.workspace;
+    case "complete":
+    case "idle":
+    case "reading":
+    case "uploading":
+      return null;
+    default:
+      state satisfies never;
+      return panic("Unknown filing state");
+  }
+};
 
 /**
  * Files the selected message into a matter as one `.eml` document. A
@@ -123,7 +140,7 @@ export const useFileEmail = (messages: FileEmailMessages) => {
       catch: (cause) => cause,
       try: async (): Promise<FiledEmail> => {
         if (retry) {
-          setState({ type: "uploading" });
+          setState({ type: "finalizing", workspace: retry.workspace });
           return await finalizeFiledEmail(retry.pending);
         }
         setState({ type: "reading" });

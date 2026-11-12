@@ -61,6 +61,7 @@ export const FilingSection = (props: FilingSectionProps) => {
     case "complete":
       return <FiledPanel saveState={saveState} t={t} />;
     case "error":
+    case "finalizing":
     case "idle":
     case "reading":
     case "uploading":
@@ -110,6 +111,8 @@ const fileButtonLabel = (state: OpenFilingState, t: Translate): string => {
   switch (state.type) {
     case "error":
       return state.retry === null ? t("fileEmail") : t("finishSaving");
+    case "finalizing":
+      return t("finishSaving");
     case "idle":
     case "reading":
     case "uploading":
