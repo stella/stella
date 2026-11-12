@@ -230,7 +230,7 @@ export const createTimestampIdCursorCodec = <Id>({
   encode: (timestampValue, id) => encodePaginationCursor([timestampValue, id]),
   decode: (cursor) => {
     const parts = decodePaginationCursor(cursor);
-    if (parts === null || parts.length !== 2) {
+    if (parts?.length !== 2) {
       return null;
     }
     const [rawTimestamp, rawId] = parts;
