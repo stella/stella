@@ -15,6 +15,9 @@ const { COPIED_RESET_MS } = await import("@stll/ui/copy-button");
 
 declare const confirm: () => void;
 declare const host: HTMLElement;
+// The rule reads the command by name; a stand-in keeps the fixture off the
+// deprecated DOM method.
+declare const editor: { execCommand: (command: string) => boolean };
 declare const copyNoticeText: () => Promise<boolean>;
 declare const NoticeCopy: (props: {
   onCopy: () => Promise<boolean>;
@@ -37,7 +40,7 @@ export const _c = async () =>
   // oxlint-disable-next-line copy-feedback-owner/no-raw-clipboard-write -- regression fixture for a direct clipboard write
   await navigator.clipboard.writeText("Smlouva o dílo");
 // oxlint-disable-next-line copy-feedback-owner/no-raw-clipboard-write -- regression fixture for the legacy copy command
-export const _d = () => host.ownerDocument.execCommand("copy");
+export const _d = () => editor.execCommand("copy");
 
 // --- Accepted: other events, a component's own onCopy prop ---
 // expect-clean: copy-feedback-owner/no-raw-copy-listener
@@ -47,6 +50,6 @@ export const _e = () => (
   <NoticeCopy onCopy={copyNoticeText} />
 );
 // expect-clean: copy-feedback-owner/no-raw-clipboard-write
-export const _f = () => host.ownerDocument.execCommand("bold");
+export const _f = () => editor.execCommand("bold");
 export const _g = COPIED_RESET_MS;
 export const _h = CopyFeedback;
