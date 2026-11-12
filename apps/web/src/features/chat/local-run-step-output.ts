@@ -32,6 +32,7 @@ import {
 } from "@/lib/desktop-bridge";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 const NOT_FOUND = 404;
 /** The bridge is on this computer: a kept step reads well within this. */
@@ -180,19 +181,28 @@ export const localRunStepOutputOptions = ({
   userId,
   callId,
 }: LocalRunStepOutputKey) =>
-  // Named, so the stale time below reads the output's own type.
-  queryOptions<
-    LocalRunStepOutputView,
-    DefaultError,
-    LocalRunStepOutputView,
-    ReturnType<typeof chatKeys.localRunStepOutput>
-  >({
-    queryKey: chatKeys.localRunStepOutput(activeOrganizationId, userId, callId),
-    queryFn: streamedQuery({
-      streamFn: ({ signal }) => readLocalRunStepOutput({ callId, signal }),
-      reducer: foldLocalRunStepOutput,
-      initialValue: LOCAL_RUN_STEP_OUTPUT_UNREAD,
+  // The output is read from the member's computer, never from a stella
+  // resource, so no write of stella's makes it stale.
+  resourceQueryOptions(
+    // Named, so the stale time below reads the output's own type.
+    queryOptions<
+      LocalRunStepOutputView,
+      DefaultError,
+      LocalRunStepOutputView,
+      ReturnType<typeof chatKeys.localRunStepOutput>
+    >({
+      queryKey: chatKeys.localRunStepOutput(
+        activeOrganizationId,
+        userId,
+        callId,
+      ),
+      queryFn: streamedQuery({
+        streamFn: ({ signal }) => readLocalRunStepOutput({ callId, signal }),
+        reducer: foldLocalRunStepOutput,
+        initialValue: LOCAL_RUN_STEP_OUTPUT_UNREAD,
+      }),
+      staleTime: (query) => localRunStepOutputStaleTime(query.state.data),
+      retry: false,
     }),
-    staleTime: (query) => localRunStepOutputStaleTime(query.state.data),
-    retry: false,
-  });
+    { type: "independent" },
+  );
