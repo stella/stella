@@ -329,21 +329,29 @@ export const verificationGraphOptions = ({
   workspaceId: string;
   listId: string;
 }) =>
-  infiniteQueryOptions({
-    queryKey: avtKeys.graph(workspaceId, listId),
-    queryFn: async ({ pageParam, signal }) => {
-      const response = await api
-        .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .verifications.graph.get({
-          query: {
-            listId: toSafeId<"legalList">(listId),
-            ...(pageParam !== null && { cursor: pageParam }),
-          },
-          fetch: { signal },
-        });
-      return unwrapApiResponse(response);
+  // The graph reads the list's facts and their sources live, so a change to
+  // the list's facts marks it stale.
+  resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: avtKeys.graph(workspaceId, listId),
+      queryFn: async ({ pageParam, signal }) => {
+        const response = await api
+          .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .verifications.graph.get({
+            query: {
+              listId: toSafeId<"legalList">(listId),
+              ...(pageParam !== null && { cursor: pageParam }),
+            },
+            fetch: { signal },
+          });
+        return unwrapApiResponse(response);
+      },
+      initialPageParam: nullableStringCursorSeed(),
+      getNextPageParam: (page) => page.nextCursor,
+      staleTime: 0,
+    }),
+    {
+      resources: [RESOURCE_TYPE.LEGAL_LIST],
+      scope: { type: "workspace", workspaceId },
     },
-    initialPageParam: nullableStringCursorSeed(),
-    getNextPageParam: (page) => page.nextCursor,
-    staleTime: 0,
-  });
+  );
