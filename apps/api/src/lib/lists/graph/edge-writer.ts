@@ -112,10 +112,14 @@ const writeSql = (
     }
     case "recheck": {
       return recheckCitesSql(
-        sql`event.workspace_id = ${workspaceId} AND event.id IN ${write.eventIds.length === 0 ? sql`(NULL)` : sql`(${sql.join(
-          write.eventIds.map((eventId) => sql`${eventId}`),
-          sql`, `,
-        )})`}`,
+        sql`event.workspace_id = ${workspaceId} AND event.id IN ${
+          write.eventIds.length === 0
+            ? sql`(NULL)`
+            : sql`(${sql.join(
+                write.eventIds.map((eventId) => sql`${eventId}`),
+                sql`, `,
+              )})`
+        }`,
       );
     }
     default: {
