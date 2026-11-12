@@ -922,7 +922,7 @@ const continueTurn = async (
 ): Promise<Result<HarnessTurn, HarnessStartError>> => {
   const cli = ClaudeProcess.of(live);
   const held = cli === undefined ? undefined : HELD.get(cli);
-  if (cli === undefined || held === undefined || !cli.take(live)) {
+  if (cli === undefined || held === undefined || !(await cli.take(live))) {
     await live.end();
     return startTurn(options, {
       ...input,

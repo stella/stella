@@ -1288,8 +1288,9 @@ export class SidecarHost {
     }
     coalescer.flush();
     const kept = (await run.turn?.release()) ?? null;
-    if (kept !== null && delivery.broken) {
-      // The run fails: nothing it started stays behind.
+    if (kept !== null && (delivery.broken || isStopped(run))) {
+      // The run fails, or was stopped after its turn completed (while its
+      // files were shared, say): nothing it started stays behind.
       await kept.end();
     } else if (kept !== null) {
       await this.keepLive({ message, config, run, session: kept });

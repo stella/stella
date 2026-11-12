@@ -67,8 +67,11 @@ export class ClaudeProcess {
   /** Live background task ids to their kind, as the CLI last listed them. */
   private tasks: ReadonlyMap<string, string> = new Map();
   private kept: KeptSession | null = null;
-  /** An own turn of the CLI is being interrupted until its result. */
-  private interruptingOwnTurn = false;
+  /**
+   * An own turn of the CLI being interrupted: settles with its result.
+   * `null` while none runs.
+   */
+  private ownTurnEnded: PromiseWithResolvers<undefined> | null = null;
   private readonly gracePeriodMs: number;
   private readonly detached: Detached;
 
@@ -135,11 +138,24 @@ export class ClaudeProcess {
 
   /**
    * The next turn takes the process `session` keeps; `false` once that
-   * session is ending or ended.
+   * session is ending or ended. A turn the CLI opened itself is let end
+   * first, so its result never reaches the next turn; one that does not end
+   * within the grace period leaves the process to be ended instead.
    */
-  take(session: HarnessLiveSession): boolean {
+  async take(session: HarnessLiveSession): Promise<boolean> {
+    const ownTurn = this.ownTurnEnded;
+    if (
+      ownTurn !== null &&
+      !(await settlesWithin(ownTurn.promise, this.gracePeriodMs))
+    ) {
+      return false;
+    }
     const kept = this.kept;
-    if (kept?.session !== session || !kept.take()) {
+    if (
+      this.ownTurnEnded !== null ||
+      kept?.session !== session ||
+      !kept.take()
+    ) {
       return false;
     }
     this.kept = null;
@@ -191,7 +207,7 @@ export class ClaudeProcess {
     });
     this.kept = kept;
     KEPT.set(kept.session, this);
-    this.interruptingOwnTurn = false;
+    this.ownTurnEnded = null;
     this.route({
       message: (type) => {
         this.ownTurn(client, type);
@@ -215,13 +231,14 @@ export class ClaudeProcess {
   /** A turn the CLI opened itself between stella's turns is interrupted. */
   private ownTurn(client: ClaudeCliClient, type: string) {
     if (type === "result") {
-      this.interruptingOwnTurn = false;
+      this.ownTurnEnded?.resolve(undefined);
+      this.ownTurnEnded = null;
       return;
     }
-    if (!OWN_TURN_OUTPUT.has(type) || this.interruptingOwnTurn) {
+    if (!OWN_TURN_OUTPUT.has(type) || this.ownTurnEnded !== null) {
       return;
     }
-    this.interruptingOwnTurn = true;
+    this.ownTurnEnded = Promise.withResolvers<undefined>();
     this.detached(
       settlesWithin(client.request("interrupt"), this.gracePeriodMs),
       "claude-live.interrupt",

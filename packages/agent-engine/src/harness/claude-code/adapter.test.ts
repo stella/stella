@@ -1807,6 +1807,38 @@ describe("Claude Code background commands after a turn", () => {
     ]);
   });
 
+  test("the next turn waits for a turn the CLI opened itself to end, so its result is not the next turn's", async () => {
+    const { adapter, workspaceDir, turn } = await completedTurn(
+      "background_own_turn_late",
+    );
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const { promise: interrupted, resolve } = Promise.withResolvers<number>();
+    live.watch(resolve);
+    // The own turn was interrupted and has not ended yet.
+    expect(await interrupted).toBe(1);
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    expect(events.filter(({ type }) => type === "turn.failed")).toEqual([]);
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "text.completed" }),
+    );
+    await next.value.dispose();
+  });
+
   test("a kept process ends by itself once its last background command exits", async () => {
     const { turn } = await completedTurn("background_command_exits");
     const live = await turn.release();

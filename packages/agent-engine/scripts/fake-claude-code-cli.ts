@@ -329,6 +329,35 @@ const FAKE_SCENARIOS = {
       errors: ["Request was aborted."],
     }),
   ],
+  /**
+   * A turn the CLI opens itself between stella's turns that takes a while to
+   * end once interrupted; the chat's next user message comes meanwhile.
+   */
+  background_own_turn_late: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([
+      ["task-serve", "local_bash"],
+      ["task-watch", "local_bash"],
+    ]),
+    result(),
+    { sleep: 200 },
+    assistant("msg-own", [{ type: "text", text: "The watcher exited." }]),
+    { expect: "interrupt", response: {} },
+    // The client's signal that the interrupt went out; the result is late.
+    backgroundTasks([["task-serve", "local_bash"]]),
+    { sleep: 300 },
+    result({
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Request was aborted."],
+    }),
+    { expectUser: true },
+    { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
+    backgroundTasks([]),
+    assistant("msg-2", [{ type: "text", text: "It stopped." }]),
+    result(),
+  ],
   /** A dev server left running that exits while the chat waits. */
   background_command_exits: [
     ...freshTurn(),
