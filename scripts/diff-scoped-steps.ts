@@ -195,7 +195,7 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "deploy-outlook-addin.yml:scope#Decide whether the push changes the add-in":
     expands(
-      "Follows the add-in's workspace graph and declared inputs from the pushed range.",
+      "Follows the add-in's workspace graph and declared inputs from the last successful deploy run.",
     ),
   "ci.yml:ci-plan#Resolve comparison base": operational(
     "Resolves the base the plan compares against.",

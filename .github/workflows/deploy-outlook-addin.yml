@@ -15,6 +15,8 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# A newer push replaces a run still pending here, so a run's own pushed range
+# can miss commits; the scope step therefore diffs from the last deployed run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -31,6 +33,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      # Reads this workflow's last successful run as the diff base.
+      actions: read
     outputs:
       affected: ${{ steps.scope.outputs.affected }}
     steps:
@@ -52,16 +56,29 @@ jobs:
       # its workspace graph, the packages that graph resolves to, and the
       # outside files turbo.json declares for its build. A manual dispatch
       # always deploys, and a check that cannot decide deploys too.
+      # The base is the head of this workflow's last successful main run, not
+      # the push's own before: a replaced pending run or a failed deploy then
+      # leaves its commits in the next run's range instead of dropping them.
       - name: Decide whether the push changes the add-in
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          base_sha=""
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            base_sha="$(
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-outlook-addin.yml/runs?branch=main&status=success&per_page=1" \
+                --jq '.workflow_runs[0].head_sha // empty'
+            )" || base_sha=""
+          fi
           if [[ "$EVENT_NAME" != "push" ]]; then
             affected=true
+          elif [[ ! "$base_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::warning::No earlier successful deploy run to diff from; deploying."
+            affected=true
           elif ! affected="$(
-            bun scripts/landing-deploy-scope.ts --package @stll/outlook --base "$BEFORE" --head "$GITHUB_SHA"
+            bun scripts/landing-deploy-scope.ts --package @stll/outlook --base "$base_sha" --head "$GITHUB_SHA"
           )"; then
             echo "::warning::Could not scope the Outlook add-in deploy; deploying."
             affected=true
@@ -197,6 +214,9 @@ jobs:
       contents: read
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
+    # Production deploys a build only after staging deployed that same build.
+    outputs:
+      covered: ${{ steps.covered.outputs.covered }}
     env:
       DEPLOY_ENVIRONMENT: staging
       TASKPANE_ORIGIN: https://outlook-staging.stll.app
@@ -349,6 +369,9 @@ jobs:
 
   deploy-production:
     needs: [build, deploy-staging]
+    # A staging run that a newer deploy covered published nothing, so this
+    # build never reached staging; the newer run deploys both environments.
+    if: needs.deploy-staging.outputs.covered == 'false'
     name: Deploy production
     runs-on: ubuntu-24.04
     timeout-minutes: 45
