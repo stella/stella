@@ -185,6 +185,9 @@
             "location": "apps/mobile/src/components/use-document-editing.ts#1"
           },
           {
+            "location": "apps/mobile/src/components/use-mark-chat-read.ts#1"
+          },
+          {
             "location": "apps/mobile/src/components/use-now.ts#1"
           },
           {
@@ -198,6 +201,27 @@
           },
           {
             "location": "apps/mobile/src/components/use-shared-draft.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-draft.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-summary.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-file-email.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-mail-snapshot.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-outlook-auth.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-workspace-selection.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-workspaces.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
@@ -233,7 +257,7 @@
             "location": "apps/web/src/components/chat/create-document-draft-inspector-editor.logic.ts#1"
           },
           {
-            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#1"
+            "location": "apps/web/src/components/chat/use-chat-composer-models.ts#1"
           },
           {
             "location": "apps/web/src/components/chat/use-live-elapsed.ts#1"
@@ -579,6 +603,9 @@
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/thread-reader-state.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#1"
@@ -1070,6 +1097,9 @@
             "location": "apps/mobile/src/app/timers/new.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/active-chat-runs.tsx#8"
+          },
+          {
             "location": "apps/mobile/src/components/case-law-list.tsx#1"
           },
           {
@@ -1139,6 +1169,9 @@
             "location": "apps/mobile/src/components/push-registration.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/run-banner.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/scan-page-list.tsx#1"
           },
           {
@@ -1179,6 +1212,21 @@
           },
           {
             "location": "apps/mobile/src/native/layout-metrics.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/app.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/app-header.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/notice.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/panel.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/main.tsx#1"
           },
           {
             "location": "apps/playground/src/App.tsx#1"
@@ -1388,10 +1436,10 @@
             "location": "apps/web/src/components/chat/answer-quote.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#1"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#2"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat/attachment-chip.tsx#1"
@@ -1533,6 +1581,12 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#1"
@@ -2012,6 +2066,9 @@
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/components/overview-stat-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/pdf/annotations/document-mark-bar.tsx#1"
           },
           {
@@ -2471,7 +2528,13 @@
             "location": "apps/web/src/features/avt/claim-comments.tsx#7"
           },
           {
-            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#8"
+            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#10"
+          },
+          {
+            "location": "apps/web/src/features/avt/claim-gap.tsx#9"
+          },
+          {
+            "location": "apps/web/src/features/avt/document-verifications.tsx#6"
           },
           {
             "location": "apps/web/src/features/avt/fact-extraction.tsx#8"
@@ -2487,6 +2550,12 @@
           },
           {
             "location": "apps/web/src/features/avt/original-pdf-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/avt/reason-field.tsx#8"
+          },
+          {
+            "location": "apps/web/src/features/avt/review-history.tsx#8"
           },
           {
             "location": "apps/web/src/features/avt/state-chip.tsx#8"
@@ -4191,6 +4260,9 @@
           },
           {
             "location": "packages/ui/src/components/prose.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/run-state-mark.native.tsx#1"
           },
           {
             "location": "packages/ui/src/components/scroll-area.tsx#3"
@@ -5698,6 +5770,9 @@
             "location": "apps/mobile/src/components/use-document-editing.ts#1"
           },
           {
+            "location": "apps/mobile/src/components/use-mark-chat-read.ts#1"
+          },
+          {
             "location": "apps/mobile/src/components/use-now.ts#1"
           },
           {
@@ -5711,6 +5786,27 @@
           },
           {
             "location": "apps/mobile/src/components/use-shared-draft.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-draft.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-summary.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-file-email.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-mail-snapshot.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-outlook-auth.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-workspace-selection.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-workspaces.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
@@ -5746,7 +5842,7 @@
             "location": "apps/web/src/components/chat/create-document-draft-inspector-editor.logic.ts#1"
           },
           {
-            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#1"
+            "location": "apps/web/src/components/chat/use-chat-composer-models.ts#1"
           },
           {
             "location": "apps/web/src/components/chat/use-live-elapsed.ts#1"
@@ -6092,6 +6188,9 @@
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/thread-reader-state.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#1"
@@ -6583,6 +6682,9 @@
             "location": "apps/mobile/src/app/timers/new.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/active-chat-runs.tsx#8"
+          },
+          {
             "location": "apps/mobile/src/components/case-law-list.tsx#1"
           },
           {
@@ -6652,6 +6754,9 @@
             "location": "apps/mobile/src/components/push-registration.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/run-banner.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/scan-page-list.tsx#1"
           },
           {
@@ -6692,6 +6797,21 @@
           },
           {
             "location": "apps/mobile/src/native/layout-metrics.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/app.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/app-header.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/notice.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/panel.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/main.tsx#1"
           },
           {
             "location": "apps/playground/src/App.tsx#1"
@@ -6901,10 +7021,10 @@
             "location": "apps/web/src/components/chat/answer-quote.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#1"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#2"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat/attachment-chip.tsx#1"
@@ -7046,6 +7166,12 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#1"
@@ -7525,6 +7651,9 @@
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/components/overview-stat-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/pdf/annotations/document-mark-bar.tsx#1"
           },
           {
@@ -7984,7 +8113,13 @@
             "location": "apps/web/src/features/avt/claim-comments.tsx#7"
           },
           {
-            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#8"
+            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#10"
+          },
+          {
+            "location": "apps/web/src/features/avt/claim-gap.tsx#9"
+          },
+          {
+            "location": "apps/web/src/features/avt/document-verifications.tsx#6"
           },
           {
             "location": "apps/web/src/features/avt/fact-extraction.tsx#8"
@@ -8000,6 +8135,12 @@
           },
           {
             "location": "apps/web/src/features/avt/original-pdf-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/avt/reason-field.tsx#8"
+          },
+          {
+            "location": "apps/web/src/features/avt/review-history.tsx#8"
           },
           {
             "location": "apps/web/src/features/avt/state-chip.tsx#8"
@@ -9706,6 +9847,9 @@
             "location": "packages/ui/src/components/prose.tsx#1"
           },
           {
+            "location": "packages/ui/src/components/run-state-mark.native.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/scroll-area.tsx#3"
           },
           {
@@ -10960,6 +11104,9 @@
             "location": "apps/desktop/src/mainview/main.tsx#3"
           },
           {
+            "location": "apps/outlook/src/main.tsx#2"
+          },
+          {
             "location": "apps/playground/src/main.tsx#3"
           },
           {
@@ -11120,6 +11267,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#3"
+          },
+          {
+            "location": "apps/outlook/src/main.tsx#2"
           },
           {
             "location": "apps/playground/src/main.tsx#3"
@@ -14528,9 +14678,6 @@
             "location": "apps/api/src/handlers/chat/attempt-answer.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/chat/browser-snapshot-history.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#1"
           },
           {
@@ -14601,6 +14748,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tool-json-key-order.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tool-result-retention.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/auto-apply-suggest-changes-tools.ts#5"
@@ -14898,6 +15048,9 @@
           },
           {
             "location": "packages/agent-engine/src/harness/stream-chunks.ts#8"
+          },
+          {
+            "location": "packages/agent-engine/src/protocol-log.ts#1"
           },
           {
             "location": "packages/agent-engine/src/sidecar/checkpoints.ts#1"
@@ -15533,6 +15686,9 @@
             "location": "apps/web/src/components/chat/statute-open.ts#1"
           },
           {
+            "location": "apps/web/src/components/chat/use-chat-composer-models.ts#7"
+          },
+          {
             "location": "apps/web/src/components/chat/use-effective-run-target.ts#1"
           },
           {
@@ -15650,6 +15806,9 @@
             "location": "apps/web/src/features/avt/use-claim-comments.ts#1"
           },
           {
+            "location": "apps/web/src/features/avt/use-claim-gap-actions.ts#8"
+          },
+          {
             "location": "apps/web/src/features/avt/use-claim-review-actions.ts#1"
           },
           {
@@ -15657,6 +15816,9 @@
           },
           {
             "location": "apps/web/src/features/avt/use-load-sample-case.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/avt/use-source-kinds.ts#12"
           },
           {
             "location": "apps/web/src/features/avt/use-start-fact-extraction.ts#3"
@@ -15704,6 +15866,9 @@
             "location": "apps/web/src/features/case-law/open-decision-match.ts#1"
           },
           {
+            "location": "apps/web/src/features/case-law/queries/anchor-redirects.ts#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/queries/citations.ts#1"
           },
           {
@@ -15732,6 +15897,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/use-expanded-decision-filters.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/use-held-decision-anchors.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/active-runs.ts#1"
@@ -15803,10 +15971,19 @@
             "location": "apps/web/src/features/chat/link-icons.ts#2"
           },
           {
+            "location": "apps/web/src/features/chat/local-files-undo.ts#1"
+          },
+          {
             "location": "apps/web/src/features/chat/queries.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/queries.ts#7"
+          },
+          {
+            "location": "apps/web/src/features/chat/thread-reader-state.ts#7"
+          },
+          {
+            "location": "apps/web/src/features/chat/thread-reader-state.ts#8"
           },
           {
             "location": "apps/web/src/features/command-palette/hooks/use-command-actions.ts#4"
@@ -16517,6 +16694,9 @@
             "location": "apps/web/src/components/chat/generated-visual.tsx#3"
           },
           {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/chat/mcp-reconnect-notice.tsx#4"
           },
           {
@@ -16850,7 +17030,13 @@
             "location": "apps/web/src/features/avt/avt-view.tsx#8"
           },
           {
-            "location": "apps/web/src/features/avt/document-verifications.tsx#6"
+            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#12"
+          },
+          {
+            "location": "apps/web/src/features/avt/claim-gap.tsx#11"
+          },
+          {
+            "location": "apps/web/src/features/avt/document-verifications.tsx#8"
           },
           {
             "location": "apps/web/src/features/avt/fact-extraction.tsx#10"
@@ -16860,6 +17046,9 @@
           },
           {
             "location": "apps/web/src/features/avt/original-pdf-view.tsx#13"
+          },
+          {
+            "location": "apps/web/src/features/avt/review-history.tsx#10"
           },
           {
             "location": "apps/web/src/features/avt/run-history-picker.tsx#6"
@@ -18470,7 +18659,7 @@
             "location": "apps/web/src/routes/auth/index.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/auth/organization.tsx#16"
+            "location": "apps/web/src/routes/auth/organization.tsx#17"
           },
           {
             "location": "apps/web/src/routes/auth/otp.tsx#1"
@@ -19386,6 +19575,9 @@
             "location": "apps/mobile/src/components/use-document-editing.ts#1"
           },
           {
+            "location": "apps/mobile/src/components/use-mark-chat-read.ts#1"
+          },
+          {
             "location": "apps/mobile/src/components/use-now.ts#1"
           },
           {
@@ -19399,6 +19591,27 @@
           },
           {
             "location": "apps/mobile/src/components/use-shared-draft.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-draft.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-summary.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-file-email.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-mail-snapshot.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-outlook-auth.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-workspace-selection.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-workspaces.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
@@ -19434,7 +19647,7 @@
             "location": "apps/web/src/components/chat/create-document-draft-inspector-editor.logic.ts#1"
           },
           {
-            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#1"
+            "location": "apps/web/src/components/chat/use-chat-composer-models.ts#1"
           },
           {
             "location": "apps/web/src/components/chat/use-live-elapsed.ts#1"
@@ -19780,6 +19993,9 @@
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/thread-reader-state.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#1"
@@ -20271,6 +20487,9 @@
             "location": "apps/mobile/src/app/timers/new.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/active-chat-runs.tsx#8"
+          },
+          {
             "location": "apps/mobile/src/components/case-law-list.tsx#1"
           },
           {
@@ -20340,6 +20559,9 @@
             "location": "apps/mobile/src/components/push-registration.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/run-banner.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/scan-page-list.tsx#1"
           },
           {
@@ -20380,6 +20602,21 @@
           },
           {
             "location": "apps/mobile/src/native/layout-metrics.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/app.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/app-header.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/notice.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/panel.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/main.tsx#1"
           },
           {
             "location": "apps/playground/src/App.tsx#1"
@@ -20589,10 +20826,10 @@
             "location": "apps/web/src/components/chat/answer-quote.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#1"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#2"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat/attachment-chip.tsx#1"
@@ -20734,6 +20971,12 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#1"
@@ -21213,6 +21456,9 @@
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/components/overview-stat-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/pdf/annotations/document-mark-bar.tsx#1"
           },
           {
@@ -21672,7 +21918,13 @@
             "location": "apps/web/src/features/avt/claim-comments.tsx#7"
           },
           {
-            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#8"
+            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#10"
+          },
+          {
+            "location": "apps/web/src/features/avt/claim-gap.tsx#9"
+          },
+          {
+            "location": "apps/web/src/features/avt/document-verifications.tsx#6"
           },
           {
             "location": "apps/web/src/features/avt/fact-extraction.tsx#8"
@@ -21688,6 +21940,12 @@
           },
           {
             "location": "apps/web/src/features/avt/original-pdf-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/avt/reason-field.tsx#8"
+          },
+          {
+            "location": "apps/web/src/features/avt/review-history.tsx#8"
           },
           {
             "location": "apps/web/src/features/avt/state-chip.tsx#8"
@@ -23392,6 +23650,9 @@
           },
           {
             "location": "packages/ui/src/components/prose.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/run-state-mark.native.tsx#1"
           },
           {
             "location": "packages/ui/src/components/scroll-area.tsx#3"
@@ -24694,6 +24955,9 @@
             "location": "apps/mobile/src/components/use-document-editing.ts#1"
           },
           {
+            "location": "apps/mobile/src/components/use-mark-chat-read.ts#1"
+          },
+          {
             "location": "apps/mobile/src/components/use-now.ts#1"
           },
           {
@@ -24707,6 +24971,27 @@
           },
           {
             "location": "apps/mobile/src/components/use-shared-draft.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-draft.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-summary.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-file-email.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-mail-snapshot.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-outlook-auth.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-workspace-selection.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-workspaces.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
@@ -24742,7 +25027,7 @@
             "location": "apps/web/src/components/chat/create-document-draft-inspector-editor.logic.ts#1"
           },
           {
-            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#1"
+            "location": "apps/web/src/components/chat/use-chat-composer-models.ts#1"
           },
           {
             "location": "apps/web/src/components/chat/use-live-elapsed.ts#1"
@@ -25088,6 +25373,9 @@
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/thread-reader-state.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#1"
@@ -25579,6 +25867,9 @@
             "location": "apps/mobile/src/app/timers/new.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/active-chat-runs.tsx#8"
+          },
+          {
             "location": "apps/mobile/src/components/case-law-list.tsx#1"
           },
           {
@@ -25648,6 +25939,9 @@
             "location": "apps/mobile/src/components/push-registration.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/run-banner.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/scan-page-list.tsx#1"
           },
           {
@@ -25688,6 +25982,21 @@
           },
           {
             "location": "apps/mobile/src/native/layout-metrics.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/app.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/app-header.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/notice.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/panel.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/main.tsx#1"
           },
           {
             "location": "apps/playground/src/App.tsx#1"
@@ -25897,10 +26206,10 @@
             "location": "apps/web/src/components/chat/answer-quote.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#1"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#2"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat/attachment-chip.tsx#1"
@@ -26042,6 +26351,12 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#1"
@@ -26521,6 +26836,9 @@
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/components/overview-stat-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/pdf/annotations/document-mark-bar.tsx#1"
           },
           {
@@ -26980,7 +27298,13 @@
             "location": "apps/web/src/features/avt/claim-comments.tsx#7"
           },
           {
-            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#8"
+            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#10"
+          },
+          {
+            "location": "apps/web/src/features/avt/claim-gap.tsx#9"
+          },
+          {
+            "location": "apps/web/src/features/avt/document-verifications.tsx#6"
           },
           {
             "location": "apps/web/src/features/avt/fact-extraction.tsx#8"
@@ -26996,6 +27320,12 @@
           },
           {
             "location": "apps/web/src/features/avt/original-pdf-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/avt/reason-field.tsx#8"
+          },
+          {
+            "location": "apps/web/src/features/avt/review-history.tsx#8"
           },
           {
             "location": "apps/web/src/features/avt/state-chip.tsx#8"
@@ -28700,6 +29030,9 @@
           },
           {
             "location": "packages/ui/src/components/prose.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/run-state-mark.native.tsx#1"
           },
           {
             "location": "packages/ui/src/components/scroll-area.tsx#3"
@@ -30294,7 +30627,7 @@
             "location": "apps/api/src/db/backfill-runtime.ts#1"
           },
           {
-            "location": "apps/api/src/db/better-auth-oauth-resource-repair.ts#56"
+            "location": "apps/api/src/db/better-auth-oauth-resource-repair.ts#58"
           },
           {
             "location": "apps/api/src/db/case-law-population-repair.ts#1"
@@ -30750,7 +31083,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts#7"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts#9"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts#10"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-uohs.ts#5"
@@ -31071,6 +31404,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/recapture.ts#16"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#1"
           },
           {
@@ -31297,9 +31633,6 @@
           },
           {
             "location": "apps/api/src/handlers/chat/browser-site-grants/load.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/browser-snapshot-history.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#4"
@@ -31584,6 +31917,12 @@
             "location": "apps/api/src/handlers/chat/threads/list.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/threads/pin-state/update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/threads/read-state/update.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/threads/rename.ts#1"
           },
           {
@@ -31606,6 +31945,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tool-read-scope.ts#17"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tool-result-retention.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/auto-apply-suggest-changes-tools.ts#6"
@@ -31990,6 +32332,9 @@
           },
           {
             "location": "apps/api/src/handlers/document-reviews/reference-positions.ts#30"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/reference-positions.ts#31"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/review-selection.ts#1"
@@ -32676,6 +33021,12 @@
             "location": "apps/api/src/handlers/lists/sections/create.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/lists/source-documents/list.ts#7"
+          },
+          {
+            "location": "apps/api/src/handlers/lists/source-documents/update.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/lists/update.ts#1"
           },
           {
@@ -32691,10 +33042,16 @@
             "location": "apps/api/src/handlers/lists/verifications/claim-comments/update.ts#7"
           },
           {
+            "location": "apps/api/src/handlers/lists/verifications/claim-rechecks/create.ts#8"
+          },
+          {
             "location": "apps/api/src/handlers/lists/verifications/claim-reviews/bulk/create.ts#7"
           },
           {
             "location": "apps/api/src/handlers/lists/verifications/claim-reviews/create.ts#7"
+          },
+          {
+            "location": "apps/api/src/handlers/lists/verifications/claim-reviews/list.ts#8"
           },
           {
             "location": "apps/api/src/handlers/lists/verifications/create.ts#7"
@@ -33240,6 +33597,12 @@
             "location": "apps/api/src/handlers/sharepoint/disconnect.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/sharepoint/drives/items/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/drives/list.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/sharepoint/enablement.ts#11"
           },
           {
@@ -33249,13 +33612,22 @@
             "location": "apps/api/src/handlers/sharepoint/graph-oauth.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/sharepoint/list-drive-root.ts#1"
+            "location": "apps/api/src/handlers/sharepoint/import-file.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/imports/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/sharepoint/oauth-callback.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/sharepoint/session.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/sharepoint/set-enablement.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/sites/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/sharepoint/status.ts#1"
@@ -34593,7 +34965,13 @@
             "location": "apps/api/src/lib/case-law/withdrawn-copies.ts#1"
           },
           {
+            "location": "apps/api/src/lib/case-law/withdrawn-copy-projection.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/case-law-public-read-db.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/artefact-provenance.ts#1"
           },
           {
             "location": "apps/api/src/lib/chat/chat-request.ts#2"
@@ -34744,6 +35122,9 @@
           },
           {
             "location": "apps/api/src/lib/db/aggregate-mutation-declaration.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/assert-better-auth-oauth-policy.ts#1"
           },
           {
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#1"
@@ -34911,7 +35292,7 @@
             "location": "apps/api/src/lib/document-processing-retry.ts#1"
           },
           {
-            "location": "apps/api/src/lib/document-review/decision-carry-over.ts#21"
+            "location": "apps/api/src/lib/document-review/decision-carry-over.ts#22"
           },
           {
             "location": "apps/api/src/lib/document-review/finding-write.ts#13"
@@ -35191,6 +35572,9 @@
           },
           {
             "location": "apps/api/src/lib/errors/redacted-provider-diagnostic.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/errors/request-abort.ts#1"
           },
           {
             "location": "apps/api/src/lib/errors/tagged-errors.ts#29"
@@ -35889,6 +36273,9 @@
             "location": "apps/api/src/lib/lists/fact-details.ts#6"
           },
           {
+            "location": "apps/api/src/lib/lists/fact-tiers.ts#7"
+          },
+          {
             "location": "apps/api/src/lib/lists/generation/fact-extract.ts#20"
           },
           {
@@ -35982,6 +36369,9 @@
             "location": "apps/api/src/lib/lists/verification/claim-grade.ts#1"
           },
           {
+            "location": "apps/api/src/lib/lists/verification/contract.ts#10"
+          },
+          {
             "location": "apps/api/src/lib/lists/verification/evidence.ts#12"
           },
           {
@@ -35994,7 +36384,13 @@
             "location": "apps/api/src/lib/lists/verification/read-run.ts#9"
           },
           {
+            "location": "apps/api/src/lib/lists/verification/recheck.ts#16"
+          },
+          {
             "location": "apps/api/src/lib/lists/verification/review-fold.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/lists/verification/review-history.ts#12"
           },
           {
             "location": "apps/api/src/lib/lists/verification/run-caps.ts#1"
@@ -37593,6 +37989,9 @@
             "location": "apps/mobile/src/components/use-document-editing.ts#3"
           },
           {
+            "location": "apps/mobile/src/components/use-mark-chat-read.ts#3"
+          },
+          {
             "location": "apps/mobile/src/components/use-optimistic-write.ts#3"
           },
           {
@@ -37668,6 +38067,9 @@
             "location": "apps/mobile/src/state/chat-messages.ts#1"
           },
           {
+            "location": "apps/mobile/src/state/chat-runs.ts#1"
+          },
+          {
             "location": "apps/mobile/src/state/chat-stream.ts#1"
           },
           {
@@ -37716,6 +38118,9 @@
             "location": "apps/mobile/src/state/shared-items.ts#1"
           },
           {
+            "location": "apps/mobile/src/state/swipe.ts#1"
+          },
+          {
             "location": "apps/mobile/src/state/tasks.ts#1"
           },
           {
@@ -37723,6 +38128,81 @@
           },
           {
             "location": "apps/mobile/src/state/timers.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/state/user-events.ts#1"
+          },
+          {
+            "location": "apps/outlook/scripts/build.ts#1"
+          },
+          {
+            "location": "apps/outlook/scripts/create-dev-cert.ts#1"
+          },
+          {
+            "location": "apps/outlook/scripts/dev.ts#1"
+          },
+          {
+            "location": "apps/outlook/scripts/probe-deployment.ts#1"
+          },
+          {
+            "location": "apps/outlook/scripts/release-artifact.ts#1"
+          },
+          {
+            "location": "apps/outlook/scripts/render-manifest.ts#1"
+          },
+          {
+            "location": "apps/outlook/scripts/serve.ts#1"
+          },
+          {
+            "location": "apps/outlook/scripts/validate-manifest.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/api.ts#9"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-draft.ts#3"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-summary.ts#3"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-file-email.ts#3"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-mail-snapshot.ts#3"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-outlook-auth.ts#3"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-workspaces.ts#3"
+          },
+          {
+            "location": "apps/outlook/src/lib/oauth/authorize.ts#12"
+          },
+          {
+            "location": "apps/outlook/src/lib/oauth/discovery.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/lib/oauth/errors.ts#4"
+          },
+          {
+            "location": "apps/outlook/src/lib/oauth/grant-store.ts#11"
+          },
+          {
+            "location": "apps/outlook/src/lib/oauth/tokens.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/lib/outlook-api-client.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/lib/outlook-api-error.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/lib/outlook-auth.ts#6"
+          },
+          {
+            "location": "apps/outlook/src/lib/outlook-error.ts#1"
           },
           {
             "location": "apps/visual-preview/src/handler.ts#2"
@@ -37836,6 +38316,9 @@
             "location": "apps/web/src/components/chat/answer-quote.logic.ts#4"
           },
           {
+            "location": "apps/web/src/components/chat/ask-user-card.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/components/chat/case-law-open.ts#1"
           },
           {
@@ -37851,6 +38334,9 @@
             "location": "apps/web/src/components/chat/chat-thread-messages.logic.ts#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-thread-model-write.ts#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-turn-status.logic.ts#2"
           },
           {
@@ -37858,6 +38344,9 @@
           },
           {
             "location": "apps/web/src/components/chat/citation-file-type.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/composer-choice.ts#1"
           },
           {
             "location": "apps/web/src/components/chat/create-document-draft-runtime.ts#1"
@@ -37893,7 +38382,7 @@
             "location": "apps/web/src/components/chat/table-chart.logic.ts#1"
           },
           {
-            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#3"
+            "location": "apps/web/src/components/chat/use-chat-composer-models.ts#8"
           },
           {
             "location": "apps/web/src/components/chat-composer-paste.ts#4"
@@ -38157,7 +38646,10 @@
             "location": "apps/web/src/env.ts#2"
           },
           {
-            "location": "apps/web/src/features/avt/claim-review.logic.ts#10"
+            "location": "apps/web/src/features/avt/claim-review.logic.ts#11"
+          },
+          {
+            "location": "apps/web/src/features/avt/conflict-value.logic.ts#7"
           },
           {
             "location": "apps/web/src/features/avt/fact-extraction.logic.ts#7"
@@ -38166,7 +38658,13 @@
             "location": "apps/web/src/features/avt/queries.ts#6"
           },
           {
+            "location": "apps/web/src/features/avt/review-history.logic.ts#7"
+          },
+          {
             "location": "apps/web/src/features/avt/save-state.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/avt/use-source-kinds.ts#13"
           },
           {
             "location": "apps/web/src/features/avt/use-start-fact-extraction.ts#4"
@@ -38238,6 +38736,9 @@
             "location": "apps/web/src/features/case-law/court-tier-rows.logic.ts#1"
           },
           {
+            "location": "apps/web/src/features/case-law/decision-anchor-resolution.logic.ts#11"
+          },
+          {
             "location": "apps/web/src/features/case-law/decision-find.logic.ts#12"
           },
           {
@@ -38269,6 +38770,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/use-case-law-refine.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/use-held-decision-anchors.ts#2"
           },
           {
             "location": "apps/web/src/features/case-law/use-provision-part-renderer.ts#1"
@@ -38362,6 +38866,12 @@
           },
           {
             "location": "apps/web/src/features/chat/link-icons.ts#3"
+          },
+          {
+            "location": "apps/web/src/features/chat/local-files-undo.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/local-files-undo.ts#2"
           },
           {
             "location": "apps/web/src/features/chat/queries.ts#8"
@@ -39075,6 +39585,9 @@
             "location": "packages/agent-engine/src/harness/skill-folders.ts#1"
           },
           {
+            "location": "packages/agent-engine/src/harness/skill-network-hosts.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/harness/skill-redaction.ts#1"
           },
           {
@@ -39091,6 +39604,9 @@
           },
           {
             "location": "packages/agent-engine/src/harness/turn-lifecycle.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/protocol-log.ts#2"
           },
           {
             "location": "packages/agent-engine/src/run.ts#3"
@@ -39156,6 +39672,9 @@
             "location": "packages/api-contract/src/browser-control.ts#1"
           },
           {
+            "location": "packages/api-contract/src/case-law-anchor-redirects.ts#13"
+          },
+          {
             "location": "packages/api-contract/src/case-law-decision-route.ts#1"
           },
           {
@@ -39195,7 +39714,7 @@
             "location": "packages/api-contract/src/decision-docket-filing-year.fixtures.ts#1"
           },
           {
-            "location": "packages/api-contract/src/decision-docket-grammar.ts#7"
+            "location": "packages/api-contract/src/decision-docket-grammar.ts#8"
           },
           {
             "location": "packages/api-contract/src/decision-paragraph-range.ts#1"
@@ -39205,6 +39724,9 @@
           },
           {
             "location": "packages/api-contract/src/decision-ruling-identity.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/desktop-account-link.ts#1"
           },
           {
             "location": "packages/api-contract/src/desktop-runner.ts#3"
@@ -39756,6 +40278,9 @@
             "location": "packages/legal-ast/src/reader-text-quote.ts#20"
           },
           {
+            "location": "packages/legal-ast/src/stable-block-anchors.ts#24"
+          },
+          {
             "location": "packages/legal-ast/src/statute-anchor-scheme.ts#17"
           },
           {
@@ -39916,6 +40441,9 @@
           },
           {
             "location": "packages/sanctions/src/ofac.ts#1"
+          },
+          {
+            "location": "packages/sanctions/src/party-screening.ts#1"
           },
           {
             "location": "packages/sanctions/src/replacement.ts#1"
@@ -40392,6 +40920,9 @@
             "location": "scripts/ci-check-budgets.ts#13"
           },
           {
+            "location": "scripts/ci-comparison-base.ts#1"
+          },
+          {
             "location": "scripts/ci-expression-context.ts#1"
           },
           {
@@ -40552,6 +41083,9 @@
           },
           {
             "location": "scripts/flaky-test-quarantine.ts#16"
+          },
+          {
+            "location": "scripts/flaky-test-workflow.ts#1"
           },
           {
             "location": "scripts/generate-case-law-publication-migration.ts#1"
@@ -40752,7 +41286,7 @@
             "location": "scripts/run-custom-lint-tests.ts#1"
           },
           {
-            "location": "scripts/run-unlisted-script-tests.ts#15"
+            "location": "scripts/run-unlisted-script-tests.ts#19"
           },
           {
             "location": "scripts/rust-test-determinism-scan.ts#11"
@@ -40932,10 +41466,16 @@
             "location": "apps/mobile/src/app/timers/new.tsx#3"
           },
           {
+            "location": "apps/mobile/src/components/active-chat-runs.tsx#10"
+          },
+          {
             "location": "apps/mobile/src/components/case-law-list.tsx#3"
           },
           {
             "location": "apps/mobile/src/components/changes.tsx#11"
+          },
+          {
+            "location": "apps/mobile/src/components/chat-thread-row.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/chat-thread-view.tsx#3"
@@ -40989,6 +41529,9 @@
             "location": "apps/mobile/src/components/matters-view.tsx#3"
           },
           {
+            "location": "apps/mobile/src/components/run-banner.tsx#3"
+          },
+          {
             "location": "apps/mobile/src/components/selection.tsx#3"
           },
           {
@@ -41008,6 +41551,9 @@
           },
           {
             "location": "apps/mobile/src/connection/session-provider.tsx#3"
+          },
+          {
+            "location": "apps/outlook/src/main.tsx#4"
           },
           {
             "location": "apps/web/src/app-providers.tsx#8"
@@ -41073,6 +41619,9 @@
             "location": "apps/web/src/components/chat/answer-quote.tsx#5"
           },
           {
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#9"
+          },
+          {
             "location": "apps/web/src/components/chat/attachment-chip.tsx#3"
           },
           {
@@ -41101,6 +41650,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-message-actions-menu.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-model-options-menu.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat/chat-model-selector.tsx#4"
@@ -41149,6 +41701,9 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#5"
           },
           {
             "location": "apps/web/src/components/chat/message-export-menu.tsx#4"
@@ -41235,6 +41790,9 @@
             "location": "apps/web/src/components/inspector/anonymization-match-status.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#26"
+          },
+          {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#5"
           },
           {
@@ -41317,9 +41875,6 @@
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#16"
-          },
-          {
-            "location": "apps/web/src/components/matter-run-marks.tsx#1"
           },
           {
             "location": "apps/web/src/components/matter-target-picker.tsx#5"
@@ -41505,10 +42060,13 @@
             "location": "apps/web/src/features/avt/claim-comments.tsx#9"
           },
           {
-            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#10"
+            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#13"
           },
           {
             "location": "apps/web/src/features/avt/fact-extraction.tsx#11"
+          },
+          {
+            "location": "apps/web/src/features/avt/review-history.tsx#11"
           },
           {
             "location": "apps/web/src/features/avt/verification-detail.tsx#6"
@@ -41838,7 +42396,7 @@
             "location": "apps/web/src/routes/auth/handoff.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/auth/organization.tsx#17"
+            "location": "apps/web/src/routes/auth/organization.tsx#18"
           },
           {
             "location": "apps/web/src/routes/auth/otp.tsx#2"
@@ -42061,6 +42619,12 @@
           },
           {
             "location": "packages/ui/src/components/inline-rename.tsx#4"
+          },
+          {
+            "location": "packages/ui/src/components/run-state-mark.native.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/run-state-mark.tsx#1"
           },
           {
             "location": "packages/ui/src/components/sidebar.tsx#8"
@@ -42312,6 +42876,10 @@
         {
           "name": "SrcFile",
           "value": "apps/visual-preview/node_modules/better-result/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/outlook/node_modules/better-result/package.json"
         },
         {
           "name": "SrcFile",
@@ -43418,10 +43986,10 @@
             "location": "apps/api/src/db/backfill-runtime.ts#2"
           },
           {
-            "location": "apps/api/src/db/better-auth-oauth-resource-repair.ts#57"
+            "location": "apps/api/src/db/better-auth-oauth-resource-repair.ts#59"
           },
           {
-            "location": "apps/api/src/db/better-auth-oauth-resource-repair.ts#58"
+            "location": "apps/api/src/db/better-auth-oauth-resource-repair.ts#60"
           },
           {
             "location": "apps/api/src/db/columns.ts#2"
@@ -44153,9 +44721,6 @@
             "location": "apps/api/src/handlers/chat/fork/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/generate-thread-title.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/chat/get-thread-recap.ts#2"
           },
           {
@@ -44247,6 +44812,21 @@
           },
           {
             "location": "apps/api/src/handlers/chat/threads/list.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/threads/pin-state/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/threads/read-state/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/threads/reader-state.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/threads/reader-state.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/threads/reader-state.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/threads/rename.ts#2"
@@ -45146,13 +45726,16 @@
             "location": "apps/api/src/handlers/sharepoint/disconnect.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/sharepoint/graph-client.ts#17"
+            "location": "apps/api/src/handlers/sharepoint/graph-client.ts#16"
           },
           {
-            "location": "apps/api/src/handlers/sharepoint/list-drive-root.ts#2"
+            "location": "apps/api/src/handlers/sharepoint/import-file.ts#14"
           },
           {
             "location": "apps/api/src/handlers/sharepoint/oauth-callback.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/session.ts#2"
           },
           {
             "location": "apps/api/src/handlers/sharepoint/status.ts#2"
@@ -45908,6 +46491,9 @@
             "location": "apps/api/src/lib/case-law/decision-analysis.ts#1"
           },
           {
+            "location": "apps/api/src/lib/case-law/decision-anchor-redirects.ts#8"
+          },
+          {
             "location": "apps/api/src/lib/case-law/decision-badges.ts#2"
           },
           {
@@ -45975,6 +46561,12 @@
           },
           {
             "location": "apps/api/src/lib/case-law/decision-write-extension.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/derived-ai-source.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/derived-ai-source.ts#2"
           },
           {
             "location": "apps/api/src/lib/case-law/filter-country-scope.ts#2"
@@ -46304,7 +46896,7 @@
             "location": "apps/api/src/lib/desktop-runner/folder-restores.ts#13"
           },
           {
-            "location": "apps/api/src/lib/desktop-runner/store.ts#17"
+            "location": "apps/api/src/lib/desktop-runner/store.ts#19"
           },
           {
             "location": "apps/api/src/lib/document-content-provenance.ts#1"
@@ -46331,7 +46923,7 @@
             "location": "apps/api/src/lib/document-review/approved-playbook-versions.ts#11"
           },
           {
-            "location": "apps/api/src/lib/document-review/decision-carry-over.ts#22"
+            "location": "apps/api/src/lib/document-review/decision-carry-over.ts#23"
           },
           {
             "location": "apps/api/src/lib/document-review/decision-counts.ts#15"
@@ -46958,6 +47550,9 @@
             "location": "apps/api/src/lib/legal-search/statute-sitemap-shard-sql.ts#2"
           },
           {
+            "location": "apps/api/src/lib/lists/fact-tiers.ts#8"
+          },
+          {
             "location": "apps/api/src/lib/lists/generation/run-persistence.ts#9"
           },
           {
@@ -47025,6 +47620,12 @@
           },
           {
             "location": "apps/api/src/lib/lists/verification/read-run.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/lists/verification/recheck.ts#17"
+          },
+          {
+            "location": "apps/api/src/lib/lists/verification/review-history.ts#13"
           },
           {
             "location": "apps/api/src/lib/lists/verification/run-caps.ts#2"
@@ -47894,7 +48495,7 @@
             "location": "apps/api/src/db/auth-schema.ts#11"
           },
           {
-            "location": "apps/api/src/db/better-auth-oauth-resource-repair.ts#58"
+            "location": "apps/api/src/db/better-auth-oauth-resource-repair.ts#60"
           },
           {
             "location": "apps/api/src/db/columns.ts#3"
@@ -48033,6 +48634,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/threads/list.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/threads/reader-state.ts#3"
           },
           {
             "location": "apps/api/src/handlers/legislation/ingestion.ts#4"
@@ -48774,6 +49378,9 @@
             "location": "apps/mobile/src/components/composer-attach-menu.ios.tsx#9"
           },
           {
+            "location": "apps/mobile/src/components/run-banner.tsx#4"
+          },
+          {
             "location": "apps/mobile/src/components/viewer-controls.tsx#3"
           }
         ]
@@ -48984,6 +49591,9 @@
             "location": "apps/mobile/src/components/new-chat.ts#2"
           },
           {
+            "location": "apps/mobile/src/components/open-thread.ts#1"
+          },
+          {
             "location": "apps/mobile/src/components/use-document-editing.ts#5"
           },
           {
@@ -49060,9 +49670,6 @@
           },
           {
             "location": "apps/mobile/src/app/timers/new.tsx#4"
-          },
-          {
-            "location": "apps/mobile/src/components/chat-thread-row.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/decision-reader.tsx#4"
@@ -49490,6 +50097,9 @@
             "location": "apps/mobile/src/native/timer-actions.ts#1"
           },
           {
+            "location": "apps/mobile/src/components/active-chat-runs.tsx#11"
+          },
+          {
             "location": "apps/mobile/src/components/decision-text.dom.tsx#10"
           },
           {
@@ -49503,6 +50113,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-chat-turn.ts#5"
+          },
+          {
+            "location": "apps/mobile/src/components/active-chat-runs.tsx#11"
           },
           {
             "location": "apps/mobile/src/components/decision-text.dom.tsx#10"
@@ -50490,6 +51103,75 @@
       "version": "0.16.47"
     },
     {
+      "authors": [
+        {
+          "name": "James Lan"
+        }
+      ],
+      "bom-ref": "pkg:npm/libxml2-wasm@0.7.2",
+      "description": "WebAssembly-based libxml2 javascript wrapper",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/outlook/node_modules/libxml2-wasm/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/outlook/node_modules/libxml2-wasm/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/outlook/scripts/validate-manifest.ts#2"
+          },
+          {
+            "location": "apps/outlook/scripts/validate-manifest.ts#3"
+          },
+          {
+            "location": "apps/outlook/scripts/validate-manifest.ts#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://jameslan.github.io/libxml2-wasm/"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "libxml2-wasm",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/libxml2-wasm/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/outlook/node_modules/libxml2-wasm/package.json"
+        }
+      ],
+      "purl": "pkg:npm/libxml2-wasm@0.7.2",
+      "scope": "required",
+      "tags": [
+        "xml"
+      ],
+      "type": "library",
+      "version": "0.7.2"
+    },
+    {
       "bom-ref": "pkg:npm/lightningcss@1.33.0",
       "description": "A CSS parser, transformer, and minifier written in Rust",
       "evidence": {
@@ -51240,6 +51922,73 @@
       "scope": "required",
       "type": "library",
       "version": "3.0.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "Murat Gözel <murat@gozel.com.tr>"
+        }
+      ],
+      "bom-ref": "pkg:npm/mimetext@3.0.28",
+      "description": "RFC-5322 compliant, fully typed and documented email message generator for javascript runtimes",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/outlook/node_modules/mimetext/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/outlook/node_modules/mimetext/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/outlook/src/lib/eml.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/lib/eml.ts#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/muratgozel/MIMEText#readme"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/muratgozel/MIMEText.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "mimetext",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/mimetext/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/outlook/node_modules/mimetext/package.json"
+        }
+      ],
+      "purl": "pkg:npm/mimetext@3.0.28",
+      "scope": "required",
+      "type": "library",
+      "version": "3.0.28"
     },
     {
       "authors": [
@@ -52601,6 +53350,9 @@
             "location": "apps/desktop/src/mainview/main.tsx#3"
           },
           {
+            "location": "apps/outlook/src/main.tsx#2"
+          },
+          {
             "location": "apps/playground/src/main.tsx#3"
           },
           {
@@ -52761,6 +53513,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#3"
+          },
+          {
+            "location": "apps/outlook/src/main.tsx#2"
           },
           {
             "location": "apps/playground/src/main.tsx#3"
@@ -52935,6 +53690,10 @@
         },
         {
           "name": "SrcFile",
+          "value": "apps/outlook/node_modules/react-dom/package.json"
+        },
+        {
+          "name": "SrcFile",
           "value": "apps/mobile/node_modules/react-dom/package.json"
         },
         {
@@ -53017,6 +53776,9 @@
           },
           {
             "location": "apps/mobile/src/components/pane.tsx#2"
+          },
+          {
+            "location": "apps/mobile/src/components/run-banner.tsx#15"
           },
           {
             "location": "apps/mobile/src/components/ui/safe-area-view.tsx#3"
@@ -53163,6 +53925,9 @@
             "location": "packages/ui/src/components/matter-icon.native.tsx#2"
           },
           {
+            "location": "packages/ui/src/components/run-state-mark.native.tsx#5"
+          },
+          {
             "location": "packages/ui/src/components/stella-mark.native.tsx#1"
           },
           {
@@ -53242,6 +54007,9 @@
             "location": "apps/mobile/src/components/use-document-editing.ts#6"
           },
           {
+            "location": "apps/mobile/src/components/use-mark-chat-read.ts#4"
+          },
+          {
             "location": "apps/mobile/src/components/use-pick-document.ts#4"
           },
           {
@@ -53306,6 +54074,9 @@
           },
           {
             "location": "apps/mobile/src/app/timers/new.tsx#5"
+          },
+          {
+            "location": "apps/mobile/src/components/active-chat-runs.tsx#12"
           },
           {
             "location": "apps/mobile/src/components/auth-backdrop-view.tsx#1"
@@ -53389,6 +54160,12 @@
             "location": "apps/mobile/src/components/retry-button.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/run-banner.tsx#13"
+          },
+          {
+            "location": "apps/mobile/src/components/run-banner.tsx#14"
+          },
+          {
             "location": "apps/mobile/src/components/scan-page-list.tsx#3"
           },
           {
@@ -53398,10 +54175,10 @@
             "location": "apps/mobile/src/components/split-pane.tsx#3"
           },
           {
-            "location": "apps/mobile/src/components/swipe-row.tsx#11"
+            "location": "apps/mobile/src/components/swipe-row.tsx#12"
           },
           {
-            "location": "apps/mobile/src/components/swipe-row.tsx#12"
+            "location": "apps/mobile/src/components/swipe-row.tsx#13"
           },
           {
             "location": "apps/mobile/src/components/task-assignees.tsx#4"
@@ -53456,6 +54233,9 @@
           },
           {
             "location": "packages/ui/src/components/loader.native.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/components/run-state-mark.native.tsx#4"
           },
           {
             "location": "packages/ui/src/components/separator.native.tsx#1"
@@ -53576,6 +54356,9 @@
             "location": "apps/mobile/src/components/use-document-editing.ts#1"
           },
           {
+            "location": "apps/mobile/src/components/use-mark-chat-read.ts#1"
+          },
+          {
             "location": "apps/mobile/src/components/use-now.ts#1"
           },
           {
@@ -53589,6 +54372,27 @@
           },
           {
             "location": "apps/mobile/src/components/use-shared-draft.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-draft.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-ai-summary.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-file-email.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-mail-snapshot.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-outlook-auth.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-workspace-selection.ts#1"
+          },
+          {
+            "location": "apps/outlook/src/hooks/use-workspaces.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
@@ -53624,7 +54428,7 @@
             "location": "apps/web/src/components/chat/create-document-draft-inspector-editor.logic.ts#1"
           },
           {
-            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#1"
+            "location": "apps/web/src/components/chat/use-chat-composer-models.ts#1"
           },
           {
             "location": "apps/web/src/components/chat/use-live-elapsed.ts#1"
@@ -53970,6 +54774,9 @@
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/thread-reader-state.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#1"
@@ -54461,6 +55268,9 @@
             "location": "apps/mobile/src/app/timers/new.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/active-chat-runs.tsx#8"
+          },
+          {
             "location": "apps/mobile/src/components/case-law-list.tsx#1"
           },
           {
@@ -54530,6 +55340,9 @@
             "location": "apps/mobile/src/components/push-registration.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/run-banner.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/scan-page-list.tsx#1"
           },
           {
@@ -54570,6 +55383,21 @@
           },
           {
             "location": "apps/mobile/src/native/layout-metrics.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/app.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/app-header.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/notice.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/components/panel.tsx#1"
+          },
+          {
+            "location": "apps/outlook/src/main.tsx#1"
           },
           {
             "location": "apps/playground/src/App.tsx#1"
@@ -54779,10 +55607,10 @@
             "location": "apps/web/src/components/chat/answer-quote.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#1"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#2"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat/attachment-chip.tsx#1"
@@ -54924,6 +55752,12 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#1"
@@ -55403,6 +56237,9 @@
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/components/overview-stat-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/pdf/annotations/document-mark-bar.tsx#1"
           },
           {
@@ -55862,7 +56699,13 @@
             "location": "apps/web/src/features/avt/claim-comments.tsx#7"
           },
           {
-            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#8"
+            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#10"
+          },
+          {
+            "location": "apps/web/src/features/avt/claim-gap.tsx#9"
+          },
+          {
+            "location": "apps/web/src/features/avt/document-verifications.tsx#6"
           },
           {
             "location": "apps/web/src/features/avt/fact-extraction.tsx#8"
@@ -55878,6 +56721,12 @@
           },
           {
             "location": "apps/web/src/features/avt/original-pdf-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/avt/reason-field.tsx#8"
+          },
+          {
+            "location": "apps/web/src/features/avt/review-history.tsx#8"
           },
           {
             "location": "apps/web/src/features/avt/state-chip.tsx#8"
@@ -57584,6 +58433,9 @@
             "location": "packages/ui/src/components/prose.tsx#1"
           },
           {
+            "location": "packages/ui/src/components/run-state-mark.native.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/scroll-area.tsx#3"
           },
           {
@@ -57879,6 +58731,10 @@
         },
         {
           "name": "SrcFile",
+          "value": "apps/outlook/node_modules/react/package.json"
+        },
+        {
+          "name": "SrcFile",
           "value": "apps/mobile/node_modules/react/package.json"
         },
         {
@@ -58131,10 +58987,16 @@
             "location": "scripts/flake-gate-command.ts#2"
           },
           {
+            "location": "scripts/flaky-test-workflow.ts#2"
+          },
+          {
             "location": "scripts/check-custom-lint-test-runners.ts#3"
           },
           {
             "location": "scripts/flake-gate-command.ts#2"
+          },
+          {
+            "location": "scripts/flaky-test-workflow.ts#2"
           }
         ]
       },
@@ -58448,7 +59310,7 @@
             "location": "apps/web/src/components/ai-elements/message-response.tsx#8"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#4"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#10"
           },
           {
             "location": "apps/web/src/components/chat/chat-table-chart.tsx#7"
@@ -58618,6 +59480,9 @@
             "location": "packages/agent-engine/src/harness/compatibility.ts#2"
           },
           {
+            "location": "packages/agent-engine/src/protocol-log.ts#3"
+          },
+          {
             "location": "packages/agent-engine/src/sidecar/checkpoints.ts#20"
           },
           {
@@ -58760,6 +59625,9 @@
           },
           {
             "location": "packages/agent-engine/src/harness/compatibility.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/protocol-log.ts#3"
           },
           {
             "location": "packages/agent-engine/src/sidecar/checkpoints.ts#20"
@@ -59331,7 +60199,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#5"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#11"
           },
           {
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#14"
@@ -59407,6 +60275,9 @@
           },
           {
             "location": "packages/ui/src/components/matter-icon.native.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/run-state-mark.native.tsx#6"
           },
           {
             "location": "packages/ui/src/components/stella-mark.native.tsx#2"
@@ -59762,7 +60633,7 @@
             "location": "apps/web/src/components/ai-suggestions/use-review-change-summary.ts#2"
           },
           {
-            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#4"
+            "location": "apps/web/src/components/chat/use-chat-composer-models.ts#9"
           },
           {
             "location": "apps/web/src/components/chat-composer-paste.ts#5"
@@ -59816,6 +60687,9 @@
             "location": "apps/web/src/components/workspaces/kanban/use-kanban-schema.ts#3"
           },
           {
+            "location": "apps/web/src/features/avt/use-claim-gap-actions.ts#9"
+          },
+          {
             "location": "apps/web/src/features/avt/use-claim-review-actions.ts#3"
           },
           {
@@ -59823,6 +60697,9 @@
           },
           {
             "location": "apps/web/src/features/avt/use-load-sample-case.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/avt/use-source-kinds.ts#14"
           },
           {
             "location": "apps/web/src/features/avt/use-start-fact-extraction.ts#5"
@@ -59850,6 +60727,9 @@
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-suggest-chat-thread-title.ts#4"
+          },
+          {
+            "location": "apps/web/src/features/chat/thread-reader-state.ts#9"
           },
           {
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#4"
@@ -60221,6 +61101,9 @@
             "location": "apps/mobile/src/components/push-registration.tsx#5"
           },
           {
+            "location": "apps/mobile/src/components/run-banner.tsx#16"
+          },
+          {
             "location": "apps/mobile/src/components/scan-page-list.tsx#4"
           },
           {
@@ -60243,6 +61126,9 @@
           },
           {
             "location": "apps/mobile/src/components/write-failure.tsx#4"
+          },
+          {
+            "location": "apps/outlook/src/app.tsx#3"
           },
           {
             "location": "apps/playground/src/main.tsx#5"
@@ -60428,7 +61314,7 @@
             "location": "apps/web/src/components/chat/answer-quote.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#6"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#12"
           },
           {
             "location": "apps/web/src/components/chat/author-name-required-dialog.tsx#4"
@@ -60467,7 +61353,7 @@
             "location": "apps/web/src/components/chat/chat-mock-model-badge.tsx#1"
           },
           {
-            "location": "apps/web/src/components/chat/chat-model-options-menu.tsx#4"
+            "location": "apps/web/src/components/chat/chat-model-options-menu.tsx#5"
           },
           {
             "location": "apps/web/src/components/chat/chat-model-selector.tsx#5"
@@ -60525,6 +61411,9 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-files-undo.tsx#6"
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#4"
@@ -60683,7 +61572,7 @@
             "location": "apps/web/src/components/inspector/anonymization-match-status.tsx#2"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#26"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#27"
           },
           {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#6"
@@ -60851,7 +61740,7 @@
             "location": "apps/web/src/components/matter-number-hint.tsx#3"
           },
           {
-            "location": "apps/web/src/components/matter-run-marks.tsx#2"
+            "location": "apps/web/src/components/matter-run-marks.tsx#1"
           },
           {
             "location": "apps/web/src/components/matter-target-picker.tsx#6"
@@ -60891,6 +61780,9 @@
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/overview-stat-card.tsx#3"
           },
           {
             "location": "apps/web/src/components/pdf/annotations/document-mark-bar.tsx#4"
@@ -61277,19 +62169,25 @@
             "location": "apps/web/src/features/avt/claim-comments.tsx#10"
           },
           {
-            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#11"
+            "location": "apps/web/src/features/avt/claim-detail-panel.tsx#14"
+          },
+          {
+            "location": "apps/web/src/features/avt/claim-gap.tsx#12"
           },
           {
             "location": "apps/web/src/features/avt/claim-qualifiers.tsx#8"
           },
           {
-            "location": "apps/web/src/features/avt/document-verifications.tsx#7"
+            "location": "apps/web/src/features/avt/document-verifications.tsx#9"
           },
           {
             "location": "apps/web/src/features/avt/evidence-list-empty-state.tsx#2"
           },
           {
             "location": "apps/web/src/features/avt/fact-extraction.tsx#12"
+          },
+          {
+            "location": "apps/web/src/features/avt/fact-tier.tsx#8"
           },
           {
             "location": "apps/web/src/features/avt/load-sample-case-button.tsx#1"
@@ -61299,6 +62197,12 @@
           },
           {
             "location": "apps/web/src/features/avt/original-pdf-view.tsx#14"
+          },
+          {
+            "location": "apps/web/src/features/avt/reason-field.tsx#10"
+          },
+          {
+            "location": "apps/web/src/features/avt/review-history.tsx#12"
           },
           {
             "location": "apps/web/src/features/avt/run-history-picker.tsx#7"
@@ -62321,7 +63225,7 @@
             "location": "apps/web/src/routes/auth/handoff.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/auth/organization.tsx#18"
+            "location": "apps/web/src/routes/auth/organization.tsx#19"
           },
           {
             "location": "apps/web/src/routes/auth/reauth.tsx#2"
@@ -62708,6 +63612,10 @@
         },
         {
           "name": "SrcFile",
+          "value": "apps/outlook/node_modules/use-intl/package.json"
+        },
+        {
+          "name": "SrcFile",
           "value": "apps/mobile/node_modules/use-intl/package.json"
         },
         {
@@ -63062,6 +63970,9 @@
             "location": "apps/api/src/handlers/case-law/analysis/significance.ts#18"
           },
           {
+            "location": "apps/api/src/handlers/case-law/decisions/anchor-redirects.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#15"
           },
           {
@@ -63212,9 +64123,6 @@
             "location": "apps/api/src/handlers/chat/browser-site-grants/delete.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/browser-snapshot-history.ts#3"
-          },
-          {
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#7"
           },
           {
@@ -63332,6 +64240,12 @@
             "location": "apps/api/src/handlers/chat/threads/list.ts#5"
           },
           {
+            "location": "apps/api/src/handlers/chat/threads/pin-state/update.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/threads/read-state/update.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/chat/threads/rename.ts#3"
           },
           {
@@ -63387,9 +64301,6 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/org-tools.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/past-chat-tools.ts#5"
@@ -64094,6 +65005,12 @@
             "location": "apps/api/src/handlers/lists/sections/create.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/lists/source-documents/list.ts#8"
+          },
+          {
+            "location": "apps/api/src/handlers/lists/source-documents/update.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/lists/update.ts#3"
           },
           {
@@ -64106,10 +65023,16 @@
             "location": "apps/api/src/handlers/lists/verifications/claim-comments/update.ts#8"
           },
           {
+            "location": "apps/api/src/handlers/lists/verifications/claim-rechecks/create.ts#9"
+          },
+          {
             "location": "apps/api/src/handlers/lists/verifications/claim-reviews/bulk/create.ts#8"
           },
           {
             "location": "apps/api/src/handlers/lists/verifications/claim-reviews/create.ts#8"
+          },
+          {
+            "location": "apps/api/src/handlers/lists/verifications/claim-reviews/list.ts#9"
           },
           {
             "location": "apps/api/src/handlers/lists/verifications/create.ts#9"
@@ -64439,22 +65362,34 @@
             "location": "apps/api/src/handlers/seller-profiles/schema.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/sharepoint/browse-input.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/sharepoint/crypto.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/sharepoint/graph-client.ts#18"
+            "location": "apps/api/src/handlers/sharepoint/drives/items/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/drives/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/graph-client.ts#17"
           },
           {
             "location": "apps/api/src/handlers/sharepoint/graph-oauth.ts#17"
           },
           {
-            "location": "apps/api/src/handlers/sharepoint/list-drive-root.ts#3"
+            "location": "apps/api/src/handlers/sharepoint/imports/create.ts#2"
           },
           {
             "location": "apps/api/src/handlers/sharepoint/oauth-callback.ts#3"
           },
           {
             "location": "apps/api/src/handlers/sharepoint/set-enablement.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/sites/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/signals/count.ts#3"
@@ -65150,6 +66085,9 @@
             "location": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts#4"
           },
           {
+            "location": "apps/api/src/lib/chat/artefact-provenance.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/chat/case-law-citation-projection.ts#1"
           },
           {
@@ -65252,7 +66190,7 @@
             "location": "apps/api/src/lib/desktop-runner/session.ts#2"
           },
           {
-            "location": "apps/api/src/lib/desktop-runner/store.ts#18"
+            "location": "apps/api/src/lib/desktop-runner/store.ts#20"
           },
           {
             "location": "apps/api/src/lib/document-processing-readiness.ts#2"
@@ -65264,7 +66202,7 @@
             "location": "apps/api/src/lib/document-review/reference-grade.ts#20"
           },
           {
-            "location": "apps/api/src/lib/document-source.ts#29"
+            "location": "apps/api/src/lib/document-source.ts#27"
           },
           {
             "location": "apps/api/src/lib/document-translation/ai.ts#1"
@@ -65957,6 +66895,9 @@
             "location": "apps/mobile/src/state/chat-messages.ts#2"
           },
           {
+            "location": "apps/mobile/src/state/chat-runs.ts#2"
+          },
+          {
             "location": "apps/mobile/src/state/chat-stream.ts#2"
           },
           {
@@ -66012,6 +66953,21 @@
           },
           {
             "location": "apps/mobile/src/state/timers.ts#2"
+          },
+          {
+            "location": "apps/outlook/src/lib/api-schemas.ts#10"
+          },
+          {
+            "location": "apps/outlook/src/lib/oauth/authorize.ts#13"
+          },
+          {
+            "location": "apps/outlook/src/lib/oauth/discovery.ts#2"
+          },
+          {
+            "location": "apps/outlook/src/lib/oauth/grant-store.ts#12"
+          },
+          {
+            "location": "apps/outlook/src/lib/oauth/tokens.ts#2"
           },
           {
             "location": "apps/visual-preview/src/handler.ts#4"
@@ -66120,6 +67076,12 @@
           },
           {
             "location": "apps/web/src/features/chat/chat-runtime.ts#12"
+          },
+          {
+            "location": "apps/web/src/features/chat/local-files-undo.ts#3"
+          },
+          {
+            "location": "apps/web/src/features/chat/run-on-preference-store.ts#1"
           },
           {
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#5"
@@ -66374,6 +67336,9 @@
             "location": "packages/api-contract/src/case-law-analysis.ts#1"
           },
           {
+            "location": "packages/api-contract/src/case-law-anchor-redirects.ts#14"
+          },
+          {
             "location": "packages/api-contract/src/case-law-court-year.ts#1"
           },
           {
@@ -66387,6 +67352,9 @@
           },
           {
             "location": "packages/api-contract/src/case-law-source-languages.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/chat-ask-user.ts#1"
           },
           {
             "location": "packages/api-contract/src/chat-connector.ts#1"
@@ -66872,6 +67840,9 @@
             "location": "scripts/rule-census.ts#15"
           },
           {
+            "location": "scripts/run-unlisted-script-tests.ts#30"
+          },
+          {
             "location": "scripts/schema-import-changes.ts#12"
           },
           {
@@ -67022,7 +67993,7 @@
             "location": "apps/web/src/routes/auth/index.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/auth/organization.tsx#19"
+            "location": "apps/web/src/routes/auth/organization.tsx#20"
           },
           {
             "location": "apps/web/src/routes/auth/two-factor.tsx#2"
@@ -67158,6 +68129,10 @@
         {
           "name": "SrcFile",
           "value": "apps/visual-preview/node_modules/valibot/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/outlook/node_modules/valibot/package.json"
         },
         {
           "name": "SrcFile",
@@ -67664,6 +68639,9 @@
             "location": "apps/web/src/components/workspaces/kanban/kanban-selection.ts#4"
           },
           {
+            "location": "apps/web/src/features/avt/add-fact-progress-store.ts#1"
+          },
+          {
             "location": "apps/web/src/features/chat/legal-document-chat-threads.ts#17"
           },
           {
@@ -67671,6 +68649,12 @@
           },
           {
             "location": "apps/web/src/features/chat/queued-chat-sends.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/run-on-preference-store.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/chat/run-on-preference-store.ts#3"
           },
           {
             "location": "apps/web/src/features/chat/thread-active-skill-store.ts#1"
@@ -67814,7 +68798,7 @@
             "location": "apps/web/src/components/docx/docx-editor-host.tsx#16"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#27"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#28"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#7"
@@ -67895,6 +68879,9 @@
             "location": "apps/web/src/lib/organization/creation-state.ts#3"
           },
           {
+            "location": "apps/web/src/features/chat/run-on-preference-store.ts#3"
+          },
+          {
             "location": "apps/web/src/features/chat/thread-active-skill-store.ts#2"
           },
           {
@@ -67946,7 +68933,7 @@
             "location": "apps/web/src/components/dev-sidebar-group.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#27"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#28"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#7"
