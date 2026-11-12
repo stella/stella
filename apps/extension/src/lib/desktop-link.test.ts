@@ -235,6 +235,31 @@ test("drops a result whose connection is gone and reconnects", async () => {
   expect(await readDesktopLinkState()).toBe(DESKTOP_LINK_STATE.offline);
 });
 
+test("answers a command whose processing failed instead of dropping it", async () => {
+  const { ports } = installFakeChrome({ allowed: true });
+  const link = createDesktopLink({
+    cancel: () => undefined,
+    runCommand: async () => {
+      throw new TypeError("storage is unavailable");
+    },
+    timer: createManualTimer().timer,
+  });
+  await link.connect();
+  const [native] = ports;
+  if (native === undefined) {
+    throw new TypeError("No native port opened.");
+  }
+  native.deliver(command("r-1"));
+  await settleMicrotasks();
+  expect(native.posted).toMatchObject([
+    {
+      requestId: "r-1",
+      result: { code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown },
+      type: "command-result",
+    },
+  ]);
+});
+
 test("a desktop chat's controller never matches a web connection's", () => {
   const id = crypto.randomUUID();
   expect(desktopControllerId(id)).not.toBe(id);

@@ -14,6 +14,7 @@ import {
   executeBrowserCommand,
   forgetControlledTab,
   replaceControlledTab,
+  takeOverControl,
 } from "./tab-executor";
 
 type TabChange = { status?: string; url?: string };
@@ -357,6 +358,21 @@ const run = async (
     signIn,
   });
 
+describe("taking the browser over", () => {
+  test("ends another controller's control, and leaves its own alone", async () => {
+    const installed = installFakeChrome();
+    expect(await takeOverControl(CONTROLLER_ID)).toBe(false);
+    expect(installed.session["browserControlledTab"]).toBeDefined();
+
+    expect(await takeOverControl("desktop:thread-1")).toBe(true);
+    expect(installed.session["browserControlledTab"]).toBeUndefined();
+    // Nothing is left for the previous controller to act on.
+    expect(await run({ action: "snapshot" })).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.noControlledTab,
+    });
+  });
+});
+
 describe("a page that asks for a sign-in", () => {
   const desktop = { signIn: SIGN_IN_POLICY.handToMember } as const;
   const signInFrame = { frameId: 3, result: { refused: "sign-in" } };
@@ -420,10 +436,28 @@ describe("a page that asks for a sign-in", () => {
     expect(log).not.toContain("inject:snapshot");
   });
 
+  test("stops a desktop action before it acts when any frame asks", async () => {
+    const { handlers, log } = installFakeChrome();
+    handlers["action"] = () => [{ frameId: 0, result: { ok: true } }];
+    handlers["snapshot"] = () => [
+      { frameId: 0, result: { refused: "none" } },
+      signInFrame,
+    ];
+
+    expect(await run(click(), desktop)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+    });
+    expect(log).not.toContain("inject:action");
+  });
+
   test("reached by a click is the known outcome, not an unknown one", async () => {
     const { handlers } = installFakeChrome();
     handlers["action"] = () => [{ frameId: 0, result: { ok: true } }];
-    handlers["snapshot"] = () => [signInFrame];
+    // Clear before the click; a sign-in page after it.
+    handlers["snapshot"] = (injection) =>
+      Reflect.get(injection.args?.[0] ?? {}, "purpose") === "sign-in-check"
+        ? [{ frameId: 0, result: { refused: "none" } }]
+        : [signInFrame];
 
     expect(await run(click(), desktop)).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.needsMember,

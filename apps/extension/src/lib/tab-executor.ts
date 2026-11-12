@@ -49,6 +49,7 @@ import {
   readContainedTabs,
   readTabOwner,
   reclaimControlledTab,
+  releaseContainedTabs,
   switchContainedTab,
 } from "./tab-containment";
 
@@ -201,6 +202,23 @@ export const readControlledTabId = async (
 ): Promise<number | null> => {
   const state = await readControlledTabState();
   return state?.controllerId === controllerId ? state.tabId : null;
+};
+
+/**
+ * Hands the browser to `controllerId`: another controller's controlled tab
+ * stops being controlled, and every contained tab goes back to the member,
+ * in the same step. Returns whether anything was taken over.
+ */
+export const takeOverControl = async (
+  controllerId: string,
+): Promise<boolean> => {
+  const state = await readControlledTabState();
+  if (state?.controllerId === controllerId) {
+    return false;
+  }
+  await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
+  await releaseContainedTabs();
+  return true;
 };
 
 /** Returns whether `tabId` was the controlled tab. */
@@ -453,10 +471,21 @@ type PageOperation =
       kind: "snapshot";
       limits: typeof BROWSER_CONTROL_LIMITS;
       metadataType: typeof BROWSER_CONTROL_TARGET_METADATA;
+      /** A read, or only whether the frame asks for a sign-in. */
+      purpose: SnapshotPurpose;
+      purposes: typeof SNAPSHOT_PURPOSE;
       shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
       signIn: SignInPolicy;
       signInPolicies: typeof SIGN_IN_POLICY;
     };
+
+const SNAPSHOT_PURPOSE = {
+  read: "read",
+  /** Answers `{ refused: "sign-in" }` or `{ refused: "none" }`; reads nothing. */
+  signInCheck: "sign-in-check",
+} as const;
+
+type SnapshotPurpose = (typeof SNAPSHOT_PURPOSE)[keyof typeof SNAPSHOT_PURPOSE];
 
 /**
  * A value `chrome.scripting.executeScript` hands to the injected function as
@@ -1100,9 +1129,18 @@ const runPageOperation = async (
       // read or done; a web connection reads on with secrets withheld.
       const signInRefusal = () => {
         if (
-          pageOperation.signIn !== pageOperation.signInPolicies.handToMember ||
-          !asksForSignIn(document)
+          pageOperation.signIn !== pageOperation.signInPolicies.handToMember
         ) {
+          return null;
+        }
+        const asks = asksForSignIn(document);
+        if (
+          pageOperation.kind === "snapshot" &&
+          pageOperation.purpose === pageOperation.purposes.signInCheck
+        ) {
+          return { refused: asks ? "sign-in" : "none" } as const;
+        }
+        if (!asks) {
           return null;
         }
         return pageOperation.kind === "snapshot"
@@ -1565,6 +1603,8 @@ const readSnapshot = async ({
       kind: "snapshot",
       limits: BROWSER_CONTROL_LIMITS,
       metadataType: BROWSER_CONTROL_TARGET_METADATA,
+      purpose: SNAPSHOT_PURPOSE.read,
+      purposes: SNAPSHOT_PURPOSE,
       shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
       signIn,
       signInPolicies: SIGN_IN_POLICY,
@@ -2242,6 +2282,28 @@ const runSwitchTab = async (
   });
 };
 
+/**
+ * Whether any frame of the tab asks for a sign-in now. A desktop action
+ * checks the whole tab before it acts: a sign-in frame that appeared after
+ * the last read must stop the action, not only the read that follows it.
+ */
+const tabAsksForSignIn = async (tabId: number): Promise<boolean> => {
+  const results = await runPageOperation(
+    { allFrames: true, tabId },
+    {
+      kind: "snapshot",
+      limits: BROWSER_CONTROL_LIMITS,
+      metadataType: BROWSER_CONTROL_TARGET_METADATA,
+      purpose: SNAPSHOT_PURPOSE.signInCheck,
+      purposes: SNAPSHOT_PURPOSE,
+      shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+      signIn: SIGN_IN_POLICY.handToMember,
+      signInPolicies: SIGN_IN_POLICY,
+    },
+  );
+  return results.some(({ result }) => v.is(signInRefusalSchema, result));
+};
+
 const runElementAction = async (
   command: BrowserControlElementCommand,
   { state, tab, tabId }: ControlledTab & { tabId: number },
@@ -2265,6 +2327,12 @@ const runElementAction = async (
   const frame = await checkActionFrame(tabId, reference.frameId, documentId);
   if (!frame.ok) {
     return frame.error;
+  }
+  if (
+    signIn === SIGN_IN_POLICY.handToMember &&
+    (await tabAsksForSignIn(tabId))
+  ) {
+    return needsMember();
   }
   const overBudget = await budget.charge();
   if (overBudget !== null) {

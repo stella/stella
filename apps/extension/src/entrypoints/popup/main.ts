@@ -24,6 +24,7 @@ import {
   type PopupView,
   popupView,
 } from "../../lib/popup-view";
+import { BROWSER_DESKTOP_LINK_STORAGE_KEY } from "../../lib/storage-keys";
 import { containedTabIds, readContainedTabs } from "../../lib/tab-containment";
 import { trustedStellaOriginFromUrl } from "../../lib/trusted-origin";
 
@@ -256,6 +257,13 @@ const renderDesktopLink = async (): Promise<void> => {
   desktopAllowButton.textContent = view.type === "allow" ? text : "";
   desktopStatusText.textContent = view.type === "allow" ? "" : text;
 };
+
+// The link connects and drops while the popup is open.
+chrome.storage.session.onChanged.addListener((changes) => {
+  if (Object.hasOwn(changes, BROWSER_DESKTOP_LINK_STORAGE_KEY)) {
+    renderDesktopLink().catch(() => renderFailure("accessUpdateFailed"));
+  }
+});
 
 desktopAllowButton.addEventListener("click", () => {
   desktopAllowButton.disabled = true;

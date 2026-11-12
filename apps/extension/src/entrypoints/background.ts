@@ -50,6 +50,7 @@ import {
   sortCommittedNavigation,
   sortNavigationTarget,
 } from "../lib/opened-tabs";
+import { parseControllableUrl } from "../lib/origin-policy";
 import {
   isExtensionPageSender,
   parsePopupRequest,
@@ -65,7 +66,6 @@ import {
 import {
   forgetContainedTab,
   onContainedTabsChanged,
-  releaseContainedTabs,
   replaceTab,
 } from "../lib/tab-containment";
 import {
@@ -74,6 +74,7 @@ import {
   forgetControlledTab,
   readControlledTabId,
   replaceControlledTab,
+  takeOverControl,
 } from "../lib/tab-executor";
 import { trustedStellaOriginFromUrl } from "../lib/trusted-origin";
 
@@ -213,11 +214,17 @@ type ControlledCommand = Pick<
    */
   admit: () => Promise<BrowserControlResult | null>;
   signIn: SignInPolicy;
+  /**
+   * Runs right before the command executes, after the ledger found no
+   * earlier result for it; `null` for none.
+   */
+  beforeExecute: (() => Promise<void>) | null;
 };
 
 /** One command from either transport, through the one control session. */
 const runControlledCommand = async ({
   admit,
+  beforeExecute,
   command,
   controllerId,
   observedTab,
@@ -239,13 +246,15 @@ const runControlledCommand = async ({
     return await executeAtMostOnce({
       command,
       controllerId,
-      execute: async () =>
-        await executeBrowserCommand(controllerId, command, {
+      execute: async () => {
+        await beforeExecute?.();
+        return await executeBrowserCommand(controllerId, command, {
           budget: storedCommandBudget({ command, controllerId, turnId }),
           observedTab,
           signal,
           signIn,
-        }),
+        });
+      },
       toolCallId,
     });
   });
@@ -271,6 +280,7 @@ const runCommand = async (
             "Connect stella from the extension popup before using browser actions.",
           );
     },
+    beforeExecute: null,
     command: message.command,
     controllerId: message.controllerId,
     observedTab: message.observedTab,
@@ -280,26 +290,46 @@ const runCommand = async (
   });
 
 /**
+ * What a coding agent on this computer may ask for: its tools open, read,
+ * click and type. Switching to another chat's tab, going back, keys and
+ * selects are refused.
+ */
+const DESKTOP_ACTIONS: ReadonlySet<string> = new Set([
+  BROWSER_CONTROL_ACTION.click,
+  BROWSER_CONTROL_ACTION.fill,
+  BROWSER_CONTROL_ACTION.open,
+  BROWSER_CONTROL_ACTION.snapshot,
+]);
+
+/**
  * A command from a coding agent on this computer. Chrome only starts the
  * host for this extension and the member allowed it, so there is no pairing
- * to check. Its first page takes the browser over from whichever chat had
- * it: that chat's tabs are handed back to the member.
+ * to check. Its first page that will actually load takes the browser over
+ * from whichever chat had it: that chat loses its controlled tab and its
+ * tabs are handed back to the member, in one step.
  */
 const runDesktopCommand = async (
   message: DesktopCommand,
 ): Promise<BrowserControlResult> => {
   const controllerId = desktopControllerId(message.controllerId);
+  const { command } = message;
   const result = await runControlledCommand({
-    admit: async () => {
+    admit: async () =>
+      DESKTOP_ACTIONS.has(command.action)
+        ? null
+        : browserControlError(
+            BROWSER_CONTROL_ERROR_CODE.invalidCommand,
+            "stella desktop opens, reads, clicks and types only.",
+          ),
+    beforeExecute: async () => {
       if (
-        message.command.action === BROWSER_CONTROL_ACTION.open &&
-        (await readControlledTabId(controllerId)) === null
+        command.action === BROWSER_CONTROL_ACTION.open &&
+        parseControllableUrl(command.url) !== null
       ) {
-        await releaseContainedTabs();
+        await takeOverControl(controllerId);
       }
-      return null;
     },
-    command: message.command,
+    command,
     controllerId,
     observedTab: message.observedTab,
     signIn: SIGN_IN_POLICY.handToMember,

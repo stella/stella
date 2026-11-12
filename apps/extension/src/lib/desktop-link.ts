@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import {
+  BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserControlResult,
@@ -11,6 +12,7 @@ import {
 } from "@stll/api-contract/browser-control";
 
 import { hasDesktopLinkAccess } from "./access";
+import { browserControlError } from "./browser-control-result";
 import { BROWSER_DESKTOP_LINK_STORAGE_KEY } from "./storage-keys";
 
 /**
@@ -130,20 +132,30 @@ export const createDesktopLink = ({
           () => undefined,
         );
         return;
-      case "command":
+      case "command": {
+        const answer = (result: BrowserControlResult) => {
+          send(from, {
+            protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+            requestId: request.requestId,
+            result,
+            source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+            type: "command-result",
+          });
+        };
+        // Every command is answered: a failure here may come after the
+        // page acted, so stella desktop is told to read before retrying.
         runCommand(request)
-          .then((result) => {
-            send(from, {
-              protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-              requestId: request.requestId,
-              result,
-              source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
-              type: "command-result",
-            });
-            return undefined;
-          })
-          .catch(() => undefined);
+          .then(answer)
+          .catch((error: unknown) => {
+            answer(
+              browserControlError(
+                BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+                `The browser extension could not report this command's outcome (${error instanceof Error ? error.name : "unknown error"}). Take a snapshot before retrying.`,
+              ),
+            );
+          });
         return;
+      }
       case "cancel":
         cancel(request);
         return;
