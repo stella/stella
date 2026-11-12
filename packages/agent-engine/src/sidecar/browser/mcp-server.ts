@@ -7,7 +7,11 @@ import { isChatLocalRunBrowserAction } from "@stll/api-contract/chat-local-run-t
 import { LOCAL_BROWSER_MCP_SERVER_NAME } from "../../harness/tool-parts";
 import type { StellaSandboxMcpBinding } from "../../sandbox";
 import type { BrowserBridge } from "./bridge";
-import { createLocalBrowserSession, localBrowserToolList } from "./tools";
+import {
+  type ApproveTyping,
+  createLocalBrowserSession,
+  localBrowserToolList,
+} from "./tools";
 
 /**
  * The browser tools' MCP endpoint for local harnesses: served here, on the
@@ -54,6 +58,7 @@ const toolCallParamsSchema = v.object({
 type HeldRun = {
   secret: Buffer;
   threadId: string;
+  approveTyping: ApproveTyping;
 };
 
 export type LocalBrowserMcp = {
@@ -63,6 +68,8 @@ export type LocalBrowserMcp = {
   register: (run: {
     runId: string;
     threadId: string;
+    /** Asks the run's member to allow typing outside a search field. */
+    approveTyping: ApproveTyping;
   }) => StellaSandboxMcpBinding;
   /** Ends the run's access and stops its command in the extension. */
   unregister: (runId: string) => void;
@@ -174,17 +181,20 @@ export const startLocalBrowserMcp = ({
         const result = await sessionFor(held.threadId).call(
           params.output.name,
           params.output.arguments,
-          async (command, observedTab) =>
-            await bridge.request(
-              {
-                command,
-                controllerId: held.threadId,
-                observedTab,
-                toolCallId: crypto.randomUUID(),
-                turnId: runId,
-              },
-              signal,
-            ),
+          {
+            approveTyping: held.approveTyping,
+            send: async (command, observedTab) =>
+              await bridge.request(
+                {
+                  command,
+                  controllerId: held.threadId,
+                  observedTab,
+                  toolCallId: crypto.randomUUID(),
+                  turnId: runId,
+                },
+                signal,
+              ),
+          },
         );
         return rpcResult(id, result);
       }
@@ -246,11 +256,15 @@ export const startLocalBrowserMcp = ({
 
   return {
     origin,
-    register: ({ runId, threadId }) => {
+    register: ({ approveTyping, runId, threadId }) => {
       const secret = Buffer.from(
         crypto.getRandomValues(new Uint8Array(SECRET_BYTES)),
       ).toString("base64url");
-      runs.set(runId, { secret: Buffer.from(secret), threadId });
+      runs.set(runId, {
+        approveTyping,
+        secret: Buffer.from(secret),
+        threadId,
+      });
       return {
         serverName: LOCAL_BROWSER_MCP_SERVER_NAME,
         url: `${origin}${ROUTE_PREFIX}${encodeURIComponent(runId)}`,

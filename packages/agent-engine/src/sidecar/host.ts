@@ -51,6 +51,10 @@ import type { ProtocolLog } from "../protocol-log";
 import { copyAttachments } from "./attachments";
 import type { LocalBrowserMcp } from "./browser/mcp-server";
 import {
+  createTypingApprovals,
+  type TypingApprovals,
+} from "./browser/typing-approvals";
+import {
   captureCheckpoint,
   checkpointChunk,
   restoreCheckpoint,
@@ -182,6 +186,8 @@ type HeldRun = {
   outputSharing: AbortController;
   /** Whether the folder was saved before the harness started; `null` until then. */
   checkpoint: DesktopRunnerCheckpointEvent | null;
+  /** The browser tools' questions to the member about typing. */
+  readonly typing: TypingApprovals;
 };
 
 /**
@@ -423,6 +429,14 @@ export class SidecarHost {
         return;
       case "run.approval":
         this.withRun(message, (run) => {
+          // A browser tool's question about typing is answered here.
+          const native = run.requests.get(message.requestId);
+          if (
+            native !== undefined &&
+            run.typing.answer(native, message.decision)
+          ) {
+            return;
+          }
           this.respond(run, message.requestId, (requestId) => ({
             type: "approval",
             requestId,
@@ -632,6 +646,7 @@ export class SidecarHost {
       outputs: null,
       outputSharing: new AbortController(),
       checkpoint: null,
+      typing: createTypingApprovals(),
     };
     this.runs.set(message.runId, run);
     this.track(
@@ -701,6 +716,7 @@ export class SidecarHost {
         : RUN_STOP.interrupt;
     run.stopCopying.abort();
     run.outputSharing.abort();
+    run.typing.declineAll();
     if (run.turn !== null) {
       this.detached(run.turn.interrupt(), "sidecar.interrupt");
     }
@@ -870,6 +886,7 @@ export class SidecarHost {
         this.options.browser?.register({
           runId: message.runId,
           threadId: message.threadId,
+          approveTyping: run.typing.request,
         }) ?? null,
       transcript: transcript.output,
       inputFiles: input.files,
@@ -1032,7 +1049,7 @@ export class SidecarHost {
       if (run.stop !== RUN_STOP.none) {
         this.detached(opened.value.interrupt(), "sidecar.interrupt");
       }
-      events = opened.value.events;
+      events = run.typing.withEvents(opened.value.events);
     } else if (run.stop !== RUN_STOP.none) {
       events = stoppedBeforeStart();
     } else {

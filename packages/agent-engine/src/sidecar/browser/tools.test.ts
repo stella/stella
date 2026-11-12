@@ -17,7 +17,11 @@ import {
 } from "@stll/api-contract/chat-local-run-tool";
 
 import { localBrowserResult } from "./local-result";
-import { createLocalBrowserSession, localBrowserToolList } from "./tools";
+import {
+  createLocalBrowserSession,
+  localBrowserToolList,
+  TYPING_DECISION,
+} from "./tools";
 
 const ABSENT = { type: BROWSER_CONTROL_TARGET_METADATA.absent } as const;
 
@@ -66,8 +70,12 @@ type Sent = {
 
 const recorder = (results: BrowserControlResult[]) => {
   const sent: Sent[] = [];
-  return {
-    sent,
+  const asked: string[] = [];
+  const context = {
+    approveTyping: async ({ url }: { url: string }) => {
+      asked.push(url);
+      return TYPING_DECISION.approve;
+    },
     send: async (
       command: BrowserControlCommand,
       observedTab: BrowserObservedTab | null,
@@ -76,6 +84,7 @@ const recorder = (results: BrowserControlResult[]) => {
       return localBrowserResult(results.shift() ?? page("unexpected"));
     },
   };
+  return { asked, context, send: context.send, sent };
 };
 
 const parsed = (result: { content: { text: string }[] }): unknown =>
@@ -92,7 +101,7 @@ describe("the local browser tools", () => {
     const session = createLocalBrowserSession();
     const browser = recorder([page("r-1"), page("r-2"), page("r-3")]);
 
-    const read = await session.call("snapshot", {}, browser.send);
+    const read = await session.call("snapshot", {}, browser.context);
     expect(read.isError).toBe(false);
     expect(parsed(read)).toMatchObject({
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
@@ -109,9 +118,9 @@ describe("the local browser tools", () => {
     await session.call(
       "type",
       { ref: "e:0:1.0", text: "notice" },
-      browser.send,
+      browser.context,
     );
-    await session.call("click", { ref: "e:0:2.0" }, browser.send);
+    await session.call("click", { ref: "e:0:2.0" }, browser.context);
     expect(browser.sent).toEqual([
       { command: { action: "snapshot" }, observedTab: null },
       {
@@ -155,7 +164,11 @@ describe("the local browser tools", () => {
   test("a ref the chat never read is refused without reaching Chrome", async () => {
     const session = createLocalBrowserSession();
     const browser = recorder([]);
-    const result = await session.call("click", { ref: "e:0:9" }, browser.send);
+    const result = await session.call(
+      "click",
+      { ref: "e:0:9" },
+      browser.context,
+    );
     expect(result.isError).toBe(true);
     expect(parsed(result)).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.elementNotFound,
@@ -177,7 +190,7 @@ describe("the local browser tools", () => {
     const result = await session.call(
       "open",
       { url: "https://fixture-library.test/account" },
-      browser.send,
+      browser.context,
     );
     expect(result.isError).toBe(true);
     expect(parsed(result)).toMatchObject({
@@ -196,7 +209,7 @@ describe("the local browser tools", () => {
   test("a page read is kept as completed, never as its content", async () => {
     const session = createLocalBrowserSession();
     const browser = recorder([page("r-1")]);
-    const result = await session.call("snapshot", {}, browser.send);
+    const result = await session.call("snapshot", {}, browser.context);
     expect(
       shownChatLocalRunToolResult(
         CHAT_LOCAL_RUN_TOOL_NAMES.browser,
@@ -212,12 +225,73 @@ describe("the local browser tools", () => {
     await session.call(
       "snapshot",
       { textOffset: null, extra: 1 },
-      browser.send,
+      browser.context,
     );
     expect(browser.sent.at(0)?.command).toEqual({ action: "snapshot" });
-    const refused = await session.call("open", { url: 42 }, browser.send);
+    const refused = await session.call("open", { url: 42 }, browser.context);
     expect(parsed(refused)).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.invalidCommand,
     });
+  });
+});
+
+describe("typing outside a search field", () => {
+  const searchPage = (revision: string): BrowserControlResult => {
+    const base = page(revision);
+    return base.status === "success"
+      ? {
+          ...base,
+          snapshot: {
+            ...base.snapshot,
+            elements: base.snapshot.elements.map((element) =>
+              element.ref === "e:0:1.0"
+                ? { ...element, role: "searchbox" }
+                : element,
+            ),
+          },
+        }
+      : base;
+  };
+
+  test("a search field takes the text without asking", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([searchPage("r-1"), searchPage("r-2")]);
+    await session.call("snapshot", {}, browser.context);
+    await session.call(
+      "type",
+      { ref: "e:0:1.0", text: "notice" },
+      browser.context,
+    );
+    expect(browser.asked).toEqual([]);
+    expect(browser.sent.at(-1)?.command.action).toBe("fill");
+  });
+
+  test("any other field waits for the member, and a refusal types nothing", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1")]);
+    await session.call("snapshot", {}, browser.context);
+    const refused = await session.call(
+      "type",
+      { ref: "e:0:1.0", text: "notice" },
+      {
+        ...browser.context,
+        approveTyping: async ({ url }) => {
+          browser.asked.push(url);
+          return TYPING_DECISION.deny;
+        },
+      },
+    );
+    expect(browser.asked).toEqual(["https://fixture-library.test/search"]);
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+    ]);
+    expect(refused.isError).toBe(true);
+    expect(
+      shownChatLocalRunToolResult(
+        CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+        refused.content.at(0)?.text ?? "",
+        true,
+      ),
+    ).toBe(JSON.stringify({ status: "declined" }));
   });
 });

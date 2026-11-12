@@ -22,6 +22,9 @@ import type { BrowserBridge } from "./bridge";
 import { localBrowserResult } from "./local-result";
 import { startLocalBrowserMcp } from "./mcp-server";
 import { installNativeHost } from "./native-host-manifest";
+import { TYPING_DECISION } from "./tools";
+
+const approveTyping = async () => TYPING_DECISION.approve;
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -88,7 +91,11 @@ const rpc = async (
 describe("the local browser MCP endpoint", () => {
   test("serves the four tools to the run it was registered for", async () => {
     const { mcp, requests } = start();
-    const binding = mcp.register({ runId: "run-1", threadId: "thread-1" });
+    const binding = mcp.register({
+      approveTyping,
+      runId: "run-1",
+      threadId: "thread-1",
+    });
     expect(binding.serverName).toBe("stella_browser");
     expect(binding.url.startsWith(`${mcp.origin}/browser/`)).toBe(true);
 
@@ -156,8 +163,16 @@ describe("the local browser MCP endpoint", () => {
 
   test("refuses another run's secret, a browser page and an ended run", async () => {
     const { cancels, mcp } = start();
-    const first = mcp.register({ runId: "run-1", threadId: "thread-1" });
-    const second = mcp.register({ runId: "run-2", threadId: "thread-2" });
+    const first = mcp.register({
+      approveTyping,
+      runId: "run-1",
+      threadId: "thread-1",
+    });
+    const second = mcp.register({
+      approveTyping,
+      runId: "run-2",
+      threadId: "thread-2",
+    });
     const ping = { id: 1, jsonrpc: "2.0", method: "ping" };
 
     expect(

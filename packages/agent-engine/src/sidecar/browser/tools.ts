@@ -124,7 +124,7 @@ const TOOL_DEFINITIONS = {
   },
   type: {
     description:
-      "Replace the text of a field on the page this chat last read, by its ref, and read the page again. It does not submit: click the page's button afterwards. Never type passwords or verification codes; the member signs in themselves.",
+      "Replace the text of a field on the page this chat last read, by its ref, and read the page again. It does not submit: click the page's button afterwards. A search field (role searchbox) takes the text at once; any other field waits for the member to allow it in chat, and a refusal comes back as declined. Never type passwords or verification codes; the member signs in themselves.",
     inputSchema: {
       type: "object",
       properties: {
@@ -250,6 +250,25 @@ type PageSeen = {
   elements: ReadonlyMap<string, BrowserControlElement>;
 };
 
+/** The role the extension gives a search field, or a field in a search form. */
+const SEARCH_FIELD_ROLE = "searchbox";
+
+export const TYPING_DECISION = {
+  approve: "approve",
+  deny: "deny",
+} as const;
+
+export type TypingDecision =
+  (typeof TYPING_DECISION)[keyof typeof TYPING_DECISION];
+
+/**
+ * Asks the member, in chat, to allow typing into a field that is not a
+ * search field on the page at `url`.
+ */
+export type ApproveTyping = (request: {
+  url: string;
+}) => Promise<TypingDecision>;
+
 /** Reaches the extension for one call: its run, and its stop. */
 type LocalBrowserSend = (
   command: BrowserControlCommand,
@@ -281,6 +300,11 @@ const unknownRef = (): BuiltCommand => ({
   ),
   type: "refused",
 });
+
+type LocalBrowserCallContext = {
+  send: LocalBrowserSend;
+  approveTyping: ApproveTyping;
+};
 
 /** One chat's browser tools. */
 export const createLocalBrowserSession = () => {
@@ -366,11 +390,28 @@ export const createLocalBrowserSession = () => {
     call: async (
       tool: ChatLocalRunBrowserAction,
       input: unknown,
-      send: LocalBrowserSend,
+      { approveTyping, send }: LocalBrowserCallContext,
     ): Promise<LocalBrowserToolResult> => {
       const next = command(tool, input);
       if (next.type === "refused") {
         return next.result;
+      }
+      // A search is the agent's to type; anything else the member allows.
+      if (
+        next.command.action === BROWSER_CONTROL_ACTION.fill &&
+        next.command.target.role !== SEARCH_FIELD_ROLE &&
+        (await approveTyping({ url: next.command.page.url })) ===
+          TYPING_DECISION.deny
+      ) {
+        return textResult(
+          {
+            status: "declined",
+            code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+            message: "The member declined typing into this field.",
+            hint: "Ask the member what to enter, or go on without typing here.",
+          },
+          true,
+        );
       }
       // The one place page content is read: to answer the agent here.
       const result = readLocalBrowserResult(

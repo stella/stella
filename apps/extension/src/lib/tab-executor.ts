@@ -868,8 +868,14 @@ const runPageOperation = async (
           return "textbox";
         }
         if (element instanceof HTMLInputElement) {
-          return element.type === "checkbox" || element.type === "radio"
-            ? element.type
+          if (element.type === "checkbox" || element.type === "radio") {
+            return element.type;
+          }
+          // A search field, or a text field in a search landmark: typing a
+          // query there is what a search is.
+          return element.type === "search" ||
+            element.closest("[role='search'], search") !== null
+            ? "searchbox"
             : "textbox";
         }
         return "interactive";
