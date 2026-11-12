@@ -52,7 +52,7 @@ const SIGNED_DIALOG_LINGER: Duration = Duration::from_secs(2);
 /// at the same number and closes the session after the last one.
 const MAX_FINALIZE_ATTEMPTS: u32 = 3;
 
-const DIALOG_LABEL: &str = "pdf-sign-dialog";
+pub const DIALOG_LABEL: &str = "pdf-sign-dialog";
 const DIALOG_WIDTH: f64 = 420.0;
 /// Initial viewport; the page requests its measured content size after rendering.
 const DIALOG_HEIGHT: f64 = 640.0;
@@ -229,12 +229,70 @@ enum DialogState {
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-struct DialogIdentity<'a> {
-  id: &'a str,
-  label: &'a str,
-  issuer: Option<&'a str>,
+struct DialogIdentity {
+  id: String,
+  label: String,
+  issuer: Option<String>,
   /// `YYYY-MM-DD`; the dialog formats it in the app's language.
-  expires_on: &'a str,
+  expires_on: String,
+}
+
+impl From<&SigningIdentity> for DialogIdentity {
+  fn from(identity: &SigningIdentity) -> Self {
+    Self {
+      id: identity.id.clone(),
+      label: identity.label.clone(),
+      issuer: identity.issuer.clone(),
+      expires_on: identity.expires_on.clone(),
+    }
+  }
+}
+
+/// What the store offers right now, and the state the dialog shows for it.
+struct IdentityListing {
+  state: DialogState,
+  /// Why the keychain could not be read, for `KeychainUnavailable`.
+  state_message_key: Option<&'static str>,
+  identities: Vec<SigningIdentity>,
+}
+
+async fn identity_listing() -> IdentityListing {
+  let listed = list_identities().await;
+  let (state, state_message_key) = match &listed {
+    Ok(identities) if identities.is_empty() => (DialogState::NoIdentities, None),
+    Ok(_) => (DialogState::Ready, None),
+    Err(SigningErrorCode::UnsupportedPlatform) => {
+      (DialogState::UnsupportedPlatform, None)
+    }
+    Err(code) => (
+      DialogState::KeychainUnavailable,
+      Some(message_key(code.as_str())),
+    ),
+  };
+  IdentityListing {
+    state,
+    state_message_key,
+    identities: listed.unwrap_or_default(),
+  }
+}
+
+/// The picker as the open dialog re-reads it, so a smart card inserted or
+/// removed after the dialog opened shows up without reopening it.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DialogListing {
+  state: DialogState,
+  state_message_key: Option<&'static str>,
+  identities: Vec<DialogIdentity>,
+}
+
+pub async fn dialog_listing() -> DialogListing {
+  let listing = identity_listing().await;
+  DialogListing {
+    state: listing.state,
+    state_message_key: listing.state_message_key,
+    identities: listing.identities.iter().map(DialogIdentity::from).collect(),
+  }
 }
 
 /// Everything the dialog renders. The session token is deliberately absent:
@@ -554,19 +612,11 @@ pub async fn redeem_and_sign(
     token: redeemed.session_token,
   };
 
-  let identities = list_identities().await;
-  let (state, state_message_key) = match &identities {
-    Ok(identities) if identities.is_empty() => (DialogState::NoIdentities, None),
-    Ok(_) => (DialogState::Ready, None),
-    Err(SigningErrorCode::UnsupportedPlatform) => {
-      (DialogState::UnsupportedPlatform, None)
-    }
-    Err(code) => (
-      DialogState::KeychainUnavailable,
-      Some(message_key(code.as_str())),
-    ),
-  };
-  let identities = identities.unwrap_or_default();
+  let IdentityListing {
+    state,
+    state_message_key,
+    identities,
+  } = identity_listing().await;
 
   if let Err(error) =
     crate::deep_link::recheck_handoff_account(&app_handle, &account).await
@@ -639,24 +689,30 @@ pub async fn redeem_and_sign(
     }
   };
 
-  let Some(identity) = identities
-    .into_iter()
-    .find(|identity| identity.id == identity_id)
-  else {
-    session.cancel(REASON_USER_CANCELLED).await;
-    if outcome_sender
-      .send(PdfSignResult::failed(
-        SigningErrorCode::KeyNotFound.as_str(),
-        None,
-      ))
-      .is_err()
-    {
-      tracing::debug!("PDF signing outcome had no waiter");
+  // The dialog re-lists while it is open, so the choice may be a card
+  // inserted since it opened; and a card pulled out since the last listing
+  // must not reach the signature. The store as it is now decides.
+  let chosen = list_identities().await.and_then(|identities| {
+    identities
+      .into_iter()
+      .find(|identity| identity.id == identity_id)
+      .ok_or(SigningErrorCode::KeyNotFound)
+  });
+  let identity = match chosen {
+    Ok(identity) => identity,
+    Err(code) => {
+      session.cancel(REASON_USER_CANCELLED).await;
+      if outcome_sender
+        .send(PdfSignResult::failed(code.as_str(), None))
+        .is_err()
+      {
+        tracing::debug!("PDF signing outcome had no waiter");
+      }
+      // The dialog already shows the failure it was sent.
+      return Err(crate::handoff::Stop::Presented(
+        "stella desktop could not find the chosen certificate.".into(),
+      ));
     }
-    // The dialog already shows the failure it was sent.
-    return Err(crate::handoff::Stop::Presented(
-      "stella desktop no longer has the chosen certificate.".into(),
-    ));
   };
 
   if let Err(error) =
@@ -1082,16 +1138,8 @@ fn open_dialog(
     return Err("A PDF signing dialog is already open.".to_string());
   }
 
-  let listed: Vec<DialogIdentity<'_>> = content
-    .identities
-    .iter()
-    .map(|identity| DialogIdentity {
-      id: &identity.id,
-      label: &identity.label,
-      issuer: identity.issuer.as_deref(),
-      expires_on: &identity.expires_on,
-    })
-    .collect();
+  let listed: Vec<DialogIdentity> =
+    content.identities.iter().map(DialogIdentity::from).collect();
   // Everything the dialog renders travels in the hash, the session token
   // included in what does not: the webview never sees it. The dialog holds no
   // strings of its own, so its wording rides along and it renders in the
@@ -1339,13 +1387,40 @@ mod tests {
   fn an_identity_reaches_the_dialog_with_its_issuer_and_expiry() {
     assert_eq!(
       serde_json::to_string(&DialogIdentity {
-        id: "abc",
-        label: "Jane Counsel",
-        issuer: Some("Test Issuing CA"),
-        expires_on: "2030-01-31",
+        id: "abc".to_string(),
+        label: "Jane Counsel".to_string(),
+        issuer: Some("Test Issuing CA".to_string()),
+        expires_on: "2030-01-31".to_string(),
       })
       .unwrap(),
       r#"{"id":"abc","label":"Jane Counsel","issuer":"Test Issuing CA","expiresOn":"2030-01-31"}"#
+    );
+  }
+
+  #[test]
+  fn a_relisting_reaches_the_dialog_as_its_script_reads_it() {
+    let listing = DialogListing {
+      state: DialogState::Ready,
+      state_message_key: None,
+      identities: vec![DialogIdentity {
+        id: "abc".to_string(),
+        label: "Jane Counsel".to_string(),
+        issuer: None,
+        expires_on: "2030-01-31".to_string(),
+      }],
+    };
+    assert_eq!(
+      serde_json::to_string(&listing).unwrap(),
+      r#"{"state":"ready","stateMessageKey":null,"identities":[{"id":"abc","label":"Jane Counsel","issuer":null,"expiresOn":"2030-01-31"}]}"#
+    );
+    let unavailable = DialogListing {
+      state: DialogState::KeychainUnavailable,
+      state_message_key: Some(message_key("keychain_locked")),
+      identities: Vec::new(),
+    };
+    assert_eq!(
+      serde_json::to_string(&unavailable).unwrap(),
+      r#"{"state":"keychainUnavailable","stateMessageKey":"pdfSignErrors.keychainLocked","identities":[]}"#
     );
   }
 
