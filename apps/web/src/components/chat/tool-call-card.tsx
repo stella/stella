@@ -423,11 +423,17 @@ const localRunStepFailed = (name: string, output: unknown): boolean =>
   output !== null &&
   Reflect.get(output, "status") === "failed";
 
+/** The result a coding agent's run gives a call its turn cut off. */
+const isInterruptedOutput = (output: unknown): boolean =>
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === "interrupted";
+
 /**
- * How a call that did not complete reads: failed when its result says so
- * (an error envelope, or a coding agent's step reporting `failed`);
- * interrupted only when it ended without such a result (its turn was
- * stopped or cut off, or the result is a cancellation).
+ * How a call that did not complete reads: interrupted only when it ended
+ * with no result at all (its stream died mid call) or with the explicit
+ * cancellation result; any other error result, an envelope, a step
+ * reporting `failed` or a connector's plain-text error, reads as failed.
  */
 export const toolFailureLabelKey = ({
   name,
@@ -444,7 +450,12 @@ export const toolFailureLabelKey = ({
   ) {
     return "chat.toolCall.failed";
   }
-  return state === "error" ? "chat.toolCall.interrupted" : undefined;
+  if (state !== "error") {
+    return undefined;
+  }
+  return output === undefined || isInterruptedOutput(output)
+    ? "chat.toolCall.interrupted"
+    : "chat.toolCall.failed";
 };
 
 // Static marks make a running glyph impossible outside the turn owner.

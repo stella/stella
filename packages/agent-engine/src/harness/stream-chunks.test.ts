@@ -498,7 +498,11 @@ describe("local harness chunks", () => {
       {
         type: "tool.completed",
         toolCall: commandCall,
-        result: { content: "Interrupted by the user.", status: "cancelled" },
+        // What the adapter built from the harness's error flag.
+        result: {
+          content: JSON.stringify({ status: "failed" }),
+          status: "cancelled",
+        },
       },
       { type: "turn.interrupted" },
     ]);
@@ -506,6 +510,7 @@ describe("local harness chunks", () => {
       expect.objectContaining({
         type: "tool-result",
         toolCallId: commandCall.id,
+        content: JSON.stringify({ status: "interrupted" }),
         state: "error",
         outcome: "cancelled",
       }),
