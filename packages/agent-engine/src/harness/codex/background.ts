@@ -160,7 +160,9 @@ export class CodexProcess {
       return;
     }
     // A harness without it (an older release) still ends with its process.
-    await client.request("thread/backgroundTerminals/clean", { threadId });
+    (
+      await client.request("thread/backgroundTerminals/clean", { threadId })
+    ).unwrapOr(undefined);
   }
 
   private async keep(

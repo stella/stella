@@ -148,10 +148,13 @@ export class ClaudeProcess {
 
   /** Ends each of `taskIds`; a task that ended meanwhile is refused. */
   async stop(client: ClaudeCliClient, taskIds: Iterable<string>) {
-    await Promise.allSettled(
-      [...taskIds].map(async (taskId) =>
-        client.request("stop_task", { task_id: taskId }),
-      ),
+    await Promise.all(
+      [...taskIds].map(async (taskId) => {
+        // A refusal changes nothing: the process tree ends with the process.
+        (await client.request("stop_task", { task_id: taskId })).unwrapOr(
+          undefined,
+        );
+      }),
     );
   }
 
