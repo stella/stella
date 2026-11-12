@@ -121,8 +121,9 @@ type Grounding =
   | { type: "grounded"; claim: ExtractedClaim }
   | { type: "misquoted"; raw: RawClaim; reason: string };
 
-/** What a cited id reads: a piece, or a cut block's whole passage when the
- *  model names the block rather than the piece it was shown. */
+/** What a cited id reads: a piece, or, when the model names a cut block
+ *  rather than the piece it was shown, the pieces of that block this window
+ *  asked about. */
 type GroundTarget = {
   key: string;
   passageIndex: number;
@@ -130,19 +131,39 @@ type GroundTarget = {
   end: number;
 };
 
+/**
+ * The ids one window's answer may cite. A cut block's own id reads only the
+ * pieces of it the window asked about, never the whole block: a quote that
+ * repeats earlier in the block would otherwise anchor to a piece another
+ * window read. A block the window did not ask about has no target under its
+ * own id once it is cut.
+ */
 const groundTargets = (
   pieces: readonly ExtractionPiece[],
   passages: readonly VerificationPassage[],
+  { from, to }: ExtractionWindow,
 ): ReadonlyMap<string, GroundTarget> => {
   const targets = new Map<string, GroundTarget>();
-  for (const [passageIndex, { block, start, end }] of passages.entries()) {
-    targets.set(block.id, { key: block.id, passageIndex, start, end });
-  }
   for (const piece of pieces) {
     targets.set(piece.id, {
       key: piece.id,
       passageIndex: piece.passageIndex,
       start: piece.start,
+      end: piece.end,
+    });
+  }
+  for (const piece of pieces.slice(from, to)) {
+    const blockId =
+      passages[piece.passageIndex]?.block.id ??
+      panic("A piece names a passage outside the run");
+    if (blockId === piece.id) {
+      continue;
+    }
+    const asked = targets.get(blockId);
+    targets.set(blockId, {
+      key: blockId,
+      passageIndex: piece.passageIndex,
+      start: asked?.start ?? piece.start,
       end: piece.end,
     });
   }
@@ -308,7 +329,6 @@ export const extractClaims = async ({
     outputSchema: extractionSchema,
   });
   const pieces = extractionPieces(passages);
-  const targets = groundTargets(pieces, passages);
   const windows = extractionWindows(pieces);
   /** Every failure this extraction observes reaches analytics here: each
    *  failed window attempt, and anything thrown past the windows. */
@@ -320,6 +340,7 @@ export const extractClaims = async ({
   const readWindow = async (
     window: ExtractionWindow,
   ): Promise<Result<ExtractedClaim[], ExtractionStop>> => {
+    const targets = groundTargets(pieces, passages, window);
     const request = call.request(windowTask(pieces, window));
     const output = await call.generate([request]);
     if (Result.isError(output)) {

@@ -342,6 +342,47 @@ describe("extractClaims", () => {
     ]);
   });
 
+  test("a cut page cited by its own id reads only the pieces the window asked about", async () => {
+    const sentence = "The plan was agreed with the council on 2 April. ";
+    const page = sentence.repeat(250);
+    const blocks: VerificationBlock[] = [
+      { id: "P4", text: page, source: { type: "pdf-page", pageNumber: 4 } },
+    ];
+    // The words repeat on every line: only the second piece's window
+    // answers, citing the page rather than its piece.
+    const result = await extractClaims({
+      passages: wholeDocumentPassages(blocks),
+      deps: {
+        ...deps,
+        generateObjectForTask: asTestRaw<typeof generateTanStackObjectForTask>(
+          async (options: Captured) =>
+            await Promise.resolve(
+              JSON.stringify(options.messages).includes(
+                "these blocks only: P4~2",
+              )
+                ? {
+                    claims: [
+                      {
+                        blockId: "P4",
+                        quote: "The plan was agreed with the council",
+                        type: "fact",
+                        framing: "asserted",
+                      },
+                    ],
+                  }
+                : { claims: [] },
+            ),
+        ),
+      },
+    });
+    const claims = Result.isOk(result) ? result.value.claims : [];
+    expect(claims).toHaveLength(1);
+    // Anchored at the start of the second piece, past the first piece's
+    // 9 KB, never at the first line of the page.
+    expect(claims[0]?.anchor.start).toBeGreaterThan(8000);
+    expect(claims[0]?.anchor.start).toBeLessThan(page.length);
+  });
+
   test("a claim that cannot be found after repair is left out", async () => {
     answers.push(
       {
