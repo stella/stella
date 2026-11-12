@@ -27,6 +27,7 @@ import type {
   RecordConflict,
   VerificationEvidence,
   VerificationScope,
+  VerificationUnreadPart,
 } from "@/api/lib/lists/verification/contract";
 import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
 import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
@@ -202,6 +203,12 @@ export const legalListVerificationRuns = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     startedAt: timestamptz("started_at"),
     finishedAt: timestamptz("finished_at"),
+    // Text a completed run could not read: an extraction call kept failing
+    // after its retries. Edges only, never text. Empty when all was read.
+    unreadParts: jsonb("unread_parts")
+      .$type<VerificationUnreadPart[]>()
+      .notNull()
+      .default([]),
   },
   (table) => [
     ...entityFeatureGateChecks(table),

@@ -547,7 +547,8 @@
       "startFailed": "Neizdevās sākt pārbaudi",
       "status": {
         "running": "Notiek pārbaude"
-      }
+      },
+      "unreadParts": "{count, plural, zero {Neizdevās nolasīt # dokumenta daļas, tāpēc to apgalvojumi netika pārbaudīti.} one {Neizdevās nolasīt # dokumenta daļu, tāpēc tās apgalvojumi netika pārbaudīti.} other {Neizdevās nolasīt # dokumenta daļas, tāpēc to apgalvojumi netika pārbaudīti.}}"
     },
     "save": {
       "failed": "Nav saglabāts",

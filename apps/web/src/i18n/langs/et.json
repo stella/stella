@@ -547,7 +547,8 @@
       "startFailed": "Kontrolli ei õnnestunud käivitada",
       "status": {
         "running": "Kontrollimine"
-      }
+      },
+      "unreadParts": "{count, plural, one {Dokumendi # osa ei õnnestunud lugeda, seega selle väiteid ei kontrollitud.} other {Dokumendi # osa ei õnnestunud lugeda, seega nende väiteid ei kontrollitud.}}"
     },
     "save": {
       "failed": "Salvestamata",

@@ -118,6 +118,7 @@ export const makeRun = (
   })),
   status: "completed",
   errorCode: null,
+  unreadParts: [],
   pipelineVersion: 1,
   modelRef: null,
   requestedBy: null,

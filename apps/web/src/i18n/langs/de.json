@@ -547,7 +547,8 @@
       "startFailed": "Die Prüfung konnte nicht gestartet werden",
       "status": {
         "running": "Wird geprüft"
-      }
+      },
+      "unreadParts": "{count, plural, one {# Teil des Dokuments konnte nicht gelesen werden, seine Behauptungen wurden daher nicht geprüft.} other {# Teile des Dokuments konnten nicht gelesen werden, ihre Behauptungen wurden daher nicht geprüft.}}"
     },
     "save": {
       "failed": "Nicht gespeichert",

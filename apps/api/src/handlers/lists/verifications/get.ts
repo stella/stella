@@ -46,7 +46,10 @@ const config = {
     "decisions follow only the same words with an unchanged verdict. It " +
     "counts the reviewed claims that came across whole and lists the rest " +
     "(`text-changed`, `verdict-changed`, `unmatched`, `ambiguous`); null " +
-    "when there was nothing to carry.",
+    "when there was nothing to carry. `unreadParts` lists the text a " +
+    "completed run could not read (each from `start` to `end`, a block id " +
+    "and an offset): no claim was looked for there, so verify the document " +
+    "again to read it; empty when the run read everything.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",

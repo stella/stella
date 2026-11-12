@@ -933,6 +933,8 @@ export const readVerificationRun = async ({
     })),
     status: run.status,
     errorCode: run.errorCode,
+    // Text a completed run could not read; empty when it read everything.
+    unreadParts: run.unreadParts,
     pipelineVersion: run.pipelineVersion,
     modelRef: run.modelRef,
     requestedBy: run.requestedBy,

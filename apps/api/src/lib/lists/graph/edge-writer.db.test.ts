@@ -514,6 +514,7 @@ describe("graph edge writers", () => {
         tx,
         runId,
         workspaceId: matter.workspaceId,
+        unreadParts: [],
         blocks: [
           {
             id: "p0",

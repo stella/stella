@@ -141,6 +141,7 @@ const withFixture = async (
         "20261005120300_list_verification_access_revoked",
         "20261005120400_list_verification_run_caps",
         "20261112080005_legal_list_verification_run_scope",
+        "20261112204612_legal_list_verification_run_unread_parts",
       ]) {
         if (migration === "20261005120400_list_verification_run_caps") {
           await beforeCapsMigration?.(db);

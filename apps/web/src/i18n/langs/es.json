@@ -547,7 +547,8 @@
       "startFailed": "No se pudo iniciar la verificación",
       "status": {
         "running": "Verificando"
-      }
+      },
+      "unreadParts": "{count, plural, one {No se pudo leer # parte del documento, así que sus afirmaciones no se verificaron.} other {No se pudieron leer # partes del documento, así que sus afirmaciones no se verificaron.}}"
     },
     "save": {
       "failed": "No guardado",

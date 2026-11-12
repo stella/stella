@@ -795,7 +795,7 @@ const executeRun = async ({
       ? "access_revoked"
       : "extraction_failed";
   }
-  const claims = extracted.value;
+  const { claims, unread } = extracted.value;
   const graded = await gradeClaims({
     claims: claims.flatMap((claim, position) =>
       claim.type === "fact"
@@ -861,6 +861,7 @@ const executeRun = async ({
       workspaceId: actor.workspaceId,
       blocks: passages.map((passage) => passage.block),
       claims: rows,
+      unreadParts: unread,
     });
   });
   return null;

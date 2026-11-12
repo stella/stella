@@ -18,7 +18,10 @@ import { defineTransitions, transition } from "@/api/lib/db/transitions";
 import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
 import { carryReviewsToRun } from "@/api/lib/lists/verification/carry-over";
 import { VERIFICATION_RUN_ACTIVE_STATUSES } from "@/api/lib/lists/verification/contract";
-import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
+import type {
+  VerificationRunErrorCode,
+  VerificationUnreadPart,
+} from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import { emitVerificationRunFailureMetric } from "@/api/lib/observability/request-metrics";
 
@@ -86,6 +89,9 @@ type CompleteVerificationRunArgs = {
   workspaceId: SafeId<"workspace">;
   blocks: readonly VerificationBlock[];
   claims: readonly (typeof legalListClaims.$inferInsert)[];
+  /** Text the run could not read; stored with the completion so a reader
+   *  never sees the run whole when it is not. */
+  unreadParts: readonly VerificationUnreadPart[];
 };
 
 /**
@@ -100,6 +106,7 @@ export const completeVerificationRun = async ({
   workspaceId,
   blocks,
   claims,
+  unreadParts,
 }: CompleteVerificationRunArgs): Promise<void> => {
   const run = (
     await tx
@@ -130,7 +137,7 @@ export const completeVerificationRun = async ({
     options: {
       from: ["running"],
       to: "completed",
-      set: { finishedAt: new Date() },
+      set: { finishedAt: new Date(), unreadParts: [...unreadParts] },
     },
     recordTransitionAuditEvent: async (auditTx) =>
       await recordVerificationAuditEvent({
