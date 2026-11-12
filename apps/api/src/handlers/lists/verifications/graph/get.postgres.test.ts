@@ -213,12 +213,17 @@ if (!databaseUrl || !runPostgres) {
           scoring: "held",
           updatedBy: userId,
         });
-        const source = (
-          itemEntityId: SafeId<"entity">,
-          sourceEntityId: SafeId<"entity">,
-          sourceEntityVersionId: SafeId<"entityVersion">,
-          pageNumber: number,
-        ) => ({
+        const source = ({
+          itemEntityId,
+          sourceEntityId,
+          sourceEntityVersionId,
+          pageNumber,
+        }: {
+          itemEntityId: SafeId<"entity">;
+          sourceEntityId: SafeId<"entity">;
+          sourceEntityVersionId: SafeId<"entityVersion">;
+          pageNumber: number;
+        }) => ({
           id: createSafeId<"legalListItemSource">(),
           workspaceId,
           listId,
@@ -229,12 +234,20 @@ if (!databaseUrl || !runPostgres) {
           quote: null,
           createdBy: userId,
         });
-        await db
-          .insert(legalListItemSources)
-          .values([
-            source(recordedFactId, ledgerId, ledgerVersionId, 14),
-            source(recalledFactId, interviewId, interviewVersionId, 2),
-          ]);
+        await db.insert(legalListItemSources).values([
+          source({
+            itemEntityId: recordedFactId,
+            sourceEntityId: ledgerId,
+            sourceEntityVersionId: ledgerVersionId,
+            pageNumber: 14,
+          }),
+          source({
+            itemEntityId: recalledFactId,
+            sourceEntityId: interviewId,
+            sourceEntityVersionId: interviewVersionId,
+            pageNumber: 2,
+          }),
+        ]);
         await db.insert(legalListSourceDocuments).values({
           workspaceId,
           listId,
@@ -260,13 +273,17 @@ if (!databaseUrl || !runPostgres) {
           listId: forList,
           facts: facts.map(({ id, name }) => pinned(id, name)),
         });
-        const run = (
-          id: SafeId<"legalListVerificationRun">,
-          entityId: SafeId<"entity">,
-          forList: SafeId<"legalList">,
-          createdAt: string,
-          status: "completed" | "failed" = "completed",
-        ) => ({
+        const run = ({
+          id,
+          entityId,
+          forList,
+          createdAt,
+        }: {
+          id: SafeId<"legalListVerificationRun">;
+          entityId: SafeId<"entity">;
+          forList: SafeId<"legalList">;
+          createdAt: string;
+        }) => ({
           id,
           organizationId,
           workspaceId,
@@ -275,23 +292,36 @@ if (!databaseUrl || !runPostgres) {
           entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
           contentSha256: "d".repeat(64),
           evidence: evidence(forList),
-          status,
-          errorCode: status === "failed" ? ("internal" as const) : null,
+          status: "completed" as const,
+          errorCode: null,
           createdAt: new Date(createdAt),
         });
-        await db
-          .insert(legalListVerificationRuns)
-          .values([
-            run(olderRunId, statementId, listId, "2026-11-01T10:00:00Z"),
-            run(latestRunId, statementId, listId, "2026-11-02T10:00:00Z"),
-            run(
-              otherListRunId,
-              statementId,
-              otherListId,
-              "2026-11-03T10:00:00Z",
-            ),
-            run(defenceRunId, defenceId, listId, "2026-11-02T11:00:00Z"),
-          ]);
+        await db.insert(legalListVerificationRuns).values([
+          run({
+            id: olderRunId,
+            entityId: statementId,
+            forList: listId,
+            createdAt: "2026-11-01T10:00:00Z",
+          }),
+          run({
+            id: latestRunId,
+            entityId: statementId,
+            forList: listId,
+            createdAt: "2026-11-02T10:00:00Z",
+          }),
+          run({
+            id: otherListRunId,
+            entityId: statementId,
+            forList: otherListId,
+            createdAt: "2026-11-03T10:00:00Z",
+          }),
+          run({
+            id: defenceRunId,
+            entityId: defenceId,
+            forList: listId,
+            createdAt: "2026-11-02T11:00:00Z",
+          }),
+        ]);
         const anchor = {
           type: "docx-block",
           blockId: "p1",

@@ -21,6 +21,7 @@ import * as v from "valibot";
 import type { Transaction } from "@/api/db/root";
 import {
   legalListClaims,
+  legalListItems,
   legalLists,
   legalListVerificationRuns,
 } from "@/api/db/schema";
@@ -491,7 +492,22 @@ type GraphFactsArgs = {
   pinned: ReadonlyMap<FactId, VerificationEvidenceFact>;
   claims: readonly GraphClaimInput[];
   standings: Awaited<ReturnType<typeof readFactStandings>>;
+  /** Facts a claim links that are on the list past the facts the graph
+   *  carries: still on the list, never shown as off it. */
+  listedBeyond: ReadonlySet<FactId>;
 };
+
+/** The facts a page's claims link, each once. */
+const linkedFactIds = (claims: readonly GraphClaimInput[]): FactId[] => [
+  ...new Set<FactId>(
+    claims.flatMap((claim) => [
+      ...claim.refs.map((ref) => ref.factEntityId),
+      ...(claim.recordConflict === null
+        ? []
+        : claim.recordConflict.factEntityIds),
+    ]),
+  ),
+];
 
 /** The list's facts, and any fact off the list a claim of the page still
  *  links, as its run read it. */
@@ -500,25 +516,25 @@ const graphFacts = ({
   pinned,
   claims,
   standings,
+  listedBeyond,
 }: GraphFactsArgs): GraphFactInput[] => {
   const listOrdinal = new Map(
     listFacts.map((fact, index) => [fact.factEntityId, index]),
   );
-  const linked = new Set<FactId>(
-    claims.flatMap((claim) => [
-      ...claim.refs.map((ref) => ref.factEntityId),
-      ...(claim.recordConflict === null
-        ? []
-        : claim.recordConflict.factEntityIds),
-    ]),
-  );
-  const offList = [...linked]
-    .filter((factId) => !listOrdinal.has(factId))
-    .map(
-      (factId) =>
-        pinned.get(factId) ??
-        panic("A claim links a fact no run of the page read"),
-    );
+  // Past the facts the graph carries, a listed fact keeps its place after
+  // them, in the order its claims link it.
+  for (const factId of linkedFactIds(claims)) {
+    if (listedBeyond.has(factId) && !listOrdinal.has(factId)) {
+      listOrdinal.set(factId, listOrdinal.size);
+    }
+  }
+  const linked = linkedFactIds(claims);
+  const asRead = (factId: FactId) =>
+    pinned.get(factId) ?? panic("A claim links a fact no run of the page read");
+  const carried = new Set(listFacts.map((fact) => fact.factEntityId));
+  // Linked facts the list's read did not carry: on the list past its
+  // bound, or off it.
+  const beyond = linked.filter((factId) => !carried.has(factId)).map(asRead);
   // Runs pinned before document names were recorded name a source by its
   // document's current name, as the run read does.
   const documentNames = new Map(
@@ -530,7 +546,7 @@ const graphFacts = ({
       ),
     ),
   );
-  return [...listFacts, ...offList].map((fact) => ({
+  return [...listFacts, ...beyond].map((fact) => ({
     factEntityId: fact.factEntityId,
     text: fact.text,
     occurredOn: fact.occurredOn,
@@ -545,6 +561,36 @@ const graphFacts = ({
       locator: source.locator,
     })),
   }));
+};
+
+/** Which of the named facts are on the list; only asked when the list holds
+ *  more facts than the graph carries. */
+const readListedBeyond = async ({
+  tx,
+  workspaceId,
+  listId,
+  factIds,
+}: {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  listId: SafeId<"legalList">;
+  factIds: readonly FactId[];
+}): Promise<ReadonlySet<FactId>> => {
+  if (factIds.length === 0) {
+    return new Set();
+  }
+  const rows = await tx
+    .select({ factEntityId: legalListItems.entityId })
+    .from(legalListItems)
+    .where(
+      and(
+        eq(legalListItems.workspaceId, workspaceId),
+        eq(legalListItems.listId, listId),
+        inArray(legalListItems.entityId, [...factIds]),
+      ),
+    )
+    .limit(factIds.length);
+  return new Set(rows.map((row) => row.factEntityId));
 };
 
 export const readVerificationGraph = async ({
@@ -619,6 +665,17 @@ export const readVerificationGraph = async ({
   };
   const standings = await readFactStandings({ tx, workspaceId, evidence });
   const claims = presentClaims(claimRows, reviews, standings);
+  const listedBeyond = await readListedBeyond({
+    tx,
+    workspaceId,
+    listId,
+    factIds: listFacts.overflow
+      ? linkedFactIds(claims).filter(
+          (factId) =>
+            !listFacts.facts.some((fact) => fact.factEntityId === factId),
+        )
+      : [],
+  });
 
   const statements: GraphStatementInput[] = plan.statements.map((statement) => {
     const run = runOf(statement.runId);
@@ -644,6 +701,7 @@ export const readVerificationGraph = async ({
           pinned,
           claims,
           standings,
+          listedBeyond,
         }),
       }),
       factOverflow: listFacts.overflow,

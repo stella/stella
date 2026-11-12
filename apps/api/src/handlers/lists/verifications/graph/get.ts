@@ -46,7 +46,9 @@ const config = {
     "between. `provenance` links a fact to a source document at its " +
     "locator. Paginated by documents with a cursor; a document with more " +
     "claims than `limit` continues on the next page. Every page carries " +
-    "the list's facts.",
+    "the list's facts, at most 1000 of them: `factOverflow` is true when " +
+    "the list holds more, so check it before treating the facts as " +
+    "complete.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
