@@ -923,7 +923,9 @@ const FAKE_SCENARIOS = {
             hidden: false,
             isDefault: true,
             supportedReasoningEfforts: [
+              { reasoningEffort: "high", description: "" },
               { reasoningEffort: "medium", description: "" },
+              { reasoningEffort: "turbo", description: "" },
             ],
             defaultReasoningEffort: "medium",
             inputModalities: ["text", "image"],

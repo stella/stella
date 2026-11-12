@@ -298,10 +298,10 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .default({}),
     /**
-     * Legacy disable list kept for rolling deploy compatibility. New
-     * code reads nativeToolOverrides; keep writes in sync until a later
-     * migration can drop this column after all deployed versions no
-     * longer read it.
+     * Legacy disable list that nothing reads or writes any more. Each
+     * row keeps the value its last synced toggle left, so it may lag
+     * nativeToolOverrides, the only source of truth. A later migration
+     * drops this column.
      */
     disabledNativeTools: jsonb("disabled_native_tools")
       .$type<string[]>()

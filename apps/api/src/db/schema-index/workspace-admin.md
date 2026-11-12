@@ -66,7 +66,7 @@ organization_settings.document_processing_mode        text                defaul
 organization_settings.practice_jurisdictions          jsonb               default,not null    workspace-admin.ts:282
 organization_settings.data_box_ids                    jsonb               default,not null    workspace-admin.ts:288  The organization's own data-box IDs (lowercase); they decide whether a filed data-box message is outgoing or incoming.
 organization_settings.native_tool_overrides           jsonb               default,not null    workspace-admin.ts:296  Per-slug overrides for built-in native tools (e.g. ARES).
-organization_settings.disabled_native_tools           jsonb               default,not null    workspace-admin.ts:306  Legacy disable list kept for rolling deploy compatibility.
+organization_settings.disabled_native_tools           jsonb               default,not null    workspace-admin.ts:306  Legacy disable list that nothing reads or writes any more.
 organization_settings.ai_config_encrypted             bytea               null                workspace-admin.ts:311  Encrypted OrgAIConfig JSON (AES-256-GCM).
 organization_settings.ai_config_iv                    bytea               null                workspace-admin.ts:313  AES-GCM initialization vector for aiConfigEncrypted.
 organization_settings.deepl_api_key_encrypted         bytea               null                workspace-admin.ts:315  Encrypted DeepL API key (single opaque string, AES-256-GCM).

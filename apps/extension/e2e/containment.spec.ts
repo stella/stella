@@ -300,6 +300,7 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     await expect(popupPage.getByRole("button")).toHaveText([
       "Disconnect",
       "Remove access",
+      "Use with stella desktop",
     ]);
     await popupPage.close();
 

@@ -2,7 +2,10 @@ import { EventType } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
-import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import {
+  AGENT_HARNESSES,
+  harnessSessionIdEvent,
+} from "@stll/api-contract/agent-harness";
 import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
@@ -12,6 +15,7 @@ import {
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DESKTOP_RUNNER_OUTPUT_EVENT,
+  DESKTOP_RUNNER_REASONING_EFFORTS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
 } from "@stll/api-contract/desktop-runner";
 import { hmacSha256Hex } from "@stll/sha256/node";
@@ -33,10 +37,7 @@ import {
   type CodexNotificationMethod,
   type CodexServerRequestMethod,
 } from "./harness/codex/protocol";
-import {
-  HARNESS_CONTINUATION_EVENT,
-  harnessSessionIdEvent,
-} from "./harness/stream-chunks";
+import { HARNESS_CONTINUATION_EVENT } from "./harness/stream-chunks";
 import {
   SIDECAR_HOLDER_MODES,
   SIDECAR_HOST_MESSAGE,
@@ -733,7 +734,7 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
   "turn/start": {
     threadId: IDENTIFIER,
     model: OPAQUE,
-    effort: vocabulary(["none", "minimal", "low", "medium", "high", "xhigh"]),
+    effort: vocabulary(DESKTOP_RUNNER_REASONING_EFFORTS),
     input: list({
       type: vocabulary(["text", "image", "localImage", "skill", "mention"]),
       text: SIZE,
@@ -900,6 +901,7 @@ const SIDECAR_HOST_FIELDS: Readonly<
     harnessSessionId: IDENTIFIER,
     ...SIDECAR_LAUNCH,
     model: OPAQUE,
+    reasoningEffort: vocabulary(DESKTOP_RUNNER_REASONING_EFFORTS),
     policy: object({
       network: vocabulary(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: vocabulary(DESKTOP_RUNNER_FS_POLICIES),

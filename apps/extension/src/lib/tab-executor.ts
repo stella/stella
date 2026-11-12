@@ -26,6 +26,13 @@ import type { CommandBudget } from "./command-budget";
 import { readBrowserController } from "./controller";
 import { isControllableFrame, parseControllableUrl } from "./origin-policy";
 import {
+  isIdentityProviderUrl,
+  needsMember,
+  SIGN_IN_MESSAGE,
+  SIGN_IN_POLICY,
+  type SignInPolicy,
+} from "./sign-in-policy";
+import {
   checkCommandIdentity,
   type LiveTopDocument,
   type SnapshotState,
@@ -79,6 +86,9 @@ const cancelled = (): BrowserControlResult =>
     BROWSER_CONTROL_ERROR_CODE.cancelled,
     "The browser action was stopped before it ran.",
   );
+
+/** A frame's answer to a snapshot when its document asks for a sign-in. */
+const signInRefusalSchema = v.strictObject({ refused: v.literal("sign-in") });
 
 const frameLocationSchema = v.strictObject({
   origin: v.string(),
@@ -428,6 +438,10 @@ type PageOperation =
       metadataType: typeof BROWSER_CONTROL_TARGET_METADATA;
       path: string;
       shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
+      signIn: SignInPolicy;
+      /** What the action returns on a document that asks for a sign-in. */
+      signInMessage: string;
+      signInPolicies: typeof SIGN_IN_POLICY;
     }
   | { kind: "locate" }
   | {
@@ -439,8 +453,21 @@ type PageOperation =
       kind: "snapshot";
       limits: typeof BROWSER_CONTROL_LIMITS;
       metadataType: typeof BROWSER_CONTROL_TARGET_METADATA;
+      /** A read, or only whether the frame asks for a sign-in. */
+      purpose: SnapshotPurpose;
+      purposes: typeof SNAPSHOT_PURPOSE;
       shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
+      signIn: SignInPolicy;
+      signInPolicies: typeof SIGN_IN_POLICY;
     };
+
+const SNAPSHOT_PURPOSE = {
+  read: "read",
+  /** Answers `{ refused: "sign-in" }` or `{ refused: "none" }`; reads nothing. */
+  signInCheck: "sign-in-check",
+} as const;
+
+type SnapshotPurpose = (typeof SNAPSHOT_PURPOSE)[keyof typeof SNAPSHOT_PURPOSE];
 
 /**
  * A value `chrome.scripting.executeScript` hands to the injected function as
@@ -642,55 +669,60 @@ const runPageOperation = async (
           }
         }
       };
-      rememberSensitiveFields(document);
-      // From the first injection on, secret values are learned as they
-      // change, not only when a command looks: a password typed while the
-      // user has the tab, then shown by a page that swaps or retypes the
-      // field, is still known. Installed once per document, in the
-      // extension's isolated world, where the page cannot remove it.
-      const WATCH_KEY = "stellaSecretWatch";
-      if (Reflect.get(globalThis, WATCH_KEY) !== true) {
-        Reflect.set(globalThis, WATCH_KEY, true);
-        const learn = (node: unknown) => {
-          if (node instanceof Element) {
-            rememberSecretValue(node);
-          }
-        };
-        const onEdit = (event: Event) => {
-          learn(event.composedPath().at(0));
-        };
-        document.addEventListener("input", onEdit, true);
-        document.addEventListener("change", onEdit, true);
-        new MutationObserver((records) => {
-          for (const record of records) {
-            if (
-              record.type === "attributes" &&
-              record.attributeName === "type" &&
-              record.oldValue?.toLowerCase() === "password" &&
-              record.target instanceof Element
-            ) {
-              sensitiveHistory.add(record.target);
+      // Learns the page's secret values and keeps learning them. Runs only
+      // once a desktop sign-in refusal is ruled out: a page handed to the
+      // member is never read, so none of its values are kept.
+      const learnSecrets = () => {
+        rememberSensitiveFields(document);
+        // From the first injection on, secret values are learned as they
+        // change, not only when a command looks: a password typed while the
+        // user has the tab, then shown by a page that swaps or retypes the
+        // field, is still known. Installed once per document, in the
+        // extension's isolated world, where the page cannot remove it.
+        const WATCH_KEY = "stellaSecretWatch";
+        if (Reflect.get(globalThis, WATCH_KEY) !== true) {
+          Reflect.set(globalThis, WATCH_KEY, true);
+          const learn = (node: unknown) => {
+            if (node instanceof Element) {
+              rememberSecretValue(node);
             }
-            learn(record.target);
-            for (const removed of record.removedNodes) {
-              if (removed instanceof Element) {
-                learn(removed);
-                for (const field of removed.querySelectorAll(
-                  "input, textarea",
-                )) {
-                  learn(field);
+          };
+          const onEdit = (event: Event) => {
+            learn(event.composedPath().at(0));
+          };
+          document.addEventListener("input", onEdit, true);
+          document.addEventListener("change", onEdit, true);
+          new MutationObserver((records) => {
+            for (const record of records) {
+              if (
+                record.type === "attributes" &&
+                record.attributeName === "type" &&
+                record.oldValue?.toLowerCase() === "password" &&
+                record.target instanceof Element
+              ) {
+                sensitiveHistory.add(record.target);
+              }
+              learn(record.target);
+              for (const removed of record.removedNodes) {
+                if (removed instanceof Element) {
+                  learn(removed);
+                  for (const field of removed.querySelectorAll(
+                    "input, textarea",
+                  )) {
+                    learn(field);
+                  }
                 }
               }
             }
-          }
-        }).observe(document, {
-          attributeFilter: ["autocomplete", "id", "name", "type"],
-          attributeOldValue: true,
-          attributes: true,
-          childList: true,
-          subtree: true,
-        });
-      }
+          }).observe(document, {
+            attributeFilter: ["autocomplete", "id", "name", "type"],
+            attributeOldValue: true,
+            attributes: true,
+            childList: true,
+            subtree: true,
+          });
+        }
+      };
       // A rect(...) clip or a clip-path that leaves nothing to see.
       const clippedAway = (style: CSSStyleDeclaration) => {
         // Computed as `rect(top, right, bottom, left)`; `auto` edges parse
@@ -1032,6 +1064,93 @@ const runPageOperation = async (
         return container instanceof Element ? container : null;
       };
 
+      // A field only the member fills in: a password, a one-time code, or
+      // a masked secret. A document showing one is a sign-in, which the
+      // member completes; nothing of it is read or acted on.
+      const SIGN_IN_NAME_WORDS = new Set([
+        "onetime",
+        "otp",
+        "passcode",
+        "passphrase",
+        "passwd",
+        "password",
+        "pwd",
+        "totp",
+      ]);
+      const namedLikeSignIn = (identifier: string) => {
+        const words = nameWords(identifier);
+        return words.some(
+          (word, index) =>
+            SIGN_IN_NAME_WORDS.has(word) ||
+            (word === "one" && words[index + 1] === "time"),
+        );
+      };
+      const isSignInField = (element: HTMLInputElement | HTMLTextAreaElement) =>
+        element.type === "password" ||
+        (element.getAttribute("autocomplete") ?? "")
+          .toLowerCase()
+          .split(/\s+/u)
+          .some((token) => SENSITIVE_AUTOCOMPLETE_TOKENS.has(token)) ||
+        masked(element) ||
+        namedLikeSignIn(element.name) ||
+        namedLikeSignIn(element.id);
+      const asksForSignIn = (root: ParentNode): boolean => {
+        for (const element of root.querySelectorAll("*")) {
+          // A text area counts like an input: a one-time code is typed
+          // into either.
+          const field =
+            (element instanceof HTMLInputElement &&
+              element.type !== "hidden") ||
+            element instanceof HTMLTextAreaElement
+              ? element
+              : null;
+          if (
+            field !== null &&
+            isSignInField(field) &&
+            visible(field) &&
+            !concealedInTree(field)
+          ) {
+            return true;
+          }
+          if (element.shadowRoot && asksForSignIn(element.shadowRoot)) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // Under the desktop policy a sign-in is refused before anything is
+      // read or done; a web connection reads on with secrets withheld.
+      const signInRefusal = () => {
+        if (
+          pageOperation.signIn !== pageOperation.signInPolicies.handToMember
+        ) {
+          return null;
+        }
+        const asks = asksForSignIn(document);
+        if (
+          pageOperation.kind === "snapshot" &&
+          pageOperation.purpose === pageOperation.purposes.signInCheck
+        ) {
+          return { refused: asks ? "sign-in" : "none" } as const;
+        }
+        if (!asks) {
+          return null;
+        }
+        return pageOperation.kind === "snapshot"
+          ? ({ refused: "sign-in" } as const)
+          : ({
+              code: pageOperation.errorCode.needsMember,
+              error: pageOperation.signInMessage,
+              ok: false,
+            } as const);
+      };
+      const refusedSignIn = signInRefusal();
+      if (refusedSignIn !== null) {
+        return refusedSignIn;
+      }
+      learnSecrets();
+
       if (pageOperation.kind === "snapshot") {
         const interactiveSelector = [
           "a[href]",
@@ -1331,13 +1450,24 @@ type DomActionOutcome =
   | { status: "dispatched" }
   | { status: "unobserved" };
 
-const injectDomAction = async (
-  tabId: number,
-  documentId: string,
-  path: string,
-  expectedOrigin: string,
-  command: BrowserControlElementCommand,
-): Promise<DomActionOutcome> => {
+type InjectDomActionOptions = {
+  command: BrowserControlElementCommand;
+  documentId: string;
+  /** The frame origin the worker checked; the action refuses any other. */
+  expectedOrigin: string;
+  path: string;
+  signIn: SignInPolicy;
+  tabId: number;
+};
+
+const injectDomAction = async ({
+  command,
+  documentId,
+  expectedOrigin,
+  path,
+  signIn,
+  tabId,
+}: InjectDomActionOptions): Promise<DomActionOutcome> => {
   let results: Awaited<ReturnType<typeof runPageOperation>>;
   try {
     results = await runPageOperation(
@@ -1351,6 +1481,9 @@ const injectDomAction = async (
         metadataType: BROWSER_CONTROL_TARGET_METADATA,
         path,
         shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+        signIn,
+        signInMessage: SIGN_IN_MESSAGE,
+        signInPolicies: SIGN_IN_POLICY,
       },
     );
   } catch {
@@ -1433,6 +1566,7 @@ type ReadSnapshotOptions = {
    * The page refuses before reading anything, and nothing is stored.
    */
   requiredOrigin?: { origin: string; refusal: BrowserControlResult };
+  signIn: SignInPolicy;
   tabId: number;
   textOffset: number;
 };
@@ -1440,15 +1574,26 @@ type ReadSnapshotOptions = {
 const readSnapshot = async ({
   controllerId,
   requiredOrigin,
+  signIn,
   tabId,
   textOffset,
 }: ReadSnapshotOptions): Promise<BrowserControlResult> => {
+  const handsSignInToMember = signIn === SIGN_IN_POLICY.handToMember;
   const tab = await chrome.tabs.get(tabId);
   if (tab.url === undefined || parseControllableUrl(tab.url) === null) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
       UNSUPPORTED_PAGE_MESSAGE,
     );
+  }
+  if (handsSignInToMember && isIdentityProviderUrl(tab.url)) {
+    return needsMember();
+  }
+  // Every frame is checked before any is read: a frame without a sign-in
+  // is never read for a tab another frame hands to the member. Each frame
+  // checks again as it reads, for a sign-in that appears in between.
+  if (handsSignInToMember && (await tabAsksForSignIn(tabId))) {
+    return needsMember();
   }
   const results = await runPageOperation(
     { allFrames: true, tabId },
@@ -1459,9 +1604,21 @@ const readSnapshot = async ({
       kind: "snapshot",
       limits: BROWSER_CONTROL_LIMITS,
       metadataType: BROWSER_CONTROL_TARGET_METADATA,
+      purpose: SNAPSHOT_PURPOSE.read,
+      purposes: SNAPSHOT_PURPOSE,
       shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+      signIn,
+      signInPolicies: SIGN_IN_POLICY,
     },
   );
+  // A sign-in in any frame, or a top document that turned out to be an
+  // identity provider's, is the member's: nothing is returned or stored.
+  if (
+    handsSignInToMember &&
+    results.some(({ result }) => v.is(signInRefusalSchema, result))
+  ) {
+    return needsMember();
+  }
   const frames = results.flatMap(({ documentId, frameId, result }) => {
     const parsed = v.safeParse(frameSnapshotSchema, result);
     return parsed.success
@@ -1478,6 +1635,9 @@ const readSnapshot = async ({
     top?.snapshot.origin !== requiredOrigin.origin
   ) {
     return requiredOrigin.refusal;
+  }
+  if (handsSignInToMember && top && isIdentityProviderUrl(top.snapshot.url)) {
+    return needsMember();
   }
   if (
     top &&
@@ -1551,9 +1711,8 @@ const readSnapshot = async ({
  */
 const readOutcome = async (
   navigation: TabNavigationObserver,
-  controllerId: string,
   tabId: number,
-  signal: AbortSignal,
+  { controllerId, signal, signIn }: CommandRun,
 ): Promise<BrowserControlResult> => {
   for (let attempt = 0; attempt < OUTCOME_SNAPSHOT_ATTEMPTS; attempt += 1) {
     const settled = await navigation.waitForSettled(signal);
@@ -1568,14 +1727,25 @@ const readOutcome = async (
     const generation = navigation.generation();
     let result: BrowserControlResult | null;
     try {
-      result = await readSnapshot({ controllerId, tabId, textOffset: 0 });
+      result = await readSnapshot({
+        controllerId,
+        signIn,
+        tabId,
+        textOffset: 0,
+      });
     } catch {
       result = null;
     }
     if (navigation.generation() !== generation) {
       continue;
     }
-    if (result?.status === "success") {
+    // The action led to a sign-in: what happened is known, and the page
+    // is the member's.
+    if (
+      result?.status === "success" ||
+      (result?.status === "error" &&
+        result.code === BROWSER_CONTROL_ERROR_CODE.needsMember)
+    ) {
       return result;
     }
     return outcomeUnknown(
@@ -1600,6 +1770,8 @@ export type AdoptControlledTabResult =
 export const adoptControlledTab = async (
   controllerId: string,
   tab: chrome.tabs.Tab,
+  /** Takes the browser back for this connection, once the tab qualifies. */
+  takeOver: (() => Promise<void>) | null,
 ): Promise<AdoptControlledTabResult> => {
   const [controller, stellaTabs] = await Promise.all([
     readBrowserController(),
@@ -1613,6 +1785,9 @@ export const adoptControlledTab = async (
     parseControllableUrl(tab.url) === null
   ) {
     return { status: "unsupported-page" };
+  }
+  if (takeOver !== null) {
+    await takeOver();
   }
   // The user's hand-over always succeeds: at chat's tab limit the oldest of
   // chat's other tabs stays confined but is no longer chat's.
@@ -1732,6 +1907,14 @@ type ExecuteBrowserCommandOptions = {
   observedTab: BrowserObservedTab | null;
   /** Aborts when chat stops the command or control changes. */
   signal: AbortSignal;
+  /** How a page that asks for a sign-in is treated; set by the transport. */
+  signIn: SignInPolicy;
+  /**
+   * For an `open` by a controller that does not hold the browser: hands it
+   * over, run once every check of the open passed and right before the tab
+   * changes. `null` when the controller holds it already.
+   */
+  takeOver: (() => Promise<void>) | null;
 };
 
 /** The tab's top document now; see `TopDocument`. */
@@ -1790,7 +1973,10 @@ type ControlledTab = NonNullable<Awaited<ReturnType<typeof readControlledTab>>>;
  */
 type CommandProgress = { dispatched: boolean };
 
-type CommandRun = Pick<ExecuteBrowserCommandOptions, "budget" | "signal"> & {
+type CommandRun = Pick<
+  ExecuteBrowserCommandOptions,
+  "budget" | "signal" | "signIn" | "takeOver"
+> & {
   controllerId: string;
   progress: CommandProgress;
 };
@@ -1835,7 +2021,7 @@ const runOpen = async (
     BrowserControlCommand,
     { action: typeof BROWSER_CONTROL_ACTION.open }
   >,
-  { budget, controllerId, progress, signal }: CommandRun,
+  { budget, controllerId, progress, signal, signIn, takeOver }: CommandRun,
 ): Promise<BrowserControlResult> => {
   const requested = parseControllableUrl(command.url);
   if (requested === null) {
@@ -1852,12 +2038,26 @@ const runOpen = async (
     );
   // Spares creating a tab only to close it; the limit itself holds where
   // the tab joins chat's.
-  if (newTab && chatTabsAtLimit(await readContainedTabs())) {
+  // A takeover's new holder keeps none of the previous holder's tabs: the
+  // limit then holds where the tab joins.
+  if (
+    newTab &&
+    takeOver === null &&
+    chatTabsAtLimit(await readContainedTabs())
+  ) {
     return tabLimitReached();
   }
   const overBudget = await budget.charge();
   if (overBudget !== null) {
     return budgetExceeded(overBudget);
+  }
+  // Nothing refused the page: only now may the browser change hands.
+  if (takeOver !== null) {
+    if (isStopped(signal)) {
+      await budget.refund();
+      return cancelled();
+    }
+    await takeOver();
   }
   progress.dispatched = true;
   const opened = await openControlledTab(controllerId, requested, {
@@ -1899,6 +2099,13 @@ const runOpen = async (
   const landed = await chrome.tabs.get(opened.tabId);
   const landedUrl =
     landed.url === undefined ? null : parseControllableUrl(landed.url);
+  if (
+    signIn === SIGN_IN_POLICY.handToMember &&
+    landedUrl !== null &&
+    isIdentityProviderUrl(landedUrl.href)
+  ) {
+    return needsMember();
+  }
   if (landedUrl === null || landedUrl.origin !== requested.origin) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.redirected,
@@ -1911,6 +2118,7 @@ const runOpen = async (
   await reclaimControlledTab(opened.tabId);
   return await readSnapshot({
     controllerId,
+    signIn,
     tabId: opened.tabId,
     textOffset: 0,
   });
@@ -1919,8 +2127,9 @@ const runOpen = async (
 const runGoBack = async (
   tabId: number,
   state: ControlledTabState,
-  { budget, controllerId, progress, signal }: CommandRun,
+  run: CommandRun,
 ): Promise<BrowserControlResult> => {
+  const { budget, progress, signal } = run;
   const navigation = createTabNavigationObserver(tabId);
   try {
     const overBudget = await budget.charge();
@@ -1934,7 +2143,7 @@ const runGoBack = async (
     }
     progress.dispatched = true;
     await navigateBack(tabId);
-    return await readOutcome(navigation, controllerId, tabId, signal);
+    return await readOutcome(navigation, tabId, run);
   } finally {
     navigation.dispose();
   }
@@ -1993,7 +2202,7 @@ const runSwitchTab = async (
     BrowserControlCommand,
     { action: typeof BROWSER_CONTROL_ACTION.switchTab }
   >,
-  { budget, controllerId, signal }: CommandRun,
+  { budget, controllerId, signal, signIn }: CommandRun,
 ): Promise<BrowserControlResult> => {
   const { tabId } = command;
   const [owner, stellaTabs] = await Promise.all([
@@ -2093,17 +2302,49 @@ const runSwitchTab = async (
   return await readSnapshot({
     controllerId,
     requiredOrigin: { origin: approved.origin, refusal: leftApprovedOrigin() },
+    signIn,
     tabId,
     textOffset: 0,
   });
 };
 
-const runElementAction = async (
-  command: BrowserControlElementCommand,
-  { state, tab, tabId }: ControlledTab & { tabId: number },
-  documentId: string | null,
-  { budget, controllerId, progress, signal }: CommandRun,
-): Promise<BrowserControlResult> => {
+/**
+ * Whether any frame of the tab asks for a sign-in now. A desktop action
+ * checks the whole tab before it acts: a sign-in frame that appeared after
+ * the last read must stop the action, not only the read that follows it.
+ */
+const tabAsksForSignIn = async (tabId: number): Promise<boolean> => {
+  const results = await runPageOperation(
+    { allFrames: true, tabId },
+    {
+      kind: "snapshot",
+      limits: BROWSER_CONTROL_LIMITS,
+      metadataType: BROWSER_CONTROL_TARGET_METADATA,
+      purpose: SNAPSHOT_PURPOSE.signInCheck,
+      purposes: SNAPSHOT_PURPOSE,
+      shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+      signIn: SIGN_IN_POLICY.handToMember,
+      signInPolicies: SIGN_IN_POLICY,
+    },
+  );
+  return results.some(({ result }) => v.is(signInRefusalSchema, result));
+};
+
+type ElementActionArgs = {
+  command: BrowserControlElementCommand;
+  controlledTab: ControlledTab & { tabId: number };
+  /** The document the element's frame showed when the page was read. */
+  documentId: string | null;
+  run: CommandRun;
+};
+
+const runElementAction = async ({
+  command,
+  controlledTab: { state, tab, tabId },
+  documentId,
+  run,
+}: ElementActionArgs): Promise<BrowserControlResult> => {
+  const { budget, progress, signal, signIn } = run;
   if (tab.url === undefined || parseControllableUrl(tab.url) === null) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
@@ -2121,6 +2362,12 @@ const runElementAction = async (
   if (!frame.ok) {
     return frame.error;
   }
+  if (
+    signIn === SIGN_IN_POLICY.handToMember &&
+    (await tabAsksForSignIn(tabId))
+  ) {
+    return needsMember();
+  }
   const overBudget = await budget.charge();
   if (overBudget !== null) {
     return budgetExceeded(overBudget);
@@ -2133,13 +2380,14 @@ const runElementAction = async (
       return cancelled();
     }
     progress.dispatched = true;
-    const outcome = await injectDomAction(
-      tabId,
-      documentId,
-      reference.path,
-      frame.origin,
+    const outcome = await injectDomAction({
       command,
-    );
+      documentId,
+      expectedOrigin: frame.origin,
+      path: reference.path,
+      signIn,
+      tabId,
+    });
     if (outcome.status === "refused") {
       // The page refused before acting, so the snapshot still describes it
       // and nothing was spent.
@@ -2152,7 +2400,7 @@ const runElementAction = async (
         "Chrome lost the page before the action reported back.",
       );
     }
-    return await readOutcome(navigation, controllerId, tabId, signal);
+    return await readOutcome(navigation, tabId, run);
   } finally {
     navigation.dispose();
   }
@@ -2161,10 +2409,23 @@ const runElementAction = async (
 const runBrowserCommand = async (
   controllerId: string,
   command: BrowserControlCommand,
-  { budget, observedTab, signal }: ExecuteBrowserCommandOptions,
+  {
+    budget,
+    observedTab,
+    signal,
+    signIn,
+    takeOver,
+  }: ExecuteBrowserCommandOptions,
   progress: CommandProgress,
 ): Promise<BrowserControlResult> => {
-  const run: CommandRun = { budget, controllerId, progress, signal };
+  const run = {
+    budget,
+    controllerId,
+    progress,
+    signal,
+    signIn,
+    takeOver,
+  };
   try {
     if (isStopped(signal)) {
       return cancelled();
@@ -2200,6 +2461,7 @@ const runBrowserCommand = async (
     if (command.action === BROWSER_CONTROL_ACTION.snapshot) {
       return await readSnapshot({
         controllerId,
+        signIn,
         tabId,
         textOffset: command.textOffset ?? 0,
       });
@@ -2207,12 +2469,12 @@ const runBrowserCommand = async (
     if (command.action === BROWSER_CONTROL_ACTION.goBack) {
       return await runGoBack(tabId, controlledTab.state, run);
     }
-    return await runElementAction(
+    return await runElementAction({
       command,
-      { ...controlledTab, tabId },
-      identity.documentId,
+      controlledTab: { ...controlledTab, tabId },
+      documentId: identity.documentId,
       run,
-    );
+    });
   } catch {
     if (progress.dispatched) {
       return outcomeUnknown(

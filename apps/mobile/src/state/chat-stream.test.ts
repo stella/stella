@@ -161,6 +161,7 @@ describe("drawing an answer from its events", () => {
       text: "Checking the register\n\nTwo found.",
       tools: ["list_templates"],
       files: [],
+      drafts: [],
     });
   });
 

@@ -101,6 +101,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Matter vocabulary uses the normal matter read permission on every deployment",
   ],
   [
+    "/v1/workspaces/member-candidates",
+    "The organization's people a matter can be shared with are listed under the normal matter read permission on every deployment",
+  ],
+  [
     "/v1/desktop/matter-candidates",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
@@ -179,6 +183,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/presence",
     "Desktop account presence supports handoff on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/cleanup",
+    "Desktop dictation cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/marked",

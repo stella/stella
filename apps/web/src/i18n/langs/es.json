@@ -571,6 +571,21 @@
       "showBefore": "Mostrar el texto anterior al ¶ {from}",
       "verifyParagraphs": "Verificar párrafos"
     },
+    "staleness": {
+      "failed": "No se pudieron volver a comprobar las afirmaciones",
+      "finished": "{count, plural, one {# afirmación comprobada de nuevo} other {# afirmaciones comprobadas de nuevo} many {# afirmaciones comprobadas de nuevo}}",
+      "partial": "{rechecked, number} comprobadas de nuevo, {failed, plural, one {# con error} other {# con error} many {# con error}}",
+      "reasons": {
+        "factChanged": "Hecho modificado",
+        "factHeld": "Hecho excluido",
+        "factRemoved": "Hecho eliminado",
+        "newFactRelated": "Nuevo hecho relacionado"
+      },
+      "recheckAll": "Volver a comprobar todas",
+      "recheckLocked": "Se está volviendo a comprobar con las demás afirmaciones desactualizadas",
+      "runLine": "{count, plural, one {# afirmación puede estar desactualizada} other {# afirmaciones pueden estar desactualizadas} many {# afirmaciones pueden estar desactualizadas}}",
+      "running": "{count, plural, one {Volviendo a comprobar # afirmación…} other {Volviendo a comprobar # afirmaciones…} many {Volviendo a comprobar # afirmaciones…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Contradicha",
@@ -628,100 +643,21 @@
       "pickList": "Elija la lista con cuyos hechos se contrastan los documentos de este asunto."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Crear versión bilingüe",
-      "creating": "Creando…",
-      "description": "Crea una copia de este documento en dos columnas: el texto original a la izquierda y una copia para traducir a la derecha, con numeración independiente. La copia se guarda en este asunto como un documento nuevo.",
-      "sameLanguage": "Elija dos idiomas distintos.",
-      "sourceLanguage": "Idioma de origen",
-      "title": "Versión bilingüe"
-    },
-    "error": {
-      "title": "No se pudo crear la versión bilingüe"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> está listo con {rowCount, plural, one {# fila} other {# filas} many {# filas}} por traducir.",
-      "title": "Versión bilingüe creada"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Rellena la columna de traducción de este documento a dos columnas. Revise qué ocurre con cada fila y cómo se traducen los términos definidos y, a continuación, inicie la traducción.",
-      "prepare": "Preparar",
-      "preparing": "Leyendo el documento…",
-      "preparingHint": "Leer todo el documento y evaluar cada fila tarda hasta dos minutos.",
-      "title": "Traducir la versión bilingüe"
+      "prepare": "Preparar"
     },
     "dispositions": {
-      "inline": "Ambos idiomas",
       "keep": "Dejar como está"
     },
-    "error": {
-      "prepareTitle": "No se pudo preparar el documento",
-      "startTitle": "No se pudo iniciar la traducción"
-    },
-    "errorCodes": {
-      "aiUnavailable": "No hay ningún modelo de IA disponible para la traducción.",
-      "applyFailed": "Las traducciones no se pudieron escribir de nuevo en el documento.",
-      "documentChanged": "El documento cambió durante la traducción. Prepárelo de nuevo.",
-      "documentUnresolved": "El documento o su archivo ya no está disponible.",
-      "enqueueFailed": "La traducción no se pudo poner en cola.",
-      "internal": "La traducción se detuvo de forma inesperada.",
-      "notBilingual": "Este documento no tiene una tabla bilingüe.",
-      "translationFailed": "No se pudo traducir un lote de filas.",
-      "unknown": "La traducción se detuvo de forma inesperada."
-    },
-    "glossary": {
-      "add": "Añadir término",
-      "description": "Estas traducciones se aplican a todas las filas. Un término sin traducción debe completarse o eliminarse.",
-      "empty": "No se encontraron términos definidos.",
-      "formsHint": "Separe las otras formas con comas.",
-      "formsSource": "Otras formas del término",
-      "formsTarget": "Otras formas de la traducción",
-      "incomplete": "Complete las traducciones que faltan o elimine esos términos.",
-      "origins": {
-        "detected": "Detectado",
-        "user": "Suyo"
-      },
-      "term": "Término",
-      "title": "Términos definidos",
-      "tooManyForms": "Un término puede tener como máximo {max} formas adicionales.",
-      "translation": "Traducción"
-    },
     "kinds": {
-      "heading": "Título",
-      "listItem": "Elemento de lista",
-      "paragraph": "Párrafo",
-      "table": "Tabla completa"
-    },
-    "origins": {
-      "default": "Sin evaluar",
-      "model": "IA"
+      "paragraph": "Párrafo"
     },
     "review": {
-      "droppedRows": "{count, plural, one {Se omitió # fila} other {Se omitieron # filas} many {Se omitieron # filas}}: no contienen texto traducible.",
-      "start": "Iniciar traducción",
       "starting": "Iniciando…"
     },
     "rows": {
-      "description": "Elija qué ocurre con cada fila de la columna de traducción.",
-      "ordinal": "#",
-      "sourceText": "Texto de origen",
-      "title": "Filas",
-      "whatToDo": "Qué hacer"
-    },
-    "run": {
-      "cancelled": "La traducción se canceló.",
-      "doneSummary": "{count, plural, one {# fila traducida} other {# filas traducidas} many {# filas traducidas}}.",
-      "doneTitle": "Traducción finalizada",
-      "failedRows": "{count, plural, one {No se pudo traducir # fila} other {No se pudieron traducir # filas} many {No se pudieron traducir # filas}}.",
-      "failedTitle": "Traducción detenida",
-      "hint": "La traducción se ejecuta en el servidor. Mantenga esta ventana abierta para seguirla.",
-      "moreRows": "{count, plural, one {# fila más} other {# filas más} many {# filas más}}",
-      "progress": "{completed} de {total} filas traducidas",
-      "title": "Traducción en curso…",
-      "warningsTitle": "Filas por revisar"
+      "title": "Filas"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
       "none": "Aún no hay citas registradas.",
       "notInStella": "Aún no está en stella",
-      "openAtCitation": "Abrir en la cita",
       "openDecision": "Abrir la resolución",
       "paragraphLabel": "Apartado {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1918,7 +1853,6 @@
       "restored": "Cambios en archivos deshechos"
     },
     "localRun": {
-      "cloud": "Nube de stella",
       "errorFolderUnavailable": "La carpeta vinculada a este chat no está disponible en tu ordenador. Revísala en stella desktop y vuelve a enviarlo.",
       "errorLimitReached": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Vuelve a intentarlo cuando se restablezca el límite.",
       "errorLimitResetsAt": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Puedes volver a intentarlo a partir del {time}.",
@@ -1928,7 +1862,6 @@
       "errorRestoring": "Tu ordenador aún está deshaciendo cambios en archivos. Vuelve a enviarlo en un momento.",
       "errorUnavailable": "Tu ordenador dejó de procesar esta respuesta. Comprueba que stella desktop esté abierto y conectado, y vuelve a intentarlo.",
       "filesNotShared": "Los archivos que no se pudieron compartir siguen en tu ordenador: {fileNames}",
-      "onThisComputer": "{harness} en este ordenador",
       "permissionAboveLimit": "Tu organización no lo permite",
       "permissionAskDescription": "Edita por su cuenta los archivos de la carpeta del chat; pregunta antes de cualquier otra cosa.",
       "permissionAutoDescription": "Hace por su cuenta lo que considera seguro; pregunta por el resto.",
@@ -1943,10 +1876,9 @@
       "refusalNoComputer": "Ninguno de tus ordenadores está conectado. Abre stella desktop y vuelve a enviar.",
       "refusalPermissionAboveLimit": "Tu organización no permite estos permisos para el agente de programación de tu ordenador. Elige otra opción en Permisos.",
       "refusalPermissionUnavailable": "El agente de programación de tu ordenador no puede ejecutarse con estos permisos. Elige otra opción en Permisos.",
+      "refusalReasoningEffortUnavailable": "El agente de programación de tu ordenador no ofrece este nivel de razonamiento para el modelo. Elige otro en Nivel de razonamiento.",
       "refusalTooLarge": "Esta conversación es demasiado larga para pasarla a tu ordenador. Empieza un chat nuevo para ejecutarla allí.",
       "refusalUnavailable": "Ejecutar chats en tu ordenador no está disponible para tu cuenta.",
-      "runOn": "Ejecutar en",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Límite alcanzado hasta {time}",
       "stateModelUnavailable": "El modelo ya no está disponible",
@@ -2110,6 +2042,23 @@
     "richContentLoading": "Cargando contenido interactivo…",
     "richContentTitle": "Contenido interactivo",
     "richContentUnavailable": "Este contenido no se puede mostrar de forma segura.",
+    "runOn": {
+      "checkFailed": "No se ha podido comprobar tu ordenador",
+      "chipLabel": "Se ejecuta en: {place}",
+      "cloud": "Nube",
+      "cloudDescription": "Se ejecuta en la nube. Funciona desde cualquier sitio.",
+      "harnessModels": "Modelos de {harness}",
+      "hintInstall": "Instálalo desde stella desktop",
+      "hintOffline": "Abre stella desktop en tu ordenador",
+      "hintSignIn": "Inicia sesión en stella desktop",
+      "hintUpdate": "Actualízalo desde stella desktop",
+      "localPlace": "Tu ordenador, {harness}",
+      "localSelection": "Tu ordenador · {harness}",
+      "modelDefault": "Predeterminado (recomendado)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Tu ordenador",
+      "yourComputerDescription": "Usa Codex o Claude Code en tu ordenador con tu propia suscripción. Puede leer y cambiar archivos de la carpeta de este chat; sus permisos deciden qué puede hacer sin preguntar."
+    },
     "selection": {
       "askInNewChat": "Preguntar en un chat nuevo",
       "quoteInReply": "Citar en la respuesta",
@@ -2161,6 +2110,7 @@
     "stopFailed": "No se pudo detener la respuesta. Inténtalo de nuevo.",
     "stopResponse": "Detener",
     "stopped": "Detenido",
+    "stopping": "Deteniendo…",
     "suggestTitle": "Sugerir un título",
     "suggestTitleUnavailableAnonymized": "Las sugerencias de título no están disponibles para conversaciones anonimizadas.",
     "suggestedFollowupsLabel": "Sugerencias de preguntas de seguimiento",
@@ -2697,6 +2647,7 @@
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
     "organizations": "Organizaciones",
+    "outOfDate": "Desactualizada",
     "page": "Página {page}",
     "paymentRetryNotice": "Problema con el pago. Actualiza tu método de pago antes del {date} para mantener el acceso.",
     "pin": "Fijar",
@@ -6102,7 +6053,6 @@
     "comments": "Comentarios",
     "commentsEmpty": "Selecciona texto para comentarlo.",
     "noRevisions": "Aún no hay revisiones",
-    "outOfDate": "Desactualizada",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Sin resumen",
     "proposals": "Propuestas",

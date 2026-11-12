@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+
 import {
   bindCreateDocumentDraftChatThread,
-  buildCreateDocumentDownloadFileName,
   buildCreateDocumentDraftPayload,
   findReadyCreateDocumentDraftMessageId,
   getCreateDocumentDraftEditorAccess,

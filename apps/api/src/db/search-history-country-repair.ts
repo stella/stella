@@ -5,6 +5,7 @@ import { searchHistoryPathCountry } from "@stll/api-contract/search-history-iden
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import type { Verdict } from "@stll/db-load-gate/health";
 
+import { getContentEncryptionMasterKey } from "@/api/env-content-encryption";
 import { createSafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import {
@@ -12,6 +13,7 @@ import {
   SEARCH_HISTORY_LEGACY_DOCUMENT_SQL,
   SEARCH_HISTORY_PENDING_DOCUMENT_SQL,
 } from "@/api/lib/db/aggregate-lock";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { systemAuditRow } from "@/api/lib/system-audit/record";
 import { isRecord } from "@/api/lib/type-guards";
@@ -26,6 +28,7 @@ import type {
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "search-history-country";
+const INTRODUCED_BY = "20261111230200_search_history_country_expand";
 const AUDIT_ACTOR = "system:search-history-country-repair";
 const BATCH = 50;
 // The kind CHECK leaves decision and statute as the only non-search rows.
@@ -109,12 +112,37 @@ const readCompletion = async (
       };
 };
 
+const CONTENT_KEY = {
+  available: "available",
+  unavailable: "unavailable",
+} as const;
+type ContentKeyState = (typeof CONTENT_KEY)[keyof typeof CONTENT_KEY];
+
+/**
+ * The migrate task carries only the database credential, so it cannot read
+ * the content key; any other key failure still stops the repair.
+ */
+const readContentKeyState = (): ContentKeyState => {
+  const key = Result.try({
+    try: () => getContentEncryptionMasterKey(),
+    catch: (cause: unknown) => cause,
+  });
+  if (key.isOk()) {
+    return key.value === null ? CONTENT_KEY.unavailable : CONTENT_KEY.available;
+  }
+  if (key.error instanceof ConfigurationError) {
+    return CONTENT_KEY.unavailable;
+  }
+  throw key.error;
+};
+
 type RepairRuntimeOptions = {
   readVerdict?: () => Promise<Verdict>;
   sleep?: (milliseconds: number) => Promise<void>;
   clock?: () => number;
   log?: (record: unknown) => void;
   decrypt?: typeof decryptContent;
+  readContentKey?: () => ContentKeyState;
 };
 
 export const createSearchHistoryCountryRepair = ({
@@ -123,14 +151,14 @@ export const createSearchHistoryCountryRepair = ({
   clock,
   log,
   decrypt = decryptContent,
+  readContentKey = readContentKeyState,
 }: RepairRuntimeOptions = {}): OnlineRepair => ({
   name: REPAIR_NAME,
-  introducedBy: {
-    type: "code",
-    owner: "src/db/search-history-country-repair.ts",
-  },
+  // Migration-owned: startup admits its durable pending checkpoint.
+  introducedBy: INTRODUCED_BY,
   readCompletion,
   repair: async (connection) => {
+    const contentKey = readContentKey();
     const runtime = createBackfillRuntime({
       name: REPAIR_NAME,
       tableName: "search_history_entries",
@@ -148,6 +176,11 @@ export const createSearchHistoryCountryRepair = ({
         sleep,
         step: async () =>
           await runtime.step(async ({ tx, size, cursor }) => {
+            // Without the key, record the checkpoint and leave every legacy
+            // row pending; readCompletion then reads the repair as pending.
+            if (contentKey === CONTENT_KEY.unavailable) {
+              return { cursor: null, done: true, value: 0 };
+            }
             const rows = (
               await querySearchHistoryCountryRepairBatch({
                 connection: tx,

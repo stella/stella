@@ -50,6 +50,11 @@ export type ClaimReviewEvent =
   ListsRoutes["claim-reviews"]["post"]["body"]["event"];
 /** A claim's latest re-check, beside the grade it replaced. */
 export type ClaimRecheck = NonNullable<VerificationClaim["recheck"]>;
+/** One reason a claim's grade may no longer stand on the list as it is now. */
+export type StalenessReason = NonNullable<
+  VerificationClaim["staleness"]
+>[number];
+export type StalenessReasonKind = StalenessReason["kind"];
 export type ClaimReviewStatus = NonNullable<ClaimReview["status"]>;
 export type ClaimOverrideState = NonNullable<ClaimReview["override"]>;
 
@@ -78,9 +83,6 @@ export type ClaimReviewEventKind = ReviewHistoryEntry["kind"];
 type ReviewStatusMeta = {
   labelKey: TranslationKey;
   tone: ReviewStatusTone;
-  /** A settled claim has had its human decision; needs-evidence keeps it
-   *  open, so it stays in the queue and outside bulk acceptance. */
-  settles: boolean;
   /** The status as an ICU select value (a select key cannot hold "-"). */
   selectKey: "reviewed" | "disputed" | "needsEvidence";
 };
@@ -89,19 +91,16 @@ export const REVIEW_STATUS_META = {
   reviewed: {
     labelKey: "avt.review.status.reviewed",
     tone: "success",
-    settles: true,
     selectKey: "reviewed",
   },
   disputed: {
     labelKey: "avt.review.status.disputed",
     tone: "destructive",
-    settles: true,
     selectKey: "disputed",
   },
   "needs-evidence": {
     labelKey: "avt.review.status.needsEvidence",
     tone: "warning",
-    settles: false,
     selectKey: "needsEvidence",
   },
 } as const satisfies Record<ClaimReviewStatus, ReviewStatusMeta>;

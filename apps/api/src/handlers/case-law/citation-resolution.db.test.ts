@@ -1293,7 +1293,7 @@ test("a decision whose identity changes re-queues the edges drawn to it and keep
     await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
       reopenCitationsResolvedTo(tx, movedTarget),
     ),
-  ).toBe(1);
+  ).toMatchObject({ reopened: 1 });
   // Queued for another answer, and still linked until it comes: the decision
   // must not lose its incoming citations for as long as the queue takes.
   expect(await rowOf(movedCitation)).toMatchObject({
@@ -1383,7 +1383,7 @@ test("a key gaining a second holder retracts the edge, in bulk too", async () =>
     await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
       reopenCitationsForKeys(tx, [bulkKey]),
     ),
-  ).toBe(1);
+  ).toMatchObject({ reopened: 1 });
   expect(await rowOf(bulkCitation)).toMatchObject({
     cited: null,
     status: CITATION_RESOLUTION_STATUS.PENDING,
@@ -1401,7 +1401,7 @@ test("a key gaining a second holder retracts the edge, in bulk too", async () =>
     await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
       reopenCitationsForKeys(tx, [bulkKey]),
     ),
-  ).toBe(1);
+  ).toMatchObject({ reopened: 1 });
   expect(await rowOf(bulkCitation)).toMatchObject({
     status: CITATION_RESOLUTION_STATUS.PENDING,
   });

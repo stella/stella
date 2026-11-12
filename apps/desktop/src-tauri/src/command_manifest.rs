@@ -32,6 +32,8 @@ macro_rules! with_stella_commands {
       commands::set_autostart => "set_autostart",
       dictation::dictation_get_snapshot => "dictation_get_snapshot",
       dictation::dictation_set_enabled => "dictation_set_enabled",
+      dictation::dictation_set_cleanup => "dictation_set_cleanup",
+      dictation::dictation_set_language => "dictation_set_language",
       dictation::dictation_download_model => "dictation_download_model",
       clipboard_shortcut::shortcut_get_snapshot => "shortcut_get_snapshot",
       clipboard_shortcut::shortcut_check => "shortcut_check",

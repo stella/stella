@@ -6,6 +6,7 @@ import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   DESKTOP_RUNNER_HARNESS_STATE,
+  DESKTOP_RUNNER_REASONING_EFFORTS,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
 } from "./desktop-runner";
@@ -50,6 +51,15 @@ export const chatLocalRunTargetSchema = v.strictObject({
   approvals: v.optional(
     v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
     DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+  ),
+  /**
+   * The reasoning effort each turn asks the model for; `null`, or omitted,
+   * leaves it to the harness. Only an effort the computer reports for the
+   * model is accepted.
+   */
+  reasoningEffort: v.optional(
+    v.nullable(v.picklist(DESKTOP_RUNNER_REASONING_EFFORTS)),
+    null,
   ),
 });
 export type ChatLocalRunTarget = v.InferOutput<typeof chatLocalRunTargetSchema>;
@@ -120,6 +130,8 @@ export const CHAT_LOCAL_RUN_REFUSAL = {
   harnessUnavailable: "local_run_harness_unavailable",
   /** The harness no longer offers the chosen model. */
   modelUnavailable: "local_run_model_unavailable",
+  /** The harness does not offer the chosen reasoning effort for the model. */
+  reasoningEffortUnavailable: "local_run_reasoning_effort_unavailable",
   /** The computer cannot run the harness in the chosen approval mode. */
   approvalsUnavailable: "local_run_approvals_unavailable",
   /** The organization does not let a run go that far without asking. */
