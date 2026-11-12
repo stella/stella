@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Označeno jako vyžadující důkazy",
         "statusReviewed": "Označeno jako zkontrolované"
       },
+      "carriedFrom": "Z ověření z {date}",
+      "carriedFromEarlier": "Z dřívějšího ověření",
       "empty": "Zatím žádné úkony kontroly.",
       "filters": {
         "allKinds": "Jakýkoli úkon",
@@ -506,6 +508,21 @@
     },
     "runs": {
       "back": "Všechny dokumenty",
+      "carryOver": {
+        "openSource": "Otevřít ověření z {date}",
+        "outcomes": {
+          "ambiguous": "Více možných shod",
+          "textChanged": "Znění se změnilo",
+          "unmatched": "Žádné odpovídající tvrzení",
+          "verdictChanged": "Závěr se změnil"
+        },
+        "summary": {
+          "carried": "{count, number} převzato",
+          "carriedAndMissed": "{carried, number} převzato · {missed, number} ne",
+          "label": "Kontroly z ověření z {date}: převzato {carried, number}, nepřevzato {missed, number}",
+          "missed": "{count, number} nepřevzato"
+        }
+      },
       "errors": {
         "accessRevoked": "Ověřování bylo zastaveno, protože přístup není dostupný.",
         "aiUnavailable": "Pro ověření dokumentů není dostupný žádný model AI. Zkontrolujte nastavení AI organizace.",

@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Marcada como pendiente de pruebas",
         "statusReviewed": "Marcada como revisada"
       },
+      "carriedFrom": "De la verificación del {date}",
+      "carriedFromEarlier": "De una verificación anterior",
       "empty": "Aún no hay acciones de revisión.",
       "filters": {
         "allKinds": "Cualquier acción",
@@ -506,6 +508,21 @@
     },
     "runs": {
       "back": "Todos los documentos",
+      "carryOver": {
+        "openSource": "Abrir la verificación del {date}",
+        "outcomes": {
+          "ambiguous": "Varias coincidencias posibles",
+          "textChanged": "La redacción cambió",
+          "unmatched": "Ninguna afirmación coincidente",
+          "verdictChanged": "El resultado cambió"
+        },
+        "summary": {
+          "carried": "{count, number} trasladadas",
+          "carriedAndMissed": "{carried, number} trasladadas · {missed, number} no",
+          "label": "Revisiones de la verificación del {date}: {carried, number} trasladadas, {missed, number} no trasladadas",
+          "missed": "{count, number} no trasladadas"
+        }
+      },
       "errors": {
         "accessRevoked": "La verificación se detuvo porque el acceso no está disponible.",
         "aiUnavailable": "No hay ningún modelo de IA disponible para verificar documentos. Revise la configuración de IA de la organización.",

@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Marquée comme nécessitant des preuves",
         "statusReviewed": "Marquée comme examinée"
       },
+      "carriedFrom": "De la vérification du {date}",
+      "carriedFromEarlier": "D’une vérification antérieure",
       "empty": "Aucune action d’examen pour l’instant.",
       "filters": {
         "allKinds": "Toute action",
@@ -506,6 +508,21 @@
     },
     "runs": {
       "back": "Tous les documents",
+      "carryOver": {
+        "openSource": "Ouvrir la vérification du {date}",
+        "outcomes": {
+          "ambiguous": "Plusieurs correspondances possibles",
+          "textChanged": "La formulation a changé",
+          "unmatched": "Aucune affirmation correspondante",
+          "verdictChanged": "Le verdict a changé"
+        },
+        "summary": {
+          "carried": "{count, number} repris",
+          "carriedAndMissed": "{carried, number} repris · {missed, number} non",
+          "label": "Examens de la vérification du {date} : {carried, number} repris, {missed, number} non repris",
+          "missed": "{count, number} non repris"
+        }
+      },
       "errors": {
         "accessRevoked": "La vérification a été arrêtée car l’accès est indisponible.",
         "aiUnavailable": "Aucun modèle d’IA n’est disponible pour vérifier les documents. Vérifiez les paramètres d’IA de l’organisation.",

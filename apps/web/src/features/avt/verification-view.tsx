@@ -97,9 +97,16 @@ type VerdictFilter =
   | "reviewed"
   | ClaimState;
 
+/** What the run's header can ask of the view: select a claim and bring it
+ *  into view, as stepping through a filter does. */
+export type VerificationViewHandle = {
+  showClaim: (claimId: VerificationClaim["id"]) => void;
+};
+
 type VerificationViewProps = {
   workspaceId: string;
   run: VerificationRun;
+  ref?: React.Ref<VerificationViewHandle>;
 };
 
 type OriginalDocumentProps = React.ComponentProps<typeof OriginalDocxView> & {
@@ -126,6 +133,7 @@ const OriginalDocument = ({
 export const VerificationView = ({
   workspaceId,
   run,
+  ref,
 }: VerificationViewProps) => {
   const format = useFormatter();
   const t = useTranslations();
@@ -234,6 +242,14 @@ export const VerificationView = ({
       scrollOriginalToClaim(selectedClaim);
     }
   };
+
+  React.useImperativeHandle(ref, () => ({
+    showClaim: (id) => {
+      if (claimById.has(id)) {
+        goToMatch(id);
+      }
+    },
+  }));
 
   const stepper = matchStepper({
     orderedMatches,

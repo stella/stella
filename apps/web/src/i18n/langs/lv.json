@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Atzīmēts, ka vajag pierādījumus",
         "statusReviewed": "Atzīmēts kā pārskatīts"
       },
+      "carriedFrom": "No {date} pārbaudes",
+      "carriedFromEarlier": "No agrākas pārbaudes",
       "empty": "Pārskatīšanas darbību vēl nav.",
       "filters": {
         "allKinds": "Jebkura darbība",
@@ -506,6 +508,21 @@
     },
     "runs": {
       "back": "Visi dokumenti",
+      "carryOver": {
+        "openSource": "Atvērt {date} pārbaudi",
+        "outcomes": {
+          "ambiguous": "Vairākas iespējamas atbilstības",
+          "textChanged": "Formulējums mainījies",
+          "unmatched": "Nav atbilstoša apgalvojuma",
+          "verdictChanged": "Slēdziens mainījies"
+        },
+        "summary": {
+          "carried": "Pārnests: {count, number}",
+          "carriedAndMissed": "Pārnests: {carried, number} · nav: {missed, number}",
+          "label": "Pārskatīšanas no {date} pārbaudes: pārnestas {carried, number}, nav pārnestas {missed, number}",
+          "missed": "Nav pārnests: {count, number}"
+        }
+      },
       "errors": {
         "accessRevoked": "Pārbaude tika apturēta, jo piekļuve nav pieejama.",
         "aiUnavailable": "Dokumentu pārbaudei nav pieejams neviens AI modelis. Pārbaudiet organizācijas AI iestatījumus.",

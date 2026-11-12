@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Bizonyítékra várónak jelölve",
         "statusReviewed": "Ellenőrzöttnek jelölve"
       },
+      "carriedFrom": "A(z) {date} ellenőrzésből",
+      "carriedFromEarlier": "Egy korábbi ellenőrzésből",
       "empty": "Még nincs ellenőrzési művelet.",
       "filters": {
         "allKinds": "Bármely művelet",
@@ -506,6 +508,21 @@
     },
     "runs": {
       "back": "Összes irat",
+      "carryOver": {
+        "openSource": "A(z) {date} ellenőrzés megnyitása",
+        "outcomes": {
+          "ambiguous": "Több lehetséges egyezés",
+          "textChanged": "A megfogalmazás megváltozott",
+          "unmatched": "Nincs megfelelő állítás",
+          "verdictChanged": "A következtetés megváltozott"
+        },
+        "summary": {
+          "carried": "{count, number} átvéve",
+          "carriedAndMissed": "{carried, number} átvéve · {missed, number} nem",
+          "label": "A(z) {date} ellenőrzés ellenőrzései: {carried, number} átvéve, {missed, number} nem átvéve",
+          "missed": "{count, number} nem átvéve"
+        }
+      },
       "errors": {
         "accessRevoked": "Az ellenőrzés leállt, mert a hozzáférés nem érhető el.",
         "aiUnavailable": "Nem érhető el AI-modell az iratok ellenőrzéséhez. Ellenőrizze a szervezet AI-beállításait.",

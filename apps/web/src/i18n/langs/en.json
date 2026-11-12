@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Marked as needing evidence",
         "statusReviewed": "Marked reviewed"
       },
+      "carriedFrom": "From the run of {date}",
+      "carriedFromEarlier": "From an earlier run",
       "empty": "No review actions yet.",
       "filters": {
         "allKinds": "Any action",
@@ -506,6 +508,21 @@
     },
     "runs": {
       "back": "All documents",
+      "carryOver": {
+        "openSource": "Open the run of {date}",
+        "outcomes": {
+          "ambiguous": "Several possible matches",
+          "textChanged": "Wording changed",
+          "unmatched": "No matching claim",
+          "verdictChanged": "Verdict changed"
+        },
+        "summary": {
+          "carried": "{count, number} carried",
+          "carriedAndMissed": "{carried, number} carried · {missed, number} not",
+          "label": "Reviews from the run of {date}: {carried, number} carried, {missed, number} not carried",
+          "missed": "{count, number} not carried"
+        }
+      },
       "errors": {
         "accessRevoked": "Verification stopped because access is unavailable.",
         "aiUnavailable": "No AI model is available to verify documents. Check the organization's AI settings.",
