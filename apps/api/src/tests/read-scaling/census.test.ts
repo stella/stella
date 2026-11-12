@@ -46,6 +46,7 @@ import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
 import { memberCandidatesScalingScenario } from "./member-candidates";
+import { memberRoleScalingScenario } from "./member-role";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
@@ -102,6 +103,7 @@ const measuredApiScenarios = [
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
   mobileClientMetadataScalingScenario,
+  memberRoleScalingScenario,
   outlookClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,

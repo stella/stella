@@ -7,7 +7,9 @@ import { ChatThreadView } from "@/components/chat-thread-view";
 import { screenStyles } from "@/components/empty-state-screen";
 import { EntityDetailSheet } from "@/components/entity-detail-sheet";
 import { MatterEntities } from "@/components/matter-entities";
+import { MatterName } from "@/components/matter-name";
 import { Pane } from "@/components/pane";
+import { useSelection } from "@/components/selection";
 import type {
   MatterSelection,
   TaskSelection,
@@ -50,7 +52,13 @@ export const MatterPane = ({ matter }: { matter: MatterSelection }) => {
   const { state } = useSession();
 
   return (
-    <Pane title={matter.name}>
+    <Pane
+      title={
+        <MatterName fallback={matter.name} matterId={matter.workspaceId}>
+          {(name) => name}
+        </MatterName>
+      }
+    >
       {state.status === "signed-in" ? (
         <MatterEntities
           // Another matter is another list.
@@ -66,11 +74,15 @@ export const MatterPane = ({ matter }: { matter: MatterSelection }) => {
 /** The task selected in the tasks' list, beside it, as its sheet shows it. */
 export const TaskPane = ({ task }: { task: TaskSelection }) => {
   const { state } = useSession();
+  const selection = useSelection();
 
   return state.status === "signed-in" ? (
     <SafeAreaView className="flex-1" edges={["top"]}>
       <EntityDetailSheet
         entityId={task.entityId}
+        onDeleted={() => {
+          selection.select("task", null);
+        }}
         source={state.source}
         workspaceId={task.workspaceId}
       />

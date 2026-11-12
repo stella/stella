@@ -152,7 +152,26 @@
     "doneAssigning": "Hotovo",
     "someone": "Někdo",
     "membersFailed": "Členy spisu se nepodařilo načíst.",
-    "assignFailed": "Úkol se nepodařilo přidělit. Zkuste to znovu."
+    "assignFailed": "Úkol se nepodařilo přidělit. Zkuste to znovu.",
+    "statusTitle": "Stav",
+    "priorityTitle": "Priorita",
+    "priority": {
+      "none": "Žádná",
+      "urgent": "Urgentní",
+      "high": "Vysoká",
+      "medium": "Střední",
+      "low": "Nízká"
+    },
+    "subtasks": "Podúkoly",
+    "linked": "Propojené položky",
+    "delete": "Smazat úkol",
+    "deleteTitle": "Smazat úkol?",
+    "deleteMessage": "Opravdu chcete smazat „{name}“? Tuto akci nelze vrátit zpět.",
+    "cancel": "Zrušit",
+    "saveFailed": "Změnu se nepodařilo uložit. Zkuste to znovu.",
+    "readOnly": "Tento úkol pochází z propojeného kalendáře a zde jej nelze měnit.",
+    "untitled": "Úkol bez názvu",
+    "loadOneFailed": "Úkol se nepodařilo načíst."
   },
   "matters": {
     "emptyTitle": "Zatím žádné spisy",
@@ -487,6 +506,13 @@
       "judge": "Soudce",
       "mediator": "Mediátor",
       "other": "Jiné"
-    }
+    },
+    "numberConvention": "Preferovaný formát: {example}",
+    "numberDeparts": "Neodpovídá preferovanému formátu.",
+    "numberHintEmpty": "Zadejte spisovou značku a dokumenty spisu se začnou číslovat."
+  },
+  "role": {
+    "readFailed": "Vaše oprávnění se nepodařilo načíst, proto jsou úpravy zatím skryté.",
+    "retry": "Zkusit znovu"
   }
 }
