@@ -169,11 +169,11 @@ const writeSql = (
     case "fact-sources": {
       return [
         factSourcesSql(
-        sql`source.workspace_id = ${workspaceId} AND source.id IN (${sql.join(
-          write.sourceIds.map((id) => sql`${id}`),
-          sql`, `,
-        )})`,
-      ),
+          sql`source.workspace_id = ${workspaceId} AND source.id IN (${sql.join(
+            write.sourceIds.map((id) => sql`${id}`),
+            sql`, `,
+          )})`,
+        ),
       ];
     }
     default: {
