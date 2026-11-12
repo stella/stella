@@ -18,7 +18,7 @@
  */
 
 import { toMarkdownBytes } from "@firecrawl/anydoc";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import {
@@ -372,16 +372,25 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   return buffer;
 };
 
+/** The caller's character budget (argv[3]); the shared one when absent. */
+const readMaxCharsArgument = (value: string | undefined): number => {
+  if (value === undefined) {
+    return LIMITS.extractedContentMaxChars;
+  }
+  const parsed = /^[1-9]\d{0,15}$/u.test(value) ? Number(value) : Number.NaN;
+  if (!Number.isSafeInteger(parsed)) {
+    return panic("Extraction worker character budget is invalid");
+  }
+  return parsed;
+};
+
 // ── Main ──────────────────────────────────────────────────
 
 try {
   const mimeType = process.argv[2] ?? "";
+  const maxChars = readMaxCharsArgument(process.argv[3]);
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
-  const result = await extract(
-    fileBytes,
-    mimeType,
-    LIMITS.extractedContentMaxChars,
-  );
+  const result = await extract(fileBytes, mimeType, maxChars);
   if (result.isErr()) {
     const errorClass = getWorkerErrorClass(result.error);
     const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));

@@ -144,10 +144,13 @@ const uploadSkillResource = createSafeRootHandler(
           fileName: path,
         }),
       );
-      const extracted = await extractFileText(scanned, {
-        source: "skill-resource-upload",
-        skillId: params.skillId,
-      });
+      // One character past the cap, so a longer text is refused below
+      // rather than stored cut short.
+      const extracted = await extractFileText(
+        scanned,
+        { source: "skill-resource-upload", skillId: params.skillId },
+        { maxChars: LIMITS.agentSkillResourceMaxChars + 1 },
+      );
       if (!extracted) {
         return Result.err(
           new HandlerError({
