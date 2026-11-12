@@ -257,6 +257,14 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/chat/runs/list.ts",
     uncataloged: "chat_thread_ui",
   },
+  // A standing approval given from an approval in a conversation: "Allow in
+  // this conversation" or "Always allow" for one tool, as the web's
+  // approval card stores it.
+  "POST /v1/chat/tool-grants": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/tool-grants/create.ts",
+    uncataloged: "chat_thread_ui",
+  },
   // The person's event stream. Its events carry no content (notifications
   // changed, chat runs changed, a resource set changed); the app re-reads
   // through the routes above. It carries more than chat, so it takes the

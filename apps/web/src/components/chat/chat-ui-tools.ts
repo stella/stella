@@ -13,12 +13,11 @@ import {
   isChatPastedTextPart,
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
-import {
-  CHAT_LOCAL_RUN_QUESTION_TOOL,
-  CHAT_LOCAL_RUN_STEER_TOOL,
-} from "@stll/api-contract/chat-run-target";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-local-run-question";
+import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import {
+  externalMcpConnectorSlugOf,
   isApprovalGatedBuiltInChatTool,
   isGrantableChatTool,
 } from "@stll/api-contract/chat-tool-grants";
@@ -416,13 +415,6 @@ export const isExternalInputChatToolName = (
 ): toolName is ExternalInputToolName =>
   isOwnKey(EXTERNAL_INPUT_CHAT_TOOL_NAMES, toolName);
 
-export const getExternalMcpConnectorSlugFromToolName = (
-  toolName: `mcp__${string}`,
-): string | null => {
-  const parts = toolName.split("__");
-  return parts.length >= 3 ? (parts.at(1) ?? null) : null;
-};
-
 export const getExternalMcpConnectorApprovalGrant = (
   connectorSlug: string,
 ): ToolApprovalGrant =>
@@ -435,7 +427,7 @@ export const getToolApprovalGrant = (
     return toolName;
   }
 
-  const connectorSlug = getExternalMcpConnectorSlugFromToolName(toolName);
+  const connectorSlug = externalMcpConnectorSlugOf(toolName);
   if (!connectorSlug) {
     return toolName;
   }

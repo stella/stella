@@ -59,6 +59,7 @@
     "./conflict-checks": "./src/conflict-checks.ts",
     "./chat-ask-user": "./src/chat-ask-user.ts",
     "./chat-ask-user-draft": "./src/chat-ask-user-draft.ts",
+    "./chat-create-document": "./src/chat-create-document.ts",
     "./chat-connector": "./src/chat-connector.ts",
     "./internal-ui-transport": "./src/internal-ui-transport.ts",
     "./chat-secret": "./src/chat-secret.ts",

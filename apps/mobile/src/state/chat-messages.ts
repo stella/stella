@@ -6,6 +6,8 @@ import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 import type { ChatDraft, SentFile } from "@/state/chat-attachments";
+import { draftDocumentsOf } from "@/state/chat-documents";
+import type { ChatDraftDocument } from "@/state/chat-documents";
 import { pendingInputOf } from "@/state/chat-pending-input";
 import type { PendingInput } from "@/state/chat-pending-input";
 
@@ -49,7 +51,8 @@ const messagesPageSchema = v.object({
 
 /**
  * A message as the thread shows it: its text, the tools the assistant used
- * on the way, and the files the person attached.
+ * on the way, the files the person attached, and the drafts the assistant
+ * wrote.
  */
 export type ChatEntry = {
   readonly id: string;
@@ -58,6 +61,7 @@ export type ChatEntry = {
   readonly text: string;
   readonly tools: readonly string[];
   readonly files: readonly SentFile[];
+  readonly drafts: readonly ChatDraftDocument[];
 };
 
 /**
@@ -118,6 +122,7 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     text,
     tools,
     files,
+    drafts: draftDocumentsOf(message.parts),
   };
 };
 
@@ -138,6 +143,7 @@ export const sentEntry = ({
   tools: [],
   // The thread names each file; its bytes have gone with the message.
   files: files.map(({ mimeType, name }) => ({ mimeType, name })),
+  drafts: [],
 });
 
 /**
