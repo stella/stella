@@ -27,7 +27,10 @@ import {
 } from "@stll/ui/tooltip";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { isCurrentDocument } from "@/components/breadcrumbs/document-switcher.logic";
+import {
+  isCurrentDocument,
+  RENDITION_LIST_VIEW,
+} from "@/components/breadcrumbs/document-switcher.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import { downloadTabFile } from "@/components/inspector/file-download-service";
 import {
@@ -92,7 +95,7 @@ export const DocumentSwitcher = ({
     select: (entity) =>
       getEntityFileDownloadRenditions({ entityData: entity, fieldId }),
   });
-  const renditionsView = queryView(renditionsQuery);
+  const renditionsView = queryView(renditionsQuery, RENDITION_LIST_VIEW);
   useQueryViewError(renditionsView, "DocumentSwitcher:renditions");
 
   const visible = filesView.type === "items" ? filesView.items : [];
