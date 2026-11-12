@@ -9,8 +9,11 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
+import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+
 import type { Transaction } from "@/api/db/root";
 import {
+  entities,
   legalListClaimReviewEvents,
   legalListClaims,
   legalListFactDetails,
@@ -27,8 +30,12 @@ import type {
   ClaimVerdict,
   RecordConflict,
   VerificationEvidence,
+  VerificationEvidenceFact,
 } from "@/api/lib/lists/verification/contract";
-import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
+import {
+  gradedClaimType,
+  VERIFICATION_LIMITS,
+} from "@/api/lib/lists/verification/contract";
 import { suggestedGoverningFactId } from "@/api/lib/lists/verification/governing-suggestion";
 import {
   claimQualifiers,
@@ -38,22 +45,34 @@ import type {
   FactStanding,
   GraderClaimQualifier,
 } from "@/api/lib/lists/verification/qualifiers";
-import type { ClaimReview } from "@/api/lib/lists/verification/review-fold";
+import { applyFactChanges } from "@/api/lib/lists/verification/recheck-facts";
+import type {
+  ClaimRecheck,
+  ClaimReview,
+} from "@/api/lib/lists/verification/review-fold";
 import {
   contestedFactIds,
   foldClaimReview,
+  gradeOf,
+  linksChangedSinceGrade,
 } from "@/api/lib/lists/verification/review-fold";
 
-/** A claim's review on the wire, with how many actions its history holds. */
+/** A claim's review on the wire, with how many actions its history holds and
+ *  whether its links changed since its grade. Its latest re-check is part of
+ *  the claim's grade, so the claim states it (`presentRecheck`). */
 export const serializeClaimReview = ({
   review,
   eventCount,
-}: ClaimReviewRecord) => ({
-  ...review,
-  noteSavedAt: review.noteSavedAt?.toISOString() ?? null,
-  decidedAt: review.decidedAt?.toISOString() ?? null,
-  eventCount,
-});
+}: ClaimReviewRecord) => {
+  const { recheck: _onTheClaim, ...wire } = review;
+  return {
+    ...wire,
+    linksChanged: linksChangedSinceGrade(review),
+    noteSavedAt: wire.noteSavedAt?.toISOString() ?? null,
+    decidedAt: wire.decidedAt?.toISOString() ?? null,
+    eventCount,
+  };
+};
 
 type ReadClaimReviewsArgs = {
   tx: Pick<Transaction, "select">;
@@ -210,40 +229,127 @@ type QualifiedClaimRow = ClaimVerdictColumns & {
   qualifiers: readonly GraderClaimQualifier[];
 };
 
-/** Every qualifier of a stored claim: the grader's, and the ones the facts
- *  its verdict rests on give it as they stand now. */
+/** Every qualifier of a stored claim, read with its current grade
+ *  (`gradeOf`): the grader's, and the ones the facts its verdict rests on
+ *  give it as they stand now. */
 export const qualifiersOfClaim = (
   claim: QualifiedClaimRow,
   review: ClaimReview | null,
   standings: FactStandings,
-) =>
-  claimQualifiers({
-    graded: claim.qualifiers,
+) => {
+  const graded = gradeOf(claim, review);
+  return claimQualifiers({
+    graded: graded.qualifiers,
     resting: restingFactIds(
-      { verdict: toClaimVerdict(claim), refs: claim.refs },
+      { verdict: toClaimVerdict(graded), refs: graded.refs },
       review,
     ).map(
       (factEntityId) =>
         standings.get(factEntityId) ??
-        panic("A claim rests on a fact its run did not pin"),
+        panic("A claim rests on a fact neither its run nor a re-check pinned"),
     ),
   });
+};
 
-/** What deciding which claims need attention reads of a run: the facts whose
- *  meaning is contested, and how every pinned fact stands now. `null` when
- *  the workspace holds no such run. */
+/**
+ * Every fact a run's claims can rest on: the facts the run pinned, and the
+ * facts its claims' latest re-checks read that the run did not (or read
+ * differently, the later reading kept).
+ */
+const factsWithRechecks = (
+  evidence: VerificationEvidence,
+  reviews: ReadonlyMap<SafeId<"legalListClaim">, ClaimReviewRecord>,
+): VerificationEvidence => {
+  const facts = new Map(
+    evidence.facts.map((fact) => [fact.factEntityId, fact]),
+  );
+  const rechecks = [...reviews.values()]
+    .flatMap(({ review }) => (review.recheck === null ? [] : [review.recheck]))
+    .toSorted((a, b) => a.checkedAt.getTime() - b.checkedAt.getTime());
+  for (const recheck of rechecks) {
+    for (const fact of recheck.facts.changed) {
+      facts.set(fact.factEntityId, fact);
+    }
+  }
+  return { listId: evidence.listId, facts: [...facts.values()] };
+};
+
+/** What deciding which claims need attention reads of a run: the facts it
+ *  pinned (and which of them are contested), and how every fact its claims
+ *  can rest on stands now. `null` when the workspace holds no such run. */
 export const readRunAttentionInputs = async (args: ReadVerificationRunArgs) => {
-  const evidence = await readRunEvidenceForGrading(args);
-  if (evidence === null) {
+  const pinned = await readRunEvidenceForGrading(args);
+  if (pinned === null) {
     return null;
   }
+  const evidence = factsWithRechecks(
+    pinned,
+    await readClaimReviews({
+      tx: args.tx,
+      workspaceId: args.workspaceId,
+      runId: args.runId,
+    }),
+  );
   return {
-    contested: contestedFactIds(evidence),
+    pinned,
+    contested: contestedFactIds(pinned),
     standings: await readFactStandings({
       tx: args.tx,
       workspaceId: args.workspaceId,
       evidence,
     }),
+  };
+};
+
+/**
+ * The contested facts as a claim's own grade read them: a re-checked
+ * claim by the facts its latest re-check read, every other one by the
+ * run's pinned facts. The browser's triage reads them the same way.
+ */
+export const contestedFactIdsOfClaim = (
+  inputs: Pick<
+    NonNullable<Awaited<ReturnType<typeof readRunAttentionInputs>>>,
+    "pinned" | "contested"
+  >,
+  review: ClaimReview,
+): ReadonlySet<SafeId<"entity">> =>
+  review.recheck === null
+    ? inputs.contested
+    : contestedFactIds({
+        listId: inputs.pinned.listId,
+        facts: applyFactChanges(inputs.pinned.facts, review.recheck.facts),
+      });
+
+type PresentRecheckArgs = {
+  claim: QualifiedClaimRow;
+  recheck: ClaimRecheck;
+  pinned: readonly VerificationEvidenceFact[];
+};
+
+/**
+ * A claim's latest re-check on the wire: who asked and when, how many facts
+ * it read, the facts its grade cites as it read them (so a fact added since
+ * the run still shows), and the grade the run gave, which it replaced.
+ */
+const presentRecheck = ({ claim, recheck, pinned }: PresentRecheckArgs) => {
+  const read = applyFactChanges(pinned, recheck.facts);
+  const cited = new Set<SafeId<"entity">>([
+    ...recheck.grade.refs.map((ref) => ref.factEntityId),
+    ...(recheck.grade.recordConflict === null
+      ? []
+      : recheck.grade.recordConflict.factEntityIds),
+  ]);
+  return {
+    checkedAt: recheck.checkedAt.toISOString(),
+    checkedBy: recheck.checkedBy,
+    modelRef: recheck.modelRef,
+    factCount: read.length,
+    facts: read.filter((fact) => cited.has(fact.factEntityId)),
+    original: {
+      verdict: toClaimVerdict(claim),
+      refs: claim.refs,
+      qualifiers: claim.qualifiers,
+    },
   };
 };
 
@@ -325,7 +431,8 @@ const readFactStandings = async ({
   return standings;
 };
 
-/** How every fact a run pinned stands now, keyed by fact. `null` when the
+/** How every fact a run's claims can rest on stands now (the run's pinned
+ *  facts and its re-checks' facts), keyed by fact. `null` when the
  *  workspace holds no such run. */
 export const readRunFactStandings = async (args: ReadVerificationRunArgs) => {
   const evidence = await readRunEvidenceForGrading(args);
@@ -334,24 +441,134 @@ export const readRunFactStandings = async (args: ReadVerificationRunArgs) => {
     : readFactStandings({
         tx: args.tx,
         workspaceId: args.workspaceId,
-        evidence,
+        evidence: factsWithRechecks(
+          evidence,
+          await readClaimReviews({
+            tx: args.tx,
+            workspaceId: args.workspaceId,
+            runId: args.runId,
+          }),
+        ),
       });
 };
 
 /** The record suggested to govern a claim withheld between two facts, as
- *  they stand now; null for any other claim. */
+ *  they stand now and read with its current grade; null for any other
+ *  claim. */
 export const governingSuggestionOfClaim = (
-  claim: Pick<QualifiedClaimRow, "recordConflict">,
+  claim: Pick<QualifiedClaimRow, "state" | "recordConflict">,
+  review: ClaimReview | null,
   standings: FactStandings,
-) =>
-  claim.recordConflict === null
+) => {
+  const { recordConflict } = gradeOf(claim, review);
+  return recordConflict === null
     ? null
     : suggestedGoverningFactId({
-        conflict: claim.recordConflict,
+        conflict: recordConflict,
         tierOf: (factEntityId) =>
           standings.get(factEntityId)?.tier ??
-          panic("A record conflict names a fact its run did not pin"),
+          panic(
+            "A record conflict names a fact neither its run nor a re-check pinned",
+          ),
       });
+};
+
+type PresentClaimArgs = {
+  claim: typeof legalListClaims.$inferSelect;
+  record: ClaimReviewRecord | null;
+  standings: FactStandings;
+  pinned: readonly VerificationEvidenceFact[];
+};
+
+/** One claim on the wire, read with its current grade; a re-check names the
+ *  run's grade it replaced. */
+const presentClaim = ({
+  claim,
+  record,
+  standings,
+  pinned,
+}: PresentClaimArgs) => {
+  const review = record?.review ?? null;
+  const recheck = review?.recheck ?? null;
+  const graded = gradeOf(claim, review);
+  return {
+    id: claim.id,
+    position: claim.position,
+    type: recheck === null ? claim.type : gradedClaimType(recheck.grade),
+    framing: claim.framing,
+    verdict: toClaimVerdict(graded),
+    qualifiers: qualifiersOfClaim(claim, review, standings),
+    // Only a suggestion: the conflict stays open until a person names the
+    // governing record.
+    suggestedGoverningFactId: governingSuggestionOfClaim(
+      claim,
+      review,
+      standings,
+    ),
+    text: claim.text,
+    anchor: claim.anchor,
+    refs: graded.refs,
+    review: record === null ? null : serializeClaimReview(record),
+    recheck:
+      recheck === null ? null : presentRecheck({ claim, recheck, pinned }),
+  };
+};
+
+type ReadVerifiedClaimArgs = ReadVerificationRunArgs & {
+  claimId: SafeId<"legalListClaim">;
+};
+
+/** One claim as the run read presents it. `null` when the workspace holds
+ *  no such claim. */
+export const readVerifiedClaim = async ({
+  tx,
+  workspaceId,
+  runId,
+  claimId,
+}: ReadVerifiedClaimArgs) => {
+  const row = (
+    await tx
+      .select({
+        claim: legalListClaims,
+        evidence: legalListVerificationRuns.evidence,
+      })
+      .from(legalListClaims)
+      .innerJoin(
+        legalListVerificationRuns,
+        and(
+          eq(legalListVerificationRuns.id, legalListClaims.runId),
+          eq(legalListVerificationRuns.workspaceId, workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(legalListClaims.id, claimId),
+          eq(legalListClaims.runId, runId),
+          eq(legalListClaims.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (row === undefined) {
+    return null;
+  }
+  const reviews = await readClaimReviews({
+    tx,
+    workspaceId,
+    runId,
+    claimIds: [claimId],
+  });
+  return presentClaim({
+    claim: row.claim,
+    record: reviews.get(claimId) ?? null,
+    standings: await readFactStandings({
+      tx,
+      workspaceId,
+      evidence: factsWithRechecks(row.evidence, reviews),
+    }),
+    pinned: row.evidence.facts,
+  });
+};
 
 /** `null` when the workspace holds no such run. */
 export const readVerificationRun = async ({
@@ -406,7 +623,7 @@ export const readVerificationRun = async ({
   const standings = await readFactStandings({
     tx,
     workspaceId,
-    evidence: run.evidence,
+    evidence: factsWithRechecks(run.evidence, reviews),
   });
 
   return {
@@ -431,26 +648,14 @@ export const readVerificationRun = async ({
     startedAt: run.startedAt?.toISOString() ?? null,
     finishedAt: run.finishedAt?.toISOString() ?? null,
     blocks,
-    claims: claims.map((claim) => {
-      const verdict = toClaimVerdict(claim);
-      const record = reviews.get(claim.id) ?? null;
-      const review = record?.review ?? null;
-      return {
-        id: claim.id,
-        position: claim.position,
-        type: claim.type,
-        framing: claim.framing,
-        verdict,
-        qualifiers: qualifiersOfClaim(claim, review, standings),
-        // Only a suggestion: the conflict stays open until a person names
-        // the governing record.
-        suggestedGoverningFactId: governingSuggestionOfClaim(claim, standings),
-        text: claim.text,
-        anchor: claim.anchor,
-        refs: claim.refs,
-        review: record === null ? null : serializeClaimReview(record),
-      };
-    }),
+    claims: claims.map((claim) =>
+      presentClaim({
+        claim,
+        record: reviews.get(claim.id) ?? null,
+        standings,
+        pinned: run.evidence.facts,
+      }),
+    ),
   };
 };
 
@@ -522,3 +727,138 @@ export const readClaimsForBulkReview = ({
     .orderBy(asc(legalListClaims.id))
     .limit(claimIds.length)
     .for("update");
+
+type ReadRecheckTargetArgs = ReadVerificationRunArgs & {
+  claimId: SafeId<"legalListClaim">;
+};
+
+/**
+ * What re-checking one claim reads: the claim as written, the facts its run
+ * pinned, the run's document version, and the text of the block the claim
+ * sits in (the grader reads it for the claim's meaning). `null` when the
+ * workspace holds no such claim.
+ */
+export const readRecheckTarget = async ({
+  tx,
+  workspaceId,
+  runId,
+  claimId,
+}: ReadRecheckTargetArgs) => {
+  const row = (
+    await tx
+      .select({
+        claim: {
+          state: legalListClaims.state,
+          recordConflict: legalListClaims.recordConflict,
+          text: legalListClaims.text,
+          anchor: legalListClaims.anchor,
+        },
+        evidence: legalListVerificationRuns.evidence,
+        entityVersionId: legalListVerificationRuns.entityVersionId,
+      })
+      .from(legalListClaims)
+      .innerJoin(
+        legalListVerificationRuns,
+        and(
+          eq(legalListVerificationRuns.id, legalListClaims.runId),
+          eq(legalListVerificationRuns.workspaceId, workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(legalListClaims.id, claimId),
+          eq(legalListClaims.runId, runId),
+          eq(legalListClaims.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (row === undefined) {
+    return null;
+  }
+  const { anchor } = row.claim;
+  const block = (
+    await tx
+      .select({ text: legalListVerificationBlocks.text })
+      .from(legalListVerificationBlocks)
+      .where(
+        and(
+          eq(legalListVerificationBlocks.workspaceId, workspaceId),
+          eq(legalListVerificationBlocks.runId, runId),
+          anchor.type === "docx-block"
+            ? and(
+                eq(legalListVerificationBlocks.kind, "docx-block"),
+                eq(legalListVerificationBlocks.blockId, anchor.blockId),
+              )
+            : and(
+                eq(legalListVerificationBlocks.kind, "pdf-page"),
+                eq(legalListVerificationBlocks.pageNumber, anchor.pageNumber),
+              ),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  return {
+    ...row,
+    blockText: block?.text ?? panic("A claim's block is missing from its run"),
+  };
+};
+
+export type LinkableFactRejection = "fact-not-on-list" | "fact-held";
+
+type RejectLinkedFactArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"legalListVerificationRun">;
+  factEntityId: SafeId<"entity">;
+};
+
+/**
+ * Whether a reviewer can point a claim at this fact: it must be a fact on
+ * the list the run verified, and one that is checked against (a held fact
+ * never is, so a re-check would not read it). Null when it can.
+ */
+export const rejectLinkedFact = async ({
+  tx,
+  workspaceId,
+  runId,
+  factEntityId,
+}: RejectLinkedFactArgs): Promise<LinkableFactRejection | null> => {
+  const fact = (
+    await tx
+      .select({ scoring: legalListFactDetails.scoring })
+      .from(legalListVerificationRuns)
+      .innerJoin(
+        legalListItems,
+        and(
+          eq(legalListItems.workspaceId, workspaceId),
+          // The run pins its list id as text inside its evidence.
+          sql`${legalListItems.listId} = (${legalListVerificationRuns.evidence} ->> 'listId')::uuid`,
+          eq(legalListItems.entityId, factEntityId),
+        ),
+      )
+      .innerJoin(
+        entities,
+        and(
+          eq(entities.id, legalListItems.entityId),
+          eq(entities.workspaceId, workspaceId),
+          eq(entities.listItemType, LIST_ITEM_TYPE.FACT),
+        ),
+      )
+      .leftJoin(
+        legalListFactDetails,
+        eq(legalListFactDetails.itemEntityId, legalListItems.entityId),
+      )
+      .where(
+        and(
+          eq(legalListVerificationRuns.id, runId),
+          eq(legalListVerificationRuns.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (fact === undefined) {
+    return "fact-not-on-list";
+  }
+  return fact.scoring === "held" ? "fact-held" : null;
+};

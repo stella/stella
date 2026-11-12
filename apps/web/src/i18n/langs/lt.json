@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Išvada aiški, tačiau vieno susijusio fakto aiškinimas ginčijamas; prieš patvirtindami jį peržiūrėkite.",
       "contradicted": "Registras šio teiginio nepatvirtina. Prieš patvirtinant išvadą ją turi įvertinti žmogus.",
-      "nocover": "Joks atraminis faktas nesusijęs su šiuo teiginiu, todėl nėra su kuo jo palyginti. Patvirtinti neprivaloma.",
+      "nocover": "Joks sąrašo faktas dar neapima šio teiginio.",
       "notverifiable": "Atidėta kaip nepatikrinama; patvirtinti neprivaloma. Jei teiginį iš tiesų galima patikrinti, atverkite jį iš naujo toliau.",
       "recordconflict": "Du registro įrodymai prieštarauja vienas kitam. Aukščiau nuspręskite, kuris yra vadovaujamasis, arba perduokite įrodymų grupei; įrankis už jus nepasirinks.",
       "restsOnHeld": "Faktas, kuriuo grindžiama ši išvada, sulaikytas peržiūrai; patvirtinkite, kad išvada galioja ir be jo, arba patikrinkite teiginį iš naujo, kai faktas bus išspręstas.",
@@ -381,6 +381,30 @@
         "label": "Be šaltinio"
       }
     },
+    "gap": {
+      "addFact": "Pridėti faktą iš dokumento",
+      "addFactFailed": "Fakto nepavyko pridėti",
+      "factOffList": "Faktas, kurio sąraše nebėra",
+      "linkFact": "Susieti faktą",
+      "linkFailed": "Fakto nepavyko susieti",
+      "linked": "Susieti faktai",
+      "linkedMark": "Susieta",
+      "linksChanged": "Susiejimai pasikeitė nuo paskutinio patikrinimo.",
+      "noFacts": "Nė vienas sąrašo faktas netinka.",
+      "recheck": "Patikrinti iš naujo",
+      "recheckFailed": "Teiginio nepavyko patikrinti iš naujo",
+      "searchFacts": "Ieškoti sąrašo faktų",
+      "sheet": {
+        "passage": "Ištrauka",
+        "passageHint": "Dokumento žodžiai, kurie nustato faktą.",
+        "statementRequired": "Įrašykite faktą.",
+        "statementTooLong": "Faktą gali sudaryti ne daugiau kaip {limit} simbolių.",
+        "submit": "Pridėti ir patikrinti iš naujo",
+        "title": "Pridėti faktą iš dokumento"
+      },
+      "showNextSteps": "Rodyti tolesnius veiksmus",
+      "unlink": "Nutraukti ryšį su: {fact}"
+    },
     "guidance": {
       "escalate": "Perduoti",
       "manualJudgement": "Žmogaus sprendimas",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Priimta kaip įprasta",
         "conflictReopened": "Prieštaravimo sprendimas atšauktas",
         "escalated": "Perduota įrodymų grupei",
+        "factLinked": "Susietas faktas",
+        "factUnlinked": "Nutrauktas fakto ryšys",
         "governed": "Pasirinktas vadovaujamasis įrašas",
         "noteCleared": "Pastaba pašalinta",
         "noteSaved": "Pastaba išsaugota",
         "overridden": "Išvada pakeista",
         "overrideWithdrawn": "Išvados pakeitimas atšauktas",
+        "rechecked": "Teiginys patikrintas iš naujo",
         "reopened": "Atverta iš naujo kaip patikrinamas teiginys",
         "statusCleared": "Peržiūros būsena pašalinta",
         "statusDisputed": "Pažymėta kaip užginčyta",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Buvęs narys",
       "kinds": {
+        "factLink": "Fakto ryšiai",
         "override": "Pakeistos išvados",
+        "recheck": "Pakartotinės patikros",
         "recordConflict": "Prieštaravimų sprendimai",
         "reopen": "Atvėrimai iš naujo",
         "status": "Būsenos pakeitimai"
@@ -461,6 +490,11 @@
       "unresolveConflict": "Kodėl atšaukiamas šis sprendimas?",
       "withdrawOverride": "Kodėl grįžtama prie įrankio išvados?"
     },
+    "recheck": {
+      "currentVerdict": "Išvada po pakartotinės patikros",
+      "runVerdict": "Patikros išvada",
+      "summary": "Patikrinta iš naujo {checkedAt} pagal {count, plural, one {# faktą} few {# faktus} many {# fakto} other {# faktų}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Užginčyta} needsEvidence {Reikia įrodymų} other {{origin, select, bulk {Priimta kaip įprasta} other {Peržiūrėta}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "Neišsaugota",
       "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas"
     },
-    "sourceMediumTooltip": "Šaltinio laikmena yra neutralus apibūdinimas. Ji savaime nemažina patikimumo.",
     "states": {
       "contradicted": {
         "chip": "Prieštarauja",
@@ -5404,8 +5437,6 @@
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",
     "caseLawEmptyState": "Pradėkite rašyti, kad ieškotumėte teismų sprendimų.",
-    "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",
     "chatCoveragePartial": "Ne visi pokalbiai išnagrinėti iki galo.",
     "continueInChat": "Tęsti pokalbyje",
     "dateFrom": "Nuo",
@@ -6124,6 +6155,11 @@
     "title": "Teisės aktai",
     "validity": "Galioja nuo {from} iki {to}",
     "versionAppliedInDecision": "Sprendime <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> taikyta redakcija (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# įterpta nuostata} few {# įterptos nuostatos} many {# įterptos nuostatos} other {# įterptų nuostatų}}",
+    "versionChangesChanged": "{count, plural, one {# pakeista nuostata} few {# pakeistos nuostatos} many {# pakeistos nuostatos} other {# pakeistų nuostatų}}",
+    "versionChangesNone": "Formuluotė nepakeista",
+    "versionChangesRemoved": "{count, plural, one {# išbraukta nuostata} few {# išbrauktos nuostatos} many {# išbrauktos nuostatos} other {# išbrauktų nuostatų}}",
+    "versionChangesWords": "{inserted, plural, one {# įterptas žodis} few {# įterpti žodžiai} many {# įterpto žodžio} other {# įterptų žodžių}}, {deleted, plural, one {# išbrauktas žodis} few {# išbraukti žodžiai} many {# išbraukto žodžio} other {# išbrauktų žodžių}}",
     "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
   },
   "styleSets": {
@@ -6844,6 +6880,7 @@
     "deletedItem": "Ištrinta: {name}",
     "deletingWorkspace": "Byla trinama",
     "documentSwitcher": {
+      "download": "Atsisiųsti šį failą",
       "searchPlaceholder": "Rasti dokumentą…",
       "trigger": "Perjungti dokumentą"
     },

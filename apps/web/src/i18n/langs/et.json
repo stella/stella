@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Otsus on selge, kuid ühe aluseks oleva fakti tõlgendus on vaidlustatud; vaadake see enne kinnitamist üle.",
       "contradicted": "Register ei toeta seda väidet. Enne otsuse kinnitamist peab inimene selle üle vaatama.",
-      "nocover": "Ükski ankurfakt ei käsitle seda väidet, seega pole seda millegi põhjal kontrollida. Kinnitamine on vabatahtlik.",
+      "nocover": "Ükski loendi fakt ei kata seda väidet veel.",
       "notverifiable": "Kõrvale jäetud kui kontrollimatu; kinnitamine on vabatahtlik. Kui väidet saab tegelikult kontrollida, avage see allpool uuesti.",
       "recordconflict": "Registri kaks tõendit on vastuolus. Otsustage eespool, kumb on aluseks, või edastage asi tõendite töörühmale; tööriist ei vali teie eest.",
       "restsOnHeld": "Fakt, millele see otsus tugineb, on ülevaatuseks peatatud; kinnitage, et otsus kehtib ka ilma selleta, või kontrollige väidet uuesti, kui fakt on selgunud.",
@@ -381,6 +381,30 @@
         "label": "Allikata"
       }
     },
+    "gap": {
+      "addFact": "Lisa fakt dokumendist",
+      "addFactFailed": "Fakti ei saanud lisada",
+      "factOffList": "Fakt, mida loendis enam ei ole",
+      "linkFact": "Seo fakt",
+      "linkFailed": "Fakti ei saanud siduda",
+      "linked": "Seotud faktid",
+      "linkedMark": "Seotud",
+      "linksChanged": "Seosed on viimasest kontrollist saati muutunud.",
+      "noFacts": "Ükski loendi fakt ei vasta.",
+      "recheck": "Kontrolli uuesti",
+      "recheckFailed": "Väidet ei saanud uuesti kontrollida",
+      "searchFacts": "Otsi loendi fakte",
+      "sheet": {
+        "passage": "Lõik",
+        "passageHint": "Dokumendi sõnad, mis fakti tõendavad.",
+        "statementRequired": "Kirjutage fakt.",
+        "statementTooLong": "Fakt võib olla kuni {limit} märki pikk.",
+        "submit": "Lisa ja kontrolli uuesti",
+        "title": "Lisa fakt dokumendist"
+      },
+      "showNextSteps": "Näita järgmisi samme",
+      "unlink": "Tühista seos: {fact}"
+    },
     "guidance": {
       "escalate": "Edasta edasi",
       "manualJudgement": "Inimese otsustus",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Tavapärasena kinnitatud",
         "conflictReopened": "Vastuolu lahendus võetud tagasi",
         "escalated": "Edastatud tõendite töörühmale",
+        "factLinked": "Fakt seotud",
+        "factUnlinked": "Fakti seos tühistatud",
         "governed": "Aluseks olev kirje valitud",
         "noteCleared": "Märkus eemaldatud",
         "noteSaved": "Märkus salvestatud",
         "overridden": "Otsus asendatud",
         "overrideWithdrawn": "Asendus võetud tagasi",
+        "rechecked": "Väide kontrollitud uuesti",
         "reopened": "Uuesti avatud kontrollitava väitena",
         "statusCleared": "Kontrolli olek eemaldatud",
         "statusDisputed": "Märgitud vaidlustatuks",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Endine liige",
       "kinds": {
+        "factLink": "Faktiseosed",
         "override": "Asendatud otsused",
+        "recheck": "Korduskontrollid",
         "recordConflict": "Vastuolude lahendused",
         "reopen": "Uuesti avamised",
         "status": "Oleku muudatused"
@@ -461,6 +490,11 @@
       "unresolveConflict": "Miks see lahendus tagasi võtta?",
       "withdrawOverride": "Miks naasta tööriista otsuse juurde?"
     },
+    "recheck": {
+      "currentVerdict": "Otsus pärast uuesti kontrollimist",
+      "runVerdict": "Kontrollkäigu otsus",
+      "summary": "Kontrollitud uuesti {checkedAt} {count, plural, one {# fakti} other {# fakti}} alusel."
+    },
     "review": {
       "decided": "{status, select, disputed {Vaidlustatud} needsEvidence {Vajab tõendeid} other {{origin, select, bulk {Tavapärasena kinnitatud} other {Kontrollitud}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "Salvestamata",
       "failedTitle": "Teie muudatust ei salvestatud"
     },
-    "sourceMediumTooltip": "Allika kandja on neutraalne kirjeldus ega vähenda iseenesest kindlust.",
     "states": {
       "contradicted": {
         "chip": "Vastuolus",
@@ -5404,8 +5437,6 @@
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
     "caseLawEmptyState": "Alustage tippimist, et otsida kohtulahendeid.",
-    "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
     "chatCoveragePartial": "Kõiki vestlusi ei otsitud täielikult.",
     "continueInChat": "Jätka vestluses",
     "dateFrom": "Alates",
@@ -6124,6 +6155,11 @@
     "title": "Õigusaktid",
     "validity": "Kehtib {from} kuni {to}",
     "versionAppliedInDecision": "Kohtulahendis <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> kohaldatud redaktsioon (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# säte lisatud} other {# sätet lisatud}}",
+    "versionChangesChanged": "{count, plural, one {# säte muudetud} other {# sätet muudetud}}",
+    "versionChangesNone": "Sõnastus muutmata",
+    "versionChangesRemoved": "{count, plural, one {# säte välja jäetud} other {# sätet välja jäetud}}",
+    "versionChangesWords": "{inserted, plural, one {# sõna lisatud} other {# sõna lisatud}}, {deleted, plural, one {# sõna kustutatud} other {# sõna kustutatud}}",
     "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
   },
   "styleSets": {
@@ -6844,6 +6880,7 @@
     "deletedItem": "Kustutatud: {name}",
     "deletingWorkspace": "Toimiku kustutamine",
     "documentSwitcher": {
+      "download": "Laadi see fail alla",
       "searchPlaceholder": "Otsi dokumenti…",
       "trigger": "Vaheta dokumenti"
     },

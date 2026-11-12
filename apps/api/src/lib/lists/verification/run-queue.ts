@@ -36,16 +36,14 @@ import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/a
 import { resolveListVerificationAccess } from "@/api/lib/lists/verification/access-context";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
 import type { ExtractedClaim } from "@/api/lib/lists/verification/claim-extract";
+import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
 import {
-  gradeClaims,
   gradedClaimType,
-} from "@/api/lib/lists/verification/claim-grade";
-import type { ClaimGrade } from "@/api/lib/lists/verification/claim-grade";
-import {
   VERIFICATION_LIMITS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
 } from "@/api/lib/lists/verification/contract";
 import type {
+  ClaimGrade,
   VerificationEvidence,
   VerificationRunErrorCode,
 } from "@/api/lib/lists/verification/contract";
@@ -774,6 +772,8 @@ const executeRun = async ({
                   ),
                 anchor: claim.anchor,
               },
+              // A new run's claims have no reviewer yet.
+              linkedFactIds: [],
             },
           ]
         : [],

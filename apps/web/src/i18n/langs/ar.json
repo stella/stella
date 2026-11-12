@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "النتيجة واضحة، لكن تفسير إحدى الوقائع المساهمة محل نزاع؛ لذا تستحق مراجعتك قبل الاعتماد.",
       "contradicted": "السجل يخالف هذا الادعاء. ويلزم قرار بشري قبل اعتماد هذه النتيجة.",
-      "nocover": "لا تتناول أي واقعة مرجعية هذا الادعاء، لذلك لا يوجد ما يمكن تأكيده بالرجوع إليه. الاعتماد اختياري.",
+      "nocover": "لا تغطي أي واقعة في القائمة هذا الادعاء بعد.",
       "notverifiable": "مستبعد لعدم قابليته للتحقق؛ الاعتماد اختياري. أعد فتحه أدناه إذا كان قابلًا للفحص فعلًا.",
       "recordconflict": "يوجد تعارض بين مستندين في السجل. حدّد أعلاه أيهما يحكم، أو أحِل الأمر إلى فريق الأدلة؛ لن تختار الأداة نيابةً عنك.",
       "restsOnHeld": "واقعة تستند إليها هذه النتيجة محجوزة للمراجعة؛ أكّد أن النتيجة قائمة من دونها، أو أعد فحص الادعاء بعد حسم الواقعة.",
@@ -381,6 +381,30 @@
         "label": "بلا مصدر"
       }
     },
+    "gap": {
+      "addFact": "إضافة واقعة من مستند",
+      "addFactFailed": "تعذّرت إضافة الواقعة",
+      "factOffList": "واقعة لم تعد في القائمة",
+      "linkFact": "ربط واقعة",
+      "linkFailed": "تعذّر ربط الواقعة",
+      "linked": "الوقائع المرتبطة",
+      "linkedMark": "مرتبطة",
+      "linksChanged": "تغيّرت الروابط منذ آخر تحقق.",
+      "noFacts": "لا توجد واقعة في القائمة مطابقة.",
+      "recheck": "إعادة الفحص",
+      "recheckFailed": "تعذّرت إعادة فحص الادعاء",
+      "searchFacts": "البحث في وقائع القائمة",
+      "sheet": {
+        "passage": "المقطع",
+        "passageHint": "الكلمات الواردة في المستند التي تثبت الواقعة.",
+        "statementRequired": "اكتب الواقعة.",
+        "statementTooLong": "لا يجوز أن تتجاوز الواقعة {limit} حرفًا.",
+        "submit": "إضافة وإعادة الفحص",
+        "title": "إضافة واقعة من مستند"
+      },
+      "showNextSteps": "عرض الخطوات التالية",
+      "unlink": "إلغاء ربط {fact}"
+    },
     "guidance": {
       "escalate": "إحالة",
       "manualJudgement": "قرار بشري",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "قُبل باعتباره روتينيًا",
         "conflictReopened": "سُحب حل التعارض",
         "escalated": "أُحيل إلى فريق الأدلة",
+        "factLinked": "رُبطت واقعة",
+        "factUnlinked": "أُلغي ربط واقعة",
         "governed": "اختير السجل الحاكم",
         "noteCleared": "حُذفت الملاحظة",
         "noteSaved": "حُفظت ملاحظة",
         "overridden": "استُبدلت النتيجة",
         "overrideWithdrawn": "سُحب استبدال النتيجة",
+        "rechecked": "أُعيد فحص الادعاء",
         "reopened": "أُعيد فتحه بصفته ادعاءً قابلًا للفحص",
         "statusCleared": "أُزيلت حالة المراجعة",
         "statusDisputed": "وُضعت علامة «متنازع عليه»",
@@ -412,7 +439,9 @@
       },
       "formerMember": "عضو سابق",
       "kinds": {
+        "factLink": "روابط الوقائع",
         "override": "استبدالات النتيجة",
+        "recheck": "عمليات إعادة الفحص",
         "recordConflict": "حلول التعارضات",
         "reopen": "مرات إعادة الفتح",
         "status": "تغييرات الحالة"
@@ -461,6 +490,11 @@
       "unresolveConflict": "لماذا سحب هذا الحل؟",
       "withdrawOverride": "لماذا العودة إلى نتيجة الأداة؟"
     },
+    "recheck": {
+      "currentVerdict": "النتيجة بعد إعادة الفحص",
+      "runVerdict": "نتيجة عملية التحقق",
+      "summary": "أُعيد الفحص في {checkedAt} بالرجوع إلى {count, plural, zero {لا وقائع} one {واقعة واحدة} two {واقعتين} few {# وقائع} many {# واقعة} other {# واقعة}}."
+    },
     "review": {
       "decided": "{status, select, disputed {متنازع عليه} needsEvidence {يحتاج إلى أدلة} other {{origin, select, bulk {قُبل باعتباره روتينيًا} other {روجع}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "لم يُحفظ",
       "failedTitle": "لم يُحفظ تغييرك"
     },
-    "sourceMediumTooltip": "وسيط المصدر وصف محايد، ولا يخفض الثقة من تلقاء نفسه.",
     "states": {
       "contradicted": {
         "chip": "متعارض",
@@ -5404,8 +5437,6 @@
   "search": {
     "aiRefine": "تحسين الاستعلام بالذكاء الاصطناعي",
     "caseLawEmptyState": "ابدأ الكتابة للبحث في الأحكام القضائية.",
-    "caseLawMatchingDecisions": "{count, plural, zero {# قرارات مطابقة} one {قرار مطابق واحد} two {قراران مطابقان} few {# قرارات مطابقة} many {# قرارًا مطابقًا} other {# قرار مطابق}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ قرارات مطابقة} one {#+ قرار مطابق} two {#+ قرار مطابق} few {#+ قرارات مطابقة} many {#+ قرارًا مطابقًا} other {#+ قرار مطابق}}",
     "chatCoveragePartial": "لم يتم البحث في كل الدردشات بالكامل.",
     "continueInChat": "المتابعة في الدردشة",
     "dateFrom": "من",
@@ -6124,6 +6155,11 @@
     "title": "التشريعات",
     "validity": "نافذ من {from} إلى {to}",
     "versionAppliedInDecision": "الصيغة المطبقة في قرار <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, zero {لا مواد مضافة} one {مادة واحدة مضافة} two {مادتان مضافتان} few {# مواد مضافة} many {# مادةً مضافة} other {# مادة مضافة}}",
+    "versionChangesChanged": "{count, plural, zero {لا مواد معدلة} one {مادة واحدة معدلة} two {مادتان معدلتان} few {# مواد معدلة} many {# مادةً معدلة} other {# مادة معدلة}}",
+    "versionChangesNone": "الصياغة دون تغيير",
+    "versionChangesRemoved": "{count, plural, zero {لا مواد محذوفة} one {مادة واحدة محذوفة} two {مادتان محذوفتان} few {# مواد محذوفة} many {# مادةً محذوفة} other {# مادة محذوفة}}",
+    "versionChangesWords": "{inserted, plural, zero {لا كلمات مضافة} one {كلمة واحدة مضافة} two {كلمتان مضافتان} few {# كلمات مضافة} many {# كلمةً مضافة} other {# كلمة مضافة}}، {deleted, plural, zero {لا كلمات محذوفة} one {كلمة واحدة محذوفة} two {كلمتان محذوفتان} few {# كلمات محذوفة} many {# كلمةً محذوفة} other {# كلمة محذوفة}}",
     "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {
@@ -6844,6 +6880,7 @@
     "deletedItem": "تم الحذف: {name}",
     "deletingWorkspace": "جارٍ حذف الملف القانوني",
     "documentSwitcher": {
+      "download": "تنزيل هذا الملف",
       "searchPlaceholder": "ابحث عن مستند…",
       "trigger": "تبديل المستند"
     },

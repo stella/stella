@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Rozstrzygnięcie jest jednoznaczne, ale interpretacja jednego z uwzględnionych faktów jest sporna; warto ją sprawdzić przed zatwierdzeniem.",
       "contradicted": "Rejestr odbiega od tego twierdzenia. Zanim rozstrzygnięcie zostanie zatwierdzone, potrzebna jest decyzja człowieka.",
-      "nocover": "Żaden fakt referencyjny nie odnosi się do tego twierdzenia, więc nie ma z czym go porównać. Zatwierdzenie jest opcjonalne.",
+      "nocover": "Żaden fakt z listy nie obejmuje jeszcze tego twierdzenia.",
       "notverifiable": "Odłożone jako niemożliwe do zweryfikowania; zatwierdzenie jest opcjonalne. Jeśli twierdzenie można jednak sprawdzić, otwórz je ponownie poniżej.",
       "recordconflict": "Dwa materiały dowodowe w aktach są ze sobą sprzeczne. Powyżej wskaż, który jest nadrzędny, albo oznacz sprawę dla zespołu ds. dowodów; narzędzie nie dokona wyboru za Ciebie.",
       "restsOnHeld": "Fakt, na którym opiera się to rozstrzygnięcie, jest wstrzymany do weryfikacji; potwierdź, że rozstrzygnięcie obowiązuje również bez niego, albo sprawdź twierdzenie ponownie po wyjaśnieniu faktu.",
@@ -381,6 +381,30 @@
         "label": "Bez źródła"
       }
     },
+    "gap": {
+      "addFact": "Dodaj fakt z dokumentu",
+      "addFactFailed": "Nie udało się dodać faktu",
+      "factOffList": "Fakt, którego nie ma już na liście",
+      "linkFact": "Powiąż fakt",
+      "linkFailed": "Nie udało się powiązać faktu",
+      "linked": "Powiązane fakty",
+      "linkedMark": "Powiązany",
+      "linksChanged": "Powiązania zmieniły się od ostatniego sprawdzenia.",
+      "noFacts": "Żaden fakt na liście nie pasuje.",
+      "recheck": "Sprawdź ponownie",
+      "recheckFailed": "Nie udało się ponownie sprawdzić twierdzenia",
+      "searchFacts": "Szukaj wśród faktów na liście",
+      "sheet": {
+        "passage": "Fragment",
+        "passageHint": "Słowa w dokumencie, które ustalają fakt.",
+        "statementRequired": "Wpisz fakt.",
+        "statementTooLong": "Fakt może mieć najwyżej {limit} znaków.",
+        "submit": "Dodaj i sprawdź ponownie",
+        "title": "Dodaj fakt z dokumentu"
+      },
+      "showNextSteps": "Pokaż kolejne kroki",
+      "unlink": "Usuń powiązanie: {fact}"
+    },
     "guidance": {
       "escalate": "Przekaż dalej",
       "manualJudgement": "Wymaga decyzji",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Zaakceptowano jako rutynowe",
         "conflictReopened": "Wycofano rozstrzygnięcie sprzeczności",
         "escalated": "Oznaczono dla zespołu ds. dowodów",
+        "factLinked": "Powiązano fakt",
+        "factUnlinked": "Usunięto powiązanie faktu",
         "governed": "Wybrano wpis nadrzędny",
         "noteCleared": "Usunięto uwagę",
         "noteSaved": "Zapisano uwagę",
         "overridden": "Zmieniono rozstrzygnięcie",
         "overrideWithdrawn": "Wycofano zmianę rozstrzygnięcia",
+        "rechecked": "Ponownie sprawdzono twierdzenie",
         "reopened": "Otwarto ponownie jako możliwe do sprawdzenia twierdzenie",
         "statusCleared": "Usunięto status weryfikacji",
         "statusDisputed": "Oznaczono jako zakwestionowane",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Były członek",
       "kinds": {
+        "factLink": "Powiązania faktów",
         "override": "Zmiany rozstrzygnięcia",
+        "recheck": "Ponowne sprawdzenia",
         "recordConflict": "Rozstrzygnięcia sprzeczności",
         "reopen": "Ponowne otwarcia",
         "status": "Zmiany statusu"
@@ -461,6 +490,11 @@
       "unresolveConflict": "Dlaczego wycofać to rozstrzygnięcie sprzeczności?",
       "withdrawOverride": "Dlaczego wrócić do rozstrzygnięcia narzędzia?"
     },
+    "recheck": {
+      "currentVerdict": "Rozstrzygnięcie po ponownym sprawdzeniu",
+      "runVerdict": "Rozstrzygnięcie z pierwotnego przebiegu",
+      "summary": "Ponownie sprawdzono {checkedAt} na podstawie {count, plural, one {# faktu} few {# faktów} many {# faktów} other {# faktu}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Zakwestionowane} needsEvidence {Brak dowodów} other {{origin, select, bulk {Zaakceptowane jako rutynowe} other {Zweryfikowane}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "Nie zapisano",
       "failedTitle": "Twoja zmiana nie została zapisana"
     },
-    "sourceMediumTooltip": "Nośnik źródła: neutralny opis. Sam w sobie nie obniża poziomu pewności.",
     "states": {
       "contradicted": {
         "chip": "Sprzeczne",
@@ -5404,8 +5437,6 @@
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",
     "caseLawEmptyState": "Zacznij pisać, aby przeszukać orzeczenia sądowe.",
-    "caseLawMatchingDecisions": "{count, plural, one {# pasujące orzeczenie} few {# pasujące orzeczenia} many {# pasujących orzeczeń} other {# pasującego orzeczenia}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ pasujące orzeczenie} few {#+ pasujące orzeczenia} many {#+ pasujących orzeczeń} other {#+ pasującego orzeczenia}}",
     "chatCoveragePartial": "Nie wszystkie czaty przeszukano w całości.",
     "continueInChat": "Kontynuuj na czacie",
     "dateFrom": "Od",
@@ -6124,6 +6155,11 @@
     "title": "Akty prawne",
     "validity": "Obowiązuje od {from} do {to}",
     "versionAppliedInDecision": "Wersja zastosowana w orzeczeniu <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# dodany przepis} few {# dodane przepisy} many {# dodanych przepisów} other {# dodanego przepisu}}",
+    "versionChangesChanged": "{count, plural, one {# zmieniony przepis} few {# zmienione przepisy} many {# zmienionych przepisów} other {# zmienionego przepisu}}",
+    "versionChangesNone": "Brzmienie bez zmian",
+    "versionChangesRemoved": "{count, plural, one {# skreślony przepis} few {# skreślone przepisy} many {# skreślonych przepisów} other {# skreślonego przepisu}}",
+    "versionChangesWords": "{inserted, plural, one {# dodane słowo} few {# dodane słowa} many {# dodanych słów} other {# dodanego słowa}}, {deleted, plural, one {# skreślone słowo} few {# skreślone słowa} many {# skreślonych słów} other {# skreślonego słowa}}",
     "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },
   "styleSets": {
@@ -6844,6 +6880,7 @@
     "deletedItem": "Usunięto: {name}",
     "deletingWorkspace": "Usuwanie sprawy",
     "documentSwitcher": {
+      "download": "Pobierz ten plik",
       "searchPlaceholder": "Znajdź dokument…",
       "trigger": "Przełącz dokument"
     },

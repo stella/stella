@@ -413,9 +413,11 @@ for (const { kind, path } of citations) {
             // One chip per citation: a held primary trails no publisher link
             // and carries no glyph beside its own text. The tray's disclosure
             // chevron belongs to its trigger, not to the chip.
-            expect(surface.querySelectorAll("a")).toHaveLength(1);
+            expect(surface.querySelectorAll("a").length).toBe(1);
             if (held) {
-              expect(primary?.parentElement?.querySelector("svg")).toBeNull();
+              expect(
+                primary?.parentElement?.querySelector("svg") === null,
+              ).toBe(true);
             }
           }
         });
@@ -542,8 +544,8 @@ test("default markdown and clarification analysis share publisher aliases and in
       expect(primary.getAttribute("href")).toBe(internal);
     }
     expect(
-      view.queryAllByRole("link", { name: messages.common.source }),
-    ).toHaveLength(0);
+      view.queryAllByRole("link", { name: messages.common.source }).length,
+    ).toBe(0);
   });
 });
 
@@ -820,8 +822,8 @@ test("a relative held primary is one chip in the tray and the passive answer", a
       expect(primary.getAttribute("href")).toBe(primaryUrl);
     }
     expect(
-      view.queryAllByRole("link", { name: messages.common.source }),
-    ).toHaveLength(0);
+      view.queryAllByRole("link", { name: messages.common.source }).length,
+    ).toBe(0);
   });
 });
 
@@ -940,7 +942,9 @@ test("reply markdown and clarification analysis share bare-domain chips without 
       for (const link of links) {
         expect(link.getAttribute("target")).toBe("_blank");
         expect(link.getAttribute("rel")).toBe("noopener noreferrer");
-        expect(link.firstElementChild?.querySelector("svg")).not.toBeNull();
+        expect(link.firstElementChild?.querySelector("svg") === null).toBe(
+          false,
+        );
         expect(link.children.item(1)?.tagName).toBe("BDI");
         fireEvent.mouseEnter(link);
         fireEvent.focus(link);

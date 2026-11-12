@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Le verdict est net, mais l’interprétation d’un fait contributif est contestée ; un coup d’œil s’impose avant validation.",
       "contradicted": "Le dossier s’écarte de cette affirmation. Une décision humaine est nécessaire avant que ce verdict soit retenu.",
-      "nocover": "Aucun fait d’ancrage ne traite de cette affirmation ; il n’y a donc rien pour la confirmer. La validation est facultative.",
+      "nocover": "Aucun fait de la liste ne couvre encore cette affirmation.",
       "notverifiable": "Écartée comme non vérifiable ; la validation est facultative. Rouvrez-la ci-dessous si elle est en réalité vérifiable.",
       "recordconflict": "Deux pièces du dossier se contredisent. Déterminez ci-dessus laquelle fait foi, ou signalez-le à l’équipe chargée des preuves ; l’outil ne choisira pas à votre place.",
       "restsOnHeld": "Un fait sur lequel repose ce verdict est en attente de vérification ; confirmez que le verdict tient sans lui, ou revérifiez l’affirmation une fois le fait tranché.",
@@ -381,6 +381,30 @@
         "label": "Sans source"
       }
     },
+    "gap": {
+      "addFact": "Ajouter un fait depuis un document",
+      "addFactFailed": "Le fait n’a pas pu être ajouté",
+      "factOffList": "Un fait qui ne figure plus dans la liste",
+      "linkFact": "Lier un fait",
+      "linkFailed": "Le fait n’a pas pu être lié",
+      "linked": "Faits liés",
+      "linkedMark": "Lié",
+      "linksChanged": "Les liens ont changé depuis la dernière vérification.",
+      "noFacts": "Aucun fait de la liste ne correspond.",
+      "recheck": "Revérifier",
+      "recheckFailed": "L’affirmation n’a pas pu être revérifiée",
+      "searchFacts": "Rechercher dans les faits de la liste",
+      "sheet": {
+        "passage": "Extrait",
+        "passageHint": "Les mots du document qui établissent le fait.",
+        "statementRequired": "Rédigez le fait.",
+        "statementTooLong": "Un fait ne peut pas dépasser {limit} caractères.",
+        "submit": "Ajouter et revérifier",
+        "title": "Ajouter un fait depuis un document"
+      },
+      "showNextSteps": "Afficher les prochaines étapes",
+      "unlink": "Dissocier {fact}"
+    },
     "guidance": {
       "escalate": "Faire remonter",
       "manualJudgement": "Jugement manuel",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Acceptée de routine",
         "conflictReopened": "Résolution de la contradiction retirée",
         "escalated": "Signalée à l’équipe chargée des preuves",
+        "factLinked": "Fait lié",
+        "factUnlinked": "Fait dissocié",
         "governed": "Élément faisant foi choisi",
         "noteCleared": "Note supprimée",
         "noteSaved": "Note enregistrée",
         "overridden": "Verdict remplacé",
         "overrideWithdrawn": "Remplacement du verdict retiré",
+        "rechecked": "Affirmation revérifiée",
         "reopened": "Rouverte en tant qu’affirmation vérifiable",
         "statusCleared": "Statut d’examen retiré",
         "statusDisputed": "Désaccord signalé",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Ancien membre",
       "kinds": {
+        "factLink": "Liens de faits",
         "override": "Verdicts remplacés",
+        "recheck": "Revérifications",
         "recordConflict": "Résolutions de contradictions",
         "reopen": "Réouvertures",
         "status": "Changements de statut"
@@ -461,6 +490,11 @@
       "unresolveConflict": "Pourquoi retirer cette résolution ?",
       "withdrawOverride": "Pourquoi revenir au verdict de l’outil ?"
     },
+    "recheck": {
+      "currentVerdict": "Verdict après la revérification",
+      "runVerdict": "Verdict de l’analyse",
+      "summary": "Revérifiée le {checkedAt} par rapport à {count, plural, one {# fait} other {# faits} many {# faits}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Désaccord signalé} needsEvidence {Preuves requises} other {{origin, select, bulk {Acceptée de routine} other {Examinée}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "Non enregistré",
       "failedTitle": "Votre modification n’a pas été enregistrée"
     },
-    "sourceMediumTooltip": "Support de la source : un descripteur neutre. Il n’abaisse pas la confiance à lui seul.",
     "states": {
       "contradicted": {
         "chip": "Contredite",
@@ -5404,8 +5437,6 @@
   "search": {
     "aiRefine": "Améliorer la requête avec l’IA",
     "caseLawEmptyState": "Commencez à saisir pour rechercher des décisions de justice.",
-    "caseLawMatchingDecisions": "{count, plural, one {# décision correspondante} other {# décisions correspondantes} many {# décisions correspondantes}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ décision correspondante} other {#+ décisions correspondantes} many {#+ décisions correspondantes}}",
     "chatCoveragePartial": "Les conversations n’ont pas toutes été parcourues en entier.",
     "continueInChat": "Continuer dans une conversation",
     "dateFrom": "Du",
@@ -6124,6 +6155,11 @@
     "title": "Législation",
     "validity": "En vigueur du {from} au {to}",
     "versionAppliedInDecision": "Version appliquée dans la décision <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# disposition insérée} other {# dispositions insérées} many {# dispositions insérées}}",
+    "versionChangesChanged": "{count, plural, one {# disposition modifiée} other {# dispositions modifiées} many {# dispositions modifiées}}",
+    "versionChangesNone": "Rédaction inchangée",
+    "versionChangesRemoved": "{count, plural, one {# disposition supprimée} other {# dispositions supprimées} many {# dispositions supprimées}}",
+    "versionChangesWords": "{inserted, plural, one {# mot inséré} other {# mots insérés} many {# mots insérés}}, {deleted, plural, one {# mot supprimé} other {# mots supprimés} many {# mots supprimés}}",
     "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
   },
   "styleSets": {
@@ -6844,6 +6880,7 @@
     "deletedItem": "Supprimé : {name}",
     "deletingWorkspace": "Suppression du dossier",
     "documentSwitcher": {
+      "download": "Télécharger ce fichier",
       "searchPlaceholder": "Rechercher un document…",
       "trigger": "Changer de document"
     },

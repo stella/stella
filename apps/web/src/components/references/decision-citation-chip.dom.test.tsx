@@ -184,7 +184,7 @@ test("Escape restores focus without reopening, and a later focus opens again", a
   await pressEscape();
   await pressEscape();
   await waitFor(() => {
-    expect(screen.queryByText(passage)).toBeNull();
+    expect(screen.queryByText(passage) === null).toBe(true);
     expect(view.container.ownerDocument.activeElement).toBe(trigger);
   });
   await act(async () => {
@@ -225,8 +225,8 @@ for (const protocol of ["javascript", "data"]) {
       expect(
         screen.queryByRole("link", {
           name: messages.inspector.external.openOriginal,
-        }),
-      ).toBeNull();
+        }) === null,
+      ).toBe(true);
       expect(
         screen
           .getByRole("link", { name: messages.common.openInStella })

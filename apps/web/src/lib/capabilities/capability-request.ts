@@ -40,6 +40,7 @@ export type AppOnlyWriteId =
   | "folio-collaboration.seed.acknowledge"
   | "organization-settings.local-runs.update"
   | "organizations.audit-export.create"
+  | "search.case-law-section.list"
   | "sharepoint.connect"
   | "sharepoint.connection.delete"
   | "sharepoint.enablement.update"
