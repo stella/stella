@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getOauthAccountSwitchHref,
+  getOauthContinuationHref,
   getOauthHashFragment,
   getOauthRedirectUrl,
   getSignedOauthQuery,
@@ -131,5 +132,39 @@ describe("getOauthRedirectUrl", () => {
         redirect_uri: "https://client.example/callback?code=123",
       }),
     ).toBe("https://client.example/callback?code=123");
+  });
+});
+
+describe("getOauthContinuationHref", () => {
+  const signed = "client_id=client-123&scope=openid&sig=abc123";
+
+  test("resumes a destination that carries the signed request", () => {
+    const bridged = `/auth/organization#${getOauthHashFragment(signed)}`;
+    expect(getOauthContinuationHref(bridged)).toBe(bridged);
+    expect(getOauthContinuationHref(`/auth/organization?${signed}`)).toBe(
+      `/auth/organization?${signed}`,
+    );
+  });
+
+  test("leaves ordinary and unsigned destinations alone", () => {
+    expect(getOauthContinuationHref(undefined)).toBeNull();
+    expect(getOauthContinuationHref("/")).toBeNull();
+    expect(getOauthContinuationHref("/workspaces?tab=open")).toBeNull();
+    expect(
+      getOauthContinuationHref(
+        `/auth/organization#${getOauthHashFragment("client_id=client-123")}`,
+      ),
+    ).toBeNull();
+  });
+
+  test("never leaves this site, whatever the destination carries", () => {
+    const fragment = getOauthHashFragment(signed);
+    for (const elsewhere of [
+      `//elsewhere.example/auth/organization#${fragment}`,
+      `https://elsewhere.example/auth/organization#${fragment}`,
+      `https://elsewhere.example/?${signed}`,
+    ]) {
+      expect(getOauthContinuationHref(elsewhere)).toBeNull();
+    }
   });
 });

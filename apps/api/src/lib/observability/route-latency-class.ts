@@ -683,6 +683,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/law/statutes/resolve": "crud",
   "POST /v1/legislation/corpus/search": "search",
   "POST /v1/lists/:workspaceId/claim-comments": "crud",
+  "POST /v1/lists/:workspaceId/claim-rechecks": "ai",
   "POST /v1/lists/:workspaceId/claim-reviews": "crud",
   "POST /v1/lists/:workspaceId/claim-reviews/bulk": "crud",
   "POST /v1/lists/:workspaceId/columns": "crud",
