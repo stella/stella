@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
+
 /** Where a new fact comes from: a document, a page of it, and the words.
  *  The document's live version is read when the source is written. */
 type FactSourceInput = {
@@ -10,15 +12,18 @@ type FactSourceInput = {
 
 export type AddFactInput = { statement: string; source: FactSourceInput };
 
-/** How far adding a fact got: added to the list, sourced, linked. Its
- *  re-check's key is chosen once, so a retry whose re-check already landed
- *  replays it instead of grading the claim again. */
+/** How far adding a fact got: being created, added to the list, sourced,
+ *  linked. The create's and the re-check's keys are chosen once, so a retry
+ *  whose create or re-check already landed replays it instead of adding the
+ *  fact twice or grading the claim again. */
 export type AddedFact = {
   input: AddFactInput;
-  entityId: string;
-  step: "added" | "sourced" | "linked";
+  createRequest: IdempotentRequest;
   recheckKey: string;
-};
+} & (
+  | { step: "creating" }
+  | { step: "added" | "sourced" | "linked"; entityId: string }
+);
 
 type AddFactProgressStore = {
   /** Unfinished additions by claim (`addFactProgressKey`). */

@@ -331,10 +331,10 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
             listSectionId: toSafeId<"legalListSection">(selectedSectionId),
           }),
         },
-        send: async (body) =>
+        send: async (body, request) =>
           api
             .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            .put(body),
+            .put(body, request),
       });
       if (response.error) {
         throw toAPIError(response.error);
