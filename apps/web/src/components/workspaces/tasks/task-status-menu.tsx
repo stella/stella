@@ -20,6 +20,7 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
@@ -42,20 +43,26 @@ const useTaskStatusChange = (workspaceId: string) => {
       id: toSafeId<"workspace">(workspaceId),
     }),
     mutationFn: async (
-      {
-        taskId,
-        status,
-      }: {
-        taskId: string;
-        status: TaskStatus;
-      },
+      variables: { taskId: string; status: TaskStatus },
       request,
-    ) => {
-      const response = await api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .patch({ taskId: toSafeId<"entity">(taskId), status }, request);
-      return unwrapApiResponse(response);
-    },
+    ) =>
+      await resourceMutation({
+        mutation: "updateTaskStatus",
+        queryClient,
+        mutationFn: async ({
+          taskId,
+          status,
+        }: {
+          taskId: string;
+          status: TaskStatus;
+          workspaceId: string;
+        }) => {
+          const response = await api
+            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .patch({ taskId: toSafeId<"entity">(taskId), status }, request);
+          return unwrapApiResponse(response);
+        },
+      })({ ...variables, workspaceId }),
     onSuccess: async (_data, variables) => {
       // `entitiesKeys.all` also covers the sidebar's matter activity list.
       await Promise.all([

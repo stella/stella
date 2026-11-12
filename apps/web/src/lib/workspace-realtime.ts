@@ -133,6 +133,19 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.INVOICE],
   },
+  updateTaskStatus: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PATCH",
+        route: "/tasks/:workspaceId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ENTITY],
+    // A task is an entity: its own queries and every entity collection,
+    // the matter's tasks and its overview included, refresh.
+    changedEntity: "taskId",
+  },
   renameEntity: {
     writes: [
       {
