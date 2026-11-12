@@ -686,6 +686,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-dom-node-poll-assertion.fixture.tsx", [
     "no-dom-node-poll-assertion/no-dom-node-poll-assertion",
   ]),
+  fixtureRuleOverride("text-mark-not-in-button.fixture.tsx", [
+    "text-mark-not-in-button/text-mark-not-in-button",
+  ]),
   fixtureRuleOverride("no-secret-in-log-sink.fixture.ts", [
     "no-secret-in-log-sink/no-secret-in-log-sink",
   ]),
@@ -2345,6 +2348,7 @@ const config = defineConfig({
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/no-dom-node-poll-assertion.ts",
+    "./.oxlint-plugins/text-mark-not-in-button.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
     "./.oxlint-plugins/require-polite-publisher-fetch.ts",
@@ -4585,6 +4589,19 @@ const config = defineConfig({
       ],
       rules: {
         "no-dom-node-poll-assertion/no-dom-node-poll-assertion": "error",
+      },
+    },
+    {
+      // A text mark is prose; a Button is one atomic box that would lift a
+      // mark crossing a line out of the paragraph's reading order. Clickable
+      // prose is ButtonTextRun.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/text-mark-not-in-button.fixture.tsx",
+      ],
+      rules: {
+        "text-mark-not-in-button/text-mark-not-in-button": "error",
       },
     },
     {
