@@ -2241,7 +2241,7 @@
       "interrupted": "Vor Abschluss unterbrochen",
       "localOutput": {
         "cut": "Die ersten {kept} von {total} werden angezeigt",
-        "diff": "Änderungen",
+        "diff": "Dateiänderungen",
         "elsewhere": "Auf dem Computer öffnen, auf dem der Schritt lief",
         "empty": "Keine Ausgabe",
         "failed": "Die stella-Desktop-App auf diesem Computer konnte dies nicht anzeigen.",

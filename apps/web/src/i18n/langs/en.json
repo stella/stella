@@ -2241,7 +2241,7 @@
       "interrupted": "Interrupted before finishing",
       "localOutput": {
         "cut": "Showing the first {kept} of {total}",
-        "diff": "Changes",
+        "diff": "File changes",
         "elsewhere": "Open on the computer that ran it",
         "empty": "No output",
         "failed": "The stella desktop app on this computer could not show this.",

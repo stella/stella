@@ -2241,7 +2241,7 @@
       "interrupted": "Katkes enne lõpetamist",
       "localOutput": {
         "cut": "Kuvatakse esimesed {kept} (kokku {total})",
-        "diff": "Muudatused",
+        "diff": "Failimuudatused",
         "elsewhere": "Avage arvutis, kus see käivitati",
         "empty": "Väljund puudub",
         "failed": "stella töölauarakendus selles arvutis ei suutnud seda kuvada.",

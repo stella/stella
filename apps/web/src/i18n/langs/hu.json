@@ -2241,7 +2241,7 @@
       "interrupted": "Befejezés előtt megszakadt",
       "localOutput": {
         "cut": "Az első {kept} látható, összesen {total}",
-        "diff": "Módosítások",
+        "diff": "Fájlmódosítások",
         "elsewhere": "Nyissa meg azon a számítógépen, amelyen futott",
         "empty": "Nincs kimenet",
         "failed": "A stella asztali alkalmazás ezen a számítógépen nem tudta megjeleníteni.",

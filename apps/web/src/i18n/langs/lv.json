@@ -2241,7 +2241,7 @@
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "localOutput": {
         "cut": "Rāda pirmos {kept} no {total}",
-        "diff": "Izmaiņas",
+        "diff": "Failu izmaiņas",
         "elsewhere": "Atveriet datorā, kurā tas tika izpildīts",
         "empty": "Nav izvades",
         "failed": "stella darbvirsmas lietotne šajā datorā to nevarēja parādīt.",

@@ -2241,7 +2241,7 @@
       "interrupted": "Nutraukta nebaigus",
       "localOutput": {
         "cut": "Rodomi pirmieji {kept} iš {total}",
-        "diff": "Pakeitimai",
+        "diff": "Failų pakeitimai",
         "elsewhere": "Atidarykite kompiuteryje, kuriame tai buvo vykdoma",
         "empty": "Išvesties nėra",
         "failed": "stella darbalaukio programa šiame kompiuteryje negalėjo to parodyti.",

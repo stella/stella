@@ -2241,7 +2241,7 @@
       "interrupted": "Přerušeno před dokončením",
       "localOutput": {
         "cut": "Zobrazeno prvních {kept} z {total}",
-        "diff": "Změny",
+        "diff": "Změny souborů",
         "elsewhere": "Otevřete na počítači, kde krok běžel",
         "empty": "Žádný výstup",
         "failed": "Desktopová aplikace stella na tomto počítači to nedokázala zobrazit.",
