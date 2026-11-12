@@ -1933,7 +1933,7 @@
       "permissionAutoDescription": "Erledigt selbst, was es für sicher hält; fragt beim Rest nach.",
       "permissionFullAuto": "Vollautomatisch",
       "permissionFullAutoDescription": "Fragt bei nichts innerhalb des Ordners des Chats nach; fragt immer, bevor es etwas an Ihrem Computer ändert.",
-      "permissionPlan": "Plan",
+      "permissionPlan": "Planen",
       "permissionPlanDescription": "Liest und plant zuerst; ändert nichts, bevor Sie den Plan genehmigen.",
       "permissionSandboxed": "Läuft in einer Sandbox; fragt, bevor es etwas an Ihrem Computer ändert.",
       "permissionUnavailable": "Auf diesem Computer nicht verfügbar",

@@ -1933,7 +1933,7 @@
       "permissionAutoDescription": "Sam robi to, co uznaje za bezpieczne; o resztę pyta.",
       "permissionFullAuto": "W pełni automatycznie",
       "permissionFullAutoDescription": "Nie pyta o nic w folderze czatu; zawsze pyta, zanim zmieni coś na Twoim komputerze.",
-      "permissionPlan": "Plan",
+      "permissionPlan": "Planowanie",
       "permissionPlanDescription": "Najpierw czyta i planuje; niczego nie zmienia, dopóki nie zatwierdzisz planu.",
       "permissionSandboxed": "Działa w piaskownicy; pyta, zanim zmieni coś na Twoim komputerze.",
       "permissionUnavailable": "Niedostępne na tym komputerze",

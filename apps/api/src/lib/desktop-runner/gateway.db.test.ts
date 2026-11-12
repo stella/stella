@@ -1185,7 +1185,7 @@ describe("approval modes", () => {
           state: "ready",
           version: HARNESS_VERSION,
           capabilities: ["approvals"],
-          approvalModes: ["ask", "auto", "full_auto"],
+          approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
           models: [{ id: MODEL, label: "Model" }],
         },
       ],
