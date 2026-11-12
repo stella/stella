@@ -17,7 +17,7 @@ globalThis.fetch = Object.assign(async () => Response.json(null), {
   preconnect: () => undefined,
 });
 
-const { act, cleanup, fireEvent, render, screen, within } =
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -161,6 +161,10 @@ const closeMenu = async () => {
   });
 };
 
+const waitForMenuClosed = async () => {
+  await waitFor(() => expect(screen.queryByRole("menu") === null).toBe(true));
+};
+
 const choose = async (menu: HTMLElement, name: string) => {
   const item = within(menu)
     .getAllByRole("menuitemradio")
@@ -193,7 +197,8 @@ test("the where chip switches the place, and the model chip lists that place's m
   ).toBeTruthy();
   await choose(places, "Codex");
   expect(chosen).toEqual([LOCAL_TARGET]);
-  await closeMenu();
+  // Picking a place closes the menu.
+  await waitForMenuClosed();
 
   // On the computer: the agent's models and none of stella's. This agent
   // marks no default, so none is called recommended.
@@ -211,7 +216,7 @@ test("the where chip switches the place, and the model chip lists that place's m
 
   await choose(await openMenu(CODEX_PLACE), messages.chat.runOn.cloud);
   expect(chosen).toEqual([LOCAL_TARGET, { kind: "cloud" }]);
-  await closeMenu();
+  await waitForMenuClosed();
   const cloudModels = await openMenu(AUTO_LABEL);
   expect(within(cloudModels).getByPlaceholderText(SEARCH)).toBeTruthy();
   expect(within(cloudModels).getByText(CLOUD_MODEL.displayName)).toBeTruthy();
@@ -288,7 +293,7 @@ test("an agent starts on the model it marks as its default, offered first", asyn
   );
   await choose(await openMenu(CLOUD_PLACE), "Codex");
   expect(chosen).toEqual([{ ...LOCAL_TARGET, model: "gpt-6.1-sol" }]);
-  await closeMenu();
+  await waitForMenuClosed();
   const models = await openMenu("GPT-6.1 Sol");
   expect(
     within(models)
@@ -352,4 +357,34 @@ test("a chat on the computer whose read failed says so on both chips, claiming n
   } finally {
     restore();
   }
+});
+
+test("a permission pick keeps the where menu open for another choice", async () => {
+  const claude = {
+    kind: "local",
+    harness: "claude-code",
+    model: "sonnet",
+    approvals: "ask",
+  } as const satisfies ChatRunTarget;
+  const { chosen } = renderChips(claude, {
+    ...READINESS,
+    runners: READINESS.runners.map((runner) => ({
+      ...runner,
+      harnesses: [
+        ...runner.harnesses,
+        {
+          id: "claude-code",
+          state: "ready",
+          version: "2.1.309",
+          capabilities: ["approvals"],
+          approvalModes: ["ask", "auto"],
+          models: [{ id: "sonnet", label: "Sonnet" }],
+        },
+      ],
+    })),
+  });
+  const places = await openMenu("Runs on: Your computer, Claude Code");
+  await choose(places, "Auto");
+  expect(chosen).toEqual([{ ...claude, approvals: "auto" }]);
+  expect(screen.queryByRole("menu") === null).toBe(false);
 });

@@ -243,7 +243,10 @@ export const ChatRunTargetMenu = ({
   return (
     <>
       <MenuRadioGroup value={runOnPlaceValue(selected)}>
+        {/* Picking a place or an agent is the choice the menu exists for,
+            so it closes; a permission pick keeps it open for another. */}
         <MenuRadioItem
+          closeOnClick
           onClick={() => choose(CHAT_CLOUD_RUN_TARGET)}
           value={CHAT_RUN_TARGET_KIND.cloud}
         >
@@ -282,6 +285,7 @@ export const ChatRunTargetMenu = ({
                 });
           return (
             <MenuRadioItem
+              closeOnClick
               key={option.harness}
               onClick={() => choose(target)}
               value={runOnPlaceValue(target)}
@@ -410,6 +414,7 @@ export const LocalModelOptions = ({
       </MenuGroupLabel>
       {recommended !== null && (
         <MenuRadioItem
+          closeOnClick
           onClick={() => choose(recommended.id)}
           value={recommended.id}
         >
@@ -421,6 +426,7 @@ export const LocalModelOptions = ({
       )}
       {others.map((model) => (
         <MenuRadioItem
+          closeOnClick
           key={model.id}
           onClick={() => choose(model.id)}
           value={model.id}
