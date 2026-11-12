@@ -2256,6 +2256,7 @@
       "patternInPath": "{pattern} asukohas {path}",
       "readFile": "Faili lugemine",
       "searchFiles": "Failidest otsimine",
+      "signInToContinue": "Jätkamiseks logige sisse",
       "sourceCode": "Lähtekood",
       "statusWaiting": "Ootel",
       "toggleDetails": "Üksikasjade lülitamine",

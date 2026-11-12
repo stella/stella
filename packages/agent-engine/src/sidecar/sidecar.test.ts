@@ -1433,6 +1433,7 @@ describe("harness holder over its socket", () => {
         FAKE_HARNESS_LOG: path.join(root, "fake.log"),
       },
       processGrantTimeoutMs: WAIT_MS,
+      browser: null,
     });
     cleanups.push(() => {
       rmSync(root, { recursive: true, force: true });
@@ -1520,6 +1521,7 @@ describe("harness holder over its socket", () => {
           FAKE_HARNESS_LOG: path.join(root, "fake.log"),
         },
         processGrantTimeoutMs: WAIT_MS,
+        browser: null,
       });
       cleanups.push(async () => {
         await host.shutdown();
@@ -1700,6 +1702,7 @@ describe("holder limits and timers", () => {
       helloTimeoutMs: 5000,
       unackedRetentionMs: 60_000,
       processGrantTimeoutMs: 60_000,
+      browser: null,
       limits: { maxMessages: 1000, maxBytes: 1024 * 1024 },
       protocolLog: { type: "set", setting: "off" },
       ...overrides,

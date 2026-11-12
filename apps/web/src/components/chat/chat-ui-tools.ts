@@ -376,6 +376,7 @@ const HARNESS_TOOL_TITLE_KEYS = {
   request_user_input: "chat.tool.request_user_input",
   request_permissions: "chat.tool.request_permissions",
   harness_unsupported_item: "chat.tool.harness_unsupported_item",
+  local_browser: "chat.tool.use-browser",
 } as const satisfies Record<string, TranslationKey>;
 
 const CHAT_TOOL_DISPLAY_TITLE_KEYS = {

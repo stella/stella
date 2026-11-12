@@ -49,6 +49,7 @@ import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import type { ProtocolLog } from "../protocol-log";
 import { copyAttachments } from "./attachments";
+import type { LocalBrowserMcp } from "./browser/mcp-server";
 import {
   captureCheckpoint,
   checkpointChunk,
@@ -132,6 +133,8 @@ export type SidecarHostOptions = {
    * desktop's `harness.process_granted` before the run or probe fails.
    */
   processGrantTimeoutMs: number;
+  /** The browser tools each run gets; `null` without a browser bridge. */
+  browser: LocalBrowserMcp | null;
 };
 
 /** The inherited environment with the launch's removals and settings applied. */
@@ -634,6 +637,7 @@ export class SidecarHost {
     this.track(
       this.execute(message, config, run).finally(() => {
         config.proxy.unregister(message.runId);
+        this.options.browser?.unregister(message.runId);
         this.runs.delete(message.runId);
       }),
     );
@@ -862,6 +866,11 @@ export class SidecarHost {
       instructions: message.instructions,
       policy: message.policy,
       mcp: binding.value,
+      browser:
+        this.options.browser?.register({
+          runId: message.runId,
+          threadId: message.threadId,
+        }) ?? null,
       transcript: transcript.output,
       inputFiles: input.files,
       continuation:

@@ -2256,6 +2256,7 @@
       "patternInPath": "{pattern} dans {path}",
       "readFile": "Lecture d’un fichier",
       "searchFiles": "Recherche dans les fichiers",
+      "signInToContinue": "Connectez-vous pour continuer",
       "sourceCode": "Code source",
       "statusWaiting": "En attente",
       "toggleDetails": "Afficher les détails",

@@ -2256,6 +2256,7 @@
       "patternInPath": "{pattern} unter {path}",
       "readFile": "Datei wird gelesen",
       "searchFiles": "Dateien werden durchsucht",
+      "signInToContinue": "Zum Fortfahren anmelden",
       "sourceCode": "Quellcode",
       "statusWaiting": "Wartet",
       "toggleDetails": "Details ein-/ausblenden",

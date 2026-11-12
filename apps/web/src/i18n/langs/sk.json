@@ -2256,6 +2256,7 @@
       "patternInPath": "{pattern} v {path}",
       "readFile": "Čítanie súboru",
       "searchFiles": "Vyhľadávanie v súboroch",
+      "signInToContinue": "Na pokračovanie sa prihláste",
       "sourceCode": "Zdrojový kód",
       "statusWaiting": "Čaká",
       "toggleDetails": "Prepnúť podrobnosti",

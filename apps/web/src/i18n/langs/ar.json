@@ -2256,6 +2256,7 @@
       "patternInPath": "{pattern} في {path}",
       "readFile": "قراءة ملف",
       "searchFiles": "البحث في الملفات",
+      "signInToContinue": "سجّل الدخول للمتابعة",
       "sourceCode": "الشيفرة المصدرية",
       "statusWaiting": "في الانتظار",
       "toggleDetails": "إظهار/إخفاء التفاصيل",

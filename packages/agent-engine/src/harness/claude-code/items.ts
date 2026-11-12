@@ -7,11 +7,7 @@ import {
 import type { DESKTOP_RUNNER_APPROVAL_KINDS } from "@stll/api-contract/desktop-runner";
 
 import type { HarnessToolCall, HarnessToolResult } from "../events";
-import {
-  HARNESS_TOOL_NAMES,
-  mcpToolCallName,
-  nativeToolCall,
-} from "../tool-parts";
+import { HARNESS_TOOL_NAMES, mcpToolCall, nativeToolCall } from "../tool-parts";
 import type {
   ClaudeMessageType,
   ClaudeSystemSubtype,
@@ -311,11 +307,12 @@ export const toolCallForUse = (
     case "question":
       return { id, name: HARNESS_TOOL_NAMES.question, input };
     case "mcp":
-      return {
+      return mcpToolCall({
         id,
-        name: mcpToolCallName({ ...mcpName(name, stellaServer), stellaServer }),
         input,
-      };
+        ...mcpName(name, stellaServer),
+        stellaServer,
+      });
     case "native": {
       const detail = nativeDetail(name, input);
       return nativeToolCall(

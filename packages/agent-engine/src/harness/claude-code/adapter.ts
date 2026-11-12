@@ -623,9 +623,13 @@ const turnArgs = (
   ...settingsArgs(input, skills, options.platform),
   ...(skills === null ? [] : ["--plugin-dir", skills.dir]),
   ...NETWORK_ARGS[input.policy.network],
-  // The stella MCP server enforces its own approvals for writes.
+  // The stella MCP server enforces its own approvals for writes; the
+  // extension holds the browser to its own policy.
   "--allowedTools",
-  `mcp__${input.mcp.serverName}`,
+  [
+    `mcp__${input.mcp.serverName}`,
+    ...(input.browser === null ? [] : [`mcp__${input.browser.serverName}`]),
+  ].join(","),
   target.type === "fresh" ? "--session-id" : "--resume",
   target.sessionId,
   "--model",
@@ -692,16 +696,19 @@ const openSession = async (
       }),
     );
   }
-  // Only stella's server is registered; the run's secret travels over
+  // Only stella's servers are registered; the run's secrets travel over
   // stdio, never on the command line or in a file.
+  const servers = [
+    input.mcp,
+    ...(input.browser === null ? [] : [input.browser]),
+  ];
   const registered = await client.request("mcp_set_servers", {
-    servers: {
-      [input.mcp.serverName]: {
-        type: "http",
-        url: input.mcp.url,
-        headers: { Authorization: `Bearer ${input.mcp.token}` },
-      },
-    },
+    servers: Object.fromEntries(
+      servers.map(({ serverName, token, url }) => [
+        serverName,
+        { type: "http", url, headers: { Authorization: `Bearer ${token}` } },
+      ]),
+    ),
   });
   const parsed = Result.isOk(registered)
     ? v.safeParse(McpSetServersResponseSchema, registered.value)
@@ -709,8 +716,11 @@ const openSession = async (
   if (
     parsed === null ||
     !parsed.success ||
-    !parsed.output.added.includes(input.mcp.serverName) ||
-    parsed.output.errors[input.mcp.serverName] !== undefined
+    servers.some(
+      ({ serverName }) =>
+        !parsed.output.added.includes(serverName) ||
+        parsed.output.errors[serverName] !== undefined,
+    )
   ) {
     return fail(
       new HarnessStartError({
@@ -828,7 +838,10 @@ const startTurn = async (
       "Claude Code adapter: the workspace directory must be an absolute path",
     );
   }
-  if (!MCP_SERVER_NAME.test(input.mcp.serverName)) {
+  if (
+    !MCP_SERVER_NAME.test(input.mcp.serverName) ||
+    (input.browser !== null && !MCP_SERVER_NAME.test(input.browser.serverName))
+  ) {
     panic("Claude Code adapter: the MCP server name must be plain");
   }
   if (!path.isAbsolute(input.cacheDir)) {

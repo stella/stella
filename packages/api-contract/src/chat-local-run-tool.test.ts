@@ -4,6 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  CHAT_LOCAL_RUN_NEEDS_MEMBER,
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   CHAT_LOCAL_RUN_TOOL_NAMES,
   CHAT_LOCAL_RUN_TOOL_STATUSES,
@@ -200,5 +201,57 @@ describe("what a local run's native step shows", () => {
         reason: null,
       }),
     ).toBe("Approval required to run mcp__docs__read");
+  });
+});
+
+describe("a browser step on the member's computer", () => {
+  test("keeps the kind of step and the opened address, never the page", () => {
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "open",
+        url: "https://fixture-library.test/search",
+        snapshot: { text: "Private page text" },
+      }),
+    ).toEqual({
+      name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      input: { action: "open", url: "https://fixture-library.test/search" },
+    });
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "type",
+        ref: "e:0:1.2",
+        text: "Private query",
+      }),
+    ).toEqual({
+      name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      input: { action: "type" },
+    });
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "evaluate",
+      }),
+    ).toBeNull();
+  });
+
+  test("a sign-in the member completes is kept as its own status", () => {
+    const content = JSON.stringify({
+      status: CHAT_LOCAL_RUN_NEEDS_MEMBER,
+      message: "This page asks for a sign-in.",
+      page: { text: "Private page text" },
+    });
+    expect(
+      shownChatLocalRunToolResult(
+        CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+        content,
+        true,
+      ),
+    ).toBe(JSON.stringify({ status: CHAT_LOCAL_RUN_NEEDS_MEMBER }));
+    expect(
+      shownChatLocalRunToolResult(
+        CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+        JSON.stringify({ text: "Private page text", title: "Library" }),
+        false,
+      ),
+    ).toBe(JSON.stringify({ status: "completed" }));
   });
 });

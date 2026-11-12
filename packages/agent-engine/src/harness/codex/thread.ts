@@ -157,7 +157,10 @@ const threadParams = (
   input: HarnessTurnInput,
   disabledSkills: readonly string[],
 ) => {
-  if (!MCP_SERVER_NAME.test(input.mcp.serverName)) {
+  if (
+    !MCP_SERVER_NAME.test(input.mcp.serverName) ||
+    (input.browser !== null && !MCP_SERVER_NAME.test(input.browser.serverName))
+  ) {
     panic("Codex adapter: the MCP server name must be a bare TOML key");
   }
   if (!path.isAbsolute(input.cacheDir)) {
@@ -194,6 +197,17 @@ const threadParams = (
         // The stella MCP server enforces its own approvals for writes.
         default_tools_approval_mode: "approve",
       },
+      // The extension holds the browser to its own policy: the origin
+      // policy, containment, budgets and the sign-in handoff.
+      ...(input.browser === null
+        ? {}
+        : {
+            [`mcp_servers.${input.browser.serverName}`]: {
+              url: input.browser.url,
+              http_headers: { Authorization: `Bearer ${input.browser.token}` },
+              default_tools_approval_mode: "approve",
+            },
+          }),
     },
   };
 };

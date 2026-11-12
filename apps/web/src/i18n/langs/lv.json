@@ -2256,6 +2256,7 @@
       "patternInPath": "{pattern} ({path})",
       "readFile": "Faila lasīšana",
       "searchFiles": "Meklēšana failos",
+      "signInToContinue": "Lai turpinātu, pieslēdzieties",
       "sourceCode": "Pirmkods",
       "statusWaiting": "Gaida",
       "toggleDetails": "Pārslēgt detaļas",

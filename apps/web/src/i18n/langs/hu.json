@@ -2256,6 +2256,7 @@
       "patternInPath": "{pattern} itt: {path}",
       "readFile": "Fájl olvasása",
       "searchFiles": "Keresés a fájlokban",
+      "signInToContinue": "A folytatáshoz jelentkezzen be",
       "sourceCode": "Forráskód",
       "statusWaiting": "Várakozik",
       "toggleDetails": "Részletek megjelenítése",

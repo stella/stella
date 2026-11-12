@@ -1,0 +1,110 @@
+import { Result } from "better-result";
+import path from "node:path";
+
+import { BROWSER_EXTENSION_ID } from "@stll/api-contract/browser-control";
+import { sha256Hex } from "@stll/sha256/node";
+
+import { startBrowserBridge } from "./bridge";
+import { type LocalBrowserMcp, startLocalBrowserMcp } from "./mcp-server";
+import { installNativeHost } from "./native-host-manifest";
+
+/**
+ * The holder's browser: the bridge Chrome's host connects to, the host's
+ * registration with Chrome, and the MCP server the runs' harnesses call.
+ * Unix only for now (named pipes on Windows come later); a holder without
+ * it runs harnesses without browser tools.
+ */
+
+/** `sun_path` bytes on macOS, its NUL included; Linux allows 108. */
+const SUN_PATH_BYTES = process.platform === "linux" ? 108 : 104;
+/** How long one browser command may take before it is reported unobserved. */
+const BROWSER_COMMAND_TIMEOUT_MS = 120_000;
+
+/**
+ * The bridge's socket: beside the holder's, named after it but shorter, so
+ * it fits wherever the holder's endpoint fits.
+ */
+export const browserEndpointFor = (holderEndpoint: string): string =>
+  path.join(
+    path.dirname(holderEndpoint),
+    `sb-${sha256Hex(holderEndpoint).slice(0, 8)}.sock`,
+  );
+
+export type HolderBrowserOptions = {
+  /** How to start this sidecar: its executable, and the script in development. */
+  command: readonly string[];
+  /** The member's home folder; `null` registers no host with Chrome. */
+  home: string | null;
+  /** Development extension ids allowed besides the store's. */
+  extraExtensionIds: readonly string[];
+};
+
+type HolderBrowserOutcome =
+  | {
+      type: "started";
+      browser: { mcp: LocalBrowserMcp; stop: () => Promise<void> };
+    }
+  /** Runs go without browser tools; `reason` is for the holder's log. */
+  | { type: "unavailable"; reason: string };
+
+export const startHolderBrowser = async ({
+  command,
+  dir,
+  endpoint,
+  extraExtensionIds,
+  home,
+  log,
+  version,
+}: HolderBrowserOptions & {
+  dir: string;
+  /** The holder's own endpoint. */
+  endpoint: string;
+  log: (line: string) => void;
+  version: string;
+}): Promise<HolderBrowserOutcome> => {
+  if (process.platform === "win32") {
+    return { reason: "not on Windows yet", type: "unavailable" };
+  }
+  const browserEndpoint = browserEndpointFor(endpoint);
+  if (Buffer.byteLength(browserEndpoint) > SUN_PATH_BYTES - 1) {
+    return { reason: "its socket path does not fit", type: "unavailable" };
+  }
+  const bridge = await startBrowserBridge({
+    dir,
+    endpoint: browserEndpoint,
+    log,
+    timeoutMs: BROWSER_COMMAND_TIMEOUT_MS,
+  });
+  if (Result.isError(bridge)) {
+    return { reason: bridge.error.message, type: "unavailable" };
+  }
+  if (home !== null) {
+    const installed = installNativeHost({
+      command,
+      dir,
+      endpoint: bridge.value.endpoint,
+      extensionIds: [BROWSER_EXTENSION_ID, ...extraExtensionIds],
+      home,
+      platform: process.platform,
+      secretFile: bridge.value.secretFile,
+    });
+    if (Result.isError(installed)) {
+      log(`the browser host was not registered: ${installed.error.message}`);
+    } else if (installed.value.type === "skipped") {
+      log(`the browser host was not registered: ${installed.value.reason}`);
+    } else {
+      log("the browser host is registered with Chrome");
+    }
+  }
+  const mcp = startLocalBrowserMcp({ bridge: bridge.value, version });
+  return {
+    browser: {
+      mcp,
+      stop: async () => {
+        await mcp.stop();
+        await bridge.value.stop();
+      },
+    },
+    type: "started",
+  };
+};
