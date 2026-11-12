@@ -31,7 +31,13 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import { initialBatchState } from "@stll/db-load-gate/health";
 
-import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
+import {
+  SETTING_ORGANIZATION_ID,
+  SETTING_USER_ID,
+  SETTING_WORKSPACE_ACCESS_MODE,
+  SETTING_WORKSPACE_IDS,
+  WORKSPACE_ACCESS_MODE,
+} from "@/api/db/rls";
 import {
   entities,
   legalGraphEdges,
@@ -41,7 +47,6 @@ import {
   legalListVerificationRuns,
   workspaces,
 } from "@/api/db/schema";
-import { setScopedTransactionSettings } from "@/api/db/scoped";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { GraphEdgeProducerKind } from "@/api/lib/lists/graph/contract";
 import {
@@ -50,10 +55,6 @@ import {
   runCitesSql,
 } from "@/api/lib/lists/graph/edge-writer";
 import type { ClaimReviewEventKind } from "@/api/lib/lists/verification/contract";
-import {
-  brandPersistedOrganizationId,
-  brandPersistedWorkspaceId,
-} from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { onlineMigrationParams } from "./online-migration-connection";
@@ -61,6 +62,7 @@ import type {
   MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
 } from "./online-migration-connection";
+import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 
 /** Rows one statement reads or writes, so each batch stays short. */
 export const GRAPH_EDGE_BACKFILL_BATCH_SIZE = 500;
@@ -187,9 +189,6 @@ const run = async (
   );
 };
 
-const toSql = (query: SQLWrapper | string): SQL =>
-  typeof query === "string" ? sql.raw(query) : query.getSQL();
-
 const textField = (row: unknown, field: string): string => {
   const value = isRecord(row) ? row[field] : undefined;
   return typeof value === "string"
@@ -239,16 +238,20 @@ const deriveBatch = async (
 ): Promise<string | null> => {
   await connection.execute("BEGIN");
   try {
-    await setScopedTransactionSettings({
-      tx: { execute: async (query) => await run(connection, toSql(query)) },
-      organizationId: brandPersistedOrganizationId(matter.organizationId),
-      userId: null,
-      workspaceScope: {
-        type: WORKSPACE_ACCESS_MODE.explicit,
-        workspaceIds: [brandPersistedWorkspaceId(matter.workspaceId)],
-      },
-      featureIds: [LEGAL_LISTS_FEATURE_ID],
-    });
+    // The application role pinned to one matter, as a service actor (no
+    // member) with the list feature on: the settings a scoped transaction
+    // installs. The migration entrypoint cannot load the request-path
+    // scoping module, so they are set here from the same names.
+    await run(
+      connection,
+      sql`SELECT
+        set_config('role', ${APPLICATION_RLS_ROLE_NAME}, true),
+        set_config(${SETTING_WORKSPACE_IDS}, ${`{${matter.workspaceId}}`}, true),
+        set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${WORKSPACE_ACCESS_MODE.explicit}, true),
+        set_config(${SETTING_ORGANIZATION_ID}, ${matter.organizationId}, true),
+        set_config(${SETTING_USER_ID}, '', true),
+        set_config('app.enabled_features', ${JSON.stringify([LEGAL_LISTS_FEATURE_ID])}, true)`,
+    );
     const ids = (
       await run(
         connection,
