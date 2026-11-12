@@ -100,7 +100,7 @@ fn plain_path(path: &Path) -> Option<String> {
   let text = path.to_str()?;
   Some(
     text
-      .strip_prefix(r"\\?\")
+      .strip_prefix("\\\\?\\")
       .filter(|rest| !rest.starts_with("UNC\\"))
       .unwrap_or(text)
       .to_owned(),
@@ -109,7 +109,7 @@ fn plain_path(path: &Path) -> Option<String> {
 
 /// A share by its UNC name, which a mapped drive also resolves to.
 fn is_network_path(folder: &Path) -> bool {
-  folder.to_str().is_some_and(|text| text.starts_with(r"\\"))
+  folder.to_str().is_some_and(|text| text.starts_with("\\\\"))
 }
 
 /// The highest folder on the way to `folder` on the same volume.
@@ -203,7 +203,9 @@ impl LinkedFolders {
     Self::new(
       DevicePreference::in_app_data(PREFERENCE_FILE),
       stella_folders(),
-      Box::new(|| crate::local_skill_folders::SkillFolders::for_this_computer().listed()),
+      Box::new(|| {
+        crate::local_skill_folders::SkillFolders::for_this_computer().listed()
+      }),
     )
   }
 
@@ -250,7 +252,8 @@ impl LinkedFolders {
   }
 
   fn is_protected(&self, folder: &Path) -> bool {
-    let overlaps = |other: &Path| folder.starts_with(other) || other.starts_with(folder);
+    let overlaps =
+      |other: &Path| folder.starts_with(other) || other.starts_with(folder);
     self.protected.iter().any(|root| overlaps(root.as_path()))
       || (self.skill_folders)()
         .iter()
@@ -370,12 +373,14 @@ impl LinkedFolders {
     let _held = LIST_CHANGE.lock().unwrap_or_else(PoisonError::into_inner);
     let mut links = self.stored();
     if let Some(existing) = links.iter().find(|listed| listed.path == link.path) {
-      return Uuid::parse_str(&existing.id).map_err(|_invalid| LinkedFolderListError::Storage);
+      return Uuid::parse_str(&existing.id)
+        .map_err(|_invalid| LinkedFolderListError::Storage);
     }
     if links.len() >= MAX_LINKS {
       return Err(LinkedFolderListError::TooMany);
     }
-    let id = Uuid::parse_str(&link.id).map_err(|_invalid| LinkedFolderListError::Storage)?;
+    let id =
+      Uuid::parse_str(&link.id).map_err(|_invalid| LinkedFolderListError::Storage)?;
     links.push(link);
     self.store(links)?;
     Ok(id)
@@ -404,8 +409,8 @@ mod tests {
 
   impl Place {
     fn new() -> Self {
-      let root = std::env::temp_dir()
-        .join(format!("stella-linked-folders-{}", Uuid::new_v4()));
+      let root =
+        std::env::temp_dir().join(format!("stella-linked-folders-{}", Uuid::new_v4()));
       crate::local_store::create_private_dir(&root).unwrap();
       Self { root }
     }
@@ -498,7 +503,10 @@ mod tests {
 
     assert!(folders.statuses().is_empty());
     assert_eq!(folders.resolve(id), Err(LinkedFolderRefusal::Unlinked));
-    assert_eq!(fs::read_to_string(folder.join("brief.docx")).unwrap(), "draft");
+    assert_eq!(
+      fs::read_to_string(folder.join("brief.docx")).unwrap(),
+      "draft"
+    );
   }
 
   #[test]
@@ -510,10 +518,7 @@ mod tests {
 
     fs::rename(&folder, place.root.join("matter, closed")).unwrap();
 
-    assert_eq!(
-      folders.resolve(id),
-      Err(LinkedFolderRefusal::Moved)
-    );
+    assert_eq!(folders.resolve(id), Err(LinkedFolderRefusal::Moved));
   }
 
   #[test]
@@ -563,7 +568,10 @@ mod tests {
 
     assert_eq!(folders.add(&runs), Err(LinkedFolderListError::Protected));
     assert_eq!(folders.add(&data), Err(LinkedFolderListError::Protected));
-    assert_eq!(folders.add(&place.root), Err(LinkedFolderListError::Protected));
+    assert_eq!(
+      folders.add(&place.root),
+      Err(LinkedFolderListError::Protected)
+    );
     assert!(folders.statuses().is_empty());
   }
 
@@ -584,10 +592,7 @@ mod tests {
       Box::new(move || vec![skill.clone()]),
     );
 
-    assert_eq!(
-      folders.resolve(id),
-      Err(LinkedFolderRefusal::Protected)
-    );
+    assert_eq!(folders.resolve(id), Err(LinkedFolderRefusal::Protected));
   }
 
   #[cfg(unix)]
@@ -602,10 +607,7 @@ mod tests {
     fs::remove_dir(&folder).unwrap();
     std::os::unix::fs::symlink(&elsewhere, &folder).unwrap();
 
-    assert_eq!(
-      folders.resolve(id),
-      Err(LinkedFolderRefusal::Moved)
-    );
+    assert_eq!(folders.resolve(id), Err(LinkedFolderRefusal::Moved));
   }
 
   #[test]

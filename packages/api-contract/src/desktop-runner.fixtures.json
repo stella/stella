@@ -310,6 +310,31 @@
       },
       {
         "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_unlinked"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_offline"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_moved"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_protected"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_unreadable"
+      },
+      {
+        "type": "run.rejected",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "reason": "harness_needs_login"
       },

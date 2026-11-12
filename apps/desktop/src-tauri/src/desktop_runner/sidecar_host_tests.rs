@@ -477,8 +477,7 @@ fn a_linked_folder_that_hangs_counts_as_offline_in_time() {
 }
 
 #[test]
-fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_beside_the_chat_folder()
-{
+fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_beside_the_chat_folder() {
   let place = Place::new();
   let id = run_id();
   run(async {

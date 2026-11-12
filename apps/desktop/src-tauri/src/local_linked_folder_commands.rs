@@ -127,7 +127,10 @@ mod tests {
   #[test]
   fn command_errors_serialize_as_flat_codes() {
     for (error, code) in [
-      (LocalLinkedFolderCommandError::FeatureDisabled, "feature_disabled"),
+      (
+        LocalLinkedFolderCommandError::FeatureDisabled,
+        "feature_disabled",
+      ),
       (LinkedFolderListError::TooMany.into(), "too_many"),
       (LinkedFolderListError::Protected.into(), "protected"),
     ] {
