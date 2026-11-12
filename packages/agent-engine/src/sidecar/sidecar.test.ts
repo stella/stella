@@ -612,7 +612,7 @@ describe("harness holder over its socket", () => {
           "image_input",
           "steer",
         ],
-        approvalModes: ["ask"],
+        approvalModes: ["ask", "auto", "full_auto"],
         models: [
           {
             id: "gpt-test",
@@ -1017,8 +1017,9 @@ describe("harness holder over its socket", () => {
       }),
       holder.received().find(({ method }) => method === "thread/start")?.params,
     );
+    // The run starts at Ask: Codex's untrusted policy.
     expect(threadStart).toMatchObject({
-      approvalPolicy: "on-request",
+      approvalPolicy: "untrusted",
       sandbox: "workspace-write",
     });
     expect(
