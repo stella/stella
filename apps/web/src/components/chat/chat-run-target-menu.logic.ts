@@ -135,6 +135,32 @@ export const chatLocalHarnessOptions = (
 };
 
 /**
+ * What the Run on menu offers for each harness on the computers a turn on
+ * `target` can run on. A turn in a linked folder runs only on the folder's
+ * computer, so only that computer's reports count for it, however ready
+ * another computer is; any connected computer counts otherwise.
+ */
+export const chatLocalHarnessOptionsFor = (
+  readiness: ChatLocalRunReadiness | undefined,
+  target: ChatRunTarget,
+): ChatLocalHarnessOption[] | null => {
+  if (
+    readiness?.status !== "enabled" ||
+    target.kind !== "local" ||
+    target.folder === undefined
+  ) {
+    return chatLocalHarnessOptions(readiness);
+  }
+  const { desktopId } = target.folder;
+  return chatLocalHarnessOptions({
+    ...readiness,
+    runners: readiness.runners.filter(
+      (runner) => runner.desktopId === desktopId,
+    ),
+  });
+};
+
+/**
  * A folder linked on one of the member's computers, as the Run on menu
  * offers it: `computer_offline` while its computer is not connected,
  * whatever it reported before.
@@ -184,7 +210,8 @@ export type LocalRunFolderProblem =
 
 /**
  * Whether the member's computers can take a turn on `target` now, read as
- * the Run on menu reads them (the harness option a send is routed by):
+ * the Run on menu reads them (the harness option a send is routed by, on
+ * the linked folder's computer when the target names one):
  * `ready`; why its harness cannot (offline, signed out); `model_unavailable`
  * when the ready harness no longer offers the model, which the API would
  * refuse; `not_allowed` when the member may not run turns on a computer.
@@ -222,7 +249,18 @@ export const localRunTargetState = (
   readiness: ChatLocalRunReadiness,
   target: ChatLocalRunTarget,
 ): LocalRunTargetState => {
-  const option = chatLocalHarnessOptions(readiness)?.find(
+  if (readiness.status !== "enabled") {
+    return { type: "not_allowed" };
+  }
+  // A turn in a linked folder runs only on the folder's computer: a folder
+  // that cannot take one (unlinked, away, its computer offline) says so
+  // first, and only that computer's harness and models count.
+  const folder =
+    target.folder === undefined ? null : folderState(readiness, target.folder);
+  if (folder?.type === "folder") {
+    return folder;
+  }
+  const option = chatLocalHarnessOptionsFor(readiness, target)?.find(
     ({ harness }) => harness === target.harness,
   );
   if (option === undefined) {
@@ -234,9 +272,7 @@ export const localRunTargetState = (
   if (!option.models.some(({ id }) => id === target.model)) {
     return { type: "model_unavailable" };
   }
-  return target.folder === undefined
-    ? { type: "ready" }
-    : folderState(readiness, target.folder);
+  return folder ?? { type: "ready" };
 };
 
 /**
@@ -494,7 +530,7 @@ export const effectiveRunTarget = (
   if (chosen.kind !== "local" || readiness?.status !== "enabled") {
     return chosen;
   }
-  const option = chatLocalHarnessOptions(readiness)?.find(
+  const option = chatLocalHarnessOptionsFor(readiness, chosen)?.find(
     ({ harness }) => harness === chosen.harness,
   );
   const approvals = approvalModeWithin({

@@ -13,6 +13,7 @@ import {
   CHAT_LOCAL_HARNESS_NAMES,
   type ChatLocalHarnessOption,
   chatLocalHarnessOptions,
+  chatLocalHarnessOptionsFor,
   effectiveRunTarget,
   localRunMaxApprovals,
   localRunModelLabel,
@@ -532,6 +533,81 @@ describe("a linked folder", () => {
         inFolder(elsewhere),
       ),
     ).toEqual({ type: "folder", problem: "unlinked" });
+  });
+
+  test("is read on the folder's computer, however ready another computer is", () => {
+    const signedOut = runner(
+      [{ id: "codex", state: "needs_login", version: "0.50.0" }],
+      true,
+      [
+        {
+          id: LINK_ID,
+          name: "Smith v Jones",
+          state: "available",
+          approval: "approved",
+        },
+      ],
+    );
+    const both: ChatLocalRunReadiness = {
+      status: "enabled",
+      // The other computer is ready and listed first.
+      runners: [runner([READY_CODEX]), signedOut],
+      maxApprovals: NO_LIMIT,
+    };
+    const target = inFolder(signedOut);
+
+    expect(localRunTargetState(both, target)).toEqual({
+      type: "harness",
+      option: { harness: "codex", state: "needs_login" },
+    });
+    expect(stateOf(chatLocalHarnessOptionsFor(both, target), "codex")).toBe(
+      "needs_login",
+    );
+    // The chat's own folder runs on whichever computer is ready.
+    expect(localRunTargetState(both, LOCAL)).toEqual({ type: "ready" });
+    expect(stateOf(chatLocalHarnessOptionsFor(both, LOCAL), "codex")).toBe(
+      "ready",
+    );
+  });
+
+  test("offers the efforts and permissions of the folder's computer", () => {
+    const efforts = (
+      reasoningEfforts: ("low" | "high")[],
+    ): ChatLocalHarnessReadiness => ({
+      id: "codex",
+      state: "ready",
+      version: "0.50.0",
+      capabilities: ["approvals"],
+      approvalModes: ["ask"],
+      models: [{ id: "gpt-5-codex", label: "GPT-5 Codex", reasoningEfforts }],
+    });
+    const folderComputer = runner([efforts(["low"])], true, [
+      {
+        id: LINK_ID,
+        name: "Smith v Jones",
+        state: "available",
+        approval: "approved",
+      },
+    ]);
+    const both: ChatLocalRunReadiness = {
+      status: "enabled",
+      runners: [runner([efforts(["low", "high"])]), folderComputer],
+      maxApprovals: NO_LIMIT,
+    };
+    const target = inFolder(folderComputer);
+
+    expect(
+      reasoningEffortChoices(
+        target,
+        chatLocalHarnessOptionsFor(both, target) ?? [],
+      ),
+    ).toEqual(["low"]);
+    expect(
+      reasoningEffortChoices(
+        LOCAL,
+        chatLocalHarnessOptionsFor(both, LOCAL) ?? [],
+      ),
+    ).toEqual(["low", "high"]);
   });
 
   test("stays with the chat when another model is picked, and differs from the chat's own folder", () => {

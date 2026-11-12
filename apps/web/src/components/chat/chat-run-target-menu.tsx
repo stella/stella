@@ -28,7 +28,7 @@ import {
   type ChatLocalFolderOption,
   chatLocalFolderOptions,
   type ChatLocalHarnessOption,
-  chatLocalHarnessOptions,
+  chatLocalHarnessOptionsFor,
   defaultHarnessModel,
   LOCAL_RUN_PERMISSION_KEYS,
   type LocalRunFolderProblem,
@@ -257,7 +257,9 @@ export const ChatRunTargetMenu = ({
     runnersView.type === "items" ? runnersView.items : undefined;
   // Until the member's computers are read, no agent is listed; a member who
   // may not run turns on a computer sees only the way back to the cloud.
-  const listed = chatLocalHarnessOptions(readiness);
+  // With a linked folder chosen, the agents listed are the folder's
+  // computer's, which its turns run on.
+  const listed = chatLocalHarnessOptionsFor(readiness, selected);
   const options = listed ?? NO_HARNESS_OPTIONS;
   const choose = (target: ChatRunTarget) => {
     if (!sameRunTarget(target, selected)) {
@@ -428,7 +430,10 @@ export const LocalModelOptions = ({
       </p>
     );
   }
-  const option = chatLocalHarnessOptions(readiness)?.find(
+  // A turn in a linked folder runs on the folder's computer: its models are
+  // that computer's.
+  const options = chatLocalHarnessOptionsFor(readiness, selected);
+  const option = options?.find(
     (candidate) => candidate.harness === selected.harness,
   );
   if (option?.state !== "ready") {
@@ -460,7 +465,7 @@ export const LocalModelOptions = ({
   };
   const efforts = reasoningEffortChoices(
     selected,
-    chatLocalHarnessOptions(readiness) ?? NO_HARNESS_OPTIONS,
+    options ?? NO_HARNESS_OPTIONS,
   );
   const chooseEffort = (target: ChatLocalRunTarget) => {
     if (!sameRunTarget(target, selected)) {
