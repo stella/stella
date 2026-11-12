@@ -1274,6 +1274,7 @@
       "count": "{count, plural, one {# keel} other {# keelt}}",
       "matchedIn": "Vaste keeles: {language}"
     },
+    "linkedPassageGone": "Lingitud lõiku selles tekstis enam ei ole.",
     "loadingMore": "Laadib rohkem...",
     "marginFilter": {
       "label": "Viidatud sätete filter",
@@ -1853,6 +1854,9 @@
       "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
       "errorLimitResetsAt": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Uuesti saad proovida alates {time}.",
       "errorNeedsLogin": "Sinu arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logi sisse stella desktopi kaudu ja proovi uuesti.",
+      "errorNotReached": "Sinu arvuti ei võtnud seda vastust vastu. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
+      "errorRelinked": "stella desktop seoti sinu arvutis uuesti, seega see vastus peatus. Saada see uuesti.",
+      "errorRestoring": "Sinu arvuti võtab veel failimuudatusi tagasi. Saada see hetke pärast uuesti.",
       "errorUnavailable": "Sinu arvuti lõpetas selle vastuse töötlemise. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
       "filesNotShared": "Failid, mida ei õnnestunud jagada, jäävad sinu arvutisse: {fileNames}",
       "onThisComputer": "{harness} selles arvutis",
@@ -1874,13 +1878,17 @@
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
       "runOn": "Käivita",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limiit täis kuni {time}",
+      "stateModelUnavailable": "Mudel pole enam saadaval",
       "stateNeedsLogin": "Vaja sisse logida",
       "stateNotInstalled": "Pole installitud",
       "stateOffline": "Arvuti pole võrgus",
       "stateUnavailable": "Praegu pole saadaval",
       "stateUnsupported": "Seda versiooni ei toetata",
-      "waitingForComputer": "Ootame, kuni sinu arvuti uuesti ühendub…"
+      "waitingForComputer": "Ootame, kuni sinu arvuti uuesti ühendub…",
+      "waitingForPickup": "Ootame, kuni sinu arvuti selle vastuse vastu võtab…",
+      "waitingSentAt": "Saadetud kell {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Valige kõik sobivad",
@@ -4214,6 +4222,7 @@
       "documentChanged": "See dokument on pärast seda ülevaatust muutunud.",
       "documentCutNotice": "<strong>Dokumenti {documentName} ei loetud täielikult.</strong> See on selle mudeli jaoks liiga pikk, seega jäeti välja umbes {percent} selle tekstist. Vastuseta seisukoht märgitakse ülevaatamiseks, sest vastus võib olla väljajäetud osas.",
       "documentTooLarge": "See dokument on liiga pikk, et see mudel saaks sellest piisavalt lugeda. Proovige suurema kontekstiaknaga mudelit.",
+      "documentsTooLarge": "Need dokumendid on liiga pikad, et see mudel saaks neid korraga lugeda. Kasutage vähem või lühemaid dokumente või proovige suurema kontekstiaknaga mudelit.",
       "export": {
         "counterparty": "Laadi vastaspoole jaoks alla",
         "counterpartyFailed": "Dokumendi eksportimine ebaõnnestus",
@@ -4392,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {Leiti # oskus} other {Leiti # oskust}}",
       "discoveryEmpty": "Sellest hoidlast või kaustast ei leitud ühtegi oskust.",
       "discoverySkippedInvalid": "{count, plural, one {# vigane oskus jäeti vahele} other {# vigast oskust jäeti vahele}}",
+      "dropPack": "Lohistage siia .zip või SKILL.md, et oskus importida",
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
       "fileExists": "Selle teega fail on juba olemas",
@@ -4449,6 +4459,7 @@
         }
       },
       "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
+      "uploadPack": "Laadi üles .zip või SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"
     },

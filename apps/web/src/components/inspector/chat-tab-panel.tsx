@@ -266,6 +266,7 @@ export const ChatTabPanel = ({
     threadRef,
     stored: data,
     queryKey: threadQueryOptions.queryKey,
+    startsOnLastChoice: true,
   });
   const { getRunTarget } = composerModels;
   const chat = useChatThreadRuntime({
@@ -293,7 +294,7 @@ export const ChatTabPanel = ({
     leave,
     isGenerating,
     turnAbandoned,
-    waitingForComputer,
+    computerWait,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -765,7 +766,7 @@ export const ChatTabPanel = ({
                   queuedMessages={queuedMessages}
                   streamdownComponents={streamdownComponents}
                   userMessageEdit={userMessageEdit}
-                  waitingForComputer={waitingForComputer}
+                  computerWait={computerWait}
                   workspaceId={tabWorkspaceId}
                 />
               )}

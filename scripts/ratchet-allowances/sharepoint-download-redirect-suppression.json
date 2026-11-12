@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The SharePoint file download follows Microsoft Graph's /content redirect to a pre-authenticated URL. require-safe-outbound-target prescribes a narrow call-site suppression for an intentionally trusted runtime target: the URL comes from Graph's authenticated response and is checked to be HTTPS on a Microsoft file host (*.sharepoint.com, *.1drv.com) before the request, which carries no credentials and refuses redirects."
+}

@@ -23,7 +23,11 @@
       ]
     },
     "apps/desktop": {
-      "typescript": { "config": ["tsconfig*.json"] }
+      "typescript": { "config": ["tsconfig*.json"] },
+      // build:sidecar builds the agent engine through `bun run --cwd`, which
+      // knip does not follow; the dependency is what brings the sidecar's own
+      // dependencies into installs filtered to the desktop's workspace graph.
+      "ignoreDependencies": ["@stll/agent-engine"]
     },
     "apps/mobile": {
       "typescript": { "config": ["tsconfig*.json"] },

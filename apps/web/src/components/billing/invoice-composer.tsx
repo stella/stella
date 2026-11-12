@@ -46,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
@@ -910,8 +911,10 @@ const TimeEntriesTable = ({
                 </RowText>
               </TableCell>
               <TableCell className="min-w-0">
-                <RowText className="line-clamp-2" excluded={excluded}>
-                  {entry.invoiceNarrative ?? entry.narrative}
+                <RowText excluded={excluded}>
+                  <TruncatedText lines={2}>
+                    {entry.invoiceNarrative ?? entry.narrative}
+                  </TruncatedText>
                 </RowText>
                 {entry.timekeeperName !== null && (
                   <span className="text-muted-foreground block text-xs">
@@ -1010,8 +1013,10 @@ const ExpensesTable = ({
                 </RowText>
               </TableCell>
               <TableCell className="min-w-0">
-                <RowText className="line-clamp-2" excluded={!included}>
-                  {expense.invoiceDescription ?? expense.description}
+                <RowText excluded={!included}>
+                  <TruncatedText lines={2}>
+                    {expense.invoiceDescription ?? expense.description}
+                  </TruncatedText>
                 </RowText>
               </TableCell>
               <TableCell className="text-end whitespace-nowrap">

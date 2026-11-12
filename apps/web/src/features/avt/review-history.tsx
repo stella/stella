@@ -30,6 +30,7 @@ import {
   SheetPopup,
   SheetTitle,
 } from "@stll/ui/sheet";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -383,12 +384,12 @@ const HistoryEntryRow = ({
           onClick={() => onShowClaim(entry.claimId)}
           variant="plain"
         >
-          <span
-            className="text-muted-foreground line-clamp-1 text-start font-serif text-xs hover:underline"
+          <TruncatedText
+            className="text-muted-foreground text-start font-serif text-xs hover:underline"
             dir="auto"
           >
             {claimText}
-          </span>
+          </TruncatedText>
         </Button>
       )}
       {changes.length > 0 && (

@@ -753,10 +753,6 @@
       "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
-      "id": "GET /v1/sharepoint/drive/root",
-      "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
-    },
-    {
       "id": "GET /v1/sharepoint/oauth/callback",
       "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
@@ -2420,6 +2416,10 @@
     },
     {
       "id": "POST /v1/sharepoint/connect",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/sharepoint/imports/:workspaceId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {

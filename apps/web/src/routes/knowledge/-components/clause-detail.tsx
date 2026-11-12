@@ -65,6 +65,7 @@ import {
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { InlineEdit } from "@/components/inline-edit";
@@ -601,9 +602,9 @@ const ClauseTitleText = ({
   title: string;
 }) => {
   const text = (
-    <span className="block min-w-0 overflow-hidden text-lg font-semibold text-ellipsis whitespace-pre">
+    <TruncatedText className="text-lg font-semibold whitespace-pre">
       {title}
-    </span>
+    </TruncatedText>
   );
   if (!canEdit) {
     return (

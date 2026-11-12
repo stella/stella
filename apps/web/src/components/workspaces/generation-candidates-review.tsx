@@ -30,6 +30,7 @@ import {
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import type { ReviewDecisionState } from "@stll/ui/review-decision-actions";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   acceptAllTargets,
@@ -425,12 +426,12 @@ const CandidateBody = ({
         size="inline"
         variant="link"
       >
-        <span className="truncate">
+        <TruncatedText>
           <SourceLocatorLabel
             documentName={documentName(source.sourceEntityId)}
             locator={source.locator}
           />
-        </span>
+        </TruncatedText>
       </Button>,
     );
   }
@@ -438,19 +439,26 @@ const CandidateBody = ({
     <ListItemContent>
       <ListItemTitle variant="statement">{candidate.name}</ListItemTitle>
       {candidate.description && (
-        <p className="text-muted-foreground line-clamp-2 text-xs" dir="auto">
+        <TruncatedText
+          className="text-muted-foreground text-xs"
+          dir="auto"
+          lines={2}
+          render={<p />}
+        >
           {candidate.description}
-        </p>
+        </TruncatedText>
       )}
       {source !== undefined && source.quote !== null && (
-        <p
-          className="text-foreground mt-1 line-clamp-3 text-sm leading-relaxed text-pretty"
+        <TruncatedText
+          className="text-foreground mt-1 text-sm leading-relaxed text-pretty"
           dir="auto"
+          lines={3}
+          render={<p />}
         >
           <q>
             <BidiText as="span">{source.quote}</BidiText>
           </q>
-        </p>
+        </TruncatedText>
       )}
       {meta?.status}
       {parts.length > 0 && (

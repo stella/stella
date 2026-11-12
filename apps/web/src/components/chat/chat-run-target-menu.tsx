@@ -20,6 +20,7 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   CHAT_LOCAL_HARNESS_NAMES,
@@ -28,6 +29,7 @@ import {
   LOCAL_RUN_PERMISSION_KEYS,
   localRunMaxApprovals,
   localRunTargetFor,
+  type LocalRunTargetState,
   type PermissionAvailability,
   permissionView,
   runTargetValue,
@@ -67,6 +69,61 @@ const FIXED_PERMISSION_KEY = {
   "claude-code": "chat.localRun.permissionAskDescription",
 } as const satisfies Record<ChatLocalRunHarness, TranslationKey>;
 
+/**
+ * Why a harness cannot take a turn now, as the Run on menu and the composer
+ * bar both say it; `null` while it can.
+ */
+const useHarnessStateLabel = () => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (option: ChatLocalHarnessOption): string | null => {
+    switch (option.state) {
+      case "ready":
+        return null;
+      case "limit_until":
+        return t("chat.localRun.stateLimitUntil", {
+          time: format.dateTime(
+            new Date(option.resetsAt),
+            MEDIUM_DATE_SHORT_TIME_FORMAT,
+          ),
+        });
+      case "needs_login":
+      case "not_installed":
+      case "unsupported":
+      case "unavailable":
+      case "offline":
+        return t(UNAVAILABLE_LABEL_KEY[option.state]);
+      default:
+        option satisfies never;
+        return panic("Unknown harness state");
+    }
+  };
+};
+
+/**
+ * Why the member's computers cannot take a turn on the chosen target now,
+ * as the composer bar says it; `null` while they can.
+ */
+export const useLocalRunTargetStateLabel = () => {
+  const t = useTranslations();
+  const harnessLabel = useHarnessStateLabel();
+  return (state: LocalRunTargetState): string | null => {
+    switch (state.type) {
+      case "ready":
+        return null;
+      case "harness":
+        return harnessLabel(state.option);
+      case "model_unavailable":
+        return t("chat.localRun.stateModelUnavailable");
+      case "not_allowed":
+        return t("chat.localRun.stateUnavailable");
+      default:
+        state satisfies never;
+        return panic("Unknown local run target state");
+    }
+  };
+};
+
 type ChatRunTargetMenuProps = {
   activeOrganizationId: string;
   /** Reads the member's computers only while the menu is open. */
@@ -88,7 +145,7 @@ export const ChatRunTargetMenu = ({
   onSelect,
 }: ChatRunTargetMenuProps) => {
   const t = useTranslations();
-  const format = useFormatter();
+  const stateLabel = useHarnessStateLabel();
   const runnersView = queryView(
     useQuery({
       ...localRunnersOptions(activeOrganizationId),
@@ -116,29 +173,6 @@ export const ChatRunTargetMenu = ({
   const maxApprovals = localRunMaxApprovals(readiness);
   const permissions = permissionView(selected, options, maxApprovals);
 
-  const stateLabel = (option: ChatLocalHarnessOption) => {
-    switch (option.state) {
-      case "ready":
-        return null;
-      case "limit_until":
-        return t("chat.localRun.stateLimitUntil", {
-          time: format.dateTime(
-            new Date(option.resetsAt),
-            MEDIUM_DATE_SHORT_TIME_FORMAT,
-          ),
-        });
-      case "needs_login":
-      case "not_installed":
-      case "unsupported":
-      case "unavailable":
-      case "offline":
-        return t(UNAVAILABLE_LABEL_KEY[option.state]);
-      default:
-        option satisfies never;
-        return panic("Unknown harness state");
-    }
-  };
-
   return (
     <>
       <MenuRadioGroup value={value}>
@@ -158,9 +192,9 @@ export const ChatRunTargetMenu = ({
             return (
               <MenuItem disabled key={option.harness}>
                 <span className="flex min-w-0 flex-col py-0.5">
-                  <BidiText as="span" className="truncate">
+                  <TruncatedText render={<BidiText as="span" />}>
                     {name}
-                  </BidiText>
+                  </TruncatedText>
                   <span className="text-muted-foreground text-2xs">
                     {stateLabel(option)}
                   </span>
@@ -173,9 +207,9 @@ export const ChatRunTargetMenu = ({
           return (
             <MenuSub key={option.harness}>
               <MenuSubTrigger data-checked={harnessSelected || undefined}>
-                <BidiText as="span" className="truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {name}
-                </BidiText>
+                </TruncatedText>
               </MenuSubTrigger>
               <MenuSubPopup className="w-64">
                 <MenuRadioGroup value={value}>
@@ -192,9 +226,9 @@ export const ChatRunTargetMenu = ({
                         onClick={() => choose(target)}
                         value={runTargetValue(target)}
                       >
-                        <BidiText as="span" className="truncate">
+                        <TruncatedText render={<BidiText as="span" />}>
                           {model.label}
-                        </BidiText>
+                        </TruncatedText>
                       </MenuRadioItem>
                     );
                   })}

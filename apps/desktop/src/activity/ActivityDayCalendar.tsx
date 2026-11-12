@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   activityBlocks,
@@ -150,15 +151,20 @@ const ActivityBlockDetails = ({
             />
             <div className="flex min-w-0 flex-1 flex-col">
               <div className="flex items-baseline justify-between gap-3">
-                <bdi className="truncate font-medium">{row.name}</bdi>
+                <TruncatedText className="font-medium" render={<bdi />}>
+                  {row.name}
+                </TruncatedText>
                 <span className="text-muted-foreground shrink-0 tabular-nums">
                   {durationLabel(row.durationMs)}
                 </span>
               </div>
               {row.title === null ? null : (
-                <bdi className="text-muted-foreground truncate">
+                <TruncatedText
+                  className="text-muted-foreground"
+                  render={<bdi />}
+                >
                   {row.title}
-                </bdi>
+                </TruncatedText>
               )}
             </div>
           </li>
@@ -485,13 +491,17 @@ export const ActivityDayCalendar = ({
       maximumFractionDigits: 1,
     });
   const summaryLabel = useSummaryLabel();
+  // Matters group the day, so its blocks wait for them: drawn before they
+  // arrive, every block a matter claims would be drawn again as another one,
+  // under a pointer or focus already on it. The grid shows meanwhile.
+  const matched = candidates.type !== "loading";
   const columns = useCalendarColumns({
-    segments: day.segments,
+    segments: matched ? day.segments : [],
     granularity: preferences.granularity,
     sourceAppVisuals: snapshot.sourceAppVisuals,
     rangeSelection: editable,
-    draftedEntries,
-    suggestions,
+    draftedEntries: matched ? draftedEntries : [],
+    suggestions: matched ? suggestions : [],
     narrativeFor: (suggestion) => narratives.editFor(suggestion).narrative,
     onActivate: (suggestion) =>
       open({ id: suggestion.id, type: "suggestion" }, suggestion),
@@ -814,7 +824,9 @@ function useCalendarColumns({
         title: (
           <span className="flex min-w-0 items-center gap-1.5">
             {appIcon}
-            <bdi className="truncate">{label}</bdi>
+            <TruncatedText hint={false} render={<bdi />}>
+              {label}
+            </TruncatedText>
           </span>
         ),
         tone: activityTone(block),
