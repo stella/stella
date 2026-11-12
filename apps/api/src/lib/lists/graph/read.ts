@@ -9,8 +9,8 @@
  * features the caller cannot see, and an edge whose far end, claim or Spot is
  * hidden is left out by the join, never filtered afterwards.
  *
- * Bounded by construction, one statement per read: a lookup reads at most
- * `limit` + 1 nodes, a neighbourhood page at most `limit` + 1 edges beside
+ * Bounded by construction: a lookup reads at most `limit` + 1 entities and
+ * `limit` + 1 claims, a neighbourhood page at most `limit` + 1 edges beside
  * one grouped count, and a walk at most `GRAPH_READ_LIMITS.WALK_EDGES_MAX` + 1
  * edges within `GRAPH_READ_LIMITS.WALK_DEPTH_MAX` hops.
  */
@@ -18,9 +18,10 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { alias, unionAll } from "drizzle-orm/pg-core";
+import { alias } from "drizzle-orm/pg-core";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+import { compareCodeUnit } from "@stll/collation";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -775,7 +776,8 @@ const kindAtRank = (rank: number): GraphLookupNodeKind =>
 /**
  * Nodes of the given kinds whose name (a fact, a document) or words (a
  * claim) contain `text`, case-insensitively, in kind order (facts, claims,
- * documents) and then id order, after `after`: one statement.
+ * documents) and then id order, after `after`: one read of entities and one
+ * of claims, each a page long.
  */
 export const lookupGraphNodes = async ({
   tx,
@@ -862,11 +864,16 @@ export const lookupGraphNodes = async ({
         afterNode(claimRank, sql`${legalListClaims.id}`),
       ),
     );
-  const page = await readCursorPage(
-    unionAll(entityNodes, claimNodes).orderBy(sql`rank`, sql`id`),
-    { limit, cursorForItem: (row) => `${String(row.rank)}:${row.id}` },
+  // Each kind's first `limit` + 1 after the cursor holds the merged
+  // page's: the page is the first `limit` of both, by kind and id.
+  const rows = [
+    ...(await entityNodes.orderBy(sql`rank`, sql`id`).limit(limit + 1)),
+    ...(await claimNodes.orderBy(sql`rank`, sql`id`).limit(limit + 1)),
+  ].toSorted(
+    (left, right) =>
+      left.rank - right.rank || compareCodeUnit(left.id, right.id),
   );
-  const nodes = page.items.map((row): GraphLookupHit => ({
+  const nodes = rows.slice(0, limit).map((row): GraphLookupHit => ({
     kind: kindAtRank(row.rank),
     id: row.id,
     label: truncate(row.label),
@@ -877,7 +884,7 @@ export const lookupGraphNodes = async ({
   return {
     nodes,
     after:
-      page.nextCursor !== null && last !== undefined
+      rows.length > limit && last !== undefined
         ? { kind: last.kind, id: last.id }
         : null,
   };
