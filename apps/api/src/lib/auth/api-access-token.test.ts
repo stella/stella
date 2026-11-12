@@ -298,6 +298,31 @@ describe("which routes an API access token opens", () => {
     }
   });
 
+  test("the caller's role and the matter-number convention open at the read scope, the organization's settings never", () => {
+    for (const route of ["/v1/me/role", "/v1/workspaces/matter-numbering"]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "GET",
+          route,
+          scopes: ["stella:read"],
+        }),
+      ).toEqual({ admitted: true });
+    }
+    for (const [method, route] of [
+      ["GET", "/v1/organization-settings"],
+      ["POST", "/v1/organization-settings"],
+      ["POST", "/v1/organization-settings/preview"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({
+          method,
+          route,
+          scopes: ["stella:read", "stella:admin_read", "stella:admin_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
   test("an upload opens at its domain scope, its folder steps never", () => {
     for (const route of [
       "/v1/uploads/:workspaceId/presign",

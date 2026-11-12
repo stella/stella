@@ -487,6 +487,9 @@
       "judge": "Juiz",
       "mediator": "Mediador",
       "other": "Outro"
-    }
+    },
+    "numberConvention": "Formato preferido: {example}",
+    "numberDeparts": "Não corresponde ao formato preferido.",
+    "numberHintEmpty": "Informe um número de caso para começar a numerar seus documentos."
   }
 }

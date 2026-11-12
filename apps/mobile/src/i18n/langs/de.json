@@ -487,6 +487,9 @@
       "judge": "Richter",
       "mediator": "Mediator",
       "other": "Sonstige"
-    }
+    },
+    "numberConvention": "Bevorzugtes Format: {example}",
+    "numberDeparts": "Entspricht nicht dem bevorzugten Format.",
+    "numberHintEmpty": "Vergeben Sie ein Aktenzeichen, damit die Dokumente dieser Akte nummeriert werden."
   }
 }

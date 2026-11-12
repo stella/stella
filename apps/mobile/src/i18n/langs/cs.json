@@ -487,6 +487,9 @@
       "judge": "Soudce",
       "mediator": "Mediátor",
       "other": "Jiné"
-    }
+    },
+    "numberConvention": "Preferovaný formát: {example}",
+    "numberDeparts": "Neodpovídá preferovanému formátu.",
+    "numberHintEmpty": "Zadejte spisovou značku a dokumenty spisu se začnou číslovat."
   }
 }

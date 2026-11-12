@@ -3,7 +3,7 @@ import { startTransition, Suspense, use, useState } from "react";
 import { panic, Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Alert, ScrollView, View } from "react-native";
-import { useTranslations } from "use-intl";
+import { useNow, useTimeZone, useTranslations } from "use-intl";
 
 import { resolveReferenceEdit } from "@stll/api-contract/matter-reference-edit";
 import { Button } from "@stll/ui/button";
@@ -15,6 +15,7 @@ import { screenStyles } from "@/components/empty-state-screen";
 import { LoadFailedCard } from "@/components/load-failure";
 import { MatterParties } from "@/components/matter-parties";
 import { MatterTeam, SectionTitle } from "@/components/matter-team";
+import { useCan } from "@/components/role";
 import { useMatterWrite } from "@/components/use-matter-write";
 import { WriteFailureNotice } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
@@ -25,12 +26,14 @@ import {
   archiveMatter,
   deleteMatter,
   duplicateMatter,
+  matterNumberHint,
   readMatter,
+  readMatterNumbering,
   unarchiveMatter,
   updateMatter,
 } from "@/state/matter-detail";
-import type { MatterDetail } from "@/state/matter-detail";
-import { useAppColors } from "@/theme";
+import type { MatterDetail, MatterNumbering } from "@/state/matter-detail";
+import { useAppColors, useUiColors } from "@/theme";
 
 type DetailLoad = Promise<Result<MatterDetail, ApiError>>;
 
@@ -101,6 +104,7 @@ const LoadedMatterInfo = ({
 }) => {
   const t = useTranslations("matterInfo");
   const { end } = useSession();
+  const canUpdate = useCan({ workspace: ["update"] });
   const loaded = use(detail);
   if (Result.isError(loaded)) {
     if (loaded.error._tag === "SignedOutError") {
@@ -118,6 +122,8 @@ const LoadedMatterInfo = ({
   }
   const matter = loaded.value;
   const archived = matter.status === "archived";
+  // What the person's role may not change shows read-only, as on the web.
+  const locked = archived || !canUpdate;
   return (
     <>
       {archived ? (
@@ -126,7 +132,7 @@ const LoadedMatterInfo = ({
         </View>
       ) : null}
       <MatterFields
-        archived={archived}
+        locked={locked}
         // A fresh load starts the fields from what it read.
         key={JSON.stringify([matter.name, matter.reference])}
         matter={matter}
@@ -134,14 +140,14 @@ const LoadedMatterInfo = ({
         source={source}
       />
       <MatterClient
-        archived={archived}
+        locked={locked}
         matter={matter}
         reload={reload}
         source={source}
       />
       {/* Keyed by status, so archiving or restoring loads them afresh. */}
       <MatterTeam
-        disabled={archived}
+        disabled={locked}
         key={`team-${matter.status}`}
         leadUserId={matter.leadUserId ?? null}
         matterId={matterId}
@@ -149,7 +155,7 @@ const LoadedMatterInfo = ({
         source={source}
       />
       <MatterParties
-        disabled={archived}
+        disabled={locked}
         key={`parties-${matter.status}`}
         matterId={matterId}
         source={source}
@@ -161,12 +167,12 @@ const LoadedMatterInfo = ({
 
 /** The matter's name and number, each saved when its field is left. */
 const MatterFields = ({
-  archived,
+  locked,
   matter,
   reload,
   source,
 }: {
-  archived: boolean;
+  locked: boolean;
   matter: MatterDetail;
   reload: () => void;
   source: AccessTokenSource;
@@ -175,7 +181,7 @@ const MatterFields = ({
   const { failure, saving, write } = useMatterWrite(source);
   const [name, setName] = useState(matter.name);
   const [reference, setReference] = useState(matter.reference);
-  const disabled = archived || saving;
+  const disabled = locked || saving;
 
   const saveName = () => {
     const next = name.trim();
@@ -274,9 +280,12 @@ const MatterFields = ({
         returnKeyType="done"
         value={reference}
       />
+      <NumberConvention source={source} typed={reference} />
       <View className="px-1">
         <Text variant="caption">
-          {t("numberHint", { example: `${reference.trim()}/001` })}
+          {reference.trim() === ""
+            ? t("numberHintEmpty")
+            : t("numberHint", { example: `${reference.trim()}/001` })}
         </Text>
       </View>
       <WriteFailureNotice failure={failure} message={t("saveFailed")} />
@@ -290,12 +299,12 @@ const MatterFields = ({
  * client is replaced only if no one changed it meanwhile.
  */
 const MatterClient = ({
-  archived,
+  locked,
   matter,
   reload,
   source,
 }: {
-  archived: boolean;
+  locked: boolean;
   matter: MatterDetail;
   reload: () => void;
   source: AccessTokenSource;
@@ -361,7 +370,7 @@ const MatterClient = ({
         <Text className="flex-1" numberOfLines={2} variant="rowTitle">
           {current?.displayName ?? t("personal")}
         </Text>
-        {archived ? null : (
+        {locked ? null : (
           <Button
             disabled={saving || addingContact}
             onPress={() => {
@@ -395,9 +404,63 @@ const MatterClient = ({
 };
 
 /**
+ * The organization's matter-number convention under the number field, as
+ * the web's hint shows it: an example of the preferred format, and a warning
+ * once the typed number departs from it. Nothing while it loads or if it
+ * cannot be read: the number saves either way.
+ */
+const NumberConvention = ({
+  source,
+  typed,
+}: {
+  source: AccessTokenSource;
+  typed: string;
+}) => {
+  const [numbering] = useState(
+    async () => await readMatterNumbering({ fetch, source }),
+  );
+  return (
+    <Suspense fallback={null}>
+      <NumberConventionHint numbering={numbering} typed={typed} />
+    </Suspense>
+  );
+};
+
+const NumberConventionHint = ({
+  numbering,
+  typed,
+}: {
+  numbering: Promise<Result<MatterNumbering, ApiError>>;
+  typed: string;
+}) => {
+  const t = useTranslations("matterInfo");
+  const ui = useUiColors();
+  const now = useNow();
+  const timeZone = useTimeZone() ?? "UTC";
+  const read = use(numbering);
+  if (Result.isError(read)) {
+    return null;
+  }
+  const hint = matterNumberHint(typed, read.value, { now, timeZone });
+  return (
+    <View className="gap-0.5 px-1">
+      <Text variant="caption">
+        {t("numberConvention", { example: hint.example })}
+      </Text>
+      {hint.departs ? (
+        <Text style={{ color: ui.warningForeground }} variant="caption">
+          {t("numberDeparts")}
+        </Text>
+      ) : null}
+    </View>
+  );
+};
+
+/**
  * What can be done with the whole matter, as the web's matter info offers
- * it: a copy with or without its content, archiving or restoring it, and
- * deleting it once its name is typed to confirm.
+ * it to a role allowed to: a copy with or without its content, archiving or
+ * restoring it, and deleting it once its name is typed to confirm. A role
+ * allowed none of them sees none.
  */
 const MatterActions = ({
   matter,
@@ -413,6 +476,9 @@ const MatterActions = ({
   const { failure, saving, write } = useMatterWrite(source);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [typed, setTyped] = useState("");
+  const canDuplicate = useCan({ workspace: ["create"] });
+  const canArchive = useCan({ workspace: ["update"] });
+  const canDelete = useCan({ workspace: ["delete"] });
   const archived = matter.status === "archived";
   const request = { fetch, matterId: matter.id, source };
 
@@ -495,10 +561,14 @@ const MatterActions = ({
     );
   };
 
+  if (!canDuplicate && !canArchive && !canDelete) {
+    return null;
+  }
+
   return (
     <View className="gap-2">
       <SectionTitle title={t("actions")} />
-      {archived ? null : (
+      {archived || !canDuplicate ? null : (
         <>
           <Button
             disabled={saving}
@@ -520,64 +590,97 @@ const MatterActions = ({
           </Button>
         </>
       )}
-      <Button
-        disabled={saving}
-        onPress={archived ? unarchive : archive}
-        variant="outline"
-      >
-        {archived ? t("unarchive") : t("archive")}
-      </Button>
-      {confirmingDelete ? (
-        <View className="gap-2">
-          <View className="px-1">
-            <Text variant="caption">{t("deleteMessage")}</Text>
-          </View>
-          <Input
-            accessibilityLabel={t("typeName")}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus
-            disabled={saving}
-            onChangeText={setTyped}
-            placeholder={matter.name}
-            value={typed}
-          />
-          <View className="flex-row gap-2">
-            <Button
-              className="flex-1"
-              disabled={saving}
-              onPress={() => {
-                setConfirmingDelete(false);
-                setTyped("");
-              }}
-              variant="outline"
-            >
-              {t("cancel")}
-            </Button>
-            <Button
-              className="flex-1"
-              disabled={saving || typed.trim() !== matter.name}
-              loading={saving}
-              onPress={remove}
-              variant="destructive"
-            >
-              {t("delete")}
-            </Button>
-          </View>
-        </View>
-      ) : (
+      {canArchive ? (
         <Button
           disabled={saving}
-          onPress={() => {
+          onPress={archived ? unarchive : archive}
+          variant="outline"
+        >
+          {archived ? t("unarchive") : t("archive")}
+        </Button>
+      ) : null}
+      {canDelete ? (
+        <MatterDelete
+          confirming={confirmingDelete}
+          matterName={matter.name}
+          onCancel={() => {
+            setConfirmingDelete(false);
+            setTyped("");
+          }}
+          onConfirm={remove}
+          onStart={() => {
             setConfirmingDelete(true);
           }}
-          variant="destructive-outline"
+          onType={setTyped}
+          saving={saving}
+          typed={typed}
+        />
+      ) : null}
+      <WriteFailureNotice failure={failure} message={t("saveFailed")} />
+    </View>
+  );
+};
+
+/** Deleting the matter: a button, then its name typed to confirm. */
+const MatterDelete = ({
+  confirming,
+  matterName,
+  onCancel,
+  onConfirm,
+  onStart,
+  onType,
+  saving,
+  typed,
+}: {
+  confirming: boolean;
+  matterName: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  onStart: () => void;
+  onType: (typed: string) => void;
+  saving: boolean;
+  typed: string;
+}) => {
+  const t = useTranslations("matterInfo");
+  return confirming ? (
+    <View className="gap-2">
+      <View className="px-1">
+        <Text variant="caption">{t("deleteMessage")}</Text>
+      </View>
+      <Input
+        accessibilityLabel={t("typeName")}
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoFocus
+        disabled={saving}
+        onChangeText={onType}
+        placeholder={matterName}
+        value={typed}
+      />
+      <View className="flex-row gap-2">
+        <Button
+          className="flex-1"
+          disabled={saving}
+          onPress={onCancel}
+          variant="outline"
+        >
+          {t("cancel")}
+        </Button>
+        <Button
+          className="flex-1"
+          disabled={saving || typed.trim() !== matterName}
+          loading={saving}
+          onPress={onConfirm}
+          variant="destructive"
         >
           {t("delete")}
         </Button>
-      )}
-      <WriteFailureNotice failure={failure} message={t("saveFailed")} />
+      </View>
     </View>
+  ) : (
+    <Button disabled={saving} onPress={onStart} variant="destructive-outline">
+      {t("delete")}
+    </Button>
   );
 };
 

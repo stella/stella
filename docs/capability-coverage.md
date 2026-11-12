@@ -384,6 +384,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.justifications.list` | read | stella:read | — | generic invoke → `stella capability matters justifications-list` |
 | `matters.list` | read | stella:read | — | curated tool `list_matters` |
+| `matters.matter-numbering.get` | read | stella:read | — | generic invoke → `stella capability matters matter-numbering-get` |
 | `matters.member-candidates.list` | read | stella:read | — | generic invoke → `stella capability matters member-candidates-list` |
 | `matters.members.add` | write | stella:matters_write | — | curated tool `add_matter_member` |
 | `matters.members.list` | read | stella:read | — | covered by `list_matters` |

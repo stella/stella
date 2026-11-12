@@ -4,11 +4,13 @@ import { readBillingDraftSettings } from "@/api/handlers/desktop-time-entries/bi
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
 import readEntities from "@/api/handlers/entities/list";
 import readVersions from "@/api/handlers/entities/versions/list";
+import readMemberRole from "@/api/handlers/me/role/get";
 import {
   listBillingKnowledgeFiles,
   readBillingKnowledgeFile,
 } from "@/api/handlers/organization-settings/billing-drafts";
 import readBillingDraftConfiguration from "@/api/handlers/organization-settings/billing-drafts/get";
+import readMatterNumbering from "@/api/handlers/workspaces/matter-numbering/get";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
@@ -116,5 +118,63 @@ export const readScalingScenarios = [
     expectedRows: 1,
     definition: readBillingKnowledgeFile,
     measure: measureBillingKnowledgeFile,
+  },
+  {
+    name: "caller's role",
+    expectedRows: 1,
+    definition: readMemberRole,
+    measure: async (fixture: ReadFixture) =>
+      await runWithMeasuredQueryCounter(async (counter) => {
+        const response = await readMemberRole.handler(
+          asTestRaw<Parameters<typeof readMemberRole.handler>[0]>({
+            safeDb: fixture.safeDb,
+            user: { id: fixture.userId },
+            session: { activeOrganizationId: fixture.organizationId },
+            memberRole: sessionMemberRole("member"),
+            request: new Request("https://example.test/v1/me/role"),
+            route: "/v1/me/role" satisfies ApiRoutePath,
+          }),
+        );
+        if (response instanceof HttpStatusResponse) {
+          return panic("Role scaling requires a successful handler response");
+        }
+        return {
+          statements: counter.count,
+          transactionRoundTrips: counter.transactions,
+          responseBytes: Buffer.byteLength(JSON.stringify(response)),
+          rows: 1,
+        };
+      }),
+  },
+  {
+    name: "matter-number convention",
+    expectedRows: 1,
+    definition: readMatterNumbering,
+    measure: async (fixture: ReadFixture) =>
+      await runWithMeasuredQueryCounter(async (counter) => {
+        const response = await readMatterNumbering.handler(
+          asTestRaw<Parameters<typeof readMatterNumbering.handler>[0]>({
+            safeDb: fixture.safeDb,
+            user: { id: fixture.userId },
+            session: { activeOrganizationId: fixture.organizationId },
+            memberRole: sessionMemberRole("member"),
+            request: new Request(
+              "https://example.test/v1/workspaces/matter-numbering",
+            ),
+            route: "/v1/workspaces/matter-numbering" satisfies ApiRoutePath,
+          }),
+        );
+        if (response instanceof HttpStatusResponse) {
+          return panic(
+            "Matter numbering scaling requires a successful handler response",
+          );
+        }
+        return {
+          statements: counter.count,
+          transactionRoundTrips: counter.transactions,
+          responseBytes: Buffer.byteLength(JSON.stringify(response)),
+          rows: 1,
+        };
+      }),
   },
 ];

@@ -487,6 +487,9 @@
       "judge": "Teisėjas",
       "mediator": "Mediatorius",
       "other": "Kita"
-    }
+    },
+    "numberConvention": "Pageidaujamas formatas: {example}",
+    "numberDeparts": "Neatitinka pageidaujamo formato.",
+    "numberHintEmpty": "Nurodykite bylos numerį, kad jos dokumentai būtų numeruojami."
   }
 }

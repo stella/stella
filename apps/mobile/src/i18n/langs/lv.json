@@ -487,6 +487,9 @@
       "judge": "Tiesnesis",
       "mediator": "Mediators",
       "other": "Cits"
-    }
+    },
+    "numberConvention": "Vēlamais formāts: {example}",
+    "numberDeparts": "Neatbilst vēlamajam formātam.",
+    "numberHintEmpty": "Norādiet lietas numuru, lai sāktu numurēt tās dokumentus."
   }
 }

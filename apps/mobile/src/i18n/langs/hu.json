@@ -487,6 +487,9 @@
       "judge": "Bíró",
       "mediator": "Mediátor",
       "other": "Egyéb"
-    }
+    },
+    "numberConvention": "Előnyben részesített formátum: {example}",
+    "numberDeparts": "Nem egyezik az előnyben részesített formátummal.",
+    "numberHintEmpty": "Adjon meg ügyszámot, hogy az ügy dokumentumai számozást kapjanak."
   }
 }

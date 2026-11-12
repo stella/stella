@@ -487,6 +487,9 @@
       "judge": "Sędzia",
       "mediator": "Mediator",
       "other": "Inna"
-    }
+    },
+    "numberConvention": "Preferowany format: {example}",
+    "numberDeparts": "Nie pasuje do preferowanego formatu.",
+    "numberHintEmpty": "Podaj sygnaturę sprawy, aby rozpocząć numerowanie jej dokumentów."
   }
 }

@@ -487,6 +487,9 @@
       "judge": "قاضٍ",
       "mediator": "وسيط",
       "other": "أخرى"
-    }
+    },
+    "numberConvention": "التنسيق المفضل: {example}",
+    "numberDeparts": "لا يطابق التنسيق المفضل.",
+    "numberHintEmpty": "أدخل رقم القضية لبدء ترقيم مستنداتها."
   }
 }

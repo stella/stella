@@ -487,6 +487,9 @@
       "judge": "Judge",
       "mediator": "Mediator",
       "other": "Other"
-    }
+    },
+    "numberConvention": "Preferred format: {example}",
+    "numberDeparts": "Doesn't match the preferred format.",
+    "numberHintEmpty": "Set a matter number to start numbering the documents in this matter."
   }
 }
