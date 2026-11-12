@@ -630,9 +630,13 @@ const turnArgs = (
   ...settingsArgs(input, skills, options.platform),
   ...(skills === null ? [] : ["--plugin-dir", skills.dir]),
   ...NETWORK_ARGS[input.policy.network],
-  // The stella MCP server enforces its own approvals for writes.
-  "--allowedTools",
-  `mcp__${input.mcp.serverName}`,
+  // The stella MCP server enforces its own approvals for destructive
+  // calls. In plan nothing is allowed ahead: a stella call is asked about
+  // like any other until the member approves the plan, so no write lands
+  // before it (the turn stays this way after approval: asks more, not less).
+  ...(input.policy.approvals === "plan"
+    ? []
+    : ["--allowedTools", `mcp__${input.mcp.serverName}`]),
   target.type === "fresh" ? "--session-id" : "--resume",
   target.sessionId,
   "--model",

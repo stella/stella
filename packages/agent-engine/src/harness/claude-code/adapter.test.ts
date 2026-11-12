@@ -1206,10 +1206,13 @@ describe("Claude Code approval modes", () => {
   const valueOf = (args: readonly string[], flag: string) =>
     args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
 
-  test("plan starts the CLI in plan mode, without the sandbox", async () => {
+  test("plan starts the CLI in plan mode, without the sandbox, and allows no stella call ahead", async () => {
     const args = await argsFor("plan");
     expect(valueOf(args, "--permission-mode")).toBe("plan");
     expect(args).not.toContain("--settings");
+    // A stella write before the plan is approved is asked about.
+    expect(args).not.toContain("--allowedTools");
+    expect(valueOf(await argsFor("ask"), "--allowedTools")).toMatch(/^mcp__/u);
   });
 
   test("a plan opens with its approval, which shows the plan and offers approve or deny; approving it switches the CLI to Ask's mode once the plan's call has run", async () => {

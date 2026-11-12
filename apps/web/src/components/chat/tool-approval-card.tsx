@@ -65,6 +65,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   localRunProposedPlan,
+  localRunToolSubtitleText,
   localRunToolView,
 } from "@/components/chat/local-run-tool.logic";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
@@ -891,6 +892,9 @@ const ToolApprovalSummary = ({
   return (
     <>
       {proposedPlan !== null && <LocalRunPlanSummary plan={proposedPlan} />}
+      {proposedPlan === null && (
+        <LocalRunTargetSummary input={input} name={name} output={part.output} />
+      )}
       {part.name === "update-entity-fields" && part.input !== undefined && (
         <UpdateSummary input={part.input} />
       )}
@@ -941,6 +945,40 @@ const ToolApprovalSummary = ({
  * The plan a coding agent proposes before it acts, read whole so the member
  * knows what approving it lets the agent do.
  */
+/**
+ * What a coding agent's step acts on (the command, the file, the address,
+ * the tool), so the member sees it before allowing the step.
+ */
+const LocalRunTargetSummary = ({
+  input,
+  name,
+  output,
+}: {
+  input: unknown;
+  name: string;
+  output: unknown;
+}) => {
+  const t = useTranslations();
+  const view = localRunToolView({ name, input, output });
+  const target =
+    view === null
+      ? null
+      : localRunToolSubtitleText(view.subtitle, {
+          patternInPath: (values) => t("chat.toolCall.patternInPath", values),
+          commandExited: (values) => t("chat.toolCall.commandExited", values),
+        });
+  if (target === null) {
+    return null;
+  }
+  return (
+    <div className="border-border/50 border-t px-3 py-2">
+      <p className="text-muted-foreground font-mono text-xs break-all">
+        {target}
+      </p>
+    </div>
+  );
+};
+
 const LocalRunPlanSummary = ({ plan }: { plan: string }) => (
   <div className="border-border/50 border-t">
     <ScrollArea axis="vertical" className="max-h-96">
