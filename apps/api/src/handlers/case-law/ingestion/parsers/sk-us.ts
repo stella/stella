@@ -1113,18 +1113,16 @@ const readOpeningFormula = (
 /**
  * The title is one run of lines, and the formula under it closes the run:
  * the docket set in the title's type after it (`V mene …` / `PL. ÚS
- * 10/2014-78`) is no second title.
+ * 10/2014-78`) is no second title, also when it wraps over two lines.
  */
 const titleClosedByFormula = (builder: BlockBuilder): boolean => {
-  const previous = builder.blocks.at(-1);
-  return (
-    builder.paragraph === null &&
-    previous?.type === "paragraph" &&
-    previous.role === "opening-formula" &&
-    builder.blocks.some(
-      (block) => block.type === "heading" && block.role === "decision-title",
-    )
+  const title = builder.blocks.findLastIndex(
+    (block) => block.type === "heading" && block.role === "decision-title",
   );
+  const formula = builder.blocks.findLastIndex(
+    (block) => block.type === "paragraph" && block.role === "opening-formula",
+  );
+  return title !== -1 && formula > title;
 };
 
 /**
