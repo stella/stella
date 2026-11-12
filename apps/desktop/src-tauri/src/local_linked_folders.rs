@@ -561,12 +561,12 @@ mod tests {
       folders.remove(&Uuid::new_v4().to_string()),
       Err(LinkedFolderListError::Storage)
     );
-    // Reading it lists nothing, no run can name a folder in it, and the
-    // stored text stays as it was.
+    // Reading it lists nothing, a run naming a folder in it is refused as
+    // unreadable, and the stored text stays as it was.
     assert_eq!(folders.listed(), Vec::<String>::new());
     assert_eq!(
       folders.resolve(Uuid::new_v4()),
-      Err(LinkedFolderRefusal::Unlinked)
+      Err(LinkedFolderRefusal::Unreadable)
     );
     assert_eq!(fs::read_to_string(&stored).unwrap(), "{ not a list");
   }
