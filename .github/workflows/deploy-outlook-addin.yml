@@ -68,7 +68,7 @@ jobs:
           base_sha=""
           if [[ "$EVENT_NAME" == "push" ]]; then
             base_sha="$(
-              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-outlook-addin.yml/runs?branch=main&status=success&per_page=1" \
+              bash scripts/gh-retry.sh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-outlook-addin.yml/runs?branch=main&status=success&per_page=1" \
                 --jq '.workflow_runs[0].head_sha // empty'
             )" || base_sha=""
           fi
