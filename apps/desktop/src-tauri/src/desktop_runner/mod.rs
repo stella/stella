@@ -213,6 +213,14 @@ impl DesktopRunnerControl {
       tasks.stop();
     }
   }
+
+  /// The member linked or unlinked a folder; the host, once there is one,
+  /// reports the list again.
+  pub(crate) fn linked_folders_changed(&self) {
+    if let Some(Some(host)) = self.host.get() {
+      host.linked_folders_changed();
+    }
+  }
 }
 
 /// Start the runner when the feature turns on for the account, stop it when
@@ -374,6 +382,10 @@ impl LocalHarnesses for ManagedHarnesses {
     id: uuid::Uuid,
   ) -> Result<std::path::PathBuf, crate::local_linked_folders::LinkedFolderRefusal> {
     crate::local_linked_folders::LinkedFolders::for_this_computer().resolve(id)
+  }
+
+  fn linked_folder_reports(&self) -> Vec<crate::runner_protocol::LinkedFolderReport> {
+    crate::local_linked_folders::LinkedFolders::for_this_computer().reports()
   }
 
   fn on_install_settled(&self, settled: InstallSettled) {

@@ -22,7 +22,9 @@ use super::tests::{Connection, Gateway, Setup};
 use crate::harness_sidecar::tests::Fixture;
 use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar, SkillFolderRef};
 use crate::local_linked_folders::LinkedFolderRefusal;
-use crate::runner_protocol::{ApprovalDecision, Harness, RunApproval};
+use crate::runner_protocol::{
+  ApprovalDecision, Harness, LinkedFolderReport, RunApproval,
+};
 
 const WAIT: Duration = Duration::from_secs(10);
 const VERSION: &str = "0.50.0";
@@ -51,6 +53,9 @@ struct FakeHarnesses {
   credentials: Option<HarnessCredentials>,
   /// What the host asked to hear when an install ends.
   settled: Arc<Mutex<Option<InstallSettled>>>,
+  /// Whether the member linked any folder; a report of them reaches the API
+  /// on its own, between the messages other tests wait for.
+  folders_linked: bool,
 }
 
 impl LocalHarnesses for FakeHarnesses {
@@ -89,6 +94,17 @@ impl LocalHarnesses for FakeHarnesses {
       _ => Err(LinkedFolderRefusal::Unlinked),
     }
   }
+
+  fn linked_folder_reports(&self) -> Vec<LinkedFolderReport> {
+    if !self.folders_linked {
+      return Vec::new();
+    }
+    serde_json::from_value(json!([
+      { "id": LINKED_FOLDER_ID, "name": "Smith v Jones", "state": "available" },
+      { "id": OFFLINE_FOLDER_ID, "name": "Archive", "state": "offline" },
+    ]))
+    .unwrap()
+  }
 }
 
 /// Harnesses whose skill folders answer only once `release` fires.
@@ -113,6 +129,11 @@ impl LocalHarnesses for HungFolders {
   fn linked_folder(&self, _id: uuid::Uuid) -> Result<PathBuf, LinkedFolderRefusal> {
     let _released = self.release.lock().unwrap().recv();
     Ok(PathBuf::from("/late"))
+  }
+
+  fn linked_folder_reports(&self) -> Vec<LinkedFolderReport> {
+    let _released = self.release.lock().unwrap().recv();
+    Vec::new()
   }
 
   fn skill_folders(&self) -> Vec<SkillFolderRef> {
@@ -205,6 +226,15 @@ impl Place {
     credentials: Option<HarnessCredentials>,
     probe_interval: Duration,
   ) -> SidecarHarnessHost {
+    self.host_with(credentials, probe_interval, false)
+  }
+
+  fn host_with(
+    &self,
+    credentials: Option<HarnessCredentials>,
+    probe_interval: Duration,
+    folders_linked: bool,
+  ) -> SidecarHarnessHost {
     SidecarHarnessHost::new(
       HostSettings {
         sidecar: self.fixture.settings_for("1.4.0", self.fixture.stand_in()),
@@ -215,6 +245,7 @@ impl Place {
         root: self.fixture.root.clone(),
         credentials,
         settled: Arc::clone(&self.settled),
+        folders_linked,
       }),
     )
   }
@@ -459,6 +490,31 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
     json!({"network": "open", "fs": "workspace", "approvals": "auto"})
   );
   assert_eq!(start["launch"]["processGrant"], false);
+}
+
+#[test]
+fn the_linked_folders_reach_the_api_by_name_and_state_only() {
+  let place = Place::new();
+  run(async {
+    let host = place.host_with(None, Duration::from_secs(3600), true);
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let _connection = connect(&gateway, &[], "ready").await;
+    until("the host looked at the linked folders", || {
+      host.linked_folders().len() == 2
+    })
+    .await;
+    assert_eq!(
+      serde_json::to_value(host.linked_folders()).unwrap(),
+      json!([
+        { "id": LINKED_FOLDER_ID, "name": "Smith v Jones", "state": "available" },
+        { "id": OFFLINE_FOLDER_ID, "name": "Archive", "state": "offline" },
+      ])
+    );
+    runner.stop().await;
+  });
+  stop_holders(&place);
 }
 
 #[test]

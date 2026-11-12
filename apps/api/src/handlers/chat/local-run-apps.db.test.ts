@@ -219,6 +219,7 @@ const readTurn = async ({
         harnessVersion: "2.1.309",
         model: "claude-test",
         approvals: "ask",
+        linkedFolderId: null,
       },
     },
   ).withResourceOrigin(origin);

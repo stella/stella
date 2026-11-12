@@ -651,6 +651,7 @@ const startInput = (
   attachments: [],
   mcp: { serverName: "stella", url: "https://api.example.test/mcp" },
   workspaceIds: [],
+  linkedFolderId: null,
 });
 
 /** Start a run on `desktopId` and return the id the API minted for it. */
@@ -2673,6 +2674,7 @@ describe("chat turns on a computer", () => {
       harnessVersion: HARNESS_VERSION,
       model: CHAT_MODEL,
       approvals: "ask",
+      linkedFolderId: null,
     },
   });
 

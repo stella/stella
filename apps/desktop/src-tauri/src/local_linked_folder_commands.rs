@@ -55,11 +55,16 @@ async fn off_the_loop<T: Send + 'static>(
     .ok()
 }
 
+/// Tell the settings window and the runner, which reports the list to the
+/// API so chats can offer the folder.
 fn announce(app: &AppHandle) {
   best_effort(
     app.emit(CHANGED_EVENT, ()),
     "linked folder change was not announced",
   );
+  if let Some(control) = app.try_state::<crate::desktop_runner::DesktopRunnerControl>() {
+    control.linked_folders_changed();
+  }
 }
 
 #[tauri::command]

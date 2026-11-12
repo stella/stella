@@ -21,6 +21,7 @@ import {
   permissionView,
   runTargetValue,
   sameRunTarget,
+  withRunFolder,
 } from "@/components/chat/chat-run-target-menu.logic";
 
 /** The ceiling of an organization that never lowered it. */
@@ -38,11 +39,13 @@ const READY_CODEX: ChatLocalHarnessReadiness = {
 const runner = (
   harnesses: ChatLocalHarnessReadiness[],
   connected = true,
+  linkedFolders: ChatLocalRunnerReadiness["linkedFolders"] = [],
 ): ChatLocalRunnerReadiness => ({
   desktopId: Bun.randomUUIDv7(),
   connected,
   lastSeenAt: "2026-11-03T10:00:00.000Z",
   harnesses,
+  linkedFolders,
 });
 
 const stateOf = (
@@ -390,5 +393,91 @@ describe("whether the chosen computer can take a turn now", () => {
     expect(localRunTargetState({ status: "hidden" }, CODEX)).toEqual({
       type: "not_allowed",
     });
+  });
+});
+
+describe("a linked folder", () => {
+  const LINK_ID = "0192f3a0-6b1c-7d2e-8f30-0000000000d1";
+  const computer = (
+    state: "available" | "offline" | "moved",
+    approval: "approved" | "pending",
+    connected = true,
+  ) =>
+    runner([READY_CODEX], connected, [
+      { id: LINK_ID, name: "Smith v Jones", state, approval },
+    ]);
+  const readiness = (
+    linked: ChatLocalRunnerReadiness,
+  ): ChatLocalRunReadiness => ({
+    status: "enabled",
+    runners: [linked],
+    maxApprovals: NO_LIMIT,
+  });
+  const inFolder = (linked: ChatLocalRunnerReadiness) =>
+    withRunFolder(LOCAL, {
+      desktopId: linked.desktopId,
+      linkId: LINK_ID,
+      name: "Smith v Jones",
+    });
+
+  test("takes a turn once available on a connected computer and allowed", () => {
+    const linked = computer("available", "approved");
+    expect(localRunTargetState(readiness(linked), inFolder(linked))).toEqual({
+      type: "ready",
+    });
+  });
+
+  test("waits for the member's OK before its first turn", () => {
+    const linked = computer("available", "pending");
+    expect(localRunTargetState(readiness(linked), inFolder(linked))).toEqual({
+      type: "folder_pending",
+    });
+  });
+
+  test("says why it cannot take a turn: offline, moved, its computer away, unlinked", () => {
+    const offline = computer("offline", "approved");
+    expect(localRunTargetState(readiness(offline), inFolder(offline))).toEqual({
+      type: "folder",
+      problem: "offline",
+    });
+    const moved = computer("moved", "approved");
+    expect(localRunTargetState(readiness(moved), inFolder(moved))).toEqual({
+      type: "folder",
+      problem: "moved",
+    });
+    const away = computer("available", "approved", false);
+    expect(
+      localRunTargetState(
+        {
+          status: "enabled",
+          runners: [away, runner([READY_CODEX])],
+          maxApprovals: NO_LIMIT,
+        },
+        inFolder(away),
+      ),
+    ).toEqual({ type: "folder", problem: "computer_offline" });
+    const elsewhere = computer("available", "approved");
+    expect(
+      localRunTargetState(
+        readiness(runner([READY_CODEX])),
+        inFolder(elsewhere),
+      ),
+    ).toEqual({ type: "folder", problem: "unlinked" });
+  });
+
+  test("stays with the chat when another model is picked, and differs from the chat's own folder", () => {
+    const linked = computer("available", "approved");
+    const target = inFolder(linked);
+    const picked = localRunTargetFor({
+      selected: target,
+      option: READY_CLAUDE,
+      model: "opus",
+      maxApprovals: NO_LIMIT,
+    });
+    expect(picked.kind === "local" ? picked.folder : null).toEqual(
+      target.folder,
+    );
+    expect(sameRunTarget(target, LOCAL)).toBe(false);
+    expect(sameRunTarget(withRunFolder(target, undefined), LOCAL)).toBe(true);
   });
 });

@@ -235,6 +235,7 @@ export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {
   runApprovalRequest: "run.approval_request",
   runFinished: "run.finished",
   folderRestored: "folder.restored",
+  linkedFoldersStatus: "linked_folders.status",
 } as const;
 
 export const DESKTOP_RUNNER_SERVER_MESSAGE = {
@@ -332,6 +333,34 @@ export const DESKTOP_RUNNER_REJECT_REASONS = [
   "folder_protected",
   "folder_unreadable",
 ] as const;
+
+/**
+ * How a folder the member linked on a computer stands, as the computer last
+ * looked: `offline` when its volume is not mounted, `moved` when it is gone
+ * from its volume or its path leads elsewhere, `protected` when it holds or
+ * sits in what runs rely on, `unreadable` when it cannot be read.
+ */
+export const DESKTOP_RUNNER_LINKED_FOLDER_STATES = [
+  "available",
+  "offline",
+  "moved",
+  "protected",
+  "unreadable",
+] as const;
+export type DesktopRunnerLinkedFolderState =
+  (typeof DESKTOP_RUNNER_LINKED_FOLDER_STATES)[number];
+export const DESKTOP_RUNNER_LINKED_FOLDER_STATE = {
+  available: "available",
+  offline: "offline",
+  moved: "moved",
+  protected: "protected",
+  unreadable: "unreadable",
+} as const satisfies Record<
+  DesktopRunnerLinkedFolderState,
+  DesktopRunnerLinkedFolderState
+>;
+/** Linked folders one computer reports at most. */
+export const DESKTOP_RUNNER_MAX_LINKED_FOLDERS = 64;
 
 export const DESKTOP_RUNNER_APPROVAL_KINDS = [
   "command",
@@ -664,6 +693,28 @@ export type DesktopRunnerCheckpointEvent = v.InferOutput<
   typeof desktopRunnerCheckpointEventSchema
 >;
 
+/**
+ * A folder linked on the computer, by its id and name: its path never leaves
+ * the computer.
+ */
+export const desktopRunnerLinkedFolderSchema = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
+  state: v.picklist(DESKTOP_RUNNER_LINKED_FOLDER_STATES),
+});
+export type DesktopRunnerLinkedFolder = v.InferOutput<
+  typeof desktopRunnerLinkedFolderSchema
+>;
+
+const linkedFoldersSchema = v.pipe(
+  v.array(desktopRunnerLinkedFolderSchema),
+  v.maxLength(DESKTOP_RUNNER_MAX_LINKED_FOLDERS),
+  v.check(
+    (folders) => listsOnce(folders.map(({ id }) => id)),
+    "Each linked folder is listed once",
+  ),
+);
+
 export const desktopRunnerDesktopMessageSchema = v.variant("type", [
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.hello),
@@ -687,10 +738,17 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
         "Each run is listed once",
       ),
     ),
+    /** The folders linked on the computer; none from a desktop before them. */
+    linkedFolders: v.optional(linkedFoldersSchema, []),
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.harnessStatus),
     harness: harnessReportSchema,
+  }),
+  /** Every linked folder, sent when the list or a folder's state changed. */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.linkedFoldersStatus),
+    folders: linkedFoldersSchema,
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.runAccepted),

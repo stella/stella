@@ -42,6 +42,7 @@ import {
   persistRunMessage,
   readPendingCommands,
   recordHarnessStatus,
+  recordLinkedFolders,
   recordRunAccepted,
   recordRunRejected,
   releaseRunnerSession,
@@ -816,6 +817,17 @@ const handleMessage = async (
         binding,
         sessionId: state.sessionId,
         report: message.harness,
+      });
+      if (!current) {
+        close(state, DESKTOP_RUNNER_CLOSE.superseded);
+      }
+      return;
+    }
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.linkedFoldersStatus: {
+      const current = await recordLinkedFolders(db, {
+        binding,
+        sessionId: state.sessionId,
+        folders: message.folders,
       });
       if (!current) {
         close(state, DESKTOP_RUNNER_CLOSE.superseded);

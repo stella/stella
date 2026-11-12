@@ -71,6 +71,12 @@ const createLocalRunnersEndpoint = (dependencies?: LocalRunnersDependencies) =>
               ? [{ ...report, id: report.id }]
               : [],
         ),
+        linkedFolders: runner.linkedFolders.map((folder) => ({
+          ...folder,
+          approval: runner.approvedFolderIds.includes(folder.id)
+            ? "approved"
+            : "pending",
+        })),
       })),
       maxApprovals,
     };

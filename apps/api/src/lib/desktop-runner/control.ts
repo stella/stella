@@ -14,6 +14,7 @@ import {
   type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
   type DesktopRunnerLimits,
+  type DesktopRunnerLinkedFolder,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
   type DesktopRunnerTiming,
@@ -35,6 +36,7 @@ import {
 } from "@/api/lib/desktop-runner/sealed-answers";
 import {
   type AnsweredRequest,
+  approveLinkedFolder,
   type ChatRunBinding,
   type ChatRunForRequest,
   type DesktopRunnerDb,
@@ -85,7 +87,14 @@ type RunApproval = Extract<
 
 /** Which of a member's computers can take a run of `harness`. */
 export type PickedDesktop =
-  | { type: "available"; desktopId: string; harness: ReadyHarnessReport }
+  | {
+      type: "available";
+      desktopId: string;
+      harness: ReadyHarnessReport;
+      /** The computer's linked folders, and those runs may work in. */
+      linkedFolders: readonly DesktopRunnerLinkedFolder[];
+      approvedFolderIds: readonly string[];
+    }
   /** No computer of the member has an open runner socket. */
   | { type: "no_computer" }
   /** The most recently seen computer cannot run the harness now. */
@@ -120,6 +129,12 @@ export type StartLocalRunInput = {
   mcp: Omit<RunStart["mcp"], "token" | "expiresAt">;
   /** Workspaces already authorized for this member and run. */
   workspaceIds: readonly SafeId<"workspace">[];
+  /**
+   * A folder linked on the computer for the run to work in, which the
+   * computer must report available and the member must have let runs use;
+   * `null` for the chat's own folder.
+   */
+  linkedFolderId: string | null;
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
 };
@@ -136,6 +151,8 @@ export type StartLocalRunOutcome =
   | { type: "approvals_unavailable" }
   /** The chat's folder is being restored on its computer. */
   | { type: "folder_busy" }
+  /** The linked folder is not available, or runs may not work in it yet. */
+  | { type: "folder_unavailable" }
   /** The message would not fit one frame, even with the longest token. */
   | { type: "too_large" };
 
@@ -205,13 +222,18 @@ const invalid = (
 const seenSince = ({ now, timing }: ControlDeps) =>
   new Date(now().getTime() - timing.runnerFreshnessMs);
 
-type PickDesktopOptions = { owner: RunOwner; harness: AgentHarness };
+type PickDesktopOptions = {
+  owner: RunOwner;
+  harness: AgentHarness;
+  /** Only this computer, as a turn in a folder linked on it needs. */
+  desktopId?: string;
+};
 
 const pickDesktop = async (
   deps: ControlDeps,
-  { owner, harness }: PickDesktopOptions,
+  { owner, harness, desktopId }: PickDesktopOptions,
 ): Promise<Result<PickedDesktop, DatabaseError>> => {
-  const runners = await Result.tryPromise({
+  const read = await Result.tryPromise({
     try: async () =>
       await readConnectedRunners(deps.db, {
         ...owner,
@@ -220,10 +242,14 @@ const pickDesktop = async (
       }),
     catch: toDatabaseError,
   });
-  if (runners.isErr()) {
-    return runners;
+  if (read.isErr()) {
+    return read;
   }
-  for (const runner of runners.value) {
+  const runners =
+    desktopId === undefined
+      ? read.value
+      : read.value.filter((runner) => runner.desktopId === desktopId);
+  for (const runner of runners) {
     const report = runner.harnesses.find(({ id }) => id === harness);
     // Only what the computer reports `ready` is routed to.
     if (report?.state === DESKTOP_RUNNER_HARNESS_STATE.ready) {
@@ -231,10 +257,12 @@ const pickDesktop = async (
         type: "available",
         desktopId: runner.desktopId,
         harness: report,
+        linkedFolders: runner.linkedFolders,
+        approvedFolderIds: runner.approvedFolderIds,
       });
     }
   }
-  const latest = runners.value.at(0);
+  const latest = runners.at(0);
   return Result.ok(
     latest === undefined
       ? { type: "no_computer" }
@@ -283,8 +311,7 @@ const startRun = async (
     runId,
     // A chat's turns share a folder; a run outside a chat keeps its own.
     folderId: input.chat?.threadId ?? runId,
-    // Runs work in the chat's own folder until a chat can link one.
-    linkedFolderId: null,
+    linkedFolderId: input.linkedFolderId,
     harness: input.harness,
     harnessVersion: input.harnessVersion,
     model: input.model,
@@ -331,6 +358,7 @@ const startRun = async (
         model: input.model,
         approvals: input.approvals,
         workspaceIds: input.workspaceIds,
+        linkedFolderId: input.linkedFolderId,
         chat,
         payload: { plain: message, withNote },
         now: deps.now(),
@@ -568,6 +596,19 @@ export const createDesktopRunnerControl = ({
     pickDesktop: async (options: PickDesktopOptions) =>
       await pickDesktop(deps, options),
     startRun: async (input: StartLocalRunInput) => await startRun(deps, input),
+    /**
+     * Let runs work in a folder linked on one of the member's computers.
+     * `false` when that computer does not report the folder.
+     */
+    approveLinkedFolder: async (options: {
+      owner: RunOwner;
+      desktopId: string;
+      linkId: string;
+    }): Promise<Result<boolean, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await approveLinkedFolder(db, options),
+        catch: toDatabaseError,
+      }),
     /** Add a user message to a running run; idempotent on `inputId`. */
     sendInput: async ({
       owner,

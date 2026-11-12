@@ -6,7 +6,9 @@ import {
   CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
   CHAT_LOCAL_RUN_HARNESSES,
   CHAT_RUN_TARGET_KIND,
+  type ChatLocalFolderApproval,
   type ChatLocalHarnessReadiness,
+  type ChatLocalRunFolder,
   type ChatLocalRunHarness,
   type ChatLocalRunReadiness,
   type ChatLocalRunTarget,
@@ -16,7 +18,9 @@ import {
 import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+  DESKTOP_RUNNER_LINKED_FOLDER_STATE,
   type DesktopRunnerApprovalMode,
+  type DesktopRunnerLinkedFolderState,
 } from "@stll/api-contract/desktop-runner";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -123,6 +127,54 @@ export const chatLocalHarnessOptions = (
 };
 
 /**
+ * A folder linked on one of the member's computers, as the Run on menu
+ * offers it: `computer_offline` while its computer is not connected,
+ * whatever it reported before.
+ */
+export type ChatLocalFolderOption = {
+  folder: ChatLocalRunFolder;
+  state: DesktopRunnerLinkedFolderState | "computer_offline";
+  approval: ChatLocalFolderApproval;
+};
+
+/** Every folder linked on the member's computers, most recently seen first. */
+export const chatLocalFolderOptions = (
+  readiness: ChatLocalRunReadiness | undefined,
+): ChatLocalFolderOption[] =>
+  readiness?.status === "enabled"
+    ? readiness.runners.flatMap((runner) =>
+        runner.linkedFolders.map((linked) => ({
+          folder: {
+            desktopId: runner.desktopId,
+            linkId: linked.id,
+            name: linked.name,
+          },
+          state: runner.connected ? linked.state : "computer_offline",
+          approval: linked.approval,
+        })),
+      )
+    : [];
+
+/** The option of the folder a target works in; `undefined` once unlinked. */
+export const chatLocalFolderOption = (
+  readiness: ChatLocalRunReadiness | undefined,
+  folder: ChatLocalRunFolder,
+): ChatLocalFolderOption | undefined =>
+  chatLocalFolderOptions(readiness).find(
+    (option) =>
+      option.folder.desktopId === folder.desktopId &&
+      option.folder.linkId === folder.linkId,
+  );
+
+/** Why a target's linked folder cannot take a turn now. */
+export type LocalRunFolderProblem =
+  | Exclude<
+      ChatLocalFolderOption["state"],
+      typeof DESKTOP_RUNNER_LINKED_FOLDER_STATE.available
+    >
+  | "unlinked";
+
+/**
  * Whether the member's computers can take a turn on `target` now, read as
  * the Run on menu reads them (the harness option a send is routed by):
  * `ready`; why its harness cannot (offline, signed out); `model_unavailable`
@@ -136,7 +188,27 @@ export type LocalRunTargetState =
       option: Exclude<ChatLocalHarnessOption, { state: "ready" }>;
     }
   | { type: "model_unavailable" }
-  | { type: "not_allowed" };
+  | { type: "not_allowed" }
+  /** The target's linked folder cannot take a turn now. */
+  | { type: "folder"; problem: LocalRunFolderProblem }
+  /** The member has not yet let turns work in the target's linked folder. */
+  | { type: "folder_pending" };
+
+const folderState = (
+  readiness: ChatLocalRunReadiness,
+  folder: ChatLocalRunFolder,
+): LocalRunTargetState => {
+  const option = chatLocalFolderOption(readiness, folder);
+  if (option === undefined) {
+    return { type: "folder", problem: "unlinked" };
+  }
+  if (option.state !== DESKTOP_RUNNER_LINKED_FOLDER_STATE.available) {
+    return { type: "folder", problem: option.state };
+  }
+  return option.approval === "approved"
+    ? { type: "ready" }
+    : { type: "folder_pending" };
+};
 
 export const localRunTargetState = (
   readiness: ChatLocalRunReadiness,
@@ -151,9 +223,12 @@ export const localRunTargetState = (
   if (option.state !== "ready") {
     return { type: "harness", option };
   }
-  return option.models.some(({ id }) => id === target.model)
+  if (!option.models.some(({ id }) => id === target.model)) {
+    return { type: "model_unavailable" };
+  }
+  return target.folder === undefined
     ? { type: "ready" }
-    : { type: "model_unavailable" };
+    : folderState(readiness, target.folder);
 };
 
 /**
@@ -206,7 +281,16 @@ export const runTargetValue = (target: ChatRunTarget): string =>
     ? `${target.harness}${SEPARATOR}${target.model}`
     : CHAT_RUN_TARGET_KIND.cloud;
 
-/** Whether two targets run a turn the same way, permission mode included. */
+/** The Folder choice's radio value: the link's id, or the chat's own folder. */
+export const CHAT_OWN_FOLDER_VALUE = "chat";
+
+export const runFolderValue = (target: ChatLocalRunTarget): string =>
+  target.folder?.linkId ?? CHAT_OWN_FOLDER_VALUE;
+
+/**
+ * Whether two targets run a turn the same way, permission mode and folder
+ * included.
+ */
 export const sameRunTarget = (
   left: ChatRunTarget,
   right: ChatRunTarget,
@@ -214,7 +298,21 @@ export const sameRunTarget = (
   runTargetValue(left) === runTargetValue(right) &&
   (left.kind !== "local" ||
     right.kind !== "local" ||
-    left.approvals === right.approvals);
+    (left.approvals === right.approvals &&
+      left.folder?.desktopId === right.folder?.desktopId &&
+      runFolderValue(left) === runFolderValue(right)));
+
+/** The target working in `folder`, or in the chat's own folder without one. */
+export const withRunFolder = (
+  target: ChatLocalRunTarget,
+  folder: ChatLocalRunFolder | undefined,
+): ChatLocalRunTarget => ({
+  kind: target.kind,
+  harness: target.harness,
+  model: target.model,
+  approvals: target.approvals,
+  ...(folder === undefined ? {} : { folder }),
+});
 
 /**
  * The target for a model picked under a ready harness. The permission mode
@@ -235,6 +333,10 @@ export const localRunTargetFor = ({
   kind: "local",
   harness: option.harness,
   model,
+  // The folder stays the chat's whichever harness and model work in it.
+  ...(selected.kind === "local" && selected.folder !== undefined
+    ? { folder: selected.folder }
+    : {}),
   approvals: approvalModeWithin({
     mode:
       selected.kind === "local" &&

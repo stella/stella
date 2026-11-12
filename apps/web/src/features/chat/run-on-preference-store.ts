@@ -21,12 +21,13 @@ const ORGANIZATION_ID_MAX_LENGTH = 64;
 
 /**
  * Where the member last chose to run turns: stella cloud, or a harness and
- * model on their computer. Never how much a run may do without asking: a
- * permission is granted to one chat, and a new chat asks again.
+ * model on their computer. Never how much a run may do without asking, nor
+ * the folder it works in: both belong to one chat, and a new chat starts in
+ * its own folder with the default permission.
  */
 const runOnPreferenceSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal(CHAT_RUN_TARGET_KIND.cloud) }),
-  v.omit(chatLocalRunTargetSchema, ["approvals"]),
+  v.omit(chatLocalRunTargetSchema, ["approvals", "folder"]),
 ]);
 type RunOnPreference = v.InferOutput<typeof runOnPreferenceSchema>;
 

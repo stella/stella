@@ -162,6 +162,16 @@ wire_values!(RejectReason {
   FolderUnreadable => "folder_unreadable",
 });
 
+/// How a folder linked on the computer stands, as `hello` and
+/// `linked_folders.status` report it.
+wire_values!(LinkedFolderState {
+  Available => "available",
+  Offline => "offline",
+  Moved => "moved",
+  Protected => "protected",
+  Unreadable => "unreadable",
+});
+
 wire_values!(FolderRestoreOutcome {
   Restored => "restored",
   NoCheckpoint => "no_checkpoint",
@@ -346,6 +356,23 @@ pub(crate) struct Hello {
   pub(crate) sidecar_version: String,
   pub(crate) harnesses: Vec<HarnessReport>,
   pub(crate) active_runs: Vec<ActiveRun>,
+  #[serde(default)]
+  pub(crate) linked_folders: Vec<LinkedFolderReport>,
+}
+
+/// A folder the member linked on this computer, as the API knows it: its id
+/// and name, never its path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct LinkedFolderReport {
+  pub(crate) id: FolderId,
+  pub(crate) name: String,
+  pub(crate) state: LinkedFolderState,
+}
+
+/// Every linked folder, sent whenever the list or a folder's state changed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct LinkedFoldersStatus {
+  pub(crate) folders: Vec<LinkedFolderReport>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -410,6 +437,7 @@ wire_union!(DesktopMessage tagged "type" {
   RunApprovalRequest(RunApprovalRequest) => "run.approval_request",
   RunFinished(RunFinished) => "run.finished",
   FolderRestored(FolderRestored) => "folder.restored",
+  LinkedFoldersStatus(LinkedFoldersStatus) => "linked_folders.status",
 });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -696,6 +724,10 @@ mod tests {
             .iter()
             .map(|value| value.wire_name()),
         ),
+      ),
+      (
+        "linkedFolderStates",
+        names(LinkedFolderState::ALL.iter().map(|value| value.wire_name())),
       ),
       (
         "networkPolicies",

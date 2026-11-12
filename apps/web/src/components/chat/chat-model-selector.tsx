@@ -28,6 +28,7 @@ import {
   localRunModelLabel,
   localRunTargetState,
 } from "@/components/chat/chat-run-target-menu.logic";
+import { LocalFolderApproval } from "@/components/chat/local-folder-approval";
 import {
   localRunnersOptions,
   modelOptionsOptions,
@@ -70,45 +71,53 @@ export const ChatModelSelector = ({
   const trigger = localTrigger ?? cloudTrigger;
 
   return (
-    <Menu onOpenChange={setOpen} open={open}>
-      <MenuTrigger
-        render={
-          <Button
-            aria-label={trigger.label}
-            className={cn(
-              trigger.chosen
-                ? "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5"
-                : "text-muted-foreground hover:text-foreground gap-1.5",
-            )}
-            // Until the stored choice is known, nothing can be picked on it.
-            disabled={disabled || models.state === "loading"}
-            onFocus={() => setDetailsRequested(true)}
-            onMouseEnter={() => setDetailsRequested(true)}
-            size="xs"
-            variant="ghost"
+    <>
+      <Menu onOpenChange={setOpen} open={open}>
+        <MenuTrigger
+          render={
+            <Button
+              aria-label={trigger.label}
+              className={cn(
+                trigger.chosen
+                  ? "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5"
+                  : "text-muted-foreground hover:text-foreground gap-1.5",
+              )}
+              // Until the stored choice is known, nothing can be picked on it.
+              disabled={disabled || models.state === "loading"}
+              onFocus={() => setDetailsRequested(true)}
+              onMouseEnter={() => setDetailsRequested(true)}
+              size="xs"
+              variant="ghost"
+            />
+          }
+          tooltip={trigger.label}
+        >
+          {trigger.icon}
+          <TruncatedText className="max-w-36" render={<BidiText as="span" />}>
+            {trigger.label}
+          </TruncatedText>
+        </MenuTrigger>
+        <MenuPopup
+          align="start"
+          className={CHAT_MODEL_MENU_POPUP_CLASS_NAME}
+          side="top"
+          sideOffset={6}
+        >
+          <ChatModelOptionsMenu
+            enabled={open}
+            key={open ? "open" : "closed"}
+            models={models}
+            open={open}
           />
-        }
-        tooltip={trigger.label}
-      >
-        {trigger.icon}
-        <TruncatedText className="max-w-36" render={<BidiText as="span" />}>
-          {trigger.label}
-        </TruncatedText>
-      </MenuTrigger>
-      <MenuPopup
-        align="start"
-        className={CHAT_MODEL_MENU_POPUP_CLASS_NAME}
-        side="top"
-        sideOffset={6}
-      >
-        <ChatModelOptionsMenu
-          enabled={open}
-          key={open ? "open" : "closed"}
-          models={models}
-          open={open}
+        </MenuPopup>
+      </Menu>
+      {selectedTarget.kind === "local" && (
+        <LocalFolderApproval
+          activeOrganizationId={models.activeOrganizationId}
+          target={selectedTarget}
         />
-      </MenuPopup>
-    </Menu>
+      )}
+    </>
   );
 };
 
@@ -137,10 +146,16 @@ const useLocalRunTrigger = (
   const readiness =
     runnersView.type === "items" ? runnersView.items : undefined;
   const model = localRunModelLabel(readiness, target) ?? target.model;
-  const selection = t("chat.localRun.selectionLabel", {
-    harness: CHAT_LOCAL_HARNESS_NAMES[target.harness],
-    model,
-  });
+  const harness = CHAT_LOCAL_HARNESS_NAMES[target.harness];
+  // A linked folder is named, never its path: the API knows only the name.
+  const selection =
+    target.folder === undefined
+      ? t("chat.localRun.selectionLabel", { harness, model })
+      : t("chat.localRun.selectionFolderLabel", {
+          harness,
+          model,
+          folder: target.folder.name,
+        });
   // Until the computers are read nothing is known against the choice.
   const state =
     readiness === undefined

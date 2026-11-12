@@ -141,6 +141,8 @@ type LocalRunDestination = {
   harnessVersion: string;
   model: string;
   approvals: DesktopRunnerApprovalMode;
+  /** The folder linked on that computer the run works in, if any. */
+  linkedFolderId: string | null;
 };
 
 export type LocalRunContext = {
@@ -1391,6 +1393,7 @@ const storedRunMessage = (stored: unknown): SequencedRunMessage => {
       return message;
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.hello:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.harnessStatus:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.linkedFoldersStatus:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runAccepted:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runRejected:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored:
@@ -1667,6 +1670,7 @@ async function* startLocalRun({
     chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
     desktopId: destination.desktopId,
     harness: destination.harness,
+    linkedFolderId: destination.linkedFolderId,
   });
   const rewrite = {
     chatRunId: input.chatRunId,
@@ -1699,6 +1703,7 @@ async function* startLocalRun({
       attachments,
       mcp: context.mcp,
       workspaceIds: context.workspaceIds,
+      linkedFolderId: destination.linkedFolderId,
       chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
     });
   const sentAt = new Date(nowMs()).toISOString();
@@ -1752,6 +1757,10 @@ async function* startLocalRun({
     case "folder_busy":
       // An undo of the chat's files is still running on the computer.
       yield* refuse(AI_FAILURE_CODES.local_runner_restoring);
+      return;
+    case "folder_unavailable":
+      // The linked folder went offline or moved since the turn was routed.
+      yield* refuse(AI_FAILURE_CODES.local_runner_folder_unavailable);
       return;
     case "too_large":
       yield* refuse(AI_FAILURE_CODES.local_runner_turn_too_large);

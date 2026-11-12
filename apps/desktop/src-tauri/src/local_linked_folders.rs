@@ -21,28 +21,25 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::device_preference::DevicePreference;
+use crate::runner_protocol::{FolderId, LinkedFolderReport};
 
 /// The list is read and replaced whole, so changes to it are made one at a time.
 static LIST_CHANGE: Mutex<()> = Mutex::new(());
 
 const PREFERENCE_FILE: &str = "local-linked-folders.json";
+/// As many as `hello` and `linked_folders.status` list.
 const MAX_LINKS: usize = 64;
+/// Characters of a folder's name a report carries; the contract takes 255
+/// UTF-16 units.
+const MAX_REPORTED_NAME_CHARS: usize = 120;
 const LOG_TARGET: &str = "stella::local_linked_folders";
 
-/// How a linked folder stands now; the settings window and runs read it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LinkedFolderState {
-  Available,
-  /// The volume the folder is on is not mounted.
-  Offline,
-  /// The folder is gone from its volume, or its path now leads elsewhere.
-  Moved,
-  /// The folder holds stella's data or a skill folder, or sits inside one.
-  Protected,
-  /// The folder is there but cannot be read.
-  Unreadable,
-}
+/// How a linked folder stands now, in the words the settings window, runs
+/// and the runner protocol share: `offline` when its volume is not mounted,
+/// `moved` when it is gone from its volume or its path leads elsewhere,
+/// `protected` when it holds stella's data or a skill folder or sits inside
+/// one, `unreadable` when it is there but cannot be read.
+pub(crate) use crate::runner_protocol::LinkedFolderState;
 
 /// Why a run cannot work in a linked folder: no link with the id is on this
 /// computer, or its folder is not available now.
@@ -322,6 +319,22 @@ impl LinkedFolders {
       .collect()
   }
 
+  /// Every link as the API knows it: id, name and state, never the path.
+  pub fn reports(&self) -> Vec<LinkedFolderReport> {
+    self
+      .statuses()
+      .into_iter()
+      .filter_map(|status| {
+        let id = FolderId::try_from(status.id).ok()?;
+        Some(LinkedFolderReport {
+          id,
+          name: status.name.chars().take(MAX_REPORTED_NAME_CHARS).collect(),
+          state: status.state,
+        })
+      })
+      .collect()
+  }
+
   /// The folder a run with the link works in, when it can work there now.
   pub fn resolve(&self, id: Uuid) -> Result<PathBuf, LinkedFolderRefusal> {
     let link = self
@@ -468,6 +481,25 @@ mod tests {
     );
     assert_eq!(fresh.resolve(id), Ok(PathBuf::from(Place::real(&folder))));
     assert_eq!(fresh.listed(), vec![Place::real(&folder)]);
+  }
+
+  #[test]
+  fn a_report_names_the_folder_and_never_its_path() {
+    let place = Place::new();
+    let folder = place.folder("Smith v Jones");
+    let folders = place.folders();
+    let id = folders.add(&folder).unwrap();
+
+    let reports = folders.reports();
+
+    assert_eq!(
+      serde_json::to_value(&reports).unwrap(),
+      serde_json::json!([{
+        "id": id.to_string(),
+        "name": "Smith v Jones",
+        "state": "available",
+      }])
+    );
   }
 
   #[test]
