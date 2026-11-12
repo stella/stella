@@ -12,10 +12,9 @@ import { type ArchiveTransport, runSkillCommand } from "./run";
 /** The execution environment's process table; the runner is Linux only. */
 const PROC_ROOT = "/proc";
 
-/** A process that is already gone needs no kill. */
-const killProcess = (pid: number) => {
-  Result.try(() => process.kill(pid, "SIGKILL"));
-};
+/** False when the process is already gone. */
+const killProcess = (pid: number): boolean =>
+  Result.try(() => process.kill(pid, "SIGKILL")).isOk();
 
 /** Until S3 answers with headers; the body then may not stall longer. */
 const HEADERS_TIMEOUT_MS = 30_000;

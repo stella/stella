@@ -114,20 +114,13 @@ export const liveProcessIds = async (
  */
 const canStillAct = async (procRoot: string, pid: number) => {
   const stat = await readProcessFile(procRoot, pid, "stat");
-  switch (stat.kind) {
-    case "gone": {
-      return false;
-    }
-    case "unreadable": {
-      return true;
-    }
-    case "read": {
-      // `pid (comm) S ...`: the state follows the last parenthesis, which
-      // also ends a command name that itself contains one.
-      const state = stat.text.slice(stat.text.lastIndexOf(")") + 2).charAt(0);
-      return state !== "Z";
-    }
+  if (stat.kind !== "read") {
+    return stat.kind === "unreadable";
   }
+  // `pid (comm) S ...`: the state follows the last parenthesis, which also
+  // ends a command name that itself contains one.
+  const state = stat.text.slice(stat.text.lastIndexOf(")") + 2).charAt(0);
+  return state !== "Z";
 };
 
 /**

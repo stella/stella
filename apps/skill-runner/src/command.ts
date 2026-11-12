@@ -42,9 +42,9 @@ const capture = (limit: number) => {
   };
 };
 
-/** SIGKILL a whole process group; an error means it has no members left. */
-const killGroup = (group: number) =>
-  Result.try(() => process.kill(-group, "SIGKILL"));
+/** SIGKILL a whole process group; false when it has no members left. */
+const killGroup = (group: number): boolean =>
+  Result.try(() => process.kill(-group, "SIGKILL")).isOk();
 
 /**
  * Run one command in its own process group. Whether it exits or times out,
@@ -98,7 +98,7 @@ export const runCommand = async ({
       const group = child.pid;
       // The whole process group, so nothing the command started survives;
       // the child alone when the group is already gone.
-      if (group === undefined || killGroup(group).isErr()) {
+      if (group === undefined || !killGroup(group)) {
         child.kill("SIGKILL");
       }
     }, timeoutMs);

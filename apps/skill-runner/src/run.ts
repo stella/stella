@@ -73,7 +73,7 @@ type RunError = SkillRunnerArchiveError | SkillRunnerIsolationError;
  * execution environment, where every process that appears during a command
  * is the command's.
  */
-export type ProcessSweep = {
+type ProcessSweep = {
   procRoot: string;
   kill: (pid: number) => void;
 };
