@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import type { SkillRunnerInput } from "@stll/api-contract/skill-runner";
 import { ZipArchive } from "@stll/docx-core/zip";
@@ -139,7 +140,10 @@ describe("one skill command", () => {
         },
       })
     ).unwrap();
-    const seen = JSON.parse(result.stdout.text) as Record<string, string>;
+    const seen = v.parse(
+      v.record(v.string(), v.string()),
+      JSON.parse(result.stdout.text),
+    );
     expect(Object.keys(seen).filter((key) => key.startsWith("AWS_"))).toEqual(
       [],
     );
