@@ -3,29 +3,29 @@ import { describe, expect, test } from "bun:test";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import { roles } from "./index";
-import type { PermissionInput } from "./role-grants";
-import { roleAllows, statements } from "./role-grants";
-
-/** Every single action of every resource, each asked for on its own. */
-const singleActions: PermissionInput[] = Object.entries(statements).flatMap(
-  ([resource, actions]) =>
-    actions.map((action): PermissionInput => ({ [resource]: [action] })),
-);
+import { roleAllows, roleGrantsAction, statements } from "./role-grants";
 
 describe("roleAllows", () => {
-  // The clients decide what to offer with `roleAllows`; the server decides
-  // with the access control built from the same grants. They must agree on
+  // The clients decide what to offer with these grants; the server decides
+  // with the access control built from the same ones. They must agree on
   // every action, or a client offers what the server refuses.
   test.each(ORGANIZATION_ROLE_NAMES)(
     "agrees with the server's access control for %s on every action",
     (role) => {
-      for (const permissions of singleActions) {
-        expect({ permissions, allowed: roleAllows(role, permissions) }).toEqual(
-          {
-            permissions,
-            allowed: roles[role].authorize(permissions).success,
-          },
-        );
+      const held: Partial<Record<string, readonly string[]>> =
+        roles[role].statements;
+      for (const [resource, actions] of Object.entries(statements)) {
+        for (const action of actions) {
+          expect({
+            resource,
+            action,
+            granted: roleGrantsAction(role, resource, action),
+          }).toEqual({
+            resource,
+            action,
+            granted: held[resource]?.includes(action) === true,
+          });
+        }
       }
     },
   );

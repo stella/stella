@@ -232,6 +232,26 @@ export const isOrganizationRoleName = (
 ): role is OrganizationRoleName =>
   ORGANIZATION_ROLE_NAMES.some((name) => name === role);
 
+/** Whether `role` grants `action` on `resource`; an unknown role grants none. */
+export const roleGrantsAction = (
+  role: string,
+  resource: string,
+  action: string,
+): boolean => {
+  if (!isOrganizationRoleName(role)) {
+    return false;
+  }
+  // Widened to an index signature by plain assignment, so any resource name
+  // can be looked up without a cast.
+  const granted: Partial<Record<string, readonly string[]>> = ROLE_GRANTS[role];
+  // `Object.hasOwn` first: a resource named after an inherited key
+  // (`constructor`) must deny, not read the prototype.
+  const allowed = Object.hasOwn(granted, resource)
+    ? granted[resource]
+    : undefined;
+  return allowed?.includes(action) === true;
+};
+
 /**
  * Whether `role` grants every action `permissions` asks for. An unknown role
  * grants nothing, so a client that cannot tell the role offers no action the
@@ -244,22 +264,10 @@ export const roleAllows = (
   if (!isOrganizationRoleName(role)) {
     return false;
   }
-  // Widened to an index signature by plain assignment, so any resource name
-  // can be looked up without a cast.
-  const granted: Partial<Record<string, readonly string[]>> = ROLE_GRANTS[role];
   const requested: Partial<Record<string, readonly string[]>> = permissions;
-  return Object.entries(requested).every(([resource, actions]) => {
-    if (actions === undefined) {
-      return true;
-    }
-    // `Object.hasOwn` first: a resource named after an inherited key
-    // (`constructor`) must deny, not read the prototype.
-    const allowed = Object.hasOwn(granted, resource)
-      ? granted[resource]
-      : undefined;
-    return (
-      allowed !== undefined &&
-      actions.every((action) => allowed.includes(action))
-    );
-  });
+  return Object.entries(requested).every(
+    ([resource, actions]) =>
+      actions === undefined ||
+      actions.every((action) => roleGrantsAction(role, resource, action)),
+  );
 };
