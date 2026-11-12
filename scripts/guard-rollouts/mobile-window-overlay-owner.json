@@ -1,7 +1,8 @@
 {
   "id": "mobile-window-overlay-owner",
   "rules": ["mobile-window-overlay-owner/mobile-window-overlay-owner"],
-  "type": "full",
+  "type": "changed-lines",
+  "expiresAt": "2026-11-19T00:00:00.000Z",
   "check": [
     "bun",
     "--bun",
