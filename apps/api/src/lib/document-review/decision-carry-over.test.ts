@@ -402,7 +402,7 @@ describe("planCarriedDecisions outcomes", () => {
   test("another conclusion is a changed verdict, a missing answer is unmatched", () => {
     const regraded = finding({ decision: "accepted" });
     const dropped = finding({
-      decision: "rejected",
+      decision: "dismissed",
       positionId: OTHER_POSITION_ID,
     });
     const { carried, outcomes } = plan(
