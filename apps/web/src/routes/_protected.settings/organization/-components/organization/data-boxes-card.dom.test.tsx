@@ -157,7 +157,7 @@ test("data-box settings validate IDs and declare writes while refreshing corresp
       ),
     }),
   );
-  await waitFor(() => expect(view.queryByText("newbox1")).toBeNull());
+  await waitFor(() => expect(view.queryByText("newbox1") === null).toBe(true));
   expect(writes.at(1)).toEqual({
     method: "DELETE",
     path: `${BOXES_PATH}/newbox1`,

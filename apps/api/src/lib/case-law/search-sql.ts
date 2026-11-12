@@ -1,14 +1,7 @@
 import { panic } from "better-result";
-import { and, eq, type SQL, sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
-import {
-  caseLawSearchDocuments,
-  caseLawSources,
-  publishedCaseLawDecisions,
-} from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
-import { derivedAiCaseLawSource } from "@/api/lib/case-law/derived-ai-source";
+import { caseLawSearchDocuments } from "@/api/db/schema";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import type { LegalSearchEngine } from "@/api/lib/legal-search/types";
 
@@ -27,38 +20,6 @@ export const publicCaseLawDecisionJoin = sql`
     ON case_law_sources.id = d.source_id
    AND ${redistributableCaseLawSource}
 `;
-
-/**
- * The projection text of a decision a search hit may still hand to a model:
- * published, from a source that allows both redistribution and derived AI.
- * The redistribution half is the gate of `publicCaseLawDecisionJoin`, read at
- * use rather than trusted from the hit; the derived-AI half is why a hit that
- * search may show can still be kept out of a model prompt. `null` when no row
- * qualifies.
- */
-export const readCaseLawSearchTextForAi = async (
-  tx: Transaction,
-  decisionId: SafeId<"caseLawDecision">,
-): Promise<string | null> => {
-  const rows = await tx
-    .select({ searchableText: caseLawSearchDocuments.searchableText })
-    .from(caseLawSearchDocuments)
-    .innerJoin(
-      publishedCaseLawDecisions,
-      eq(publishedCaseLawDecisions.id, caseLawSearchDocuments.decisionId),
-    )
-    .innerJoin(
-      caseLawSources,
-      and(
-        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-        redistributableCaseLawSource,
-        derivedAiCaseLawSource,
-      ),
-    )
-    .where(eq(caseLawSearchDocuments.decisionId, decisionId))
-    .limit(1);
-  return rows.at(0)?.searchableText ?? null;
-};
 
 export const bodyPreviewJoin = sql`
   LEFT JOIN LATERAL (

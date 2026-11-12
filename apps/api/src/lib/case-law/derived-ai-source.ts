@@ -1,8 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
-import { caseLawSources } from "@/api/db/schema";
-
 /**
  * Whether a source's text may be fed to a model. A separate permission from
  * redistribution: a source may allow showing its wording but not AI use.
@@ -15,7 +13,3 @@ export const derivedAiCaseLawSourceFor = (descriptor: SQLWrapper) => sql`(
   ${descriptor} IS NULL
   OR (${descriptor} ->> 'allowsDerivedAi') = 'true'
 )`;
-
-export const derivedAiCaseLawSource = derivedAiCaseLawSourceFor(
-  caseLawSources.descriptor,
-);

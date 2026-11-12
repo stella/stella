@@ -141,6 +141,7 @@ export const FREE_WITHOUT_OWN_KEY = {
   "bilingual.background": "counts",
   "list-verification.start": "counts",
   "list-verification.background": "counts",
+  "list-verification.recheck": "counts",
   "list-fact-extraction.start": "counts",
   "list-fact-extraction.background": "counts",
   "report-export.start": "counts",

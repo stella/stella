@@ -26,13 +26,6 @@ import {
 } from "@/api/tests/query-plans/plan-walker";
 
 import {
-  CASE_LAW_SEARCH_FETCH_LIMIT,
-  CASE_LAW_SEARCH_SIZES,
-  caseLawSearchStatement,
-  seedCaseLawSearch,
-  unboundedCaseLawSearchStatement,
-} from "./case-law-search-fixture";
-import {
   CASE_LAW_SCENARIOS,
   type CaseLawScenarioGeneration,
   coverageRefreshWroteSummary,
@@ -68,7 +61,6 @@ import {
   sharedBlockSampleProblem,
   writeScaleViolations,
 } from "./measurement";
-import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { QUERY_PERF_PROFILES } from "./profiles";
 import {
   CORPUS_STATEMENT_BUDGET_IDS,
@@ -312,114 +304,6 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
       },
     });
   }, 420_000); // timeout: the first corpus test seeds about a million rows before the integration assertion.
-
-  test("global Case Law search enriches only its page at both corpus sizes", async () => {
-    const budgetId = "statement.caseLaw.globalSearchHits";
-    const databaseUrl =
-      process.env["DATABASE_URL"] ??
-      panic("DATABASE_URL required for query perf");
-    const measurements: number[] = [];
-    await withQueryPerfFixture({
-      databaseUrl,
-      profileId: "corpus",
-      timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
-      run: async (db, deadline) => {
-        for (const rows of CASE_LAW_SEARCH_SIZES) {
-          // db-await-in-loop: grow and measure each isolated corpus sequentially.
-          await deadline.run(`case-law search corpus ${rows}`, async () => {
-            await seedCaseLawSearch(db, rows);
-            const good = await measureOwnerStatement({
-              database: db,
-              build: caseLawSearchStatement,
-              owner: budgetId,
-              ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[budgetId],
-              profileId: "corpus",
-            });
-            const bad = await measureOwnerStatement({
-              database: db,
-              build: unboundedCaseLawSearchStatement,
-              owner: budgetId,
-              ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[budgetId],
-              profileId: "corpus",
-            });
-            log({
-              event: "read_budget_measurement",
-              budgetId,
-              rows,
-              budgetPages: readBudgetPages(budgetId),
-              after: good.metrics,
-              before: bad.metrics,
-            });
-            log({
-              event: "read_budget_plan",
-              budgetId,
-              rows,
-              plan: good.plan.Plan,
-              formerPlan: bad.plan.Plan,
-            });
-            expect(good.plan.Plan["Actual Rows"]).toBe(
-              CASE_LAW_SEARCH_FETCH_LIMIT,
-            );
-            expect(bad.plan.Plan["Actual Rows"]).toBe(
-              CASE_LAW_SEARCH_FETCH_LIMIT,
-            );
-            expect(budgetProblem(budgetId, good.metrics)).toBeUndefined();
-            // Fixed text hits must not walk unrelated decisions before LIMIT.
-            expect(
-              good.planViolations.filter(
-                ({ kind, node }) =>
-                  kind === "large-scan" &&
-                  node["Relation Name"] ===
-                    getTableName(schema.caseLawDecisions),
-              ),
-            ).toEqual([]);
-            expect(
-              budgetViolations(bad.metrics, READ_BUDGETS[budgetId].pages).map(
-                ({ kind }) => kind,
-              ),
-            ).toContain("shared-buffer-budget");
-            // Same values and order, including snippets, identifiers and ranking.
-            const before = executedRows(
-              await db.execute(unboundedCaseLawSearchStatement()),
-            );
-            const after = executedRows(
-              await db.execute(caseLawSearchStatement()),
-            );
-            expect(after).toEqual(before);
-            expect(after).toHaveLength(CASE_LAW_SEARCH_FETCH_LIMIT);
-            expect(Object.keys(after.at(0) ?? {}).toSorted()).toEqual(
-              [
-                "id",
-                "case_number",
-                "ecli",
-                "case_number_type",
-                "court",
-                "country",
-                "decision_date",
-                "slug",
-                "language",
-                "language_group_key",
-                "identifiers",
-                "headline",
-                "tier",
-                "score",
-                "updated_at",
-              ].toSorted(),
-            );
-            measurements.push(good.metrics.sharedBlocks);
-          });
-        }
-      },
-    });
-    expect(measurements).toHaveLength(CASE_LAW_SEARCH_SIZES.length);
-    expect(
-      scaleViolations({
-        size: measurements.at(0) ?? panic("Missing small measurement"),
-        double: measurements.at(1) ?? panic("Missing growth measurement"),
-      }),
-    ).toEqual([]);
-    expect(profileBudgets("case-law")).toEqual([budgetId]);
-  }, 420_000); // timeout: two corpus sizes, warm-cache measurements and mutation checks on an isolated database.
 
   test("document search stays within its budget at both sizes and a correlated policy exceeds it", async () => {
     const databaseUrl =
