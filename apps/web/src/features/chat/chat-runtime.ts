@@ -168,6 +168,11 @@ type ChatRuntimeSnapshot = {
    *  mid-turn; `null` while it runs. A rejoin replays the run's events, so a
    *  reload reads the same. */
   computerWait: ChatLocalRunComputerWait | null;
+  /** When this page sent the message its running request carries, on the
+   *  `performance.now()` clock: the start every turn's live elapsed time
+   *  counts from, on stella or on the member's computer alike. `null` once
+   *  that request is over, and for a turn this page joined (a reload). */
+  turnSentAt: number | null;
 };
 
 type TanStackClientToolResult = Parameters<
@@ -464,6 +469,7 @@ export const createChatRuntime = ({
     stop: { status: "idle" },
     turnAbandoned: false,
     computerWait: null,
+    turnSentAt: null,
   };
   /** The server turn the latest request runs; null from a new message until
    *  the server names its turn. */
@@ -492,9 +498,10 @@ export const createChatRuntime = ({
     stoppedTurnId = null;
     settledTurnRefused = false;
     stopBeforeHeaders = "none";
-    if (snapshot.stop.status !== "idle") {
-      setSnapshot({ stop: { status: "idle" } });
-    }
+    setSnapshot({
+      turnSentAt: performance.now(),
+      ...(snapshot.stop.status === "idle" ? {} : { stop: { status: "idle" } }),
+    });
   };
 
   let cancelScheduledEmit: (() => void) | undefined;
@@ -1032,7 +1039,7 @@ export const createChatRuntime = ({
         isLoading,
         // A wait belongs to the request that reported it.
         computerWait: null,
-        ...(!isLoading ? { reconnecting: false } : {}),
+        ...(!isLoading ? { reconnecting: false, turnSentAt: null } : {}),
         ...(isLoading && stopBeforeHeaders === "none" && !isStoppedTurn()
           ? { turnAbandoned: false }
           : {}),
