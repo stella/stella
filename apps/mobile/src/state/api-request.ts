@@ -62,6 +62,12 @@ type ApiRequest<TSchema extends v.GenericSchema> = {
   readonly method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** For a route that is slow by design; the default suits the rest. */
   readonly timeoutMs?: number;
+  /**
+   * Names one write, so the server answers a repeat of it, sent again after
+   * a lost response or on a fresh token, with the first answer instead of
+   * making the change twice. Only routes that keep receipts accept one.
+   */
+  readonly idempotencyKey?: string;
 };
 
 const requestJson = async <TSchema extends v.GenericSchema>(
@@ -74,6 +80,7 @@ const requestJson = async <TSchema extends v.GenericSchema>(
     body,
     method = body === undefined ? "GET" : "POST",
     timeoutMs,
+    idempotencyKey,
   }: Omit<ApiRequest<TSchema>, "path">,
 ): Promise<Result<v.InferOutput<TSchema>, ApiRequestError>> => {
   const form = body instanceof FormData ? body : undefined;
@@ -91,6 +98,9 @@ const requestJson = async <TSchema extends v.GenericSchema>(
             ...(body === undefined || form !== undefined
               ? {}
               : { "Content-Type": "application/json" }),
+            ...(idempotencyKey === undefined
+              ? {}
+              : { "Idempotency-Key": idempotencyKey }),
           },
           method,
           ...(body === undefined ? {} : { body: form ?? JSON.stringify(body) }),

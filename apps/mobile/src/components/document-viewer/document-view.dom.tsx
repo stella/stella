@@ -4,6 +4,8 @@ import { useEffect, useEffectEvent, useState } from "react";
 
 import type { DOMProps } from "expo/dom";
 
+import { compileLegalSourceToDocx } from "@stll/docx-core";
+
 import { useDomAppearance } from "@/components/dom-theme";
 import type { DomAppearance } from "@/components/dom-theme";
 
@@ -27,6 +29,14 @@ type DocumentViewProps = {
   /** Room under the document's end, in CSS pixels, for the app's bar. */
   clearance: number;
   readChunk: (offset: number, length: number) => Promise<string>;
+  /**
+   * A draft the model wrote, built here from its source instead of read
+   * from a file: the Word document is packed in the page, as the web packs
+   * it, since the app's own runtime cannot compress one.
+   */
+  draftSource?: string | undefined;
+  /** The title a draft without one of its own takes. */
+  draftTitle?: string | undefined;
   /** The app holds the Word document's edit lock (see `DocxPages`). */
   editable: boolean;
   /** Changes to ask for the edits now, to finish editing. */
@@ -66,6 +76,26 @@ const allowZoom = () => {
 };
 
 /**
+ * A draft's Word document, packed from its source, or why the source does
+ * not compile.
+ */
+const buildDraft = async (
+  source: string,
+  titleFallback: string,
+): Promise<
+  | { readonly built: true; readonly bytes: Uint8Array }
+  | { readonly built: false; readonly reason: string }
+> => {
+  const compiled = await compileLegalSourceToDocx(source, { titleFallback });
+  return compiled.status === "ok"
+    ? { built: true, bytes: new Uint8Array(compiled.buffer) }
+    : {
+        built: false,
+        reason: compiled.errors.map(({ message }) => message).join(" "),
+      };
+};
+
+/**
  * The canvas around the pages, as folio draws its own: the muted tint over
  * the background, so a white page stands apart in light and a dark one in
  * dark.
@@ -85,6 +115,8 @@ const DocumentView = ({
   zoom,
   clearance,
   readChunk,
+  draftSource,
+  draftTitle,
   editable,
   saveRequest,
   onEditRequest,
@@ -107,6 +139,28 @@ const DocumentView = ({
   useEffect(() => {
     allowZoom();
     let cancelled = false;
+    if (draftSource !== undefined) {
+      buildDraft(draftSource, draftTitle ?? "")
+        .then((draft) => {
+          if (cancelled) {
+            return undefined;
+          }
+          if (draft.built) {
+            setBytes(draft.bytes);
+          } else {
+            loadFailed(draft.reason);
+          }
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            loadFailed(error);
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     const target = new Uint8Array(size);
     const chunks = chunksOf(size);
     // One slice after another, so a single bridge message stays small.
@@ -131,7 +185,7 @@ const DocumentView = ({
     return () => {
       cancelled = true;
     };
-  }, [size]);
+  }, [size, draftSource, draftTitle]);
 
   const ready = () => {
     onReady();

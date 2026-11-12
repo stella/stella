@@ -8,6 +8,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { legalListClaimReviewEvents } from "@/api/db/schema";
+import { legalListVerificationRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -56,6 +57,7 @@ const config = {
     "claim that was marked.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: legalListVerificationRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "document_processing",

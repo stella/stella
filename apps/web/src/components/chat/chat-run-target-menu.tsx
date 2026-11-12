@@ -22,6 +22,7 @@ import {
 } from "@stll/ui/menu";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { EFFORT_LABEL_KEY } from "@/components/chat/chat-model-options-menu.logic";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
   type ChatLocalHarnessOption,
@@ -32,6 +33,7 @@ import {
   type LocalRunTargetState,
   type PermissionAvailability,
   permissionView,
+  reasoningEffortChoices,
   runTargetValue,
   sameRunTarget,
 } from "@/components/chat/chat-run-target-menu.logic";
@@ -62,6 +64,9 @@ const UNAVAILABLE_PERMISSION_KEY = {
   Exclude<PermissionAvailability, "available">,
   TranslationKey
 >;
+
+/** The radio value of leaving the reasoning effort to the harness. */
+const HARNESS_DEFAULT_EFFORT = "harness-default";
 
 /** How a harness that runs in one mode behaves, said once in its place. */
 const FIXED_PERMISSION_KEY = {
@@ -134,9 +139,10 @@ type ChatRunTargetMenuProps = {
 
 /**
  * The Run on choice of the Models submenu: stella's own models, or a coding
- * agent on the member's computer with the models it reports, and then how
- * much that agent asks before it acts. Absent entirely until the member's
- * computers are known and the member may run turns there.
+ * agent on the member's computer with the models it reports, then the
+ * reasoning efforts the model offers and how much that agent asks before it
+ * acts. Absent entirely until the member's computers are known and the
+ * member may run turns there.
  */
 export const ChatRunTargetMenu = ({
   activeOrganizationId,
@@ -172,6 +178,7 @@ export const ChatRunTargetMenu = ({
   };
   const maxApprovals = localRunMaxApprovals(readiness);
   const permissions = permissionView(selected, options, maxApprovals);
+  const efforts = reasoningEffortChoices(selected, options);
 
   return (
     <>
@@ -238,6 +245,33 @@ export const ChatRunTargetMenu = ({
           );
         })}
       </MenuRadioGroup>
+      {selected.kind === "local" && efforts !== null && (
+        <>
+          <MenuSeparator />
+          <MenuRadioGroup
+            value={selected.reasoningEffort ?? HARNESS_DEFAULT_EFFORT}
+          >
+            <MenuGroupLabel>
+              {t("chat.modelSelector.effortLabel")}
+            </MenuGroupLabel>
+            <MenuRadioItem
+              onClick={() => choose({ ...selected, reasoningEffort: null })}
+              value={HARNESS_DEFAULT_EFFORT}
+            >
+              {t("chat.modelSelector.effortValues.providerDefault")}
+            </MenuRadioItem>
+            {efforts.map((effort) => (
+              <MenuRadioItem
+                key={effort}
+                onClick={() => choose({ ...selected, reasoningEffort: effort })}
+                value={effort}
+              >
+                {t(EFFORT_LABEL_KEY[effort])}
+              </MenuRadioItem>
+            ))}
+          </MenuRadioGroup>
+        </>
+      )}
       {permissions?.type === "fixed" && (
         <>
           <MenuSeparator />

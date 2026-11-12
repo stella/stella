@@ -571,6 +571,21 @@
       "showBefore": "Näita teksti enne ¶ {from}",
       "verifyParagraphs": "Kontrolli lõike"
     },
+    "staleness": {
+      "failed": "Väiteid ei saanud uuesti kontrollida",
+      "finished": "{count, plural, one {# väide kontrollitud uuesti} other {# väidet kontrollitud uuesti}}",
+      "partial": "Uuesti kontrollitud: {rechecked, number}, ebaõnnestus: {failed, plural, one {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt muudetud",
+        "factHeld": "Fakt välja jäetud",
+        "factRemoved": "Fakt eemaldatud",
+        "newFactRelated": "Uus seotud fakt"
+      },
+      "recheckAll": "Kontrolli kõik uuesti",
+      "recheckLocked": "Kontrollitakse uuesti koos teiste aegunud väidetega",
+      "runLine": "{count, plural, one {# väide võib olla aegunud} other {# väidet võivad olla aegunud}}",
+      "running": "{count, plural, one {# väidet kontrollitakse uuesti…} other {# väidet kontrollitakse uuesti…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Vastuolus",
@@ -628,100 +643,21 @@
       "pickList": "Valige loend, mille faktide alusel selle toimiku dokumente kontrollitakse."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Loo kakskeelne versioon",
-      "creating": "Loomine…",
-      "description": "Loob dokumendist kahe veeruga koopia: vasakul algtekst, paremal tõlkimiseks mõeldud koopia eraldi nummerdusega. Koopia salvestatakse sellesse toimikusse uue dokumendina.",
-      "sameLanguage": "Valige kaks erinevat keelt.",
-      "sourceLanguage": "Lähtekeel",
-      "title": "Kakskeelne versioon"
-    },
-    "error": {
-      "title": "Kakskeelse versiooni loomine ebaõnnestus"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> on valmis, tõlkida on {rowCount, plural, one {# rida} other {# rida}}.",
-      "title": "Kakskeelne versioon loodud"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Täidab selle kaheveerulise dokumendi tõlkeveeru. Vaadake üle, mis iga reaga toimub ja kuidas määratletud termineid tõlgitakse, ning käivitage siis tõlge.",
-      "prepare": "Valmista ette",
-      "preparing": "Dokumendi lugemine…",
-      "preparingHint": "Kogu dokumendi lugemine ja iga rea hindamine võtab kuni kaks minutit.",
-      "title": "Tõlgi kakskeelne versioon"
+      "prepare": "Valmista ette"
     },
     "dispositions": {
-      "inline": "Mõlemad keeled",
       "keep": "Jäta muutmata"
     },
-    "error": {
-      "prepareTitle": "Dokumendi ettevalmistamine ebaõnnestus",
-      "startTitle": "Tõlke käivitamine ebaõnnestus"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Tõlkimiseks pole ühtegi tehisintellekti mudelit saadaval.",
-      "applyFailed": "Tõlkeid ei õnnestunud dokumenti tagasi kirjutada.",
-      "documentChanged": "Dokument muutus tõlkimise ajal. Valmistage see uuesti ette.",
-      "documentUnresolved": "Dokument või selle fail ei ole enam saadaval.",
-      "enqueueFailed": "Tõlget ei õnnestunud järjekorda lisada.",
-      "internal": "Tõlge katkes ootamatult.",
-      "notBilingual": "Sellel dokumendil ei ole kakskeelset tabelit.",
-      "translationFailed": "Ridade partii tõlkimine ebaõnnestus.",
-      "unknown": "Tõlge katkes ootamatult."
-    },
-    "glossary": {
-      "add": "Lisa termin",
-      "description": "Neid vasteid kasutatakse kõigil ridadel. Vasteta termin tuleb täita või eemaldada.",
-      "empty": "Määratletud termineid ei leitud.",
-      "formsHint": "Eraldage muud vormid komadega.",
-      "formsSource": "Termini muud vormid",
-      "formsTarget": "Tõlke muud vormid",
-      "incomplete": "Täitke puuduvad tõlked või eemaldage need terminid.",
-      "origins": {
-        "detected": "Leitud",
-        "user": "Teie oma"
-      },
-      "term": "Termin",
-      "title": "Määratletud terminid",
-      "tooManyForms": "Terminil võib olla kuni {max} muud vormi.",
-      "translation": "Tõlge"
-    },
     "kinds": {
-      "heading": "Pealkiri",
-      "listItem": "Loendipunkt",
-      "paragraph": "Lõik",
-      "table": "Terve tabel"
-    },
-    "origins": {
-      "default": "Hindamata",
-      "model": "AI"
+      "paragraph": "Lõik"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# rida jäeti vahele} other {# rida jäeti vahele}}: need ei sisalda tõlgitavat teksti.",
-      "start": "Käivita tõlge",
       "starting": "Käivitamine…"
     },
     "rows": {
-      "description": "Valige, mis juhtub tõlkeveeru iga reaga.",
-      "ordinal": "#",
-      "sourceText": "Lähtetekst",
-      "title": "Read",
-      "whatToDo": "Mida teha"
-    },
-    "run": {
-      "cancelled": "Tõlge tühistati.",
-      "doneSummary": "Tõlgitud {count, plural, one {# rida} other {# rida}}.",
-      "doneTitle": "Tõlge on valmis",
-      "failedRows": "{count, plural, one {# rida jäi tõlkimata} other {# rida jäi tõlkimata}}.",
-      "failedTitle": "Tõlge peatus",
-      "hint": "Tõlge töötab serveris. Jälgimiseks hoidke see aken avatuna.",
-      "moreRows": "{count, plural, one {veel # rida} other {veel # rida}}",
-      "progress": "Tõlgitud {completed} rida {total}-st",
-      "title": "Tõlkimine on pooleli…",
-      "warningsTitle": "Ülevaatamist vajavad read"
+      "title": "Read"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
       "none": "Viiteid pole veel salvestatud.",
       "notInStella": "Veel pole stellas",
-      "openAtCitation": "Ava viite kohal",
       "openDecision": "Ava lahend",
       "paragraphLabel": "Punkt {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1942,6 +1877,7 @@
       "refusalNoComputer": "Ükski sinu arvuti pole ühendatud. Ava stella desktop ja saada uuesti.",
       "refusalPermissionAboveLimit": "Sinu organisatsioon ei luba sinu arvutis töötavale programmeerimisagendile neid õigusi. Vali menüüs Õigused mõni muu valik.",
       "refusalPermissionUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa nende õigustega töötada. Vali menüüs Õigused mõni muu valik.",
+      "refusalReasoningEffortUnavailable": "Sinu arvutis töötav programmeerimisagent ei paku selle mudeli jaoks seda arutlustaset. Vali menüüs Arutlustase mõni teine.",
       "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
       "runOn": "Käivita",
@@ -2160,6 +2096,7 @@
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
+    "stopping": "Peatamine…",
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
     "suggestedFollowupsLabel": "Soovitatud jätkuküsimused",
@@ -2696,6 +2633,7 @@
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
     "organizations": "Organisatsioonid",
+    "outOfDate": "Aegunud",
     "page": "Lehekülg {page}",
     "paymentRetryNotice": "Makseprobleem. Juurdepääsu säilitamiseks uuendage oma makseviisi hiljemalt {date}.",
     "pin": "Kinnita",
@@ -6101,7 +6039,6 @@
     "comments": "Kommentaarid",
     "commentsEmpty": "Kommenteerimiseks vali tekst.",
     "noRevisions": "Versioone veel pole",
-    "outOfDate": "Aegunud",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Kokkuvõte puudub",
     "proposals": "Muudatusettepanekud",

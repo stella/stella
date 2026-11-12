@@ -70,7 +70,9 @@ export type HarnessToolCall = {
 
 export type HarnessToolResult = {
   content: string;
-  status: "succeeded" | "failed";
+  /** `cancelled`: the harness never ran the call to its end because the
+   *  turn was stopped or a new message cut it off; not a failure. */
+  status: "succeeded" | "failed" | "cancelled";
 };
 
 /**
@@ -180,7 +182,15 @@ export type HarnessFailure =
    * The run's approval mode needs the harness's OS sandbox and the sandbox
    * could not start; the run never runs without it.
    */
-  | { type: "sandbox_unavailable"; message: string };
+  | { type: "sandbox_unavailable"; message: string }
+  /**
+   * The harness kept retrying the provider with nothing else happening for
+   * longer than a turn may wait; the turn ends instead of waiting on.
+   */
+  | { type: "retry_stalled"; message: string }
+  /** The harness could not reach stella's MCP server, so it has none of
+   *  stella's tools; the turn does not run without them. */
+  | { type: "tools_unavailable"; message: string };
 
 export type HarnessEvent =
   | {
@@ -219,4 +229,6 @@ export const HARNESS_FAILURE_OUTCOME = {
   harness_exited: "failed",
   protocol_violation: "failed",
   sandbox_unavailable: "failed",
+  retry_stalled: "failed",
+  tools_unavailable: "failed",
 } as const satisfies Record<HarnessFailure["type"], DesktopRunnerRunOutcome>;

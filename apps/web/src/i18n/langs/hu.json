@@ -571,6 +571,21 @@
       "showBefore": "A(z) {from}. ¶ előtti szöveg megjelenítése",
       "verifyParagraphs": "Bekezdések ellenőrzése"
     },
+    "staleness": {
+      "failed": "Az állításokat nem sikerült újra ellenőrizni",
+      "finished": "{count, plural, one {# állítás újraellenőrizve} other {# állítás újraellenőrizve}}",
+      "partial": "Újraellenőrizve: {rechecked, number}, sikertelen: {failed, plural, one {#} other {#}}",
+      "reasons": {
+        "factChanged": "Tény módosult",
+        "factHeld": "Tény kihagyva",
+        "factRemoved": "Tény eltávolítva",
+        "newFactRelated": "Új kapcsolódó tény"
+      },
+      "recheckAll": "Összes újraellenőrzése",
+      "recheckLocked": "A többi elavult állítással együtt újraellenőrzés alatt",
+      "runLine": "{count, plural, one {# állítás elavult lehet} other {# állítás elavult lehet}}",
+      "running": "{count, plural, one {# állítás újraellenőrzése…} other {# állítás újraellenőrzése…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Cáfolt",
@@ -628,100 +643,21 @@
       "pickList": "Válassza ki azt a listát, amelynek tényeihez az ügy iratait viszonyítja a rendszer."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Kétnyelvű változat létrehozása",
-      "creating": "Létrehozás…",
-      "description": "Két oszlopos másolatot készít a dokumentumról: balra az eredeti szöveg, jobbra a fordítandó másolat, külön számozással. A másolat új dokumentumként kerül ebbe az ügybe.",
-      "sameLanguage": "Válasszon két különböző nyelvet.",
-      "sourceLanguage": "Forrásnyelv",
-      "title": "Kétnyelvű változat"
-    },
-    "error": {
-      "title": "A kétnyelvű változat létrehozása nem sikerült"
-    },
-    "success": {
-      "description": "A(z) <bdi>{fileName}</bdi> készen áll, {rowCount, plural, one {# sor} other {# sor}} vár fordításra.",
-      "title": "Kétnyelvű változat létrehozva"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Kitölti a kétoszlopos dokumentum fordítási oszlopát. Nézze át, mi történik az egyes sorokkal és hogyan jelennek meg a meghatározott kifejezések, majd indítsa el a fordítást.",
-      "prepare": "Előkészítés",
-      "preparing": "Dokumentum beolvasása…",
-      "preparingHint": "A teljes dokumentum beolvasása és minden sor értékelése akár két percig is tart.",
-      "title": "Kétnyelvű változat fordítása"
+      "prepare": "Előkészítés"
     },
     "dispositions": {
-      "inline": "Mindkét nyelv",
       "keep": "Változatlanul hagyás"
     },
-    "error": {
-      "prepareTitle": "A dokumentum előkészítése nem sikerült",
-      "startTitle": "A fordítás indítása nem sikerült"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Nem érhető el AI-modell a fordításhoz.",
-      "applyFailed": "A fordításokat nem sikerült visszaírni a dokumentumba.",
-      "documentChanged": "A dokumentum megváltozott a fordítás közben. Készítse elő újra.",
-      "documentUnresolved": "A dokumentum vagy a fájlja már nem érhető el.",
-      "enqueueFailed": "A fordítást nem sikerült sorba állítani.",
-      "internal": "A fordítás váratlanul leállt.",
-      "notBilingual": "Ez a dokumentum nem tartalmaz kétnyelvű táblázatot.",
-      "translationFailed": "Egy sorköteget nem sikerült lefordítani.",
-      "unknown": "A fordítás váratlanul leállt."
-    },
-    "glossary": {
-      "add": "Kifejezés hozzáadása",
-      "description": "Ezek a megfeleltetések minden sorra érvényesek. A fordítás nélküli kifejezést ki kell tölteni vagy el kell távolítani.",
-      "empty": "Nem találhatók meghatározott kifejezések.",
-      "formsHint": "A további alakokat vesszővel válassza el.",
-      "formsSource": "A kifejezés további alakjai",
-      "formsTarget": "A fordítás további alakjai",
-      "incomplete": "Töltse ki a hiányzó fordításokat, vagy távolítsa el ezeket a kifejezéseket.",
-      "origins": {
-        "detected": "Megtalált",
-        "user": "Saját"
-      },
-      "term": "Kifejezés",
-      "title": "Meghatározott kifejezések",
-      "tooManyForms": "Egy kifejezés legfeljebb {max} további alakot tartalmazhat.",
-      "translation": "Fordítás"
-    },
     "kinds": {
-      "heading": "Címsor",
-      "listItem": "Listaelem",
-      "paragraph": "Bekezdés",
-      "table": "Teljes táblázat"
-    },
-    "origins": {
-      "default": "Nem értékelt",
-      "model": "AI"
+      "paragraph": "Bekezdés"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# sor kimaradt} other {# sor kimaradt}}: nem tartalmaznak lefordítható szöveget.",
-      "start": "Fordítás indítása",
       "starting": "Indítás…"
     },
     "rows": {
-      "description": "Válassza ki, mi történjen a fordítási oszlop egyes soraival.",
-      "ordinal": "#",
-      "sourceText": "Forrásszöveg",
-      "title": "Sorok",
-      "whatToDo": "Mi történjen"
-    },
-    "run": {
-      "cancelled": "A fordítást megszakították.",
-      "doneSummary": "{count, plural, one {# sor} other {# sor}} lefordítva.",
-      "doneTitle": "A fordítás elkészült",
-      "failedRows": "{count, plural, one {# sort nem sikerült lefordítani} other {# sort nem sikerült lefordítani}}.",
-      "failedTitle": "A fordítás leállt",
-      "hint": "A fordítás a kiszolgálón fut. A követéséhez hagyja nyitva ezt az ablakot.",
-      "moreRows": "{count, plural, one {még # sor} other {még # sor}}",
-      "progress": "{total} sorból {completed} lefordítva",
-      "title": "A fordítás folyamatban…",
-      "warningsTitle": "Ellenőrzendő sorok"
+      "title": "Sorok"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# elutasító} other {# elutasító}}",
       "none": "Még nincs rögzített hivatkozás.",
       "notInStella": "Még nincs a stellában",
-      "openAtCitation": "Megnyitás a hivatkozásnál",
       "openDecision": "Határozat megnyitása",
       "paragraphLabel": "{paragraph}. pont",
       "paragraphMark": "¶ {paragraph}",
@@ -1942,6 +1877,7 @@
       "refusalNoComputer": "Egyik számítógépe sem csatlakozik. Nyissa meg a stella desktopot, majd küldje el újra.",
       "refusalPermissionAboveLimit": "A szervezete nem adja meg ezeket az engedélyeket a számítógépén futó kódoló ügynöknek. Válasszon másik lehetőséget az Engedélyek menüben.",
       "refusalPermissionUnavailable": "A számítógépén futó kódoló ügynök nem futhat ezekkel az engedélyekkel. Válasszon másik lehetőséget az Engedélyek menüben.",
+      "refusalReasoningEffortUnavailable": "A számítógépén futó kódoló ügynök nem kínálja ezt a gondolkodási szintet a modellhez. Válasszon másikat a Gondolkodási szint menüben.",
       "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
       "runOn": "Futtatás itt",
@@ -2160,6 +2096,7 @@
     "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
+    "stopping": "Leállítás…",
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
     "suggestedFollowupsLabel": "Javasolt követő kérdések",
@@ -2696,6 +2633,7 @@
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
     "organizations": "Szervezetek",
+    "outOfDate": "Elavult",
     "page": "{page}. oldal",
     "paymentRetryNotice": "Fizetési probléma. A hozzáférés megtartásához frissítse a fizetési módját eddig: {date}.",
     "pin": "Rögzítés",
@@ -6101,7 +6039,6 @@
     "comments": "Megjegyzések",
     "commentsEmpty": "Jelöljön ki szöveget a megjegyzéshez.",
     "noRevisions": "Még nincs változat",
-    "outOfDate": "Elavult",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Nincs összefoglaló",
     "proposals": "Módosítási javaslatok",

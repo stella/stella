@@ -841,6 +841,7 @@ describe("buildSendRequestBody", () => {
       harness: "codex",
       model: "gpt-5-codex",
       approvals: "full_auto",
+      reasoningEffort: null,
     };
     expect(bodyFor(local).runTarget).toEqual(local);
     expect("runTarget" in bodyFor({ kind: "cloud" })).toBe(false);
