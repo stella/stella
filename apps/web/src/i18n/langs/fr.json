@@ -6813,6 +6813,7 @@
     "deletedItem": "Supprimé : {name}",
     "deletingWorkspace": "Suppression du dossier",
     "documentSwitcher": {
+      "download": "Télécharger ce fichier",
       "searchPlaceholder": "Rechercher un document…",
       "trigger": "Changer de document"
     },

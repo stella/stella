@@ -6813,6 +6813,7 @@
     "deletedItem": "Excluído: {name}",
     "deletingWorkspace": "Excluindo caso",
     "documentSwitcher": {
+      "download": "Baixar este arquivo",
       "searchPlaceholder": "Encontrar um documento…",
       "trigger": "Trocar de documento"
     },

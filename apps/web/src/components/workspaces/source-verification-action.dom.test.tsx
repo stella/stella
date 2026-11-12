@@ -209,8 +209,9 @@ for (const { locale } of [{ locale: "en" }, { locale: "ar" }] as const) {
     });
     await waitFor(() =>
       expect(
-        mounted.queryByRole("button", { name: messages.common.accept }),
-      ).toBeNull(),
+        mounted.queryByRole("button", { name: messages.common.accept }) ===
+          null,
+      ).toBe(true),
     );
     expect(requests).toHaveLength(1);
     mounted.unmount();

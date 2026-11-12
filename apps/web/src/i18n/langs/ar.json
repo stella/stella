@@ -6813,6 +6813,7 @@
     "deletedItem": "تم الحذف: {name}",
     "deletingWorkspace": "جارٍ حذف الملف القانوني",
     "documentSwitcher": {
+      "download": "تنزيل هذا الملف",
       "searchPlaceholder": "ابحث عن مستند…",
       "trigger": "تبديل المستند"
     },

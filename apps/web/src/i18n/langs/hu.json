@@ -6813,6 +6813,7 @@
     "deletedItem": "Törölve: {name}",
     "deletingWorkspace": "Ügy törlése folyamatban",
     "documentSwitcher": {
+      "download": "Fájl letöltése",
       "searchPlaceholder": "Dokumentum keresése…",
       "trigger": "Dokumentum váltása"
     },
