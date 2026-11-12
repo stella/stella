@@ -16,22 +16,26 @@ describe("deleting a task", () => {
     const taskId = createSafeId<"entity">();
     let lookedUp: unknown;
     let deleted = false;
-    const { safeDb, scopedDb } = createScopedDbMock({
-      query: {
-        entities: {
-          // The id names a document, or a task in another matter: the
-          // lookup, which asks for a task in this matter, finds nothing.
-          findFirst: async (input: unknown) => {
-            lookedUp = input;
-            return await Promise.resolve(undefined);
+    const { safeDb, scopedDb } = createScopedDbMock(
+      {
+        query: {
+          entities: {
+            // The id names an item the caller can see that is not a task in
+            // this matter, such as a document: the lookup, which asks for a
+            // task in this matter, finds nothing.
+            findFirst: async (input: unknown) => {
+              lookedUp = input;
+              return await Promise.resolve(undefined);
+            },
           },
         },
+        delete: () => {
+          deleted = true;
+          throw new Error("nothing may be deleted");
+        },
       },
-      delete: () => {
-        deleted = true;
-        throw new Error("nothing may be deleted");
-      },
-    });
+      { visibleResources: { entity: [taskId] } },
+    );
 
     const result = await deleteTask.handler(
       asTestRaw<DeleteTaskCtx>({
