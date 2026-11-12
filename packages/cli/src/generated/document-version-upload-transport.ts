@@ -22,13 +22,13 @@ export const DOCUMENT_VERSION_UPLOAD_TRANSPORT = {
  * Every client reads this one value: the browser and the CLI refuse a larger
  * file before reading it, and the desktop app bounds an Office download by it.
  */
-export const UPLOAD_DOCUMENT_MAX_BYTES = 200 * 1024 * 1024;
+export const UPLOAD_DOCUMENT_MAX_BYTES: number = 200 * 1024 * 1024;
 
 /**
  * The slowest uplink a maximum-size document must still finish on inside
  * `DOCUMENT_UPLOAD_PUT_TIMEOUT_MS`: 128 KiB/s, about one megabit.
  */
-export const DOCUMENT_UPLOAD_MIN_BYTES_PER_SECOND = 128 * 1024;
+export const DOCUMENT_UPLOAD_MIN_BYTES_PER_SECOND: number = 128 * 1024;
 
 /**
  * How long a client lets one presigned document PUT run before it gives up.

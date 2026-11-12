@@ -42,7 +42,7 @@ fn link_clang_runtime() {
 /// so no copy of it exists here. The declaration is one line whose value is a
 /// product of integer literals (`200 * 1024 * 1024`).
 fn emit_document_limit() {
-  const DECLARATION: &str = "export const UPLOAD_DOCUMENT_MAX_BYTES = ";
+  const DECLARATION: &str = "export const UPLOAD_DOCUMENT_MAX_BYTES: number = ";
   let manifest_dir =
     std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
   let source_path = std::path::Path::new(&manifest_dir)
