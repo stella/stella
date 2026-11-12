@@ -73,6 +73,7 @@ import {
   scanPendingRows,
 } from "@/api/lib/queue-reconcile-scan";
 import {
+  createDocumentRunJobs,
   createDocumentRunQueue,
   STANDARD_DOCUMENT_RUN_LIMITS,
 } from "@/api/lib/queue/document-run-queue";
@@ -850,9 +851,16 @@ const queueExecute =
         : { execution: context.execution }),
     });
 
-export const listVerificationRunQueue = createDocumentRunQueue({
+const LIST_VERIFICATION_RUN_JOBS = createDocumentRunJobs<
+  "legal-list-verification-runs",
+  "legalListVerificationRun"
+>({
   name: "legal-list-verification-runs",
   jobName: "run-list-verification",
+});
+
+export const listVerificationRunQueue = createDocumentRunQueue({
+  jobs: LIST_VERIFICATION_RUN_JOBS,
   actionKind: "list-verification.background",
   limits: STANDARD_DOCUMENT_RUN_LIMITS,
   workerContext: WORKER_CONTEXT,
@@ -874,7 +882,7 @@ export const listVerificationRunQueue = createDocumentRunQueue({
 export const enqueueListVerificationRun = async (
   args: EnqueueDocumentRunArgs<"legalListVerificationRun">,
 ): Promise<void> => {
-  await listVerificationRunQueue.enqueue(args);
+  await LIST_VERIFICATION_RUN_JOBS.enqueue(args);
 };
 
 export const reconcileStuckListVerificationRuns = async (

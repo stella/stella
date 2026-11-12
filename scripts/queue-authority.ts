@@ -15,7 +15,7 @@
 //            classify as a member run of that module; a raw BullMQ worker
 //            import outside the constructor owner. A module that calls
 //            `createDocumentRunQueue` constructs that queue's Worker: the
-//            factory builds it from the `name` the call passes.
+//            factory builds it for the `name` its `jobs` were created with.
 //   members  (baselined, keyed without line numbers) a member-run queue whose
 //            worker module never calls the imported `createRootRunActor`
 //            (`<queue>::run-actor`); a member-run module the pinned-handle
@@ -477,6 +477,25 @@ const accessedMemberName = (node: Node | undefined): string | null => {
   return node.property.type === "Identifier" ? node.property.name : null;
 };
 
+/** The value of `key` in a call's first, object-literal argument. */
+const optionValue = (call: CallExpression, key: string): Expression | null => {
+  const first = call.arguments.at(0);
+  if (first === undefined || first.type === "SpreadElement") {
+    return null;
+  }
+  const options = unwrap(first);
+  if (options.type !== "ObjectExpression") {
+    return null;
+  }
+  const property = options.properties.find(
+    (candidate): candidate is ObjectProperty =>
+      isPropertyAssignment(candidate) &&
+      !candidate.computed &&
+      propertyName(candidate.key) === key,
+  );
+  return property === undefined ? null : property.value;
+};
+
 /**
  * Queue names consumed by the owned BullMQ workers a module constructs:
  * `undefined` when it constructs none, `null` when a queue name does not
@@ -565,21 +584,20 @@ const workerQueueNames = (
         : first;
     }),
     ...factoryCalls.map((call) => {
-      const spec = call.arguments.at(0);
-      if (spec === undefined || spec.type === "SpreadElement") {
+      // The queue's `jobs`, from `createDocumentRunJobs({ name })`: inline or
+      // a local constant.
+      const jobs = optionValue(call, "jobs");
+      if (jobs === null) {
         return null;
       }
-      const options = unwrap(spec);
-      if (options.type !== "ObjectExpression") {
-        return null;
-      }
-      const name = options.properties.find(
-        (property): property is ObjectProperty =>
-          isPropertyAssignment(property) &&
-          !property.computed &&
-          propertyName(property.key) === "name",
-      );
-      return name === undefined ? null : name.value;
+      const jobsCall =
+        jobs.type === "Identifier"
+          ? (declarationInitializer(file, jobs.name) ?? null)
+          : jobs;
+      const unwrapped = jobsCall === null ? null : unwrap(jobsCall);
+      return unwrapped?.type === "CallExpression"
+        ? optionValue(unwrapped, "name")
+        : null;
     }),
   ];
   const queues = new Set<string>();
@@ -1777,7 +1795,7 @@ const selfTestWorkerConstructors = (): string[] => {
   }
   const factoryQueues = workerQueueNames(
     "apps/api/src/lib/runs/run-queue.ts",
-    'import { createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; const NAME = "runs"; export const runs = createDocumentRunQueue({ name: NAME, jobName: "run" });',
+    'import { createDocumentRunJobs, createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; const NAME = "runs"; const JOBS = createDocumentRunJobs({ name: NAME, jobName: "run" }); export const runs = createDocumentRunQueue({ jobs: JOBS });',
     () => null,
   );
   if (JSON.stringify(factoryQueues) !== JSON.stringify(["runs"])) {
@@ -1788,7 +1806,7 @@ const selfTestWorkerConstructors = (): string[] => {
   if (
     workerQueueNames(
       "apps/api/src/lib/runs/run-queue.ts",
-      'import { createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; export const runs = createDocumentRunQueue(spec);',
+      'import { createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; export const runs = createDocumentRunQueue({ jobs: makeJobs() });',
       () => null,
     ) !== null
   ) {

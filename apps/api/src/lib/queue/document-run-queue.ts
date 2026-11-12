@@ -162,9 +162,8 @@ type DocumentRunQueueSpec<
   Db,
   Row extends DocumentRunQueuedRow<Kind>,
 > = {
-  name: Name;
-  jobName: string;
-  contractVersion?: number;
+  /** The queue's jobs, as `createDocumentRunJobs` describes them. */
+  jobs: DocumentRunJobs<Name, Kind>;
   /** The background slot a job takes; its period action was drawn when the
    *  run was queued. */
   actionKind: ConcurrencyOnlyActionKind;
@@ -241,6 +240,78 @@ type ReconcileStuckArgs<Db, Context> = {
   db: Db;
   context?: Context;
 };
+
+/**
+ * The enqueue side of a document run queue: its lazy BullMQ queue and the job
+ * one run is enqueued as. A request that starts a run needs only this, so it
+ * never holds the run's execution.
+ */
+export const createDocumentRunJobs = <
+  Name extends BullMqQueueName,
+  Kind extends SafeIdType,
+>({
+  name,
+  jobName,
+  contractVersion,
+}: {
+  name: Name;
+  jobName: string;
+  /** Set on a queue whose job shape has been versioned. */
+  contractVersion?: number;
+}) => {
+  const getQueue = createLazyBullMqQueue<DocumentRunJobData>({
+    name,
+    defaultJobOptions: {
+      attempts: JOB_ATTEMPTS,
+      removeOnComplete: 100,
+      removeOnFail: 500,
+    },
+  });
+
+  /** One job, described exactly as the queue takes it. The run id is the job
+   *  identity, so a duplicate enqueue collapses onto the job in flight. */
+  const runJob = ({
+    runId,
+    workspaceId,
+    organizationId,
+    userId,
+  }: EnqueueDocumentRunArgs<Kind>) => ({
+    name: jobName,
+    data: {
+      ...(contractVersion === undefined ? {} : { contractVersion }),
+      runId,
+      workspaceId,
+      organizationId,
+      userId,
+    } satisfies DocumentRunJobData,
+    opts: { jobId: createBullMqJobId(workspaceId, runId) },
+  });
+
+  return {
+    name,
+    contractVersion,
+    getQueue,
+    runJob,
+    enqueue: async (args: EnqueueDocumentRunArgs<Kind>): Promise<void> => {
+      const job = runJob(args);
+      await getQueue().add(job.name, job.data, job.opts);
+    },
+    /** Many runs in one round trip: the same jobs, under the same ids. */
+    enqueueMany: async (
+      runs: readonly EnqueueDocumentRunArgs<Kind>[],
+    ): Promise<void> => {
+      if (runs.length === 0) {
+        return;
+      }
+      await getQueue().addBulk(runs.map(runJob));
+    },
+  };
+};
+
+type DocumentRunJobs<
+  Name extends BullMqQueueName,
+  Kind extends SafeIdType,
+> = ReturnType<typeof createDocumentRunJobs<Name, Kind>>;
 
 type DocumentRunWorkerArgs<
   Name extends BullMqQueueName,
@@ -360,55 +431,13 @@ export const createDocumentRunQueue = <
 >(
   spec: DocumentRunQueueSpec<Name, Kind, Claimed, ErrorCode, Context, Db, Row>,
 ) => {
-  const { name, limits, workerContext, contractVersion } = spec;
+  const { jobs, limits, workerContext } = spec;
+  const { name, contractVersion, getQueue, runJob } = jobs;
   if (limits.runTimeoutMs >= limits.stuckRunningMs) {
     panic(
       `${name}: a run's time budget must end before its row counts as stuck`,
     );
   }
-
-  const getQueue = createLazyBullMqQueue<DocumentRunJobData>({
-    name,
-    defaultJobOptions: {
-      attempts: JOB_ATTEMPTS,
-      removeOnComplete: 100,
-      removeOnFail: 500,
-    },
-  });
-
-  /** One job, described exactly as the queue takes it. The run id is the job
-   *  identity, so a duplicate enqueue collapses onto the job in flight. */
-  const runJob = ({
-    runId,
-    workspaceId,
-    organizationId,
-    userId,
-  }: EnqueueDocumentRunArgs<Kind>) => ({
-    name: spec.jobName,
-    data: {
-      ...(contractVersion === undefined ? {} : { contractVersion }),
-      runId,
-      workspaceId,
-      organizationId,
-      userId,
-    } satisfies DocumentRunJobData,
-    opts: { jobId: createBullMqJobId(workspaceId, runId) },
-  });
-
-  const enqueue = async (args: EnqueueDocumentRunArgs<Kind>): Promise<void> => {
-    const { name: jobName, data, opts } = runJob(args);
-    await getQueue().add(jobName, data, opts);
-  };
-
-  /** Many runs in one round trip: the same jobs, under the same ids. */
-  const enqueueMany = async (
-    runs: readonly EnqueueDocumentRunArgs<Kind>[],
-  ): Promise<void> => {
-    if (runs.length === 0) {
-      return;
-    }
-    await getQueue().addBulk(runs.map(runJob));
-  };
 
   const thrownErrorCode =
     spec.thrownErrorCode ?? (() => DOCUMENT_RUN_INTERNAL_ERROR);
@@ -526,8 +555,6 @@ export const createDocumentRunQueue = <
   return {
     name,
     limits,
-    enqueue,
-    enqueueMany,
     processRun,
     reconcileQueued,
     reconcileStuck,

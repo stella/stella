@@ -60,6 +60,7 @@ import {
   reconcileCursorTimestamp,
 } from "@/api/lib/queue-reconcile-scan";
 import {
+  createDocumentRunJobs,
   createDocumentRunQueue,
   STANDARD_DOCUMENT_RUN_LIMITS,
 } from "@/api/lib/queue/document-run-queue";
@@ -695,10 +696,17 @@ const setRunFailed = async (
   );
 };
 
-export const documentReviewRunQueue = createDocumentRunQueue({
+const DOCUMENT_REVIEW_RUN_JOBS = createDocumentRunJobs<
+  "document-review-runs-v2",
+  "documentReviewRun"
+>({
   name: "document-review-runs-v2",
   jobName: "run-document-review",
   contractVersion: QUEUE_CONTRACT_VERSION,
+});
+
+export const documentReviewRunQueue = createDocumentRunQueue({
+  jobs: DOCUMENT_REVIEW_RUN_JOBS,
   actionKind: "document-reviews.background",
   limits: STANDARD_DOCUMENT_RUN_LIMITS,
   workerContext: undefined,
@@ -713,7 +721,7 @@ export const documentReviewRunQueue = createDocumentRunQueue({
 export const enqueueDocumentReviewRun = async (
   args: EnqueueDocumentRunArgs<"documentReviewRun">,
 ): Promise<void> => {
-  await documentReviewRunQueue.enqueue(args);
+  await DOCUMENT_REVIEW_RUN_JOBS.enqueue(args);
 };
 
 /**
@@ -724,7 +732,7 @@ export const enqueueDocumentReviewRun = async (
 export const enqueueDocumentReviewRuns = async (
   runs: readonly EnqueueDocumentRunArgs<"documentReviewRun">[],
 ): Promise<void> => {
-  await documentReviewRunQueue.enqueueMany(runs);
+  await DOCUMENT_REVIEW_RUN_JOBS.enqueueMany(runs);
 };
 
 export const reconcileQueuedDocumentReviewRuns = async ({
