@@ -87,31 +87,31 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
     taskFilter: null,
     jsonPath: null,
   };
-  for (let index = 0; index < argv.length; index += 1) {
-    const value = argv[index + 1];
-    switch (argv[index]) {
+  for (let index = 0; index < argv.length; index += 2) {
+    const flag = argv.at(index) ?? panic("An argument index ran past argv");
+    const value = argv.at(index + 1);
+    if (value === undefined) {
+      return panic(`Flag ${flag} needs a value`);
+    }
+    switch (flag) {
       case "--models": {
-        options.models = (value ?? "").split(",").filter(Boolean);
-        index += 1;
+        options.models = value.split(",").filter(Boolean);
         break;
       }
       case "--runs": {
-        options.runs = Number.parseInt(value ?? "1", 10);
-        index += 1;
+        options.runs = Number.parseInt(value, 10);
         break;
       }
       case "--task": {
-        options.taskFilter = value ?? null;
-        index += 1;
+        options.taskFilter = value;
         break;
       }
       case "--json": {
-        options.jsonPath = value ?? null;
-        index += 1;
+        options.jsonPath = value;
         break;
       }
       default: {
-        return panic(`Unknown argument ${String(argv[index])}`);
+        return panic(`Unknown argument ${flag}`);
       }
     }
   }
