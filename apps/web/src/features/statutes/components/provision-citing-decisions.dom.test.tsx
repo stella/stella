@@ -221,10 +221,10 @@ for (const [locale, messages] of [
         Response.json({ message: "Read unavailable" }, { status: 503 }),
       );
     });
-    await waitFor(() => expect(ui.queryByRole("alert")).not.toBeNull());
+    await waitFor(() => expect(ui.queryByRole("alert") === null).toBe(false));
     fireEvent.click(ui.getByRole("button", { name: messages.common.retry }));
     await waitFor(() =>
-      expect(ui.queryByText(messages.common.noResults)).not.toBeNull(),
+      expect(ui.queryByText(messages.common.noResults) === null).toBe(false),
     );
     expect(attempts).toBe(2);
   });

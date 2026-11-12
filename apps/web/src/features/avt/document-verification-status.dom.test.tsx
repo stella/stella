@@ -330,7 +330,9 @@ test("a failed kind read says so where the switches are and recovers on retry", 
   expect(Object.hasOwn(toggle().dataset, "disabled")).toBe(true);
   fireEvent.click(view.getByRole("button", { name: messages.common.retry }));
   await waitFor(() =>
-    expect(view.queryByText(messages.avt.documents.kindsLoadFailed)).toBeNull(),
+    expect(
+      view.queryByText(messages.avt.documents.kindsLoadFailed) === null,
+    ).toBe(true),
   );
   await waitFor(() =>
     expect(Object.hasOwn(toggle().dataset, "disabled")).toBe(false),

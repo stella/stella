@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Das Ergebnis ist eindeutig, doch die Auslegung eines beitragenden Fakts ist strittig – vor der Freigabe sollten Sie dies prüfen.",
       "contradicted": "Der Bestand weicht von dieser Behauptung ab. Bevor dieses Ergebnis Bestand hat, ist eine menschliche Entscheidung erforderlich.",
-      "nocover": "Kein Ankerfakt betrifft diese Behauptung; sie kann daher mit nichts abgeglichen werden. Die Freigabe ist optional.",
+      "nocover": "Noch deckt keine Tatsache der Liste diese Behauptung ab.",
       "notverifiable": "Als nicht überprüfbar zurückgestellt – die Freigabe ist optional. Öffnen Sie die Behauptung unten erneut, falls sie doch überprüfbar ist.",
       "recordconflict": "Zwei Anlagen im Bestand widersprechen sich. Klären Sie oben, welche maßgeblich ist, oder markieren Sie den Fall für das Belegteam – das Tool entscheidet nicht für Sie.",
       "restsOnHeld": "Ein Fakt, auf dem dieses Ergebnis beruht, ist zur Prüfung zurückgestellt; bestätigen Sie, dass das Ergebnis auch ohne ihn trägt, oder prüfen Sie die Behauptung erneut, sobald der Fakt geklärt ist.",
@@ -381,6 +381,30 @@
         "label": "Ohne Quelle"
       }
     },
+    "gap": {
+      "addFact": "Tatsache aus einem Dokument hinzufügen",
+      "addFactFailed": "Die Tatsache konnte nicht hinzugefügt werden",
+      "factOffList": "Eine Tatsache, die nicht mehr in der Liste steht",
+      "linkFact": "Tatsache verknüpfen",
+      "linkFailed": "Die Tatsache konnte nicht verknüpft werden",
+      "linked": "Verknüpfte Tatsachen",
+      "linkedMark": "Verknüpft",
+      "linksChanged": "Die Verknüpfungen haben sich seit der letzten Prüfung geändert.",
+      "noFacts": "Keine Tatsache in der Liste passt.",
+      "recheck": "Erneut prüfen",
+      "recheckFailed": "Die Behauptung konnte nicht erneut geprüft werden",
+      "searchFacts": "Tatsachen der Liste durchsuchen",
+      "sheet": {
+        "passage": "Textstelle",
+        "passageHint": "Der Wortlaut im Dokument, der die Tatsache belegt.",
+        "statementRequired": "Geben Sie die Tatsache ein.",
+        "statementTooLong": "Eine Tatsache darf höchstens {limit} Zeichen enthalten.",
+        "submit": "Hinzufügen und erneut prüfen",
+        "title": "Tatsache aus einem Dokument hinzufügen"
+      },
+      "showNextSteps": "Nächste Schritte anzeigen",
+      "unlink": "Verknüpfung mit {fact} aufheben"
+    },
     "guidance": {
       "escalate": "Eskalieren",
       "manualJudgement": "Manuelle Entscheidung",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Als routinemäßig übernommen",
         "conflictReopened": "Auflösung des Widerspruchs zurückgenommen",
         "escalated": "Für das Belegteam markiert",
+        "factLinked": "Tatsache verknüpft",
+        "factUnlinked": "Verknüpfung mit Tatsache aufgehoben",
         "governed": "Maßgeblichen Eintrag gewählt",
         "noteCleared": "Notiz entfernt",
         "noteSaved": "Notiz gespeichert",
         "overridden": "Ergebnis geändert",
         "overrideWithdrawn": "Änderung des Ergebnisses zurückgenommen",
+        "rechecked": "Behauptung erneut geprüft",
         "reopened": "Als überprüfbare Behauptung erneut geöffnet",
         "statusCleared": "Prüfstatus entfernt",
         "statusDisputed": "Als beanstandet markiert",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Ehemaliges Mitglied",
       "kinds": {
+        "factLink": "Faktenverknüpfungen",
         "override": "Geänderte Ergebnisse",
+        "recheck": "Erneute Prüfungen",
         "recordConflict": "Auflösungen von Widersprüchen",
         "reopen": "Erneute Öffnungen",
         "status": "Statusänderungen"
@@ -461,6 +490,11 @@
       "unresolveConflict": "Warum diese Auflösung zurücknehmen?",
       "withdrawOverride": "Warum zum Ergebnis des Werkzeugs zurückkehren?"
     },
+    "recheck": {
+      "currentVerdict": "Ergebnis nach der erneuten Prüfung",
+      "runVerdict": "Ergebnis des Prüflaufs",
+      "summary": "Erneut geprüft {checkedAt} anhand von {count, plural, one {# Tatsache} other {# Tatsachen}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Beanstandet} needsEvidence {Belege fehlen} other {{origin, select, bulk {Als routinemäßig übernommen} other {Geprüft}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "Nicht gespeichert",
       "failedTitle": "Ihre Änderung wurde nicht gespeichert"
     },
-    "sourceMediumTooltip": "Quellenmedium – eine neutrale Beschreibung. Es mindert die Sicherheit nicht von sich aus.",
     "states": {
       "contradicted": {
         "chip": "Widersprochen",
@@ -5396,8 +5429,6 @@
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",
     "caseLawEmptyState": "Tippen Sie, um Gerichtsentscheidungen zu durchsuchen.",
-    "caseLawMatchingDecisions": "{count, plural, one {# passende Entscheidung} other {# passende Entscheidungen}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ passende Entscheidung} other {#+ passende Entscheidungen}}",
     "chatCoveragePartial": "Nicht alle Chats wurden vollständig durchsucht.",
     "continueInChat": "Im Chat fortsetzen",
     "dateFrom": "Von",
@@ -6059,6 +6090,11 @@
     "title": "Rechtsvorschriften",
     "validity": "Gültig von {from} bis {to}",
     "versionAppliedInDecision": "In der Entscheidung <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> angewandte Fassung (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# Vorschrift eingefügt} other {# Vorschriften eingefügt}}",
+    "versionChangesChanged": "{count, plural, one {# Vorschrift geändert} other {# Vorschriften geändert}}",
+    "versionChangesNone": "Wortlaut unverändert",
+    "versionChangesRemoved": "{count, plural, one {# Vorschrift gestrichen} other {# Vorschriften gestrichen}}",
+    "versionChangesWords": "{inserted, plural, one {# Wort eingefügt} other {# Wörter eingefügt}}, {deleted, plural, one {# Wort gestrichen} other {# Wörter gestrichen}}",
     "wordingVersionUnknown": "Datum der Wortlautversion nicht verfügbar"
   },
   "styleSets": {
@@ -6779,6 +6815,7 @@
     "deletedItem": "Gelöscht: {name}",
     "deletingWorkspace": "Akte wird gelöscht",
     "documentSwitcher": {
+      "download": "Diese Datei herunterladen",
       "searchPlaceholder": "Dokument suchen…",
       "trigger": "Dokument wechseln"
     },

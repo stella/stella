@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Závěr je jednoznačný, ale výklad jednoho z použitých faktů je sporný; před schválením si zaslouží vaši pozornost.",
       "contradicted": "Záznamy se od tohoto tvrzení odchylují. Než bude možné závěr potvrdit, musí rozhodnout člověk.",
-      "nocover": "Žádný referenční fakt se tohoto tvrzení netýká, takže je nelze s ničím porovnat. Schválení je nepovinné.",
+      "nocover": "Toto tvrzení zatím nepokrývá žádný fakt ze seznamu.",
       "notverifiable": "Odloženo jako neověřitelné; schválení je nepovinné. Pokud lze tvrzení ve skutečnosti ověřit, znovu je otevřete níže.",
       "recordconflict": "Dva důkazní materiály ve spise si odporují. Výše určete, který je rozhodující, nebo věc označte pro tým pro důkazy; nástroj nerozhodne za vás.",
       "restsOnHeld": "Fakt, o který se tento závěr opírá, je pozastaven ke kontrole; potvrďte, že závěr platí i bez něj, nebo tvrzení po vyřešení faktu ověřte znovu.",
@@ -381,6 +381,30 @@
         "label": "Bez zdroje"
       }
     },
+    "gap": {
+      "addFact": "Přidat fakt z dokumentu",
+      "addFactFailed": "Fakt se nepodařilo přidat",
+      "factOffList": "Fakt, který už v seznamu není",
+      "linkFact": "Propojit fakt",
+      "linkFailed": "Fakt se nepodařilo propojit",
+      "linked": "Propojené fakty",
+      "linkedMark": "Propojeno",
+      "linksChanged": "Propojení se od poslední kontroly změnila.",
+      "noFacts": "Žádný fakt v seznamu neodpovídá.",
+      "recheck": "Zkontrolovat znovu",
+      "recheckFailed": "Tvrzení se nepodařilo zkontrolovat znovu",
+      "searchFacts": "Hledat mezi fakty v seznamu",
+      "sheet": {
+        "passage": "Pasáž",
+        "passageHint": "Slova v dokumentu, která fakt prokazují.",
+        "statementRequired": "Napište fakt.",
+        "statementTooLong": "Fakt může mít nejvýše {limit} znaků.",
+        "submit": "Přidat a zkontrolovat znovu",
+        "title": "Přidat fakt z dokumentu"
+      },
+      "showNextSteps": "Zobrazit další kroky",
+      "unlink": "Zrušit propojení: {fact}"
+    },
     "guidance": {
       "escalate": "Předat dál",
       "manualJudgement": "Vyžaduje úsudek",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Přijato jako rutinní",
         "conflictReopened": "Vyřešení rozporu zrušeno",
         "escalated": "Předáno týmu pro důkazy",
+        "factLinked": "Propojen fakt",
+        "factUnlinked": "Zrušeno propojení faktu",
         "governed": "Zvolen rozhodující záznam",
         "noteCleared": "Poznámka odstraněna",
         "noteSaved": "Poznámka uložena",
         "overridden": "Závěr změněn",
         "overrideWithdrawn": "Změna závěru vzata zpět",
+        "rechecked": "Tvrzení znovu zkontrolováno",
         "reopened": "Znovu otevřeno jako ověřitelné tvrzení",
         "statusCleared": "Stav kontroly zrušen",
         "statusDisputed": "Označeno jako zpochybněné",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Bývalý člen",
       "kinds": {
+        "factLink": "Propojení faktů",
         "override": "Změny závěru",
+        "recheck": "Opakované kontroly",
         "recordConflict": "Řešení rozporů v záznamech",
         "reopen": "Znovuotevření",
         "status": "Změny stavu"
@@ -461,6 +490,11 @@
       "unresolveConflict": "Proč rušíte toto vyřešení?",
       "withdrawOverride": "Proč se vracíte k závěru nástroje?"
     },
+    "recheck": {
+      "currentVerdict": "Závěr po opakované kontrole",
+      "runVerdict": "Závěr kontroly",
+      "summary": "Znovu zkontrolováno {checkedAt} proti {count, plural, one {# faktu} few {# faktům} many {# faktu} other {# faktům}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Zpochybněno} needsEvidence {Vyžaduje důkazy} other {{origin, select, bulk {Přijato jako rutinní} other {Zkontrolováno}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "Neuloženo",
       "failedTitle": "Vaše změna nebyla uložena"
     },
-    "sourceMediumTooltip": "Médium zdroje: neutrální popis. Samo o sobě nesnižuje míru jistoty.",
     "states": {
       "contradicted": {
         "chip": "V rozporu",
@@ -5396,8 +5429,6 @@
   "search": {
     "aiRefine": "Vylepšit dotaz pomocí AI",
     "caseLawEmptyState": "Začněte psát pro vyhledávání v soudních rozhodnutích.",
-    "caseLawMatchingDecisions": "{count, plural, one {# odpovídající rozhodnutí} few {# odpovídající rozhodnutí} many {# odpovídajícího rozhodnutí} other {# odpovídajících rozhodnutí}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ odpovídající rozhodnutí} few {#+ odpovídající rozhodnutí} many {#+ odpovídajícího rozhodnutí} other {#+ odpovídajících rozhodnutí}}",
     "chatCoveragePartial": "Ne všechny chaty byly prohledány celé.",
     "continueInChat": "Pokračovat v chatu",
     "dateFrom": "Od",
@@ -6059,6 +6090,11 @@
     "title": "Právní předpisy",
     "validity": "Platné od {from} do {to}",
     "versionAppliedInDecision": "Znění použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# vložené ustanovení} few {# vložená ustanovení} many {# vloženého ustanovení} other {# vložených ustanovení}}",
+    "versionChangesChanged": "{count, plural, one {# změněné ustanovení} few {# změněná ustanovení} many {# změněného ustanovení} other {# změněných ustanovení}}",
+    "versionChangesNone": "Znění beze změny",
+    "versionChangesRemoved": "{count, plural, one {# vypuštěné ustanovení} few {# vypuštěná ustanovení} many {# vypuštěného ustanovení} other {# vypuštěných ustanovení}}",
+    "versionChangesWords": "{inserted, plural, one {# vložené slovo} few {# vložená slova} many {# vloženého slova} other {# vložených slov}}, {deleted, plural, one {# vypuštěné slovo} few {# vypuštěná slova} many {# vypuštěného slova} other {# vypuštěných slov}}",
     "wordingVersionUnknown": "Datum verze znění není k dispozici"
   },
   "styleSets": {
@@ -6779,6 +6815,7 @@
     "deletedItem": "Smazáno: {name}",
     "deletingWorkspace": "Mazání spisu",
     "documentSwitcher": {
+      "download": "Stáhnout tento soubor",
       "searchPlaceholder": "Najít dokument…",
       "trigger": "Přepnout dokument"
     },
