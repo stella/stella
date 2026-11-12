@@ -239,7 +239,7 @@ export const startFakeExtension = ({
         }
         const index = Number(command.target.ref.split(":").at(2));
         const element = tab.page?.elements.at(index);
-        if (element === undefined || tab.url === null) {
+        if (element === undefined) {
           return errorResult(
             BROWSER_CONTROL_ERROR_CODE.elementNotFound,
             "No such element.",
@@ -274,7 +274,7 @@ export const startFakeExtension = ({
   const send = (message: unknown) => {
     const frame = encodeNativeMessage(JSON.stringify(message));
     if (frame !== null) {
-      host.stdin.write(frame);
+      Promise.resolve(host.stdin.write(frame)).catch(() => undefined);
     }
   };
 
@@ -323,7 +323,7 @@ export const startFakeExtension = ({
     commands,
     connected: connected.promise,
     stop: async () => {
-      host.stdin.end();
+      await host.stdin.end();
       host.kill();
       await host.exited;
       await pumped;
