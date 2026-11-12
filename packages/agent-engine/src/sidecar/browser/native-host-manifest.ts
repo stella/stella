@@ -20,12 +20,21 @@ import { STELLA_DESKTOP_NATIVE_HOST } from "@stll/api-contract/browser-control";
 /** The script Chrome starts, in the holder's private folder. */
 const NATIVE_HOST_SCRIPT = "browser-host";
 
-const CHROME_PROFILE_ROOT = [
-  "Library",
-  "Application Support",
-  "Google",
-  "Chrome",
-];
+/**
+ * Where Chrome keeps a user's profiles, under the home folder; it reads
+ * per-user hosts from `NativeMessagingHosts` there. `null` where stella
+ * does not register a host yet (Windows registers through the registry).
+ */
+const chromeProfileRoot = (platform: NodeJS.Platform): string[] | null => {
+  switch (platform) {
+    case "darwin":
+      return ["Library", "Application Support", "Google", "Chrome"];
+    case "linux":
+      return [".config", "google-chrome"];
+    default:
+      return null;
+  }
+};
 
 /** One argument for `/bin/sh`, whatever it contains. */
 const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
@@ -59,10 +68,11 @@ export const installNativeHost = ({
   InstallNativeHostOutcome,
   { message: string }
 > => {
-  if (platform !== "darwin") {
+  const profileFolders = chromeProfileRoot(platform);
+  if (profileFolders === null) {
     return Result.ok({ reason: "unsupported_platform", type: "skipped" });
   }
-  const profileRoot = path.join(home, ...CHROME_PROFILE_ROOT);
+  const profileRoot = path.join(home, ...profileFolders);
   if (!existsSync(profileRoot)) {
     return Result.ok({ reason: "no_chrome", type: "skipped" });
   }

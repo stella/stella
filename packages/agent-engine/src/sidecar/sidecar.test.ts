@@ -755,6 +755,16 @@ describe("harness holder over its socket", () => {
     );
     expect(server.headers.Authorization).toMatch(/^Bearer \S{43,}$/u);
     expect(JSON.stringify(holder.received())).not.toContain(RUN_TOKEN);
+    // This holder can register no browser host with Chrome (it has no
+    // home folder), so the harness is offered no browser tools.
+    expect(
+      Object.keys(
+        v.parse(
+          v.record(v.string(), v.unknown()),
+          registered?.request?.servers,
+        ),
+      ),
+    ).toEqual(["stella"]);
   });
 
   test("hands each harness the turn's attached image from its copy; a PDF reaches Claude only", async () => {

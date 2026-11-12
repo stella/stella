@@ -33,8 +33,13 @@ export const browserEndpointFor = (holderEndpoint: string): string =>
 export type HolderBrowserOptions = {
   /** How to start this sidecar: its executable, and the script in development. */
   command: readonly string[];
-  /** The member's home folder; `null` registers no host with Chrome. */
+  /**
+   * The member's home folder. Without one no host is registered with
+   * Chrome, and runs get no browser tools.
+   */
   home: string | null;
+  /** Where Chrome looks for the host depends on it. */
+  platform: NodeJS.Platform;
   /** Development extension ids allowed besides the store's. */
   extraExtensionIds: readonly string[];
 };
@@ -54,6 +59,7 @@ export const startHolderBrowser = async ({
   extraExtensionIds,
   home,
   log,
+  platform,
   version,
 }: HolderBrowserOptions & {
   dir: string;
@@ -62,8 +68,16 @@ export const startHolderBrowser = async ({
   log: (line: string) => void;
   version: string;
 }): Promise<HolderBrowserOutcome> => {
-  if (process.platform === "win32") {
+  if (platform === "win32") {
     return { reason: "not on Windows yet", type: "unavailable" };
+  }
+  // Without a host Chrome can start, the tools could only fail: no harness
+  // is offered them.
+  if (home === null) {
+    return {
+      reason: "no home folder to register a host in",
+      type: "unavailable",
+    };
   }
   const browserEndpoint = browserEndpointFor(endpoint);
   if (Buffer.byteLength(browserEndpoint) > SUN_PATH_BYTES - 1) {
@@ -78,24 +92,30 @@ export const startHolderBrowser = async ({
   if (Result.isError(bridge)) {
     return { reason: bridge.error.message, type: "unavailable" };
   }
-  if (home !== null) {
-    const installed = installNativeHost({
-      command,
-      dir,
-      endpoint: bridge.value.endpoint,
-      extensionIds: [BROWSER_EXTENSION_ID, ...extraExtensionIds],
-      home,
-      platform: process.platform,
-      secretFile: bridge.value.secretFile,
-    });
-    if (Result.isError(installed)) {
-      log(`the browser host was not registered: ${installed.error.message}`);
-    } else if (installed.value.type === "skipped") {
-      log(`the browser host was not registered: ${installed.value.reason}`);
-    } else {
-      log("the browser host is registered with Chrome");
-    }
+  const installed = installNativeHost({
+    command,
+    dir,
+    endpoint: bridge.value.endpoint,
+    extensionIds: [BROWSER_EXTENSION_ID, ...extraExtensionIds],
+    home,
+    platform,
+    secretFile: bridge.value.secretFile,
+  });
+  if (Result.isError(installed)) {
+    await bridge.value.stop();
+    return {
+      reason: `the browser host was not registered: ${installed.error.message}`,
+      type: "unavailable",
+    };
   }
+  if (installed.value.type === "skipped") {
+    await bridge.value.stop();
+    return {
+      reason: `the browser host was not registered: ${installed.value.reason}`,
+      type: "unavailable",
+    };
+  }
+  log("the browser host is registered with Chrome");
   const mcp = startLocalBrowserMcp({ bridge: bridge.value, version });
   return {
     browser: {

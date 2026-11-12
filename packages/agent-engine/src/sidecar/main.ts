@@ -106,6 +106,7 @@ const started = await startHolderServer({
       : [process.execPath],
     extraExtensionIds: extraBrowserExtensionIds(),
     home: homeFolder(),
+    platform: process.platform,
   },
 });
 if (Result.isError(started)) {
