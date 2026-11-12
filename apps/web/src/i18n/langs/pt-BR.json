@@ -571,6 +571,21 @@
       "showBefore": "Mostrar o texto antes do ¶ {from}",
       "verifyParagraphs": "Verificar parágrafos"
     },
+    "staleness": {
+      "failed": "Não foi possível verificar as alegações novamente",
+      "finished": "{count, plural, one {# alegação verificada novamente} other {# alegações verificadas novamente} many {# alegações verificadas novamente}}",
+      "partial": "{rechecked, number} verificadas novamente, {failed, plural, one {# com falha} other {# com falha} many {# com falha}}",
+      "reasons": {
+        "factChanged": "Fato alterado",
+        "factHeld": "Fato excluído",
+        "factRemoved": "Fato removido",
+        "newFactRelated": "Novo fato relacionado"
+      },
+      "recheckAll": "Verificar todas novamente",
+      "recheckLocked": "Sendo verificada novamente com as outras alegações desatualizadas",
+      "runLine": "{count, plural, one {# alegação pode estar desatualizada} other {# alegações podem estar desatualizadas} many {# alegações podem estar desatualizadas}}",
+      "running": "{count, plural, one {Verificando # alegação novamente…} other {Verificando # alegações novamente…} many {Verificando # alegações novamente…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Contradita",
@@ -2696,6 +2711,7 @@
     "organization": "Organização",
     "organizationName": "Nome da organização",
     "organizations": "Organizações",
+    "outOfDate": "Desatualizada",
     "page": "Página {page}",
     "paymentRetryNotice": "Problema com o pagamento. Atualize sua forma de pagamento até {date} para manter o acesso.",
     "pin": "Fixar",
@@ -6101,7 +6117,6 @@
     "comments": "Comentários",
     "commentsEmpty": "Selecione um trecho para comentá-lo.",
     "noRevisions": "Ainda não há revisões",
-    "outOfDate": "Desatualizada",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Sem resumo",
     "proposals": "Propostas",

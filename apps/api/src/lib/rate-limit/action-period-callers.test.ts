@@ -187,6 +187,7 @@ describe("period identity coverage", () => {
       "handlers/entities/placements/suggest.ts",
       "handlers/entities/versions/summarize.ts",
       "handlers/lists/fact-extractions/create.ts",
+      "handlers/lists/verifications/claim-rechecks/bulk/create.ts",
       "handlers/lists/verifications/claim-rechecks/create.ts",
       "handlers/lists/verifications/create.ts",
       "handlers/properties/preview.ts",

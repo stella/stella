@@ -571,6 +571,21 @@
       "showBefore": "Pokaż tekst przed ¶ {from}",
       "verifyParagraphs": "Sprawdź akapity"
     },
+    "staleness": {
+      "failed": "Nie udało się ponownie sprawdzić twierdzeń",
+      "finished": "{count, plural, one {Ponownie sprawdzono # twierdzenie} few {Ponownie sprawdzono # twierdzenia} many {Ponownie sprawdzono # twierdzeń} other {Ponownie sprawdzono # twierdzenia}}",
+      "partial": "Ponownie sprawdzono: {rechecked, number}, nie udało się: {failed, plural, one {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt zmieniony",
+        "factHeld": "Fakt wykluczony",
+        "factRemoved": "Fakt usunięty",
+        "newFactRelated": "Nowy powiązany fakt"
+      },
+      "recheckAll": "Sprawdź wszystkie ponownie",
+      "recheckLocked": "Jest ponownie sprawdzane razem z innymi nieaktualnymi twierdzeniami",
+      "runLine": "{count, plural, one {# twierdzenie może być nieaktualne} few {# twierdzenia mogą być nieaktualne} many {# twierdzeń może być nieaktualnych} other {# twierdzenia może być nieaktualnego}}",
+      "running": "{count, plural, one {Ponowne sprawdzanie # twierdzenia…} few {Ponowne sprawdzanie # twierdzeń…} many {Ponowne sprawdzanie # twierdzeń…} other {Ponowne sprawdzanie # twierdzenia…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Sprzeczne",
@@ -2696,6 +2711,7 @@
     "organization": "Organizacja",
     "organizationName": "Nazwa organizacji",
     "organizations": "Organizacje",
+    "outOfDate": "Nieaktualna",
     "page": "Strona {page}",
     "paymentRetryNotice": "Problem z płatnością. Zaktualizuj metodę płatności do {date}, aby zachować dostęp.",
     "pin": "Przypnij",
@@ -6101,7 +6117,6 @@
     "comments": "Komentarze",
     "commentsEmpty": "Zaznacz tekst, aby go skomentować.",
     "noRevisions": "Brak wersji",
-    "outOfDate": "Nieaktualna",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Bez podsumowania",
     "proposals": "Propozycje zmian",
