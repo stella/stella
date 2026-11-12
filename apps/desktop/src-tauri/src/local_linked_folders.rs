@@ -351,8 +351,10 @@ impl LinkedFolders {
 
   /// The folder a run with the link works in, when it can work there now.
   pub fn resolve(&self, id: Uuid) -> Result<PathBuf, LinkedFolderRefusal> {
+    // A list that cannot be read names no folder a run could trust.
     let link = self
       .stored()
+      .map_err(|_unread| LinkedFolderRefusal::Unreadable)?
       .into_iter()
       .find(|link| Uuid::parse_str(&link.id).ok() == Some(id))
       .ok_or(LinkedFolderRefusal::Unlinked)?;
@@ -409,7 +411,10 @@ impl LinkedFolders {
   /// Links a probed folder: only the stored list is touched, never the
   /// folder. The list is read again under the lock, so two adds never each
   /// replace it with their own copy.
-  pub fn commit(&self, candidate: LinkCandidate) -> Result<Uuid, LinkedFolderListError> {
+  pub fn commit(
+    &self,
+    candidate: LinkCandidate,
+  ) -> Result<Uuid, LinkedFolderListError> {
     let LinkCandidate(link) = candidate;
     let _held = LIST_CHANGE.lock().unwrap_or_else(PoisonError::into_inner);
     let mut links = self.stored()?;
