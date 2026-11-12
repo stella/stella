@@ -279,6 +279,7 @@ const seedMatter = async (): Promise<Matter> => {
       },
       facts: { changed: [], removed: [] },
       modelRef: null,
+      assertedOn: { type: "none" },
     } satisfies ClaimReviewEventPayload;
     await tx.insert(legalListClaimReviewEvents).values({
       id: recheckId,

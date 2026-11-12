@@ -1,0 +1,5 @@
+{
+  "add-column": "Two nullable columns without a default and one constant-default text column on legal_list_claims, a catalog-only change that rewrites no rows, under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The asserted date check is added NOT VALID, so no rows are scanned under the lock; it only constrains the new columns and is validated online after deployment.",
+  "create-policy": "The owner-access policy is a catalog-only addition under the migration's one-second lock timeout."
+}

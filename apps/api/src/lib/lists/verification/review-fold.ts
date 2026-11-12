@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
+  ClaimAssertedDate,
   ClaimGrade,
   ClaimOverrideState,
   ClaimRef,
@@ -47,6 +48,9 @@ export type ClaimReview = {
 
 export type ClaimRecheck = {
   grade: ClaimGrade;
+  /** The claim's asserted date as this grading read it; null on a re-check
+   *  recorded before claims carried dates, which read none. */
+  assertedOn: ClaimAssertedDate | null;
   /** The facts it was graded against, as changes to the run's. */
   facts: RecheckFactChanges;
   modelRef: string | null;
@@ -145,6 +149,7 @@ const applyEvent = (
         recordConflictResolution: null,
         recheck: {
           grade: payload.grade,
+          assertedOn: payload.assertedOn ?? null,
           facts: payload.facts,
           modelRef: payload.modelRef,
           checkedAt: createdAt,

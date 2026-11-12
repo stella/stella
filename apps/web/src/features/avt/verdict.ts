@@ -156,6 +156,7 @@ export const resolveClaimView = (
     // Missing coverage has no conflict to suggest a record for.
     suggestedGoverningFactId: null,
     text: claim.text,
+    assertedOn: claim.assertedOn,
     anchor: claim.anchor,
     refs: [],
     review: claim.review,
