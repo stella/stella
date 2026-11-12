@@ -294,6 +294,7 @@
     "errorReadHistory": "Clipboard history could not be loaded.",
     "errorUpdateHistory": "Clipboard history could not be updated.",
     "formattedText": "Formatted text",
+    "dictation": "Dictation",
     "image": "Image",
     "imageCleanupPending": "Some deleted image data could not be removed. Cleanup will retry automatically.",
     "imageDimensions": "{width} × {height} px",
@@ -585,9 +586,20 @@
     "descriptionCloud": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed by stella AI and is not stored by stella.",
     "cleanup": {
       "title": "Clean up with AI",
-      "description": "Speech is still transcribed on this computer, and audio never leaves it. With cleanup on, the transcribed text is sent through stella to your organization’s AI provider to fix recognition mistakes and apply spoken punctuation and formatting, such as “new line” or “bold”. stella does not store it.",
-      "descriptionCloud": "With cleanup on, stella AI also fixes recognition mistakes in the transcribed text and applies spoken punctuation and formatting, such as “new line” or “bold”."
+      "description": "Speech is still transcribed on this computer, and audio never leaves it. With cleanup on, the transcribed text is sent through stella to your organization’s AI provider to fix recognition mistakes and apply spoken punctuation and formatting, such as “new line” or “bold”. stella does not store it. Cleanup is also told what kind of app you dictate into, such as email or chat, so the text suits it.",
+      "descriptionCloud": "With cleanup on, stella AI also fixes recognition mistakes in the transcribed text and applies spoken punctuation and formatting, such as “new line” or “bold”. Cleanup is also told what kind of app you dictate into, such as email or chat, so the text suits it."
     },
+    "context": {
+      "windowTitle": {
+        "title": "Share the window title with AI cleanup",
+        "description": "Cleanup also gets the title of the window you dictate into, so it can tell a contract from an internal memo. Window titles can contain client or matter names. The title is sent through stella to your organization’s AI provider, and stella does not store it."
+      },
+      "textBeforeCursor": {
+        "title": "Share text before the cursor with AI cleanup",
+        "description": "Cleanup also gets up to {limit, number} characters before the cursor, so the dictation fits the text you are writing. This sends part of the document you are in through stella to your organization’s AI provider, and stella does not store it."
+      }
+    },
+    "keptInHistory": "Each dictation is also kept in clipboard history on this computer.",
     "destination": {
       "title": "Transcribe with",
       "local": "This computer",
@@ -620,7 +632,8 @@
       "focusUnconfirmed": "stella could not confirm which app has focus, so nothing was typed. Try again.",
       "shortcutHeld": "Release the shortcut keys to type. Nothing was typed; try again.",
       "cloudTranscription": "stella AI could not transcribe this dictation, and the speech model is not on this computer. Try again, or set “Transcribe with” to “This computer” and download the model."
-    }
+    },
+    "failureKeptInHistory": "The text is in clipboard history."
   },
   "shortcut": {
     "title": "Clipboard shortcut",

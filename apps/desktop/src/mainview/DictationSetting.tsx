@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
 
+import { DESKTOP_DICTATION_CLEANUP_LIMITS } from "@stll/api-contract/desktop-dictation-cleanup";
 import { displayLanguageName } from "@stll/locales";
 import { Button } from "@stll/ui/button";
 import {
@@ -55,7 +56,17 @@ type DictationSnapshot = {
    *  not available. */
   destination: DictationDestinationValue;
   enabled: boolean;
+  /** Whether each dictation's text also goes to clipboard history; not
+   *  while the user paused it or the organization turned it off. */
+  keepsInHistory: boolean;
   language: DictationLanguage;
+  /** Whether cleanup also gets the focused window's title. */
+  shareWindowTitle: boolean;
+  /** Whether cleanup also gets the text before the cursor. */
+  shareTextBeforeCursor: boolean;
+  /** Whether this computer can read the text before the cursor; without it
+   *  the switch is not offered. */
+  textBeforeCursorAvailable: boolean;
   failure:
     | "accessibility"
     | "cloudTranscription"
@@ -66,6 +77,8 @@ type DictationSnapshot = {
     | "shortcutHeld"
     | "transcription"
     | null;
+  /** Whether the failed dictation's text is in clipboard history. */
+  failureKeptInHistory: boolean;
   keys: ShortcutKeys;
   model: DictationModel;
   modelBytes: number;
@@ -163,6 +176,20 @@ export const DictationSetting = ({
     }
   };
 
+  const setShare = async (
+    command:
+      | "dictation_set_share_text_before_cursor"
+      | "dictation_set_share_window_title",
+    enabled: boolean,
+  ) => {
+    const result = await Result.tryPromise(async () =>
+      invoke<DictationSnapshot>(command, { enabled }),
+    );
+    if (Result.isOk(result)) {
+      setSnapshot(result.value);
+    }
+  };
+
   const setLanguage = async (language: string) => {
     const result = await Result.tryPromise(async () =>
       invoke<DictationSnapshot>("dictation_set_language", { language }),
@@ -212,6 +239,11 @@ export const DictationSetting = ({
               ? t("descriptionCloud", { shortcut })
               : t("description", { shortcut })}
           </p>
+          {snapshot.enabled && snapshot.keepsInHistory && (
+            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+              {t("keptInHistory")}
+            </p>
+          )}
         </div>
         <Switch
           aria-describedby="dictation-description"
@@ -243,6 +275,35 @@ export const DictationSetting = ({
               void setCleanup(cleanup);
             }}
           />
+        </div>
+      )}
+      {snapshot.enabled && snapshot.cleanup && (
+        <div className="flex flex-col gap-3 ps-4">
+          <DictationSwitchRow
+            checked={snapshot.shareWindowTitle}
+            description={t("context.windowTitle.description")}
+            id="dictation-share-window-title"
+            onChange={(enabled) => {
+              void setShare("dictation_set_share_window_title", enabled);
+            }}
+            title={t("context.windowTitle.title")}
+          />
+          {snapshot.textBeforeCursorAvailable && (
+            <DictationSwitchRow
+              checked={snapshot.shareTextBeforeCursor}
+              description={t("context.textBeforeCursor.description", {
+                limit: DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength,
+              })}
+              id="dictation-share-text-before-cursor"
+              onChange={(enabled) => {
+                void setShare(
+                  "dictation_set_share_text_before_cursor",
+                  enabled,
+                );
+              }}
+              title={t("context.textBeforeCursor.title")}
+            />
+          )}
         </div>
       )}
       {snapshot.enabled && snapshot.cloudAvailable && (
@@ -283,11 +344,46 @@ export const DictationSetting = ({
       {snapshot.failure !== null && (
         <p className="text-destructive text-sm" role="status">
           {t(`failure.${snapshot.failure}`)}
+          {/* Two sentences, each translated whole. */}
+          {snapshot.failureKeptInHistory && ` ${t("failureKeptInHistory")}`}
         </p>
       )}
     </div>,
   );
 };
+
+/** An opt-in switch under AI cleanup, with what it sends. */
+const DictationSwitchRow = ({
+  checked,
+  description,
+  id,
+  onChange,
+  title,
+}: {
+  checked: boolean;
+  description: string;
+  id: string;
+  onChange: (enabled: boolean) => void;
+  title: string;
+}) => (
+  <div className="flex items-center justify-between gap-4">
+    <div className="min-w-0 flex-1">
+      <p className="text-sm font-medium">{title}</p>
+      <p
+        className="text-muted-foreground mt-1 text-sm leading-relaxed"
+        id={`${id}-description`}
+      >
+        {description}
+      </p>
+    </div>
+    <Switch
+      aria-describedby={`${id}-description`}
+      aria-label={title}
+      checked={checked}
+      onCheckedChange={onChange}
+    />
+  </div>
+);
 
 /** Which language dictation expects: automatic (this computer's languages)
  *  or one the speech model lists, named in its own language. */

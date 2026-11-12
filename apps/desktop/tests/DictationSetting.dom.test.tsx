@@ -25,12 +25,17 @@ const ENABLED_SNAPSHOT = {
   cloudModel: null,
   destination: "local",
   enabled: true,
+  keepsInHistory: true,
   language: {
     choice: "auto",
     inferred: ["cs", "en"],
     supported: ["cs", "en", "sk"],
   },
+  shareWindowTitle: false,
+  shareTextBeforeCursor: false,
+  textBeforeCursorAvailable: true,
   failure: null,
+  failureKeptInHistory: false,
   keys: { code: "Space", modifiers: ["control", "alt"] },
   model: { status: "ready" },
   modelBytes: 740_363_168,
@@ -180,6 +185,123 @@ test.each(["focusUnconfirmed", "shortcutHeld"] as const)(
     expect(getByRole("status").textContent).toBe(
       defaultMessages.dictation.failure[failure],
     );
+  },
+);
+
+test("a dictation that typed nothing says its text is in clipboard history", async () => {
+  const { getByRole } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    failure: "focusChanged",
+    failureKeptInHistory: true,
+  });
+
+  expect(getByRole("status").textContent).toBe(
+    `${defaultMessages.dictation.failure.focusChanged} ${defaultMessages.dictation.failureKeptInHistory}`,
+  );
+});
+
+test("a failure whose text was not kept never promises clipboard history", async () => {
+  const { getByRole } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    keepsInHistory: false,
+    failure: "shortcutHeld",
+    failureKeptInHistory: false,
+  });
+
+  expect(getByRole("status").textContent).not.toContain(
+    defaultMessages.dictation.failureKeptInHistory,
+  );
+});
+
+test("says dictations are kept in clipboard history only while it keeps them", async () => {
+  const kept = await renderSetting(ENABLED_SNAPSHOT);
+  expect(
+    kept.queryByText(defaultMessages.dictation.keptInHistory),
+  ).not.toBeNull();
+  kept.unmount();
+  clearMocks();
+
+  const off = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    keepsInHistory: false,
+  });
+  expect(off.queryByText(defaultMessages.dictation.keptInHistory)).toBeNull();
+});
+
+const THROUGH_STELLA = "through stella to your organization’s AI provider";
+
+test("offers the context switches under cleanup, off by default, with what they send", async () => {
+  const { getByRole, getByText } = await renderSetting(ENABLED_SNAPSHOT);
+  const { windowTitle, textBeforeCursor } = defaultMessages.dictation.context;
+
+  for (const title of [windowTitle.title, textBeforeCursor.title]) {
+    const toggle = getByRole("switch", { name: title });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  }
+  const titleCopy = getByText(windowTitle.description).textContent;
+  expect(titleCopy).toContain("client or matter names");
+  expect(titleCopy).toContain(THROUGH_STELLA);
+  expect(titleCopy).toContain("stella does not store it");
+  const textCopy = getByText(/characters before the cursor/u).textContent;
+  expect(textCopy).toContain("1,000 characters");
+  expect(textCopy).toContain("part of the document you are in");
+  expect(textCopy).toContain(THROUGH_STELLA);
+  expect(textCopy).toContain("stella does not store it");
+});
+
+test("hides the context switches while cleanup is off", async () => {
+  const { queryByRole } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    cleanup: false,
+  });
+  const { windowTitle, textBeforeCursor } = defaultMessages.dictation.context;
+
+  expect(queryByRole("switch", { name: windowTitle.title })).toBeNull();
+  expect(queryByRole("switch", { name: textBeforeCursor.title })).toBeNull();
+});
+
+test("offers no text-before-cursor switch where this computer cannot read it", async () => {
+  const { queryByRole, getByRole } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    textBeforeCursorAvailable: false,
+  });
+  const { windowTitle, textBeforeCursor } = defaultMessages.dictation.context;
+
+  expect(getByRole("switch", { name: windowTitle.title })).toBeTruthy();
+  expect(queryByRole("switch", { name: textBeforeCursor.title })).toBeNull();
+});
+
+test.each([
+  ["dictation_set_share_window_title", "windowTitle", "shareWindowTitle"],
+  [
+    "dictation_set_share_text_before_cursor",
+    "textBeforeCursor",
+    "shareTextBeforeCursor",
+  ],
+] as const)(
+  "turning on %s asks the native side and shows its answer",
+  async (command, copy, field) => {
+    const calls: unknown[] = [];
+    const { getByRole } = await renderSetting(
+      ENABLED_SNAPSHOT,
+      (called, payload) => {
+        if (called !== command) {
+          return undefined;
+        }
+        calls.push(payload);
+        return { ...ENABLED_SNAPSHOT, [field]: true };
+      },
+    );
+    const toggle = getByRole("switch", {
+      name: defaultMessages.dictation.context[copy].title,
+    });
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+    });
+    expect(calls).toEqual([{ enabled: true }]);
   },
 );
 

@@ -198,7 +198,7 @@ const fn is_separator(character: char) -> bool {
 
 /// Embedding, override and isolate controls, which reorder the text around
 /// them.
-const fn is_bidi_control(character: char) -> bool {
+pub const fn is_bidi_control(character: char) -> bool {
   matches!(character, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
 }
 
@@ -249,6 +249,21 @@ pub fn plan(segments: &[Segment], class: AppClass) -> Vec<Stroke> {
     }
   }
   strokes.finish()
+}
+
+/// The segments as plain text, the way a clipboard keeps them: a line break
+/// is a newline, a paragraph break an empty line, bold is plain, and the
+/// text is the same text `plan` types.
+pub fn plain_text(segments: &[Segment]) -> String {
+  let mut text = String::new();
+  for piece in normalized(segments) {
+    match piece {
+      Piece::Text { text: piece, .. } => text.push_str(&piece),
+      Piece::Break { paragraph: false } => text.push('\n'),
+      Piece::Break { paragraph: true } => text.push_str("\n\n"),
+    }
+  }
+  text.trim().to_string()
 }
 
 enum Piece {
@@ -659,5 +674,21 @@ mod tests {
   #[test]
   fn raw_text_is_typed_exactly_with_the_trailing_space() {
     assert_eq!(raw("nový řádek a tedy"), vec![typed("nový řádek a tedy ")]);
+  }
+
+  #[test]
+  fn the_plain_text_keeps_breaks_as_newlines_and_bold_as_text() {
+    assert_eq!(plain_text(&product_example()), "a tedy\nse rozhodl odejít.");
+    assert_eq!(
+      plain_text(&[
+        text("Lhůta je "),
+        bold("24"),
+        text(" dní. "),
+        Segment::ParagraphBreak,
+        text(" Konec\u{2028}textu\u{202E}"),
+      ]),
+      "Lhůta je 24 dní.\n\nKonec textu"
+    );
+    assert_eq!(plain_text(&[Segment::LineBreak]), "");
   }
 }

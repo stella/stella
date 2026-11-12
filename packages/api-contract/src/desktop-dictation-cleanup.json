@@ -4,6 +4,17 @@
   "maxLocaleLength": 35,
   "maxLanguages": 8,
   "maxSegments": 2000,
+  "maxWindowTitleLength": 200,
+  "maxTextBeforeCursorLength": 1000,
+  "appKinds": [
+    "email",
+    "chat",
+    "document",
+    "browser",
+    "code",
+    "terminal",
+    "other"
+  ],
   "minAnswerTextPercent": 50,
   "minBreakAllowance": 4,
   "transcriptCharactersPerBreak": 20,

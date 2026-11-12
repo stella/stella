@@ -43,6 +43,7 @@ mod dictation;
 mod dictation_audio;
 mod dictation_cleanup;
 mod dictation_cloud;
+mod dictation_context;
 #[cfg(dictation)]
 mod dictation_engine;
 mod dictation_focus;

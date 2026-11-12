@@ -294,6 +294,7 @@
     "errorReadHistory": "Historii schránky se nepodařilo načíst.",
     "errorUpdateHistory": "Historii schránky se nepodařilo aktualizovat.",
     "formattedText": "Formátovaný text",
+    "dictation": "Diktát",
     "image": "Obrázek",
     "imageCleanupPending": "Některá smazaná obrazová data se nepodařilo odstranit. Čištění se automaticky zopakuje.",
     "imageDimensions": "{width} × {height} px",
@@ -585,9 +586,20 @@
     "descriptionCloud": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč převádí stella AI a stella ji neukládá.",
     "cleanup": {
       "title": "Upravit pomocí AI",
-      "description": "Řeč se i nadále převádí na tomto počítači a zvuk ho nikdy neopustí. Se zapnutou úpravou se převedený text odešle přes stellu poskytovateli AI vaší organizace, který opraví chyby rozpoznávání a použije vyslovenou interpunkci a formátování, například „nový řádek“ nebo „tučně“. stella ho neukládá.",
-      "descriptionCloud": "Se zapnutou úpravou stella AI také opraví chyby rozpoznávání v převedeném textu a použije vyslovenou interpunkci a formátování, například „nový řádek“ nebo „tučně“."
+      "description": "Řeč se i nadále převádí na tomto počítači a zvuk ho nikdy neopustí. Se zapnutou úpravou se převedený text odešle přes stellu poskytovateli AI vaší organizace, který opraví chyby rozpoznávání a použije vyslovenou interpunkci a formátování, například „nový řádek“ nebo „tučně“. stella ho neukládá. Úprava se dozví i druh aplikace, do které diktujete, například e-mail nebo chat, aby jí text odpovídal.",
+      "descriptionCloud": "Se zapnutou úpravou stella AI také opraví chyby rozpoznávání v převedeném textu a použije vyslovenou interpunkci a formátování, například „nový řádek“ nebo „tučně“. Úprava se dozví i druh aplikace, do které diktujete, například e-mail nebo chat, aby jí text odpovídal."
     },
+    "context": {
+      "windowTitle": {
+        "title": "Sdílet název okna s úpravou pomocí AI",
+        "description": "Úprava dostane i název okna, do kterého diktujete, aby rozeznala například smlouvu od interní poznámky. Názvy oken mohou obsahovat jména klientů nebo názvy spisů. Název se odešle přes stellu poskytovateli AI vaší organizace a stella ho neukládá."
+      },
+      "textBeforeCursor": {
+        "title": "Sdílet text před kurzorem s úpravou pomocí AI",
+        "description": "Úprava dostane i nejvýše {limit, number} znaků před kurzorem, aby diktát navázal na text, který píšete. Část dokumentu, ve kterém právě jste, se tak odešle přes stellu poskytovateli AI vaší organizace a stella ji neukládá."
+      }
+    },
+    "keptInHistory": "Každý diktát se také uloží do historie schránky na tomto počítači.",
     "destination": {
       "title": "Převádět pomocí",
       "local": "Tento počítač",
@@ -620,7 +632,8 @@
       "focusUnconfirmed": "stella nemohla ověřit, která aplikace je aktivní, takže se nic nenapsalo. Zkuste to znovu.",
       "shortcutHeld": "Pusťte klávesy zkratky, aby se text mohl napsat. Nic se nenapsalo, zkuste to znovu.",
       "cloudTranscription": "stella AI tento diktát nepřevedla a řečový model v tomto počítači není. Zkuste to znovu, nebo u „Převádět pomocí“ zvolte „Tento počítač“ a model stáhněte."
-    }
+    },
+    "failureKeptInHistory": "Text najdete v historii schránky."
   },
   "shortcut": {
     "title": "Zkratka schránky",

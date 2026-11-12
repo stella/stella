@@ -26,6 +26,8 @@
     "allow-dictation-get-snapshot",
     "allow-dictation-set-enabled",
     "allow-dictation-set-cleanup",
+    "allow-dictation-set-share-window-title",
+    "allow-dictation-set-share-text-before-cursor",
     "allow-dictation-set-language",
     "allow-dictation-set-destination",
     "allow-dictation-get-cloud-models",

@@ -177,8 +177,9 @@ NOT COVERED until separately exercised against a live model.
 instructions, the transcript message and the structured output schema for
 synthetic Czech, Slovak and English dictations: spoken punctuation, line and
 paragraph breaks, bold, a self-correction, a question that must stay a
-question and an instruction that must stay dictated text. It never calls a
-provider. From `apps/api`:
+question, an instruction that must stay dictated text, one dictation written
+for an email and for a chat, and a window title and text before the cursor
+that must not reach the answer. It never calls a provider. From `apps/api`:
 
 ```sh
 bun run eval:dictation-cleanup prompts > /absolute/path/dictation-prompts.jsonl

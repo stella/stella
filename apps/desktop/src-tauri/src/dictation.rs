@@ -1,9 +1,13 @@
 //! Hold-to-talk dictation into any app. Speech is transcribed on this
-//! computer: audio never leaves it, and neither audio nor text is stored.
-//! With AI cleanup on (the default), the transcribed text, never the audio,
-//! goes through stella to the organization's AI provider before it is typed,
-//! and stella does not store it. Only when the user chooses stella AI for
-//! transcription does the audio leave this computer.
+//! computer: audio never leaves it and is never stored. The finished text is
+//! kept only in stella's own clipboard history on this computer, labelled as
+//! a dictation, while that history is on; the system clipboard is never
+//! written. With AI cleanup on (the default), the transcribed text, never the
+//! audio, goes through stella to the organization's AI provider before it is
+//! typed, with the kind of app it goes to and, when the user shares them, the
+//! window title and the text before the cursor; stella stores none of it.
+//! Only when the user chooses stella AI for transcription does the audio
+//! leave this computer.
 //!
 //! This module owns the preferences, the speech model file and the shortcut.
 //! `dictation_engine` owns capture, transcription and insertion on one thread.
@@ -31,6 +35,7 @@ use crate::{
   config::APP_DATA_DIR_NAME,
   device_preference::DevicePreference,
   dictation_cloud::{self, CloudModels, Destination},
+  dictation_context::{self, Sharing},
   dictation_language::{self, Choice, LanguageSnapshot},
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
@@ -45,6 +50,12 @@ const LANGUAGE_PREFERENCE_FILE_NAME: &str = "dictation-language";
 const DESTINATION_PREFERENCE_FILE_NAME: &str = "dictation-destination";
 /// The stella AI transcription model the user picked; absent: the default.
 const CLOUD_MODEL_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model";
+/// Off unless the user turned it on: cleanup also gets the window title.
+const SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME: &str = "dictation-share-window-title";
+/// Off unless the user turned it on: cleanup also gets the text before the
+/// cursor.
+const SHARE_TEXT_BEFORE_CURSOR_PREFERENCE_FILE_NAME: &str =
+  "dictation-share-text-before-cursor";
 const MAX_MODEL_ID_BYTES: usize = 128;
 const ENABLED_VALUE: &str = "on";
 const DISABLED_VALUE: &str = "off";
@@ -109,12 +120,39 @@ pub enum Failure {
   CloudTranscription,
 }
 
+/// A dictation that went wrong, and whether its text is in stella's
+/// clipboard history all the same.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Failed {
+  pub failure: Failure,
+  pub kept_in_history: bool,
+}
+
+impl From<Failure> for Failed {
+  fn from(failure: Failure) -> Self {
+    Self {
+      failure,
+      kept_in_history: false,
+    }
+  }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DictationSnapshot {
   available: bool,
   enabled: bool,
   cleanup: bool,
+  /// Whether cleanup also gets the focused window's title.
+  share_window_title: bool,
+  /// Whether cleanup also gets the text before the cursor.
+  share_text_before_cursor: bool,
+  /// Whether this computer can read the text before the cursor; without it
+  /// the window does not offer the switch.
+  text_before_cursor_available: bool,
+  /// Whether a dictation's text goes to clipboard history: not while the
+  /// user paused it or the organization turned it off.
+  keeps_in_history: bool,
   language: LanguageSnapshot,
   /// Whether the server enables stella AI transcription for this account;
   /// without it the window offers no choice of destination.
@@ -127,6 +165,8 @@ pub struct DictationSnapshot {
   model_bytes: u64,
   phase: Phase,
   failure: Option<Failure>,
+  /// Whether the failed dictation's text is in clipboard history.
+  failure_kept_in_history: bool,
   keys: ShortcutKeys,
   shortcut_taken: bool,
 }
@@ -134,12 +174,14 @@ pub struct DictationSnapshot {
 struct Inner {
   enabled: bool,
   cleanup: bool,
+  share_window_title: bool,
+  share_text_before_cursor: bool,
   language: Choice,
   destination: Destination,
   cloud_model: Option<String>,
   model: ModelState,
   phase: Phase,
-  failure: Option<Failure>,
+  failure: Option<Failed>,
   shortcut_taken: bool,
   commands: Option<Sender<Command>>,
 }
@@ -154,6 +196,12 @@ impl DictationState {
       .read()
       .as_deref()
       != Some(DISABLED_VALUE);
+    let shared = |file_name: &str| {
+      DevicePreference::in_app_data(file_name).read().as_deref() == Some(ENABLED_VALUE)
+    };
+    let share_window_title = shared(SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME);
+    let share_text_before_cursor =
+      shared(SHARE_TEXT_BEFORE_CURSOR_PREFERENCE_FILE_NAME);
     let language = Choice::parse(
       DevicePreference::in_app_data(LANGUAGE_PREFERENCE_FILE_NAME)
         .read()
@@ -170,6 +218,8 @@ impl DictationState {
     Self(Mutex::new(Inner {
       enabled,
       cleanup,
+      share_window_title,
+      share_text_before_cursor,
       language,
       destination,
       cloud_model,
@@ -190,12 +240,18 @@ impl DictationState {
     available: bool,
     cloud_available: bool,
     inferred: Vec<&'static str>,
+    keeps_in_history: bool,
   ) -> DictationSnapshot {
     let inner = self.0.lock().unwrap_or_else(|error| error.into_inner());
     DictationSnapshot {
       available,
       enabled: inner.enabled,
       cleanup: inner.cleanup,
+      share_window_title: inner.share_window_title,
+      share_text_before_cursor: inner.share_text_before_cursor
+        && dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
+      text_before_cursor_available: dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
+      keeps_in_history,
       language: LanguageSnapshot::new(&inner.language, inferred),
       cloud_available,
       destination: inner.destination.effective(cloud_available),
@@ -203,7 +259,10 @@ impl DictationState {
       model: inner.model,
       model_bytes: MODEL_BYTES,
       phase: inner.phase,
-      failure: inner.failure,
+      failure: inner.failure.map(|failed| failed.failure),
+      failure_kept_in_history: inner
+        .failure
+        .is_some_and(|failed| failed.kept_in_history),
       keys: ShortcutKeys::of(&shortcut()),
       shortcut_taken: inner.shortcut_taken,
     }
@@ -376,8 +435,20 @@ pub fn set_phase(app: &AppHandle, phase: Phase) {
   show_phase_in_tray(app, phase);
 }
 
-pub fn report_failure(app: &AppHandle, failure: Failure) {
-  change(app, |inner| inner.failure = Some(failure));
+/// What cleanup may read about where the text goes besides the kind of app:
+/// nothing while cleanup is off, otherwise what the speaker shares.
+pub fn context_sharing(app: &AppHandle) -> Sharing {
+  app.state::<DictationState>().update(|inner| Sharing {
+    window_title: inner.cleanup && inner.share_window_title,
+    text_before_cursor: inner.cleanup
+      && inner.share_text_before_cursor
+      && dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
+  })
+}
+
+pub fn report_failure(app: &AppHandle, failed: impl Into<Failed>) {
+  let failed = failed.into();
+  change(app, |inner| inner.failure = Some(failed));
 }
 
 pub fn clear_failure(app: &AppHandle) {
@@ -460,7 +531,12 @@ fn read_snapshot(app: &AppHandle, state: &DictationState) -> DictationSnapshot {
   } else {
     Vec::new()
   };
-  state.snapshot(available, cloud_available(app), inferred)
+  state.snapshot(
+    available,
+    cloud_available(app),
+    inferred,
+    crate::clipboard::keeps_dictations(app),
+  )
 }
 
 #[tauri::command]
@@ -514,6 +590,50 @@ pub fn dictation_set_cleanup(
     CLEANUP_PREFERENCE_FILE_NAME,
     stored_switch(enabled),
     |inner| inner.cleanup = enabled,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Whether cleanup also gets the focused window's title.
+#[tauri::command]
+pub fn dictation_set_share_window_title(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  change_preference(
+    &app,
+    SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| inner.share_window_title = enabled,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Whether cleanup also gets the text before the cursor, where this
+/// computer can read it.
+#[tauri::command]
+pub fn dictation_set_share_text_before_cursor(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  if enabled && !dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED {
+    return Err(
+      "the text before the cursor cannot be read on this computer".to_string(),
+    );
+  }
+  change_preference(
+    &app,
+    SHARE_TEXT_BEFORE_CURSOR_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| inner.share_text_before_cursor = enabled,
   )?;
   Ok(read_snapshot(&app, &state))
 }
@@ -757,6 +877,8 @@ mod tests {
     DictationState(Mutex::new(Inner {
       enabled: true,
       cleanup,
+      share_window_title: false,
+      share_text_before_cursor: false,
       language: Choice::Automatic,
       destination: Destination::parse(None),
       cloud_model: None,
@@ -805,6 +927,42 @@ mod tests {
     assert!(!state.update(|inner| inner.cleanup));
     assert_eq!(preference.read().as_deref(), Some(DISABLED_VALUE));
     std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn a_failure_says_whether_the_text_is_in_clipboard_history() {
+    let state = state(true);
+    let snapshot = |state: &DictationState| {
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap()
+    };
+    assert_eq!(snapshot(&state)["failureKeptInHistory"], false);
+    state.update(|inner| {
+      inner.failure = Some(Failed {
+        failure: Failure::FocusChanged,
+        kept_in_history: true,
+      });
+    });
+    let kept = snapshot(&state);
+    assert_eq!(kept["failure"], "focusChanged");
+    assert_eq!(kept["failureKeptInHistory"], true);
+    // A failure before any text, such as a missing microphone, keeps nothing.
+    state.update(|inner| inner.failure = Some(Failure::Microphone.into()));
+    let lost = snapshot(&state);
+    assert_eq!(lost["failure"], "microphone");
+    assert_eq!(lost["failureKeptInHistory"], false);
+  }
+
+  #[test]
+  fn context_sharing_starts_off_and_the_snapshot_reports_it() {
+    let state = state(true);
+    let snapshot =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
+    assert_eq!(snapshot["shareWindowTitle"], false);
+    assert_eq!(snapshot["shareTextBeforeCursor"], false);
+    assert_eq!(
+      snapshot["textBeforeCursorAvailable"],
+      dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED
+    );
   }
 
   #[test]
