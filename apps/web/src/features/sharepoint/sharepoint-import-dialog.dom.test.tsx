@@ -282,6 +282,11 @@ test("a later round that fails keeps the stored file and marks the rest unconfir
     },
     { items: [{ driveId: DRIVE.id, itemId: "01REPLY" }], parentId: PARENT_ID },
   ]);
+  // The header counts the unconfirmed file as unconfirmed, not as failed.
+  expect(
+    screen.getByText("1 file was not confirmed; import it again."),
+  ).toBeDefined();
+  expect(screen.queryByText(/could not be imported/u)).toBeNull();
   const unconfirmedRow = unconfirmed.closest("li") ?? document.body;
   expect(within(unconfirmedRow).getByText("Reply.pdf")).toBeDefined();
   expect(

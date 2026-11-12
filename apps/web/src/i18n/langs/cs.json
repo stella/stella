@@ -5967,6 +5967,7 @@
       "progress": "Importováno {done, number} z {total, number}",
       "unchanged": "Již aktuální",
       "unconfirmed": "Nepotvrzeno",
+      "unconfirmedCount": "{count, plural, one {# soubor nebyl potvrzen; importujte ho znovu.} few {# soubory nebyly potvrzeny; importujte je znovu.} many {# souboru nebylo potvrzeno; importujte je znovu.} other {# souborů nebylo potvrzeno; importujte je znovu.}}",
       "unconfirmedReason": "Import se zastavil dříve, než byl tento soubor potvrzen. Importujte ho znovu.",
       "versioned": "Nová verze"
     },

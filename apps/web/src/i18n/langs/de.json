@@ -5967,6 +5967,7 @@
       "progress": "{done, number} von {total, number} importiert",
       "unchanged": "Bereits aktuell",
       "unconfirmed": "Nicht bestätigt",
+      "unconfirmedCount": "{count, plural, one {# Datei wurde nicht bestätigt; importieren Sie sie erneut.} other {# Dateien wurden nicht bestätigt; importieren Sie sie erneut.}}",
       "unconfirmedReason": "Der Import wurde beendet, bevor diese Datei bestätigt war. Importieren Sie sie erneut.",
       "versioned": "Neue Version"
     },

@@ -5967,6 +5967,7 @@
       "progress": "{total, number} fájlból {done, number} importálva",
       "unchanged": "Már naprakész",
       "unconfirmed": "Nincs megerősítve",
+      "unconfirmedCount": "{count, plural, one {# fájl nincs megerősítve; importálja újra.} other {# fájl nincs megerősítve; importálja őket újra.}}",
       "unconfirmedReason": "Az importálás leállt, mielőtt ez a fájl megerősítést kapott volna. Importálja újra.",
       "versioned": "Új verzió"
     },

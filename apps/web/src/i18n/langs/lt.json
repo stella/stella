@@ -5967,6 +5967,7 @@
       "progress": "Importuota {done, number} iš {total, number}",
       "unchanged": "Jau naujausias",
       "unconfirmed": "Nepatvirtinta",
+      "unconfirmedCount": "{count, plural, one {# failas nepatvirtintas; importuokite jį dar kartą.} few {# failai nepatvirtinti; importuokite juos dar kartą.} many {# failo nepatvirtinta; importuokite juos dar kartą.} other {# failų nepatvirtinta; importuokite juos dar kartą.}}",
       "unconfirmedReason": "Importavimas sustojo prieš patvirtinant šį failą. Importuokite jį dar kartą.",
       "versioned": "Nauja versija"
     },

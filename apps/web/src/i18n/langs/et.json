@@ -5967,6 +5967,7 @@
       "progress": "Imporditud {done, number}/{total, number}",
       "unchanged": "Juba ajakohane",
       "unconfirmed": "Kinnitamata",
+      "unconfirmedCount": "{count, plural, one {# fail jäi kinnitamata; importige see uuesti.} other {# faili jäid kinnitamata; importige need uuesti.}}",
       "unconfirmedReason": "Import peatus enne selle faili kinnitamist. Importige see uuesti.",
       "versioned": "Uus versioon"
     },

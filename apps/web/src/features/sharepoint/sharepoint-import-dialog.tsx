@@ -178,6 +178,24 @@ const SharepointImportDialogBody = ({
   const access = useSharepointAccess();
   const [summary, setSummary] = useState<SharepointImportSummary | null>(null);
 
+  // Failures and unconfirmed files are told apart: a failed file was refused,
+  // an unconfirmed one may still have been stored and is worth importing again.
+  const importSummaryText = ({
+    failed,
+    unconfirmed,
+    outcomes,
+  }: SharepointImportSummary) =>
+    [
+      failed > 0
+        ? t("sharepoint.import.partial", { failed, total: outcomes.length })
+        : null,
+      unconfirmed > 0
+        ? t("sharepoint.import.unconfirmedCount", { count: unconfirmed })
+        : null,
+    ]
+      .filter((sentence) => sentence !== null)
+      .join(" ");
+
   const body = (() => {
     if (summary !== null) {
       return <ImportResults onClose={onClose} summary={summary} />;
@@ -253,10 +271,7 @@ const SharepointImportDialogBody = ({
             ? t("sharepoint.picker.description", {
                 max: SHAREPOINT_IMPORT_MAX_ITEMS,
               })
-            : t("sharepoint.import.partial", {
-                failed: summary.failed + summary.unconfirmed,
-                total: summary.outcomes.length,
-              })}
+            : importSummaryText(summary)}
         </DialogDescription>
       </DialogHeader>
       {body}

@@ -5967,6 +5967,7 @@
       "progress": "Importēti {done, number} no {total, number}",
       "unchanged": "Jau aktuāls",
       "unconfirmed": "Nav apstiprināts",
+      "unconfirmedCount": "{count, plural, zero {# failu nav apstiprināts; importējiet tos vēlreiz.} one {# fails nav apstiprināts; importējiet to vēlreiz.} other {# faili nav apstiprināti; importējiet tos vēlreiz.}}",
       "unconfirmedReason": "Importēšana apstājās, pirms šis fails tika apstiprināts. Importējiet to vēlreiz.",
       "versioned": "Jauna versija"
     },

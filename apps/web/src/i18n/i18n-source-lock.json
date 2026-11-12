@@ -4979,6 +4979,7 @@
   "sharepoint.import.progress": "Imported {done, number} of {total, number}",
   "sharepoint.import.unchanged": "Already up to date",
   "sharepoint.import.unconfirmed": "Not confirmed",
+  "sharepoint.import.unconfirmedCount": "{count, plural, one {# file was not confirmed; import it again.} other {# files were not confirmed; import them again.}}",
   "sharepoint.import.unconfirmedReason": "The import stopped before this file was confirmed. Import it again.",
   "sharepoint.import.versioned": "New version",
   "sharepoint.oauthReasons.consentDenied": "Microsoft sign-in was cancelled or access was not granted.",
