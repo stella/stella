@@ -143,7 +143,7 @@ export const chatLocalFolderOptions = (
 ): ChatLocalFolderOption[] =>
   readiness?.status === "enabled"
     ? readiness.runners.flatMap((runner) =>
-        runner.linkedFolders.map((linked) => ({
+        runner.linkedFolders.map((linked): ChatLocalFolderOption => ({
           folder: {
             desktopId: runner.desktopId,
             linkId: linked.id,

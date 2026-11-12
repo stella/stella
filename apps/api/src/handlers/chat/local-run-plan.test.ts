@@ -165,7 +165,13 @@ describe("a turn in a folder linked on the member's computer", () => {
     linkId: LINK_ID,
     name: "Smith v Jones",
   };
-  const IN_FOLDER: ChatRunTarget = { ...LOCAL, folder: FOLDER };
+  const IN_FOLDER: ChatRunTarget = {
+    kind: "local",
+    harness: "codex",
+    model: MODEL,
+    approvals: "ask",
+    folder: FOLDER,
+  };
   const computerWith = (
     state: "available" | "offline",
     approved: boolean,
