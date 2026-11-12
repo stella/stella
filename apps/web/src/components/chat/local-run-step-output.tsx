@@ -93,6 +93,17 @@ const LocalRunStepOutput = ({
     kind === "diff"
       ? t("chat.toolCall.localOutput.diff")
       : t("chat.toolCall.output");
+  const retry = (
+    <Button
+      onClick={() => {
+        detached(query.refetch(), "local-run-step-output.retry");
+      }}
+      size="xs"
+      variant="ghost"
+    >
+      {t("common.tryAgain")}
+    </Button>
+  );
   switch (view.type) {
     case "pending":
       return <Note pending>{t("chat.toolCall.localOutput.reading")}</Note>;
@@ -100,15 +111,7 @@ const LocalRunStepOutput = ({
       return (
         <Note>
           {t("chat.toolCall.localOutput.failed")}
-          <Button
-            onClick={() => {
-              detached(view.retry(), "local-run-step-output.retry");
-            }}
-            size="xs"
-            variant="ghost"
-          >
-            {t("common.tryAgain")}
-          </Button>
+          {retry}
         </Note>
       );
     case "empty":
@@ -122,7 +125,14 @@ const LocalRunStepOutput = ({
   const output = view.items;
   switch (output.status) {
     case "elsewhere":
-      return <Note>{t("chat.toolCall.localOutput.elsewhere")}</Note>;
+      // stella desktop may have been started since: the member can look
+      // again without reopening the row.
+      return (
+        <Note>
+          {t("chat.toolCall.localOutput.elsewhere")}
+          {retry}
+        </Note>
+      );
     case "not-kept":
       return <Note>{t("chat.toolCall.localOutput.notKept")}</Note>;
     case "shown":
@@ -132,8 +142,17 @@ const LocalRunStepOutput = ({
       return panic("Unhandled step output status");
   }
   const reading = query.fetchStatus === "fetching";
+  // A read cut off after it began keeps what arrived, but never reads as
+  // the whole output.
+  const interrupted =
+    view.refetchError === undefined ? null : (
+      <Note>
+        {t("chat.toolCall.localOutput.failed")}
+        {retry}
+      </Note>
+    );
   if (output.text === "" && !reading) {
-    return <Note>{t("chat.toolCall.localOutput.empty")}</Note>;
+    return interrupted ?? <Note>{t("chat.toolCall.localOutput.empty")}</Note>;
   }
   return (
     <section aria-label={label} className="group/code relative" dir="ltr">
@@ -156,6 +175,7 @@ const LocalRunStepOutput = ({
           {kind === "diff" ? <DiffText text={output.text} /> : output.text}
         </pre>
       </ScrollArea>
+      {interrupted}
       {isLocalRunStepOutputCut(output.totalBytes) && (
         <Note>
           {t("chat.toolCall.localOutput.cut", {

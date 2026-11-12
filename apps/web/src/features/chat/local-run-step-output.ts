@@ -20,6 +20,7 @@ import {
   foldLocalRunStepOutput,
   LOCAL_RUN_STEP_OUTPUT_UNREAD,
   type LocalRunStepOutputEvent,
+  localRunStepOutputStaleTime,
 } from "@/features/chat/local-run-step-output.logic";
 import { api } from "@/lib/api";
 import {
@@ -164,8 +165,11 @@ type LocalRunStepOutputKey = {
 };
 
 /**
- * One step's output, read progressively from this computer. Read once per
- * opening: a finished step's output does not change, so it is never polled.
+ * One step's output, read progressively from this computer. A read that
+ * reached the desktop holds for good (a finished step's output does not
+ * change, so it is never polled); one that found the run elsewhere is read
+ * again when the row opens again, since stella desktop may have started
+ * since.
  */
 export const localRunStepOutputOptions = ({
   activeOrganizationId,
@@ -179,6 +183,6 @@ export const localRunStepOutputOptions = ({
       reducer: foldLocalRunStepOutput,
       initialValue: LOCAL_RUN_STEP_OUTPUT_UNREAD,
     }),
-    staleTime: Number.POSITIVE_INFINITY,
+    staleTime: (query) => localRunStepOutputStaleTime(query.state.data),
     retry: false,
   });

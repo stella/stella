@@ -8,6 +8,7 @@ import {
   isLocalRunStepOutputCut,
   LOCAL_RUN_STEP_OUTPUT_UNREAD,
   type LocalRunStepOutputEvent,
+  localRunStepOutputStaleTime,
 } from "./local-run-step-output.logic";
 
 const fold = (events: LocalRunStepOutputEvent[]) => {
@@ -60,4 +61,17 @@ describe("a step's output as its row shows it", () => {
       ].map(diffLineTone),
     ).toEqual(["file", "file", "hunk", "removed", "added", "context"]);
   });
+});
+
+test("an output found elsewhere is read again; one the desktop answered holds", () => {
+  expect(localRunStepOutputStaleTime({ status: "elsewhere" })).toBe(0);
+  for (const answered of [
+    { status: "not-kept" },
+    { status: "shown", text: "ok", keptBytes: 2, totalBytes: 2 },
+  ] as const) {
+    expect(localRunStepOutputStaleTime(answered)).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+  }
+  expect(localRunStepOutputStaleTime(undefined)).toBe(Number.POSITIVE_INFINITY);
 });

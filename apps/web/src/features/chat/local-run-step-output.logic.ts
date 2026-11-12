@@ -26,6 +26,15 @@ export type LocalRunStepOutputView =
   | { status: "not-kept" }
   | { status: "shown"; text: string; keptBytes: number; totalBytes: number };
 
+/**
+ * How long a read output stays fresh: for good once the desktop answered (a
+ * finished step's output never changes), not at all when the run was found
+ * elsewhere, since stella desktop may have started since.
+ */
+export const localRunStepOutputStaleTime = (
+  output: LocalRunStepOutputView | undefined,
+): number => (output?.status === "elsewhere" ? 0 : Number.POSITIVE_INFINITY);
+
 export const LOCAL_RUN_STEP_OUTPUT_UNREAD: LocalRunStepOutputView = {
   status: "shown",
   text: "",
