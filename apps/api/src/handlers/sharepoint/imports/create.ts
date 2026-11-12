@@ -5,6 +5,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { SHAREPOINT_IMPORT_MAX_ITEMS } from "@stll/api-contract/sharepoint";
 import { Temporal } from "@stll/time";
 
+import { documentVersionRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import {
   sharepointDriveIdSchema,
   sharepointFileIdSchema,
@@ -68,6 +69,7 @@ const config = {
     "time left for come back deferred: send those again.",
   permissions: { workspace: ["read"], entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: documentVersionRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "document_processing",
