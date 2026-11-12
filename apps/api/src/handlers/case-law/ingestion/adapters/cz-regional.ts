@@ -2297,23 +2297,40 @@ const czRegionalRecaptureLookupOf = (
 };
 
 /**
+ * The publisher's id of the decision a document-only row holds: the id the
+ * held document states. The row's own id came from the crawl's listing, not
+ * from the bytes, so it alone never proves which document the row holds.
+ */
+const czRegionalHeldDocumentId = (
+  stored: StoredRawReparseInput,
+): string | undefined =>
+  stored.contentType === CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE
+    ? toOptionalValue(
+        readCzRegionalDocument(new TextDecoder().decode(stored.raw)).parsed
+          ?.uuid,
+      )
+    : undefined;
+
+/**
  * Whether a listed item is the stored row, by the identity rule the crawl and
  * the reconciliation key rows by: the publisher's document id where the row
- * holds one, the docket otherwise.
+ * or its held document states one, the docket otherwise.
  */
 const czRegionalMatchesStored = (
   item: ReconciliationListingItem,
   stored: StoredRawReparseInput,
 ): boolean => {
   const listed = listingIdentityKey(item.identity);
+  const sourceDocumentId =
+    stored.sourceDocumentId ?? czRegionalHeldDocumentId(stored);
   const held = listingIdentityKey(
-    stored.sourceDocumentId === null
+    sourceDocumentId === undefined
       ? {
           type: "case-number",
           caseNumber: stored.caseNumber,
           language: CZ_REGIONAL_LANGUAGE,
         }
-      : { type: "document", sourceDocumentId: stored.sourceDocumentId },
+      : { type: "document", sourceDocumentId },
   );
   return listed !== null && listed === held;
 };
@@ -2327,9 +2344,11 @@ const sameDocket = (left: string, right: string): boolean =>
  *
  * The envelope comes out of {@link assembleCzRegionalDecision}, the builder the
  * crawl uses, so a recaptured row and a freshly crawled one store the same
- * bytes. The listed row has to name the decision the held document is: its
- * document id is the row's and the document's own, and its docket is the
- * row's. Anything else is reported rather than written.
+ * bytes. The listed row has to be proved to name the decision the held
+ * document is: the held document states its id, the listing links that id,
+ * the row's own id (where it holds one) is the same, and the docket is the
+ * row's. A docket alone proves nothing, so anything less is reported rather
+ * than written.
  */
 const recaptureCzRegionalStoredRaw = ({
   listingPayload,
@@ -2349,23 +2368,31 @@ const recaptureCzRegionalStoredRaw = ({
     };
   }
   const document = readCzRegionalDocument(new TextDecoder().decode(stored.raw));
-  const listedDocumentId = documentIdFromLink(toOptionalValue(read.item.odkaz));
   const heldDocumentId = toOptionalValue(document.parsed?.uuid);
-  if (
-    listedDocumentId !== undefined &&
-    stored.sourceDocumentId !== null &&
-    listedDocumentId !== stored.sourceDocumentId
-  ) {
+  if (heldDocumentId === undefined) {
     return {
-      type: "identity-mismatch",
-      detail: `the listing links ${listedDocumentId}, the row ${stored.sourceDocumentId}`,
+      type: "not-recapturable",
+      detail:
+        "the held document states no id, so no listed item is provably its own",
     };
   }
   if (
-    listedDocumentId !== undefined &&
-    heldDocumentId !== undefined &&
-    listedDocumentId !== heldDocumentId
+    stored.sourceDocumentId !== null &&
+    stored.sourceDocumentId !== heldDocumentId
   ) {
+    return {
+      type: "identity-mismatch",
+      detail: `the row names ${stored.sourceDocumentId}, the held document is ${heldDocumentId}`,
+    };
+  }
+  const listedDocumentId = documentIdFromLink(toOptionalValue(read.item.odkaz));
+  if (listedDocumentId === undefined) {
+    return {
+      type: "not-recapturable",
+      detail: `the listed item links no document, so it is not provably ${heldDocumentId}`,
+    };
+  }
+  if (listedDocumentId !== heldDocumentId) {
     return {
       type: "identity-mismatch",
       detail: `the listing links ${listedDocumentId}, the held document is ${heldDocumentId}`,

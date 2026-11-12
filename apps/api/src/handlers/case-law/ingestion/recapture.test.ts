@@ -92,9 +92,7 @@ const documentOnlyRow = async (
   metadata: {},
 });
 
-const declaredRecapture =
-  czRegionalAdapter.reconciliation.recapture ??
-  panic("cz-regional declares no recapture");
+const declaredRecapture = czRegionalAdapter.reconciliation.recapture;
 
 /** The real adapter, with its lookup listing served from the recording. */
 const adapterServing = (listLookup: SourceRecapture["listLookup"]) => ({

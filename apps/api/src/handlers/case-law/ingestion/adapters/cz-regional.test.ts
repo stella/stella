@@ -294,9 +294,7 @@ const documentOnlyRow = (
   metadata: {},
 });
 
-const recapture =
-  czRegionalAdapter.reconciliation.recapture ??
-  panic("cz-regional declares no recapture");
+const recapture = czRegionalAdapter.reconciliation.recapture;
 
 describe("a document-only row is recaptured from its day listing", () => {
   test("the recaptured row is the row a crawl stores, and replays to it", async () => {
@@ -374,6 +372,81 @@ describe("a document-only row is recaptured from its day listing", () => {
         stored: {
           ...stored,
           raw: new TextEncoder().encode(await readFixture(APPELLATE_DOCUMENT)),
+        },
+      }),
+    ).toMatchObject({ type: "identity-mismatch" });
+  });
+
+  test("a row stored without its id is found and recaptured by the held document's id", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+    const stored = {
+      ...documentOnlyRow(crawled, await readFixture(DISTRICT_DOCUMENT)),
+      sourceDocumentId: null,
+    };
+    const listed = await itemByDocket(LISTING, DISTRICT_DOCKET);
+
+    expect(
+      recapture.matchesStored(
+        { identity: czRegionalListingIdentity(listed), payload: listed },
+        stored,
+      ),
+    ).toBe(true);
+    expect(
+      recapture.recaptureStoredRaw({ listingPayload: listed, stored }),
+    ).toEqual({
+      type: "recaptured",
+      raw: crawled.sourceRaw ?? panic("crawl stored no envelope"),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    });
+  });
+
+  test("nothing short of the held document's own id proves the listed item is it", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+    const documentRaw = await readFixture(DISTRICT_DOCUMENT);
+    const heldId = '"uuid":"e21716f9-8855-4a85-a7e6-9af23622661b"';
+    expect(documentRaw).toContain(heldId);
+    const listed = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    const stored = documentOnlyRow(crawled, documentRaw);
+    const unidentified = documentOnlyRow(
+      crawled,
+      documentRaw.replace(heldId, '"uuid":null'),
+    );
+
+    // The row's id and the docket agree, but the bytes state no id.
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: listed,
+        stored: unidentified,
+      }),
+    ).toMatchObject({ type: "not-recapturable" });
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: listed,
+        stored: { ...unidentified, sourceDocumentId: null },
+      }),
+    ).toMatchObject({ type: "not-recapturable" });
+    // The docket agrees, but the listed item links no document.
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: { ...listed, odkaz: null },
+        stored,
+      }),
+    ).toMatchObject({ type: "not-recapturable" });
+    // The row's own id names another document than the one it holds.
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: listed,
+        stored: {
+          ...stored,
+          sourceDocumentId: "00000000-0000-4000-8000-000000000000",
         },
       }),
     ).toMatchObject({ type: "identity-mismatch" });
