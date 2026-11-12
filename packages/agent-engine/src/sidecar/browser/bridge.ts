@@ -59,6 +59,9 @@ type BrowserBridgeRequest = {
   turnId: string;
 };
 
+/** Which command to stop: the chat's controller and its run. */
+export type BrowserBridgeCancel = { controllerId: string; turnId: string };
+
 export type BrowserBridge = {
   readonly endpoint: string;
   readonly secretFile: string;
@@ -69,7 +72,7 @@ export type BrowserBridge = {
     signal: AbortSignal,
   ) => Promise<LocalBrowserResult>;
   /** Stops the run's queued or running command in the extension. */
-  cancel: (controllerId: string, turnId: string) => void;
+  cancel: (run: BrowserBridgeCancel) => void;
   stop: () => Promise<void>;
 };
 
@@ -232,6 +235,23 @@ const listen = async (server: net.Server, endpoint: string) =>
     });
   });
 
+/** Writes the secret readable only by this user, replacing any earlier one. */
+const writeSecretFile = (
+  secretFile: string,
+  secret: string,
+): Result<void, { message: string }> => {
+  const temporary = `${secretFile}.${process.pid}.tmp`;
+  const written = Result.try(() => {
+    writeFileSync(temporary, secret, { mode: 0o600 });
+    renameSync(temporary, secretFile);
+  });
+  if (Result.isError(written)) {
+    rmSync(temporary, { force: true });
+    return Result.err({ message: "the secret file could not be written" });
+  }
+  return Result.ok(undefined);
+};
+
 export const startBrowserBridge = async ({
   dir,
   endpoint,
@@ -250,9 +270,13 @@ export const startBrowserBridge = async ({
   }
   const secret = randomBytes(SECRET_BYTES).toString("hex");
   const secretFile = path.join(dir, BROWSER_BRIDGE_SECRET_FILE);
-  const temporary = `${secretFile}.${process.pid}.tmp`;
-  writeFileSync(temporary, secret, { mode: 0o600 });
-  renameSync(temporary, secretFile);
+  const written = writeSecretFile(secretFile, secret);
+  if (Result.isError(written)) {
+    // Without the secret file no host can connect: the holder goes on
+    // without browser tools.
+    await closeServer(server, [endpoint]);
+    return written;
+  }
 
   let host: Host | null = null;
   /** Each command's settle, by request id, until its result arrives. */
@@ -353,7 +377,7 @@ export const startBrowserBridge = async ({
       : { type: "waiting" };
   };
 
-  const cancel = (controllerId: string, turnId: string) => {
+  const cancel = ({ controllerId, turnId }: BrowserBridgeCancel) => {
     if (host?.status !== "ready") {
       return;
     }
@@ -399,7 +423,7 @@ export const startBrowserBridge = async ({
     const requestId = crypto.randomUUID();
     return await awaitResult({
       cancel: () => {
-        cancel(controllerId, turnId);
+        cancel({ controllerId, turnId });
       },
       dispatch: () => {
         write(socket, {

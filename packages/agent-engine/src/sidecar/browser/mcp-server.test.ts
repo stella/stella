@@ -42,7 +42,7 @@ type Requested = Parameters<BrowserBridge["request"]>[0];
 /** A bridge whose extension answers every command with a sign-in. */
 const fakeBridge = () => {
   const requests: Requested[] = [];
-  const cancels: [string, string][] = [];
+  const cancels: { controllerId: string; turnId: string }[] = [];
   const bridge: BrowserBridge = {
     endpoint: "/unused.sock",
     secretFile: "/unused.secret",
@@ -59,8 +59,8 @@ const fakeBridge = () => {
         status: "error",
       });
     },
-    cancel: (controllerId, turnId) => {
-      cancels.push([controllerId, turnId]);
+    cancel: (run) => {
+      cancels.push(run);
     },
     stop: async () => undefined,
   };
@@ -191,7 +191,7 @@ describe("the local browser MCP endpoint", () => {
     expect((await rpc(first, ping)).status).toBe(200);
 
     mcp.unregister("run-1");
-    expect(cancels).toEqual([["thread-1", "run-1"]]);
+    expect(cancels).toEqual([{ controllerId: "thread-1", turnId: "run-1" }]);
     expect((await rpc(first, ping)).status).toBe(404);
   });
 });

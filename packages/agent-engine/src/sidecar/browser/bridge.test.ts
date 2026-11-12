@@ -1,6 +1,14 @@
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -253,6 +261,29 @@ describe("the browser bridge and its native host", () => {
       turnId: "run-1",
       type: "cancel",
     });
+  });
+});
+
+describe("starting the browser bridge", () => {
+  test("a secret it cannot write is an error, with the socket released", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "stella-bridge-"));
+    cleanups.push(() => {
+      rmSync(dir, { force: true, recursive: true });
+    });
+    // A folder where the secret file belongs: the rename cannot replace it.
+    mkdirSync(path.join(dir, "browser.secret"));
+    const endpoint = path.join(dir, "sb.sock");
+    const started = await startBrowserBridge({
+      dir,
+      endpoint,
+      log: () => undefined,
+      timeoutMs: 5000,
+    });
+    expect(Result.isError(started)).toBe(true);
+    expect(existsSync(endpoint)).toBe(false);
+    expect(readdirSync(dir).filter((name) => name.endsWith(".tmp"))).toEqual(
+      [],
+    );
   });
 });
 

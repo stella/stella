@@ -26,6 +26,7 @@ import type { CommandBudget } from "./command-budget";
 import { readBrowserController } from "./controller";
 import { isControllableFrame, parseControllableUrl } from "./origin-policy";
 import {
+  IDENTITY_PROVIDER_HOSTS,
   isIdentityProviderUrl,
   needsMember,
   SIGN_IN_MESSAGE,
@@ -442,6 +443,7 @@ type PageOperation =
       /** What the action returns on a document that asks for a sign-in. */
       signInMessage: string;
       signInPolicies: typeof SIGN_IN_POLICY;
+      identityProviderHosts: typeof IDENTITY_PROVIDER_HOSTS;
     }
   | { kind: "locate" }
   | {
@@ -459,6 +461,7 @@ type PageOperation =
       shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
       signIn: SignInPolicy;
       signInPolicies: typeof SIGN_IN_POLICY;
+      identityProviderHosts: typeof IDENTITY_PROVIDER_HOSTS;
     };
 
 const SNAPSHOT_PURPOSE = {
@@ -671,7 +674,10 @@ const runPageOperation = async (
       };
       // Learns the page's secret values and keeps learning them. Runs only
       // once a desktop sign-in refusal is ruled out: a page handed to the
-      // member is never read, so none of its values are kept.
+      // member is never read. The watchers it installed earlier go on
+      // learning after a sign-in form appears: the values stay in the
+      // extension's isolated world and only withhold the same text from
+      // every later read, as when a single-page app shows it again.
       const learnSecrets = () => {
         rememberSensitiveFields(document);
         // From the first injection on, secret values are learned as they
@@ -1133,7 +1139,18 @@ const runPageOperation = async (
         ) {
           return null;
         }
-        const asks = asksForSignIn(document);
+        // An identity provider's page, here a frame the worker's address
+        // check of the top document does not see, is the member's whatever
+        // fields it shows (matched as `isIdentityProviderUrl` does).
+        const host =
+          URL.parse(window.location.href)?.hostname.toLowerCase() ?? "";
+        const onIdentityProvider = pageOperation.identityProviderHosts.some(
+          (pattern) =>
+            pattern.startsWith(".")
+              ? host.endsWith(pattern) && host.length > pattern.length
+              : host === pattern,
+        );
+        const asks = onIdentityProvider || asksForSignIn(document);
         if (
           pageOperation.kind === "snapshot" &&
           pageOperation.purpose === pageOperation.purposes.signInCheck
@@ -1490,6 +1507,7 @@ const injectDomAction = async ({
         signIn,
         signInMessage: SIGN_IN_MESSAGE,
         signInPolicies: SIGN_IN_POLICY,
+        identityProviderHosts: IDENTITY_PROVIDER_HOSTS,
       },
     );
   } catch {
@@ -1615,6 +1633,7 @@ const readSnapshot = async ({
       shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
       signIn,
       signInPolicies: SIGN_IN_POLICY,
+      identityProviderHosts: IDENTITY_PROVIDER_HOSTS,
     },
   );
   // A sign-in in any frame, or a top document that turned out to be an
@@ -2331,6 +2350,7 @@ const tabAsksForSignIn = async (tabId: number): Promise<boolean> => {
       shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
       signIn: SIGN_IN_POLICY.handToMember,
       signInPolicies: SIGN_IN_POLICY,
+      identityProviderHosts: IDENTITY_PROVIDER_HOSTS,
     },
   );
   return results.some(({ result }) => v.is(signInRefusalSchema, result));

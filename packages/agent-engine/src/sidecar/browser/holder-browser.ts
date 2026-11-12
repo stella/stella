@@ -116,7 +116,19 @@ export const startHolderBrowser = async ({
     };
   }
   log("the browser host is registered with Chrome");
-  const mcp = startLocalBrowserMcp({ bridge: bridge.value, version });
+  // The loopback listener can fail to start; the holder goes on without
+  // browser tools then.
+  const started = Result.try(() =>
+    startLocalBrowserMcp({ bridge: bridge.value, version }),
+  );
+  if (Result.isError(started)) {
+    await bridge.value.stop();
+    return {
+      reason: "the browser tools' local endpoint did not start",
+      type: "unavailable",
+    };
+  }
+  const mcp = started.value;
   return {
     browser: {
       mcp,

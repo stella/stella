@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   BROWSER_CONTROL_ACTION,
   type BrowserControlCommand,
@@ -86,17 +88,33 @@ export const admitControl = async ({
     : CONTROL_ADMISSION.refused;
 };
 
+/** Who takes the browser: a desktop chat by its id, or the web connection. */
+export type ControlHolder =
+  | { transport: typeof CONTROL_TRANSPORT.desktop; controllerId: string }
+  | { transport: typeof CONTROL_TRANSPORT.web };
+
 /**
- * Hands the browser to `controllerId`: the previous holder's controlled tab
- * stops being controlled and every contained tab goes back to the member,
- * then the new holder is recorded. Called only as the last step of a
- * takeover that nothing refused, so a refusal never changes the previous
- * holder's tabs or their rules.
+ * Hands the browser to `holder`: the previous holder's controlled tab stops
+ * being controlled and every contained tab goes back to the member, then
+ * the new holder is recorded. The web connection is recorded as no record,
+ * so ending its pairing releases what it holds. Called only as the last
+ * step of a takeover that nothing refused, so a refusal never changes the
+ * previous holder's tabs or their rules.
  */
-export const takeOverControl = async (controllerId: string): Promise<void> => {
+export const takeOverControl = async (holder: ControlHolder): Promise<void> => {
   await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
   await releaseContainedTabs();
-  await chrome.storage.session.set({
-    [BROWSER_CONTROL_OWNER_STORAGE_KEY]: controllerId,
-  });
+  switch (holder.transport) {
+    case CONTROL_TRANSPORT.desktop:
+      await chrome.storage.session.set({
+        [BROWSER_CONTROL_OWNER_STORAGE_KEY]: holder.controllerId,
+      });
+      return;
+    case CONTROL_TRANSPORT.web:
+      await chrome.storage.session.remove(BROWSER_CONTROL_OWNER_STORAGE_KEY);
+      return;
+    default:
+      holder satisfies never;
+      panic("Unhandled control holder");
+  }
 };

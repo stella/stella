@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -84,6 +84,23 @@ test("offers the browser once Chrome can start the host", async () => {
     ).toBe(true);
     await started.browser.stop();
   } finally {
+    rmSync(at.root, { force: true, recursive: true });
+  }
+});
+
+test("offers no browser when its local endpoint cannot listen, and leaves no socket", async () => {
+  const at = place();
+  const serve = spyOn(Bun, "serve").mockImplementation(() => {
+    throw new Error("listen failed");
+  });
+  try {
+    mkdirSync(path.join(at.home, ".config", "google-chrome"), {
+      recursive: true,
+    });
+    expect(await start(at, "linux")).toMatchObject({ type: "unavailable" });
+    expect(existsSync(browserEndpointFor(at.endpoint))).toBe(false);
+  } finally {
+    serve.mockRestore();
     rmSync(at.root, { force: true, recursive: true });
   }
 });

@@ -291,7 +291,7 @@ export const startLocalBrowserMcp = ({
       if (held === undefined) {
         return;
       }
-      bridge.cancel(held.threadId, runId);
+      bridge.cancel({ controllerId: held.threadId, turnId: runId });
       if (
         ![...runs.values()].some(({ threadId }) => threadId === held.threadId)
       ) {
