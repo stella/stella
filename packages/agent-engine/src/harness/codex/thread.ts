@@ -27,9 +27,13 @@ import { SkillsListResponseSchema, ThreadResponseSchema } from "./protocol";
 const SANDBOX_MODE = {
   workspace: "workspace-write",
 } as const satisfies Record<HarnessRunPolicy["fs"], string>;
-const NETWORK_ACCESS = {
+/**
+ * Whether the run's network policy lets the sandbox reach the network; a
+ * level may still turn it off (`CODEX_LEVEL`).
+ */
+const NETWORK_ACCESS: Readonly<Record<HarnessRunPolicy["network"], boolean>> = {
   open: true,
-} as const satisfies Record<HarnessRunPolicy["network"], boolean>;
+};
 /**
  * Codex's settings per approval mode, strictly ordered: each level allows
  * everything the one below it does and more, so a ceiling at a level never
