@@ -2919,7 +2919,6 @@
       "dropZone": "Suelta aquí el poder notarial (.docx) o haz clic para elegir un archivo",
       "extracting": "Extrayendo poderdante(s)…",
       "fileHint": "stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
-      "fileTooLarge": "El archivo del poder debe tener 50 MB o menos.",
       "invalidFileType": "Selecciona un archivo .docx.",
       "noOutorganteFound": "No se pudo identificar ningún otorgante en este documento.",
       "parseErrorGeneric": "No se pudieron extraer contactos de este documento.",

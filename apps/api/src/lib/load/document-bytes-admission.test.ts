@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { createByteAdmission } from "./finalize-admission";
+import { createByteAdmission } from "./document-bytes-admission";
 
 describe("byte admission", () => {
   test("admits work while it fits and holds the rest until bytes are released", async () => {

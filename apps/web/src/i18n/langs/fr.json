@@ -2919,7 +2919,6 @@
       "dropZone": "Déposez la procuration (.docx) ici ou cliquez pour choisir un fichier",
       "extracting": "Extraction du ou des mandants…",
       "fileHint": "stella lit le document et repère automatiquement le(s) mandant(s) (celui qui donne procuration, pas l'avocat). Vérifiez le résultat avant de confirmer.",
-      "fileTooLarge": "Le fichier de procuration ne doit pas dépasser 50 Mo.",
       "invalidFileType": "Veuillez choisir un fichier .docx.",
       "noOutorganteFound": "Aucun mandant n'a pu être identifié dans ce document.",
       "parseErrorGeneric": "Impossible d'extraire des contacts de ce document.",

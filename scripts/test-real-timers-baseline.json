@@ -274,6 +274,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/lib/load/document-bytes-admission.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/lib/observability/event-loop-delay.test.ts": {
     "count": 4,
     "owner": "api",
@@ -391,11 +396,6 @@
   },
   "apps/api/src/lib/tanstack-ai-provider-retry.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/uploads/finalize-admission.test.ts": {
-    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

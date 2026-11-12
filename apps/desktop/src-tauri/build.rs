@@ -37,8 +37,41 @@ fn link_clang_runtime() {
   println!("cargo:rustc-link-lib=static=clang_rt.osx");
 }
 
+/// The API contract owns the document limit. The desktop app bounds an Office
+/// download by the same value, read from the contract's source at build time
+/// so no copy of it exists here. The declaration is one line whose value is a
+/// product of integer literals (`200 * 1024 * 1024`).
+fn emit_document_limit() {
+  const DECLARATION: &str = "export const UPLOAD_DOCUMENT_MAX_BYTES = ";
+  let manifest_dir =
+    std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
+  let source_path = std::path::Path::new(&manifest_dir)
+    .join("../../../packages/api-contract/src/document-version-upload.ts");
+  println!("cargo:rerun-if-changed={}", source_path.display());
+  let source = std::fs::read_to_string(&source_path)
+    .expect("the API contract's upload module is readable");
+  let expression = source
+    .lines()
+    .find_map(|line| line.strip_prefix(DECLARATION))
+    .and_then(|rest| rest.strip_suffix(';'))
+    .expect("the API contract declares UPLOAD_DOCUMENT_MAX_BYTES on one line");
+  let bytes = expression
+    .split('*')
+    .map(|factor| {
+      factor
+        .trim()
+        .replace('_', "")
+        .parse::<u64>()
+        .expect("each factor of the document limit is an integer literal")
+    })
+    .try_fold(1_u64, u64::checked_mul)
+    .expect("the document limit fits in u64");
+  println!("cargo:rustc-env=STELLA_UPLOAD_DOCUMENT_MAX_BYTES={bytes}");
+}
+
 fn main() {
   configure_dictation();
+  emit_document_limit();
   let attributes = tauri_build::Attributes::new()
     .app_manifest(tauri_build::AppManifest::new().commands(STELLA_COMMAND_NAMES));
   tauri_build::try_build(attributes).expect("failed to run tauri build script");

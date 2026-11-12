@@ -2427,7 +2427,6 @@
   "contacts.extractProcuracao.dropZone": "Drop a power of attorney (.docx) here, or click to choose a file",
   "contacts.extractProcuracao.extracting": "Extracting grantor(s)…",
   "contacts.extractProcuracao.fileHint": "stella reads the document and finds the grantor(s) (not the lawyer) automatically. Review the results before confirming.",
-  "contacts.extractProcuracao.fileTooLarge": "The power-of-attorney file must be 50 MB or smaller.",
   "contacts.extractProcuracao.invalidFileType": "Please choose a .docx file.",
   "contacts.extractProcuracao.noOutorganteFound": "No grantor could be identified in this document.",
   "contacts.extractProcuracao.parseErrorGeneric": "Could not extract contacts from this document.",

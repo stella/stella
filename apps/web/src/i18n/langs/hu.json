@@ -2919,7 +2919,6 @@
       "dropZone": "Húzza ide a meghatalmazást (.docx), vagy kattintson a fájl kiválasztásához",
       "extracting": "Meghatalmazó(k) kinyerése…",
       "fileHint": "A stella beolvassa a dokumentumot, és automatikusan megkeresi a meghatalmazót (aki a meghatalmazást adja, nem az ügyvédet). Megerősítés előtt ellenőrizze az eredményt.",
-      "fileTooLarge": "A meghatalmazás fájlja legfeljebb 50 MB lehet.",
       "invalidFileType": "Válasszon egy .docx fájlt.",
       "noOutorganteFound": "Ebben a dokumentumban nem sikerült meghatalmazót azonosítani.",
       "parseErrorGeneric": "Ebből a dokumentumból nem sikerült kapcsolatokat kinyerni.",

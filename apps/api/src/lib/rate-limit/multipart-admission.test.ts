@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { HTTP_REQUEST_BODY_MAX_BYTES } from "@stll/api-contract/limits";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createResponseSet } from "@/api/http/context";
@@ -49,6 +50,26 @@ describe("admitMultipartRequest", () => {
     expect(Result.isError(admitted)).toBe(true);
     expect(request.bodyUsed).toBe(false);
   });
+
+  test.each([
+    { declared: HTTP_REQUEST_BODY_MAX_BYTES, admitted: true },
+    { declared: HTTP_REQUEST_BODY_MAX_BYTES + 1, admitted: false },
+  ])(
+    "a form of $declared bytes is admitted exactly when the server's ingress accepts it",
+    async ({ declared, admitted }) => {
+      const request = new Request("http://localhost/upload", {
+        method: "POST",
+        body: "not read",
+        headers: {
+          "content-type": "multipart/form-data; boundary=test",
+          "content-length": String(declared),
+        },
+      });
+
+      expect(Result.isOk(await admitMultipartRequest(request))).toBe(admitted);
+      expect(request.bodyUsed).toBe(false);
+    },
+  );
 
   test("refuses an upper-case multipart media type the same way", async () => {
     const request = new Request("http://localhost/upload", {

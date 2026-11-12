@@ -260,7 +260,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/template-binding/binding-catalog.ts",
     "apps/api/src/lib/templates/lookup-formats/set-user-default.ts",
     "apps/api/src/lib/uploads/file-metadata-schema.ts",
-    "apps/api/src/lib/uploads/finalize-admission.ts",
+    "apps/api/src/lib/load/document-bytes-admission.ts",
     "apps/api/src/lib/uploads/promote-tmp-object.ts",
     "apps/api/src/lib/uploads/file-comparison/sweep.ts",
     "apps/api/src/lib/user-files/types.ts",

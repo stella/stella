@@ -18,6 +18,7 @@ export const SKILL_RUNNER_LIMITS = {
   commandTimeoutMs: 11 * 60 * 1000,
   /** Captured from each of stdout and stderr; the rest is dropped and counted. */
   streamBytes: 256 * 1024,
+  // oxlint-disable-next-line no-literal-document-byte-limit/no-literal-document-byte-limit -- a workspace archive budget, equal to the document limit only by chance
   workspaceArchiveBytes: 200 * 1024 * 1024,
   workspaceUncompressedBytes: 1024 * 1024 * 1024,
   workspaceFiles: 10_000,

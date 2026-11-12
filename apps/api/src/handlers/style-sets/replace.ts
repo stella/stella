@@ -13,7 +13,9 @@ import { extractStyleSetFile } from "@/api/lib/style-sets";
 
 const paramsSchema = v.object({ styleSetId: resourceIdSchema("styleSet") });
 const bodySchema = v.object({
-  styleSource: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  styleSource: fileSchema({
+    maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument,
+  }),
 });
 
 const config = {

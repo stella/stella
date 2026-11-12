@@ -2919,7 +2919,6 @@
       "dropZone": "Přetáhněte sem plnou moc (.docx), nebo klikněte a vyberte soubor",
       "extracting": "Zjišťujeme zmocnitele…",
       "fileHint": "stella přečte dokument a automaticky najde zmocnitele (toho, kdo uděluje plnou moc, ne advokáta). Před potvrzením výsledek zkontrolujte.",
-      "fileTooLarge": "Soubor plné moci musí mít nejvýše 50 MB.",
       "invalidFileType": "Vyberte prosím soubor .docx.",
       "noOutorganteFound": "V tomto dokumentu se nepodařilo identifikovat žádného zmocnitele.",
       "parseErrorGeneric": "Z tohoto dokumentu se nepodařilo extrahovat kontakty.",

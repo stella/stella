@@ -81,7 +81,14 @@ const LIBRE_OFFICE_LOCK_SUFFIX: &str = "#";
 const MICROSOFT_OFFICE_LOCK_PREFIX: &str = "~$";
 const SUPPORT_EMAIL: &str = "hello@stll.app";
 const CONTENT_TYPES_ENTRY: &str = "[Content_Types].xml";
-const MAX_OFFICE_DOWNLOAD_BYTES: u64 = 50 * 1024 * 1024;
+/// The API contract's `UPLOAD_DOCUMENT_MAX_BYTES`, which `build.rs` reads from
+/// its source: no stored document is larger, so none the server holds is
+/// refused here.
+const MAX_OFFICE_DOWNLOAD_BYTES: u64 =
+  match u64::from_str_radix(env!("STELLA_UPLOAD_DOCUMENT_MAX_BYTES"), 10) {
+    Ok(bytes) => bytes,
+    Err(_) => panic!("build.rs emits the document limit as a decimal integer"),
+  };
 const ZIP_LOCAL_FILE_HEADER_MAGIC: &[u8] = b"PK\x03\x04";
 const GENERIC_OFFICE_DOWNLOAD_MIME_TYPES: &[&str] =
   &["application/octet-stream", "binary/octet-stream"];
