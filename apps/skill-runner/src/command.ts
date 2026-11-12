@@ -42,6 +42,9 @@ const capture = (limit: number) => {
   };
 };
 
+/** How long output still in the pipes may take to arrive after an exit. */
+const STREAM_DRAIN_MS = 2000;
+
 /** SIGKILL a whole process group; false when it has no members left. */
 const killGroup = (group: number): boolean =>
   Result.try(() => process.kill(-group, "SIGKILL")).isOk();
@@ -72,6 +75,7 @@ export const runCommand = async ({
   return await new Promise<CommandOutcome>((resolve) => {
     let timedOut = false;
     let settled = false;
+    let drain: ReturnType<typeof setTimeout> | undefined;
     const finish = (
       outcome: Omit<CommandOutcome, "stdout" | "stderr" | "durationMs">,
     ) => {
@@ -80,6 +84,7 @@ export const runCommand = async ({
       }
       settled = true;
       clearTimeout(timer);
+      clearTimeout(drain);
       resolve({
         ...outcome,
         durationMs: Math.round(performance.now() - started),
@@ -112,19 +117,28 @@ export const runCommand = async ({
         signal: null,
       });
     });
-    child.on("close", (code, signal) => {
-      // A descendant may still run with its own stdio once the command
-      // exits; an empty group is the expected case.
+    child.on("exit", (code, signal) => {
+      // A descendant may still run once the command exits; an empty group is
+      // the expected case.
       if (child.pid !== undefined) {
         killGroup(child.pid);
       }
-      finish({
+      const exited = {
         outcome: timedOut
           ? SKILL_RUNNER_OUTCOME.timedOut
           : SKILL_RUNNER_OUTCOME.exited,
         exitCode: code,
         signal,
-      });
+      };
+      // Output still in the pipes arrives before `close`. A process that left
+      // the group can hold them open for good, so the outcome does not wait
+      // on it past a short drain: the caller's sweep ends that process.
+      child.once("close", () => finish(exited));
+      drain = setTimeout(() => {
+        child.stdout.destroy();
+        child.stderr.destroy();
+        finish(exited);
+      }, STREAM_DRAIN_MS);
     });
   });
 };

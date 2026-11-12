@@ -11,8 +11,11 @@ import * as v from "valibot";
 export const SKILL_RUNNER_LIMITS = {
   argvItems: 64,
   argChars: 4096,
-  /** Leaves a Lambda's 15 minutes room to fetch and store the workspace. */
-  commandTimeoutMs: 13 * 60 * 1000,
+  /**
+   * With the runner's transfer deadlines (two downloads of 45 s, one upload of
+   * 90 s) the worst run takes 14 of a Lambda's 15 minutes.
+   */
+  commandTimeoutMs: 11 * 60 * 1000,
   /** Captured from each of stdout and stderr; the rest is dropped and counted. */
   streamBytes: 256 * 1024,
   workspaceArchiveBytes: 200 * 1024 * 1024,
@@ -22,6 +25,8 @@ export const SKILL_RUNNER_LIMITS = {
   skillUncompressedBytes: 50 * 1024 * 1024,
   skillFiles: 1000,
   urlChars: 4096,
+  /** A workspace path, in the input and in every path a result reports. */
+  pathChars: 1024,
 } as const;
 
 const httpsUrl = v.pipe(
@@ -37,7 +42,7 @@ export const SKILL_RUNNER_RELATIVE_PATH_PATTERN =
 
 const relativePath = v.pipe(
   v.string(),
-  v.maxLength(1024),
+  v.maxLength(SKILL_RUNNER_LIMITS.pathChars),
   v.regex(SKILL_RUNNER_RELATIVE_PATH_PATTERN),
   v.check(
     (path) => !path.split("/").some((segment) => segment === ".."),
@@ -106,7 +111,7 @@ const capturedStream = v.strictObject({
 });
 
 const workspaceFile = v.strictObject({
-  path: v.pipe(v.string(), v.maxLength(1024)),
+  path: v.pipe(v.string(), v.maxLength(SKILL_RUNNER_LIMITS.pathChars)),
   sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
   sha256: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
 });
@@ -125,7 +130,7 @@ export const skillRunnerResultSchema = v.strictObject({
   ),
   /** Paths the command removed, in path order. */
   removedFiles: v.pipe(
-    v.array(v.pipe(v.string(), v.maxLength(1024))),
+    v.array(v.pipe(v.string(), v.maxLength(SKILL_RUNNER_LIMITS.pathChars))),
     v.maxLength(SKILL_RUNNER_LIMITS.workspaceFiles),
   ),
 });

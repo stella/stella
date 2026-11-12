@@ -105,6 +105,7 @@ export const listFolder = async (
     for (const entry of entries.value) {
       const full = path.join(dir, entry.name);
       const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+      const remainingBytes = limits.uncompressedBytes - totalBytes;
       const read = await Result.tryPromise({
         try: async () => {
           const stat = await lstat(full);
@@ -114,9 +115,14 @@ export const listFolder = async (
           if (!stat.isFile()) {
             return { type: "other" } as const;
           }
+          // Checked before reading, so a file past the limit is never
+          // buffered. The runner lists a workspace only while nothing else
+          // runs in it: before the command and after the sweep.
+          if (stat.size > remainingBytes) {
+            return { type: "too-large" } as const;
+          }
           return {
             type: "file",
-            sizeBytes: stat.size,
             content: await readFile(full),
           } as const;
         },
@@ -132,7 +138,14 @@ export const listFolder = async (
       if (read.value.type === "other") {
         continue;
       }
-      totalBytes += read.value.sizeBytes;
+      if (read.value.type === "too-large") {
+        return Result.err(
+          new SkillRunnerArchiveError({
+            message: "Workspace holds more than a run may keep",
+          }),
+        );
+      }
+      totalBytes += read.value.content.byteLength;
       if (
         files.size + 1 > limits.files ||
         totalBytes > limits.uncompressedBytes
@@ -144,7 +157,7 @@ export const listFolder = async (
         );
       }
       files.set(relative, {
-        sizeBytes: read.value.sizeBytes,
+        sizeBytes: read.value.content.byteLength,
         sha256: sha256Hex(read.value.content),
       });
     }

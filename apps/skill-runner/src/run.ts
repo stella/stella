@@ -188,6 +188,21 @@ const runInFolder = async (
   if (after.isErr()) {
     return Result.err(after.error);
   }
+  const reported = changes(before.value, after.value);
+  // The result reports every changed and removed path; a workspace whose
+  // result could not be read back is not stored.
+  if (
+    [
+      ...reported.changedFiles.map(({ path: file }) => file),
+      ...reported.removedFiles,
+    ].some((file) => file.length > SKILL_RUNNER_LIMITS.pathChars)
+  ) {
+    return Result.err(
+      new SkillRunnerArchiveError({
+        message: "The workspace holds a path longer than a run may report",
+      }),
+    );
+  }
   const packed = await packFolder(workspace, after.value);
   if (packed.isErr()) {
     return Result.err(packed.error);
@@ -208,8 +223,16 @@ const runInFolder = async (
   if (stored.isErr()) {
     return Result.err(stored.error);
   }
-  return Result.ok({ ...ran, ...changes(before.value, after.value) });
+  return Result.ok({ ...ran, ...reported });
 };
+
+/** Remove a run folder; false when part of it could not be removed. */
+const removeRunFolder = async (root: string): Promise<boolean> =>
+  (
+    await Result.tryPromise(
+      async () => await rm(root, { recursive: true, force: true }),
+    )
+  ).isOk();
 
 /**
  * Run one skill command: lay out the skill and the chat's workspace in a
@@ -235,6 +258,8 @@ export const runSkillCommand = async (
     environment: options.environment ?? lambdaEnvironment(),
     sweep: options.sweep,
   });
-  await rm(root.value, { recursive: true, force: true });
+  // The outcome stands whatever the cleanup does: a command can leave a
+  // folder it made unreadable, and the execution environment is never reused.
+  await removeRunFolder(root.value);
   return outcome;
 };

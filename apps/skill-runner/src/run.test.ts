@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { createReadStream } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -256,6 +257,29 @@ describe("the command process", () => {
     expect(outcome.outcome).toBe("exited");
     await released;
     await rm(folder, { recursive: true, force: true });
+  });
+
+  // The descendant starts its own session, out of the command's group, and
+  // keeps the command's stdout open. Waiting for that pipe to close would
+  // hold the outcome past the test's own timeout; in the Lambda the sweep
+  // ends such a process, here the test does.
+  test("a process that escapes the group with the output pipe does not hold the outcome", async () => {
+    const outcome = await runCommand({
+      argv: [
+        BUN,
+        "-e",
+        'const held = require("node:child_process").spawn("sleep", ["30"], { detached: true, stdio: ["ignore", "inherit", "inherit"] }); console.log(held.pid); held.unref(); process.exit(0);',
+      ],
+      cwd: process.cwd(),
+      env: { PATH: process.env["PATH"] ?? "" },
+      timeoutMs: 20_000,
+    });
+    expect(outcome.outcome).toBe("exited");
+    const escaped = Number(outcome.stdout.text.trim());
+    expect(Number.isInteger(escaped)).toBe(true);
+    expect(Result.try(() => process.kill(escaped, "SIGKILL")).isOk()).toBe(
+      true,
+    );
   });
 
   test("output beyond the cap is dropped and counted", async () => {
