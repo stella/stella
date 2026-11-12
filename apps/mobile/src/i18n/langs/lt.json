@@ -491,5 +491,9 @@
     "numberConvention": "Pageidaujamas formatas: {example}",
     "numberDeparts": "Neatitinka pageidaujamo formato.",
     "numberHintEmpty": "Nurodykite bylos numerį, kad jos dokumentai būtų numeruojami."
+  },
+  "role": {
+    "readFailed": "Nepavyko įkelti jūsų teisių, todėl pakeitimai kol kas paslėpti.",
+    "retry": "Bandyti dar kartą"
   }
 }

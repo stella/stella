@@ -15,7 +15,7 @@ import { screenStyles } from "@/components/empty-state-screen";
 import { LoadFailedCard } from "@/components/load-failure";
 import { MatterParties } from "@/components/matter-parties";
 import { MatterTeam, SectionTitle } from "@/components/matter-team";
-import { useCan } from "@/components/role";
+import { RoleFailureNotice, useCan } from "@/components/role";
 import { useMatterWrite } from "@/components/use-matter-write";
 import { WriteFailureNotice } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
@@ -131,6 +131,7 @@ const LoadedMatterInfo = ({
           <Text variant="caption">{t("archivedNotice")}</Text>
         </View>
       ) : null}
+      <RoleFailureNotice />
       <MatterFields
         locked={locked}
         // A fresh load starts the fields from what it read.

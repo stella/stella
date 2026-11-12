@@ -491,5 +491,9 @@
     "numberConvention": "Preferowany format: {example}",
     "numberDeparts": "Nie pasuje do preferowanego formatu.",
     "numberHintEmpty": "Podaj sygnaturę sprawy, aby rozpocząć numerowanie jej dokumentów."
+  },
+  "role": {
+    "readFailed": "Nie udało się wczytać Twoich uprawnień, więc zmiany są na razie ukryte.",
+    "retry": "Spróbuj ponownie"
   }
 }

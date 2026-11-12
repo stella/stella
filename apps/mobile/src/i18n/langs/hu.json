@@ -491,5 +491,9 @@
     "numberConvention": "Előnyben részesített formátum: {example}",
     "numberDeparts": "Nem egyezik az előnyben részesített formátummal.",
     "numberHintEmpty": "Adjon meg ügyszámot, hogy az ügy dokumentumai számozást kapjanak."
+  },
+  "role": {
+    "readFailed": "Nem sikerült betölteni a jogosultságait, ezért a módosítások egyelőre rejtve vannak.",
+    "retry": "Újra"
   }
 }
