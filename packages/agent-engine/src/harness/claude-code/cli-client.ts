@@ -61,15 +61,15 @@ type StartClaudeCliOptions = {
 };
 
 /**
- * Requests that may wait longer than the usual deadline. Initialize covers
+ * Startup requests, which wait on the startup deadline: initialize covers
  * the CLI's first launch (an antivirus scan, a busy computer); registering
  * stella's MCP server waits on the CLI's own connect, itself up to 30
- * seconds a server, so its deadline sits well above that.
+ * seconds a server.
  */
-const SLOW_REQUEST_MS: Partial<Record<ClaudeHostControlRequest, number>> = {
-  initialize: 2 * 60_000,
-  mcp_set_servers: 90_000,
-};
+const STARTUP_REQUESTS: ReadonlySet<ClaudeHostControlRequest> = new Set([
+  "initialize",
+  "mcp_set_servers",
+]);
 
 export type ClaudeCliClient = {
   /** Sends a control request and settles with its response payload. */
@@ -192,7 +192,7 @@ export const startClaudeCli = ({
           request_id: requestId,
           request: { ...fields, subtype },
         },
-        SLOW_REQUEST_MS[subtype],
+        STARTUP_REQUESTS.has(subtype) ? deadlines.startupRequestMs : undefined,
       );
     },
     send: cli.write,

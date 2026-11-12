@@ -51,15 +51,15 @@ type StartAppServerOptions = {
 };
 
 /**
- * Requests that may wait longer than the usual deadline. Initialize covers
+ * Startup requests, which wait on the startup deadline: initialize covers
  * the CLI's first launch (an antivirus scan, a busy computer); starting or
  * resuming a thread waits for its MCP servers, stella's among them.
  */
-const SLOW_REQUEST_MS: Partial<Record<CodexClientRequestMethod, number>> = {
-  initialize: 2 * 60_000,
-  "thread/start": 90_000,
-  "thread/resume": 90_000,
-};
+const STARTUP_REQUESTS: ReadonlySet<CodexClientRequestMethod> = new Set([
+  "initialize",
+  "thread/start",
+  "thread/resume",
+]);
 
 export type AppServerClient = {
   request: (
@@ -150,7 +150,7 @@ export const startAppServer = ({
         id,
         method,
         { id, method, params },
-        SLOW_REQUEST_MS[method],
+        STARTUP_REQUESTS.has(method) ? deadlines.startupRequestMs : undefined,
       );
     },
     notify: (method, params) => {

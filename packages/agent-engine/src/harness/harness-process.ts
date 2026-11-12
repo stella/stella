@@ -28,6 +28,12 @@ export type HarnessProcessDeadlines = {
   /** How long a request waits for its answer before the process is ended. */
   requestMs: number;
   /**
+   * How long a startup request waits instead (the first launch, connecting
+   * stella's MCP server): a slow computer is not a hung harness. `requestMs`
+   * when unset.
+   */
+  startupRequestMs?: number | undefined;
+  /**
    * How long the process, and every process it started, gets to exit on
    * SIGTERM before SIGKILL.
    */
