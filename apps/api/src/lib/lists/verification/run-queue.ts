@@ -670,6 +670,45 @@ type ExecuteRunArgs = {
   execution?: VerificationExecutionBoundaries;
 };
 
+/** The passages a run checks, or the code it fails with when the pinned file
+ *  yields none. */
+const readRunPassages = async ({
+  actor,
+  file,
+  scope,
+  readDocument,
+  signal,
+}: {
+  actor: RunActor;
+  file: ResolvedFile;
+  scope: Parameters<typeof runPassages>[1];
+  readDocument: typeof readVerificationDocument;
+  signal: AbortSignal;
+}): Promise<
+  Result<NonNullable<ReturnType<typeof runPassages>>, VerificationRunErrorCode>
+> => {
+  const document = await readDocument({
+    organizationId: actor.organizationId,
+    workspaceId: actor.workspaceId,
+    file,
+    signal,
+    // A run may wait out its own timeout for the document byte budget.
+    admissionWaitMs: RUN_TIMEOUT_MS,
+  });
+  if (document.type === "unsupported-format") {
+    return Result.err("unsupported_format");
+  }
+  if (document.type === "no-text") {
+    return Result.err("no_text");
+  }
+  // Still waiting on the document byte budget when the run timed out.
+  const passages =
+    document.type === "busy" ? null : runPassages(document.blocks, scope);
+  return passages === null || passages.length === 0
+    ? Result.err("extraction_failed")
+    : Result.ok(passages);
+};
+
 const executeRun = async ({
   actor,
   admission,
@@ -687,26 +726,17 @@ const executeRun = async ({
     return "access_revoked";
   }
   const abortSignal = AbortSignal.timeout(RUN_TIMEOUT_MS);
-  const readDocument = execution.readDocument ?? readVerificationDocument;
-  const document = await readDocument({
-    organizationId: actor.organizationId,
-    workspaceId: actor.workspaceId,
+  const read = await readRunPassages({
+    actor,
     file: file.value,
+    scope: run.scope,
+    readDocument: execution.readDocument ?? readVerificationDocument,
     signal: abortSignal,
-    admissionWaitMs: RUN_TIMEOUT_MS,
   });
-  if (document.type === "unsupported-format") {
-    return "unsupported_format";
+  if (Result.isError(read)) {
+    return read.error;
   }
-  if (document.type === "no-text") {
-    return "no_text";
-  }
-  // Still waiting on the document byte budget when the run timed out.
-  const passages =
-    document.type === "busy" ? null : runPassages(document.blocks, run.scope);
-  if (passages === null || passages.length === 0) {
-    return "extraction_failed";
-  }
+  const passages = read.value;
 
   const configResult = await Result.tryPromise({
     try: async () => {
