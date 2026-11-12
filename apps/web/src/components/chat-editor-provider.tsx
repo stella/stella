@@ -277,6 +277,7 @@ export type ChatMessageDraftHandoff = {
 };
 
 type ActiveChatEditorHandle = {
+  appendText: (text: string) => void;
   focus: () => void;
   insertMention: (mention: ChatMentionOption) => void;
   insertPastedText: (attrs: PastedTextAttrs) => void;
@@ -350,6 +351,11 @@ type ChatEditorManagerContextValue = {
     threadRef: ChatThreadRef,
     attrs: PastedTextAttrs,
   ) => void;
+  /** `text` after whatever the thread's live composer holds, or at the end
+   *  of its stored draft when none is live. The live composer's latest
+   *  keystrokes reach its stored draft only after a debounce, so appending
+   *  to the stored draft while it is live would lose them. */
+  appendTextToThread: (threadRef: ChatThreadRef, text: string) => void;
   registerActiveEditor: (handle: ActiveChatEditorHandle) => () => void;
   /** Put `draft` into the thread's live composer, ahead of whatever the
    *  composer already holds. False when the thread has no live composer. */
@@ -529,6 +535,26 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     [],
   );
 
+  const appendTextToThread = useCallback(
+    (threadRef: ChatThreadRef, text: string) => {
+      const threadKey = getChatThreadKey(threadRef);
+      const activeEditor = mountedEditorFor(
+        mountedEditorsRef.current,
+        threadKey,
+      );
+
+      if (activeEditor !== null) {
+        activeEditor.appendText(text);
+        return;
+      }
+
+      useChatDraftStore
+        .getState()
+        .insertInlineContent(threadKey, [{ type: "text", text }]);
+    },
+    [],
+  );
+
   const restoreMessageDraftIntoThread = useCallback(
     (threadRef: ChatThreadRef, draft: ChatMessageDraftHandoff): boolean => {
       const activeEditor = mountedEditorFor(
@@ -562,6 +588,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
 
   const contextValue = useMemo<ChatEditorManagerContextValue>(
     () => ({
+      appendTextToThread,
       focusThread,
       getMentionItems,
       hasLiveComposer,
@@ -574,6 +601,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       searchMentionItems,
     }),
     [
+      appendTextToThread,
       focusThread,
       getMentionItems,
       getPluginRegistrations,
@@ -1378,9 +1406,29 @@ export const useChatEditor = ({
     [editor, markDraftStarted],
   );
 
+  // Appends as the stored draft does (`appendInlineContentToDraftDoc`): at
+  // the end of the last paragraph, or in a new one after another block.
+  const appendText = useCallback(
+    (text: string) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+
+      markDraftStarted();
+      const { doc } = editor.state;
+      const end =
+        doc.lastChild?.type.name === "paragraph"
+          ? doc.content.size - 1
+          : doc.content.size;
+      editor.commands.insertContentAt(end, { type: "text", text });
+    },
+    [editor, markDraftStarted],
+  );
+
   useExternalSyncEffect(
     () =>
       registerActiveEditor({
+        appendText,
         focus,
         insertMention,
         insertPastedText,
@@ -1388,6 +1436,7 @@ export const useChatEditor = ({
         threadKey,
       }),
     [
+      appendText,
       focus,
       insertMention,
       insertPastedText,

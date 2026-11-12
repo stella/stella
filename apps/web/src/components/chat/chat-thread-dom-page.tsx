@@ -169,7 +169,7 @@ const ChatThreadDomPage = ({
           value={{
             pause: session.localRunQuestion,
             answer: session.answerLocalRunQuestion,
-            draftKey: getChatThreadKey(threadRef),
+            threadRef,
           }}
         >
           {renderComposer?.(session)}

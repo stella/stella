@@ -23,6 +23,7 @@ import { Step, Steps } from "@stll/ui/steps";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import { useChatEditorManager } from "@/components/chat-editor-provider";
 import { unsentOwnWords } from "@/components/chat/local-run-question.logic";
 import { SecretInput } from "@/components/secret-input";
 import type { LocalRunAnswerDelivery } from "@/features/chat/chat-runtime";
@@ -32,7 +33,7 @@ import {
   useFormattingLocale,
   useStepsMarkerStyle,
 } from "@/i18n/formatting-context";
-import { useChatDraftStore } from "@/lib/chat-draft-store";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 
 type LocalRunQuestionCardProps = {
@@ -42,8 +43,8 @@ type LocalRunQuestionCardProps = {
     interruptId: string,
     answers: Record<string, string[]> | null,
   ) => Promise<LocalRunAnswerDelivery>;
-  /** The thread's composer draft; see `ChatLocalRunQuestionContextValue`. */
-  draftKey: string;
+  /** See `ChatLocalRunQuestionContextValue`. */
+  threadRef: ChatThreadRef;
 };
 
 type Sent = { type: "answered" } | { type: "dismissed" } | null;
@@ -58,7 +59,7 @@ type Sent = { type: "answered" } | { type: "dismissed" } | null;
 export const LocalRunQuestionCard = ({
   pause,
   onAnswer,
-  draftKey,
+  threadRef,
 }: LocalRunQuestionCardProps) => {
   const t = useTranslations();
   const formattingLocale = useFormattingLocale();
@@ -106,20 +107,17 @@ export const LocalRunQuestionCard = ({
   // Words typed into the card and not sent (the turn stopped, a new
   // message replaced it, it was answered elsewhere) go to the composer, so
   // they are not lost; a secret's never do.
-  const unsent = useLatestCallback(() =>
-    sent === null ? unsentOwnWords(questions, drafts) : "",
-  );
-  useExternalSyncEffect(
-    () => () => {
-      const words = unsent();
-      if (words !== "") {
-        useChatDraftStore
-          .getState()
-          .insertInlineContent(draftKey, [{ type: "text", text: words }]);
-      }
-    },
-    [draftKey, unsent],
-  );
+  // Through the live composer when one is on screen, so the member's latest
+  // typing there, not yet in the stored draft, stays.
+  const { appendTextToThread } = useChatEditorManager();
+  const keepUnsent = useLatestCallback(() => {
+    const words = sent === null ? unsentOwnWords(questions, drafts) : "";
+    if (words !== "") {
+      appendTextToThread(threadRef, words);
+    }
+  });
+  // Only on unmount: the callback is stable, so no re-render runs it.
+  useExternalSyncEffect(() => () => keepUnsent(), [keepUnsent]);
 
   const handleSubmit: NonNullable<ComponentProps<"form">["onSubmit"]> = (
     event,

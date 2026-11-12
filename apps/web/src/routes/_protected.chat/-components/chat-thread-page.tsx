@@ -729,7 +729,7 @@ export const ChatThreadPage = ({
                         value={{
                           pause: localRunQuestion,
                           answer: answerLocalRunQuestion,
-                          draftKey: threadKey,
+                          threadRef,
                         }}
                       >
                         <ChatThreadMessages

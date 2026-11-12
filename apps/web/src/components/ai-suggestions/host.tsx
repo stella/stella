@@ -544,6 +544,7 @@ export const PromptBar = (props: PromptBarProps) => {
     presets,
     threadHasMessages = false,
     onStop,
+    stopping = false,
     onRetry,
     editorController,
     emptyPlaceholder,

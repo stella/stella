@@ -2198,7 +2198,7 @@ const AssistantMessageParts = ({
     ) {
       return (
         <LocalRunQuestionCard
-          draftKey={localRunQuestion.draftKey}
+          threadRef={localRunQuestion.threadRef}
           key={localRunQuestionPause.interruptId}
           onAnswer={localRunQuestion.answer}
           pause={localRunQuestionPause}
