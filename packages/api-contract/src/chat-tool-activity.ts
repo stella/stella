@@ -241,6 +241,9 @@ const CHAT_TOOL_DISPLAY = {
   ...HARNESS_CHAT_TOOL_DISPLAY,
 } as const;
 
+/** A step a coding agent on the member's computer took itself. */
+export type HarnessChatToolName = keyof typeof HARNESS_CHAT_TOOL_DISPLAY;
+
 /** A tool no longer registered whose calls stored threads still carry. */
 export type RetiredChatToolName = keyof typeof RETIRED_CHAT_TOOL_DISPLAY;
 

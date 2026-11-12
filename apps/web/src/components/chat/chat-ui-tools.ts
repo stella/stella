@@ -18,6 +18,7 @@ import {
 } from "@stll/api-contract/chat-tool-activity";
 import type {
   ChatToolLabel,
+  HarnessChatToolName,
   RetiredChatToolName,
 } from "@stll/api-contract/chat-tool-activity";
 import {
@@ -137,7 +138,7 @@ type BuiltInApprovalToolName = Exclude<
  * member approves one like any other call (`isApprovalToolName` accepts its
  * name), and its input is the contract's (`chat-local-run-tool`).
  */
-type HarnessToolName = keyof typeof HARNESS_TOOL_TITLE_KEYS;
+type HarnessToolName = HarnessChatToolName;
 export type HarnessChatToolCallPart = Omit<TanStackChatToolCallPart, "name"> & {
   name: HarnessToolName;
 };
