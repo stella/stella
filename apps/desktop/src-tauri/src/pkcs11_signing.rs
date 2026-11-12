@@ -222,6 +222,11 @@ pub async fn sign(
   digest: &[u8; 32],
   pin: Option<Pin>,
 ) -> Result<Vec<u8>, TokenSignFailure> {
+  tracing::info!(
+    module = %source.module.display(),
+    slot = source.slot,
+    "signing on a PKCS #11 token"
+  );
   let request = Request::Sign(SignRequest {
     module: source.module.clone(),
     certificate_sha256: identity.id.clone(),
