@@ -28,8 +28,8 @@ import {
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
   scanPendingRows,
-} from "@/api/lib/queue/reconcile-scan";
-import type { ReconcileScanResult } from "@/api/lib/queue/reconcile-scan";
+} from "@/api/lib/queue-reconcile-scan";
+import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 
 export const REPORT_EXPORT_QUEUE_NAME = "report-exports";

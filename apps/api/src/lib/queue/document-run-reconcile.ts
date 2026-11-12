@@ -8,7 +8,7 @@
 
 import { panic, Result } from "better-result";
 
-import type { ReconcileQueuedRunsResult } from "@/api/lib/queue/reconcile-scan";
+import type { ReconcileQueuedRunsResult } from "@/api/lib/queue-reconcile-scan";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 

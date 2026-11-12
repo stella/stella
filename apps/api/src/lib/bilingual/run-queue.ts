@@ -57,13 +57,13 @@ import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryptio
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
-import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
   reconcileQueuedRuns,
-} from "@/api/lib/queue/reconcile-scan";
-import type { ReconcileScanResult } from "@/api/lib/queue/reconcile-scan";
+} from "@/api/lib/queue-reconcile-scan";
+import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";

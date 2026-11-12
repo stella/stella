@@ -26,8 +26,8 @@ import {
 } from "@/api/lib/document-review/run-contract";
 import { documentReviewRunQueue } from "@/api/lib/document-review/run-queue";
 import { listVerificationRunQueue } from "@/api/lib/lists/verification/run-queue";
+import type { ReconcileQueuedRunsResult } from "@/api/lib/queue-reconcile-scan";
 import { STANDARD_DOCUMENT_RUN_LIMITS } from "@/api/lib/queue/document-run-queue";
-import type { ReconcileQueuedRunsResult } from "@/api/lib/queue/reconcile-scan";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedDocumentReviewRunId,
@@ -44,11 +44,16 @@ import {
 // the shared test database.
 setDefaultTimeout(60_000);
 
-const { testDb, ids } = await getRlsFixture();
-const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
+type RlsFixture = Awaited<ReturnType<typeof getRlsFixture>>;
+
+let testDb: RlsFixture["testDb"];
+let ids: RlsFixture["ids"];
+let database: RlsDatabase<Transaction>;
 const testState = createTestState({ file: import.meta.path, config: env });
 
 testState.beforeAll(async () => {
+  ({ testDb, ids } = await getRlsFixture());
+  database = asTestRaw<RlsDatabase<Transaction>>(testDb);
   testState.setConfig("FEATURE_LEGAL_LISTS", true);
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
@@ -141,9 +146,15 @@ type QueueDriver = {
   limits: unknown;
 };
 
-const timestamps = ({ status, age }: SeedRun) => ({
+/** The lifecycle columns a row in `status` carries; a terminal row carries
+ *  the code it ended with. */
+const lifecycle = ({ status, age }: SeedRun) => ({
+  status,
   ...(status === "queued" && age !== undefined ? { createdAt: ago(age) } : {}),
   ...(status === "running" ? { startedAt: ago(age ?? "1 second") } : {}),
+  ...(status === "failed"
+    ? { errorCode: "internal" as const, finishedAt: ago("1 second") }
+    : {}),
 });
 
 const verificationDriver: QueueDriver = {
@@ -165,8 +176,7 @@ const verificationDriver: QueueDriver = {
         facts: [],
       },
       pipelineVersion: 2,
-      status: options.status,
-      ...timestamps(options),
+      ...lifecycle(options),
     });
     return id;
   },
@@ -249,8 +259,7 @@ const reviewDriver: QueueDriver = {
       contentSha256: "a".repeat(64),
       basis: REVIEW_BASIS,
       executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
-      status: options.status,
-      ...timestamps(options),
+      ...lifecycle(options),
     });
     return id;
   },
@@ -443,7 +452,7 @@ describe.each(QUEUES)("the %s run queue", (_name, driver) => {
     expect(executions).toEqual([runId]);
     expect(await driver.read(finished)).toEqual({
       status: "failed",
-      errorCode: null,
+      errorCode: "internal",
     });
   });
 });
