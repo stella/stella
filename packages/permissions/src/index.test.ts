@@ -203,6 +203,22 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("only owner and admin can start or read organisation data exports", () => {
+    for (const role of ["owner", "admin"] as const) {
+      expect(
+        roles[role].authorize({ dataExport: ["create", "read"] }).success,
+      ).toBe(true);
+    }
+    for (const role of ["member", "intern", "external"] as const) {
+      expect(roles[role].authorize({ dataExport: ["create"] }).success).toBe(
+        false,
+      );
+      expect(roles[role].authorize({ dataExport: ["read"] }).success).toBe(
+        false,
+      );
+    }
+  });
+
   test("every role can read its workspace", () => {
     for (const role of ROLE_NAMES) {
       expect(roles[role].authorize({ workspace: ["read"] }).success).toBe(true);
@@ -247,6 +263,31 @@ describe("role grant boundaries", () => {
         expect(
           roles[role].authorize({ caseLawResearch: [action] }).success,
         ).toBe(false);
+      }
+    }
+  });
+
+  test("staff run conflict checks; only management reviews them", () => {
+    for (const role of ["owner", "admin", "member"] as const) {
+      expect(roles[role].authorize({ conflictCheck: ["run"] }).success).toBe(
+        true,
+      );
+    }
+    for (const role of ["owner", "admin"] as const) {
+      expect(roles[role].authorize({ conflictCheck: ["review"] }).success).toBe(
+        true,
+      );
+    }
+    expect(roles.member.authorize({ conflictCheck: ["review"] }).success).toBe(
+      false,
+    );
+    // A check searches matters beyond the runner's own, so the roles confined
+    // to their assigned matters hold neither half.
+    for (const role of ["intern", "external"] as const) {
+      for (const action of ["run", "review"] as const) {
+        expect(roles[role].authorize({ conflictCheck: [action] }).success).toBe(
+          false,
+        );
       }
     }
   });

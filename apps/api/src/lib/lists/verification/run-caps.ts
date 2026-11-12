@@ -22,6 +22,18 @@ const CAP_REFUSALS = {
   },
 } as const;
 
+/** A re-check is refused at the same limits, and retried by its own call. */
+const RECHECK_CAP_REFUSALS = {
+  active: {
+    message: CAP_REFUSALS.active.message,
+    hint: "Wait for an active verification to finish, then retry lists.verifications.claim-rechecks.create.",
+  },
+  daily: {
+    message: CAP_REFUSALS.daily.message,
+    hint: "Retry lists.verifications.claim-rechecks.create after midnight in Europe/Prague.",
+  },
+} as const satisfies Record<keyof typeof CAP_REFUSALS, unknown>;
+
 export class ListVerificationRunCapError extends TaggedError(
   "ListVerificationRunCapError",
 )<{
@@ -76,7 +88,10 @@ type DecideVerificationBudgetArgs = {
   active: number;
   starts: number;
   caps: VerificationRunCaps;
+  /** `start` admits new work only below the caps; `dispatch` admits the
+   *  model calls of a run already counted in them. */
   phase: "start" | "dispatch";
+  refusals?: typeof CAP_REFUSALS | typeof RECHECK_CAP_REFUSALS;
 };
 
 export const decideVerificationBudget = ({
@@ -84,13 +99,14 @@ export const decideVerificationBudget = ({
   starts,
   caps,
   phase,
+  refusals = CAP_REFUSALS,
 }: DecideVerificationBudgetArgs) => {
   const allowance = phase === "dispatch" ? 1 : 0;
   if (active >= caps.active + allowance) {
     return Result.err(
       new ListVerificationRunCapError({
         reason: "active",
-        ...CAP_REFUSALS.active,
+        ...refusals.active,
       }),
     );
   }
@@ -98,7 +114,7 @@ export const decideVerificationBudget = ({
     return Result.err(
       new ListVerificationRunCapError({
         reason: "daily",
-        ...CAP_REFUSALS.daily,
+        ...refusals.daily,
       }),
     );
   }
@@ -123,6 +139,29 @@ export const checkVerificationDispatchBudget = async ({
       startsPerDay: Math.min(caps.startsPerDay, budget.dailyLimit),
     },
     phase: "dispatch",
+  });
+};
+
+/**
+ * A re-check grades one claim and is no run: it takes no active slot and no
+ * daily start, but it is refused once the organization is at either limit,
+ * so it cannot spend past a budget its runs have used up.
+ */
+export const checkVerificationRecheckBudget = async ({
+  tx,
+  organizationId,
+  caps = getVerificationRunCaps(),
+}: CheckVerificationDispatchBudgetArgs) => {
+  const budget = await readVerificationBudget({ tx, organizationId });
+  return decideVerificationBudget({
+    active: budget.active,
+    starts: budget.starts,
+    caps: {
+      active: Math.min(caps.active, budget.activeLimit),
+      startsPerDay: Math.min(caps.startsPerDay, budget.dailyLimit),
+    },
+    phase: "start",
+    refusals: RECHECK_CAP_REFUSALS,
   });
 };
 

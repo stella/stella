@@ -179,6 +179,27 @@ describe("chatKeys", () => {
     expect(inMatter.queryKey.at(-1)).toBe("matter_b");
   });
 
+  test("isolates the pinned and unpinned histories from each other and the unfiltered list", () => {
+    const activeOrganizationId = "org_test";
+    const userId = "user_test";
+    const keys = ([undefined, "pinned", "unpinned"] as const).map(
+      (pinState) =>
+        groupedChatThreadsOptions({
+          activeOrganizationId,
+          ...(pinState === undefined ? {} : { pinState }),
+          userId,
+        }).queryKey,
+    );
+
+    expect(new Set(keys.map((key) => JSON.stringify(key))).size).toBe(3);
+    // Each sits under the reader's lists prefix the user stream refreshes.
+    for (const key of keys) {
+      expect(key.slice(0, 5)).toEqual(
+        chatKeys.groupedThreadLists(activeOrganizationId, userId),
+      );
+    }
+  });
+
   test("separates plain chat transports from active DOCX edit transports", () => {
     const threadId = toChatThreadId("thread-A");
     const base = {
@@ -528,6 +549,8 @@ describe("mergeGroupedChatThreadPages", () => {
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
             decision: null,
+            pinState: "unpinned",
+            readState: "read",
           },
         ],
         nextCursor: "page-2",
@@ -545,6 +568,8 @@ describe("mergeGroupedChatThreadPages", () => {
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
                 decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
             ],
           },
@@ -561,6 +586,8 @@ describe("mergeGroupedChatThreadPages", () => {
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
             decision: null,
+            pinState: "unpinned",
+            readState: "read",
           },
           {
             createdAt: "2026-05-16T06:00:00.000Z",
@@ -571,6 +598,8 @@ describe("mergeGroupedChatThreadPages", () => {
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
             decision: null,
+            pinState: "unpinned",
+            readState: "read",
           },
         ],
         nextCursor: null,
@@ -588,6 +617,8 @@ describe("mergeGroupedChatThreadPages", () => {
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
                 decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
               {
                 createdAt: "2026-05-16T05:00:00.000Z",
@@ -598,6 +629,8 @@ describe("mergeGroupedChatThreadPages", () => {
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
                 decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
             ],
           },
@@ -614,6 +647,8 @@ describe("mergeGroupedChatThreadPages", () => {
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
                 decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
               {
                 createdAt: "2026-05-16T04:00:00.000Z",
@@ -624,6 +659,8 @@ describe("mergeGroupedChatThreadPages", () => {
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
                 decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
             ],
           },
@@ -804,6 +841,7 @@ describe("buildSendRequestBody", () => {
       harness: "codex",
       model: "gpt-5-codex",
       approvals: "full_auto",
+      reasoningEffort: null,
     };
     expect(bodyFor(local).runTarget).toEqual(local);
     expect("runTarget" in bodyFor({ kind: "cloud" })).toBe(false);

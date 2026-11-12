@@ -66,6 +66,10 @@
     "accountWindowTitle": "Conectar conta",
     "accountTitle": "Conectar esta conta?",
     "accountSubtitle": "Conecte o stella desktop a esta conta e organização.",
+    "switchWindowTitle": "Trocar de conta",
+    "switchTitle": "Trocar para outra conta?",
+    "switchSubtitle": "O stella desktop está conectado a {currentEmail}. Desconectar essa conta e conectar {email} no lugar?",
+    "switchConfirm": "Desconectar e conectar",
     "accountEmail": "Conta",
     "organizationName": "Organização",
     "allow": "Permitir",
@@ -770,7 +774,9 @@
         "notCompleted": "O login não foi concluído. Tente de novo.",
         "timedOut": "O login demorou demais. Tente de novo.",
         "unavailable": "Não foi possível iniciar o Claude Code neste computador. Tente de novo."
-      }
+      },
+      "unknown": "Não foi possível verificar o login no Claude Code. Verifique de novo em instantes.",
+      "checkAgain": "Verificar de novo"
     },
     "install": {
       "notInstalled": "O {name} ainda não está instalado neste computador.",

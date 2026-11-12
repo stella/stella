@@ -7,7 +7,8 @@ export default {
   summary:
     "The ingestion owner publishes revision values together. " +
     "`no-direct-legislation-revision-write` rejects separate row mutations; " +
-    "withdrawal, expression-ID backfill and projection-epoch owners may update " +
+    "withdrawal, expression-ID backfill, projection-epoch and version " +
+    "change-summary owners may update " +
     "only their exact unrelated columns through explicit object literals.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

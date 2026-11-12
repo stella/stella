@@ -19,7 +19,7 @@ Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 
 const requests: Request[] = [];
 const unexpectedRequests: string[] = [];
-const answers: Response[] = [];
+const answers: (Response | Promise<Response>)[] = [];
 let fetchBoundary: Mock<typeof globalThis.fetch>;
 
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
@@ -120,6 +120,18 @@ beforeEach(() => {
           return Response.json({ runs: [] });
         }
         if (
+          request.method === "POST" &&
+          new URL(request.url).pathname.endsWith("/source-documents/kinds")
+        ) {
+          // Every document is a record; the kind read is not what these
+          // tests are about.
+          return Response.json({
+            documents: [
+              { documentEntityId: target.entityId, sourceKind: "document" },
+            ],
+          });
+        }
+        if (
           request.method !== "POST" ||
           !new URL(request.url).pathname.endsWith("/verifications")
         ) {
@@ -131,7 +143,7 @@ beforeEach(() => {
         if (answer === undefined) {
           return panic("No verification response seeded");
         }
-        return answer;
+        return await answer;
       },
       { preconnect: () => undefined },
     ),
@@ -266,3 +278,120 @@ test.each<[string, string]>([
     expect(await requests.at(1)?.json()).toEqual({ listId, ...target });
   },
 );
+
+const openRange = async (messages: typeof english) => {
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.scope.verifyParagraphs }),
+  );
+  const popup = await screen.findByRole("dialog");
+  const input = within(popup).getByLabelText(
+    messages.inspector.metadata.documentProperties.keys.paragraphs,
+  );
+  const submit = within(popup).getByRole("button", {
+    name: messages.common.verify,
+  });
+  return { popup, input, submit };
+};
+
+test.each<[string, keyof typeof english.avt.scope.errors]>([
+  ["136-82", "reversed"],
+  ["82 to 136", "garbage"],
+  ["1-900", "tooWide"],
+])(
+  "a range typed as %s is refused beside the field and never sent",
+  async (typed, reason) => {
+    const { messages } = mountDocuments();
+    const { popup, input, submit } = await openRange(messages);
+    fireEvent.change(input, { target: { value: typed } });
+    const error = within(popup).getByText(messages.avt.scope.errors[reason]);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(input.getAttribute("aria-describedby")).toBe(error.id);
+    fireEvent.click(submit);
+    // The refusal is decided on submit, before anything is sent.
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(requests).toHaveLength(0);
+  },
+);
+
+test("an empty range asks for paragraphs instead of verifying everything", async () => {
+  const { messages } = mountDocuments();
+  const { popup, submit } = await openRange(messages);
+  expect(
+    within(popup).queryByText(messages.avt.scope.errors.required),
+  ).toBeNull();
+  fireEvent.click(submit);
+  expect(
+    within(popup).getByText(messages.avt.scope.errors.required),
+  ).toBeTruthy();
+  expect(requests).toHaveLength(0);
+});
+
+test("a typed range starts a run over those paragraphs only", async () => {
+  answers.push(Response.json({ runId }));
+  const { opened, messages } = mountDocuments();
+  const { input, submit } = await openRange(messages);
+  fireEvent.change(input, { target: { value: " 82 – 136 " } });
+  fireEvent.click(submit);
+  await waitFor(() => expect(opened).toEqual([runId]));
+  expect(await requests.at(0)?.json()).toEqual({
+    listId,
+    ...target,
+    paragraphs: "82-136",
+  });
+});
+
+test("a refusal that arrives after the field closed is said in the document's row", async () => {
+  const { promise: answer, resolve } = Promise.withResolvers<Response>();
+  answers.push(answer);
+  const { messages } = mountDocuments();
+  const { popup, input, submit } = await openRange(messages);
+  fireEvent.change(input, { target: { value: "82-136" } });
+  fireEvent.click(submit);
+  fireEvent.keyDown(popup, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
+  resolve(
+    Response.json(
+      {
+        code: "verification_paragraphs_not_found",
+        message: "Paragraph 136 is not in this document.",
+        hint: "Its paragraphs run from 1 to 120.",
+      },
+      { status: 422 },
+    ),
+  );
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toBe(messages.avt.scope.errors.notFound);
+  expect(notice).not.toHaveBeenCalled();
+  // Open again, the field says it and the row no longer repeats it.
+  const reopened = await openRange(messages);
+  expect(
+    within(reopened.popup).queryByText(messages.avt.scope.errors.notFound) ===
+      null,
+  ).toBe(false);
+  expect(screen.queryByRole("alert") === null).toBe(true);
+});
+
+test("a range the document does not have is said beside the field, not as a toast", async () => {
+  answers.push(
+    Response.json(
+      {
+        code: "verification_paragraphs_not_found",
+        message: "Paragraph 136 is not in this document.",
+        hint: "Its paragraphs run from 1 to 120. Use the numbers the document prints.",
+      },
+      { status: 422 },
+    ),
+  );
+  const { opened, messages } = mountDocuments();
+  const { popup, input, submit } = await openRange(messages);
+  fireEvent.change(input, { target: { value: "82-136" } });
+  fireEvent.click(submit);
+  await within(popup).findByText(messages.avt.scope.errors.notFound);
+  expect(notice).not.toHaveBeenCalled();
+  expect(opened).toEqual([]);
+  // Editing the range clears the server's answer about the old one.
+  fireEvent.change(input, { target: { value: "82-120" } });
+  expect(
+    within(popup).queryByText(messages.avt.scope.errors.notFound),
+  ).toBeNull();
+});

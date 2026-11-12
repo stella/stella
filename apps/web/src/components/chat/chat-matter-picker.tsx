@@ -20,6 +20,7 @@ import {
 } from "@stll/ui/menu";
 import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -121,11 +122,7 @@ const MatterPickerTriggerContent = (props: MatterPickerTriggerContentProps) => {
       } else {
         icon = <MatterIcon className="size-3 shrink-0" variant="none" />;
       }
-      label = (
-        <span className="min-w-0 truncate" dir="auto">
-          {props.triggerLabel}
-        </span>
-      );
+      label = <TruncatedText dir="auto">{props.triggerLabel}</TruncatedText>;
       extra = props.extra;
       break;
     default: {
@@ -231,9 +228,9 @@ const MatterCheckboxItem = ({
           className="size-3.5 shrink-0"
           matter={{ id: matter.id, color: matter.color }}
         />
-        <span className="min-w-0 flex-1 truncate text-sm" dir="auto">
+        <TruncatedText className="flex-1 text-sm" dir="auto">
           {matter.name}
-        </span>
+        </TruncatedText>
         {/* No tooltip: a tooltip's popup would portal its pointer events
             through this menu item and toggle the matter. The label names
             the link. */}
@@ -508,9 +505,9 @@ export const ChatMatterPicker = ({
             >
               <span className="flex min-w-0 items-center gap-2">
                 <MatterIcon className="size-3.5 shrink-0" variant="all" />
-                <span className="truncate text-sm font-medium">
+                <TruncatedText className="text-sm font-medium">
                   {t("inspector.matterPicker.allMatters")}
-                </span>
+                </TruncatedText>
               </span>
             </MenuCheckboxItem>
           )}
@@ -590,7 +587,7 @@ const ClientMatterToggle = ({
       onClick={onToggle}
     >
       <span className="flex min-w-0 items-center gap-2">
-        <span className="min-w-0 truncate">{group.label}</span>
+        <TruncatedText>{group.label}</TruncatedText>
         {groupSelectedCount > 0 && !groupAllSelected && (
           <span className="text-muted-foreground text-3xs ms-auto shrink-0 tabular-nums">
             {format.number(groupSelectedCount)}/

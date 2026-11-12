@@ -20,6 +20,8 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
+import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -377,5 +379,142 @@ describe("skill catalog tools", () => {
     );
     expect(reads).toHaveLength(3);
     expect(JSON.stringify(rows)).not.toContain("Follow the test methodology.");
+  });
+});
+
+describe("read-skill-resource windows", () => {
+  const readTool = (slug: string) =>
+    createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
+      organizationId: ids.orgA,
+      safeDb,
+      skills: catalogOf(slug),
+      userId: ids.userA1,
+    })["read-skill-resource"];
+
+  const insertResource = async (
+    skillId: SafeId<"agentSkill">,
+    path: string,
+    content: string,
+  ) =>
+    await testDb.insert(agentSkillResources).values({
+      id: testId(),
+      organizationId: ids.orgA,
+      skillId,
+      path,
+      content,
+      sizeBytes: new TextEncoder().encode(content).byteLength,
+    });
+
+  const windowOf = (result: Result<unknown, unknown>) => {
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    const output = result.value;
+    if (
+      !isRecord(output) ||
+      typeof output["content"] !== "string" ||
+      typeof output["charCount"] !== "number" ||
+      (output["nextCursor"] !== null &&
+        typeof output["nextCursor"] !== "string")
+    ) {
+      throw new TypeError("Expected a resource window");
+    }
+    return {
+      charCount: output["charCount"],
+      content: output["content"],
+      contentHash: output["contentHash"],
+      nextCursor: output["nextCursor"],
+    };
+  };
+
+  const expectInvalidCursor = (result: Result<unknown, unknown>) => {
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBeInstanceOf(ChatToolError);
+      if (result.error instanceof ChatToolError) {
+        expect(result.error.kind).toBe("invalid-input");
+      }
+    }
+  };
+
+  test("a resource at the stored cap reads back whole through nextCursor", async () => {
+    const slug = `windowed-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill(slug);
+    const path = "references/commentary.txt";
+    const unit = "Komentář 😀 ";
+    const content = unit
+      .repeat(Math.ceil(LIMITS.agentSkillResourceMaxChars / unit.length))
+      .slice(0, LIMITS.agentSkillResourceMaxChars)
+      .toWellFormed();
+    await insertResource(skillId, path, content);
+    const tool = readTool(slug);
+
+    const windows: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const window = windowOf(
+        await executeTool({
+          input: {
+            path,
+            skillName: slug,
+            ...(cursor === null ? {} : { cursor }),
+          },
+          tool,
+        }),
+      );
+      expect(window.charCount).toBe(content.length);
+      expect(window.content.length).toBeLessThanOrEqual(
+        LIMITS.agentSkillResourceModelContextMaxChars,
+      );
+      expect(window.content.isWellFormed()).toBe(true);
+      // Every window reports the hash of the whole skill, not of the window.
+      expect(window.contentHash).toBe("0".repeat(64));
+      windows.push(window.content);
+      cursor = window.nextCursor;
+    } while (cursor !== null);
+
+    expect(windows.join("")).toBe(content);
+    expect(windows.length).toBeGreaterThan(1);
+  });
+
+  test("a cursor from another resource or an edited resource is refused", async () => {
+    const slug = `windowed-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill(slug);
+    const path = "references/long.md";
+    const content = "x".repeat(
+      LIMITS.agentSkillResourceModelContextMaxChars + 10,
+    );
+    await insertResource(skillId, path, content);
+    await insertResource(skillId, "references/other.md", content);
+    const tool = readTool(slug);
+
+    const first = windowOf(
+      await executeTool({ input: { path, skillName: slug }, tool }),
+    );
+    const cursor = first.nextCursor;
+    if (cursor === null) {
+      throw new TypeError("Expected a continuation");
+    }
+
+    expectInvalidCursor(
+      await executeTool({
+        input: { cursor, path: "references/other.md", skillName: slug },
+        tool,
+      }),
+    );
+
+    await testDb
+      .update(agentSkillResources)
+      .set({ content: `${content}y` })
+      .where(eq(agentSkillResources.skillId, skillId));
+    expectInvalidCursor(
+      await executeTool({ input: { cursor, path, skillName: slug }, tool }),
+    );
+
+    const restarted = windowOf(
+      await executeTool({ input: { path, skillName: slug }, tool }),
+    );
+    expect(restarted.charCount).toBe(content.length + 1);
   });
 });

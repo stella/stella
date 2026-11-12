@@ -35,6 +35,7 @@ import {
   TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
   TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
 } from "@/api/handlers/chat/tanstack-chat-lifecycle";
+import { retainToolResultsInParts } from "@/api/handlers/chat/tool-result-retention";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type {
   ChatAttachmentMetadata,
@@ -1649,7 +1650,9 @@ const normalizeChatPartsForPersistence = (
   parts: readonly ChatPart[],
 ): ChatPart[] => {
   const normalized: ChatPart[] = [];
-  for (const part of parts) {
+  // A message stores each superseded tool result as its projection, as the
+  // model reads it, so a browsing turn stores one page however many it read.
+  for (const part of retainToolResultsInParts(parts, continueStoredChatPart)) {
     normalized.push(normalizeChatPartForPersistence(part));
   }
   return applyChatPartPersistenceBudget(normalized).parts;
@@ -1945,6 +1948,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.anonRestorations === undefined &&
   metadata.answerQuotes === undefined &&
   metadata.contextNotice === undefined &&
+  metadata.localFilesUndone === undefined &&
   metadata.localRunContext === undefined &&
   metadata.localRunFilesNotShared === undefined &&
   metadata.mentions === undefined &&

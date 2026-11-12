@@ -69,6 +69,14 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/ai/draft-email.ts",
     uncataloged: "native_tool_ui",
   },
+  // A question about the open email. Naming a matter adds that matter's
+  // search results, read under the token's own scopes, so a token without
+  // `stella:read` gets an answer from the email alone.
+  "POST /v1/ai/ask-email": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/ask-email.ts",
+    uncataloged: "native_tool_ui",
+  },
   "GET /v1/workspaces/:workspaceId/vocabulary": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/vocabulary/get.ts",
@@ -94,6 +102,21 @@ export const API_OAUTH_ROUTES = {
   "PUT /v1/workspaces": {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/workspaces/create.ts",
+  },
+  // A new matter's client and team, as the web's create dialog offers them:
+  // an address-book contact found by name or created on the spot, and the
+  // organization's people to share the matter with.
+  "GET /v1/contacts/search": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/contacts/search.ts",
+  },
+  "PUT /v1/contacts": {
+    scope: "stella:contacts_write",
+    handler: "apps/api/src/handlers/contacts/create.ts",
+  },
+  "GET /v1/workspaces/member-candidates": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/member-candidates/list.ts",
   },
   "PUT /v1/tasks/:workspaceId": {
     scope: "stella:matters_write",
@@ -179,6 +202,15 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/threads/list.ts",
   },
+  // The reader's own marks on a chat in the chats list.
+  "PATCH /v1/chat/threads/:threadId/read-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/read-state/update.ts",
+  },
+  "PATCH /v1/chat/threads/:threadId/pin-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/pin-state/update.ts",
+  },
   "GET /v1/chat/threads/:threadId/messages": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/messages/list.ts",
@@ -218,6 +250,14 @@ export const API_OAUTH_ROUTES = {
   "GET /v1/chat/runs/active": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/runs/list.ts",
+    uncataloged: "chat_thread_ui",
+  },
+  // A standing approval given from an approval in a conversation: "Allow in
+  // this conversation" or "Always allow" for one tool, as the web's
+  // approval card stores it.
+  "POST /v1/chat/tool-grants": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/tool-grants/create.ts",
     uncataloged: "chat_thread_ui",
   },
   // The person's event stream. Its events carry no content (notifications

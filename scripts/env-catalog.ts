@@ -48,7 +48,6 @@ export type EnvOwner = (typeof ENV_OWNER)[keyof typeof ENV_OWNER];
 export type EnvCatalogEntry = {
   credentialKind: (typeof ENV_CREDENTIAL_KIND)[keyof typeof ENV_CREDENTIAL_KIND];
   description: string;
-  documented: boolean;
   example: string | undefined;
   exposure: EnvExposure;
   name: string;
@@ -117,7 +116,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AZURE_RESOURCE_NAME",
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
-  "CASE_LAW_DATABASE_POOL_MAX",
   "CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_ENABLED",
   "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
@@ -167,6 +165,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
+  "FEATURE_CONFLICT_CHECK",
   "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_FREE_TIER",
   "FEATURE_GOVERNED_WORKFLOW",
@@ -832,7 +831,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DEPLOY_ENVIRONMENT: ENV_CREDENTIAL_KIND.notCredential,
   BETTER_AUTH_SECRET: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
-  CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DERIVED_AI: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
     ENV_CREDENTIAL_KIND.notCredential,
@@ -843,7 +841,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   CASE_LAW_EU_COMPLETION_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_EU_COMPLETION_MAX_ROWS: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_EU_COMPLETION_MODE: ENV_CREDENTIAL_KIND.notCredential,
-  CASE_LAW_DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   COMPANIES_HOUSE_API_KEY: ENV_CREDENTIAL_KIND.credential,
   CONTENT_ENCRYPTION_KEY: ENV_CREDENTIAL_KIND.credential,
   CORPUS_INDEX_Q09_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
@@ -901,6 +898,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_CONFLICT_CHECK: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FILE_USAGE_LIMITS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FREE_TIER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
@@ -1166,11 +1164,6 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "VITE_PUBLIC_APP_URL",
 ]);
 
-const HIDDEN_SCHEMA_KEYS = new Set([
-  "CASE_LAW_DATABASE_POOL_MAX",
-  "CASE_LAW_DATABASE_URL",
-]);
-
 const humanizeEnvName = (name: string) => {
   const words = name
     .replace(/^VITE_/u, "")
@@ -1304,7 +1297,6 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
     return {
       credentialKind,
       description: DESCRIPTION_OVERRIDES[name] ?? humanizeEnvName(name),
-      documented: !HIDDEN_SCHEMA_KEYS.has(name),
       example: EXAMPLE_VALUES[name],
       exposure: exposureFor({ name, owner, schema: entrySchema }),
       name,
@@ -1403,6 +1395,10 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "RECONCILIATION_FETCH_DELAY_MS",
   "SK_DOCUMENT_BACKFILL_ENABLED",
   "SK_DOCUMENT_FETCH_DELAY_MS",
+  // Desktop agent sidecar, local only: `redacted` writes the redacted
+  // harness and sidecar protocol log to holder.log; unset or `off` (the
+  // default) writes none. packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_AGENT_PROTOCOL_LOG",
   "STELLA_API_KEY",
   "STELLA_DESKTOP_ALLOWED_API_BASE_URLS",
   "STELLA_DESKTOP_ALLOWED_ORIGINS",
@@ -1872,6 +1868,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "RUN_ID",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
+  // The script test runner's scan preload logs directory scans here.
+  "SCRIPT_TEST_SCAN_LOG",
   "SHA",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
@@ -1959,6 +1957,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION_ENCODED",
   "CI_POSTGRES_TEST_SHARD",
+  // Immutable migrated template used when a native suite clones its database.
+  "STELLA_POSTGRES_TEST_TEMPLATE_URL",
   "POSTGRES_TEST_DURATIONS_FILE",
   "POSTGRES_JUNIT_FILE",
   "CHANGED_MARKDOWN",
@@ -1989,6 +1989,19 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_RESOLVER_ERROR",
   "TEST_UPSTREAM_BLOCKED",
   "WXT_STELLA_ORIGINS",
+  // The Outlook add-in build bakes these origins, the provider name, support
+  // link and version into its bundle and manifest
+  // (apps/outlook/scripts/render-manifest.ts), records the release's upload
+  // and frame-ancestor origins, and its local server reads its port.
+  "STELLA_API_ORIGIN",
+  "STELLA_OUTLOOK_FRAME_ANCESTORS",
+  "STELLA_OUTLOOK_PORT",
+  "STELLA_OUTLOOK_VERSION",
+  "STELLA_PROVIDER_NAME",
+  "STELLA_SUPPORT_URL",
+  "STELLA_TASKPANE_ORIGIN",
+  "STELLA_UPLOAD_ORIGIN",
+  "STELLA_WEB_ORIGIN",
 ]);
 
 export const AMBIENT_ENV_KEYS = new Set([

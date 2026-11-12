@@ -15,6 +15,7 @@ import {
   desktopProtocolSchema,
   desktopVersionSchema,
 } from "./desktop-presence";
+import { desktopRunnerQuestionAnswersSchema } from "./desktop-runner-answers";
 
 /**
  * Wire contract for the outbound WebSocket a desktop runner holds to the API.
@@ -63,10 +64,17 @@ export type DesktopRunnerLimits = {
   /** Installations (installation id and device key) per account and organization. */
   readonly maxRunnersPerAccount: number;
   /**
-   * How long a run may wait to be accepted, or for its computer to return,
-   * before the API ends it as lost.
+   * How long a run written to its computer's socket may wait to be accepted,
+   * or for its computer to return, before the API ends it as lost.
    */
   readonly abandonedRunMs: number;
+  /**
+   * How long a run never written to a socket may wait before the API ends it
+   * as lost: its computer is not connected, and the turn says so rather than
+   * waiting on. A run once written keeps `abandonedRunMs`, since the desktop
+   * starts a run before its acceptance reaches the API.
+   */
+  readonly unacceptedRunMs: number;
   /** Sequenced messages (events, approval requests, the final one) one run may store. */
   readonly maxMessagesPerRun: number;
   /** UTF-8 bytes of sequenced messages one run may store. */
@@ -84,6 +92,7 @@ export type DesktopRunnerLimits = {
 export const DESKTOP_RUNNER_LIMITS = {
   maxRunnersPerAccount: 10,
   abandonedRunMs: 24 * 60 * 60_000,
+  unacceptedRunMs: 2 * 60_000,
   maxMessagesPerRun: 20_000,
   maxMessageBytesPerRun: 64 * 1024 * 1024,
   maxCommandsPerRun: 2000,
@@ -367,6 +376,35 @@ export type DesktopRunnerApprovalMode =
 export const DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE =
   "ask" satisfies DesktopRunnerApprovalMode;
 
+/**
+ * The reasoning efforts a harness may report for a model and a run may ask
+ * for, ordered weakest to strongest. Codex and Claude Code each list the ones
+ * a model accepts; an effort outside this list is left out of the report.
+ */
+export const DESKTOP_RUNNER_REASONING_EFFORTS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+export type DesktopRunnerReasoningEffort =
+  (typeof DESKTOP_RUNNER_REASONING_EFFORTS)[number];
+
+/**
+ * The efforts of `reported` this contract carries, each once and in ladder
+ * order, so a harness naming an effort stella does not know yet still
+ * reports the model. A model that reports none (`undefined`) offers none.
+ */
+export const knownReasoningEfforts = (
+  reported: readonly string[] | undefined,
+): DesktopRunnerReasoningEffort[] =>
+  DESKTOP_RUNNER_REASONING_EFFORTS.filter(
+    (effort) => reported?.includes(effort) === true,
+  );
+
 const MAX_SEQ = 4_294_967_295;
 const MAX_ACTIVE_RUNS = 64;
 const MAX_MODELS = 100;
@@ -379,67 +417,14 @@ const MAX_MESSAGE_TYPE_LENGTH = 64;
 const listsOnce = (keys: readonly string[]) =>
   new Set(keys).size === keys.length;
 
-/**
- * What one `run.answer` may carry. A run asks a blocking question as a chunk
- * whose `RUN_FINISHED` interrupt has `metadata.kind: "question"`; the answers
- * name each question by its id. Lengths are UTF-16 code units, as JavaScript
- * counts them.
- */
-export const DESKTOP_RUNNER_ANSWER_LIMITS = {
-  maxQuestions: 32,
-  maxAnswersPerQuestion: 64,
-  maxAnswerLength: 16_384,
-  maxQuestionIdLength: 256,
-} as const;
-
-/** The keys `v.record` leaves out of what it parses, without an issue. */
-const RECORD_DROPPED_KEYS: ReadonlySet<string> = new Set([
-  "__proto__",
-  "prototype",
-  "constructor",
-]);
-
-/**
- * The id a blocking question names one of its questions by, in the pause
- * that asks it and in the answers alike. Answers are a record keyed by this
- * id, so an id the record would drop could never be answered.
- */
-export const desktopRunnerQuestionIdSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestionIdLength),
-  v.check(
-    (id) => !RECORD_DROPPED_KEYS.has(id),
-    "A question id must survive as an answer key",
-  ),
-);
-
-/**
- * Answers to a blocking question, keyed by question id: option labels or
- * free text. A question may be answered by several options.
- */
-export const desktopRunnerQuestionAnswersSchema = v.pipe(
-  v.record(
-    desktopRunnerQuestionIdSchema,
-    v.pipe(
-      v.array(
-        v.pipe(
-          v.string(),
-          v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxAnswerLength),
-        ),
-      ),
-      v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxAnswersPerQuestion),
-    ),
-  ),
-  v.check(
-    (answers) =>
-      Object.keys(answers).length <= DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestions,
-    `At most ${String(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestions)} questions are answered at once`,
-  ),
-);
-export type DesktopRunnerQuestionAnswers = v.InferOutput<
-  typeof desktopRunnerQuestionAnswersSchema
->;
+// The answer limits and schemas live in a leaf module, so a client that only
+// answers a question (the phone) does not load the runner protocol.
+export {
+  DESKTOP_RUNNER_ANSWER_LIMITS,
+  desktopRunnerQuestionAnswersSchema,
+  desktopRunnerQuestionIdSchema,
+} from "./desktop-runner-answers";
+export type { DesktopRunnerQuestionAnswers } from "./desktop-runner-answers";
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 const requestIdSchema = v.pipe(v.string(), v.uuid());
@@ -476,9 +461,25 @@ const tokenSchema = v.pipe(
   v.maxLength(DESKTOP_RUNNER_MAX_TOKEN_LENGTH),
 );
 
+const reasoningEffortSchema = v.picklist(DESKTOP_RUNNER_REASONING_EFFORTS);
+
 const harnessModelSchema = v.object({
   id: modelIdSchema,
   label: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  /**
+   * The efforts a run of this model may ask for; empty when the harness
+   * offers no choice. A desktop from before efforts existed lists none.
+   */
+  reasoningEfforts: v.optional(
+    v.pipe(
+      v.array(reasoningEffortSchema),
+      v.check(
+        (efforts) => listsOnce(efforts),
+        "Reasoning efforts are listed once",
+      ),
+    ),
+    [],
+  ),
 });
 
 const harnessReportSchema = v.variant("state", [
@@ -822,6 +823,13 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     harness: harnessSchema,
     harnessVersion: desktopVersionSchema,
     model: modelIdSchema,
+    /**
+     * The effort the run asks the model for, one the desktop reported for
+     * it; `null` leaves it to the harness.
+     */
+    // Absent only in a command queued before this field existed; make it
+    // required once no queued row can predate it (a day after deploy).
+    reasoningEffort: v.optional(v.nullable(reasoningEffortSchema), null),
     /** The session to resume, from an earlier run's `run.finished`. */
     harnessSessionId: harnessSessionIdSchema,
     instructions: v.pipe(v.string(), v.maxLength(65_536)),

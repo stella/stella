@@ -13,6 +13,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
@@ -486,6 +487,36 @@ describe("local harness chunks", () => {
     );
   });
 
+  test("a call the harness reports it did not run because of a stop is stored cancelled, not failed", async () => {
+    const chunks = await localChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("native-5"),
+        continuation: { type: "resumed" },
+      },
+      { type: "tool.started", toolCall: commandCall },
+      {
+        type: "tool.completed",
+        toolCall: commandCall,
+        // What the adapter built from the harness's error flag.
+        result: {
+          content: JSON.stringify({ status: "failed" }),
+          status: "cancelled",
+        },
+      },
+      { type: "turn.interrupted" },
+    ]);
+    expect(fold(chunks).flatMap(({ parts }) => parts)).toContainEqual(
+      expect.objectContaining({
+        type: "tool-result",
+        toolCallId: commandCall.id,
+        content: JSON.stringify({ status: "interrupted" }),
+        state: "error",
+        outcome: "cancelled",
+      }),
+    );
+  });
+
   test("each failure kind ends the run with its own error code", async () => {
     const failures = {
       auth_required: { type: "auth_required", message: "Sign in again." },
@@ -493,6 +524,10 @@ describe("local harness chunks", () => {
         type: "usage_limit",
         message: "Limit reached.",
         resetsAt: "2026-10-28T14:00:00.000Z",
+      },
+      model_at_capacity: {
+        type: "model_at_capacity",
+        message: "Selected model is at capacity.",
       },
       provider_error: {
         type: "provider_error",
@@ -513,6 +548,14 @@ describe("local harness chunks", () => {
         type: "sandbox_unavailable",
         message: "The sandbox could not start.",
       },
+      retry_stalled: {
+        type: "retry_stalled",
+        message: "The harness kept retrying the provider without progress.",
+      },
+      tools_unavailable: {
+        type: "tools_unavailable",
+        message: "The harness could not connect to the stella MCP server.",
+      },
     } as const satisfies {
       [Type in HarnessFailure["type"]]: Extract<HarnessFailure, { type: Type }>;
     };
@@ -528,6 +571,22 @@ describe("local harness chunks", () => {
       codes.add(String(last.code));
     }
     expect(codes.size).toBe(Object.keys(failures).length);
+  });
+
+  test("a model at capacity ends the run with the chat's code for a provider outage", async () => {
+    const chunks = await localChunks([
+      {
+        type: "turn.failed",
+        failure: {
+          type: "model_at_capacity",
+          message: "Selected model is at capacity.",
+        },
+      },
+    ]);
+    expect(chunks.at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: AI_FAILURE_CODES.provider_unavailable,
+    });
   });
 
   test("a usage limit says when it resets, and only a limit with a known reset", async () => {

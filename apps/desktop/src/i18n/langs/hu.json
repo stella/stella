@@ -66,6 +66,10 @@
     "accountWindowTitle": "Fiók csatlakoztatása",
     "accountTitle": "Csatlakoztatja ezt a fiókot?",
     "accountSubtitle": "Csatlakoztassa a stella desktop alkalmazást ehhez a fiókhoz és szervezethez.",
+    "switchWindowTitle": "Fiókváltás",
+    "switchTitle": "Átvált egy másik fiókra?",
+    "switchSubtitle": "A stella desktop a(z) {currentEmail} fiókhoz csatlakozik. Leválasztja, és helyette a(z) {email} fiókot csatlakoztatja?",
+    "switchConfirm": "Leválasztás és csatlakozás",
     "accountEmail": "Fiók",
     "organizationName": "Szervezet",
     "allow": "Engedélyezés",
@@ -770,7 +774,9 @@
         "notCompleted": "A bejelentkezés nem fejeződött be. Próbálja újra.",
         "timedOut": "A bejelentkezés túl sokáig tartott. Próbálja újra.",
         "unavailable": "A Claude Code nem indítható el ezen a számítógépen. Próbálja újra."
-      }
+      },
+      "unknown": "Nem sikerült ellenőrizni a Claude Code-bejelentkezést. Néhány pillanat múlva ellenőrizze újra.",
+      "checkAgain": "Újbóli ellenőrzés"
     },
     "install": {
       "notInstalled": "A {name} még nincs telepítve ezen a számítógépen.",

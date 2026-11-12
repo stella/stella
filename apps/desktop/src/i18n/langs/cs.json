@@ -66,6 +66,10 @@
     "accountWindowTitle": "Připojit účet",
     "accountTitle": "Připojit tento účet?",
     "accountSubtitle": "Připojte stella desktop k tomuto účtu a organizaci.",
+    "switchWindowTitle": "Přepnout účet",
+    "switchTitle": "Přepnout na jiný účet?",
+    "switchSubtitle": "stella desktop je připojený k účtu {currentEmail}. Odpojit ho a místo něj připojit {email}?",
+    "switchConfirm": "Odpojit a připojit",
     "accountEmail": "Účet",
     "organizationName": "Organizace",
     "allow": "Povolit",
@@ -770,7 +774,9 @@
         "notCompleted": "Přihlášení nebylo dokončeno. Zkuste to znovu.",
         "timedOut": "Přihlášení trvalo příliš dlouho. Zkuste to znovu.",
         "unavailable": "Claude Code se na tomto počítači nepodařilo spustit. Zkuste to znovu."
-      }
+      },
+      "unknown": "Přihlášení do Claude Code se nepodařilo ověřit. Za chvíli to ověřte znovu.",
+      "checkAgain": "Ověřit znovu"
     },
     "install": {
       "notInstalled": "{name} zatím není na tomto počítači nainstalován.",

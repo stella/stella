@@ -44,6 +44,7 @@ import {
   FAKE_STELLA_ANSWER,
   FAKE_STELLA_SERVER,
 } from "../../../scripts/fake-stella-turn";
+import { PROTOCOL_LOG_OFF } from "../../protocol-log";
 import type { HarnessTurn, HarnessTurnInput } from "../adapter";
 import { createCodexHarnessAdapter } from "../codex/adapter";
 import {
@@ -131,6 +132,7 @@ const harnessFor = (
   mkdirSync(workspaceDir);
   const adapter = createClaudeCodeHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_CLI, scenario] },
+    protocolLog: PROTOCOL_LOG_OFF,
     claudeConfigDir,
     environment: {
       ...STRAY_ENVIRONMENT,
@@ -203,6 +205,7 @@ const turnInput = (
   threadId: "stella-thread-1",
   workspaceDir,
   model: "sonnet",
+  reasoningEffort: null,
   instructions: INSTRUCTIONS,
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
@@ -215,6 +218,7 @@ const turnInput = (
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
   skillFolders: [],
+  networkHosts: [],
   toolPath: [],
   ...overrides,
 });
@@ -288,6 +292,7 @@ const codexEvents = async (scenario: FakeCodexScenario) => {
   mkdirSync(codexHome);
   const adapter = createCodexHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_CODEX, scenario] },
+    protocolLog: PROTOCOL_LOG_OFF,
     codexHome,
     environment: {
       FAKE_HARNESS_LOG: path.join(root, "fake.log"),
@@ -315,6 +320,14 @@ const codexEvents = async (scenario: FakeCodexScenario) => {
 };
 
 describe("Claude Code adapter over stream-json stdio", () => {
+  test("asks the model for the run's reasoning effort, after the model it applies to", async () => {
+    const { startups } = await run("tool_calls", {
+      overrides: { reasoningEffort: "max" },
+    });
+    const args = startups()[0]?.args ?? [];
+    expect(args.slice(-4)).toEqual(["--model", "sonnet", "--effort", "max"]);
+  });
+
   test("runs in the workspace with the stella config dir, without billing overrides, and sends secrets only over stdio", async () => {
     const { events, startups, received, claudeConfigDir, workspaceDir } =
       await run("tool_calls");
@@ -1141,6 +1154,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
     );
     const harness = createClaudeCodeHarnessAdapter({
       launch: { executable: "/nonexistent/claude", args: [] },
+      protocolLog: PROTOCOL_LOG_OFF,
       claudeConfigDir,
       environment: {},
       gracePeriodMs: 100,
@@ -1172,6 +1186,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(() =>
       createClaudeCodeHarnessAdapter({
         launch: { executable: process.execPath, args: [] },
+        protocolLog: PROTOCOL_LOG_OFF,
         claudeConfigDir: path.join(process.env["HOME"] ?? "/", ".claude"),
         environment: {},
         gracePeriodMs: 10,
@@ -1226,10 +1241,11 @@ describe("Claude Code approval modes", () => {
     });
   });
 
-  test("full auto lets sandboxed commands reach the network and still asks before leaving the sandbox", async () => {
+  test("full auto lets sandboxed commands reach a host the skills declare and still asks before leaving the sandbox", async () => {
     const { events, answers } = await run("sandbox_network", {
       overrides: {
         policy: { network: "open", fs: "workspace", approvals: "full_auto" },
+        networkHosts: [FAKE_SANDBOX_HOST],
       },
       onEvent: async (event, turn) => {
         if (event.type === "approval.requested") {
@@ -1265,6 +1281,35 @@ describe("Claude Code approval modes", () => {
       },
     ]);
     expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("full auto asks about a host no skill declares", async () => {
+    const { events, answers } = await run("sandbox_network", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "full_auto" },
+        networkHosts: ["aviationweather.gov"],
+      },
+      onEvent: async (event, turn) => {
+        if (event.type === "approval.requested") {
+          await turn.respond({
+            type: "approval",
+            requestId: event.request.requestId,
+            decision: "deny",
+          });
+        }
+      },
+    });
+    const approvals = events.flatMap((event) =>
+      event.type === "approval.requested" ? [event.request] : [],
+    );
+    expect(approvals).toHaveLength(2);
+    expect(approvals[0]).toMatchObject({
+      toolCall: { localInput: { host: FAKE_SANDBOX_HOST } },
+    });
+    expect(answers()[0]).toMatchObject({
+      request_id: "cli-1",
+      response: expect.objectContaining({ behavior: "deny" }),
+    });
   });
 
   test("outside full auto a request to reach a host is asked about", async () => {

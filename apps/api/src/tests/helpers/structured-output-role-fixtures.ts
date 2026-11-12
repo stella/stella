@@ -374,7 +374,7 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       outputSchema: "gradingSchema",
       schema: gradingSchema,
       answer:
-        '{"grades":[{"claimId":"c1","verdict":"supported","score":86,"refs":[{"factId":"f3","rel":"supports"}],"conflict":null},{"claimId":"c2","verdict":"nocover","score":null,"refs":[],"conflict":null}]}',
+        '{"grades":[{"claimId":"c1","verdict":"supported","score":86,"refs":[{"factId":"f3","rel":"supports"}],"conflict":null,"qualifiers":[],"statedDate":"2025-03-03"},{"claimId":"c2","verdict":"nocover","score":null,"refs":[],"conflict":null,"qualifiers":[{"kind":"record-silent","explanation":"The witness describes her own expectation, which no document would record."}],"statedDate":null}]}',
     },
     {
       file: "lib/scheduler/tasks/memory-extractor.ts",

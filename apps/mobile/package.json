@@ -33,6 +33,8 @@
     "@stll/api-contract": "workspace:*",
     "@stll/brand": "workspace:*",
     "@stll/chat-limits": "workspace:*",
+    "@stll/concurrency": "workspace:*",
+    "@stll/docx-core": "catalog:",
     "@stll/folio-fonts": "catalog:",
     "@stll/folio-react": "catalog:",
     "@stll/locales": "workspace:*",

@@ -47,7 +47,7 @@ describe("a Slovak decision's title and formula", () => {
         { type: "heading", role: "decision-title", text: title },
         {
           type: "paragraph",
-          role: "intro",
+          role: "opening-formula",
           text: "V MENE SLOVENSKEJ REPUBLIKY",
         },
       ]);

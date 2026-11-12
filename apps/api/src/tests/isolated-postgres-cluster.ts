@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import {
   chownSync,
-  mkdirSync,
+  existsSync,
   mkdtempSync,
   rmSync,
   writeFileSync,
@@ -24,7 +24,6 @@ export const withIsolatedPostgresCluster = async <T>(
 ): Promise<T> => {
   const root = mkdtempSync(path.join(tmpdir(), `${prefix}-`));
   const dataDir = path.join(root, "data");
-  const socketDir = path.join(root, "sock");
   const native = Bun.which("initdb");
   const fixture =
     native === null
@@ -55,7 +54,11 @@ export const withIsolatedPostgresCluster = async <T>(
   const command = (cmd: string[]) =>
     Bun.spawnSync(
       runNativeAsPostgres ? ["runuser", "-u", "postgres", "--", ...cmd] : cmd,
-      { stdout: "pipe", stderr: "pipe" },
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, PGPASSWORD: password, PGCONNECT_TIMEOUT: "10" },
+      },
     );
   const checked = (cmd: string[]) => {
     const result = command(cmd);
@@ -76,15 +79,9 @@ export const withIsolatedPostgresCluster = async <T>(
     listener.stop(true);
     const passwordFile = path.join(root, "password");
     writeFileSync(passwordFile, `${password}\n`, { mode: 0o600 });
-    mkdirSync(socketDir);
     if (runNativeAsPostgres) {
       chownSync(
         passwordFile,
-        postgresIdentity?.uid ?? 0,
-        postgresIdentity?.gid ?? 0,
-      );
-      chownSync(
-        socketDir,
         postgresIdentity?.uid ?? 0,
         postgresIdentity?.gid ?? 0,
       );
@@ -113,13 +110,13 @@ export const withIsolatedPostgresCluster = async <T>(
           "-l",
           path.join(root, "postgres.log"),
           "-o",
-          `-c listen_addresses=127.0.0.1 -c port=${port} -c unix_socket_directories=${socketDir}`,
+          `-c listen_addresses=127.0.0.1 -c port=${port} -c unix_socket_directories=''`,
           "start",
         ]);
         checked([
           "createdb",
           "-h",
-          socketDir,
+          "127.0.0.1",
           "-p",
           port,
           "-U",
@@ -187,7 +184,10 @@ export const withIsolatedPostgresCluster = async <T>(
     try {
       if (started) {
         if (fixture.type === "native") {
-          checked(["pg_ctl", "-D", dataDir, "-m", "immediate", "-w", "stop"]);
+          // Startup can fail before a PID exists; keep the original failure.
+          if (existsSync(path.join(dataDir, "postmaster.pid"))) {
+            checked(["pg_ctl", "-D", dataDir, "-m", "immediate", "-w", "stop"]);
+          }
         } else {
           checked(["docker", "rm", "-fv", fixture.name]);
         }

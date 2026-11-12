@@ -89,7 +89,7 @@ const CAMEL_CASE = /^[a-z][a-zA-Z0-9]*$/u;
 const appSnapshot = {
   bridgePort: 45_901,
   bridgeVersion: BRIDGE_VERSION,
-  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v6"],
+  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v7"],
   notificationPreferences: {
     documentReady: true,
     revisionCreated: true,

@@ -44,8 +44,10 @@ import {
   type HarnessFailure,
   harnessSessionId,
 } from "../harness/events";
+import { readSkillFolderNetworkHosts } from "../harness/skill-network-hosts";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
+import type { ProtocolLog } from "../protocol-log";
 import { copyAttachments } from "./attachments";
 import {
   captureCheckpoint,
@@ -96,6 +98,12 @@ const HARNESS_GRACE_MS = 5000;
  * catches a harness that stopped answering.
  */
 const HARNESS_REQUEST_TIMEOUT_MS = 30_000;
+/**
+ * How long a startup request waits: the CLI's first launch, which a busy
+ * computer or an antivirus scan slows, and connecting stella's MCP server,
+ * which the CLI itself gives up to 30 seconds.
+ */
+const HARNESS_STARTUP_REQUEST_TIMEOUT_MS = 2 * 60_000;
 const MAX_PROBED_MODELS = 100;
 
 export type HarnessLaunch = {
@@ -115,6 +123,8 @@ export type SidecarHostOptions = {
   send: (message: SidecarHostOutput) => boolean;
   /** One line in the holder's log. Never passed tokens, prompts or outputs. */
   log: (line: string) => void;
+  /** Where each harness process's protocol lines go, redacted. */
+  protocolLog: ProtocolLog;
   /** The harness's environment; `CODEX_HOME` and the like are set per run. */
   environment: Readonly<Record<string, string>>;
   /**
@@ -192,7 +202,9 @@ const ADAPTERS = {
       clientVersion: launch.clientVersion,
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
+      startupRequestTimeoutMs: HARNESS_STARTUP_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
+      protocolLog: options.protocolLog,
       ...(options.onProcess === null ? {} : { onProcess: options.onProcess }),
       ...(launch.launch.clientName === null
         ? {}
@@ -214,7 +226,9 @@ const ADAPTERS = {
       environment: launchEnvironment(options.environment, launch.launch),
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
+      startupRequestTimeoutMs: HARNESS_STARTUP_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
+      protocolLog: options.protocolLog,
       platform: process.platform,
     });
   },
@@ -227,6 +241,7 @@ const ADAPTERS = {
 type AdapterOptions = {
   environment: Readonly<Record<string, string>>;
   onBackgroundError: (error: unknown, context: string) => void;
+  protocolLog: ProtocolLog;
   /** Waits for the desktop's grant of a new harness process; `null` without one. */
   onProcess: ((pid: number) => Promise<boolean>) | null;
 };
@@ -309,6 +324,7 @@ const probeOutcome = ({
       id: model.id,
       label: model.displayName === "" ? model.id : model.displayName,
       isDefault: model.isDefault,
+      reasoningEfforts: [...model.reasoningEfforts],
     })),
   };
 };
@@ -543,6 +559,7 @@ export class SidecarHost {
           onBackgroundError: (_error, context) => {
             this.options.log(`harness background work failed: ${context}`);
           },
+          protocolLog: this.options.protocolLog,
           onProcess: launch.launch.processGrant
             ? async (pid) => this.awaitGrant(id, pid)
             : null,
@@ -826,14 +843,22 @@ export class SidecarHost {
     for (const reason of input.skipped) {
       this.options.log(`an attached file stays a path only: ${reason}`);
     }
+    const declared = await readSkillFolderNetworkHosts(message.skillFolders);
+    for (const skill of declared.unreadable) {
+      this.options.log(
+        `a skill's network hosts could not be read and add none: ${skill}`,
+      );
+    }
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
       workspaceDir: message.workspaceDir,
       cacheDir: message.cacheDir,
       skillFolders: message.skillFolders,
+      networkHosts: declared.hosts,
       toolPath: message.toolPath,
       model: message.model,
+      reasoningEffort: message.reasoningEffort,
       instructions: message.instructions,
       policy: message.policy,
       mcp: binding.value,

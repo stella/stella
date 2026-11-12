@@ -54,6 +54,7 @@ import {
   FAKE_STELLA_SERVER,
   FAKE_STELLA_STEPS,
 } from "../../../scripts/fake-stella-turn";
+import { PROTOCOL_LOG_OFF } from "../../protocol-log";
 import type { HarnessTurn, HarnessTurnInput } from "../adapter";
 import { type HarnessEvent, harnessSessionId } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
@@ -66,7 +67,7 @@ import {
   CODEX_SERVER_REQUESTS,
   InitializeResponseSchema,
 } from "./protocol";
-import { CODEX_APPROVAL_OPTIONS } from "./turn";
+import { CODEX_APPROVAL_OPTIONS, type CodexCapacityRetry } from "./turn";
 
 const FAKE_SERVER = path.join(
   import.meta.dir,
@@ -85,7 +86,21 @@ afterEach(() => {
   }
 });
 
-const FAST_CAPACITY_RETRY = { maxAttempts: 5, baseDelayMs: 5, maxDelayMs: 20 };
+/** Continues a turn at capacity at once, recording each delay it skipped. */
+const capacityRetryRecording = () => {
+  const delays: number[] = [];
+  const capacityRetry: CodexCapacityRetry = {
+    maxAttempts: 5,
+    baseDelayMs: 10,
+    maxDelayMs: 50,
+    sleep: async (delayMs) => {
+      delays.push(delayMs);
+    },
+  };
+  return { delays, capacityRetry };
+};
+
+const FAST_CAPACITY_RETRY = capacityRetryRecording().capacityRetry;
 
 const harnessFor = (
   scenario: FakeScenario,
@@ -101,6 +116,7 @@ const harnessFor = (
   mkdirSync(workspaceDir);
   const adapter = createCodexHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_SERVER, scenario] },
+    protocolLog: PROTOCOL_LOG_OFF,
     codexHome,
     environment: {
       ...environment,
@@ -148,6 +164,7 @@ const turnInput = (
   threadId: "stella-thread-1",
   workspaceDir,
   model: "gpt-test",
+  reasoningEffort: null,
   instructions: "Use the stella MCP server.",
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
@@ -160,6 +177,7 @@ const turnInput = (
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
   skillFolders: [],
+  networkHosts: [],
   toolPath: [],
   ...overrides,
 });
@@ -252,6 +270,18 @@ describe("Codex adapter over a stdio app-server", () => {
         context: { usedTokens: 150, windowTokens: FAKE_CONTEXT_WINDOW },
       },
     });
+  });
+
+  test("asks the model for the run's reasoning effort on turn/start, and for none when the run leaves it to the harness", async () => {
+    const turnStart = (
+      received: readonly { method?: string; params?: unknown }[],
+    ) => received.find(({ method }) => method === "turn/start")?.params;
+    const chosen = await run("tool_calls", {
+      overrides: { reasoningEffort: "high" },
+    });
+    expect(turnStart(chosen.received())).toMatchObject({ effort: "high" });
+    const left = await run("tool_calls");
+    expect(turnStart(left.received())).not.toHaveProperty("effort");
   });
 
   test("its one approval mode runs in the workspace sandbox, asks before leaving it, and writes caches to the package cache", async () => {
@@ -782,6 +812,7 @@ describe("Codex adapter over a stdio app-server", () => {
         executable: process.execPath,
         args: [FAKE_SERVER, "unresponsive"],
       },
+      protocolLog: PROTOCOL_LOG_OFF,
       detached: createDetached((error) => {
         backgroundErrors.push(error);
       }),
@@ -994,6 +1025,11 @@ describe("Codex adapter over a stdio app-server", () => {
       type: "retrying",
       message: "Reconnecting",
     });
+    // A usage limit is the member's allowance, not the model's capacity: the
+    // turn is not continued.
+    expect(
+      limited.received().filter(({ method }) => method === "turn/start"),
+    ).toHaveLength(1);
     expect(terminal(limited.events)).toEqual({
       type: "turn.failed",
       failure: {
@@ -1004,42 +1040,94 @@ describe("Codex adapter over a stdio app-server", () => {
     });
   });
 
-  test("a turn the model's capacity ended continues on the same thread with empty input", async () => {
-    const { events, received } = await run("capacity_retry");
+  test("stella's MCP server failing to start fails the turn; a member's own does not", async () => {
+    const failed = await run("stella_mcp_failed");
+    expect(terminal(failed.events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "tools_unavailable",
+        message: "The harness could not connect to the stella MCP server.",
+      },
+    });
+    const theirs = await run("other_mcp_failed");
+    expect(terminal(theirs.events)?.type).toBe("turn.completed");
+  });
+
+  /** Runs a scenario whose continuations record their delays. */
+  const runRecordingDelays = async (scenario: FakeScenario) => {
+    const { delays, capacityRetry } = capacityRetryRecording();
+    const harness = harnessFor(scenario, capacityRetry);
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const collected = collect(started.value);
+    await collected.done;
+    await started.value.dispose();
+    const starts = harness
+      .received()
+      .filter(({ method }) => method === "turn/start");
+    return { events: collected.events, delays, starts };
+  };
+
+  test("a turn the model's capacity ended continues on the same thread with empty input, repeating nothing", async () => {
+    const { events, delays, starts } =
+      await runRecordingDelays("capacity_retry");
     expect(events).toContainEqual({
       type: "retrying",
       message: "Selected model is at capacity. Please try a different model.",
     });
-    expect(events).toContainEqual(
-      expect.objectContaining({ type: "text.completed", text: "Recovered." }),
-    );
+    // The message completed before the failure stays in the thread; the
+    // continuation writes only what follows it.
+    expect(
+      events.flatMap((event) =>
+        event.type === "text.completed" ? [event.text] : [],
+      ),
+    ).toEqual(["Reading.", "Recovered."]);
     expect(terminal(events)).toMatchObject({ type: "turn.completed" });
-    const starts = received().filter(({ method }) => method === "turn/start");
+    expect(delays).toEqual([10]);
     expect(starts).toHaveLength(2);
     expect(starts[1]?.params).toEqual({ threadId: FAKE_THREAD_ID, input: [] });
   });
 
-  test("a turn still at capacity after five continuations fails with the native code", async () => {
-    const { events, received } = await run("capacity_exhausted");
+  test("a turn still at capacity after five continuations, each waiting twice as long up to the cap, fails as the model at capacity", async () => {
+    const { events, delays, starts } =
+      await runRecordingDelays("capacity_exhausted");
     expect(events.filter(({ type }) => type === "retrying")).toHaveLength(5);
+    expect(delays).toEqual([10, 20, 40, 50, 50]);
     expect(terminal(events)).toEqual({
       type: "turn.failed",
       failure: {
-        type: "provider_error",
+        type: "model_at_capacity",
         message: "Selected model is at capacity. Please try a different model.",
-        code: "serverOverloaded",
       },
     });
-    expect(
-      received().filter(({ method }) => method === "turn/start"),
-    ).toHaveLength(6);
+    expect(starts).toHaveLength(6);
+  });
+
+  test("a turn at capacity while a message streams in part fails instead of writing it again", async () => {
+    const { events, delays, starts } = await runRecordingDelays(
+      "capacity_mid_message",
+    );
+    expect(events.map(({ type }) => type)).not.toContain("retrying");
+    expect(delays).toEqual([]);
+    expect(terminal(events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "model_at_capacity",
+        message: "Selected model is at capacity. Please try a different model.",
+      },
+    });
+    expect(starts).toHaveLength(1);
   });
 
   test("stopping a turn while it waits to continue ends it as interrupted", async () => {
+    const wait = Promise.withResolvers<undefined>();
     const harness = harnessFor("capacity_retry", {
-      maxAttempts: 5,
-      baseDelayMs: 60_000,
-      maxDelayMs: 60_000,
+      ...FAST_CAPACITY_RETRY,
+      sleep: async () => wait.promise,
     });
     const started = await harness.adapter.startTurn(
       turnInput(harness.workspaceDir),
@@ -1054,6 +1142,8 @@ describe("Codex adapter over a stdio app-server", () => {
       }
     });
     await collected.done;
+    // The wait ends after the stop; the stopped turn does not continue.
+    wait.resolve(undefined);
     await turn.dispose();
     expect(terminal(collected.events)).toEqual({ type: "turn.interrupted" });
     const methods = harness.received().map(({ method }) => method);
@@ -1103,7 +1193,7 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
-  test("a probe reports version, account, visible models and capabilities without a session", async () => {
+  test("a probe reports version, account, visible models with the efforts stella knows, and capabilities without a session", async () => {
     const harness = harnessFor("probe");
     const probed = await harness.adapter.probe();
     if (Result.isError(probed)) {
@@ -1117,7 +1207,7 @@ describe("Codex adapter over a stdio app-server", () => {
           id: "gpt-test",
           displayName: "GPT Test",
           isDefault: true,
-          reasoningEfforts: ["medium"],
+          reasoningEfforts: ["medium", "high"],
           inputModalities: ["text", "image"],
         },
       ],
@@ -1142,6 +1232,7 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(() =>
       createCodexHarnessAdapter({
         launch: { executable: process.execPath, args: [] },
+        protocolLog: PROTOCOL_LOG_OFF,
         codexHome: path.join(process.env["HOME"] ?? "/", ".codex"),
         environment: {},
         clientVersion: "0.0.1",
@@ -1581,6 +1672,7 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
     mkdirSync(codexHome);
     const started = startAppServer({
       launch: { executable: codex ?? "", args: ["app-server"] },
+      protocolLog: PROTOCOL_LOG_OFF,
       detached: createDetached((error) => {
         cliErrors.push(error);
       }),

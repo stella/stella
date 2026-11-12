@@ -755,8 +755,56 @@ const FAKE_SCENARIOS = {
       additionalDetails: null,
     }),
   ],
+  /** stella's MCP server fails to start after the turn began. */
+  stella_mcp_failed: [
+    ...freshTurn(),
+    {
+      notify: "mcpServer/startupStatus/updated",
+      params: {
+        name: "stella",
+        status: "failed",
+        error: "connection refused",
+        failureReason: null,
+        threadId: FAKE_THREAD_ID,
+      },
+    },
+    { sleep: 5000 },
+  ],
+  /** A member's own MCP server fails; the turn runs on. */
+  other_mcp_failed: [
+    ...freshTurn(),
+    {
+      notify: "mcpServer/startupStatus/updated",
+      params: {
+        name: "their-notes",
+        status: "failed",
+        error: "connection refused",
+        failureReason: null,
+        threadId: FAKE_THREAD_ID,
+      },
+    },
+    completed(),
+  ],
+  /** A message completes, then the model is at capacity before the next. */
   capacity_retry: [
     ...freshTurn(),
+    {
+      notify: "item/agentMessage/delta",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "m-1",
+        delta: "Reading.",
+      },
+    },
+    {
+      notify: "item/completed",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        item: agentMessage("m-1", "Reading."),
+      },
+    },
     completed("failed", OVERLOADED),
     ...continuation([
       {
@@ -787,6 +835,20 @@ const FAKE_SCENARIOS = {
         },
       ]),
     ).flat(),
+  ],
+  /** The model is at capacity while a message is still streaming. */
+  capacity_mid_message: [
+    ...freshTurn(),
+    {
+      notify: "item/agentMessage/delta",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "m-1",
+        delta: "Readi",
+      },
+    },
+    completed("failed", OVERLOADED),
   ],
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
   /** One blocking question asking two questions under one id. */
@@ -861,7 +923,9 @@ const FAKE_SCENARIOS = {
             hidden: false,
             isDefault: true,
             supportedReasoningEfforts: [
+              { reasoningEffort: "high", description: "" },
               { reasoningEffort: "medium", description: "" },
+              { reasoningEffort: "turbo", description: "" },
             ],
             defaultReasoningEffort: "medium",
             inputModalities: ["text", "image"],
