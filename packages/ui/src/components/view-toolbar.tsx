@@ -21,9 +21,10 @@ export const ViewChromeBar = ({
 
 /**
  * Shared view controls, placed at the end of a `ViewChromeBar`. They stay on
- * one line and scroll horizontally once they outgrow two thirds of the row, so
- * the tabs beside them always keep room to show and scroll, and a control past
- * the edge is scrolled to rather than clipped.
+ * one line and scroll horizontally once they outgrow half the row on a phone,
+ * or two thirds of it from `md` up, so the tabs beside them always keep room
+ * for a whole tab and scroll, and a control past the edge is scrolled to rather
+ * than clipped.
  */
 export const ViewToolbarChrome = ({
   className,
@@ -31,7 +32,7 @@ export const ViewToolbarChrome = ({
 }: ComponentProps<"div">) => (
   <div
     className={cn(
-      "ms-auto flex max-w-2/3 min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
+      "ms-auto flex max-w-1/2 min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] md:max-w-2/3 [&::-webkit-scrollbar]:hidden",
       className,
     )}
     {...props}
