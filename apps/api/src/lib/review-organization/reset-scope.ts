@@ -114,6 +114,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "billing_codes",
   "case_law_research_answers",
   "case_law_research_columns",
+  "chat_limit_reminders",
   "chat_run_log_entries",
   "chat_run_logs",
   "chat_secrets",

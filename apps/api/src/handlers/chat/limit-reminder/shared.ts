@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 import { CHAT_LIMIT_REMINDER_UNAVAILABLE } from "@stll/api-contract/chat-limit-reminder";
 
 import type { Transaction } from "@/api/db/root";
@@ -54,7 +55,11 @@ const limitOutcomeSchema = v.object({
   metadata: v.object({
     turnOutcome: v.object({
       type: v.literal("failed"),
-      limitResetsAt: v.pipe(v.string(), v.isoTimestamp()),
+      limitResetsAt: v.pipe(
+        v.string(),
+        v.isoTimestamp(),
+        API_STORABLE_INSTANT_CHECK,
+      ),
     }),
   }),
 });
