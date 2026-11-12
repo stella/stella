@@ -956,6 +956,27 @@ describe("harness holder over its socket", () => {
     expect(methods).not.toContain("thread/resume");
   });
 
+  test("a stop after the turn completed keeps nothing running", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "background_terminal_late_list");
+    // The turn's last chunk is out; its process is not kept yet.
+    await client.waitFor(
+      (message): message is Extract<SidecarMessage, { type: "run.event" }> =>
+        message.type === "run.event" &&
+        message.runId === runId &&
+        message.chunk.type === "RUN_FINISHED",
+    );
+    client.send({ type: "run.interrupt", runId });
+    await client.waitFor(is("run.finished", runId));
+    expect(
+      client.messages.filter((message) => message.type === "background.tasks"),
+    ).toEqual([]);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
   test("ends a chat's kept process before a run with another session starts", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);

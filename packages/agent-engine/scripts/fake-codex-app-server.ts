@@ -306,6 +306,22 @@ const FAKE_SCENARIOS = {
       params: { threadId: FAKE_THREAD_ID, turn: continuedTurn("completed") },
     },
   ],
+  /**
+   * A turn that leaves a dev server running and answers the client's list
+   * of background terminals late: a stop can arrive after the turn
+   * completed and before its process is kept.
+   */
+  background_terminal_late_list: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    completed(),
+    { sleep: 1000 },
+    {
+      expect: "thread/backgroundTerminals/list",
+      result: { data: [backgroundTerminal("call-serve")], nextCursor: null },
+    },
+  ],
   /** As above, but the server exits while the chat waits for its next turn. */
   background_terminal_exits: [
     ...freshTurn(),
