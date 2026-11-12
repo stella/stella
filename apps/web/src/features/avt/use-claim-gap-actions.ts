@@ -146,32 +146,48 @@ export const useClaimGapActions = ({
       const previous: AddedFact | undefined =
         useAddFactProgress.getState().progress[progressKey];
       const { statement, source } = previous?.input ?? submitted;
-      // The task endpoint takes no idempotency key; the capability header
-      // declares the write.
-      const entityId =
-        previous?.entityId ??
-        (
-          await invokeCapability("tasks.create", async (request) =>
-            unwrapApiResponse(
-              await api
-                .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-                .put(
-                  {
-                    name: statement,
-                    listId: toSafeId<"legalList">(listId),
-                    listItemType: LIST_ITEM_TYPE.FACT,
-                  },
-                  request,
-                ),
-            ),
-          )
-        ).entityId;
-      let added: AddedFact = {
-        input: { statement, source },
-        entityId,
-        step: previous?.step ?? "added",
-        recheckKey: previous?.recheckKey ?? createUuid(),
+      const createBody = {
+        name: statement,
+        listId: toSafeId<"legalList">(listId),
+        listItemType: LIST_ITEM_TYPE.FACT,
       };
+      const createOperation = `claim-add-fact:${runId}:${claimId}`;
+      let pending: AddedFact = previous ?? {
+        input: { statement, source },
+        step: "creating",
+        // Recorded before the create is sent: a retry whose response was
+        // lost replays the first create instead of adding the fact twice.
+        createRequest: submit.prepare({
+          body: createBody,
+          operation: createOperation,
+        }),
+        recheckKey: createUuid(),
+      };
+      if (pending.step === "creating") {
+        record(pending);
+        const created = unwrapApiResponse(
+          await submit.run({
+            operation: createOperation,
+            body: createBody,
+            request: pending.createRequest,
+            send: async (body, replay) =>
+              await invokeCapability("tasks.create", async (request) =>
+                api
+                  .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+                  .put(body, {
+                    ...request,
+                    headers: {
+                      "Idempotency-Key": replay.headers["Idempotency-Key"],
+                      ...request.headers,
+                    },
+                  }),
+              ),
+          }),
+        );
+        pending = { ...pending, step: "added", entityId: created.entityId };
+      }
+      let added = pending;
+      const { entityId } = added;
       record(added);
       if (added.step === "added") {
         // The live version at submission rather than a stale pick, read

@@ -58,6 +58,7 @@ export const REPLAY_CAPABLE_ROUTES = [
   { method: "PUT", path: "/v1/properties/:workspaceId/batch" },
   { method: "PUT", path: "/v1/rates/:workspaceId" },
   { method: "PUT", path: "/v1/rates/:workspaceId/:rateTableId/entries" },
+  { method: "PUT", path: "/v1/tasks/:workspaceId" },
   { method: "PUT", path: "/v1/template-recipes" },
   { method: "PUT", path: "/v1/time-entries/:workspaceId" },
   { method: "PUT", path: "/v1/view-templates/:workspaceId" },
