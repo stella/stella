@@ -89,6 +89,7 @@ export const makeRun = (
   fileFieldId: toSafeId<"field">(uuid(9002)),
   entityVersionId: toSafeId<"entityVersion">(uuid(9003)),
   evidence: { listId: toSafeId<"legalList">(uuid(9004)), facts },
+  scope: { kind: "whole" },
   factStandings: facts.map((fact) => ({
     factEntityId: fact.factEntityId,
     scoring: "included" as const,

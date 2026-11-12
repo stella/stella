@@ -197,6 +197,28 @@ describe("ButtonTextRun", () => {
     expect(markup).toContain("select-text");
     expect(markup).not.toContain("role=");
   });
+
+  test("a run looks like a link unless a text mark it holds draws the line", () => {
+    const labelClasses = (markup: string) =>
+      /<label class="(?<classes>[^"]*)"/u.exec(markup)?.groups?.["classes"] ??
+      "";
+    const link = labelClasses(
+      renderToStaticMarkup(
+        <ButtonTextRun onClick={() => undefined}>the agreement</ButtonTextRun>,
+      ),
+    );
+    const marked = labelClasses(
+      renderToStaticMarkup(
+        <ButtonTextRun onClick={() => undefined} variant="plain">
+          the agreement
+        </ButtonTextRun>,
+      ),
+    );
+
+    expect(link.split(" ")).toContain("underline");
+    expect(marked.split(" ")).not.toContain("underline");
+    expect(marked.split(" ")).toContain("select-text");
+  });
 });
 
 describe("Button focusRing", () => {

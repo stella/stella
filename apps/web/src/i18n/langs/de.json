@@ -553,6 +553,24 @@
       "failed": "Nicht gespeichert",
       "failedTitle": "Ihre Änderung wurde nicht gespeichert"
     },
+    "scope": {
+      "checkedDocument": "Nur die Absätze <num>{range}</num> geprüft.",
+      "checkedOrdinal": "Nur die Absätze <num>{range}</num> geprüft, nach ihrer Reihenfolge gezählt: Dieses Dokument nummeriert seine Absätze nicht.",
+      "errors": {
+        "empty": "Diese Absätze enthalten keinen Text zum Prüfen.",
+        "garbage": "Geben Sie Absatznummern ein, etwa 82–136.",
+        "notFound": "Diese Absätze sind nicht in diesem Dokument.",
+        "numberingUnclear": "Die Absatznummern dieses Dokuments lassen sich nicht lesen. Prüfen Sie das ganze Dokument.",
+        "required": "Geben Sie die zu prüfenden Absätze ein.",
+        "reversed": "Der Bereich endet, bevor er beginnt.",
+        "tooWide": "Prüfen Sie höchstens 500 Absätze auf einmal."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "In diesen Absätzen wurden keine Behauptungen gefunden.",
+      "showBefore": "Text vor ¶ {from} anzeigen",
+      "verifyParagraphs": "Absätze prüfen"
+    },
     "states": {
       "contradicted": {
         "chip": "Widersprochen",
