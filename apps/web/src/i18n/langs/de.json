@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Als belegbedürftig markiert",
         "statusReviewed": "Als geprüft markiert"
       },
+      "carriedFrom": "Aus der Prüfung vom {date}",
+      "carriedFromEarlier": "Aus einer früheren Prüfung",
       "empty": "Noch keine Prüfaktionen.",
       "filters": {
         "allKinds": "Jede Aktion",
@@ -506,6 +508,21 @@
     },
     "runs": {
       "back": "Alle Dokumente",
+      "carryOver": {
+        "openSource": "Prüfung vom {date} öffnen",
+        "outcomes": {
+          "ambiguous": "Mehrere mögliche Treffer",
+          "textChanged": "Wortlaut geändert",
+          "unmatched": "Keine passende Behauptung",
+          "verdictChanged": "Ergebnis hat sich geändert"
+        },
+        "summary": {
+          "carried": "{count, number} übernommen",
+          "carriedAndMissed": "{carried, number} übernommen · {missed, number} nicht",
+          "label": "Prüfungen aus der Prüfung vom {date}: {carried, number} übernommen, {missed, number} nicht übernommen",
+          "missed": "{count, number} nicht übernommen"
+        }
+      },
       "errors": {
         "accessRevoked": "Die Überprüfung wurde beendet, da kein Zugriff verfügbar ist.",
         "aiUnavailable": "Für die Dokumentenprüfung ist kein KI-Modell verfügbar. Prüfen Sie die KI-Einstellungen der Organisation.",
@@ -535,6 +552,39 @@
     "save": {
       "failed": "Nicht gespeichert",
       "failedTitle": "Ihre Änderung wurde nicht gespeichert"
+    },
+    "scope": {
+      "checkedDocument": "Nur die Absätze <num>{range}</num> geprüft.",
+      "checkedOrdinal": "Nur die Absätze <num>{range}</num> geprüft, nach ihrer Reihenfolge gezählt: Dieses Dokument nummeriert seine Absätze nicht.",
+      "errors": {
+        "empty": "Diese Absätze enthalten keinen Text zum Prüfen.",
+        "garbage": "Geben Sie Absatznummern ein, etwa 82–136.",
+        "notFound": "Diese Absätze sind nicht in diesem Dokument.",
+        "numberingUnclear": "Die Absatznummern dieses Dokuments lassen sich nicht lesen. Prüfen Sie das ganze Dokument.",
+        "required": "Geben Sie die zu prüfenden Absätze ein.",
+        "reversed": "Der Bereich endet, bevor er beginnt.",
+        "tooWide": "Prüfen Sie höchstens 500 Absätze auf einmal."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "In diesen Absätzen wurden keine Behauptungen gefunden.",
+      "showBefore": "Text vor ¶ {from} anzeigen",
+      "verifyParagraphs": "Absätze prüfen"
+    },
+    "staleness": {
+      "failed": "Die Behauptungen konnten nicht erneut geprüft werden",
+      "finished": "{count, plural, one {# Behauptung erneut geprüft} other {# Behauptungen erneut geprüft}}",
+      "partial": "{rechecked, number} erneut geprüft, {failed, plural, one {# fehlgeschlagen} other {# fehlgeschlagen}}",
+      "reasons": {
+        "factChanged": "Fakt geändert",
+        "factHeld": "Fakt ausgeschlossen",
+        "factRemoved": "Fakt entfernt",
+        "newFactRelated": "Neuer zugehöriger Fakt"
+      },
+      "recheckAll": "Alle erneut prüfen",
+      "recheckLocked": "Wird mit den anderen veralteten Behauptungen erneut geprüft",
+      "runLine": "{count, plural, one {# Behauptung ist möglicherweise veraltet} other {# Behauptungen sind möglicherweise veraltet}}",
+      "running": "{count, plural, one {# Behauptung wird erneut geprüft…} other {# Behauptungen werden erneut geprüft…}}"
     },
     "states": {
       "contradicted": {
@@ -593,100 +643,21 @@
       "pickList": "Wählen Sie die Liste, mit deren Fakten die Dokumente dieser Akte abgeglichen werden."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Zweisprachige Fassung erstellen",
-      "creating": "Wird erstellt…",
-      "description": "Erstellt eine Kopie dieses Dokuments in zwei Spalten: links der Originaltext, rechts eine Kopie zum Übersetzen mit eigener Nummerierung. Die Kopie wird in dieser Akte als neues Dokument abgelegt.",
-      "sameLanguage": "Wählen Sie zwei verschiedene Sprachen.",
-      "sourceLanguage": "Ausgangssprache",
-      "title": "Zweisprachige Fassung"
-    },
-    "error": {
-      "title": "Zweisprachige Fassung fehlgeschlagen"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> ist bereit, {rowCount, plural, one {# Zeile} other {# Zeilen}} zu übersetzen.",
-      "title": "Zweisprachige Fassung erstellt"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Füllt die Übersetzungsspalte dieses zweispaltigen Dokuments. Prüfen Sie, was mit jeder Zeile geschieht und wie die definierten Begriffe wiedergegeben werden, und starten Sie dann die Übersetzung.",
-      "prepare": "Vorbereiten",
-      "preparing": "Dokument wird gelesen…",
-      "preparingHint": "Das gesamte Dokument zu lesen und jede Zeile zu bewerten dauert bis zu zwei Minuten.",
-      "title": "Zweisprachige Fassung übersetzen"
+      "prepare": "Vorbereiten"
     },
     "dispositions": {
-      "inline": "Beide Sprachen",
       "keep": "Unverändert lassen"
     },
-    "error": {
-      "prepareTitle": "Das Dokument konnte nicht vorbereitet werden",
-      "startTitle": "Die Übersetzung konnte nicht gestartet werden"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Für die Übersetzung ist kein KI-Modell verfügbar.",
-      "applyFailed": "Die Übersetzungen konnten nicht in das Dokument zurückgeschrieben werden.",
-      "documentChanged": "Das Dokument hat sich während der Übersetzung geändert. Bereiten Sie es erneut vor.",
-      "documentUnresolved": "Das Dokument oder seine Datei ist nicht mehr verfügbar.",
-      "enqueueFailed": "Die Übersetzung konnte nicht in die Warteschlange gestellt werden.",
-      "internal": "Die Übersetzung wurde unerwartet beendet.",
-      "notBilingual": "Dieses Dokument enthält keine zweisprachige Tabelle.",
-      "translationFailed": "Ein Stapel von Zeilen konnte nicht übersetzt werden.",
-      "unknown": "Die Übersetzung wurde unerwartet beendet."
-    },
-    "glossary": {
-      "add": "Begriff hinzufügen",
-      "description": "Diese Wiedergaben gelten für alle Zeilen. Ein Begriff ohne Übersetzung muss ergänzt oder entfernt werden.",
-      "empty": "Keine definierten Begriffe gefunden.",
-      "formsHint": "Weitere Formen durch Kommas trennen.",
-      "formsSource": "Weitere Formen des Begriffs",
-      "formsTarget": "Weitere Formen der Übersetzung",
-      "incomplete": "Ergänzen Sie die fehlenden Übersetzungen oder entfernen Sie diese Begriffe.",
-      "origins": {
-        "detected": "Gefunden",
-        "user": "Eigene"
-      },
-      "term": "Begriff",
-      "title": "Definierte Begriffe",
-      "tooManyForms": "Ein Begriff kann höchstens {max} weitere Formen haben.",
-      "translation": "Übersetzung"
-    },
     "kinds": {
-      "heading": "Überschrift",
-      "listItem": "Listenpunkt",
-      "paragraph": "Absatz",
-      "table": "Ganze Tabelle"
-    },
-    "origins": {
-      "default": "Nicht bewertet",
-      "model": "KI"
+      "paragraph": "Absatz"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# Zeile wurde übersprungen} other {# Zeilen wurden übersprungen}}: Sie enthalten keinen übersetzbaren Text.",
-      "start": "Übersetzung starten",
       "starting": "Wird gestartet…"
     },
     "rows": {
-      "description": "Wählen Sie, was mit jeder Zeile der Übersetzungsspalte geschieht.",
-      "ordinal": "#",
-      "sourceText": "Ausgangstext",
-      "title": "Zeilen",
-      "whatToDo": "Was tun"
-    },
-    "run": {
-      "cancelled": "Die Übersetzung wurde abgebrochen.",
-      "doneSummary": "{count, plural, one {# Zeile} other {# Zeilen}} übersetzt.",
-      "doneTitle": "Übersetzung abgeschlossen",
-      "failedRows": "{count, plural, one {# Zeile konnte nicht übersetzt werden} other {# Zeilen konnten nicht übersetzt werden}}.",
-      "failedTitle": "Übersetzung gestoppt",
-      "hint": "Die Übersetzung läuft auf dem Server. Lassen Sie dieses Fenster offen, um sie zu verfolgen.",
-      "moreRows": "{count, plural, one {# weitere Zeile} other {# weitere Zeilen}}",
-      "progress": "{completed} von {total} Zeilen übersetzt",
-      "title": "Übersetzung läuft…",
-      "warningsTitle": "Zu prüfende Zeilen"
+      "title": "Zeilen"
     }
   },
   "billing": {
@@ -1199,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# ablehnend} other {# ablehnend}}",
       "none": "Noch keine Zitierungen erfasst.",
       "notInStella": "Noch nicht in stella",
-      "openAtCitation": "An der Zitatstelle öffnen",
       "openDecision": "Entscheidung öffnen",
       "paragraphLabel": "Randnummer {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1907,6 +1877,7 @@
       "refusalNoComputer": "Keiner Ihrer Computer ist verbunden. Öffnen Sie stella desktop und senden Sie erneut.",
       "refusalPermissionAboveLimit": "Ihre Organisation erlaubt diese Berechtigungen für den Coding-Agenten auf Ihrem Computer nicht. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalPermissionUnavailable": "Der Coding-Agent auf Ihrem Computer kann mit diesen Berechtigungen nicht laufen. Wählen Sie unter „Berechtigungen“ eine andere Option.",
+      "refusalReasoningEffortUnavailable": "Der Coding-Agent auf Ihrem Computer bietet diesen Denkaufwand für das Modell nicht an. Wählen Sie unter „Denkaufwand“ einen anderen.",
       "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
       "runOn": "Ausführen auf",
@@ -1931,7 +1902,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# Chat wartet auf Sie} other {# Chats warten auf Sie}}",
-      "working": "{count, plural, one {# Chat arbeitet} other {# Chats arbeiten}}"
+      "waitsOn": {
+        "approval": "Wartet auf Ihre Freigabe",
+        "askUser": "Hat eine Frage an Sie",
+        "clientTool": "Läuft weiter, sobald Sie den Chat öffnen",
+        "harnessQuestion": "Der Agent auf Ihrem Computer hat eine Frage"
+      },
+      "working": "{count, plural, one {# Chat arbeitet} other {# Chats arbeiten}}",
+      "workingNow": "Arbeitet"
     },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mcpReconnect": {
@@ -2118,6 +2096,7 @@
     "stopFailed": "Die Antwort konnte nicht gestoppt werden. Versuchen Sie es erneut.",
     "stopResponse": "Stoppen",
     "stopped": "Gestoppt",
+    "stopping": "Wird angehalten…",
     "suggestTitle": "Titel vorschlagen",
     "suggestTitleUnavailableAnonymized": "Für anonymisierte Konversationen sind keine Titelvorschläge verfügbar.",
     "suggestedFollowupsLabel": "Vorgeschlagene Folgefragen",
@@ -2654,6 +2633,7 @@
     "organization": "Organisation",
     "organizationName": "Organisationsname",
     "organizations": "Organisationen",
+    "outOfDate": "Veraltet",
     "page": "Seite {page}",
     "paymentRetryNotice": "Zahlungsproblem. Aktualisieren Sie Ihre Zahlungsmethode bis zum {date}, um den Zugriff zu behalten.",
     "pin": "Anheften",
@@ -2668,6 +2648,7 @@
     "queued": "Eingereiht",
     "reason": "Grund",
     "recommended": "Empfohlen",
+    "reconnect": "Erneut verbinden",
     "reconnecting": "Verbindung wird wiederhergestellt…",
     "reference": "Referenz",
     "refresh": "Aktualisieren",
@@ -3317,6 +3298,14 @@
       "organizationMemberLimitReached": "Diese Organisation hat ihr Mitgliederlimit erreicht.",
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
+      "sharepointAccessDenied": "Microsoft hat den Zugriff auf diese Website, Bibliothek oder Datei verweigert.",
+      "sharepointFileTooLarge": "Diese Datei ist zu groß für den Import.",
+      "sharepointInvalidCursor": "Die Liste hat sich während des Durchsuchens geändert. Öffnen Sie den Ordner erneut.",
+      "sharepointNotAFile": "Es können nur Dateien importiert werden, keine Ordner oder Notizbücher.",
+      "sharepointNotConnected": "Verbinden Sie Ihr Microsoft-Konto, um SharePoint und OneDrive zu verwenden.",
+      "sharepointNotFound": "Diese Website, Bibliothek oder Datei existiert nicht mehr oder ist nicht für Sie freigegeben.",
+      "sharepointReconnectRequired": "Ihre Microsoft-Anmeldung ist abgelaufen. Verbinden Sie SharePoint und OneDrive erneut.",
+      "sharepointThrottled": "Microsoft begrenzt die Anfragen. Versuchen Sie es in Kürze erneut.",
       "skillSourceUnreachable": "Die Skill-Quelle konnte nicht geladen werden. Prüfen Sie, ob der Link auf ein öffentliches GitHub-Repository verweist, oder versuchen Sie es später erneut.",
       "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Arbeitsbereichs-Kontexts zu verwenden.",
       "usageLimitExceeded": "Nutzungslimit erreicht.",
@@ -4423,7 +4412,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Erstellen Sie Standpunkt für Standpunkt ein Playbook für die Vertragsprüfung, gestützt auf Ihre bereits unterzeichneten Verträge, ein kurzes Gespräch und marktübliche Standards.",
-          "name": "Playbook erstellen"
+          "name": "Playbook erstellen",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Füge einem meiner bestehenden Playbooks Standpunkte hinzu.",
+              "name": "Playbook erweitern"
+            },
+            "fromContracts": {
+              "body": "Erstelle ein Playbook für Vertraulichkeitsvereinbarungen auf Grundlage meiner bereits unterzeichneten Vereinbarungen.",
+              "name": "Mit früheren Verträgen beginnen"
+            },
+            "fromMarketStandards": {
+              "body": "Erstelle ein Playbook für Lieferantenverträge, ausgehend von marktüblichen Standpunkten.",
+              "name": "Mit Marktstandards beginnen"
+            }
+          }
         }
       },
       "builtInSection": "Integrierte Skills",
@@ -4545,7 +4548,6 @@
       "otherTitle": "Weitere Integrationen",
       "probe": "Prüfen",
       "recommendedFor": "Empfohlen für {jurisdictions}",
-      "reconnect": "Erneut verbinden",
       "saveToken": "Token speichern",
       "tokenHelp": "Token erhalten",
       "tokenLabel": "Bearer-Token",
@@ -4674,6 +4676,10 @@
       "optionPlaceholder": "Optionswert",
       "optionsLabel": "Optionen",
       "outline": "Gliederung",
+      "pendingPane": {
+        "description": "Beantworten Sie die Fragen im Chat. Sobald Sie das erste Speichern freigeben, öffnet sich das Playbook hier, und Sie können es neben der Unterhaltung bearbeiten.",
+        "title": "Ihr Playbook erscheint hier"
+      },
       "positionOfTotal": "Standpunkt {index} von {total}",
       "positionRemoved": "Standpunkt entfernt",
       "positions": "Standpunkte",
@@ -5429,8 +5435,6 @@
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",
     "caseLawEmptyState": "Tippen Sie, um Gerichtsentscheidungen zu durchsuchen.",
-    "caseLawMatchingDecisions": "{count, plural, one {# passende Entscheidung} other {# passende Entscheidungen}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ passende Entscheidung} other {#+ passende Entscheidungen}}",
     "chatCoveragePartial": "Nicht alle Chats wurden vollständig durchsucht.",
     "continueInChat": "Im Chat fortsetzen",
     "dateFrom": "Von",
@@ -5788,8 +5792,10 @@
         "clause_category": "Klauselkategorie",
         "clause_template_link": "Klauselvorlagenverknüpfung",
         "clause_variant": "Klauselvariante",
+        "conflict_check": "Kollisionsprüfung",
         "contact": "Kontakt",
         "contact_directory": "Kontaktverzeichnis",
+        "data_export": "Datenexport",
         "desktop_edit_session": "Desktop-Bearbeitungssitzung",
         "document_annotation": "Dokumentanmerkung",
         "document_review_run": "Dokumentprüfung",
@@ -5967,6 +5973,63 @@
       "usageUnitsThisPeriod": "Nutzungseinheiten in diesem Zeitraum"
     }
   },
+  "sharepoint": {
+    "admin": {
+      "description": "Mitglieder verbinden ihr eigenes Microsoft-Konto und importieren Dateien in Akten. stella liest nur, was das jeweilige Mitglied in Microsoft 365 öffnen kann.",
+      "disableConfirm": "Ausschalten",
+      "disableDescription": "Die Microsoft-Verbindung aller Mitglieder wird entfernt und ihre gespeicherte Anmeldung gelöscht. Bereits importierte Dokumente bleiben in ihren Akten. Mitglieder müssen sich erneut verbinden, wenn Sie die Funktion wieder einschalten.",
+      "disableInputLabel": "Geben Sie {confirmation} ein, um die Funktion auszuschalten",
+      "disableTitle": "SharePoint und OneDrive ausschalten?",
+      "toggleLabel": "SharePoint und OneDrive zulassen"
+    },
+    "askAdmin": "Für Ihre Organisation ausgeschaltet. Bitten Sie eine Organisationsadministration, die Funktion einzuschalten.",
+    "connectFailed": "SharePoint und OneDrive konnten nicht verbunden werden",
+    "connected": "SharePoint und OneDrive verbunden",
+    "description": "Dateien aus SharePoint und OneDrive in Akten importieren.",
+    "disconnectDescription": "Ihre Microsoft-Anmeldung wird aus stella entfernt. Bereits importierte Dokumente bleiben in ihren Akten.",
+    "disconnectTitle": "SharePoint und OneDrive trennen?",
+    "disconnected": "SharePoint und OneDrive getrennt",
+    "import": {
+      "alreadyCurrent": "{count, plural, one {# Datei war bereits aktuell.} other {# Dateien waren bereits aktuell.}}",
+      "created": "Importiert",
+      "done": "Dateien aus SharePoint oder OneDrive importiert",
+      "failedReason": "Die Datei konnte nicht kopiert werden. Versuchen Sie es später erneut.",
+      "partial": "Bei {failed, number} von {total, plural, one {# Datei} other {# Dateien}} ist der Import fehlgeschlagen.",
+      "progress": "{done, number} von {total, number} importiert",
+      "unchanged": "Bereits aktuell",
+      "unconfirmed": "Nicht bestätigt",
+      "unconfirmedCount": "{count, plural, one {# Datei wurde nicht bestätigt; importieren Sie sie erneut.} other {# Dateien wurden nicht bestätigt; importieren Sie sie erneut.}}",
+      "unconfirmedReason": "Der Import wurde beendet, bevor diese Datei bestätigt war. Importieren Sie sie erneut.",
+      "versioned": "Neue Version"
+    },
+    "oauthReasons": {
+      "consentDenied": "Die Microsoft-Anmeldung wurde abgebrochen oder der Zugriff wurde nicht gewährt.",
+      "expired": "Die Anmeldung hat zu lange gedauert. Verbinden Sie sich erneut.",
+      "notConfigured": "Diese stella-Installation ist nicht für die Microsoft-Anmeldung eingerichtet. Wenden Sie sich an Ihre Administration.",
+      "notEnabled": "Ihre Organisation hat SharePoint und OneDrive nicht eingeschaltet.",
+      "tryAgain": "Die Microsoft-Anmeldung wurde nicht abgeschlossen. Verbinden Sie sich erneut.",
+      "userMismatch": "Die Anmeldung wurde von einem anderen Konto oder einer anderen Organisation gestartet. Verbinden Sie sich erneut von diesem aus."
+    },
+    "picker": {
+      "description": "Wählen Sie bis zu {max, number} Dateien aus, die in diese Akte kopiert werden sollen.",
+      "emptyFolder": "Dieser Ordner ist leer.",
+      "menuItem": "Aus SharePoint oder OneDrive",
+      "myOneDrive": "Mein OneDrive",
+      "noFollowedSites": "Suchen Sie nach einer Website oder öffnen Sie Mein OneDrive.",
+      "noLibraries": "Hier gibt es keine Dokumentbibliotheken.",
+      "notConnected": "Verbinden Sie Ihr Microsoft-Konto, um SharePoint und OneDrive zu durchsuchen.",
+      "notImportable": "Kann nicht importiert werden",
+      "reconnectRequired": "Ihre Microsoft-Anmeldung ist abgelaufen. Verbinden Sie sich erneut, um weiter zu durchsuchen.",
+      "searchSites": "Websites suchen",
+      "selectedCount": "{count, plural, =0 {Keine Dateien ausgewählt} one {# Datei ausgewählt} other {# Dateien ausgewählt}}",
+      "selectionLimit": "Sie können bis zu {max, number} Dateien gleichzeitig importieren.",
+      "sites": "Websites",
+      "throttledFor": "Microsoft begrenzt die Anfragen. Versuchen Sie es in {seconds, plural, one {# Sekunde} other {# Sekunden}} erneut.",
+      "title": "Aus SharePoint oder OneDrive importieren"
+    },
+    "reconnectRequired": "Anmeldung abgelaufen",
+    "title": "SharePoint und OneDrive"
+  },
   "skillHistory": {
     "acceptStale": "Annehmen und neuere Änderungen überschreiben",
     "backToCurrent": "Zurück zur aktuellen Fassung",
@@ -5976,7 +6039,6 @@
     "comments": "Kommentare",
     "commentsEmpty": "Text markieren, um ihn zu kommentieren.",
     "noRevisions": "Noch keine Fassungen",
-    "outOfDate": "Veraltet",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Keine Zusammenfassung",
     "proposals": "Änderungsvorschläge",
@@ -6092,6 +6154,11 @@
     "title": "Rechtsvorschriften",
     "validity": "Gültig von {from} bis {to}",
     "versionAppliedInDecision": "In der Entscheidung <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> angewandte Fassung (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# Vorschrift eingefügt} other {# Vorschriften eingefügt}}",
+    "versionChangesChanged": "{count, plural, one {# Vorschrift geändert} other {# Vorschriften geändert}}",
+    "versionChangesNone": "Wortlaut unverändert",
+    "versionChangesRemoved": "{count, plural, one {# Vorschrift gestrichen} other {# Vorschriften gestrichen}}",
+    "versionChangesWords": "{inserted, plural, one {# Wort eingefügt} other {# Wörter eingefügt}}, {deleted, plural, one {# Wort gestrichen} other {# Wörter gestrichen}}",
     "wordingVersionUnknown": "Datum der Wortlautversion nicht verfügbar"
   },
   "styleSets": {
@@ -6812,6 +6879,7 @@
     "deletedItem": "Gelöscht: {name}",
     "deletingWorkspace": "Akte wird gelöscht",
     "documentSwitcher": {
+      "download": "Diese Datei herunterladen",
       "searchPlaceholder": "Dokument suchen…",
       "trigger": "Dokument wechseln"
     },

@@ -115,7 +115,11 @@ export const LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
-/** Expanded before the follow-up release grants the reviewed doctrine capability. */
+/**
+ * The reviewed doctrine capability, granted by
+ * `20261112120000_public_law_reader_citation_doctrine` one release after the
+ * map first permitted it.
+ */
 export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
   case_law_citations: {
     citation_key: "permitted",
@@ -397,17 +401,17 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   [CASE_LAW_DECISION_VIEWS[0]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   case_law_decision_citation_stats: {
-    decision_id: "permitted",
-    direction: "permitted",
-    related_year: "permitted",
-    related_country: "permitted",
-    related_source_id: "permitted",
-    polarity: "permitted",
-    count: "permitted",
+    decision_id: "required",
+    direction: "required",
+    related_year: "required",
+    related_country: "required",
+    related_source_id: "required",
+    polarity: "required",
+    count: "required",
   },
   case_law_decision_citation_stats_state: {
-    decision_id: "permitted",
-    status: "permitted",
+    decision_id: "required",
+    status: "required",
   },
   // The text-search configuration a language's query is parsed with. It is
   // read from the database whose search documents it has to match.
@@ -633,6 +637,10 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     expression_kind: "required",
     window_disposition: "required",
     window_disposition_basis: "required",
+    // What a consolidation changed against the one before it, served only
+    // while the row's payload revision is the one it was computed from.
+    change_summary: "required",
+    payload_revision: "required",
     fulltext: "required",
     sections: "required",
     document_ast: "required",

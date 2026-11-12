@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Marquée comme nécessitant des preuves",
         "statusReviewed": "Marquée comme examinée"
       },
+      "carriedFrom": "De la vérification du {date}",
+      "carriedFromEarlier": "D’une vérification antérieure",
       "empty": "Aucune action d’examen pour l’instant.",
       "filters": {
         "allKinds": "Toute action",
@@ -506,6 +508,21 @@
     },
     "runs": {
       "back": "Tous les documents",
+      "carryOver": {
+        "openSource": "Ouvrir la vérification du {date}",
+        "outcomes": {
+          "ambiguous": "Plusieurs correspondances possibles",
+          "textChanged": "La formulation a changé",
+          "unmatched": "Aucune affirmation correspondante",
+          "verdictChanged": "Le verdict a changé"
+        },
+        "summary": {
+          "carried": "{count, number} repris",
+          "carriedAndMissed": "{carried, number} repris · {missed, number} non",
+          "label": "Examens de la vérification du {date} : {carried, number} repris, {missed, number} non repris",
+          "missed": "{count, number} non repris"
+        }
+      },
       "errors": {
         "accessRevoked": "La vérification a été arrêtée car l’accès est indisponible.",
         "aiUnavailable": "Aucun modèle d’IA n’est disponible pour vérifier les documents. Vérifiez les paramètres d’IA de l’organisation.",
@@ -535,6 +552,39 @@
     "save": {
       "failed": "Non enregistré",
       "failedTitle": "Votre modification n’a pas été enregistrée"
+    },
+    "scope": {
+      "checkedDocument": "Seuls les paragraphes <num>{range}</num> ont été vérifiés.",
+      "checkedOrdinal": "Seuls les paragraphes <num>{range}</num> ont été vérifiés, comptés dans l’ordre : ce document ne numérote pas ses paragraphes.",
+      "errors": {
+        "empty": "Ces paragraphes ne contiennent aucun texte à vérifier.",
+        "garbage": "Saisissez des numéros de paragraphe, par exemple 82–136.",
+        "notFound": "Ces paragraphes ne figurent pas dans ce document.",
+        "numberingUnclear": "La numérotation des paragraphes de ce document est illisible. Vérifiez le document entier.",
+        "required": "Saisissez les paragraphes à vérifier.",
+        "reversed": "La plage se termine avant de commencer.",
+        "tooWide": "Vérifiez au plus 500 paragraphes à la fois."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "Aucune affirmation n’a été trouvée dans ces paragraphes.",
+      "showBefore": "Afficher le texte avant le ¶ {from}",
+      "verifyParagraphs": "Vérifier des paragraphes"
+    },
+    "staleness": {
+      "failed": "Les affirmations n’ont pas pu être revérifiées",
+      "finished": "{count, plural, one {# affirmation revérifiée} other {# affirmations revérifiées} many {# affirmations revérifiées}}",
+      "partial": "{rechecked, number} revérifiée(s), {failed, plural, one {# en échec} other {# en échec} many {# en échec}}",
+      "reasons": {
+        "factChanged": "Fait modifié",
+        "factHeld": "Fait exclu",
+        "factRemoved": "Fait retiré",
+        "newFactRelated": "Nouveau fait lié"
+      },
+      "recheckAll": "Tout revérifier",
+      "recheckLocked": "En cours de revérification avec les autres affirmations obsolètes",
+      "runLine": "{count, plural, one {# affirmation est peut-être obsolète} other {# affirmations sont peut-être obsolètes} many {# affirmations sont peut-être obsolètes}}",
+      "running": "{count, plural, one {Revérification de # affirmation…} other {Revérification de # affirmations…} many {Revérification de # affirmations…}}"
     },
     "states": {
       "contradicted": {
@@ -593,100 +643,21 @@
       "pickList": "Choisissez la liste dont les faits servent à vérifier les documents de ce dossier."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Créer la version bilingue",
-      "creating": "Création…",
-      "description": "Crée une copie de ce document sur deux colonnes : le texte original à gauche, une copie à traduire à droite, avec une numérotation indépendante. La copie est enregistrée dans ce dossier comme nouveau document.",
-      "sameLanguage": "Choisissez deux langues différentes.",
-      "sourceLanguage": "Langue source",
-      "title": "Version bilingue"
-    },
-    "error": {
-      "title": "Échec de la version bilingue"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> est prêt avec {rowCount, plural, one {# ligne} other {# lignes} many {# lignes}} à traduire.",
-      "title": "Version bilingue créée"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Remplit la colonne de traduction de ce document sur deux colonnes. Vérifiez ce qui arrive à chaque ligne et la façon dont les termes définis sont rendus, puis lancez la traduction.",
-      "prepare": "Préparer",
-      "preparing": "Lecture du document…",
-      "preparingHint": "Lire l'intégralité du document et évaluer chaque ligne prend jusqu'à deux minutes.",
-      "title": "Traduire la version bilingue"
+      "prepare": "Préparer"
     },
     "dispositions": {
-      "inline": "Les deux langues",
       "keep": "Laisser tel quel"
     },
-    "error": {
-      "prepareTitle": "Le document n'a pas pu être préparé",
-      "startTitle": "La traduction n'a pas pu être lancée"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Aucun modèle d'IA n'est disponible pour la traduction.",
-      "applyFailed": "Les traductions n'ont pas pu être réécrites dans le document.",
-      "documentChanged": "Le document a changé pendant la traduction. Préparez-le à nouveau.",
-      "documentUnresolved": "Le document ou son fichier n'est plus disponible.",
-      "enqueueFailed": "La traduction n'a pas pu être mise en file d'attente.",
-      "internal": "La traduction s'est arrêtée de façon inattendue.",
-      "notBilingual": "Ce document ne contient pas de tableau bilingue.",
-      "translationFailed": "Un lot de lignes n'a pas pu être traduit.",
-      "unknown": "La traduction s'est arrêtée de façon inattendue."
-    },
-    "glossary": {
-      "add": "Ajouter un terme",
-      "description": "Ces rendus s'appliquent à toutes les lignes. Un terme sans traduction doit être complété ou supprimé.",
-      "empty": "Aucun terme défini trouvé.",
-      "formsHint": "Séparez les autres formes par des virgules.",
-      "formsSource": "Autres formes du terme",
-      "formsTarget": "Autres formes de la traduction",
-      "incomplete": "Complétez les traductions manquantes ou supprimez ces termes.",
-      "origins": {
-        "detected": "Détecté",
-        "user": "Le vôtre"
-      },
-      "term": "Terme",
-      "title": "Termes définis",
-      "tooManyForms": "Un terme peut compter au maximum {max} autres formes.",
-      "translation": "Traduction"
-    },
     "kinds": {
-      "heading": "Titre",
-      "listItem": "Élément de liste",
-      "paragraph": "Paragraphe",
-      "table": "Tableau entier"
-    },
-    "origins": {
-      "default": "Non évalué",
-      "model": "IA"
+      "paragraph": "Paragraphe"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# ligne a été ignorée} other {# lignes ont été ignorées} many {# lignes ont été ignorées}} : elles ne contiennent aucun texte traduisible.",
-      "start": "Lancer la traduction",
       "starting": "Lancement…"
     },
     "rows": {
-      "description": "Choisissez ce qui arrive à chaque ligne de la colonne de traduction.",
-      "ordinal": "#",
-      "sourceText": "Texte source",
-      "title": "Lignes",
-      "whatToDo": "Que faire"
-    },
-    "run": {
-      "cancelled": "La traduction a été annulée.",
-      "doneSummary": "{count, plural, one {# ligne traduite} other {# lignes traduites} many {# lignes traduites}}.",
-      "doneTitle": "Traduction terminée",
-      "failedRows": "{count, plural, one {# ligne n'a pas pu être traduite} other {# lignes n'ont pas pu être traduites} many {# lignes n'ont pas pu être traduites}}.",
-      "failedTitle": "Traduction interrompue",
-      "hint": "La traduction s'exécute sur le serveur. Gardez cette fenêtre ouverte pour la suivre.",
-      "moreRows": "{count, plural, one {# ligne de plus} other {# lignes de plus} many {# lignes de plus}}",
-      "progress": "{completed} lignes traduites sur {total}",
-      "title": "Traduction en cours…",
-      "warningsTitle": "Lignes à vérifier"
+      "title": "Lignes"
     }
   },
   "billing": {
@@ -1199,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# négative} many {# négatives} other {# négatives}}",
       "none": "Aucune citation enregistrée pour l'instant.",
       "notInStella": "Pas encore dans stella",
-      "openAtCitation": "Ouvrir à la citation",
       "openDecision": "Ouvrir la décision",
       "paragraphLabel": "Point {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1907,6 +1877,7 @@
       "refusalNoComputer": "Aucun de vos ordinateurs n’est connecté. Ouvrez stella desktop, puis renvoyez le message.",
       "refusalPermissionAboveLimit": "Votre organisation n’accorde pas ces autorisations à l’agent de code de votre ordinateur. Choisissez une autre option sous Autorisations.",
       "refusalPermissionUnavailable": "L’agent de code de votre ordinateur ne peut pas s’exécuter avec ces autorisations. Choisissez une autre option sous Autorisations.",
+      "refusalReasoningEffortUnavailable": "L’agent de code de votre ordinateur ne propose pas ce niveau de raisonnement pour le modèle. Choisissez-en un autre sous Niveau de raisonnement.",
       "refusalTooLarge": "Cette conversation est trop longue pour être transmise à votre ordinateur. Commencez une nouvelle conversation pour l’y exécuter.",
       "refusalUnavailable": "L’exécution des conversations sur votre ordinateur n’est pas disponible pour votre compte.",
       "runOn": "Exécuter sur",
@@ -1931,7 +1902,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# conversation vous attend} other {# conversations vous attendent} many {# conversations vous attendent}}",
-      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}"
+      "waitsOn": {
+        "approval": "Attend votre approbation",
+        "askUser": "Vous pose une question",
+        "clientTool": "Reprend quand vous ouvrez cette conversation",
+        "harnessQuestion": "L’agent sur votre ordinateur a une question"
+      },
+      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}",
+      "workingNow": "En cours"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mcpReconnect": {
@@ -2118,6 +2096,7 @@
     "stopFailed": "Impossible d'arrêter la réponse. Réessayez.",
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
+    "stopping": "Arrêt en cours…",
     "suggestTitle": "Suggérer un titre",
     "suggestTitleUnavailableAnonymized": "Les suggestions de titre ne sont pas disponibles pour les conversations anonymisées.",
     "suggestedFollowupsLabel": "Suggestions de questions de suivi",
@@ -2654,6 +2633,7 @@
     "organization": "Organisation",
     "organizationName": "Nom de l'organisation",
     "organizations": "Organisations",
+    "outOfDate": "Obsolète",
     "page": "Page n° {page}",
     "paymentRetryNotice": "Problème de paiement. Mettez à jour votre moyen de paiement avant le {date} pour conserver votre accès.",
     "pin": "Épingler",
@@ -2668,6 +2648,7 @@
     "queued": "En file d'attente",
     "reason": "Motif",
     "recommended": "Recommandés",
+    "reconnect": "Reconnecter",
     "reconnecting": "Reconnexion…",
     "reference": "Référence",
     "refresh": "Actualiser",
@@ -3317,6 +3298,14 @@
       "organizationMemberLimitReached": "Cette organisation a atteint sa limite de membres.",
       "providerKeyRejected": "Le fournisseur a refusé la clé API.",
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
+      "sharepointAccessDenied": "Microsoft a refusé l’accès à ce site, cette bibliothèque ou ce fichier.",
+      "sharepointFileTooLarge": "Ce fichier est trop volumineux pour être importé.",
+      "sharepointInvalidCursor": "La liste a changé pendant votre navigation. Rouvrez le dossier.",
+      "sharepointNotAFile": "Seuls les fichiers peuvent être importés, pas les dossiers ni les blocs-notes.",
+      "sharepointNotConnected": "Connectez votre compte Microsoft pour utiliser SharePoint et OneDrive.",
+      "sharepointNotFound": "Ce site, cette bibliothèque ou ce fichier n’existe plus ou n’est pas partagé avec vous.",
+      "sharepointReconnectRequired": "Votre connexion Microsoft a expiré. Reconnectez SharePoint et OneDrive.",
+      "sharepointThrottled": "Microsoft limite les requêtes. Réessayez dans quelques instants.",
       "skillSourceUnreachable": "La source de la compétence n’a pas pu être chargée. Vérifiez que le lien mène à un dépôt GitHub public, ou réessayez plus tard.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte.",
@@ -4423,7 +4412,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Créez un playbook de revue de contrats critère par critère, à partir de vos contrats déjà signés, d’un court entretien et des usages du marché.",
-          "name": "Créer un playbook"
+          "name": "Créer un playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Ajoute des critères à l’un de mes playbooks existants.",
+              "name": "Compléter un playbook"
+            },
+            "fromContracts": {
+              "body": "Crée un playbook pour les accords de confidentialité à partir de mes accords déjà signés.",
+              "name": "Partir de contrats passés"
+            },
+            "fromMarketStandards": {
+              "body": "Crée un playbook pour les contrats fournisseurs en partant des critères conformes aux usages du marché.",
+              "name": "Partir des usages du marché"
+            }
+          }
         }
       },
       "builtInSection": "Compétences intégrées",
@@ -4545,7 +4548,6 @@
       "otherTitle": "Autres intégrations",
       "probe": "Vérifier",
       "recommendedFor": "Recommandé pour {jurisdictions}",
-      "reconnect": "Reconnecter",
       "saveToken": "Enregistrer le jeton",
       "tokenHelp": "Comment obtenir un jeton",
       "tokenLabel": "Jeton Bearer",
@@ -4674,6 +4676,10 @@
       "optionPlaceholder": "Valeur de l'option",
       "optionsLabel": "Options",
       "outline": "Plan",
+      "pendingPane": {
+        "description": "Répondez aux questions dans la conversation. Une fois le premier enregistrement approuvé, le playbook s’ouvre ici et vous pouvez le modifier à côté de la conversation.",
+        "title": "Votre playbook apparaîtra ici"
+      },
       "positionOfTotal": "Critère {index} sur {total}",
       "positionRemoved": "Critère supprimé",
       "positions": "Critères",
@@ -5429,8 +5435,6 @@
   "search": {
     "aiRefine": "Améliorer la requête avec l’IA",
     "caseLawEmptyState": "Commencez à saisir pour rechercher des décisions de justice.",
-    "caseLawMatchingDecisions": "{count, plural, one {# décision correspondante} other {# décisions correspondantes} many {# décisions correspondantes}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ décision correspondante} other {#+ décisions correspondantes} many {#+ décisions correspondantes}}",
     "chatCoveragePartial": "Les conversations n’ont pas toutes été parcourues en entier.",
     "continueInChat": "Continuer dans une conversation",
     "dateFrom": "Du",
@@ -5788,8 +5792,10 @@
         "clause_category": "catégorie de clauses",
         "clause_template_link": "lien entre clause et modèle",
         "clause_variant": "variante de clause",
+        "conflict_check": "vérification de conflit d'intérêts",
         "contact": "personne de contact",
         "contact_directory": "répertoire de contacts",
+        "data_export": "exportation de données",
         "desktop_edit_session": "session de modification sur ordinateur",
         "document_annotation": "annotation de document",
         "document_review_run": "révision de document",
@@ -5967,6 +5973,63 @@
       "usageUnitsThisPeriod": "Unités d’utilisation sur cette période"
     }
   },
+  "sharepoint": {
+    "admin": {
+      "description": "Les membres connectent leur propre compte Microsoft et importent des fichiers dans les dossiers. stella lit uniquement ce que chaque membre peut ouvrir dans Microsoft 365.",
+      "disableConfirm": "Désactiver",
+      "disableDescription": "La connexion Microsoft de chaque membre est supprimée et sa session enregistrée est effacée. Les documents déjà importés restent dans leurs dossiers. Les membres devront se reconnecter si vous réactivez cette fonction.",
+      "disableInputLabel": "Saisissez {confirmation} pour désactiver",
+      "disableTitle": "Désactiver SharePoint et OneDrive ?",
+      "toggleLabel": "Autoriser SharePoint et OneDrive"
+    },
+    "askAdmin": "Désactivée pour votre organisation. Demandez à un administrateur de l’activer.",
+    "connectFailed": "Impossible de connecter SharePoint et OneDrive",
+    "connected": "SharePoint et OneDrive connectés",
+    "description": "Importez des fichiers de SharePoint et OneDrive dans les dossiers.",
+    "disconnectDescription": "Votre connexion Microsoft est supprimée de stella. Les documents que vous avez déjà importés restent dans leurs dossiers.",
+    "disconnectTitle": "Déconnecter SharePoint et OneDrive ?",
+    "disconnected": "SharePoint et OneDrive déconnectés",
+    "import": {
+      "alreadyCurrent": "{count, plural, one {# fichier était déjà à jour.} many {# de fichiers étaient déjà à jour.} other {# fichiers étaient déjà à jour.}}",
+      "created": "Importé",
+      "done": "Fichiers importés depuis SharePoint ou OneDrive",
+      "failedReason": "Le fichier n’a pas pu être copié. Réessayez plus tard.",
+      "partial": "L’importation a échoué pour {failed, number} sur {total, plural, one {# fichier} many {# de fichiers} other {# fichiers}}.",
+      "progress": "{done, number} sur {total, number} importés",
+      "unchanged": "Déjà à jour",
+      "unconfirmed": "Non confirmé",
+      "unconfirmedCount": "{count, plural, one {# fichier n'a pas été confirmé ; importez-le à nouveau.} many {# de fichiers n'ont pas été confirmés ; importez-les à nouveau.} other {# fichiers n'ont pas été confirmés ; importez-les à nouveau.}}",
+      "unconfirmedReason": "L'importation s'est arrêtée avant la confirmation de ce fichier. Importez-le à nouveau.",
+      "versioned": "Nouvelle version"
+    },
+    "oauthReasons": {
+      "consentDenied": "La connexion Microsoft a été annulée ou l’accès n’a pas été accordé.",
+      "expired": "La connexion a pris trop de temps. Connectez-vous à nouveau.",
+      "notConfigured": "Cette installation de stella n’est pas configurée pour la connexion Microsoft. Contactez votre administrateur.",
+      "notEnabled": "Votre organisation n’a pas activé SharePoint et OneDrive.",
+      "tryAgain": "La connexion Microsoft ne s’est pas terminée. Connectez-vous à nouveau.",
+      "userMismatch": "La connexion a été lancée depuis un autre compte ou une autre organisation. Connectez-vous à nouveau depuis celui-ci."
+    },
+    "picker": {
+      "description": "Choisissez jusqu’à {max, number} fichiers à copier dans ce dossier.",
+      "emptyFolder": "Ce dossier est vide.",
+      "menuItem": "Depuis SharePoint ou OneDrive",
+      "myOneDrive": "Mon OneDrive",
+      "noFollowedSites": "Recherchez un site ou ouvrez Mon OneDrive.",
+      "noLibraries": "Aucune bibliothèque de documents ici.",
+      "notConnected": "Connectez votre compte Microsoft pour parcourir SharePoint et OneDrive.",
+      "notImportable": "Ne peut pas être importé",
+      "reconnectRequired": "Votre connexion Microsoft a expiré. Reconnectez-vous pour continuer à parcourir.",
+      "searchSites": "Rechercher des sites",
+      "selectedCount": "{count, plural, =0 {Aucun fichier sélectionné} one {# fichier sélectionné} many {# de fichiers sélectionnés} other {# fichiers sélectionnés}}",
+      "selectionLimit": "Vous pouvez importer jusqu’à {max, number} fichiers à la fois.",
+      "sites": "Sites SharePoint",
+      "throttledFor": "Microsoft limite les requêtes. Réessayez dans {seconds, plural, one {# seconde} many {# de secondes} other {# secondes}}.",
+      "title": "Importer depuis SharePoint ou OneDrive"
+    },
+    "reconnectRequired": "Connexion expirée",
+    "title": "SharePoint et OneDrive"
+  },
   "skillHistory": {
     "acceptStale": "Accepter et écraser les modifications récentes",
     "backToCurrent": "Revenir à la version actuelle",
@@ -5976,7 +6039,6 @@
     "comments": "Commentaires",
     "commentsEmpty": "Sélectionnez du texte pour le commenter.",
     "noRevisions": "Aucune révision pour l'instant",
-    "outOfDate": "Obsolète",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Sans résumé",
     "proposals": "Propositions",
@@ -6092,6 +6154,11 @@
     "title": "Législation",
     "validity": "En vigueur du {from} au {to}",
     "versionAppliedInDecision": "Version appliquée dans la décision <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# disposition insérée} other {# dispositions insérées} many {# dispositions insérées}}",
+    "versionChangesChanged": "{count, plural, one {# disposition modifiée} other {# dispositions modifiées} many {# dispositions modifiées}}",
+    "versionChangesNone": "Rédaction inchangée",
+    "versionChangesRemoved": "{count, plural, one {# disposition supprimée} other {# dispositions supprimées} many {# dispositions supprimées}}",
+    "versionChangesWords": "{inserted, plural, one {# mot inséré} other {# mots insérés} many {# mots insérés}}, {deleted, plural, one {# mot supprimé} other {# mots supprimés} many {# mots supprimés}}",
     "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
   },
   "styleSets": {
@@ -6812,6 +6879,7 @@
     "deletedItem": "Supprimé : {name}",
     "deletingWorkspace": "Suppression du dossier",
     "documentSwitcher": {
+      "download": "Télécharger ce fichier",
       "searchPlaceholder": "Rechercher un document…",
       "trigger": "Changer de document"
     },

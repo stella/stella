@@ -174,6 +174,10 @@
     "deploy-landing.yml/scope": "main",
     "deploy-landing.yml/build": "main",
     "deploy-landing.yml/deploy": "main",
+    "deploy-outlook-addin.yml/scope": "main",
+    "deploy-outlook-addin.yml/build": "main",
+    "deploy-outlook-addin.yml/deploy-staging": "main",
+    "deploy-outlook-addin.yml/deploy-production": "main",
     "safe-chain-cache.yml/warm": "main",
     "ci.yml/ci-plan": "pr-fast",
     "ci.yml/generated-sources": "pr-fast",
@@ -237,7 +241,6 @@
     "manual-checks.yml/install-cache-linux": "main",
     "type-cost-measurement.yml/prepare": "main",
     "type-cost-measurement.yml/measure": "main",
-    "queue-admission.yml/admission": "dispatch-only",
     "playbook-clause-eval.yml/playbook-clause-eval": "dispatch-only",
     "playbook-journey.yml/playbook-journey": "main",
     "ci-runner-loss-retry.yml/retry": "pr-fast",
@@ -275,6 +278,10 @@
       "cancelInProgress": false
     },
     "deploy-landing.yml": {
+      "role": "publish",
+      "cancelInProgress": false
+    },
+    "deploy-outlook-addin.yml": {
       "role": "publish",
       "cancelInProgress": false
     },

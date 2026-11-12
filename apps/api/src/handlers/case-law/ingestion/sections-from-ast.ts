@@ -1,3 +1,4 @@
+// parser-output-unchanged: a section holding the opening formula is the header, as it was when the formula carried the intro role; no other section changes.
 // parser-output-unchanged: document-tail callers retain their section behavior; HU explicitly opts into anchored notes
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -117,7 +118,7 @@ const sectionType = (
   if (previous === "ruling" && !reasons) {
     return "footer";
   }
-  if (index === 0 || hasRole("intro")) {
+  if (index === 0 || hasRole("opening-formula") || hasRole("intro")) {
     return "header";
   }
   return reasons ||

@@ -17,6 +17,7 @@ import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   type DesktopRunnerApprovalMode,
+  type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -47,6 +48,10 @@ export const CHAT_LOCAL_HARNESS_NAMES = {
 } as const satisfies Record<ChatLocalRunHarness, string>;
 
 type HarnessState = ChatLocalHarnessReadiness["state"];
+type HarnessModels = Extract<
+  ChatLocalHarnessReadiness,
+  { state: "ready" }
+>["models"];
 
 /**
  * One harness as the Run on menu offers it: ready with its models, or why it
@@ -57,7 +62,8 @@ export type ChatLocalHarnessOption =
   | {
       harness: ChatLocalRunHarness;
       state: "ready";
-      models: readonly { id: string; label: string }[];
+      /** The models it reports, each with the efforts a turn may ask for. */
+      models: HarnessModels;
       /** The permission modes the computer can run the harness in. */
       approvalModes: readonly DesktopRunnerApprovalMode[];
     }
@@ -206,7 +212,10 @@ export const runTargetValue = (target: ChatRunTarget): string =>
     ? `${target.harness}${SEPARATOR}${target.model}`
     : CHAT_RUN_TARGET_KIND.cloud;
 
-/** Whether two targets run a turn the same way, permission mode included. */
+/**
+ * Whether two targets run a turn the same way, permission mode and reasoning
+ * effort included.
+ */
 export const sameRunTarget = (
   left: ChatRunTarget,
   right: ChatRunTarget,
@@ -214,12 +223,15 @@ export const sameRunTarget = (
   runTargetValue(left) === runTargetValue(right) &&
   (left.kind !== "local" ||
     right.kind !== "local" ||
-    left.approvals === right.approvals);
+    (left.approvals === right.approvals &&
+      left.reasoningEffort === right.reasoningEffort));
 
 /**
  * The target for a model picked under a ready harness. The permission mode
  * carries over when this harness can run in it, and is Ask otherwise; a mode
- * above the organization's ceiling falls to the highest one it allows.
+ * above the organization's ceiling falls to the highest one it allows. The
+ * reasoning effort carries over when the picked model offers it, and is the
+ * harness's default otherwise.
  */
 export const localRunTargetFor = ({
   selected,
@@ -231,20 +243,51 @@ export const localRunTargetFor = ({
   option: Extract<ChatLocalHarnessOption, { state: "ready" }>;
   model: string;
   maxApprovals: DesktopRunnerApprovalMode;
-}): ChatRunTarget => ({
-  kind: "local",
-  harness: option.harness,
-  model,
-  approvals: approvalModeWithin({
-    mode:
-      selected.kind === "local" &&
-      option.approvalModes.includes(selected.approvals)
-        ? selected.approvals
-        : DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
-    ceiling: maxApprovals,
-    offered: option.approvalModes,
-  }),
-});
+}): ChatRunTarget => {
+  const effort = selected.kind === "local" ? selected.reasoningEffort : null;
+  // No such model offers no effort.
+  const offered = option.models.find(
+    ({ id }) => id === model,
+  )?.reasoningEfforts;
+  return {
+    kind: "local",
+    harness: option.harness,
+    model,
+    reasoningEffort:
+      effort !== null && offered?.includes(effort) === true ? effort : null,
+    approvals: approvalModeWithin({
+      mode:
+        selected.kind === "local" &&
+        option.approvalModes.includes(selected.approvals)
+          ? selected.approvals
+          : DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+      ceiling: maxApprovals,
+      offered: option.approvalModes,
+    }),
+  };
+};
+
+/**
+ * The reasoning efforts the selected local model offers, or `null` when the
+ * turn runs in the cloud, its harness cannot take a turn, or the model offers
+ * no choice; the menu then shows none.
+ */
+export const reasoningEffortChoices = (
+  selected: ChatRunTarget,
+  options: readonly ChatLocalHarnessOption[],
+): readonly DesktopRunnerReasoningEffort[] | null => {
+  if (selected.kind !== "local") {
+    return null;
+  }
+  const option = options.find(({ harness }) => harness === selected.harness);
+  if (option?.state !== "ready") {
+    return null;
+  }
+  const efforts =
+    option.models.find(({ id }) => id === selected.model)?.reasoningEfforts ??
+    [];
+  return efforts.length === 0 ? null : efforts;
+};
 
 /**
  * Whether a permission mode can be chosen: `computer` when the computer

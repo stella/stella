@@ -363,6 +363,7 @@ const startRun = (
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
     harnessSessionId: null,
+    reasoningEffort: null,
     policy: { network: "open", fs: "workspace", approvals: "ask" },
     mcp: {
       serverName: "stella",
@@ -462,6 +463,31 @@ describe("harness holder over its socket", () => {
     await older.ended;
     expect(older.messages.some(is("hello"))).toBe(false);
     await desktop(holder);
+  });
+
+  test("a newer desktop's hello makes a holder with no runs exit, after the rejection", async () => {
+    const holder = await spawnHolder();
+    const newer = await connect(holder.endpoint);
+    newer.send({ ...helloMessage(holder), protocol: SIDECAR_PROTOCOL + 1 });
+    expect(await newer.waitFor(is("rejected"))).toMatchObject({
+      reason: "protocol_mismatch",
+    });
+    expect(await holder.exited).toBe(0);
+  });
+
+  test("a newer desktop's hello lets a holder finish its runs before it exits", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "interrupt_queued");
+    await client.waitFor(is("run.event", runId));
+    const newer = await connect(holder.endpoint);
+    newer.send({ ...helloMessage(holder), protocol: SIDECAR_PROTOCOL + 1 });
+    await newer.waitFor(is("rejected"));
+    // The run it holds still runs and reaches its desktop.
+    client.send({ type: "run.cancel", runId });
+    const finished = await client.waitFor(is("run.finished", runId));
+    client.send({ type: "ack", runId, seq: finished.seq });
+    expect(await holder.exited).toBe(0);
   });
 
   test("rejects unknown and invalid lines once authenticated", async () => {
@@ -578,8 +604,15 @@ describe("harness holder over its socket", () => {
         type: "ready",
         version: "0.166.0",
         capabilities: ["approvals", "interrupt", "resume", "image_input"],
-        approvalModes: ["ask"],
-        models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
+        approvalModes: ["ask", "auto", "full_auto"],
+        models: [
+          {
+            id: "gpt-test",
+            label: "GPT Test",
+            isDefault: true,
+            reasoningEfforts: ["medium", "high"],
+          },
+        ],
       },
     });
     expect(holder.received().map(({ method }) => method)).not.toContain(
@@ -976,8 +1009,9 @@ describe("harness holder over its socket", () => {
       }),
       holder.received().find(({ method }) => method === "thread/start")?.params,
     );
+    // The run starts at Ask: Codex's untrusted policy.
     expect(threadStart).toMatchObject({
-      approvalPolicy: "on-request",
+      approvalPolicy: "untrusted",
       sandbox: "workspace-write",
     });
     expect(
@@ -997,6 +1031,23 @@ describe("harness holder over its socket", () => {
     expect(JSON.stringify(holder.startups())).toContain(
       '"--permission-mode","auto"',
     );
+  });
+
+  test("hands the harness the run's reasoning effort", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = startRun(
+      client,
+      holder,
+      {
+        harness: "claude-code",
+        executable: fakeClaude(holder.root, "stella_tools"),
+        model: "sonnet",
+      },
+      { reasoningEffort: "high" },
+    );
+    await client.waitFor(is("run.finished", runId));
+    expect(JSON.stringify(holder.startups())).toContain('"--effort","high"');
   });
 
   test("relays an approval with one request id and returns the decision", async () => {
@@ -1399,6 +1450,7 @@ describe("harness holder over its socket", () => {
       workspaceDir,
       cacheDir: path.join(root, "agent-package-cache"),
       model: "gpt-test",
+      reasoningEffort: null,
       instructions: "Use the stella MCP server.",
       messages: [{ role: "user", content: "Find the lease decision." }],
       attachments: [],
@@ -1487,6 +1539,7 @@ describe("harness holder over its socket", () => {
         workspaceDir,
         cacheDir: path.join(root, "agent-package-cache"),
         model: "gpt-test",
+        reasoningEffort: null,
         instructions: "Use the stella MCP server.",
         messages: [{ role: "user", content: "Write the report." }],
         attachments: [],

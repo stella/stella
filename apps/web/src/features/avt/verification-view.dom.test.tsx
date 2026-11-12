@@ -14,6 +14,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
+import * as v from "valibot";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -123,7 +124,7 @@ const {
   Outlet,
   RouterProvider,
 } = await import("@tanstack/react-router");
-const { QueryClient, QueryClientProvider, useQuery } =
+const { InfiniteQueryObserver, QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -366,6 +367,15 @@ const mount = async (run: VerificationRun = seededRun(), signedIn = false) => {
   return { client, run };
 };
 
+// A claim is a text run: its hidden button is the control, and the run
+// around it holds the mark and what a screen reader hears.
+const claimRun = (button: HTMLElement) =>
+  button.closest<HTMLElement>('[data-slot="button-text-run"]') ??
+  panic("A claim button sits in its text run");
+const runText = (button: HTMLElement) => claimRun(button).textContent;
+const runMark = (button: HTMLElement) =>
+  claimRun(button).querySelector<HTMLElement>(":scope > span");
+
 const claimButton = (suffix: number) => {
   const fixture = Object.values(claimFixtures).find(
     ({ claim }) => claim.position === suffix,
@@ -411,10 +421,14 @@ test("the reader draws each stored block with its claims marked on the stored wo
     ).toBe(true);
   }
   expect(
-    // The button is the control; the span inside it draws the mark and
-    // holds the words.
+    // The button is the control; the run around it holds the span that
+    // draws the mark over the words.
     marks.map((mark) =>
-      [...(mark.firstElementChild?.childNodes ?? mark.childNodes)]
+      [
+        ...(mark
+          .closest('[data-slot="button-text-run"]')
+          ?.querySelector(":scope > span")?.childNodes ?? []),
+      ]
         .filter((node) => node.nodeType === Node.TEXT_NODE)
         .map((node) => node.textContent)
         .join(""),
@@ -438,6 +452,49 @@ test("the reader draws each stored block with its claims marked on the stored wo
   expect(requests).toEqual([]);
 });
 
+test("a claim that crosses a line break reads in place, in the paragraph's order", async () => {
+  const { run } = await mount(witnessStatementRun());
+  const crossing = run.claims.find((claim) => claim.text.includes("\n"));
+  const stored = run.blocks.find(
+    (block) =>
+      crossing?.anchor.type === "docx-block" &&
+      block.blockId === crossing.anchor.blockId,
+  );
+  if (crossing === undefined || stored === undefined) {
+    panic("The witness statement has a claim that crosses a line");
+  }
+  const paragraph = document.querySelector<HTMLElement>(
+    `[data-anchor="${stored.blockId}"]`,
+  );
+  // The words read back in the stored order: every text node, outside what
+  // only a screen reader hears, joined, is the stored text.
+  if (paragraph === null) {
+    panic("The claim's paragraph is drawn");
+  }
+  const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+  const ordered: Text[] = [];
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if (
+      node instanceof Text &&
+      node.parentElement?.closest(".sr-only") === null
+    ) {
+      ordered.push(node);
+    }
+  }
+  expect(ordered.map((node) => node.textContent).join("")).toBe(stored.text);
+  // The claim's words are a text run that wraps with the prose, never inside
+  // a <button>, which is one atomic box and would lift them out of the line.
+  const crossingRun = claimRun(
+    document.querySelector<HTMLElement>(`#avt-claim-${crossing.id}`) ??
+      panic("The crossing claim is drawn"),
+  );
+  const words = ordered.filter((node) => crossingRun.contains(node));
+  expect(words.map((node) => node.textContent).join("")).toBe(crossing.text);
+  expect(
+    words.every((node) => node.parentElement?.closest("button") === null),
+  ).toBe(true);
+});
+
 test("all verdicts expose their evidence and basis in the real detail panel, never a score", async () => {
   const { run } = await mount();
   const seededStates: string[] = run.claims.map(({ verdict }) => verdict.state);
@@ -446,7 +503,7 @@ test("all verdicts expose their evidence and basis in the real detail panel, nev
     const suffix = claim.position;
     selectClaim(suffix);
     expect(claimButton(suffix).getAttribute("aria-pressed")).toBe("true");
-    expect(claimButton(suffix).textContent).toContain(label);
+    expect(runText(claimButton(suffix))).toContain(label);
     const quote = screen
       .getAllByText(text)
       .find((node) => node.tagName === "BLOCKQUOTE");
@@ -549,10 +606,10 @@ test("a claim's qualifiers show beside its verdict and in its detail, and a sile
 
   // The silent record reads muted in the document and its chip says why;
   // it is not offered as a gap to fill.
-  expect(mark(silentText).firstElementChild?.className).toContain(
+  expect(runMark(mark(silentText))?.className).toContain(
     "text-muted-foreground",
   );
-  expect(mark(silentText).textContent).toContain(
+  expect(runText(mark(silentText))).toContain(
     messages.avt.qualifiers.recordSilent.label,
   );
   fireEvent.click(mark(silentText));
@@ -567,7 +624,7 @@ test("a claim's qualifiers show beside its verdict and in its detail, and a sile
   expect(screen.queryByText(messages.avt.disposition.nocover)).toBeNull();
 
   // Plain missing coverage is a gap at full strength, said in one line.
-  expect(mark(gap.text).firstElementChild?.className).not.toContain(
+  expect(runMark(mark(gap.text))?.className).not.toContain(
     "text-muted-foreground",
   );
   fireEvent.click(mark(gap.text));
@@ -740,7 +797,7 @@ test("a governing record changes the verdict and escalation keeps the conflict o
       },
     },
   });
-  expect(claimButton(5).textContent).toContain("Supported");
+  expect(runText(claimButton(5))).toContain("Supported");
   expect(screen.getByText("0/2")).toBeTruthy();
   expect(
     screen.getByText(messages.avt.claimDetail.basis.verdictWithheld),
@@ -790,7 +847,7 @@ test("a governing record changes the verdict and escalation keeps the conflict o
       .getByRole("button", { name: messages.avt.confirm.recordConflict })
       .hasAttribute("disabled"),
   ).toBe(true);
-  expect(claimButton(5).textContent).toContain("Record conflict");
+  expect(runText(claimButton(5))).toContain("Record conflict");
   expect(screen.getByText("0/3")).toBeTruthy();
   expect(
     screen.getByText(messages.avt.claimDetail.basis.verdictWithheld),
@@ -822,7 +879,7 @@ test("a document's record is pre-selected over a witness's account, and the revi
     screen.getByText(messages.avt.claimDetail.recordConflict.suggestedNotice),
   ).toBeTruthy();
   expect(screen.getByText(messages.common.suggested)).toBeTruthy();
-  expect(claimButton(5).textContent).toContain("Record conflict");
+  expect(runText(claimButton(5))).toContain("Record conflict");
   expect(requests).toEqual([]);
   const confirm = screen.getByRole("button", {
     name: messages.avt.claimDetail.recordConflict.confirmGoverningRecord,
@@ -938,7 +995,7 @@ test("a rejected review restores the claim and attention queue and surfaces the 
     screen.getByRole("button", { name: messages.avt.confirm.verdict }),
   );
   await waitFor(() => expect(screen.getByText("1/3")).toBeTruthy());
-  expect(claimButton(2).textContent).toContain("reviewed");
+  expect(runText(claimButton(2))).toContain("reviewed");
   await waitFor(() => expect(requests).toHaveLength(1));
   pendingReview.resolve(
     Response.json(
@@ -955,7 +1012,7 @@ test("a rejected review restores the claim and attention queue and surfaces the 
       .getQueryData(verificationRunOptions(workspaceId, run.id).queryKey)
       ?.claims.at(1)?.review,
   ).toBeNull();
-  expect(claimButton(2).textContent).not.toContain("reviewed");
+  expect(runText(claimButton(2))).not.toContain("reviewed");
   expect(
     screen
       .getByRole("button", { name: messages.avt.confirm.verdict })
@@ -1453,6 +1510,7 @@ test("a claim's history opens from one row and reads who did what, why, and what
     claimId: target.id,
     kind: fields.action.kind,
     createdAt: `2026-09-0${String(id)}T10:00:00.000Z`,
+    carriedFrom: null,
     ...fields,
   });
   const page = {
@@ -1512,6 +1570,167 @@ test("a claim's history opens from one row and reads who did what, why, and what
     messages.avt.states.tension.chip,
     messages.avt.states.supported.chip,
   ]);
+  expect(requests).toEqual([]);
+});
+
+test("a review decision never reads its run again and reads its open history once", async () => {
+  const { client, run } = await mount();
+  const claim = run.claims.at(1) ?? panic("Missing seeded tension claim");
+  const history = (items: ReviewHistoryPage["items"]) =>
+    ({
+      items,
+      nextCursor: null,
+      limit: 50,
+      reviewers: { type: "complete", items: [] },
+    }) satisfies ReviewHistoryPage;
+  const historyOptions = reviewHistoryOptions({
+    workspaceId,
+    runId: run.id,
+    claimId: claim.id,
+  });
+  client.setQueryData(historyOptions.queryKey, {
+    pages: [history([])],
+    pageParams: [null],
+  });
+  // The test client reads nothing on its own; the history open beside the
+  // claim is a live reader here, so its refresh is what this test counts.
+  const unsubscribe = new InfiniteQueryObserver(client, {
+    ...historyOptions,
+    enabled: true,
+    staleTime: Infinity,
+  }).subscribe(() => undefined);
+  selectClaim(2);
+  expect(requests).toEqual([]);
+  const reviewed = {
+    ...EMPTY_CLAIM_REVIEW,
+    status: "reviewed",
+    statusOrigin: "single",
+    decidedAt: at,
+    decidedBy: actorId,
+    eventCount: 1,
+  } as const;
+  answers.push(Response.json({ claimId: claim.id, review: reviewed }));
+  answers.push(Response.json(history([])));
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.confirm.verdict }),
+  );
+  // The decision writes the claim's review into the run in place: the run is
+  // never read again. The review history open beside it is read once.
+  await waitFor(() =>
+    expect(requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      `POST /v1/lists/${workspaceId}/claim-reviews`,
+      `GET /v1/lists/${workspaceId}/claim-reviews`,
+    ]),
+  );
+  await act(async () => {
+    await Promise.resolve();
+  });
+  unsubscribe();
+  expect(requests).toHaveLength(2);
+  expect(
+    client
+      .getQueryData(verificationRunOptions(workspaceId, run.id).queryKey)
+      ?.claims.at(1)?.review,
+  ).toEqual(reviewed);
+  expect(
+    client.getQueryState(verificationRunOptions(workspaceId, run.id).queryKey)
+      ?.isInvalidated,
+  ).toBe(false);
+});
+
+test("decisions carried from the previous run sit under one divider naming that run", async () => {
+  const seeded = seededRun();
+  const target = seeded.claims.at(0) ?? panic("Missing claim");
+  const run = {
+    ...seeded,
+    claims: seeded.claims.map((claim) =>
+      claim.id === target.id
+        ? {
+            ...claim,
+            review: {
+              ...EMPTY_CLAIM_REVIEW,
+              status: "reviewed",
+              statusOrigin: "single",
+              decidedAt: at,
+              decidedBy: actorId,
+              eventCount: 2,
+            },
+          }
+        : claim,
+    ),
+  } satisfies VerificationRun;
+  const { client } = await mount(run);
+  const previousRunId = toSafeId<"legalListVerificationRun">(
+    "0199a3c4-5b6d-7e8f-9a0b-000000008001",
+  );
+  const member = {
+    type: "member",
+    id: actorId,
+    name: "Dana Reviewer",
+    image: null,
+  } as const;
+  const page = {
+    items: [
+      {
+        id: toSafeId<"legalListClaimReviewEvent">(
+          "0199a3c4-5b6d-7e8f-9a0b-000000007202",
+        ),
+        claimId: target.id,
+        kind: "note",
+        actor: member,
+        createdAt: "2026-09-02T10:00:00.000Z",
+        action: { kind: "note", note: "Written on this run." },
+        reason: { type: "none" },
+        before: { verdict: "supported", override: null, status: "reviewed" },
+        after: { verdict: "supported", override: null, status: "reviewed" },
+        carriedFrom: null,
+      },
+      {
+        id: toSafeId<"legalListClaimReviewEvent">(
+          "0199a3c4-5b6d-7e8f-9a0b-000000007201",
+        ),
+        claimId: target.id,
+        kind: "status",
+        actor: member,
+        createdAt: "2026-08-20T10:00:00.000Z",
+        action: { kind: "status", status: "reviewed", origin: "single" },
+        reason: { type: "none" },
+        before: { verdict: "supported", override: null, status: null },
+        after: { verdict: "supported", override: null, status: "reviewed" },
+        carriedFrom: {
+          runId: previousRunId,
+          runCreatedAt: "2026-08-19T09:30:00.000Z",
+        },
+      },
+    ],
+    nextCursor: null,
+    limit: 50,
+    reviewers: { type: "complete", items: [member] },
+  } satisfies ReviewHistoryPage;
+  client.setQueryData(
+    reviewHistoryOptions({ workspaceId, runId: run.id, claimId: target.id })
+      .queryKey,
+    { pages: [page], pageParams: [null] },
+  );
+  selectClaim(1);
+  fireEvent.click(screen.getByRole("button", { name: /^History/u }));
+  // One divider, named as the run picker names that run, over the carried
+  // entry only; each entry keeps its one-line action.
+  const dividers = screen.getAllByText(/^From the run of /u);
+  expect(dividers.map((divider) => divider.textContent)).toEqual([
+    expect.stringMatching(/^From the run of Aug 19, 2026\D+9:30\sAM$/u),
+  ]);
+  const carriedGroup = (dividers[0] ?? panic("No divider")).closest("section");
+  expect(
+    within(carriedGroup ?? panic("No carried group")).getByText(
+      messages.avt.history.actions.statusReviewed,
+    ),
+  ).toBeTruthy();
+  expect(
+    within(carriedGroup ?? panic("No carried group")).queryByText(
+      messages.avt.history.actions.noteSaved,
+    ),
+  ).toBeNull();
   expect(requests).toEqual([]);
 });
 
@@ -1614,8 +1833,11 @@ test("a gap claim leads with adding or linking a fact; a silent one offers that 
  * reads per viewer (each claim's comments, the organization's settings);
  * those are answered as empty and not recorded.
  */
-const answerSignedIn = (answered: ReadonlyMap<string, () => Response>) => {
-  const seen: RecordedRequest[] = [];
+type AnsweredRequest = RecordedRequest & { idempotencyKey: string | null };
+const answerSignedIn = (
+  answered: ReadonlyMap<string, () => Response | Promise<Response>>,
+) => {
+  const seen: AnsweredRequest[] = [];
   const product = fetchBoundary.getMockImplementation();
   fetchBoundary.mockImplementation(
     Object.assign(
@@ -1641,6 +1863,7 @@ const answerSignedIn = (answered: ReadonlyMap<string, () => Response>) => {
           method: request.method,
           path: pathname,
           body: text === "" ? null : JSON.parse(text),
+          idempotencyKey: request.headers.get("Idempotency-Key"),
         });
         return answer();
       },
@@ -1997,6 +2220,128 @@ test("an addition that failed midway finishes as first submitted, its fields hel
   });
 });
 
+test("an addition whose create answer was lost replays that create on retry, even after leaving the claim", async () => {
+  const seeded = seededRun();
+  const documentId = "0199a3c4-5b6d-7e8f-9a0b-000000009211";
+  const versionId = "0199a3c4-5b6d-7e8f-9a0b-000000009212";
+  const addedFactId = "0199a3c4-5b6d-7e8f-9a0b-000000009213";
+  const lists = `/v1/lists/${workspaceId}`;
+  let createWrites = 0;
+  const seen = answerSignedIn(
+    new Map([
+      [
+        `GET /v1/entities/${workspaceId}/entity/${documentId}`,
+        () =>
+          Response.json({ entityId: documentId, currentVersionId: versionId }),
+      ],
+      [
+        `PUT /v1/tasks/${workspaceId}`,
+        () => {
+          createWrites += 1;
+          // The first create may have landed; its answer never arrives.
+          return createWrites === 1
+            ? Response.json({ error: "unavailable" }, { status: 503 })
+            : Response.json({ entityId: addedFactId });
+        },
+      ],
+      [
+        `POST ${lists}/item-sources`,
+        () => Response.json({ id: "0199a3c4-5b6d-7e8f-9a0b-000000009214" }),
+      ],
+      [
+        `POST ${lists}/claim-reviews`,
+        () =>
+          Response.json({
+            claimId: seeded.claims.at(3)?.id,
+            review: { ...EMPTY_CLAIM_REVIEW, linkedFactIds: [addedFactId] },
+          }),
+      ],
+      [
+        `POST ${lists}/claim-rechecks`,
+        () => Response.json({ replayed: false, claim: seeded.claims.at(3) }),
+      ],
+    ]),
+  );
+  const { client } = await mount(seeded, true);
+  client.setQueryData(workspaceFilesOptions(workspaceId).queryKey, [
+    {
+      entityId: documentId,
+      fieldId: "0199a3c4-5b6d-7e8f-9a0b-000000009215",
+      name: "Lender's notice",
+      fileName: "notice.docx",
+      parentId: null,
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      sizeBytes: 12_000,
+    },
+  ]);
+  selectClaim(4);
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.addFact }),
+  );
+  const sheet = await screen.findByRole("dialog", {
+    name: messages.avt.gap.sheet.title,
+  });
+  const picker = within(sheet).getByRole("combobox", {
+    name: messages.common.document,
+  });
+  await act(async () => {
+    picker.focus();
+    fireEvent.input(picker, {
+      target: { value: "notice" },
+      inputType: "insertText",
+    });
+  });
+  fireEvent.click(
+    await screen.findByRole("option", { name: "Lender's notice" }),
+  );
+  fireEvent.click(
+    within(sheet).getByRole("button", { name: messages.avt.gap.sheet.submit }),
+  );
+  await waitFor(() => expect(createWrites).toBe(1));
+  // The panel that sent the create goes away before the retry.
+  await waitFor(() =>
+    expect(
+      within(sheet)
+        .getByLabelText(messages.common.fact)
+        .hasAttribute("disabled"),
+    ).toBe(true),
+  );
+  fireEvent.click(
+    within(sheet).getByRole("button", { name: messages.common.cancel }),
+  );
+  selectClaim(2);
+  selectClaim(4);
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.addFact }),
+  );
+  const reopened = await screen.findByRole("dialog", {
+    name: messages.avt.gap.sheet.title,
+  });
+  fireEvent.click(
+    within(reopened).getByRole("button", {
+      name: messages.avt.gap.sheet.submit,
+    }),
+  );
+  await waitFor(() =>
+    expect(seen.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      `PUT /v1/tasks/${workspaceId}`,
+      `PUT /v1/tasks/${workspaceId}`,
+      `GET /v1/entities/${workspaceId}/entity/${documentId}`,
+      `POST ${lists}/item-sources`,
+      `POST ${lists}/claim-reviews`,
+      `POST ${lists}/claim-rechecks`,
+    ]),
+  );
+  // One key for the create, so the server replays a create that landed
+  // instead of adding the fact a second time.
+  const [lost, retried] = seen;
+  expect(lost?.idempotencyKey).toEqual(expect.any(String));
+  expect(retried?.idempotencyKey).toBe(lost?.idempotencyKey ?? "");
+  expect(retried?.body).toEqual(lost?.body);
+  expect(seen.at(3)?.body).toMatchObject({ itemEntityId: addedFactId });
+});
+
 test("a re-checked claim reads its new verdict beside the run's, and names a fact the run never pinned", async () => {
   const seeded = seededRun();
   const later = makeFact(7, {
@@ -2067,4 +2412,411 @@ test("a re-checked claim reads its new verdict beside the run's, and names a fac
     screen.queryByRole("button", { name: messages.avt.gap.addFact }),
   ).toBeNull();
   expect(requests).toEqual([]);
+});
+
+/** The seeded run with the supported claim's cited fact edited since and a
+ *  fact added on the gap claim's point. */
+const runWithNewEvidence = (): VerificationRun => {
+  const seeded = seededRun();
+  return {
+    ...seeded,
+    claims: seeded.claims.map((claim) => {
+      if (claim.position === 1) {
+        return {
+          ...claim,
+          staleness: [
+            {
+              kind: "fact-changed",
+              factEntityId: factId(1),
+              text: "The signed agreement provides for an August drawdown.",
+            },
+          ],
+        };
+      }
+      if (claim.position === 4) {
+        return {
+          ...claim,
+          staleness: [
+            {
+              kind: "new-fact-related",
+              factEntityId: factId(9),
+              text: "The lender's written notice is dated 3 June.",
+            },
+          ],
+        };
+      }
+      return claim;
+    }),
+  } satisfies VerificationRun;
+};
+
+const recheckAllButton = () =>
+  screen.getByRole("button", { name: messages.avt.staleness.recheckAll });
+const staleLine = () =>
+  screen.getByRole("button", { name: "2 claims may be out of date" });
+
+test("claims out of date are counted on one run line, filtered with their reasons, and nothing re-grades on its own", async () => {
+  await mount(runWithNewEvidence());
+  const line = staleLine();
+  expect(line.getAttribute("aria-pressed")).toBe("false");
+  // Each out-of-date claim says so to a screen reader where it is marked:
+  // in its accessible name, which its text run gives it.
+  const nameOf = (suffix: number) => {
+    const fixture =
+      Object.values(claimFixtures).find(
+        ({ claim }) => claim.position === suffix,
+      ) ?? panic(`Missing claim fixture ${String(suffix)}`);
+    let accessibleName = "";
+    screen.getByRole("button", {
+      name: (name) => {
+        if (name.startsWith(fixture.text)) {
+          accessibleName = name;
+          return true;
+        }
+        return false;
+      },
+    });
+    return accessibleName;
+  };
+  expect(nameOf(1)).toContain(messages.common.outOfDate);
+  expect(nameOf(2)).not.toContain(messages.common.outOfDate);
+
+  fireEvent.click(line);
+  expect(staleLine().getAttribute("aria-pressed")).toBe("true");
+  // The filter steps through exactly the two claims, from the first.
+  expect(screen.getAllByText("1/2").length).toBeGreaterThan(0);
+  expect(
+    screen.getByText(messages.avt.staleness.reasons.factChanged),
+  ).toBeTruthy();
+  expect(
+    screen.getByText("The signed agreement provides for an August drawdown."),
+  ).toBeTruthy();
+
+  selectClaim(4);
+  expect(
+    screen.getByText(messages.avt.staleness.reasons.newFactRelated),
+  ).toBeTruthy();
+  expect(
+    screen.queryByText(messages.avt.staleness.reasons.factChanged),
+  ).toBeNull();
+  // A claim whose grade stands shows no notice.
+  selectClaim(2);
+  expect(
+    screen.queryByText(messages.avt.staleness.reasons.newFactRelated),
+  ).toBeNull();
+  expect(requests).toEqual([]);
+});
+
+test("a run whose grades all stand shows no run line", async () => {
+  await mount();
+  expect(
+    screen.queryByRole("button", { name: messages.avt.staleness.recheckAll }),
+  ).toBeNull();
+  expect(requests).toEqual([]);
+});
+
+test("re-check all sends each out-of-date claim with its own key, shows progress, and retries only what failed", async () => {
+  const run = runWithNewEvidence();
+  const bulkPath = `/v1/lists/${workspaceId}/claim-rechecks/bulk`;
+  let respond: (response: Response) => void = () => undefined;
+  answers.push(
+    new Promise<Response>((resolve) => {
+      respond = resolve;
+    }),
+  );
+  await mount(run);
+  fireEvent.click(recheckAllButton());
+
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toBe(
+      "Re-checking 2 claims…",
+    ),
+  );
+  expect(
+    screen.queryByRole("button", { name: messages.avt.staleness.recheckAll }),
+  ).toBeNull();
+  // The selected claim is in the run, so its own re-check waits for it.
+  const ownRecheck = () =>
+    screen.getByRole("button", { name: messages.avt.gap.recheck });
+  expect(ownRecheck().getAttribute("aria-disabled")).toBe("true");
+  const [sent] = requests;
+  expect(sent?.method).toBe("POST");
+  expect(sent?.path).toBe(bulkPath);
+  const body = v.parse(
+    v.object({
+      runId: v.string(),
+      claims: v.array(
+        v.object({ claimId: v.string(), requestKey: v.string() }),
+      ),
+    }),
+    sent?.body,
+  );
+  expect(body.runId).toBe(run.id);
+  // Reading order, one key per claim.
+  expect(body.claims.map(({ claimId }) => claimId)).toEqual([
+    claimFixtures.supported.claim.id,
+    claimFixtures.nocover.claim.id,
+  ]);
+  const [supportedKey, gapKey] = body.claims.map(
+    ({ requestKey }) => requestKey,
+  );
+  expect(supportedKey).not.toBe(gapKey);
+
+  await act(async () => {
+    respond(
+      Response.json({
+        results: [
+          {
+            claimId: claimFixtures.supported.claim.id,
+            status: "rechecked",
+            replayed: false,
+          },
+          {
+            claimId: claimFixtures.nocover.claim.id,
+            status: "refused",
+            error: {
+              status: 502,
+              code: null,
+              message: "The claim could not be checked again. Try again.",
+              retryable: true,
+            },
+          },
+        ],
+      }),
+    );
+  });
+  await waitFor(() =>
+    // The result, then the server's reason for the claim it could not grade.
+    expect(screen.getByRole("status").textContent).toStartWith(
+      "1 re-checked, 1 failed",
+    ),
+  );
+  expect(ownRecheck().getAttribute("aria-disabled")).toBeNull();
+  expect(ownRecheck().hasAttribute("disabled")).toBe(false);
+
+  answers.push(
+    Response.json({
+      results: [
+        {
+          claimId: claimFixtures.nocover.claim.id,
+          status: "rechecked",
+          replayed: false,
+        },
+      ],
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toBe("1 claim re-checked"),
+  );
+  // Only the claim that failed goes again, under the key it first had, so
+  // a grade that landed but lost its answer is not graded twice.
+  expect(requests.at(1)?.body).toEqual({
+    runId: run.id,
+    claims: [{ claimId: claimFixtures.nocover.claim.id, requestKey: gapKey }],
+  });
+
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.dismiss }),
+  );
+  expect(screen.queryByRole("status")).toBeNull();
+});
+
+test("a re-check refused as a whole stops, says so, and offers the claims again", async () => {
+  const run = runWithNewEvidence();
+  answers.push(
+    Response.json(
+      {
+        error: "This organization has reached its daily verification limit.",
+        code: "verification_daily_limit_reached",
+      },
+      { status: 429 },
+    ),
+  );
+  await mount(run);
+  fireEvent.click(recheckAllButton());
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toBe(
+      "0 re-checked, 2 failed",
+    ),
+  );
+  expect(
+    screen.getByRole("button", { name: messages.common.retry }),
+  ).toBeTruthy();
+});
+
+test("a held cited fact is said once, as the reason to re-check, not again as a chip", async () => {
+  const seeded = seededRun();
+  const heldQualifier = {
+    kind: "rests-on-held",
+    explanation: null,
+    review: "needs-judgement",
+  } as const;
+  const run = {
+    ...seeded,
+    claims: seeded.claims.map((claim) => {
+      if (claim.position === 3) {
+        return {
+          ...claim,
+          qualifiers: [heldQualifier],
+          staleness: [
+            {
+              kind: "fact-held",
+              factEntityId: factId(2),
+              text: "The bank statement records an August drawdown.",
+            },
+          ],
+        };
+      }
+      if (claim.position === 1) {
+        // Held, but the grade's own reading still stands: the chip says it.
+        return { ...claim, qualifiers: [heldQualifier], staleness: [] };
+      }
+      return claim;
+    }),
+  } satisfies VerificationRun;
+  await mount(run);
+  selectClaim(3);
+  expect(
+    screen.getByText(messages.avt.staleness.reasons.factHeld),
+  ).toBeTruthy();
+  expect(
+    screen.queryByText(messages.avt.qualifiers.restsOnHeld.label),
+  ).toBeNull();
+  selectClaim(1);
+  expect(
+    screen.getByText(messages.avt.qualifiers.restsOnHeld.label),
+  ).toBeTruthy();
+  expect(requests).toEqual([]);
+});
+
+test("a claim refused for good is not offered again", async () => {
+  const run = runWithNewEvidence();
+  answers.push(
+    Response.json({
+      results: [
+        {
+          claimId: claimFixtures.supported.claim.id,
+          status: "rechecked",
+          replayed: false,
+        },
+        {
+          claimId: claimFixtures.nocover.claim.id,
+          status: "refused",
+          error: {
+            status: 409,
+            code: "claim_review_actions_exhausted",
+            message: "A claim holds at most 200 review actions.",
+            retryable: false,
+          },
+        },
+      ],
+    }),
+  );
+  await mount(run);
+  fireEvent.click(recheckAllButton());
+  await waitFor(() =>
+    // The result, then the server's reason for the claim it could not grade.
+    expect(screen.getByRole("status").textContent).toStartWith(
+      "1 re-checked, 1 failed",
+    ),
+  );
+  expect(screen.getByRole("status").textContent).toContain(
+    "A claim holds at most 200 review actions.",
+  );
+  expect(
+    screen.queryByRole("button", { name: messages.common.retry }),
+  ).toBeNull();
+});
+
+test("a claim's re-check buttons share one pending re-check", async () => {
+  const seeded = seededRun();
+  const notice = listFact(8, "The lender's notice letter is dated 3 June.");
+  const run = {
+    ...seeded,
+    claims: seeded.claims.map((claim) =>
+      claim.position === 4
+        ? {
+            ...claim,
+            review: {
+              ...EMPTY_CLAIM_REVIEW,
+              linkedFactIds: [toSafeId<"entity">(notice.id)],
+              linksChanged: true,
+              eventCount: 1,
+            },
+            staleness: [
+              {
+                kind: "new-fact-related",
+                factEntityId: toSafeId<"entity">(notice.id),
+                text: notice.name,
+              },
+            ],
+          }
+        : claim,
+    ),
+  } satisfies VerificationRun;
+  const lists = `/v1/lists/${workspaceId}`;
+  let answer: (response: Response) => void = () => undefined;
+  const pending = new Promise<Response>((resolve) => {
+    answer = resolve;
+  });
+  const seen = answerSignedIn(
+    new Map<string, () => Response | Promise<Response>>([
+      [
+        `GET ${lists}/${seeded.evidence.listId}/items`,
+        () => Response.json({ items: [notice], nextCursor: null, limit: 100 }),
+      ],
+      // Held until the second button has been looked at.
+      [`POST ${lists}/claim-rechecks`, async () => await pending],
+    ]),
+  );
+  await mount(run, true);
+  selectClaim(4);
+  const buttons = () =>
+    screen.getAllByRole("button", { name: messages.avt.gap.recheck });
+  expect(buttons()).toHaveLength(2);
+  // The linked facts' re-check; the notice's waits for it.
+  fireEvent.click(buttons()[1] ?? panic("No re-check button"));
+  await waitFor(() =>
+    expect(
+      buttons().every(
+        (button) =>
+          button.hasAttribute("disabled") ||
+          button.getAttribute("aria-disabled") === "true" ||
+          button.getAttribute("aria-busy") === "true",
+      ),
+    ).toBe(true),
+  );
+  expect(
+    seen.filter(({ path }) => path === `${lists}/claim-rechecks`),
+  ).toHaveLength(1);
+  answer(Response.json({ replayed: false, claim: run.claims.at(3) }));
+});
+
+test("a claim's own re-check from its notice goes through the run's re-check of claims", async () => {
+  const run = runWithNewEvidence();
+  answers.push(
+    Response.json({
+      results: [
+        {
+          claimId: claimFixtures.supported.claim.id,
+          status: "rechecked",
+          replayed: false,
+        },
+      ],
+    }),
+  );
+  await mount(run);
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.recheck }),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toBe("1 claim re-checked"),
+  );
+  expect(requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
+    `POST /v1/lists/${workspaceId}/claim-rechecks/bulk`,
+  ]);
+  expect(requests.at(0)?.body).toMatchObject({
+    claims: [{ claimId: claimFixtures.supported.claim.id }],
+  });
 });

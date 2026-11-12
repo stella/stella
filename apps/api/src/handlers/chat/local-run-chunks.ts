@@ -11,7 +11,10 @@ import * as v from "valibot";
 
 import { HARNESS_CONTINUATION_EVENT } from "@stll/agent-engine";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
-import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import {
+  AGENT_HARNESSES,
+  harnessSessionIdEvent,
+} from "@stll/api-contract/agent-harness";
 import {
   CHAT_TOOL_EXECUTOR,
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
@@ -53,6 +56,7 @@ import {
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
   desktopRunnerOutputEventSchema,
+  type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 import type {
   StellaMcpAppCall,
@@ -140,6 +144,7 @@ type LocalRunDestination = {
   harness: ChatLocalRunHarness;
   harnessVersion: string;
   model: string;
+  reasoningEffort: DesktopRunnerReasoningEffort | null;
   approvals: DesktopRunnerApprovalMode;
 };
 
@@ -377,7 +382,7 @@ const LOCAL_RUN_EVENT_DISPOSITION = {
  * only these pass; the rest of what a desktop sends goes no further.
  */
 const LOCAL_RUN_CUSTOM_EVENTS: ReadonlySet<string> = new Set([
-  ...AGENT_HARNESSES.map((harness) => `${harness}.session-id`),
+  ...AGENT_HARNESSES.map(harnessSessionIdEvent),
   HARNESS_CONTINUATION_EVENT,
 ]);
 
@@ -1681,6 +1686,7 @@ async function* startLocalRun({
       harness: destination.harness,
       harnessVersion: destination.harnessVersion,
       model: destination.model,
+      reasoningEffort: destination.reasoningEffort,
       approvals: destination.approvals,
       harnessSessionId,
       instructions: input.instructions,
@@ -1736,6 +1742,7 @@ async function* startLocalRun({
       return;
     case "no_computer":
     case "model_unavailable":
+    case "reasoning_effort_unavailable":
     case "approvals_unavailable":
       yield* refuse(AI_FAILURE_CODES.local_runner_unavailable);
       return;

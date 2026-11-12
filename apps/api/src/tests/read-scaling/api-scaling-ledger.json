@@ -1603,6 +1603,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/ai/ask-email",
+      "reason": "Model-backed surface over a bounded request; it reads organization AI settings and, when a matter is named, that matter's ranked search results under the caller's access, and persists nothing beyond usage rows, awaiting the write harness for statements and emitted response bytes."
+    },
+    {
       "id": "POST /v1/ai/draft-email",
       "reason": "Model-backed surface over a bounded request; it reads only organization AI settings and persists nothing beyond usage rows, awaiting the write harness for statements and emitted response bytes."
     },
@@ -1799,6 +1803,14 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/conflict-checks",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/conflict-checks/:checkId/decision",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/contacts/:contactId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1833,6 +1845,10 @@
     {
       "id": "POST /v1/contacts/procuracao-upload",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/data-exports",
+      "reason": "Creates a durable export job under the organization capacity fence; archive work is covered by worker lifecycle tests, pending the write-scaling harness."
     },
     {
       "id": "POST /v1/desktop-edit-handoffs/:handoffId/opened",
@@ -2104,6 +2120,10 @@
     },
     {
       "id": "POST /v1/lists/:workspaceId/claim-rechecks",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/claim-rechecks/bulk",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2385,6 +2405,10 @@
     {
       "id": "POST /v1/search-history/import",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/search/case-law",
+      "reason": "Writes nothing; the corpus search engine answers it per country with a bounded page. Awaits the write harness like the other search POST routes."
     },
     {
       "id": "POST /v1/search/facets",
@@ -2873,6 +2897,10 @@
     {
       "id": "PUT /v1/client-invoices/:clientId",
       "reason": "Creates one invoice and claims selected work within a transaction; awaits the write scaling harness."
+    },
+    {
+      "id": "PUT /v1/conflict-checks/:checkId/matter/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
       "id": "PUT /v1/contacts",

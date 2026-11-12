@@ -1,6 +1,8 @@
 /**
- * Wire-shaped AVT fixtures for the logic tests, pinned to the verification
- * API's response types so a change to the contract breaks them loudly.
+ * Wire-shaped AVT fixtures for the logic tests and the browser specs, pinned
+ * to the verification API's response types so a change to the contract breaks
+ * them loudly. Imports stay within `wire.ts` and `safe-id`, which the browser
+ * specs' project compiles.
  */
 
 import type {
@@ -9,7 +11,7 @@ import type {
   EvidenceFact,
   VerificationClaim,
   VerificationRun,
-} from "@/features/avt/types";
+} from "@/features/avt/wire";
 import { toSafeId } from "@/lib/safe-id";
 
 const uuid = (suffix: number) =>
@@ -46,6 +48,8 @@ type MakeClaimArgs = {
   anchor?: VerificationClaim["anchor"];
   suggestedGoverningFactId?: VerificationClaim["suggestedGoverningFactId"];
   recheck?: VerificationClaim["recheck"];
+  staleness?: VerificationClaim["staleness"];
+  assertedOn?: VerificationClaim["assertedOn"];
 };
 
 export const makeClaim = ({
@@ -63,6 +67,8 @@ export const makeClaim = ({
   },
   suggestedGoverningFactId = null,
   recheck = null,
+  staleness = [],
+  assertedOn = { type: "none" },
 }: MakeClaimArgs): VerificationClaim => ({
   id: claimId(suffix),
   position: suffix,
@@ -72,10 +78,12 @@ export const makeClaim = ({
   qualifiers,
   suggestedGoverningFactId,
   text: `Claim ${String(suffix)}`,
+  assertedOn,
   anchor,
   refs,
   review,
   recheck,
+  staleness,
 });
 
 export const makeRun = (
@@ -87,6 +95,7 @@ export const makeRun = (
   fileFieldId: toSafeId<"field">(uuid(9002)),
   entityVersionId: toSafeId<"entityVersion">(uuid(9003)),
   evidence: { listId: toSafeId<"legalList">(uuid(9004)), facts },
+  scope: { kind: "whole" },
   factStandings: facts.map((fact) => ({
     factEntityId: fact.factEntityId,
     scoring: "included" as const,
@@ -99,6 +108,7 @@ export const makeRun = (
   modelRef: null,
   requestedBy: null,
   blocks: [],
+  carryOver: null,
   createdAt: "2026-09-01T09:00:00.000Z",
   startedAt: "2026-09-01T09:00:01.000Z",
   finishedAt: "2026-09-01T09:01:00.000Z",

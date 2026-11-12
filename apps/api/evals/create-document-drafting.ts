@@ -37,6 +37,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { createDocumentInputSchema } from "@stll/api-contract/chat-create-document";
 import { compileLegalSourceToDocument } from "@stll/docx-core";
 import type {
   BlockContent,
@@ -45,10 +46,7 @@ import type {
   Paragraph,
 } from "@stll/docx-core";
 
-import {
-  createCreateDocumentTool,
-  createDocumentToolInputSchema,
-} from "@/api/handlers/chat/tools/create-document-tool";
+import { createCreateDocumentTool } from "@/api/handlers/chat/tools/create-document-tool";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
   streamChatChunks,
@@ -339,7 +337,7 @@ const parseJsonOrNull = (text: string): unknown => {
 const readToolInput = (
   input: unknown,
 ): { name: string; source: string } | null => {
-  const parsed = v.safeParse(createDocumentToolInputSchema, input);
+  const parsed = v.safeParse(createDocumentInputSchema, input);
   return parsed.success ? parsed.output : null;
 };
 

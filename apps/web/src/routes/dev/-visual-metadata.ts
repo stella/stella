@@ -78,6 +78,7 @@ export const visualRegistry = {
   },
   "chat-answer-footer": { label: "Chat answer footer", layout: "plain" },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
+  "chat-follow-ups": { label: "Chat follow-up chips", layout: "plain" },
   "ask-user": { label: "Ask-user questions", layout: "plain" },
   "case-law-text-availability": {
     label: "Case-law text availability",

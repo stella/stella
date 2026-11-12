@@ -1852,7 +1852,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Section number, with optional §, e.g. 1729 or § 5a."
+          "description": "Section or article, e.g. 1729, § 5a or čl. 38."
         },
         "as_of": {
           "type": "string",
@@ -6837,7 +6837,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
   },
   {
     "name": "add_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Add matter member changes state or starts stateful work.",
@@ -6875,7 +6875,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
   },
   {
     "name": "remove_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Remove matter member changes state or starts stateful work.",
@@ -9420,7 +9420,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Section number, with optional §, e.g. 1729 or § 5a."
+          "description": "Section or article, e.g. 1729, § 5a or čl. 38."
         },
         "as_of": {
           "type": "string",
@@ -14405,7 +14405,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   },
   {
     "name": "add_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Add matter member changes state or starts stateful work.",
@@ -14443,7 +14443,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   },
   {
     "name": "remove_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Remove matter member changes state or starts stateful work.",
@@ -17414,7 +17414,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Section number, with optional §, e.g. 1729 or § 5a."
+          "description": "Section or article, e.g. 1729, § 5a or čl. 38."
         },
         "as_of": {
           "type": "string",
@@ -19678,7 +19678,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Section number, with optional §, e.g. 1729 or § 5a."
+          "description": "Section or article, e.g. 1729, § 5a or čl. 38."
         },
         "as_of": {
           "type": "string",

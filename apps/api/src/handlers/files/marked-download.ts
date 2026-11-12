@@ -21,9 +21,14 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import {
+  fileFieldQuery,
+  LIVE_VERSION_DELIVERY,
+  recordLiveVersionDelivery,
+} from "@/api/lib/files/live-version-field";
 import { writeMarksIntoPdf } from "@/api/lib/files/marked-pdf";
 import type { PdfMark } from "@/api/lib/files/marked-pdf";
-import { displayedPdfFileId, fileFieldQuery } from "@/api/lib/files/read-file";
+import { displayedPdfFileId } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readAllVisibleMatterDocumentMarks } from "@/api/lib/legal-search/reader-annotations/matter-document-list";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -71,7 +76,11 @@ export const readMarkedDownload = async function* ({
   )).at(0);
   if (!row) {
     return Result.err(
-      new HandlerError({ status: 404, message: "File not found" }),
+      new HandlerError({
+        status: 404,
+        code: "not_found",
+        message: "File not found",
+      }),
     );
   }
   if (row.content.type !== "file") {
@@ -173,12 +182,16 @@ export const readMarkedDownload = async function* ({
         };
 
   // Recorded once the copy exists, as the other download paths do: a failed
-  // read must not leave a download in the trail that never happened.
-  yield* Result.await(
+  // read must not leave a download in the trail that never happened, and a
+  // version withdrawn while the copy was made is not found.
+  const delivery = yield* Result.await(
     Result.tryPromise(
       async () =>
-        await scopedDb(
-          async (tx) =>
+        await recordLiveVersionDelivery({
+          scopedDb,
+          fieldId,
+          workspaceId,
+          record: async (tx) =>
             await recordAuditEvent(tx, {
               action: AUDIT_ACTION.DOWNLOAD,
               resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
@@ -190,9 +203,21 @@ export const readMarkedDownload = async function* ({
                 markExport: mode,
               },
             }),
-        ),
+        }),
     ),
   );
+  if (delivery === LIVE_VERSION_DELIVERY.withdrawn) {
+    if (download.body instanceof ReadableStream) {
+      await download.body.cancel();
+    }
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        code: "not_found",
+        message: "File not found",
+      }),
+    );
+  }
 
   return Result.ok(
     secureDocumentResponse({

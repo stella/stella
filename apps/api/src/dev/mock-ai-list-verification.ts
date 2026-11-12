@@ -86,13 +86,24 @@ const sentencesOf = (text: string): string[] =>
       (sentence) => /[.!?]$/u.test(sentence) && !NOT_A_CLAIM.test(sentence),
     );
 
-/** `[id] text` lines of the blocks a request carries. */
+/** The `[id] text` blocks a request carries. A block's text runs on over
+ *  the lines below it (a PDF page's lines) until the next block or the
+ *  request's instruction, and reads as one line of prose. */
 const requestBlocks = (request: string): Map<string, string> => {
   const blocks = new Map<string, string>();
+  let open: string | null = null;
   for (const line of request.split("\n")) {
-    const block = /^\[(?<id>[^\]]+)\] (?<text>.+)$/u.exec(line)?.groups;
+    const block = /^\[(?<id>[^\]]+)\] (?<text>.*)$/u.exec(line)?.groups;
     if (block?.["id"] !== undefined && block["text"] !== undefined) {
-      blocks.set(block["id"], block["text"]);
+      open = block["id"];
+      blocks.set(open, block["text"].trim());
+      continue;
+    }
+    if (line.startsWith("List the claims in these blocks only:")) {
+      open = null;
+    }
+    if (open !== null && line.trim() !== "") {
+      blocks.set(open, `${blocks.get(open) ?? ""} ${line.trim()}`.trim());
     }
   }
   return blocks;
@@ -211,7 +222,7 @@ export const mockClaimGrades = (request: string) => {
   const factsWith = (word: string) =>
     facts.filter((fact) => fact.words.has(word)).length;
   const pointed = pointedFacts(request);
-  return promptItems(request, "C").map((claim) => {
+  const grades = promptItems(request, "C").map((claim) => {
     // A word capitalised after the sentence start is taken for a name.
     const weights = new Map(
       tokens(claim.text).map((token, index) => [
@@ -304,4 +315,7 @@ export const mockClaimGrades = (request: string) => {
       qualifiers: [],
     };
   });
+  // The claim's own words date it (`claim-date.ts`); the mock never
+  // supplies a date they do not give.
+  return grades.map((grade) => ({ ...grade, statedDate: null }));
 };

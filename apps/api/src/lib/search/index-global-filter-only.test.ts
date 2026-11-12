@@ -91,7 +91,7 @@ test("skips alternative corpus counts for an upper-bound-only search", async () 
   expect(caseLawQueries).toHaveLength(0);
 });
 
-test("caps alternative case-law counts for an old lower bound", async () => {
+test("counts no case law beside an old lower bound", async () => {
   await searchGlobal({
     accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
     editedByUserIds: [],
@@ -112,9 +112,9 @@ test("caps alternative case-law counts for an old lower bound", async () => {
       query.includes("FROM case_law_search_documents"),
     );
 
-  expect(caseLawQueries).toHaveLength(1);
-  expect(caseLawQueries.at(0)?.sql).toContain("bounded_case_law");
-  expect(caseLawQueries.at(0)?.params).toContain(1000);
+  // The type facet offers no case-law bucket: the palette's case-law
+  // section is answered by the corpus search engine, not here.
+  expect(caseLawQueries).toHaveLength(0);
 });
 
 test("normalizes numeric-offset filters to UTC before binding SQL", async () => {
@@ -179,8 +179,8 @@ test.each([1, 17, 100])(
   },
 );
 
-test("uses authoritative decision timestamps for filter-only case law", async () => {
-  await searchGlobal({
+test("filter-only case law reads no case law", async () => {
+  const result = await searchGlobal({
     accessibleWorkspaceIds: [],
     editedByUserIds: [],
     limit: 10,
@@ -196,50 +196,11 @@ test("uses authoritative decision timestamps for filter-only case law", async ()
   const dialect = new PgDialect();
   const caseLawQueries = rootDbExecuteMock.mock.calls
     .map(([query]) => dialect.sqlToQuery(query).sql)
-    .filter((query) => query.includes("FROM case_law_search_documents clsd"));
+    .filter((query) => query.includes("case_law_"));
 
-  expect(caseLawQueries).toHaveLength(2);
-  for (const query of caseLawQueries) {
-    expect(query).toContain(
-      "JOIN case_law_published_decisions d ON d.id = clsd.decision_id",
-    );
-    expect(query).toContain("d.updated_at >=");
-    expect(query).not.toContain("clsd.updated_at >=");
-  }
-
-  const hitQuery = caseLawQueries.find((query) =>
-    query.includes("clsd.decision_id AS id"),
-  );
-  const countQuery = caseLawQueries.find((query) =>
-    query.includes("bounded_case_law"),
-  );
-  expect(hitQuery).toContain("d.updated_at");
-  expect(hitQuery).toContain(
-    "ORDER BY d.updated_at DESC, clsd.decision_id DESC",
-  );
-  expect(countQuery).toContain("LIMIT");
-});
-
-test("caps corpus-wide case-law counts at the pagination horizon", async () => {
-  await searchGlobal({
-    accessibleWorkspaceIds: [],
-    editedByUserIds: [],
-    limit: 10,
-    mimeTypes: [],
-    organizationId: toSafeId<"organization">("org_1"),
-    query: "",
-    selectedWorkspaceIds: [],
-    types: ["case-law"],
-    userId: toSafeId<"user">("user_1"),
-  });
-
-  const dialect = new PgDialect();
-  const boundedCountQuery = rootDbExecuteMock.mock.calls
-    .map(([query]) => dialect.sqlToQuery(query))
-    .find(({ sql: query }) => query.includes("bounded_case_law"));
-
-  expect(boundedCountQuery?.sql).toContain("LIMIT");
-  expect(boundedCountQuery?.params).toContain(1000);
+  expect(caseLawQueries).toEqual([]);
+  expect(result.hits).toEqual([]);
+  expect(result.totalCount).toBe(0);
 });
 
 test("sorts filter-only hits newest first across result types", async () => {

@@ -17,6 +17,12 @@ import {
   requiresPerCallChatApproval,
   USE_CONNECTOR_SECRET_TOOL_NAME,
 } from "@stll/api-contract/chat-secret";
+import {
+  formatReadableInputValue,
+  getCompleteConnectorInputRows,
+  getReadableInputRows,
+  humanizeIdentifier,
+} from "@stll/api-contract/chat-tool-input-rows";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -65,11 +71,7 @@ import {
   buildRegistryWriteSummaryRows,
   findCachedReaderAnnotationRows,
   findReaderAnnotationMark,
-  formatReadableInputValue,
-  getCompleteConnectorInputRows,
-  getReadableInputRows,
   getReaderAnnotationEditTargetId,
-  humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
 import {
@@ -591,7 +593,7 @@ export const ToolApprovalCard = ({
     ? getToolOutputError(part.output)
     : undefined;
   const failureLabelKey = isFailed
-    ? toolFailureLabelKey(rawErrorDetails, part.state)
+    ? toolFailureLabelKey({ name, output: part.output, state: part.state })
     : undefined;
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;

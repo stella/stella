@@ -183,23 +183,20 @@ for (const host of hosts) {
 }
 
 // A selection bar's Copy acts on the reader's selected words, so the reader's
-// own copy of them (Cmd+C) must confirm it too. Only `useSelectionCopy`
-// listens for that; a click-only copy control (`CopyActionButton`,
-// `CopyButton`, a raw clipboard write) in a bar or in a component the bar
-// renders would confirm the press and ignore the keyboard.
-const selectionCopyOwner = path.join(
-  sourceRoot,
-  "components/selection-toolbar-actions.tsx",
-);
+// own copy of them (Cmd+C) must confirm it too. `useSelectionCopyControl`
+// confirms that; a value control (`CopyControl`, `useCopyControl`) in a bar
+// or in a component the bar renders would confirm only an exact match of a
+// fixed value, never the words the bar is showing for.
+const selectionCopyOwner = path.join(sourceRoot, "components/copy-control.tsx");
 const CLICK_ONLY_COPY: readonly {
   specifier: string;
   names: readonly string[] | "module";
 }[] = [
-  { specifier: "@/components/copy-action-button", names: "module" },
   {
-    specifier: "@stll/ui/copy-button",
-    names: ["CopyButton", "useCopyConfirmation"],
+    specifier: "@/components/copy-control",
+    names: ["CopyControl", "useCopyControl"],
   },
+  { specifier: "@stll/ui/copy-button", names: "module" },
   { specifier: "@stll/clipboard", names: "module" },
 ];
 const treeOf = (file: string): ParsedSource => {

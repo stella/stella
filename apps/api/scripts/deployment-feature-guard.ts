@@ -101,6 +101,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Matter vocabulary uses the normal matter read permission on every deployment",
   ],
   [
+    "/v1/workspaces/member-candidates",
+    "The organization's people a matter can be shared with are listed under the normal matter read permission on every deployment",
+  ],
+  [
     "/v1/desktop/matter-candidates",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
@@ -155,6 +159,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/me/data-exports",
     "A personal data export is available to every account on every deployment",
+  ],
+  [
+    "/v1/data-exports",
+    "Organization data export (data portability) is available on every deployment",
   ],
   [
     "/v1/chat/threads/:threadId/connectors/:toolCallId",

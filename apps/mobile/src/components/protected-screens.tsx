@@ -173,6 +173,13 @@ const Screens = () => {
                     >
                       {matters("noGrouping")}
                     </Stack.Toolbar.MenuAction>
+                    <Stack.Toolbar.MenuAction
+                      onPress={() => {
+                        router.push("/archived-matters");
+                      }}
+                    >
+                      {matters("archivedMatters")}
+                    </Stack.Toolbar.MenuAction>
                   </Stack.Toolbar.Menu>
                 ) : null}
               </Stack.Toolbar>
@@ -218,7 +225,7 @@ const Screens = () => {
               options={{
                 ...pushedScreen,
                 presentation: "formSheet",
-                sheetAllowedDetents: [0.5, 1],
+                sheetAllowedDetents: [0.75, 1],
                 sheetGrabberVisible: true,
               }}
             />
@@ -274,6 +281,16 @@ const Screens = () => {
               name="matter/[workspaceId]/index"
               options={pushedScreen}
             />
+            <Stack.Screen
+              name="matter/[workspaceId]/info"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen name="archived-matters" options={pushedScreen} />
             <Stack.Screen
               name="document/[workspaceId]/[entityId]"
               options={pushedScreen}

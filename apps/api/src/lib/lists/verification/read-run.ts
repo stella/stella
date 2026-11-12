@@ -7,13 +7,15 @@
  */
 
 import { panic } from "better-result";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
+  legalListClaimCarryOutcomes,
   legalListClaimReviewEvents,
   legalListClaims,
   legalListFactDetails,
@@ -22,9 +24,12 @@ import {
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { readFactTiers, readSourceKinds } from "@/api/lib/lists/fact-tiers";
 import { factTier } from "@/api/lib/lists/source-kind";
+import { claimAssertedDate } from "@/api/lib/lists/verification/claim-date";
 import type {
+  ClaimAssertedDate,
   ClaimRef,
   ClaimState,
   ClaimVerdict,
@@ -36,7 +41,13 @@ import {
   gradedClaimType,
   VERIFICATION_LIMITS,
 } from "@/api/lib/lists/verification/contract";
+import { verificationBlockId } from "@/api/lib/lists/verification/document-text";
+import {
+  readHeldFactIds,
+  readVerificationEvidence,
+} from "@/api/lib/lists/verification/evidence";
 import { suggestedGoverningFactId } from "@/api/lib/lists/verification/governing-suggestion";
+import { scopedBlockContext } from "@/api/lib/lists/verification/paragraph-scope";
 import {
   claimQualifiers,
   restingFactIds,
@@ -52,10 +63,22 @@ import type {
 } from "@/api/lib/lists/verification/review-fold";
 import {
   contestedFactIds,
+  EMPTY_CLAIM_REVIEW,
   foldClaimReview,
   gradeOf,
   linksChangedSinceGrade,
+  rejectRecheck,
 } from "@/api/lib/lists/verification/review-fold";
+import {
+  citedFactIds,
+  claimStaleness,
+  gradePins,
+  listFactsNow,
+} from "@/api/lib/lists/verification/staleness";
+import type {
+  GradePins,
+  ListFactsNow,
+} from "@/api/lib/lists/verification/staleness";
 
 /** A claim's review on the wire, with how many actions its history holds and
  *  whether its links changed since its grade. Its latest re-check is part of
@@ -64,7 +87,9 @@ export const serializeClaimReview = ({
   review,
   eventCount,
 }: ClaimReviewRecord) => {
-  const { recheck: _onTheClaim, ...wire } = review;
+  // The shared decision is the status read in the shared vocabulary; the
+  // wire states the status itself.
+  const { recheck: _onTheClaim, decision: _sharedReading, ...wire } = review;
   return {
     ...wire,
     linksChanged: linksChangedSinceGrade(review),
@@ -333,12 +358,7 @@ type PresentRecheckArgs = {
  */
 const presentRecheck = ({ claim, recheck, pinned }: PresentRecheckArgs) => {
   const read = applyFactChanges(pinned, recheck.facts);
-  const cited = new Set<SafeId<"entity">>([
-    ...recheck.grade.refs.map((ref) => ref.factEntityId),
-    ...(recheck.grade.recordConflict === null
-      ? []
-      : recheck.grade.recordConflict.factEntityIds),
-  ]);
+  const cited = new Set(citedFactIds(recheck.grade));
   return {
     checkedAt: recheck.checkedAt.toISOString(),
     checkedBy: recheck.checkedBy,
@@ -473,11 +493,133 @@ export const governingSuggestionOfClaim = (
       });
 };
 
+type ReadListNowArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  /** Every fact a run's claims can rest on (`factsWithRechecks`). */
+  evidence: VerificationEvidence;
+};
+
+/**
+ * The run's list as it stands now, which each claim's staleness is read
+ * against: the facts checked against now, and which facts the run's grades
+ * read are held out of scoring since. `null` when the list holds more facts
+ * than one check reads, so no claim of it can be checked again either.
+ */
+const readListNow = async ({
+  tx,
+  workspaceId,
+  evidence,
+}: ReadListNowArgs): Promise<ListFactsNow | null> => {
+  const read = await readVerificationEvidence({
+    tx,
+    workspaceId,
+    listId: evidence.listId,
+  });
+  if (read.type === "too-many-facts") {
+    return null;
+  }
+  const scored = new Set(read.evidence.facts.map((fact) => fact.factEntityId));
+  return listFactsNow({
+    scored: read.evidence.facts,
+    held: await readHeldFactIds({
+      tx,
+      workspaceId,
+      listId: evidence.listId,
+      factIds: evidence.facts
+        .map((fact) => fact.factEntityId)
+        .filter((factEntityId) => !scored.has(factEntityId)),
+    }),
+  });
+};
+
+type ClaimStalenessArgs = {
+  claim: QualifiedClaimRow & { text: string };
+  review: ClaimReview | null;
+  /** The facts the run pinned, keyed once for every claim. */
+  runPins: GradePins;
+  pinned: readonly VerificationEvidenceFact[];
+  now: ListFactsNow | null;
+};
+
+/** Why the claim's current grade may no longer stand on the list as it is
+ *  now (`claimStaleness`); null when the list cannot be read whole. */
+const stalenessOfClaim = ({
+  claim,
+  review,
+  runPins,
+  pinned,
+  now,
+}: ClaimStalenessArgs) => {
+  if (now === null) {
+    return null;
+  }
+  const recheck = review?.recheck ?? null;
+  return claimStaleness(
+    {
+      text: claim.text,
+      grade: gradeOf(claim, review),
+      pins:
+        recheck === null
+          ? runPins
+          : gradePins(applyFactChanges(pinned, recheck.facts)),
+      linkedFactIds: (review ?? EMPTY_CLAIM_REVIEW).linkedFactIds,
+      recheckable: rejectRecheck(claim, review ?? EMPTY_CLAIM_REVIEW) === null,
+    },
+    now,
+  );
+};
+
+type AssertedDateColumns = Pick<
+  typeof legalListClaims.$inferSelect,
+  "text" | "assertedOn" | "assertedOnPrecision" | "assertedOnSource"
+>;
+
+/**
+ * The date a claim asserts, as its reviewers read it: its latest
+ * re-check's reading, else its run's. A claim written before claims carried
+ * dates is read from its words now, exactly as the backfill stores it.
+ */
+const assertedDateOfClaim = (
+  claim: AssertedDateColumns,
+  review: ClaimReview | null,
+): ClaimAssertedDate => {
+  const rechecked = review?.recheck?.assertedOn ?? null;
+  if (rechecked !== null) {
+    return rechecked;
+  }
+  const source = claim.assertedOnSource;
+  switch (source) {
+    case "pending": {
+      return claimAssertedDate(claim.text, null);
+    }
+    case "none": {
+      return { type: "none" };
+    }
+    case "text":
+    case "grader": {
+      return {
+        type: "dated",
+        source,
+        date: claim.assertedOn ?? panic("A dated claim has no date"),
+        precision:
+          claim.assertedOnPrecision ?? panic("A dated claim has no precision"),
+      };
+    }
+    default: {
+      source satisfies never;
+      return panic(`Unhandled asserted date source: ${String(source)}`);
+    }
+  }
+};
+
 type PresentClaimArgs = {
   claim: typeof legalListClaims.$inferSelect;
   record: ClaimReviewRecord | null;
   standings: FactStandings;
   pinned: readonly VerificationEvidenceFact[];
+  runPins: GradePins;
+  now: ListFactsNow | null;
 };
 
 /** One claim on the wire, read with its current grade; a re-check names the
@@ -487,6 +629,8 @@ const presentClaim = ({
   record,
   standings,
   pinned,
+  runPins,
+  now,
 }: PresentClaimArgs) => {
   const review = record?.review ?? null;
   const recheck = review?.recheck ?? null;
@@ -506,11 +650,16 @@ const presentClaim = ({
       standings,
     ),
     text: claim.text,
+    assertedOn: assertedDateOfClaim(claim, review),
     anchor: claim.anchor,
     refs: graded.refs,
     review: record === null ? null : serializeClaimReview(record),
     recheck:
       recheck === null ? null : presentRecheck({ claim, recheck, pinned }),
+    // Why the grade may no longer stand on the list as it is now: empty
+    // when no reason was found, null when the list holds more facts than a
+    // check reads.
+    staleness: stalenessOfClaim({ claim, review, runPins, pinned, now }),
   };
 };
 
@@ -558,16 +707,124 @@ export const readVerifiedClaim = async ({
     runId,
     claimIds: [claimId],
   });
+  const evidence = factsWithRechecks(row.evidence, reviews);
   return presentClaim({
     claim: row.claim,
     record: reviews.get(claimId) ?? null,
-    standings: await readFactStandings({
-      tx,
-      workspaceId,
-      evidence: factsWithRechecks(row.evidence, reviews),
-    }),
+    standings: await readFactStandings({ tx, workspaceId, evidence }),
     pinned: row.evidence.facts,
+    runPins: gradePins(row.evidence.facts),
+    now: await readListNow({ tx, workspaceId, evidence }),
   });
+};
+
+type ReadRunClaimsForCarryArgs = {
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"legalListVerificationRun">;
+};
+
+/**
+ * A run's claims as carrying review decisions forward matches them: words,
+ * place, and the grade the run wrote. The caller resolves a reviewed
+ * claim's grade through its fold (`gradeOf`); claims per run are capped by
+ * their position check.
+ */
+export const readRunClaimsForCarry = async ({
+  tx,
+  workspaceId,
+  runId,
+}: ReadRunClaimsForCarryArgs) =>
+  await readBounded(
+    tx
+      .select({
+        id: legalListClaims.id,
+        text: legalListClaims.text,
+        anchor: legalListClaims.anchor,
+        state: legalListClaims.state,
+        recordConflict: legalListClaims.recordConflict,
+      })
+      .from(legalListClaims)
+      .where(
+        and(
+          eq(legalListClaims.workspaceId, workspaceId),
+          eq(legalListClaims.runId, runId),
+        ),
+      )
+      .orderBy(asc(legalListClaims.position)),
+    VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX,
+  );
+
+/**
+ * What the run carried from the previous run of its document: the run it
+ * read, how many reviewed claims came across whole, and the ones that did
+ * not (their words as that run has them, why, and the claim they matched
+ * when one did). `null` when nothing was there to carry.
+ */
+const readCarryOver = async ({
+  tx,
+  workspaceId,
+  runId,
+}: ReadVerificationRunArgs) => {
+  const outcomes = legalListClaimCarryOutcomes;
+  // One outcome per claim of the previous run, whose claims are capped.
+  const read = await readBounded(
+    tx
+      .select({
+        sourceRunId: outcomes.sourceRunId,
+        sourceRunCreatedAt: legalListVerificationRuns.createdAt,
+        sourceClaimId: outcomes.sourceClaimId,
+        outcome: outcomes.outcome,
+        targetClaimId: outcomes.targetClaimId,
+        text: legalListClaims.text,
+      })
+      .from(outcomes)
+      .innerJoin(
+        legalListClaims,
+        and(
+          eq(legalListClaims.id, outcomes.sourceClaimId),
+          eq(legalListClaims.runId, outcomes.sourceRunId),
+          eq(legalListClaims.workspaceId, workspaceId),
+        ),
+      )
+      .innerJoin(
+        legalListVerificationRuns,
+        and(
+          eq(legalListVerificationRuns.id, outcomes.sourceRunId),
+          eq(legalListVerificationRuns.workspaceId, workspaceId),
+        ),
+      )
+      .where(
+        and(eq(outcomes.workspaceId, workspaceId), eq(outcomes.runId, runId)),
+      )
+      .orderBy(asc(legalListClaims.position)),
+    VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX,
+  );
+  const rows =
+    read.type === "complete"
+      ? read.rows
+      : panic("A run carried more outcomes than its source run has claims");
+  const [first] = rows;
+  if (first === undefined) {
+    return null;
+  }
+  return {
+    sourceRunId: first.sourceRunId,
+    sourceRunCreatedAt: first.sourceRunCreatedAt.toISOString(),
+    carriedCount: rows.filter((row) => row.outcome === "carried").length,
+    notCarried: rows.flatMap((row) =>
+      row.outcome === "carried"
+        ? []
+        : [
+            {
+              sourceClaimId: row.sourceClaimId,
+              text: row.text,
+              outcome: row.outcome,
+              targetClaimId: row.targetClaimId,
+            },
+          ],
+    ),
+  };
 };
 
 /** `null` when the workspace holds no such run. */
@@ -620,11 +877,10 @@ export const readVerificationRun = async ({
     .orderBy(asc(legalListVerificationBlocks.ordinal))
     .limit(VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX);
   const reviews = await readClaimReviews({ tx, workspaceId, runId });
-  const standings = await readFactStandings({
-    tx,
-    workspaceId,
-    evidence: factsWithRechecks(run.evidence, reviews),
-  });
+  const evidence = factsWithRechecks(run.evidence, reviews);
+  const standings = await readFactStandings({ tx, workspaceId, evidence });
+  const now = await readListNow({ tx, workspaceId, evidence });
+  const runPins = gradePins(run.evidence.facts);
 
   return {
     id: run.id,
@@ -632,6 +888,7 @@ export const readVerificationRun = async ({
     fileFieldId: run.fileFieldId,
     entityVersionId: run.entityVersionId,
     evidence: run.evidence,
+    scope: run.scope,
     // How each pinned fact stands on the list now: what the computed
     // qualifiers read, so a reader shows the same footing they state.
     factStandings: [...standings].map(([factEntityId, standing]) => ({
@@ -648,12 +905,15 @@ export const readVerificationRun = async ({
     startedAt: run.startedAt?.toISOString() ?? null,
     finishedAt: run.finishedAt?.toISOString() ?? null,
     blocks,
+    carryOver: await readCarryOver({ tx, workspaceId, runId }),
     claims: claims.map((claim) =>
       presentClaim({
         claim,
         record: reviews.get(claim.id) ?? null,
         standings,
         pinned: run.evidence.facts,
+        runPins,
+        now,
       }),
     ),
   };
@@ -728,79 +988,165 @@ export const readClaimsForBulkReview = ({
     .limit(claimIds.length)
     .for("update");
 
-type ReadRecheckTargetArgs = ReadVerificationRunArgs & {
-  claimId: SafeId<"legalListClaim">;
+type ReadRecheckTargetsArgs = ReadVerificationRunArgs & {
+  claimIds: readonly SafeId<"legalListClaim">[];
 };
 
+/** The block a claim sits in, as both the claim's anchor and a stored block
+ *  name it. */
+const blockKeyOf = (
+  block:
+    | { type: "docx-block"; blockId: string }
+    | { type: "pdf-page"; pageNumber: number },
+): string =>
+  block.type === "docx-block"
+    ? `docx:${block.blockId}`
+    : `pdf:${String(block.pageNumber)}`;
+
 /**
- * What re-checking one claim reads: the claim as written, the facts its run
- * pinned, the run's document version, and the text of the block the claim
- * sits in (the grader reads it for the claim's meaning). `null` when the
- * workspace holds no such claim.
+ * What re-checking claims of one run reads: the facts the run pinned, the
+ * run's document version, and per claim the claim as written with the text
+ * of the block it sits in, cut to the run's paragraph range as the run's
+ * grading read it (the grader reads it for the claim's meaning). A claim the
+ * workspace does not hold has no entry; `null` when it holds no such run.
  */
-export const readRecheckTarget = async ({
+export const readRecheckTargets = async ({
   tx,
   workspaceId,
   runId,
-  claimId,
-}: ReadRecheckTargetArgs) => {
-  const row = (
+  claimIds,
+}: ReadRecheckTargetsArgs) => {
+  const run = (
     await tx
       .select({
-        claim: {
-          state: legalListClaims.state,
-          recordConflict: legalListClaims.recordConflict,
-          text: legalListClaims.text,
-          anchor: legalListClaims.anchor,
-        },
         evidence: legalListVerificationRuns.evidence,
         entityVersionId: legalListVerificationRuns.entityVersionId,
+        scope: legalListVerificationRuns.scope,
       })
-      .from(legalListClaims)
-      .innerJoin(
-        legalListVerificationRuns,
+      .from(legalListVerificationRuns)
+      .where(
         and(
-          eq(legalListVerificationRuns.id, legalListClaims.runId),
+          eq(legalListVerificationRuns.id, runId),
           eq(legalListVerificationRuns.workspaceId, workspaceId),
         ),
       )
-      .where(
-        and(
-          eq(legalListClaims.id, claimId),
-          eq(legalListClaims.runId, runId),
-          eq(legalListClaims.workspaceId, workspaceId),
-        ),
-      )
       .limit(1)
   ).at(0);
-  if (row === undefined) {
+  if (run === undefined) {
     return null;
   }
-  const { anchor } = row.claim;
-  const block = (
-    await tx
-      .select({ text: legalListVerificationBlocks.text })
-      .from(legalListVerificationBlocks)
-      .where(
-        and(
-          eq(legalListVerificationBlocks.workspaceId, workspaceId),
-          eq(legalListVerificationBlocks.runId, runId),
-          anchor.type === "docx-block"
-            ? and(
-                eq(legalListVerificationBlocks.kind, "docx-block"),
-                eq(legalListVerificationBlocks.blockId, anchor.blockId),
-              )
-            : and(
-                eq(legalListVerificationBlocks.kind, "pdf-page"),
-                eq(legalListVerificationBlocks.pageNumber, anchor.pageNumber),
+  const claims =
+    claimIds.length === 0
+      ? []
+      : await tx
+          .select({
+            id: legalListClaims.id,
+            state: legalListClaims.state,
+            recordConflict: legalListClaims.recordConflict,
+            text: legalListClaims.text,
+            anchor: legalListClaims.anchor,
+          })
+          .from(legalListClaims)
+          .where(
+            and(
+              eq(legalListClaims.workspaceId, workspaceId),
+              eq(legalListClaims.runId, runId),
+              inArray(legalListClaims.id, [...claimIds]),
+            ),
+          )
+          .limit(claimIds.length);
+  const blockIds = [
+    ...new Set(
+      claims.flatMap(({ anchor }) =>
+        anchor.type === "docx-block" ? [anchor.blockId] : [],
+      ),
+    ),
+  ];
+  const pageNumbers = [
+    ...new Set(
+      claims.flatMap(({ anchor }) =>
+        anchor.type === "pdf-page" ? [anchor.pageNumber] : [],
+      ),
+    ),
+  ];
+  const blocks =
+    claims.length === 0
+      ? []
+      : await tx
+          .select({
+            kind: legalListVerificationBlocks.kind,
+            blockId: legalListVerificationBlocks.blockId,
+            pageNumber: legalListVerificationBlocks.pageNumber,
+            text: legalListVerificationBlocks.text,
+          })
+          .from(legalListVerificationBlocks)
+          .where(
+            and(
+              eq(legalListVerificationBlocks.workspaceId, workspaceId),
+              eq(legalListVerificationBlocks.runId, runId),
+              or(
+                blockIds.length === 0
+                  ? undefined
+                  : and(
+                      eq(legalListVerificationBlocks.kind, "docx-block"),
+                      inArray(legalListVerificationBlocks.blockId, blockIds),
+                    ),
+                pageNumbers.length === 0
+                  ? undefined
+                  : and(
+                      eq(legalListVerificationBlocks.kind, "pdf-page"),
+                      inArray(
+                        legalListVerificationBlocks.pageNumber,
+                        pageNumbers,
+                      ),
+                    ),
               ),
-        ),
-      )
-      .limit(1)
-  ).at(0);
+            ),
+          )
+          .limit(blockIds.length + pageNumbers.length);
+  const blockText = new Map(
+    blocks.flatMap((block) => {
+      if (block.kind === "docx-block") {
+        return [
+          [
+            blockKeyOf({ type: "docx-block", blockId: block.blockId }),
+            block.text,
+          ] as const,
+        ];
+      }
+      // A page block always carries its number (the table's checks).
+      if (block.pageNumber !== null) {
+        return [
+          [
+            blockKeyOf({ type: "pdf-page", pageNumber: block.pageNumber }),
+            block.text,
+          ] as const,
+        ];
+      }
+      return [];
+    }),
+  );
+  const { scope, ...target } = run;
   return {
-    ...row,
-    blockText: block?.text ?? panic("A claim's block is missing from its run"),
+    ...target,
+    claims: new Map(
+      claims.map(({ id, ...claim }) => [
+        id,
+        {
+          ...claim,
+          context: scopedBlockContext(
+            {
+              id: verificationBlockId(claim.anchor),
+              text:
+                blockText.get(blockKeyOf(claim.anchor)) ??
+                panic("A claim's block is missing from its run"),
+            },
+            scope,
+            claim.anchor,
+          ),
+        },
+      ]),
+    ),
   };
 };
 

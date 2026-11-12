@@ -24,7 +24,12 @@ import { chatPinnedThreadsScalingScenario } from "./chat-threads";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { reviewHistoryScalingScenarios } from "./claim-review-history";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import {
+  conflictCheckListScalingScenario,
+  conflictCheckReadScalingScenario,
+} from "./conflict-checks";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
+import { dataExportReadScalingScenarios } from "./data-exports";
 import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
@@ -40,6 +45,7 @@ import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { memberCandidatesScalingScenario } from "./member-candidates";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
@@ -70,6 +76,7 @@ import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  ...dataExportReadScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   ...readScalingScenarios,
@@ -85,6 +92,8 @@ const measuredApiScenarios = [
   chatActiveRunsScalingScenario,
   chatPinnedThreadsScalingScenario,
   browserSiteGrantsScalingScenario,
+  conflictCheckListScalingScenario,
+  conflictCheckReadScalingScenario,
   chatMcpAppBundleScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
@@ -97,6 +106,7 @@ const measuredApiScenarios = [
   ...documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
+  memberCandidatesScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
   ...legislationMatterLinkScalingScenarios,

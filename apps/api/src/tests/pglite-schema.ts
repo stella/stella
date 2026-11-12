@@ -13,6 +13,10 @@ import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 
 import { parseMigrationStatements } from "../../../../scripts/check-migration-safety";
 import { readDecisionDocketFilingYearMigration } from "./decision-docket-filing-year-migration";
+import {
+  findingDecisionHistoryMigrationPath,
+  findingDecisionHistoryMigrations,
+} from "./finding-decision-history-migrations";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
@@ -80,9 +84,19 @@ const SYNTHETIC_SESSION_MIGRATION_PATH = nodePath.join(
   "20261019070000_monitoring_session",
   "migration.sql",
 );
+const CONFLICT_CHECKS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261112043800_conflict_checks",
+  "migration.sql",
+);
 const STORED_KEYS_ORGANIZATION_SCOPE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261020000100_stored_keys_organization_scope",
+  "migration.sql",
+);
+const SEARCH_HISTORY_COUNTRY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261111230200_search_history_country_expand",
   "migration.sql",
 );
 const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
@@ -176,6 +190,25 @@ export const installPgliteFlowTransitions = async (db: PgliteSchemaDb) => {
       if (statement.trim()) {
         await db.execute(sql.raw(statement));
       }
+    }
+  }
+};
+
+/** Install the same stale-import fence that protects the PostgreSQL history writer. */
+export const installPgliteSearchHistoryClearFence = async (
+  db: PgliteSchemaDb,
+) => {
+  for (const statement of readMigrationStatements(
+    SEARCH_HISTORY_COUNTRY_MIGRATION_PATH,
+  )) {
+    const source = executableSql(statement);
+    if (
+      source.startsWith(
+        "CREATE FUNCTION public.search_history_entries_clear_cutoff_fence",
+      ) ||
+      source.startsWith("CREATE TRIGGER search_history_entries_clear_cutoff_")
+    ) {
+      await db.execute(sql.raw(statement));
     }
   }
 };
@@ -438,6 +471,27 @@ export const installPgliteSyntheticMembershipTrigger = async (
   });
   if (statements.length !== 3) {
     panic("Expected the dedicated principal membership function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/**
+ * Install the conflict-check routines omitted by schema push: they read
+ * across matter walls and exist only in their migration.
+ */
+export const installPgliteConflictCheckRoutines = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readFileSync(
+    CONFLICT_CHECKS_MIGRATION_PATH,
+    "utf-8",
+  ).match(
+    /CREATE FUNCTION public\.stella_conflict_[a-z_]+\([\s\S]*?\n\$\$;|REVOKE ALL ON FUNCTION public\.stella_conflict_[^;]*;|GRANT EXECUTE ON FUNCTION public\.stella_conflict_[^;]*;/gu,
+  );
+  if (statements?.length !== 6) {
+    panic("Expected the two conflict-check routines and their grants");
   }
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
@@ -1787,4 +1841,20 @@ export const installPgliteCaseLawPopulationCounts = async (
     await db.execute(sql.raw(statement));
   }
   await db.execute(sql`SELECT public.seed_case_law_population_counts(128)`);
+};
+
+/**
+ * Install the trigger that writes every finding decision's history event, so
+ * a writer that changes a decision in a test gets its history exactly as it
+ * would in production.
+ */
+export const installPgliteFindingDecisionHistory = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  for (const folder of findingDecisionHistoryMigrations()) {
+    await installPgliteMigration({
+      db,
+      migrationPath: findingDecisionHistoryMigrationPath(folder),
+    });
+  }
 };

@@ -5,6 +5,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { CLAIM_REVIEW_EVENT_KINDS } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimReviewEventPayload,
   RecordConflict,
@@ -23,6 +24,7 @@ import {
   needsAttention,
   rejectRecheck,
   rejectReviewEvent,
+  REVIEWED_VIEW_EVENT_KINDS,
   reviewedView,
 } from "@/api/lib/lists/verification/review-fold";
 import type { ClaimReview } from "@/api/lib/lists/verification/review-fold";
@@ -80,6 +82,7 @@ const PAYLOADS: readonly ClaimReviewEventPayload[] = [
     },
     facts: { changed: [], removed: [] },
     modelRef: "test:model",
+    assertedOn: { type: "none" },
   },
 ];
 
@@ -153,6 +156,7 @@ describe("foldClaimReview", () => {
       },
       facts: { changed: [], removed: [] },
       modelRef: null,
+      assertedOn: { type: "none" },
     } as const satisfies ClaimReviewEventPayload;
     const link = (change: "link" | "unlink") =>
       ({
@@ -250,6 +254,7 @@ describe("foldClaimReview", () => {
               },
         facts: { changed: [], removed: [] },
         modelRef: null,
+        assertedOn: { type: "none" },
       } satisfies ClaimReviewEventPayload,
       actorId: "checker",
       createdAt: at(index),
@@ -383,6 +388,7 @@ describe("foldClaimReview", () => {
         },
         facts: { changed: [], removed: [] },
         modelRef: null,
+        assertedOn: { type: "none" },
         checkedAt: at(1),
         checkedBy: "a",
         linkedFactIds: [],
@@ -665,6 +671,46 @@ describe("needsAttention over the reviewed view", () => {
     expect(reviewedView(claim, governedBy(FACT_B)).state).toBe("supported");
     expect(reviewedView(claim, EMPTY_CLAIM_REVIEW).state).toBe(
       "recordconflict",
+    );
+  });
+
+  // Run summaries fold only these kinds for the claims they count, so any
+  // other kind that changed the view would leave a summary behind it.
+  test("the reviewed view reads only the view event kinds", () => {
+    expect(new Set(PAYLOADS.map((payload) => payload.kind))).toEqual(
+      new Set(CLAIM_REVIEW_EVENT_KINDS),
+    );
+    const viewKinds: ReadonlySet<string> = new Set(REVIEWED_VIEW_EVENT_KINDS);
+    const claims = [
+      { state: "notverifiable", refs: [], recordConflict: null },
+      {
+        state: "recordconflict",
+        refs: refsTo(FACT_A),
+        recordConflict: CONFLICT,
+      },
+      { state: "contradicted", refs: refsTo(FACT_B), recordConflict: null },
+    ] as const;
+    assertProperty(
+      "the reviewed view reads only the view event kinds",
+      fc.property(
+        fc.array(fc.constantFrom(...PAYLOADS), { maxLength: 40 }),
+        (payloads) => {
+          const events = payloads.map((payload, index) => ({
+            payload,
+            actorId: `user-${String(index)}`,
+            createdAt: at(index),
+          }));
+          const full = foldClaimReview(events);
+          const viewOnly = foldClaimReview(
+            events.filter((event) => viewKinds.has(event.payload.kind)),
+          );
+          for (const claim of claims) {
+            expect(reviewedView(claim, viewOnly)).toEqual(
+              reviewedView(claim, full),
+            );
+          }
+        },
+      ),
     );
   });
 

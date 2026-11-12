@@ -291,10 +291,12 @@ export const ChatTabPanel = ({
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     turnAbandoned,
     computerWait,
+    turnSentAt,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -767,6 +769,7 @@ export const ChatTabPanel = ({
                   streamdownComponents={streamdownComponents}
                   userMessageEdit={userMessageEdit}
                   computerWait={computerWait}
+                  turnSentAt={turnSentAt}
                   workspaceId={tabWorkspaceId}
                 />
               )}
@@ -831,6 +834,7 @@ export const ChatTabPanel = ({
             onStop={() => {
               stop();
             }}
+            stopping={stopPending}
             onNewThread={messages.length > 0 ? startNewThread : null}
             onSubmit={handleComposerSubmit}
             pendingCount={0}

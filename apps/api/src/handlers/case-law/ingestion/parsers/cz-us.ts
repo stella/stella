@@ -818,7 +818,7 @@ const classifyUsBodyLine = ({
       id: makeUsBlockId(state),
       anchorId: makeAnchorId("p", state.blockIndex),
       type: "paragraph",
-      role: "intro",
+      role: "opening-formula",
       inlines,
       plainText,
     });

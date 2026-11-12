@@ -34,6 +34,10 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import { resolveListVerificationAccess } from "@/api/lib/lists/verification/access-context";
+import {
+  assertedDateColumns,
+  claimAssertedDate,
+} from "@/api/lib/lists/verification/claim-date";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
 import type { ExtractedClaim } from "@/api/lib/lists/verification/claim-extract";
 import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
@@ -43,16 +47,23 @@ import {
   VERIFICATION_RUN_ACTIVE_STATUSES,
 } from "@/api/lib/lists/verification/contract";
 import type {
+  ClaimAssertedDate,
   ClaimGrade,
   VerificationEvidence,
   VerificationRunErrorCode,
+  VerificationScope,
 } from "@/api/lib/lists/verification/contract";
 import { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
+import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import {
   ListVerificationAccessRevokedError,
   VERIFICATION_MODEL_TASK,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
+import {
+  passageContext,
+  scopePassages,
+} from "@/api/lib/lists/verification/paragraph-scope";
 import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
 import {
   checkVerificationDispatchBudget,
@@ -414,6 +425,7 @@ type ClaimedRun = {
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
   contentSha256: string;
+  scope: VerificationScope;
 };
 
 /** Conditional `queued -> running`: the loser of a double delivery updates
@@ -445,6 +457,7 @@ const claimRun = async ({
       fileFieldId: legalListVerificationRuns.fileFieldId,
       entityVersionId: legalListVerificationRuns.entityVersionId,
       contentSha256: legalListVerificationRuns.contentSha256,
+      scope: legalListVerificationRuns.scope,
     });
   return rows.at(0) ?? null;
 };
@@ -548,11 +561,17 @@ const resolvePinnedFile = async (
 
 type ClaimRow = typeof legalListClaims.$inferInsert;
 
-/** One row per claim in reading order; a set-aside claim is never graded. */
+type GradedClaims = {
+  grades: ReadonlyMap<string, ClaimGrade>;
+  assertedDates: ReadonlyMap<string, ClaimAssertedDate>;
+};
+
+/** One row per claim in reading order; a set-aside claim is never graded,
+ *  so its date is read from its words alone. */
 const claimRows = (
   actor: RunActor,
   claims: readonly ExtractedClaim[],
-  grades: ReadonlyMap<string, ClaimGrade>,
+  { grades, assertedDates }: GradedClaims,
 ): ClaimRow[] =>
   claims.map((claim, position): ClaimRow => {
     const base = {
@@ -564,6 +583,10 @@ const claimRows = (
       framing: claim.framing,
       text: claim.text,
       anchor: claim.anchor,
+      ...assertedDateColumns(
+        assertedDates.get(String(position)) ??
+          claimAssertedDate(claim.text, null),
+      ),
     };
     if (claim.type !== "fact") {
       return {
@@ -606,6 +629,21 @@ const resolveRunningActorAccess = async (
         grants,
       }),
   );
+
+/** The text a run reads, or null when it may read none: more blocks than
+ *  a run stores, or a stored range that no longer lands in the document (a
+ *  range never widens to the whole document). Only the blocks the range
+ *  reads are stored, so a range of a long document fits. */
+const runPassages = (
+  blocks: readonly VerificationBlock[],
+  scope: VerificationScope,
+) => {
+  const passages = scopePassages(blocks, scope);
+  return passages === null ||
+    passages.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX
+    ? null
+    : passages;
+};
 
 /** Trusted process-local I/O boundaries; never sourced from queued data. */
 type VerificationExecutionBoundaries = {
@@ -653,7 +691,8 @@ const executeRun = async ({
   if (document.type === "no-text") {
     return "no_text";
   }
-  if (document.blocks.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX) {
+  const passages = runPassages(document.blocks, run.scope);
+  if (passages === null || passages.length === 0) {
     return "extraction_failed";
   }
 
@@ -747,7 +786,7 @@ const executeRun = async ({
     abortSignal,
   };
 
-  const extracted = await extractClaims({ blocks: document.blocks, deps });
+  const extracted = await extractClaims({ passages, deps });
   if (Result.isError(extracted)) {
     if (extracted.error.cause instanceof ListVerificationRunCapError) {
       return "run_limit_reached";
@@ -764,14 +803,11 @@ const executeRun = async ({
             {
               key: String(position),
               text: claim.text,
-              context: {
-                text:
-                  document.blocks.at(claim.blockIndex)?.text ??
-                  panic(
-                    "An extracted claim names a block outside the document",
-                  ),
-                anchor: claim.anchor,
-              },
+              context: passageContext(
+                passages.at(claim.blockIndex) ??
+                  panic("An extracted claim names a block outside the run"),
+                claim.anchor,
+              ),
               // A new run's claims have no reviewer yet.
               linkedFactIds: [],
             },
@@ -793,7 +829,7 @@ const executeRun = async ({
     return "grading_failed";
   }
 
-  const rows = claimRows(actor, claims, graded.value.grades);
+  const rows = claimRows(actor, claims, graded.value);
   await actor.writeDb(async (tx) => {
     const access = await resolveListVerificationRunAccess({
       tx,
@@ -823,7 +859,7 @@ const executeRun = async ({
       tx,
       runId: actor.runId,
       workspaceId: actor.workspaceId,
-      blocks: document.blocks,
+      blocks: passages.map((passage) => passage.block),
       claims: rows,
     });
   });

@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "وُضعت علامة «يحتاج إلى أدلة»",
         "statusReviewed": "وُضعت علامة «روجع»"
       },
+      "carriedFrom": "من تحقق {date}",
+      "carriedFromEarlier": "من تحقق سابق",
       "empty": "لا إجراءات مراجعة بعد.",
       "filters": {
         "allKinds": "أي إجراء",
@@ -506,6 +508,21 @@
     },
     "runs": {
       "back": "جميع المستندات",
+      "carryOver": {
+        "openSource": "فتح تحقق {date}",
+        "outcomes": {
+          "ambiguous": "عدة تطابقات محتملة",
+          "textChanged": "تغيّرت الصياغة",
+          "unmatched": "لا يوجد ادعاء مطابق",
+          "verdictChanged": "تغيّرت النتيجة"
+        },
+        "summary": {
+          "carried": "نُقل: {count, number}",
+          "carriedAndMissed": "نُقل: {carried, number} · لم يُنقل: {missed, number}",
+          "label": "المراجعات من تحقق {date}: نُقل {carried, number}، ولم يُنقل {missed, number}",
+          "missed": "لم يُنقل: {count, number}"
+        }
+      },
       "errors": {
         "accessRevoked": "توقف التحقق لأن الوصول غير متاح.",
         "aiUnavailable": "لا يتوفر أي نموذج ذكاء اصطناعي للتحقق من المستندات. تحقق من إعدادات الذكاء الاصطناعي للمؤسسة.",
@@ -535,6 +552,39 @@
     "save": {
       "failed": "لم يُحفظ",
       "failedTitle": "لم يُحفظ تغييرك"
+    },
+    "scope": {
+      "checkedDocument": "تم التحقق من الفقرات <num>{range}</num> فقط.",
+      "checkedOrdinal": "تم التحقق من الفقرات <num>{range}</num> فقط، مع عدّها بالترتيب: هذا المستند لا يرقّم فقراته.",
+      "errors": {
+        "empty": "لا تحتوي هذه الفقرات على نص للتحقق منه.",
+        "garbage": "أدخل أرقام الفقرات، مثل 82–136.",
+        "notFound": "هذه الفقرات غير موجودة في هذا المستند.",
+        "numberingUnclear": "تتعذر قراءة أرقام فقرات هذا المستند. تحقق من المستند كاملًا.",
+        "required": "أدخل الفقرات المراد التحقق منها.",
+        "reversed": "ينتهي النطاق قبل أن يبدأ.",
+        "tooWide": "تحقق من 500 فقرة كحد أقصى في كل مرة."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "لم يُعثر على أي ادعاءات في هذه الفقرات.",
+      "showBefore": "إظهار النص قبل ¶ {from}",
+      "verifyParagraphs": "التحقق من فقرات"
+    },
+    "staleness": {
+      "failed": "تعذّرت إعادة فحص الادعاءات",
+      "finished": "{count, plural, zero {لم يُعَد فحص أي ادعاء} one {أُعيد فحص ادعاء واحد} two {أُعيد فحص ادعاءين} few {أُعيد فحص # ادعاءات} many {أُعيد فحص # ادعاءً} other {أُعيد فحص # ادعاء}}",
+      "partial": "أُعيد الفحص: {rechecked, number}، تعذّر: {failed, plural, zero {#} one {#} two {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "تغيّرت الواقعة",
+        "factHeld": "استُبعدت الواقعة",
+        "factRemoved": "أُزيلت الواقعة",
+        "newFactRelated": "واقعة جديدة ذات صلة"
+      },
+      "recheckAll": "إعادة فحص الكل",
+      "recheckLocked": "يُعاد فحصه مع الادعاءات القديمة الأخرى",
+      "runLine": "{count, plural, zero {لا ادعاءات قد تكون قديمة} one {ادعاء واحد قد يكون قديمًا} two {ادعاءان قد يكونان قديمين} few {# ادعاءات قد تكون قديمة} many {# ادعاءً قد يكون قديمًا} other {# ادعاء قد يكون قديمًا}}",
+      "running": "{count, plural, zero {لا ادعاءات قيد إعادة الفحص…} one {جارٍ إعادة فحص ادعاء واحد…} two {جارٍ إعادة فحص ادعاءين…} few {جارٍ إعادة فحص # ادعاءات…} many {جارٍ إعادة فحص # ادعاءً…} other {جارٍ إعادة فحص # ادعاء…}}"
     },
     "states": {
       "contradicted": {
@@ -593,100 +643,21 @@
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "إنشاء نسخة ثنائية اللغة",
-      "creating": "جارٍ الإنشاء…",
-      "description": "ينشئ نسخة من هذا المستند في عمودين: النص الأصلي في العمود الأيسر ونسخة للترجمة في العمود الأيمن بترقيم مستقل. تُحفَظ النسخة في هذا الملف القانوني كمستند جديد.",
-      "sameLanguage": "اختر لغتين مختلفتين.",
-      "sourceLanguage": "اللغة المصدر",
-      "title": "نسخة ثنائية اللغة"
-    },
-    "error": {
-      "title": "تعذّر إنشاء النسخة ثنائية اللغة"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> جاهز ويحتوي على {rowCount, plural, zero {لا صفوف} one {صف واحد} two {صفين} few {# صفوف} many {# صفًا} other {# صف}} للترجمة.",
-      "title": "تم إنشاء النسخة ثنائية اللغة"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "يملأ عمود الترجمة في هذا المستند ذي العمودين. راجع ما سيحدث لكل صف وكيف تُترجم المصطلحات المحددة، ثم ابدأ الترجمة.",
-      "prepare": "تحضير",
-      "preparing": "جارٍ قراءة المستند…",
-      "preparingHint": "قراءة المستند بالكامل وتقييم كل صف تستغرق ما يصل إلى دقيقتين.",
-      "title": "ترجمة النسخة ثنائية اللغة"
+      "prepare": "تحضير"
     },
     "dispositions": {
-      "inline": "اللغتان معًا",
       "keep": "الإبقاء كما هو"
     },
-    "error": {
-      "prepareTitle": "تعذّر تحضير المستند",
-      "startTitle": "تعذّر بدء الترجمة"
-    },
-    "errorCodes": {
-      "aiUnavailable": "لا يتوفر أي نموذج ذكاء اصطناعي للترجمة.",
-      "applyFailed": "تعذّرت كتابة الترجمات في المستند.",
-      "documentChanged": "تغيّر المستند أثناء تشغيل الترجمة. حضّره من جديد.",
-      "documentUnresolved": "لم يعد المستند أو ملفه متاحًا.",
-      "enqueueFailed": "تعذّر إدراج الترجمة في قائمة الانتظار.",
-      "internal": "توقفت الترجمة بشكل غير متوقع.",
-      "notBilingual": "لا يحتوي هذا المستند على جدول ثنائي اللغة.",
-      "translationFailed": "تعذّرت ترجمة دفعة من الصفوف.",
-      "unknown": "توقفت الترجمة بشكل غير متوقع."
-    },
-    "glossary": {
-      "add": "إضافة مصطلح",
-      "description": "تُستخدم هذه الترجمات في كل الصفوف. يجب استكمال ترجمة أي مصطلح ناقص أو إزالته.",
-      "empty": "لم يتم العثور على مصطلحات محددة.",
-      "formsHint": "افصل الصيغ الأخرى بفواصل.",
-      "formsSource": "صيغ أخرى للمصطلح",
-      "formsTarget": "صيغ أخرى للترجمة",
-      "incomplete": "أكمل الترجمات الناقصة أو أزل تلك المصطلحات.",
-      "origins": {
-        "detected": "مكتشف",
-        "user": "خاص بك"
-      },
-      "term": "المصطلح",
-      "title": "المصطلحات المحددة",
-      "tooManyForms": "يمكن أن يحتوي المصطلح على {max} صيغة أخرى كحد أقصى.",
-      "translation": "الترجمة"
-    },
     "kinds": {
-      "heading": "عنوان",
-      "listItem": "عنصر قائمة",
-      "paragraph": "فقرة",
-      "table": "جدول كامل"
-    },
-    "origins": {
-      "default": "غير مُقيَّم",
-      "model": "ذكاء اصطناعي"
+      "paragraph": "فقرة"
     },
     "review": {
-      "droppedRows": "{count, plural, zero {لم يُتخطَّ أي صف} one {تم تخطي صف واحد} two {تم تخطي صفين} few {تم تخطي # صفوف} many {تم تخطي # صفًا} other {تم تخطي # صف}}: لا تحتوي على نص قابل للترجمة.",
-      "start": "بدء الترجمة",
       "starting": "جارٍ البدء…"
     },
     "rows": {
-      "description": "اختر ما سيحدث لكل صف في عمود الترجمة.",
-      "ordinal": "#",
-      "sourceText": "النص المصدر",
-      "title": "الصفوف",
-      "whatToDo": "ما الإجراء"
-    },
-    "run": {
-      "cancelled": "تم إلغاء الترجمة.",
-      "doneSummary": "{count, plural, zero {لم تتم ترجمة أي صف} one {تمت ترجمة صف واحد} two {تمت ترجمة صفين} few {تمت ترجمة # صفوف} many {تمت ترجمة # صفًا} other {تمت ترجمة # صف}}.",
-      "doneTitle": "اكتملت الترجمة",
-      "failedRows": "{count, plural, zero {لم يتعذّر أي صف} one {تعذّرت ترجمة صف واحد} two {تعذّرت ترجمة صفين} few {تعذّرت ترجمة # صفوف} many {تعذّرت ترجمة # صفًا} other {تعذّرت ترجمة # صف}}.",
-      "failedTitle": "توقفت الترجمة",
-      "hint": "تعمل الترجمة على الخادم. أبقِ هذه النافذة مفتوحة لمتابعتها.",
-      "moreRows": "{count, plural, zero {لا صفوف أخرى} one {صف واحد آخر} two {صفان آخران} few {# صفوف أخرى} many {# صفًا آخر} other {# صف آخر}}",
-      "progress": "تمت ترجمة {completed} من {total} صف",
-      "title": "الترجمة قيد التنفيذ…",
-      "warningsTitle": "صفوف تحتاج مراجعة"
+      "title": "الصفوف"
     }
   },
   "billing": {
@@ -1199,7 +1170,6 @@
       "negativeCount": "{count, plural, zero {لا سلبية} one {سلبي واحد} two {سلبيان} few {# سلبية} many {# سلبيًا} other {# سلبي}}",
       "none": "لم تُسجَّل أي استشهادات بعد.",
       "notInStella": "غير متوفر في stella بعد",
-      "openAtCitation": "فتح عند موضع الاستشهاد",
       "openDecision": "فتح الحكم",
       "paragraphLabel": "الفقرة {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1907,6 +1877,7 @@
       "refusalNoComputer": "لا يوجد أي حاسوب من حواسيبك متصل. افتح stella desktop ثم أرسل مجددًا.",
       "refusalPermissionAboveLimit": "لا تسمح مؤسستك لوكيل البرمجة على حاسوبك بهذه الأذونات. اختر خيارًا آخر من قائمة الأذونات.",
       "refusalPermissionUnavailable": "لا يمكن لوكيل البرمجة على حاسوبك العمل بهذه الأذونات. اختر خيارًا آخر من قائمة الأذونات.",
+      "refusalReasoningEffortUnavailable": "لا يقدّم وكيل البرمجة على حاسوبك مستوى الاستدلال هذا لهذا النموذج. اختر مستوى آخر من قائمة مستوى الاستدلال.",
       "refusalTooLarge": "هذه الدردشة أطول من أن تُنقل إلى حاسوبك. ابدأ دردشة جديدة لتشغيلها هناك.",
       "refusalUnavailable": "تشغيل الدردشات على حاسوبك غير متاح لحسابك.",
       "runOn": "التشغيل على",
@@ -1931,7 +1902,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, zero {لا توجد دردشات بانتظارك} one {دردشة واحدة بانتظارك} two {دردشتان بانتظارك} few {# دردشات بانتظارك} many {# دردشة بانتظارك} other {# دردشة بانتظارك}}",
-      "working": "{count, plural, zero {لا توجد دردشات قيد العمل} one {دردشة واحدة قيد العمل} two {دردشتان قيد العمل} few {# دردشات قيد العمل} many {# دردشة قيد العمل} other {# دردشة قيد العمل}}"
+      "waitsOn": {
+        "approval": "بانتظار موافقتك",
+        "askUser": "يطرح عليك سؤالاً",
+        "clientTool": "يتابع عند فتح هذه الدردشة",
+        "harnessQuestion": "لدى الوكيل على حاسوبك سؤال"
+      },
+      "working": "{count, plural, zero {لا توجد دردشات قيد العمل} one {دردشة واحدة قيد العمل} two {دردشتان قيد العمل} few {# دردشات قيد العمل} many {# دردشة قيد العمل} other {# دردشة قيد العمل}}",
+      "workingNow": "قيد العمل"
     },
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mcpReconnect": {
@@ -2118,6 +2096,7 @@
     "stopFailed": "تعذّر إيقاف الإجابة. حاول مرة أخرى.",
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
+    "stopping": "جارٍ الإيقاف…",
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
     "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
@@ -2654,6 +2633,7 @@
     "organization": "المؤسسة",
     "organizationName": "اسم المؤسسة",
     "organizations": "المؤسسات",
+    "outOfDate": "غير محدَّث",
     "page": "الصفحة {page}",
     "paymentRetryNotice": "هناك مشكلة في الدفع. حدّث طريقة الدفع بحلول {date} للحفاظ على إمكانية الوصول.",
     "pin": "تثبيت",
@@ -2668,6 +2648,7 @@
     "queued": "قيد الانتظار",
     "reason": "السبب",
     "recommended": "موصى به",
+    "reconnect": "إعادة الاتصال",
     "reconnecting": "جارٍ إعادة الاتصال…",
     "reference": "المرجع",
     "refresh": "تحديث",
@@ -3317,6 +3298,14 @@
       "organizationMemberLimitReached": "بلغت هذه المؤسسة الحد الأقصى للأعضاء.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
+      "sharepointAccessDenied": "رفضت Microsoft منح الوصول إلى هذا الموقع أو المكتبة أو الملف.",
+      "sharepointFileTooLarge": "هذا الملف كبير جدًا بحيث لا يمكن استيراده.",
+      "sharepointInvalidCursor": "تغيّرت القائمة أثناء التصفح. افتح المجلد مرة أخرى.",
+      "sharepointNotAFile": "يمكن استيراد الملفات فقط، وليس المجلدات أو دفاتر الملاحظات.",
+      "sharepointNotConnected": "اربط حساب Microsoft الخاص بك لاستخدام SharePoint وOneDrive.",
+      "sharepointNotFound": "هذا الموقع أو المكتبة أو الملف لم يعد موجودًا أو غير مشارك معك.",
+      "sharepointReconnectRequired": "انتهت صلاحية تسجيل دخولك إلى Microsoft. أعد ربط SharePoint وOneDrive.",
+      "sharepointThrottled": "تحدّ Microsoft من عدد الطلبات. حاول مرة أخرى بعد قليل.",
       "skillSourceUnreachable": "تعذر تحميل مصدر المهارة. تحقق من أن الرابط يشير إلى مستودع GitHub عام، أو حاول مرة أخرى لاحقًا.",
       "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
       "usageLimitExceeded": "تم بلوغ حد الاستخدام.",
@@ -4423,7 +4412,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "أنشئ دليل مراجعة للعقود موقفًا تلو الآخر، استنادًا إلى عقودك الموقّعة سابقًا ومقابلة قصيرة والمعايير المعتادة في السوق.",
-          "name": "إنشاء دليل مراجعة"
+          "name": "إنشاء دليل مراجعة",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "أضف مواقف إلى أحد أدلة المراجعة الحالية لديّ.",
+              "name": "توسيع دليل مراجعة"
+            },
+            "fromContracts": {
+              "body": "أنشئ دليل مراجعة لاتفاقيات عدم الإفصاح استنادًا إلى اتفاقياتي الموقّعة سابقًا.",
+              "name": "البدء من عقود سابقة"
+            },
+            "fromMarketStandards": {
+              "body": "أنشئ دليل مراجعة لعقود التوريد انطلاقًا من المواقف المعتادة في السوق.",
+              "name": "البدء من معايير السوق"
+            }
+          }
         }
       },
       "builtInSection": "المهارات المُدمَجة",
@@ -4545,7 +4548,6 @@
       "otherTitle": "تكاملات أخرى",
       "probe": "فحص",
       "recommendedFor": "موصى به لـ {jurisdictions}",
-      "reconnect": "إعادة الاتصال",
       "saveToken": "حفظ الرمز",
       "tokenHelp": "كيفية الحصول على رمز",
       "tokenLabel": "رمز Bearer",
@@ -4674,6 +4676,10 @@
       "optionPlaceholder": "قيمة الخيار",
       "optionsLabel": "الخيارات",
       "outline": "الهيكل",
+      "pendingPane": {
+        "description": "أجب عن الأسئلة في الدردشة. بعد أن توافق على أول حفظ، يُفتح دليل المراجعة هنا ويمكنك تعديله بجانب الدردشة.",
+        "title": "سيظهر دليل المراجعة هنا"
+      },
       "positionOfTotal": "الموقف {index} من {total}",
       "positionRemoved": "تمت إزالة الموقف",
       "positions": "المواقف",
@@ -5429,8 +5435,6 @@
   "search": {
     "aiRefine": "تحسين الاستعلام بالذكاء الاصطناعي",
     "caseLawEmptyState": "ابدأ الكتابة للبحث في الأحكام القضائية.",
-    "caseLawMatchingDecisions": "{count, plural, zero {# قرارات مطابقة} one {قرار مطابق واحد} two {قراران مطابقان} few {# قرارات مطابقة} many {# قرارًا مطابقًا} other {# قرار مطابق}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ قرارات مطابقة} one {#+ قرار مطابق} two {#+ قرار مطابق} few {#+ قرارات مطابقة} many {#+ قرارًا مطابقًا} other {#+ قرار مطابق}}",
     "chatCoveragePartial": "لم يتم البحث في كل الدردشات بالكامل.",
     "continueInChat": "المتابعة في الدردشة",
     "dateFrom": "من",
@@ -5788,8 +5792,10 @@
         "clause_category": "فئة البنود",
         "clause_template_link": "ربط البند بالقالب",
         "clause_variant": "صيغة البند",
+        "conflict_check": "فحص تضارب المصالح",
         "contact": "جهة اتصال",
         "contact_directory": "دليل جهات الاتصال",
+        "data_export": "تصدير البيانات",
         "desktop_edit_session": "جلسة تحرير على الحاسوب",
         "document_annotation": "تعليق على المستند",
         "document_review_run": "مراجعة المستند",
@@ -5967,6 +5973,63 @@
       "usageUnitsThisPeriod": "وحدات الاستخدام في هذه الفترة"
     }
   },
+  "sharepoint": {
+    "admin": {
+      "description": "يربط الأعضاء حساباتهم الخاصة في Microsoft ويستوردون الملفات إلى الملفات القانونية. تقرأ stella فقط ما يستطيع كل عضو فتحه في Microsoft 365.",
+      "disableConfirm": "إيقاف",
+      "disableDescription": "ستتم إزالة اتصال Microsoft لجميع الأعضاء وحذف تسجيل الدخول المخزّن لديهم. تبقى المستندات التي تم استيرادها بالفعل في ملفاتها القانونية. سيحتاج الأعضاء إلى الربط مرة أخرى إذا أعدت تشغيل هذه الميزة.",
+      "disableInputLabel": "اكتب {confirmation} لإيقاف التشغيل",
+      "disableTitle": "هل تريد إيقاف SharePoint وOneDrive؟",
+      "toggleLabel": "السماح باستخدام SharePoint وOneDrive"
+    },
+    "askAdmin": "متوقف لمؤسستك. اطلب من أحد المسؤولين تشغيله.",
+    "connectFailed": "تعذّر ربط SharePoint وOneDrive",
+    "connected": "تم ربط SharePoint وOneDrive",
+    "description": "استيراد الملفات من SharePoint وOneDrive إلى الملفات القانونية.",
+    "disconnectDescription": "ستتم إزالة تسجيل دخولك إلى Microsoft من stella. تبقى المستندات التي استوردتها بالفعل في ملفاتها القانونية.",
+    "disconnectTitle": "هل تريد قطع الاتصال بـ SharePoint وOneDrive؟",
+    "disconnected": "تم قطع الاتصال بـ SharePoint وOneDrive",
+    "import": {
+      "alreadyCurrent": "{count, plural, zero {# ملف كانت محدّثة بالفعل.} one {# ملف كان محدّثًا بالفعل.} two {# ملفين كانا محدّثين بالفعل.} few {# ملفات كانت محدّثة بالفعل.} many {# ملفًا كانت محدّثة بالفعل.} other {# ملف كانت محدّثة بالفعل.}}",
+      "created": "تم الاستيراد",
+      "done": "تم استيراد الملفات من SharePoint أو OneDrive",
+      "failedReason": "تعذّر نسخ الملف. حاول مرة أخرى لاحقًا.",
+      "partial": "تعذّر استيراد {failed, number} من أصل {total, plural, zero {# ملف} one {# ملف} two {# ملفين} few {# ملفات} many {# ملفًا} other {# ملف}}.",
+      "progress": "تم استيراد {done, number} من {total, number}",
+      "unchanged": "محدّث بالفعل",
+      "unconfirmed": "غير مؤكد",
+      "unconfirmedCount": "{count, plural, zero {لم يُؤكَّد أي ملف؛ استوردها مرة أخرى.} one {لم يُؤكَّد ملف واحد؛ استورده مرة أخرى.} two {لم يُؤكَّد ملفان؛ استوردهما مرة أخرى.} few {لم تُؤكَّد # ملفات؛ استوردها مرة أخرى.} many {لم يُؤكَّد # ملفًا؛ استوردها مرة أخرى.} other {لم يُؤكَّد # ملف؛ استوردها مرة أخرى.}}",
+      "unconfirmedReason": "توقف الاستيراد قبل تأكيد هذا الملف. استورده مرة أخرى.",
+      "versioned": "إصدار جديد"
+    },
+    "oauthReasons": {
+      "consentDenied": "تم إلغاء تسجيل الدخول إلى Microsoft أو لم يتم منح الوصول.",
+      "expired": "استغرق تسجيل الدخول وقتًا طويلًا. اربط الحساب مرة أخرى.",
+      "notConfigured": "لم يتم إعداد نسخة stella هذه لتسجيل الدخول عبر Microsoft. تواصل مع المسؤول لديك.",
+      "notEnabled": "لم تقم مؤسستك بتشغيل SharePoint وOneDrive.",
+      "tryAgain": "لم يكتمل تسجيل الدخول إلى Microsoft. اربط الحساب مرة أخرى.",
+      "userMismatch": "بدأ تسجيل الدخول من حساب أو مؤسسة أخرى. اربط الحساب مرة أخرى من هذا الحساب."
+    },
+    "picker": {
+      "description": "اختر الملفات المراد نسخها إلى هذا الملف القانوني (بحد أقصى {max, number}).",
+      "emptyFolder": "هذا المجلد فارغ.",
+      "menuItem": "من SharePoint أو OneDrive",
+      "myOneDrive": "OneDrive الخاص بي",
+      "noFollowedSites": "ابحث عن موقع أو افتح OneDrive الخاص بي.",
+      "noLibraries": "لا توجد مكتبات مستندات هنا.",
+      "notConnected": "اربط حساب Microsoft الخاص بك لتصفح SharePoint وOneDrive.",
+      "notImportable": "لا يمكن استيراده",
+      "reconnectRequired": "انتهت صلاحية تسجيل دخولك إلى Microsoft. أعد الربط لمتابعة التصفح.",
+      "searchSites": "البحث في المواقع",
+      "selectedCount": "{count, plural, =0 {لم يتم تحديد أي ملف} zero {تم تحديد # ملف} one {تم تحديد # ملف} two {تم تحديد # ملفين} few {تم تحديد # ملفات} many {تم تحديد # ملفًا} other {تم تحديد # ملف}}",
+      "selectionLimit": "الحد الأقصى لعدد الملفات التي يمكن استيرادها دفعة واحدة: {max, number}.",
+      "sites": "المواقع",
+      "throttledFor": "تحدّ Microsoft من عدد الطلبات. حاول مرة أخرى بعد {seconds, plural, zero {# ثانية} one {# ثانية} two {# ثانيتين} few {# ثوانٍ} many {# ثانية} other {# ثانية}}.",
+      "title": "استيراد من SharePoint أو OneDrive"
+    },
+    "reconnectRequired": "انتهت صلاحية تسجيل الدخول",
+    "title": "SharePoint وOneDrive"
+  },
   "skillHistory": {
     "acceptStale": "قبول واستبدال التعديلات الأحدث",
     "backToCurrent": "العودة إلى النسخة الحالية",
@@ -5976,7 +6039,6 @@
     "comments": "التعليقات",
     "commentsEmpty": "حدّد نصًا للتعليق عليه.",
     "noRevisions": "لا توجد مراجعات بعد",
-    "outOfDate": "غير محدَّث",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "بلا ملخص",
     "proposals": "الاقتراحات",
@@ -6092,6 +6154,11 @@
     "title": "التشريعات",
     "validity": "نافذ من {from} إلى {to}",
     "versionAppliedInDecision": "الصيغة المطبقة في قرار <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, zero {لا مواد مضافة} one {مادة واحدة مضافة} two {مادتان مضافتان} few {# مواد مضافة} many {# مادةً مضافة} other {# مادة مضافة}}",
+    "versionChangesChanged": "{count, plural, zero {لا مواد معدلة} one {مادة واحدة معدلة} two {مادتان معدلتان} few {# مواد معدلة} many {# مادةً معدلة} other {# مادة معدلة}}",
+    "versionChangesNone": "الصياغة دون تغيير",
+    "versionChangesRemoved": "{count, plural, zero {لا مواد محذوفة} one {مادة واحدة محذوفة} two {مادتان محذوفتان} few {# مواد محذوفة} many {# مادةً محذوفة} other {# مادة محذوفة}}",
+    "versionChangesWords": "{inserted, plural, zero {لا كلمات مضافة} one {كلمة واحدة مضافة} two {كلمتان مضافتان} few {# كلمات مضافة} many {# كلمةً مضافة} other {# كلمة مضافة}}، {deleted, plural, zero {لا كلمات محذوفة} one {كلمة واحدة محذوفة} two {كلمتان محذوفتان} few {# كلمات محذوفة} many {# كلمةً محذوفة} other {# كلمة محذوفة}}",
     "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {
@@ -6812,6 +6879,7 @@
     "deletedItem": "تم الحذف: {name}",
     "deletingWorkspace": "جارٍ حذف الملف القانوني",
     "documentSwitcher": {
+      "download": "تنزيل هذا الملف",
       "searchPlaceholder": "ابحث عن مستند…",
       "trigger": "تبديل المستند"
     },
