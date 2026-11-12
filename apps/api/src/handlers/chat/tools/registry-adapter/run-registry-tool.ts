@@ -9,8 +9,10 @@ import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { containsRawUuid } from "@/api/lib/chat/uuid-mask";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { runAsCorpusSearchCaller } from "@/api/lib/legal-search/corpus-index-admission";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { mcpPublicReadCallerKey } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
@@ -33,6 +35,7 @@ import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
+import { SOFT_LAW_TOOL_HANDLERS } from "@/api/mcp/soft-law-tools";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -41,6 +44,7 @@ import {
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { RequiresThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
+import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
   AllHandlerOutputsTyped,
   AssertTrue,
@@ -109,6 +113,8 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   get_usage: BILLING_TOOL_HANDLERS.get_usage,
   search_legislation: LEGISLATION_TOOL_HANDLERS.search_legislation,
   read_statute: LEGISLATION_TOOL_HANDLERS.read_statute,
+  search_guidance: SOFT_LAW_TOOL_HANDLERS.search_guidance,
+  read_guidance: SOFT_LAW_TOOL_HANDLERS.read_guidance,
   read_statute_provisions: LEGISLATION_TOOL_HANDLERS.read_statute_provisions,
   read_provision_history: LEGISLATION_TOOL_HANDLERS.read_provision_history,
   search_boe_legislation: RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation,
@@ -254,6 +260,46 @@ const runInjectedHandler = async ({
     return panic("An object input schema parsed to a non-object value");
   }
   return await handler({ args: parsed.output, context });
+};
+
+/**
+ * Chat waits for a continued read instead of handing the model a token: the
+ * turn is already open, so holding it costs nothing the model could use. Past
+ * this the model gets the honest running answer and may call again.
+ */
+const CHAT_CONTINUATION_WAIT_MS = 45_000;
+
+const runningContinuation = (response: McpToolResponse) =>
+  !isMcpEgressPlan(response) &&
+  response.status === "success" &&
+  isRecord(response.data) &&
+  response.data["status"] === "running" &&
+  typeof response.data["continuationToken"] === "string" &&
+  typeof response.data["retryAfterMs"] === "number"
+    ? {
+        token: response.data["continuationToken"],
+        retryAfterMs: response.data["retryAfterMs"],
+      }
+    : null;
+
+const waitOutContinuation = async (
+  first: McpToolResponse,
+  args: Record<string, unknown>,
+  run: (runArgs: Record<string, unknown>) => Promise<McpToolResponse>,
+): Promise<McpToolResponse> => {
+  const deadlineAt = performance.now() + CHAT_CONTINUATION_WAIT_MS;
+  let response = first;
+  for (
+    let running = runningContinuation(response);
+    running !== null && performance.now() < deadlineAt;
+    running = runningContinuation(response)
+  ) {
+    await Bun.sleep(
+      Math.min(running.retryAfterMs, deadlineAt - performance.now()),
+    );
+    response = await run({ ...args, continuation_token: running.token });
+  }
+  return response;
 };
 
 /** The key the boundary's input notes ride under beside a read's payload. */
@@ -437,18 +483,27 @@ export const executeRegistryRead = async ({
   }
   const authorizedContext = authorization.context;
 
-  const response =
-    handler === undefined
-      ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
-          args: scoped.value,
-          context: authorizedContext,
-        })
-      : await runInjectedHandler({
-          args: scoped.value,
-          context: authorizedContext,
-          toolName,
-          handler,
-        });
+  const invoke = async (invokeArgs: Record<string, unknown>) =>
+    await runAsCorpusSearchCaller(
+      mcpPublicReadCallerKey(authorizedContext),
+      async () =>
+        handler === undefined
+          ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
+              args: invokeArgs,
+              context: authorizedContext,
+            })
+          : await runInjectedHandler({
+              args: invokeArgs,
+              context: authorizedContext,
+              toolName,
+              handler,
+            }),
+    );
+  const response = await waitOutContinuation(
+    await invoke(scoped.value),
+    scoped.value,
+    invoke,
+  );
   const finished = await finalizeToolEgress({
     context: authorizedContext,
     mode: "default",

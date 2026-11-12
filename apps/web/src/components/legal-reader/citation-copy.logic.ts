@@ -63,6 +63,7 @@ const isQuotedLanguage = (language: string): language is UiLanguageCode =>
  */
 const LANGUAGE_BY_COUNTRY = {
   AUT: "de",
+  BRA: "pt",
   CZE: "cs",
   DEU: "de",
   EST: "et",

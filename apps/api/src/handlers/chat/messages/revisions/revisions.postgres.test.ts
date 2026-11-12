@@ -48,13 +48,13 @@ import type {
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
+import { estimateTextTokens } from "@/api/lib/ai-generation/token-estimate";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { decodePaginationCursor } from "@/api/lib/pagination";

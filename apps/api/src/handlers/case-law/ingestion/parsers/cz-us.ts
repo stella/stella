@@ -67,6 +67,7 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
   CZ_TAKTO,
   CZ_TAKTO_TAIL_RE,
+  czechBenchRecitalStart,
   isCzechBareSignatoryName,
   isCzechOpeningFormula,
   isCzechTaktoLine,
@@ -823,6 +824,7 @@ const classifyUsBodyLine = ({
   // "takto:" separator
   if (isCzechTaktoLine(plainText) || isCzechTaktoLine(collapsed)) {
     state.inRuling = true;
+    markBenchRecital(blocks);
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -1100,6 +1102,26 @@ const opensRuling = (
   (CZ_TAKTO_TAIL_RE.test(plainText) ||
     PLENARY_BENCH_RE.test(plainText) ||
     NALEZ_CAPTION_RE.test(plainText));
+
+/**
+ * The bench recital printed before a "takto:" of its own line (`Ústavní
+ * soud České republiky` / `v senátě rozhodl ve věci …`) introduces the
+ * ruling, as the shared Czech grammar reads it.
+ */
+const markBenchRecital = (blocks: Block[]): void => {
+  // The title is kept apart from the body's blocks, which open after it.
+  const start = czechBenchRecitalStart(blocks, blocks.length, {
+    opensAfterHeadMatter: true,
+  });
+  if (start === undefined) {
+    return;
+  }
+  for (const [index, block] of blocks.entries()) {
+    if (index >= start && block.type === "paragraph") {
+      blocks[index] = { ...block, role: "intro" };
+    }
+  }
+};
 
 /** A paragraph's role: its separate opinion's, or the ruling's opener. */
 const paragraphRole = (

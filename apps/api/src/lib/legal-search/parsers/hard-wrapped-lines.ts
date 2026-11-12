@@ -1,3 +1,10 @@
+// parser-output-unchanged: [cz-nss] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [cz-uohs] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [pl-kio] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [pl-kis] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [pl-sn] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [pl-uokik] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [sk-courts] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
 import { panic } from "better-result";
 
 import {
@@ -203,6 +210,7 @@ const CITES_POINT_RE = /(?:^|[\s(])(?:\p{L}|\d{1,3})\)[,;]?$/u;
 const opensListItem = (above: PrintedLine, line: PrintedLine): boolean =>
   CLOSES_ITEM_RE.test(above.text) &&
   !CITES_POINT_RE.test(above.text) &&
+  !takesANumber(above.text) &&
   LIST_ITEM_OPENING_RE.test(line.text);
 
 /**
@@ -226,9 +234,22 @@ const endsParagraph = (
   above.width < margin - HARD_WRAP.filledSlack &&
   !JUSTIFIED_RE.test(above.text);
 
+/** The sentence goes on: no closing punctuation above, a lowercase word below. */
+const typescriptRunsOn = (
+  above: PrintedLine,
+  line: PrintedLine,
+  margin: number,
+): boolean =>
+  above.indent < HARD_WRAP.centredIndent &&
+  above.width >= margin / 2 &&
+  !/[.:;!?]$/u.test(above.text) &&
+  /^\p{Ll}/u.test(line.text);
+
 /**
  * A line indented deeper than the one above it opens a paragraph, unless it
- * is aligned under the text of the list item above it.
+ * is aligned under the text of the list item above it, or the sentence above
+ * plainly goes on into it (`jakákoli podobná` / ` pojistka.`). A list item
+ * never opens after a word its number belongs to (`písm.` / `b)`).
  */
 const opensParagraph = (
   above: PrintedLine,
@@ -240,18 +261,9 @@ const opensParagraph = (
   SPACED_DISPLAY_LINE_RE.test(line.text) ||
   opensListItem(above, line) ||
   endsParagraph(above, line, margin) ||
-  (line.indent > above.indent && line.indent > hangingIndentOf(above));
-
-/** The sentence goes on: no closing punctuation above, a lowercase word below. */
-const typescriptRunsOn = (
-  above: PrintedLine,
-  line: PrintedLine,
-  margin: number,
-): boolean =>
-  above.indent < HARD_WRAP.centredIndent &&
-  above.width >= margin / 2 &&
-  !/[.:;!?]$/u.test(above.text) &&
-  /^\p{Ll}/u.test(line.text);
+  (line.indent > above.indent &&
+    line.indent > hangingIndentOf(above) &&
+    !typescriptRunsOn(above, line, margin));
 
 /**
  * Words a suspended hyphen stands before: in "dvou- a tříletý" the hyphen is

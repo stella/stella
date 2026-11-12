@@ -92,6 +92,7 @@
     "countSummary": "{columns} columns × {rows} rows = {answers, plural, one {# answer} other {# answers}}. Answers spend budget.",
     "modelRefused": "The model refused to answer",
     "nothingFound": "Nothing found",
+    "nothingFoundInCutDocument": "Nothing found in the part that was read",
     "refusedBudget": "Not run: answer budget unavailable",
     "rerunAllPage": "Rerun all (this page)",
     "rerunColumnPage": "Rerun column (this page)",
@@ -211,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "About the anchor-fact record",
+      "addFact": "Add a fact",
+      "addFactPlaceholder": "State the fact as the evidence shows it",
       "addInterpretationNote": "Add interpretation note",
+      "busyLine": "Facts you accept appear here.",
+      "confidenceLevels": {
+        "high": "High confidence",
+        "low": "Low confidence",
+        "medium": "Medium confidence"
+      },
       "description": "Hard evidence (emails, messages, bank records, agreed facts) extracted into the anchor-fact record that claims are checked against. Review, edit, or add facts by hand.",
       "editInterpretationNote": "Edit interpretation note",
-      "empty": "Mark items of this list as facts to check documents against them.",
-      "extractionAndReview": "Extraction & review",
-      "factCount": "{count, plural, one {# fact} other {# facts}}",
+      "emptyLine": "Extract facts from the matter's documents or add one by hand.",
+      "emptyTitle": "No anchor facts yet",
       "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong>: the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.",
+      "heldFilter": "{count, plural, one {# held for review} other {# held for review}}",
       "heldForReview": "Held for review",
+      "hideSources": "Hide sources",
       "holdOutOfScoring": "Hold out of scoring",
       "inScoring": "In scoring",
       "includeInScoring": "Include in scoring",
@@ -227,10 +238,18 @@
       "interpretiveConfidence": "Interpretive confidence",
       "openList": "Open list",
       "record": "Anchor-fact record",
-      "setConfidence": "Set confidence",
+      "showSources": "Show sources",
       "title": "Anchor facts"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Anchor facts disagree",
+        "conflictCount": "{count, plural, one {# conflict} other {# conflicts}}",
+        "gap": "<strong>No anchor fact covers this claim.</strong> This is a gap in the record, not a weak verdict: there is nothing to check the claim against yet.",
+        "notVerifiable": "<strong>Not a verifiable assertion.</strong> This is the kind of statement no document could ever settle: a counterfactual, a prediction, a statement of intent, a legal conclusion, or a claim too vague to check. Set aside rather than scored.",
+        "supportCount": "{count, plural, one {# support} other {# supports}}",
+        "verdictWithheld": "Verdict withheld"
+      },
       "escalatedReview": "Escalated to the evidence team; no verdict to confirm or dispute here until the underlying conflict is resolved.",
       "flagDispute": "Flag dispute",
       "humanReview": "Human review",
@@ -252,11 +271,13 @@
       "overrideTooltip": "A reviewer has recorded a different verdict. The analysis below is the tool's own, unchanged.",
       "overrideVerdict": "Override verdict",
       "recordConflict": {
+        "confirmGoverningRecord": "Confirm as governing",
         "description": "Two anchor facts speak to the same point (<strong>{subject}</strong>) but disagree. Both are <strong>high-confidence</strong> sources, so this is not a reliability problem: the record itself is internally inconsistent. AVT withholds a verdict rather than score the claim, because picking one record over the other is a judgement for you to make and record, not one the tool should make silently.",
         "escalatedNotice": "Flagged for the evidence team. The record conflict stays open and counted until a governing record is chosen.",
         "flagForEvidenceTeam": "Flag for evidence team",
         "governed": "<strong>{value}</strong> governs: the claim is judged against this record. The other record stays on file.",
         "reconcile": "Reconcile the record",
+        "suggestedNotice": "A document's record is suggested over a witness's account. Confirm it, or choose the other record.",
         "title": "Conflicting evidence in the record",
         "treatAsGoverningRecord": "Treat as governing"
       },
@@ -266,17 +287,8 @@
       },
       "reopened": "Re-opened, check pending",
       "reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.",
-      "score": {
-        "anchorFactsDisagree": "Anchor facts disagree",
-        "conflictCount": "{count, plural, one {# conflict} other {# conflicts}}",
-        "noCoverage": "<strong>The record is silent.</strong> No anchor fact in the database addresses this claim. This is distinct from a weak score: it means there is nothing to check it against yet.",
-        "notVerifiable": "<strong>Not a verifiable assertion.</strong> This is the kind of statement no document could ever settle: a counterfactual, a prediction, a statement of intent, a legal conclusion, or a claim too vague to check. Set aside rather than scored.",
-        "outOf100": "<strong>/ 100</strong> support score",
-        "supportCount": "{count, plural, one {# support} other {# supports}}",
-        "verdictWithheld": "Verdict withheld"
-      },
       "sourceCount": "{count, plural, one {# source} other {# sources}}",
-      "whyScore": "Why this score: anchor facts"
+      "whyVerdict": "Why this verdict: anchor facts"
     },
     "claimTypes": {
       "fact": {
@@ -308,17 +320,66 @@
       "nocover": "No anchor fact addresses this claim, so there's nothing to confirm it against. Sign-off is optional.",
       "notverifiable": "Set aside as not verifiable; sign-off is optional. Re-open below if it's actually checkable.",
       "recordconflict": "Two exhibits in the record disagree. Resolve which governs above, or flag the evidence team; the tool won't pick for you.",
+      "restsOnHeld": "A fact this verdict rests on is held for review; confirm the verdict still stands without it, or re-check the claim once the fact is settled.",
+      "scopeMismatch": "A cited fact covers a different scope than the claim. Weigh whether it settles the claim as worded before the verdict stands.",
       "supported": "The record affirms this. Your sign-off confirms the tool read it correctly; no judgement call needed.",
-      "tension": "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands."
+      "tension": "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands.",
+      "testimonyOnly": "The record affirms this, but no document's record backs it: it rests on testimony. Your sign-off confirms the tool read it correctly; the verdict stays marked as resting on testimony.",
+      "unsourcedOnly": "The record affirms this, but only through facts with no source yet. Your sign-off confirms the tool read them correctly; the facts stay marked as unsourced."
     },
     "documents": {
       "claimSummary": "Contradicted: {contradicted} · In tension: {tension} · Record conflicts: {conflicts}",
       "empty": "Upload a document to this matter to verify it.",
+      "kindsLoadFailed": "Whether these documents are testimony could not be loaded.",
       "notVerified": "Not verified yet",
       "otherList": "Checked against another list",
       "sizeConfirmTitle": "Verify this document?",
       "statusLoadFailed": "The verification status of these documents could not be loaded.",
+      "testimony": "Testimony",
+      "testimonyAbout": "About testimony",
+      "testimonyLine": "Mark witness statements, interview notes and transcripts as testimony. Facts taken from them count as a person's account, not a record.",
       "verifyAgain": "Verify again"
+    },
+    "extraction": {
+      "busy": "Finish the current extraction and its review first.",
+      "confirmStart": "{units, plural, one {Start, # unit} other {Start, # units}}",
+      "dialogDescription": "You accept or decline each fact before it joins the record.",
+      "dialogTitle": "Extract facts from documents",
+      "documentsChosen": "{count, plural, one {# chosen, up to {max}} other {# chosen, up to {max}}}",
+      "documentsLabel": "Documents to read",
+      "errors": {
+        "accessRevoked": "The fact extraction stopped because access is unavailable.",
+        "aiUnavailable": "No AI model is available to read the documents. Check the organization's AI settings.",
+        "documentMissing": "A chosen document or the list no longer exists. Reload the page and choose again.",
+        "enqueueFailed": "The fact extraction could not be started. Try again.",
+        "extractionFailed": "The facts in these documents could not be extracted.",
+        "internal": "The fact extraction failed unexpectedly.",
+        "noText": "No text could be read from the chosen documents.",
+        "sourceUnavailable": "A document changed or was removed after the extraction started. Choose the documents again.",
+        "unsupportedFormat": "Only DOCX files, PDFs and files with a PDF rendition can be read for facts."
+      },
+      "extractFromDocuments": "Extract from documents",
+      "failedTitle": "Fact extraction failed",
+      "instructionLabel": "What to look for (optional)",
+      "instructionPlaceholder": "For example: payments between the parties and when they were made",
+      "nothingFound": "No facts were found in the chosen documents.",
+      "proposedTitle": "Proposed facts",
+      "queued": "Waiting to start.",
+      "reviewed": "{accepted} of {proposed, plural, one {# proposed fact} other {# proposed facts}} accepted.",
+      "runSize": "{available, plural, one {This run uses about {estimated} of your # available unit.} other {This run uses about {estimated} of your # available units.}}",
+      "running": "Reading the documents. Proposed facts will appear here for review.",
+      "startFailed": "Could not start the fact extraction",
+      "submit": "{count, plural, =0 {Extract facts} one {Extract facts from # document} other {Extract facts from # documents}}"
+    },
+    "factTier": {
+      "testimony": {
+        "hint": "Every source of this fact that has not been rejected is testimony: a witness statement, interview note or transcript.",
+        "label": "Testimony"
+      },
+      "unsourced": {
+        "hint": "No source document that has not been rejected is linked to this fact; its medium and date describe the evidence but are not a source.",
+        "label": "Unsourced"
+      }
     },
     "guidance": {
       "escalate": "Escalate",
@@ -326,13 +387,87 @@
       "optional": "Optional",
       "readyToConfirm": "Ready to confirm"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Accepted as routine",
+        "conflictReopened": "Withdrew the conflict's resolution",
+        "escalated": "Flagged for the evidence team",
+        "governed": "Chose the governing record",
+        "noteCleared": "Cleared the note",
+        "noteSaved": "Saved a note",
+        "overridden": "Overrode the verdict",
+        "overrideWithdrawn": "Withdrew the override",
+        "reopened": "Re-opened as a checkable claim",
+        "statusCleared": "Cleared the review status",
+        "statusDisputed": "Marked disputed",
+        "statusNeedsEvidence": "Marked as needing evidence",
+        "statusReviewed": "Marked reviewed"
+      },
+      "empty": "No review actions yet.",
+      "filters": {
+        "allKinds": "Any action",
+        "allReviewers": "Any reviewer",
+        "kind": "Filter by action",
+        "reviewer": "Filter by reviewer"
+      },
+      "formerMember": "Former member",
+      "kinds": {
+        "override": "Verdict overrides",
+        "recordConflict": "Record conflict resolutions",
+        "reopen": "Re-openings",
+        "status": "Status changes"
+      },
+      "noMatches": "No actions match these filters.",
+      "noStatus": "No status",
+      "none": "No actions yet",
+      "reasonUnrecorded": "No reason recorded: this was done before reasons were required.",
+      "runButton": "Review history",
+      "runTitle": "Review history"
+    },
     "matches": {
       "count": "{count, plural, one {# match} other {# matches}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Caveats",
+      "recordSilent": {
+        "hint": "The record is not expected to speak to this point, so the missing coverage is not a gap.",
+        "label": "Record silent"
+      },
+      "restsOnHeld": {
+        "hint": "A fact this verdict rests on is now held out of scoring.",
+        "label": "Rests on a held fact"
+      },
+      "scopeMismatch": {
+        "hint": "A cited fact covers a different period, population, place or measure than the claim.",
+        "label": "Scope mismatch"
+      },
+      "testimonyOnly": {
+        "hint": "No document's record backs the facts this verdict rests on, and at least one of them is testimony.",
+        "label": "Testimony only"
+      },
+      "unsourcedOnly": {
+        "hint": "No fact this verdict rests on has a source yet.",
+        "label": "Unsourced only"
+      }
+    },
+    "reason": {
+      "escalate": "Why does the evidence team need this?",
+      "govern": "Why does this record govern?",
+      "override": "Why is the verdict “{verdict}”?",
+      "placeholder": "Say why; it stays in the claim's history",
+      "reopen": "Why can this claim be checked?",
+      "required": "Give a reason to record this.",
+      "unresolveConflict": "Why withdraw this resolution?",
+      "withdrawOverride": "Why return to the tool's verdict?"
+    },
     "review": {
-      "disputed": "Disputed · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Accepted as routine} other {Reviewed}} · {decidedAt}",
+      "decided": "{status, select, disputed {Disputed} needsEvidence {Needs evidence} other {{origin, select, bulk {Accepted as routine} other {Reviewed}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Disputed",
+        "needsEvidence": "Needs evidence",
+        "reviewed": "Reviewed"
+      },
       "undo": "Undo decision"
     },
     "runs": {
@@ -375,7 +510,8 @@
       },
       "nocover": {
         "chip": "No coverage",
-        "label": "No anchor fact covers this claim"
+        "label": "No anchor fact covers this claim",
+        "silentChip": "No coverage · record silent"
       },
       "notverifiable": {
         "chip": "Not verifiable",
@@ -398,7 +534,7 @@
       "acceptRoutine": "Accept {count, plural, one {# routine claim} other {# routine claims}}",
       "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}",
       "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong>: conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} needsEvidence {, needs evidence} other {}})",
       "documentView": {
         "label": "Document view",
         "original": "Original",
@@ -1138,6 +1274,7 @@
       "count": "{count, plural, one {# language} other {# languages}}",
       "matchedIn": "Matched in {language}"
     },
+    "linkedPassageGone": "The linked passage is no longer in this text.",
     "loadingMore": "Loading more...",
     "marginFilter": {
       "label": "Cited provisions filter",
@@ -1248,6 +1385,7 @@
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.",
     "searchLabel": "Search case law",
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012",
+    "searchStillSearching": "The search service is busy. Still searching…",
     "searchUnavailable": {
       "description": "The case-law search could not be reached. Your query is kept in the address bar, so try again in a moment.",
       "title": "Search is temporarily unavailable"
@@ -1492,6 +1630,8 @@
           "snapshotContinue": "Continue reading page",
           "switchTab": "Switch to tab"
         },
+        "allowSiteFailed": "This website could not be saved as allowed. This action still runs; the next one asks again.",
+        "alwaysAllowSite": "Always allow this website",
         "askAgain": "Ask again",
         "autoApproveReads": "Auto-approve page reads",
         "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.",
@@ -1687,14 +1827,40 @@
     "loadEarlierMessages": "Load earlier messages",
     "loadEarlierMessagesError": "Couldn't load earlier messages",
     "loadingEarlierMessages": "Loading earlier messages…",
+    "localFilesUndo": {
+      "action": "Undo file changes",
+      "computer": {
+        "failed": "The undo did not finish on your computer. Some files may already have changed, so check the chat's folder.",
+        "folderBusy": "A run on your computer is using this folder. Try again when it finishes.",
+        "noCheckpoint": "Your computer has no saved copy of the files from before this turn, so nothing was undone.",
+        "notNewest": "Your computer has newer changes in this folder, so nothing was undone."
+      },
+      "confirm": "Undo changes",
+      "confirmDescription": "The files this turn changed in its folder on your computer go back to how they were before the turn. Only this turn's changes are undone; earlier turns' changes stay.",
+      "confirmTitle": "Undo this turn's file changes?",
+      "expired": "Your computer did not answer in time. Try again.",
+      "pending": "Undoing file changes on your computer",
+      "refused": {
+        "desktopOffline": "Your computer is offline. Open the stella desktop app and try again.",
+        "desktopUpdateRequired": "The stella desktop app on your computer is too old to undo changes. Update it, then try again.",
+        "noCheckpoint": "This turn has no saved copy of the files to go back to.",
+        "notNewest": "Only the newest turn's file changes can be undone.",
+        "threadBusy": "This chat is still working. Try again when it finishes."
+      },
+      "restored": "File changes undone"
+    },
     "localRun": {
       "cloud": "stella cloud",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
       "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
+      "errorNotReached": "Your computer did not pick up this turn. Make sure stella desktop is open and connected, then try again.",
+      "errorRelinked": "stella desktop was linked again on your computer, so this turn stopped. Send it again.",
+      "errorRestoring": "Your computer is still undoing file changes. Send this again in a moment.",
       "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
       "filesNotShared": "Files that could not be shared stay on your computer: {fileNames}",
       "onThisComputer": "{harness} on this computer",
+      "permissionAboveLimit": "Not allowed by your organization",
       "permissionAskDescription": "Edits files in the chat's folder on its own; asks before anything else.",
       "permissionAutoDescription": "Does what it judges safe on its own; asks about the rest.",
       "permissionFullAuto": "Full auto",
@@ -1706,18 +1872,23 @@
       "refusalHarnessUnavailable": "The coding agent on your computer cannot take this request right now. Check it in stella desktop.",
       "refusalModelUnavailable": "The coding agent on your computer no longer offers this model. Choose another one under Run on.",
       "refusalNoComputer": "None of your computers is connected. Open stella desktop, then send again.",
+      "refusalPermissionAboveLimit": "Your organization does not allow these permissions for the coding agent on your computer. Choose another option under Permissions.",
       "refusalPermissionUnavailable": "The coding agent on your computer cannot run with these permissions. Choose another option under Permissions.",
       "refusalTooLarge": "This conversation is too long to hand to your computer. Start a new chat to run it there.",
       "refusalUnavailable": "Running chats on your computer is not available for your account.",
       "runOn": "Run on",
       "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit reached until {time}",
+      "stateModelUnavailable": "Model no longer available",
       "stateNeedsLogin": "Sign-in needed",
       "stateNotInstalled": "Not installed",
       "stateOffline": "Computer offline",
       "stateUnavailable": "Not available right now",
       "stateUnsupported": "This version is not supported",
-      "waitingForComputer": "Waiting for your computer to reconnect…"
+      "waitingForComputer": "Waiting for your computer to reconnect…",
+      "waitingForPickup": "Waiting for your computer to pick up this turn…",
+      "waitingSentAt": "Sent at {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Choose any that apply",
@@ -2049,6 +2220,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# character} other {# characters}}",
+      "commandExited": "{command} (exit code {code})",
       "consoleLogs": "Console output",
       "exactCall": "Exact call",
       "failed": "This step failed; stella will work around it.",
@@ -2056,10 +2228,14 @@
       "input": "Input",
       "interrupted": "Interrupted before finishing",
       "output": "Output",
+      "patternInPath": "{pattern} in {path}",
+      "readFile": "Reading a file",
+      "searchFiles": "Searching files",
       "sourceCode": "Source code",
       "statusWaiting": "Waiting",
       "toggleDetails": "Toggle details",
-      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}"
+      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}",
+      "updatePlan": "Updating the plan"
     },
     "turnNotification": {
       "failedBody": "A chat reply in stella did not finish.",
@@ -2412,6 +2588,8 @@
     "loading": "Loading",
     "logTime": "Log time",
     "low": "Low",
+    "markAsRead": "Mark as read",
+    "markAsUnread": "Mark as unread",
     "matter": "Matter",
     "matters": "Matters",
     "medium": "Medium",
@@ -2442,6 +2620,7 @@
     "or": "Or",
     "organization": "Organization",
     "organizationName": "Organization name",
+    "organizations": "Organizations",
     "page": "Page {page}",
     "paymentRetryNotice": "Payment issue. Update your payment method by {date} to keep access.",
     "pin": "Pin",
@@ -2528,6 +2707,7 @@
     "unexpectedError": "An unexpected error occurred. Please contact support.",
     "unknownUser": "Unknown user",
     "unpin": "Unpin",
+    "unread": "Unread",
     "unsavedChanges": "Unsaved changes",
     "unsavedChangesClose": "Unsaved changes. Close again to discard",
     "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard",
@@ -2747,7 +2927,6 @@
       "vatPayerUnknown": "Unknown",
       "year": "Year of birth"
     },
-    "filterOrganizations": "Organizations",
     "filterPersons": "Persons",
     "import": {
       "confirmAction": "Confirm import",
@@ -3069,6 +3248,7 @@
       "aiProviderTaskUnsupported": "The configured AI provider cannot do this task. Choose a provider that can.",
       "aiUnknown": "The AI request failed. Try again.",
       "alreadyOrganizationMember": "This person is already a member of this organization.",
+      "browserSiteGrantLimitReached": "You can allow at most 100 websites. Remove one under Settings, Connections first.",
       "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.",
       "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
       "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.",
@@ -3104,6 +3284,7 @@
       "organizationMemberLimitReached": "This organization has reached its member limit.",
       "providerKeyRejected": "The provider rejected the API key.",
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.",
+      "skillSourceUnreachable": "The skill source could not be loaded. Check that the link points to a public GitHub repository, or try again later.",
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.",
       "usageLimitExceeded": "Usage limit reached.",
       "validationInvalid": "A field has a value that cannot be saved.",
@@ -4039,6 +4220,9 @@
       "description": "Choose an authored playbook, reference documents, or both.",
       "dismissFinding": "Dismiss finding",
       "documentChanged": "This document changed after this review.",
+      "documentCutNotice": "<strong>{documentName} was not read in full.</strong> It is too long for this model, so about {percent} of its text was left out. A position with no answer is flagged for review, because the answer may be in the part left out.",
+      "documentTooLarge": "This document is too long for this model to read enough of it. Try a model with a larger context window.",
+      "documentsTooLarge": "These documents are too long for this model to read together. Use fewer or shorter documents, or try a model with a larger context window.",
       "export": {
         "counterparty": "Download for counterparty",
         "counterpartyFailed": "Could not export the document",
@@ -4054,6 +4238,7 @@
       "failed": "Document review failed",
       "filterCoverage": "Coverage",
       "filterDeviations": "Deviations",
+      "fixesWithheldNotice": "Proposed changes weren't created for this review because it used a reference document from a matter that isn't available to the person who ran it. Findings are unaffected.",
       "flag": "Flag",
       "flaggedPositions": "{total, plural, one {{flagged, number} of # position flagged} other {{flagged, number} of # positions flagged}}",
       "fromChat": "From chat",
@@ -4216,6 +4401,7 @@
       "discoveredSkills": "{count, plural, one {# skill found} other {# skills found}}",
       "discoveryEmpty": "No skills were found at this repository or folder.",
       "discoverySkippedInvalid": "{count, plural, one {# invalid skill was skipped} other {# invalid skills were skipped}}",
+      "dropPack": "Drop a .zip or SKILL.md to import the skill",
       "editSkill": "Edit skill",
       "enableSkill": "Enable skill",
       "fileExists": "A file with this path already exists",
@@ -4273,6 +4459,7 @@
         }
       },
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.",
+      "uploadPack": "Upload .zip or SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "Version: {version}"
     },
@@ -4688,6 +4875,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Accepting {done} of {total}…"
+    },
     "sources": {
       "add": "Add source",
       "documentRequired": "Choose a document.",
@@ -4948,6 +5138,12 @@
       "selectModelForEachRole": "Add a provider and select a model for each category.",
       "selectedProvider": "{provider}",
       "usingDefaults": "Using defaults"
+    },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} characters",
+      "description": "These instructions apply to every AI conversation in your organization and take priority over personal preferences. Changes apply from the next message. Use them for compliance rules, data handling, and formatting standards.",
+      "title": "Organization instructions",
+      "tooLong": "Instructions must be at most {maxLength} characters."
     },
     "creationEvaluationLimitReached": "You have used all {limit} organization evaluation periods. Deleting an organization does not restore one. Use an existing organization or contact support for paid access.",
     "creationInvalidName": "Enter a valid organization name (up to {maxLength} characters).",
@@ -5319,6 +5515,7 @@
       "deleteAccountWarning": "Deletion is irreversible. Your login and private account data will be removed.",
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.",
       "desktop": "Desktop",
+      "desktopAccountConflict": "stella desktop on this computer is connected to another stella account. Switching asks you to confirm in stella desktop first.",
       "desktopAppDescription": "Recall anything you copy, and open stella documents in the desktop apps you already use.",
       "desktopCardApproveDetail": "Approve to link this computer to <bdi>{identity}</bdi> on {host}.",
       "desktopCardApproveTitle": "stella desktop is asking to connect",
@@ -5333,6 +5530,7 @@
       "desktopCardOutdatedTitle": "stella desktop needs an update",
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.",
       "desktopClipboardTitle": "Searchable clipboard history",
+      "desktopConnectDeclined": "The connection was cancelled in stella desktop.",
       "desktopConnectFailed": "Could not connect stella desktop.",
       "desktopConnectInstalled": "It's installed, connect",
       "desktopConnectedAs": "Connected as <bdi>{email}</bdi>",
@@ -5348,11 +5546,13 @@
       "desktopInstallOpenStep": "Open stella desktop once. Clipboard appears immediately and remains available from the macOS menu bar or Windows system tray.",
       "desktopInstallTitle": "Install and open",
       "desktopInstallWindowsStep": "Run the installer and follow the prompts.",
+      "desktopKeptAccount": "stella desktop kept its current account.",
       "desktopOpenApp": "Open stella desktop",
       "desktopPrivacyDescription": "Clipboard history is encrypted and stored on this device.",
       "desktopPrivacyTitle": "Private by default",
       "desktopSelfHostDescription": "Trust this stella URL in the signed desktop app so documents from this install can open locally.",
       "desktopSelfHostTitle": "Self-hosted desktop editing",
+      "desktopSwitchAccount": "Switch stella desktop to this account",
       "displayNameDescription": "How your colleagues see you across matters, comments, and activity.",
       "displayNameRequired": "Enter a display name.",
       "displayNameSaved": "Display name updated",
@@ -5426,6 +5626,9 @@
       "browserExtensionDescription": "stella chat can read and use websites in a Chrome tab you choose. Every action waits for your approval.",
       "browserExtensionInstall": "Add to Chrome",
       "browserExtensionTitle": "Browser extension",
+      "browserSiteRemove": "Remove {site}",
+      "browserSitesDescription": "Chat's browser actions on these websites run without asking. Remove a website to be asked again.",
+      "browserSitesTitle": "Allowed websites",
       "cliDescription": "Install the stella command-line client and sign in to script matters, documents, and templates from a terminal.",
       "cliInstallLabel": "Install",
       "cliLoginLabel": "Log in",
@@ -5542,6 +5745,7 @@
         "case_law_matter_link": "case law matter link",
         "case_law_reader_answer": "case law reader answer",
         "case_law_research_column": "case law research column",
+        "chat_browser_site_grant": "chat website approval",
         "chat_file": "chat file",
         "chat_message": "chat message",
         "chat_thread": "chat thread",
@@ -5638,6 +5842,11 @@
         "labelAria": "Document type name",
         "reorder": "Reorder document type",
         "title": "Document types"
+      },
+      "localRuns": {
+        "description": "The most a coding agent may do without asking when it runs a chat on a member's computer. A lower limit applies from each member's next message; a run already going keeps its permissions.",
+        "title": "Coding agents on members' computers",
+        "updated": "Coding agent permissions updated"
       },
       "matterNumbering": "Matter numbering",
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",

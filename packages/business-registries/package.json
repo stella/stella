@@ -1,6 +1,6 @@
 {
   "name": "@stll/business-registries",
-  "version": "0.13.7",
+  "version": "0.13.8",
   "description": "Typed clients for national business / commercial registries (Czech ARES, Norwegian Brreg, Mexican INEGI DENUE, US SEC EDGAR, Slovak ORSR, Taiwanese GCIS, Finnish PRH, Polish KRS, UK Companies House, French INSEE Sirene, ...)",
   "keywords": [
     "ares",
@@ -97,8 +97,8 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/business-registries",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/business-registries",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/business-registries",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/business-registries",
     "prepack": "bun run build",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },

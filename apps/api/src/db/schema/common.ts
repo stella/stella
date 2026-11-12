@@ -34,6 +34,7 @@ import {
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
+  chatBrowserSiteGrantPolicies,
   chatMessagePolicies,
   chatMessageRevisionPolicies,
   chatMessageSearchDocumentPolicies,
@@ -78,6 +79,7 @@ import {
   wsOrganizationScopedRequestPolicies,
   wsOrganizationUserPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 } from "@/api/db/rls";
 import type {
   BankAccount,
@@ -217,6 +219,8 @@ export type JustificationBlock =
 export type JustificationContent = {
   version: 1;
   blocks: JustificationBlock[];
+  /** Set on a clause summary, whose wording lives only in its citations. */
+  gradeFrom?: "cited-passages";
 };
 
 /** Re-exported so the schema layer keeps one import surface; the agenda member
@@ -570,6 +574,7 @@ export {
   orgPolicies,
   orgReadOnlyPolicies,
   savedSearchPolicies,
+  chatBrowserSiteGrantPolicies,
   chatToolGrantPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
@@ -589,6 +594,7 @@ export {
   wsDataScopePolicies,
   wsOrganizationScopedRequestPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 };
 
 export type {

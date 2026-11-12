@@ -11,6 +11,7 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 import {
+  CHAT_TOOL_DECLINED_ERROR,
   chatToolExecutor,
   isBrowserResolvedChatToolCall,
   isHarnessChatToolCall,
@@ -34,6 +35,7 @@ import {
   TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
   TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
 } from "@/api/handlers/chat/tanstack-chat-lifecycle";
+import { retainToolResultsInParts } from "@/api/handlers/chat/tool-result-retention";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type {
   ChatAttachmentMetadata,
@@ -889,20 +891,58 @@ const terminalToolCallError = (part: ChatToolCallPart): ChatToolCallPart => {
   });
 };
 
+type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
+
+/** A declined call as it is stored, and the result answering it. */
+type DeclinedToolCall = {
+  call: ChatToolCallPart;
+  result: ChatToolResultPart;
+};
+
+/**
+ * `part` declined, in the one shape a declined call is stored in: the shape
+ * the chat engine writes when the user denies an approval. The call settles
+ * as an error whose output is the engine's denial and keeps its approval with
+ * `approved: false`, and a `denied` result answers it, so the model is told
+ * the user declined and every reader (`isDeclinedChatToolCall`) sees the same
+ * decision whoever declined the call.
+ */
+export const declineToolCall = (
+  part: ChatToolCallPart,
+  approval: ChatApprovalMetadata,
+): DeclinedToolCall => {
+  const output = { error: CHAT_TOOL_DECLINED_ERROR };
+  return {
+    call: toChatToolCallPart({
+      ...part,
+      approval: { ...approval, approved: false },
+      output,
+      state: "error",
+    }),
+    result: {
+      content: JSON.stringify(output),
+      error: CHAT_TOOL_DECLINED_ERROR,
+      outcome: "denied",
+      state: "error",
+      toolCallId: part.id,
+      type: "tool-result",
+    },
+  };
+};
+
+/** What a terminated turn leaves of one of its calls: the call, and the
+ *  result that now answers it, if any. */
 const cancelPendingToolCallPart = (
   part: ChatToolCallPart,
-): ChatToolCallPart => {
+): { call: ChatToolCallPart; result?: ChatToolResultPart } => {
   switch (part.state) {
     case "approval-requested": {
       const approval = getChatToolCallExtension(part, "approval");
       if (!isChatApprovalMetadata(approval)) {
-        return terminalToolCallError(part);
+        return { call: terminalToolCallError(part) };
       }
-      return toChatToolCallPart({
-        ...part,
-        approval: { ...approval, approved: false },
-        state: "approval-responded",
-      });
+      // Nobody can answer the approval any more, so it is declined.
+      return declineToolCall(part, approval);
     }
     case "awaiting-input":
     case "input-streaming":
@@ -910,11 +950,11 @@ const cancelPendingToolCallPart = (
       // Do not leave a partial or client-owned call in a state that a fresh
       // hydration can execute after its owning turn was superseded. Omitting
       // input/approval/output also removes now-invalid user controls.
-      return terminalToolCallError(part);
+      return { call: terminalToolCallError(part) };
     case "approval-responded":
     case "complete":
     case "error":
-      return part;
+      return { call: part };
     default:
       part.state satisfies never;
       return panic(`Unhandled state: ${String(part.state)}`);
@@ -924,17 +964,26 @@ const cancelPendingToolCallPart = (
 /**
  * Keep a terminal assistant message internally consistent: metadata records
  * its turn's outcome, and its parts no longer expose an approval or input
- * control that belongs to that terminated turn.
+ * control that belongs to that terminated turn. The results answering the
+ * approvals it declines go at the end of the message, where the engine
+ * stores the results it writes (`answerCallsInTheirStep` puts each in its
+ * step for a provider request).
  */
 export const cancelPendingChatToolCalls = (
   message: PersistableChatMessage,
 ): PersistableChatMessage => {
-  const parts = message.parts.map((part) =>
-    part.type === "tool-call"
-      ? continueStoredChatPart(part, cancelPendingToolCallPart(part))
-      : part,
-  );
-  return { ...message, parts };
+  const results: ChatToolResultPart[] = [];
+  const parts = message.parts.map((part) => {
+    if (part.type !== "tool-call") {
+      return part;
+    }
+    const { call, result } = cancelPendingToolCallPart(part);
+    if (result !== undefined) {
+      results.push(result);
+    }
+    return continueStoredChatPart(part, call);
+  });
+  return { ...message, parts: [...parts, ...results] };
 };
 
 /**
@@ -1601,7 +1650,9 @@ const normalizeChatPartsForPersistence = (
   parts: readonly ChatPart[],
 ): ChatPart[] => {
   const normalized: ChatPart[] = [];
-  for (const part of parts) {
+  // A message stores each superseded tool result as its projection, as the
+  // model reads it, so a browsing turn stores one page however many it read.
+  for (const part of retainToolResultsInParts(parts, continueStoredChatPart)) {
     normalized.push(normalizeChatPartForPersistence(part));
   }
   return applyChatPartPersistenceBudget(normalized).parts;
@@ -1897,6 +1948,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.anonRestorations === undefined &&
   metadata.answerQuotes === undefined &&
   metadata.contextNotice === undefined &&
+  metadata.localFilesUndone === undefined &&
   metadata.localRunContext === undefined &&
   metadata.localRunFilesNotShared === undefined &&
   metadata.mentions === undefined &&

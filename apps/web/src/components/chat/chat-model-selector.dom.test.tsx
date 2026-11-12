@@ -64,6 +64,7 @@ const READINESS: ChatLocalRunReadiness = {
       ],
     },
   ],
+  maxApprovals: "full_auto",
 };
 
 const CLOUD_MODEL = {
@@ -109,10 +110,12 @@ const renderSelector = (selected: ChatRunTarget) => {
                 scope: "global",
                 threadId: toChatThreadId("thread-local-run"),
               },
+              state: "ready",
               selectedModel: null,
               selectedReasoningEffort: null,
               selectModel: () => undefined,
               runTarget: {
+                type: "choice",
                 selected: target,
                 select: (next) => {
                   chosen.push(next);

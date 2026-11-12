@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "A fact extraction writes its candidates and their sources in the same transaction as the run's audited transition to review; the transition's audit event names the candidate count, so the two inserts carry a skip like the verification engine's output writes."
+}

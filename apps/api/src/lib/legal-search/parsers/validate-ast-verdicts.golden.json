@@ -3418,6 +3418,256 @@
     }
   },
   {
+    "name": "parsers/cz-us-iv-us-35-96.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 10433,
+        "astLength": 10179,
+        "retainedPct": 97.6,
+        "blockCount": 22,
+        "missingWords": [
+          "iv.ús",
+          "sbnu",
+          "exkluzivitě",
+          "ochraně",
+          "nabytého",
+          "aplikací",
+          "předpisu"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 15
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 20861,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-35-96.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "CONTENT_LOSS",
+          "message": "Only 88.8% of text retained (threshold: 90%)",
+          "severity": "error"
+        },
+        {
+          "code": "MISSING_WORDS",
+          "message": "50 meaningful words missing: iv.ús, sbnu, exkluzivitě, ochraně, nabytého, aplikací, předpisu, uvádějí, uzavřené, náležitostí",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 10433,
+        "astLength": 9264,
+        "retainedPct": 88.8,
+        "blockCount": 21,
+        "missingWords": [
+          "iv.ús",
+          "sbnu",
+          "exkluzivitě",
+          "ochraně",
+          "nabytého",
+          "aplikací",
+          "předpisu",
+          "uvádějí",
+          "uzavřené",
+          "náležitostí",
+          "žádný",
+          "předpis",
+          "včetně",
+          "neuváděl",
+          "úkony",
+          "učiněné",
+          "doby",
+          "prohlášení",
+          "těchto",
+          "nepřátele",
+          "zahájení",
+          "jsou",
+          "právně",
+          "neúčinné",
+          "takové",
+          "tvrzení",
+          "uvedeno",
+          "namítají",
+          "fakticky",
+          "existovalo",
+          "dobu",
+          "aniž",
+          "mohl",
+          "kdokoli",
+          "předpokládat",
+          "bývalý",
+          "bude",
+          "prohlášen",
+          "zásahu",
+          "práv",
+          "protiprávním",
+          "porušujícím",
+          "obecně",
+          "uznávaná",
+          "lidská",
+          "svobody",
+          "navrhují",
+          "zrušení",
+          "obou",
+          "napadených"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 14
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 20861,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-35-96.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 10433,
+        "astLength": 11094,
+        "retainedPct": 106.3,
+        "blockCount": 23,
+        "missingWords": [
+          "iv.ús",
+          "sbnu",
+          "exkluzivitě",
+          "ochraně",
+          "nabytého",
+          "aplikací",
+          "předpisu"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 16
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 20861,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-35-96.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 10433,
+        "astLength": 10178,
+        "retainedPct": 97.6,
+        "blockCount": 22,
+        "missingWords": [
+          "iv.ús",
+          "sbnu",
+          "exkluzivitě",
+          "ochraně",
+          "nabytého",
+          "aplikací",
+          "předpisu"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 15
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 20861,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-35-96.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 10433,
+        "astLength": 10179,
+        "retainedPct": 97.6,
+        "blockCount": 22,
+        "missingWords": [
+          "iv.ús",
+          "sbnu",
+          "exkluzivitě",
+          "ochraně",
+          "nabytého",
+          "aplikací",
+          "předpisu"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 15
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 20861,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
     "name": "parsers/cz-us-iv-us-422-26.html.gz#current",
     "result": {
       "ok": true,
@@ -3618,9 +3868,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
         },
@@ -3721,9 +3971,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 13
         },
@@ -3768,9 +4018,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 15
         },
@@ -3809,9 +4059,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
         },
@@ -3850,9 +4100,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
         },
@@ -3877,7 +4127,7 @@
         "originalLength": 99612,
         "astLength": 99478,
         "retainedPct": 99.9,
-        "blockCount": 178,
+        "blockCount": 174,
         "missingWords": ["sbnu", "změna"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
@@ -3887,7 +4137,7 @@
           "paragraph": 76,
           "paragraph-closing": 7,
           "paragraph-signature": 2,
-          "paragraph-dissent": 73
+          "paragraph-dissent": 69
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3908,32 +4158,19 @@
       "issues": [],
       "stats": {
         "originalLength": 99612,
-        "astLength": 99092,
-        "retainedPct": 99.5,
-        "blockCount": 177,
-        "missingWords": [
-          "sbnu",
-          "změna",
-          "násobkem",
-          "základního",
-          "narůstání",
-          "končí",
-          "nulové",
-          "mne",
-          "nesvědčí",
-          "vycházel",
-          "věrohodný",
-          "analýze"
-        ],
+        "astLength": 99305,
+        "retainedPct": 99.7,
+        "blockCount": 173,
+        "missingWords": ["sbnu", "změna", "pořádkem"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
           "paragraph-intro": 1,
           "paragraph-holding": 3,
-          "paragraph": 76,
+          "paragraph": 75,
           "paragraph-closing": 7,
           "paragraph-signature": 2,
-          "paragraph-dissent": 72
+          "paragraph-dissent": 69
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3960,19 +4197,19 @@
       ],
       "stats": {
         "originalLength": 99612,
-        "astLength": 99864,
-        "retainedPct": 100.3,
-        "blockCount": 179,
+        "astLength": 99651,
+        "retainedPct": 100,
+        "blockCount": 175,
         "missingWords": ["sbnu", "změna"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
           "paragraph-intro": 1,
           "paragraph-holding": 3,
-          "paragraph": 76,
+          "paragraph": 77,
           "paragraph-closing": 7,
           "paragraph-signature": 2,
-          "paragraph-dissent": 74
+          "paragraph-dissent": 69
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3995,7 +4232,7 @@
         "originalLength": 99612,
         "astLength": 99477,
         "retainedPct": 99.9,
-        "blockCount": 178,
+        "blockCount": 174,
         "missingWords": ["sbnu", "změna"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
@@ -4005,7 +4242,7 @@
           "paragraph": 76,
           "paragraph-closing": 7,
           "paragraph-signature": 2,
-          "paragraph-dissent": 73
+          "paragraph-dissent": 69
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -4028,7 +4265,7 @@
         "originalLength": 99612,
         "astLength": 99478,
         "retainedPct": 99.9,
-        "blockCount": 178,
+        "blockCount": 174,
         "missingWords": ["sbnu", "změna"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
@@ -4038,7 +4275,7 @@
           "paragraph": 76,
           "paragraph-closing": 7,
           "paragraph-signature": 2,
-          "paragraph-dissent": 73
+          "paragraph-dissent": 69
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,

@@ -1,10 +1,10 @@
 import { panic } from "better-result";
 
-/** Where one of the reader's chats stands while it is still open. */
-export type ActiveChatRunState = "needs-you" | "working";
+import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
+import type { ChatActiveRunState } from "@stll/api-contract/chat";
 
 type ActiveChatRunPlacement = {
-  state: ActiveChatRunState;
+  state: ChatActiveRunState;
   workspaceId: string | null;
 };
 
@@ -31,13 +31,13 @@ export const matterRunStatusByWorkspace = (
       working: 0,
     };
     switch (state) {
-      case "needs-you":
+      case CHAT_ACTIVE_RUN_STATE.needsYou:
         byWorkspace.set(workspaceId, {
           ...current,
           needsYou: current.needsYou + 1,
         });
         break;
-      case "working":
+      case CHAT_ACTIVE_RUN_STATE.working:
         byWorkspace.set(workspaceId, {
           ...current,
           working: current.working + 1,
@@ -57,12 +57,12 @@ export const matterRunStatusByWorkspace = (
  */
 export const topMatterRunState = (
   status: MatterRunStatus | undefined,
-): ActiveChatRunState | null => {
+): ChatActiveRunState | null => {
   if (status === undefined) {
     return null;
   }
   if (status.needsYou > 0) {
-    return "needs-you";
+    return CHAT_ACTIVE_RUN_STATE.needsYou;
   }
-  return status.working > 0 ? "working" : null;
+  return status.working > 0 ? CHAT_ACTIVE_RUN_STATE.working : null;
 };

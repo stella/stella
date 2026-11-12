@@ -1,10 +1,14 @@
 import { useId, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_CLOUD_RUN_TARGET,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import { groupReasoningEfforts } from "@stll/chat/model-selector";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -23,6 +27,7 @@ import {
   MenuSubTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -64,25 +69,57 @@ export const EFFORT_LABEL_KEY = {
 export type ComposerModelsMenuProps = {
   activeOrganizationId: string;
   threadRef: ChatThreadRef;
+  /**
+   * `loading` until the stored choice is known; the menu is disabled until
+   * then, so no pick composes on a choice not yet read.
+   */
+  state: "loading" | "ready";
   /** Current per-thread override ("provider::modelId"), or null when the
    *  thread uses the org default. */
   selectedModel: string | null;
   selectedReasoningEffort: ReasoningEffort | null;
-  /** Persist the chosen model (see `useChatModelSelection`). Fire-and-forget
+  /** Persist the chosen model (see `useChatComposerModels`). Fire-and-forget
    *  here: the caller's own send path is what awaits the outcome via
    *  `awaitPendingSelection`, not this menu. */
   selectModel: (selection: {
     model: string | null;
     reasoningEffort: ReasoningEffort | null;
   }) => void;
-  /**
-   * Where the thread's turns run. Absent on surfaces whose turns always run
-   * on stella's own models; the menu then offers no Run on choice.
-   */
-  runTarget?: {
-    selected: ChatRunTarget;
-    select: (target: ChatRunTarget) => void;
-  };
+  /** Where the thread's turns run; see `ChatRunOn`. */
+  runTarget: ChatRunOn;
+};
+
+/**
+ * Where a composer's turns run, as its model menu offers it. Required on
+ * every menu, so a surface that starts or continues a thread cannot drop
+ * the Run on choice by leaving a prop out: it takes the choice from
+ * `useChatComposerModels`, or states `cloud_only` because its turns depend
+ * on tools only stella's own models drive in this page (the live document
+ * editor's suggestions, say).
+ */
+export type ChatRunOn =
+  | {
+      type: "choice";
+      selected: ChatRunTarget;
+      select: (target: ChatRunTarget) => void;
+    }
+  | { type: "cloud_only" };
+
+export const CHAT_RUN_ON_CLOUD_ONLY = {
+  type: "cloud_only",
+} as const satisfies ChatRunOn;
+
+/** The target a composer's next turn runs on. */
+export const chatRunOnTarget = (runOn: ChatRunOn): ChatRunTarget => {
+  switch (runOn.type) {
+    case "choice":
+      return runOn.selected;
+    case "cloud_only":
+      return CHAT_CLOUD_RUN_TARGET;
+    default:
+      runOn satisfies never;
+      return panic("Unknown Run on choice");
+  }
 };
 
 type ModelOption = {
@@ -117,7 +154,7 @@ export const ChatModelOptionsMenu = ({
   open,
 }: ChatModelOptionsMenuProps) => (
   <>
-    {models.runTarget && (
+    {models.runTarget.type === "choice" && (
       <ChatRunTargetMenu
         activeOrganizationId={models.activeOrganizationId}
         enabled={enabled}
@@ -125,7 +162,7 @@ export const ChatModelOptionsMenu = ({
         selected={models.runTarget.selected}
       />
     )}
-    {models.runTarget?.selected.kind !== "local" && (
+    {chatRunOnTarget(models.runTarget).kind !== "local" && (
       <CloudModelOptions enabled={enabled} models={models} open={open} />
     )}
   </>
@@ -361,9 +398,9 @@ const ModelOptionRow = ({
           />
           <span className="flex min-w-0 flex-col">
             <span className="flex min-w-0 items-center gap-1.5">
-              <BidiText as="span" className="truncate">
+              <TruncatedText render={<BidiText as="span" />}>
                 {option.displayName}
-              </BidiText>
+              </TruncatedText>
               {recommendation === "new" && (
                 <span className="bg-muted text-muted-foreground text-2xs shrink-0 rounded-sm px-1.5 py-px font-medium">
                   {t("chat.modelSelector.newModel")}

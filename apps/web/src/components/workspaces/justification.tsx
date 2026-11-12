@@ -4,6 +4,7 @@ import { produce } from "immer";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -203,8 +204,10 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
       <Tooltip
         content={t("common.unverifiedCitationHint")}
         render={
-          <span className="text-muted-foreground text-2xs inline-flex max-w-[16rem] items-center gap-1 truncate align-baseline font-medium italic underline decoration-dotted underline-offset-2">
-            “{preview}” · {t("common.unverified")}
+          <span className="text-muted-foreground text-2xs inline-flex max-w-[16rem] items-center gap-1 align-baseline font-medium italic underline decoration-dotted underline-offset-2">
+            <TruncatedText>
+              “{preview}” · {t("common.unverified")}
+            </TruncatedText>
           </span>
         }
       />
@@ -239,11 +242,12 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
           }}
           variant="plain"
         >
-          <span
-            className={cn(CITATION_CHIP_CLASSES, "block max-w-full truncate")}
+          <TruncatedText
+            className={cn(CITATION_CHIP_CLASSES, "block")}
+            hint={false}
           >
             “{preview}”
-          </span>
+          </TruncatedText>
         </Button>
       }
     />

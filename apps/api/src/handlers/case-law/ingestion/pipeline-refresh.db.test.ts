@@ -29,11 +29,16 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import {
+  CASE_LAW_CORPUS_DEPENDENCIES,
+  type CaseLawCorpusDependencies,
+} from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { zstdCompress } from "@/api/lib/compression";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
@@ -82,6 +87,20 @@ const STORED_KEYS = {
   astKey: "legal-corpus/stored/ast.json.zst",
 } as const;
 const STORED_CONTENT_HASH = "stored-content-hash";
+
+// A refresh that replaces the document reads the one it replaces, to record
+// where its anchors went; the stored AST object is served from here.
+const storedAstCorpus = {
+  ...CASE_LAW_CORPUS_DEPENDENCIES,
+  readBytes: {
+    readObject: async ({ key }) => {
+      if (key !== STORED_KEYS.astKey) {
+        throw new TypeError(`Unexpected stored object read: ${key}`);
+      }
+      return await Promise.resolve(zstdCompress(JSON.stringify(storedAst)));
+    },
+  },
+} satisfies CaseLawCorpusDependencies;
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("ingestion refresh — stored document", () => {
@@ -450,6 +469,7 @@ if (!databaseUrl || !runPostgresTests) {
           observationOrder: 1n,
           sourceId,
           scopedDb,
+          corpus: storedAstCorpus,
           observedAt: new Date("2026-07-31T12:00:00.000Z"),
         })
       ).unwrap();

@@ -9,7 +9,7 @@ import { CASE_LAW_REPLAY_PENDING_INDEX } from "@/api/db/case-law-parsed-input-st
 import * as schema from "@/api/db/schema";
 import { BACKGROUND_REPLAY_ARMS } from "@/api/handlers/case-law/ingestion/replay";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { READ_BUDGETS, readBudgetPages } from "@/api/lib/db/read-budgets";
 import { READ_COMMITTED_BEGIN } from "@/api/lib/db/read-committed-unit";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -63,8 +63,10 @@ import {
   metricsFromPlan,
   OVER_BUDGET_REMOVAL_BAND,
   scaleViolations,
+  scheduledJobBudgetProblems,
   shapeViolations,
   sharedBlockSampleProblem,
+  writeScaleViolations,
 } from "./measurement";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { QUERY_PERF_PROFILES } from "./profiles";
@@ -223,10 +225,7 @@ test("every measurement execution guard applies even when pages fit or carry an 
     "statement.documents.searchHits",
     "statement.legislation.candidateRows",
   ] as const) {
-    for (const sharedBlocks of [
-      READ_BUDGETS[id].pages,
-      READ_BUDGETS[id].pages + 1,
-    ]) {
+    for (const sharedBlocks of [readBudgetPages(id), readBudgetPages(id) + 1]) {
       expect(
         budgetProblem(id, { sharedBlocks, executionTimeMs: 10_001 }),
       ).toContain("execution time");
@@ -259,7 +258,7 @@ test("over-budget markers use hysteresis while unmarked budgets retain their edg
   ).toBeUndefined();
   expect(
     budgetProblem("statement.documents.searchHits", {
-      sharedBlocks: READ_BUDGETS["statement.documents.searchHits"].pages,
+      sharedBlocks: readBudgetPages("statement.documents.searchHits"),
       executionTimeMs: 10_000,
     }),
   ).toBeUndefined();
@@ -347,7 +346,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               event: "read_budget_measurement",
               budgetId,
               rows,
-              budgetPages: READ_BUDGETS[budgetId].pages,
+              budgetPages: readBudgetPages(budgetId),
               after: good.metrics,
               before: bad.metrics,
             });
@@ -617,7 +616,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             event: "read_budget_measurement",
             profileId: "corpus",
             budgetId,
-            budgetPages: READ_BUDGETS[budgetId].pages,
+            budgetPages: readBudgetPages(budgetId),
             ...result.metrics,
             perRow: result.metrics.sharedBlocks / entry.expectedRows,
           });
@@ -724,7 +723,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           pages: unbounded,
         });
         note(
-          unbounded > READ_BUDGETS["scheduled.caseLaw.reportFreshness"].pages
+          unbounded > readBudgetPages("scheduled.caseLaw.reportFreshness")
             ? undefined
             : `the former unbounded freshness reads measured ${String(unbounded)} pages, inside the job's budget: the fixture is too small to refuse them`,
         );
@@ -914,6 +913,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               jobId,
               generation,
               ...run.metrics,
+              readMetrics: run.readMetrics,
+              writeMetrics: run.writeMetrics,
+              writtenRows: run.writtenRows,
               statements: run.statements,
             });
             for (const violation of run.planViolations) {
@@ -927,7 +929,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                 `${jobId} on ${generation} left no proof of its work; the budget measured only its bookkeeping`,
               );
             }
-            return run.metrics;
+            return run;
           } finally {
             await release?.();
           }
@@ -955,23 +957,28 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             );
             for (const run of runs) {
               log({ event: "read_budget_job_run", jobId, ...run });
-              note(budgetProblem(budgetId, run.metrics));
+              for (const problem of scheduledJobBudgetProblems(budgetId, run)) {
+                note(problem);
+              }
             }
             const small =
               runs.at(0) ?? panic("Missing small writing-job measurement");
             const large =
               runs.at(1) ?? panic("Missing large writing-job measurement");
-            for (const violation of scaleViolations({
-              size: small.metrics.sharedBlocks,
-              double: large.metrics.sharedBlocks,
-            })) {
+            for (const violation of [
+              ...scaleViolations({
+                size: small.readMetrics.sharedBlocks,
+                double: large.readMetrics.sharedBlocks,
+              }),
+              ...writeScaleViolations({ size: small, double: large }),
+            ]) {
               note(`${jobId}: ${violation}`);
             }
             continue;
           }
           const backfill = backfillFixture(jobId);
           if (backfill !== undefined) {
-            const pages: number[] = [];
+            const runs: Awaited<ReturnType<typeof runMetrics>>[] = [];
             for (const rows of [backfill.sizes.base, backfill.sizes.double]) {
               // db-await-in-loop: the source table grows before the second bounded run is measured.
               const result = await deadline.run(
@@ -1009,14 +1016,25 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   return await runMetrics(jobId, measurement.task);
                 },
               );
-              pages.push(result.sharedBlocks);
-              note(budgetProblem(budgetId, result));
+              runs.push(result);
+              for (const problem of scheduledJobBudgetProblems(
+                budgetId,
+                result,
+              )) {
+                note(problem);
+              }
             }
             const size =
-              pages.at(0) ?? panic("missing base backfill measurement");
+              runs.at(0) ?? panic("missing base backfill measurement");
             const double =
-              pages.at(1) ?? panic("missing double backfill measurement");
-            for (const violation of scaleViolations({ size, double })) {
+              runs.at(1) ?? panic("missing double backfill measurement");
+            for (const violation of [
+              ...scaleViolations({
+                size: size.readMetrics.sharedBlocks,
+                double: double.readMetrics.sharedBlocks,
+              }),
+              ...writeScaleViolations({ size, double }),
+            ]) {
               note(`${jobId} on backfill source rows: ${violation}`);
             }
             continue;
@@ -1029,7 +1047,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               async () =>
                 await runMetrics(jobId, measurement.task, scenario.size),
             );
-            note(budgetProblem(budgetId, size));
+            for (const problem of scheduledJobBudgetProblems(budgetId, size)) {
+              note(problem);
+            }
             const twin = scenario.double;
             if (twin === undefined) {
               continue;
@@ -1039,11 +1059,19 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               `run ${jobId} on ${describeScheduledScenario(twin)}`,
               async () => await runMetrics(jobId, measurement.task, twin),
             );
-            note(budgetProblem(budgetId, double));
-            for (const violation of scaleViolations({
-              size: size.sharedBlocks,
-              double: double.sharedBlocks,
-            })) {
+            for (const problem of scheduledJobBudgetProblems(
+              budgetId,
+              double,
+            )) {
+              note(problem);
+            }
+            for (const violation of [
+              ...scaleViolations({
+                size: size.readMetrics.sharedBlocks,
+                double: double.readMetrics.sharedBlocks,
+              }),
+              ...writeScaleViolations({ size, double }),
+            ]) {
               note(`${jobId} on ${label}: ${violation}`);
             }
           }

@@ -16,6 +16,41 @@ import {
 } from "@/api/lib/workflow/run-logic";
 
 describe("workflow batch retry", () => {
+  const attemptsFor = async (cause: unknown): Promise<number> => {
+    let attempts = 0;
+    await runWorkflowBatchGenerationWithRetry({
+      generate: async () => {
+        attempts++;
+        return Result.err(
+          new WorkflowIntegrationError({ message: "failed", cause }),
+        );
+      },
+      onRetryError: () => {},
+      sleep: async () => {},
+      throwIfAborted: () => {},
+    });
+    return attempts;
+  };
+
+  test.each([
+    ["context overflow", { status: 400, code: "context_length_exceeded" }],
+    ["oversized request", { status: 413 }],
+    ["rejected credentials", { status: 401 }],
+    ["exhausted credit by status", { status: 402 }],
+    ["exhausted credit by body", { code: "credit_balance_exhausted" }],
+    ["retired model", { status: 404 }],
+  ])("does not resend a request that cannot succeed: %s", async (_, cause) => {
+    expect(await attemptsFor(cause)).toBe(1);
+  });
+
+  test.each([
+    ["rate limit", { status: 429 }],
+    ["provider outage", { status: 503 }],
+    ["failure from outside the provider", new Error("storage read failed")],
+  ])("resends a request that can succeed later: %s", async (_, cause) => {
+    expect(await attemptsFor(cause)).toBe(2);
+  });
+
   test("retries a transient integration failure and returns the later success", async () => {
     const retryErrors: string[] = [];
     const sleepDelays: number[] = [];

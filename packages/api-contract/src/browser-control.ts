@@ -408,6 +408,73 @@ export type BrowserControlResult = v.InferOutput<
   typeof browserControlResultSchema
 >;
 
+/**
+ * Read in place of a page snapshot a later one replaced: the snapshot's text
+ * and refs are gone and its refs are stale.
+ */
+export const SUPERSEDED_BROWSER_SNAPSHOT_NOTE =
+  "Superseded by a later page read: this page's text and element refs are no longer in context and its refs are stale. Call `snapshot` (on its tab) to read it again.";
+
+/**
+ * A successful result whose page snapshot a later result replaced, as chat
+ * keeps it: the page it was on, without its text or elements. Chat stores,
+ * streams and shows the model this in place of every page but the newest
+ * (see `chat-tool-result-retention`).
+ */
+const browserControlSupersededSchema = v.strictObject({
+  note: v.pipe(v.string(), v.maxLength(1000)),
+  page: v.strictObject({
+    contentTrust: v.literal(BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent),
+    tabId: tabIdSchema,
+    textTotalChars: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    title: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.titleChars)),
+    url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
+  }),
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  status: v.literal("superseded"),
+});
+
+/**
+ * Every output chat keeps for a `use-browser` call: what the extension
+ * returned, or its superseded projection. The extension never returns the
+ * projection; `parseBrowserControlResult` rejects it.
+ */
+export const browserControlRetainedResultSchema = v.variant("status", [
+  browserControlSuccessSchema,
+  browserControlErrorSchema,
+  browserControlSupersededSchema,
+]);
+
+export type BrowserControlRetainedResult = v.InferOutput<
+  typeof browserControlRetainedResultSchema
+>;
+
+/**
+ * The projection of a result a later page read replaced, or `null` for one
+ * that carries no page (an error, or a result already projected).
+ */
+export const supersedeBrowserControlResult = (
+  output: unknown,
+): BrowserControlRetainedResult | null => {
+  const result = v.safeParse(browserControlSuccessSchema, output);
+  if (!result.success) {
+    return null;
+  }
+  const { snapshot } = result.output;
+  return {
+    note: SUPERSEDED_BROWSER_SNAPSHOT_NOTE,
+    page: {
+      contentTrust: snapshot.contentTrust,
+      tabId: snapshot.tabId,
+      textTotalChars: snapshot.textTotalChars,
+      title: snapshot.title,
+      url: snapshot.url,
+    },
+    protocolVersion: result.output.protocolVersion,
+    status: "superseded",
+  };
+};
+
 export const BROWSER_EXTENSION_MESSAGE_SOURCE = {
   extension: "stella-browser-extension",
   web: "stella-web",

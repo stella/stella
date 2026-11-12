@@ -673,6 +673,7 @@ const CanaryComposer = ({ controllers, sends }: CanaryComposerProps) => {
       hero={
         <ChatInputSurface
           controller={controller}
+          models={null}
           sendDisabled={availability !== "available"}
           variant="large"
           reservedCommands={{ hasPersistedThread: false }}

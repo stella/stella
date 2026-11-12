@@ -1,6 +1,6 @@
 {
   "name": "@stll/calculations",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Typed, unit-safe reducers for workspace column calculations.",
   "keywords": [
     "calculations",
@@ -39,8 +39,8 @@
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src)",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/calculations",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/calculations",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/calculations",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/calculations",
     "prepack": "bun run build"
   },
   "dependencies": {

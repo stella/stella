@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-uodo] only adds the bench-member and decision-date line predicates, which the data-protection reader does not call.
+// parser-output-unchanged: [pl-uodo] only narrows the signature-title opening, which the data-protection reader does not call.
 /**
  * How a Polish decision names its own parts: the operative verbs its ruling
  * opens with, the reasons heading, the recital before the ruling, the closing
@@ -305,12 +305,39 @@ const SIGNATURE_TITLE_RE =
 /** Longest line a signature title opening is read on. */
 const SIGNATURE_TITLE_LINE_MAX_CHARS = 120;
 
-/** Whether a short line opens on a judge's title or office. */
+/**
+ * Fewest words a lead-in ending on a colon runs to (`Prezes Urzędu ustalił
+ * następujący stan faktyczny:`); a signing label before its colon is one or
+ * two (`Przewodniczący:`, `Sędzia sprawozdawca:`).
+ */
+const LEAD_IN_MIN_WORDS = 4;
+
+/**
+ * The formula a lead-in ends on, whatever closes it (`Prezes Urzędu
+ * zważył, co następuje.`).
+ */
+const LEAD_IN_FORMULA_RE = /,? co następuje\s?[.:]?$/u;
+
+/**
+ * Whether a line is a sentence leading in to what follows: on a colon after
+ * a sentence's worth of words, or on the formula `co następuje`.
+ */
+const leadsIn = (line: string): boolean =>
+  (line.endsWith(":") && line.split(" ").length >= LEAD_IN_MIN_WORDS) ||
+  LEAD_IN_FORMULA_RE.test(line);
+
+/**
+ * Whether a short line opens on a judge's title or office. A sentence that
+ * opens on the office and leads in to the reasons (`Prezes Urzędu ustalił
+ * następujący stan faktyczny:`, `Prezes Urzędu zważył, co następuje.`)
+ * signs nothing.
+ */
 export const opensWithPlSignatureTitle = (text: string): boolean => {
   const line = grammarLine(text);
   return (
     line.length <= SIGNATURE_TITLE_LINE_MAX_CHARS &&
-    SIGNATURE_TITLE_RE.test(line)
+    SIGNATURE_TITLE_RE.test(line) &&
+    !leadsIn(line)
   );
 };
 
@@ -450,3 +477,52 @@ const DECISION_DATE_LINE_RE =
 /** Whether a line gives the date of the decision and nothing else. */
 export const isPlDecisionDateLine = (text: string): boolean =>
   DECISION_DATE_LINE_RE.test(grammarLine(text));
+
+/**
+ * An authority's decision titled by its number: `DECYZJA nr DOK-9/2011`,
+ * `DECYZJA Nr RŁO 15/2009`. The line ends on the number; a sentence that
+ * names a decision by its number (`Decyzja nr 5 z dnia … została
+ * uchylona.`) is no title.
+ */
+const NUMBERED_DECISION_TITLE_RE =
+  /^(?:DECYZJA|Decyzja) (?:NR|Nr|nr)\.? (?:\p{Lu}{2,6}(?: ?- ?| ))?\d{1,4}(?:[./-]\d{1,4}){0,3}$/u;
+
+/**
+ * An authority's decision titled by its docket alone, with or without
+ * `nr`: `DECYZJA RGD - 1/2026`, `DECYZJA DIH-1/48/2017`.
+ */
+const DOCKETED_DECISION_TITLE_RE =
+  /^(?:DECYZJA|Decyzja) \p{Lu}{2,6}(?: ?- ?| )\d{1,4}(?:\/\d{1,4}){1,2}$/u;
+
+/** Whether a line is the title an authority's decision is printed under. */
+export const isPlAuthorityDecisionTitle = (text: string): boolean => {
+  const line = grammarLine(text);
+  return (
+    NUMBERED_DECISION_TITLE_RE.test(line) ||
+    DOCKETED_DECISION_TITLE_RE.test(line)
+  );
+};
+
+/**
+ * The clause a recital runs on into when the ruling's verb follows it in the
+ * same paragraph: `…, uznaje się, że …` after `po przeprowadzeniu
+ * postępowania … przeciwko …`.
+ */
+const RULING_CLAUSE_RE = new RegExp(
+  `, (?=(?:${POLISH_OPERATIVE_FORMS.join("|")})(?!\\p{L}))`,
+  "iu",
+);
+
+/**
+ * Where the ruling starts in a paragraph that opens on the recital and
+ * rules in its last clause (`po przeprowadzeniu postępowania … , uznaje się,
+ * że …`): the offset of the operative verb, or `undefined` when the
+ * paragraph is no such recital or states no ruling.
+ */
+export const plRulingClauseStart = (text: string): number | undefined => {
+  if (!isPlOpeningRecital(text)) {
+    return undefined;
+  }
+  const match = RULING_CLAUSE_RE.exec(text);
+  return match === null ? undefined : match.index + match[0].length;
+};

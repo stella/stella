@@ -59,15 +59,22 @@ type WorkspaceConnectionAuthorizer = (
 
 /**
  * Whether one user still holds an active membership in the organization their
- * user-channel connection was opened for. The user channel is its own routing
- * table, so this is the only membership question it has to ask — no workspace
- * bucket is scanned to find a user's streams.
+ * user-channel connections were opened for, and which of their browser
+ * sessions among `sessionIds` are still live. The user channel is its own
+ * routing table, so this is the only membership question it has to ask — no
+ * workspace bucket is scanned to find a user's streams.
  */
 type UserConnectionAuthorizer = (lookup: {
   organizationId: SafeId<"organization">;
   sessionIds: readonly string[];
   userId: SafeId<"user">;
-}) => Promise<ReadonlySet<string>>;
+}) => Promise<UserConnectionAudience>;
+
+export type UserConnectionAudience = {
+  readonly member: boolean;
+  /** Only ever non-empty for a member. */
+  readonly liveSessionIds: ReadonlySet<string>;
+};
 
 /** Workspace ID → connected SSE streams on THIS instance. */
 const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
@@ -83,7 +90,37 @@ let authorizeWorkspaceConnections: WorkspaceConnectionAuthorizer | null = null;
 type UserSSEConnection = {
   controller: ReadableStreamDefaultController;
   organizationId: SafeId<"organization">;
-  sessionId: string;
+  holder: UserStreamHolder;
+};
+
+/**
+ * Who holds a user-channel stream. `id` keys the per-holder stream cap: the
+ * browser session, or for an app's access token the `oauth-client:` id its
+ * requests carry, so one app's streams for a person share one cap whichever
+ * device or refreshed token opened them. `kind` is the stream's binding kind
+ * and decides what each delivery re-checks: a browser session must still be
+ * live; a credential has no session row, so delivery re-checks the
+ * organization membership and the bound-stream sweep revalidates the token
+ * itself.
+ */
+type UserStreamHolder = {
+  readonly id: string;
+  readonly kind: SseStreamBinding["kind"];
+};
+
+const holdsUserStream = (
+  audience: UserConnectionAudience,
+  holder: UserStreamHolder,
+): boolean => {
+  switch (holder.kind) {
+    case "session":
+      return audience.liveSessionIds.has(holder.id);
+    case "credential":
+      return audience.member;
+    default:
+      holder.kind satisfies never;
+      return panic(`Unhandled user stream holder: ${String(holder.kind)}`);
+  }
 };
 
 /** User ID → that user's connected streams on THIS instance. */
@@ -551,7 +588,7 @@ export const subscribe = ({
 
 type SubscribeUserOptions = {
   organizationId: SafeId<"organization">;
-  sessionId: string;
+  holder: UserStreamHolder;
   signal: AbortSignal;
   userId: SafeId<"user">;
 };
@@ -563,7 +600,7 @@ type SubscribeUserOptions = {
  */
 export const subscribeUser = ({
   organizationId,
-  sessionId,
+  holder,
   signal,
   userId,
 }: SubscribeUserOptions): ReadableStream<Uint8Array> => {
@@ -581,7 +618,7 @@ export const subscribeUser = ({
       const conn: UserSSEConnection = {
         controller,
         organizationId,
-        sessionId,
+        holder,
       };
 
       let set = userConnections.get(userId);
@@ -595,7 +632,9 @@ export const subscribeUser = ({
         },
         connection: conn,
         limit: LIMITS.sseStreamsPerSession,
-        sameHolder: (registered) => registered.sessionId === sessionId,
+        sameHolder: (registered) =>
+          registered.holder.kind === holder.kind &&
+          registered.holder.id === holder.id,
         set,
       });
 
@@ -776,7 +815,9 @@ const broadcastLocalToUser = async (
     try: async () =>
       await authorizer({
         organizationId,
-        sessionIds: targets.map((connection) => connection.sessionId),
+        sessionIds: targets.flatMap(({ holder }) =>
+          holder.kind === "session" ? [holder.id] : [],
+        ),
         userId,
       }),
     catch: (cause) => cause,
@@ -794,7 +835,7 @@ const broadcastLocalToUser = async (
     if (!set.has(conn)) {
       continue;
     }
-    if (!reauthorized.value.has(conn.sessionId)) {
+    if (!holdsUserStream(reauthorized.value, conn.holder)) {
       set.delete(conn);
       closeControllerQuietly(conn.controller);
       continue;
