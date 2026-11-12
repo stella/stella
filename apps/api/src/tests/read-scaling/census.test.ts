@@ -39,6 +39,7 @@ import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
+import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
@@ -97,6 +98,7 @@ const measuredApiScenarios = [
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   ...reviewHistoryScalingScenarios,
+  ...graphToolsScalingScenarios,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,

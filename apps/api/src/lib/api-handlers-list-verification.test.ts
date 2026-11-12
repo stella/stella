@@ -6,6 +6,9 @@ import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-
 
 import { legalListVerificationRuns } from "@/api/db/schema";
 import { env } from "@/api/env";
+import graphNeighbours from "@/api/handlers/lists/graph/neighbours/list";
+import graphNodes from "@/api/handlers/lists/graph/nodes/list";
+import graphPaths from "@/api/handlers/lists/graph/paths/list";
 import factDetails from "@/api/handlers/lists/items/fact-details/update";
 import sourceReview from "@/api/handlers/lists/items/sources/verification/update";
 import createComment from "@/api/handlers/lists/verifications/claim-comments/create";
@@ -57,6 +60,9 @@ const context = (
 });
 
 const endpoints = {
+  graphNodes,
+  graphNeighbours,
+  graphPaths,
   create,
   list,
   get,

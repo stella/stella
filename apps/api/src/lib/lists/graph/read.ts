@@ -82,7 +82,7 @@ export const GRAPH_LOOKUP_NODE_KINDS = [
   "claim",
   "document",
 ] as const satisfies readonly GraphNodeKind[];
-export type GraphLookupNodeKind = (typeof GRAPH_LOOKUP_NODE_KINDS)[number];
+type GraphLookupNodeKind = (typeof GRAPH_LOOKUP_NODE_KINDS)[number];
 
 export type GraphNodeRef = { kind: GraphNodeKind; id: string };
 
@@ -95,7 +95,7 @@ export type GraphNode = GraphNodeRef & {
 };
 
 /** The exact text an edge rests on. */
-export type GraphEdgeQuote = {
+type GraphEdgeQuote = {
   text: string | null;
   documentId: SafeId<"entity">;
   documentName: string;
@@ -500,7 +500,7 @@ export const readGraphNode = async (
       };
 };
 
-export type GraphNeighbourhood = {
+type GraphNeighbourhood = {
   node: GraphNode;
   /** Every current edge of the node matching the filter, counted by kind,
    *  stance and decision; the page lists some of them. */
@@ -623,7 +623,7 @@ export const readGraphNeighbourhood = async ({
   };
 };
 
-export type GraphPath = {
+type GraphPath = {
   /** The nodes along the path, the start first. */
   nodes: GraphNode[];
   /** The edge between each node and the next. */
@@ -712,7 +712,7 @@ export const walkGraph = async ({
   return { start, paths: paths.slice(0, maxPaths), truncated };
 };
 
-export type GraphLookupHit = GraphNode & { kind: GraphLookupNodeKind };
+type GraphLookupHit = GraphNode & { kind: GraphLookupNodeKind };
 
 /** Where a lookup page ends: the kind it reached and the last id in it. */
 export type GraphLookupCursor = { kind: GraphLookupNodeKind; id: string };

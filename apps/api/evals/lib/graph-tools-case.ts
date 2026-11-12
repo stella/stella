@@ -6,14 +6,14 @@
 
 import type { ClaimRef } from "@/api/lib/lists/verification/contract";
 
-export type GraphCaseFact = {
+type GraphCaseFact = {
   key: string;
   name: string;
   document: string;
   quote: string;
 };
 
-export type GraphCaseClaim = {
+type GraphCaseClaim = {
   key: string;
   text: string;
   cites: readonly { fact: string; rel: ClaimRef["rel"] }[];
