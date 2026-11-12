@@ -22,7 +22,11 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
-import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
+import {
+  gradeClaims,
+  GRADING_BATCH_SIZE,
+  GRADING_CONCURRENCY,
+} from "@/api/lib/lists/verification/claim-grade";
 import { gradedClaimType } from "@/api/lib/lists/verification/contract";
 import type { VerificationEvidenceFact } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
@@ -32,6 +36,7 @@ import {
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import { wholeDocumentPassages } from "@/api/lib/lists/verification/paragraph-scope";
+import { RECHECKS_PER_REQUEST_MAX } from "@/api/lib/lists/verification/recheck";
 import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
@@ -744,6 +749,7 @@ describe("gradeClaims", () => {
     });
     expect(Result.isOk(result) ? result.value : null).toEqual({
       type: "incomplete",
+      grades: new Map(),
       ungraded: 1,
     });
   });
@@ -935,4 +941,10 @@ test("each model request rechecks its run budget before dispatch", async () => {
   }
   expect(checks).toBe(2);
   expect(captured).toHaveLength(1);
+});
+
+test("a bulk re-check request is one round of the grader's batches", () => {
+  expect(RECHECKS_PER_REQUEST_MAX).toBe(
+    GRADING_BATCH_SIZE * GRADING_CONCURRENCY,
+  );
 });

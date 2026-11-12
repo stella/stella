@@ -571,6 +571,21 @@
       "showBefore": "Mostrar el texto anterior al ¶ {from}",
       "verifyParagraphs": "Verificar párrafos"
     },
+    "staleness": {
+      "failed": "No se pudieron volver a comprobar las afirmaciones",
+      "finished": "{count, plural, one {# afirmación comprobada de nuevo} other {# afirmaciones comprobadas de nuevo} many {# afirmaciones comprobadas de nuevo}}",
+      "partial": "{rechecked, number} comprobadas de nuevo, {failed, plural, one {# con error} other {# con error} many {# con error}}",
+      "reasons": {
+        "factChanged": "Hecho modificado",
+        "factHeld": "Hecho excluido",
+        "factRemoved": "Hecho eliminado",
+        "newFactRelated": "Nuevo hecho relacionado"
+      },
+      "recheckAll": "Volver a comprobar todas",
+      "recheckLocked": "Se está volviendo a comprobar con las demás afirmaciones desactualizadas",
+      "runLine": "{count, plural, one {# afirmación puede estar desactualizada} other {# afirmaciones pueden estar desactualizadas} many {# afirmaciones pueden estar desactualizadas}}",
+      "running": "{count, plural, one {Volviendo a comprobar # afirmación…} other {Volviendo a comprobar # afirmaciones…} many {Volviendo a comprobar # afirmaciones…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Contradicha",
@@ -2696,6 +2711,7 @@
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
     "organizations": "Organizaciones",
+    "outOfDate": "Desactualizada",
     "page": "Página {page}",
     "paymentRetryNotice": "Problema con el pago. Actualiza tu método de pago antes del {date} para mantener el acceso.",
     "pin": "Fijar",
@@ -6101,7 +6117,6 @@
     "comments": "Comentarios",
     "commentsEmpty": "Selecciona texto para comentarlo.",
     "noRevisions": "Aún no hay revisiones",
-    "outOfDate": "Desactualizada",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Sin resumen",
     "proposals": "Propuestas",

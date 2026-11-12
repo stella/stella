@@ -41,8 +41,8 @@ import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifie
 /** Claims per grading call: the facts dominate the variable part of the
  *  prompt, so a batch amortises them without letting one failure take the
  *  whole run with it. */
-const BATCH_SIZE = 10;
-const CONCURRENCY = 3;
+export const GRADING_BATCH_SIZE = 10;
+export const GRADING_CONCURRENCY = 3;
 
 const GRADED_VERDICTS = [
   ...SCORED_CLAIM_STATES,
@@ -297,9 +297,11 @@ type GradeClaimsArgs = {
   deps: VerificationModelDeps;
 };
 
+/** `incomplete` keeps the grades it has: a run fails on any claim left
+ *  unanswered, a re-check records the claims that were answered. */
 export type GradeClaimsOutcome =
   | { type: "graded"; grades: Map<string, ClaimGrade> }
-  | { type: "incomplete"; ungraded: number };
+  | { type: "incomplete"; grades: Map<string, ClaimGrade>; ungraded: number };
 
 /** A grade per claim key, or how many claims no answer could be held to. */
 export const gradeClaims = async ({
@@ -356,14 +358,14 @@ export const gradeClaims = async ({
   const keyByPromptId = new Map(
     prompted.map(({ promptId, claim }) => [promptId, claim.key]),
   );
-  const batches = chunkItems(prompted, BATCH_SIZE);
+  const batches = chunkItems(prompted, GRADING_BATCH_SIZE);
 
   return Result.flatten(
     await Result.tryPromise({
       try: async () => {
         const perBatch = await mapWithConcurrency({
           items: batches,
-          limit: CONCURRENCY,
+          limit: GRADING_CONCURRENCY,
           operation: async (batch) => {
             const request = call.request(
               `Claims:\n${batch
@@ -445,7 +447,7 @@ export const gradeClaims = async ({
         return Result.ok(
           ungraded === 0
             ? ({ type: "graded", grades } as const)
-            : ({ type: "incomplete", ungraded } as const),
+            : ({ type: "incomplete", grades, ungraded } as const),
         );
       },
       catch: (cause) => {

@@ -571,6 +571,21 @@
       "showBefore": "Text vor ¶ {from} anzeigen",
       "verifyParagraphs": "Absätze prüfen"
     },
+    "staleness": {
+      "failed": "Die Behauptungen konnten nicht erneut geprüft werden",
+      "finished": "{count, plural, one {# Behauptung erneut geprüft} other {# Behauptungen erneut geprüft}}",
+      "partial": "{rechecked, number} erneut geprüft, {failed, plural, one {# fehlgeschlagen} other {# fehlgeschlagen}}",
+      "reasons": {
+        "factChanged": "Fakt geändert",
+        "factHeld": "Fakt ausgeschlossen",
+        "factRemoved": "Fakt entfernt",
+        "newFactRelated": "Neuer zugehöriger Fakt"
+      },
+      "recheckAll": "Alle erneut prüfen",
+      "recheckLocked": "Wird mit den anderen veralteten Behauptungen erneut geprüft",
+      "runLine": "{count, plural, one {# Behauptung ist möglicherweise veraltet} other {# Behauptungen sind möglicherweise veraltet}}",
+      "running": "{count, plural, one {# Behauptung wird erneut geprüft…} other {# Behauptungen werden erneut geprüft…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Widersprochen",
@@ -2696,6 +2711,7 @@
     "organization": "Organisation",
     "organizationName": "Organisationsname",
     "organizations": "Organisationen",
+    "outOfDate": "Veraltet",
     "page": "Seite {page}",
     "paymentRetryNotice": "Zahlungsproblem. Aktualisieren Sie Ihre Zahlungsmethode bis zum {date}, um den Zugriff zu behalten.",
     "pin": "Anheften",
@@ -6101,7 +6117,6 @@
     "comments": "Kommentare",
     "commentsEmpty": "Text markieren, um ihn zu kommentieren.",
     "noRevisions": "Noch keine Fassungen",
-    "outOfDate": "Veraltet",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Keine Zusammenfassung",
     "proposals": "Änderungsvorschläge",
