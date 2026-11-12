@@ -98,6 +98,8 @@ const accountBearerOwners = {
   "http_client.rs": "key: &crate::device_proof::DeviceKey",
   "time_entry_submit.rs": "account: &AccountRequest",
   "billing_draft_submit.rs": "account: &AccountRequest",
+  // The development stand-in computer proves the device key it linked itself.
+  "desktop_runner/stand_in.rs": "let device = DeviceKey::from_pkcs8(&pkcs8)?;",
 } as const;
 
 const assertBearerOwner = (file: string, source: string) => {
