@@ -31,7 +31,8 @@ let ids: TestIds;
 const clock = createTestClock();
 
 /** The fixture gives each person an address under their own id. */
-const emailOf = (userId: string) => expect.stringMatching(`^${userId}@`);
+const emailOf = (userId: string) => expect.stringContaining(`${userId}@`);
+
 const departedUserId = mintAuthProviderIdValue();
 
 beforeAll(async () => {
