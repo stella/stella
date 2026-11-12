@@ -837,9 +837,9 @@ checks:
     # typecheck-enforced McpExposure). This guard imports every handler
     # module, verifies each disposition is well-formed, that every
     # tool/covered reference names a real static MCP tool, that no registry
-    # tool is orphaned, and that the `pending` baseline only ever shrinks
-    # (a new pending endpoint fails). The --self-test run first proves the
-    # ratchet detectors still fire, so a broken guard cannot pass silently.
+    # tool is orphaned, and that no endpoint is `pending`. The --self-test
+    # run first proves the detectors still fire, so a broken guard cannot
+    # pass silently.
     run: |
       bun apps/api/scripts/mcp-coverage-guard.ts --self-test
       bun apps/api/scripts/mcp-coverage-guard.ts
