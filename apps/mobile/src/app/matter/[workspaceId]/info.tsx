@@ -139,14 +139,21 @@ const LoadedMatterInfo = ({
         reload={reload}
         source={source}
       />
+      {/* Keyed by status, so archiving or restoring loads them afresh. */}
       <MatterTeam
         disabled={archived}
+        key={`team-${matter.status}`}
         leadUserId={matter.leadUserId ?? null}
         matterId={matterId}
         onChanged={reload}
         source={source}
       />
-      <MatterParties disabled={archived} matterId={matterId} source={source} />
+      <MatterParties
+        disabled={archived}
+        key={`parties-${matter.status}`}
+        matterId={matterId}
+        source={source}
+      />
       <MatterActions matter={matter} reload={reload} source={source} />
     </>
   );
@@ -296,6 +303,8 @@ const MatterClient = ({
   const t = useTranslations("matterInfo");
   const { failure, saving, write } = useMatterWrite(source);
   const [choosing, setChoosing] = useState(false);
+  // A client being added to the address book is not chosen yet.
+  const [addingContact, setAddingContact] = useState(false);
   const current = matter.client ?? null;
   const clientAction = current === null ? t("setClient") : t("changeClient");
 
@@ -354,7 +363,7 @@ const MatterClient = ({
         </Text>
         {archived ? null : (
           <Button
-            disabled={saving}
+            disabled={saving || addingContact}
             onPress={() => {
               setChoosing((open) => !open);
             }}
@@ -374,6 +383,7 @@ const MatterClient = ({
         <ContactPicker
           clearLabel={t("changeClient")}
           disabled={saving}
+          onAddingChange={setAddingContact}
           onSelect={pick}
           selected={null}
           source={source}
@@ -415,21 +425,36 @@ const MatterActions = ({
         {
           onPress: () => {
             write(
-              async () =>
-                await Result.gen(async function* () {
-                  const copyId = yield* Result.await(
-                    duplicateMatter({ ...request, includeContent }),
-                  );
-                  const copy = yield* Result.await(
-                    readMatter({ fetch, matterId: copyId, source }),
-                  );
-                  return Result.ok(copy);
-                }),
+              async (): Promise<
+                Result<{ id: string; name: string | undefined }, ApiError>
+              > => {
+                const copied = await duplicateMatter({
+                  ...request,
+                  includeContent,
+                });
+                if (Result.isError(copied)) {
+                  return Result.err(copied.error);
+                }
+                // The copy exists once the duplicate answers; its name is
+                // only for the title, so a failed read still opens it.
+                const copy = await readMatter({
+                  fetch,
+                  matterId: copied.value,
+                  source,
+                });
+                return Result.ok({
+                  id: copied.value,
+                  name: Result.isOk(copy) ? copy.value.name : undefined,
+                });
+              },
               (copy) => {
                 router.dismissAll();
                 router.push({
                   pathname: "/matter/[workspaceId]",
-                  params: { name: copy.name, workspaceId: copy.id },
+                  params: {
+                    workspaceId: copy.id,
+                    ...(copy.name === undefined ? {} : { name: copy.name }),
+                  },
                 });
               },
             );

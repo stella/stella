@@ -83,6 +83,8 @@ const LoadedParties = ({
   const { end } = useSession();
   const { failure, saving, write } = useMatterWrite(source);
   const [adding, setAdding] = useState(false);
+  // A party being added to the address book is not chosen yet.
+  const [addingContact, setAddingContact] = useState(false);
   const [contact, setContact] = useState<ContactChoice | null>(null);
   const [role, setRole] = useState<WorkspaceContactRole | null>(null);
   // One id per contact and role being linked, so pressing Add again after a
@@ -201,6 +203,7 @@ const LoadedParties = ({
           <ContactPicker
             clearLabel={t("removeParty")}
             disabled={busy}
+            onAddingChange={setAddingContact}
             onSelect={(picked) => {
               setContact(picked);
               setRequestId(randomUUID());
@@ -233,7 +236,9 @@ const LoadedParties = ({
             </Button>
             <Button
               className="flex-1"
-              disabled={busy || contact === null || role === null}
+              disabled={
+                busy || addingContact || contact === null || role === null
+              }
               loading={saving}
               onPress={add}
             >
