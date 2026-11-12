@@ -9,6 +9,8 @@
 
 import { panic } from "better-result";
 
+import { REVIEW_STATUS_DECISION } from "@stll/api-contract/review-decision";
+
 import type {
   ClaimReview,
   ClaimState,
@@ -17,7 +19,6 @@ import type {
   VerificationClaim,
   VerificationRun,
 } from "@/features/avt/types";
-import { REVIEW_STATUS_META } from "@/features/avt/types";
 import type { TranslationKey } from "@/i18n/types";
 
 const CONFLICT_STATES: ReadonlySet<ClaimState> = new Set([
@@ -85,11 +86,12 @@ export const needsAttention = (
     isContested(claim, contested) ||
     judgementQualifier(claim) !== undefined);
 
-/** A claim is SETTLED once a human dispositions it either way; marking it
- *  as needing evidence keeps it open. */
+/** A claim is SETTLED once a human decides it either way, in the shared
+ *  vocabulary every review surface reads (`REVIEW_STATUS_DECISION`): marking
+ *  it as needing evidence decides nothing and keeps it open. */
 export const isSettled = (review: ClaimReview | null): boolean => {
   const status = review?.status ?? null;
-  return status !== null && REVIEW_STATUS_META[status].settles;
+  return status !== null && REVIEW_STATUS_DECISION.claim[status] !== null;
 };
 
 /**
