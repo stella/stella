@@ -108,14 +108,20 @@ const getModelRunCaps = (kind: ModelRunKind): ModelRunCaps => ({
   startsPerDay: env[MODEL_RUN_CAP_ENV[kind].startsPerDay],
 });
 
-/** The transaction settings the insert trigger reads a kind's limits from. */
-const limitSettings = (kind: ModelRunKind) => {
-  const suffix = kind.replaceAll("-", "_");
-  return {
-    active: `app.model_run_active_limit_${suffix}`,
-    daily: `app.model_run_daily_limit_${suffix}`,
-  };
-};
+/**
+ * Hand the insert trigger a kind's limits for this transaction. The setting
+ * names are spelled out per kind (the trigger reads
+ * `app.model_run_<active|daily>_limit_<kind with underscores>`), so no
+ * setting name is ever built at run time.
+ */
+const SET_LIMITS = {
+  "list-run": (caps: ModelRunCaps) => sql`SELECT
+    set_config('app.model_run_active_limit_list_run', ${String(caps.active)}, true),
+    set_config('app.model_run_daily_limit_list_run', ${String(caps.startsPerDay)}, true)`,
+  "document-review": (caps: ModelRunCaps) => sql`SELECT
+    set_config('app.model_run_active_limit_document_review', ${String(caps.active)}, true),
+    set_config('app.model_run_daily_limit_document_review', ${String(caps.startsPerDay)}, true)`,
+} as const satisfies Record<ModelRunKind, (caps: ModelRunCaps) => unknown>;
 
 type StartModelRunArgs<T> = {
   safeDb: SafeDb;
@@ -141,11 +147,8 @@ export const startModelRun = async <T>({
 }: StartModelRunArgs<T>): Promise<
   Result<T, ModelRunCapError | SafeDbError>
 > => {
-  const settings = limitSettings(kind);
   const started = await safeDb(async (tx) => {
-    await tx.execute(sql`SELECT
-      set_config(${settings.active}, ${String(caps.active)}, true),
-      set_config(${settings.daily}, ${String(caps.startsPerDay)}, true)`);
+    await tx.execute(SET_LIMITS[kind](caps));
     return await start(tx);
   });
   return started.mapError((cause) => {

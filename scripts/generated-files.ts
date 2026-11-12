@@ -363,6 +363,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/sanctions/*",
     "apps/api/src/lib/lists/verification/contract.ts",
     "apps/api/src/lib/usage/model-run-caps/config.ts",
+    "apps/api/src/lib/usage/model-run-caps/caps.ts",
     "apps/api/src/lib/markdown/ai-tool.ts",
     "apps/api/src/lib/markdown/sanitize-html.ts",
     "apps/api/src/lib/mcp-connectors/app-urls.ts",
