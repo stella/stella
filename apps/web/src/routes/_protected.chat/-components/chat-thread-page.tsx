@@ -778,7 +778,6 @@ export const ChatThreadPage = ({
                       </ChatLocalRunQuestionContext>
                       <ChatBackgroundTasks
                         generationActive={isGenerating}
-                        ranOnComputer={data.newestLocalTurn !== undefined}
                         threadId={threadRef.threadId}
                       />
                       <ChatThreadRecap

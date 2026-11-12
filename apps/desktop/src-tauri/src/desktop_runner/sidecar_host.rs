@@ -46,9 +46,9 @@ use super::harness::{
 use super::journal::SharedJournal;
 use super::run_folders;
 use crate::harness_sidecar::{
-  self, BackgroundTasks, HarnessLaunchSettings, HarnessProbe, HarnessProcess, HarnessSidecar,
-  RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore, SidecarRunOutput,
-  SidecarRunStart, SidecarSettings, SkillFolderRef,
+  self, BackgroundTasks, HarnessLaunchSettings, HarnessProbe, HarnessProcess,
+  HarnessSidecar, RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore,
+  SidecarRunOutput, SidecarRunStart, SidecarSettings, SkillFolderRef,
 };
 use crate::runner_protocol::{
   FolderRestore, FolderRestoreOutcome, Harness, HarnessReport,

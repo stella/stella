@@ -823,6 +823,26 @@ fn a_holder_that_dies_fails_its_runs_and_the_next_run_starts_a_new_one() {
 }
 
 #[test]
+fn a_holder_that_dies_reports_its_background_work_ended() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut counts = sidecar.watch_background().unwrap();
+    let mut crashed = sidecar.start_run(run_start("background-crash")).unwrap();
+    let _delivered = deliveries(&mut crashed).await;
+    let reported = counts.recv().await.unwrap();
+    assert_eq!(reported.count, 2);
+    // The holder's kept processes went with it: nothing keeps showing them.
+    let ended = counts.recv().await.unwrap();
+    assert_eq!(
+      (ended.run_id.as_str(), ended.count),
+      (reported.run_id.as_str(), 0)
+    );
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
 fn a_run_start_the_holder_finds_invalid_fails_that_run_and_no_other() {
   let fixture = Fixture::new();
   with_children(async {
@@ -1318,6 +1338,8 @@ fn stand_in_holder() {
 /// - `flood`: 300 events at once;
 /// - `flood-later`: an event, then 300 more on the first approval;
 /// - `crash`: an event, then the process exits without cleaning up;
+/// - `background-crash`: an event and a background task count of 2, then
+///   the process exits without cleaning up;
 /// - `garbage`: a line that is not JSON.
 ///
 /// A launch with `processGrant` first reports the stand-in's own process id
@@ -1589,6 +1611,12 @@ mod stand_in {
       }
       "crash" => {
         emit(held, run_id, event).await;
+        std::process::exit(3);
+      }
+      "background-crash" => {
+        emit(held, run_id, event).await;
+        let count = json!({ "type": "background.tasks", "runId": run_id, "count": 2 });
+        write(held, &count.to_string()).await;
         std::process::exit(3);
       }
       _ => {

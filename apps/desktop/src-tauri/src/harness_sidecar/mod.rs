@@ -360,6 +360,7 @@ impl HarnessSidecar {
         restores: HashMap::new(),
         processes: None,
         background: None,
+        background_holders: HashMap::new(),
       }
       .run(),
     );
@@ -956,6 +957,9 @@ struct Supervisor {
   processes: Option<mpsc::Sender<HarnessProcess>>,
   /// Where background task counts go.
   background: Option<mpsc::Sender<BackgroundTasks>>,
+  /// The holder each count above 0 came from, by run id: a holder that is
+  /// lost takes its kept processes with it.
+  background_holders: HashMap<String, PathBuf>,
 }
 
 impl Supervisor {
@@ -1429,7 +1433,7 @@ impl Supervisor {
       return;
     }
     match event {
-      LinkEvent::Message(message) => self.dispatch(message),
+      LinkEvent::Message(message) => self.dispatch(&dir, message),
       LinkEvent::Broken(error) => {
         // The kind only: a line may carry run data.
         let kind = match error {
@@ -1502,7 +1506,7 @@ impl Supervisor {
     }
   }
 
-  fn dispatch(&mut self, message: SidecarMessage) {
+  fn dispatch(&mut self, dir: &Path, message: SidecarMessage) {
     match message {
       SidecarMessage::Hello(_) => {
         tracing::warn!(target: LOG_TARGET, "harness holder repeated its hello");
@@ -1564,13 +1568,14 @@ impl Supervisor {
         }
       }
       SidecarMessage::BackgroundTasks(tasks) => {
-        let watched = self
-          .background
-          .as_ref()
-          .is_some_and(|reports| reports.try_send(tasks).is_ok());
-        if !watched {
-          tracing::warn!(target: LOG_TARGET, "a background task count had no watcher");
+        if tasks.count == 0 {
+          self.background_holders.remove(&tasks.run_id);
+        } else {
+          self
+            .background_holders
+            .insert(tasks.run_id.clone(), dir.to_path_buf());
         }
+        self.report_background(tasks);
       }
       SidecarMessage::Rejected(rejected) => {
         tracing::warn!(
@@ -1685,6 +1690,32 @@ impl Supervisor {
       self.fail_run(&run_id);
     }
     self.fail_probes(dir);
+    self.end_background(dir);
+  }
+
+  /// The holder's kept processes went with it: each count it reported above
+  /// 0 is reported as 0, so no chat keeps showing work that no longer runs.
+  fn end_background(&mut self, dir: &Path) {
+    let ended: Vec<String> = self
+      .background_holders
+      .iter()
+      .filter(|(_run_id, holder)| holder.as_path() == dir)
+      .map(|(run_id, _holder)| run_id.clone())
+      .collect();
+    for run_id in ended {
+      self.background_holders.remove(&run_id);
+      self.report_background(BackgroundTasks { run_id, count: 0 });
+    }
+  }
+
+  fn report_background(&self, tasks: BackgroundTasks) {
+    let watched = self
+      .background
+      .as_ref()
+      .is_some_and(|reports| reports.try_send(tasks).is_ok());
+    if !watched {
+      tracing::warn!(target: LOG_TARGET, "a background task count had no watcher");
+    }
   }
 
   fn fail_probes(&mut self, dir: &Path) {
@@ -1735,7 +1766,7 @@ impl Supervisor {
         continue;
       }
       match event {
-        LinkEvent::Message(message) => self.dispatch(message),
+        LinkEvent::Message(message) => self.dispatch(&dir, message),
         LinkEvent::Broken(_) | LinkEvent::Closed => {
           self.links.remove(&dir);
         }

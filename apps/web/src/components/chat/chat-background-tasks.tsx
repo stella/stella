@@ -14,24 +14,23 @@ const NO_THREAD = { activeOrganizationId: "", userId: "", threadId: "" };
 /**
  * What the chat's coding agent left running in the background on the
  * member's computer after its last turn, such as a server or a watcher. The
- * chat's next turn continues where that work runs. Shown between turns
- * only: a running turn holds the work, and nothing shows once it ended or
- * while the computer is away. `ranOnComputer: false` (a chat none of whose
- * turns ran on a computer) reads nothing.
+ * chat's next turn continues where that work runs. Read for every chat,
+ * whatever it runs on now: a chat switched to the cloud may still hold work
+ * an earlier turn left on a computer. Shown between turns only: a running
+ * turn holds the work, and nothing shows once it ended or while the
+ * computer is away.
  */
 export const ChatBackgroundTasks = ({
   threadId,
   generationActive,
-  ranOnComputer = true,
 }: {
   threadId: string;
   generationActive: boolean;
-  ranOnComputer?: boolean;
 }) => {
   const t = useTranslations();
   const user = useMaybeAuthenticatedUser();
   const thread =
-    user === null || !ranOnComputer
+    user === null
       ? null
       : {
           activeOrganizationId: user.activeOrganizationId,

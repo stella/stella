@@ -8,7 +8,8 @@ SET LOCAL statement_timeout = '10s';--> statement-breakpoint
 -- a row.
 ALTER TABLE "desktop_runner_runs" ADD COLUMN IF NOT EXISTS "background_tasks" integer NOT NULL DEFAULT 0;--> statement-breakpoint
 
--- Every existing row holds 0, so the check holds for each of them.
--- squawk-ignore constraint-missing-not-valid
+-- The check only constrains the new column, which every existing row holds
+-- as 0; it is added NOT VALID and validated online, so no scan runs under
+-- this migration's lock.
 ALTER TABLE "desktop_runner_runs" ADD CONSTRAINT "desktop_runner_runs_background_tasks_check"
-  CHECK ("background_tasks" BETWEEN 0 AND 1000);
+  CHECK ("background_tasks" BETWEEN 0 AND 1000) NOT VALID;--> statement-breakpoint
