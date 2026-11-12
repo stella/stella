@@ -29,6 +29,8 @@ const emptyReview = {
   decidedBy: null,
   reopened: false,
   recordConflictResolution: null,
+  linkedFactIds: [],
+  linksChanged: false,
   eventCount: 0,
 };
 const avtLayout = {
@@ -124,6 +126,8 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
       text,
       anchor: { type: "docx-block", blockId: "b1", start: 0, end: text.length },
       refs: [],
+      // The API states a claim's latest re-check; this one has none.
+      recheck: null,
     };
     const run = {
       id: uuid(9000),
@@ -371,6 +375,7 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
         },
         refs: [],
         review: null,
+        recheck: null,
       };
     };
     const signed = pdfClaim({
