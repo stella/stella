@@ -42,7 +42,7 @@ CREATE TABLE "legal_graph_edges" (
         AND ("stance" IS NULL OR "stance" IN ('supports', 'conflicts', 'record'))),
   CONSTRAINT "legal_graph_edges_provenance_check" CHECK (("source_id" IS NULL) <> ("provenance_reason" IS NULL)
         AND ("kind" IN ('sourced-from', 'mentions', 'about')) = ("source_id" IS NOT NULL)
-        AND ("kind" IN ('cites')) = ("provenance_reason" IS NOT DISTINCT FROM 'claim-anchor')
+        AND ("kind" IN ('cites')) = ("provenance_reason" IS NOT NULL)
         AND ("provenance_reason" IS NULL OR "provenance_reason" IN ('claim-anchor'))),
   CONSTRAINT "legal_graph_edges_producer_check" CHECK ("producer_kind" IN ('run', 'recheck', 'extraction', 'reviewer', 'import')
         AND ("producer_kind" IN ('run', 'recheck', 'extraction', 'reviewer')) = ("producer_id" IS NOT NULL)),

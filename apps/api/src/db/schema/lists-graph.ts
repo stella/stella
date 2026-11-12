@@ -63,10 +63,8 @@ const STANCE_KIND_SQL_VALUES = kindsWhere((rule) => rule.stance === "required");
 const SPOT_KIND_SQL_VALUES = kindsWhere(
   (rule) => rule.provenance.type === "spot",
 );
-const CLAIM_ANCHOR_KIND_SQL_VALUES = kindsWhere(
-  (rule) =>
-    rule.provenance.type === "reason" &&
-    rule.provenance.reason === "claim-anchor",
+const REASON_KIND_SQL_VALUES = kindsWhere(
+  (rule) => rule.provenance.type === "reason",
 );
 
 /**
@@ -216,7 +214,7 @@ export const legalGraphEdges = p.pgTable(
       "legal_graph_edges_provenance_check",
       sql`(${table.sourceId} IS NULL) <> (${table.provenanceReason} IS NULL)
         AND (${table.kind} IN (${SPOT_KIND_SQL_VALUES})) = (${table.sourceId} IS NOT NULL)
-        AND (${table.kind} IN (${CLAIM_ANCHOR_KIND_SQL_VALUES})) = (${table.provenanceReason} IS NOT DISTINCT FROM 'claim-anchor')
+        AND (${table.kind} IN (${REASON_KIND_SQL_VALUES})) = (${table.provenanceReason} IS NOT NULL)
         AND (${table.provenanceReason} IS NULL OR ${table.provenanceReason} IN (${PROVENANCE_REASON_SQL_VALUES}))`,
     ),
     p.check(

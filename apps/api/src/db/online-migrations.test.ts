@@ -2633,6 +2633,11 @@ const createHarness = ({
           if (query.includes("starts_with")) {
             return queryIndexArtifacts(params);
           }
+          // The graph edge backfill's matter walk: no matter holds a
+          // verification run or a Spot, so there is nothing to derive.
+          if (query.includes('FROM "workspaces" workspace')) {
+            return [];
+          }
 
           return queryIndexState(params);
         },

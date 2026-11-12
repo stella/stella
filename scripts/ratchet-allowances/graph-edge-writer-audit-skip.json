@@ -1,0 +1,6 @@
+{
+  "metric": "audit-skip-directives",
+  "file": "apps/api/src/lib/lists/graph/edge-writer.ts",
+  "delta": 1,
+  "reason": "Graph edges are derived from the act each caller already audits in the same transaction (run completion, a re-check, a Spot added or a fact accepted); an audit row per derived edge would restate that event."
+}

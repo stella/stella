@@ -65,7 +65,7 @@ import type {
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 
 /** Rows one statement reads or writes, so each batch stays short. */
-export const GRAPH_EDGE_BACKFILL_BATCH_SIZE = 500;
+const GRAPH_EDGE_BACKFILL_BATCH_SIZE = 500;
 /** Matters one read of the walk names. */
 const MATTERS_PER_READ = 100;
 
