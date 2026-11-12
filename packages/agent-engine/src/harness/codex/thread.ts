@@ -35,6 +35,23 @@ const NETWORK_ACCESS: Readonly<Record<HarnessRunPolicy["network"], boolean>> = {
   open: true,
 };
 /**
+ * The approval modes Codex runs in, named one by one so a new mode is never
+ * offered by default. Not plan: the pinned app-server has plan mode only as
+ * an experimental turn parameter.
+ */
+export const CODEX_APPROVAL_MODES = [
+  "ask",
+  "auto",
+  "full_auto",
+] as const satisfies readonly HarnessRunPolicy["approvals"][];
+type CodexApprovalMode = (typeof CODEX_APPROVAL_MODES)[number];
+
+export const isCodexApprovalMode = (
+  mode: HarnessRunPolicy["approvals"],
+): mode is CodexApprovalMode =>
+  CODEX_APPROVAL_MODES.some((supported) => supported === mode);
+
+/**
  * Codex's settings per approval mode, strictly ordered: each level allows
  * everything the one below it does and more, so a ceiling at a level never
  * yields a higher level's settings. Commands always run inside the workspace
@@ -57,7 +74,7 @@ const CODEX_LEVEL = {
   auto: { approvalPolicy: "untrusted", networkAccess: true },
   full_auto: { approvalPolicy: "on-request", networkAccess: true },
 } as const satisfies Record<
-  HarnessRunPolicy["approvals"],
+  CodexApprovalMode,
   { approvalPolicy: "untrusted" | "on-request"; networkAccess: boolean }
 >;
 /** A dotted config key carries the name, so it must stay a bare TOML key. */
@@ -163,16 +180,20 @@ const threadParams = (
   if (!path.isAbsolute(input.cacheDir)) {
     panic("Codex adapter: the cache directory must be an absolute path");
   }
+  const { approvals } = input.policy;
+  // `startTurn` refuses any other mode before a thread is asked for.
+  const level = isCodexApprovalMode(approvals)
+    ? CODEX_LEVEL[approvals]
+    : panic("Codex adapter: the turn's approval mode is not a Codex one");
   return {
     model: input.model,
     cwd: input.workspaceDir,
-    approvalPolicy: CODEX_LEVEL[input.policy.approvals].approvalPolicy,
+    approvalPolicy: level.approvalPolicy,
     sandbox: SANDBOX_MODE[input.policy.fs],
     developerInstructions: input.instructions,
     config: {
       "sandbox_workspace_write.network_access":
-        NETWORK_ACCESS[input.policy.network] &&
-        CODEX_LEVEL[input.policy.approvals].networkAccess,
+        NETWORK_ACCESS[input.policy.network] && level.networkAccess,
       // Package caches live outside the workspace; the temp directory and
       // `/tmp` stay writable, as tools that make scratch files expect.
       "sandbox_workspace_write.writable_roots": [input.cacheDir],

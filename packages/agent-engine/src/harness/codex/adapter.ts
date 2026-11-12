@@ -3,10 +3,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import {
-  DESKTOP_RUNNER_APPROVAL_MODES,
-  knownReasoningEfforts,
-} from "@stll/api-contract/desktop-runner";
+import { knownReasoningEfforts } from "@stll/api-contract/desktop-runner";
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
 import type { ProtocolLog } from "../../protocol-log";
@@ -43,7 +40,11 @@ import {
   ModelListResponseSchema,
   TurnStartResponseSchema,
 } from "./protocol";
-import { openThread } from "./thread";
+import {
+  CODEX_APPROVAL_MODES,
+  isCodexApprovalMode,
+  openThread,
+} from "./thread";
 import { type CodexCapacityRetry, CodexTurnSession } from "./turn";
 
 /**
@@ -404,9 +405,8 @@ const probe = async (
       auth,
       models,
       capabilities: capabilities(),
-      // Every level: `CODEX_LEVEL` in thread.ts maps each, and Codex sandboxes
-      // every command at every level.
-      approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
+      // Codex sandboxes every command at each of its levels.
+      approvalModes: [...CODEX_APPROVAL_MODES],
       // The probe does not read rate limits; a limited turn reports them.
       usageLimit: null,
     });
@@ -419,6 +419,15 @@ const startTurn = async (
   options: CodexHarnessAdapterOptions,
   input: HarnessTurnInput,
 ): Promise<Result<HarnessTurn, HarnessStartError>> => {
+  // A mode the probe never offered fails before Codex starts.
+  if (!isCodexApprovalMode(input.policy.approvals)) {
+    return Result.err(
+      new HarnessStartError({
+        reason: "start_rejected",
+        message: "Codex does not run in this approval mode.",
+      }),
+    );
+  }
   const standalone = buildTurnPrompt({
     transcript: input.transcript,
     mode: "standalone",
