@@ -1,10 +1,12 @@
 import {
+  type DefaultError,
   experimental_streamedQuery as streamedQuery,
   queryOptions,
 } from "@tanstack/react-query";
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
   CHAT_LOCAL_RUN_STEP_OUTPUT_HEADERS,
   CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
@@ -21,6 +23,7 @@ import {
   LOCAL_RUN_STEP_OUTPUT_UNREAD,
   type LocalRunStepOutputEvent,
   localRunStepOutputStaleTime,
+  type LocalRunStepOutputView,
 } from "@/features/chat/local-run-step-output.logic";
 import { api } from "@/lib/api";
 import {
@@ -42,8 +45,9 @@ const totalBytesOf = (response: Response) => {
   const header = response.headers.get(
     CHAT_LOCAL_RUN_STEP_OUTPUT_HEADERS.totalBytes,
   );
-  const total = header === null ? Number.NaN : Number(header);
-  return Number.isSafeInteger(total) && total >= 0 ? total : null;
+  // A size the desktop did not state as a whole number of bytes is unknown.
+  const total = parseIntegerToken(header, { sign: "unsigned" });
+  return Result.isOk(total) ? total.value : null;
 };
 
 const bridgeFailure = (response: Response, path: string) =>
@@ -176,7 +180,13 @@ export const localRunStepOutputOptions = ({
   userId,
   callId,
 }: LocalRunStepOutputKey) =>
-  queryOptions({
+  // Named, so the stale time below reads the output's own type.
+  queryOptions<
+    LocalRunStepOutputView,
+    DefaultError,
+    LocalRunStepOutputView,
+    ReturnType<typeof chatKeys.localRunStepOutput>
+  >({
     queryKey: chatKeys.localRunStepOutput(activeOrganizationId, userId, callId),
     queryFn: streamedQuery({
       streamFn: ({ signal }) => readLocalRunStepOutput({ callId, signal }),

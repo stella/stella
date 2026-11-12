@@ -40,9 +40,7 @@ type GrantDependencies = {
 const answer = (grant: ChatLocalRunStepOutputGrant) => Result.ok(grant);
 
 /** A grant for the member who owns the run, and for no one else. */
-export const createLocalRunStepOutputGrant = (
-  dependencies?: GrantDependencies,
-) =>
+const createLocalRunStepOutputGrant = (dependencies?: GrantDependencies) =>
   createSafeRootHandler(
     config,
     async function* ({ params: { runId }, session, user }) {
