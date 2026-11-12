@@ -33,3 +33,6 @@ CREATE POLICY "legal_list_claims_owner_access" ON "legal_list_claims"
     FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_claims'::regclass))
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
     FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_claims'::regclass));
+
+-- The pending-claims index (legal_list_claims_asserted_on_pending_idx) is
+-- built concurrently in the online phase, before the backfill reads it.

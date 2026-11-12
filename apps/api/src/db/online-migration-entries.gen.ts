@@ -100,6 +100,7 @@ export { default as indexes_invoices_client_backfill_idx } from "./online-migrat
 export { default as indexes_invoices_id_workspace_unique } from "./online-migration-entries/indexes-invoices-id-workspace-unique";
 export { default as indexes_invoices_org_client_created_idx } from "./online-migration-entries/indexes-invoices-org-client-created-idx";
 export { default as indexes_invoices_ws_original_idx } from "./online-migration-entries/indexes-invoices-ws-original-idx";
+export { default as indexes_legal_list_claims_asserted_on_pending_idx } from "./online-migration-entries/indexes-legal-list-claims-asserted-on-pending-idx";
 export { default as indexes_legal_list_generation_runs_stella_active_idx } from "./online-migration-entries/indexes-legal-list-generation-runs-stella-active-idx";
 export { default as indexes_legal_lists_sample_workspace_uidx } from "./online-migration-entries/indexes-legal-lists-sample-workspace-uidx";
 export { default as indexes_legal_reader_annotations_matter_document_idx } from "./online-migration-entries/indexes-legal-reader-annotations-matter-document-idx";

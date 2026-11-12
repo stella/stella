@@ -95,36 +95,36 @@ legal_list_claims.asserted_on_source                           text             
 legal_list_claims.created_at                                   timestamptz      default,not null  lists-verification.ts:467
 ```
 
-## legal_list_claim_review_events · `legalListClaimReviewEvents` · lists-verification.ts:580 · rls
+## legal_list_claim_review_events · `legalListClaimReviewEvents` · lists-verification.ts:586 · rls
 
 Reviewer actions on a claim, append-only.
 
 ```text
-legal_list_claim_review_events.{...entityFeatureGateColumns()}              spread                             lists-verification.ts:583
-legal_list_claim_review_events.{...entityFeatureOrganizationGateColumns()}  spread                             lists-verification.ts:584
-legal_list_claim_review_events.id                                           pUuid            pk,not null       lists-verification.ts:585
-legal_list_claim_review_events.workspace_id                                 safeWorkspaceId  fk,not null       lists-verification.ts:586
-legal_list_claim_review_events.run_id                                       safeUuid         fk,not null       lists-verification.ts:587
-legal_list_claim_review_events.claim_id                                     safeUuid         fk,not null       lists-verification.ts:588
-legal_list_claim_review_events.kind                                         text             not null          lists-verification.ts:589
-legal_list_claim_review_events.payload                                      jsonb            not null          lists-verification.ts:593  Typed as written now, so a writer cannot leave out a required reason.
-legal_list_claim_review_events.actor_id                                     text             fk,null           lists-verification.ts:594
-legal_list_claim_review_events.created_at                                   timestamptz      default,not null  lists-verification.ts:602  The insert's own clock, not the transaction's start: events are folded in this order, and a reviewer whose transaction began earlier but took the claim's lock…
-legal_list_claim_review_events.carried_from_run_id                          safeUuid         null              lists-verification.ts:607  A decision carried from the previous run of the document: the run and the event it copies.
-legal_list_claim_review_events.carried_from_event_id                        safeUuid         null              lists-verification.ts:610
+legal_list_claim_review_events.{...entityFeatureGateColumns()}              spread                             lists-verification.ts:589
+legal_list_claim_review_events.{...entityFeatureOrganizationGateColumns()}  spread                             lists-verification.ts:590
+legal_list_claim_review_events.id                                           pUuid            pk,not null       lists-verification.ts:591
+legal_list_claim_review_events.workspace_id                                 safeWorkspaceId  fk,not null       lists-verification.ts:592
+legal_list_claim_review_events.run_id                                       safeUuid         fk,not null       lists-verification.ts:593
+legal_list_claim_review_events.claim_id                                     safeUuid         fk,not null       lists-verification.ts:594
+legal_list_claim_review_events.kind                                         text             not null          lists-verification.ts:595
+legal_list_claim_review_events.payload                                      jsonb            not null          lists-verification.ts:599  Typed as written now, so a writer cannot leave out a required reason.
+legal_list_claim_review_events.actor_id                                     text             fk,null           lists-verification.ts:600
+legal_list_claim_review_events.created_at                                   timestamptz      default,not null  lists-verification.ts:608  The insert's own clock, not the transaction's start: events are folded in this order, and a reviewer whose transaction began earlier but took the claim's lock…
+legal_list_claim_review_events.carried_from_run_id                          safeUuid         null              lists-verification.ts:613  A decision carried from the previous run of the document: the run and the event it copies.
+legal_list_claim_review_events.carried_from_event_id                        safeUuid         null              lists-verification.ts:616
 ```
 
-## legal_list_claim_carry_outcomes · `legalListClaimCarryOutcomes` · lists-verification.ts:703
+## legal_list_claim_carry_outcomes · `legalListClaimCarryOutcomes` · lists-verification.ts:709
 
 What became of each reviewed claim of the previous run of a document when the next run completed (`lib/lists/verification/carry-over.ts`): carried to a matchin…
 
 ```text
-legal_list_claim_carry_outcomes.{...entityFeatureGateColumns()}              spread                        lists-verification.ts:706
-legal_list_claim_carry_outcomes.{...entityFeatureOrganizationGateColumns()}  spread                        lists-verification.ts:707
-legal_list_claim_carry_outcomes.workspace_id                                 safeWorkspaceId  fk,not null  lists-verification.ts:708
-legal_list_claim_carry_outcomes.run_id                                       safeUuid         fk,not null  lists-verification.ts:710  The run the decisions were carried to.
-legal_list_claim_carry_outcomes.source_run_id                                safeUuid         fk,not null  lists-verification.ts:711
-legal_list_claim_carry_outcomes.source_claim_id                              safeUuid         fk,not null  lists-verification.ts:713
-legal_list_claim_carry_outcomes.outcome                                      text             not null     lists-verification.ts:714
-legal_list_claim_carry_outcomes.target_claim_id                              safeUuid         fk,null      lists-verification.ts:716  The matching claim of this run; null when nothing matched.
+legal_list_claim_carry_outcomes.{...entityFeatureGateColumns()}              spread                        lists-verification.ts:712
+legal_list_claim_carry_outcomes.{...entityFeatureOrganizationGateColumns()}  spread                        lists-verification.ts:713
+legal_list_claim_carry_outcomes.workspace_id                                 safeWorkspaceId  fk,not null  lists-verification.ts:714
+legal_list_claim_carry_outcomes.run_id                                       safeUuid         fk,not null  lists-verification.ts:716  The run the decisions were carried to.
+legal_list_claim_carry_outcomes.source_run_id                                safeUuid         fk,not null  lists-verification.ts:717
+legal_list_claim_carry_outcomes.source_claim_id                              safeUuid         fk,not null  lists-verification.ts:719
+legal_list_claim_carry_outcomes.outcome                                      text             not null     lists-verification.ts:720
+legal_list_claim_carry_outcomes.target_claim_id                              safeUuid         fk,null      lists-verification.ts:722  The matching claim of this run; null when nothing matched.
 ```

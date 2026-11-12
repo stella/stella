@@ -3,7 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 
 export default {
   id: "repairs-list-claim-asserted-date-backfill",
-  revision: 1453,
+  revision: 1454,
   type: "repairs",
   values: [LIST_CLAIM_ASSERTED_DATE_BACKFILL],
 } satisfies OnlineMigrationEntry;

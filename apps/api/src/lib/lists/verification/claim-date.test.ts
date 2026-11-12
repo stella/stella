@@ -432,14 +432,39 @@ describe("claim date reader", () => {
           "$ ",
           "§ ",
           "ref ",
+          "EUR ",
+          "CZK ",
+          "paid ",
+          "a total of ",
         ),
+        fc.constantFrom("", " euros", " shares", " Kč", " people"),
         noise,
-        (year, before, filler) => {
+        (year, before, after, filler) => {
           expect(
-            readClaimTextDate(`${filler} ${before}${String(year)} ${filler}`),
-          ).toEqual({
-            type: "silent",
-          });
+            readClaimTextDate(
+              `${filler} ${before}${String(year)}${after} ${filler}`,
+            ),
+          ).toEqual({ type: "silent" });
+        },
+      ),
+    );
+  });
+
+  test("an amount beside a date leaves the date as written", () => {
+    assertProperty(
+      "an amount beside a date leaves the date as written",
+      fc.property(
+        calendarDay,
+        fc.integer({ min: 1900, max: 2099 }),
+        fc.constantFrom("euros", "EUR", "shares", "Kč"),
+        (day, amount, unit) => {
+          const text = `I paid ${String(amount)} ${unit} on ${String(day.day)} ${monthName(day.month)} ${String(day.year)}.`;
+          expect(readClaimTextDate(text)).toEqual(
+            dated({
+              date: iso(day.year, day.month, day.day),
+              precision: "day",
+            }),
+          );
         },
       ),
     );

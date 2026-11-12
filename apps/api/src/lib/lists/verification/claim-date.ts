@@ -15,7 +15,8 @@
  * the record (a record entry of 17 August sits inside it), and it keeps one
  * date shape for claims and facts. Dates no single year covers leave the
  * claim undated. Relative dates ("the next day", "a week later") are not
- * dates.
+ * dates, and a bare number is a year only after a word that places it in
+ * time ("in 2021", not "paid 2000 euros").
  */
 
 import { panic } from "better-result";
@@ -256,65 +257,71 @@ const PATTERNS: readonly Pattern[] = [
       return [date(from, null, null), date(to, null, null)];
     },
   ),
-  // in 2021
+  // in 2021 (kept only after a word that places it in time)
   pattern(
     `(?<![\\p{N}/.,:])(?<![£$€¥#§¶]\\s?)${YEAR}(?![%/]|[.,:-]\\p{N})`,
     ([y]) => [date(number(y), null, null)],
   ),
 ];
 
-/** Words before a number that make it an identifier, never a year. */
-const IDENTIFIER_WORDS = new Set([
-  "account",
-  "annex",
-  "appendix",
-  "art",
-  "article",
-  "case",
-  "chapter",
-  "claim",
-  "clause",
-  "code",
-  "exhibit",
-  "flat",
-  "folio",
-  "house",
-  "id",
-  "invoice",
-  "item",
-  "line",
-  "no",
-  "nos",
-  "number",
-  "p",
-  "page",
-  "pages",
-  "para",
-  "paragraph",
-  "paragraphs",
-  "part",
-  "pp",
-  "ref",
-  "reference",
-  "room",
-  "rule",
-  "schedule",
-  "section",
-  "sheet",
-  "tab",
-  "unit",
-  "version",
+/**
+ * Words that place a bare four-digit number in time ("in 2021", "mid-2021",
+ * "v roce 2021"). A number after any other word is an amount, a count or an
+ * identifier ("paid 2000 euros", "EUR 2000", "No. 2021"), never a year.
+ */
+const YEAR_WORDS = new Set([
+  "in",
+  "during",
+  "throughout",
+  "since",
+  "until",
+  "till",
+  "before",
+  "after",
+  "from",
+  "early",
+  "mid",
+  "late",
+  "circa",
+  "c",
+  "ca",
+  "year",
+  "summer",
+  "winter",
+  "spring",
+  "autumn",
+  "fall",
+  "end",
+  "beginning",
+  // Czech, Slovak, Polish, German, French, Spanish, Portuguese.
+  "v",
+  "ve",
+  "w",
+  "roce",
+  "roku",
+  "rok",
+  "im",
+  "jahr",
+  "jahre",
+  "seit",
+  "en",
+  "depuis",
+  "desde",
+  "hasta",
 ]);
 
 const NOT_A_LETTER = /\P{L}/u;
 
-/** The word just before `start`, a trailing dot dropped ("No. 2021"). */
-const followsIdentifierWord = (text: string, start: number): boolean => {
+/** Whether the word just before `start` places a number in time; a trailing
+ *  dot or hyphen is dropped ("mid-2021"). */
+const followsYearWord = (text: string, start: number): boolean => {
   const before = text.slice(Math.max(0, start - 24), start).trimEnd();
-  const word = (before.endsWith(".") ? before.slice(0, -1) : before)
+  const word = (
+    before.endsWith(".") || before.endsWith("-") ? before.slice(0, -1) : before
+  )
     .split(NOT_A_LETTER)
     .at(-1);
-  return word !== undefined && IDENTIFIER_WORDS.has(word.toLowerCase());
+  return word !== undefined && YEAR_WORDS.has(word.toLowerCase());
 };
 
 type Match = { start: number; end: number; mentions: Mention[] };
@@ -352,7 +359,7 @@ const mentionsOf = (text: string): Mention[] => {
       match.mentions[0]?.type === "date" &&
       match.mentions[0].month === null &&
       match.end - match.start === 4;
-    if (bareYear && followsIdentifierWord(text, match.start)) {
+    if (bareYear && !followsYearWord(text, match.start)) {
       continue;
     }
     taken.push(match);

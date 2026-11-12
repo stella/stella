@@ -487,6 +487,12 @@ export const legalListClaims = p.pgTable(
     p
       .index("legal_list_claims_run_idx")
       .on(table.workspaceId, table.runId, table.position),
+    // The claims the asserted date backfill has yet to read: its batches and
+    // its completion check, which every startup runs, read only these.
+    p
+      .index("legal_list_claims_asserted_on_pending_idx")
+      .on(table.id)
+      .where(sql`${table.assertedOnSource} = 'pending'`),
     p.check(
       "legal_list_claims_type_check",
       sql`${table.type} IN (${CLAIM_TYPE_SQL_VALUES})`,
