@@ -4827,6 +4827,7 @@
   "settings.organization.auditResourceKinds.clause_category": "clause category",
   "settings.organization.auditResourceKinds.clause_template_link": "clause template link",
   "settings.organization.auditResourceKinds.clause_variant": "clause variant",
+  "settings.organization.auditResourceKinds.conflict_check": "conflict check",
   "settings.organization.auditResourceKinds.contact": "contact",
   "settings.organization.auditResourceKinds.contact_directory": "contact directory",
   "settings.organization.auditResourceKinds.desktop_edit_session": "desktop editing session",

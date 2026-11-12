@@ -24,6 +24,10 @@ import { chatPinnedThreadsScalingScenario } from "./chat-threads";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { reviewHistoryScalingScenarios } from "./claim-review-history";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import {
+  conflictCheckListScalingScenario,
+  conflictCheckReadScalingScenario,
+} from "./conflict-checks";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
@@ -85,6 +89,8 @@ const measuredApiScenarios = [
   chatActiveRunsScalingScenario,
   chatPinnedThreadsScalingScenario,
   browserSiteGrantsScalingScenario,
+  conflictCheckListScalingScenario,
+  conflictCheckReadScalingScenario,
   chatMcpAppBundleScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,

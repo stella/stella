@@ -38,6 +38,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   organization_settings: "Organization settings, not reviewer content.",
   billing_draft_user_settings:
     "Per-user billing draft consent and preferences, not reviewer content.",
+  conflict_checks:
+    "Conflict checks are an invitation-only feature the review organization is never granted, so no reviewer can record one there; the table stays empty for it.",
   organization_access_states: "Organization access state, set by operators.",
   organization_configured_access: "Organization access, set by operators.",
   feature_enrolments:

@@ -350,6 +350,7 @@ export const ENUM_COLUMNS = {
     "interaction_type",
     "interruption_reason",
   ],
+  conflict_checks: ["decision", "outcome"],
   contact_relationships: ["relationship_type"],
   contact_search_documents: ["contact_type"],
   contacts: [

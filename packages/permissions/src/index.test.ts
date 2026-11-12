@@ -251,6 +251,31 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("staff run conflict checks; only management reviews them", () => {
+    for (const role of ["owner", "admin", "member"] as const) {
+      expect(roles[role].authorize({ conflictCheck: ["run"] }).success).toBe(
+        true,
+      );
+    }
+    for (const role of ["owner", "admin"] as const) {
+      expect(roles[role].authorize({ conflictCheck: ["review"] }).success).toBe(
+        true,
+      );
+    }
+    expect(roles.member.authorize({ conflictCheck: ["review"] }).success).toBe(
+      false,
+    );
+    // A check searches matters beyond the runner's own, so the roles confined
+    // to their assigned matters hold neither half.
+    for (const role of ["intern", "external"] as const) {
+      for (const action of ["run", "review"] as const) {
+        expect(roles[role].authorize({ conflictCheck: [action] }).success).toBe(
+          false,
+        );
+      }
+    }
+  });
+
   test("everyone but an external collaborator keeps their own work", () => {
     // Annotations, stored searches and account links are the caller's own
     // work, so they follow the time entry / expense / chat line rather than

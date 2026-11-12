@@ -12,6 +12,7 @@ import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { authMetadataRoute } from "@/api/handlers/auth/routes";
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
+import { conflictChecksRoute } from "@/api/handlers/conflict-checks/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRunnerRoute } from "@/api/handlers/desktop-runner/routes";
@@ -125,6 +126,7 @@ const ROOT_ROUTE_TABLES: Readonly<Record<string, readonly RouteEntry[]>> = {
   aiAutocompleteRoute,
   authMetadataRoute,
   authUiRoute,
+  conflictChecksRoute,
   desktopFeatureAccessRoute,
   desktopPresenceRoute,
   desktopRunnerRoute,

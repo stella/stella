@@ -44,6 +44,7 @@ import {
   installPgliteChatStoredContentEgress,
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
+  installPgliteConflictCheckRoutines,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteCorrespondenceSources,
   installPgliteDecisionAliases,
@@ -875,6 +876,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteSyntheticMembershipTrigger(db);
   await installPgliteUserFileOrganizationKeyGuard(db);
+  await installPgliteConflictCheckRoutines(db);
   await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
