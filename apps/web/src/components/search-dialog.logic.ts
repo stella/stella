@@ -2,7 +2,6 @@ import { panic } from "better-result";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
-import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 
 import type { SearchScope } from "@/components/search-scope";
 import type {
@@ -417,16 +416,3 @@ export const rememberSelectedFacetLabels = (
   }
   return next;
 };
-
-/**
- * The case-law facet count as words. The number counts matching decisions,
- * capped at the global search ceiling, so a count at the ceiling is shown as
- * "at least" rather than as an exact total.
- */
-export const caseLawFacetCountMessage = (count: number) =>
-  count >= GLOBAL_SEARCH_RESULT_LIMIT
-    ? ({
-        key: "search.caseLawMatchingDecisionsAtLeast",
-        count: GLOBAL_SEARCH_RESULT_LIMIT,
-      } as const)
-    : ({ key: "search.caseLawMatchingDecisions", count } as const);

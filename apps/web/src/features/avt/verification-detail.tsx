@@ -1,3 +1,5 @@
+import * as React from "react";
+
 import { useQuery } from "@tanstack/react-query";
 /**
  * One verification of one document: waiting while it runs, the reason when it
@@ -16,12 +18,16 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
+import { ScopeMark, ScopeRefusalMessage } from "@/features/avt/paragraph-scope";
+import { scopeParagraphs } from "@/features/avt/paragraph-scope.logic";
 import { verificationRunOptions } from "@/features/avt/queries";
+import { RunCarryOverControl } from "@/features/avt/run-carry-over";
 import { RunHistoryPicker } from "@/features/avt/run-history-picker";
 import type { VerificationRun } from "@/features/avt/types";
 import { RUN_ERROR_KEYS } from "@/features/avt/types";
 import { useStartVerification } from "@/features/avt/use-start-verification";
 import { VerificationView } from "@/features/avt/verification-view";
+import type { VerificationViewHandle } from "@/features/avt/verification-view";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
@@ -64,6 +70,9 @@ export const VerificationDetail = ({
       ? undefined
       : files?.find((file) => file.entityId === run.entityId);
   const documentName = currentFile?.name ?? null;
+  // The carry control lives in the header; the claims it shows live in the
+  // view below it.
+  const view = React.useRef<VerificationViewHandle>(null);
 
   return (
     <>
@@ -78,14 +87,28 @@ export const VerificationDetail = ({
             <TruncatedText>{documentName}</TruncatedText>
           </h2>
         )}
+        {run !== undefined && <ScopeMark scope={run.scope} />}
         {run !== undefined && (
-          <RunHistoryPicker
-            fileFieldId={currentFile?.fieldId ?? run.fileFieldId}
-            listId={listId}
-            onOpenRun={onOpenRun}
-            run={run}
-            workspaceId={workspaceId}
-          />
+          // The run's date and what it carried wrap together, never apart.
+          <div className="ms-auto flex items-center gap-1">
+            {run.status === "completed" &&
+              run.carryOver !== null &&
+              run.carryOver.carriedCount + run.carryOver.notCarried.length >
+                0 && (
+                <RunCarryOverControl
+                  carryOver={run.carryOver}
+                  onOpenRun={onOpenRun}
+                  onShowClaim={(claimId) => view.current?.showClaim(claimId)}
+                />
+              )}
+            <RunHistoryPicker
+              fileFieldId={currentFile?.fieldId ?? run.fileFieldId}
+              listId={listId}
+              onOpenRun={onOpenRun}
+              run={run}
+              workspaceId={workspaceId}
+            />
+          </div>
         )}
       </div>
       {isPending && <Skeleton className="h-40 w-full" />}
@@ -100,6 +123,7 @@ export const VerificationDetail = ({
           listId={listId}
           onOpenRun={onOpenRun}
           run={run}
+          view={view}
           workspaceId={workspaceId}
         />
       )}
@@ -114,6 +138,7 @@ type RunBodyProps = {
   currentFileFieldId: string | null;
   listId: string | null;
   onOpenRun: (runId: string) => void;
+  view: React.Ref<VerificationViewHandle>;
 };
 
 const RunBody = ({
@@ -122,6 +147,7 @@ const RunBody = ({
   currentFileFieldId,
   listId,
   onOpenRun,
+  view,
 }: RunBodyProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -149,6 +175,7 @@ const RunBody = ({
               fileFieldId={currentFileFieldId}
               listId={listId}
               onOpenRun={onOpenRun}
+              paragraphs={scopeParagraphs(run.scope)}
               workspaceId={workspaceId}
             />
           )}
@@ -170,10 +197,12 @@ const RunBody = ({
           </p>
           {run.claims.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              {t("avt.runs.noClaims")}
+              {run.scope.kind === "whole"
+                ? t("avt.runs.noClaims")
+                : t("avt.scope.noClaims")}
             </p>
           ) : (
-            <VerificationView run={run} workspaceId={workspaceId} />
+            <VerificationView ref={view} run={run} workspaceId={workspaceId} />
           )}
         </>
       );
@@ -190,6 +219,9 @@ type VerifyAgainProps = {
   listId: string;
   entityId: string;
   fileFieldId: string;
+  /** The failed run's paragraph range, tried again as it was; null for the
+   *  whole document. */
+  paragraphs: string | null;
   onOpenRun: (runId: string) => void;
 };
 
@@ -198,6 +230,7 @@ const VerifyAgain = ({
   listId,
   entityId,
   fileFieldId,
+  paragraphs,
   onOpenRun,
 }: VerifyAgainProps) => {
   const t = useTranslations();
@@ -208,7 +241,11 @@ const VerifyAgain = ({
     onStarted: onOpenRun,
   });
   const confirmation = verification.sizeConfirmation;
-  const target = { entityId, fileFieldId };
+  const target = {
+    entityId,
+    fileFieldId,
+    ...(paragraphs === null ? {} : { paragraphs }),
+  };
 
   return (
     <>
@@ -224,6 +261,9 @@ const VerifyAgain = ({
         <PlayIcon />
         {t("avt.documents.verifyAgain")}
       </Button>
+      {verification.scopeRefusal !== null && (
+        <ScopeRefusalMessage refusal={verification.scopeRefusal.code} />
+      )}
       <RunSizeConfirmDialog
         confirmLabel={t("common.verify")}
         detail={confirmation}

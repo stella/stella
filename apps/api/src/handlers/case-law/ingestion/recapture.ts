@@ -103,14 +103,37 @@ type RecaptureDecisionOptions = {
   signal?: AbortSignal | undefined;
 };
 
-export const recaptureDecisionFromListing = async ({
-  adapter,
+export type LocateListedPayloadOutcome =
+  | { type: "listed"; lookup: string; payload: unknown }
+  /** The adapter declares no recapture. */
+  | { type: "unsupported" }
+  /** The stored row names nothing to ask the publisher for. */
+  | { type: "no-lookup" }
+  | { type: "not-listed"; lookup: string }
+  | { type: "listing-unavailable"; lookup: string; error: unknown }
+  /** Several listed items match the row; none is chosen. */
+  | { type: "identity-mismatch"; lookup: string; detail: string };
+
+type LocateListedPayloadOptions = {
+  reconciliation: SourceReconciliation;
+  stored: StoredRawReparseInput;
+  signal?: AbortSignal | undefined;
+};
+
+/**
+ * The listing item the publisher serves for a stored row, as the crawl would
+ * have read it. What a caller does with it is the caller's: upgrade the held
+ * payload where the adapter can (`recaptureDecisionFromListing`), or replay
+ * it through `reconciliation.buildDecision` where only a fresh read builds
+ * the row.
+ */
+export const locateListedPayload = async ({
+  reconciliation,
   stored,
   signal,
-}: RecaptureDecisionOptions): Promise<RecaptureDecisionOutcome> => {
-  const { reconciliation, reparseStoredRaw } = adapter;
+}: LocateListedPayloadOptions): Promise<LocateListedPayloadOutcome> => {
   const { recapture } = reconciliation;
-  if (recapture === undefined || reparseStoredRaw === undefined) {
+  if (recapture === undefined) {
     return { type: "unsupported" };
   }
   const lookup = recapture.lookupOf(stored);
@@ -120,7 +143,7 @@ export const recaptureDecisionFromListing = async ({
   const listed = await findListedPayload({ recapture, lookup, stored, signal });
   switch (listed.type) {
     case "listed":
-      break;
+      return { type: "listed", lookup, payload: listed.payload };
     case "not-listed":
       return { type: "not-listed", lookup };
     case "ambiguous":
@@ -135,8 +158,29 @@ export const recaptureDecisionFromListing = async ({
       listed satisfies never;
       return panic("Unhandled listed-payload result");
   }
-  const recaptured = recapture.recaptureStoredRaw({
-    listingPayload: listed.payload,
+};
+
+export const recaptureDecisionFromListing = async ({
+  adapter,
+  stored,
+  signal,
+}: RecaptureDecisionOptions): Promise<RecaptureDecisionOutcome> => {
+  const { reconciliation, reparseStoredRaw } = adapter;
+  const recaptureStoredRaw = reconciliation.recapture?.recaptureStoredRaw;
+  if (recaptureStoredRaw === undefined || reparseStoredRaw === undefined) {
+    return { type: "unsupported" };
+  }
+  const located = await locateListedPayload({
+    reconciliation,
+    stored,
+    signal,
+  });
+  if (located.type !== "listed") {
+    return located;
+  }
+  const { lookup } = located;
+  const recaptured = recaptureStoredRaw({
+    listingPayload: located.payload,
     stored,
   });
   switch (recaptured.type) {

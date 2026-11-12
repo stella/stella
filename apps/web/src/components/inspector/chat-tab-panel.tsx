@@ -295,6 +295,7 @@ export const ChatTabPanel = ({
     isGenerating,
     turnAbandoned,
     computerWait,
+    turnSentAt,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -767,6 +768,7 @@ export const ChatTabPanel = ({
                   streamdownComponents={streamdownComponents}
                   userMessageEdit={userMessageEdit}
                   computerWait={computerWait}
+                  turnSentAt={turnSentAt}
                   workspaceId={tabWorkspaceId}
                 />
               )}

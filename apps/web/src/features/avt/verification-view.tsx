@@ -12,7 +12,7 @@ import { useTranslations } from "use-intl";
 
 import { LiteralTextProvider } from "@stll/decision-reader/display-elision-policy";
 import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
-import { Button } from "@stll/ui/button";
+import { Button, ButtonTextRun } from "@stll/ui/button";
 import {
   CheckIcon,
   CircleAlertIcon,
@@ -38,6 +38,7 @@ import {
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import type { OriginalScrollTarget } from "@/features/avt/original-docx-view";
 import { isPdfClaimBoxDrawn } from "@/features/avt/original-pdf-claim-box";
+import { outsideSpansForBlock } from "@/features/avt/paragraph-scope.logic";
 import { RunHistorySheet } from "@/features/avt/review-history";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
@@ -55,10 +56,10 @@ import type {
 import { REVIEW_STATUS_META, STATE_META } from "@/features/avt/types";
 import { useClaimReviewActions } from "@/features/avt/use-claim-review-actions";
 import {
+  claimFactsById,
   contestedFactIds,
   countClaims,
   effectiveState,
-  evidenceFactsById,
   isConflictState,
   isContested,
   isSettled,
@@ -97,9 +98,16 @@ type VerdictFilter =
   | "reviewed"
   | ClaimState;
 
+/** What the run's header can ask of the view: select a claim and bring it
+ *  into view, as stepping through a filter does. */
+export type VerificationViewHandle = {
+  showClaim: (claimId: VerificationClaim["id"]) => void;
+};
+
 type VerificationViewProps = {
   workspaceId: string;
   run: VerificationRun;
+  ref?: React.Ref<VerificationViewHandle>;
 };
 
 type OriginalDocumentProps = React.ComponentProps<typeof OriginalDocxView> & {
@@ -126,6 +134,7 @@ const OriginalDocument = ({
 export const VerificationView = ({
   workspaceId,
   run,
+  ref,
 }: VerificationViewProps) => {
   const format = useFormatter();
   const t = useTranslations();
@@ -139,8 +148,9 @@ export const VerificationView = ({
   // and the detail panel agree about what each claim currently is.
   const claims = run.claims.map(resolveClaimView);
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
+  // The run's pinned reading; a re-checked claim reads its own re-check's
+  // facts instead (`isContested`).
   const contested = contestedFactIds(run.evidence.facts);
-  const factsById = evidenceFactsById(run);
   const presentation = selectClaimPresentation(run.blocks, claims);
   const readingOrder = presentation.readingOrder;
   const counts = countClaims(run.claims, contested);
@@ -233,6 +243,14 @@ export const VerificationView = ({
       scrollOriginalToClaim(selectedClaim);
     }
   };
+
+  React.useImperativeHandle(ref, () => ({
+    showClaim: (id) => {
+      if (claimById.has(id)) {
+        goToMatch(id);
+      }
+    },
+  }));
 
   const stepper = matchStepper({
     orderedMatches,
@@ -412,6 +430,7 @@ export const VerificationView = ({
             <ReadingDocument
               presentation={presentation}
               renderClaim={renderClaim}
+              scope={run.scope}
             />
           )}
         </div>
@@ -425,7 +444,7 @@ export const VerificationView = ({
             <ClaimDetailPanel
               claim={selectedClaim}
               contested={contested}
-              factsById={factsById}
+              factsById={claimFactsById(run, selectedClaim)}
               key={selectedClaim.id}
               onReviewEvent={(event) => recordEvent(selectedClaim.id, event)}
               run={run}
@@ -561,15 +580,58 @@ const claimDomId = (claimId: string): string => `avt-claim-${claimId}`;
 
 type ReadingDocumentProps = {
   presentation: ClaimPresentation;
+  /** A paragraph range stores only the blocks it spans; the text of its
+   *  first and last block outside the range is dimmed. */
+  scope: VerificationRun["scope"];
   renderClaim: (
     claim: VerificationClaim,
     children: React.ReactNode,
   ) => React.ReactElement;
 };
 
+// The reader colours its own text, so the outside is faded as a whole.
+const renderOutsideScope = (children: React.ReactNode) => (
+  <span className="opacity-45" data-outside-scope="">
+    {children}
+  </span>
+);
+
+/** The text a range starts after, folded to one quiet control so the
+ *  range is what the reader opens on; unfolded, it reads faded. */
+const OutsideScopeLead = ({
+  from,
+  children,
+}: {
+  from: number;
+  children: React.ReactNode;
+}) => {
+  const t = useTranslations();
+  const [shown, setShown] = React.useState(false);
+  if (shown) {
+    return renderOutsideScope(children);
+  }
+  // Its own `dir` keeps the label out of the document text's direction:
+  // `dir="auto"` on the block skips an element that states one.
+  return (
+    <span className="block" dir="auto">
+      <Button
+        aria-expanded={false}
+        onClick={() => setShown(true)}
+        size="inline"
+        variant="ghost"
+      >
+        <span className="text-muted-foreground font-sans text-xs">
+          {t("avt.scope.showBefore", { from: String(from) })}
+        </span>
+      </Button>
+    </span>
+  );
+};
+
 /** The stored text in the shared reader, or the claims' own passages. */
 const ReadingDocument = ({
   presentation,
+  scope,
   renderClaim,
 }: ReadingDocumentProps) => {
   const t = useTranslations();
@@ -600,14 +662,31 @@ const ReadingDocument = ({
                       activeMatchIndex={NO_ACTIVE_MATCH}
                       anchorPresentation="embedded"
                       anchorsByPieceId={{
-                        [block.paragraph.id]: block.claimSpans.map(
-                          ({ claim, start, end }) => ({
+                        [block.paragraph.id]: [
+                          ...outsideSpansForBlock(scope, {
+                            blockId: block.paragraph.id,
+                            text: block.paragraph.plainText,
+                          }).map(({ start, end }) => ({
+                            start,
+                            end,
+                            key: `outside-${String(start)}`,
+                            render:
+                              start === 0 && scope.kind === "paragraphs"
+                                ? (children: React.ReactNode) => (
+                                    <OutsideScopeLead from={scope.from}>
+                                      {children}
+                                    </OutsideScopeLead>
+                                  )
+                                : renderOutsideScope,
+                          })),
+                          ...block.claimSpans.map(({ claim, start, end }) => ({
                             start,
                             end,
                             key: claim.id,
-                            render: (children) => renderClaim(claim, children),
-                          }),
-                        ),
+                            render: (children: React.ReactNode) =>
+                              renderClaim(claim, children),
+                          })),
+                        ].toSorted((a, b) => a.start - b.start),
                       }}
                       block={block.paragraph}
                       rangesByPieceId={NO_RANGES}
@@ -672,7 +751,12 @@ const claimMatchesFilter = (
     case "needsreview": {
       return (
         needsAttention(
-          { state, refs: claim.refs, qualifiers: claim.qualifiers },
+          {
+            state,
+            refs: claim.refs,
+            qualifiers: claim.qualifiers,
+            recheck: claim.recheck,
+          },
           contested,
         ) && !isSettled(claim.review)
       );
@@ -781,11 +865,12 @@ const ClaimSpan = ({
   const { mark, markTextClass } = STATE_COLOR[state];
   const qualifierAnnouncement = announceQualifiers(claim);
   return (
-    // The claim's look is the review text mark, drawn by the span; the plain
-    // button only makes the run of evidence a control.
-    <Button
+    // The claim's look is the review text mark, drawn by the span. A claim is
+    // a run of the document's prose and wraps with it, so it is a text run,
+    // never a <button> (one atomic box that would lift a claim crossing a
+    // line out of the paragraph's reading order).
+    <ButtonTextRun
       aria-pressed={selected}
-      className="inline"
       id={claimDomId(claim.id)}
       onClick={() => onSelect(claim.id)}
       variant="plain"
@@ -842,6 +927,6 @@ const ClaimSpan = ({
           {qualifierAnnouncement !== null && ` ${qualifierAnnouncement}`}
         </span>
       </span>
-    </Button>
+    </ButtonTextRun>
   );
 };

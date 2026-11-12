@@ -503,19 +503,18 @@ const RESTRICTED_IMPORT_RULES = {
       ],
     },
   ],
-  // A copy control confirms through one of two owners: `CopyButton` for a
-  // fixed value, `useSelectionCopy` for selected words (which also confirms
-  // the reader's own copy). The Copy and Copied swap and its timer stay
-  // inside them. See ./copy-feedback-owner.ts.
+  // Every Copy goes through one owner, which writes the clipboard, confirms
+  // the Copy when the clipboard holds what it copies, and renders the Copy
+  // and Copied swap. See ./copy-feedback-owner.ts.
   "copy-feedback-owner": [
     {
       messageId: "copyFeedbackOwner",
       message:
-        "Render a Copy control through its owner, not with `{{name}}`: " +
-        "CopyActionButton (@/components/copy-action-button) for a fixed " +
-        "value, or SelectionCopyMenu / SelectionCopyButton with " +
-        "useSelectionCopy (@/components/selection-toolbar-actions) for " +
-        "selected words, which also confirms the reader's own Cmd+C.",
+        "Render a Copy through @/components/copy-control, not with " +
+        "`{{name}}`: CopyControl for a value, useCopyControl with " +
+        "CopyControlButton or CopyControlFeedback for a custom trigger, " +
+        "useSelectionCopyControl for a selection bar. The owner confirms " +
+        "the press and the reader's own copy of the same text.",
       modules: [
         "@stll/ui/copy-button",
         "packages/ui/src/components/copy-button",
@@ -524,14 +523,33 @@ const RESTRICTED_IMPORT_RULES = {
       ],
       restriction: {
         type: "exports",
-        names: new Set(["CopyFeedback", "useCopiedFeedback"]),
+        names: new Set([
+          "CopyButton",
+          "CopyFeedback",
+          "useCopiedFeedback",
+          "useCopyConfirmation",
+        ]),
         hit: EXPORT_HIT.binding,
       },
       owners: [
-        "apps/web/src/components/selection-toolbar-actions.tsx",
+        "apps/web/src/components/copy-control.tsx",
         // The package's public barrel re-exports every component.
         "packages/ui/src/index.ts",
       ],
+    },
+    {
+      messageId: "clipboardHelperOwner",
+      message:
+        "Write the clipboard through @/components/copy-control (CopyControl, " +
+        "useCopyControl, useSelectionCopyControl), not @stll/clipboard: the " +
+        "owner reports a failed copy and confirms the Copy in place.",
+      modules: ["@stll/clipboard", "packages/clipboard/src/index"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: ["apps/web/src/components/copy-control.tsx"],
     },
   ],
 } as const satisfies Record<string, readonly RestrictedImportEntry[]>;

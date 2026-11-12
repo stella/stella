@@ -23,6 +23,7 @@ export { default as constraints_lifecycle_shape_constraints } from "./online-mig
 export { default as constraints_list_claim_qualifiers_constraints } from "./online-migration-entries/constraints-list-claim-qualifiers-constraints";
 export { default as constraints_list_generation_constraints } from "./online-migration-entries/constraints-list-generation-constraints";
 export { default as constraints_list_verification_constraints } from "./online-migration-entries/constraints-list-verification-constraints";
+export { default as constraints_list_verification_scope_constraints } from "./online-migration-entries/constraints-list-verification-scope-constraints";
 export { default as constraints_local_run_approval_ceiling_constraints } from "./online-migration-entries/constraints-local-run-approval-ceiling-constraints";
 export { default as constraints_matter_time_expense_retention_constraints } from "./online-migration-entries/constraints-matter-time-expense-retention-constraints";
 export { default as constraints_notification_task_assigned_constraints } from "./online-migration-entries/constraints-notification-task-assigned-constraints";
@@ -31,6 +32,7 @@ export { default as constraints_organization_ai_instructions_constraints } from 
 export { default as constraints_reader_annotation_constraints } from "./online-migration-entries/constraints-reader-annotation-constraints";
 export { default as constraints_reader_answer_constraints } from "./online-migration-entries/constraints-reader-answer-constraints";
 export { default as constraints_sanctions_monitoring_constraints } from "./online-migration-entries/constraints-sanctions-monitoring-constraints";
+export { default as constraints_search_history_country_constraints } from "./online-migration-entries/constraints-search-history-country-constraints";
 export { default as constraints_time_entry_submitted_constraints } from "./online-migration-entries/constraints-time-entry-submitted-constraints";
 export { default as constraints_usage_action_type_constraints } from "./online-migration-entries/constraints-usage-action-type-constraints";
 export { default as cutovers_case_law_decisions_updated_id_idx } from "./online-migration-entries/cutovers-case-law-decisions-updated-id-idx";
@@ -115,7 +117,9 @@ export { default as indexes_sanctions_contact_marks_organization_retry_idx } fro
 export { default as indexes_sanctions_contact_marks_retry_idx } from "./online-migration-entries/indexes-sanctions-contact-marks-retry-idx";
 export { default as indexes_sanctions_contact_matches_org_open_cursor_idx } from "./online-migration-entries/indexes-sanctions-contact-matches-org-open-cursor-idx";
 export { default as indexes_sanctions_screening_events_org_cursor_idx } from "./online-migration-entries/indexes-sanctions-screening-events-org-cursor-idx";
+export { default as indexes_search_history_entries_legacy_documents_pending_idx } from "./online-migration-entries/indexes-search-history-entries-legacy-documents-pending-idx";
 export { default as indexes_search_history_entries_owner_country_recent_idx } from "./online-migration-entries/indexes-search-history-entries-owner-country-recent-idx";
+export { default as indexes_search_history_entries_owner_read_identity_idx } from "./online-migration-entries/indexes-search-history-entries-owner-read-identity-idx";
 export { default as indexes_session_originconsentid_idx } from "./online-migration-entries/indexes-session-originconsentid-idx";
 export { default as indexes_session_prior_token_hash_idx } from "./online-migration-entries/indexes-session-prior-token-hash-idx";
 export { default as indexes_soft_law_search } from "./online-migration-entries/indexes-soft-law-search";
@@ -167,6 +171,7 @@ export { default as repairs_lifecycle_shape_constraint_validations } from "./onl
 export { default as repairs_list_claim_qualifiers_constraint_validation } from "./online-migration-entries/repairs-list-claim-qualifiers-constraint-validation";
 export { default as repairs_list_generation_constraint_validations } from "./online-migration-entries/repairs-list-generation-constraint-validations";
 export { default as repairs_list_verification_constraint_validation } from "./online-migration-entries/repairs-list-verification-constraint-validation";
+export { default as repairs_list_verification_scope_constraint_validation } from "./online-migration-entries/repairs-list-verification-scope-constraint-validation";
 export { default as repairs_local_run_approval_ceiling_constraint_validations } from "./online-migration-entries/repairs-local-run-approval-ceiling-constraint-validations";
 export { default as repairs_matter_time_expense_retention_validations } from "./online-migration-entries/repairs-matter-time-expense-retention-validations";
 export { default as repairs_notification_task_assigned_constraint_validations } from "./online-migration-entries/repairs-notification-task-assigned-constraint-validations";
@@ -175,6 +180,8 @@ export { default as repairs_organization_ai_instructions_constraint_validations 
 export { default as repairs_reader_annotation_constraint_validations } from "./online-migration-entries/repairs-reader-annotation-constraint-validations";
 export { default as repairs_reader_answer_constraint_validation } from "./online-migration-entries/repairs-reader-answer-constraint-validation";
 export { default as repairs_sanctions_monitoring_constraint_validations } from "./online-migration-entries/repairs-sanctions-monitoring-constraint-validations";
+export { default as repairs_search_history_country_constraint_validation } from "./online-migration-entries/repairs-search-history-country-constraint-validation";
+export { default as repairs_search_history_country_repair } from "./online-migration-entries/repairs-search-history-country-repair";
 export { default as repairs_time_entry_submitted_constraint_validation } from "./online-migration-entries/repairs-time-entry-submitted-constraint-validation";
 export { default as repairs_usage_action_type_constraint_validation } from "./online-migration-entries/repairs-usage-action-type-constraint-validation";
 export { default as replacements_account_issuer_account_id_uidx } from "./online-migration-entries/replacements-account-issuer-account-id-uidx";

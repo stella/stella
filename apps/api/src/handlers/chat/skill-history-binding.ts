@@ -119,9 +119,11 @@ const projectUnavailable = (
       return {
         ...part,
         output: {
+          charCount: SKILL_HISTORY_UNAVAILABLE_TEXT.length,
           content: SKILL_HISTORY_UNAVAILABLE_TEXT,
           contentHash: null,
           mimeType: "text/plain",
+          nextCursor: null,
           path: "unavailable",
           skillId: null,
           skillName,

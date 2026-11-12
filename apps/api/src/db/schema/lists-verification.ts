@@ -1,16 +1,20 @@
 import {
   CLAIM_ANCHOR_TYPES,
+  CLAIM_CARRY_OUTCOMES,
   CLAIM_FRAMINGS,
   CLAIM_REVIEW_EVENT_KINDS,
   CLAIM_REVIEW_REASON_RULE,
   CLAIM_STATE,
   CLAIM_STATES,
   CLAIM_TYPES,
+  MATCHED_CLAIM_CARRY_OUTCOMES,
+  PARAGRAPH_NUMBERINGS,
   SCORED_CLAIM_STATES,
   VERIFICATION_LIMITS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
   VERIFICATION_RUN_ERROR_CODES,
   VERIFICATION_RUN_STATUSES,
+  WHOLE_DOCUMENT_SCOPE,
 } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimAnchor,
@@ -19,6 +23,7 @@ import type {
   ClaimReviewReasonRule,
   RecordConflict,
   VerificationEvidence,
+  VerificationScope,
 } from "@/api/lib/lists/verification/contract";
 import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
 import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
@@ -65,6 +70,8 @@ const CLAIM_FRAMING_SQL_VALUES = quoted(CLAIM_FRAMINGS);
 const CLAIM_STATE_SQL_VALUES = quoted(CLAIM_STATES);
 const SCORED_CLAIM_STATE_SQL_VALUES = quoted(SCORED_CLAIM_STATES);
 const REVIEW_EVENT_KIND_SQL_VALUES = quoted(CLAIM_REVIEW_EVENT_KINDS);
+const CARRY_OUTCOME_SQL_VALUES = quoted(CLAIM_CARRY_OUTCOMES);
+const MATCHED_CARRY_OUTCOME_SQL_VALUES = quoted(MATCHED_CLAIM_CARRY_OUTCOMES);
 const reviewKindsWhereReason = (rules: readonly ClaimReviewReasonRule[]) =>
   quoted(
     CLAIM_REVIEW_EVENT_KINDS.filter((kind) =>
@@ -82,6 +89,10 @@ const RECORDCONFLICT_SQL = sql.raw(`'${CLAIM_STATE.RECORDCONFLICT}'`);
 const NOCOVER_SQL = sql.raw(`'${CLAIM_STATE.NOCOVER}'`);
 const RECORD_SILENT_SQL = sql.raw(
   `'${"record-silent" satisfies GraderClaimQualifier["kind"]}'`,
+);
+const PARAGRAPH_NUMBERING_SQL_VALUES = quoted(PARAGRAPH_NUMBERINGS);
+const WHOLE_DOCUMENT_SCOPE_SQL = sql.raw(
+  `'${JSON.stringify(WHOLE_DOCUMENT_SCOPE)}'::jsonb`,
 );
 
 const verificationBudgetOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
@@ -164,6 +175,12 @@ export const legalListVerificationRuns = p.pgTable(
     entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
     contentSha256: p.varchar("content_sha256", { length: 64 }).notNull(),
     evidence: jsonb().$type<VerificationEvidence>().notNull(),
+    // What the run checks: the whole document, or a paragraph range
+    // resolved when the run started (contract.ts `VerificationScope`).
+    scope: jsonb()
+      .$type<VerificationScope>()
+      .notNull()
+      .default(sql`${WHOLE_DOCUMENT_SCOPE_SQL}`),
     status: p
       .text("status", { enum: VERIFICATION_RUN_STATUSES })
       .notNull()
@@ -239,6 +256,27 @@ export const legalListVerificationRuns = p.pgTable(
     p.check(
       "legal_list_verification_runs_pipeline_version_check",
       sql`${table.pipelineVersion} > 0`,
+    ),
+    // A whole-document scope carries nothing else; a paragraph range names
+    // an inclusive range from 1, how it counted, and the two edges it
+    // resolved to.
+    p.check(
+      "legal_list_verification_runs_scope_check",
+      sql`CASE ${table.scope}->>'kind'
+        WHEN 'whole' THEN ${table.scope} = ${WHOLE_DOCUMENT_SCOPE_SQL}
+        WHEN 'paragraphs' THEN CASE
+          WHEN jsonb_typeof(${table.scope}->'from') = 'number'
+            AND jsonb_typeof(${table.scope}->'to') = 'number'
+            AND jsonb_typeof(${table.scope}->'start'->'blockId') = 'string'
+            AND jsonb_typeof(${table.scope}->'start'->'offset') = 'number'
+            AND jsonb_typeof(${table.scope}->'end'->'blockId') = 'string'
+            AND jsonb_typeof(${table.scope}->'end'->'offset') = 'number'
+            AND jsonb_typeof(${table.scope}->'numbering') = 'string'
+          THEN (${table.scope}->>'from')::numeric >= 1
+            AND (${table.scope}->>'to')::numeric >= (${table.scope}->>'from')::numeric
+            AND ${table.scope}->>'numbering' IN (${PARAGRAPH_NUMBERING_SQL_VALUES})
+          ELSE false END
+        ELSE false END`,
     ),
     // The worker rebuilds its tenant scope from this row, so the organization
     // is held to the workspace's own, and both scopes gate every command.
@@ -517,10 +555,20 @@ export const legalListClaimReviewEvents = p.pgTable(
       .references(() => user.id, { onDelete: "set null" }),
     // The insert's own clock, not the transaction's start: events are folded
     // in this order, and a reviewer whose transaction began earlier but took
-    // the claim's lock later must still sort after the event they saw.
+    // the claim's lock later must still sort after the event they saw. A
+    // carried event keeps its origin's time, so it folds in the order the
+    // reviewer acted and before anything done on the new run.
     createdAt: timestamptz("created_at")
       .notNull()
       .default(sql`clock_timestamp()`),
+    // A decision carried from the previous run of the document: the run and
+    // the event it copies. Null for an action taken on this run.
+    carriedFromRunId: safeUuid<"legalListVerificationRun">(
+      "carried_from_run_id",
+    ),
+    carriedFromEventId: safeUuid<"legalListClaimReviewEvent">(
+      "carried_from_event_id",
+    ),
   },
   (table) => [
     ...entityFeatureGateChecks(table),
@@ -551,11 +599,14 @@ export const legalListClaimReviewEvents = p.pgTable(
     // A reason, when given, is text with something besides spaces in it;
     // actions that change the verdict must give one. Added NOT VALID and
     // never validated: events recorded before reasons were required keep
-    // their payload as written and read back as "no reason recorded".
+    // their payload as written and read back as "no reason recorded". A
+    // carried event is a copy of one of those as written, so it may lack a
+    // reason its kind now requires.
     p.check(
       "legal_list_claim_review_events_reason_check",
       sql`CASE WHEN ${table.payload}->'reason' IS NULL
         THEN ${table.kind} NOT IN (${REASON_REQUIRED_KIND_SQL_VALUES})
+          OR ${table.carriedFromEventId} IS NOT NULL
         ELSE ${table.kind} IN (${REASON_ALLOWED_KIND_SQL_VALUES})
           AND jsonb_typeof(${table.payload}->'reason') = 'string'
           AND char_length(btrim(${table.payload}->>'reason')) BETWEEN 1 AND ${NOTE_MAX_SQL}
@@ -592,5 +643,117 @@ export const legalListClaimReviewEvents = p.pgTable(
     p
       .index("legal_list_claim_review_events_ef_claim_id_idx")
       .on(table.workspaceId, table.claimId),
+    // A carried event names both its origin run and its origin event.
+    p.check(
+      "legal_list_claim_review_events_carried_from_check",
+      sql`(${table.carriedFromRunId} IS NULL) = (${table.carriedFromEventId} IS NULL)`,
+    ),
+  ],
+);
+
+/**
+ * What became of each reviewed claim of the previous run of a document when
+ * the next run completed (`lib/lists/verification/carry-over.ts`): carried to
+ * a matching claim, matched but with decisions withdrawn because the verdict
+ * changed, or left behind (no match, or more than one). Written once, with
+ * the carried events, in the transaction that completes the run; the
+ * previous run is never changed.
+ */
+export const legalListClaimCarryOutcomes = p.pgTable(
+  "legal_list_claim_carry_outcomes",
+  {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureOrganizationGateColumns(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    // The run the decisions were carried to.
+    runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
+    sourceRunId:
+      safeUuid<"legalListVerificationRun">("source_run_id").notNull(),
+    sourceClaimId: safeUuid<"legalListClaim">("source_claim_id").notNull(),
+    outcome: p.text("outcome", { enum: CLAIM_CARRY_OUTCOMES }).notNull(),
+    // The matching claim of this run; null when nothing matched.
+    targetClaimId: safeUuid<"legalListClaim">("target_claim_id"),
+  },
+  (table) => [
+    ...entityFeatureGateChecks(table),
+    // One outcome per source claim: a replayed completion carries nothing
+    // twice.
+    p.primaryKey({
+      name: "legal_list_claim_carry_outcomes_pkey",
+      columns: [table.runId, table.sourceClaimId],
+    }),
+    // And one source claim per target claim, so no claim receives two
+    // claims' decisions.
+    p
+      .unique("legal_list_claim_carry_outcomes_target_unq")
+      .on(table.runId, table.targetClaimId),
+    p
+      .foreignKey({
+        name: "legal_list_claim_carry_outcomes_run_fk",
+        columns: [table.runId, table.workspaceId],
+        foreignColumns: [
+          legalListVerificationRuns.id,
+          legalListVerificationRuns.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "legal_list_claim_carry_outcomes_source_claim_fk",
+        columns: [table.sourceClaimId, table.sourceRunId, table.workspaceId],
+        foreignColumns: [
+          legalListClaims.id,
+          legalListClaims.runId,
+          legalListClaims.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "legal_list_claim_carry_outcomes_target_claim_fk",
+        columns: [table.targetClaimId, table.runId, table.workspaceId],
+        foreignColumns: [
+          legalListClaims.id,
+          legalListClaims.runId,
+          legalListClaims.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .index("legal_list_claim_carry_outcomes_run_idx")
+      .on(table.workspaceId, table.runId),
+    p
+      .index("legal_list_claim_carry_outcomes_source_claim_idx")
+      .on(table.workspaceId, table.sourceClaimId),
+    // The feature gate finds a claim's outcomes by either claim.
+    p
+      .index("legal_list_claim_carry_outcomes_target_claim_idx")
+      .on(table.workspaceId, table.targetClaimId),
+    p.check(
+      "legal_list_claim_carry_outcomes_outcome_check",
+      sql`${table.outcome} IN (${CARRY_OUTCOME_SQL_VALUES})`,
+    ),
+    // A target claim exactly when one matched.
+    p.check(
+      "legal_list_claim_carry_outcomes_target_check",
+      sql`(${table.targetClaimId} IS NOT NULL) = (${table.outcome} IN (${MATCHED_CARRY_OUTCOME_SQL_VALUES}))`,
+    ),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [
+          table.runId,
+          { kind: "owned-by-parent", parent: legalListVerificationRuns },
+        ],
+        [
+          table.sourceClaimId,
+          { kind: "owned-by-parent", parent: legalListClaims },
+        ],
+        [
+          table.targetClaimId,
+          { kind: "owned-by-parent", parent: legalListClaims },
+        ],
+      ]),
+    }),
   ],
 );

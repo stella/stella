@@ -11,6 +11,7 @@ import {
 
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
+import { ViewChromeBar, ViewToolbarChrome } from "@stll/ui/view-toolbar";
 
 import {
   getWeekStart,
@@ -524,13 +525,9 @@ function ViewChromeRow({
 }) {
   const navigate = Route.useNavigate();
   return (
-    <div className="flex min-w-0 flex-col border-b md:flex-row md:flex-wrap md:items-center md:justify-between">
+    <ViewChromeBar>
       <div
-        className={cn(
-          "flex min-w-0 items-center",
-          TOOLBAR_ROW_HEIGHT,
-          toolbar !== null && "border-b md:border-b-0",
-        )}
+        className={cn("flex min-w-0 flex-1 items-center", TOOLBAR_ROW_HEIGHT)}
       >
         <ViewSwitcher
           activeViewId={activeViewId}
@@ -548,7 +545,7 @@ function ViewChromeRow({
         />
       </div>
       {toolbar}
-    </div>
+    </ViewChromeBar>
   );
 }
 
@@ -662,11 +659,11 @@ function ViewPendingComponent() {
       : selectAvailableWorkspaceView(cachedViews, viewId);
   const layoutType = pendingView?.layout.type;
   const toolbarSkeleton = (
-    <div className={cn("flex items-center gap-1.5 px-3", TOOLBAR_ROW_HEIGHT)}>
-      <Skeleton className="size-7 rounded-md" />
-      <Skeleton className="size-7 rounded-md" />
-      <Skeleton className="h-7 w-24 rounded-md" />
-    </div>
+    <ViewToolbarChrome>
+      <Skeleton className="size-7 shrink-0 rounded-md" />
+      <Skeleton className="size-7 shrink-0 rounded-md" />
+      <Skeleton className="h-7 w-24 shrink-0 rounded-md" />
+    </ViewToolbarChrome>
   );
 
   return (
@@ -678,13 +675,18 @@ function ViewPendingComponent() {
           workspaceId={workspaceId}
         />
       ) : (
-        <div className="flex min-w-0 flex-col border-b px-3 md:flex-row md:items-center md:justify-between">
-          <div className={cn("flex items-center gap-1.5", TOOLBAR_ROW_HEIGHT)}>
+        <ViewChromeBar>
+          <div
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-1.5 px-3",
+              TOOLBAR_ROW_HEIGHT,
+            )}
+          >
             <Skeleton className="h-7 w-24 rounded-md" />
             <Skeleton className="h-7 w-20 rounded-md" />
           </div>
           {toolbarSkeleton}
-        </div>
+        </ViewChromeBar>
       )}
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex-1 overflow-auto">

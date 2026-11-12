@@ -261,7 +261,9 @@ test("a rendered decision paints only CSS find ranges and Escape leaves no searc
     screen.container.querySelector("mark, [data-reader-match-index]"),
   ).toBeNull();
   fireEvent.keyDown(screen.getByRole("searchbox"), { key: "Escape" });
-  await waitFor(() => expect(screen.queryByRole("searchbox")).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByRole("searchbox") === null).toBe(true),
+  );
   expect(highlights.size).toBe(0);
   expect(
     screen.container.querySelector("mark, [data-reader-match-index]"),
@@ -323,7 +325,9 @@ test("typing replaces search terms and Escape removes every reader highlight", a
   expect(activeRange("statute")?.toString()).toBe("Náhrada");
   expect(screen.getByText(matchCounter(1, 1))).toBeTruthy();
   fireEvent.keyDown(input, { key: "Escape" });
-  await waitFor(() => expect(screen.queryByRole("searchbox")).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByRole("searchbox") === null).toBe(true),
+  );
   expect([...highlights.keys()]).toEqual([]);
 });
 
@@ -338,7 +342,9 @@ test("closing one reader clears its highlights while the neighboring reader reta
   fireEvent.click(
     decision.getByRole("button", { name: messages.folio.findReplace.close }),
   );
-  await waitFor(() => expect(decision.queryByRole("searchbox")).toBeNull());
+  await waitFor(() =>
+    expect(decision.queryByRole("searchbox") === null).toBe(true),
+  );
   expect(highlights.has("stella-inspector-find-decision")).toBe(false);
   expect(highlights.has("stella-inspector-find-active-decision")).toBe(false);
   expect(statute.getByRole("searchbox").getAttribute("value")).toBe("náhrada");
@@ -432,7 +438,9 @@ test("Escape inside one pane leaves its neighbor's find bar and highlights intac
   const decision = within(screen.getByRole("region", { name: "decision" }));
   const statute = within(screen.getByRole("region", { name: "statute" }));
   fireEvent.keyDown(decision.getByRole("searchbox"), { key: "Escape" });
-  await waitFor(() => expect(decision.queryByRole("searchbox")).toBeNull());
+  await waitFor(() =>
+    expect(decision.queryByRole("searchbox") === null).toBe(true),
+  );
   expect(highlights.has("stella-inspector-find-decision")).toBe(false);
   expect(highlights.has("stella-inspector-find-active-decision")).toBe(false);
   expect(statute.getByRole("searchbox").getAttribute("value")).toBe("náhrada");

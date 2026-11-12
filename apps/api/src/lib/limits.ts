@@ -24,6 +24,7 @@ import {
   SEARCH_HISTORY_IMPORT_MAX,
   SEARCH_HISTORY_TITLE_MAX_LENGTH,
   SEARCH_QUERY_MAX_LENGTH,
+  SKILL_RESOURCE_UPLOAD_MAX_BYTES,
   TIME_ENTRIES_APPROVAL_BATCH_MAX,
   UPLOAD_DOCUMENT_MAX_BYTES,
 } from "@stll/api-contract/limits";
@@ -243,6 +244,8 @@ export const LIMITS = {
   agentSkillResourcesPerSkill: SKILL_PACKAGE_LIMITS.resourcesPerSkillMax,
   agentSkillResourcePathMaxChars: SKILL_PACKAGE_LIMITS.resourcePathMaxChars,
   agentSkillResourceMaxChars: SKILL_PACKAGE_LIMITS.resourceMaxChars,
+  agentSkillResourceModelContextMaxChars:
+    SKILL_PACKAGE_LIMITS.resourceModelContextMaxChars,
   /** Prose a proposal author writes to explain the change. */
   agentSkillProposalSummaryMaxChars: 2000,
   /** Quoted source a comment anchors to, kept so the comment can be
@@ -476,6 +479,13 @@ export const LIMITS = {
   caseLawProvisionCandidateBudget: 5000,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
+  /**
+   * One page of the search palette's case-law section, split across the
+   * countries it asks. Small: the section is a glance beside the matter
+   * results, and the full case-law search pages further.
+   */
+  searchCaseLawSectionPageSizeDefault: 10,
+  searchCaseLawSectionPageSizeMax: 20,
   /** Maximum visible text returned by any global-search preview response. */
   searchPreviewResponseCharacterLimit: 16_000,
   /** Messages surrounding the best match in a global-search chat preview. */
@@ -487,6 +497,8 @@ export const LIMITS = {
   searchChatCandidateBytesMax: 8 * 1024 * 1024,
   savedSearchesPerUser: 100,
   savedSearchesPageSizeDefault: 50,
+  conflictChecksPageSizeDefault: 50,
+  conflictChecksPageSizeMax: 100,
   savedSearchesPageSizeMax: 100,
   savedTimeNarrativesPerUser: 100,
   /**
@@ -1005,6 +1017,8 @@ export const FILE_SIZE_LIMIT_BYTES = {
   dataImport: 10 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */
   skillPack: 50 * 1024 * 1024,
+  /** One file uploaded into an existing skill as a resource. */
+  skillResource: SKILL_RESOURCE_UPLOAD_MAX_BYTES,
   /** Chat context file attachments. */
   chatContextFile: CHAT_CONTEXT_FILE_MAX_BYTES,
 } as const;

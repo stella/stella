@@ -5,8 +5,9 @@
 // claim ids the request lists, so a canned answer would ground nothing.
 //
 // Grading is a word-overlap heuristic, deterministic for one request, that
-// lands on the verdicts and qualifiers a local run needs to show. A claim
-// about the author's own state of mind has no coverage and the record is
+// lands on the verdicts and qualifiers a local run needs to show. A claim a
+// reviewer pointed at a fact rests on that fact (a re-check). A claim about
+// the author's own state of mind has no coverage and the record is
 // silent on it; one sharing too little with every fact has no coverage.
 // Otherwise it rests on the fact it shares most with: a claim naming a day
 // that another fact on the same point dates differently is withheld between
@@ -85,13 +86,24 @@ const sentencesOf = (text: string): string[] =>
       (sentence) => /[.!?]$/u.test(sentence) && !NOT_A_CLAIM.test(sentence),
     );
 
-/** `[id] text` lines of the blocks a request carries. */
+/** The `[id] text` blocks a request carries. A block's text runs on over
+ *  the lines below it (a PDF page's lines) until the next block or the
+ *  request's instruction, and reads as one line of prose. */
 const requestBlocks = (request: string): Map<string, string> => {
   const blocks = new Map<string, string>();
+  let open: string | null = null;
   for (const line of request.split("\n")) {
-    const block = /^\[(?<id>[^\]]+)\] (?<text>.+)$/u.exec(line)?.groups;
+    const block = /^\[(?<id>[^\]]+)\] (?<text>.*)$/u.exec(line)?.groups;
     if (block?.["id"] !== undefined && block["text"] !== undefined) {
-      blocks.set(block["id"], block["text"]);
+      open = block["id"];
+      blocks.set(open, block["text"].trim());
+      continue;
+    }
+    if (line.startsWith("List the claims in these blocks only:")) {
+      open = null;
+    }
+    if (open !== null && line.trim() !== "") {
+      blocks.set(open, `${blocks.get(open) ?? ""} ${line.trim()}`.trim());
     }
   }
   return blocks;
@@ -126,6 +138,24 @@ const promptItems = (request: string, prefix: "F" | "C") =>
       new RegExp(`^- (${prefix}\\d+): (.+)$(?:\\n {2}(.+)$)?`, "gmu"),
     ),
   ].map(([, id = "", text = "", detail = ""]) => ({ id, text, detail }));
+
+/** The facts a reviewer pointed each claim at (`reviewer points to:`). */
+const pointedFacts = (request: string): Map<string, string[]> => {
+  const pointed = new Map<string, string[]>();
+  let claimId: string | null = null;
+  for (const line of request.split("\n")) {
+    const claim = /^- (C\d+): /u.exec(line)?.[1];
+    if (claim !== undefined) {
+      claimId = claim;
+      continue;
+    }
+    const ids = /^ {2}reviewer points to: (.+)$/u.exec(line)?.[1];
+    if (claimId !== null && ids !== undefined) {
+      pointed.set(claimId, ids.split(", "));
+    }
+  }
+  return pointed;
+};
 
 const RECORD_SILENT_EXPLANATION =
   "This is the author's own account of their understanding; no document in the record would be expected to address it.";
@@ -191,6 +221,7 @@ export const mockClaimGrades = (request: string) => {
   }));
   const factsWith = (word: string) =>
     facts.filter((fact) => fact.words.has(word)).length;
+  const pointed = pointedFacts(request);
   return promptItems(request, "C").map((claim) => {
     // A word capitalised after the sentence start is taken for a name.
     const weights = new Map(
@@ -211,16 +242,20 @@ export const mockClaimGrades = (request: string) => {
       }))
       .filter(({ overlap }) => overlap >= COVERAGE_MIN)
       .toSorted((a, b) => b.overlap - a.overlap);
-    const best = ranked.at(0);
-    const silent = OWN_STATE.test(claim.text);
-    const conflict = NAMED_DAY.test(claim.text)
-      ? datedConflict({
-          facts,
-          coveringIds: ranked.map(({ id }) => id),
-          claimWords: [...weights.keys()],
-          distinctive: (word) => factsWith(word) <= DISTINCTIVE_FACTS_MAX,
-        })
-      : null;
+    // A fact a reviewer pointed the claim at is the one it rests on.
+    const pointedId = pointed.get(claim.id)?.at(0);
+    const best =
+      pointedId === undefined ? ranked.at(0) : { id: pointedId, overlap: 0 };
+    const silent = pointedId === undefined && OWN_STATE.test(claim.text);
+    const conflict =
+      pointedId === undefined && NAMED_DAY.test(claim.text)
+        ? datedConflict({
+            facts,
+            coveringIds: ranked.map(({ id }) => id),
+            claimWords: [...weights.keys()],
+            distinctive: (word) => factsWith(word) <= DISTINCTIVE_FACTS_MAX,
+          })
+        : null;
     if (best === undefined || silent) {
       return {
         claimId: claim.id,

@@ -1,4 +1,5 @@
 // parser-output-unchanged: shared SHA-256 ownership preserves derived ID bytes and UUID layout (sha256-storage-parity.test.ts compares each migrated boundary with the Node digest); search-history ID branding serves cursor pagination only; reader answer ID branding serves stored answers only.
+// parser-output-unchanged: conflict check ID branding serves cursor pagination only.
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -115,6 +116,11 @@ export const brandPersistedEntityId = (entityId: string): SafeId<"entity"> =>
 export const brandPersistedReportExportId = (
   reportExportId: string,
 ): SafeId<"reportExport"> => toSafeId<"reportExport">(reportExportId);
+
+// parser-output-unchanged: Adds the data export id brander; no parser calls it.
+export const brandPersistedDataExportId = (
+  dataExportId: string,
+): SafeId<"dataExport"> => toSafeId<"dataExport">(dataExportId);
 
 export const brandPersistedFieldId = (fieldId: string): SafeId<"field"> =>
   toSafeId<"field">(fieldId);
@@ -261,6 +267,12 @@ export const brandPersistedLegislationDocumentId = (
 ): SafeId<"legislationDocument"> =>
   toSafeId<"legislationDocument">(legislationDocumentId);
 
+/** A legislation source id an operator typed, or null when it is no UUID. */
+export const brandValidatedLegislationSourceId = (
+  sourceId: string,
+): SafeId<"legislationSource"> | null =>
+  isUuid(sourceId) ? toSafeId<"legislationSource">(sourceId) : null;
+
 export const brandValidatedCorpusIndexProjectionIntentId = (
   intentId: string,
 ): SafeId<"corpusIndexProjectionIntent"> | null =>
@@ -327,6 +339,10 @@ export const brandPersistedRateTableId = (
 export const brandPersistedSavedSearchId = (
   savedSearchId: string,
 ): SafeId<"savedSearch"> => toSafeId<"savedSearch">(savedSearchId);
+
+export const brandPersistedConflictCheckId = (
+  conflictCheckId: string,
+): SafeId<"conflictCheck"> => toSafeId<"conflictCheck">(conflictCheckId);
 
 export const brandPersistedSearchHistoryEntryId = (
   entryId: string,

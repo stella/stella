@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Závěr je jednoznačný, ale výklad jednoho z použitých faktů je sporný; před schválením si zaslouží vaši pozornost.",
       "contradicted": "Záznamy se od tohoto tvrzení odchylují. Než bude možné závěr potvrdit, musí rozhodnout člověk.",
-      "nocover": "Žádný referenční fakt se tohoto tvrzení netýká, takže je nelze s ničím porovnat. Schválení je nepovinné.",
+      "nocover": "Toto tvrzení zatím nepokrývá žádný fakt ze seznamu.",
       "notverifiable": "Odloženo jako neověřitelné; schválení je nepovinné. Pokud lze tvrzení ve skutečnosti ověřit, znovu je otevřete níže.",
       "recordconflict": "Dva důkazní materiály ve spise si odporují. Výše určete, který je rozhodující, nebo věc označte pro tým pro důkazy; nástroj nerozhodne za vás.",
       "restsOnHeld": "Fakt, o který se tento závěr opírá, je pozastaven ke kontrole; potvrďte, že závěr platí i bez něj, nebo tvrzení po vyřešení faktu ověřte znovu.",
@@ -381,6 +381,30 @@
         "label": "Bez zdroje"
       }
     },
+    "gap": {
+      "addFact": "Přidat fakt z dokumentu",
+      "addFactFailed": "Fakt se nepodařilo přidat",
+      "factOffList": "Fakt, který už v seznamu není",
+      "linkFact": "Propojit fakt",
+      "linkFailed": "Fakt se nepodařilo propojit",
+      "linked": "Propojené fakty",
+      "linkedMark": "Propojeno",
+      "linksChanged": "Propojení se od poslední kontroly změnila.",
+      "noFacts": "Žádný fakt v seznamu neodpovídá.",
+      "recheck": "Zkontrolovat znovu",
+      "recheckFailed": "Tvrzení se nepodařilo zkontrolovat znovu",
+      "searchFacts": "Hledat mezi fakty v seznamu",
+      "sheet": {
+        "passage": "Pasáž",
+        "passageHint": "Slova v dokumentu, která fakt prokazují.",
+        "statementRequired": "Napište fakt.",
+        "statementTooLong": "Fakt může mít nejvýše {limit} znaků.",
+        "submit": "Přidat a zkontrolovat znovu",
+        "title": "Přidat fakt z dokumentu"
+      },
+      "showNextSteps": "Zobrazit další kroky",
+      "unlink": "Zrušit propojení: {fact}"
+    },
     "guidance": {
       "escalate": "Předat dál",
       "manualJudgement": "Vyžaduje úsudek",
@@ -392,17 +416,22 @@
         "acceptedRoutine": "Přijato jako rutinní",
         "conflictReopened": "Vyřešení rozporu zrušeno",
         "escalated": "Předáno týmu pro důkazy",
+        "factLinked": "Propojen fakt",
+        "factUnlinked": "Zrušeno propojení faktu",
         "governed": "Zvolen rozhodující záznam",
         "noteCleared": "Poznámka odstraněna",
         "noteSaved": "Poznámka uložena",
         "overridden": "Závěr změněn",
         "overrideWithdrawn": "Změna závěru vzata zpět",
+        "rechecked": "Tvrzení znovu zkontrolováno",
         "reopened": "Znovu otevřeno jako ověřitelné tvrzení",
         "statusCleared": "Stav kontroly zrušen",
         "statusDisputed": "Označeno jako zpochybněné",
         "statusNeedsEvidence": "Označeno jako vyžadující důkazy",
         "statusReviewed": "Označeno jako zkontrolované"
       },
+      "carriedFrom": "Z ověření z {date}",
+      "carriedFromEarlier": "Z dřívějšího ověření",
       "empty": "Zatím žádné úkony kontroly.",
       "filters": {
         "allKinds": "Jakýkoli úkon",
@@ -412,7 +441,9 @@
       },
       "formerMember": "Bývalý člen",
       "kinds": {
+        "factLink": "Propojení faktů",
         "override": "Změny závěru",
+        "recheck": "Opakované kontroly",
         "recordConflict": "Řešení rozporů v záznamech",
         "reopen": "Znovuotevření",
         "status": "Změny stavu"
@@ -461,6 +492,11 @@
       "unresolveConflict": "Proč rušíte toto vyřešení?",
       "withdrawOverride": "Proč se vracíte k závěru nástroje?"
     },
+    "recheck": {
+      "currentVerdict": "Závěr po opakované kontrole",
+      "runVerdict": "Závěr kontroly",
+      "summary": "Znovu zkontrolováno {checkedAt} proti {count, plural, one {# faktu} few {# faktům} many {# faktu} other {# faktům}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Zpochybněno} needsEvidence {Vyžaduje důkazy} other {{origin, select, bulk {Přijato jako rutinní} other {Zkontrolováno}}}} · {decidedAt}",
       "status": {
@@ -472,6 +508,21 @@
     },
     "runs": {
       "back": "Všechny dokumenty",
+      "carryOver": {
+        "openSource": "Otevřít ověření z {date}",
+        "outcomes": {
+          "ambiguous": "Více možných shod",
+          "textChanged": "Znění se změnilo",
+          "unmatched": "Žádné odpovídající tvrzení",
+          "verdictChanged": "Závěr se změnil"
+        },
+        "summary": {
+          "carried": "{count, number} převzato",
+          "carriedAndMissed": "{carried, number} převzato · {missed, number} ne",
+          "label": "Kontroly z ověření z {date}: převzato {carried, number}, nepřevzato {missed, number}",
+          "missed": "{count, number} nepřevzato"
+        }
+      },
       "errors": {
         "accessRevoked": "Ověřování bylo zastaveno, protože přístup není dostupný.",
         "aiUnavailable": "Pro ověření dokumentů není dostupný žádný model AI. Zkontrolujte nastavení AI organizace.",
@@ -502,7 +553,24 @@
       "failed": "Neuloženo",
       "failedTitle": "Vaše změna nebyla uložena"
     },
-    "sourceMediumTooltip": "Médium zdroje: neutrální popis. Samo o sobě nesnižuje míru jistoty.",
+    "scope": {
+      "checkedDocument": "Ověřeny jen odstavce <num>{range}</num>.",
+      "checkedOrdinal": "Ověřeny jen odstavce <num>{range}</num>, počítané podle pořadí: tento dokument své odstavce nečísluje.",
+      "errors": {
+        "empty": "Tyto odstavce neobsahují žádný text k ověření.",
+        "garbage": "Zadejte čísla odstavců, například 82–136.",
+        "notFound": "Tyto odstavce v dokumentu nejsou.",
+        "numberingUnclear": "Číslování odstavců v tomto dokumentu nelze přečíst. Ověřte celý dokument.",
+        "required": "Zadejte odstavce, které chcete ověřit.",
+        "reversed": "Rozsah končí dřív, než začíná.",
+        "tooWide": "Najednou lze ověřit nejvýše 500 odstavců."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "V těchto odstavcích nebyla nalezena žádná tvrzení.",
+      "showBefore": "Zobrazit text před ¶ {from}",
+      "verifyParagraphs": "Ověřit odstavce"
+    },
     "states": {
       "contradicted": {
         "chip": "V rozporu",
@@ -2635,6 +2703,7 @@
     "queued": "Ve frontě",
     "reason": "Důvod",
     "recommended": "Doporučené",
+    "reconnect": "Připojit znovu",
     "reconnecting": "Obnovování spojení…",
     "reference": "Reference",
     "refresh": "Obnovit",
@@ -3284,6 +3353,14 @@
       "organizationMemberLimitReached": "Tato organizace dosáhla limitu členů.",
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",
       "providerRateLimited": "Byl dosažen limit požadavků poskytovatele. Zkuste to brzy znovu.",
+      "sharepointAccessDenied": "Microsoft odepřel přístup k tomuto webu, knihovně nebo souboru.",
+      "sharepointFileTooLarge": "Tento soubor je příliš velký na import.",
+      "sharepointInvalidCursor": "Seznam se během procházení změnil. Otevřete složku znovu.",
+      "sharepointNotAFile": "Importovat lze pouze soubory, ne složky ani poznámkové bloky.",
+      "sharepointNotConnected": "Pro použití SharePoint a OneDrive připojte svůj účet Microsoft.",
+      "sharepointNotFound": "Tento web, knihovna nebo soubor již neexistuje nebo s vámi není sdílen.",
+      "sharepointReconnectRequired": "Platnost vašeho přihlášení k Microsoftu vypršela. Připojte SharePoint a OneDrive znovu.",
+      "sharepointThrottled": "Microsoft omezuje počet požadavků. Zkuste to brzy znovu.",
       "skillSourceUnreachable": "Zdroj dovednosti se nepodařilo načíst. Zkontrolujte, že odkaz vede na veřejný repozitář GitHub, nebo to zkuste později.",
       "thirdPartyBoundaryRefusal": "Požadavek se pokusil použít obsah mimo povolený kontext pracovního prostoru.",
       "usageLimitExceeded": "Byl dosažen limit využití.",
@@ -4526,7 +4603,6 @@
       "otherTitle": "Ostatní integrace",
       "probe": "Ověřit",
       "recommendedFor": "Doporučeno pro {jurisdictions}",
-      "reconnect": "Připojit znovu",
       "saveToken": "Uložit token",
       "tokenHelp": "Jak získat token",
       "tokenLabel": "Bearer token",
@@ -5414,8 +5490,6 @@
   "search": {
     "aiRefine": "Vylepšit dotaz pomocí AI",
     "caseLawEmptyState": "Začněte psát pro vyhledávání v soudních rozhodnutích.",
-    "caseLawMatchingDecisions": "{count, plural, one {# odpovídající rozhodnutí} few {# odpovídající rozhodnutí} many {# odpovídajícího rozhodnutí} other {# odpovídajících rozhodnutí}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ odpovídající rozhodnutí} few {#+ odpovídající rozhodnutí} many {#+ odpovídajícího rozhodnutí} other {#+ odpovídajících rozhodnutí}}",
     "chatCoveragePartial": "Ne všechny chaty byly prohledány celé.",
     "continueInChat": "Pokračovat v chatu",
     "dateFrom": "Od",
@@ -5773,8 +5847,10 @@
         "clause_category": "kategorie ustanovení",
         "clause_template_link": "propojení ustanovení se vzorem",
         "clause_variant": "varianta ustanovení",
+        "conflict_check": "kontrola střetu zájmů",
         "contact": "kontakt",
         "contact_directory": "adresář kontaktů",
+        "data_export": "export dat",
         "desktop_edit_session": "relace úprav na počítači",
         "document_annotation": "anotace dokumentu",
         "document_review_run": "kontrola dokumentu",
@@ -5952,6 +6028,63 @@
       "usageUnitsThisPeriod": "Jednotky využití za toto období"
     }
   },
+  "sharepoint": {
+    "admin": {
+      "description": "Členové připojí svůj vlastní účet Microsoft a importují soubory do spisů. stella čte pouze to, co může každý člen otevřít v Microsoft 365.",
+      "disableConfirm": "Vypnout",
+      "disableDescription": "Připojení všech členů k Microsoftu bude odebráno a jejich uložená přihlášení smazána. Již importované dokumenty zůstanou ve svých spisech. Pokud funkci znovu zapnete, budou se muset členové připojit znovu.",
+      "disableInputLabel": "Pro vypnutí napište {confirmation}",
+      "disableTitle": "Vypnout SharePoint a OneDrive?",
+      "toggleLabel": "Povolit SharePoint a OneDrive"
+    },
+    "askAdmin": "Pro vaši organizaci vypnuto. Požádejte správce, aby funkci zapnul.",
+    "connectFailed": "SharePoint a OneDrive se nepodařilo připojit",
+    "connected": "SharePoint a OneDrive jsou připojeny",
+    "description": "Importujte soubory ze služeb SharePoint a OneDrive do spisů.",
+    "disconnectDescription": "Vaše přihlášení k Microsoftu bude z aplikace stella odebráno. Již importované dokumenty zůstanou ve svých spisech.",
+    "disconnectTitle": "Odpojit SharePoint a OneDrive?",
+    "disconnected": "SharePoint a OneDrive jsou odpojeny",
+    "import": {
+      "alreadyCurrent": "{count, plural, one {# soubor byl již aktuální.} few {# soubory byly již aktuální.} many {# souboru bylo již aktuální.} other {# souborů bylo již aktuálních.}}",
+      "created": "Importováno",
+      "done": "Soubory byly importovány ze služby SharePoint nebo OneDrive",
+      "failedReason": "Soubor se nepodařilo zkopírovat. Zkuste to později znovu.",
+      "partial": "Nepodařilo se importovat {failed, number} z {total, plural, one {# souboru} few {# souborů} many {# souboru} other {# souborů}}.",
+      "progress": "Importováno {done, number} z {total, number}",
+      "unchanged": "Již aktuální",
+      "unconfirmed": "Nepotvrzeno",
+      "unconfirmedCount": "{count, plural, one {# soubor nebyl potvrzen; importujte ho znovu.} few {# soubory nebyly potvrzeny; importujte je znovu.} many {# souboru nebylo potvrzeno; importujte je znovu.} other {# souborů nebylo potvrzeno; importujte je znovu.}}",
+      "unconfirmedReason": "Import se zastavil dříve, než byl tento soubor potvrzen. Importujte ho znovu.",
+      "versioned": "Nová verze"
+    },
+    "oauthReasons": {
+      "consentDenied": "Přihlášení k Microsoftu bylo zrušeno nebo nebyl udělen přístup.",
+      "expired": "Přihlášení trvalo příliš dlouho. Připojte se znovu.",
+      "notConfigured": "Tato instalace aplikace stella není nastavena pro přihlášení přes Microsoft. Obraťte se na svého správce.",
+      "notEnabled": "Vaše organizace nezapnula SharePoint a OneDrive.",
+      "tryAgain": "Přihlášení k Microsoftu nebylo dokončeno. Připojte se znovu.",
+      "userMismatch": "Přihlášení bylo zahájeno z jiného účtu nebo jiné organizace. Připojte se znovu z tohoto."
+    },
+    "picker": {
+      "description": "Vyberte soubory ke zkopírování do tohoto spisu (maximálně {max, number}).",
+      "emptyFolder": "Tato složka je prázdná.",
+      "menuItem": "Ze služby SharePoint nebo OneDrive",
+      "myOneDrive": "Můj OneDrive",
+      "noFollowedSites": "Vyhledejte web nebo otevřete Můj OneDrive.",
+      "noLibraries": "Žádné knihovny dokumentů.",
+      "notConnected": "Pro procházení SharePoint a OneDrive připojte svůj účet Microsoft.",
+      "notImportable": "Nelze importovat",
+      "reconnectRequired": "Platnost vašeho přihlášení k Microsoftu vypršela. Pro pokračování v procházení se připojte znovu.",
+      "searchSites": "Hledat weby",
+      "selectedCount": "{count, plural, =0 {Nejsou vybrány žádné soubory} one {Vybrán # soubor} few {Vybrány # soubory} many {Vybráno # souboru} other {Vybráno # souborů}}",
+      "selectionLimit": "Maximální počet souborů importovaných najednou: {max, number}.",
+      "sites": "Weby",
+      "throttledFor": "Microsoft omezuje počet požadavků. Zkuste to znovu za {seconds, plural, one {# sekundu} few {# sekundy} many {# sekundy} other {# sekund}}.",
+      "title": "Import ze služby SharePoint nebo OneDrive"
+    },
+    "reconnectRequired": "Přihlášení vypršelo",
+    "title": "SharePoint a OneDrive"
+  },
   "skillHistory": {
     "acceptStale": "Přijmout a přepsat novější úpravy",
     "backToCurrent": "Zpět na aktuální znění",
@@ -6077,6 +6210,11 @@
     "title": "Právní předpisy",
     "validity": "Platné od {from} do {to}",
     "versionAppliedInDecision": "Znění použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# vložené ustanovení} few {# vložená ustanovení} many {# vloženého ustanovení} other {# vložených ustanovení}}",
+    "versionChangesChanged": "{count, plural, one {# změněné ustanovení} few {# změněná ustanovení} many {# změněného ustanovení} other {# změněných ustanovení}}",
+    "versionChangesNone": "Znění beze změny",
+    "versionChangesRemoved": "{count, plural, one {# vypuštěné ustanovení} few {# vypuštěná ustanovení} many {# vypuštěného ustanovení} other {# vypuštěných ustanovení}}",
+    "versionChangesWords": "{inserted, plural, one {# vložené slovo} few {# vložená slova} many {# vloženého slova} other {# vložených slov}}, {deleted, plural, one {# vypuštěné slovo} few {# vypuštěná slova} many {# vypuštěného slova} other {# vypuštěných slov}}",
     "wordingVersionUnknown": "Datum verze znění není k dispozici"
   },
   "styleSets": {
@@ -6797,6 +6935,7 @@
     "deletedItem": "Smazáno: {name}",
     "deletingWorkspace": "Mazání spisu",
     "documentSwitcher": {
+      "download": "Stáhnout tento soubor",
       "searchPlaceholder": "Najít dokument…",
       "trigger": "Přepnout dokument"
     },

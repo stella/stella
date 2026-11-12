@@ -182,6 +182,8 @@ process.exitCode = await runGatedTests({
               ...pgliteSnapshot.environment,
               [gate]: gateValue,
               DATABASE_URL: workerUrl,
+              // Clones read the immutable template, not an active test database.
+              STELLA_POSTGRES_TEST_TEMPLATE_URL: databaseUrl,
             },
             stdin: "inherit",
             stdout: "inherit",

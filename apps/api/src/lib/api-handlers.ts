@@ -303,6 +303,9 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `organization_export`: starting or downloading a whole-organization data
+ *   export; a person performs it in the app, never an agent, because it hands
+ *   over the firm's privileged material in one action.
  * - `native_device`: a native app registering the device it runs on (push
  *   alert delivery). Only the signed-in app holds the device token; an agent
  *   that could register one could route a person's alerts elsewhere.
@@ -334,6 +337,7 @@ type McpInternalReason =
   | "billing_ui"
   | "compound_consent"
   | "native_device"
+  | "organization_export"
   | "agent_autonomy_ceiling";
 
 /**

@@ -283,6 +283,7 @@ export const ChatThreadPage = ({
     reconnecting,
     turnAbandoned,
     computerWait,
+    turnSentAt,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -776,6 +777,7 @@ export const ChatThreadPage = ({
                           computerWait={computerWait}
                           newestLocalTurn={data.newestLocalTurn}
                           threadRef={threadRef}
+                          turnSentAt={turnSentAt}
                           userMessageEdit={userMessageEdit}
                           workspaceId={workspaceId}
                         />
