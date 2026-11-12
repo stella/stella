@@ -50,7 +50,7 @@ export const HorizontalScroller = ({
 
   const measure = useCallback((node: HTMLDivElement) => {
     writeScrollEdgeFade(node);
-    const rowWidth = node.parentElement?.clientWidth ?? node.clientWidth;
+    const rowWidth = rowContentWidth(node.parentElement) ?? node.clientWidth;
     setState(
       fitsRow(node.scrollWidth, rowWidth)
         ? { canScrollEnd: false, canScrollStart: false }
@@ -214,6 +214,19 @@ export const scrollState = (
     canScrollStart: maximum > 1 && position > 1,
     canScrollEnd: maximum > 1 && position < maximum - 1,
   };
+};
+
+/**
+ * The width the row's children span: the room the controls and the viewport
+ * share, without the row's own padding, in either direction.
+ */
+const rowContentWidth = (row: Element | null): number | undefined => {
+  const first = row?.firstElementChild?.getBoundingClientRect();
+  const last = row?.lastElementChild?.getBoundingClientRect();
+  if (first === undefined || last === undefined) {
+    return undefined;
+  }
+  return Math.max(first.right, last.right) - Math.min(first.left, last.left);
 };
 
 /**

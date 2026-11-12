@@ -110,6 +110,33 @@ test("shows directional controls and scrolls forward", () => {
   );
 });
 
+test("shows the controls when content overflows a padded row", () => {
+  const view = render(
+    <HorizontalScroller
+      className="px-4"
+      previousLabel="Previous"
+      nextLabel="Next"
+    >
+      <button type="button">Item</button>
+    </HorizontalScroller>,
+  );
+  const viewport = divOf(view.getByText("Item").parentElement?.parentElement);
+  const row = divOf(viewport.parentElement);
+  // A 300px row with 16px padding on each side leaves the viewport 268px.
+  Object.defineProperty(row, "clientWidth", { value: 300 });
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 268 },
+    scrollWidth: { value: 290 },
+    getBoundingClientRect: {
+      value: () => DOMRect.fromRect({ x: 16, y: 0, width: 268, height: 24 }),
+    },
+  });
+  act(() => TestResizeObserver.notify());
+  expect(view.getByLabelText("Next").getAttribute("aria-disabled")).toBe(
+    "false",
+  );
+});
+
 test("converts vertical wheel input and reveals focused content", () => {
   const scrollBy = mock(() => undefined);
   const scrollIntoView = mock(() => undefined);
