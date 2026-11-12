@@ -23,9 +23,9 @@ describe("deleting a task", () => {
             // The id names an item the caller can see that is not a task in
             // this matter, such as a document: the lookup, which asks for a
             // task in this matter, finds nothing.
-            findFirst: async (input: unknown) => {
+            findFirst: async (input: unknown): Promise<null> => {
               lookedUp = input;
-              return await Promise.resolve(undefined);
+              return await Promise.resolve(null);
             },
           },
         },
