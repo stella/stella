@@ -85,5 +85,17 @@
   },
   "connectStellaInstead": {
     "message": "Vietoj to prijungti „stella“ čia"
+  },
+  "allowDesktop": {
+    "message": "Naudoti su stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop prijungta"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop neveikia"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Atnaujinkite stella desktop ir šį plėtinį"
   }
 }
