@@ -61,3 +61,38 @@ EXECUTE FUNCTION public.stella_document_review_finding_decision_history();
 REVOKE ALL ON FUNCTION public.stella_document_review_finding_decision_history() FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.stella_document_review_finding_decision_history() TO stella;
+--> statement-breakpoint
+
+-- While a deploy rolls, tasks of the previous release still append the event
+-- for a decision they change, after the trigger above has already written it
+-- from the same UPDATE. Their event has its own random id, so the conflict on
+-- id cannot catch it: a second event for the same finding, decision and actor
+-- from the same transaction is that same change written twice, and is
+-- dropped. (Their baseline already collides on the finding's id.) No writer
+-- of this release appends an event itself, so outside a rolling deploy this
+-- drops nothing.
+CREATE FUNCTION public.stella_document_review_finding_decision_once() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, public AS $function$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.document_review_finding_decisions AS event
+     WHERE event.finding_id = NEW.finding_id
+       AND event.decision IS NOT DISTINCT FROM NEW.decision
+       AND event.actor_id IS NOT DISTINCT FROM NEW.actor_id
+       AND event.xmin::text = (txid_current() % 4294967296)::text
+  ) THEN
+    RETURN NULL;
+  END IF;
+  RETURN NEW;
+END
+$function$;
+--> statement-breakpoint
+
+CREATE TRIGGER document_review_finding_decisions_once
+BEFORE INSERT ON public.document_review_finding_decisions
+FOR EACH ROW EXECUTE FUNCTION public.stella_document_review_finding_decision_once();
+--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION public.stella_document_review_finding_decision_once() FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_document_review_finding_decision_once() TO stella;

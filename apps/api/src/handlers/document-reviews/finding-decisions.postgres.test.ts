@@ -314,6 +314,29 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
           expect.objectContaining({ decision: "rejected", actorId: reopener }),
         ]);
 
+        // A task of the previous release, mid-deploy, still appends the event
+        // itself after the trigger wrote it: the same change is kept once.
+        await client.begin(async (tx) => {
+          await tx.unsafe(`
+            UPDATE document_review_findings
+               SET decision = 'accepted', decided_by = '${decider}', decided_at = '2026-05-01T00:00:00Z'
+             WHERE id = '${reviewed}'
+          `);
+          await tx.unsafe(`
+            INSERT INTO document_review_finding_decisions
+              (id, workspace_id, finding_id, decision, actor_id, created_at)
+            VALUES (gen_random_uuid(), '${workspace}', '${reviewed}',
+              'accepted', '${decider}', '2026-05-01T00:00:00Z')
+          `);
+        });
+        // Ordered by moment: the reopening carries its own clock, later than
+        // both stamped decisions.
+        expect(await history(reviewed)).toEqual([
+          expect.objectContaining({ decision: "accepted", actorId: decider }),
+          expect.objectContaining({ decision: "accepted", actorId: decider }),
+          expect.objectContaining({ decision: null, actorId: reopener }),
+        ]);
+
         // So the repair has nothing left to do, whatever wrote the rows.
         expect(
           await DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL.readCompletion(
