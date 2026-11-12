@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -242,13 +243,38 @@ describe("registering the host with Chrome", () => {
     expect(statSync(path.join(dir, "browser-host")).mode % 0o1000).toBe(0o700);
   });
 
-  test("writes nothing without Chrome, or off macOS", () => {
+  test("writes nothing without Chrome, or where no host location is known", () => {
     const { dir, root } = home();
     expect(installNativeHost(options(root, dir))).toEqual(
       Result.ok({ reason: "no_chrome", type: "skipped" }),
     );
     expect(
       installNativeHost({ ...options(root, dir), platform: "linux" }),
+    ).toEqual(Result.ok({ reason: "no_chrome", type: "skipped" }));
+    expect(
+      installNativeHost({ ...options(root, dir), platform: "win32" }),
     ).toEqual(Result.ok({ reason: "unsupported_platform", type: "skipped" }));
+    expect(existsSync(path.join(dir, "browser-host"))).toBe(false);
+  });
+
+  test("registers the host in Chrome's Linux profile folder", () => {
+    const { dir, root } = home();
+    mkdirSync(path.join(root, ".config", "google-chrome"), { recursive: true });
+    const installed = installNativeHost({
+      ...options(root, dir),
+      platform: "linux",
+    });
+    expect(installed).toEqual(
+      Result.ok({
+        manifest: path.join(
+          root,
+          ".config",
+          "google-chrome",
+          "NativeMessagingHosts",
+          `${STELLA_DESKTOP_NATIVE_HOST}.json`,
+        ),
+        type: "installed",
+      }),
+    );
   });
 });

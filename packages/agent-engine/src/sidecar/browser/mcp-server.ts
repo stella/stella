@@ -147,6 +147,13 @@ export const startLocalBrowserMcp = ({
       // A notification, or an answer to a request this server never sends.
       return new Response(null, { status: 202 });
     }
+    if (method === undefined) {
+      return rpcError(
+        id,
+        JSON_RPC_ERROR.invalidRequest,
+        "A request names its method.",
+      );
+    }
     switch (method) {
       case "initialize": {
         const params = v.safeParse(initializeParamsSchema, message.params);
@@ -202,7 +209,7 @@ export const startLocalBrowserMcp = ({
         return rpcError(
           id,
           JSON_RPC_ERROR.methodNotFound,
-          `Method not found: ${method ?? "none"}.`,
+          `Method not found: ${method}.`,
         );
     }
   };

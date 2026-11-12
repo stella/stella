@@ -127,7 +127,7 @@ export const mcpToolCall = ({
   if (!isChatLocalRunBrowserAction(tool)) {
     return unsupportedItem(id, `${server}:${tool}`).toolCall;
   }
-  const url =
+  const url: unknown =
     tool === "open" && typeof input === "object" && input !== null
       ? Reflect.get(input, "url")
       : undefined;

@@ -26,14 +26,13 @@ const NATIVE_HOST_SCRIPT = "browser-host";
  * does not register a host yet (Windows registers through the registry).
  */
 const chromeProfileRoot = (platform: NodeJS.Platform): string[] | null => {
-  switch (platform) {
-    case "darwin":
-      return ["Library", "Application Support", "Google", "Chrome"];
-    case "linux":
-      return [".config", "google-chrome"];
-    default:
-      return null;
+  if (platform === "darwin") {
+    return ["Library", "Application Support", "Google", "Chrome"];
   }
+  if (platform === "linux") {
+    return [".config", "google-chrome"];
+  }
+  return null;
 };
 
 /** One argument for `/bin/sh`, whatever it contains. */
