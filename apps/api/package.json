@@ -52,6 +52,7 @@
     "eval:playbook-authoring": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/playbook-authoring.ts",
     "eval:extraction": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/extraction.ts",
     "eval:playbook-clause": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/playbook-clause-extraction.ts",
+    "eval:avt-verification": "NODE_ENV=development STELLA_LOCAL_DEV=1 FEATURE_LEGAL_LISTS=true bun --env-file=.env evals/avt-verification.ts",
     "eval:playbook-journey": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/e2e/playbook-journey.ts",
     "eval:reader-explain": "bun evals/reader-explain-local.ts",
     "eval:generated-views": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example evals/generated-views-local.ts",
