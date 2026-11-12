@@ -90,6 +90,7 @@ export const FAILURE_TAGS = [
   "CitationStorageFieldError",
   "ClaudeCliRequestError",
   "ClientDocumentUnsupportedError",
+  "CodexTerminalListError",
   "ComparisonAppError",
   "CompatibilityCheckError",
   "CompletionApprovalError",
