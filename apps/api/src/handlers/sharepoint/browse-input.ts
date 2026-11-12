@@ -35,6 +35,10 @@ export const sharepointFolderIdSchema = graphIdSchema(
   `Folder item id from a previous listing, or "${SHAREPOINT_ROOT_ITEM_ID}" for the top of the drive`,
 );
 
+export const sharepointFileIdSchema = graphIdSchema(
+  "File item id from a folder listing",
+);
+
 /** A Graph next-page query string can run long; the bound is still finite. */
 export const sharepointCursorSchema = paginationCursorSchema({
   maxChars: 4096,

@@ -19,7 +19,11 @@ import * as v from "valibot";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { SHAREPOINT_REFUSAL_CODE } from "@stll/api-contract/sharepoint";
 import { fetchWithTimeout } from "@stll/fetch";
-import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
+import {
+  BodyByteLimitError,
+  readBodyJsonWithIdleDeadline,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch/body-reader";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -281,7 +285,7 @@ const RETRY_AFTER_DEFAULT_MS = 5000;
 const RETRY_AFTER_MAX_MS = 120_000;
 
 export type SharepointGraphError = HandlerError<
-  400 | 403 | 404 | 409 | 429 | 502
+  400 | 403 | 404 | 409 | 413 | 429 | 502
 >;
 
 /**
@@ -394,30 +398,24 @@ export const replayQuery = (
   return params;
 };
 
-type GraphListRequest<TSchema extends v.GenericSchema> = {
+type GraphJsonRequest = {
   accessToken: AccessToken;
   /** Path below the Graph base URL, segments already encoded. */
   path: string;
-  /** First-page query; a cursor replaces it whole. */
-  query: Record<string, string>;
-  cursor: string | null;
-  itemSchema: TSchema;
+  query: URLSearchParams;
+  /** Whether the query is a client cursor, so a 400 can name it. */
+  cursorSent: boolean;
 };
 
-type GraphListPage<TItem> = { items: TItem[]; nextCursor: string | null };
-
-const listGraphPage = async <TSchema extends v.GenericSchema>({
+/** One delegated Graph GET whose JSON body the caller validates. */
+const getGraphJson = async ({
   accessToken,
   path,
   query,
-  cursor,
-  itemSchema,
-}: GraphListRequest<TSchema>): Promise<
-  Result<GraphListPage<v.InferOutput<TSchema>>, SharepointGraphError>
-> => {
+  cursorSent,
+}: GraphJsonRequest): Promise<Result<unknown, SharepointGraphError>> => {
   const url = new URL(`${GRAPH_API_BASE_URL}${path}`);
-  url.search = replayQuery(cursor, query).toString();
-
+  url.search = query.toString();
   const response = await Result.tryPromise({
     try: async () =>
       await fetchWithTimeout(url, {
@@ -440,12 +438,12 @@ const listGraphPage = async <TSchema extends v.GenericSchema>({
       graphRefusal({
         status: response.value.status,
         retryAfter: response.value.headers.get("retry-after"),
-        cursorSent: cursor !== null,
+        cursorSent,
       }),
     );
   }
 
-  const body = await Result.tryPromise({
+  return await Result.tryPromise({
     try: async (): Promise<unknown> =>
       await readBodyJsonWithIdleDeadline(response.value, {
         idleMs: GRAPH_FETCH_TIMEOUT_MS,
@@ -453,6 +451,35 @@ const listGraphPage = async <TSchema extends v.GenericSchema>({
       }),
     catch: (cause) =>
       upstreamError("Microsoft Graph returned an unreadable body", cause),
+  });
+};
+
+type GraphListRequest<TSchema extends v.GenericSchema> = {
+  accessToken: AccessToken;
+  /** Path below the Graph base URL, segments already encoded. */
+  path: string;
+  /** First-page query; a cursor replaces it whole. */
+  query: Record<string, string>;
+  cursor: string | null;
+  itemSchema: TSchema;
+};
+
+type GraphListPage<TItem> = { items: TItem[]; nextCursor: string | null };
+
+const listGraphPage = async <TSchema extends v.GenericSchema>({
+  accessToken,
+  path,
+  query,
+  cursor,
+  itemSchema,
+}: GraphListRequest<TSchema>): Promise<
+  Result<GraphListPage<v.InferOutput<TSchema>>, SharepointGraphError>
+> => {
+  const body = await getGraphJson({
+    accessToken,
+    path,
+    query: replayQuery(cursor, query),
+    cursorSent: cursor !== null,
   });
   if (Result.isError(body)) {
     return body;
@@ -611,7 +638,7 @@ export type GraphDriveItem = v.InferOutput<typeof graphDriveItemSchema>;
  * plain file nor a folder (OneNote notebooks and other packages); they are
  * listed so a folder reads as Microsoft shows it, but cannot be imported.
  */
-const SHAREPOINT_ITEM_KIND = {
+export const SHAREPOINT_ITEM_KIND = {
   file: "file",
   folder: "folder",
   other: "other",
@@ -620,7 +647,7 @@ const SHAREPOINT_ITEM_KIND = {
 type SharepointItemKind =
   (typeof SHAREPOINT_ITEM_KIND)[keyof typeof SHAREPOINT_ITEM_KIND];
 
-type SharepointDriveItem = {
+export type SharepointDriveItem = {
   id: string;
   driveId: string;
   name: string;
@@ -660,6 +687,9 @@ export const toSharepointDriveItem = (
 /** The folder id that names a drive's top level. */
 export const SHAREPOINT_ROOT_ITEM_ID = "root";
 
+const drivePathOf = (driveId: string): string =>
+  `/drives/${encodeURIComponent(driveId)}`;
+
 const DRIVE_ITEM_SELECT =
   "id,name,size,webUrl,eTag,lastModifiedDateTime,file,folder,package,parentReference";
 
@@ -681,7 +711,7 @@ export const listSharepointChildren = async ({
 }: ChildrenRequest): Promise<
   Result<Page<SharepointDriveItem>, SharepointGraphError>
 > => {
-  const drivePath = `/drives/${encodeURIComponent(driveId)}`;
+  const drivePath = drivePathOf(driveId);
   const page = await listGraphPage({
     accessToken,
     path:
@@ -697,4 +727,147 @@ export const listSharepointChildren = async ({
     nextCursor,
     limit,
   }));
+};
+
+type DriveItemRequest = {
+  accessToken: AccessToken;
+  driveId: string;
+  itemId: string;
+};
+
+/** One drive item's current metadata, as the caller may see it. */
+export const getSharepointDriveItem = async ({
+  accessToken,
+  driveId,
+  itemId,
+}: DriveItemRequest): Promise<
+  Result<SharepointDriveItem, SharepointGraphError>
+> => {
+  const body = await getGraphJson({
+    accessToken,
+    path: `${drivePathOf(driveId)}/items/${encodeURIComponent(itemId)}`,
+    query: new URLSearchParams({ $select: DRIVE_ITEM_SELECT }),
+    cursorSent: false,
+  });
+  if (Result.isError(body)) {
+    return body;
+  }
+  const parsed = v.safeParse(graphDriveItemSchema, body.value);
+  if (!parsed.success) {
+    return Result.err(
+      upstreamError("Microsoft Graph returned an unexpected drive item"),
+    );
+  }
+  return Result.ok(toSharepointDriveItem(parsed.output, driveId));
+};
+
+const GRAPH_DOWNLOAD_TIMEOUT_MS = 30_000;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * Hosts Microsoft serves pre-authenticated drive downloads from: SharePoint
+ * and OneDrive for work or school, and personal OneDrive.
+ */
+const DOWNLOAD_HOST_SUFFIXES = [".sharepoint.com", ".1drv.com"] as const;
+
+/** A Graph download link this client follows: HTTPS on a Microsoft file host. */
+const isSharepointDownloadUrl = (url: URL): boolean =>
+  url.protocol === "https:" &&
+  url.port === "" &&
+  DOWNLOAD_HOST_SUFFIXES.some((suffix) => url.hostname.endsWith(suffix));
+
+type DownloadRequest = DriveItemRequest & {
+  /** The largest file accepted; a longer body fails rather than truncates. */
+  maxBytes: number;
+};
+
+/**
+ * A drive item's bytes. Graph answers `/content` with a redirect to a
+ * short-lived pre-authenticated URL on a Microsoft file host; it is followed
+ * by hand, only to such a host and without the bearer token, so the token
+ * never leaves Graph's own host.
+ */
+export const downloadSharepointFile = async ({
+  accessToken,
+  driveId,
+  itemId,
+  maxBytes,
+}: DownloadRequest): Promise<Result<Uint8Array, SharepointGraphError>> => {
+  const contentUrl = new URL(
+    `${GRAPH_API_BASE_URL}${drivePathOf(driveId)}/items/${encodeURIComponent(itemId)}/content`,
+  );
+  const first = await Result.tryPromise({
+    try: async () =>
+      await fetchWithTimeout(contentUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        redirect: "manual",
+        timeout: { type: "headers", ms: GRAPH_DOWNLOAD_TIMEOUT_MS },
+      }),
+    catch: (cause) => upstreamError("Failed to reach Microsoft Graph", cause),
+  });
+  if (Result.isError(first)) {
+    return first;
+  }
+
+  let response = first.value;
+  let redirected = false;
+  if (REDIRECT_STATUSES.has(response.status)) {
+    await Promise.allSettled([response.body?.cancel()]);
+    const location = URL.parse(response.headers.get("location") ?? "");
+    if (location === null || !isSharepointDownloadUrl(location)) {
+      return Result.err(
+        upstreamError("Microsoft Graph returned an unusable download link"),
+      );
+    }
+    const downloaded = await Result.tryPromise({
+      try: async () =>
+        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- Microsoft Graph's own /content redirect, checked above to be HTTPS on a Microsoft file host; sent without credentials, redirects refused
+        await fetchWithTimeout(location, {
+          redirect: "error",
+          timeout: { type: "headers", ms: GRAPH_DOWNLOAD_TIMEOUT_MS },
+        }),
+      catch: (cause) =>
+        upstreamError("Failed to download the SharePoint file", cause),
+    });
+    if (Result.isError(downloaded)) {
+      return downloaded;
+    }
+    response = downloaded.value;
+    redirected = true;
+  }
+
+  if (!response.ok) {
+    await Promise.allSettled([response.body?.cancel()]);
+    // The file host answers for a short-lived pre-authenticated link, not
+    // for the stored grant: its refusal fails this file, never the grant.
+    if (redirected && (response.status === 401 || response.status === 403)) {
+      return Result.err(
+        upstreamError(
+          `The SharePoint download link was refused (HTTP ${response.status})`,
+        ),
+      );
+    }
+    return Result.err(
+      graphRefusal({
+        status: response.status,
+        retryAfter: response.headers.get("retry-after"),
+        cursorSent: false,
+      }),
+    );
+  }
+  return await Result.tryPromise({
+    try: async () =>
+      await readBodyWithIdleDeadline(response, {
+        idleMs: GRAPH_DOWNLOAD_TIMEOUT_MS,
+        maxBytes,
+      }),
+    catch: (cause) =>
+      BodyByteLimitError.is(cause)
+        ? new HandlerError({
+            status: 413,
+            code: SHAREPOINT_REFUSAL_CODE.fileTooLarge,
+            message: "The file exceeds the document size limit",
+          })
+        : upstreamError("Failed to read the SharePoint file", cause),
+  });
 };

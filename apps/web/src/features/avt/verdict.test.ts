@@ -108,16 +108,52 @@ describe("AVT triage", () => {
 
     expect(
       needsAttention(
-        { state: "supported", refs: claim.refs, qualifiers: [] },
+        { state: "supported", refs: claim.refs, qualifiers: [], recheck: null },
         contestedFactIds(facts),
       ),
     ).toBe(true);
     expect(
       needsAttention(
-        { state: "supported", refs: claim.refs, qualifiers: [] },
+        { state: "supported", refs: claim.refs, qualifiers: [], recheck: null },
         NONE_CONTESTED,
       ),
     ).toBe(false);
+  });
+
+  test("a re-checked claim is contested by the facts its re-check read, not the run's", () => {
+    const pinned = contestedFactIds([
+      makeFact(1, { interpretationNote: "Initials may be a draft mark" }),
+    ]);
+    const refs = [{ factEntityId: factId(1), rel: "supports" as const }];
+    const recheck = (interpretationNote: string | null) => ({
+      checkedAt: "2026-11-11T10:00:00.000Z",
+      checkedBy: "0199a3c4-5b6d-7e8f-9a0b-000000009098",
+      modelRef: null,
+      factCount: 1,
+      facts: [makeFact(1, { interpretationNote })],
+      original: { verdict: noCover, refs: [], qualifiers: [] },
+    });
+
+    // The note was cleared before the re-check: its grade no longer rests
+    // on a contested reading, whatever the run pinned.
+    expect(
+      needsAttention(
+        { state: "supported", refs, qualifiers: [], recheck: recheck(null) },
+        pinned,
+      ),
+    ).toBe(false);
+    // A note added since the run counts for the claim that read it.
+    expect(
+      needsAttention(
+        {
+          state: "supported",
+          refs,
+          qualifiers: [],
+          recheck: recheck("Initials may be a draft mark"),
+        },
+        NONE_CONTESTED,
+      ),
+    ).toBe(true);
   });
 
   // The review each qualifier asks for comes from the server; a clean
@@ -151,7 +187,12 @@ describe("AVT triage", () => {
     );
     expect(
       dispositionGuidance(
-        { state: "supported", refs: held.refs, qualifiers: held.qualifiers },
+        {
+          state: "supported",
+          refs: held.refs,
+          qualifiers: held.qualifiers,
+          recheck: null,
+        },
         NONE_CONTESTED,
       ),
     ).toEqual({
@@ -168,6 +209,7 @@ describe("AVT triage", () => {
           state: "supported",
           refs: unsourced.refs,
           qualifiers: unsourced.qualifiers,
+          recheck: null,
         },
         NONE_CONTESTED,
       ),
@@ -187,6 +229,7 @@ describe("AVT triage", () => {
           state: "notverifiable",
           refs: [{ factEntityId: factId(1), rel: "supports" }],
           qualifiers: [],
+          recheck: null,
         },
         contestedFactIds(facts),
       ),

@@ -380,6 +380,14 @@ describe("list verification access grants across MCP tools", () => {
       params,
       query: { runId: resourceId, claimId: resourceId },
     },
+    "lists.verifications.claim-rechecks.create": {
+      params,
+      body: {
+        runId: resourceId,
+        claimId: resourceId,
+        requestKey: "synthetic-recheck",
+      },
+    },
     "lists.verifications.claim-comments.create": {
       params,
       body: { runId: resourceId, claimId: resourceId, body: "Synthetic note" },

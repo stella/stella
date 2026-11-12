@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 120,
+    "count": 119,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 1,
@@ -8,7 +8,6 @@
       "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts": 6,
       "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-tool.ts": 2,
       "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-write-tool.ts": 1,
-      "apps/api/src/handlers/document-reviews/propose-positions-stream.ts": 1,
       "apps/api/src/handlers/entities/copy-utils.ts": 3,
       "apps/api/src/handlers/entities/pdf-signing-redeem-handoff.ts": 1,
       "apps/api/src/handlers/files/routes.ts": 7,

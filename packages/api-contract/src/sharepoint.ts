@@ -15,4 +15,11 @@ export const SHAREPOINT_REFUSAL_CODE = {
   throttled: "sharepoint_throttled",
   /** A pagination cursor that this API did not issue. */
   invalidCursor: "sharepoint_invalid_cursor",
+  /** Only files can be imported; folders and notebooks cannot. */
+  notAFile: "sharepoint_not_a_file",
+  /** The file is larger than a stella document may be. */
+  fileTooLarge: "sharepoint_file_too_large",
 } as const;
+
+/** How many files one SharePoint import request may name. */
+export const SHAREPOINT_IMPORT_MAX_ITEMS = 10;
