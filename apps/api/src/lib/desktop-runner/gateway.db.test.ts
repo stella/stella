@@ -9,7 +9,7 @@ import {
 import { ChatClient } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -1156,6 +1156,31 @@ describe("leases", () => {
 });
 
 describe("approval modes and reasoning efforts", () => {
+  test("a start queued before reasoning efforts existed is sent with the harness's effort, not cancelled", async () => {
+    const { desktopId, desktop } = await acceptedRun(first);
+    const runId = await assignRun(desktopId);
+    await desktop.receive("run.start", ofRun(runId));
+    await desktop.close();
+    await db
+      .update(desktopRunnerCommands)
+      .set({
+        payload: sql`${desktopRunnerCommands.payload} - 'reasoningEffort'`,
+      })
+      .where(
+        and(
+          eq(desktopRunnerCommands.runId, runId),
+          eq(desktopRunnerCommands.kind, "run.start"),
+        ),
+      );
+
+    const back = await openDesktop(first, desktopId);
+    await back.hello();
+    const resent = await back.receive("run.start", ofRun(runId));
+    expect(resent).toMatchObject({ runId, reasoningEffort: null });
+    expect((await runState(runId))?.state).toBe("assigned");
+    await back.close();
+  });
+
   test("a run starts in the thread's approval mode and effort, and ones the computer does not report are refused", async () => {
     // A runner row as its socket's hello leaves it; no socket is needed to
     // queue a start.

@@ -827,7 +827,9 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
      * The effort the run asks the model for, one the desktop reported for
      * it; `null` leaves it to the harness.
      */
-    reasoningEffort: v.nullable(reasoningEffortSchema),
+    // Absent only in a command queued before this field existed; make it
+    // required once no queued row can predate it (a day after deploy).
+    reasoningEffort: v.optional(v.nullable(reasoningEffortSchema), null),
     /** The session to resume, from an earlier run's `run.finished`. */
     harnessSessionId: harnessSessionIdSchema,
     instructions: v.pipe(v.string(), v.maxLength(65_536)),
