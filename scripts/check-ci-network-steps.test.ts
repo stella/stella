@@ -196,6 +196,46 @@ ${stepEnv}        run: cargo build --locked
     ]);
   });
 
+  test("a package.json script run by name needs the step timeout", () => {
+    const step = (timeout: string) =>
+      workflow(`      - name: Install the docs MCP server
+${timeout}        run: bash scripts/retry.sh bun run setup:mcp
+`);
+    const manifest = JSON.stringify({
+      scripts: {
+        "setup:mcp": "bun install --cwd .claude/mcp --frozen-lockfile",
+      },
+    });
+
+    expect(
+      check({ [WORKFLOW]: step(""), "package.json": manifest }).errors,
+    ).toEqual([
+      `${WORKFLOW}: build: Install the docs MCP server: bun install (package.json#setup:mcp) needs a step timeout-minutes`,
+    ]);
+    expect(
+      check({
+        [WORKFLOW]: step("        timeout-minutes: 5\n"),
+        "package.json": manifest,
+      }).errors,
+    ).toEqual([]);
+  });
+
+  test("a package.json script run by name outside retry.sh fails", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Install the docs MCP server
+        timeout-minutes: 5
+        run: bun run setup:mcp
+`),
+      "package.json": JSON.stringify({
+        scripts: { "setup:mcp": "bun install --cwd .claude/mcp" },
+      }),
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Install the docs MCP server: route bun install (package.json#setup:mcp) through scripts/retry.sh`,
+    ]);
+  });
+
   test("a package script a step invokes is scanned", () => {
     const report = check({
       [WORKFLOW]: workflow(`      - name: Prepare toolchain
