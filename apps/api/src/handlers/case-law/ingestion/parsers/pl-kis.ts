@@ -66,7 +66,7 @@ export type ParsePlKisDocumentInput = {
  * which is how a layout the reading does not know shows; the text is all
  * there, its structure is not.
  */
-export type PlKisDocumentStructure =
+type PlKisDocumentStructure =
   { type: "divided" } | { type: "undivided"; role: ParagraphRole | undefined };
 
 export type ParsePlKisDocumentOutput = {
