@@ -8,7 +8,6 @@ import {
   type DesktopLaunchOutcome,
   type DesktopLaunchState,
   hasConnectedComputer,
-  type ReadComputerConnected,
 } from "@/features/chat/desktop-launch.logic";
 import { localRunnersOptions } from "@/features/chat/queries";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -20,42 +19,44 @@ class ComputerReadError extends TaggedError("ComputerReadError")<{
 }> {}
 
 /**
- * Reads the member's computers afresh into the cache, so the Run on menu and
+ * Reads the member's computers afresh into the cache, so the where chip and
  * the composer bar show a computer the moment it connects.
  */
-const readComputerConnected =
-  (
-    queryClient: QueryClient,
-    activeOrganizationId: string,
-  ): ReadComputerConnected =>
-  async (signal) => {
-    const options = localRunnersOptions(activeOrganizationId);
-    // An abandoned read stops its request too; each poll is its own retry.
-    signal.addEventListener(
-      "abort",
-      () => {
-        detached(
-          queryClient.cancelQueries({
-            queryKey: options.queryKey,
-            exact: true,
-          }),
-          "desktop-launch.cancel-read",
-        );
-      },
-      { once: true },
-    );
-    return (
-      await Result.tryPromise({
-        try: async () =>
-          await queryClient.query({ ...options, staleTime: 0, retry: false }),
-        catch: (cause) =>
-          new ComputerReadError({
-            message: "The member's computers could not be read",
-            cause,
-          }),
-      })
-    ).map(hasConnectedComputer);
-  };
+const readComputerConnected = async (
+  activeOrganizationId: string,
+  queryClient: QueryClient,
+  signal: AbortSignal,
+) => {
+  // An abandoned read stops its request too; each poll is its own retry.
+  signal.addEventListener(
+    "abort",
+    () => {
+      detached(
+        queryClient.cancelQueries({
+          queryKey: localRunnersOptions(activeOrganizationId).queryKey,
+          exact: true,
+        }),
+        "desktop-launch.cancel-read",
+      );
+    },
+    { once: true },
+  );
+  const read = queryClient.query({
+    ...localRunnersOptions(activeOrganizationId),
+    staleTime: 0,
+    retry: false,
+  });
+  return (
+    await Result.tryPromise({
+      try: async () => await read,
+      catch: (cause) =>
+        new ComputerReadError({
+          message: "The member's computers could not be read",
+          cause,
+        }),
+    })
+  ).map(hasConnectedComputer);
+};
 
 type UseDesktopLaunchResult = {
   state: DesktopLaunchState;
@@ -75,7 +76,12 @@ export const useDesktopLaunch = (
   const launch = useLatestCallback(
     async () =>
       await desktop.launch(
-        readComputerConnected(queryClient, activeOrganizationId),
+        async (signal) =>
+          await readComputerConnected(
+            activeOrganizationId,
+            queryClient,
+            signal,
+          ),
       ),
   );
   return { state, launch };
