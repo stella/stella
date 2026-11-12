@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import type { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
+import { CHAT_LOCAL_RUN_TOOL_LIMITS } from "@stll/api-contract/chat-local-run-tool";
 import {
   chatLocalRunAnswersRefusal,
   chatLocalRunQuestionsSchema,
@@ -100,6 +101,10 @@ const SET_MODE_SUGGESTION = "setMode";
 
 /** What the model reads when the user denies a tool call. */
 const DENIED_MESSAGE = "The user denied this action.";
+/** Chat shows a proposed plan up to this length; a longer one is never put
+ *  to the member, since approving it would approve steps they cannot see. */
+const MAX_PLAN_CHARS = CHAT_LOCAL_RUN_TOOL_LIMITS.proposedPlan;
+const PLAN_TOO_LONG_MESSAGE = `The plan is too long for the user to review: keep it under ${MAX_PLAN_CHARS} characters and propose it again.`;
 /** Rules granted for the session stay in memory, never in a settings file. */
 const SESSION_DESTINATION = "session";
 const MAX_REASON_CHARS = 2000;
@@ -830,6 +835,18 @@ export class ClaudeCodeTurnSession {
     });
     if (parsed.tool_name === ASK_USER_QUESTION_TOOL) {
       this.question(controlId, toolCall, parsed.input);
+      return;
+    }
+    const plan = parsed.input["plan"];
+    if (
+      proposesPlan &&
+      typeof plan === "string" &&
+      plan.length > MAX_PLAN_CHARS
+    ) {
+      this.client?.respond(controlId, {
+        behavior: "deny",
+        message: PLAN_TOO_LONG_MESSAGE,
+      });
       return;
     }
     const suggestions = (parsed.permission_suggestions ?? []).filter(

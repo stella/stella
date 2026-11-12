@@ -254,13 +254,16 @@ const SET_MODE_SUGGESTION = {
   destination: "session",
 };
 
+/** A plan longer than chat shows (20,000 UTF-16 code units). */
+export const FAKE_LONG_PLAN = `## Plan\n\n${"1. Read the lease.\n".repeat(1200)}`;
+
 /** The plan call as the CLI asks about it: the model's input plus the plan. */
-const proposePlan = (toolUseId: string): FakeStep[] => [
+const proposePlan = (toolUseId: string, plan = FAKE_PLAN): FakeStep[] => [
   assistant("msg-plan", [toolUse(toolUseId, "ExitPlanMode", {})]),
   canUseTool(
     toolUseId,
     "ExitPlanMode",
-    { plan: FAKE_PLAN, planFilePath: "/plans/lease.md" },
+    { plan, planFilePath: "/plans/lease.md" },
     { permission_suggestions: [SET_MODE_SUGGESTION] },
   ),
 ];
@@ -628,6 +631,14 @@ const FAKE_SCENARIOS = {
     ...proposePlan("call-plan"),
     toolResult("call-plan", "The user denied this action.", true),
     assistant("msg-2", [{ type: "text", text: "Waiting for a new plan." }]),
+    result(),
+  ],
+  /** A plan too long to show: refused without asking, the CLI stays in plan mode. */
+  plan_too_long: [
+    ...freshTurn(),
+    ...proposePlan("call-plan", FAKE_LONG_PLAN),
+    toolResult("call-plan", "The plan is too long.", true),
+    assistant("msg-2", [{ type: "text", text: "Shortening the plan." }]),
     result(),
   ],
   /** An approval without suggested rules offers no session-wide decision. */
