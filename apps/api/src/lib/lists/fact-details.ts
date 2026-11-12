@@ -3,6 +3,8 @@
 // these facts; the vocabulary belongs to Lists because a fact's reliability
 // does not depend on which feature reads it.
 
+import { panic } from "better-result";
+
 /** How unambiguous a fact's meaning is. Interpretive, never derived from the
  *  carrier medium (a handwritten note can be `high`). */
 export const FACT_CONFIDENCES = ["high", "medium", "low"] as const;
@@ -11,6 +13,7 @@ export type FactConfidence = (typeof FACT_CONFIDENCES)[number];
 /** Whether verdicts may rest on a fact. `held` keeps it out of scoring until
  *  a reviewer confirms it. */
 export const FACT_SCORING = ["included", "held"] as const;
+export type FactScoring = (typeof FACT_SCORING)[number];
 
 /** How much of `occurredOn` is known: `2021-07-01` at `month` is July 2021. */
 export const FACT_DATE_PRECISIONS = ["day", "month", "year"] as const;
@@ -21,3 +24,25 @@ export const FACT_DETAIL_LIMITS = {
   MEDIUM_MAX: 64,
   INTERPRETATION_NOTE_MAX: 4000,
 } as const;
+
+/** A partial date has one spelling: its first day. */
+export const canonicalFactDate = (
+  date: string,
+  precision: FactDatePrecision,
+): string => {
+  switch (precision) {
+    case "day": {
+      return date;
+    }
+    case "month": {
+      return `${date.slice(0, 7)}-01`;
+    }
+    case "year": {
+      return `${date.slice(0, 4)}-01-01`;
+    }
+    default: {
+      precision satisfies never;
+      return panic(`Unhandled date precision: ${String(precision)}`);
+    }
+  }
+};

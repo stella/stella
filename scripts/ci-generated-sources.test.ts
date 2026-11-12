@@ -859,7 +859,7 @@ test("API boot entry points prepare capability runtime sources before starting",
       "turbo run generate:typecheck-declarations --filter=@stll/api",
     );
     expect(emission).toBeGreaterThanOrEqual(0);
-    expect(script.indexOf("bun --bun oxlint")).toBeGreaterThan(emission);
+    expect(script.indexOf("bun scripts/lint.ts")).toBeGreaterThan(emission);
   }
   expect(turbo.tasks["@stll/api#typecheck"]?.dependsOn).toContain(
     "typecheck:src",

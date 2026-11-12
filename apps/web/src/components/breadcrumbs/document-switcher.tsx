@@ -22,6 +22,7 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { isCurrentDocument } from "@/components/breadcrumbs/document-switcher.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -144,9 +145,9 @@ export const DocumentSwitcher = ({
                     value={file.fieldId}
                   >
                     <DocumentIdentityBadge identity={{ kind: "unknown" }} />
-                    <BidiText as="span" className="min-w-0 truncate">
+                    <TruncatedText render={<BidiText as="span" />}>
                       {file.fileName}
-                    </BidiText>
+                    </TruncatedText>
                     {isCurrent ? <CheckIcon className="ms-auto" /> : null}
                   </CommandItem>
                 );

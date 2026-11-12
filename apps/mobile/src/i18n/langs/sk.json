@@ -15,6 +15,7 @@
     "noMatchesDescription": "Žiadny názov konverzácie ani spisu neobsahuje „{search}“.",
     "search": "Hľadať konverzácie",
     "loadFailed": "Vaše konverzácie sa nepodarilo načítať.",
+    "runsLoadFailed": "Nepodarilo sa zistiť, ktoré konverzácie na vás čakajú.",
     "retry": "Skúsiť znova",
     "untitled": "Konverzácia bez názvu",
     "loadMoreFailed": "Načítať ďalšie",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "Túto konverzáciu sa nepodarilo načítať.",
     "greeting": "Na čom chcete pracovať?",
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
+    "markRead": "Prečítané",
+    "markUnread": "Neprečítané",
+    "pin": "Pripnúť",
+    "unpin": "Odopnúť",
+    "unread": "Neprečítané",
+    "markReadFailed": "Konverzáciu sa nepodarilo označiť ako prečítanú.",
+    "markUnreadFailed": "Konverzáciu sa nepodarilo označiť ako neprečítanú.",
+    "pinFailed": "Konverzáciu sa nepodarilo pripnúť.",
+    "unpinFailed": "Konverzáciu sa nepodarilo odopnúť.",
     "sections": {
+      "needsYou": "Čaká na vás",
+      "working": "Prebieha",
+      "pinned": "Pripnuté",
       "today": "Dnes",
       "yesterday": "Včera",
       "week": "Posledných 7 dní",
@@ -62,7 +75,12 @@
     "sendFileRefused": "Súbor sa nepodarilo odoslať, takže sa správa neodoslala. Odstráňte súbor a skúste to znova.",
     "sendFileNotAnonymizable": "Táto konverzácia je anonymizovaná a stella nedokázala anonymizovať jeden zo súborov, takže sa nič neodoslalo. Odstráňte súbor a skúste to znova.",
     "pickTitle": "Vyberte konverzáciu",
-    "pickDescription": "Vyberte vlákno zo zoznamu alebo začnite nové tlačidlom +."
+    "pickDescription": "Vyberte vlákno zo zoznamu alebo začnite nové tlačidlom +.",
+    "runBanner": {
+      "needsYou": "Čaká na vás",
+      "finished": "Dokončené",
+      "openHint": "Otvorí konverzáciu"
+    }
   },
   "tasks": {
     "emptyTitle": "Žiadne otvorené úlohy",
@@ -151,7 +169,11 @@
     "scanDocument": "Naskenovať dokument",
     "newTask": "Nová úloha",
     "uploadDocument": "Nahrať dokument",
-    "uploadFailed": "Dokument sa nepodarilo nahrať. Skúste to znova."
+    "uploadFailed": "Dokument sa nepodarilo nahrať. Skúste to znova.",
+    "startTimer": "Spustiť časovač",
+    "pauseTimer": "Pozastaviť časovač",
+    "resumeTimer": "Pokračovať v časovači",
+    "timerRunning": "Časovač beží"
   },
   "entity": {
     "type": "Typ",
@@ -242,7 +264,6 @@
     "headnote": "Právna veta",
     "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
     "openSource": "Otvoriť originál",
-    "openFailed": "Odkaz sa nepodarilo otvoriť.",
     "loadFailed": "Judikatúru sa nepodarilo načítať.",
     "share": "Zdieľať"
   },
@@ -346,5 +367,19 @@
   "pane": {
     "showList": "Zobraziť zoznam",
     "hideList": "Skryť zoznam"
+  },
+  "link": {
+    "open": "Otvoriť",
+    "share": "Zdieľať",
+    "cancel": "Zrušiť",
+    "openFailed": "Odkaz sa nepodarilo otvoriť."
+  },
+  "share": {
+    "title": "Pridať do stelly",
+    "start": "Začať",
+    "uploading": "Nahrávam {done} z {total}…",
+    "filesOnly": "Uložia sa iba súbory; odkazy a text sa vynechajú.",
+    "unavailableTitle": "Nie je čo pridať",
+    "unavailable": "Táto zdieľaná položka už tu nie je. Zdieľajte ju znova z druhej aplikácie."
   }
 }

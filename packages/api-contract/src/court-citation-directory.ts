@@ -1736,6 +1736,7 @@ const grammarOf = (
  */
 export const COURT_CITATION_GRAMMARS = {
   AUT: { kind: "no-identity-surface" },
+  BRA: { kind: "no-identity-surface" },
   CZE: grammarOf("CZE", {
     ecliJurisdiction: "CZ",
     ecliFamilyPrefixes: ["KS", "MS", "OS", "VS"],

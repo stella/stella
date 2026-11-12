@@ -103,7 +103,7 @@ const runCycle = async (
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,
     limit: 1,
-    leaseMs: 600_000,
+    fillWindowMs: 600_000,
     payloadReadConcurrency: 1,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,

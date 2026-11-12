@@ -2,18 +2,18 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
 import { assertProperty } from "@stll/property-testing";
 
 import {
   matterRunStatusByWorkspace,
   topMatterRunState,
 } from "@/features/chat/active-runs.logic";
-import type { ActiveChatRunState } from "@/features/chat/active-runs.logic";
 
 const MATTERS = ["matter_lease", "matter_spa", "matter_dismissal"] as const;
 
 const runArbitrary = fc.record({
-  state: fc.constantFrom<ActiveChatRunState>("needs-you", "working"),
+  state: fc.constantFrom(...Object.values(CHAT_ACTIVE_RUN_STATE)),
   workspaceId: fc.constantFrom<string | null>(...MATTERS, null),
 });
 

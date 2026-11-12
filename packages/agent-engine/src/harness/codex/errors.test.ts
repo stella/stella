@@ -57,6 +57,18 @@ describe("Codex turn failures", () => {
     ).toEqual({ type: "usage_limit", message, resetsAt: null });
   });
 
+  test("a model at capacity is its own failure, apart from a usage limit", () => {
+    const message =
+      "Selected model is at capacity. Please try a different model.";
+    expect(
+      classifyTurnFailure({
+        error: { message, codexErrorInfo: "serverOverloaded" },
+        // An exhausted allowance does not make capacity a usage limit.
+        rateLimits: exhaustedUntil(1_793_196_000),
+      }),
+    ).toEqual({ type: "model_at_capacity", message });
+  });
+
   test("any other stream disconnect stays a provider error", () => {
     const message = "stream disconnected before completion: connection reset";
     expect(

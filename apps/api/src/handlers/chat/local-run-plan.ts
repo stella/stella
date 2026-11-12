@@ -4,9 +4,14 @@ import {
   CHAT_LOCAL_RUN_REFUSAL,
   CHAT_RUN_TARGET_KIND,
   type ChatRunTarget,
+  isApprovalModeWithin,
 } from "@stll/api-contract/chat-run-target";
-import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
+import {
+  DESKTOP_RUNNER_FEATURE_ID,
+  type DesktopRunnerApprovalMode,
+} from "@stll/api-contract/desktop-runner";
 
+import type { SafeDbError } from "@/api/db/safe-db";
 import {
   createLocalChatRun,
   type LocalChatRun,
@@ -17,10 +22,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
-import {
-  type DatabaseError,
-  HandlerError,
-} from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   type FeatureAccessSnapshot,
   isFeatureEnabled,
@@ -41,6 +43,13 @@ export type ResolveChatLocalRunOptions = {
   organizationId: SafeId<"organization">;
   chatThreadId: SafeId<"chatThread">;
   workspaceIds: readonly SafeId<"workspace">[];
+  /**
+   * The most the organization lets a run do without asking, read when the
+   * turn starts so a lowered ceiling holds the next turn.
+   */
+  readApprovalCeiling: () => Promise<
+    Result<DesktopRunnerApprovalMode, SafeDbError>
+  >;
   /** The gateway control; the process's own by default. */
   runtime?: { control: DesktopRunnerControl; runBell: DesktopRunnerRunBell };
 };
@@ -78,9 +87,10 @@ export const resolveChatLocalRun = async ({
   organizationId,
   chatThreadId,
   workspaceIds,
+  readApprovalCeiling,
   runtime = getDesktopRunnerControl(),
 }: ResolveChatLocalRunOptions): Promise<
-  Result<LocalChatRun | undefined, HandlerError | DatabaseError>
+  Result<LocalChatRun | undefined, HandlerError | SafeDbError>
 > => {
   if (
     runTarget === undefined ||
@@ -122,6 +132,19 @@ export const resolveChatLocalRun = async ({
         type: "resume",
         harness: runTarget.harness,
       }),
+    );
+  }
+  // The organization's ceiling holds whichever computer would take the turn.
+  // A resumed run was held to it when it started and keeps its mode.
+  const ceiling = await readApprovalCeiling();
+  if (ceiling.isErr()) {
+    return Result.err(ceiling.error);
+  }
+  if (!isApprovalModeWithin(runTarget.approvals, ceiling.value)) {
+    return refuse(
+      403,
+      CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
+      "Your organization does not let a run on your computer do that much without asking.",
     );
   }
   const picked = await runtime.control.pickDesktop({

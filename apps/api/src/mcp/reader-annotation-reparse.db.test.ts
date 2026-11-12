@@ -120,6 +120,8 @@ const createCaller = async (): Promise<Caller> => {
 const requestContext = (
   { organizationId, userId }: Caller,
   blocks: readonly Block[],
+  /** Anchors of an earlier parse the decision's redirects move. */
+  moved: ReadonlyMap<string, string> = new Map(),
 ): AuthorizedMcpRequestContext => {
   const identity = { organizationId, serverValidatedWorkspaceIds: [], userId };
   return asTestRaw<AuthorizedMcpRequestContext>({
@@ -147,6 +149,7 @@ const requestContext = (
           readBlocks: async () => await Promise.resolve(blocks),
           readTextPieces: async () =>
             await Promise.resolve(blocks.flatMap(readerAnchorPiecesOf)),
+          resolveHeldAnchors: async () => await Promise.resolve(moved),
         }),
     },
   });
@@ -311,6 +314,40 @@ describe("reader marks across a re-parse of their decision", () => {
         quote: "przepisy ustawy.",
       },
     ]);
+  });
+
+  test("an anchor read before a re-parse places the mark on the block its redirect names", async () => {
+    const caller = await createCaller();
+    // Re-parsed onto stable anchors: the agent still holds the old one.
+    const stableParse = [
+      paragraph("x0a1b2c3d4e", "Sąd rozważył przepisy ustawy."),
+      paragraph(
+        "x5f6a7b8c9d",
+        "Na podstawie art. 5 ustawy sąd oddalił skargę w całości.",
+      ),
+    ];
+    const call = async (moved: ReadonlyMap<string, string>) =>
+      await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "create_reader_annotation",
+        context: requestContext(caller, stableParse, moved),
+        args: {
+          target_type: "decision",
+          target_id: DECISION_ID,
+          mark: { kind: "highlight" },
+          passages: [{ anchor: "p-reasons-4", quote: "sąd oddalił skargę" }],
+        },
+      });
+
+    // Without a redirect the old anchor names no block, and the call says so.
+    expect((await call(new Map())).isError).toBe(true);
+
+    const placed = payloadOf(
+      await call(new Map([["p-reasons-4", "x5f6a7b8c9d"]])),
+    );
+    expect(placed).toMatchObject({
+      passages: [{ anchor: "x5f6a7b8c9d", quote: "sąd oddalił skargę" }],
+    });
   });
 
   test("an agent's retry after a whitespace-only re-parse replays its mark", async () => {

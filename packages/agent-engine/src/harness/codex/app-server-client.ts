@@ -1,12 +1,19 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import type { ProtocolLog } from "../../protocol-log";
 import {
   type HarnessProcessDeadlines,
   startHarnessProcess,
 } from "../harness-process";
+import type { HarnessSpawnError } from "../process-tree";
 import type { Detached, HarnessExit } from "../turn-lifecycle";
-import { type CodexRequestId, JsonRpcMessageSchema } from "./protocol";
+import {
+  type CodexClientNotificationMethod,
+  type CodexClientRequestMethod,
+  type CodexRequestId,
+  JsonRpcMessageSchema,
+} from "./protocol";
 
 /**
  * JSON-RPC over the stdio of one `codex app-server` process: one JSON object
@@ -35,6 +42,7 @@ export type AppServerLaunch = {
 
 type StartAppServerOptions = {
   launch: AppServerLaunch;
+  protocolLog: ProtocolLog;
   detached: Detached;
   deadlines: HarnessProcessDeadlines;
   cwd: string;
@@ -44,10 +52,10 @@ type StartAppServerOptions = {
 
 export type AppServerClient = {
   request: (
-    method: string,
+    method: CodexClientRequestMethod,
     params: unknown,
   ) => Promise<Result<unknown, AppServerRequestError>>;
-  notify: (method: string, params?: unknown) => void;
+  notify: (method: CodexClientNotificationMethod, params?: unknown) => void;
   respond: (id: CodexRequestId, result: unknown) => void;
   respondError: (id: CodexRequestId, code: number, message: string) => void;
   /** The server process's id. */
@@ -62,12 +70,13 @@ export type AppServerClient = {
 
 export const startAppServer = ({
   launch,
+  protocolLog,
   detached,
   deadlines,
   cwd,
   env,
   handlers,
-}: StartAppServerOptions): AppServerClient => {
+}: StartAppServerOptions): Result<AppServerClient, HarnessSpawnError> => {
   const state = { nextId: 1 };
 
   const dispatch = (value: unknown) => {
@@ -102,21 +111,26 @@ export const startAppServer = ({
     }
   };
 
-  const server = startHarnessProcess<CodexRequestId, AppServerRequestError>({
+  const started = startHarnessProcess<CodexRequestId, AppServerRequestError>({
     command: [launch.executable, ...launch.args],
     cwd,
     env,
     detached,
     deadlines,
     name: "codex-app-server",
+    protocol: { channel: "codex", log: protocolLog },
     unanswered: (reason, message) =>
       new AppServerRequestError({ reason, code: null, message }),
     message: dispatch,
     violation: handlers.violation,
     exit: handlers.exit,
   });
+  if (Result.isError(started)) {
+    return started;
+  }
+  const server = started.value;
 
-  return {
+  return Result.ok({
     pid: server.pid,
     request: async (method, params) => {
       const id = state.nextId;
@@ -135,5 +149,5 @@ export const startAppServer = ({
     exited: server.exited,
     closeInput: server.closeInput,
     kill: server.kill,
-  };
+  });
 };

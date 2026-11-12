@@ -42,6 +42,7 @@ import { proposedPartiesSchema } from "@/api/lib/document-review/parties";
 import { referenceGradeSchema } from "@/api/lib/document-review/reference-grade";
 import { translationSchema as documentTranslationSchema } from "@/api/lib/document-translation/ai";
 import { occurrenceRenderingsSchema } from "@/api/lib/docx/ai-field-generator";
+import { factExtractionSchema } from "@/api/lib/lists/generation/fact-extract";
 import { extractionSchema as claimExtractionSchema } from "@/api/lib/lists/verification/claim-extract";
 import { gradingSchema } from "@/api/lib/lists/verification/claim-grade";
 import { extractionSchema as memoryExtractionSchema } from "@/api/lib/scheduler/tasks/memory-extractor";
@@ -50,7 +51,7 @@ import { fieldSuggestionsSchema } from "@/api/lib/templates/suggest-template-fie
 import { buildBatchSchema } from "@/api/lib/workflow/ai-prompts";
 import { generativeDecisionsSchema } from "@/api/lib/workflow/decisions/decide";
 import { choice, noul } from "@/api/lib/workflow/decisions/system-one";
-import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import {
   tierMatchBatchSchema,
   tierMatchSchema,
@@ -71,10 +72,11 @@ const batchTool = {
   type: "ai-model",
   prompt: "Extract it.",
 } as const;
-const batchProperties: BatchProperty[] = [
+const batchProperties: AIBatchProperty[] = [
   {
     id: toSafeId<"property">("prop-governing-law"),
     status: "stale",
+    answerShape: "value",
     content: { version: 1, type: "text" },
     dependencies: [],
     tool: batchTool,
@@ -82,6 +84,7 @@ const batchProperties: BatchProperty[] = [
   {
     id: toSafeId<"property">("prop-assignment"),
     status: "stale",
+    answerShape: "value",
     content: {
       version: 1,
       type: "single-select",
@@ -353,6 +356,13 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
         '{"renderings":["Czech law","according to the laws of the Czech Republic"]}',
     },
     {
+      file: "lib/lists/generation/fact-extract.ts",
+      outputSchema: "factExtractionSchema",
+      schema: factExtractionSchema,
+      answer:
+        '{"facts":[{"blockId":"b3","quote":"the board approved the discharge policy","fact":"The board approved the discharge policy on 9 March 2021.","occurredOn":"2021-03-09","evidenceKind":"document","medium":"Board minutes","confidence":"high","contestedMeaning":null},{"blockId":"b7","quote":"the final version was sent to every ward","fact":"The final version of the policy was sent to every ward.","occurredOn":null,"evidenceKind":"testimony","medium":"Witness statement","confidence":"medium","contestedMeaning":"Final may mean the approved policy or the last circulated draft."}]}',
+    },
+    {
       file: "lib/lists/verification/claim-extract.ts",
       outputSchema: "extractionSchema",
       schema: claimExtractionSchema,
@@ -364,7 +374,7 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       outputSchema: "gradingSchema",
       schema: gradingSchema,
       answer:
-        '{"grades":[{"claimId":"c1","verdict":"supported","score":86,"refs":[{"factId":"f3","rel":"supports"}],"conflict":null},{"claimId":"c2","verdict":"nocover","score":null,"refs":[],"conflict":null}]}',
+        '{"grades":[{"claimId":"c1","verdict":"supported","score":86,"refs":[{"factId":"f3","rel":"supports"}],"conflict":null,"qualifiers":[]},{"claimId":"c2","verdict":"nocover","score":null,"refs":[],"conflict":null,"qualifiers":[{"kind":"record-silent","explanation":"The witness describes her own expectation, which no document would record."}]}]}',
     },
     {
       file: "lib/scheduler/tasks/memory-extractor.ts",

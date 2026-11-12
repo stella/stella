@@ -107,7 +107,7 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
         const connection = connectionIn(client, schema);
         const repair = DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL;
         expect(await repair.readCompletion(connection)).toMatchObject({
-          type: "incomplete",
+          type: "pending",
         });
         expect(await repair.repair(connection)).toEqual({
           type: "complete",

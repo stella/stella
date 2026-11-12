@@ -37,6 +37,7 @@ import {
 import {
   codexItemHandling,
   isToolItem,
+  planUpdateStep,
   reasoningText,
   toolCallForItem,
   toolResultForItem,
@@ -221,12 +222,14 @@ const interactionResult = (
 /**
  * A turn that fails because the model is at capacity continues on the same
  * thread with empty input, after a delay that doubles from `baseDelayMs` up
- * to `maxDelayMs`, at most `maxAttempts` times.
+ * to `maxDelayMs`, at most `maxAttempts` times. `sleep` waits out each delay,
+ * so a test decides when a continuation starts.
  */
 export type CodexCapacityRetry = {
   maxAttempts: number;
   baseDelayMs: number;
   maxDelayMs: number;
+  sleep: (delayMs: number) => Promise<void>;
 };
 
 type CodexTurnSessionOptions = {
@@ -250,7 +253,11 @@ export class CodexTurnSession {
   private readonly resolved = new Set<string>();
   private readonly answeredByMessage = new Set<string>();
   private unsupportedItems = 0;
+  /** Plan updates reported so far in this turn. */
+  private planUpdates = 0;
   private capacityRetries = 0;
+  /** Messages whose text streamed in part and whose item has not completed. */
+  private readonly openMessages = new Set<string>();
 
   private readonly lifecycle: HarnessTurnLifecycle<AppServerClient>;
   private readonly stellaServer: string;
@@ -406,6 +413,7 @@ export class CodexTurnSession {
       case "item/agentMessage/delta": {
         const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
         if (parsed !== null && parsed.turnId === this.turnId) {
+          this.openMessages.add(parsed.itemId);
           this.emit({
             type: "text.delta",
             messageId: parsed.itemId,
@@ -440,6 +448,17 @@ export class CodexTurnSession {
         const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
         if (parsed !== null) {
           this.rateLimits = mergeRateLimits(this.rateLimits, parsed.rateLimits);
+        }
+        return;
+      }
+      case "turn/plan/updated": {
+        const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
+        if (parsed !== null && parsed.turnId === this.turnId) {
+          this.planUpdates += 1;
+          this.emit({
+            type: "tool.completed",
+            ...planUpdateStep(parsed, this.planUpdates),
+          });
         }
         return;
       }
@@ -492,12 +511,19 @@ export class CodexTurnSession {
   /**
    * Continue a turn the model's capacity ended. Messages are held until the
    * continuation's turn id is known, as they are before the first turn.
+   *
+   * Continuing repeats nothing the chat already shows: Codex keeps every
+   * completed item in the thread, and the continuation's empty input resumes
+   * after them. A message that streamed in part is the exception (Codex keeps
+   * no partial item, so the continuation would write it again), so such a
+   * turn fails instead.
    */
   private retryAtCapacity(error: CodexTurnError | null): boolean {
     const { maxAttempts, baseDelayMs, maxDelayMs } = this.capacityRetry;
     if (
       !isCapacityFailure(error) ||
       this.lifecycle.interrupting ||
+      this.openMessages.size > 0 ||
       this.capacityRetries >= maxAttempts
     ) {
       return false;
@@ -518,7 +544,7 @@ export class CodexTurnSession {
   }
 
   private async continueAfter(delayMs: number, error: CodexTurnError | null) {
-    await Bun.sleep(delayMs);
+    await this.capacityRetry.sleep(delayMs);
     const client = this.client;
     if (
       this.lifecycle.ended ||
@@ -611,6 +637,7 @@ export class CodexTurnSession {
     }
     switch (item.type) {
       case "agentMessage":
+        this.openMessages.delete(item.id);
         this.emit({
           type: "text.completed",
           messageId: item.id,

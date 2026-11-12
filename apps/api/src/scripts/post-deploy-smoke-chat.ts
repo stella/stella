@@ -24,6 +24,7 @@
 import { TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
@@ -621,7 +622,8 @@ const hasOneCompletedSubagent = (output: unknown): boolean => {
 };
 
 /**
- * After the decline: the call is stored declined (settled, nothing ran), the
+ * After the decline: the call is stored declined (`isDeclinedChatToolCall`)
+ * and settled as the error a declined call is stored as, so nothing ran; the
  * continuation kept every earlier call, the model answered in text, and no
  * tool call is left open.
  */
@@ -640,10 +642,7 @@ export const evaluateDeclinedTurn = ({
   if (!call) {
     return fail(`declined call ${pending.callId} is no longer stored`);
   }
-  if (
-    call.state !== "approval-responded" ||
-    call.approval?.approved !== false
-  ) {
+  if (!isDeclinedChatToolCall(call) || call.state !== "error") {
     return fail(
       `declined call is ${call.state} (approved: ${String(call.approval?.approved)})`,
     );

@@ -166,6 +166,7 @@ import {
   reserveThirdPartyBoundarySourcePlaceholders,
 } from "@/api/handlers/chat/third-party-boundary";
 import { sortToolJsonKeys } from "@/api/handlers/chat/tool-json-key-order";
+import { retainToolResultsForModel } from "@/api/handlers/chat/tool-result-retention";
 import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { resolveChatTurnModel } from "@/api/handlers/chat/turn-model";
 import type { ChatTurnModel } from "@/api/handlers/chat/turn-model";
@@ -2134,10 +2135,14 @@ const createChatRuntimeMiddleware = ({
         }
       }
 
+      // Superseded tool results (earlier page snapshots) shrink before
+      // compaction measures the history, so a browsing turn holds one page
+      // instead of every page.
+      const projectedMessages = retainToolResultsForModel(config.messages);
       const compactedMessages = await compactModelMessagesForModel({
         abortSignal,
         aiAnalytics: compactionAnalytics,
-        messages: config.messages,
+        messages: projectedMessages,
         modelId,
         organizationId,
         admission: modelAdmission,

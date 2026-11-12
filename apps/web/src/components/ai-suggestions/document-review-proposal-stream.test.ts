@@ -1,11 +1,15 @@
 import { describe, expect, it } from "bun:test";
 
+import { DOCUMENT_TOO_LARGE_ERROR_CODE } from "@stll/api-contract";
+
 import {
   mergeStreamedPosition,
   parseReviewProposalEvent,
+  proposalRefusalMessage,
   REVIEW_PROPOSAL_EVENT,
 } from "@/components/ai-suggestions/document-review-proposal-stream";
 import type { IndexedPosition } from "@/components/ai-suggestions/document-review-proposal-stream";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { Position } from "@/lib/knowledge/playbook-types";
 
 const gradedPosition = (sourceId: string): Position => ({
@@ -164,5 +168,44 @@ describe("mergeStreamedPosition", () => {
   it("replaces a replayed index rather than duplicating it", () => {
     const merged = mergeStreamedPosition([indexed(0, "a")], indexed(0, "a2"));
     expect(merged.map((entry) => entry.position.sourceId)).toEqual(["a2"]);
+  });
+});
+
+describe("proposalRefusalMessage", () => {
+  const messages = {
+    unexpectedErrorMessage: "unexpected",
+    documentsTooLargeMessage: "documents too large",
+  };
+
+  it("names the documents when the model cannot fit them", () => {
+    expect(
+      proposalRefusalMessage({
+        ...messages,
+        refusal: {
+          status: 413,
+          value: {
+            code: DOCUMENT_TOO_LARGE_ERROR_CODE,
+            message: "Server wording",
+          },
+        },
+      }),
+    ).toBe(messages.documentsTooLargeMessage);
+  });
+
+  it("keeps the general wording for any other refusal", () => {
+    const refusal = {
+      status: 403,
+      value: { code: "forbidden", message: "Server wording" },
+    };
+
+    expect(proposalRefusalMessage({ ...messages, refusal })).toBe(
+      userErrorMessage(refusal, messages.unexpectedErrorMessage),
+    );
+  });
+
+  it("falls back when the stream ended without a refusal", () => {
+    expect(proposalRefusalMessage({ ...messages, refusal: null })).toBe(
+      messages.unexpectedErrorMessage,
+    );
   });
 });

@@ -2,9 +2,15 @@ import { convertMessagesToModelMessages } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  isDeclinedChatToolCall,
+} from "@stll/api-contract/chat";
 
-import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
+import {
+  declineToolCall,
+  toPersistableChatMessage,
+} from "@/api/handlers/chat/chat-message-parts";
 import {
   closeCutShortCalls,
   CUT_SHORT_OUTCOME,
@@ -472,6 +478,56 @@ describe("the settled history the engine converts", () => {
     // denial's answer into its step, so every request answers it the same way.
     expect(history[0]?.parts).toEqual(parts);
     expect(findTranscriptProblems(modelRequest(parts))).toEqual([]);
+  });
+
+  // An approval nobody can answer any more is declined, and stored as the
+  // engine stores a call the user declined: one shape for every reader.
+  test("a cut-short turn stores its open approvals declined in the engine's shape", () => {
+    const intro = {
+      content: "Deleting both.",
+      type: "text",
+    } satisfies ChatPart;
+    const parts = [
+      intro,
+      approval("first"),
+      approval("second"),
+      completed,
+      stored("completed"),
+    ] satisfies ChatPart[];
+    const closed = closeCutShortCalls(
+      toPersistableChatMessage({
+        id: toSafeId<"chatMessage">("01a0e22c-ba01-7525-803d-b57dcb87e6fd"),
+        parts,
+        role: "assistant",
+      }),
+    ).parts;
+
+    const declined = ["first", "second"].map((id) => {
+      const pending = approval(id);
+      if (!("approval" in pending)) {
+        return panic("The fixture's approval carries its approval");
+      }
+      return declineToolCall(pending, pending.approval);
+    });
+    // The stored parts keep their order; the denials' results follow them,
+    // where the engine appends the results it stores.
+    expect(closed).toEqual([
+      intro,
+      ...declined.map(({ call: declinedCall }) => declinedCall),
+      completed,
+      stored("completed"),
+      ...declined.map(({ result }) => result),
+    ]);
+    expect(
+      closed.filter(
+        (part) => part.type === "tool-call" && isDeclinedChatToolCall(part),
+      ),
+    ).toHaveLength(2);
+    expect(
+      findUnsettledStoredToolCalls({ outcome: "cancelled", parts: closed }),
+    ).toEqual([]);
+    // The provider is handed both calls answered in their own step.
+    expect(findTranscriptProblems(modelRequest(closed))).toEqual([]);
   });
 
   test("a denial in the message's last step is left to the engine", () => {

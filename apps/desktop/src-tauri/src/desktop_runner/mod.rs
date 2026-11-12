@@ -44,9 +44,10 @@ use self::sidecar_host::{
 };
 pub(crate) use self::state::RunnerState;
 use crate::harness_installation::HarnessInstallation;
-use crate::harness_release::ManagedHarness;
+use crate::harness_release::{ManagedHarness, ManagedTool};
 use crate::harness_sidecar::{
   HarnessLaunchSettings, ReconnectBackoff, SidecarLaunch, SidecarSettings,
+  SkillFolderRef,
 };
 use crate::keychain::LocalDataKey;
 use crate::local_store::{self, StoreKey};
@@ -303,7 +304,24 @@ fn journal_backing(namespace: &str) -> JournalBacking {
 /// Where the host keeps its holders and run folders, under the app's data.
 const HOLDER_DIRECTORY: &str = "agent-holder";
 const RUNS_DIRECTORY: &str = "agent-runs";
-const PACKAGE_CACHE_DIRECTORY: &str = "agent-package-cache";
+/// Where every run on this computer once shared one cache. Each chat has its
+/// own beside its folder now; what is left here is removed once no holder of
+/// an earlier version, whose runs may still use it, is left.
+const RETIRED_PACKAGE_CACHE_DIRECTORY: &str = "agent-package-cache";
+
+/// The folders on this computer every run writes to, which a skill folder must
+/// stay out of.
+pub(crate) fn run_folders_on_this_computer() -> Vec<std::path::PathBuf> {
+  dirs::data_dir()
+    .map(|data| data.join(crate::config::APP_DATA_DIR_NAME))
+    .map(|data| {
+      vec![
+        data.join(RUNS_DIRECTORY),
+        data.join(RETIRED_PACKAGE_CACHE_DIRECTORY),
+      ]
+    })
+    .unwrap_or_default()
+}
 
 /// The app's harness host: the bundled sidecar, the managed CLIs and the
 /// ChatGPT connection. `None` without a data folder.
@@ -331,9 +349,9 @@ fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
         start_timeout: Duration::from_secs(20),
         shutdown_grace: Duration::from_secs(10),
         backoff: ReconnectBackoff::DEFAULT,
+        retired_dirs: vec![data.join(RETIRED_PACKAGE_CACHE_DIRECTORY)],
       },
       workspaces: data.join(RUNS_DIRECTORY),
-      package_cache: data.join(PACKAGE_CACHE_DIRECTORY),
       probe_interval: sidecar_host::PROBE_INTERVAL,
     },
     Arc::new(ManagedHarnesses { app: app.clone() }),
@@ -347,6 +365,10 @@ struct ManagedHarnesses {
 }
 
 impl LocalHarnesses for ManagedHarnesses {
+  fn skill_folders(&self) -> Vec<SkillFolderRef> {
+    crate::local_skill_folders::SkillFolders::for_this_computer().for_run()
+  }
+
   fn on_install_settled(&self, settled: InstallSettled) {
     let Some(installation) = self.app.try_state::<HarnessInstallation>() else {
       return;
@@ -376,11 +398,22 @@ impl LocalHarnesses for ManagedHarnesses {
     let installation = self.app.try_state::<HarnessInstallation>()?;
     let lease = installation.acquire(managed).ok()?;
     let (_variable, config_dir) = lease.config_env();
+    let version = lease.version().to_owned();
+    let executable = lease.executable().to_path_buf();
+    let config_dir = config_dir.to_path_buf();
+    // A run still starts on a computer whose Bun is not installed yet; its
+    // commands then find whatever the computer has.
+    let bun = installation.acquire_tool(ManagedTool::Bun).ok();
+    let tool_path = bun
+      .iter()
+      .filter_map(|bun| bun.executable().parent().map(std::path::PathBuf::from))
+      .collect();
     Some(InstalledHarness {
-      version: lease.version().to_owned(),
-      executable: lease.executable().to_path_buf(),
-      config_dir: config_dir.to_path_buf(),
-      lease: Box::new(lease),
+      version,
+      executable,
+      config_dir,
+      tool_path,
+      lease: Box::new((lease, bun)),
     })
   }
 

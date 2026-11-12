@@ -18,7 +18,7 @@ import { panic } from "better-result";
 
 import {
   foldSearchMatchTextWithOffsets,
-  spacedLetterRunRegex,
+  letterSpacingJoins,
 } from "@stll/text-normalize";
 
 /**
@@ -98,23 +98,8 @@ export type FoldedMarkText = {
  * The spaces inside spaced-out emphasis (`r o z h o d o l`) that join their
  * letters into one word rather than separating them, by original index.
  */
-const spacedLetterJoins = (text: string): ReadonlySet<number> => {
-  const joins = new Set<number>();
-  for (const match of text.matchAll(spacedLetterRunRegex())) {
-    const run = match[0];
-    for (let offset = 1; offset < run.length; offset += 1) {
-      const before = run[offset - 1];
-      if (
-        run[offset] === " " &&
-        before !== undefined &&
-        WORD_CHARACTER.test(before)
-      ) {
-        joins.add(match.index + offset);
-      }
-    }
-  }
-  return joins;
-};
+const spacedLetterJoins = (text: string): ReadonlySet<number> =>
+  new Set(letterSpacingJoins(text));
 
 /**
  * Fold a text for marking: `foldSearchMatchTextWithOffsets` (the client-wide
@@ -230,6 +215,18 @@ export const queryFindTokens = (query: string | undefined): QueryMarkTokens =>
   Object.assign(foldedQueryWords(query, 1), {
     [QUERY_MARK_TOKENS]: true as const,
   });
+
+/**
+ * The words a reader typed, folded, in the order typed and with repeats kept:
+ * the phrase a find looks for before it falls back to the words one by one.
+ */
+export const queryFindPhrase = (query: string | undefined): string[] => {
+  if (query === undefined) {
+    return [];
+  }
+  const { text } = foldMarkText(query);
+  return wordSpans(text).map(({ end, start }) => text.slice(start, end));
+};
 
 /**
  * Where a token matches, as an index into the folded text: at the start of a

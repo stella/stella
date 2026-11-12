@@ -1,6 +1,6 @@
 {
   "name": "@stll/text-normalize",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Search match-key text normalization — Arabic orthographic variant folding (alef/hamza/teh-marbuta/yeh, tashkeel, tatweel, digits) with per-language fold tables",
   "keywords": [
     "arabic",
@@ -31,6 +31,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./hungarian-letters": "./src/hungarian-letters.ts",
     "./postgres-search-fold": "./src/postgres-search-fold.ts",
     "./search-match-key": "./src/search-match-key.ts",
     "./search-query-matcher": "./src/search-query-matcher.ts",
@@ -46,8 +47,8 @@
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/text-normalize",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/text-normalize",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/text-normalize",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/text-normalize",
     "prepack": "bun run build"
   },
   "devDependencies": {

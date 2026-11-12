@@ -12,6 +12,7 @@ import {
   test,
 } from "bun:test";
 
+import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
 import type { OrganizationRoleName } from "@stll/auth-model";
 import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
@@ -65,6 +66,7 @@ const files = [
     fileName: "agreement.pdf",
     parentId: null,
     mimeType: PDF_MIME,
+    sizeBytes: 240_000,
   },
   {
     entityId: "019a0000-0000-7000-8000-000000000008",
@@ -73,11 +75,14 @@ const files = [
     fileName: "statement.docx",
     parentId: null,
     mimeType: DOCX_MIME,
+    sizeBytes: 36_000,
   },
 ];
 const utcTimeZone =
   parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const settings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
   capabilities: {},
@@ -89,6 +94,7 @@ const settings = {
   promptCachingEnabled: true,
   managedAIResidency: "eu",
   memoryExtractionEnabled: false,
+  localRunMaxApprovalMode: "full_auto",
   timeMinimumUnitMinutes: 1,
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
@@ -413,11 +419,17 @@ test("a document is required and the quote limit rejects excess input", async ()
   );
   fireEvent.click(mounted.view.getByText("Signed agreement"));
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.quote), {
-    target: { value: "x".repeat(10_001) },
+    target: { value: "x".repeat(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH + 1) },
   });
   await save(mounted);
   expect((await mounted.view.findByRole("alert")).textContent).toBe(
-    english.lists.sources.quoteTooLong.replace("{limit}", "10,000"),
+    english.lists.sources.quoteTooLong.replace("{limit}", () =>
+      // English digit grouping, as the form renders it in this locale.
+      String(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH).replace(
+        /\B(?=(?:\d{3})+$)/gu,
+        ",",
+      ),
+    ),
   );
   expect(requests).toHaveLength(0);
 });
@@ -456,7 +468,7 @@ test("choosing DOCX replaces PDF, clears its page, and accepts a quote at the li
   fireEvent.click(mounted.view.getByText("Čapek statement"));
   expect(mounted.view.queryByLabelText(english.lists.sources.page)).toBeNull();
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.quote), {
-    target: { value: "x".repeat(10_000) },
+    target: { value: "x".repeat(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH) },
   });
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
@@ -465,7 +477,7 @@ test("choosing DOCX replaces PDF, clears its page, and accepts a quote at the li
     ?.json();
   expect(body.locator).toEqual({ type: "document" });
   expect(body.sourceEntityId).toBe(files.at(1)?.entityId);
-  expect(body.quote).toHaveLength(10_000);
+  expect(body.quote).toHaveLength(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH);
 });
 test("an optional page and quote can both be omitted", async () => {
   answer();

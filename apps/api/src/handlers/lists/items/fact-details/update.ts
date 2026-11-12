@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -19,12 +19,12 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
+  canonicalFactDate,
   FACT_CONFIDENCES,
   FACT_DATE_PRECISIONS,
   FACT_DETAIL_LIMITS,
   FACT_SCORING,
 } from "@/api/lib/lists/fact-details";
-import type { FactDatePrecision } from "@/api/lib/lists/fact-details";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import type {
   UnbackedProjectionKeys,
@@ -103,25 +103,6 @@ const FACT_DETAIL_FIELDS = [
   "scoring",
 ] as const satisfies readonly (keyof typeof legalListFactDetails.$inferSelect)[];
 
-/** A partial date has one spelling: its first day. */
-const canonicalDate = (date: string, precision: FactDatePrecision): string => {
-  switch (precision) {
-    case "day": {
-      return date;
-    }
-    case "month": {
-      return `${date.slice(0, 7)}-01`;
-    }
-    case "year": {
-      return `${date.slice(0, 4)}-01-01`;
-    }
-    default: {
-      precision satisfies never;
-      return panic(`Unhandled date precision: ${String(precision)}`);
-    }
-  }
-};
-
 const updateFactDetails = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, user, body, recordAuditEvent }) {
@@ -131,7 +112,10 @@ const updateFactDetails = createSafeHandler(
       ...(occurredOn === null
         ? { occurredOn: null, occurredOnPrecision: null }
         : {
-            occurredOn: canonicalDate(occurredOn.date, occurredOn.precision),
+            occurredOn: canonicalFactDate(
+              occurredOn.date,
+              occurredOn.precision,
+            ),
             occurredOnPrecision: occurredOn.precision,
           }),
     };

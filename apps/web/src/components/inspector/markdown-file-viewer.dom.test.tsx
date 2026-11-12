@@ -294,6 +294,59 @@ test("publication captures the displayed source inside the debounce interval", a
   expect(view.queryByRole("button", { name: "Save" })).toBeNull();
 });
 
+// Mount an immediate and a default editor on real timers, then install fake
+// timers for the debounce assertions.
+const mountEmissionEditors = async () => {
+  const immediateChanges: string[] = [];
+  const debouncedChanges: string[] = [];
+  const immediate = render(
+    <IntlProvider locale="en" messages={englishMessages}>
+      <MarkdownHybridEditor
+        markdown="Original instructions"
+        imagePolicy="data-only"
+        changeEmission="immediate"
+        onMarkdownChange={(text) => {
+          immediateChanges.push(text);
+        }}
+      />
+    </IntlProvider>,
+  );
+  const debounced = render(
+    <IntlProvider locale="en" messages={englishMessages}>
+      <MarkdownHybridEditor
+        markdown="Original instructions"
+        imagePolicy="data-only"
+        onMarkdownChange={(text) => {
+          debouncedChanges.push(text);
+        }}
+      />
+    </IntlProvider>,
+  );
+  await waitFor(() => {
+    expect(immediate.container.querySelector(".md-editor")).not.toBeNull();
+    expect(debounced.container.querySelector(".md-editor")).not.toBeNull();
+  });
+  jest.useFakeTimers();
+  return { immediate, debounced, immediateChanges, debouncedChanges };
+};
+
+test("immediate editor changes reach the host before navigation while default editors debounce", async () => {
+  const { immediate, debounced, immediateChanges, debouncedChanges } =
+    await mountEmissionEditors();
+  expect(immediateChanges).toEqual([]);
+  expect(debouncedChanges).toEqual([]);
+
+  edit(immediate.container, "Revised instructions");
+  edit(debounced.container, "Revised instructions");
+  expect(immediateChanges).toEqual(["Revised instructions"]);
+  expect(debouncedChanges).toEqual([]);
+
+  await advance(399);
+  expect(debouncedChanges).toEqual([]);
+  await advance(1);
+  expect(debouncedChanges).toEqual(["Revised instructions"]);
+});
+
 test.each([true, false])(
   "publication locks the model until settlement (success=%s) and resumes editing",
   async (succeeded) => {

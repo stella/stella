@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { DirectionalIcon } from "../components/directional-icon";
+import { TruncatedText } from "../components/truncated-text";
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 import {
@@ -94,14 +95,14 @@ export const KanbanColumnBandHeader = ({
     {compact ? null : (
       <>
         {swatch}
-        <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate text-sm font-semibold">
+        <TruncatedText className="flex flex-1 items-baseline gap-1.5 text-sm font-semibold">
           {title}
           {meta !== undefined && (
             <span className="text-muted-foreground text-xs font-normal tabular-nums">
               {meta}
             </span>
           )}
-        </span>
+        </TruncatedText>
         {actions}
       </>
     )}

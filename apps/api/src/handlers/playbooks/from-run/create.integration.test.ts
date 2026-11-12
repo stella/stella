@@ -96,6 +96,7 @@ const basisFor = (perspective: ReviewPerspective): DocumentReviewRunBasis => ({
           },
         ],
       },
+      scope: null,
     },
   },
   perspective,

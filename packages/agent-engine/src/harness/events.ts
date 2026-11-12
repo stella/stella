@@ -7,6 +7,7 @@
 
 import * as v from "valibot";
 
+import { chatLocalRunApprovalMessage } from "@stll/api-contract/chat-local-run-tool";
 import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import type {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
@@ -59,6 +60,12 @@ export type HarnessToolCall = {
   id: string;
   name: string;
   input: unknown;
+  /**
+   * What the harness asked of a native tool whose record leaves it out, such
+   * as the file a read opened. It stays in this process: only the skill filter
+   * reads it, and it is not part of what a turn reports.
+   */
+  localInput?: unknown;
 };
 
 export type HarnessToolResult = {
@@ -86,28 +93,17 @@ export type HarnessApprovalRequest = {
 };
 
 /**
- * What an approval asks the user to allow. A command approval names the
- * command itself, since that is what runs, not the harness's summary of it
- * (as t3code, MIT, shows command approvals); anything else uses the
- * harness's reason, or names the tool.
+ * What an approval asks the user to allow, from what chat keeps of the call
+ * (`chatLocalRunApprovalMessage`): a command's shown command line, else the
+ * harness's shown reason, or the tool's name. Never more of a step than its
+ * call shows, so a heredoc's text stays here.
  */
-export const approvalMessage = (request: HarnessApprovalRequest): string => {
-  const { input } = request.toolCall;
-  if (
-    request.kind === "command" &&
-    typeof input === "object" &&
-    input !== null &&
-    "command" in input &&
-    typeof input.command === "string" &&
-    input.command.trim() !== ""
-  ) {
-    return input.command;
-  }
-  if (request.reason !== null && request.reason.trim() !== "") {
-    return request.reason;
-  }
-  return `Approval required to run ${request.toolCall.name}`;
-};
+export const approvalMessage = (request: HarnessApprovalRequest): string =>
+  chatLocalRunApprovalMessage({
+    toolName: request.toolCall.name,
+    input: request.toolCall.input,
+    reason: request.reason,
+  });
 
 /** One question of a blocking question, as the chat contract carries it. */
 export type HarnessQuestion = ChatLocalRunQuestion;
@@ -167,6 +163,11 @@ export type HarnessUsage = {
 export type HarnessFailure =
   | { type: "auth_required"; message: string }
   | { type: "usage_limit"; message: string; resetsAt: string | null }
+  /**
+   * The model stayed at capacity through every retry: a transient state of
+   * the provider, unlike a usage limit, which is the member's own allowance.
+   */
+  | { type: "model_at_capacity"; message: string }
   | { type: "provider_error"; message: string; code: string }
   | {
       type: "harness_exited";
@@ -213,6 +214,7 @@ export type HarnessEvent =
 export const HARNESS_FAILURE_OUTCOME = {
   auth_required: "needs_login",
   usage_limit: "limit_reached",
+  model_at_capacity: "failed",
   provider_error: "failed",
   harness_exited: "failed",
   protocol_violation: "failed",

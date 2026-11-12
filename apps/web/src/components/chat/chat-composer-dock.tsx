@@ -42,8 +42,13 @@ type ChatComposerNewThreadPrompt = {
 type ChatComposerDockCommonProps = {
   threadRef: ChatThreadRef;
   guideAnchorsEnabled?: boolean;
-  /** Model picker rendered beside the context meter when the surface has one. */
-  models?: ComposerModelsMenuProps | undefined;
+  /**
+   * Model picker rendered beside the context meter, with where the thread's
+   * turns run. Required, so a surface cannot drop the Run on choice by
+   * leaving a prop out; `null` only where the surface pins the model or has
+   * no thread to choose for yet.
+   */
+  models: ComposerModelsMenuProps | null;
   /**
    * Genuine per-surface leading context, rendered first in the start
    * cluster: the main-chat matter picker, or the file overlay's
@@ -73,7 +78,7 @@ type ChatComposerDockProps = ChatComposerDockCommonProps &
 type ChatComposerDockRenderState = {
   disabled: boolean;
   endExtras: ReactNode | undefined;
-  models?: ComposerModelsMenuProps | undefined;
+  models: ComposerModelsMenuProps | null;
   onNewThread: (() => void) | null;
   newThreadPrompt: ChatComposerNewThreadPrompt | undefined;
 } & (

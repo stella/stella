@@ -15,6 +15,7 @@
     "noMatchesDescription": "Nenhum título de conversa ou caso contém “{search}”.",
     "search": "Pesquisar conversas",
     "loadFailed": "Não foi possível carregar suas conversas.",
+    "runsLoadFailed": "Não foi possível verificar quais conversas aguardam você.",
     "retry": "Tentar novamente",
     "untitled": "Conversa sem título",
     "loadMoreFailed": "Carregar mais",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "Não foi possível carregar esta conversa.",
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
+    "markRead": "Lido",
+    "markUnread": "Não lido",
+    "pin": "Fixar",
+    "unpin": "Desafixar",
+    "unread": "Não lida",
+    "markReadFailed": "Não foi possível marcar a conversa como lida.",
+    "markUnreadFailed": "Não foi possível marcar a conversa como não lida.",
+    "pinFailed": "Não foi possível fixar a conversa.",
+    "unpinFailed": "Não foi possível desafixar a conversa.",
     "sections": {
+      "needsYou": "Aguardando você",
+      "working": "Em andamento",
+      "pinned": "Fixadas",
       "today": "Hoje",
       "yesterday": "Ontem",
       "week": "Últimos 7 dias",
@@ -62,7 +75,12 @@
     "sendFileRefused": "Não foi possível enviar um arquivo, então a mensagem não foi enviada. Remova o arquivo e tente novamente.",
     "sendFileNotAnonymizable": "Esta conversa é anonimizada e a stella não conseguiu anonimizar um dos arquivos, então nada foi enviado. Remova o arquivo e tente novamente.",
     "pickTitle": "Escolha uma conversa",
-    "pickDescription": "Escolha uma conversa da lista ou comece uma nova com +."
+    "pickDescription": "Escolha uma conversa da lista ou comece uma nova com +.",
+    "runBanner": {
+      "needsYou": "Aguardando você",
+      "finished": "Concluído",
+      "openHint": "Abre a conversa"
+    }
   },
   "tasks": {
     "emptyTitle": "Nenhuma tarefa em aberto",
@@ -151,7 +169,11 @@
     "scanDocument": "Digitalizar um documento",
     "newTask": "Nova tarefa",
     "uploadDocument": "Carregar documento",
-    "uploadFailed": "Não foi possível enviar o documento. Tente novamente."
+    "uploadFailed": "Não foi possível enviar o documento. Tente novamente.",
+    "startTimer": "Iniciar cronômetro",
+    "pauseTimer": "Pausar cronômetro",
+    "resumeTimer": "Retomar cronômetro",
+    "timerRunning": "Cronômetro em andamento"
   },
   "entity": {
     "type": "Tipo",
@@ -242,7 +264,6 @@
     "headnote": "Ementa",
     "textUnavailable": "Não há texto disponível para esta decisão",
     "openSource": "Abrir fonte original",
-    "openFailed": "Não foi possível abrir o link.",
     "loadFailed": "Não foi possível carregar a jurisprudência.",
     "share": "Compartilhar"
   },
@@ -346,5 +367,19 @@
   "pane": {
     "showList": "Mostrar a lista",
     "hideList": "Ocultar a lista"
+  },
+  "link": {
+    "open": "Abrir",
+    "share": "Compartilhar",
+    "cancel": "Cancelar",
+    "openFailed": "Não foi possível abrir o link."
+  },
+  "share": {
+    "title": "Adicionar ao stella",
+    "start": "Começar",
+    "uploading": "Enviando {done} de {total}…",
+    "filesOnly": "Somente os arquivos são salvos; links e texto ficam de fora.",
+    "unavailableTitle": "Nada para adicionar",
+    "unavailable": "Este compartilhamento não está mais disponível. Compartilhe de novo pelo outro aplicativo."
   }
 }

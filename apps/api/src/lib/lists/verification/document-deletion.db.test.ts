@@ -85,6 +85,7 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           "20260928132500_legal_list_verification_blocks",
           "20261005120200_list_verification_force_rls",
           "20261005120400_verification_read_receipts",
+          "20261110120000_legal_list_claim_qualifiers",
         ]) {
           await applyMigration(name);
         }

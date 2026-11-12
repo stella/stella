@@ -2,14 +2,26 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import {
+  cellMetadata,
+  entities,
+  entityVersions,
+  fields,
+  justifications,
+  workspaces,
+} from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  CELL_COMPANION_BATCH,
+  planCellCompanions,
+} from "@/api/lib/entity-versions/cell-companions";
 import {
   CARRIED_FIELD_COLUMNS,
   carriedFieldValues,
@@ -60,7 +72,7 @@ export default createSafeHandler(
           },
           columns: { id: true, versionNumber: true },
           with: {
-            fields: { columns: CARRIED_FIELD_COLUMNS },
+            fields: { columns: { id: true, ...CARRIED_FIELD_COLUMNS } },
           },
         }),
       ),
@@ -165,15 +177,35 @@ export default createSafeHandler(
           workspaceId,
         });
 
-        // Clone all fields from the source version
+        // Clone all fields from the source version, with what they carry.
+        const fieldClones = new Map(
+          version.fields.map((field) => [field.id, createSafeId<"field">()]),
+        );
         if (version.fields.length > 0) {
           await tx.insert(fields).values(
             version.fields.map((field) => ({
               ...carriedFieldValues(field),
+              id: fieldClones.get(field.id) ?? createSafeId<"field">(),
               entityVersionId: nextVersionId,
               workspaceId,
             })),
           );
+        }
+        const { metadata, justifications: cited } = await planCellCompanions({
+          tx,
+          kind: "restore",
+          sourceWorkspaceId: workspaceId,
+          targetWorkspaceId: workspaceId,
+          versions: [
+            { sourceVersionId: version.id, targetVersionId: nextVersionId },
+          ],
+          fieldClones,
+        });
+        for (const rows of chunkItems(metadata, CELL_COMPANION_BATCH)) {
+          await tx.insert(cellMetadata).values(rows);
+        }
+        for (const rows of chunkItems(cited, CELL_COMPANION_BATCH)) {
+          await tx.insert(justifications).values(rows);
         }
 
         // Point entity to the new version

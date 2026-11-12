@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use std::sync::Arc;
 use tauri::{Manager, State};
 use tauri_plugin_opener::OpenerExt;
@@ -117,8 +118,13 @@ pub async fn open_stella_account(
   let linked = crate::account::current(&account).await?;
   if linked.is_none() {
     let (api_base_url, origin) = browser_connect_target(&*state.lock().await)?;
-    return crate::account::open_browser_connection(&app, &api_base_url, &origin)
-      .await
+    return crate::account::open_browser_connection(
+      &app,
+      &api_base_url,
+      &origin,
+      crate::account::LinkIntent::Connect,
+    )
+    .await
       .inspect_err(|error| {
         tracing::warn!(error = %error, web_origin = %origin, "stella web connection did not open");
       });
@@ -198,7 +204,7 @@ pub async fn takeover_dialog_respond(
 ) -> Result<(), String> {
   let label = window.label().to_string();
   crate::session_manager::set_takeover_response(&label, approved);
-  let _ = window.close();
+  best_effort(window.close(), "dialog window could not be closed");
   Ok(())
 }
 
@@ -246,7 +252,7 @@ pub async fn self_host_connect_dialog_respond(
   window: tauri::WebviewWindow,
 ) -> Result<(), String> {
   crate::deep_link::set_self_host_connect_response(approved);
-  let _ = window.close();
+  best_effort(window.close(), "dialog window could not be closed");
   Ok(())
 }
 
@@ -271,7 +277,7 @@ pub async fn pdf_sign_respond(
   match waiting {
     Some(outcome) => Ok(outcome.await.unwrap_or(PdfSignResult::Cancelled)),
     None => {
-      let _ = window.close();
+      best_effort(window.close(), "dialog window could not be closed");
       Ok(PdfSignResult::Cancelled)
     }
   }

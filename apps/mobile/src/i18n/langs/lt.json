@@ -15,6 +15,7 @@
     "noMatchesDescription": "Nė vieno pokalbio pavadinime ar byloje nėra „{search}“.",
     "search": "Ieškoti pokalbių",
     "loadFailed": "Nepavyko įkelti jūsų pokalbių.",
+    "runsLoadFailed": "Nepavyko patikrinti, kurie pokalbiai laukia jūsų.",
     "retry": "Bandyti dar kartą",
     "untitled": "Pokalbis be pavadinimo",
     "loadMoreFailed": "Įkelti daugiau",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "Nepavyko įkelti šio pokalbio.",
     "greeting": "Prie ko norėtumėte dirbti?",
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
+    "markRead": "Skaityta",
+    "markUnread": "Neskaityta",
+    "pin": "Prisegti",
+    "unpin": "Atsegti",
+    "unread": "Neskaitytas",
+    "markReadFailed": "Nepavyko pažymėti pokalbio kaip skaityto.",
+    "markUnreadFailed": "Nepavyko pažymėti pokalbio kaip neskaityto.",
+    "pinFailed": "Nepavyko prisegti pokalbio.",
+    "unpinFailed": "Nepavyko atsegti pokalbio.",
     "sections": {
+      "needsYou": "Laukia jūsų",
+      "working": "Vykdoma",
+      "pinned": "Prisegti",
       "today": "Šiandien",
       "yesterday": "Vakar",
       "week": "Paskutinės 7 dienos",
@@ -62,7 +75,12 @@
     "sendFileRefused": "Nepavyko išsiųsti failo, todėl žinutė nebuvo išsiųsta. Pašalinkite failą ir bandykite dar kartą.",
     "sendFileNotAnonymizable": "Šis pokalbis anonimizuotas, o stella nepavyko anonimizuoti vieno iš failų, todėl niekas nebuvo išsiųsta. Pašalinkite failą ir bandykite dar kartą.",
     "pickTitle": "Pasirinkite pokalbį",
-    "pickDescription": "Pasirinkite giją iš sąrašo arba pradėkite naują mygtuku +."
+    "pickDescription": "Pasirinkite giją iš sąrašo arba pradėkite naują mygtuku +.",
+    "runBanner": {
+      "needsYou": "Laukia jūsų",
+      "finished": "Baigta",
+      "openHint": "Atveria pokalbį"
+    }
   },
   "tasks": {
     "emptyTitle": "Atvirų užduočių nėra",
@@ -151,7 +169,11 @@
     "scanDocument": "Nuskenuoti dokumentą",
     "newTask": "Nauja užduotis",
     "uploadDocument": "Įkelti dokumentą",
-    "uploadFailed": "Dokumento įkelti nepavyko. Bandykite dar kartą."
+    "uploadFailed": "Dokumento įkelti nepavyko. Bandykite dar kartą.",
+    "startTimer": "Paleisti laikmatį",
+    "pauseTimer": "Pristabdyti laikmatį",
+    "resumeTimer": "Tęsti laikmatį",
+    "timerRunning": "Laikmatis veikia"
   },
   "entity": {
     "type": "Tipas",
@@ -242,7 +264,6 @@
     "headnote": "Santrauka",
     "textUnavailable": "Šiam sprendimui teksto nėra",
     "openSource": "Atverti pirminį šaltinį",
-    "openFailed": "Nepavyko atidaryti nuorodos.",
     "loadFailed": "Nepavyko įkelti teismų praktikos.",
     "share": "Bendrinti"
   },
@@ -346,5 +367,19 @@
   "pane": {
     "showList": "Rodyti sąrašą",
     "hideList": "Slėpti sąrašą"
+  },
+  "link": {
+    "open": "Atidaryti",
+    "share": "Bendrinti",
+    "cancel": "Atšaukti",
+    "openFailed": "Nepavyko atidaryti nuorodos."
+  },
+  "share": {
+    "title": "Pridėti į stellą",
+    "start": "Pradėti",
+    "uploading": "Įkeliama {done} iš {total}…",
+    "filesOnly": "Išsaugomi tik failai; nuorodos ir tekstas praleidžiami.",
+    "unavailableTitle": "Nėra ką pridėti",
+    "unavailable": "Šio bendrinimo nebėra. Pabendrinkite dar kartą iš kitos programos."
   }
 }

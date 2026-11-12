@@ -54,7 +54,6 @@ export const DOC_SOURCES = {
       "@tanstack/ai-openai",
       "@tanstack/ai-openrouter",
       "@tanstack/ai-persistence",
-      "@tanstack/ai-react",
       "@tanstack/ai-sandbox",
       "@tanstack/charts",
       "@tanstack/devtools-vite",
@@ -372,6 +371,20 @@ const PROBED_WITHOUT_LLMS_TXT = [
   [
     "@electric-sql/pglite",
     ["https://pglite.dev/llms.txt", "https://pglite.dev/docs/llms.txt"],
+  ],
+  [
+    "@emnapi/core",
+    [
+      "https://emnapi.netlify.app/llms.txt",
+      "https://raw.githubusercontent.com/toyobayashi/emnapi/main/llms.txt",
+    ],
+  ],
+  [
+    "@emnapi/runtime",
+    [
+      "https://emnapi.netlify.app/llms.txt",
+      "https://raw.githubusercontent.com/toyobayashi/emnapi/main/llms.txt",
+    ],
   ],
   [
     "@firecrawl/anydoc",
@@ -718,6 +731,14 @@ const noLlmsTxt = ([dependency, urls]: readonly [
 export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
   noLlmsTxt,
 ).concat(
+  {
+    checkedAt: "2026-11-04T00:00:00.000Z",
+    dependency: "date-holidays",
+    explanation:
+      "https://raw.githubusercontent.com/commenthol/date-holidays/master/llms.txt and https://commenthol.github.io/date-holidays/llms.txt return 404. Use the official API documentation in https://github.com/commenthol/date-holidays#api directly.",
+    expiresAt: "2026-12-04T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
   ...["@dnd-kit/core", "@dnd-kit/sortable"].map(
     (dependency) =>
       ({
@@ -862,6 +883,38 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     explanation:
       "https://tailwindcss.com/llms.txt returns 404. Use the PostCSS installation guide at https://tailwindcss.com/docs/installation/using-postcss directly.",
     expiresAt: "2026-11-05T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "@tailwindcss/cli",
+    explanation:
+      "https://tailwindcss.com/llms.txt and https://tailwindcss.com/docs/llms.txt return 404. Use the CLI installation guide at https://tailwindcss.com/docs/installation/tailwind-cli directly; the Outlook add-in build runs only its --input, --output and --minify options.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "@types/office-js",
+    explanation:
+      "https://raw.githubusercontent.com/DefinitelyTyped/DefinitelyTyped/HEAD/llms.txt and https://raw.githubusercontent.com/OfficeDev/office-js/HEAD/llms.txt return 404. Use the Outlook add-in API reference at https://learn.microsoft.com/javascript/api/outlook directly, with the declarations in @types/office-js.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "libxml2-wasm",
+    explanation:
+      "https://jameslan.github.io/libxml2-wasm/llms.txt and the repository's llms.txt return 404. Use the API documentation at https://jameslan.github.io/libxml2-wasm/ directly; the Outlook add-in uses it only to validate its manifest against the Office XML schemas.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "mimetext",
+    explanation:
+      "https://muratgozel.github.io/MIMEText/llms.txt and the repository's llms.txt return 404. Use the README at https://github.com/muratgozel/MIMEText directly; the Outlook add-in uses it only to assemble an .eml message from a mail item.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {

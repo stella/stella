@@ -46,6 +46,7 @@ import {
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
+import type { RunRegistryReadToolProps } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { renderProjectionShape } from "@/api/lib/chat/projection-schema";
@@ -338,6 +339,8 @@ type BuildChatCodeModeProps = Omit<
   sourceScopes?: readonly ChatSourceScope[] | undefined;
   /** Rebuild live authority before each registry read in a delayed script. */
   resolveCurrentExecutionContext?: ResolveCurrentChatExecutionContext;
+  /** Keeps the reads a chat app presents for the turn's `show_app`. */
+  recordAppRead?: RunRegistryReadToolProps["recordAppRead"];
 };
 
 export const buildChatCodeMode = (
@@ -346,6 +349,7 @@ export const buildChatCodeMode = (
   const {
     sourceScopes = [],
     documentedReads,
+    recordAppRead,
     refRegistry,
     resolveCurrentExecutionContext,
     scriptCallTools,
@@ -384,6 +388,7 @@ export const buildChatCodeMode = (
             args: toolArgs,
             context: currentContext.value,
             refRegistry,
+            recordAppRead,
             scopeArgs: async (args) =>
               await scopeCorpusRead({
                 scopes: sourceScopes,

@@ -212,6 +212,8 @@
     "scripts/knip-exports-ratchet.test.ts",
     "scripts/knip-exports-ratchet.ts",
     "scripts/landing-deploy-scope.test.ts",
+    "scripts/lint-command.ts",
+    "scripts/lint.ts",
     "scripts/main-heavy-plan.test.ts",
     "scripts/main-heavy.test.ts",
     "scripts/marketing-reshoot.ts",
