@@ -1,5 +1,5 @@
 {
   "metric": "direct-third-party-declarations",
-  "delta": 4,
-  "reason": "The skill runner is a new Lambda app bundled on its own, like apps/visual-preview: it declares the zip reader (@stll/docx-core), better-result and valibot it imports, and bun-types for its tests, all from the catalog."
+  "delta": 1,
+  "reason": "packages/ai-catalog adds fast-check as a devDependency for the frontier module property test; fast-check is already used across the repository."
 }
