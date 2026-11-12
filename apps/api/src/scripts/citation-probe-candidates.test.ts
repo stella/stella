@@ -94,6 +94,8 @@ describe("citation probe candidates", () => {
     expect(residual("č. j. číslo uvedený v bodě 3.2 rozsudku")).toBe(false);
     expect(residual("č.j. č. účtu ze dne 3. 4. 2019")).toBe(false);
     expect(residual("č. j. číslo")).toBe(false);
+    expect(residual("č. j. Číslo jednací ze dne 1. 2. 2020")).toBe(false);
+    expect(residual("č. j. číslo jednací 12 C 345/2020")).toBe(true);
     expect(residual("č. j. číslo 12 C 345/2020")).toBe(true);
     expect(residual("č. j. 12 C 345/2020-67")).toBe(true);
   });
