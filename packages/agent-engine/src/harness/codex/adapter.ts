@@ -399,7 +399,7 @@ const probe = async (
       auth,
       models,
       capabilities: capabilities(),
-      // Every level: `CODEX_APPROVAL_POLICY` in thread.ts maps each, and Codex sandboxes
+      // Every level: `CODEX_LEVEL` in thread.ts maps each, and Codex sandboxes
       // every command at every level.
       approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
       // The probe does not read rate limits; a limited turn reports them.

@@ -246,7 +246,7 @@ describe("Codex adapter over a stdio app-server", () => {
       approvalPolicy: "untrusted",
       sandbox: "workspace-write",
       config: {
-        "sandbox_workspace_write.network_access": true,
+        "sandbox_workspace_write.network_access": false,
         "sandbox_workspace_write.writable_roots": [CACHE_DIR],
         "sandbox_workspace_write.exclude_tmpdir_env_var": false,
         "sandbox_workspace_write.exclude_slash_tmp": false,
@@ -271,12 +271,12 @@ describe("Codex adapter over a stdio app-server", () => {
   });
 
   test.each([
-    ["ask", "untrusted"],
-    ["auto", "on-request"],
-    ["full_auto", "on-request"],
+    ["ask", "untrusted", false],
+    ["auto", "untrusted", true],
+    ["full_auto", "on-request", true],
   ] as const)(
-    "at %s it runs in the workspace sandbox with Codex's %s policy, asks before leaving it, and writes caches to the package cache",
-    async (approvals, approvalPolicy) => {
+    "at %s it runs in the workspace sandbox with Codex's %s policy (network %s), asks before leaving it, and writes caches to the package cache",
+    async (approvals, approvalPolicy, networkAccess) => {
       const { received, startup } = await run("tool_calls", {
         overrides: {
           policy: { network: "open", fs: "workspace", approvals },
@@ -289,6 +289,7 @@ describe("Codex adapter over a stdio app-server", () => {
         approvalPolicy,
         sandbox: "workspace-write",
         config: {
+          "sandbox_workspace_write.network_access": networkAccess,
           "sandbox_workspace_write.writable_roots": [CACHE_DIR],
           "sandbox_workspace_write.exclude_tmpdir_env_var": false,
           "sandbox_workspace_write.exclude_slash_tmp": false,
@@ -299,6 +300,35 @@ describe("Codex adapter over a stdio app-server", () => {
       );
     },
   );
+
+  test("the levels are strictly ordered: each starts Codex differently, and Auto keeps the command gate", async () => {
+    const settingsAt = async (
+      approvals: HarnessTurnInput["policy"]["approvals"],
+    ) => {
+      const { received } = await run("tool_calls", {
+        overrides: {
+          policy: { network: "open", fs: "workspace", approvals },
+        },
+      });
+      const fields = (value: unknown): Record<string, unknown> =>
+        typeof value === "object" && value !== null
+          ? Object.fromEntries(Object.entries(value))
+          : {};
+      const params = fields(
+        received().find(({ method }) => method === "thread/start")?.params,
+      );
+      return JSON.stringify([
+        params["approvalPolicy"],
+        fields(params["config"])["sandbox_workspace_write.network_access"],
+      ]);
+    };
+    const ask = await settingsAt("ask");
+    const auto = await settingsAt("auto");
+    const fullAuto = await settingsAt("full_auto");
+    expect(new Set([ask, auto, fullAuto]).size).toBe(3);
+    // A ceiling at Auto never starts Codex with Full auto's policy.
+    expect(auto).toBe(JSON.stringify(["untrusted", true]));
+  });
 
   test("a managed tool comes first on the server's PATH and the inherited PATH stays", async () => {
     const toolDir = path.join(tmpdir(), "stella-managed-bun", "bin");
