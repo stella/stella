@@ -120,7 +120,7 @@ legal_list_claim_carry_outcomes.{...entityFeatureOrganizationGateColumns()}  spr
 legal_list_claim_carry_outcomes.workspace_id                                 safeWorkspaceId  fk,not null  lists-verification.ts:633
 legal_list_claim_carry_outcomes.run_id                                       safeUuid         fk,not null  lists-verification.ts:635  The run the decisions were carried to.
 legal_list_claim_carry_outcomes.source_run_id                                safeUuid         fk,not null  lists-verification.ts:636
-legal_list_claim_carry_outcomes.source_claim_id                              safeUuid         fk,not null  lists-verification.ts:639
-legal_list_claim_carry_outcomes.outcome                                      text             not null     lists-verification.ts:640
-legal_list_claim_carry_outcomes.target_claim_id                              safeUuid         fk,null      lists-verification.ts:642  The matching claim of this run; null when nothing matched.
+legal_list_claim_carry_outcomes.source_claim_id                              safeUuid         fk,not null  lists-verification.ts:638
+legal_list_claim_carry_outcomes.outcome                                      text             not null     lists-verification.ts:639
+legal_list_claim_carry_outcomes.target_claim_id                              safeUuid         fk,null      lists-verification.ts:641  The matching claim of this run; null when nothing matched.
 ```
