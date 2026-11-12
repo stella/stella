@@ -11,7 +11,7 @@ import { caseLawSources } from "@/api/db/schema";
  * Kept apart from `redistribution-sql.ts`, which parsers import: an AI read
  * gate is not parse logic and must not change any parser's inputs.
  */
-export const derivedAiCaseLawSourceFor = (descriptor: SQLWrapper) => sql`(
+const derivedAiCaseLawSourceFor = (descriptor: SQLWrapper) => sql`(
   ${descriptor} IS NULL
   OR (${descriptor} ->> 'allowsDerivedAi') = 'true'
 )`;
