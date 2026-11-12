@@ -246,6 +246,7 @@ export const seedGraphCase = async ({
     await writeGraphEdges(tx, workspaceId, {
       type: "fact-sources",
       sourceIds: facts.map((fact) => fact.sourceId),
+      producer: { type: "reviewer" },
     });
   });
   const fact = (key: string) =>

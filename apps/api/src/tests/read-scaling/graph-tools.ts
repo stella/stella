@@ -227,6 +227,7 @@ export const seedGraphToolsScaling = async ({
     await writeGraphEdges(tx, ids.workspaceId, {
       type: "fact-sources",
       sourceIds: [sourceId],
+      producer: { type: "reviewer" },
     });
   });
   const tenant: GraphTenant = {
