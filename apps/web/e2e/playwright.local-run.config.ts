@@ -31,6 +31,14 @@ export default defineConfig({
         ["blob", { outputDir: path.join(OUTPUT_DIR, "blob-report") }],
         ["github"],
         ["list"],
+        [
+          "json",
+          {
+            outputFile:
+              process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] ??
+              ".cache/playwright-timings.json",
+          },
+        ],
       ]
     : [["list"], ["html", { open: "never" }]],
   timeout: 90_000,

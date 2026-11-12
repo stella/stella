@@ -6022,9 +6022,7 @@ jobs:
   e2e-local-runs:
     needs: [ci-plan, local-run-stand-in]
     if: >-
-      !cancelled()
-      && needs.local-run-stand-in.result == 'success'
-      && inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       && needs.ci-plan.outputs.run_required != 'false'
       && (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
