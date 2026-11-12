@@ -158,11 +158,11 @@ describe("words found on a page", () => {
     );
   });
 
-  test("match a ligature glyph to the letters pdf.js selects for it", () => {
+  test("quote whole ligature glyphs that read as the selected letters", () => {
     // LibPDF keeps the glyph's own character; pdf.js gives its letters.
     const LIGATURES = ["\uFB00", "\uFB01", "\uFB02", "\uFB03", "\uFB04"];
     assertProperty(
-      "quote whole glyphs that read as the selected letters",
+      "quote whole ligature glyphs that read as the selected letters",
       fc.property(
         fc
           .array(
