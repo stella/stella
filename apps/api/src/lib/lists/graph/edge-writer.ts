@@ -145,36 +145,31 @@ export type GraphEdgeWrite =
 const writeSql = (
   workspaceId: SafeId<"workspace">,
   write: GraphEdgeWrite,
-): SQL[] => {
+): SQL => {
   switch (write.type) {
     case "run": {
-      return [
-        runCitesSql(
-          sql`claim.workspace_id = ${workspaceId} AND claim.run_id = ${write.runId}`,
-        ),
-        // A re-check carried from the previous run is the grade its claim is
-        // read with, so it cites as any re-check does.
-        recheckCitesSql(
-          sql`event.workspace_id = ${workspaceId} AND event.run_id = ${write.runId}`,
-        ),
-      ];
+      // One statement: the run's citations, and those of the re-checks on
+      // its claims (a re-check carried from the previous run is the grade
+      // its claim is read with, so it cites as any re-check does).
+      return sql`WITH run_edges AS (${runCitesSql(
+        sql`claim.workspace_id = ${workspaceId} AND claim.run_id = ${write.runId}`,
+      )}), recheck_edges AS (${recheckCitesSql(
+        sql`event.workspace_id = ${workspaceId} AND event.run_id = ${write.runId}`,
+      )})
+        SELECT id FROM run_edges UNION ALL SELECT id FROM recheck_edges`;
     }
     case "recheck": {
-      return [
-        recheckCitesSql(
-          sql`event.workspace_id = ${workspaceId} AND event.id = ${write.eventId}`,
-        ),
-      ];
+      return recheckCitesSql(
+        sql`event.workspace_id = ${workspaceId} AND event.id = ${write.eventId}`,
+      );
     }
     case "fact-sources": {
-      return [
-        factSourcesSql(
-          sql`source.workspace_id = ${workspaceId} AND source.id IN (${sql.join(
-            write.sourceIds.map((id) => sql`${id}`),
-            sql`, `,
-          )})`,
-        ),
-      ];
+      return factSourcesSql(
+        sql`source.workspace_id = ${workspaceId} AND source.id IN (${sql.join(
+          write.sourceIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      );
     }
     default: {
       write satisfies never;
@@ -195,10 +190,6 @@ export const writeGraphEdges = async (
   if (write.type === "fact-sources" && write.sourceIds.length === 0) {
     return 0;
   }
-  let written = 0;
-  for (const statement of writeSql(workspaceId, write)) {
-    // audit: skip — edges are derived from the act the caller audits in this transaction.
-    written += executedRows(await tx.execute(statement)).length;
-  }
-  return written;
+  // audit: skip — edges are derived from the act the caller audits in this transaction.
+  return executedRows(await tx.execute(writeSql(workspaceId, write))).length;
 };
