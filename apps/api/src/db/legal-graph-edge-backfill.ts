@@ -19,8 +19,8 @@
  *
  * Two passes. API tasks still serving the previous release during the
  * rollout write rows without edges, so after the first pass the repair stays
- * pending, and the next deploy's walk (run once that rollout is over)
- * derives whatever those tasks wrote before it reads complete.
+ * pending, and a later migrate run, once `GRAPH_EDGE_ROLLOUT_GRACE_MS` has
+ * passed since the first pass, walks again before it reads complete.
  */
 
 import { panic } from "better-result";
@@ -30,6 +30,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import { initialBatchState } from "@stll/db-load-gate/health";
+import { Temporal } from "@stll/time";
 
 import {
   SETTING_ORGANIZATION_ID,
@@ -83,10 +84,17 @@ const UUID_PATTERN =
 
 /** Whether some ref of `refs` names a fact the row's workspace still holds:
  *  only those become edges, so only those can be pending. */
-const citesALiveFact = (refs: SQL, workspace: SQL) => sql`EXISTS (
+const citesALiveFact = ({
+  refs,
+  workspace,
+}: {
+  refs: SQL;
+  workspace: SQL;
+}) => sql`EXISTS (
     SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${refs}) = 'array' THEN ${refs} ELSE '[]'::jsonb END) ref
     JOIN ${entities} fact
       ON fact.workspace_id = ${workspace}
+      AND fact.list_item_type = ${LIST_ITEM_TYPE.FACT}
       AND fact.id = CASE WHEN ref.value->>'factEntityId' ~* ${UUID_PATTERN}
         THEN (ref.value->>'factEntityId')::uuid END
   )`;
@@ -97,6 +105,13 @@ const idsAfter = (column: SQL, cursor: string | null) =>
 const idList = (column: SQL, ids: readonly string[]) =>
   sql`${column} = ANY(string_to_array(${ids.join(",")}, ',')::uuid[])`;
 
+type PendingArgs = {
+  workspaceId: string;
+  cursor: string | null;
+  limit: number;
+};
+type WriteArgs = { workspaceId: string; ids: readonly string[] };
+
 /**
  * One family of rows the graph derives edges from. A row is pending while it
  * could produce an edge and has none from its producer: every edge of one row
@@ -105,20 +120,20 @@ const idList = (column: SQL, ids: readonly string[]) =>
 type EdgeSource = {
   name: string;
   /** The matter's pending rows after `cursor`, in id order. */
-  pending: (workspaceId: string, cursor: string | null, limit: number) => SQL;
+  pending: (args: PendingArgs) => SQL;
   /** The writer's own statement, for the given rows. */
-  write: (workspaceId: string, ids: readonly string[]) => SQL;
+  write: (args: WriteArgs) => SQL;
 };
 
 const EDGE_SOURCES: readonly EdgeSource[] = [
   {
     name: "run grades",
-    pending: (workspaceId, cursor, limit) => sql`SELECT claim.id
+    pending: ({ workspaceId, cursor, limit }) => sql`SELECT claim.id
       FROM ${legalListClaims} claim
       WHERE claim.workspace_id = ${workspaceId}
         AND ${idsAfter(sql`claim.id`, cursor)}
         AND claim.refs <> '[]'::jsonb
-        AND ${citesALiveFact(sql`claim.refs`, sql`claim.workspace_id`)}
+        AND ${citesALiveFact({ refs: sql`claim.refs`, workspace: sql`claim.workspace_id` })}
         AND NOT EXISTS (
           SELECT 1 FROM ${legalGraphEdges} edge
           WHERE edge.workspace_id = claim.workspace_id
@@ -127,19 +142,19 @@ const EDGE_SOURCES: readonly EdgeSource[] = [
         )
       ORDER BY claim.id
       LIMIT ${limit}`,
-    write: (workspaceId, ids) =>
+    write: ({ workspaceId, ids }) =>
       runCitesSql(
         sql`claim.workspace_id = ${workspaceId} AND ${idList(sql`claim.id`, ids)}`,
       ),
   },
   {
     name: "re-check grades",
-    pending: (workspaceId, cursor, limit) => sql`SELECT event.id
+    pending: ({ workspaceId, cursor, limit }) => sql`SELECT event.id
       FROM ${legalListClaimReviewEvents} event
       WHERE event.workspace_id = ${workspaceId}
         AND ${idsAfter(sql`event.id`, cursor)}
         AND event.kind = ${RECHECK_EVENT}
-        AND ${citesALiveFact(sql`event.payload->'grade'->'refs'`, sql`event.workspace_id`)}
+        AND ${citesALiveFact({ refs: sql`event.payload->'grade'->'refs'`, workspace: sql`event.workspace_id` })}
         AND NOT EXISTS (
           SELECT 1 FROM ${legalGraphEdges} edge
           WHERE edge.workspace_id = event.workspace_id
@@ -149,14 +164,14 @@ const EDGE_SOURCES: readonly EdgeSource[] = [
         )
       ORDER BY event.id
       LIMIT ${limit}`,
-    write: (workspaceId, ids) =>
+    write: ({ workspaceId, ids }) =>
       recheckCitesSql(
         sql`event.workspace_id = ${workspaceId} AND ${idList(sql`event.id`, ids)}`,
       ),
   },
   {
     name: "fact sources",
-    pending: (workspaceId, cursor, limit) => sql`SELECT source.id
+    pending: ({ workspaceId, cursor, limit }) => sql`SELECT source.id
       FROM ${legalListItemSources} source
       JOIN ${entities} item
         ON item.id = source.item_entity_id
@@ -171,9 +186,11 @@ const EDGE_SOURCES: readonly EdgeSource[] = [
         )
       ORDER BY source.id
       LIMIT ${limit}`,
-    write: (workspaceId, ids) =>
+    // Rows written before the writers carry no record of their origin.
+    write: ({ workspaceId, ids }) =>
       factSourcesSql(
         sql`source.workspace_id = ${workspaceId} AND ${idList(sql`source.id`, ids)}`,
+        { type: "inferred" },
       ),
   },
 ];
@@ -225,17 +242,24 @@ const mattersAfter = async (
     organizationId: textField(row, "organization_id"),
   }));
 
+type BatchArgs = {
+  connection: OnlineMigrationConnection;
+  matter: Matter;
+  source: EdgeSource;
+  cursor: string | null;
+};
+
 /**
  * One batch, in one transaction, as the application role pinned to the
  * matter: its pending ids after `cursor`, and their edges. Returns the last
  * id, or null when the family has nothing left there.
  */
-const deriveBatch = async (
-  connection: OnlineMigrationConnection,
-  matter: Matter,
-  source: EdgeSource,
-  cursor: string | null,
-): Promise<string | null> => {
+const deriveBatch = async ({
+  connection,
+  matter,
+  source,
+  cursor,
+}: BatchArgs): Promise<string | null> => {
   await connection.execute("BEGIN");
   try {
     // The application role pinned to one matter, as a service actor (no
@@ -255,16 +279,19 @@ const deriveBatch = async (
     const ids = (
       await run(
         connection,
-        source.pending(
-          matter.workspaceId,
+        source.pending({
+          workspaceId: matter.workspaceId,
           cursor,
-          GRAPH_EDGE_BACKFILL_BATCH_SIZE,
-        ),
+          limit: GRAPH_EDGE_BACKFILL_BATCH_SIZE,
+        }),
       )
     ).map((row) => textField(row, "id"));
     const last = ids.at(-1) ?? null;
     if (last !== null) {
-      await run(connection, source.write(matter.workspaceId, ids));
+      await run(
+        connection,
+        source.write({ workspaceId: matter.workspaceId, ids }),
+      );
     }
     await connection.execute("COMMIT");
     return last;
@@ -274,22 +301,47 @@ const deriveBatch = async (
   }
 };
 
-/** The checkpoint's cursor: `<pass>:<last finished matter>` while a pass
- *  walks, `<pass>:done` once it has walked every matter. */
-const cursorOf = (pass: Pass, matter: string | null) =>
-  `${String(pass)}:${matter ?? "done"}`;
+/**
+ * Where the walk stands: a pass still walking matters (after the last one it
+ * finished), or a pass that walked them all, and when.
+ */
+type Checkpoint =
+  | { type: "walking"; pass: Pass; after: string }
+  | { type: "walked"; pass: Pass; finishedAt: number };
 
-type Checkpoint = { pass: Pass; after: string | null; done: boolean };
+/** `<pass>:<last finished matter>`, or `<pass>:done@<finished at>`. */
+const cursorOf = (checkpoint: Checkpoint): string => {
+  switch (checkpoint.type) {
+    case "walking": {
+      return `${String(checkpoint.pass)}:${checkpoint.after}`;
+    }
+    case "walked": {
+      return `${String(checkpoint.pass)}:done@${new Date(checkpoint.finishedAt).toISOString()}`;
+    }
+    default: {
+      checkpoint satisfies never;
+      return panic(`Online repair ${REPAIR_NAME}: unknown checkpoint`);
+    }
+  }
+};
+
+const WALKED_PREFIX = "done@";
 
 const parseCursor = (cursor: string): Checkpoint => {
-  const [pass, after] = cursor.split(":");
+  const separator = cursor.indexOf(":");
+  const pass = cursor.slice(0, separator);
+  const after = cursor.slice(separator + 1);
   const parsedPass = PASSES.find((value) => String(value) === pass);
-  if (parsedPass === undefined || after === undefined || after === "") {
+  if (separator === -1 || parsedPass === undefined || after === "") {
     return panic(`Online repair ${REPAIR_NAME}: invalid checkpoint ${cursor}`);
   }
-  return after === "done"
-    ? { pass: parsedPass, after: null, done: true }
-    : { pass: parsedPass, after, done: false };
+  if (!after.startsWith(WALKED_PREFIX)) {
+    return { type: "walking", pass: parsedPass, after };
+  }
+  const finishedAt = new Date(after.slice(WALKED_PREFIX.length)).getTime();
+  return Number.isNaN(finishedAt)
+    ? panic(`Online repair ${REPAIR_NAME}: invalid checkpoint ${cursor}`)
+    : { type: "walked", pass: parsedPass, finishedAt };
 };
 
 const readCheckpoint = async (
@@ -306,22 +358,25 @@ const readCheckpoint = async (
 
 const writeCheckpoint = async (
   connection: OnlineMigrationConnection,
-  cursor: string,
+  checkpoint: Checkpoint,
 ): Promise<void> => {
   await connection.execute(
     `INSERT INTO public.database_backfill_states (name, cursor, batch)
       VALUES ($1, $2, $3::text::jsonb)
       ON CONFLICT (name) DO UPDATE SET cursor = excluded.cursor, updated_at = now()`,
-    [REPAIR_NAME, cursor, JSON.stringify(initialBatchState())],
+    [REPAIR_NAME, cursorOf(checkpoint), JSON.stringify(initialBatchState())],
   );
 };
 
+type WalkArgs = {
+  connection: OnlineMigrationConnection;
+  pass: Pass;
+  after: string | null;
+  now: () => number;
+};
+
 /** Walk every matter from `after`, recording each one finished. */
-const walk = async (
-  connection: OnlineMigrationConnection,
-  pass: Pass,
-  after: string | null,
-): Promise<void> => {
+const walk = async ({ connection, pass, after, now }: WalkArgs) => {
   let matterCursor = after;
   for (;;) {
     const matters = await mattersAfter(connection, matterCursor);
@@ -329,58 +384,100 @@ const walk = async (
       for (const source of EDGE_SOURCES) {
         let rowCursor: string | null = null;
         do {
-          rowCursor = await deriveBatch(connection, matter, source, rowCursor);
+          rowCursor = await deriveBatch({
+            connection,
+            matter,
+            source,
+            cursor: rowCursor,
+          });
         } while (rowCursor !== null);
       }
       // Checkpoint last: only once every row of the matter is done.
-      await writeCheckpoint(connection, cursorOf(pass, matter.workspaceId));
+      await writeCheckpoint(connection, {
+        type: "walking",
+        pass,
+        after: matter.workspaceId,
+      });
       matterCursor = matter.workspaceId;
     }
     if (matters.length < MATTERS_PER_READ) {
       break;
     }
   }
-  await writeCheckpoint(connection, cursorOf(pass, null));
+  await writeCheckpoint(connection, {
+    type: "walked",
+    pass,
+    finishedAt: now(),
+  });
 };
 
-export const LEGAL_GRAPH_EDGE_BACKFILL = {
-  introducedBy: "20261112054148_legal_graph_edges",
-  name: REPAIR_NAME,
-  readCompletion: async (connection) => {
-    const checkpoint = await readCheckpoint(connection);
-    if (checkpoint === null) {
-      // Never started. A database holding nothing to derive from owes
-      // nothing: the writers cover every row from here on.
-      return (await mattersAfter(connection, null)).length === 0
-        ? { type: "complete" }
-        : { type: "incomplete", reason: "Graph edges are not derived yet" };
-    }
-    if (checkpoint.pass === 2 && checkpoint.done) {
-      return { type: "complete" };
-    }
-    return {
-      type: "pending",
-      reason: checkpoint.done
-        ? "Graph edges await the walk after the writers' rollout"
-        : "Graph edges are still being derived",
-      cursor: cursorOf(checkpoint.pass, checkpoint.after),
-      holdUntil: null,
-      heldSince: null,
-    };
-  },
-  repair: async (connection) => {
-    const checkpoint = await readCheckpoint(connection);
-    if (checkpoint === null) {
-      await walk(connection, 1, null);
-      return { type: "complete" };
-    }
-    if (checkpoint.done) {
-      if (checkpoint.pass === 1) {
-        await walk(connection, 2, null);
+/**
+ * How long after the first pass the second may start: longer than any
+ * rollout, so tasks of the release before the writers have stopped. A
+ * second migrate run within one rollout leaves the repair pending.
+ */
+export const GRAPH_EDGE_ROLLOUT_GRACE_MS = 6 * 60 * 60 * 1000;
+
+export const createLegalGraphEdgeBackfill = ({
+  now = () => Temporal.Now.instant().epochMilliseconds,
+}: { now?: () => number } = {}) =>
+  ({
+    introducedBy: "20261112054148_legal_graph_edges",
+    name: REPAIR_NAME,
+    readCompletion: async (connection) => {
+      const checkpoint = await readCheckpoint(connection);
+      if (checkpoint === null) {
+        // Never started. A database holding nothing to derive from owes
+        // nothing yet; every migrate run checks again until it holds rows.
+        return (await mattersAfter(connection, null)).length === 0
+          ? { type: "complete" }
+          : { type: "incomplete", reason: "Graph edges are not derived yet" };
       }
-      return { type: "complete" };
-    }
-    await walk(connection, checkpoint.pass, checkpoint.after);
-    return { type: "complete" };
-  },
-} satisfies MigrationOwnedOnlineRepair;
+      if (checkpoint.type === "walked" && checkpoint.pass === 2) {
+        return { type: "complete" };
+      }
+      return {
+        type: "pending",
+        reason:
+          checkpoint.type === "walked"
+            ? "Graph edges await the walk after the writers' rollout"
+            : "Graph edges are still being derived",
+        cursor: cursorOf(checkpoint),
+        holdUntil: null,
+        heldSince: null,
+      };
+    },
+    repair: async (connection) => {
+      const checkpoint = await readCheckpoint(connection);
+      if (checkpoint === null) {
+        await walk({ connection, pass: 1, after: null, now });
+        return { type: "complete" };
+      }
+      switch (checkpoint.type) {
+        case "walking": {
+          await walk({
+            connection,
+            pass: checkpoint.pass,
+            after: checkpoint.after,
+            now,
+          });
+          return { type: "complete" };
+        }
+        case "walked": {
+          if (
+            checkpoint.pass === 1 &&
+            now() - checkpoint.finishedAt >= GRAPH_EDGE_ROLLOUT_GRACE_MS
+          ) {
+            await walk({ connection, pass: 2, after: null, now });
+          }
+          return { type: "complete" };
+        }
+        default: {
+          checkpoint satisfies never;
+          return panic(`Online repair ${REPAIR_NAME}: unknown checkpoint`);
+        }
+      }
+    },
+  }) satisfies MigrationOwnedOnlineRepair;
+
+export const LEGAL_GRAPH_EDGE_BACKFILL = createLegalGraphEdgeBackfill();

@@ -59,7 +59,10 @@ import type {
   TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
 
-import { LEGAL_GRAPH_EDGE_BACKFILL } from "../../../db/legal-graph-edge-backfill";
+import {
+  createLegalGraphEdgeBackfill,
+  GRAPH_EDGE_ROLLOUT_GRACE_MS,
+} from "../../../db/legal-graph-edge-backfill";
 
 type EntityId = SafeId<"entity">;
 type SourceId = SafeId<"legalListItemSource">;
@@ -105,12 +108,14 @@ const scoped = async <T>(
     userId,
   );
 
-const task = (
-  workspaceId: SafeId<"workspace">,
-  id: EntityId,
-  name: string,
-  listItemType: (typeof LIST_ITEM_TYPE)[keyof typeof LIST_ITEM_TYPE],
-) => ({
+type TaskOptions = {
+  workspaceId: SafeId<"workspace">;
+  id: EntityId;
+  name: string;
+  listItemType: (typeof LIST_ITEM_TYPE)[keyof typeof LIST_ITEM_TYPE];
+};
+
+const task = ({ workspaceId, id, name, listItemType }: TaskOptions) => ({
   id,
   workspaceId,
   kind: "task" as const,
@@ -170,9 +175,24 @@ const seedMatter = async (): Promise<Matter> => {
       createdBy: userId,
     });
     await tx.insert(entities).values([
-      task(workspaceId, facts[0], "Contract signed", LIST_ITEM_TYPE.FACT),
-      task(workspaceId, facts[1], "Goods delivered late", LIST_ITEM_TYPE.FACT),
-      task(workspaceId, taskId, "Ask for the invoice", LIST_ITEM_TYPE.TASK),
+      task({
+        workspaceId,
+        id: facts[0],
+        name: "Contract signed",
+        listItemType: LIST_ITEM_TYPE.FACT,
+      }),
+      task({
+        workspaceId,
+        id: facts[1],
+        name: "Goods delivered late",
+        listItemType: LIST_ITEM_TYPE.FACT,
+      }),
+      task({
+        workspaceId,
+        id: taskId,
+        name: "Ask for the invoice",
+        listItemType: LIST_ITEM_TYPE.TASK,
+      }),
       {
         id: documentId,
         workspaceId,
@@ -358,7 +378,11 @@ const PRODUCER_OF_WRITE = [
 const writesOf = (matter: Matter): GraphEdgeWrite[] => [
   { type: "run", runId: matter.runId },
   { type: "recheck", eventId: matter.recheckId },
-  { type: "fact-sources", sourceIds: matter.sources },
+  {
+    type: "fact-sources",
+    sourceIds: matter.sources,
+    producer: { type: "reviewer" },
+  },
 ];
 
 const readEdges = async (
@@ -511,6 +535,81 @@ describe("graph edge writers", () => {
     ]);
   });
 
+  test("only facts are cited, and an item that becomes a fact brings its Spots", async () => {
+    const matter = await seedMatter();
+    const runId = createSafeId<"legalListVerificationRun">();
+    const claimId = createSafeId<"legalListClaim">();
+    await root(async (tx) => {
+      await tx.insert(legalListVerificationRuns).values({
+        id: runId,
+        organizationId,
+        workspaceId: matter.workspaceId,
+        entityId: matter.documentId,
+        fileFieldId: createSafeId<"field">(),
+        entityVersionId: createSafeId<"entityVersion">(),
+        contentSha256: "c".repeat(64),
+        evidence: { listId: createSafeId<"legalList">(), facts: [] },
+        status: "completed",
+        pipelineVersion: 3,
+      });
+      // A claim whose grade cites the task: not a fact, so no node.
+      await tx.insert(legalListClaims).values({
+        id: claimId,
+        runId,
+        workspaceId: matter.workspaceId,
+        position: 0,
+        type: "fact",
+        state: "tension",
+        score: 40,
+        text: "Invoice sent",
+        anchor: { type: "docx-block", blockId: "p0", start: 0, end: 7 },
+        refs: [{ factEntityId: matter.taskId, rel: "record" }],
+      });
+    });
+    expect(
+      await scoped(
+        matter.workspaceId,
+        async (tx) =>
+          await writeGraphEdges(tx, matter.workspaceId, { type: "run", runId }),
+      ),
+    ).toBe(0);
+
+    // The task becomes a fact: its Spot, added while it was a task, is now
+    // the fact's source, credited to the reviewer who added it.
+    await root(async (tx) => {
+      await tx
+        .update(entities)
+        .set({ listItemType: LIST_ITEM_TYPE.FACT })
+        .where(eq(entities.id, matter.taskId));
+    });
+    expect(
+      await scoped(
+        matter.workspaceId,
+        async (tx) =>
+          await writeGraphEdges(tx, matter.workspaceId, {
+            type: "item-became-fact",
+            itemEntityId: matter.taskId,
+          }),
+      ),
+    ).toBe(1);
+    const sourced = (await readEdges(matter.workspaceId)).filter(
+      (edge) => edge.fromEntityId === matter.taskId,
+    );
+    expect(sourced.map(identityOf)).toEqual([
+      [
+        "sourced-from",
+        "fact",
+        matter.taskId,
+        "document",
+        matter.documentId,
+        "",
+        matter.sources[2],
+        "reviewer",
+        matter.sources[2],
+      ].join("|"),
+    ]);
+  });
+
   test("another matter neither reads nor writes a matter's edges", async () => {
     const matter = await seedMatter();
     const other = await seedMatter();
@@ -594,7 +693,9 @@ describe("graph edge backfill", () => {
     );
     const liveRunEdges = await readEdges(live.workspaceId);
 
-    const repair = LEGAL_GRAPH_EDGE_BACKFILL;
+    // The migrate runs' clock: the first pass finishes at FIXTURE_TIME.
+    let clock = FIXTURE_TIME.getTime();
+    const repair = createLegalGraphEdgeBackfill({ now: () => clock });
     await testDb.$client.query(
       "DELETE FROM public.database_backfill_states WHERE name = $1",
       [repair.name],
@@ -606,11 +707,19 @@ describe("graph edge backfill", () => {
     // The first pass waits for the walk after the writers' rollout.
     expect(await repair.readCompletion(connectionOf())).toMatchObject({
       type: "pending",
-      cursor: "1:done",
+      cursor: `1:done@${new Date(clock).toISOString()}`,
     });
     // A task of the previous release writes a matter's rows without edges
-    // during the rollout; the second pass derives them.
+    // during the rollout. A second migrate run within the rollout leaves the
+    // repair pending; once the grace has passed, the second pass derives them.
     const duringRollout = await seedMatter();
+    clock += GRAPH_EDGE_ROLLOUT_GRACE_MS - 1;
+    expect(await repair.repair(connectionOf())).toEqual({ type: "complete" });
+    expect(await repair.readCompletion(connectionOf())).toMatchObject({
+      type: "pending",
+    });
+    expect(await readEdges(duringRollout.workspaceId)).toEqual([]);
+    clock += 1;
     expect(await repair.repair(connectionOf())).toEqual({ type: "complete" });
     expect(await repair.readCompletion(connectionOf())).toEqual({
       type: "complete",

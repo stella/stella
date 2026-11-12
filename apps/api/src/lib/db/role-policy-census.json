@@ -7207,7 +7207,7 @@
     "roles": ["stella"],
     "permissive": "PERMISSIVE",
     "using": null,
-    "withCheck": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND"
+    "withCheck": "(\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND AND ((source_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM legal_list_item_sources spot\n  WHERE ((spot.id = legal_graph_edges.source_id) AND (spot.workspace_id = legal_graph_edges.workspace_id))))))"
   },
   {
     "schema": "public",

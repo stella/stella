@@ -62,8 +62,9 @@ const refsOf = (refs: SQL) =>
 
 /**
  * A claim cites each fact its run's grade rests on, with the relation the
- * grade gave it. A ref to a fact the workspace no longer holds has no node to
- * reach, so it writes no edge. `scope` filters `claim`.
+ * grade gave it. A ref to a fact the workspace no longer holds, or that is
+ * no longer a fact, has no fact node to reach, so it writes no edge. `scope`
+ * filters `claim`.
  */
 export const runCitesSql = (scope: SQL) => sql`${INSERT_EDGE}
   SELECT claim.workspace_id, ${CITES}, ${CLAIM}, claim.id, claim.run_id,
@@ -73,6 +74,7 @@ export const runCitesSql = (scope: SQL) => sql`${INSERT_EDGE}
   CROSS JOIN LATERAL ${refsOf(sql`claim.refs`)} ref
   JOIN ${entities} fact
     ON fact.id = ${refFactId} AND fact.workspace_id = claim.workspace_id
+    AND fact.list_item_type = ${LIST_ITEM_TYPE.FACT}
   WHERE ${scope}
   ON CONFLICT DO NOTHING
   RETURNING id`;
@@ -89,23 +91,55 @@ export const recheckCitesSql = (scope: SQL) => sql`${INSERT_EDGE}
   CROSS JOIN LATERAL ${refsOf(sql`event.payload->'grade'->'refs'`)} ref
   JOIN ${entities} fact
     ON fact.id = ${refFactId} AND fact.workspace_id = event.workspace_id
+    AND fact.list_item_type = ${LIST_ITEM_TYPE.FACT}
   WHERE event.kind = ${RECHECK_EVENT} AND ${scope}
   ON CONFLICT DO NOTHING
   RETURNING id`;
 
 /**
- * A fact is sourced from the document each of its Spots sits in. The
- * producer is the extraction run whose accepted proposal carried the same
- * passage, else the reviewer who added it (the Spot row names them). Only
- * fact items are facts; a source on any other item writes nothing. `scope`
- * filters `source`.
+ * Who asserted a fact's Spot. The live writers know it: the reviewer who
+ * added the Spot, or the extraction run whose proposal was accepted. A
+ * Spot whose origin was not recorded (the backfill's rows, a task turned
+ * into a fact) is credited to the extraction run whose accepted proposal
+ * carried the very same passage and quote, else to the reviewer.
  */
-export const factSourcesSql = (scope: SQL) => sql`${INSERT_EDGE}
+export type SpotProducer =
+  | { type: "reviewer" }
+  | { type: "extraction"; runId: SafeId<"legalListGenerationRun"> }
+  | { type: "inferred" };
+
+const spotProducerSql = (producer: SpotProducer) => {
+  switch (producer.type) {
+    case "reviewer": {
+      return { kind: sql`${REVIEWER}`, id: sql`source.id` };
+    }
+    case "extraction": {
+      return { kind: sql`${EXTRACTION}`, id: sql`${producer.runId}::uuid` };
+    }
+    case "inferred": {
+      return {
+        kind: sql`CASE WHEN origin.run_id IS NULL THEN ${REVIEWER} ELSE ${EXTRACTION} END`,
+        id: sql`COALESCE(origin.run_id, source.id)`,
+      };
+    }
+    default: {
+      producer satisfies never;
+      return panic(`Unhandled Spot producer: ${String(producer)}`);
+    }
+  }
+};
+
+/**
+ * A fact is sourced from the document each of its Spots sits in, as
+ * `producer` asserted it. Only fact items are facts; a source on any other
+ * item writes nothing. `scope` filters `source`.
+ */
+export const factSourcesSql = (scope: SQL, producer: SpotProducer) => {
+  const asserted = spotProducerSql(producer);
+  return sql`${INSERT_EDGE}
   SELECT source.workspace_id, ${SOURCED_FROM}, ${FACT}, NULL, NULL,
     source.item_entity_id, ${DOCUMENT}, source.source_entity_id, NULL,
-    source.id, NULL,
-    CASE WHEN origin.run_id IS NULL THEN ${REVIEWER} ELSE ${EXTRACTION} END,
-    COALESCE(origin.run_id, source.id)
+    source.id, NULL, ${asserted.kind}, ${asserted.id}
   FROM ${legalListItemSources} source
   JOIN ${entities} item
     ON item.id = source.item_entity_id
@@ -123,12 +157,14 @@ export const factSourcesSql = (scope: SQL) => sql`${INSERT_EDGE}
       AND candidate.status = ${ACCEPTED_CANDIDATE}
       AND proposed.source_entity_version_id = source.source_entity_version_id
       AND proposed.locator = source.locator
+      AND proposed.quote IS NOT DISTINCT FROM source.quote
     ORDER BY candidate.run_id
     LIMIT 1
-  ) origin ON true
+  ) origin ON ${producer.type === "inferred" ? sql`true` : sql`false`}
   WHERE ${scope}
   ON CONFLICT DO NOTHING
   RETURNING id`;
+};
 
 export type GraphEdgeWrite =
   /** The grades a run wrote and the re-checks carried to its claims,
@@ -140,7 +176,10 @@ export type GraphEdgeWrite =
   | {
       type: "fact-sources";
       sourceIds: readonly SafeId<"legalListItemSource">[];
-    };
+      producer: Exclude<SpotProducer, { type: "inferred" }>;
+    }
+  /** Every Spot of an item that has just become a fact. */
+  | { type: "item-became-fact"; itemEntityId: SafeId<"entity"> };
 
 const writeSql = (
   workspaceId: SafeId<"workspace">,
@@ -169,6 +208,13 @@ const writeSql = (
           write.sourceIds.map((id) => sql`${id}`),
           sql`, `,
         )})`,
+        write.producer,
+      );
+    }
+    case "item-became-fact": {
+      return factSourcesSql(
+        sql`source.workspace_id = ${workspaceId} AND source.item_entity_id = ${write.itemEntityId}`,
+        { type: "inferred" },
       );
     }
     default: {

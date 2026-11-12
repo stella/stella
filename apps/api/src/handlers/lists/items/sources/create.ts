@@ -112,6 +112,7 @@ const createItemSource = createSafeHandler(
         await writeGraphEdges(tx, workspaceId, {
           type: "fact-sources",
           sourceIds: [id],
+          producer: { type: "reviewer" },
         });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,

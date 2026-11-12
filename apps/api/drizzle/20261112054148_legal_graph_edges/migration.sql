@@ -65,11 +65,17 @@ CREATE POLICY "workspace_select" ON "legal_graph_edges"
     WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) THEN true
     ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
   END));--> statement-breakpoint
+-- The Spot's foreign key checks only its id: it must also be in the edge's
+-- workspace, or one matter could cite another's passage.
 CREATE POLICY "workspace_insert" ON "legal_graph_edges"
   AS PERMISSIVE FOR INSERT TO stella WITH CHECK ((CASE
     WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) THEN true
     ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
-  END));--> statement-breakpoint
+  END) AND (legal_graph_edges.source_id IS NULL OR EXISTS (
+    SELECT 1 FROM public.legal_list_item_sources spot
+    WHERE spot.id = legal_graph_edges.source_id
+      AND spot.workspace_id = legal_graph_edges.workspace_id
+  )));--> statement-breakpoint
 CREATE POLICY "legal_graph_edges_no_update" ON "legal_graph_edges"
   AS RESTRICTIVE FOR UPDATE TO stella USING (false);--> statement-breakpoint
 CREATE POLICY "legal_graph_edges_no_delete" ON "legal_graph_edges"

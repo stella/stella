@@ -249,7 +249,14 @@ export const legalGraphEdges = p.pgTable(
     p.pgPolicy("workspace_insert", {
       for: "insert",
       to: stella,
-      withCheck: workspaceCheck,
+      // The Spot's foreign key checks only its id: it must also be in the
+      // edge's workspace, or one matter could cite another's passage. Outer
+      // columns are named by table, since both have them.
+      withCheck: sql`(${workspaceCheck}) AND (legal_graph_edges.source_id IS NULL OR EXISTS (
+        SELECT 1 FROM public.legal_list_item_sources spot
+        WHERE spot.id = legal_graph_edges.source_id
+          AND spot.workspace_id = legal_graph_edges.workspace_id
+      ))`,
     }),
     // Edges are never rewritten or removed by the application; they go only
     // with an end, the claim's run or the Spot, by cascade.

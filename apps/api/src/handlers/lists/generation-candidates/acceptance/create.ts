@@ -633,6 +633,7 @@ const finalizeAcceptance = async ({
   await writeGraphEdges(tx, workspaceId, {
     type: "fact-sources",
     sourceIds: itemSources.map(({ id }) => id),
+    producer: { type: "extraction", runId: body.runId },
   });
 
   await commitSettledRun(tx, {
