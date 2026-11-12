@@ -205,6 +205,7 @@ const turnInput = (
   threadId: "stella-thread-1",
   workspaceDir,
   model: "sonnet",
+  reasoningEffort: null,
   instructions: INSTRUCTIONS,
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
@@ -319,6 +320,14 @@ const codexEvents = async (scenario: FakeCodexScenario) => {
 };
 
 describe("Claude Code adapter over stream-json stdio", () => {
+  test("asks the model for the run's reasoning effort, after the model it applies to", async () => {
+    const { startups } = await run("tool_calls", {
+      overrides: { reasoningEffort: "max" },
+    });
+    const args = startups()[0]?.args ?? [];
+    expect(args.slice(-4)).toEqual(["--model", "sonnet", "--effort", "max"]);
+  });
+
   test("runs in the workspace with the stella config dir, without billing overrides, and sends secrets only over stdio", async () => {
     const { events, startups, received, claudeConfigDir, workspaceDir } =
       await run("tool_calls");

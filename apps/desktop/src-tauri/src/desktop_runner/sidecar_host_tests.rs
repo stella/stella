@@ -250,7 +250,9 @@ impl Place {
 fn ready() -> Value {
   let models: Vec<Value> = MODELS
     .iter()
-    .map(|id| json!({ "id": id, "label": id, "isDefault": false }))
+    .map(|id| {
+      json!({ "id": id, "label": id, "isDefault": false, "reasoningEfforts": ["low", "high"] })
+    })
     .collect();
   json!({
     "type": "ready",
@@ -280,6 +282,7 @@ fn run_start(run_id: &str, model: &str) -> Value {
     "harness": "codex",
     "harnessVersion": VERSION,
     "model": model,
+    "reasoningEffort": "high",
     "harnessSessionId": null,
     "instructions": "Summarize the matter.",
     "messages": [{"role": "user", "content": "Summarize the matter."}],
@@ -450,6 +453,7 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
     start["policy"],
     json!({"network": "open", "fs": "workspace", "approvals": "auto"})
   );
+  assert_eq!(start["reasoningEffort"], "high");
   assert_eq!(start["launch"]["processGrant"], false);
 }
 
@@ -468,8 +472,11 @@ fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
     claude["harness"] = json!("claude-code");
     let mut unsandboxed = run_start(&run_id(), "gpt-test");
     unsandboxed["policy"]["approvals"] = json!("full_auto");
+    let mut unoffered_effort = run_start(&run_id(), "gpt-test");
+    unoffered_effort["reasoningEffort"] = json!("max");
     let cases = [
       (run_start(&run_id(), "gpt-unknown"), "model_unavailable"),
+      (unoffered_effort, "model_unavailable"),
       (older, "harness_version_unavailable"),
       (claude, "harness_not_installed"),
       (unsandboxed, "policy_unsupported"),

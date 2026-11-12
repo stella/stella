@@ -72,6 +72,7 @@ const CODEX: ChatLocalRunTarget = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 };
 
 /** One connected computer whose Codex is ready. */
@@ -89,7 +90,9 @@ const READINESS: ChatLocalRunReadiness = {
           version: "0.50.0",
           capabilities: ["approvals"],
           approvalModes: ["ask"],
-          models: [{ id: CODEX.model, label: "GPT-5 Codex" }],
+          models: [
+            { id: CODEX.model, label: "GPT-5 Codex", reasoningEfforts: [] },
+          ],
         },
       ],
     },

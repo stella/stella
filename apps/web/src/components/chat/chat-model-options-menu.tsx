@@ -35,7 +35,10 @@ import {
   type ProviderValue,
 } from "@/components/ai-config-role-models.logic";
 import { AIProviderIcon } from "@/components/ai-provider-icons";
-import { getModelPickerView } from "@/components/chat/chat-model-options-menu.logic";
+import {
+  EFFORT_LABEL_KEY,
+  getModelPickerView,
+} from "@/components/chat/chat-model-options-menu.logic";
 import type {
   ModelPickerEntry,
   ModelRecommendation,
@@ -49,22 +52,11 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { modelOptionsOptions } from "@/features/chat/queries";
 import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { TranslationKey } from "@/i18n/types";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { queryView } from "@/lib/query-view.logic";
 
 export const CHAT_MODEL_MENU_POPUP_CLASS_NAME =
   "w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)";
-
-export const EFFORT_LABEL_KEY = {
-  none: "chat.modelSelector.effortValues.none",
-  minimal: "chat.modelSelector.effortValues.minimal",
-  low: "chat.modelSelector.effortValues.low",
-  medium: "chat.modelSelector.effortValues.medium",
-  high: "chat.modelSelector.effortValues.high",
-  xhigh: "chat.modelSelector.effortValues.xhigh",
-  max: "chat.modelSelector.effortValues.max",
-} as const satisfies Record<ReasoningEffort, TranslationKey>;
 
 export type ComposerModelsMenuProps = {
   activeOrganizationId: string;

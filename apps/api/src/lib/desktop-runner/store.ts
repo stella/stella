@@ -27,6 +27,7 @@ import {
   type DesktopRunnerHarnessReport,
   desktopRunnerHarnessReportSchema,
   type DesktopRunnerLimits,
+  type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 
 import type { RootDatabase, Transaction } from "@/api/db/root";
@@ -1542,6 +1543,7 @@ type InsertRunOptions = {
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  reasoningEffort: DesktopRunnerReasoningEffort | null;
   approvals: DesktopRunnerApprovalMode;
   workspaceIds: readonly SafeId<"workspace">[];
   /** The chat turn that starts and reads the run, when one does. */
@@ -1570,6 +1572,7 @@ export type InsertedRun =
       report: DesktopRunnerHarnessReport | null;
     }
   | { type: "model_unavailable" }
+  | { type: "reasoning_effort_unavailable" }
   | { type: "approvals_unavailable" }
   /** The chat's folder is being restored on its computer. */
   | { type: "folder_busy" };
@@ -1622,8 +1625,15 @@ export const insertAssignedRun = async (
     if (report?.state !== "ready" || report.version !== harnessVersion) {
       return { type: "harness_unavailable", report };
     }
-    if (!report.models.some(({ id }) => id === options.model)) {
+    const model = report.models.find(({ id }) => id === options.model);
+    if (model === undefined) {
       return { type: "model_unavailable" };
+    }
+    if (
+      options.reasoningEffort !== null &&
+      !model.reasoningEfforts.includes(options.reasoningEffort)
+    ) {
+      return { type: "reasoning_effort_unavailable" };
     }
     if (!report.approvalModes.includes(options.approvals)) {
       return { type: "approvals_unavailable" };

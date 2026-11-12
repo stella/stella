@@ -53,6 +53,7 @@ import {
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
   desktopRunnerOutputEventSchema,
+  type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 import type {
   StellaMcpAppCall,
@@ -140,6 +141,7 @@ type LocalRunDestination = {
   harness: ChatLocalRunHarness;
   harnessVersion: string;
   model: string;
+  reasoningEffort: DesktopRunnerReasoningEffort | null;
   approvals: DesktopRunnerApprovalMode;
 };
 
@@ -1681,6 +1683,7 @@ async function* startLocalRun({
       harness: destination.harness,
       harnessVersion: destination.harnessVersion,
       model: destination.model,
+      reasoningEffort: destination.reasoningEffort,
       approvals: destination.approvals,
       harnessSessionId,
       instructions: input.instructions,
@@ -1736,6 +1739,7 @@ async function* startLocalRun({
       return;
     case "no_computer":
     case "model_unavailable":
+    case "reasoning_effort_unavailable":
     case "approvals_unavailable":
       yield* refuse(AI_FAILURE_CODES.local_runner_unavailable);
       return;
