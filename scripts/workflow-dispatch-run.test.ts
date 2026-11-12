@@ -27,3 +27,16 @@ test("every followed dispatch finds its run without relying on the answer", () =
     expect(text, name).not.toMatch(/returned no run id/u);
   }
 });
+
+// A run named by its dispatch can read as Not Found for a moment; the
+// follower waits for it rather than failing on the first read.
+test("a followed deploy run tolerates a not-yet-visible run", () => {
+  const text = readFileSync(
+    new URL("deploy-outlook-addin.yml", workflows),
+    "utf-8",
+  );
+  expect(text).toMatch(/error\?\.status !== 404/u);
+  expect(text).not.toMatch(
+    /const \{ data: run \} = await github\.rest\.actions\.getWorkflowRun/u,
+  );
+});
