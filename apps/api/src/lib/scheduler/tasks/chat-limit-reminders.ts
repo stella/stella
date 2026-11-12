@@ -5,11 +5,6 @@ import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
 import type { Transaction } from "@/api/db/root";
 import { chatLimitReminders, chatThreads, chatTurns } from "@/api/db/schema";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createBackgroundAuditRecorder,
-} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withSkipLockedBatch } from "@/api/lib/db/aggregate-lock";
 import {
@@ -32,7 +27,6 @@ type DueReminder = {
   turnId: SafeId<"chatTurn">;
   organizationId: SafeId<"organization">;
   userId: string;
-  remindAt: Date;
 };
 
 type ReminderSweepResult = {
@@ -45,64 +39,16 @@ const fileDueReminders = async (
   tx: Transaction,
   due: readonly DueReminder[],
 ): Promise<ReminderSweepResult> => {
+  // audit: skip - delivers a reminder the member asked for; the notification it files is the record.
   if (due.length === 0) {
     return { due: 0, notified: 0, pings: [] };
   }
-  const threads = await tx
-    .select({ id: chatThreads.id, workspaceId: chatThreads.workspaceId })
-    .from(chatThreads)
-    .where(
-      inArray(
-        chatThreads.id,
-        due.map(({ threadId }) => threadId),
-      ),
-    );
-  const workspaceOf = new Map(threads.map((row) => [row.id, row.workspaceId]));
   await tx.delete(chatLimitReminders).where(
     inArray(
       chatLimitReminders.threadId,
       due.map(({ threadId }) => threadId),
     ),
   );
-  // A taken reminder leaves the chat's audit trail as the member's own
-  // cancel does, recorded by the sweep: one batch per member and organization.
-  const byMember = new Map<string, DueReminder[]>();
-  for (const reminder of due) {
-    const key = `${reminder.organizationId}\0${reminder.userId}`;
-    byMember.set(key, [...(byMember.get(key) ?? []), reminder]);
-  }
-  for (const reminders of byMember.values()) {
-    const first = reminders.at(0);
-    if (first === undefined) {
-      return panic("A member's taken reminders must not be empty");
-    }
-    const recordAuditEvent = createBackgroundAuditRecorder({
-      execution: {
-        performer: {
-          id: SEND_CHAT_LIMIT_REMINDERS_TASK,
-          name: "Chat limit reminders",
-          type: "service",
-        },
-        trigger: { source: SEND_CHAT_LIMIT_REMINDERS_TASK, type: "system" },
-      },
-      organizationId: first.organizationId,
-      workspaceId: null,
-      userId: brandPersistedUserId(first.userId),
-    });
-    // db-await-in-loop: one batched audit insert per member; the recorder binds organization and user
-    await recordAuditEvent(
-      tx,
-      reminders.map((reminder) => ({
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-        resourceId: reminder.threadId,
-        workspaceId: workspaceOf.get(reminder.threadId) ?? null,
-        changes: {
-          limitReminder: { old: reminder.remindAt.toISOString(), new: null },
-        },
-      })),
-    );
-  }
   // The newest turn of each chat, ordered as readLimitedLatestTurn orders it;
   // DISTINCT ON keeps exactly one row per chat, so the limit is exact.
   const latest = await tx
@@ -128,6 +74,16 @@ const fileDueReminders = async (
   if (waiting.length === 0) {
     return { due: due.length, notified: 0, pings: [] };
   }
+  const threads = await tx
+    .select({ id: chatThreads.id, workspaceId: chatThreads.workspaceId })
+    .from(chatThreads)
+    .where(
+      inArray(
+        chatThreads.id,
+        waiting.map(({ threadId }) => threadId),
+      ),
+    );
+  const workspaceOf = new Map(threads.map((row) => [row.id, row.workspaceId]));
   const rows = waiting.map(
     (reminder) =>
       ({
@@ -176,7 +132,6 @@ export const takeDueChatLimitReminders = async ({
           turnId: chatLimitReminders.turnId,
           organizationId: chatLimitReminders.organizationId,
           userId: chatLimitReminders.userId,
-          remindAt: chatLimitReminders.remindAt,
         })
         .from(chatLimitReminders)
         .where(
