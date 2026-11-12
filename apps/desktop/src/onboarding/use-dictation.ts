@@ -59,9 +59,7 @@ const isModel = (value: unknown): value is DictationModel => {
   }
 };
 
-const isDictationSnapshot = (
-  value: unknown,
-): value is DictationSnapshot =>
+const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   isRecord(value) &&
   typeof value["available"] === "boolean" &&
   typeof value["enabled"] === "boolean" &&

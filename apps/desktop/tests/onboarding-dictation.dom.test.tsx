@@ -19,8 +19,13 @@ const { clearMocks } = await import("@tauri-apps/api/mocks");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { default: OnboardingApp } =
   await import("../src/onboarding/OnboardingApp");
-const { DICTATION_OFF, DICTATION_STEP, installNativeSide, nativeSide, sentCommands } =
-  await import("./onboarding-dictation-native");
+const {
+  DICTATION_OFF,
+  DICTATION_STEP,
+  installNativeSide,
+  nativeSide,
+  sentCommands,
+} = await import("./onboarding-dictation-native");
 
 afterEach(() => {
   cleanup();
@@ -52,7 +57,9 @@ test("the dictation step names the macOS shortcut and that speech stays on this 
 
   await findByText(dictation.description.replace("{shortcut}", "⌃⌥Space"));
   expect(getByRole("heading", { level: 1 }).textContent).toBe(dictation.title);
-  expect(getByRole("button", { name: onboarding.dictationTurnOn })).toBeTruthy();
+  expect(
+    getByRole("button", { name: onboarding.dictationTurnOn }),
+  ).toBeTruthy();
 });
 
 test("without dictation on this computer the step offers nothing to turn on", async () => {
@@ -120,7 +127,11 @@ test("a model already in place is not downloaded again", async () => {
 test("once ready it asks for the microphone and offers a field to dictate into", async () => {
   const { findByRole, findByText } = await renderSetup(
     nativeSide({
-      dictation: { ...DICTATION_OFF, enabled: true, model: { status: "ready" } },
+      dictation: {
+        ...DICTATION_OFF,
+        enabled: true,
+        model: { status: "ready" },
+      },
     }),
   );
 
