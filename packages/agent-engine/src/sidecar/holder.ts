@@ -246,6 +246,15 @@ export class Holder {
     };
     if (preamble.protocol !== SIDECAR_PROTOCOL) {
       refuse("protocol_mismatch");
+      // A newer desktop holds the secret and speaks a later protocol: it
+      // replaced the one this holder served and starts its own holder. This
+      // one finishes the runs it holds and exits, rather than staying until
+      // the idle timer.
+      if (preamble.protocol > SIDECAR_PROTOCOL && this.mode !== "draining") {
+        this.mode = "draining";
+        this.options.log("a newer desktop connected: draining");
+        this.settle();
+      }
       return;
     }
     const parsed = parseSidecarHostLine(line);
