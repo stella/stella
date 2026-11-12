@@ -5,6 +5,7 @@
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.test.json"
   },
   "include": [
+    "scripts/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "src/**/*.test.ts",
