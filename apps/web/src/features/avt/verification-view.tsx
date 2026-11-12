@@ -12,7 +12,7 @@ import { useTranslations } from "use-intl";
 
 import { LiteralTextProvider } from "@stll/decision-reader/display-elision-policy";
 import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
-import { Button } from "@stll/ui/button";
+import { Button, ButtonTextRun } from "@stll/ui/button";
 import {
   CheckIcon,
   CircleAlertIcon,
@@ -787,14 +787,15 @@ const ClaimSpan = ({
   const { mark, markTextClass } = STATE_COLOR[state];
   const qualifierAnnouncement = announceQualifiers(claim);
   return (
-    // The claim's look is the review text mark, drawn by the span; the plain
-    // button only makes the run of evidence a control.
-    <Button
+    // The claim's look is the review text mark, drawn by the span. A claim is
+    // a run of the document's prose and wraps with it, so it is a text run,
+    // never a <button> (one atomic box that would lift a claim crossing a
+    // line out of the paragraph's reading order).
+    <ButtonTextRun
       aria-pressed={selected}
-      className="inline"
       id={claimDomId(claim.id)}
+      look="text-mark"
       onClick={() => onSelect(claim.id)}
-      variant="plain"
     >
       <span
         className={cn(
@@ -848,6 +849,6 @@ const ClaimSpan = ({
           {qualifierAnnouncement !== null && ` ${qualifierAnnouncement}`}
         </span>
       </span>
-    </Button>
+    </ButtonTextRun>
   );
 };
