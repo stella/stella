@@ -87,7 +87,10 @@ export const treatmentOf = (polarity: string | null): CitationTreatment => {
   return polarity === POLARITY.UNKNOWN ? "unclassified" : polarity;
 };
 
-/** Expand release permits these columns; a following release grants them. */
+/**
+ * False only on a database that has not yet applied the doctrine grant
+ * migration, which a rolling deploy and a self-hosted upgrade both pass through.
+ */
 const canReadCitationDoctrine = async (tx: CaseLawPublicReadTransaction) => {
   const predicates = Object.entries(DOCTRINE_COLUMN_GRANTS_BY_RELATION).flatMap(
     ([relation, columns]) =>
