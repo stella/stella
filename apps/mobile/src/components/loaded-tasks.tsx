@@ -14,6 +14,7 @@ import { Text } from "@stll/ui/text";
 import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
 import { useHeaderSearch } from "@/components/header-search";
 import { LoadFailedCard } from "@/components/load-failure";
+import { RoleFailureNotice } from "@/components/role";
 import { TaskRow } from "@/components/task-row";
 import type { AccessTokenSource } from "@/connection/session";
 import { dayAt, groupByDue } from "@/state/tasks";
@@ -123,6 +124,8 @@ export const LoadedTasks = ({
       contentInsetAdjustmentBehavior="automatic"
       keyExtractor={(task) => task.id}
       ListEmptyComponent={empty}
+      // Why a role that could not be read offers no changes here.
+      ListHeaderComponent={<RoleFailureNotice />}
       ListFooterComponent={footer ?? undefined}
       refreshControl={
         <RefreshControl
