@@ -576,7 +576,7 @@ type AssertedDateColumns = Pick<
  * re-check's reading, else its run's. A claim written before claims carried
  * dates is read from its words now, exactly as the backfill stores it.
  */
-export const assertedDateOfClaim = (
+const assertedDateOfClaim = (
   claim: AssertedDateColumns,
   review: ClaimReview | null,
 ): ClaimAssertedDate => {
