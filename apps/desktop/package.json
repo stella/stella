@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tauri build --config src-tauri/tauri.sidecar.conf.json",
     "build:sidecar": "bun run --cwd ../../packages/agent-engine build:sidecar",
+    "build:pkcs11-helper": "bun scripts/build-pkcs11-helper.ts",
     "build:view": "vite build",
     "clean": "git clean -xdf .cache .turbo dist node_modules src-tauri/target",
     "dev": "tauri dev",

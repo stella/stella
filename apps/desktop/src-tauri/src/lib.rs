@@ -75,6 +75,7 @@ mod managed_policy;
 mod marker_file;
 mod onboarding;
 mod pdf_signing;
+mod pkcs11_signing;
 mod permissions;
 mod presence;
 mod registry;

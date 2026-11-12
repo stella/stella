@@ -459,6 +459,50 @@ jobs:
             --test-requirement="$expected_requirement" \
             "${app_bundles[0]}"
 
+      # The PKCS #11 helper is signed before Tauri bundles the app, with its
+      # own entitlements (apps/desktop/scripts/build-pkcs11-helper.ts), and
+      # bundled as is; the app's signature seals it and Tauri notarizes both.
+      # Only the helper may load libraries signed by another team.
+      - name: Verify PKCS #11 helper signature
+        if: matrix.os == 'macos'
+        working-directory: apps/desktop
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [[ ! -f src-tauri/Pkcs11HelperEntitlements.plist ]]; then
+            echo "This release predates the PKCS #11 helper."
+            exit 0
+          fi
+          shopt -s nullglob
+          app_bundles=(src-tauri/target/"$TARGET"/release/bundle/macos/*.app)
+          app="${app_bundles[0]}"
+          helper="$app/Contents/MacOS/stella-pkcs11-helper"
+          if [[ ! -f "$helper" ]]; then
+            echo "::error::The app bundle has no PKCS #11 helper"
+            exit 1
+          fi
+          codesign --verify --strict --verbose=2 \
+            --test-requirement='=anchor apple generic and certificate leaf[subject.OU] = "4N3QVH454C"' \
+            "$helper"
+          # Read whole, then searched: `grep -q` closing a pipe early would
+          # fail the producer under pipefail.
+          helper_details=$(codesign --display --verbose=2 "$helper" 2>&1)
+          if ! grep -q 'flags=.*runtime' <<<"$helper_details"; then
+            echo "::error::The PKCS #11 helper is not signed with the hardened runtime"
+            exit 1
+          fi
+          entitlement=com.apple.security.cs.disable-library-validation
+          helper_entitlements=$(codesign --display --entitlements - --xml "$helper" 2>/dev/null)
+          if ! grep -q "$entitlement" <<<"$helper_entitlements"; then
+            echo "::error::The PKCS #11 helper lacks $entitlement"
+            exit 1
+          fi
+          app_entitlements=$(codesign --display --entitlements - --xml "$app" 2>/dev/null)
+          if grep -q "$entitlement" <<<"$app_entitlements"; then
+            echo "::error::The app itself must not carry $entitlement"
+            exit 1
+          fi
+
       - name: Build styled DMG without Finder automation
         if: matrix.os == 'macos'
         working-directory: apps/desktop

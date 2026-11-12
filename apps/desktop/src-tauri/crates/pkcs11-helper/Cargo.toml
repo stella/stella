@@ -1,0 +1,41 @@
+[package]
+name = "stella-pkcs11-helper"
+version = "0.0.1"
+edition = "2024"
+description = "The short-lived process that loads a smart card vendor's PKCS #11 module, so the module's native code never runs inside stella desktop"
+license = "Apache-2.0"
+publish = false
+
+[[bin]]
+name = "stella-pkcs11-helper"
+path = "src/main.rs"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+let_underscore_must_use = "deny"
+map_err_ignore = "deny"
+await_holding_lock = "deny"
+significant_drop_in_scrutinee = "deny"
+significant_drop_tightening = "warn"
+unused_result_ok = "deny"
+undocumented_unsafe_blocks = "deny"
+
+# `context_sign` alone calls into the module directly; it allows this.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+
+[dependencies]
+cryptoki = "0.12"
+cryptoki-sys = "0.5"
+hex = "0.4"
+sha2 = "0.11"
+stella-desktop-pkcs11 = { path = "../pkcs11", version = "0.0.1" }
+stella-desktop-signing-core = { path = "../signing-core", version = "0.0.1" }
+zeroize = "1"
+
+[dev-dependencies]
+ring = "0.17"

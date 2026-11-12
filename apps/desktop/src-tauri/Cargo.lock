@@ -1044,6 +1044,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cryptoki"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "625cf4599c43d69a16996ce2573fc80745a0b0300c962f0bfa11d55b6cab2b2d"
+dependencies = [
+ "bitflags 2.13.1",
+ "cryptoki-sys",
+ "libloading 0.8.9",
+ "log",
+ "secrecy",
+]
+
+[[package]]
+name = "cryptoki-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1fd850498411e4057f1cba79e6e2bc7cbe960544c1046ab46d4685c403a1121"
+dependencies = [
+ "libloading 0.8.9",
+]
+
+[[package]]
 name = "csscolorparser"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2788,7 +2810,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e9ec52138abedcc58dc17a7c6c0c00a2bdb4f3427c7f63fa97fd0d859155caf"
 dependencies = [
  "gtk-sys",
- "libloading",
+ "libloading 0.7.4",
  "once_cell",
 ]
 
@@ -2815,6 +2837,16 @@ checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
 dependencies = [
  "cfg-if",
  "winapi",
+]
+
+[[package]]
+name = "libloading"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
+dependencies = [
+ "cfg-if",
+ "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -4533,6 +4565,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "secrecy"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
+dependencies = [
+ "zeroize",
+]
+
+[[package]]
 name = "secret-service"
 version = "5.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5004,6 +5045,7 @@ dependencies = [
  "sha2 0.11.1",
  "stella-desktop-macos",
  "stella-desktop-macos-signing",
+ "stella-desktop-pkcs11",
  "stella-desktop-signing-core",
  "stella-desktop-windows-signing",
  "sys-locale",
@@ -5068,6 +5110,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "stella-desktop-pkcs11"
+version = "0.0.1"
+dependencies = [
+ "hex",
+ "serde",
+ "serde_json",
+ "stella-desktop-signing-core",
+ "zeroize",
+]
+
+[[package]]
 name = "stella-desktop-signing-core"
 version = "0.0.1"
 dependencies = [
@@ -5083,6 +5136,20 @@ dependencies = [
  "ring",
  "stella-desktop-signing-core",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "stella-pkcs11-helper"
+version = "0.0.1"
+dependencies = [
+ "cryptoki",
+ "cryptoki-sys",
+ "hex",
+ "ring",
+ "sha2 0.11.1",
+ "stella-desktop-pkcs11",
+ "stella-desktop-signing-core",
+ "zeroize",
 ]
 
 [[package]]

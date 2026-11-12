@@ -268,7 +268,9 @@ pub async fn pdf_sign_respond(
   use crate::pdf_signing::{DialogChoice, PdfSignDialogResponse, PdfSignResult};
 
   let choice = match response {
-    PdfSignDialogResponse::Sign { identity_id } => DialogChoice::Sign { identity_id },
+    PdfSignDialogResponse::Sign { identity_id, pin } => {
+      DialogChoice::Sign { identity_id, pin }
+    }
     PdfSignDialogResponse::Retry => DialogChoice::Retry,
     PdfSignDialogResponse::Cancel => DialogChoice::Cancel,
   };
@@ -281,6 +283,26 @@ pub async fn pdf_sign_respond(
       Ok(PdfSignResult::Cancelled)
     }
   }
+}
+
+/// Opens the download page of a smart card driver the signing dialog says
+/// needs an update. The page names the driver; the address comes from the
+/// desktop's own driver list, never from the page.
+#[tauri::command]
+pub fn pdf_sign_open_driver_download(
+  driver_id: String,
+  app: tauri::AppHandle,
+) -> Result<(), String> {
+  use tauri_plugin_opener::OpenerExt;
+
+  let driver = stella_desktop_pkcs11::drivers::known_driver(&driver_id)
+    .ok_or_else(|| format!("no known smart card driver is named {driver_id}"))?;
+  app
+    .opener()
+    .open_url(driver.download_url, None::<&str>)
+    .map_err(crate::logging::with_cause_logged(
+      "the driver's download page could not be opened",
+    ))
 }
 
 #[tauri::command]
