@@ -6,9 +6,9 @@ import {
   SKILL_RUNNER_OUTCOME,
 } from "@stll/api-contract/skill-runner";
 
-export type CapturedStream = { text: string; droppedBytes: number };
+type CapturedStream = { text: string; droppedBytes: number };
 
-export type CommandOutcome = {
+type CommandOutcome = {
   outcome: (typeof SKILL_RUNNER_OUTCOME)[keyof typeof SKILL_RUNNER_OUTCOME];
   exitCode: number | null;
   signal: string | null;
