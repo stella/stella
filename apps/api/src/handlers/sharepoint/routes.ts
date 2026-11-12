@@ -2,6 +2,7 @@ import connectSharepoint from "@/api/handlers/sharepoint/connect";
 import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
 import listSharepointDriveItems from "@/api/handlers/sharepoint/drives/items/list";
 import listSharepointDrives from "@/api/handlers/sharepoint/drives/list";
+import importSharepointFiles from "@/api/handlers/sharepoint/imports/create";
 import sharepointOAuthCallback from "@/api/handlers/sharepoint/oauth-callback";
 import setSharepointEnablement from "@/api/handlers/sharepoint/set-enablement";
 import listSharepointSites from "@/api/handlers/sharepoint/sites/list";
@@ -20,7 +21,7 @@ export const sharepointRoute = mount(
         DELETE: disconnectSharepoint,
       },
     }),
-    // Browsing answers as an absent route while the deployment flag is off;
+    // Browsing and import answer as an absent route while the deployment flag is off;
     // each handler still checks the organization's opt-in.
     routes(
       {
@@ -29,6 +30,7 @@ export const sharepointRoute = mount(
         "/drives/:driveId/items/:itemId/children": {
           GET: listSharepointDriveItems,
         },
+        "/imports/:workspaceId": { POST: importSharepointFiles },
       },
       { middleware: [deploymentFeatureGate("FEATURE_SHAREPOINT")] },
     ),
