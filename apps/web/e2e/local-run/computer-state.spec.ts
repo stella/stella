@@ -211,7 +211,9 @@ test("a send in a chat while no computer is connected says why, and goes through
 
   await setComputerOnline(request, true);
   // The refused message is offered again, in the transcript or the composer.
-  if ((await composer(page).innerText()).includes("Second question")) {
+  if (
+    ((await composer(page).textContent()) ?? "").includes("Second question")
+  ) {
     await page.getByRole("button", { name: "Send message" }).click();
   } else {
     await send(page, "Second question");

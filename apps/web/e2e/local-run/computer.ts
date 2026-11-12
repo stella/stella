@@ -300,7 +300,9 @@ const MAX_EXPANDED = 50;
  * step's details) and return how many opened.
  */
 export const expandTranscript = async (page: Page) => {
-  const collapsed = transcript(page).locator('button[aria-expanded="false"]');
+  const collapsed = transcript(page)
+    .locator('button[aria-expanded="false"]')
+    .filter({ visible: true });
   let opened = 0;
   // Opening a group reveals the rows inside it, so read again after each.
   // await-in-loop: each click changes what is collapsed.

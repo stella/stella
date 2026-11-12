@@ -88,12 +88,16 @@ for (const agent of ["codex", "claude-code"] as const) {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
     expect(await expandTranscript(page)).toBeGreaterThan(0);
-    const shown = await transcript(page).innerText();
     for (const text of STEPS[agent].shown) {
-      expect(shown, `chat does not show "${text}"`).toContain(text);
+      // await-in-loop: each named step part, checked in turn.
+      await expect(
+        transcript(page).getByText(text, { exact: false }).first(),
+      ).toBeVisible();
     }
+    // Not shown, and not in the page at all.
+    const shown = (await transcript(page).textContent()) ?? "";
     for (const text of STEPS[agent].hidden) {
-      expect(shown, `chat showed "${text}"`).not.toContain(text);
+      expect(shown, `chat holds "${text}"`).not.toContain(text);
     }
 
     // The same after a reload, from what the server kept.
@@ -102,9 +106,9 @@ for (const agent of ["codex", "claude-code"] as const) {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
     await expandTranscript(page);
-    const reloaded = await transcript(page).innerText();
+    const reloaded = (await transcript(page).textContent()) ?? "";
     for (const text of STEPS[agent].hidden) {
-      expect(reloaded, `chat showed "${text}" after a reload`).not.toContain(
+      expect(reloaded, `chat holds "${text}" after a reload`).not.toContain(
         text,
       );
     }
