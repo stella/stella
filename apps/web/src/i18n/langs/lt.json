@@ -4487,7 +4487,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Kurkite sutarčių peržiūros vadovą pozicija po pozicijos, remdamiesi anksčiau pasirašytomis sutartimis, trumpu pokalbiu ir įprastais rinkos standartais.",
-          "name": "Kurti peržiūros vadovą"
+          "name": "Kurti peržiūros vadovą",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pridėk pozicijų į vieną iš mano esamų peržiūros vadovų.",
+              "name": "Papildyti peržiūros vadovą"
+            },
+            "fromContracts": {
+              "body": "Sukurk konfidencialumo sutarčių peržiūros vadovą pagal mano anksčiau pasirašytas sutartis.",
+              "name": "Pradėti nuo ankstesnių sutarčių"
+            },
+            "fromMarketStandards": {
+              "body": "Sukurk tiekimo sutarčių peržiūros vadovą pagal įprastas rinkos pozicijas.",
+              "name": "Pradėti nuo rinkos standartų"
+            }
+          }
         }
       },
       "builtInSection": "Integruoti įgūdžiai",
@@ -4737,6 +4751,10 @@
       "optionPlaceholder": "Parinkties reikšmė",
       "optionsLabel": "Parinktys",
       "outline": "Struktūra",
+      "pendingPane": {
+        "description": "Atsakykite į klausimus pokalbyje. Kai patvirtinsite pirmąjį išsaugojimą, peržiūros vadovas atsidarys čia ir galėsite jį redaguoti šalia pokalbio.",
+        "title": "Jūsų peržiūros vadovas atsiras čia"
+      },
       "positionOfTotal": "Pozicija {index} iš {total}",
       "positionRemoved": "Pozicija pašalinta",
       "positions": "Pozicijos",

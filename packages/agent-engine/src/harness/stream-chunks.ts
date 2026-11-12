@@ -81,6 +81,8 @@ const FAILURE_CODE = {
   harness_exited: "harness.exited",
   protocol_violation: "harness.protocol_violation",
   sandbox_unavailable: "harness.sandbox_unavailable",
+  retry_stalled: "harness.retry_stalled",
+  tools_unavailable: "harness.tools_unavailable",
 } as const satisfies Record<HarnessFailure["type"], string>;
 
 const toTokenUsage = (usage: HarnessUsage): TokenUsage => {

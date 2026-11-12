@@ -123,7 +123,7 @@ const {
   Outlet,
   RouterProvider,
 } = await import("@tanstack/react-router");
-const { QueryClient, QueryClientProvider, useQuery } =
+const { InfiniteQueryObserver, QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -1570,6 +1570,71 @@ test("a claim's history opens from one row and reads who did what, why, and what
     messages.avt.states.supported.chip,
   ]);
   expect(requests).toEqual([]);
+});
+
+test("a review decision never reads its run again and reads its open history once", async () => {
+  const { client, run } = await mount();
+  const claim = run.claims.at(1) ?? panic("Missing seeded tension claim");
+  const history = (items: ReviewHistoryPage["items"]) =>
+    ({
+      items,
+      nextCursor: null,
+      limit: 50,
+      reviewers: { type: "complete", items: [] },
+    }) satisfies ReviewHistoryPage;
+  const historyOptions = reviewHistoryOptions({
+    workspaceId,
+    runId: run.id,
+    claimId: claim.id,
+  });
+  client.setQueryData(historyOptions.queryKey, {
+    pages: [history([])],
+    pageParams: [null],
+  });
+  // The test client reads nothing on its own; the history open beside the
+  // claim is a live reader here, so its refresh is what this test counts.
+  const unsubscribe = new InfiniteQueryObserver(client, {
+    ...historyOptions,
+    enabled: true,
+    staleTime: Infinity,
+  }).subscribe(() => undefined);
+  selectClaim(2);
+  expect(requests).toEqual([]);
+  const reviewed = {
+    ...EMPTY_CLAIM_REVIEW,
+    status: "reviewed",
+    statusOrigin: "single",
+    decidedAt: at,
+    decidedBy: actorId,
+    eventCount: 1,
+  } as const;
+  answers.push(Response.json({ claimId: claim.id, review: reviewed }));
+  answers.push(Response.json(history([])));
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.confirm.verdict }),
+  );
+  // The decision writes the claim's review into the run in place: the run is
+  // never read again. The review history open beside it is read once.
+  await waitFor(() =>
+    expect(requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      `POST /v1/lists/${workspaceId}/claim-reviews`,
+      `GET /v1/lists/${workspaceId}/claim-reviews`,
+    ]),
+  );
+  await act(async () => {
+    await Promise.resolve();
+  });
+  unsubscribe();
+  expect(requests).toHaveLength(2);
+  expect(
+    client
+      .getQueryData(verificationRunOptions(workspaceId, run.id).queryKey)
+      ?.claims.at(1)?.review,
+  ).toEqual(reviewed);
+  expect(
+    client.getQueryState(verificationRunOptions(workspaceId, run.id).queryKey)
+      ?.isInvalidated,
+  ).toBe(false);
 });
 
 test("decisions carried from the previous run sit under one divider naming that run", async () => {

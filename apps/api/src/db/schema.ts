@@ -39,6 +39,7 @@ export * from "./schema/bilingual";
 export * from "./schema/document-translations";
 export * from "./schema/document-reviews";
 export * from "./schema/lists-verification";
+export * from "./schema/lists-graph";
 export * from "./schema/office-evidence";
 export * from "./schema/pdf-signing";
 export * from "./schema/flows";

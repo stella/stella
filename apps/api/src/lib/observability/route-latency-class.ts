@@ -543,6 +543,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /usage/hosted/webhook": "crud",
   "POST /v1/ai-autocomplete/stream": "stream",
   "POST /v1/ai-config/validate-provider": "crud",
+  "POST /v1/ai/ask-email": "ai",
   "POST /v1/ai/draft-email": "ai",
   "POST /v1/ai/summarize": "ai",
   "POST /v1/api-keys": "crud",

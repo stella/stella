@@ -70,6 +70,7 @@
     "inputRequest": "Input",
     "questionTitle": "Asking for clarification",
     "questionChooseSeveral": "Choose any that apply",
+    "questionSelectAll": "Select all",
     "questionOwnWords": "Write your own",
     "questionShowOptions": "Show options",
     "questionPlaceholder": "Your answer",

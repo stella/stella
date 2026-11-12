@@ -100,6 +100,10 @@ export const RESOURCE_AUTHORIZATION_DISPOSITION = {
   [RESOURCE_TYPE.FLOW_RUN]: { type: "domain_policy", owner: "flows" },
   [RESOURCE_TYPE.INVOICE]: { type: "domain_policy", owner: "invoices" },
   [RESOURCE_TYPE.LEGAL_LIST]: { type: "domain_policy", owner: "legal_lists" },
+  [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION]: {
+    type: "domain_policy",
+    owner: "legal_lists",
+  },
   [RESOURCE_TYPE.LEGISLATION_DOCUMENT]: {
     type: "corpus_policy",
     owner: "legislation",
