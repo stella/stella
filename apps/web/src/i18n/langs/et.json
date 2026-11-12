@@ -1962,7 +1962,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# vestlus ootab teid} other {# vestlust ootab teid}}",
-      "working": "{count, plural, one {# vestlus on töös} other {# vestlust on töös}}"
+      "waitsOn": {
+        "approval": "Ootab teie kinnitust",
+        "askUser": "Esitab teile küsimuse",
+        "clientTool": "Jätkub, kui avate selle vestluse",
+        "harnessQuestion": "Teie arvutis töötaval agendil on küsimus"
+      },
+      "working": "{count, plural, one {# vestlus on töös} other {# vestlust on töös}}",
+      "workingNow": "Töös"
     },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mcpReconnect": {

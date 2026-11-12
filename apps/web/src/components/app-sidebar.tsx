@@ -91,7 +91,11 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
-import { MatterRunBadge, MatterRunMarks } from "@/components/matter-run-marks";
+import {
+  MatterRunBadge,
+  MatterRunMarks,
+  useRunCounts,
+} from "@/components/matter-run-marks";
 import { PendingApprovalsNavBadge } from "@/components/pending-approvals-nav-badge";
 import {
   Sidebar,
@@ -128,8 +132,8 @@ import {
   useMatterActions,
 } from "@/components/workspaces/matter-context-menu";
 import { activeChatRunsOptions } from "@/features/chat/active-runs";
-import { matterRunStatusByWorkspace } from "@/features/chat/active-runs.logic";
-import type { MatterRunStatus } from "@/features/chat/active-runs.logic";
+import { matterRunsByWorkspace } from "@/features/chat/active-runs.logic";
+import type { MatterRuns } from "@/features/chat/active-runs.logic";
 import {
   groupedChatThreadsOptions,
   mergeGroupedChatThreadPages,
@@ -370,7 +374,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
   );
   // Run marks decorate matters that are listed anyway; an unreadable list
   // shows no marks rather than holding the matters back.
-  const runStatusByWorkspaceId = matterRunStatusByWorkspace(
+  const runsByWorkspaceId = matterRunsByWorkspace(
     activeRunsView.type === "items" ? activeRunsView.items : [],
   );
   const workspaces = workspacesData?.workspaces;
@@ -860,7 +864,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
                 onReorder={reorderPinned}
                 billingLinks={matterBillingLinks}
                 onTogglePin={togglePin}
-                runStatus={runStatusByWorkspaceId.get(ws.id)}
+                runs={runsByWorkspaceId.get(ws.id)}
                 workspace={ws}
               />
             ))}
@@ -877,7 +881,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
                 onExpandedChange={() => toggleMatterExpansion(ws.id)}
                 billingLinks={matterBillingLinks}
                 onTogglePin={togglePin}
-                runStatus={runStatusByWorkspaceId.get(ws.id)}
+                runs={runsByWorkspaceId.get(ws.id)}
                 workspace={ws}
               />
             ))}
@@ -1114,7 +1118,7 @@ type MatterItemProps = {
   ) => void;
   navBadge?: number | undefined;
   /** What the reader's chats in this matter are doing; absent when none are open. */
-  runStatus: MatterRunStatus | undefined;
+  runs: MatterRuns | undefined;
 };
 
 const MATTER_DRAG_TYPE = "stella/pinned-matter-id";
@@ -1186,7 +1190,7 @@ export const MatterItem = ({
   onEntityDrop,
   onExpandedChange,
   navBadge,
-  runStatus,
+  runs,
   userId,
 }: MatterItemProps) => {
   // Read pin state directly from the store so the menu label
@@ -1279,6 +1283,7 @@ export const MatterItem = ({
 
   const canDrag = isPinned && !!onReorder;
   const isCollapsed = state === "collapsed" && !isMobile;
+  const runCounts = useRunCounts(runs);
 
   useExternalSyncEffect(() => {
     if (!isPinned || pinAttention === null) {
@@ -1523,6 +1528,7 @@ export const MatterItem = ({
             ws.name,
             ws.client?.displayName ?? t("workspaces.parties.personalLabel"),
             showMatterNumber ? ws.reference : null,
+            ...runCounts.map((count) => count.label),
           ]
             .filter(Boolean)
             .join(" · ")}
@@ -1548,7 +1554,6 @@ export const MatterItem = ({
                   className="size-4 shrink-0"
                   matter={{ id: ws.id, color: ws.color }}
                 />
-                <MatterRunBadge status={runStatus} />
               </MatterColorContextPicker>
             )}
             <span className="relative flex min-w-0 flex-col">
@@ -1557,7 +1562,7 @@ export const MatterItem = ({
                 <Tooltip
                   content={formatFullTimestamp(ws.lastActivityAt)}
                   render={
-                    <span className="text-muted-foreground text-3xs min-w-0 leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
+                    <span className="text-muted-foreground text-3xs flex min-w-0 leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
                   }
                 >
                   <TruncatedText render={<BidiText />}>
@@ -1565,15 +1570,22 @@ export const MatterItem = ({
                       ? ws.client.displayName
                       : t("workspaces.parties.personalLabel")}
                   </TruncatedText>
-                  {relTime ? ` · ${relTime}` : ""}
+                  {relTime ? (
+                    <span className="shrink-0 whitespace-pre">
+                      {` · ${relTime}`}
+                    </span>
+                  ) : null}
                 </Tooltip>
                 <span className="ms-auto">
-                  <MatterRunMarks status={runStatus} />
+                  <MatterRunMarks runs={runs} />
                 </span>
               </span>
             </span>
           </Link>
         </SidebarMenuButton>
+        {isCollapsed ? (
+          <MatterRunBadge runs={runs} workspaceId={ws.id} />
+        ) : null}
         {navBadge !== undefined ? (
           <NavBadge
             className={cn(hasExpandableContent && "end-7")}

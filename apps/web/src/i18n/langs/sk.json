@@ -1962,7 +1962,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {Na vás čaká # chat} few {Na vás čakajú # chaty} many {Na vás čaká # chatu} other {Na vás čaká # chatov}}",
-      "working": "{count, plural, one {Pracuje # chat} few {Pracujú # chaty} many {Pracuje # chatu} other {Pracuje # chatov}}"
+      "waitsOn": {
+        "approval": "Čaká na vaše schválenie",
+        "askUser": "Pýta sa vás",
+        "clientTool": "Pokračuje, keď otvoríte chat",
+        "harnessQuestion": "Agent vo vašom počítači má otázku"
+      },
+      "working": "{count, plural, one {Pracuje # chat} few {Pracujú # chaty} many {Pracuje # chatu} other {Pracuje # chatov}}",
+      "workingNow": "Pracuje"
     },
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mcpReconnect": {
