@@ -95,12 +95,14 @@ the open; the previous holder then loses its controlled tab and its tabs go
 back to the member, and a stella tab's chat is refused until the member
 connects it again or hands it a tab from the popup.
 
-A page that asks for a sign-in (a visible password or one-time-code field in
-any frame, or an identity provider's page) is the member's: a desktop command
-gets `needs-member`, with nothing read, typed or clicked and no snapshot
-stored: the page script checks for a sign-in before it reads any field or
-starts watching the page. Commands from a stella tab still read such a page with its secret
-fields withheld.
+A page that asks for a sign-in (a visible password or one-time-code field,
+input or text area, in any frame, or an identity provider's page) is the
+member's: a desktop command on it gets `needs-member`, with nothing on the
+page read, typed or clicked and no snapshot stored. Every frame is checked
+before any is read, and the page script checks before it reads any field
+or starts watching the page. A click or fill that leads to such a page has
+run: its `needs-member` says the page it led to is the member's. Commands
+from a stella tab still read such a page with its secret fields withheld.
 
 ## Control and stopping
 

@@ -205,6 +205,12 @@ describe("the stella desktop row", () => {
         "not-running",
       );
     }
+    expect(
+      desktopLinkView({
+        allowed: true,
+        state: DESKTOP_LINK_STATE.incompatible,
+      }),
+    ).toEqual({ messageKey: "desktopUpdateNeeded", type: "update-needed" });
   });
 });
 

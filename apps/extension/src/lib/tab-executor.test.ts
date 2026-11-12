@@ -527,9 +527,11 @@ describe("a page that asks for a sign-in", () => {
     };
     await run({ action: "snapshot" }, desktop);
     await run({ action: "snapshot" });
+    // A desktop read checks every frame for a sign-in before it reads.
     expect(policies).toMatchObject([
-      { signIn: SIGN_IN_POLICY.handToMember },
-      { signIn: SIGN_IN_POLICY.withholdSecrets },
+      { purpose: "sign-in-check", signIn: SIGN_IN_POLICY.handToMember },
+      { purpose: "read", signIn: SIGN_IN_POLICY.handToMember },
+      { purpose: "read", signIn: SIGN_IN_POLICY.withholdSecrets },
     ]);
   });
 
@@ -541,7 +543,11 @@ describe("a page that asks for a sign-in", () => {
     } = { func: undefined, operation: undefined };
     handlers["snapshot"] = (injection) => {
       injected.func = injection.func;
-      injected.operation = injection.args?.[0];
+      injected.operation = {
+        ...injection.args?.[0],
+        // The read itself, as a frame added after the tab-wide check meets it.
+        purpose: "read",
+      };
       return [{ frameId: 0, result: { refused: "sign-in" } }];
     };
     await run({ action: "snapshot" }, desktop);
@@ -557,7 +563,7 @@ describe("a page that asks for a sign-in", () => {
     class FakeElement {
       parentElement = null;
       shadowRoot = null;
-      getAttribute(name: string) {
+      getAttribute(name: string): string | null {
         return name === "type" ? "password" : null;
       }
       getClientRects() {
@@ -585,7 +591,19 @@ describe("a page that asks for a sign-in", () => {
         return "typed-secret-6612";
       }
     }
-    const field = new FakeInput();
+    // A one-time code typed into a text area is a sign-in field as well.
+    class FakeTextArea extends FakeElement {
+      id = "code";
+      name = "code";
+      type = "textarea";
+      override getAttribute(name: string) {
+        return name === "autocomplete" ? "one-time-code" : null;
+      }
+      get value() {
+        touched.push("value");
+        return "481516";
+      }
+    }
     const style = {
       clip: "auto",
       clipPath: "none",
@@ -599,66 +617,67 @@ describe("a page that asks for a sign-in", () => {
       visibility: "visible",
       getPropertyValue: () => "",
     };
-    const globals: Record<string, unknown> = {
-      document: {
-        addEventListener: () => touched.push("listener"),
-        querySelectorAll: () => [field],
-      },
-      Element: FakeElement,
-      HTMLInputElement: FakeInput,
-      // Kinds the page has none of: nothing is an instance.
-      HTMLSelectElement: class {
-        readonly kind = "select";
-      },
-      HTMLTextAreaElement: class {
-        readonly kind = "textarea";
-      },
-      MutationObserver: class {
-        constructor() {
-          touched.push("observer");
-        }
+    for (const field of [new FakeInput(), new FakeTextArea()]) {
+      const globals: Record<string, unknown> = {
+        document: {
+          addEventListener: () => touched.push("listener"),
+          querySelectorAll: () => [field],
+        },
+        Element: FakeElement,
+        HTMLInputElement: FakeInput,
+        // A kind the page has none of: nothing is an instance.
+        HTMLSelectElement: class {
+          readonly kind = "select";
+        },
+        HTMLTextAreaElement: FakeTextArea,
+        MutationObserver: class {
+          constructor() {
+            touched.push("observer");
+          }
 
-        observe() {
-          touched.push("observe");
-        }
-      },
-      ShadowRoot: class {
-        readonly kind = "shadow-root";
-      },
-      window: {
-        getComputedStyle: () => style,
-        location: { href: "https://library.example/login" },
-        origin: "https://library.example",
-        scrollX: 0,
-        scrollY: 0,
-      },
-    };
-    const saved = Object.keys(globals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
-    );
-    for (const [key, value] of Object.entries(globals)) {
-      Object.defineProperty(globalThis, key, { configurable: true, value });
-    }
-    try {
-      expect(func(operation)).toEqual({ refused: "sign-in" });
-      const kept: unknown = Reflect.get(globalThis, "stellaSecretValues");
-      expect(kept instanceof Set ? [...kept] : []).toEqual([]);
-      expect(Reflect.get(globalThis, "stellaSecretWatch")).toBeUndefined();
-      expect(touched).toEqual([]);
-    } finally {
-      for (const [key, descriptor] of saved) {
-        if (descriptor === undefined) {
-          Reflect.deleteProperty(globalThis, key);
-        } else {
-          Object.defineProperty(globalThis, key, descriptor);
-        }
+          observe() {
+            touched.push("observe");
+          }
+        },
+        ShadowRoot: class {
+          readonly kind = "shadow-root";
+        },
+        window: {
+          getComputedStyle: () => style,
+          location: { href: "https://library.example/login" },
+          origin: "https://library.example",
+          scrollX: 0,
+          scrollY: 0,
+        },
+      };
+      const saved = Object.keys(globals).map(
+        (key) =>
+          [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+      );
+      for (const [key, value] of Object.entries(globals)) {
+        Object.defineProperty(globalThis, key, { configurable: true, value });
       }
-      for (const key of [
-        "stellaSecretValues",
-        "stellaSensitiveFields",
-        "stellaSecretWatch",
-      ]) {
-        Reflect.deleteProperty(globalThis, key);
+      try {
+        expect(func(operation)).toEqual({ refused: "sign-in" });
+        const kept: unknown = Reflect.get(globalThis, "stellaSecretValues");
+        expect(kept instanceof Set ? [...kept] : []).toEqual([]);
+        expect(Reflect.get(globalThis, "stellaSecretWatch")).toBeUndefined();
+        expect(touched).toEqual([]);
+      } finally {
+        for (const [key, descriptor] of saved) {
+          if (descriptor === undefined) {
+            Reflect.deleteProperty(globalThis, key);
+          } else {
+            Object.defineProperty(globalThis, key, descriptor);
+          }
+        }
+        for (const key of [
+          "stellaSecretValues",
+          "stellaSensitiveFields",
+          "stellaSecretWatch",
+        ]) {
+          Reflect.deleteProperty(globalThis, key);
+        }
       }
     }
   });

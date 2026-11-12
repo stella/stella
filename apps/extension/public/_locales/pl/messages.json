@@ -94,5 +94,8 @@
   },
   "desktopNotRunning": {
     "message": "stella desktop nie jest uruchomiony"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Zaktualizuj stella desktop i to rozszerzenie"
   }
 }

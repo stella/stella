@@ -31,6 +31,8 @@ export const DESKTOP_LINK_STATE = {
   offline: "offline",
   /** The host started; stella desktop has not answered yet. */
   waiting: "waiting",
+  /** stella desktop answered with another protocol: no command can run. */
+  incompatible: "incompatible",
 } as const;
 
 export type DesktopLinkState =
@@ -62,7 +64,7 @@ const writeDesktopLinkState = async (state: DesktopLinkState) => {
  * a web connection's (a random UUID) and never reaches that connection's
  * controlled tab, receipts or budget.
  */
-export const desktopControllerId = (controllerId: string): string =>
+export const desktopControllerId = (controllerId: string) =>
   `desktop:${controllerId}`;
 
 export type DesktopCommand = Extract<
@@ -83,10 +85,28 @@ export type DesktopLinkTimer = (
   delayMs: number,
 ) => () => void;
 
+/** The alarm that wakes an idle worker to reconnect to stella desktop. */
+export const DESKTOP_LINK_ALARM = "stella-desktop-link";
+
+/** Chrome fires an alarm no sooner than this after it is set. */
+const ALARM_MIN_DELAY_MS = 30_000;
+
+/**
+ * A timeout while the worker runs, and an alarm that wakes it if Chrome
+ * stops it first: with no native port open, an idle worker is ended and
+ * its timeouts with it. The worker connects on every start, so the alarm
+ * only has to wake it.
+ */
 export const realDesktopLinkTimer: DesktopLinkTimer = (task, delayMs) => {
   const timer = setTimeout(task, delayMs);
+  chrome.alarms
+    .create(DESKTOP_LINK_ALARM, {
+      delayInMinutes: Math.max(delayMs, ALARM_MIN_DELAY_MS) / 60_000,
+    })
+    .catch(() => undefined);
   return () => {
     clearTimeout(timer);
+    chrome.alarms.clear(DESKTOP_LINK_ALARM).catch(() => undefined);
   };
 };
 
@@ -123,14 +143,18 @@ export const createDesktopLink = ({
     switch (request.type) {
       case "hello":
         attempts = 0;
+        // Answered whatever stella desktop speaks, so it can name the
+        // mismatch; connected only when both speak this protocol.
         send(from, {
           protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
           source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
           type: "hello",
         });
-        writeDesktopLinkState(DESKTOP_LINK_STATE.connected).catch(
-          () => undefined,
-        );
+        writeDesktopLinkState(
+          request.protocolVersion === BROWSER_CONTROL_PROTOCOL_VERSION
+            ? DESKTOP_LINK_STATE.connected
+            : DESKTOP_LINK_STATE.incompatible,
+        ).catch(() => undefined);
         return;
       case "command": {
         const answer = (result: BrowserControlResult) => {
@@ -193,7 +217,7 @@ export const createDesktopLink = ({
     schedule();
   };
 
-  const connect = async (): Promise<void> => {
+  const connect = async () => {
     if (!(await hasDesktopLinkAccess())) {
       await writeDesktopLinkState(DESKTOP_LINK_STATE.offline);
       return;

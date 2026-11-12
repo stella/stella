@@ -76,6 +76,7 @@ if (
 if (
   !exactSet(manifest.permissions, [
     "activeTab",
+    "alarms",
     "declarativeNetRequest",
     "scripting",
     "storage",

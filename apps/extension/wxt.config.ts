@@ -61,7 +61,14 @@ export default defineConfig({
     // new tab or which frame started a download. `nativeMessaging` is asked
     // for on its own, by members who run coding agents with stella desktop.
     optional_permissions: ["downloads", "nativeMessaging", "webNavigation"],
-    permissions: ["activeTab", "declarativeNetRequest", "scripting", "storage"],
+    // `alarms` wakes the worker to reconnect to stella desktop.
+    permissions: [
+      "activeTab",
+      "alarms",
+      "declarativeNetRequest",
+      "scripting",
+      "storage",
+    ],
   },
   srcDir: "src",
   zip: { artifactTemplate: "stella-extension-chrome-{{version}}.zip" },

@@ -189,6 +189,13 @@ test("answers stella desktop's hello and runs its commands", async () => {
       type: "hello",
     },
   ]);
+  // Another protocol is answered, never reported as connected.
+  expect(await readDesktopLinkState()).toBe(DESKTOP_LINK_STATE.incompatible);
+  native.deliver({
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
+    type: "hello",
+  });
   expect(await readDesktopLinkState()).toBe(DESKTOP_LINK_STATE.connected);
 
   native.deliver(command("r-1"));

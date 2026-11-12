@@ -94,5 +94,8 @@
   },
   "desktopNotRunning": {
     "message": "stella desktop ei tööta"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Uuendage stella desktopi ja seda laiendust"
   }
 }

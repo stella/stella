@@ -1085,7 +1085,7 @@ const runPageOperation = async (
             (word === "one" && words[index + 1] === "time"),
         );
       };
-      const isSignInField = (element: HTMLInputElement) =>
+      const isSignInField = (element: HTMLInputElement | HTMLTextAreaElement) =>
         element.type === "password" ||
         (element.getAttribute("autocomplete") ?? "")
           .toLowerCase()
@@ -1096,12 +1096,19 @@ const runPageOperation = async (
         namedLikeSignIn(element.id);
       const asksForSignIn = (root: ParentNode): boolean => {
         for (const element of root.querySelectorAll("*")) {
+          // A text area counts like an input: a one-time code is typed
+          // into either.
+          const field =
+            (element instanceof HTMLInputElement &&
+              element.type !== "hidden") ||
+            element instanceof HTMLTextAreaElement
+              ? element
+              : null;
           if (
-            element instanceof HTMLInputElement &&
-            element.type !== "hidden" &&
-            isSignInField(element) &&
-            visible(element) &&
-            !concealedInTree(element)
+            field !== null &&
+            isSignInField(field) &&
+            visible(field) &&
+            !concealedInTree(field)
           ) {
             return true;
           }
@@ -1582,6 +1589,12 @@ const readSnapshot = async ({
   if (handsSignInToMember && isIdentityProviderUrl(tab.url)) {
     return needsMember();
   }
+  // Every frame is checked before any is read: a frame without a sign-in
+  // is never read for a tab another frame hands to the member. Each frame
+  // checks again as it reads, for a sign-in that appears in between.
+  if (handsSignInToMember && (await tabAsksForSignIn(tabId))) {
+    return needsMember();
+  }
   const results = await runPageOperation(
     { allFrames: true, tabId },
     {
@@ -2025,7 +2038,13 @@ const runOpen = async (
     );
   // Spares creating a tab only to close it; the limit itself holds where
   // the tab joins chat's.
-  if (newTab && chatTabsAtLimit(await readContainedTabs())) {
+  // A takeover's new holder keeps none of the previous holder's tabs: the
+  // limit then holds where the tab joins.
+  if (
+    newTab &&
+    takeOver === null &&
+    chatTabsAtLimit(await readContainedTabs())
+  ) {
     return tabLimitReached();
   }
   const overBudget = await budget.charge();
@@ -2311,12 +2330,20 @@ const tabAsksForSignIn = async (tabId: number): Promise<boolean> => {
   return results.some(({ result }) => v.is(signInRefusalSchema, result));
 };
 
-const runElementAction = async (
-  command: BrowserControlElementCommand,
-  { state, tab, tabId }: ControlledTab & { tabId: number },
-  documentId: string | null,
-  run: CommandRun,
-): Promise<BrowserControlResult> => {
+type ElementActionArgs = {
+  command: BrowserControlElementCommand;
+  controlledTab: ControlledTab & { tabId: number };
+  /** The document the element's frame showed when the page was read. */
+  documentId: string | null;
+  run: CommandRun;
+};
+
+const runElementAction = async ({
+  command,
+  controlledTab: { state, tab, tabId },
+  documentId,
+  run,
+}: ElementActionArgs): Promise<BrowserControlResult> => {
   const { budget, progress, signal, signIn } = run;
   if (tab.url === undefined || parseControllableUrl(tab.url) === null) {
     return browserControlError(
@@ -2391,7 +2418,7 @@ const runBrowserCommand = async (
   }: ExecuteBrowserCommandOptions,
   progress: CommandProgress,
 ): Promise<BrowserControlResult> => {
-  const run: CommandRun = {
+  const run = {
     budget,
     controllerId,
     progress,
@@ -2442,12 +2469,12 @@ const runBrowserCommand = async (
     if (command.action === BROWSER_CONTROL_ACTION.goBack) {
       return await runGoBack(tabId, controlledTab.state, run);
     }
-    return await runElementAction(
+    return await runElementAction({
       command,
-      { ...controlledTab, tabId },
-      identity.documentId,
+      controlledTab: { ...controlledTab, tabId },
+      documentId: identity.documentId,
       run,
-    );
+    });
   } catch {
     if (progress.dispatched) {
       return outcomeUnknown(

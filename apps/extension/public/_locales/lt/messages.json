@@ -94,5 +94,8 @@
   },
   "desktopNotRunning": {
     "message": "stella desktop neveikia"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Atnaujinkite stella desktop ir šį plėtinį"
   }
 }

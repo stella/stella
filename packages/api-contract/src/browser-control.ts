@@ -370,9 +370,10 @@ export const BROWSER_CONTROL_ERROR_CODE = {
   /**
    * The page asks for a sign-in (a password or one-time-code field, or an
    * identity provider's page). The member signs in themselves; nothing on
-   * the page was read, typed or clicked. Only commands from stella desktop
-   * get it so far; a web connection reads such a page with its secret
-   * fields withheld.
+   * that page was read, typed or clicked. After a click or fill it names
+   * the page the action led to: the action itself ran. Only commands from
+   * stella desktop get it so far; a web connection reads such a page with
+   * its secret fields withheld.
    */
   needsMember: "needs-member",
   noControlledTab: "no-controlled-tab",

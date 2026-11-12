@@ -94,5 +94,8 @@
   },
   "desktopNotRunning": {
     "message": "stella desktop لا يعمل"
+  },
+  "desktopUpdateNeeded": {
+    "message": "حدّث stella desktop وهذه الإضافة"
   }
 }

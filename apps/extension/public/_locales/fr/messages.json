@@ -94,5 +94,8 @@
   },
   "desktopNotRunning": {
     "message": "stella desktop n’est pas lancé"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Mettez à jour stella desktop et cette extension"
   }
 }

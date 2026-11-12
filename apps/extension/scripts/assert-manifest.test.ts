@@ -10,7 +10,13 @@ const productionManifest = {
   content_security_policy: {
     extension_pages: "script-src 'self'; object-src 'self'",
   },
-  permissions: ["activeTab", "declarativeNetRequest", "scripting", "storage"],
+  permissions: [
+    "activeTab",
+    "alarms",
+    "declarativeNetRequest",
+    "scripting",
+    "storage",
+  ],
   optional_host_permissions: ["https://*/*"],
   optional_permissions: ["downloads", "nativeMessaging", "webNavigation"],
   content_scripts: [

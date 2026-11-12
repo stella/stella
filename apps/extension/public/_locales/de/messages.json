@@ -94,5 +94,8 @@
   },
   "desktopNotRunning": {
     "message": "stella desktop läuft nicht"
+  },
+  "desktopUpdateNeeded": {
+    "message": "stella desktop und diese Erweiterung aktualisieren"
   }
 }

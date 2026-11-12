@@ -244,11 +244,19 @@ primaryButton.addEventListener("click", () => {
   }
 });
 
+/** The latest desktop render; an older one that finishes later is dropped. */
+let desktopRender = 0;
+
 const renderDesktopLink = async (): Promise<void> => {
+  desktopRender += 1;
+  const thisRender = desktopRender;
   const [allowed, state] = await Promise.all([
     hasDesktopLinkAccess(),
     readDesktopLinkState(),
   ]);
+  if (thisRender !== desktopRender) {
+    return;
+  }
   const view = desktopLinkView({ allowed, state });
   desktopAllowButton.hidden = view.type !== "allow";
   desktopStatus.hidden = view.type === "allow";

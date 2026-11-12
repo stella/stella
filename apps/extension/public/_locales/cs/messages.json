@@ -94,5 +94,8 @@
   },
   "desktopNotRunning": {
     "message": "stella desktop: neběží"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Aktualizujte stella desktop a toto rozšíření"
   }
 }

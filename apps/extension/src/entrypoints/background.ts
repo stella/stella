@@ -37,6 +37,7 @@ import {
 } from "../lib/controller";
 import {
   createDesktopLink,
+  DESKTOP_LINK_ALARM,
   type DesktopCommand,
   desktopControllerId,
   realDesktopLinkTimer,
@@ -246,31 +247,40 @@ const runControlledCommand = async ({
   toolCallId,
   turnId,
 }: ControlledCommand): Promise<BrowserControlResult> => {
-  const execution = await session.runCommand(turnId, async (signal) => {
-    const admission = await admit();
-    if (admission.type === "refused") {
-      return admission.result;
-    }
-    if (!(await hasAllSiteAccess())) {
-      return browserControlError(
-        BROWSER_CONTROL_ERROR_CODE.permissionDenied,
-        "Grant stella access to websites from the extension popup.",
-      );
-    }
-    return await executeAtMostOnce({
-      command,
-      controllerId,
-      execute: async () =>
-        await executeBrowserCommand(controllerId, command, {
-          budget: storedCommandBudget({ command, controllerId, turnId }),
-          observedTab,
-          signal,
-          signIn,
-          takeOver: admission.takeOver,
-        }),
-      toolCallId,
-    });
-  });
+  const execution = await session.runCommand(
+    { controllerId, turnId },
+    async (signal) => {
+      const admission = await admit();
+      switch (admission.type) {
+        case "refused":
+          return admission.result;
+        case "admitted":
+          break;
+        default:
+          admission satisfies never;
+          return panic("Unhandled command admission");
+      }
+      if (!(await hasAllSiteAccess())) {
+        return browserControlError(
+          BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+          "Grant stella access to websites from the extension popup.",
+        );
+      }
+      return await executeAtMostOnce({
+        command,
+        controllerId,
+        execute: async () =>
+          await executeBrowserCommand(controllerId, command, {
+            budget: storedCommandBudget({ command, controllerId, turnId }),
+            observedTab,
+            signal,
+            signIn,
+            takeOver: admission.takeOver,
+          }),
+        toolCallId,
+      });
+    },
+  );
   return execution.status === "completed"
     ? execution.result
     : browserControlError(
@@ -384,8 +394,11 @@ const runDesktopCommand = async (
 };
 
 const desktopLink = createDesktopLink({
-  cancel: ({ turnId }) => {
-    session.stopTurn(turnId)();
+  cancel: ({ controllerId, turnId }) => {
+    session.stopTurn({
+      controllerId: desktopControllerId(controllerId),
+      turnId,
+    })();
   },
   runCommand: runDesktopCommand,
   timer: realDesktopLinkTimer,
@@ -412,7 +425,10 @@ const handleWebMessage = (
   if (message.type === "cancel") {
     // The target is fixed on receipt; checking the sender reads storage,
     // and a command admitted meanwhile is not the one being stopped.
-    const stop = session.stopTurn(message.turnId);
+    const stop = session.stopTurn({
+      controllerId: message.controllerId,
+      turnId: message.turnId,
+    });
     controllerForSender(senderUrl)
       .then((controller) => {
         if (controller?.controllerId === message.controllerId) {
@@ -541,6 +557,11 @@ export default defineBackground(() => {
   chrome.permissions.onAdded.addListener(registerOptionalListeners);
   // Every worker start reconnects: Chrome ends the host with the worker.
   desktopLink.connect().catch(() => undefined);
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === DESKTOP_LINK_ALARM) {
+      desktopLink.connect().catch(() => undefined);
+    }
+  });
   chrome.permissions.onAdded.addListener(() => {
     desktopLink.connect().catch(() => undefined);
   });
@@ -548,7 +569,11 @@ export default defineBackground(() => {
     hasDesktopLinkAccess()
       .then(async (allowed) => {
         if (!allowed) {
-          await desktopLink.disconnect();
+          // A desktop command already running stops and answers on the
+          // still-open link before it closes.
+          await session.change(async () => {
+            await desktopLink.disconnect();
+          });
         }
         return undefined;
       })
