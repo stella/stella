@@ -1,0 +1,200 @@
+[
+  {
+    "name": "a self-correction keeps only the correction",
+    "transcript": "on Tuesday, I mean Wednesday",
+    "segments": [
+      {
+        "type": "text",
+        "text": "On Wednesday",
+        "bold": false
+      }
+    ],
+    "plausible": true
+  },
+  {
+    "name": "a Czech self-correction keeps only the correction",
+    "transcript": "v úterý, teda ve středu",
+    "segments": [
+      {
+        "type": "text",
+        "text": "Ve středu",
+        "bold": false
+      }
+    ],
+    "plausible": true
+  },
+  {
+    "name": "a corrected number keeps only the correction",
+    "transcript": "42, ne, 24",
+    "segments": [
+      {
+        "type": "text",
+        "text": "24",
+        "bold": false
+      }
+    ],
+    "plausible": true
+  },
+  {
+    "name": "a correction inside a bold command keeps the corrected number",
+    "transcript": "tučně 42, ne, 24 dní tečka",
+    "segments": [
+      {
+        "type": "text",
+        "text": "24",
+        "bold": true
+      },
+      {
+        "type": "text",
+        "text": " dní.",
+        "bold": false
+      }
+    ],
+    "plausible": true
+  },
+  {
+    "name": "a correction discards no more than the correction replaces",
+    "transcript": "The parties agree to extend the deadline by two weeks, I mean three",
+    "segments": [
+      {
+        "type": "text",
+        "text": "Three.",
+        "bold": false
+      }
+    ],
+    "plausible": false
+  },
+  {
+    "name": "a correction keeps the rest of its sentence",
+    "transcript": "The parties agree to extend the deadline by two weeks, I mean three",
+    "segments": [
+      {
+        "type": "text",
+        "text": "The parties agree to extend the deadline by three weeks.",
+        "bold": false
+      }
+    ],
+    "plausible": true
+  },
+  {
+    "name": "a correction discards nothing beyond its own sentence",
+    "transcript": "The landlord accepts the terms. The tenant said no to the offer. The deposit is due on Monday.",
+    "segments": [
+      {
+        "type": "text",
+        "text": "The tenant said no to the offer.",
+        "bold": false
+      }
+    ],
+    "plausible": false
+  },
+  {
+    "name": "negation and apology words alone are dictated text",
+    "transcript": "No, sorry.",
+    "segments": [
+      {
+        "type": "lineBreak"
+      }
+    ],
+    "plausible": false
+  },
+  {
+    "name": "negation and apology words alone may be typed",
+    "transcript": "No, sorry.",
+    "segments": [
+      {
+        "type": "text",
+        "text": "No, sorry.",
+        "bold": false
+      }
+    ],
+    "plausible": true
+  },
+  {
+    "name": "a decimal point does not end a sentence",
+    "transcript": "3.5 million, I mean 4 million",
+    "segments": [
+      {
+        "type": "text",
+        "text": "4 million",
+        "bold": false
+      }
+    ],
+    "plausible": true
+  },
+  {
+    "name": "a line break command alone may become a break alone",
+    "transcript": "nový řádek",
+    "segments": [
+      {
+        "type": "lineBreak"
+      }
+    ],
+    "plausible": true
+  },
+  {
+    "name": "a paragraph command alone may become a break alone",
+    "transcript": "Nový odstavec.",
+    "segments": [
+      {
+        "type": "paragraphBreak"
+      }
+    ],
+    "plausible": true
+  },
+  {
+    "name": "a Spanish line break command alone may become a break alone",
+    "transcript": "nueva línea",
+    "segments": [
+      {
+        "type": "lineBreak"
+      }
+    ],
+    "plausible": true
+  },
+  {
+    "name": "a dictated word beside a command is not a command",
+    "transcript": "smlouva nový řádek",
+    "segments": [
+      {
+        "type": "lineBreak"
+      }
+    ],
+    "plausible": false
+  },
+  {
+    "name": "commands are not content an answer must keep",
+    "transcript": "nový řádek a tedy nový řádek se rozhodl odejít tečka",
+    "segments": [
+      {
+        "type": "lineBreak"
+      },
+      {
+        "type": "text",
+        "text": "a tedy",
+        "bold": false
+      },
+      {
+        "type": "lineBreak"
+      },
+      {
+        "type": "text",
+        "text": "se rozhodl odejít.",
+        "bold": false
+      }
+    ],
+    "plausible": true
+  },
+  {
+    "name": "an answer that drops most of a sentence lost content",
+    "transcript": "the parties agree to extend the deadline by two weeks",
+    "segments": [
+      {
+        "type": "text",
+        "text": "The parties agree.",
+        "bold": false
+      }
+    ],
+    "plausible": false
+  }
+]

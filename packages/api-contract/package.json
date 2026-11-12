@@ -119,6 +119,8 @@
     "./decision-docket-identity.fixtures": "./src/decision-docket-identity.fixtures.ts",
     "./decision-docket-reference": "./src/decision-docket-reference.ts",
     "./decision-query-intent": "./src/decision-query-intent.ts",
+    "./desktop-dictation-cleanup": "./src/desktop-dictation-cleanup.ts",
+    "./desktop-dictation-cleanup.plausibility": "./src/desktop-dictation-cleanup.plausibility.json",
     "./desktop-feature-access": "./src/desktop-feature-access.ts",
     "./desktop-handoff": "./src/desktop-handoff.ts",
     "./mobile-client": "./src/mobile-client.ts",
