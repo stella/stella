@@ -210,9 +210,9 @@ type ControlledCommand = Pick<
 > & {
   /**
    * Checked inside the session, once changes queued ahead of the command
-   * have been applied; a result refuses the command.
+   * have been applied; a result refuses the command. `null` for none.
    */
-  admit: () => Promise<BrowserControlResult | null>;
+  admit: (() => Promise<BrowserControlResult | null>) | null;
   signIn: SignInPolicy;
   /**
    * Runs right before the command executes, after the ledger found no
@@ -233,7 +233,7 @@ const runControlledCommand = async ({
   turnId,
 }: ControlledCommand): Promise<BrowserControlResult> => {
   const execution = await session.runCommand(turnId, async (signal) => {
-    const refusal = await admit();
+    const refusal = admit === null ? null : await admit();
     if (refusal !== null) {
       return refusal;
     }
@@ -313,14 +313,14 @@ const runDesktopCommand = async (
 ): Promise<BrowserControlResult> => {
   const controllerId = desktopControllerId(message.controllerId);
   const { command } = message;
+  if (!DESKTOP_ACTIONS.has(command.action)) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.invalidCommand,
+      "stella desktop opens, reads, clicks and types only.",
+    );
+  }
   const result = await runControlledCommand({
-    admit: async () =>
-      DESKTOP_ACTIONS.has(command.action)
-        ? null
-        : browserControlError(
-            BROWSER_CONTROL_ERROR_CODE.invalidCommand,
-            "stella desktop opens, reads, clicks and types only.",
-          ),
+    admit: null,
     beforeExecute: async () => {
       if (
         command.action === BROWSER_CONTROL_ACTION.open &&
