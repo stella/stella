@@ -29,6 +29,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
+import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
 import { isRecord } from "@/api/lib/type-guards";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -224,7 +225,7 @@ export const seedGraphToolsScaling = async ({
       })),
     );
     await writeGraphEdges(tx, ids.workspaceId, { type: "run", runId });
-    await writeGraphEdges(tx, ids.workspaceId, {
+    await writeFactSourceEdges(tx, ids.workspaceId, {
       type: "fact-sources",
       sourceIds: [sourceId],
       producer: { type: "reviewer" },

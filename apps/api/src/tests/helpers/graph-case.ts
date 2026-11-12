@@ -24,6 +24,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
+import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedQuery } from "@/api/tests/security/test-utils";
 import type {
@@ -243,7 +244,7 @@ export const seedGraphCase = async ({
   });
   await scoped(async (tx) => {
     await writeGraphEdges(tx, workspaceId, { type: "run", runId });
-    await writeGraphEdges(tx, workspaceId, {
+    await writeFactSourceEdges(tx, workspaceId, {
       type: "fact-sources",
       sourceIds: facts.map((fact) => fact.sourceId),
       producer: { type: "reviewer" },
