@@ -10,6 +10,7 @@ import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
 import { useHeaderSearch } from "@/components/header-search";
 import { LoadFailedCard } from "@/components/load-failure";
 import { TaskRow } from "@/components/task-row";
+import type { AccessTokenSource } from "@/connection/session";
 import { dayAt, groupByDue } from "@/state/tasks";
 import type { TasksLoad, TaskSummary } from "@/state/tasks";
 import { useAppColors } from "@/theme";
@@ -23,10 +24,12 @@ export const LoadedTasks = ({
   load,
   onReload,
   refreshing,
+  source,
 }: {
   load: Promise<TasksLoad>;
   onReload: () => void;
   refreshing: boolean;
+  source: AccessTokenSource;
 }) => {
   const t = useTranslations("tasks");
   const { query } = useHeaderSearch();
@@ -66,7 +69,11 @@ export const LoadedTasks = ({
         />
       }
       renderItem={({ item, section }) => (
-        <TaskRow overdue={section.due === "overdue"} task={item} />
+        <TaskRow
+          overdue={section.due === "overdue"}
+          source={source}
+          task={item}
+        />
       )}
       renderSectionHeader={({ section }) => (
         <View className="pt-6 pb-1">

@@ -8,6 +8,7 @@ import type { DataBoxDirectionBasis } from "@stll/api-contract/data-box";
 import { Button } from "@stll/ui/button";
 import { RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { CopyActionButton } from "@/components/copy-action-button";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -219,11 +220,11 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                   <AssertedHeadersLabel record={item} />
                 )}
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="truncate text-sm font-medium">
+                  <TruncatedText className="text-sm font-medium">
                     <bdi dir="auto">
                       {item.subject || t("emailViewer.noSubject")}
                     </bdi>
-                  </span>
+                  </TruncatedText>
                   <span className="text-muted-foreground text-xs">
                     {t(CORRESPONDENCE_STATE_LABEL_KEYS[item.handlingState])}
                   </span>
@@ -239,7 +240,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                   )}
                 </span>
                 {item.channel === "data_box" ? (
-                  <span className="text-muted-foreground mt-1 block truncate text-xs">
+                  <TruncatedText className="text-muted-foreground mt-1 text-xs">
                     {t("emailViewer.from")}:{" "}
                     {item.from.name && (
                       <bdi className="me-1" dir="auto">
@@ -249,17 +250,17 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                     <bdi className="font-mono" dir="ltr">
                       {item.from.address}
                     </bdi>
-                  </span>
+                  </TruncatedText>
                 ) : (
-                  <span className="text-muted-foreground mt-1 block truncate text-xs">
+                  <TruncatedText className="text-muted-foreground mt-1 text-xs">
                     {t(
                       correspondenceProvenancePresentation(item)
                         .originalSenderLabel,
                     )}
                     : <bdi dir="ltr">{item.from.address}</bdi>
-                  </span>
+                  </TruncatedText>
                 )}
-                <span className="text-muted-foreground mt-1 block truncate text-xs">
+                <TruncatedText className="text-muted-foreground mt-1 text-xs">
                   {t("emailViewer.to")}:{" "}
                   {uniqueCorrespondenceAddresses(item.to).map((recipient) => (
                     <bdi
@@ -270,7 +271,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                       {recipient.name ?? recipient.address}
                     </bdi>
                   ))}
-                </span>
+                </TruncatedText>
               </span>
             </span>
             <time className="text-muted-foreground shrink-0 text-xs tabular-nums">

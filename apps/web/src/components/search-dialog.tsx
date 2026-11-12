@@ -1211,6 +1211,9 @@ export const SearchDialog = ({
             allowMissingThread: true,
             getUserContext,
             getContextMatterIds: () => [],
+            // No composer here offers a Run on choice; the question runs on
+            // stella.
+            getRunTarget: undefined,
             getSendMode: () => getChatSendMode(threadRef),
           },
           files: [],

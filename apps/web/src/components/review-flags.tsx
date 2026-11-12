@@ -21,6 +21,7 @@ import {
   StarIcon,
 } from "@stll/ui/icons";
 import { MenuItem } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -102,7 +103,7 @@ export const ReviewFlagMenuItems = ({
             onClick={() => onToggle(flag)}
           >
             <Icon className="size-3.5 shrink-0 opacity-75" style={{ color }} />
-            <span className="min-w-0 flex-1 truncate">{t(labelKey)}</span>
+            <TruncatedText className="flex-1">{t(labelKey)}</TruncatedText>
             {active.includes(flag) && (
               <CheckIcon className="text-muted-foreground ms-3 size-3.5 shrink-0" />
             )}

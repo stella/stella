@@ -63,6 +63,7 @@ import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import { requestAbortRefusal } from "@/api/lib/errors/request-abort";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -1066,6 +1067,7 @@ const runSafeHandlerInDeliveryScope = async <
     const error = result.error;
 
     const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
@@ -1138,6 +1140,7 @@ const runSafeHandlerInDeliveryScope = async <
     // BYOK key for) gets reported to the user as "Internal
     // server error" with no actionable detail.
     const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {

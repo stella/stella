@@ -194,8 +194,12 @@ describe("search preview authorization scope", () => {
     expect(compiled.sql).toContain("JOIN chat_messages message");
     expect(compiled.sql).toContain("ts_rank_cd(matching.tsv");
     expect(compiled.sql).toContain('AS "isTitleOnlyMatch"');
-    expect(compiled.sql).toContain("arabic_normalize(coalesce(cst.title, ''))");
-    expect(compiled.sql).toContain("cst.title");
+    // The title-only check reads the thread row's title, the same version as
+    // its provenance, not the index copy that can lag behind a rename.
+    expect(compiled.sql).toContain("arabic_normalize(coalesce(t.title, ''))");
+    expect(compiled.sql).not.toContain(
+      "arabic_normalize(coalesce(cst.title, ''))",
+    );
     expect(compiled.sql).toContain("ORDER BY nearby.created_at");
     expect(compiled.sql).toContain("LIMIT");
     expect(compiled.sql).toContain("t.user_id =");
