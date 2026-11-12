@@ -1,8 +1,8 @@
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
+import { SHAREPOINT_ROOT_ITEM_ID } from "@stll/api-contract/sharepoint";
 
-import { SHAREPOINT_ROOT_ITEM_ID } from "@/api/handlers/sharepoint/graph-client";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 
 // Microsoft Graph ids are opaque: site ids join a host name and two GUIDs

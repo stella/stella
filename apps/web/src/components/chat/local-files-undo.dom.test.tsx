@@ -437,7 +437,7 @@ test("a send takes the undo away from the previous answer and closes its confirm
   } satisfies ChatUIMessage;
   show({ transcript: [answerMessage, prompt], isGenerating: true });
   await waitFor(() => {
-    expect(view.queryByRole("alertdialog")).toBeNull();
+    expect(view.queryByRole("alertdialog") === null).toBe(true);
   });
   await openActions(view);
   expect(menuItems()).not.toContain(messages.chat.localFilesUndo.action);

@@ -27,7 +27,7 @@ import {
   companySpecificationQueryKey,
   insertCompanySpecificationToken,
 } from "@/components/company-specification.logic";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { RegistryCredentialSetup } from "@/components/registry-credential-setup";
 import { REGISTRY_RETURN_FIELDS } from "@/components/templates/registry-format-config";
 import type { LookupRegistryOption } from "@/components/templates/registry-options";
@@ -252,7 +252,7 @@ const CompanySpecificationEditor = ({
         </div>
       </div>
 
-      <CopyActionButton
+      <CopyControl
         className="w-full"
         disabled={
           !canCopyCompanySpecification({

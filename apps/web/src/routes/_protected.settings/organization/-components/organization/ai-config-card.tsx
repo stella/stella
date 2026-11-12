@@ -18,7 +18,7 @@ import {
   getProviderValues,
   hasUsableOpenAIKey,
 } from "@/components/ai-config-role-models.logic";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { detached } from "@/lib/detached";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
@@ -164,7 +164,7 @@ const SettingsError = ({ error }: SettingsErrorProps) => {
           </p>
         )}
       </div>
-      <CopyActionButton text={error.message} />
+      <CopyControl text={error.message} />
     </div>
   );
 };

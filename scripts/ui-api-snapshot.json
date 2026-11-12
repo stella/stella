@@ -1873,6 +1873,7 @@
     "./use-viewport-width": ["useViewportWidth"],
     "./utils": ["cn", "composeRefs"],
     "./view-toolbar": [
+      "ViewChromeBar",
       "ViewFilterButton",
       "ViewFilterChip",
       "ViewToolbarChrome"

@@ -8,6 +8,7 @@ import createClaimComment from "@/api/handlers/lists/verifications/claim-comment
 import deleteClaimComment from "@/api/handlers/lists/verifications/claim-comments/delete";
 import listClaimComments from "@/api/handlers/lists/verifications/claim-comments/list";
 import updateClaimComment from "@/api/handlers/lists/verifications/claim-comments/update";
+import createClaimRecheck from "@/api/handlers/lists/verifications/claim-rechecks/create";
 import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
 import listClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/list";
@@ -30,6 +31,7 @@ export const createListVerificationRoutes = (
       "/source-documents/kinds": { POST: readSourceDocumentKinds },
       "/claim-reviews": { GET: listClaimReviews, POST: createClaimReview },
       "/claim-reviews/bulk": { POST: createBulkClaimReviews },
+      "/claim-rechecks": { POST: createClaimRecheck },
       "/claim-comments": { GET: listClaimComments, POST: createClaimComment },
       "/claim-comments/:annotationId": {
         PATCH: updateClaimComment,

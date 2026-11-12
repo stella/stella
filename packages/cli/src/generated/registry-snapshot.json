@@ -4306,7 +4306,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Section number, with optional §, e.g. 1729 or § 5a."
+          "description": "Section or article, e.g. 1729, § 5a or čl. 38."
         },
         "as_of": {
           "type": "string",

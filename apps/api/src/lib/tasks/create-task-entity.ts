@@ -34,6 +34,7 @@ import {
 } from "@/api/lib/entity-constants";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { afterCommit } from "@/api/lib/idempotency/commit-effects";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -543,19 +544,23 @@ export const createTaskEntityHandler = async function* ({
   // Assignment notifications wait for the same commit: filed now, they would
   // point a colleague at a task that may still roll back. The callers that
   // pass a transaction today assign only their own actor, so they owe none.
+  // Under a replayable request the handler's transaction is a savepoint of the
+  // receipt's, so both wait for that commit and never rerun on a replay.
   if (props.tx === undefined) {
-    fileNotifications(txResult.notifications);
-    detached(
-      async () =>
-        flushEntitySearchRepairs([txResult.entityId]).catch(
-          createErrorCapture(
-            handlerErrorContext(
-              "createTaskEntityHandler.flushEntitySearchRepairs",
+    afterCommit(() => {
+      fileNotifications(txResult.notifications);
+      detached(
+        async () =>
+          flushEntitySearchRepairs([txResult.entityId]).catch(
+            createErrorCapture(
+              handlerErrorContext(
+                "createTaskEntityHandler.flushEntitySearchRepairs",
+              ),
             ),
           ),
-        ),
-      "create-task-entity.flush-entity-search-repairs",
-    );
+        "create-task-entity.flush-entity-search-repairs",
+      );
+    });
   }
 
   return Result.ok({ entityId: txResult.entityId });

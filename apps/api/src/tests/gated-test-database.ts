@@ -108,6 +108,9 @@ type OpenClientOptions = {
     readonly application_name?: string;
     readonly statement_timeout?: number;
     readonly lock_timeout?: number;
+    readonly default_transaction_read_only?: "on" | "off";
+    readonly plan_cache_mode?:
+      "auto" | "force_custom_plan" | "force_generic_plan";
   };
 };
 

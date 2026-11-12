@@ -11,8 +11,8 @@ import { panic, Result } from "better-result";
 import { fetch as streamingFetch } from "expo/fetch";
 import { AppState } from "react-native";
 
-import { REALTIME_EVENT_TYPE } from "@stll/api-contract";
-import type { UserRealtimeEvent } from "@stll/api-contract";
+import { USER_EVENT_READ, USER_EVENT_READS } from "@stll/api-contract";
+import type { UserEventRead, UserRealtimeEvent } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { sleep } from "@stll/concurrency/sleep";
 
@@ -82,10 +82,10 @@ const unread = (source: AccessTokenSource | undefined): Reading => ({
 /**
  * The person's unfinished chat runs, kept fresh without polling: read each
  * time their event stream opens (once anyway if it cannot), and again
- * whenever it says the runs changed; when it says a chat was marked read,
- * unread or pinned, the chats lists load again. The stream closes while the app is in
- * the background and reopens when it returns. Each read is compared with
- * the one before for banners; the first read after the app returns from
+ * whenever it says the runs changed; what else an event makes it read
+ * again, the chats lists among them, is the contract's USER_EVENT_READS.
+ * The stream closes while the app is in the background and reopens when it
+ * returns. Each read is compared with the one before for banners; the first read after the app returns from
  * the background only sets what later reads are compared with, so what
  * happened meanwhile is left to the chats list and push. What was read
  * belongs to the sign-in that read it: another sign-in, or none, starts
@@ -165,21 +165,17 @@ const useRunsStream = (
     }));
   });
 
-  const onEvent = useEffectEvent(({ type: eventType }: UserRealtimeEvent) => {
-    switch (eventType) {
-      case REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED:
-        reread();
-        return;
-      // The app hears of notifications through push.
-      case REALTIME_EVENT_TYPE.NEW_NOTIFICATION:
-        return;
-      // A chat was marked read or unread, or pinned, here or elsewhere.
-      case REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED:
-        changed("chats");
-        return;
-      default:
-        eventType satisfies never;
-        panic("Unhandled user realtime event");
+  const readsAgain = {
+    [USER_EVENT_READ.ACTIVE_CHAT_RUNS]: reread,
+    [USER_EVENT_READ.CHAT_THREADS]: () => {
+      changed("chats");
+    },
+    // The app hears of notifications through push.
+    [USER_EVENT_READ.NOTIFICATIONS]: () => undefined,
+  } satisfies Record<UserEventRead, () => void>;
+  const onEvent = useEffectEvent(({ type }: UserRealtimeEvent) => {
+    for (const stale of USER_EVENT_READS[type]) {
+      readsAgain[stale]();
     }
   });
   const onResync = useEffectEvent(reread);
