@@ -756,6 +756,24 @@ test("a governing record changes the verdict and escalation keeps the conflict o
     decidedBy: actorId,
   } as const;
   answers.push(Response.json({ claimId: claim.id, review: governed }));
+  /** The run read again after a record conflict changes, as the server
+   *  answers whether the claim needs attention. */
+  const serveAttention = (needsAttention: boolean) => {
+    act(() => {
+      client.setQueryData(
+        verificationRunOptions(workspaceId, run.id).queryKey,
+        (current) =>
+          current === undefined
+            ? current
+            : {
+                ...current,
+                claims: current.claims.map((each) =>
+                  each.id === claim.id ? { ...each, needsAttention } : each,
+                ),
+              },
+      );
+    });
+  };
   const governingButton = screen
     .getAllByRole("button", {
       name: messages.avt.claimDetail.recordConflict.treatAsGoverningRecord,
@@ -798,7 +816,10 @@ test("a governing record changes the verdict and escalation keeps the conflict o
     },
   });
   expect(runText(claimButton(5))).toContain("Supported");
-  expect(screen.getByText("0/2")).toBeTruthy();
+  // Governing reads the run again, and the server answers that the claim
+  // no longer needs attention; the tiles follow its answer.
+  serveAttention(false);
+  await waitFor(() => expect(screen.queryByText("0/2") === null).toBe(false));
   expect(
     screen.getByText(messages.avt.claimDetail.basis.verdictWithheld),
   ).toBeTruthy();
@@ -848,7 +869,9 @@ test("a governing record changes the verdict and escalation keeps the conflict o
       .hasAttribute("disabled"),
   ).toBe(true);
   expect(runText(claimButton(5))).toContain("Record conflict");
-  expect(screen.getByText("0/3")).toBeTruthy();
+  // Escalating reads the run again, and the conflict needs attention again.
+  serveAttention(true);
+  await waitFor(() => expect(screen.queryByText("0/3") === null).toBe(false));
   expect(
     screen.getByText(messages.avt.claimDetail.basis.verdictWithheld),
   ).toBeTruthy();

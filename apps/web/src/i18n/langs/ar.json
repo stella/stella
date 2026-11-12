@@ -643,100 +643,21 @@
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "إنشاء نسخة ثنائية اللغة",
-      "creating": "جارٍ الإنشاء…",
-      "description": "ينشئ نسخة من هذا المستند في عمودين: النص الأصلي في العمود الأيسر ونسخة للترجمة في العمود الأيمن بترقيم مستقل. تُحفَظ النسخة في هذا الملف القانوني كمستند جديد.",
-      "sameLanguage": "اختر لغتين مختلفتين.",
-      "sourceLanguage": "اللغة المصدر",
-      "title": "نسخة ثنائية اللغة"
-    },
-    "error": {
-      "title": "تعذّر إنشاء النسخة ثنائية اللغة"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> جاهز ويحتوي على {rowCount, plural, zero {لا صفوف} one {صف واحد} two {صفين} few {# صفوف} many {# صفًا} other {# صف}} للترجمة.",
-      "title": "تم إنشاء النسخة ثنائية اللغة"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "يملأ عمود الترجمة في هذا المستند ذي العمودين. راجع ما سيحدث لكل صف وكيف تُترجم المصطلحات المحددة، ثم ابدأ الترجمة.",
-      "prepare": "تحضير",
-      "preparing": "جارٍ قراءة المستند…",
-      "preparingHint": "قراءة المستند بالكامل وتقييم كل صف تستغرق ما يصل إلى دقيقتين.",
-      "title": "ترجمة النسخة ثنائية اللغة"
+      "prepare": "تحضير"
     },
     "dispositions": {
-      "inline": "اللغتان معًا",
       "keep": "الإبقاء كما هو"
     },
-    "error": {
-      "prepareTitle": "تعذّر تحضير المستند",
-      "startTitle": "تعذّر بدء الترجمة"
-    },
-    "errorCodes": {
-      "aiUnavailable": "لا يتوفر أي نموذج ذكاء اصطناعي للترجمة.",
-      "applyFailed": "تعذّرت كتابة الترجمات في المستند.",
-      "documentChanged": "تغيّر المستند أثناء تشغيل الترجمة. حضّره من جديد.",
-      "documentUnresolved": "لم يعد المستند أو ملفه متاحًا.",
-      "enqueueFailed": "تعذّر إدراج الترجمة في قائمة الانتظار.",
-      "internal": "توقفت الترجمة بشكل غير متوقع.",
-      "notBilingual": "لا يحتوي هذا المستند على جدول ثنائي اللغة.",
-      "translationFailed": "تعذّرت ترجمة دفعة من الصفوف.",
-      "unknown": "توقفت الترجمة بشكل غير متوقع."
-    },
-    "glossary": {
-      "add": "إضافة مصطلح",
-      "description": "تُستخدم هذه الترجمات في كل الصفوف. يجب استكمال ترجمة أي مصطلح ناقص أو إزالته.",
-      "empty": "لم يتم العثور على مصطلحات محددة.",
-      "formsHint": "افصل الصيغ الأخرى بفواصل.",
-      "formsSource": "صيغ أخرى للمصطلح",
-      "formsTarget": "صيغ أخرى للترجمة",
-      "incomplete": "أكمل الترجمات الناقصة أو أزل تلك المصطلحات.",
-      "origins": {
-        "detected": "مكتشف",
-        "user": "خاص بك"
-      },
-      "term": "المصطلح",
-      "title": "المصطلحات المحددة",
-      "tooManyForms": "يمكن أن يحتوي المصطلح على {max} صيغة أخرى كحد أقصى.",
-      "translation": "الترجمة"
-    },
     "kinds": {
-      "heading": "عنوان",
-      "listItem": "عنصر قائمة",
-      "paragraph": "فقرة",
-      "table": "جدول كامل"
-    },
-    "origins": {
-      "default": "غير مُقيَّم",
-      "model": "ذكاء اصطناعي"
+      "paragraph": "فقرة"
     },
     "review": {
-      "droppedRows": "{count, plural, zero {لم يُتخطَّ أي صف} one {تم تخطي صف واحد} two {تم تخطي صفين} few {تم تخطي # صفوف} many {تم تخطي # صفًا} other {تم تخطي # صف}}: لا تحتوي على نص قابل للترجمة.",
-      "start": "بدء الترجمة",
       "starting": "جارٍ البدء…"
     },
     "rows": {
-      "description": "اختر ما سيحدث لكل صف في عمود الترجمة.",
-      "ordinal": "#",
-      "sourceText": "النص المصدر",
-      "title": "الصفوف",
-      "whatToDo": "ما الإجراء"
-    },
-    "run": {
-      "cancelled": "تم إلغاء الترجمة.",
-      "doneSummary": "{count, plural, zero {لم تتم ترجمة أي صف} one {تمت ترجمة صف واحد} two {تمت ترجمة صفين} few {تمت ترجمة # صفوف} many {تمت ترجمة # صفًا} other {تمت ترجمة # صف}}.",
-      "doneTitle": "اكتملت الترجمة",
-      "failedRows": "{count, plural, zero {لم يتعذّر أي صف} one {تعذّرت ترجمة صف واحد} two {تعذّرت ترجمة صفين} few {تعذّرت ترجمة # صفوف} many {تعذّرت ترجمة # صفًا} other {تعذّرت ترجمة # صف}}.",
-      "failedTitle": "توقفت الترجمة",
-      "hint": "تعمل الترجمة على الخادم. أبقِ هذه النافذة مفتوحة لمتابعتها.",
-      "moreRows": "{count, plural, zero {لا صفوف أخرى} one {صف واحد آخر} two {صفان آخران} few {# صفوف أخرى} many {# صفًا آخر} other {# صف آخر}}",
-      "progress": "تمت ترجمة {completed} من {total} صف",
-      "title": "الترجمة قيد التنفيذ…",
-      "warningsTitle": "صفوف تحتاج مراجعة"
+      "title": "الصفوف"
     }
   },
   "billing": {
@@ -1249,7 +1170,6 @@
       "negativeCount": "{count, plural, zero {لا سلبية} one {سلبي واحد} two {سلبيان} few {# سلبية} many {# سلبيًا} other {# سلبي}}",
       "none": "لم تُسجَّل أي استشهادات بعد.",
       "notInStella": "غير متوفر في stella بعد",
-      "openAtCitation": "فتح عند موضع الاستشهاد",
       "openDecision": "فتح الحكم",
       "paragraphLabel": "الفقرة {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1933,7 +1853,6 @@
       "restored": "تم التراجع عن تغييرات الملفات"
     },
     "localRun": {
-      "cloud": "سحابة stella",
       "errorLimitReached": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. حاول مرة أخرى بعد إعادة ضبط الحد.",
       "errorLimitResetsAt": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. يمكنك المحاولة مرة أخرى بعد {time}.",
       "errorNeedsLogin": "يطلب وكيل البرمجة على حاسوبك تسجيل الدخول مجددًا. سجّل الدخول عبر stella desktop ثم حاول مرة أخرى.",
@@ -1942,7 +1861,6 @@
       "errorRestoring": "لا يزال حاسوبك يتراجع عن تغييرات الملفات. أرسل هذا مرة أخرى بعد قليل.",
       "errorUnavailable": "توقف حاسوبك عن معالجة هذا الرد. تأكد من أن stella desktop مفتوح ومتصل، ثم حاول مرة أخرى.",
       "filesNotShared": "تبقى الملفات التي تعذّرت مشاركتها على حاسوبك: {fileNames}",
-      "onThisComputer": "{harness} على هذا الحاسوب",
       "permissionAboveLimit": "غير مسموح به في مؤسستك",
       "permissionAskDescription": "يعدّل الملفات في مجلد الدردشة من تلقاء نفسه، ويسأل قبل أي شيء آخر.",
       "permissionAutoDescription": "ينفّذ من تلقاء نفسه ما يراه آمنًا، ويسأل عن الباقي.",
@@ -1957,10 +1875,9 @@
       "refusalNoComputer": "لا يوجد أي حاسوب من حواسيبك متصل. افتح stella desktop ثم أرسل مجددًا.",
       "refusalPermissionAboveLimit": "لا تسمح مؤسستك لوكيل البرمجة على حاسوبك بهذه الأذونات. اختر خيارًا آخر من قائمة الأذونات.",
       "refusalPermissionUnavailable": "لا يمكن لوكيل البرمجة على حاسوبك العمل بهذه الأذونات. اختر خيارًا آخر من قائمة الأذونات.",
+      "refusalReasoningEffortUnavailable": "لا يقدّم وكيل البرمجة على حاسوبك مستوى الاستدلال هذا لهذا النموذج. اختر مستوى آخر من قائمة مستوى الاستدلال.",
       "refusalTooLarge": "هذه الدردشة أطول من أن تُنقل إلى حاسوبك. ابدأ دردشة جديدة لتشغيلها هناك.",
       "refusalUnavailable": "تشغيل الدردشات على حاسوبك غير متاح لحسابك.",
-      "runOn": "التشغيل على",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "تم بلوغ الحد حتى {time}",
       "stateModelUnavailable": "النموذج لم يعد متاحًا",
@@ -2124,6 +2041,23 @@
     "richContentLoading": "جارٍ تحميل المحتوى التفاعلي…",
     "richContentTitle": "محتوى تفاعلي",
     "richContentUnavailable": "لا يمكن عرض هذا المحتوى بأمان.",
+    "runOn": {
+      "checkFailed": "تعذّر التحقق من حاسوبك",
+      "chipLabel": "مكان التشغيل: {place}",
+      "cloud": "السحابة",
+      "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
+      "harnessModels": "نماذج {harness}",
+      "hintInstall": "ثبّته من stella desktop",
+      "hintOffline": "افتح stella desktop على حاسوبك",
+      "hintSignIn": "سجّل الدخول من stella desktop",
+      "hintUpdate": "حدّثه من stella desktop",
+      "localPlace": "حاسوبك، {harness}",
+      "localSelection": "حاسوبك · {harness}",
+      "modelDefault": "الافتراضي (موصى به)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "حاسوبك",
+      "yourComputerDescription": "يستخدم Codex أو Claude Code على حاسوبك باشتراكك الخاص. يمكنه قراءة الملفات وتغييرها في مجلد هذه الدردشة، وتحدد الأذونات ما يمكنه فعله دون أن يسألك."
+    },
     "selection": {
       "askInNewChat": "اسأل في دردشة جديدة",
       "quoteInReply": "اقتبس في الرد",

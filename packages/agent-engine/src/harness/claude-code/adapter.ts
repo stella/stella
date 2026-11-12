@@ -11,6 +11,7 @@ import {
 import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   type DesktopRunnerApprovalMode,
+  knownReasoningEfforts,
 } from "@stll/api-contract/desktop-runner";
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
@@ -537,7 +538,7 @@ const modelsOf = ({ models }: Initialized): HarnessModel[] => {
     id: model.value,
     displayName: model.displayName,
     isDefault: index === defaultIndex,
-    reasoningEfforts: model.supportedEffortLevels ?? [],
+    reasoningEfforts: knownReasoningEfforts(model.supportedEffortLevels),
     inputModalities: TEXT_ONLY,
   }));
 };
@@ -655,6 +656,9 @@ const turnArgs = (
   target.sessionId,
   "--model",
   input.model,
+  ...(input.reasoningEffort === null
+    ? []
+    : ["--effort", input.reasoningEffort]),
 ];
 
 type OpenedSession = {

@@ -643,100 +643,21 @@
       "pickList": "Válassza ki azt a listát, amelynek tényeihez az ügy iratait viszonyítja a rendszer."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Kétnyelvű változat létrehozása",
-      "creating": "Létrehozás…",
-      "description": "Két oszlopos másolatot készít a dokumentumról: balra az eredeti szöveg, jobbra a fordítandó másolat, külön számozással. A másolat új dokumentumként kerül ebbe az ügybe.",
-      "sameLanguage": "Válasszon két különböző nyelvet.",
-      "sourceLanguage": "Forrásnyelv",
-      "title": "Kétnyelvű változat"
-    },
-    "error": {
-      "title": "A kétnyelvű változat létrehozása nem sikerült"
-    },
-    "success": {
-      "description": "A(z) <bdi>{fileName}</bdi> készen áll, {rowCount, plural, one {# sor} other {# sor}} vár fordításra.",
-      "title": "Kétnyelvű változat létrehozva"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Kitölti a kétoszlopos dokumentum fordítási oszlopát. Nézze át, mi történik az egyes sorokkal és hogyan jelennek meg a meghatározott kifejezések, majd indítsa el a fordítást.",
-      "prepare": "Előkészítés",
-      "preparing": "Dokumentum beolvasása…",
-      "preparingHint": "A teljes dokumentum beolvasása és minden sor értékelése akár két percig is tart.",
-      "title": "Kétnyelvű változat fordítása"
+      "prepare": "Előkészítés"
     },
     "dispositions": {
-      "inline": "Mindkét nyelv",
       "keep": "Változatlanul hagyás"
     },
-    "error": {
-      "prepareTitle": "A dokumentum előkészítése nem sikerült",
-      "startTitle": "A fordítás indítása nem sikerült"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Nem érhető el AI-modell a fordításhoz.",
-      "applyFailed": "A fordításokat nem sikerült visszaírni a dokumentumba.",
-      "documentChanged": "A dokumentum megváltozott a fordítás közben. Készítse elő újra.",
-      "documentUnresolved": "A dokumentum vagy a fájlja már nem érhető el.",
-      "enqueueFailed": "A fordítást nem sikerült sorba állítani.",
-      "internal": "A fordítás váratlanul leállt.",
-      "notBilingual": "Ez a dokumentum nem tartalmaz kétnyelvű táblázatot.",
-      "translationFailed": "Egy sorköteget nem sikerült lefordítani.",
-      "unknown": "A fordítás váratlanul leállt."
-    },
-    "glossary": {
-      "add": "Kifejezés hozzáadása",
-      "description": "Ezek a megfeleltetések minden sorra érvényesek. A fordítás nélküli kifejezést ki kell tölteni vagy el kell távolítani.",
-      "empty": "Nem találhatók meghatározott kifejezések.",
-      "formsHint": "A további alakokat vesszővel válassza el.",
-      "formsSource": "A kifejezés további alakjai",
-      "formsTarget": "A fordítás további alakjai",
-      "incomplete": "Töltse ki a hiányzó fordításokat, vagy távolítsa el ezeket a kifejezéseket.",
-      "origins": {
-        "detected": "Megtalált",
-        "user": "Saját"
-      },
-      "term": "Kifejezés",
-      "title": "Meghatározott kifejezések",
-      "tooManyForms": "Egy kifejezés legfeljebb {max} további alakot tartalmazhat.",
-      "translation": "Fordítás"
-    },
     "kinds": {
-      "heading": "Címsor",
-      "listItem": "Listaelem",
-      "paragraph": "Bekezdés",
-      "table": "Teljes táblázat"
-    },
-    "origins": {
-      "default": "Nem értékelt",
-      "model": "AI"
+      "paragraph": "Bekezdés"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# sor kimaradt} other {# sor kimaradt}}: nem tartalmaznak lefordítható szöveget.",
-      "start": "Fordítás indítása",
       "starting": "Indítás…"
     },
     "rows": {
-      "description": "Válassza ki, mi történjen a fordítási oszlop egyes soraival.",
-      "ordinal": "#",
-      "sourceText": "Forrásszöveg",
-      "title": "Sorok",
-      "whatToDo": "Mi történjen"
-    },
-    "run": {
-      "cancelled": "A fordítást megszakították.",
-      "doneSummary": "{count, plural, one {# sor} other {# sor}} lefordítva.",
-      "doneTitle": "A fordítás elkészült",
-      "failedRows": "{count, plural, one {# sort nem sikerült lefordítani} other {# sort nem sikerült lefordítani}}.",
-      "failedTitle": "A fordítás leállt",
-      "hint": "A fordítás a kiszolgálón fut. A követéséhez hagyja nyitva ezt az ablakot.",
-      "moreRows": "{count, plural, one {még # sor} other {még # sor}}",
-      "progress": "{total} sorból {completed} lefordítva",
-      "title": "A fordítás folyamatban…",
-      "warningsTitle": "Ellenőrzendő sorok"
+      "title": "Sorok"
     }
   },
   "billing": {
@@ -1249,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# elutasító} other {# elutasító}}",
       "none": "Még nincs rögzített hivatkozás.",
       "notInStella": "Még nincs a stellában",
-      "openAtCitation": "Megnyitás a hivatkozásnál",
       "openDecision": "Határozat megnyitása",
       "paragraphLabel": "{paragraph}. pont",
       "paragraphMark": "¶ {paragraph}",
@@ -1933,7 +1853,6 @@
       "restored": "Fájlmódosítások visszavonva"
     },
     "localRun": {
-      "cloud": "stella-felhő",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
       "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
       "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
@@ -1942,7 +1861,6 @@
       "errorRestoring": "A számítógépe még visszavonja a fájlmódosításokat. Néhány pillanat múlva küldje el újra.",
       "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "filesNotShared": "A meg nem osztható fájlok a számítógépén maradnak: {fileNames}",
-      "onThisComputer": "{harness} ezen a számítógépen",
       "permissionAboveLimit": "A szervezete nem engedélyezi",
       "permissionAskDescription": "A csevegés mappájában lévő fájlokat magától szerkeszti; minden más előtt rákérdez.",
       "permissionAutoDescription": "Amit biztonságosnak ítél, magától elvégzi; a többire rákérdez.",
@@ -1957,10 +1875,9 @@
       "refusalNoComputer": "Egyik számítógépe sem csatlakozik. Nyissa meg a stella desktopot, majd küldje el újra.",
       "refusalPermissionAboveLimit": "A szervezete nem adja meg ezeket az engedélyeket a számítógépén futó kódoló ügynöknek. Válasszon másik lehetőséget az Engedélyek menüben.",
       "refusalPermissionUnavailable": "A számítógépén futó kódoló ügynök nem futhat ezekkel az engedélyekkel. Válasszon másik lehetőséget az Engedélyek menüben.",
+      "refusalReasoningEffortUnavailable": "A számítógépén futó kódoló ügynök nem kínálja ezt a gondolkodási szintet a modellhez. Válasszon másikat a Gondolkodási szint menüben.",
       "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
-      "runOn": "Futtatás itt",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Korlát elérve eddig: {time}",
       "stateModelUnavailable": "A modell már nem érhető el",
@@ -2124,6 +2041,23 @@
     "richContentLoading": "Interaktív tartalom betöltése…",
     "richContentTitle": "Interaktív tartalom",
     "richContentUnavailable": "Ez a tartalom nem jeleníthető meg biztonságosan.",
+    "runOn": {
+      "checkFailed": "Nem sikerült ellenőrizni a számítógépét",
+      "chipLabel": "Futás helye: {place}",
+      "cloud": "Felhő",
+      "cloudDescription": "A felhőben fut. Bárhonnan elérhető.",
+      "harnessModels": "{harness}-modellek",
+      "hintInstall": "Telepítse a stella desktopból",
+      "hintOffline": "Nyissa meg a stella desktopot a számítógépén",
+      "hintSignIn": "Jelentkezzen be a stella desktopban",
+      "hintUpdate": "Frissítse a stella desktopból",
+      "localPlace": "Az Ön számítógépe, {harness}",
+      "localSelection": "Az Ön számítógépe · {harness}",
+      "modelDefault": "Alapértelmezett (ajánlott)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Az Ön számítógépe",
+      "yourComputerDescription": "A Codexet vagy a Claude Code-ot használja az Ön számítógépén, a saját előfizetésével. Olvashatja és módosíthatja a csevegés mappájában lévő fájlokat; az engedélyek határozzák meg, mit tehet rákérdezés nélkül."
+    },
     "selection": {
       "askInNewChat": "Kérdés új csevegésben",
       "quoteInReply": "Idézés a válaszban",

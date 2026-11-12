@@ -1520,6 +1520,16 @@ checks:
       bun run check:office-fixture-metadata
       bun --filter @stll/docx-utils test:office-fixture-metadata
 
+  - name: Tailwind sources cover class-shipping dependencies
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_130
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Tailwind sources cover class-shipping dependencies')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_130 != 'true') }}
+    run: |
+      bun test scripts/check-tailwind-sources.test.ts
+      bun run check:tailwind-sources
+
   # Fail PRs that change the desktop bridge surface without
   # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.
   # See scripts/check-bridge-version.sh for rationale.

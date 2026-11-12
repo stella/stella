@@ -160,6 +160,7 @@ const runStart = (at: Place): SidecarRunStart => ({
   workspaceDir: at.workspaceDir,
   cacheDir: path.join(at.root, "agent-package-cache"),
   model: "gpt-test",
+  reasoningEffort: null,
   instructions: "Use the stella MCP server.",
   messages: [{ role: "user", content: "Revise the brief." }],
   attachments: [],

@@ -376,6 +376,35 @@ export type DesktopRunnerApprovalMode =
 export const DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE =
   "ask" satisfies DesktopRunnerApprovalMode;
 
+/**
+ * The reasoning efforts a harness may report for a model and a run may ask
+ * for, ordered weakest to strongest. Codex and Claude Code each list the ones
+ * a model accepts; an effort outside this list is left out of the report.
+ */
+export const DESKTOP_RUNNER_REASONING_EFFORTS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+export type DesktopRunnerReasoningEffort =
+  (typeof DESKTOP_RUNNER_REASONING_EFFORTS)[number];
+
+/**
+ * The efforts of `reported` this contract carries, each once and in ladder
+ * order, so a harness naming an effort stella does not know yet still
+ * reports the model. A model that reports none (`undefined`) offers none.
+ */
+export const knownReasoningEfforts = (
+  reported: readonly string[] | undefined,
+): DesktopRunnerReasoningEffort[] =>
+  DESKTOP_RUNNER_REASONING_EFFORTS.filter(
+    (effort) => reported?.includes(effort) === true,
+  );
+
 const MAX_SEQ = 4_294_967_295;
 const MAX_ACTIVE_RUNS = 64;
 const MAX_MODELS = 100;
@@ -432,9 +461,31 @@ const tokenSchema = v.pipe(
   v.maxLength(DESKTOP_RUNNER_MAX_TOKEN_LENGTH),
 );
 
+const reasoningEffortSchema = v.picklist(DESKTOP_RUNNER_REASONING_EFFORTS);
+
 const harnessModelSchema = v.object({
   id: modelIdSchema,
   label: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  /**
+   * The model the harness runs when none is named, which the chat offers
+   * first as its recommended one. A report from before desktops sent it
+   * marks none.
+   */
+  isDefault: v.optional(v.boolean()),
+  /**
+   * The efforts a run of this model may ask for; empty when the harness
+   * offers no choice. A desktop from before efforts existed lists none.
+   */
+  reasoningEfforts: v.optional(
+    v.pipe(
+      v.array(reasoningEffortSchema),
+      v.check(
+        (efforts) => listsOnce(efforts),
+        "Reasoning efforts are listed once",
+      ),
+    ),
+    [],
+  ),
 });
 
 const harnessReportSchema = v.variant("state", [
@@ -778,6 +829,13 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     harness: harnessSchema,
     harnessVersion: desktopVersionSchema,
     model: modelIdSchema,
+    /**
+     * The effort the run asks the model for, one the desktop reported for
+     * it; `null` leaves it to the harness.
+     */
+    // Absent only in a command queued before this field existed; make it
+    // required once no queued row can predate it (a day after deploy).
+    reasoningEffort: v.optional(v.nullable(reasoningEffortSchema), null),
     /** The session to resume, from an earlier run's `run.finished`. */
     harnessSessionId: harnessSessionIdSchema,
     instructions: v.pipe(v.string(), v.maxLength(65_536)),

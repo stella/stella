@@ -323,7 +323,13 @@ fn refusal(report: Option<&HarnessReport>, start: &RunStart) -> Option<RejectRea
     Some(HarnessReport::Ready(ready)) => {
       if ready.version != start.harness_version {
         Some(RejectReason::HarnessVersionUnavailable)
-      } else if !ready.models.iter().any(|model| model.id == start.model) {
+      } else if !ready.models.iter().any(|model| {
+        model.id == start.model
+          && start
+            .reasoning_effort
+            .is_none_or(|effort| model.reasoning_efforts.contains(&effort))
+      }) {
+        // A model offered without the asked effort is not the model asked for.
         Some(RejectReason::ModelUnavailable)
       } else if !ready.approval_modes.contains(&start.policy.approvals) {
         Some(RejectReason::PolicyUnsupported)
@@ -973,6 +979,7 @@ impl HarnessHost for SidecarHarnessHost {
         .map(|dir| dir.to_string_lossy().into_owned())
         .collect(),
       model: start.model,
+      reasoning_effort: start.reasoning_effort,
       instructions: start.instructions,
       messages: start.messages,
       attachments: start.attachments,

@@ -374,17 +374,20 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.cells.retry` | write | stella:matters_write | — | generic invoke → `stella capability matters cells-retry` |
 | `matters.contacts.create` | write | stella:matters_write | — | curated tool `link_matter_contact` |
 | `matters.contacts.delete` | write, destructive | stella:matters_write | — | covered by `link_matter_contact` |
+| `matters.contacts.list` | read | stella:read | — | covered by `list_matters` |
 | `matters.correspondence.get` | read | stella:read | — | generic invoke → `stella capability matters correspondence-get` |
 | `matters.correspondence.list` | read | stella:read | — | generic invoke → `stella capability matters correspondence-list` |
 | `matters.correspondence.update` | write | stella:matters_write | — | generic invoke → `stella capability matters correspondence-update` |
 | `matters.create` | write | stella:matters_write | — | curated tool `save_matter` |
 | `matters.delete` | write, destructive | stella:matters_write | — | curated tool `delete_matter` |
 | `matters.duplicate` | write | stella:matters_write | — | generic invoke → `stella capability matters duplicate` |
+| `matters.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.justifications.list` | read | stella:read | — | generic invoke → `stella capability matters justifications-list` |
 | `matters.list` | read | stella:read | — | curated tool `list_matters` |
-| `matters.members.add` | write | stella:admin_write | — | curated tool `add_matter_member` |
+| `matters.member-candidates.list` | read | stella:read | — | generic invoke → `stella capability matters member-candidates-list` |
+| `matters.members.add` | write | stella:matters_write | — | curated tool `add_matter_member` |
 | `matters.members.list` | read | stella:read | — | covered by `list_matters` |
-| `matters.members.remove` | write, destructive | stella:admin_write | — | curated tool `remove_matter_member` |
+| `matters.members.remove` | write, destructive | stella:matters_write | — | curated tool `remove_matter_member` |
 | `matters.search-preview.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.unarchive` | write | stella:matters_write | — | covered by `save_matter` |
 | `matters.update` | write | stella:matters_write | — | covered by `save_matter` |
@@ -810,7 +813,7 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
 | assistant_chat | 16 |
-| auth_plumbing | 39 |
+| auth_plumbing | 40 |
 | billing_ui | 1 |
 | chat_thread_ui | 26 |
 | compound_consent | 1 |

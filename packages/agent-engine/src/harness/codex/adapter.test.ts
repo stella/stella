@@ -22,7 +22,6 @@ import {
   test,
 } from "bun:test";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -164,6 +163,7 @@ const turnInput = (
   threadId: "stella-thread-1",
   workspaceDir,
   model: "gpt-test",
+  reasoningEffort: null,
   instructions: "Use the stella MCP server.",
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
@@ -244,13 +244,13 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(threadStart?.params).toMatchObject({
       model: "gpt-test",
       cwd: workspaceDir,
-      approvalPolicy: "on-request",
+      approvalPolicy: "untrusted",
       sandbox: "workspace-write",
       config: {
-        // Codex runs only at Ask, where it cannot pause a search for
-        // approval, so its web search is off.
+        // At Ask Codex cannot pause a search for approval, so its web
+        // search is off.
         web_search: "disabled",
-        "sandbox_workspace_write.network_access": true,
+        "sandbox_workspace_write.network_access": false,
         "sandbox_workspace_write.writable_roots": [CACHE_DIR],
         "sandbox_workspace_write.exclude_tmpdir_env_var": false,
         "sandbox_workspace_write.exclude_slash_tmp": false,
@@ -274,21 +274,77 @@ describe("Codex adapter over a stdio app-server", () => {
     });
   });
 
-  test("its one approval mode runs in the workspace sandbox, asks before leaving it, and writes caches to the package cache", async () => {
-    const { received, startup } = await run("tool_calls");
-    const threadStart = received().find(
-      ({ method }) => method === "thread/start",
-    );
-    expect(threadStart?.params).toMatchObject({
-      approvalPolicy: "on-request",
-      sandbox: "workspace-write",
-      config: {
-        "sandbox_workspace_write.writable_roots": [CACHE_DIR],
-        "sandbox_workspace_write.exclude_tmpdir_env_var": false,
-        "sandbox_workspace_write.exclude_slash_tmp": false,
-      },
+  test.each([
+    ["ask", "untrusted", false, "disabled"],
+    ["auto", "untrusted", true, "live"],
+    ["full_auto", "on-request", true, "live"],
+  ] as const)(
+    "at %s it runs in the workspace sandbox with Codex's %s policy (network %s, web search %s), asks before leaving it, and writes caches to the package cache",
+    async (approvals, approvalPolicy, networkAccess, webSearch) => {
+      const { received, startup } = await run("tool_calls", {
+        overrides: {
+          policy: { network: "open", fs: "workspace", approvals },
+        },
+      });
+      const threadStart = received().find(
+        ({ method }) => method === "thread/start",
+      );
+      expect(threadStart?.params).toMatchObject({
+        approvalPolicy,
+        sandbox: "workspace-write",
+        config: {
+          web_search: webSearch,
+          "sandbox_workspace_write.network_access": networkAccess,
+          "sandbox_workspace_write.writable_roots": [CACHE_DIR],
+          "sandbox_workspace_write.exclude_tmpdir_env_var": false,
+          "sandbox_workspace_write.exclude_slash_tmp": false,
+        },
+      });
+      expect(startup().packageCache).toEqual(
+        packageCacheEnvironment(CACHE_DIR),
+      );
+    },
+  );
+
+  test("the levels are strictly ordered: each starts Codex differently, and Auto keeps the command gate", async () => {
+    const settingsAt = async (
+      approvals: HarnessTurnInput["policy"]["approvals"],
+    ) => {
+      const { received } = await run("tool_calls", {
+        overrides: {
+          policy: { network: "open", fs: "workspace", approvals },
+        },
+      });
+      const fields = (value: unknown): Record<string, unknown> =>
+        typeof value === "object" && value !== null
+          ? Object.fromEntries(Object.entries(value))
+          : {};
+      const params = fields(
+        received().find(({ method }) => method === "thread/start")?.params,
+      );
+      return JSON.stringify([
+        params["approvalPolicy"],
+        fields(params["config"])["sandbox_workspace_write.network_access"],
+      ]);
+    };
+    const ask = await settingsAt("ask");
+    const auto = await settingsAt("auto");
+    const fullAuto = await settingsAt("full_auto");
+    expect(new Set([ask, auto, fullAuto]).size).toBe(3);
+    // A ceiling at Auto never starts Codex with Full auto's policy.
+    expect(auto).toBe(JSON.stringify(["untrusted", true]));
+  });
+
+  test("asks the model for the run's reasoning effort on turn/start, and for none when the run leaves it to the harness", async () => {
+    const turnStart = (
+      received: readonly { method?: string; params?: unknown }[],
+    ) => received.find(({ method }) => method === "turn/start")?.params;
+    const chosen = await run("tool_calls", {
+      overrides: { reasoningEffort: "high" },
     });
-    expect(startup().packageCache).toEqual(packageCacheEnvironment(CACHE_DIR));
+    expect(turnStart(chosen.received())).toMatchObject({ effort: "high" });
+    const left = await run("tool_calls");
+    expect(turnStart(left.received())).not.toHaveProperty("effort");
   });
 
   test("a managed tool comes first on the server's PATH and the inherited PATH stays", async () => {
@@ -519,21 +575,6 @@ describe("Codex adapter over a stdio app-server", () => {
       );
       expect(paramsOf(received(), "thread/start")).toBeUndefined();
     });
-  });
-
-  test("an approval mode it does not offer refuses the turn before the harness starts", async () => {
-    for (const approvals of ["auto", "full_auto"] as const) {
-      const harness = harnessFor("tool_calls");
-      const started = await harness.adapter.startTurn(
-        turnInput(harness.workspaceDir, {
-          policy: { network: "open", fs: "workspace", approvals },
-        }),
-      );
-      expect(Result.isError(started) && started.error.reason).toBe(
-        "start_rejected",
-      );
-      expect(existsSync(harness.logPath)).toBe(false);
-    }
   });
 
   test("a local turn persists the same message as the cloud translator for the same native turn", async () => {
@@ -1183,7 +1224,7 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
-  test("a probe reports version, account, visible models and capabilities without a session", async () => {
+  test("a probe reports version, account, visible models with the efforts stella knows, and capabilities without a session", async () => {
     const harness = harnessFor("probe");
     const probed = await harness.adapter.probe();
     if (Result.isError(probed)) {
@@ -1197,12 +1238,12 @@ describe("Codex adapter over a stdio app-server", () => {
           id: "gpt-test",
           displayName: "GPT Test",
           isDefault: true,
-          reasoningEfforts: ["medium"],
+          reasoningEfforts: ["medium", "high"],
           inputModalities: ["text", "image"],
         },
       ],
       capabilities: ["approvals", "interrupt", "resume", "image_input"],
-      approvalModes: ["ask"],
+      approvalModes: ["ask", "auto", "full_auto"],
       usageLimit: null,
     });
     const methods = harness.received().map(({ method }) => method);

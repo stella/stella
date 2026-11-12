@@ -14,8 +14,8 @@ use serde_json::Value;
 
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessCapability, JsonObject, McpBinding,
-  RunAnswer, RunApproval, RunAttachment, RunOutcome, RunPolicy, RunRef,
-  RunTokenRefresh,
+  ReasoningEffort, RunAnswer, RunApproval, RunAttachment, RunOutcome, RunPolicy,
+  RunRef, RunTokenRefresh,
 };
 
 pub(crate) const SIDECAR_PROTOCOL: u32 = 4;
@@ -210,6 +210,7 @@ pub(crate) struct SidecarRunStart {
   /// The chat's own cache folder, writable in every sandbox.
   pub(crate) cache_dir: String,
   pub(crate) model: String,
+  pub(crate) reasoning_effort: Option<ReasoningEffort>,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
   pub(crate) harness_session_id: Option<String>,
@@ -325,6 +326,7 @@ pub(crate) struct ProbedModel {
   pub(crate) id: String,
   pub(crate) label: String,
   pub(crate) is_default: bool,
+  pub(crate) reasoning_efforts: Vec<ReasoningEffort>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

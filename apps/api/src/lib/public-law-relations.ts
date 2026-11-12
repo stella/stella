@@ -115,7 +115,11 @@ export const LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
-/** Expanded before the follow-up release grants the reviewed doctrine capability. */
+/**
+ * The reviewed doctrine capability, granted by
+ * `20261112120000_public_law_reader_citation_doctrine` one release after the
+ * map first permitted it.
+ */
 export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
   case_law_citations: {
     citation_key: "permitted",
