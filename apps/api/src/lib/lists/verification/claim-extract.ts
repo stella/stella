@@ -310,6 +310,11 @@ export const extractClaims = async ({
   const pieces = extractionPieces(passages);
   const targets = groundTargets(pieces, passages);
   const windows = extractionWindows(pieces);
+  /** Every failure this extraction observes reaches analytics here: each
+   *  failed window attempt, and anything thrown past the windows. */
+  const captureFailure = (cause: unknown) => {
+    call.captureError(cause);
+  };
 
   /** One call and its repair round. A failed call throws. */
   const readWindow = async (
@@ -371,7 +376,7 @@ export const extractClaims = async ({
     if (deps.abortSignal.aborted) {
       return Result.ok({ type: "cancelled", cause });
     }
-    call.captureError(cause);
+    captureFailure(cause);
     if (
       attempt >= EXTRACTION_WINDOW_RETRIES ||
       !aiFailureCanClearOnRetry(cause)
@@ -458,7 +463,7 @@ export const extractClaims = async ({
         });
       },
       catch: (cause) => {
-        call.captureError(cause);
+        captureFailure(cause);
         return new WorkflowIntegrationError({
           message: "Claim extraction failed",
           cause,

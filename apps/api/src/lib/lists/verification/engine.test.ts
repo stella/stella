@@ -319,14 +319,13 @@ describe("extractClaims", () => {
       deps,
     });
     expect(captured).toHaveLength(2);
-    const asked = captured
-      .map(
-        (call) =>
-          /these blocks only: (?<id>P3~\d)/u.exec(JSON.stringify(call.messages))
-            ?.groups?.["id"],
-      )
-      .toSorted();
-    expect(asked).toEqual(["P3~1", "P3~2"]);
+    const asked = captured.map(
+      (call) =>
+        /these blocks only: (?<id>P3~\d)/u.exec(JSON.stringify(call.messages))
+          ?.groups?.["id"],
+    );
+    // Windows run concurrently: each piece is asked about once, in any order.
+    expect(new Set(asked)).toEqual(new Set(["P3~1", "P3~2"]));
     expect(Result.isOk(result) ? result.value.claims : null).toEqual([
       {
         type: "fact",

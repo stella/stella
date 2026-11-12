@@ -548,7 +548,7 @@
       "status": {
         "running": "Vérification en cours"
       },
-      "unreadParts": "{count, plural, one {# partie du document n’a pas pu être lue : ses affirmations n’ont donc pas été vérifiées.} other {# parties du document n’ont pas pu être lues : leurs affirmations n’ont donc pas été vérifiées.}}"
+      "unreadParts": "{count, plural, one {# partie du document n’a pas pu être lue : ses affirmations n’ont donc pas été vérifiées.} other {# parties du document n’ont pas pu être lues : leurs affirmations n’ont donc pas été vérifiées.} many {# parties du document n’ont pas pu être lues : leurs affirmations n’ont donc pas été vérifiées.}}"
     },
     "save": {
       "failed": "Non enregistré",
