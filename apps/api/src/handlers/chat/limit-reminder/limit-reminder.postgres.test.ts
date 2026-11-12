@@ -141,11 +141,17 @@ const suite = (
         },
       ]);
       const turnId = createSafeId<"chatTurn">();
+      // A settled turn: a failed one carries why it failed, as the turn
+      // state CHECK requires.
       await database.insert(chatTurns).values({
         assistantMessageId: answerId,
         createdAt: new Date(base + index * 2),
+        ...(turn.status === "failed"
+          ? { failureCode: "provider-error", failureRetryable: false }
+          : {}),
         id: turnId,
         organizationId: owner.organizationId,
+        settledAt: new Date(base + index * 2 + 1),
         status: turn.status,
         threadId,
         userId: owner.userId,
