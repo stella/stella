@@ -1125,17 +1125,6 @@ const webUseIntlLocaleImport = {
     "Read the UI language with useMessageLocale from '@/i18n/message-locale', or the formatting locale with useFormattingLocale from '@/i18n/formatting-context'.",
 };
 
-// The mobile app draws over every screen through one owner: on iOS it is
-// FullWindowOverlay, the window layer above the native stack's bars, modals
-// and sheets; elsewhere a view after the stack. A view placed beside the stack
-// is drawn under them on iOS.
-const mobileFullWindowOverlayImport = {
-  name: "react-native-screens",
-  importNames: ["FullWindowOverlay"],
-  message:
-    "Draw over every screen through WindowOverlay from '@/components/window-overlay'.",
-};
-
 // The package formats in the host's formatting locale, which reaches it
 // through WorkspaceUiFormattingProvider; use-intl's formatter and locale are
 // the UI language.
@@ -2171,6 +2160,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
+    "./.oxlint-plugins/mobile-window-overlay-owner.ts",
     "./.oxlint-plugins/tooltip-provider-owner.ts",
     "./.oxlint-plugins/copy-feedback-owner.ts",
     "./.oxlint-plugins/sql-client-owner.ts",
@@ -3041,6 +3031,16 @@ const config = defineConfig({
       },
     },
     {
+      // Exercise mobile-window-overlay-owner against its regression fixture;
+      // the rule is otherwise scoped to apps/mobile/src.
+      files: [
+        ".oxlint-plugins/__fixtures__/mobile-window-overlay-owner.fixture.tsx",
+      ],
+      rules: {
+        "mobile-window-overlay-owner/mobile-window-overlay-owner": "error",
+      },
+    },
+    {
       // Exercise no-raw-use-effect against its regression fixture; the rule is
       // otherwise scoped to apps/web/src, which the fixtures dir is not.
       files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
@@ -3487,27 +3487,6 @@ const config = defineConfig({
       rules: {
         "unicorn/no-array-sort": "off",
         "unicorn/no-array-reverse": "off",
-      },
-    },
-    {
-      // Only WindowOverlay reaches the window layer above the native stack.
-      files: ["apps/mobile/src/**/*.{ts,tsx}"],
-      excludeFiles: ["apps/mobile/src/components/window-overlay.tsx"],
-      rules: {
-        "no-restricted-imports": [
-          "error",
-          {
-            paths: [
-              noZodImport,
-              noFastXmlParserImport,
-              noClassicTypeScriptImport,
-              ...noRetiredHttpFrameworkImports,
-              ...noRetiredZipImports,
-              ...noReactEmailImports,
-              mobileFullWindowOverlayImport,
-            ],
-          },
-        ],
       },
     },
     {
@@ -5088,6 +5067,14 @@ const config = defineConfig({
       ],
       rules: {
         "no-constructed-fetch-object/no-constructed-fetch-object": "error",
+      },
+    },
+    {
+      // Only WindowOverlay reaches the window layer above the native stack;
+      // the owner row is in restricted-import.ts.
+      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      rules: {
+        "mobile-window-overlay-owner/mobile-window-overlay-owner": "error",
       },
     },
     {
