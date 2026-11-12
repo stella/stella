@@ -14,7 +14,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { ClaimDetailPanel } from "@/features/avt/claim-detail-panel";
 import { verificationRunOptions } from "@/features/avt/queries";
-import type { MatchStepperState } from "@/features/avt/state-chip";
+import { useBulkRecheck } from "@/features/avt/use-bulk-recheck";
 import { useClaimReviewActions } from "@/features/avt/use-claim-review-actions";
 import {
   claimFactsById,
@@ -27,14 +27,6 @@ import { useQueryViewError } from "@/lib/use-query-view";
 /** A claim opened from the graph: its run (the document's verification)
  *  and the claim. */
 export type OpenedClaim = { runId: string; claimId: string };
-
-/** One claim at a time: there is no queue to step through here. */
-const NO_STEPPER: MatchStepperState = {
-  current: null,
-  total: 0,
-  onPrev: null,
-  onNext: null,
-};
 
 type GraphClaimSheetProps = {
   workspaceId: string;
@@ -132,6 +124,7 @@ const ClaimSheetBody = ({
   const runView = queryView(runQuery);
   useQueryViewError(runView, "GraphClaimSheet:run");
   const { recordEvent } = useClaimReviewActions({ workspaceId, runId });
+  const recheck = useBulkRecheck({ workspaceId, runId });
 
   if (runView.type === "pending") {
     return (
@@ -166,8 +159,8 @@ const ClaimSheetBody = ({
         contested={contestedFactIds(run.evidence.facts)}
         factsById={claimFactsById(run, claim)}
         onReviewEvent={(event) => recordEvent(claim.id, event)}
+        recheckRun={recheck.forClaim(claim.id)}
         run={run}
-        stepper={NO_STEPPER}
         workspaceId={workspaceId}
       />
     </div>
