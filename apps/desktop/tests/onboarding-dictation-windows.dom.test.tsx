@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, test } from "bun:test";
 
+import { nextMacrotask } from "@stll/concurrency/event-loop";
+
 // The platform is read from the user agent when the modules load, so the
 // Windows labels need a test file of their own.
 GlobalRegistrator.register({
@@ -21,12 +23,16 @@ const { default: OnboardingApp } =
 const { installNativeSide, nativeSide } =
   await import("./onboarding-dictation-native");
 
-afterEach(() => {
+// React's scheduler and the mocked IPC answers run on a macrotask; each
+// test and the file let one pass while the DOM is still registered.
+afterEach(async () => {
+  await act(nextMacrotask);
   cleanup();
   clearMocks();
 });
 
 afterAll(async () => {
+  await nextMacrotask();
   await GlobalRegistrator.unregister();
 });
 
