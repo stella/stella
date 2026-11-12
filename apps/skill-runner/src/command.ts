@@ -102,7 +102,7 @@ export const runCommand = async ({
     child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
     child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
     child.on("error", (error) => {
-      stderr.push(Buffer.from(String(error.message)));
+      stderr.push(Buffer.from(error.message));
       finish({
         outcome: SKILL_RUNNER_OUTCOME.notStarted,
         exitCode: null,
