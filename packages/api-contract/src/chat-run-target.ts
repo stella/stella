@@ -7,6 +7,7 @@ import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   DESKTOP_RUNNER_HARNESS_STATE,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
   desktopRunnerQuestionAnswersSchema,
   desktopRunnerQuestionIdSchema,
@@ -56,6 +57,49 @@ export const chatLocalRunTargetSchema = v.strictObject({
 });
 export type ChatLocalRunTarget = v.InferOutput<typeof chatLocalRunTargetSchema>;
 
+/**
+ * The most an organization lets a local run do without asking. Until an
+ * administrator lowers it every mode is allowed, so a new setting changes
+ * nothing for an organization that never chose one.
+ */
+export const CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS =
+  "full_auto" satisfies DesktopRunnerApprovalMode;
+
+/**
+ * Whether `mode` asks at least as much as `ceiling` allows. The modes are
+ * ordered by how much a run does on its own, `ask < auto < full_auto`, which
+ * is the order `DESKTOP_RUNNER_APPROVAL_MODES` lists them in.
+ */
+export const isApprovalModeWithin = (
+  mode: DesktopRunnerApprovalMode,
+  ceiling: DesktopRunnerApprovalMode,
+): boolean =>
+  DESKTOP_RUNNER_APPROVAL_MODES.indexOf(mode) <=
+  DESKTOP_RUNNER_APPROVAL_MODES.indexOf(ceiling);
+
+/**
+ * The mode a turn runs in under `ceiling`: its own when the ceiling allows
+ * it, otherwise the highest mode the ceiling allows among `offered` (the
+ * modes the computer can run the harness in, when known), and Ask, which
+ * every harness supports, when none is.
+ */
+export const approvalModeWithin = ({
+  mode,
+  ceiling,
+  offered,
+}: {
+  mode: DesktopRunnerApprovalMode;
+  ceiling: DesktopRunnerApprovalMode;
+  offered?: readonly DesktopRunnerApprovalMode[] | undefined;
+}): DesktopRunnerApprovalMode =>
+  isApprovalModeWithin(mode, ceiling)
+    ? mode
+    : (DESKTOP_RUNNER_APPROVAL_MODES.findLast(
+        (candidate) =>
+          isApprovalModeWithin(candidate, ceiling) &&
+          (offered === undefined || offered.includes(candidate)),
+      ) ?? DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE);
+
 export const chatRunTargetSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal(CHAT_RUN_TARGET_KIND.cloud) }),
   chatLocalRunTargetSchema,
@@ -81,6 +125,8 @@ export const CHAT_LOCAL_RUN_REFUSAL = {
   modelUnavailable: "local_run_model_unavailable",
   /** The computer cannot run the harness in the chosen approval mode. */
   approvalsUnavailable: "local_run_approvals_unavailable",
+  /** The organization does not let a run go that far without asking. */
+  approvalsAboveLimit: "local_run_approvals_above_limit",
   /** The turn does not fit what one run may carry. */
   tooLarge: "local_run_too_large",
   /** A turn cannot both run in the agent sandbox and on a computer. */
@@ -106,10 +152,15 @@ export type ChatLocalRunnerReadiness = {
 /**
  * What the composer may offer for local runs. `hidden` when the member cannot
  * run chat turns on a computer at all; the composer then shows no option.
+ * `maxApprovals` is the most the organization lets a run do without asking.
  */
 export type ChatLocalRunReadiness =
   | { status: "hidden" }
-  | { status: "enabled"; runners: ChatLocalRunnerReadiness[] };
+  | {
+      status: "enabled";
+      runners: ChatLocalRunnerReadiness[];
+      maxApprovals: DesktopRunnerApprovalMode;
+    };
 
 export const CHAT_LOCAL_HARNESS_STATE = DESKTOP_RUNNER_HARNESS_STATE;
 
@@ -215,26 +266,44 @@ export const chatLocalRunAnswersRefusal = (
 };
 
 /**
- * The CUSTOM stream event a turn running on a computer sends when that
- * computer goes away mid-turn and when it is back. The turn stays open while
- * the computer is away and continues once it reconnects, so the chat shows
- * the wait instead of a stalled answer. A rejoined stream replays these
- * events from the run log, so a reload shows the same state.
+ * The CUSTOM stream event a turn running on a computer sends while its run
+ * waits for the computer to pick it up, once it did, and when that computer
+ * goes away mid-turn and is back. The turn stays open while the computer is
+ * away and continues once it reconnects, so the chat shows the wait instead
+ * of a stalled answer; a run no computer picks up in time ends the turn as
+ * `local_runner_not_reached`. A rejoined stream replays these events from the
+ * run log, so a reload shows the same state.
  */
 export const CHAT_LOCAL_RUN_COMPUTER_EVENT = "stella.local-run.computer";
 
+/**
+ * Where a turn on the member's computer stands: `delivering` until the
+ * computer picks the run up (`since` is when the turn was sent), `waiting`
+ * while a computer that took it is away, `connected` otherwise.
+ */
 export const CHAT_LOCAL_RUN_COMPUTER_STATUSES = [
+  "delivering",
   "waiting",
   "connected",
 ] as const;
 export type ChatLocalRunComputerStatus =
   (typeof CHAT_LOCAL_RUN_COMPUTER_STATUSES)[number];
 
-export const chatLocalRunComputerEventSchema = v.strictObject({
-  status: v.picklist(CHAT_LOCAL_RUN_COMPUTER_STATUSES),
-});
+export const chatLocalRunComputerEventSchema = v.variant("status", [
+  v.strictObject({
+    status: v.literal("delivering"),
+    since: apiDateTimeSchema,
+  }),
+  v.strictObject({ status: v.literal("waiting") }),
+  v.strictObject({ status: v.literal("connected") }),
+]);
 export type ChatLocalRunComputerEvent = v.InferOutput<
   typeof chatLocalRunComputerEventSchema
+>;
+/** What the chat shows while a turn waits on the member's computer. */
+export type ChatLocalRunComputerWait = Exclude<
+  ChatLocalRunComputerEvent,
+  { status: "connected" }
 >;
 
 /**

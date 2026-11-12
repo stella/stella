@@ -29,6 +29,19 @@ export type HarnessRunPolicy = {
 export type HarnessCapability =
   (typeof DESKTOP_RUNNER_HARNESS_CAPABILITIES)[number];
 
+/** The image formats both harnesses' models read. */
+export type HarnessImageMediaType =
+  "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+
+/**
+ * A file of the turn's request that the harness hands its model as input,
+ * beside the copy in the run's folder that the prompt names.
+ */
+export type HarnessInputFile =
+  | { type: "image"; mediaType: HarnessImageMediaType; base64: string }
+  | { type: "pdf"; base64: string };
+export type HarnessInputFileType = HarnessInputFile["type"];
+
 /**
  * Resuming a native session is an optimization. The caller asks for it only
  * when the previous turn ran on the same engine, device and harness; the
@@ -57,12 +70,18 @@ export type HarnessTurnInput = {
   /** Absolute directory the harness runs in and may write to. */
   workspaceDir: string;
   /**
-   * Absolute stella-owned directory for package-manager caches, shared by
-   * the computer's runs; writable inside every harness sandbox.
+   * Absolute stella-owned cache directory of the run's chat, beside its
+   * folder: package managers and `XDG_CACHE_HOME` tools write there, writable
+   * inside every harness sandbox and never shared with another chat.
    */
   cacheDir: string;
   /** Skills the harness loads for the turn, through its own mechanism. */
   skillFolders: readonly HarnessSkillFolder[];
+  /**
+   * The hosts those skills declare (`stella-network-hosts`): the only hosts a
+   * sandboxed command may reach without the member being asked.
+   */
+  networkHosts: readonly string[];
   /**
    * Absolute directories of tools the desktop manages, such as Bun, which the
    * turn's commands find ahead of what the computer has.
@@ -81,6 +100,11 @@ export type HarnessTurnInput = {
    * or harness between turns, so every turn can start from it alone.
    */
   transcript: readonly HarnessTranscriptMessage[];
+  /**
+   * Files of the last user message the model reads directly, of the types
+   * the adapter's `inputFileTypes` lists. Their copies stay in the folder.
+   */
+  inputFiles: readonly HarnessInputFile[];
   continuation: HarnessContinuationRequest;
 };
 
@@ -179,6 +203,8 @@ export class HarnessProbeError extends TaggedError("HarnessProbeError")<{
  */
 export type HarnessAdapter = {
   readonly harness: AgentHarness;
+  /** The input files a turn hands its model; any other stays a path. */
+  readonly inputFileTypes: readonly HarnessInputFileType[];
   probe: () => Promise<Result<HarnessProbe, HarnessProbeError>>;
   startTurn: (
     input: HarnessTurnInput,

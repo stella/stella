@@ -1,4 +1,17 @@
 import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
+
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import type { EditorView } from "@tiptap/pm/view";
+import { Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
+import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
+import {
+  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
+  DOCX_SUGGESTION_SURFACE,
+} from "@stll/api-contract/chat-docx-suggestions";
 /**
  * Template Studio chat — the general document chat engine (same
  * backend, composer, tool surface, and persistence as the DOCX file
@@ -12,18 +25,7 @@ import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
  *     inspector review panel. Accepting a `{{field}}` replacement also
  *     registers the field in the Studio session.
  */
-import type { RefObject } from "react";
-
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import type { EditorView } from "@tiptap/pm/view";
-import { Result } from "better-result";
-import { useTranslations } from "use-intl";
-
-import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
-import {
-  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
-  DOCX_SUGGESTION_SURFACE,
-} from "@stll/api-contract/chat-docx-suggestions";
+import { CHAT_CLOUD_RUN_TARGET } from "@stll/api-contract/chat-run-target";
 import type { HandlerExceptionScope } from "@stll/errors";
 import { executeFolioToolCall } from "@stll/folio-agents";
 import type {
@@ -57,6 +59,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -1014,10 +1017,7 @@ const TemplateStudioChatInner = ({
         }
         continue;
       }
-      if (
-        part.state === "approval-responded" &&
-        part.approval?.approved === false
-      ) {
+      if (isDeclinedChatToolCall(part)) {
         discardStreamedPlacements(part.id);
       }
     }
@@ -1540,6 +1540,9 @@ const TemplateStudioChatInner = ({
           canSubmitNow={canSubmitWithCurrentSnapshot}
           context={{ activeOrganizationId, threadRef }}
           editorController={editorController}
+          // The Studio pins its model and runs on stella: its turns place
+          // fields through this page's editor bridge.
+          models={null}
           emptyPlaceholder={
             <span
               className={cn(
@@ -1550,12 +1553,12 @@ const TemplateStudioChatInner = ({
               <span className="shrink-0">
                 {t("chat.editableFilePlaceholderAction")}
               </span>
-              <BidiText
-                as="span"
-                className="text-foreground-label max-w-64 truncate"
+              <TruncatedText
+                className="text-foreground-label max-w-64"
+                render={<BidiText as="span" />}
               >
                 {fileName}
-              </BidiText>
+              </TruncatedText>
             </span>
           }
           layout="floating"
@@ -1589,6 +1592,7 @@ const TemplateStudioChatInner = ({
             document: { kind: CHAT_SKILL_DOCUMENT.template },
             // Pinned like the transport's `getEditApplyMode`.
             editApplyMode: CHAT_EDIT_APPLY_MODE.manual,
+            runTarget: CHAT_CLOUD_RUN_TARGET,
             threadRef,
             webSearch: {
               available: data.webSearchAvailable,
@@ -1601,6 +1605,7 @@ const TemplateStudioChatInner = ({
           dock={
             <ChatComposerDock
               data={data}
+              models={null}
               onNewThread={hasMessages ? startNewThread : null}
               status="ready"
               threadRef={threadRef}

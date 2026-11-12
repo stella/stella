@@ -6,11 +6,6 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 
 import messages from "@/i18n/langs/en.json";
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
-
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
 const { toAPIError } = await import("@/lib/errors/api");
@@ -55,7 +50,11 @@ const withIntl = (node: React.ReactNode) => (
   </IntlProvider>
 );
 
-afterEach(cleanup);
+afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
+  cleanup();
+});
 afterAll(async () => {
   cleanup();
   await unregisterDomEnvironment();

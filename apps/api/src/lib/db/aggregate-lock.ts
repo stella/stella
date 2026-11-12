@@ -11,6 +11,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   notInArray,
   or,
   SQL,
@@ -25,6 +26,7 @@ import type {
 } from "drizzle-orm/pg-core/query-builders/select.types";
 import * as v from "valibot";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { compareCodeUnit } from "@stll/collation";
 import { declareFingerprintFields } from "@stll/errors";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
@@ -715,6 +717,7 @@ type AuxiliaryRowIdentityOptions = Extract<
   {
     aggregate:
       | "accountDeletionRequest"
+      | "organizationSettings"
       | "correspondence"
       | "desktopMembership"
       | "memory"
@@ -741,6 +744,12 @@ const auxiliaryRowResource = (
         scopeColumns: [],
         scopeValues: [],
       };
+    case "organizationSettings":
+      return byUnscopedKey(
+        "organization_settings",
+        "organization_id",
+        options.id,
+      );
     case "desktopMembership":
       return {
         table: "member",
@@ -795,6 +804,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.userId,
       );
     case "accountDeletionRequest":
+    case "organizationSettings":
     case "correspondence":
     case "desktopMembership":
     case "memory":
@@ -2667,6 +2677,19 @@ export const lockBillingArrangement = async (
   return rows.at(0);
 };
 
+/** One statement, in key order, so holders of several matter locks cannot deadlock. */
+const lockMattersInKeyOrder = async (
+  tx: ExecuteTransaction,
+  workspaceIds: readonly SafeId<"workspace">[],
+) => {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(keys.key) FROM (SELECT DISTINCT hashtext(matter_id::text) AS key FROM unnest(ARRAY[${sql.join(
+      workspaceIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )}]) AS matter_id ORDER BY key) keys ORDER BY keys.key`,
+  );
+};
+
 /** Timer guards use the same advisory key order before any matter row lock. */
 export const withInvoiceMatterLocks = async (
   tx: Transaction,
@@ -2676,12 +2699,7 @@ export const withInvoiceMatterLocks = async (
   if (ids.length === 0) {
     panic("Invoice matter locks require at least one matter");
   }
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(keys.key) FROM (SELECT DISTINCT hashtext(matter_id::text) AS key FROM unnest(ARRAY[${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )}]) AS matter_id ORDER BY key) keys ORDER BY keys.key`,
-  );
+  await lockMattersInKeyOrder(tx, ids);
   await withAggregateParentBatch({
     tx,
     organizationIds: [],
@@ -3056,6 +3074,41 @@ export const lockWorkspaceLifecycle = async (
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
 };
 
+type HoldLiveSourceWorkspacesOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  workspaceIds: readonly SafeId<"workspace">[];
+};
+
+/**
+ * Takes the lifecycle fence of every matter a row will cite as a data source,
+ * and reports whether all of them still stand. Nothing else stops such a row:
+ * its source column has no foreign key. Under the fence a deletion has either
+ * committed, so this returns false, or waits and then removes the cited row.
+ */
+export const holdLiveSourceWorkspaces = async ({
+  tx,
+  organizationId,
+  workspaceIds,
+}: HoldLiveSourceWorkspacesOptions): Promise<boolean> => {
+  if (workspaceIds.length === 0) {
+    return true;
+  }
+  await lockMattersInKeyOrder(tx, workspaceIds);
+  const live = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        inArray(workspaces.id, [...workspaceIds]),
+        eq(workspaces.organizationId, organizationId),
+        ne(workspaces.status, WORKSPACE_STATUS.deleting),
+      ),
+    )
+    .limit(workspaceIds.length);
+  return live.length === workspaceIds.length;
+};
+
 export const TIMER_MATTER_LOCK_SCOPE = {
   assignment: "assignment",
   client: "client",
@@ -3231,6 +3284,11 @@ export const lockActiveTableRun = async (
       .limit(1)
       .for("no key update")
   ).at(0);
+
+/** A table run as `lockActiveTableRun` returned it, held under its row lock. */
+export type LockedTableRun = NonNullable<
+  Awaited<ReturnType<typeof lockActiveTableRun>>
+>;
 
 /** Fence matter-client assignments while a bulk delete classifies contacts. */
 export const lockOwnedContactsForBulkDelete = async ({

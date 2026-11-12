@@ -12,13 +12,13 @@ import { classifyFailure } from "@stll/errors";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawSearchDocuments,
   chatMessages,
   chatThreads,
   contactSearchDocuments,
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
+import { searchProvenanceAnswer } from "@/api/handlers/search/provenance-error";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { status } from "@/api/http/status";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -34,6 +34,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readCaseLawSearchTextForAi } from "@/api/lib/case-law/search-sql";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
@@ -986,8 +987,11 @@ const loadSummaryContexts = async ({
     { scopedDb },
   );
 
+  if (searchResult.isErr()) {
+    return searchProvenanceAnswer(searchResult.error);
+  }
   return await buildSearchResultContexts({
-    hits: searchResult.hits,
+    hits: searchResult.value.hits,
     organizationId,
     accessibleWorkspaceIds,
     scopedDb,
@@ -1185,19 +1189,19 @@ const loadSearchHitContent = async ({
     // `searchGlobal`'s case-law section stops seeing them entirely and both
     // the UI and this summariser lose them together. That section needs a
     // corpus-aware path before any database goes canonical.
-    const rows = await scopedDb((tx) =>
-      tx
-        .select({ searchableText: caseLawSearchDocuments.searchableText })
-        .from(caseLawSearchDocuments)
-        .where(
-          eq(
-            caseLawSearchDocuments.decisionId,
-            brandPersistedCaseLawDecisionId(hit.decisionId),
-          ),
-        )
-        .limit(1),
+    //
+    // The hit was gated when it was found; the text is read under the same
+    // published and redistributable gate plus the source's derived-AI
+    // permission, so a decision withdrawn since then, or one whose source
+    // forbids AI use, contributes nothing and is left out of the contexts.
+    const searchableText = await scopedDb(
+      async (tx) =>
+        await readCaseLawSearchTextForAi(
+          tx,
+          brandPersistedCaseLawDecisionId(hit.decisionId),
+        ),
     );
-    return compactContent(rows.at(0)?.searchableText);
+    return compactContent(searchableText);
   }
 
   if (hit.type === "contact") {

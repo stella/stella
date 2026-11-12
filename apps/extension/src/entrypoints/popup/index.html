@@ -8,16 +8,22 @@
   </head>
   <body>
     <main>
-      <div class="mark" aria-hidden="true">
-        <img src="/brand/stella-symbol.svg" alt="" width="20" height="21" />
-      </div>
-      <div>
+      <div class="title-row">
+        <div class="mark" aria-hidden="true">
+          <img src="/brand/stella-symbol.svg" alt="" width="20" height="21" />
+        </div>
         <h1 id="title"></h1>
-        <p id="purpose"></p>
+        <p id="status" class="status" role="status">
+          <span class="status-marker" aria-hidden="true"></span>
+          <span id="status-text"></span>
+          <span id="status-origin" class="visually-hidden"></span>
+        </p>
       </div>
-      <div class="status-line">
-        <span class="status-marker" aria-hidden="true"></span>
-        <p id="status" role="status"></p>
+      <p id="purpose" hidden></p>
+      <p id="notice" role="status" hidden></p>
+      <div id="contained-tabs" class="contained-tabs" hidden>
+        <span id="contained-tabs-label"></span>
+        <ul id="contained-tab-list"></ul>
       </div>
       <div class="actions">
         <button id="primary" type="button" hidden></button>

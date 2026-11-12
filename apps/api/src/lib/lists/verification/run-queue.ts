@@ -574,6 +574,7 @@ const claimRows = (
         score: null,
         refs: [],
         recordConflict: null,
+        qualifiers: [],
       };
     }
     const grade =
@@ -585,6 +586,7 @@ const claimRows = (
       score: grade.score,
       refs: grade.refs,
       recordConflict: grade.recordConflict,
+      qualifiers: grade.qualifiers,
     };
   });
 

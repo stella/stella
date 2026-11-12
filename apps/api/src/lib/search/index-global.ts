@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -33,6 +33,7 @@ import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identi
 import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
+import type { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -792,7 +793,7 @@ const readGlobalSearch = async (
     limit,
   }: GlobalSearchQuery,
   database: SearchReadTransaction,
-): Promise<GlobalSearchRead> => {
+): Promise<Result<GlobalSearchRead, ArtefactProvenanceDecodeError>> => {
   const parsedCursor = parseGlobalSearchCursor(cursor);
   const pagination = (() => {
     switch (parsedCursor.type) {
@@ -1042,6 +1043,7 @@ const readGlobalSearch = async (
         w.name AS workspace_name,
         t.title,
         t.title_source,
+        t.generation_provenance,
         t.subject_decision_id,
         (SELECT coalesce(jsonb_agg(jsonb_build_object(
           'role', source_message.role,
@@ -1412,12 +1414,15 @@ const readGlobalSearch = async (
     cursor: searchCursor,
     limit: fetchLimit,
   });
+  if (projectedChatRows.isErr()) {
+    return Result.err(projectedChatRows.error);
+  }
   const scoredHits = [
     ...entityRows.map(mapEntityHit),
     ...matterRows.map(mapMatterHit),
     ...contactRows.map(mapContactHit),
     ...caseLawRows.map(mapCaseLawHit),
-    ...projectedChatRows.map(mapChatHit),
+    ...projectedChatRows.value.map(mapChatHit),
     // hit.id tiebreak for deterministic ranking, not display text
   ].toSorted(compareScoredSearchHits);
 
@@ -1475,7 +1480,7 @@ const readGlobalSearch = async (
     }),
   );
 
-  return {
+  return Result.ok({
     result: {
       hits: page.items,
       facets: {
@@ -1489,7 +1494,7 @@ const readGlobalSearch = async (
       chatCoverage: chatRead.coverage,
     },
     caseLawLanguageGroups,
-  };
+  });
 };
 
 type GlobalCaseLawHitsOptions = {
@@ -1620,11 +1625,15 @@ export const searchGlobal = async (
     scopedDb,
     readLanguageAlternates = readPublicDecisionLanguageAlternatesForGroupKeys,
   }: SearchGlobalReaders,
-): Promise<GlobalSearchResult> =>
-  await withLanguageAlternates(
-    await scopedDb(async (tx) => await readGlobalSearch(query, tx)),
-    readLanguageAlternates,
+): Promise<Result<GlobalSearchResult, ArtefactProvenanceDecodeError>> => {
+  const read = await scopedDb(async (tx) => await readGlobalSearch(query, tx));
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  return Result.ok(
+    await withLanguageAlternates(read.value, readLanguageAlternates),
   );
+};
 
 // ---------------------------------------------------------------------------
 // Per-facet bucket search — used when a user types in a facet's search box

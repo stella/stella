@@ -90,10 +90,13 @@ describe("unreferenced public asset guard", () => {
       "apps/web/public/only-in-scripts.png": "bytes",
       "apps/landing/public/fonts/OFL-Example.txt": "license",
       "apps/landing/public/fonts/example.woff2": "bytes",
+      "apps/outlook/public/assets/icon-32.png": "bytes",
       "apps/web/src/routes/sign-in.tsx":
         'const background = "/branding/used.webp";\nconst logo = "by-name.png";\n',
       "apps/landing/src/styles/fonts.css":
         'src: url("/fonts/example.woff2") format("woff2");\n',
+      "apps/outlook/manifest.template.xml":
+        '<IconUrl DefaultValue="{{TASKPANE_ORIGIN}}/assets/icon-32.png" />\n',
       "scripts/render.ts": 'const input = "only-in-scripts.png";\n',
       "docs/assets.md": "dead.webp was the old background\n",
     };

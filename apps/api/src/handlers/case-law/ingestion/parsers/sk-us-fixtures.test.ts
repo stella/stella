@@ -361,3 +361,14 @@ describe("a file that runs a new block onto a finished sentence with plain space
     expect(opened).toEqual([]);
   });
 });
+
+test("IV. ÚS 344/2012: a parenthesis left open at a page break goes on onto the next page", async () => {
+  const blocks = await parsedFixture("sk-us-iv-us-344-2012", "IV. ÚS 344/2012");
+  const texts = paragraphs(blocks).map(textOf);
+  expect(texts.filter((text) => text.startsWith("C-472/11"))).toEqual([]);
+  expect(
+    texts.some((text) =>
+      text.includes("proti Csaba Csipai a spol. C-472/11 z 21. 2. 2013)"),
+    ),
+  ).toBe(true);
+});

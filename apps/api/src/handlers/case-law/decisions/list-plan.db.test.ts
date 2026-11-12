@@ -411,11 +411,11 @@ const explainLanguageWalk = async (
   return plan;
 };
 
-// A language is a share of a country: a tenth of it (`en`) or nearly all of
-// it (`cs`), as one language is all of a single-language country. Either way
-// the page is the language's own range of the walk, read in the page's order
-// and stopped by the limit, never every version in the language sorted for
-// one page.
+// A language is a share of a country: a tenth of it (`en`) or nearly all
+// of it (`cs`), as one language is all of a single-language country. Either
+// way the page is the language's own range of the walk, read in the page's
+// order and stopped by the limit, never every version in the language sorted
+// for one page.
 // timeout: each case explains its page twice, once in a transaction that drops
 // and restores the index, against the shared seeded database.
 test.each(

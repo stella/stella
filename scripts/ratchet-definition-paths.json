@@ -31,6 +31,7 @@
   "scripts/sha256-owners.ts",
   "scripts/source-globs.ts",
   "scripts/status-write-shapes.ts",
+  "scripts/test-database-handle-casts.ts",
   "scripts/undeclared-api-client-writes.ts",
   "scripts/unsignalled-skip.ts"
 ]

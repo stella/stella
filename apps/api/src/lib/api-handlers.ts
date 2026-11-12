@@ -63,6 +63,7 @@ import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import { requestAbortRefusal } from "@/api/lib/errors/request-abort";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -305,6 +306,9 @@ type McpCapabilityReason =
  * - `native_device`: a native app registering the device it runs on (push
  *   alert delivery). Only the signed-in app holds the device token; an agent
  *   that could register one could route a person's alerts elsewhere.
+ * - `agent_autonomy_ceiling`: an organization's limit on how much an agent
+ *   may do without asking. An agent that could change it could raise its
+ *   own limit, so only an administrator in the app sets it.
  */
 type McpInternalReason =
   | "auth_plumbing"
@@ -329,7 +333,8 @@ type McpInternalReason =
   | "native_tool_ui"
   | "billing_ui"
   | "compound_consent"
-  | "native_device";
+  | "native_device"
+  | "agent_autonomy_ceiling";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler
@@ -1062,6 +1067,7 @@ const runSafeHandlerInDeliveryScope = async <
     const error = result.error;
 
     const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
@@ -1134,6 +1140,7 @@ const runSafeHandlerInDeliveryScope = async <
     // BYOK key for) gets reported to the user as "Internal
     // server error" with no actionable detail.
     const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {

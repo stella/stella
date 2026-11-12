@@ -39,6 +39,14 @@ const MAX_SOURCE_ENTRY_ID_LENGTH = 512;
 // an interrupted stage from mixing rows produced by two parser versions.
 export const SANCTIONS_PARSER_VERSION = "1";
 
+/**
+ * How long one source may spend on its publisher: marker, download and
+ * parse, retries included. One refresh run checks every source in turn, so a
+ * publisher that stalls must not use up the time of the sources after it.
+ * Running out of it is a failed fetch, recorded like any other.
+ */
+export const SANCTIONS_FETCH_DEADLINE_MS = 3 * 60_000;
+
 const REPLACEMENT_FAILURE_CODES = {
   "below-minimum": "replacement-below-minimum",
   contracted: "replacement-contracted",
@@ -71,6 +79,7 @@ type RefreshOptions = {
   signal: AbortSignal;
   euXmlUrlOverride?: string | undefined;
   userAgent?: string | undefined;
+  fetchDeadlineMs?: number | undefined;
   fetchMarker?: typeof fetchSanctionsMarker | undefined;
   fetchEdition?: typeof fetchSanctionsEdition | undefined;
 };
@@ -765,6 +774,7 @@ export const refreshSanctionsSource = async ({
   signal,
   euXmlUrlOverride,
   userAgent,
+  fetchDeadlineMs = SANCTIONS_FETCH_DEADLINE_MS,
   fetchMarker = fetchSanctionsMarker,
   fetchEdition = fetchSanctionsEdition,
 }: RefreshOptions): Promise<SanctionsRefreshOutcome> => {
@@ -817,14 +827,28 @@ export const refreshSanctionsSource = async ({
     return panic("Sanctions active edition reference is broken");
   }
 
-  const current = await fetchCurrentEdition({
+  // The deadline bounds the publisher's part only. Staging rows afterwards
+  // answers to the caller's signal alone and resumes on the next run.
+  const deadline = AbortSignal.timeout(fetchDeadlineMs);
+  const fetched = await fetchCurrentEdition({
     source,
     activeMarkerKey: snapshot.markerKey,
     hasActiveEdition: snapshot.activeEditionId !== null,
-    fetchOptions: { permit, signal, euXmlUrlOverride, userAgent },
+    fetchOptions: {
+      permit,
+      signal: AbortSignal.any([signal, deadline]),
+      euXmlUrlOverride,
+      userAgent,
+    },
     fetchMarker,
     fetchEdition,
   });
+  // A publisher that outlived its deadline failed to deliver; an abort that
+  // came from the caller alone stays an abort.
+  const current: CurrentEditionResult =
+    fetched.status === "aborted" && deadline.aborted
+      ? { status: "failed", code: "fetch-failed" }
+      : fetched;
   switch (current.status) {
     case "aborted":
       return { status: "aborted", source };

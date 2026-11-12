@@ -9,6 +9,8 @@
  * own `LIMITS` so server call sites keep one lookup table.
  */
 
+import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "./legal-reader-annotations";
+
 /** Bun's 128 MiB default ingress ceiling, shared with request schemas. */
 export const HTTP_REQUEST_BODY_MAX_BYTES = 128 * 1024 * 1024;
 
@@ -160,8 +162,14 @@ export const SEARCH_HISTORY_TITLE_MAX_LENGTH = 512;
 /** Entries one best-effort history import request accepts. */
 export const SEARCH_HISTORY_IMPORT_MAX = 300;
 
-/** Max quoted characters when attaching a document source to a list item. */
-export const LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH = 10_000;
+/**
+ * Max quoted characters of a list item's document source, attached by hand or
+ * proposed by a generation candidate. A source is a spot in the document, so
+ * it takes the spot quote bound; verification pins quotes no longer than this
+ * either.
+ */
+export const LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH =
+  READER_ANNOTATION_QUOTE_MAX_LENGTH;
 
 /** Character budget for app-only decision pages and provision previews. */
 export const READER_PAGE_MAX_CHARS = 60_000;

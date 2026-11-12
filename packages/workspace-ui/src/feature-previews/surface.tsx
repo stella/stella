@@ -1,6 +1,7 @@
 import type * as React from "react";
 
 import { ReviewAuthorAvatar } from "@stll/ui/review-author-avatar";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { PreviewPerson } from "./mock-data";
@@ -46,7 +47,7 @@ export const FeaturePreviewSurface = ({
   >
     <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
       {icon}
-      <span className="min-w-0 truncate text-sm font-medium">{title}</span>
+      <TruncatedText className="text-sm font-medium">{title}</TruncatedText>
       {meta === undefined ? null : (
         <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-2">
           {meta}

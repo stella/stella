@@ -34,6 +34,7 @@ import {
 } from "@stll/ui/icons";
 import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
 import { MiddleTruncate } from "@stll/ui/middle-truncate";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import { RecordFieldValue } from "@stll/workspace-ui/field-value";
@@ -1148,7 +1149,7 @@ const ColumnHeaderCell = ({
             isActive && "text-foreground",
           )}
         >
-          <span className="truncate font-medium">{label}</span>
+          <TruncatedText className="font-medium">{label}</TruncatedText>
           {isActive && <SortIcon className="size-3 shrink-0" />}
         </span>
       </Button>
@@ -1633,7 +1634,7 @@ export const FilesystemRow = ({
 
   const extraCells = extraColumns.map((col) => (
     <span
-      className="text-muted-foreground flex h-full min-w-0 items-center justify-end overflow-hidden text-end text-xs text-ellipsis whitespace-nowrap"
+      className="text-muted-foreground flex h-full min-w-0 items-center justify-end overflow-hidden text-end text-xs whitespace-nowrap"
       key={col.id}
     >
       <ExtraColumnCell column={col} entity={node} />
@@ -1847,9 +1848,9 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   if (field?.content.type === "date") {
     const formatted = formatDateValue(field.content.value, locale);
     return (
-      <span className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs">
         {formatted || "-"}
-      </span>
+      </TruncatedText>
     );
   }
 
@@ -1857,17 +1858,17 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   // what it says; the flat text would hide it behind "-".
   if (field?.content.type === "record") {
     return (
-      <span className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs">
         <RecordFieldValue content={field.content} variant="table" />
-      </span>
+      </TruncatedText>
     );
   }
 
   const value = getFieldValue(field);
 
   return (
-    <span className="text-muted-foreground truncate text-xs">
+    <TruncatedText className="text-muted-foreground text-xs">
       {value || "-"}
-    </span>
+    </TruncatedText>
   );
 };

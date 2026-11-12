@@ -32,6 +32,7 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
   "chat_message_revisions.content",
   "chat_run_log_entries.chunk",
   "chat_run_logs.reference_summary",
+  "desktop_runner_app_calls.result",
   "desktop_runner_commands.payload",
   "desktop_runner_events.message",
   "entity_versions.collaboration_contributor_user_ids",
@@ -121,6 +122,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "document_review_parties.parties",
   "document_review_runs.basis",
   "document_review_runs.skipped",
+  "document_review_runs.withheld_sources",
   "document_translation_runs.warnings",
   "document_translation_units.application",
   "document_translation_units.warnings",
@@ -153,6 +155,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_claims.anchor",
   "legal_list_claims.refs",
   "legal_list_claims.record_conflict",
+  // A closed qualifier kind and the grader's explanation; no member id.
+  "legal_list_claims.qualifiers",
   "legal_list_generation_candidate_sources.locator",
   "legal_list_item_sources.locator",
   "legal_list_verification_runs.evidence",
@@ -389,6 +393,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_items.added_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_source_documents.updated_by":
+    "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_verification_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_verification_read_receipts.user_id":
@@ -493,6 +499,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Run log history; tool payloads name members as they were.",
   "chat_run_logs.reference_summary":
     "Derived conversation context can retain member identifiers in text; it grants no membership and expires with the run log.",
+  "desktop_runner_app_calls.result":
+    "Answers the server gave the member's own runs, deleted with their runner on organization removal; tool results name people as they were.",
   "desktop_runner_commands.payload":
     "Commands of the member's own runs, deleted with their runner on organization removal; transcripts name members as they were.",
   "desktop_runner_events.message":
@@ -547,6 +555,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped runner; the person stays an organization member.",
   "desktop_runner_runs.user_id":
     "Runs of an organization-scoped runner; each MCP call intersects the run's matters with current matter access.",
+  "desktop_runner_folder_restores.user_id":
+    "Undos of an organization-scoped runner's chat folders; the undo routes read the turn through current chat and matter access.",
   "search_history_entries.user_id":
     "The person's own organization-scoped search history; they stay an organization member.",
   "search_history_owners.user_id":
@@ -570,6 +580,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped connection; the person stays an organization member.",
   "chat_tool_grants.user_id":
     "The person's own organization-scoped tool approvals; every tool call still checks matter access.",
+  "chat_browser_site_grants.user_id":
+    "The person's own organization-scoped browser site approvals; they hold no matter data.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",
   "session.user_id":

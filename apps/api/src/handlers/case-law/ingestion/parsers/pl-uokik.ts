@@ -33,6 +33,7 @@ import type {
   PdfLine,
 } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_UOKIK_SOURCE_SYSTEM = "decyzje.uokik.gov.pl";
@@ -191,24 +192,25 @@ export const parsePlUokikDocument = async (
     documentId: input.documentId,
     sourceSystem: PL_UOKIK_SOURCE_SYSTEM,
   });
+  // The authority numbers its reasoning `[1]`, `[2]`, …: the court
+  // numbering moves the printed labels into the blocks' numbers.
+  const blocks = courtParagraphNumbers(parsed.documentAst.blocks, {
+    parser: "pl-uokik",
+    caseNumber: input.caseNumber,
+  });
   const attachedNotes = noteBlocks.map((block, index) => ({
     ...block,
-    id: `b${String(parsed.documentAst.blocks.length + index + 1)}`,
+    id: `b${String(blocks.length + index + 1)}`,
   }));
-  const output =
-    noteBlocks.length === 0
-      ? parsed
-      : {
-          documentAst: {
-            ...parsed.documentAst,
-            blocks: [...parsed.documentAst.blocks, ...attachedNotes],
-          },
-          fulltext: [
-            parsed.fulltext,
-            ...noteBlocks.map(({ plainText }) => plainText),
-          ].join("\n\n"),
-        };
-  return output;
+  return {
+    documentAst: {
+      ...parsed.documentAst,
+      blocks: [...blocks, ...attachedNotes],
+    },
+    fulltext: [...blocks, ...attachedNotes]
+      .flatMap(({ plainText }) => (plainText ? [plainText] : []))
+      .join("\n\n"),
+  };
 };
 
 // ── Court rulings the register attaches ──────────────────

@@ -12,7 +12,6 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -42,13 +41,12 @@ import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatLocalRunQuestionContext } from "@/components/chat/chat-local-run-question-context";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
-import { effectiveRunTarget } from "@/components/chat/chat-run-target-menu.logic";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
-import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
+import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { RenderStormRegion } from "@/components/render-storm-canary";
@@ -68,7 +66,6 @@ import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
-  applyChatModelChange,
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
@@ -76,6 +73,7 @@ import {
   resolveThreadActiveSkill,
   useThreadActiveSkill,
 } from "@/features/chat/thread-active-skill-store";
+import { useMarkChatThreadReadWhileOpen } from "@/features/chat/thread-reader-state";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -131,6 +129,10 @@ const WebSearchSeedLifecycle = ({ seed }: { seed: () => void }) => {
   });
   return null;
 };
+
+/** What the reader sees of the thread, for marking it read once per revision. */
+const latestMessageId = (messages: readonly { id: string }[]): string | null =>
+  messages.at(-1)?.id ?? null;
 
 export const ChatThreadPage = ({
   threadRef,
@@ -203,9 +205,13 @@ export const ChatThreadPage = ({
   // The skill is known only after the read above, and the cache key never
   // depends on it, so this context addresses the same entry the page reads.
   // Read at send time, so a turn carries the target the menu shows then.
-  const getRunTarget = useLatestCallback(() =>
-    effectiveRunTarget(data.runTarget),
-  );
+  const composerModels = useChatComposerModels({
+    activeOrganizationId,
+    threadRef,
+    stored: data,
+    queryKey: threadQueryOptions.queryKey,
+  });
+  const { getRunTarget } = composerModels;
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
@@ -275,7 +281,7 @@ export const ChatThreadPage = ({
     isGenerating,
     reconnecting,
     turnAbandoned,
-    waitingForComputer,
+    computerWait,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -324,6 +330,13 @@ export const ChatThreadPage = ({
     holdQueueForMessageEdit,
     messages,
     startUserMessageEdit,
+    threadRef,
+  });
+
+  useMarkChatThreadReadWhileOpen({
+    isGenerating,
+    revision: latestMessageId(messages),
+    threadExists: data.threadExists,
     threadRef,
   });
 
@@ -398,34 +411,6 @@ export const ChatThreadPage = ({
   const openInspectorChat = useInspectorTabsStore((s) => s.openChat);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  // Persists the composer's Models submenu selection and gates message
-  // submit on the outcome (see `onSubmit` below) so a send can never race
-  // a just-changed model onto the old, stale one.
-  const modelSelection = useChatModelSelection({
-    onPersisted: ({ model, reasoningEffort, runTarget }) => {
-      applyChatModelChange({
-        model,
-        reasoningEffort,
-        runTarget,
-        queryClient,
-        queryKey: threadQueryOptions.queryKey,
-        threadId: toSafeId<"chatThread">(threadRef.threadId),
-      });
-    },
-    threadRef,
-  });
-  // The thread keeps where its turns run beside its model, so a reload shows
-  // the same choice; the model stays as it is.
-  const runTargetChoice = {
-    selected: effectiveRunTarget(data.runTarget),
-    select: (runTarget: ChatRunTarget) =>
-      modelSelection.selectModel({
-        model: data.model,
-        reasoningEffort: data.reasoningEffort,
-        runTarget,
-      }),
-  };
 
   // "Move to side" — re-host this thread inside the inspector
   // tab. Workspace-scoped chats land on the matter so the pane
@@ -580,7 +565,7 @@ export const ChatThreadPage = ({
         if (!(await ensureAIAvailable())) {
           return CHAT_SEND_KEPT;
         }
-        if (Result.isError(await modelSelection.awaitPendingSelection())) {
+        if (Result.isError(await composerModels.awaitPendingSelection())) {
           return CHAT_SEND_KEPT;
         }
         const newThreadRef: ChatThreadRef =
@@ -635,7 +620,7 @@ export const ChatThreadPage = ({
       // failure the hook has already toasted; abort instead
       // of sending with a model that may not match what the
       // server has persisted.
-      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+      if (Result.isError(await composerModels.awaitPendingSelection())) {
         return CHAT_SEND_KEPT;
       }
       const message = await buildChatRequestMessage(draft);
@@ -780,7 +765,8 @@ export const ChatThreadPage = ({
                           queuedMessages={queuedMessages}
                           stickyUserMessages
                           streamdownComponents={streamdownComponents}
-                          waitingForComputer={waitingForComputer}
+                          computerWait={computerWait}
+                          newestLocalTurn={data.newestLocalTurn}
                           threadRef={threadRef}
                           userMessageEdit={userMessageEdit}
                           workspaceId={workspaceId}
@@ -886,20 +872,14 @@ export const ChatThreadPage = ({
                     guideAnchorsEnabled
                     isGenerating={isGenerating}
                     mcpOrganizationId={activeOrganizationId}
-                    models={{
-                      activeOrganizationId,
-                      threadRef,
-                      selectedModel: data.model,
-                      selectedReasoningEffort: data.reasoningEffort,
-                      selectModel: modelSelection.selectModel,
-                      runTarget: runTargetChoice,
-                    }}
+                    models={composerModels.models}
                     reservedCommands={{
                       hasPersistedThread: messages.length > 0,
                     }}
                     skillChat={{
                       contextMatterIds: selectedContextMatterIds,
                       document: null,
+                      runTarget: composerModels.runTarget,
                       threadRef,
                       webSearch: {
                         available: data.webSearchAvailable,
@@ -912,14 +892,7 @@ export const ChatThreadPage = ({
                       <ChatComposerDock
                         data={data}
                         guideAnchorsEnabled
-                        models={{
-                          activeOrganizationId,
-                          threadRef,
-                          selectedModel: data.model,
-                          selectedReasoningEffort: data.reasoningEffort,
-                          selectModel: modelSelection.selectModel,
-                          runTarget: runTargetChoice,
-                        }}
+                        models={composerModels.models}
                         leadingContext={
                           <>
                             {activeSkill && (

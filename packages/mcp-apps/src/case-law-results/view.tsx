@@ -72,6 +72,7 @@ import {
   TableRow,
 } from "@stll/ui/table";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import { createReaderController } from "../decision-reader/controller";
@@ -181,9 +182,13 @@ const ResultTableRow = ({
                 />
               }
             >
-              <BidiText className="truncate" title={row.caseNumber}>
+              <TruncatedText
+                hint={false}
+                render={<BidiText />}
+                title={row.caseNumber}
+              >
                 {row.caseNumber}
-              </BidiText>
+              </TruncatedText>
             </PreviewCardTrigger>
             <PreviewCardPopup align="start" className="w-80 flex-col">
               <p className="font-semibold">
@@ -232,9 +237,12 @@ const ResultTableRow = ({
           >
             <AccordionItem value={row.decisionId} className="border-0">
               <div className="flex min-w-0 items-center gap-2">
-                <p className="snippet text-muted-foreground min-w-0 flex-1 truncate text-sm">
+                <TruncatedText
+                  className="snippet text-muted-foreground flex-1 text-sm"
+                  render={<p />}
+                >
                   {row.snippet ?? headnoteText}
-                </p>
+                </TruncatedText>
                 <AccordionTrigger
                   aria-controls={panelId}
                   aria-label={t(
@@ -818,10 +826,15 @@ const SearchResults = ({
   );
 };
 
-const LoadingResults = () => {
+const LoadingResults = ({ continuing }: { continuing: boolean }) => {
   const t = useTranslations();
   return (
     <div role="status" aria-label={t("loading")} className="space-y-4">
+      {continuing && (
+        <p className="text-muted-foreground text-sm">
+          {t("searchStillRunning")}
+        </p>
+      )}
       <Skeleton className="h-9 w-full" />
       {["first", "second", "third"].map((id) => (
         <div key={id} className="flex items-center gap-4 rounded-lg border p-4">
@@ -920,8 +933,9 @@ const ResultContent = ({
   );
   switch (result.status) {
     case "idle":
+      return <LoadingResults continuing={false} />;
     case "loading":
-      return <LoadingResults />;
+      return <LoadingResults continuing={result.phase === "continuing"} />;
     case "error":
       if (result.previous.status === "ready") {
         return (

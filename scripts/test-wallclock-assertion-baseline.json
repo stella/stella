@@ -119,11 +119,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/mcp/tools.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/tests/helpers/transaction-interleaving.postgres.test.ts": {
     "count": 1,
     "owner": "api",
