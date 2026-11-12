@@ -99,8 +99,8 @@ test("an explicit slug is submitted and closes the dialog after success", async 
   await waitFor(() => expect(completed()).toBe(1));
   await waitFor(() =>
     expect(
-      document.querySelector("[data-slot=dialog-popup][data-open]"),
-    ).toBeNull(),
+      document.querySelector("[data-slot=dialog-popup][data-open]") === null,
+    ).toBe(true),
   );
   expect(requests).toEqual([
     {

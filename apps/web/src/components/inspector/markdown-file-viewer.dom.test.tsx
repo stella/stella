@@ -185,7 +185,7 @@ const mount = async () => {
     </QueryClientProvider>,
   );
   await waitFor(() =>
-    expect(view.container.querySelector(".md-editor")).not.toBeNull(),
+    expect(view.container.querySelector(".md-editor") === null).toBe(false),
   );
   jest.useFakeTimers();
   return { ...view, client };
@@ -323,8 +323,12 @@ const mountEmissionEditors = async () => {
     </IntlProvider>,
   );
   await waitFor(() => {
-    expect(immediate.container.querySelector(".md-editor")).not.toBeNull();
-    expect(debounced.container.querySelector(".md-editor")).not.toBeNull();
+    expect(immediate.container.querySelector(".md-editor") === null).toBe(
+      false,
+    );
+    expect(debounced.container.querySelector(".md-editor") === null).toBe(
+      false,
+    );
   });
   jest.useFakeTimers();
   return { immediate, debounced, immediateChanges, debouncedChanges };
@@ -376,7 +380,7 @@ test.each([true, false])(
     if (succeeded) {
       await publish();
       await waitFor(() =>
-        expect(view.container.querySelector(".md-editor")).not.toBeNull(),
+        expect(view.container.querySelector(".md-editor") === null).toBe(false),
       );
     } else {
       await act(async () =>
@@ -449,7 +453,7 @@ test("a failed background refetch keeps the retained draft publishable", async (
     }),
   );
   await waitFor(() =>
-    expect(view.container.querySelector(".md-editor")).toBeNull(),
+    expect(view.container.querySelector(".md-editor") === null).toBe(true),
   );
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(requests).toHaveLength(1));
