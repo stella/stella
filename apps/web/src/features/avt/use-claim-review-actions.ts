@@ -144,41 +144,43 @@ export const useClaimReviewActions = (scope: RunScope) => {
 
   const now = () => Temporal.Now.instant().toString();
 
+  const recordReview = resourceMutation({
+    mutation: "recordClaimReview",
+    queryClient,
+    mutationFn: async (
+      { workspaceId: matterId, targetIds: [claimId], event }: RecordVariables,
+      request: IdempotentRequest,
+    ) => {
+      const workspaceId = toSafeId<"workspace">(matterId);
+      return answerOf(
+        // Correlated, so this client consumes its own realtime echo: it
+        // already wrote the claim's review into the run and refreshed what
+        // the contract names.
+        await runWorkspaceMutation({
+          client: queryClient,
+          request: async (mutationId) =>
+            unwrapApiResponse(
+              await api.lists({ workspaceId })["claim-reviews"].post(
+                { runId, claimId, event },
+                {
+                  headers: {
+                    ...request.headers,
+                    [RESOURCE_MUTATION_ID_HEADER]: mutationId,
+                  },
+                },
+              ),
+            ),
+          queryKeys: [],
+        }),
+      );
+    },
+  });
+
   const record = useIdempotentMutation({
     mutationKey,
     // A run's review actions reach the server in the order they were taken.
     scope: { id: mutationKey.join(":") },
-    mutationFn: resourceMutation({
-      mutation: "recordClaimReview",
-      queryClient,
-      mutationFn: async (
-        { workspaceId: matterId, targetIds: [claimId], event }: RecordVariables,
-        request: IdempotentRequest,
-      ) => {
-        const workspaceId = toSafeId<"workspace">(matterId);
-        return answerOf(
-          // Correlated, so this client consumes its own realtime echo: it
-          // already wrote the claim's review into the run and refreshed what
-          // the contract names.
-          await runWorkspaceMutation({
-            client: queryClient,
-            request: async (mutationId) =>
-              unwrapApiResponse(
-                await api.lists({ workspaceId })["claim-reviews"].post(
-                  { runId, claimId, event },
-                  {
-                    headers: {
-                      ...request.headers,
-                      [RESOURCE_MUTATION_ID_HEADER]: mutationId,
-                    },
-                  },
-                ),
-              ),
-            queryKeys: [],
-          }),
-        );
-      },
-    }),
+    mutationFn: recordReview,
     onMutate: async ({ targetIds, event }) =>
       await applyOptimistic(targetIds, (review) =>
         predictClaimReview(review, event, { at: now(), actorId }),
@@ -196,37 +198,39 @@ export const useClaimReviewActions = (scope: RunScope) => {
     onError: (error, _variables, context) => rollback(error, context),
   });
 
+  const acceptRoutine = resourceMutation({
+    mutation: "acceptRoutineClaims",
+    queryClient,
+    mutationFn: async (
+      { workspaceId: matterId, targetIds: claimIds }: BulkVariables,
+      request: IdempotentRequest,
+    ) => {
+      const workspaceId = toSafeId<"workspace">(matterId);
+      return answerOf(
+        await runWorkspaceMutation({
+          client: queryClient,
+          request: async (mutationId) =>
+            unwrapApiResponse(
+              await api.lists({ workspaceId })["claim-reviews"].bulk.post(
+                { runId, claimIds },
+                {
+                  headers: {
+                    ...request.headers,
+                    [RESOURCE_MUTATION_ID_HEADER]: mutationId,
+                  },
+                },
+              ),
+            ),
+          queryKeys: [],
+        }),
+      );
+    },
+  });
+
   const bulk = useIdempotentMutation({
     mutationKey,
     scope: { id: mutationKey.join(":") },
-    mutationFn: resourceMutation({
-      mutation: "acceptRoutineClaims",
-      queryClient,
-      mutationFn: async (
-        { workspaceId: matterId, targetIds: claimIds }: BulkVariables,
-        request: IdempotentRequest,
-      ) => {
-        const workspaceId = toSafeId<"workspace">(matterId);
-        return answerOf(
-          await runWorkspaceMutation({
-            client: queryClient,
-            request: async (mutationId) =>
-              unwrapApiResponse(
-                await api.lists({ workspaceId })["claim-reviews"].bulk.post(
-                  { runId, claimIds },
-                  {
-                    headers: {
-                      ...request.headers,
-                      [RESOURCE_MUTATION_ID_HEADER]: mutationId,
-                    },
-                  },
-                ),
-              ),
-            queryKeys: [],
-          }),
-        );
-      },
-    }),
+    mutationFn: acceptRoutine,
     onMutate: async ({ targetIds }) =>
       await applyOptimistic(targetIds, (review) =>
         predictBulkReviewed(review, { at: now(), actorId }),
