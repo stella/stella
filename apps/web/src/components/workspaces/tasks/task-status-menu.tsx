@@ -56,13 +56,14 @@ const useTaskStatusChange = (workspaceId: string) => {
           taskId: string;
           status: TaskStatus;
           workspaceId: string;
+          entityId: string;
         }) => {
           const response = await api
             .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .patch({ taskId: toSafeId<"entity">(taskId), status }, request);
           return unwrapApiResponse(response);
         },
-      })({ ...variables, workspaceId }),
+      })({ ...variables, workspaceId, entityId: variables.taskId }),
     onSuccess: async (_data, variables) => {
       // `entitiesKeys.all` also covers the sidebar's matter activity list.
       await Promise.all([

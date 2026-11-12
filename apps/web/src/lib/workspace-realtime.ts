@@ -144,7 +144,7 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     resources: [RESOURCE_TYPE.ENTITY],
     // A task is an entity: its own queries and every entity collection,
     // the matter's tasks and its overview included, refresh.
-    changedEntity: "taskId",
+    changedEntity: "entityId",
   },
   renameEntity: {
     writes: [
