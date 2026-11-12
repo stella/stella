@@ -16,7 +16,7 @@ import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readConflictMatterAccess } from "@/api/lib/conflict-check/links";
 import type { ConflictMatterAccess } from "@/api/lib/conflict-check/links";
-import { hitSeverity } from "@/api/lib/conflict-check/outcome";
+import { hitSeverity, moreSevere } from "@/api/lib/conflict-check/outcome";
 import type {
   StoredConflictHit,
   StoredConflictResults,
@@ -31,6 +31,7 @@ export type ConflictCheckRow = Pick<
   | "results"
   | "outcome"
   | "decision"
+  | "decisionRevision"
   | "decidedBy"
   | "decidedAt"
   | "decisionNote"
@@ -96,8 +97,12 @@ const projectHit = (
   facts: MatterFacts,
 ): ConflictHit => {
   const matters: ConflictVisibleMatter[] = [];
-  const walled: { severity: ConflictSeverity; contactUserId: string | null }[] =
-    [];
+  // One entry per walled matter: a contact holding several roles in it
+  // counts once, at its most severe.
+  const walled = new Map<
+    string,
+    { severity: ConflictSeverity; contactUserId: string | null }
+  >();
   let deletedMatters = 0;
   for (const link of hit.links) {
     const access = facts.access.get(link.workspaceId);
@@ -121,8 +126,12 @@ const projectHit = (
       });
       continue;
     }
-    walled.push({
-      severity: link.severity,
+    const known = walled.get(link.workspaceId);
+    walled.set(link.workspaceId, {
+      severity:
+        known === undefined
+          ? link.severity
+          : moreSevere(known.severity, link.severity),
       contactUserId: access.contactUserId,
     });
   }
@@ -136,7 +145,7 @@ const projectHit = (
     evidence: hit.evidence,
     severity: hitSeverity(hit),
     matters,
-    walled: walledGroups(walled, facts.people),
+    walled: walledGroups([...walled.values()], facts.people),
     deletedMatters,
   };
 };
@@ -269,6 +278,7 @@ export const projectConflictCheck = async ({
       incomplete: result.incomplete,
     })),
     decision: row.decision,
+    decisionRevision: row.decisionRevision,
     decisionNote: row.decisionNote,
     consentReference: row.consentReference,
     decidedBy: person(row.decidedBy, facts.people),

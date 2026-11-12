@@ -87,13 +87,13 @@ describe("conflict check outcome", () => {
     ).toBe("incomplete");
   });
 
-  test("a truncated party needs review even with only informational hits", () => {
+  test("a truncated party is incomplete: its unlisted matches were never classified", () => {
     expect(
       conflictCheckOutcome({
         gaps: [],
         parties: [party([hit(["information"])], { truncated: true })],
       }),
-    ).toBe("needs_review");
+    ).toBe("incomplete");
   });
 
   test("informational hits are not no matches", () => {

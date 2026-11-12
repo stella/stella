@@ -31,10 +31,11 @@ const reviewRequired = (message: string) =>
 
 /**
  * Who may record which decision, and what it must carry. The runner records
- * a conflict, or clears a check that found no potential conflict and searched
- * everything. Clearing a potential conflict or an incomplete check, and any
- * waiver, take a reviewer (four eyes). A waiver rests on the client's recorded
- * consent; replacing a recorded decision needs a note saying why.
+ * the first decision: a conflict, or a clearance of a check that found no
+ * potential conflict and searched everything. Clearing a potential conflict or
+ * an incomplete check, any waiver, and replacing a recorded decision take a
+ * reviewer (four eyes). A waiver rests on the client's recorded consent;
+ * replacing a recorded decision needs a note saying why.
  */
 export const decisionRefusal = ({
   input,
@@ -51,8 +52,13 @@ export const decisionRefusal = ({
   if (input.decision !== "waived" && input.consentReference !== undefined) {
     return invalid("Only a waiver carries a consent reference");
   }
-  if (input.expectedDecision !== "pending" && input.note === undefined) {
-    return invalid("Replacing a recorded decision needs a note saying why");
+  if (input.expectedDecision !== "pending") {
+    if (!isReviewer) {
+      return reviewRequired("Only a reviewer can replace a recorded decision");
+    }
+    if (input.note === undefined) {
+      return invalid("Replacing a recorded decision needs a note saying why");
+    }
   }
   switch (input.decision) {
     case "conflict": {

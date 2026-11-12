@@ -11,6 +11,7 @@ CREATE TABLE "conflict_checks" (
 	"results" jsonb NOT NULL,
 	"outcome" text NOT NULL,
 	"decision" text DEFAULT 'pending' NOT NULL,
+	"decision_revision" integer DEFAULT 0 NOT NULL,
 	"decided_by" text,
 	"decided_at" timestamptz,
 	"decision_note" text,
@@ -18,6 +19,7 @@ CREATE TABLE "conflict_checks" (
 	"created_at" timestamptz DEFAULT now() NOT NULL,
 	"updated_at" timestamptz DEFAULT now() NOT NULL,
 	CONSTRAINT "conflict_checks_id_org_unq" UNIQUE ("id", "organization_id"),
+	CONSTRAINT "conflict_checks_decision_revision_check" CHECK ("conflict_checks"."decision_revision" >= 0),
 	CONSTRAINT "conflict_checks_outcome_check" CHECK ("conflict_checks"."outcome" IN ('potential_conflict', 'incomplete', 'needs_review', 'information_only', 'no_matches')),
 	CONSTRAINT "conflict_checks_decision_check" CHECK ("conflict_checks"."decision" IN ('pending', 'cleared', 'conflict', 'waived')),
 	CONSTRAINT "conflict_checks_decision_fields_check" CHECK (("conflict_checks"."decision" = 'pending') = ("conflict_checks"."decided_at" IS NULL) AND ("conflict_checks"."decision" <> 'pending' OR ("conflict_checks"."decided_by" IS NULL AND "conflict_checks"."decision_note" IS NULL))),
@@ -107,11 +109,20 @@ BEGIN
       END AS link_severity
     FROM links l
   )
+  -- A matter the caller may not open reports the most severe classification
+  -- over every party role, so submitting the same contact under each role
+  -- cannot tell a client from an opponent or a witness.
   SELECT c.link_contact_id, c.link_workspace_id, c.link_visible,
     CASE WHEN c.link_visible THEN c.link_relation END,
     CASE WHEN c.link_visible THEN c.link_role END,
     CASE WHEN c.link_visible THEN CASE WHEN c.link_status = 'active' THEN 'open' ELSE 'closed' END END,
-    c.link_severity
+    CASE
+      WHEN c.link_visible THEN c.link_severity
+      WHEN c.link_relation = 'client' THEN 'potential_conflict'
+      WHEN c.link_role = 'opposing_party' AND c.link_status = 'active' THEN 'potential_conflict'
+      WHEN c.link_role IN ('judge', 'mediator') THEN 'information'
+      ELSE 'needs_review'
+    END
   FROM classified c;
 END;
 $$;--> statement-breakpoint

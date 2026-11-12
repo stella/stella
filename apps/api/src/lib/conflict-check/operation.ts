@@ -41,7 +41,7 @@ import { CONFLICT_CHECK_DECISION_TRANSITIONS } from "@/api/lib/conflict-check/tr
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type { AuditRecorder } from "@/api/lib/db/audit-recording";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
-import { transitionScopedBatch } from "@/api/lib/db/transitions";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedConflictCheckId } from "@/api/lib/safe-id-boundaries";
@@ -56,6 +56,7 @@ const CHECK_COLUMNS = {
   decision: conflictChecks.decision,
   decidedBy: conflictChecks.decidedBy,
   decidedAt: conflictChecks.decidedAt,
+  decisionRevision: conflictChecks.decisionRevision,
   decisionNote: conflictChecks.decisionNote,
   consentReference: conflictChecks.consentReference,
   createdAt: conflictChecks.createdAt,
@@ -67,6 +68,14 @@ const checkNotFound = () =>
     status: 404,
     code: "not_found",
     message: "Conflict check not found",
+  });
+
+const decisionChanged = () =>
+  new HandlerError({
+    status: 409,
+    code: CONFLICT_CHECK_REFUSAL_CODE.decisionChanged,
+    message: "The check's decision changed since it was read",
+    hint: "Read the check again and decide on what it now says.",
   });
 
 const matterNotFound = () =>
@@ -110,6 +119,28 @@ const readRow = async (
     return abortTransaction(checkNotFound());
   }
   return row;
+};
+
+/** Only the runner and the reviewers change a check; matter members only read it. */
+const requireCheckWriter = ({
+  runBy,
+  userId,
+  isReviewer,
+}: {
+  runBy: string | null;
+  userId: SafeId<"user">;
+  isReviewer: boolean;
+}) => {
+  if (!isReviewer && runBy !== userId) {
+    abortTransaction(
+      new HandlerError({
+        status: 403,
+        code: CONFLICT_CHECK_REFUSAL_CODE.writeRequired,
+        message: "Only the check's runner or a reviewer can change it",
+        hint: "Ask the person who ran the check, or an owner or administrator.",
+      }),
+    );
+  }
 };
 
 const requireOpenableMatter = async (
@@ -251,6 +282,9 @@ export const runConflictCheck = async ({
         ...(overCap ? [CONFLICT_COVERAGE_GAPS.contactsOverCap] : []),
         ...(partyResults.some((party) => party.incomplete)
           ? [CONFLICT_COVERAGE_GAPS.partyWorkLimit]
+          : []),
+        ...(partyResults.some((party) => party.truncated)
+          ? [CONFLICT_COVERAGE_GAPS.partyMatchLimit]
           : []),
       ],
       parties: partyResults,
@@ -436,6 +470,10 @@ export const decideConflictCheck = async ({
 }): Promise<CheckResult<ConflictCheckView>> =>
   await abortableTx(safeDb, async (tx) => {
     const row = await readRow(tx, { organizationId, checkId });
+    requireCheckWriter({ runBy: row.runBy, userId, isReviewer });
+    if (row.decisionRevision !== input.expectedRevision) {
+      return abortTransaction(decisionChanged());
+    }
     const refusal = decisionRefusal({
       input,
       outcome: row.outcome,
@@ -445,10 +483,18 @@ export const decideConflictCheck = async ({
       return abortTransaction(refusal.error);
     }
     const decidedAt = now();
-    const changed = await transitionScopedBatch({
+    // The revision in the predicate makes the move atomic: a decision that
+    // landed after this read (even one that returned to the same value)
+    // leaves no row to change.
+    const changed = await transitionScopedCount({
       tx,
       spec: CONFLICT_CHECK_DECISION_TRANSITIONS,
-      identities: [{ id: checkId, organizationId }],
+      where:
+        and(
+          eq(conflictChecks.id, checkId),
+          eq(conflictChecks.organizationId, organizationId),
+          eq(conflictChecks.decisionRevision, input.expectedRevision),
+        ) ?? panic("A decision predicate is never empty"),
       options: {
         ...decisionMove(input),
         set: {
@@ -456,6 +502,7 @@ export const decideConflictCheck = async ({
           decidedAt,
           decisionNote: input.note ?? null,
           consentReference: input.consentReference ?? null,
+          decisionRevision: row.decisionRevision + 1,
           updatedAt: decidedAt,
         },
       },
@@ -471,15 +518,8 @@ export const decideConflictCheck = async ({
         });
       },
     });
-    if (changed.length === 0) {
-      return abortTransaction(
-        new HandlerError({
-          status: 409,
-          code: CONFLICT_CHECK_REFUSAL_CODE.decisionChanged,
-          message: "The check's decision changed since it was read",
-          hint: "Read the check again and decide on what it now says.",
-        }),
-      );
+    if (changed === 0) {
+      return abortTransaction(decisionChanged());
     }
     const updated = await readRow(tx, { organizationId, checkId });
     return await projectConflictCheck({
@@ -496,14 +536,31 @@ export const linkConflictCheckMatter = async ({
   organizationId,
   checkId,
   workspaceId,
+  userId,
+  isReviewer,
   recordAuditEvent,
 }: Organization & {
   safeDb: SafeDb;
   checkId: SafeId<"conflictCheck">;
   workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  isReviewer: boolean;
   recordAuditEvent: AuditRecorder;
 }): Promise<CheckResult<ConflictCheckView>> =>
   await abortableTx(safeDb, async (tx) => {
+    const checked = await readRow(tx, { organizationId, checkId });
+    requireCheckWriter({ runBy: checked.runBy, userId, isReviewer });
+    // Touching the check row holds it until commit, so concurrent relinks
+    // queue here and each reads the link the previous one left.
+    await tx
+      .update(conflictChecks)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(conflictChecks.id, checkId),
+          eq(conflictChecks.organizationId, organizationId),
+        ),
+      );
     const row = await readRow(tx, { organizationId, checkId });
     await requireOpenableMatter(tx, { organizationId, workspaceId });
     if (row.workspaceId !== workspaceId) {

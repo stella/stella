@@ -5,7 +5,6 @@ export const REPLAY_CAPABLE_ROUTES = [
   { method: "POST", path: "/v1/case/matter-links/:workspaceId" },
   { method: "POST", path: "/v1/case/matter-links/:workspaceId/batch" },
   { method: "POST", path: "/v1/chat/browser-site-grants" },
-  { method: "POST", path: "/v1/conflict-checks" },
   { method: "POST", path: "/v1/document-types" },
   {
     method: "POST",

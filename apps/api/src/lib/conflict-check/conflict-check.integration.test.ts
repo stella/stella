@@ -208,6 +208,15 @@ describe("conflict check against walled matters", () => {
     }
   });
 
+  test("a walled matter reads the same whatever side the party is submitted on", async () => {
+    const walledFor = async (role: ConflictParty["role"]) =>
+      hitFor(await run(ids.userA2, [{ ...ACME_ADVERSE, role }]), acmeId).hit
+        .walled;
+    const adverse = await walledFor("adverse");
+    expect(await walledFor("client")).toEqual(adverse);
+    expect(await walledFor("related")).toEqual(adverse);
+  });
+
   test("the stored record keeps no role or state for a walled matter", async () => {
     const created = expectOk(await run(ids.userA2, [ACME_ADVERSE]));
     const [row] = await testDb
@@ -370,6 +379,7 @@ describe("conflict check records and decisions", () => {
     const waiver = {
       decision: "waived",
       expectedDecision: "pending",
+      expectedRevision: 0,
       note: "Both clients consented in writing",
       consentReference: "Consent letters of 3 November",
     } as const;
@@ -380,6 +390,7 @@ describe("conflict check records and decisions", () => {
     const stale = await decide(ids.userAdmin, true, {
       decision: "conflict",
       expectedDecision: "pending",
+      expectedRevision: 0,
       note: "Consent withdrawn",
     });
     expect(statusOf(stale)).toBe(409);

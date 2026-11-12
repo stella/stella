@@ -10,7 +10,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { runConflictCheck } from "@/api/lib/conflict-check/operation";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
@@ -24,7 +23,6 @@ const config = {
     "information_only or no_matches. A check is never clear by itself: a " +
     "person records the decision. For a matter the caller cannot open, a " +
     "match shows only a count, its severity and whom to ask.",
-  idempotency: { type: "replay" },
   permissions: { conflictCheck: ["run"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
@@ -60,7 +58,6 @@ const createConflictCheck = createSafeRootHandler(
     );
     return Result.ok(view);
   },
-  { authorize: authorizeOrganizationReplay },
 );
 
 declareAggregateMutation(createConflictCheck, {

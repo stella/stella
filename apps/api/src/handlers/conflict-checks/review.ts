@@ -15,9 +15,10 @@ const config = {
   contract: "patch",
   description:
     "Record a decision on a conflict check: cleared, conflict, or waived " +
-    "(with the client's consent reference). Pass the decision you read as " +
-    "expectedDecision. Clearing a potential conflict or an incomplete " +
-    "check, and any waiver, need an owner or administrator and a note.",
+    "(with the client's consent reference). Pass the decision and revision " +
+    "you read as expectedDecision and expectedRevision. Clearing a potential " +
+    "conflict or an incomplete check, any waiver, and replacing a recorded " +
+    "decision need an owner or administrator and a note.",
   permissions: { conflictCheck: ["run"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",

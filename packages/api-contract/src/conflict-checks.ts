@@ -69,6 +69,8 @@ export const CONFLICT_COVERAGE_GAPS = {
   contactsOverCap: "contacts_over_cap",
   /** A party's screening stopped at its work bound before it finished. */
   partyWorkLimit: "party_work_limit",
+  /** A party matched more contacts than one check classifies. */
+  partyMatchLimit: "party_match_limit",
 } as const;
 export type ConflictCoverageGap =
   (typeof CONFLICT_COVERAGE_GAPS)[keyof typeof CONFLICT_COVERAGE_GAPS];
@@ -90,8 +92,10 @@ export const CONFLICT_MATTER_STATES = ["open", "closed"] as const;
 export type ConflictMatterState = (typeof CONFLICT_MATTER_STATES)[number];
 
 export const CONFLICT_CHECK_REFUSAL_CODE = {
-  /** Only a reviewer may clear a potential conflict or an incomplete check, or waive one. */
+  /** Only a reviewer may clear a potential conflict or an incomplete check, waive one, or replace a recorded decision. */
   reviewRequired: "conflict_check_review_required",
+  /** Only the check's runner or a reviewer may change it. */
+  writeRequired: "conflict_check_write_required",
   /** The decision changed since the caller read it. */
   decisionChanged: "conflict_check_decision_changed",
 } as const;
@@ -158,6 +162,8 @@ export const conflictCheckDecisionInputSchema = v.strictObject({
   ),
   /** The decision the caller saw; the change is refused when it moved. */
   expectedDecision: v.picklist(CONFLICT_CHECK_DECISIONS),
+  /** The decision revision the caller saw; any later decision advances it. */
+  expectedRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
   note: v.exactOptional(
     v.pipe(
       v.string(),
@@ -253,6 +259,8 @@ export type ConflictCheckView = {
   coverage: ConflictCheckCoverage;
   parties: ConflictPartyResult[];
   decision: ConflictCheckDecision;
+  /** Advances with every recorded decision; a decision names the one it read. */
+  decisionRevision: number;
   decisionNote: string | null;
   consentReference: string | null;
   decidedBy: { userId: string; name: string } | null;

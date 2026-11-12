@@ -503,7 +503,9 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "external-effect",
   },
-  "POST /v1/conflict-checks": { type: "replay" },
+  // Each run screens the firm's records as they stand; a retained response
+  // could disclose matters the caller may no longer open.
+  "POST /v1/conflict-checks": { type: "non-replay", reason: "current-state" },
   "POST /v1/conflict-checks/:checkId/decision": {
     type: "non-replay",
     reason: "current-state",

@@ -6,13 +6,15 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { linkConflictCheckMatter } from "@/api/lib/conflict-check/operation";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   contract: "patch",
   description:
-    "Link a conflict check to the matter it was run for. The caller must be " +
-    "able to open the matter; a check links to one matter at most.",
+    "Link a conflict check to the matter it was run for. Only the check's " +
+    "runner or an owner or administrator may link it, and only to a matter " +
+    "they can open; a check links to one matter at most.",
   permissions: { conflictCheck: ["run"], workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
@@ -35,10 +37,12 @@ const config = {
 const linkConflictCheckMatterHandler = createSafeRootHandler(
   config,
   async function* ({
+    memberRole,
     params: { checkId, workspaceId },
     recordAuditEvent,
     safeDb,
     session,
+    user,
   }) {
     const view = yield* Result.await(
       linkConflictCheckMatter({
@@ -46,6 +50,10 @@ const linkConflictCheckMatterHandler = createSafeRootHandler(
         organizationId: session.activeOrganizationId,
         checkId,
         workspaceId,
+        userId: user.id,
+        isReviewer: hasMemberPermission(memberRole, {
+          conflictCheck: ["review"],
+        }),
         recordAuditEvent,
       }),
     );

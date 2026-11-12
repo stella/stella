@@ -118,6 +118,8 @@ export const conflictChecks = p.pgTable(
       .text({ enum: CONFLICT_CHECK_DECISIONS })
       .notNull()
       .default("pending"),
+    /** Advances with every recorded decision, so a stale one is refused. */
+    decisionRevision: p.integer("decision_revision").notNull().default(0),
     decidedBy: p
       .text("decided_by")
       .references(() => user.id, { onDelete: "set null" }),
@@ -144,6 +146,10 @@ export const conflictChecks = p.pgTable(
         table.id.desc(),
       ),
     p.index("conflict_checks_decided_by_idx").on(table.decidedBy),
+    p.check(
+      "conflict_checks_decision_revision_check",
+      sql`${table.decisionRevision} >= 0`,
+    ),
     p.check(
       "conflict_checks_outcome_check",
       sql`${table.outcome} IN (${sql.join(

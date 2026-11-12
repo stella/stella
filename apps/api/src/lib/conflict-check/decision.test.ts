@@ -23,7 +23,11 @@ describe("conflict check decisions", () => {
     ] as const) {
       expect(
         refusal(
-          { decision: "cleared", expectedDecision: "pending" },
+          {
+            decision: "cleared",
+            expectedDecision: "pending",
+            expectedRevision: 0,
+          },
           outcome,
           false,
         ),
@@ -31,7 +35,11 @@ describe("conflict check decisions", () => {
     }
     expect(
       refusal(
-        { decision: "conflict", expectedDecision: "pending" },
+        {
+          decision: "conflict",
+          expectedDecision: "pending",
+          expectedRevision: 0,
+        },
         "potential_conflict",
         false,
       ),
@@ -42,14 +50,23 @@ describe("conflict check decisions", () => {
     for (const outcome of ["potential_conflict", "incomplete"] as const) {
       expect(
         refusal(
-          { decision: "cleared", expectedDecision: "pending", note: "ok" },
+          {
+            decision: "cleared",
+            expectedDecision: "pending",
+            expectedRevision: 0,
+            note: "ok",
+          },
           outcome,
           false,
         ),
       ).toBe(CONFLICT_CHECK_REFUSAL_CODE.reviewRequired);
       expect(
         refusal(
-          { decision: "cleared", expectedDecision: "pending" },
+          {
+            decision: "cleared",
+            expectedDecision: "pending",
+            expectedRevision: 0,
+          },
           outcome,
           true,
         ),
@@ -59,6 +76,7 @@ describe("conflict check decisions", () => {
           {
             decision: "cleared",
             expectedDecision: "pending",
+            expectedRevision: 0,
             note: "Different matter",
           },
           outcome,
@@ -72,6 +90,7 @@ describe("conflict check decisions", () => {
     const waiver = {
       decision: "waived",
       expectedDecision: "conflict",
+      expectedRevision: 1,
       note: "Both clients consented",
       consentReference: "Letter of 3 November",
     } as const;
@@ -81,11 +100,31 @@ describe("conflict check decisions", () => {
     expect(refusal(waiver, "potential_conflict", true)).toBeNull();
     expect(
       refusal(
-        { decision: "waived", expectedDecision: "conflict", note: "x" },
+        {
+          decision: "waived",
+          expectedDecision: "conflict",
+          expectedRevision: 0,
+          note: "x",
+        },
         "potential_conflict",
         true,
       ),
     ).toBe("validation_error");
+  });
+
+  test("replacing a recorded decision takes a reviewer", () => {
+    expect(
+      refusal(
+        {
+          decision: "cleared",
+          expectedDecision: "conflict",
+          expectedRevision: 1,
+          note: "Different matter after all",
+        },
+        "needs_review",
+        false,
+      ),
+    ).toBe(CONFLICT_CHECK_REFUSAL_CODE.reviewRequired);
   });
 
   test("only a waiver carries a consent reference, and replacing a decision needs a note", () => {
@@ -94,6 +133,7 @@ describe("conflict check decisions", () => {
         {
           decision: "conflict",
           expectedDecision: "pending",
+          expectedRevision: 0,
           consentReference: "x",
         },
         "needs_review",
@@ -102,14 +142,23 @@ describe("conflict check decisions", () => {
     ).toBe("validation_error");
     expect(
       refusal(
-        { decision: "conflict", expectedDecision: "cleared" },
+        {
+          decision: "conflict",
+          expectedDecision: "cleared",
+          expectedRevision: 0,
+        },
         "needs_review",
         true,
       ),
     ).toBe("validation_error");
     expect(
       refusal(
-        { decision: "cleared", expectedDecision: "cleared", note: "again" },
+        {
+          decision: "cleared",
+          expectedDecision: "cleared",
+          expectedRevision: 0,
+          note: "again",
+        },
         "needs_review",
         true,
       ),

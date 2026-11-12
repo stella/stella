@@ -15,7 +15,7 @@ const SEVERITY_RANK = {
 } as const satisfies Record<ConflictSeverity, number>;
 
 /** The more severe of two severities. */
-const moreSevere = (
+export const moreSevere = (
   left: ConflictSeverity,
   right: ConflictSeverity,
 ): ConflictSeverity =>
@@ -49,16 +49,15 @@ export const conflictCheckOutcome = (
   if (severities.has("potential_conflict")) {
     return "potential_conflict";
   }
+  // A truncated party has matches nobody classified, so its most severe
+  // relation is unknown: incomplete, not merely "needs review".
   if (
     results.gaps.length > 0 ||
-    results.parties.some((party) => party.incomplete)
+    results.parties.some((party) => party.incomplete || party.truncated)
   ) {
     return "incomplete";
   }
-  if (
-    severities.has("needs_review") ||
-    results.parties.some((party) => party.truncated)
-  ) {
+  if (severities.has("needs_review")) {
     return "needs_review";
   }
   return hits.length > 0 ? "information_only" : "no_matches";
