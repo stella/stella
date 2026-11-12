@@ -20,6 +20,7 @@
 import { toMarkdownBytes } from "@firecrawl/anydoc";
 import { panic, Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import {
   EMAIL_MIME_TYPES,
@@ -55,6 +56,7 @@ import {
   formatWorkerErrorLine,
   getWorkerErrorClass,
 } from "@/api/lib/search/extraction-worker-error";
+import { writeWorkerStdout } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
   DOCM_MIME_TYPE,
@@ -377,8 +379,8 @@ const readMaxCharsArgument = (value: string | undefined): number => {
   if (value === undefined) {
     return LIMITS.extractedContentMaxChars;
   }
-  const parsed = /^[1-9]\d{0,15}$/u.test(value) ? Number(value) : Number.NaN;
-  if (!Number.isSafeInteger(parsed)) {
+  const parsed = parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(0);
+  if (parsed < 1) {
     return panic("Extraction worker character budget is invalid");
   }
   return parsed;
@@ -400,7 +402,7 @@ try {
     process.exit(1);
   }
   if (result.value) {
-    process.stdout.write(result.value);
+    await writeWorkerStdout(result.value);
   }
   process.exit(0);
 } catch (error) {
