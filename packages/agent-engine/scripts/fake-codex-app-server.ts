@@ -1119,7 +1119,7 @@ const DecisionResultSchema = v.looseObject({ decision: v.string() });
  */
 const playLocally = (
   step: Extract<FakeStep, { byDecision: unknown } | { writeFile: string }>,
-  lastResponse: { result?: unknown } | null,
+  lastResponse: Readonly<Record<string, unknown>> | null,
   log: (entry: object) => void,
 ): readonly FakeStep[] => {
   if ("writeFile" in step) {
@@ -1128,7 +1128,7 @@ const playLocally = (
     log({ wrote: written });
     return [];
   }
-  const decision = v.safeParse(DecisionResultSchema, lastResponse?.result);
+  const decision = v.safeParse(DecisionResultSchema, lastResponse?.["result"]);
   const decided = decision.success ? decision.output.decision : null;
   log({ decision: decided });
   return APPROVING_DECISIONS.some((id) => id === decided)
@@ -1367,7 +1367,7 @@ export const run = async (
   };
   let serverRequestId = 1000;
   /** The client's answer to the last request a step sent. */
-  let lastResponse: { result?: unknown } | null = null;
+  let lastResponse: Awaited<ReturnType<typeof take>> = null;
   const queue = [...steps];
   for (let step = queue.shift(); step !== undefined; step = queue.shift()) {
     if ("expect" in step) {

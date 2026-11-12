@@ -9,6 +9,7 @@ import type { HarnessTurn, HarnessTurnInput } from "../src/harness/adapter";
 import { createClaudeCodeHarnessAdapter } from "../src/harness/claude-code/adapter";
 import { createCodexHarnessAdapter } from "../src/harness/codex/adapter";
 import type { HarnessEvent } from "../src/harness/events";
+import { PROTOCOL_LOG_OFF } from "../src/protocol-log";
 import {
   CLAUDE_BY_MODEL_SCENARIOS,
   scenarioForArgs,
@@ -49,9 +50,16 @@ const codex = () => {
       PATH: process.env["PATH"] ?? "",
     },
     clientVersion: "0.0.1",
+    protocolLog: PROTOCOL_LOG_OFF,
     gracePeriodMs: 1000,
     requestTimeoutMs: 10_000,
-    capacityRetry: { maxAttempts: 1, baseDelayMs: 5, maxDelayMs: 5 },
+    capacityRetry: {
+      maxAttempts: 1,
+      baseDelayMs: 5,
+      maxDelayMs: 5,
+      // One attempt: nothing is retried, so nothing waits.
+      sleep: async () => {},
+    },
     onBackgroundError: (error) => {
       throw error;
     },
@@ -77,6 +85,7 @@ const turnInput = (workspaceDir: string, model: string): HarnessTurnInput => ({
   cacheDir: path.join(tmpdir(), "stella-agent-package-cache"),
   skillFolders: [],
   toolPath: [],
+  networkHosts: [],
 });
 
 /** Every event of a Codex turn on `model`; `onEvent` may interrupt it. */
@@ -186,6 +195,7 @@ describe("Claude Code by model", () => {
         throw error;
       },
       platform: "darwin",
+      protocolLog: PROTOCOL_LOG_OFF,
     });
     const probed = await adapter.probe();
     if (Result.isError(probed)) {
