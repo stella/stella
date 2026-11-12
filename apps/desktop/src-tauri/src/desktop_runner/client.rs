@@ -43,8 +43,8 @@ use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
   ActiveRun, CloseCode, DESKTOP_ID_HEADER, DesktopMessage, HELLO_TIMEOUT,
   HarnessReport, HarnessStatus, Hello, LinkedFolderReport, LinkedFoldersStatus,
-  MAX_FRAME_BYTES, PATH, PING_INTERVAL,
-  POLICY_VIOLATION_CODE, PROTOCOL, RunRef, RunRejected, ServerMessage, Welcome,
+  MAX_FRAME_BYTES, PATH, PING_INTERVAL, POLICY_VIOLATION_CODE, PROTOCOL, RunRef,
+  RunRejected, ServerMessage, Welcome,
 };
 
 /// `hello` lists at most this many runs; the contract refuses more.

@@ -60,9 +60,8 @@ use crate::local_linked_folders::LinkedFolderRefusal;
 use crate::runner_protocol::{
   FolderRestore, FolderRestoreOutcome, Harness, HarnessReport,
   HarnessUnavailableReason, JsonObject, LinkedFolderReport, MAX_FRAME_BYTES,
-  MissingHarness, RejectReason,
-  RunAnswer, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
-  UnavailableHarness,
+  MissingHarness, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
+  RunTokenRefresh, UnavailableHarness,
 };
 
 const LOG_TARGET: &str = "desktop_runner::host";

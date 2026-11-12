@@ -10,9 +10,8 @@ use tokio::sync::watch;
 use super::journal::{Recorded, SharedJournal};
 use crate::runner_protocol::{
   ApprovalKind, DesktopMessage, FolderRestore, FolderRestoreOutcome, FolderRestored,
-  Harness, HarnessReport, JsonObject, LinkedFolderReport, MissingHarness,
-  RejectReason, RunAnswer,
-  RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  Harness, HarnessReport, JsonObject, LinkedFolderReport, MissingHarness, RejectReason,
+  RunAnswer, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
 };
 
 /// A run command the host could not take (its harness holder is busy or

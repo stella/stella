@@ -283,6 +283,16 @@
             "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
             "name": "Smlouva o dílo",
             "state": "moved"
+          },
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d2",
+            "name": "Archive",
+            "state": "protected"
+          },
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d3",
+            "name": "Exhibits",
+            "state": "unreadable"
           }
         ]
       },

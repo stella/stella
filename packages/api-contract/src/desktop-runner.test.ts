@@ -222,6 +222,16 @@ describe("desktop runner fixtures", () => {
         folderRestoreOutcomes: desktop.flatMap((message) =>
           message.type === "folder.restored" ? [message.outcome] : [],
         ),
+        linkedFolderStates: desktop.flatMap((message) => {
+          switch (message.type) {
+            case "hello":
+              return message.linkedFolders.map(({ state }) => state);
+            case "linked_folders.status":
+              return message.folders.map(({ state }) => state);
+            default:
+              return [];
+          }
+        }),
         networkPolicies: starts.map(({ policy }) => policy.network),
         fsPolicies: starts.map(({ policy }) => policy.fs),
         approvalModes: [

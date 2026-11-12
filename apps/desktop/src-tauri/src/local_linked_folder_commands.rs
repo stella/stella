@@ -62,7 +62,8 @@ fn announce(app: &AppHandle) {
     app.emit(CHANGED_EVENT, ()),
     "linked folder change was not announced",
   );
-  if let Some(control) = app.try_state::<crate::desktop_runner::DesktopRunnerControl>() {
+  if let Some(control) = app.try_state::<crate::desktop_runner::DesktopRunnerControl>()
+  {
     control.linked_folders_changed();
   }
 }
