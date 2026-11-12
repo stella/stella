@@ -88,6 +88,19 @@ describe("a stored sk-us row is located in its month's listing", () => {
     expect(
       recapture.matchesStored(first, legacyRow({ documentUrl: null })),
     ).toBe(false);
+    // A row whose id and download URL disagree names no single document.
+    expect(
+      recapture.matchesStored(first, {
+        ...stored,
+        sourceDocumentId: documentIdOf(second),
+      }),
+    ).toBe(false);
+    expect(
+      recapture.matchesStored(first, {
+        ...stored,
+        sourceDocumentId: documentIdOf(first),
+      }),
+    ).toBe(true);
   });
 
   test("the located payload is the listed row, read as the crawl reads it", async () => {

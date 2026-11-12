@@ -2892,22 +2892,24 @@ const skUsLookupOf = (stored: StoredRawReparseInput): string | null =>
 /**
  * The publisher's document id a stored row is keyed by: the id it holds, or
  * for a row written before it held one, the id its `docDownload/{id}` URL
- * names (the same rule `legacySourceUrls` re-keys such rows by).
+ * names (the same rule `legacySourceUrls` re-keys such rows by). A row whose
+ * ids disagree names no single document, so it is keyed by none.
  */
 const storedSkUsDocumentId = (
   stored: StoredRawReparseInput,
 ): string | undefined => {
-  if (stored.sourceDocumentId !== null) {
-    return stored.sourceDocumentId;
-  }
   const prefix = `${DOC_DOWNLOAD_URL}/`;
-  const url = [stored.documentUrl, stored.sourceUrl].find(
-    (candidate) => candidate?.startsWith(prefix) === true,
+  const named = [stored.documentUrl, stored.sourceUrl]
+    .filter((candidate) => candidate?.startsWith(prefix) === true)
+    .map((url) => url?.slice(prefix.length) ?? "")
+    .filter((id) => id.length > 0 && !id.includes("/"));
+  const ids = new Set(
+    stored.sourceDocumentId === null
+      ? named
+      : [stored.sourceDocumentId, ...named],
   );
-  const id = url?.slice(prefix.length);
-  return id === undefined || id.length === 0 || id.includes("/")
-    ? undefined
-    : id;
+  const [only] = ids;
+  return ids.size === 1 ? only : undefined;
 };
 
 /** A listed item is the stored row when it states the row's document id. */
