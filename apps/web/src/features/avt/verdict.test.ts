@@ -156,6 +156,30 @@ describe("AVT triage", () => {
     ).toBe(true);
   });
 
+  // The server sends a re-checked claim's verdict as the re-check graded it
+  // (`gradeOf`), and run summaries count it the same way; the tiles must not
+  // fall back to the grade the re-check replaced.
+  test("a re-checked claim counts in the tiles under its new grade", () => {
+    const rechecked = makeClaim({
+      suffix: 1,
+      verdict: supported(),
+      refs: [{ factEntityId: factId(1), rel: "supports" }],
+      recheck: {
+        checkedAt: "2026-11-11T10:00:00.000Z",
+        checkedBy: "0199a3c4-5b6d-7e8f-9a0b-000000009098",
+        modelRef: null,
+        factCount: 1,
+        facts: [makeFact(1)],
+        original: { verdict: contradicted(), refs: [], qualifiers: [] },
+      },
+    });
+    const { byState } = countClaims([rechecked], NONE_CONTESTED);
+    expect({
+      supported: byState.supported,
+      contradicted: byState.contradicted,
+    }).toEqual({ supported: 1, contradicted: 0 });
+  });
+
   // The review each qualifier asks for comes from the server; a clean
   // verdict on a held footing leaves the routine claims, and the count, the
   // bulk accept and the claim's own copy agree about it.
