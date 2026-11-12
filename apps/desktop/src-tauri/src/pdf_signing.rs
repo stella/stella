@@ -1376,10 +1376,10 @@ mod tests {
     // separator, a fragment marker or a non-ASCII script must not end the
     // parameter it travels in.
     let encoded = encode_json(&[DialogIdentity {
-      id: "abc",
-      label: "Kancelář & Co #2 \"Praha\"",
-      issuer: Some("CA #1 & Co"),
-      expires_on: "2030-01-31",
+      id: "abc".to_string(),
+      label: "Kancelář & Co #2 \"Praha\"".to_string(),
+      issuer: Some("CA #1 & Co".to_string()),
+      expires_on: "2030-01-31".to_string(),
     }])
     .unwrap();
 
