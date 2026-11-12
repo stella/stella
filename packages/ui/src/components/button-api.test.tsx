@@ -209,7 +209,7 @@ describe("ButtonTextRun", () => {
     );
     const marked = labelClasses(
       renderToStaticMarkup(
-        <ButtonTextRun look="text-mark" onClick={() => undefined}>
+        <ButtonTextRun onClick={() => undefined} variant="plain">
           the agreement
         </ButtonTextRun>,
       ),

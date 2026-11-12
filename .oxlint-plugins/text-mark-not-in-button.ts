@@ -17,16 +17,19 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import type { AstNode } from "./utils.ts";
 import {
   elementName,
   everyNode,
+  filenameForContext,
   getImportedName,
   getImportLocalName,
   isAstNode,
   isIdentifier,
 } from "./utils.ts";
 
+const RULE_NAME = "text-mark-not-in-button";
 const BUTTON_MODULE = "@stll/ui/button";
 const TEXT_MARK_MODULE = "@stll/ui/text-mark";
 
@@ -58,9 +61,9 @@ const localNamesOf = (
 };
 
 export default eslintCompatPlugin({
-  meta: { name: "text-mark-not-in-button" },
+  meta: { name: RULE_NAME },
   rules: {
-    "text-mark-not-in-button": {
+    [RULE_NAME]: {
       meta: {
         type: "problem",
         messages: {
@@ -69,7 +72,7 @@ export default eslintCompatPlugin({
         },
         schema: [],
       },
-      create(context) {
+      createOnce(context) {
         let buttons = new Set<string>();
         let markClasses = new Set<string>();
         let markElements = new Set<string>();
@@ -97,7 +100,16 @@ export default eslintCompatPlugin({
               return;
             }
             const children = Array.isArray(node.children) ? node.children : [];
-            if (everyNode(children).some(isMark)) {
+            // First-week rollout: only buttons opened on lines this change
+            // touched (scripts/guard-rollouts/text-mark-not-in-button.json).
+            if (
+              everyNode(children).some(isMark) &&
+              guardEnforcesLine({
+                guard: RULE_NAME,
+                file: filenameForContext(context),
+                line: context.sourceCode.getLocFromIndex(node.range[0]).line,
+              })
+            ) {
               context.report({ node, messageId: "markInButton" });
             }
           },

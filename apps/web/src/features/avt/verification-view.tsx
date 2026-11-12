@@ -794,8 +794,8 @@ const ClaimSpan = ({
     <ButtonTextRun
       aria-pressed={selected}
       id={claimDomId(claim.id)}
-      look="text-mark"
       onClick={() => onSelect(claim.id)}
+      variant="plain"
     >
       <span
         className={cn(

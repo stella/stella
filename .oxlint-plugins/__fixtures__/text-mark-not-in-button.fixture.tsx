@@ -28,6 +28,7 @@ export const MarkedCitation = () => (
 
 // --- Allowed: the same marks as a text run, and a Button without a mark ---
 export const ClaimRun = () => (
+  // expect-clean: text-mark-not-in-button/text-mark-not-in-button
   <ButtonTextRun onClick={select}>
     <span className={textMarkClass({ variant: "underline", tone: "success" })}>Funds arrived</span>
   </ButtonTextRun>

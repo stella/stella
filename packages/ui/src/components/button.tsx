@@ -514,15 +514,16 @@ const BUTTON_TEXT_RUN_CLASS =
   "has-focus-visible:ring-ring cursor-pointer rounded-xs box-decoration-clone select-text has-focus-visible:ring-2 has-disabled:cursor-not-allowed has-disabled:opacity-64";
 
 /**
- * How a run shows it can be pressed: underlined like a link, or by the text
- * mark it holds (a claim's verdict mark), which draws its own line.
+ * How a run shows it can be pressed: underlined like a link, or `plain`, by
+ * what it holds (a claim's text mark, which draws its own line), as a plain
+ * Button's look is its content.
  */
-const BUTTON_TEXT_RUN_LOOK_CLASS = {
+const BUTTON_TEXT_RUN_VARIANT_CLASS = {
   link: "underline underline-offset-2 hover:decoration-2",
-  "text-mark": "",
+  plain: "",
 } as const;
 
-type ButtonTextRunLook = keyof typeof BUTTON_TEXT_RUN_LOOK_CLASS;
+type ButtonTextRunVariant = keyof typeof BUTTON_TEXT_RUN_VARIANT_CLASS;
 
 // Visually hidden but focusable: the run, not this box, shows the focus.
 const BUTTON_TEXT_RUN_TARGET_CLASS =
@@ -549,7 +550,7 @@ type ButtonTextRunProps = Omit<
   children: ReactNode;
   className?: string | undefined;
   /** `link` unless the run holds a text mark that draws its own line. */
-  look?: ButtonTextRunLook | undefined;
+  variant?: ButtonTextRunVariant | undefined;
 };
 
 /**
@@ -565,13 +566,13 @@ const ButtonTextRun = ({
   children,
   className,
   disabled,
-  look = "link",
+  variant = "link",
   ...props
 }: ButtonTextRunProps) => (
   <label
     className={cn(
       BUTTON_TEXT_RUN_CLASS,
-      BUTTON_TEXT_RUN_LOOK_CLASS[look],
+      BUTTON_TEXT_RUN_VARIANT_CLASS[variant],
       className,
     )}
     data-slot="button-text-run"

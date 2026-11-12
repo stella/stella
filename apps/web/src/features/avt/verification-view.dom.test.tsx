@@ -460,7 +460,7 @@ test("a claim that crosses a line break reads in place, in the paragraph's order
       block.blockId === crossing.anchor.blockId,
   );
   if (crossing === undefined || stored === undefined) {
-    return panic("The witness statement has a claim that crosses a line");
+    panic("The witness statement has a claim that crosses a line");
   }
   const paragraph = document.querySelector<HTMLElement>(
     `[data-anchor="${stored.blockId}"]`,
@@ -468,7 +468,7 @@ test("a claim that crosses a line break reads in place, in the paragraph's order
   // The words read back in the stored order: every text node, outside what
   // only a screen reader hears, joined, is the stored text.
   if (paragraph === null) {
-    return panic("The claim's paragraph is drawn");
+    panic("The claim's paragraph is drawn");
   }
   const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
   const ordered: Text[] = [];
