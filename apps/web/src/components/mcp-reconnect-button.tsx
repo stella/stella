@@ -17,6 +17,7 @@ import {
   subscribeToMcpConnectionRefresh,
   useMcpOAuthWindow,
 } from "@/lib/mcp-oauth-channel";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 type McpReconnectButtonProps = {
   slug: string;
@@ -65,8 +66,17 @@ export const McpReconnectButton = ({
       handleError(undefined);
     }
   });
-  const reconnect = useMutation({
+  const queryClient = useQueryClient();
+  // Built outside useMutation so the connection start's result types the
+  // mutation instead of being inferred back from useMutation's own generics.
+  const reconnectMutationFn = resourceMutation({
+    mutation: "connectMcpServer",
+    queryClient,
+    scope: { type: "organization" },
     mutationFn: async () => await mcpConnectorConnection.start(slug),
+  });
+  const reconnect = useMutation({
+    mutationFn: reconnectMutationFn,
     onSuccess: (data) => {
       switch (data.type) {
         case "oauth2":
