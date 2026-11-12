@@ -21,6 +21,7 @@ import {
   type DesktopRunnerTiming,
 } from "@stll/api-contract/desktop-runner";
 
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { pairAppCall, recordAppCall } from "@/api/lib/desktop-runner/app-calls";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
@@ -603,13 +604,15 @@ export const createDesktopRunnerControl = ({
       await pickDesktop(deps, options),
     startRun: async (input: StartLocalRunInput) => await startRun(deps, input),
     /**
-     * Let runs work in a folder linked on one of the member's computers.
-     * `false` when that computer does not report the folder.
+     * Let runs work in a folder linked on one of the member's computers,
+     * recording its audit event in the same transaction. `false` when that
+     * computer does not report the folder.
      */
     approveLinkedFolder: async (options: {
       owner: RunOwner;
       desktopId: string;
       linkId: string;
+      recordAuditEvent: AuditRecorder;
     }): Promise<Result<boolean, DatabaseError>> =>
       await Result.tryPromise({
         try: async () => await approveLinkedFolder(db, options),

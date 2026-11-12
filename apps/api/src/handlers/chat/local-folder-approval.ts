@@ -9,7 +9,6 @@ import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
@@ -70,8 +69,14 @@ export const createApproveLocalFolder = (
       }
       const control =
         dependencies?.control() ?? getDesktopRunnerControl().control;
+      // The approval and its audit event are one transaction.
       const approved = yield* Result.await(
-        control.approveLinkedFolder({ owner, desktopId, linkId }),
+        control.approveLinkedFolder({
+          owner,
+          desktopId,
+          linkId,
+          recordAuditEvent,
+        }),
       );
       if (!approved) {
         return Result.err(
@@ -82,17 +87,6 @@ export const createApproveLocalFolder = (
           }),
         );
       }
-      yield* Result.await(
-        safeDb(async (tx) => {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL,
-            resourceId: linkId,
-            workspaceId: null,
-            metadata: { desktopId },
-          });
-        }),
-      );
       return answer("approved");
     },
   );

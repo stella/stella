@@ -44,6 +44,11 @@ import {
   desktopRunners,
   userFiles,
 } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  type AuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import {
@@ -756,35 +761,49 @@ type ApproveLinkedFolderOptions = {
   owner: RunOwner;
   desktopId: string;
   linkId: string;
+  /** Records the approval's audit event, in the approval's transaction. */
+  recordAuditEvent: AuditRecorder;
 };
 
 /**
  * Record the member's OK for runs to work in a folder linked on one of their
- * computers, on every device key of that installation that reports it.
- * `false` when none of them reports the folder.
+ * computers, on every device key of that installation that reports it, with
+ * its audit event in the same transaction: an approval whose audit event
+ * cannot be written is not kept. `false` when none of them reports the
+ * folder; nothing is then recorded.
  */
 export const approveLinkedFolder = async (
   db: DesktopRunnerDb,
-  { owner, desktopId, linkId }: ApproveLinkedFolderOptions,
-): Promise<boolean> => {
-  // audit: skip - the approving handler records the audit event
-  const updated = await db
-    .update(runner)
-    .set({
-      approvedFolderIds: sql`CASE WHEN ${linkId}::uuid = ANY(${runner.approvedFolderIds}) THEN ${runner.approvedFolderIds} ELSE array_append(${runner.approvedFolderIds}, ${linkId}::uuid) END`,
-    })
-    .where(
-      and(
-        eq(runner.userId, owner.userId),
-        eq(runner.organizationId, owner.organizationId),
-        eq(runner.desktopId, desktopId),
-        ne(runner.connection, "retired"),
-        sql`${runner.linkedFolders} @> ${JSON.stringify([{ id: linkId }])}::text::jsonb`,
-      ),
-    )
-    .returning({ desktopId: runner.desktopId });
-  return updated.length > 0;
-};
+  { owner, desktopId, linkId, recordAuditEvent }: ApproveLinkedFolderOptions,
+): Promise<boolean> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const updated = await tx
+      .update(runner)
+      .set({
+        approvedFolderIds: sql`CASE WHEN ${linkId}::uuid = ANY(${runner.approvedFolderIds}) THEN ${runner.approvedFolderIds} ELSE array_append(${runner.approvedFolderIds}, ${linkId}::uuid) END`,
+      })
+      .where(
+        and(
+          eq(runner.userId, owner.userId),
+          eq(runner.organizationId, owner.organizationId),
+          eq(runner.desktopId, desktopId),
+          ne(runner.connection, "retired"),
+          sql`${runner.linkedFolders} @> ${JSON.stringify([{ id: linkId }])}::text::jsonb`,
+        ),
+      )
+      .returning({ desktopId: runner.desktopId });
+    if (updated.length === 0) {
+      return false;
+    }
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL,
+      resourceId: linkId,
+      workspaceId: null,
+      metadata: { desktopId },
+    });
+    return true;
+  });
 
 type RunTransitionOptions = {
   binding: RunnerBinding;
