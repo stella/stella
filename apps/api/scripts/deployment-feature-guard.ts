@@ -181,6 +181,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop account presence supports handoff on every deployment",
   ],
   [
+    "/v1/desktop/dictation/cleanup",
+    "Desktop dictation cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/marked",
     "A PDF downloads with the reader's highlights on every deployment, as the uploaded bytes do",
   ],

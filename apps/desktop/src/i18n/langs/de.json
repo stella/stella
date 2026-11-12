@@ -582,6 +582,17 @@
   "dictation": {
     "title": "Diktieren",
     "description": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird auf diesem Computer umgewandelt und nicht gespeichert.",
+    "cleanup": {
+      "title": "Mit KI überarbeiten",
+      "description": "Die Sprache wird weiterhin auf diesem Computer umgewandelt, und der Ton verlässt ihn nie. Ist die Überarbeitung aktiviert, wird der umgewandelte Text an stella AI gesendet, um Erkennungsfehler zu korrigieren und gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ anzuwenden."
+    },
+    "language": {
+      "title": "Diktiersprache",
+      "description": "Die Überarbeitung belässt den Text in dieser Sprache. Automatisch verwendet die Sprachen der Anzeige und Tastaturen dieses Computers.",
+      "automatic": "Automatisch",
+      "automaticWith": "Automatisch ({languages})",
+      "noResults": "Keine Sprachen gefunden"
+    },
     "modelNeeded": "Das Sprachmodell läuft auf diesem Computer.",
     "download": "Herunterladen ({size} MB)",
     "downloading": "Sprachmodell wird geladen: {percent} %",
@@ -592,7 +603,8 @@
       "accessibility": "Erlauben Sie den Zugriff auf die Bedienungshilfen, damit stella in andere Apps schreiben kann.",
       "microphone": "stella kann Ihr Mikrofon nicht hören. Prüfen Sie den Mikrofonzugriff in den Systemeinstellungen.",
       "modelMissing": "Laden Sie zuerst das Sprachmodell herunter.",
-      "transcription": "Die Umwandlung ist fehlgeschlagen. Versuchen Sie es erneut."
+      "transcription": "Die Umwandlung ist fehlgeschlagen. Versuchen Sie es erneut.",
+      "focusChanged": "Sie haben zu einer anderen App gewechselt, bevor der Text fertig war, daher wurde nichts eingegeben. Versuchen Sie es erneut."
     }
   },
   "shortcut": {

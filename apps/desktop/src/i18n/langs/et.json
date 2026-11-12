@@ -582,6 +582,17 @@
   "dictation": {
     "title": "Dikteerimine",
     "description": "Hoidke all klahve {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata.",
+    "cleanup": {
+      "title": "Paranda tehisintellektiga",
+      "description": "Kõne teisendatakse endiselt selles arvutis ja heli ei lahku sealt kunagi. Kui parandamine on sisse lülitatud, saadetakse teisendatud tekst stella AI-le, mis parandab tuvastusvead ning rakendab dikteeritud kirjavahemärgid ja vormingu, näiteks „uus rida“ või „paks“."
+    },
+    "language": {
+      "title": "Dikteerimise keel",
+      "description": "Parandamine jätab teksti selles keeles. Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli.",
+      "automatic": "Automaatne",
+      "automaticWith": "Automaatne ({languages})",
+      "noResults": "Keeli ei leitud"
+    },
     "modelNeeded": "Kõnemudel töötab selles arvutis.",
     "download": "Laadi alla ({size} MB)",
     "downloading": "Kõnemudeli allalaadimine: {percent}%",
@@ -592,7 +603,8 @@
       "accessibility": "Lubage hõlbustusfunktsioonide juurdepääs, et stella saaks teistesse rakendustesse kirjutada.",
       "microphone": "stella ei kuule teie mikrofoni. Kontrollige mikrofoni juurdepääsu süsteemiseadetes.",
       "modelMissing": "Laadige esmalt alla kõnemudel.",
-      "transcription": "Tekstiks muutmine ebaõnnestus. Proovige uuesti."
+      "transcription": "Tekstiks muutmine ebaõnnestus. Proovige uuesti.",
+      "focusChanged": "Lülitusite enne teksti valmimist teise rakendusse, seega midagi ei sisestatud. Proovige uuesti."
     }
   },
   "shortcut": {

@@ -1,0 +1,7 @@
+{
+  "path": "/v1/desktop/dictation/cleanup",
+  "maxTranscriptLength": 20000,
+  "maxLocaleLength": 35,
+  "maxLanguages": 8,
+  "maxSegments": 2000
+}

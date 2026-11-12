@@ -582,6 +582,17 @@
   "dictation": {
     "title": "Diktavimas",
     "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma.",
+    "cleanup": {
+      "title": "Taisyti su DI",
+      "description": "Kalba ir toliau paverčiama tekstu šiame kompiuteryje, o garsas niekada jo nepalieka. Įjungus taisymą, gautas tekstas siunčiamas į stella AI, kuri ištaiso atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“."
+    },
+    "language": {
+      "title": "Diktavimo kalba",
+      "description": "Taisant tekstas paliekamas šia kalba. Automatiškai naudojamos šio kompiuterio rodymo ir klaviatūrų kalbos.",
+      "automatic": "Automatiškai",
+      "automaticWith": "Automatiškai ({languages})",
+      "noResults": "Kalbų nerasta"
+    },
     "modelNeeded": "Kalbos modelis veikia šiame kompiuteryje.",
     "download": "Atsisiųsti ({size} MB)",
     "downloading": "Atsisiunčiamas kalbos modelis: {percent} %",
@@ -592,7 +603,8 @@
       "accessibility": "Leiskite prieigą prie pritaikymo neįgaliesiems funkcijų, kad „stella“ galėtų rašyti kitose programose.",
       "microphone": "„stella“ negirdi mikrofono. Patikrinkite prieigą prie mikrofono sistemos nustatymuose.",
       "modelMissing": "Pirmiausia atsisiųskite kalbos modelį.",
-      "transcription": "Perrašyti nepavyko. Bandykite dar kartą."
+      "transcription": "Perrašyti nepavyko. Bandykite dar kartą.",
+      "focusChanged": "Perjungėte į kitą programą, kol tekstas dar nebuvo paruoštas, todėl nieko nebuvo įvesta. Bandykite dar kartą."
     }
   },
   "shortcut": {

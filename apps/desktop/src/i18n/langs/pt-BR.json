@@ -582,6 +582,17 @@
   "dictation": {
     "title": "Ditado",
     "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada.",
+    "cleanup": {
+      "title": "Revisar com IA",
+      "description": "A fala continua sendo transcrita neste computador, e o áudio nunca sai dele. Com a revisão ativada, o texto transcrito é enviado à stella AI para corrigir erros de reconhecimento e aplicar a pontuação e a formatação ditadas, como “nova linha” ou “negrito”."
+    },
+    "language": {
+      "title": "Idioma do ditado",
+      "description": "A revisão mantém o texto neste idioma. Automático usa os idiomas da interface e dos teclados deste computador.",
+      "automatic": "Automático",
+      "automaticWith": "Automático ({languages})",
+      "noResults": "Nenhum idioma encontrado"
+    },
     "modelNeeded": "O modelo de voz é executado neste computador.",
     "download": "Baixar ({size} MB)",
     "downloading": "Baixando o modelo de voz: {percent}%",
@@ -592,7 +603,8 @@
       "accessibility": "Permita o acesso à Acessibilidade para que a stella possa digitar em outros aplicativos.",
       "microphone": "A stella não consegue ouvir seu microfone. Verifique o acesso ao microfone nos Ajustes do Sistema.",
       "modelMissing": "Baixe primeiro o modelo de voz.",
-      "transcription": "A transcrição falhou. Tente novamente."
+      "transcription": "A transcrição falhou. Tente novamente.",
+      "focusChanged": "Você mudou para outro aplicativo antes de o texto ficar pronto, então nada foi digitado. Tente novamente."
     }
   },
   "shortcut": {

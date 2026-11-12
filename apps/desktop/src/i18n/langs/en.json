@@ -582,6 +582,17 @@
   "dictation": {
     "title": "Dictation",
     "description": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed on this computer and is not stored.",
+    "cleanup": {
+      "title": "Clean up with AI",
+      "description": "Speech is still transcribed on this computer, and audio never leaves it. With cleanup on, the transcribed text is sent to stella AI to fix recognition mistakes and apply spoken punctuation and formatting, such as “new line” or “bold”."
+    },
+    "language": {
+      "title": "Dictation language",
+      "description": "Cleanup keeps the text in this language. Automatic uses the languages of this computer’s display and keyboards.",
+      "automatic": "Automatic",
+      "automaticWith": "Automatic ({languages})",
+      "noResults": "No languages found"
+    },
     "modelNeeded": "The speech model runs on this computer.",
     "download": "Download ({size} MB)",
     "downloading": "Downloading the speech model: {percent}%",
@@ -592,7 +603,8 @@
       "accessibility": "Allow Accessibility access so stella can type into other apps.",
       "microphone": "stella could not hear your microphone. Check Microphone access in System Settings.",
       "modelMissing": "Download the speech model first.",
-      "transcription": "Transcription failed. Try again."
+      "transcription": "Transcription failed. Try again.",
+      "focusChanged": "You switched to another app before the text was ready, so nothing was typed. Try again."
     }
   },
   "shortcut": {

@@ -582,6 +582,17 @@
   "dictation": {
     "title": "Diktovanie",
     "description": "Podržte {shortcut} a hovorte. Text sa zobrazí v aplikácii, ktorú práve používate. Reč sa prevádza na tomto počítači a neukladá sa.",
+    "cleanup": {
+      "title": "Upraviť pomocou AI",
+      "description": "Reč sa naďalej prevádza na tomto počítači a zvuk ho nikdy neopustí. So zapnutou úpravou sa prevedený text odošle do stella AI, ktorá opraví chyby rozpoznávania a použije vyslovenú interpunkciu a formátovanie, napríklad „nový riadok“ alebo „tučne“."
+    },
+    "language": {
+      "title": "Jazyk diktovania",
+      "description": "Úprava ponechá text v tomto jazyku. Automaticky sa použijú jazyky zobrazenia a klávesníc tohto počítača.",
+      "automatic": "Automaticky",
+      "automaticWith": "Automaticky ({languages})",
+      "noResults": "Nenašli sa žiadne jazyky"
+    },
     "modelNeeded": "Rečový model beží na tomto počítači.",
     "download": "Stiahnuť ({size} MB)",
     "downloading": "Sťahovanie rečového modelu: {percent} %",
@@ -592,7 +603,8 @@
       "accessibility": "Povoľte prístup Prístupnosť, aby stella mohla písať do iných aplikácií.",
       "microphone": "stella nepočuje váš mikrofón. Skontrolujte prístup k mikrofónu v Systémových nastaveniach.",
       "modelMissing": "Najprv stiahnite rečový model.",
-      "transcription": "Prevod zlyhal. Skúste to znova."
+      "transcription": "Prevod zlyhal. Skúste to znova.",
+      "focusChanged": "Kým bol text pripravený, prepli ste do inej aplikácie, takže sa nič nenapísalo. Skúste to znova."
     }
   },
   "shortcut": {

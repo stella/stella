@@ -582,6 +582,17 @@
   "dictation": {
     "title": "Dictée",
     "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée.",
+    "cleanup": {
+      "title": "Corriger avec l’IA",
+      "description": "La parole est toujours transcrite sur cet ordinateur et l’audio ne le quitte jamais. Lorsque la correction est activée, le texte transcrit est envoyé à stella AI pour corriger les erreurs de reconnaissance et appliquer la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras »."
+    },
+    "language": {
+      "title": "Langue de dictée",
+      "description": "La correction conserve le texte dans cette langue. Automatique utilise les langues de l’affichage et des claviers de cet ordinateur.",
+      "automatic": "Automatique",
+      "automaticWith": "Automatique ({languages})",
+      "noResults": "Aucune langue trouvée"
+    },
     "modelNeeded": "Le modèle vocal s'exécute sur cet ordinateur.",
     "download": "Télécharger ({size} Mo)",
     "downloading": "Téléchargement du modèle vocal : {percent} %",
@@ -592,7 +603,8 @@
       "accessibility": "Autorisez l'accès Accessibilité pour que stella puisse écrire dans d'autres applications.",
       "microphone": "stella n'entend pas votre micro. Vérifiez l'accès au micro dans les Réglages Système.",
       "modelMissing": "Téléchargez d'abord le modèle vocal.",
-      "transcription": "La transcription a échoué. Réessayez."
+      "transcription": "La transcription a échoué. Réessayez.",
+      "focusChanged": "Vous êtes passé à une autre application avant que le texte soit prêt, rien n’a donc été saisi. Réessayez."
     }
   },
   "shortcut": {

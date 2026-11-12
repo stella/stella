@@ -37,7 +37,22 @@ pub use system_permissions::{
 #[cfg(target_os = "macos")]
 mod text_input;
 #[cfg(target_os = "macos")]
-pub use text_input::{TypeTextError, type_text};
+pub use text_input::{FormattingKey, TypeTextError, press_key, type_text};
+
+#[cfg(target_os = "macos")]
+mod user_languages;
+#[cfg(target_os = "macos")]
+pub use user_languages::{keyboard_languages, preferred_languages};
+
+#[cfg(target_os = "macos")]
+mod work_priority;
+#[cfg(target_os = "macos")]
+pub use work_priority::prefer_user_initiated;
+
+#[cfg(target_os = "windows")]
+mod windows_languages;
+#[cfg(target_os = "windows")]
+pub use windows_languages::{keyboard_languages, preferred_languages};
 
 #[cfg(target_os = "macos")]
 mod window_bounds;

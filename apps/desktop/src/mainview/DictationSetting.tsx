@@ -4,7 +4,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
 
+import { displayLanguageName } from "@stll/locales";
 import { Button } from "@stll/ui/button";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/combobox";
+import { Label } from "@stll/ui/label";
 import { Switch } from "@stll/ui/switch";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -19,11 +29,29 @@ type DictationModel =
   | { status: "missing" | "failed" | "ready" }
   | { received: number; status: "downloading"; total: number };
 
+const AUTOMATIC_LANGUAGE = "auto";
+
+type DictationLanguage = {
+  /** `auto` or one of `supported`. */
+  choice: string;
+  /** What automatic means on this computer right now. */
+  inferred: string[];
+  supported: string[];
+};
+
 type DictationSnapshot = {
   available: boolean;
+  /** Whether the transcribed text goes to stella AI before it is typed. */
+  cleanup: boolean;
   enabled: boolean;
+  language: DictationLanguage;
   failure:
-    "accessibility" | "microphone" | "modelMissing" | "transcription" | null;
+    | "accessibility"
+    | "focusChanged"
+    | "microphone"
+    | "modelMissing"
+    | "transcription"
+    | null;
   keys: ShortcutKeys;
   model: DictationModel;
   modelBytes: number;
@@ -40,8 +68,9 @@ const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   "available" in value &&
   typeof value.available === "boolean";
 
-/** Local dictation: the switch, the speech model and what went wrong. Renders
- *  nothing, group included, for an account without the feature. */
+/** Local dictation: the switch, AI cleanup, the speech model and what went
+ *  wrong. Renders nothing, group included, for an account without the
+ *  feature. */
 export const DictationSetting = ({
   renderGroup,
 }: {
@@ -103,6 +132,24 @@ export const DictationSetting = ({
     }
   };
 
+  const setCleanup = async (cleanup: boolean) => {
+    const result = await Result.tryPromise(async () =>
+      invoke<DictationSnapshot>("dictation_set_cleanup", { enabled: cleanup }),
+    );
+    if (Result.isOk(result)) {
+      setSnapshot(result.value);
+    }
+  };
+
+  const setLanguage = async (language: string) => {
+    const result = await Result.tryPromise(async () =>
+      invoke<DictationSnapshot>("dictation_set_language", { language }),
+    );
+    if (Result.isOk(result)) {
+      setSnapshot(result.value);
+    }
+  };
+
   const download = async () => {
     const result = await Result.tryPromise(async () =>
       invoke<DictationSnapshot>("dictation_download_model"),
@@ -134,6 +181,36 @@ export const DictationSetting = ({
         />
       </div>
       {snapshot.enabled && (
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">{t("cleanup.title")}</p>
+            <p
+              className="text-muted-foreground mt-1 text-sm leading-relaxed"
+              id="dictation-cleanup-description"
+            >
+              {t("cleanup.description")}
+            </p>
+          </div>
+          <Switch
+            aria-describedby="dictation-cleanup-description"
+            aria-label={t("cleanup.title")}
+            checked={snapshot.cleanup}
+            onCheckedChange={(cleanup) => {
+              void setCleanup(cleanup);
+            }}
+          />
+        </div>
+      )}
+      {snapshot.enabled && (
+        <DictationLanguageRow
+          language={snapshot.language}
+          locale={locale}
+          onChange={(language) => {
+            void setLanguage(language);
+          }}
+        />
+      )}
+      {snapshot.enabled && (
         <DictationModelRow
           model={snapshot.model}
           modelBytes={snapshot.modelBytes}
@@ -153,6 +230,73 @@ export const DictationSetting = ({
         </p>
       )}
     </div>,
+  );
+};
+
+/** Which language dictation expects: automatic (this computer's languages)
+ *  or one the speech model lists, named in its own language. */
+const DictationLanguageRow = ({
+  language,
+  locale,
+  onChange,
+}: {
+  language: DictationLanguage;
+  locale: string;
+  onChange: (language: string) => void;
+}) => {
+  const t = useTranslations("dictation.language");
+  const items = [AUTOMATIC_LANGUAGE, ...language.supported];
+  const automatic =
+    language.inferred.length === 0
+      ? t("automatic")
+      : t("automaticWith", {
+          languages: new Intl.ListFormat(locale, {
+            type: "conjunction",
+          }).format(language.inferred.map((code) => displayLanguageName(code))),
+        });
+  const label = (item: string) =>
+    item === AUTOMATIC_LANGUAGE ? automatic : displayLanguageName(item);
+
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <Label className="text-sm font-medium" htmlFor="dictation-language">
+          {t("title")}
+        </Label>
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+          {t("description")}
+        </p>
+      </div>
+      <Combobox<string>
+        autoHighlight
+        items={items}
+        itemToStringLabel={label}
+        onValueChange={(value) => {
+          if (value !== null && value !== language.choice) {
+            onChange(value);
+          }
+        }}
+        value={
+          items.includes(language.choice) ? language.choice : AUTOMATIC_LANGUAGE
+        }
+      >
+        <ComboboxInput
+          className="w-48"
+          id="dictation-language"
+          showTrigger={false}
+        />
+        <ComboboxPopup align="end">
+          <ComboboxList>
+            {(item: string) => (
+              <ComboboxItem key={item} value={item}>
+                {label(item)}
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+          <ComboboxEmpty>{t("noResults")}</ComboboxEmpty>
+        </ComboboxPopup>
+      </Combobox>
+    </div>
   );
 };
 

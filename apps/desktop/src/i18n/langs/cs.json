@@ -582,6 +582,17 @@
   "dictation": {
     "title": "Diktování",
     "description": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč se převádí na tomto počítači a neukládá se.",
+    "cleanup": {
+      "title": "Upravit pomocí AI",
+      "description": "Řeč se i nadále převádí na tomto počítači a zvuk ho nikdy neopustí. Se zapnutou úpravou se převedený text odešle do stella AI, která opraví chyby rozpoznávání a použije vyslovenou interpunkci a formátování, například „nový řádek“ nebo „tučně“."
+    },
+    "language": {
+      "title": "Jazyk diktování",
+      "description": "Úprava ponechá text v tomto jazyce. Automaticky se použijí jazyky zobrazení a klávesnic tohoto počítače.",
+      "automatic": "Automaticky",
+      "automaticWith": "Automaticky ({languages})",
+      "noResults": "Žádné jazyky nenalezeny"
+    },
     "modelNeeded": "Řečový model běží na tomto počítači.",
     "download": "Stáhnout ({size} MB)",
     "downloading": "Stahování řečového modelu: {percent} %",
@@ -592,7 +603,8 @@
       "accessibility": "Povolte přístup Zpřístupnění, aby stella mohla psát do jiných aplikací.",
       "microphone": "stella neslyší váš mikrofon. Zkontrolujte přístup k mikrofonu v Nastavení systému.",
       "modelMissing": "Nejprve stáhněte řečový model.",
-      "transcription": "Převod se nezdařil. Zkuste to znovu."
+      "transcription": "Převod se nezdařil. Zkuste to znovu.",
+      "focusChanged": "Než byl text připraven, přepnuli jste do jiné aplikace, takže se nic nenapsalo. Zkuste to znovu."
     }
   },
   "shortcut": {

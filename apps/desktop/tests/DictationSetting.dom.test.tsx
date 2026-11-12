@@ -3,7 +3,8 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 GlobalRegistrator.register({ url: "http://localhost/" });
 
-const { act, cleanup, render } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render } =
+  await import("@testing-library/react");
 const { clearMocks, mockIPC } = await import("@tauri-apps/api/mocks");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { DictationSetting } = await import("../src/mainview/DictationSetting");
@@ -19,7 +20,13 @@ afterAll(async () => {
 
 const ENABLED_SNAPSHOT = {
   available: true,
+  cleanup: true,
   enabled: true,
+  language: {
+    choice: "auto",
+    inferred: ["cs", "en"],
+    supported: ["cs", "en", "sk"],
+  },
   failure: null,
   keys: { code: "Space", modifiers: ["control", "alt"] },
   model: { status: "ready" },
@@ -29,12 +36,15 @@ const ENABLED_SNAPSHOT = {
 };
 
 /** Renders the setting over a native side that answers with `snapshot`. */
-const renderSetting = async (snapshot: unknown) => {
-  mockIPC((command) => {
+const renderSetting = async (
+  snapshot: unknown,
+  onCommand: (command: string, payload: unknown) => unknown = () => undefined,
+) => {
+  mockIPC((command, payload) => {
     if (command === "dictation_get_snapshot") {
       return snapshot;
     }
-    return undefined;
+    return onCommand(command, payload);
   });
   const view = render(
     <DesktopIntlProvider language="en" messages={defaultMessages}>
@@ -84,4 +94,84 @@ test("reports a failed dictation", async () => {
   expect(getByRole("status").textContent).toBe(
     defaultMessages.dictation.failure.microphone,
   );
+});
+
+test("offers AI cleanup, on by default, with a truthful description", async () => {
+  const { getByRole, getByText } = await renderSetting(ENABLED_SNAPSHOT);
+
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.cleanup.title,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+  const description = getByText(defaultMessages.dictation.cleanup.description);
+  expect(description.textContent).toContain("audio never leaves it");
+  expect(description.textContent).toContain("stella AI");
+});
+
+test("turning cleanup off asks the native side and shows its answer", async () => {
+  const calls: unknown[] = [];
+  const { getByRole } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (command, payload) => {
+      if (command !== "dictation_set_cleanup") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, cleanup: false };
+    },
+  );
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.cleanup.title,
+  });
+
+  await act(async () => {
+    fireEvent.click(toggle);
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
+
+  expect(calls).toEqual([{ enabled: false }]);
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+});
+
+test("hides the cleanup switch while dictation is off", async () => {
+  const { queryByText } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    enabled: false,
+  });
+
+  expect(queryByText(defaultMessages.dictation.cleanup.title)).toBeNull();
+});
+
+test("explains a dictation that focus moved away from", async () => {
+  const { getByRole } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    failure: "focusChanged",
+  });
+
+  expect(getByRole("status").textContent).toBe(
+    defaultMessages.dictation.failure.focusChanged,
+  );
+});
+
+test("automatic dictation language names the languages of this computer", async () => {
+  const { container } = await renderSetting(ENABLED_SNAPSHOT);
+
+  const input = container.querySelector<HTMLInputElement>(
+    "#dictation-language",
+  );
+  expect(input?.value).toBe("Automatic (Čeština and English)");
+});
+
+test("a chosen dictation language is shown in its own name", async () => {
+  const { container } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    language: { ...ENABLED_SNAPSHOT.language, choice: "sk" },
+  });
+
+  const input = container.querySelector<HTMLInputElement>(
+    "#dictation-language",
+  );
+  expect(input?.value).toBe("Slovenčina");
 });
