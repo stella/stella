@@ -76,6 +76,7 @@ import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { organizationsRoute } from "@/api/handlers/organizations/routes";
+import { outboundActionsRoute } from "@/api/handlers/outbound-actions/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -250,6 +251,7 @@ export const apiRoutes = mount([
       externalPreviewRoute,
       mcpConnectorsRoute,
       sharepointRoute,
+      outboundActionsRoute,
       catalogueRoute,
       organizationSettingsRoute,
       organizationsRoute,

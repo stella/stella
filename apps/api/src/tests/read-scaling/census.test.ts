@@ -46,6 +46,7 @@ import { myOpenTasksScalingScenario } from "./my-open-tasks";
 import { organizationAuditExportScalingScenario } from "./organization-audit-export";
 import { organizationCreateScalingScenario } from "./organization-create";
 import { organizationSlugScalingScenario } from "./organization-slug";
+import { outboundActionScalingScenarios } from "./outbound-actions";
 import { outlookClientMetadataScalingScenario } from "./outlook-client-metadata";
 import {
   readScenarioRegistry,
@@ -99,6 +100,7 @@ const measuredApiScenarios = [
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  ...outboundActionScalingScenarios,
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   organizationSlugScalingScenario,

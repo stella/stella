@@ -5785,6 +5785,7 @@
         "number_series": "numbriseeria",
         "organization_access_state": "organisatsiooni juurdepääsuolek",
         "organization_settings": "organisatsiooni seaded",
+        "outbound_action": "väljaminev toiming",
         "pdf_signing_session": "PDF-i allkirjastamisseanss",
         "personal_api_key": "isiklik API-võti",
         "playbook": "playbook",

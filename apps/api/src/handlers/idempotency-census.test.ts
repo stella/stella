@@ -707,6 +707,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/outbound-actions/:actionId/confirm": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/outbound-actions/:actionId/discard": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organizations/audit-export": {
     type: "non-replay",
     reason: "current-state",

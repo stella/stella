@@ -231,6 +231,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 
 /** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
+  "outbound_actions.user_id":
+    "Pending actions are removed; claimed and terminal delivery history remains attributable, with current membership and thread access gating reads.",
   "oauth_grant_revocations.user_id":
     "A revocation only refuses tokens issued before it and is pruned after the access-token lifetime.",
   "desktop_time_entry_batches.user_id":

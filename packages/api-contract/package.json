@@ -57,6 +57,7 @@
     "./chat-connector": "./src/chat-connector.ts",
     "./internal-ui-transport": "./src/internal-ui-transport.ts",
     "./chat-secret": "./src/chat-secret.ts",
+    "./outbound-action": "./src/outbound-action.ts",
     "./chat-tool-grants": "./src/chat-tool-grants.ts",
     "./chat-tool-policy": "./src/chat-tool-policy.ts",
     "./chat-tool-result-retention": "./src/chat-tool-result-retention.ts",

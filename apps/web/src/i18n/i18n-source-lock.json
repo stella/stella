@@ -4824,6 +4824,7 @@
   "settings.organization.auditResourceKinds.number_series": "number series",
   "settings.organization.auditResourceKinds.organization_access_state": "organization access status",
   "settings.organization.auditResourceKinds.organization_settings": "organization settings",
+  "settings.organization.auditResourceKinds.outbound_action": "outbound action",
   "settings.organization.auditResourceKinds.pdf_signing_session": "PDF signing session",
   "settings.organization.auditResourceKinds.personal_api_key": "personal API key",
   "settings.organization.auditResourceKinds.playbook": "playbook",
