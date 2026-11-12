@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import type enMessages from "../../public/_locales/en/messages.json";
 import type { BrowserController } from "./controller";
+import { DESKTOP_LINK_STATE, type DesktopLinkState } from "./desktop-link";
 
 export type PopupMessageKey = keyof typeof enMessages;
 export type PopupActiveTab =
@@ -136,6 +137,39 @@ export const connectedOrigin = ({ state }: PopupView): string | null => {
     default:
       state satisfies never;
       return panic("Unhandled popup state");
+  }
+};
+
+/**
+ * The popup's stella desktop row: a button that asks Chrome to let the
+ * extension talk to stella desktop, or, once allowed, whether stella
+ * desktop answers.
+ */
+export type DesktopLinkView = {
+  messageKey: PopupMessageKey;
+  type: "allow" | "connected" | "not-running";
+};
+
+export const desktopLinkView = ({
+  allowed,
+  state,
+}: {
+  allowed: boolean;
+  state: DesktopLinkState;
+}): DesktopLinkView => {
+  if (!allowed) {
+    return { messageKey: "allowDesktop", type: "allow" };
+  }
+  switch (state) {
+    case DESKTOP_LINK_STATE.connected:
+      return { messageKey: "desktopConnected", type: "connected" };
+    // The host waits for stella desktop until it answers.
+    case DESKTOP_LINK_STATE.offline:
+    case DESKTOP_LINK_STATE.waiting:
+      return { messageKey: "desktopNotRunning", type: "not-running" };
+    default:
+      state satisfies never;
+      return panic("Unhandled desktop link state");
   }
 };
 

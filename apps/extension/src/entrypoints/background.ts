@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { defineBackground } from "wxt/utils/define-background";
 
 import {
+  BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
@@ -11,7 +12,11 @@ import {
   parseBrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
 
-import { hasAllSiteAccess, removeAllSiteAccess } from "../lib/access";
+import {
+  hasAllSiteAccess,
+  hasDesktopLinkAccess,
+  removeAllSiteAccess,
+} from "../lib/access";
 import { browserControlError } from "../lib/browser-control-result";
 import { storedCommandBudget } from "../lib/command-budget";
 import { createControlSession } from "../lib/control-session";
@@ -23,6 +28,12 @@ import {
   pairStellaTab,
   readBrowserController,
 } from "../lib/controller";
+import {
+  createDesktopLink,
+  type DesktopCommand,
+  desktopControllerId,
+  realDesktopLinkTimer,
+} from "../lib/desktop-link";
 import {
   enforceStoppedDownload,
   holdDownloadForJudgement,
@@ -45,6 +56,7 @@ import {
   POPUP_PORT_NAME,
   type PopupResponse,
 } from "../lib/popup-request";
+import { SIGN_IN_POLICY, type SignInPolicy } from "../lib/sign-in-policy";
 import {
   forgetStellaTab,
   rememberStellaTab,
@@ -53,6 +65,7 @@ import {
 import {
   forgetContainedTab,
   onContainedTabsChanged,
+  releaseContainedTabs,
   replaceTab,
 } from "../lib/tab-containment";
 import {
@@ -190,19 +203,32 @@ const registerOptionalListeners = (): void => {
 
 type CommandRequest = Extract<BrowserExtensionRequest, { type: "command" }>;
 
-const runCommand = async (
-  message: CommandRequest,
-  senderUrl: string,
-): Promise<BrowserControlResult> => {
-  const execution = await session.runCommand(message.turnId, async (signal) => {
-    // Checked inside the session: a pairing change that was queued ahead of
-    // this command has been applied by now.
-    const controller = await controllerForSender(senderUrl);
-    if (!controller || controller.controllerId !== message.controllerId) {
-      return browserControlError(
-        BROWSER_CONTROL_ERROR_CODE.staleController,
-        "Connect stella from the extension popup before using browser actions.",
-      );
+type ControlledCommand = Pick<
+  CommandRequest,
+  "command" | "controllerId" | "observedTab" | "toolCallId" | "turnId"
+> & {
+  /**
+   * Checked inside the session, once changes queued ahead of the command
+   * have been applied; a result refuses the command.
+   */
+  admit: () => Promise<BrowserControlResult | null>;
+  signIn: SignInPolicy;
+};
+
+/** One command from either transport, through the one control session. */
+const runControlledCommand = async ({
+  admit,
+  command,
+  controllerId,
+  observedTab,
+  signIn,
+  toolCallId,
+  turnId,
+}: ControlledCommand): Promise<BrowserControlResult> => {
+  const execution = await session.runCommand(turnId, async (signal) => {
+    const refusal = await admit();
+    if (refusal !== null) {
+      return refusal;
     }
     if (!(await hasAllSiteAccess())) {
       return browserControlError(
@@ -211,19 +237,16 @@ const runCommand = async (
       );
     }
     return await executeAtMostOnce({
-      command: message.command,
-      controllerId: message.controllerId,
+      command,
+      controllerId,
       execute: async () =>
-        await executeBrowserCommand(message.controllerId, message.command, {
-          budget: storedCommandBudget({
-            command: message.command,
-            controllerId: message.controllerId,
-            turnId: message.turnId,
-          }),
-          observedTab: message.observedTab,
+        await executeBrowserCommand(controllerId, command, {
+          budget: storedCommandBudget({ command, controllerId, turnId }),
+          observedTab,
           signal,
+          signIn,
         }),
-      toolCallId: message.toolCallId,
+      toolCallId,
     });
   });
   return execution.status === "completed"
@@ -233,6 +256,68 @@ const runCommand = async (
         "Another approved browser action is still running. Wait for it to finish, then retry.",
       );
 };
+
+const runCommand = async (
+  message: CommandRequest,
+  senderUrl: string,
+): Promise<BrowserControlResult> =>
+  await runControlledCommand({
+    admit: async () => {
+      const controller = await controllerForSender(senderUrl);
+      return controller?.controllerId === message.controllerId
+        ? null
+        : browserControlError(
+            BROWSER_CONTROL_ERROR_CODE.staleController,
+            "Connect stella from the extension popup before using browser actions.",
+          );
+    },
+    command: message.command,
+    controllerId: message.controllerId,
+    observedTab: message.observedTab,
+    signIn: SIGN_IN_POLICY.withholdSecrets,
+    toolCallId: message.toolCallId,
+    turnId: message.turnId,
+  });
+
+/**
+ * A command from a coding agent on this computer. Chrome only starts the
+ * host for this extension and the member allowed it, so there is no pairing
+ * to check. Its first page takes the browser over from whichever chat had
+ * it: that chat's tabs are handed back to the member.
+ */
+const runDesktopCommand = async (
+  message: DesktopCommand,
+): Promise<BrowserControlResult> => {
+  const controllerId = desktopControllerId(message.controllerId);
+  const result = await runControlledCommand({
+    admit: async () => {
+      if (
+        message.command.action === BROWSER_CONTROL_ACTION.open &&
+        (await readControlledTabId(controllerId)) === null
+      ) {
+        await releaseContainedTabs();
+      }
+      return null;
+    },
+    command: message.command,
+    controllerId,
+    observedTab: message.observedTab,
+    signIn: SIGN_IN_POLICY.handToMember,
+    toolCallId: message.toolCallId,
+    turnId: message.turnId,
+  });
+  // A web chat that had the tab hears it no longer does.
+  await notifyController();
+  return result;
+};
+
+const desktopLink = createDesktopLink({
+  cancel: ({ turnId }) => {
+    session.stopTurn(turnId)();
+  },
+  runCommand: runDesktopCommand,
+  timer: realDesktopLinkTimer,
+});
 
 const handleWebMessage = (
   rawMessage: unknown,
@@ -368,6 +453,21 @@ export default defineBackground(() => {
   loadDownloadScope().catch(() => undefined);
   registerOptionalListeners();
   chrome.permissions.onAdded.addListener(registerOptionalListeners);
+  // Every worker start reconnects: Chrome ends the host with the worker.
+  desktopLink.connect().catch(() => undefined);
+  chrome.permissions.onAdded.addListener(() => {
+    desktopLink.connect().catch(() => undefined);
+  });
+  chrome.permissions.onRemoved.addListener(() => {
+    hasDesktopLinkAccess()
+      .then(async (allowed) => {
+        if (!allowed) {
+          await desktopLink.disconnect();
+        }
+        return undefined;
+      })
+      .catch(() => undefined);
+  });
 
   chrome.tabs.onRemoved.addListener((tabId) => {
     handleTabRemoved(tabId).catch(() => undefined);

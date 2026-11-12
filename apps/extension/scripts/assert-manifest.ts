@@ -88,8 +88,15 @@ if (!exactSet(manifest.optional_host_permissions, ["https://*/*"])) {
 }
 // Requested with website access: cancelling downloads a controlled page
 // starts from `blob:` or `data:` URLs, and tracing which page opened a new
-// tab or which frame started a download.
-if (!exactSet(manifest.optional_permissions, ["downloads", "webNavigation"])) {
+// tab or which frame started a download. `nativeMessaging` reaches stella
+// desktop, asked for on its own.
+if (
+  !exactSet(manifest.optional_permissions, [
+    "downloads",
+    "nativeMessaging",
+    "webNavigation",
+  ])
+) {
   panic("Extension optional permissions drifted");
 }
 if (manifest.host_permissions !== undefined) {
@@ -101,6 +108,7 @@ const forbiddenPermissions = [
   "debugger",
   "declarativeNetRequestFeedback",
   "downloads",
+  "nativeMessaging",
   "tabs",
   "webNavigation",
   "webRequest",

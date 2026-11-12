@@ -85,5 +85,14 @@
   },
   "connectStellaInstead": {
     "message": "Tā vietā savienot stella šeit"
+  },
+  "allowDesktop": {
+    "message": "Lietot ar stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop savienots"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop nedarbojas"
   }
 }

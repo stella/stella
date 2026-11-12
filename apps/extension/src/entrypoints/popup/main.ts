@@ -1,7 +1,13 @@
 import { panic } from "better-result";
 
-import { hasAllSiteAccess, requestAllSiteAccess } from "../../lib/access";
+import {
+  hasAllSiteAccess,
+  hasDesktopLinkAccess,
+  requestAllSiteAccess,
+  requestDesktopLinkAccess,
+} from "../../lib/access";
 import { readBrowserController } from "../../lib/controller";
+import { readDesktopLinkState } from "../../lib/desktop-link";
 import { downloadNoticeMessage } from "../../lib/download-guard";
 import { parseControllableUrl } from "../../lib/origin-policy";
 import { type PopupTab, runPopupAction } from "../../lib/popup-actions";
@@ -9,6 +15,7 @@ import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
 import {
   connectedOrigin,
   containedTabRows,
+  desktopLinkView,
   handedTabView,
   type PopupAction,
   type PopupActiveTab,
@@ -38,6 +45,9 @@ const containedTabsLabel = element("#contained-tabs-label", HTMLSpanElement);
 const containedTabList = element("#contained-tab-list", HTMLUListElement);
 const primaryButton = element("#primary", HTMLButtonElement);
 const secondaryActions = element("#secondary-actions", HTMLDivElement);
+const desktopStatus = element("#desktop-status", HTMLParagraphElement);
+const desktopStatusText = element("#desktop-status-text", HTMLSpanElement);
+const desktopAllowButton = element("#desktop-allow", HTMLButtonElement);
 
 const message = (
   name: PopupMessageKey | "@@bidi_dir",
@@ -233,6 +243,34 @@ primaryButton.addEventListener("click", () => {
   }
 });
 
+const renderDesktopLink = async (): Promise<void> => {
+  const [allowed, state] = await Promise.all([
+    hasDesktopLinkAccess(),
+    readDesktopLinkState(),
+  ]);
+  const view = desktopLinkView({ allowed, state });
+  desktopAllowButton.hidden = view.type !== "allow";
+  desktopStatus.hidden = view.type === "allow";
+  desktopStatus.dataset["state"] = view.type;
+  const text = message(view.messageKey);
+  desktopAllowButton.textContent = view.type === "allow" ? text : "";
+  desktopStatusText.textContent = view.type === "allow" ? "" : text;
+};
+
+desktopAllowButton.addEventListener("click", () => {
+  desktopAllowButton.disabled = true;
+  // Asked for within the click's user gesture, before anything else awaits.
+  requestDesktopLinkAccess()
+    .then(async () => {
+      await renderDesktopLink();
+      return undefined;
+    })
+    .catch(() => renderFailure("accessUpdateFailed"))
+    .finally(() => {
+      desktopAllowButton.disabled = false;
+    });
+});
+
 let renderedTab: PopupTab | null = null;
 
 const renderAccess = async (): Promise<void> => {
@@ -249,7 +287,7 @@ const renderAccess = async (): Promise<void> => {
   );
 };
 
-await renderAccess();
+await Promise.all([renderAccess(), renderDesktopLink()]);
 const taken = await sendPopupRequest({ type: "take-download-notices" });
 const downloadNotice =
   taken.status === "download-notices" ? downloadNoticeMessage(taken) : null;

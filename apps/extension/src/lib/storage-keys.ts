@@ -8,3 +8,4 @@ export const BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY = "browserDownloadNotices";
 export const BROWSER_RECENT_NAVIGATIONS_STORAGE_KEY =
   "browserRecentNavigations";
 export const BROWSER_STELLA_TABS_STORAGE_KEY = "browserStellaTabs";
+export const BROWSER_DESKTOP_LINK_STORAGE_KEY = "browserDesktopLink";

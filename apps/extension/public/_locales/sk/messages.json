@@ -85,5 +85,14 @@
   },
   "connectStellaInstead": {
     "message": "Pripojiť stellu tu"
+  },
+  "allowDesktop": {
+    "message": "Používať so stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop: pripojené"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop: nebeží"
   }
 }

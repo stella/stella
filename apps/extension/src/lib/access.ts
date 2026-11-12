@@ -21,3 +21,17 @@ export const requestAllSiteAccess = async (): Promise<boolean> =>
 
 export const removeAllSiteAccess = async (): Promise<boolean> =>
   await chrome.permissions.remove(SITE_ACCESS);
+
+/**
+ * Talking to stella desktop on this computer, requested on its own from the
+ * popup: only members who run coding agents locally need it.
+ */
+const DESKTOP_LINK_ACCESS = {
+  permissions: ["nativeMessaging"],
+} satisfies chrome.permissions.Permissions;
+
+export const hasDesktopLinkAccess = async (): Promise<boolean> =>
+  await chrome.permissions.contains(DESKTOP_LINK_ACCESS);
+
+export const requestDesktopLinkAccess = async (): Promise<boolean> =>
+  await chrome.permissions.request(DESKTOP_LINK_ACCESS);

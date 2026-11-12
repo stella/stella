@@ -7,6 +7,7 @@ import {
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
+import { SIGN_IN_POLICY, type SignInPolicy } from "./sign-in-policy";
 import { releaseToUser } from "./tab-containment";
 import {
   adoptControlledTab,
@@ -341,17 +342,94 @@ const run = async (
     budget = createBudget().budget,
     observedTab = OBSERVED_TAB,
     signal = new AbortController().signal,
+    signIn = SIGN_IN_POLICY.withholdSecrets,
   }: {
     budget?: ReturnType<typeof createBudget>["budget"];
     observedTab?: typeof OBSERVED_TAB | null;
     signal?: AbortSignal;
+    signIn?: SignInPolicy;
   } = {},
 ) =>
   await executeBrowserCommand(CONTROLLER_ID, command, {
     budget,
     observedTab,
     signal,
+    signIn,
   });
+
+describe("a page that asks for a sign-in", () => {
+  const desktop = { signIn: SIGN_IN_POLICY.handToMember } as const;
+  const signInFrame = { frameId: 3, result: { refused: "sign-in" } };
+
+  test("is handed to the member with nothing read or stored", async () => {
+    const installed = installFakeChrome();
+    installed.handlers["snapshot"] = () => [
+      { frameId: 0, result: frameSnapshot("Library") },
+      signInFrame,
+    ];
+    const stored = structuredClone(installed.session["browserControlledTab"]);
+
+    const result = await run({ action: "snapshot" }, desktop);
+    expect(result).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+      status: "error",
+    });
+    expect(JSON.stringify(result)).not.toContain("Library");
+    expect(installed.session["browserControlledTab"]).toEqual(stored);
+  });
+
+  test("is read with its secrets withheld over a web connection", async () => {
+    const { handlers } = installFakeChrome();
+    handlers["snapshot"] = () => [
+      { frameId: 0, result: frameSnapshot("Library") },
+      signInFrame,
+    ];
+
+    expect(await run({ action: "snapshot" })).toMatchObject({
+      snapshot: { title: "Library" },
+      status: "success",
+    });
+  });
+
+  test("tells the page script which policy applies", async () => {
+    const { handlers } = installFakeChrome();
+    const policies: unknown[] = [];
+    handlers["snapshot"] = (injection) => {
+      policies.push(injection.args?.[0]);
+      return [{ frameId: 0, result: frameSnapshot("Library") }];
+    };
+    await run({ action: "snapshot" }, desktop);
+    await run({ action: "snapshot" });
+    expect(policies).toMatchObject([
+      { signIn: SIGN_IN_POLICY.handToMember },
+      { signIn: SIGN_IN_POLICY.withholdSecrets },
+    ]);
+  });
+
+  test("on an identity provider's page is never injected into", async () => {
+    const { log, tabs } = installFakeChrome();
+    tabs.set(CONTROLLED_TAB_ID, {
+      id: CONTROLLED_TAB_ID,
+      status: "complete",
+      url: "https://login.microsoftonline.com/common/oauth2/authorize",
+    });
+
+    expect(await run({ action: "snapshot" }, desktop)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+    });
+    expect(log).not.toContain("inject:snapshot");
+  });
+
+  test("reached by a click is the known outcome, not an unknown one", async () => {
+    const { handlers } = installFakeChrome();
+    handlers["action"] = () => [{ frameId: 0, result: { ok: true } }];
+    handlers["snapshot"] = () => [signInFrame];
+
+    expect(await run(click(), desktop)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+    });
+  });
+});
 
 describe("outcome of a dispatched action", () => {
   test("is unknown when the page cannot be read after the click", async () => {

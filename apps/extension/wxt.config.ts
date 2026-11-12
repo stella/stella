@@ -58,8 +58,9 @@ export default defineConfig({
     optional_host_permissions: ["https://*/*"],
     // Granted with website access in one prompt: cancelling downloads a
     // controlled page starts from script, and tracing which page opened a
-    // new tab or which frame started a download.
-    optional_permissions: ["downloads", "webNavigation"],
+    // new tab or which frame started a download. `nativeMessaging` is asked
+    // for on its own, by members who run coding agents with stella desktop.
+    optional_permissions: ["downloads", "nativeMessaging", "webNavigation"],
     permissions: ["activeTab", "declarativeNetRequest", "scripting", "storage"],
   },
   srcDir: "src",
