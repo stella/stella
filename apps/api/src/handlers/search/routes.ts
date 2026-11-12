@@ -8,10 +8,11 @@ import {
   summarizeSearchBodySchema,
   summarizeSearchResults,
 } from "@/api/handlers/search/ai";
+import searchCaseLawSection from "@/api/handlers/search/case-law";
 import searchFacets from "@/api/handlers/search/facets/list";
 import searchPreviewEndpoint from "@/api/handlers/search/preview";
 import searchResults from "@/api/handlers/search/results/list";
-import { routes } from "@/api/http/route";
+import { mount, routes } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import {
@@ -20,6 +21,7 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 const refineSearchEndpoint = createSafeRootHandler(
   {
@@ -165,14 +167,21 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
   },
 );
 
-export const searchRoute = routes(
-  {
-    "/": { POST: searchResults },
-    "/facets": { POST: searchFacets },
-    "/preview": { POST: searchPreviewEndpoint },
-    "/refine": { POST: refineSearchEndpoint },
-    "/summary": { POST: summarizeSearchEndpoint },
-    "/summary/chat": { POST: searchSummaryChatEndpoint },
-  },
+export const searchRoute = mount(
+  [
+    routes({
+      "/": { POST: searchResults },
+      "/facets": { POST: searchFacets },
+      "/preview": { POST: searchPreviewEndpoint },
+      "/refine": { POST: refineSearchEndpoint },
+      "/summary": { POST: summarizeSearchEndpoint },
+      "/summary/chat": { POST: searchSummaryChatEndpoint },
+    }),
+    // The public corpus, behind the same gate as every other case-law route.
+    routes(
+      { "/case-law": { POST: searchCaseLawSection } },
+      { middleware: [deploymentFeatureGate("FEATURE_PUBLIC_LAW")] },
+    ),
+  ],
   { prefix: "/search" },
 );

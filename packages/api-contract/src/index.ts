@@ -512,6 +512,8 @@ export {
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
+  USER_EVENT_READ,
+  USER_EVENT_READS,
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export {
@@ -577,6 +579,7 @@ export type {
   RealtimeChannel,
   ResourceChange,
   ResourceRealtimeEvent,
+  UserEventRead,
   UserRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "./realtime-events";

@@ -1,4 +1,5 @@
 import { E2E_API_ORIGIN } from "../helpers/api";
+import { apiError, authJson, respond } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 
 const RETURN_PATH = "/settings/account/profile";
@@ -24,11 +25,15 @@ test("email reauthentication keeps the current session while showing the OTP cha
   await page.route(
     "**/api/auth/email-otp/send-verification-otp",
     async (route) => {
-      await route.fulfill({ json: { success: true } });
+      await respond(
+        route,
+        authJson("email-otp/send-verification-otp", { success: true }),
+      );
     },
   );
   await page.route("**/dev-public/last-otp?**", async (route) => {
-    await route.fulfill({ json: null });
+    // No mirrored code is waiting, so the code is typed by hand.
+    await respond(route, apiError(404, { message: "No code is waiting" }));
   });
   await page.goto(`/auth/reauth?${RETURN_SEARCH}`, {
     waitUntil: "domcontentloaded",

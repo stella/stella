@@ -26,7 +26,7 @@ import { MessageResponse } from "@/components/ai-elements/message";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { CompanyRegistryPreview } from "@/components/company-registry-preview";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import {
   InspectorFindBar,
@@ -609,7 +609,7 @@ const GenericExternalReferencePanel = ({
             className="grid grid-cols-2 gap-2 sm:grid-cols-2"
             variant="bare"
           >
-            <CopyActionButton
+            <CopyControl
               iconClassName="size-4"
               label={t("common.copyLink")}
               text={confirmHref ?? ""}

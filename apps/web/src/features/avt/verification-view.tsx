@@ -55,10 +55,10 @@ import type {
 import { REVIEW_STATUS_META, STATE_META } from "@/features/avt/types";
 import { useClaimReviewActions } from "@/features/avt/use-claim-review-actions";
 import {
+  claimFactsById,
   contestedFactIds,
   countClaims,
   effectiveState,
-  evidenceFactsById,
   isConflictState,
   isContested,
   isSettled,
@@ -97,9 +97,16 @@ type VerdictFilter =
   | "reviewed"
   | ClaimState;
 
+/** What the run's header can ask of the view: select a claim and bring it
+ *  into view, as stepping through a filter does. */
+export type VerificationViewHandle = {
+  showClaim: (claimId: VerificationClaim["id"]) => void;
+};
+
 type VerificationViewProps = {
   workspaceId: string;
   run: VerificationRun;
+  ref?: React.Ref<VerificationViewHandle>;
 };
 
 type OriginalDocumentProps = React.ComponentProps<typeof OriginalDocxView> & {
@@ -126,6 +133,7 @@ const OriginalDocument = ({
 export const VerificationView = ({
   workspaceId,
   run,
+  ref,
 }: VerificationViewProps) => {
   const format = useFormatter();
   const t = useTranslations();
@@ -139,8 +147,9 @@ export const VerificationView = ({
   // and the detail panel agree about what each claim currently is.
   const claims = run.claims.map(resolveClaimView);
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
+  // The run's pinned reading; a re-checked claim reads its own re-check's
+  // facts instead (`isContested`).
   const contested = contestedFactIds(run.evidence.facts);
-  const factsById = evidenceFactsById(run);
   const presentation = selectClaimPresentation(run.blocks, claims);
   const readingOrder = presentation.readingOrder;
   const counts = countClaims(run.claims, contested);
@@ -233,6 +242,14 @@ export const VerificationView = ({
       scrollOriginalToClaim(selectedClaim);
     }
   };
+
+  React.useImperativeHandle(ref, () => ({
+    showClaim: (id) => {
+      if (claimById.has(id)) {
+        goToMatch(id);
+      }
+    },
+  }));
 
   const stepper = matchStepper({
     orderedMatches,
@@ -425,7 +442,7 @@ export const VerificationView = ({
             <ClaimDetailPanel
               claim={selectedClaim}
               contested={contested}
-              factsById={factsById}
+              factsById={claimFactsById(run, selectedClaim)}
               key={selectedClaim.id}
               onReviewEvent={(event) => recordEvent(selectedClaim.id, event)}
               run={run}
@@ -672,7 +689,12 @@ const claimMatchesFilter = (
     case "needsreview": {
       return (
         needsAttention(
-          { state, refs: claim.refs, qualifiers: claim.qualifiers },
+          {
+            state,
+            refs: claim.refs,
+            qualifiers: claim.qualifiers,
+            recheck: claim.recheck,
+          },
           contested,
         ) && !isSettled(claim.review)
       );

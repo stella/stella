@@ -323,5 +323,5 @@ test("an emptied comment offers Delete instead of Save", async () => {
 
   await waitFor(() => expect(requests).toHaveLength(2));
   expect(requests.at(0)).toMatchObject({ method: "DELETE", path: ownPath });
-  await waitFor(() => expect(screen.queryByText(own.body)).toBeNull());
+  await waitFor(() => expect(screen.queryByText(own.body) === null).toBe(true));
 });

@@ -17,7 +17,7 @@ import messages from "@/i18n/langs/en.json" with { type: "json" };
 import type { ToolCallCodeTone } from "./tool-call-code-block";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
-const { cleanup, fireEvent, render, screen, waitFor } =
+const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { stellaToast } = await import("@stll/ui/toast");
@@ -124,6 +124,37 @@ describe("ToolCallCodeBlock", () => {
     );
     expect(write).toHaveBeenCalledWith('{\n  "query": "nájemní smlouva"\n}');
     expect(toast).not.toHaveBeenCalled();
+  });
+
+  test("the reader's own copy of the whole code confirms Copy; part of it does not", async () => {
+    mount("call");
+    const code = screen
+      .getByRole("region", { name: "Input" })
+      .querySelector("pre");
+    if (code === null) {
+      throw new TypeError("Missing code fixture");
+    }
+    const nativeCopy = async (select: (range: Range) => void) => {
+      const range = document.createRange();
+      select(range);
+      document.getSelection()?.removeAllRanges();
+      document.getSelection()?.addRange(range);
+      await act(async () => {
+        document.dispatchEvent(new Event("copy", { bubbles: true }));
+      });
+    };
+    const firstLine = code.querySelector("span");
+    if (firstLine === null) {
+      throw new TypeError("Missing code line fixture");
+    }
+
+    await nativeCopy((range) => range.selectNodeContents(firstLine));
+    expect(screen.getByRole("button", { name: "Copy" })).toBeDefined();
+
+    await nativeCopy((range) => range.selectNodeContents(code));
+    expect(
+      screen.getByRole("button", { name: messages.common.copied }),
+    ).toBeDefined();
   });
 
   test("shows a failure when clipboard access is denied", async () => {

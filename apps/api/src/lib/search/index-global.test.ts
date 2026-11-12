@@ -64,7 +64,7 @@ describe("global search SQL scope", () => {
   });
 
   test.each([undefined, {}, { version: 2, slots: {} }])(
-    "propagates invalid chat provenance %j before ranking or language enrichment",
+    "propagates invalid chat provenance %j before ranking",
     async (metadata) => {
       const dialect = new PgDialect();
       rootDbExecuteMock.mockImplementation(async (query) => {
@@ -84,7 +84,6 @@ describe("global search SQL scope", () => {
             ]
           : [];
       });
-      let languageReads = 0;
       const result = await searchGlobalWithDatabase(
         {
           query: "",
@@ -98,19 +97,12 @@ describe("global search SQL scope", () => {
           mimeTypes: [],
           limit: 10,
         },
-        {
-          scopedDb,
-          readLanguageAlternates: async () => {
-            languageReads++;
-            return { alternatesFor: () => [] };
-          },
-        },
+        { scopedDb },
       );
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
         expect(result.error).toBeInstanceOf(ArtefactProvenanceDecodeError);
       }
-      expect(languageReads).toBe(0);
       const reads = rootDbExecuteMock.mock.calls.map(
         ([query]) => dialect.sqlToQuery(query).sql,
       );
@@ -250,8 +242,8 @@ describe("global search SQL scope", () => {
     },
   );
 
-  test("rechecks case-law redistribution on every projected read", async () => {
-    await searchGlobal({
+  test("a case-law-only search reads no case law", async () => {
+    const result = await searchGlobal({
       query: "proportionality",
       organizationId: toSafeId<"organization">("org_1"),
       userId: toSafeId<"user">("user_1"),
@@ -263,16 +255,18 @@ describe("global search SQL scope", () => {
       limit: 10,
     });
 
+    // The palette's case-law section asks the corpus search engine; global
+    // search never ranks the corpus in its own transaction.
     const dialect = new PgDialect();
     const caseLawReads = rootDbExecuteMock.mock.calls
       .map(([query]) => dialect.sqlToQuery(query).sql)
-      .filter((sqlText) => sqlText.includes("case_law_search_documents"));
-    expect(caseLawReads.length).toBeGreaterThan(0);
-    for (const serialized of caseLawReads) {
-      expect(serialized).toContain("case_law_sources");
-      expect(serialized).toContain("allowsRedistribution");
-      expect(serialized).toContain("d.source_id");
-    }
+      .filter((sqlText) => sqlText.includes("case_law_"));
+    expect(caseLawReads).toEqual([]);
+    expect(result.hits).toEqual([]);
+    expect(result.totalCount).toBe(0);
+    expect(result.facets.type.some(({ value }) => value === "case-law")).toBe(
+      false,
+    );
   });
 
   test("maps the last editor avatar for document hits", () => {
@@ -316,10 +310,6 @@ describe("global search SQL scope", () => {
         tableSql: "FROM contact_search_documents csd",
         idSql: "'contact:' || csd.contact_id::text",
       },
-      {
-        tableSql: "FROM case_law_search_documents clsd",
-        idSql: "'case-law:' || clsd.decision_id::text",
-      },
     ] as const;
     const dialect = new PgDialect();
 
@@ -342,7 +332,7 @@ describe("global search SQL scope", () => {
       limit: 3,
     });
 
-    expect(rootDbExecuteMock).toHaveBeenCalledTimes(5);
+    expect(rootDbExecuteMock).toHaveBeenCalledTimes(4);
     const compiledQueries = rootDbExecuteMock.mock.calls.map(([query]) =>
       dialect.sqlToQuery(query),
     );
@@ -398,7 +388,7 @@ describe("global search SQL scope", () => {
       limit: 3,
     });
 
-    expect(rootDbExecuteMock).toHaveBeenCalledTimes(5);
+    expect(rootDbExecuteMock).toHaveBeenCalledTimes(4);
     for (const [query] of rootDbExecuteMock.mock.calls) {
       const compiled = dialect.sqlToQuery(query);
       expect(compiled.sql).not.toContain('COLLATE "C" <');

@@ -2530,7 +2530,10 @@ const createHarness = ({
           if (query.startsWith("SELECT 1 FROM public.case_law_sources")) {
             return [];
           }
-          if (query.startsWith("SELECT 1 FROM public.chat_run_log_entries")) {
+          if (
+            query.startsWith("SELECT 1 FROM public.search_history_entries") ||
+            query.startsWith("SELECT 1 FROM public.chat_run_log_entries")
+          ) {
             return [];
           }
           if (query.startsWith("SELECT 1 FROM public.")) {

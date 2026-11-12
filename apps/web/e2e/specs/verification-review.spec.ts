@@ -1,25 +1,30 @@
 import { PDF } from "@libpdf/core";
 import type { APIRequestContext, Page } from "@playwright/test";
 
+import {
+  contradicted,
+  factId,
+  makeClaim,
+  makeFact,
+  makeRun,
+  recordConflict,
+  supported,
+} from "@/features/avt/avt.test-fixtures";
+import type { ClaimReview } from "@/features/avt/wire";
+import { toSafeId } from "@/lib/safe-id";
+
 import { apiGet } from "../helpers/api";
+import type { ApiOk } from "../helpers/route-mock";
+import { apiError, apiJson, respond, staticBody } from "../helpers/route-mock";
 import { waitForStableGeometry } from "../helpers/stable-geometry";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 import type { TestWorkspace } from "../helpers/workspace";
 
-// The web's verification types reach the generated route tree, which the E2E
-// project does not compile, so this journey states its wire fixtures directly.
-type ViewSummary = { id: string; name: string; layout: unknown };
-type OrganizationSettingsSummary = {
-  declaredFeatureIds: string[];
-  capabilities: Record<string, unknown>;
-};
+type ViewSummary = ApiOk<"v1/views/:workspaceId", "get">[number];
 
-const uuid = (suffix: number) =>
-  `0199a3c4-5b6d-7e8f-9a0b-${String(suffix).padStart(12, "0")}`;
-const governingFactId = uuid(5);
-const competingFactId = uuid(6);
-const emptyReview = {
+const governingFactId = factId(5);
+const emptyReview: ClaimReview = {
   status: null,
   statusOrigin: null,
   override: null,
@@ -29,9 +34,11 @@ const emptyReview = {
   decidedBy: null,
   reopened: false,
   recordConflictResolution: null,
+  linkedFactIds: [],
+  linksChanged: false,
   eventCount: 0,
 };
-const avtLayout = {
+const avtLayout: Extract<ViewSummary, { layout: unknown }>["layout"] = {
   version: 1,
   type: "avt",
   filters: [],
@@ -40,16 +47,9 @@ const avtLayout = {
   calculations: [],
   listId: null,
 };
-const fact = (factEntityId: string, text: string) => ({
-  factEntityId,
-  text,
-  occurredOn: null,
-  occurredOnPrecision: null,
-  evidenceKind: null,
-  medium: null,
-  confidence: "high",
-  interpretationNote: null,
-  sources: [],
+const emptyPage = { items: [], nextCursor: null, limit: 50 };
+const unexpectedRequest = apiError(400, {
+  message: "Unexpected verification request",
 });
 
 /**
@@ -62,15 +62,16 @@ const enableVerification = async (
   workspace: TestWorkspace,
 ) => {
   const views = await apiGet<ViewSummary[]>(request, `/views/${workspace.id}`);
-  const settings = await apiGet<OrganizationSettingsSummary>(
+  const settings = await apiGet<ApiOk<"v1/organization-settings", "get">>(
     request,
     "/organization-settings",
   );
   const { cookies } = await request.storageState();
   await page.context().addCookies(cookies);
   await page.route("**/v1/organization-settings", async (route) => {
-    await route.fulfill({
-      json: {
+    await respond(
+      route,
+      apiJson("v1/organization-settings", "get", {
         ...settings,
         declaredFeatureIds: [
           ...settings.declaredFeatureIds,
@@ -82,17 +83,22 @@ const enableVerification = async (
           "list-verification": { status: "enabled" },
           "legal-lists": { status: "enabled" },
         },
-      } satisfies OrganizationSettingsSummary,
-    });
+      }),
+    );
   });
   await page.route(`**/v1/views/${workspace.id}*`, async (route) => {
-    await route.fulfill({
-      json: views.map((view) =>
-        view.id === workspace.viewId
-          ? { ...view, name: "Verification", layout: avtLayout }
-          : view,
+    await respond(
+      route,
+      apiJson(
+        "v1/views/:workspaceId",
+        "get",
+        views.map((view): ViewSummary =>
+          "layout" in view && view.id === workspace.viewId
+            ? { ...view, name: "Verification", layout: avtLayout }
+            : view,
+        ),
       ),
-    });
+    );
   });
 };
 
@@ -104,63 +110,39 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
   try {
     await enableVerification(page, request, workspace);
     const text = "The drawdown occurred on 5 July 2021.";
+    // Facts 5 and 6 are the two records the fixture's conflict sets apart.
     const claim = {
-      id: uuid(1001),
-      position: 1,
-      type: "fact",
-      framing: "asserted",
-      verdict: {
-        state: "recordconflict",
-        score: null,
-        recordConflict: {
-          subject: "Date of the drawdown",
-          factEntityIds: [governingFactId, competingFactId],
-          values: ["5 July 2021", "28 July 2021"],
-          governingStates: ["supported", "contradicted"],
+      ...makeClaim({
+        suffix: 1,
+        verdict: recordConflict,
+        anchor: {
+          type: "docx-block",
+          blockId: "b1",
+          start: 0,
+          end: text.length,
         },
-      },
-      qualifiers: [],
-      suggestedGoverningFactId: null,
+      }),
       text,
-      anchor: { type: "docx-block", blockId: "b1", start: 0, end: text.length },
-      refs: [],
     };
     const run = {
-      id: uuid(9000),
-      entityId: uuid(9001),
-      fileFieldId: uuid(9002),
-      entityVersionId: uuid(9003),
-      evidence: {
-        listId: uuid(9004),
-        facts: [
-          fact(governingFactId, "The bank ledger records 5 July 2021."),
-          fact(competingFactId, "The payment notice records 28 July 2021."),
+      ...makeRun(
+        [],
+        [
+          makeFact(5, { text: "The bank ledger records 5 July 2021." }),
+          makeFact(6, { text: "The payment notice records 28 July 2021." }),
         ],
-      },
-      factStandings: [governingFactId, competingFactId].map((factEntityId) => ({
-        factEntityId,
-        scoring: "included",
-        tier: "unsourced",
-      })),
-      status: "completed",
-      errorCode: null,
-      pipelineVersion: 1,
-      modelRef: null,
-      requestedBy: null,
+      ),
       blocks: [
         {
           ordinal: 0,
           blockId: "b1",
-          kind: "docx-block",
+          kind: "docx-block" as const,
           pageNumber: null,
           text,
         },
       ],
-      createdAt: "2026-09-01T09:00:00.000Z",
-      startedAt: "2026-09-01T09:00:01.000Z",
-      finishedAt: "2026-09-01T09:01:00.000Z",
     };
-    let review: Record<string, unknown> | null = null;
+    let review: ClaimReview | null = null;
     let reviewWrites = 0;
     const forbiddenRequests: string[] = [];
 
@@ -171,23 +153,33 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
       const path = new URL(route.request().url()).pathname;
       const root = `/v1/lists/${workspace.id}`;
       if (route.request().method() === "GET" && path === root) {
-        await route.fulfill({ json: { items: [], nextCursor: null } });
+        await respond(
+          route,
+          apiJson("v1/lists/:workspaceId", "get", emptyPage),
+        );
         return;
       }
       if (
         route.request().method() === "GET" &&
         path === `${root}/verifications/${run.id}`
       ) {
-        await route.fulfill({
-          json: { ...run, claims: [{ ...claim, review }] },
-        });
+        await respond(
+          route,
+          apiJson("v1/lists/:workspaceId/verifications/:runId", "get", {
+            ...run,
+            claims: [{ ...claim, review }],
+          }),
+        );
         return;
       }
       if (
         route.request().method() === "GET" &&
         path === `${root}/verifications`
       ) {
-        await route.fulfill({ json: { items: [], nextCursor: null } });
+        await respond(
+          route,
+          apiJson("v1/lists/:workspaceId/verifications", "get", emptyPage),
+        );
         return;
       }
       // The claim detail panel lists the claim's comments; this journey has none.
@@ -195,7 +187,10 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
         route.request().method() === "GET" &&
         path === `${root}/claim-comments`
       ) {
-        await route.fulfill({ json: { items: [], nextCursor: null } });
+        await respond(
+          route,
+          apiJson("v1/lists/:workspaceId/claim-comments", "get", emptyPage),
+        );
         return;
       }
       if (
@@ -219,7 +214,7 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
         review = {
           ...emptyReview,
           decidedAt: "2026-09-01T10:00:00.000Z",
-          decidedBy: "0199a3c4-5b6d-7e8f-9a0b-000000009005",
+          decidedBy: toSafeId<"user">("0199a3c4-5b6d-7e8f-9a0b-000000009005"),
           recordConflictResolution: {
             kind: "governed",
             factEntityId: governingFactId,
@@ -229,14 +224,17 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
             : {}),
           eventCount: reviewWrites,
         };
-        await route.fulfill({ json: { claimId: claim.id, review } });
+        await respond(
+          route,
+          apiJson("v1/lists/:workspaceId/claim-reviews", "post", {
+            claimId: claim.id,
+            review,
+          }),
+        );
         return;
       }
       forbiddenRequests.push(`${route.request().method()} ${path}`);
-      await route.fulfill({
-        status: 400,
-        json: { message: "Unexpected verification request" },
-      });
+      await respond(route, unexpectedRequest);
     });
 
     await page.goto(
@@ -337,13 +335,11 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
       [2, deliveredText],
     ]);
     const pdfClaim = ({
-      id,
       position,
       state,
       text,
       pageNumber,
     }: {
-      id: string;
       position: number;
       state: "supported" | "contradicted";
       text: string;
@@ -351,81 +347,56 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
     }) => {
       const start = (pageTexts.get(pageNumber) ?? "").indexOf(text);
       return {
-        id,
+        ...makeClaim({
+          suffix: 1000 + position,
+          verdict: state === "supported" ? supported() : contradicted(),
+          anchor: {
+            type: "pdf-page",
+            pageNumber,
+            start,
+            end: start + text.length,
+          },
+        }),
         position,
-        type: "fact",
-        framing: "asserted",
-        verdict: {
-          state,
-          score: state === "supported" ? 90 : 10,
-          recordConflict: null,
-        },
-        qualifiers: [],
-        suggestedGoverningFactId: null,
         text,
-        anchor: {
-          type: "pdf-page",
-          pageNumber,
-          start,
-          end: start + text.length,
-        },
-        refs: [],
-        review: null,
       };
     };
     const signed = pdfClaim({
-      id: uuid(2001),
       position: 1,
       state: "supported",
       text: signedText,
       pageNumber: 1,
     });
     const deposit = pdfClaim({
-      id: uuid(2002),
       position: 2,
       state: "contradicted",
       text: depositText,
       pageNumber: 1,
     });
     const delivered = pdfClaim({
-      id: uuid(2003),
       position: 3,
       state: "contradicted",
       text: deliveredText,
       pageNumber: 2,
     });
     const run = {
-      id: uuid(9100),
-      entityId: uuid(9101),
-      fileFieldId: uuid(9102),
-      entityVersionId: uuid(9103),
-      evidence: { listId: uuid(9104), facts: [] },
-      factStandings: [],
-      status: "completed",
-      errorCode: null,
-      pipelineVersion: 1,
-      modelRef: null,
-      requestedBy: null,
+      ...makeRun([signed, deposit, delivered]),
       blocks: [
         {
           ordinal: 0,
           blockId: "p1",
-          kind: "pdf-page",
+          kind: "pdf-page" as const,
           pageNumber: 1,
           text: pageOneText,
         },
         {
           ordinal: 1,
           blockId: "p2",
-          kind: "pdf-page",
+          kind: "pdf-page" as const,
           pageNumber: 2,
           text: deliveredText,
         },
       ],
-      claims: [signed, deposit, delivered],
-      createdAt: "2026-09-01T09:00:00.000Z",
-      startedAt: "2026-09-01T09:00:01.000Z",
-      finishedAt: "2026-09-01T09:01:00.000Z",
     };
     const forbiddenRequests: string[] = [];
 
@@ -435,45 +406,63 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
     await page.route(
       `**/v1/files/${workspace.id}/url/${run.fileFieldId}*`,
       async (route) => {
-        await route.fulfill({
-          json: {
-            fileId: uuid(9105),
+        await respond(
+          route,
+          apiJson("v1/files/:workspaceId/url/:fieldId", "get", {
+            fileId: "0199a3c4-5b6d-7e8f-9a0b-000000009105",
             fileName: "statement.pdf",
             mimeType: "application/pdf",
             originalMimeType: "application/pdf",
+            encrypted: false,
+            stampable: false,
             presignedUrl: new URL(pdfPath, route.request().url()).href,
-          },
-        });
+          }),
+        );
       },
     );
     await page.route(`**${pdfPath}`, async (route) => {
-      await route.fulfill({
-        body: Buffer.from(bytes),
-        contentType: "application/pdf",
-      });
+      await respond(
+        route,
+        staticBody({
+          contentType: "application/pdf",
+          body: Buffer.from(bytes),
+        }),
+      );
     });
     await page.route("**/v1/lists/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       const root = `/v1/lists/${workspace.id}`;
       const isGet = route.request().method() === "GET";
-      if (
-        isGet &&
-        (path === root ||
-          path === `${root}/verifications` ||
-          path === `${root}/claim-comments`)
-      ) {
-        await route.fulfill({ json: { items: [], nextCursor: null } });
+      if (isGet && path === root) {
+        await respond(
+          route,
+          apiJson("v1/lists/:workspaceId", "get", emptyPage),
+        );
+        return;
+      }
+      if (isGet && path === `${root}/verifications`) {
+        await respond(
+          route,
+          apiJson("v1/lists/:workspaceId/verifications", "get", emptyPage),
+        );
+        return;
+      }
+      if (isGet && path === `${root}/claim-comments`) {
+        await respond(
+          route,
+          apiJson("v1/lists/:workspaceId/claim-comments", "get", emptyPage),
+        );
         return;
       }
       if (isGet && path === `${root}/verifications/${run.id}`) {
-        await route.fulfill({ json: run });
+        await respond(
+          route,
+          apiJson("v1/lists/:workspaceId/verifications/:runId", "get", run),
+        );
         return;
       }
       forbiddenRequests.push(`${route.request().method()} ${path}`);
-      await route.fulfill({
-        status: 400,
-        json: { message: "Unexpected verification request" },
-      });
+      await respond(route, unexpectedRequest);
     });
 
     const box = (claim: { id: string }) =>
