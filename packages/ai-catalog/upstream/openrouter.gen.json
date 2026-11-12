@@ -157,7 +157,7 @@
       }
     },
     {
-      "id": "baidu/ernie-5.5-flash-preview",
+      "id": "baidu/ernie-5.5-flash-preview:free",
       "reasoning": {
         "default_effort": "high"
       }
@@ -166,12 +166,6 @@
       "id": "baidu/ernie-light-dt-1.0-intl",
       "reasoning": {
         "default_effort": "max"
-      }
-    },
-    {
-      "id": "bytedance-seed/seed-2.0-code",
-      "reasoning": {
-        "default_effort": "medium"
       }
     },
     {
