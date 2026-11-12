@@ -1841,11 +1841,8 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
   );
 };
 
-// Capabilities carrying no authored `description` are tracked by exact id in
-// apps/api/capability-description-ledger.json, not by an aggregate count here:
-// see apps/api/scripts/capability-description-guard.ts. Any set of the same
-// size satisfies a count, so it could not name the gap an author had just
-// closed, nor force that entry to be deleted in the same change as the prose.
+// Capabilities carrying no authored `description` are rejected by
+// apps/api/scripts/capability-description-guard.ts, not counted here.
 
 // A capability suppressed from the generic transport by its `transport`
 // disposition: it returns bytes (`file-response`/`file-both`), or it REQUIRES a

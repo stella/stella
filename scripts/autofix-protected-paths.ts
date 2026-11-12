@@ -11,7 +11,6 @@ export const AUTOFIX_PROTECTED_PATHS = [
   ".oxlint-plugins/no-native-ui-exceptions.json",
   ".oxlint-plugins/require-audit-on-mutation-ledger.json",
   ".oxlint-plugins/ui-usage-ledger.json",
-  "apps/api/capability-description-ledger.json",
   "apps/api/src/mcp/write-tool-authority-ledger.json",
   "apps/api/src/tests/read-scaling/api-scaling-ledger.json",
   "apps/api/src/tests/read-scaling/mcp-scaling-ledger.json",
