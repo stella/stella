@@ -20,6 +20,7 @@ import {
 } from "@stll/ui/menu";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { EFFORT_LABEL_KEY } from "@/components/chat/chat-model-options-menu.logic";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
   type ChatLocalHarnessOption,
@@ -31,6 +32,7 @@ import {
   type LocalRunTargetState,
   type PermissionAvailability,
   permissionView,
+  reasoningEffortChoices,
   runOnPlaceValue,
   sameRunTarget,
 } from "@/components/chat/chat-run-target-menu.logic";
@@ -62,6 +64,9 @@ const UNAVAILABLE_PERMISSION_KEY = {
   Exclude<PermissionAvailability, "available">,
   TranslationKey
 >;
+
+/** The radio value of leaving the reasoning effort to the harness. */
+const HARNESS_DEFAULT_EFFORT = "harness-default";
 
 /** How a harness that runs in one mode behaves, said once in its place. */
 const FIXED_PERMISSION_KEY = {
@@ -346,9 +351,9 @@ type LocalModelOptionsProps = {
 
 /**
  * The model chip's menu for a chat on the member's computer: the agent's
- * recommended model first, then the rest by the names the agent gives them.
- * A model the agent no longer offers stays listed, marked so, until another
- * is picked.
+ * recommended model first, then the rest by the names the agent gives them,
+ * then the reasoning efforts the chosen model offers. A model the agent no
+ * longer offers stays listed, marked so, until another is picked.
  */
 export const LocalModelOptions = ({
   activeOrganizationId,
@@ -407,43 +412,85 @@ export const LocalModelOptions = ({
       );
     }
   };
+  const efforts = reasoningEffortChoices(
+    selected,
+    chatLocalHarnessOptions(readiness) ?? NO_HARNESS_OPTIONS,
+  );
+  const chooseEffort = (target: ChatLocalRunTarget) => {
+    if (!sameRunTarget(target, selected)) {
+      onSelect(target);
+    }
+  };
   return (
-    <MenuRadioGroup value={selected.model}>
-      <MenuGroupLabel>
-        {t("chat.runOn.harnessModels", { harness })}
-      </MenuGroupLabel>
-      {recommended !== null && (
-        <MenuRadioItem
-          closeOnClick
-          onClick={() => choose(recommended.id)}
-          value={recommended.id}
-        >
-          <PlaceLabel
-            description={recommended.label}
-            title={t("chat.runOn.modelDefault")}
-          />
-        </MenuRadioItem>
+    <>
+      <MenuRadioGroup value={selected.model}>
+        <MenuGroupLabel>
+          {t("chat.runOn.harnessModels", { harness })}
+        </MenuGroupLabel>
+        {recommended !== null && (
+          <MenuRadioItem
+            closeOnClick
+            onClick={() => choose(recommended.id)}
+            value={recommended.id}
+          >
+            <PlaceLabel
+              description={recommended.label}
+              title={t("chat.runOn.modelDefault")}
+            />
+          </MenuRadioItem>
+        )}
+        {others.map((model) => (
+          <MenuRadioItem
+            closeOnClick
+            key={model.id}
+            onClick={() => choose(model.id)}
+            value={model.id}
+          >
+            <TruncatedText render={<BidiText as="span" />}>
+              {model.label}
+            </TruncatedText>
+          </MenuRadioItem>
+        ))}
+        {!offered && (
+          <MenuRadioItem disabled value={selected.model}>
+            <PlaceLabel
+              description={t("chat.localRun.stateModelUnavailable")}
+              title={selected.model}
+            />
+          </MenuRadioItem>
+        )}
+      </MenuRadioGroup>
+      {efforts !== null && (
+        <>
+          <MenuSeparator />
+          <MenuRadioGroup
+            value={selected.reasoningEffort ?? HARNESS_DEFAULT_EFFORT}
+          >
+            <MenuGroupLabel>
+              {t("chat.modelSelector.effortLabel")}
+            </MenuGroupLabel>
+            <MenuRadioItem
+              onClick={() =>
+                chooseEffort({ ...selected, reasoningEffort: null })
+              }
+              value={HARNESS_DEFAULT_EFFORT}
+            >
+              {t("chat.modelSelector.effortValues.providerDefault")}
+            </MenuRadioItem>
+            {efforts.map((effort) => (
+              <MenuRadioItem
+                key={effort}
+                onClick={() =>
+                  chooseEffort({ ...selected, reasoningEffort: effort })
+                }
+                value={effort}
+              >
+                {t(EFFORT_LABEL_KEY[effort])}
+              </MenuRadioItem>
+            ))}
+          </MenuRadioGroup>
+        </>
       )}
-      {others.map((model) => (
-        <MenuRadioItem
-          closeOnClick
-          key={model.id}
-          onClick={() => choose(model.id)}
-          value={model.id}
-        >
-          <TruncatedText render={<BidiText as="span" />}>
-            {model.label}
-          </TruncatedText>
-        </MenuRadioItem>
-      ))}
-      {!offered && (
-        <MenuRadioItem disabled value={selected.model}>
-          <PlaceLabel
-            description={t("chat.localRun.stateModelUnavailable")}
-            title={selected.model}
-          />
-        </MenuRadioItem>
-      )}
-    </MenuRadioGroup>
+    </>
   );
 };

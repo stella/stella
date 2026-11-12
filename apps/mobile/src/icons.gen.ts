@@ -128,7 +128,6 @@ export {
   CogIcon,
   Columns2Icon,
   Columns3Icon,
-  ColumnsIcon,
   CommandIcon,
   CompassIcon,
   CopyPlusIcon,

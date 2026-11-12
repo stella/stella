@@ -132,6 +132,15 @@
     "networkPolicies": ["open"],
     "fsPolicies": ["workspace"],
     "approvalModes": ["ask", "auto", "full_auto"],
+    "reasoningEfforts": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
     "desktopMessageTypes": [
       "hello",
       "harness.status",
@@ -188,11 +197,13 @@
               {
                 "id": "model-large",
                 "label": "Large model",
-                "isDefault": true
+                "isDefault": true,
+                "reasoningEfforts": ["low", "medium", "high", "xhigh"]
               },
               {
                 "id": "model-small",
-                "label": "Small model"
+                "label": "Small model",
+                "reasoningEfforts": ["none", "minimal", "low"]
               }
             ]
           },
@@ -261,7 +272,8 @@
           "models": [
             {
               "id": "model-large",
-              "label": "Large model"
+              "label": "Large model",
+              "reasoningEfforts": ["low", "medium", "high", "max"]
             }
           ]
         }
@@ -531,6 +543,7 @@
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
+        "reasoningEffort": "xhigh",
         "harnessSessionId": null,
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
@@ -578,6 +591,7 @@
         "harness": "claude-code",
         "harnessVersion": "2.0.30",
         "model": "model-large",
+        "reasoningEffort": null,
         "harnessSessionId": "session-1",
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
@@ -686,11 +700,13 @@
             "models": [
               {
                 "id": "model-large",
-                "label": "Large model"
+                "label": "Large model",
+                "reasoningEfforts": ["low", "medium", "high"]
               },
               {
                 "id": "model-small",
-                "label": "Small model"
+                "label": "Small model",
+                "reasoningEfforts": []
               }
             ],
             "binaryPath": "/opt/codex"
@@ -723,11 +739,13 @@
             "models": [
               {
                 "id": "model-large",
-                "label": "Large model"
+                "label": "Large model",
+                "reasoningEfforts": ["low", "medium", "high"]
               },
               {
                 "id": "model-small",
-                "label": "Small model"
+                "label": "Small model",
+                "reasoningEfforts": []
               }
             ]
           }
@@ -794,6 +812,7 @@
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
+        "reasoningEffort": null,
         "harnessSessionId": null,
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
@@ -843,6 +862,7 @@
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
+        "reasoningEffort": null,
         "harnessSessionId": null,
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
@@ -1070,6 +1090,31 @@
         }
       },
       {
+        "name": "ready harness listing a reasoning effort twice",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model",
+                "reasoningEfforts": ["high", "high"]
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ]
+          }
+        }
+      },
+      {
         "name": "unknown restore outcome",
         "reason": "invalid",
         "message": {
@@ -1155,6 +1200,7 @@
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
+          "reasoningEffort": null,
           "harnessSessionId": null,
           "instructions": "Use the stella MCP server for workspace actions.",
           "messages": [
@@ -1205,6 +1251,7 @@
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
+          "reasoningEffort": null,
           "harnessSessionId": null,
           "instructions": "Use the stella MCP server for workspace actions.",
           "messages": [
@@ -1255,6 +1302,7 @@
           "harness": "cursor",
           "harnessVersion": "0.48.0",
           "model": "model-large",
+          "reasoningEffort": null,
           "harnessSessionId": null,
           "instructions": "Use the stella MCP server for workspace actions.",
           "messages": [
@@ -1305,6 +1353,7 @@
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
+          "reasoningEffort": null,
           "harnessSessionId": null,
           "instructions": "Use the stella MCP server for workspace actions.",
           "messages": [
@@ -1372,6 +1421,7 @@
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
+          "reasoningEffort": null,
           "harnessSessionId": null,
           "instructions": "Use the stella MCP server for workspace actions.",
           "messages": [
@@ -1413,6 +1463,57 @@
         }
       },
       {
+        "name": "unknown reasoning effort",
+        "message": {
+          "type": "run.start",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "attachments": [],
+          "harness": "codex",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "reasoningEffort": "turbo",
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "open",
+            "fs": "workspace",
+            "approvals": "ask"
+          },
+          "mcp": {
+            "serverName": "stella",
+            "url": "https://api.example.test/mcp",
+            "token": "run-token-1",
+            "expiresAt": "2026-10-28T09:15:00.000Z"
+          }
+        }
+      },
+      {
         "name": "run.start without an approval mode",
         "message": {
           "type": "run.start",
@@ -1422,6 +1523,7 @@
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
+          "reasoningEffort": null,
           "harnessSessionId": null,
           "instructions": "Use the stella MCP server for workspace actions.",
           "messages": [

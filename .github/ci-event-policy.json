@@ -241,7 +241,6 @@
     "manual-checks.yml/install-cache-linux": "main",
     "type-cost-measurement.yml/prepare": "main",
     "type-cost-measurement.yml/measure": "main",
-    "queue-admission.yml/admission": "dispatch-only",
     "playbook-clause-eval.yml/playbook-clause-eval": "dispatch-only",
     "playbook-journey.yml/playbook-journey": "main",
     "ci-runner-loss-retry.yml/retry": "pr-fast",

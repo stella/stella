@@ -11,6 +11,7 @@ import {
   type HarnessApprovalRequest,
   type HarnessEvent,
   type HarnessToolCall,
+  type HarnessToolResult,
 } from "./events";
 import { redactingSkillPaths, type SkillPathScope } from "./skill-redaction";
 import { HARNESS_TOOL_NAMES, shownToolInput } from "./tool-parts";
@@ -44,7 +45,7 @@ const through = async (
 
 const completed = (
   toolCall: HarnessToolCall,
-  result: { content: string; status: "succeeded" | "failed" },
+  result: HarnessToolResult,
 ): HarnessEvent => ({ type: "tool.completed", toolCall, result });
 
 const lastCompleted = (events: readonly HarnessEvent[]) => {

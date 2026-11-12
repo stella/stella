@@ -571,6 +571,21 @@
       "showBefore": "Zobrazit text před ¶ {from}",
       "verifyParagraphs": "Ověřit odstavce"
     },
+    "staleness": {
+      "failed": "Tvrzení se nepodařilo zkontrolovat znovu",
+      "finished": "{count, plural, one {# tvrzení znovu zkontrolováno} few {# tvrzení znovu zkontrolována} many {# tvrzení znovu zkontrolováno} other {# tvrzení znovu zkontrolováno}}",
+      "partial": "Znovu zkontrolováno: {rechecked, number}, nezdařilo se: {failed, plural, one {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt změněn",
+        "factHeld": "Fakt vyloučen",
+        "factRemoved": "Fakt odebrán",
+        "newFactRelated": "Nový související fakt"
+      },
+      "recheckAll": "Zkontrolovat vše znovu",
+      "recheckLocked": "Kontroluje se znovu spolu s ostatními zastaralými tvrzeními",
+      "runLine": "{count, plural, one {# tvrzení může být zastaralé} few {# tvrzení mohou být zastaralá} many {# tvrzení může být zastaralého} other {# tvrzení může být zastaralých}}",
+      "running": "{count, plural, one {Znovu se kontroluje # tvrzení…} few {Znovu se kontrolují # tvrzení…} many {Znovu se kontroluje # tvrzení…} other {Znovu se kontroluje # tvrzení…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "V rozporu",
@@ -628,100 +643,21 @@
       "pickList": "Vyberte seznam, s jehož fakty se porovnávají dokumenty tohoto spisu."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Vytvořit dvojjazyčnou verzi",
-      "creating": "Vytváření…",
-      "description": "Vytvoří kopii dokumentu ve dvou sloupcích: vlevo původní text, vpravo kopie k překladu s vlastním číslováním. Kopie se uloží do tohoto spisu jako nový dokument.",
-      "sameLanguage": "Zvolte dva různé jazyky.",
-      "sourceLanguage": "Zdrojový jazyk",
-      "title": "Dvojjazyčná verze"
-    },
-    "error": {
-      "title": "Dvojjazyčnou verzi se nepodařilo vytvořit"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> je připraven, k překladu {rowCount, plural, one {je # řádek} few {jsou # řádky} other {je # řádků} many {je # řádku}}.",
-      "title": "Dvojjazyčná verze vytvořena"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Doplní sloupec s překladem v tomto dvousloupcovém dokumentu. Zkontrolujte, co se stane s každým řádkem a jak se překládají definované pojmy, a poté spusťte překlad.",
-      "prepare": "Připravit",
-      "preparing": "Načítání dokumentu…",
-      "preparingHint": "Načtení celého dokumentu a posouzení každého řádku trvá až dvě minuty.",
-      "title": "Přeložit dvojjazyčnou verzi"
+      "prepare": "Připravit"
     },
     "dispositions": {
-      "inline": "Oba jazyky",
       "keep": "Ponechat beze změny"
     },
-    "error": {
-      "prepareTitle": "Dokument se nepodařilo připravit",
-      "startTitle": "Překlad se nepodařilo spustit"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Pro překlad není dostupný žádný model AI.",
-      "applyFailed": "Překlady se nepodařilo zapsat zpět do dokumentu.",
-      "documentChanged": "Dokument se během překladu změnil. Připravte jej znovu.",
-      "documentUnresolved": "Dokument nebo jeho soubor už není dostupný.",
-      "enqueueFailed": "Překlad se nepodařilo zařadit do fronty.",
-      "internal": "Překlad byl neočekávaně přerušen.",
-      "notBilingual": "Tento dokument neobsahuje dvojjazyčnou tabulku.",
-      "translationFailed": "Dávku řádků se nepodařilo přeložit.",
-      "unknown": "Překlad byl neočekávaně přerušen."
-    },
-    "glossary": {
-      "add": "Přidat pojem",
-      "description": "Tyto překlady se použijí ve všech řádcích. Pojem bez překladu je nutné doplnit, nebo odebrat.",
-      "empty": "Nebyly nalezeny žádné definované pojmy.",
-      "formsHint": "Další tvary oddělte čárkami.",
-      "formsSource": "Další tvary pojmu",
-      "formsTarget": "Další tvary překladu",
-      "incomplete": "Doplňte chybějící překlady, nebo tyto pojmy odeberte.",
-      "origins": {
-        "detected": "Nalezeno",
-        "user": "Vlastní"
-      },
-      "term": "Pojem",
-      "title": "Definované pojmy",
-      "tooManyForms": "Pojem může mít nejvýše {max} dalších tvarů.",
-      "translation": "Překlad"
-    },
     "kinds": {
-      "heading": "Nadpis",
-      "listItem": "Položka seznamu",
-      "paragraph": "Odstavec",
-      "table": "Celá tabulka"
-    },
-    "origins": {
-      "default": "Neposouzeno",
-      "model": "AI"
+      "paragraph": "Odstavec"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# řádek byl vynechán} few {# řádky byly vynechány} other {# řádků bylo vynecháno} many {# řádku bylo vynecháno}}: neobsahují text, který lze přeložit.",
-      "start": "Spustit překlad",
       "starting": "Spouštění…"
     },
     "rows": {
-      "description": "Zvolte, co se stane s každým řádkem sloupce s překladem.",
-      "ordinal": "#",
-      "sourceText": "Zdrojový text",
-      "title": "Řádky",
-      "whatToDo": "Co udělat"
-    },
-    "run": {
-      "cancelled": "Překlad byl zrušen.",
-      "doneSummary": "{count, plural, one {Přeložen # řádek} few {Přeloženy # řádky} other {Přeloženo # řádků} many {Přeloženo # řádku}}.",
-      "doneTitle": "Překlad dokončen",
-      "failedRows": "{count, plural, one {# řádek se nepodařilo přeložit} few {# řádky se nepodařilo přeložit} other {# řádků se nepodařilo přeložit} many {# řádku se nepodařilo přeložit}}.",
-      "failedTitle": "Překlad byl zastaven",
-      "hint": "Překlad běží na serveru. Nechte toto okno otevřené, abyste ho mohli sledovat.",
-      "moreRows": "{count, plural, one {a další # řádek} few {a další # řádky} other {a dalších # řádků} many {a další # řádku}}",
-      "progress": "Přeloženo {completed} z {total} řádků",
-      "title": "Probíhá překlad…",
-      "warningsTitle": "Řádky ke kontrole"
+      "title": "Řádky"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# negativní} few {# negativní} many {# negativní} other {# negativních}}",
       "none": "Zatím nejsou zaznamenány žádné citace.",
       "notInStella": "Zatím není ve stelle",
-      "openAtCitation": "Otevřít na místě citace",
       "openDecision": "Otevřít rozhodnutí",
       "paragraphLabel": "Bod {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1940,6 +1875,7 @@
       "refusalNoComputer": "Žádný z vašich počítačů není připojen. Otevřete stella desktop a odešlete zprávu znovu.",
       "refusalPermissionAboveLimit": "Vaše organizace tato oprávnění programovacímu agentovi ve vašem počítači nepovoluje. Vyberte jinou možnost v nabídce Oprávnění.",
       "refusalPermissionUnavailable": "Programovací agent ve vašem počítači s těmito oprávněními běžet nemůže. Vyberte jinou možnost v nabídce Oprávnění.",
+      "refusalReasoningEffortUnavailable": "Programovací agent ve vašem počítači tuto úroveň uvažování pro daný model nenabízí. Vyberte jinou v nabídce Úroveň uvažování.",
       "refusalTooLarge": "Tato konverzace je příliš dlouhá na předání do vašeho počítače. Pro spuštění tam začněte nový chat.",
       "refusalUnavailable": "Spouštění chatů ve vašem počítači není pro váš účet dostupné.",
       "selectionStateLabel": "{selection} · {state}",
@@ -2173,6 +2109,7 @@
     "stopFailed": "Odpověď se nepodařilo zastavit. Zkuste to znovu.",
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",
+    "stopping": "Zastavuji…",
     "suggestTitle": "Navrhnout název",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nejsou dostupné pro anonymizované konverzace.",
     "suggestedFollowupsLabel": "Navrhované navazující dotazy",
@@ -2709,6 +2646,7 @@
     "organization": "Organizace",
     "organizationName": "Název organizace",
     "organizations": "Organizace",
+    "outOfDate": "Neaktuální",
     "page": "Stránka {page}",
     "paymentRetryNotice": "Problém s platbou. Pro zachování přístupu aktualizujte platební metodu do {date}.",
     "pin": "Připnout",
@@ -6114,7 +6052,6 @@
     "comments": "Komentáře",
     "commentsEmpty": "Komentář přidáte označením textu.",
     "noRevisions": "Zatím žádné revize",
-    "outOfDate": "Neaktuální",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Bez shrnutí",
     "proposals": "Návrhy změn",

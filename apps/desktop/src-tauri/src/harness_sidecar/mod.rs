@@ -70,9 +70,9 @@ use protocol::{
 
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessModel, HarnessReport,
-  HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, RejectReason,
-  RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
-  UnavailableHarness, UnsupportedHarness,
+  HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, ReasoningEffort,
+  RejectReason, RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh,
+  SignedOutHarness, UnavailableHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -589,6 +589,12 @@ pub(crate) fn harness_report(
           id: model.id.clone(),
           label: model.label.clone(),
           is_default: model.is_default,
+          // Each effort once, in the contract's order.
+          reasoning_efforts: ReasoningEffort::ALL
+            .iter()
+            .copied()
+            .filter(|effort| model.reasoning_efforts.contains(effort))
+            .collect(),
         })
         .collect();
       if models.is_empty() {

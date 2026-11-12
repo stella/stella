@@ -44,6 +44,7 @@ const LOCAL_TARGET = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 } as const satisfies ChatRunTarget;
 
 const READINESS: ChatLocalRunReadiness = {
@@ -60,7 +61,9 @@ const READINESS: ChatLocalRunReadiness = {
           version: "0.50.0",
           capabilities: ["approvals"],
           approvalModes: ["ask"],
-          models: [{ id: "gpt-5-codex", label: "GPT-5 Codex" }],
+          models: [
+            { id: "gpt-5-codex", label: "GPT-5 Codex", reasoningEfforts: [] },
+          ],
         },
       ],
     },
@@ -183,6 +186,13 @@ const CLOUD_PLACE = "Runs on: Cloud";
 const CODEX_PLACE = "Runs on: Your computer, Codex";
 const AUTO_LABEL = messages.chat.modelSelector.autoLabel;
 const SEARCH = messages.organization.aiConfig.modelIdPlaceholder;
+
+test("the model chip names the reasoning effort once one is chosen", async () => {
+  renderChips({ ...LOCAL_TARGET, reasoningEffort: "high" });
+  expect(
+    await screen.findByRole("button", { name: "GPT-5 Codex | High" }),
+  ).toBeTruthy();
+});
 
 test("the where chip switches the place, and the model chip lists that place's models", async () => {
   const { chosen } = renderChips({ kind: "cloud" });

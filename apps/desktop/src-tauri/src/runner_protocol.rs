@@ -204,6 +204,17 @@ wire_values!(ApprovalMode {
   FullAuto => "full_auto",
 });
 
+// The effort a run asks the model for, weakest first.
+wire_values!(ReasoningEffort {
+  None => "none",
+  Minimal => "minimal",
+  Low => "low",
+  Medium => "medium",
+  High => "high",
+  Xhigh => "xhigh",
+  Max => "max",
+});
+
 /// A run-scoped MCP token. `Debug` never prints it.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -275,6 +286,8 @@ pub(crate) struct HarnessModel {
   /// first as the recommended one. Sent only when set.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub(crate) is_default: bool,
+  /// The efforts a run of this model may ask for; empty when there is no choice.
+  pub(crate) reasoning_efforts: Vec<ReasoningEffort>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -463,6 +476,8 @@ pub(crate) struct RunStart {
   pub(crate) harness: Harness,
   pub(crate) harness_version: String,
   pub(crate) model: String,
+  /// An effort the desktop reported for the model; `None` leaves it to the harness.
+  pub(crate) reasoning_effort: Option<ReasoningEffort>,
   pub(crate) harness_session_id: Option<String>,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
@@ -703,6 +718,10 @@ mod tests {
       (
         "approvalModes",
         names(ApprovalMode::ALL.iter().map(|value| value.wire_name())),
+      ),
+      (
+        "reasoningEfforts",
+        names(ReasoningEffort::ALL.iter().map(|value| value.wire_name())),
       ),
       ("harnessStates", names(HarnessReport::TAGS.iter().copied())),
       (

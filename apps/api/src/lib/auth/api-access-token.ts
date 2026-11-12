@@ -103,6 +103,21 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/workspaces/create.ts",
   },
+  // A new matter's client and team, as the web's create dialog offers them:
+  // an address-book contact found by name or created on the spot, and the
+  // organization's people to share the matter with.
+  "GET /v1/contacts/search": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/contacts/search.ts",
+  },
+  "PUT /v1/contacts": {
+    scope: "stella:contacts_write",
+    handler: "apps/api/src/handlers/contacts/create.ts",
+  },
+  "GET /v1/workspaces/member-candidates": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/member-candidates/list.ts",
+  },
   "PUT /v1/tasks/:workspaceId": {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/tasks/create.ts",
@@ -235,6 +250,14 @@ export const API_OAUTH_ROUTES = {
   "GET /v1/chat/runs/active": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/runs/list.ts",
+    uncataloged: "chat_thread_ui",
+  },
+  // A standing approval given from an approval in a conversation: "Allow in
+  // this conversation" or "Always allow" for one tool, as the web's
+  // approval card stores it.
+  "POST /v1/chat/tool-grants": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/tool-grants/create.ts",
     uncataloged: "chat_thread_ui",
   },
   // The person's event stream. Its events carry no content (notifications

@@ -20,6 +20,9 @@ type ChatDraftStore = {
   clearDraft: (threadKey: string) => void;
   draftsByThreadKey: Record<string, ChatDraftState>;
   getDraft: (threadKey: string) => ChatDraftState | null;
+  /** Adds text as its own paragraph, or fills the draft when it is empty,
+   *  so it never runs into words already there. */
+  appendParagraph: (threadKey: string, text: string) => void;
   /** Appends inline nodes (a chip and the space after it) to the draft. */
   insertInlineContent: (
     threadKey: string,
@@ -80,6 +83,23 @@ export const appendInlineContentToDraftDoc = (
       appendInlineToParagraph({ type: "paragraph" }, inline),
     ],
   };
+};
+
+const isEmptyParagraph = (node: JSONContent | undefined): boolean =>
+  node?.type === "paragraph" &&
+  normalizeOptionalArray(node.content).length === 0;
+
+/** The text as the draft's own paragraph; an empty draft becomes just it. */
+export const appendParagraphToDraftDoc = (
+  doc: JSONContent,
+  text: string,
+): JSONContent => {
+  const content = normalizeOptionalArray(doc.content);
+  const paragraph = { type: "paragraph", content: [createTextNode(text)] };
+  if (content.every(isEmptyParagraph)) {
+    return { ...doc, content: [paragraph] };
+  }
+  return { ...doc, content: [...content, paragraph] };
 };
 
 const mentionContent = (mention: ChatMentionOption): JSONContent[] => [
@@ -179,6 +199,22 @@ export const useChatDraftStore = create<ChatDraftStore>((set, get) => ({
         state.draftsByThreadKey;
 
       return { draftsByThreadKey };
+    }),
+  appendParagraph: (threadKey, text) =>
+    set((state) => {
+      const currentDraft =
+        state.draftsByThreadKey[threadKey] ?? createChatDraftState();
+
+      return {
+        draftsByThreadKey: {
+          ...state.draftsByThreadKey,
+          [threadKey]: {
+            ...currentDraft,
+            doc: appendParagraphToDraftDoc(currentDraft.doc, text),
+            updatedAt: Temporal.Now.instant().epochMilliseconds,
+          },
+        },
+      };
     }),
   draftsByThreadKey: {},
   getDraft: (threadKey) => get().draftsByThreadKey[threadKey] ?? null,

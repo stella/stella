@@ -2163,13 +2163,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "packages/cli/src/cli-release-channel.ts",
-    "function": "module/fetchLatestCliVersion",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "packages/cli/src/compatibility.ts",
     "function": "module/checkServerCompatibility",
     "kind": "total-timeout-body",

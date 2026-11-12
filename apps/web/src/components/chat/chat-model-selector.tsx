@@ -23,8 +23,8 @@ import {
   ChatModelOptionsMenu,
   chatRunOnTarget,
   type ComposerModelsMenuProps,
-  EFFORT_LABEL_KEY,
 } from "@/components/chat/chat-model-options-menu";
+import { EFFORT_LABEL_KEY } from "@/components/chat/chat-model-options-menu.logic";
 import {
   ChatRunTargetMenu,
   useLocalRunTargetStateLabel,
@@ -253,8 +253,9 @@ export const ChatModelSelector = ({
 
 /**
  * The model a chat on the member's computer runs with, named as its coding
- * agent names it, and marked when the agent no longer offers it, which the
- * API would refuse. `null` for a chat in the cloud.
+ * agent names it, with the reasoning effort when one is chosen, and marked
+ * when the agent no longer offers it, which the API would refuse. `null` for
+ * a chat in the cloud.
  */
 const useLocalModelTrigger = (
   activeOrganizationId: string,
@@ -272,7 +273,14 @@ const useLocalModelTrigger = (
   }
   const readiness =
     runnersView.type === "items" ? runnersView.items : undefined;
-  const model = localRunModelLabel(readiness, target) ?? target.model;
+  const modelLabel = localRunModelLabel(readiness, target) ?? target.model;
+  const model =
+    target.reasoningEffort === null
+      ? modelLabel
+      : t("chat.modelSelector.selectionLabel", {
+          model: modelLabel,
+          effort: t(EFFORT_LABEL_KEY[target.reasoningEffort]),
+        });
   const gone =
     readiness !== undefined &&
     localRunTargetState(readiness, target).type === "model_unavailable";
