@@ -3,7 +3,7 @@ import type { emailOTP } from "better-auth/plugins/email-otp";
 import type { organization } from "better-auth/plugins/organization";
 import { expectTypeOf } from "bun:test";
 
-import type { AuthEndpointBodies } from "@/lib/auth-endpoint-bodies";
+import type { AuthEndpointBodies } from "@/lib/account/auth-endpoint-bodies";
 
 // A record as JSON carries it: a `Date` arrives as its ISO string, and a
 // property that may be `undefined` may be missing.

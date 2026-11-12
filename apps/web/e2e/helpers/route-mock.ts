@@ -29,7 +29,7 @@ import * as v from "valibot";
 import type { ApiErrorObjectValue } from "@stll/api-contract";
 
 import type { WebRoutes } from "../../src/generated/api-routes.gen";
-import type { AuthEndpointBodies } from "../../src/lib/auth-endpoint-bodies";
+import type { AuthEndpointBodies } from "../../src/lib/account/auth-endpoint-bodies";
 
 type HttpMethod = "delete" | "get" | "patch" | "post" | "put";
 
@@ -119,7 +119,7 @@ export const contractJson = <const Schema extends v.GenericSchema>(
 };
 
 /** The auth library's endpoints the specs answer. They sit outside the API
- *  route tree; `src/lib/auth-endpoint-bodies.type-test.ts` binds each body
+ *  route tree; `src/lib/account/auth-endpoint-bodies.type-test.ts` binds each body
  *  to the library's own endpoint result. */
 type AuthResponses = AuthEndpointBodies;
 
