@@ -13,10 +13,20 @@ const config = {
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Read one list verification: the document version it checked, the list " +
-    "facts it checked against as they stood then, and every claim found in " +
+    "facts it checked against as they stood then, how each of those facts " +
+    "stands on the list now (held or included; its tier: `document` when a " +
+    "source is a document's record, `testimony` when its sources are only " +
+    "witness accounts, `unsourced` without a source; see " +
+    "lists.source-documents.update), and every claim found in " +
     "the document with its verdict (state, and a 0-100 support score for " +
-    "supported, tension and contradicted), the facts it rests on, and the " +
-    "claim's current review (null while nobody has acted on it).",
+    "supported, tension and contradicted), its qualifiers (caveats that " +
+    "never change the verdict: the record is not expected to speak to the " +
+    "point, a cited fact has a different scope, no document's record backs " +
+    "it and it rests on testimony, every fact it rests on is unsourced, or " +
+    "it rests on a held fact), the facts it " +
+    "rests on, for a record conflict the fact suggested to govern it (the " +
+    "document's record over a witness's account; null when neither), and " +
+    "the claim's current review (null while nobody has acted on it).",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",

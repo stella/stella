@@ -14,6 +14,7 @@ import path from "node:path";
 
 import { waitFor } from "@stll/test-kit";
 
+import { PROTOCOL_LOG_OFF } from "../protocol-log";
 import { SidecarHost } from "./host";
 import type { SidecarHostOutput, SidecarRunStart } from "./protocol";
 
@@ -111,6 +112,7 @@ const startHost = (at: Place): Host => {
       return true;
     },
     log: () => {},
+    protocolLog: PROTOCOL_LOG_OFF,
     environment: {
       PATH: process.env["PATH"] ?? "",
       FAKE_HARNESS_LOG: at.fakeLog,
@@ -282,10 +284,63 @@ describe("undoing a local run's file changes", () => {
       outcome: "restored",
     });
     expect(contentsOf(at.workspaceDir)).toEqual(before);
-    // Undone once.
+    // Asked again, as after a lost answer: the same answer, nothing moves.
     const again = second.upcoming("folder.restored");
     second.host.handle(restoreMessage(at, runId));
-    expect((await again).outcome).toBe("not_newest");
+    expect((await again).outcome).toBe("restored");
+    expect(contentsOf(at.workspaceDir)).toEqual(before);
+  });
+
+  test("the same restore asked again while it runs waits for it and answers the same", async () => {
+    const at = place();
+    writeFileSync(path.join(at.workspaceDir, "brief.txt"), "the first draft");
+    const before = contentsOf(at.workspaceDir);
+    const first = startHost(at);
+    const { runId } = await runTurn(at, first, () => {
+      writeFileSync(
+        path.join(at.workspaceDir, "brief.txt"),
+        "rewritten by the agent",
+      );
+    });
+    await first.stop();
+    const second = startHost(at);
+    // Asked again before the first ends, as after the desktop's link to the
+    // holder dropped and came back: one restore, an answer to each request.
+    const asked = restoreMessage(at, runId);
+    const askedAgain = restoreMessage(at, runId);
+    second.host.handle(asked);
+    second.host.handle(askedAgain);
+    const answers = await waitFor(
+      () => {
+        const restored = second.written.filter(
+          (message) => message.type === "folder.restored",
+        );
+        return restored.length === 2 ? restored : undefined;
+      },
+      { description: "an answer to both restore requests" },
+    );
+    expect(answers).toEqual([
+      {
+        type: "folder.restored",
+        requestId: asked.requestId,
+        outcome: "restored",
+      },
+      {
+        type: "folder.restored",
+        requestId: askedAgain.requestId,
+        outcome: "restored",
+      },
+    ]);
+    expect(contentsOf(at.workspaceDir)).toEqual(before);
+    // A restore to another run's checkpoint is another operation.
+    const other = second.upcoming("folder.restored");
+    const otherRun = restoreMessage(at, crypto.randomUUID());
+    second.host.handle(restoreMessage(at, runId));
+    second.host.handle(otherRun);
+    expect(await other).toMatchObject({
+      requestId: otherRun.requestId,
+      outcome: "folder_busy",
+    });
   });
 
   test("a folder past a bound runs its turn without an undo", async () => {

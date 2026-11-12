@@ -232,6 +232,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PATCH /v1/chat/threads/:threadId/pin-state": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/chat/threads/:threadId/read-state": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PATCH /v1/chat/threads/:threadId/title": {
     type: "non-replay",
     reason: "current-state",
@@ -456,6 +464,11 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "POST /v1/chat/threads/:threadId/turns/:turnId/cancel": {
     type: "non-replay",
     reason: "stream",
+  },
+  // A repeat answers the turn's undo that is queued, sent or done.
+  "POST /v1/chat/threads/:threadId/turns/:turnId/local-files/undo": {
+    type: "non-replay",
+    reason: "current-state",
   },
   "POST /v1/chat/tool-grants": {
     type: "non-replay",

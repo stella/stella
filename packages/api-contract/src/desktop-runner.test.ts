@@ -13,6 +13,7 @@ import {
   DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES,
   DESKTOP_RUNNER_FRAME_REJECTION,
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
@@ -136,6 +137,7 @@ describe("desktop runner fixtures", () => {
       desktopMessageTypes: Object.values(DESKTOP_RUNNER_DESKTOP_MESSAGE),
       serverMessageTypes: Object.values(DESKTOP_RUNNER_SERVER_MESSAGE),
       answerLimits: DESKTOP_RUNNER_ANSWER_LIMITS,
+      folderRestoreOutcomes: [...DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES],
     });
   });
 
@@ -214,6 +216,9 @@ describe("desktop runner fixtures", () => {
         ),
         runOutcomes: desktop.flatMap((message) =>
           message.type === "run.finished" ? [message.outcome] : [],
+        ),
+        folderRestoreOutcomes: desktop.flatMap((message) =>
+          message.type === "folder.restored" ? [message.outcome] : [],
         ),
         networkPolicies: starts.map(({ policy }) => policy.network),
         fsPolicies: starts.map(({ policy }) => policy.fs),

@@ -4,7 +4,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type {
   ClaimOverrideState,
   ClaimRef,
-  ClaimReviewEventPayload,
+  ClaimReviewAction,
   ClaimReviewOrigin,
   ClaimReviewStatus,
   ClaimState,
@@ -12,13 +12,12 @@ import type {
   RecordConflictResolution,
   VerificationEvidence,
 } from "@/api/lib/lists/verification/contract";
-import {
-  AVT_CLAIM_REVIEW_DECISION,
-  CLAIM_STATE,
-} from "@/api/lib/lists/verification/contract";
+import { CLAIM_STATE } from "@/api/lib/lists/verification/contract";
+import { qualifiersNeedJudgement } from "@/api/lib/lists/verification/qualifiers";
+import type { ClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
 
 type ClaimReviewEvent = {
-  payload: ClaimReviewEventPayload;
+  payload: ClaimReviewAction;
   actorId: string | null;
   createdAt: Date;
 };
@@ -57,15 +56,11 @@ const applyEvent = (
   const decided = { decidedAt: createdAt, decidedBy: actorId };
   switch (payload.kind) {
     case "status": {
-      const decision =
-        payload.status === null
-          ? null
-          : AVT_CLAIM_REVIEW_DECISION[payload.status];
       return {
         ...review,
         ...decided,
         status: payload.status,
-        statusOrigin: decision === null ? null : payload.origin,
+        statusOrigin: payload.status === null ? null : payload.origin,
       };
     }
     case "override": {
@@ -121,6 +116,31 @@ export const foldClaimReview = (
   return review;
 };
 
+export type ClaimReviewStep<Event extends ClaimReviewEvent> = {
+  event: Event;
+  /** The review just before the event, and just after it. */
+  before: ClaimReview;
+  after: ClaimReview;
+};
+
+/**
+ * Every event with the review it found and the review it left, from the
+ * same fold as `foldClaimReview`: history states what changed without
+ * storing a review twice. Events arrive in fold order.
+ */
+export const claimReviewSteps = <Event extends ClaimReviewEvent>(
+  events: readonly Event[],
+): ClaimReviewStep<Event>[] => {
+  const steps: ClaimReviewStep<Event>[] = [];
+  let review = EMPTY_CLAIM_REVIEW;
+  for (const event of events) {
+    const after = applyEvent(review, event);
+    steps.push({ event, before: review, after });
+    review = after;
+  }
+  return steps;
+};
+
 type ClaimReviewTarget = {
   state: ClaimState;
   recordConflict: RecordConflict | null;
@@ -140,7 +160,7 @@ export type ClaimReviewEventRejection =
 export const rejectReviewEvent = (
   claim: ClaimReviewTarget,
   review: ClaimReview,
-  payload: ClaimReviewEventPayload,
+  payload: ClaimReviewAction,
 ): ClaimReviewEventRejection | null => {
   switch (payload.kind) {
     case "status":
@@ -186,23 +206,29 @@ const CONFLICT_STATES: ReadonlySet<ClaimState> = new Set([
   CLAIM_STATE.RECORDCONFLICT,
 ]);
 
-type AttentionTarget = {
+type ReviewedClaim = {
   state: ClaimState;
   refs: readonly ClaimRef[];
 };
 
+type AttentionTarget = ReviewedClaim & {
+  qualifiers: readonly Pick<ClaimQualifier, "review">[];
+};
+
 /**
- * A claim needs a human when its verdict is a conflict or it rests on a fact
- * whose meaning is contested. Everything else is routine: it may be accepted
- * in bulk, and its per-claim controls stay available for the record.
+ * A claim needs a human when its verdict is a conflict, it rests on a fact
+ * whose meaning is contested, or it carries a qualifier that asks for
+ * judgement (`QUALIFIER_REVIEW`). Everything else is routine: it may be
+ * accepted in bulk, and its per-claim controls stay available for the record.
  */
 export const needsAttention = (
-  { state, refs }: AttentionTarget,
+  { state, refs, qualifiers }: AttentionTarget,
   contested: ReadonlySet<SafeId<"entity">>,
 ): boolean =>
   state !== CLAIM_STATE.NOTVERIFIABLE &&
   (CONFLICT_STATES.has(state) ||
-    refs.some((ref) => contested.has(ref.factEntityId)));
+    refs.some((ref) => contested.has(ref.factEntityId)) ||
+    qualifiersNeedJudgement(qualifiers));
 
 /** Facts of a run's evidence whose meaning is contested. */
 export const contestedFactIds = (
@@ -214,7 +240,9 @@ export const contestedFactIds = (
       .map((fact) => fact.factEntityId),
   );
 
-type ViewTarget = AttentionTarget & { recordConflict: RecordConflict | null };
+export type ViewTarget = ReviewedClaim & {
+  recordConflict: RecordConflict | null;
+};
 
 /**
  * The claim as a reviewer sees it after their own decisions: a reopened
@@ -225,7 +253,7 @@ type ViewTarget = AttentionTarget & { recordConflict: RecordConflict | null };
 export const reviewedView = (
   claim: ViewTarget,
   review: ClaimReview,
-): AttentionTarget => {
+): ReviewedClaim => {
   if (review.reopened && claim.state === CLAIM_STATE.NOTVERIFIABLE) {
     return { state: CLAIM_STATE.NOCOVER, refs: [] };
   }
@@ -247,3 +275,20 @@ export const reviewedView = (
     refs: claim.refs,
   };
 };
+
+/** Where a claim stood with its reviewers at one point of its history: the
+ *  verdict as they see it, their override beside it, and the status. */
+export type ClaimDisposition = {
+  verdict: ClaimState;
+  override: ClaimOverrideState | null;
+  status: ClaimReviewStatus | null;
+};
+
+export const claimDisposition = (
+  claim: ViewTarget,
+  review: ClaimReview,
+): ClaimDisposition => ({
+  verdict: reviewedView(claim, review).state,
+  override: review.override,
+  status: review.status,
+});

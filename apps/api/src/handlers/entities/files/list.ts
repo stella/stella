@@ -112,6 +112,7 @@ const listFilesHandler = async function* ({
     parentId: SafeId<"entity"> | null;
     fileName: string;
     mimeType: string;
+    sizeBytes: number;
   };
 
   const files: (FileRow & {
@@ -131,6 +132,7 @@ const listFilesHandler = async function* ({
       fieldId: row.fieldId,
       fileName: content.fileName,
       mimeType: content.mimeType,
+      sizeBytes: content.sizeBytes,
     });
   }
 
@@ -156,7 +158,8 @@ const config = {
   description:
     "List every document in a matter that has an uploaded file, oldest first " +
     "with cursor pagination, each with its entity id, name, parent folder, " +
-    "file field id, file name, and media type. search narrows the list to " +
+    "file field id, file name, media type, and size in bytes. search " +
+    "narrows the list to " +
     "documents whose file name or name contains the text. Documents without a file, " +
     "and folders and tasks, are left out; use entities.list for the full " +
     "table with column values.",

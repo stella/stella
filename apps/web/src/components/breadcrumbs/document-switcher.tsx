@@ -25,6 +25,7 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { isCurrentDocument } from "@/components/breadcrumbs/document-switcher.logic";
 import { DocumentIcon } from "@/components/document-icon";
@@ -193,9 +194,9 @@ export const DocumentSwitcher = ({
                       fileName={file.fileName}
                       mimeType={file.mimeType}
                     />
-                    <BidiText as="span" className="min-w-0 truncate">
+                    <TruncatedText render={<BidiText as="span" />}>
                       {file.fileName}
-                    </BidiText>
+                    </TruncatedText>
                     {isCurrent ? <CheckIcon className="ms-auto" /> : null}
                   </CommandItem>
                 );
