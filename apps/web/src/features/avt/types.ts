@@ -53,6 +53,20 @@ export type ClaimRecheck = NonNullable<VerificationClaim["recheck"]>;
 export type ClaimReviewStatus = NonNullable<ClaimReview["status"]>;
 export type ClaimOverrideState = NonNullable<ClaimReview["override"]>;
 
+/** What a run took from the previous run of its document. */
+export type RunCarryOver = NonNullable<VerificationRun["carryOver"]>;
+/** A reviewed claim of the previous run whose decisions did not all come
+ *  across. */
+export type NotCarriedClaim = RunCarryOver["notCarried"][number];
+
+/** Why a reviewed claim's decisions did not all come across. */
+export const NOT_CARRIED_LABEL_KEYS = {
+  "text-changed": "avt.runs.carryOver.outcomes.textChanged",
+  "verdict-changed": "avt.runs.carryOver.outcomes.verdictChanged",
+  unmatched: "avt.runs.carryOver.outcomes.unmatched",
+  ambiguous: "avt.runs.carryOver.outcomes.ambiguous",
+} as const satisfies Record<NotCarriedClaim["outcome"], TranslationKey>;
+
 export type ReviewHistoryPage =
   ListsRoutes["claim-reviews"]["get"]["response"][200];
 export type ReviewHistoryEntry = ReviewHistoryPage["items"][number];

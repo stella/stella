@@ -38,6 +38,7 @@ import {
   chatThreads,
   chatToolGrants,
   chatTurns,
+  conflictChecks,
   desktopPresence,
   desktopRunnerFolderRestores,
   desktopTimeEntryBatches,
@@ -59,6 +60,7 @@ import {
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
+  searchHistoryOwners,
   sellerProfiles,
   signals,
   templateLookupFormats,
@@ -128,6 +130,7 @@ import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import createClientInvoice from "@/api/handlers/client-invoices/create";
 import prefillClientInvoice from "@/api/handlers/client-invoices/prefill";
+import listConflictChecks from "@/api/handlers/conflict-checks/list";
 import readContactById from "@/api/handlers/contacts/get";
 import readDataExport from "@/api/handlers/data-exports/get";
 import listDataExports from "@/api/handlers/data-exports/list";
@@ -235,6 +238,7 @@ import type {
   generateTanStackTextForTask,
 } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { grantedConflictCheckSnapshot } from "@/api/tests/helpers/conflict-check-access";
 import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -384,6 +388,9 @@ const DESKTOP_ENTRY = {
 };
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
+const conflictCheckB = toSafeId<"conflictCheck">(
+  "22222222-2222-4222-8222-2222222222c7",
+);
 const savedSearchA = toSafeId<"savedSearch">(
   "11111111-1111-4111-8111-111111111145",
 );
@@ -1872,6 +1879,27 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expectPageContainsId(result, legalListB),
   },
   {
+    name: "conflict check list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listConflictChecks, workspaceA, {
+        featureAccessSnapshot: grantedConflictCheckSnapshot({
+          organizationId: workspaceA.session.activeOrganizationId,
+          userId: workspaceA.user.id,
+        }),
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listConflictChecks, workspaceB, {
+        featureAccessSnapshot: grantedConflictCheckSnapshot({
+          organizationId: workspaceB.session.activeOrganizationId,
+          userId: workspaceB.user.id,
+        }),
+        query: { limit: 100 },
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, conflictCheckB),
+    expectPositive: (result) => expectPageContainsId(result, conflictCheckB),
+  },
+  {
     name: "saved search list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listSavedSearches, workspaceA, {
@@ -3358,6 +3386,22 @@ testState.beforeAll(async () => {
       createdBy: ids.userB1,
     },
   ]);
+  await testDb.insert(conflictChecks).values({
+    id: conflictCheckB,
+    organizationId: ids.orgB,
+    runBy: ids.userB1,
+    title: "Workspace B intake",
+    parties: [
+      {
+        type: "organization",
+        role: "client",
+        name: "Firm B prospect",
+        aliases: [],
+      },
+    ],
+    results: { version: 1, contactsScreened: 0, gaps: [], parties: [] },
+    outcome: "no_matches",
+  });
   await testDb.insert(savedSearches).values([
     {
       id: savedSearchA,
@@ -3378,7 +3422,11 @@ testState.beforeAll(async () => {
     { organizationId: ids.orgB, userId: ids.userA1 },
     [
       {
-        entry: { kind: "search", query: "Firm B research" },
+        entry: {
+          kind: "search",
+          query: "Firm B research",
+          country: "CZE",
+        },
         usedAt: new Date(),
       },
     ],
@@ -3386,6 +3434,10 @@ testState.beforeAll(async () => {
   if (searchHistoryRowB === undefined) {
     throw new Error("Search history fixture was not prepared");
   }
+  await testDb
+    .insert(searchHistoryOwners)
+    .values({ organizationId: ids.orgB, userId: ids.userA1 })
+    .onConflictDoNothing();
   await testDb
     .insert(searchHistoryEntries)
     .values({ ...searchHistoryRowB, id: searchHistoryEntryB });

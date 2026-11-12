@@ -111,6 +111,16 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `client-invoices.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices create` |
 | `client-invoices.prefill` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices prefill` |
 
+## conflict-checks
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `conflict-checks.create` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks create` |
+| `conflict-checks.get` | read | stella:read | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks get` |
+| `conflict-checks.link` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks link` |
+| `conflict-checks.list` | read | stella:read | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks list` |
+| `conflict-checks.review` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks review` |
+
 ## contacts
 
 | Capability | Access | Scope | Feature | Reachable via |

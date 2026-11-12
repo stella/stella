@@ -45,6 +45,9 @@ const PERSONAL_WRITE_SCOPES = {
   savedSearch: null,
   searchHistory: ["stella:knowledge_write"],
   integration: null,
+  // A conflict check probes matters the key's holder cannot open; it stays a
+  // signed-in action until a personal key can carry that decision.
+  conflictCheck: null,
 } as const satisfies Record<
   keyof typeof statements,
   readonly PersonalApiKeyScope[] | null

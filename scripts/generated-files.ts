@@ -304,6 +304,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/clauses/*",
     "apps/api/src/lib/conditions/ast-utils.ts",
     "apps/api/src/lib/conditions/contract.ts",
+    "apps/api/src/lib/conflict-check/*",
     "apps/api/src/lib/conditions/parse-stored.ts",
     "apps/api/src/lib/db/*",
     "apps/api/src/lib/db/operator-activity/calendar.ts",

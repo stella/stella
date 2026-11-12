@@ -168,6 +168,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   agent_skill_comment: null,
   agent_skill_proposal: null,
   ai_memory: null,
+  // A conflict check names a prospective client; it stays off the matter feed.
+  conflict_check: null,
   announcement: null,
   audit_log: null,
   legal_resolve: null,

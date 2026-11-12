@@ -28,6 +28,7 @@ import {
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
+import { conflictChecksRoute } from "@/api/handlers/conflict-checks/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { dataExportsRoute } from "@/api/handlers/data-exports/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
@@ -201,6 +202,7 @@ export const apiRoutes = mount([
   internalTimeEntriesRoute,
   myTimeEntriesRoute,
   timeEntryReportRoute,
+  conflictChecksRoute,
   memberTimeTargetsRoute,
   timeTimersRoute,
   servedIfLoaded(localDevRoutes?.devPublicRoute),

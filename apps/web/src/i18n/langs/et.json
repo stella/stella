@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "Märgitud tõendeid vajavaks",
         "statusReviewed": "Märgitud kontrollituks"
       },
+      "carriedFrom": "Kontrollist {date}",
+      "carriedFromEarlier": "Varasemast kontrollist",
       "empty": "Kontrollitoiminguid veel pole.",
       "filters": {
         "allKinds": "Mis tahes toiming",
@@ -506,6 +508,21 @@
     },
     "runs": {
       "back": "Kõik dokumendid",
+      "carryOver": {
+        "openSource": "Ava kontroll {date}",
+        "outcomes": {
+          "ambiguous": "Mitu võimalikku vastet",
+          "textChanged": "Sõnastus muutus",
+          "unmatched": "Vastavat väidet pole",
+          "verdictChanged": "Otsus muutus"
+        },
+        "summary": {
+          "carried": "Üle toodud: {count, number}",
+          "carriedAndMissed": "Üle toodud: {carried, number} · ei: {missed, number}",
+          "label": "Kontrollid kontrollist {date}: üle toodud {carried, number}, üle toomata {missed, number}",
+          "missed": "Üle toomata: {count, number}"
+        }
+      },
       "errors": {
         "accessRevoked": "Kontroll peatati, sest juurdepääs pole saadaval.",
         "aiUnavailable": "Dokumentide kontrollimiseks pole ühtegi AI-mudelit saadaval. Kontrollige organisatsiooni AI seadeid.",
@@ -5794,6 +5811,7 @@
         "clause_category": "klauslite kategooria",
         "clause_template_link": "klausli seos malliga",
         "clause_variant": "klausli variant",
+        "conflict_check": "huvide konflikti kontroll",
         "contact": "kontakt",
         "contact_directory": "kontaktide kataloog",
         "data_export": "andmete eksport",

@@ -1799,6 +1799,14 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/conflict-checks",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/conflict-checks/:checkId/decision",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/contacts/:contactId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2881,6 +2889,10 @@
     {
       "id": "PUT /v1/client-invoices/:clientId",
       "reason": "Creates one invoice and claims selected work within a transaction; awaits the write scaling harness."
+    },
+    {
+      "id": "PUT /v1/conflict-checks/:checkId/matter/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
       "id": "PUT /v1/contacts",

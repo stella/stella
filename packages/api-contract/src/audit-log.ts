@@ -44,6 +44,7 @@ export const AUDIT_RESOURCE_TYPE = {
   CLAUSE_CATEGORY: "clause_category",
   CLAUSE_TEMPLATE_LINK: "clause_template_link",
   CLAUSE_VARIANT: "clause_variant",
+  CONFLICT_CHECK: "conflict_check",
   CONTACT: "contact",
   CONTACT_DIRECTORY: "contact_directory",
   CORRESPONDENCE: "correspondence",

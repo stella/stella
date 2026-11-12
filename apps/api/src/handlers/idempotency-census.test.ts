@@ -503,6 +503,13 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "external-effect",
   },
+  // Each run screens the firm's records as they stand; a retained response
+  // could disclose matters the caller may no longer open.
+  "POST /v1/conflict-checks": { type: "non-replay", reason: "current-state" },
+  "POST /v1/conflict-checks/:checkId/decision": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/contacts/:contactId": {
     type: "non-replay",
     reason: "current-state",
@@ -1064,6 +1071,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
   },
   "PUT /v1/client-invoices/:clientId": {
     type: "replay",
+  },
+  "PUT /v1/conflict-checks/:checkId/matter/:workspaceId": {
+    type: "non-replay",
+    reason: "current-state",
   },
   "PUT /v1/contacts": {
     type: "replay",

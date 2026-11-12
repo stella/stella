@@ -132,6 +132,9 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.CLAUSE_VERSION,
   },
+  // A firm's compliance record of one check, and its link to a matter.
+  conflictCheck: { type: "non_resource", reason: "workflow" },
+  conflictCheckMatter: { type: "non_resource", reason: "association" },
   contact: { type: "resource", resourceType: RESOURCE_TYPE.CONTACT },
   // Correspondence is matter-scoped; it has no portable ResourceRef kind.
   correspondence: { type: "non_resource", reason: "subresource" },

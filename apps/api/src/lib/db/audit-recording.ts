@@ -315,6 +315,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   agent_skill_comment: "other",
   agent_skill_proposal: "other",
   ai_memory: "other",
+  conflict_check: "other",
   announcement: "other",
   billing_code: "other",
   chat_file: "other",

@@ -430,6 +430,8 @@
         "statusNeedsEvidence": "وُضعت علامة «يحتاج إلى أدلة»",
         "statusReviewed": "وُضعت علامة «روجع»"
       },
+      "carriedFrom": "من تحقق {date}",
+      "carriedFromEarlier": "من تحقق سابق",
       "empty": "لا إجراءات مراجعة بعد.",
       "filters": {
         "allKinds": "أي إجراء",
@@ -506,6 +508,21 @@
     },
     "runs": {
       "back": "جميع المستندات",
+      "carryOver": {
+        "openSource": "فتح تحقق {date}",
+        "outcomes": {
+          "ambiguous": "عدة تطابقات محتملة",
+          "textChanged": "تغيّرت الصياغة",
+          "unmatched": "لا يوجد ادعاء مطابق",
+          "verdictChanged": "تغيّرت النتيجة"
+        },
+        "summary": {
+          "carried": "نُقل: {count, number}",
+          "carriedAndMissed": "نُقل: {carried, number} · لم يُنقل: {missed, number}",
+          "label": "المراجعات من تحقق {date}: نُقل {carried, number}، ولم يُنقل {missed, number}",
+          "missed": "لم يُنقل: {count, number}"
+        }
+      },
       "errors": {
         "accessRevoked": "توقف التحقق لأن الوصول غير متاح.",
         "aiUnavailable": "لا يتوفر أي نموذج ذكاء اصطناعي للتحقق من المستندات. تحقق من إعدادات الذكاء الاصطناعي للمؤسسة.",
@@ -5794,6 +5811,7 @@
         "clause_category": "فئة البنود",
         "clause_template_link": "ربط البند بالقالب",
         "clause_variant": "صيغة البند",
+        "conflict_check": "فحص تضارب المصالح",
         "contact": "جهة اتصال",
         "contact_directory": "دليل جهات الاتصال",
         "data_export": "تصدير البيانات",

@@ -126,6 +126,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
           "20261005120200_list_verification_force_rls",
           "20261005120300_list_verification_access_revoked",
           "20261110120000_legal_list_claim_qualifiers",
+          "20261112025400_legal_list_claim_carry_over",
         ]) {
           const source = await Bun.file(
             new URL(

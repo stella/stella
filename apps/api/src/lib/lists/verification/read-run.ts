@@ -8,12 +8,14 @@
 
 import { panic } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
+  legalListClaimCarryOutcomes,
   legalListClaimReviewEvents,
   legalListClaims,
   legalListFactDetails,
@@ -22,6 +24,7 @@ import {
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { readFactTiers, readSourceKinds } from "@/api/lib/lists/fact-tiers";
 import { factTier } from "@/api/lib/lists/source-kind";
 import type {
@@ -570,6 +573,115 @@ export const readVerifiedClaim = async ({
   });
 };
 
+type ReadRunClaimsForCarryArgs = {
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"legalListVerificationRun">;
+};
+
+/**
+ * A run's claims as carrying review decisions forward matches them: words,
+ * place, and the grade the run wrote. The caller resolves a reviewed
+ * claim's grade through its fold (`gradeOf`); claims per run are capped by
+ * their position check.
+ */
+export const readRunClaimsForCarry = async ({
+  tx,
+  workspaceId,
+  runId,
+}: ReadRunClaimsForCarryArgs) =>
+  await readBounded(
+    tx
+      .select({
+        id: legalListClaims.id,
+        text: legalListClaims.text,
+        anchor: legalListClaims.anchor,
+        state: legalListClaims.state,
+        recordConflict: legalListClaims.recordConflict,
+      })
+      .from(legalListClaims)
+      .where(
+        and(
+          eq(legalListClaims.workspaceId, workspaceId),
+          eq(legalListClaims.runId, runId),
+        ),
+      )
+      .orderBy(asc(legalListClaims.position)),
+    VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX,
+  );
+
+/**
+ * What the run carried from the previous run of its document: the run it
+ * read, how many reviewed claims came across whole, and the ones that did
+ * not (their words as that run has them, why, and the claim they matched
+ * when one did). `null` when nothing was there to carry.
+ */
+const readCarryOver = async ({
+  tx,
+  workspaceId,
+  runId,
+}: ReadVerificationRunArgs) => {
+  const outcomes = legalListClaimCarryOutcomes;
+  // One outcome per claim of the previous run, whose claims are capped.
+  const read = await readBounded(
+    tx
+      .select({
+        sourceRunId: outcomes.sourceRunId,
+        sourceRunCreatedAt: legalListVerificationRuns.createdAt,
+        sourceClaimId: outcomes.sourceClaimId,
+        outcome: outcomes.outcome,
+        targetClaimId: outcomes.targetClaimId,
+        text: legalListClaims.text,
+      })
+      .from(outcomes)
+      .innerJoin(
+        legalListClaims,
+        and(
+          eq(legalListClaims.id, outcomes.sourceClaimId),
+          eq(legalListClaims.runId, outcomes.sourceRunId),
+          eq(legalListClaims.workspaceId, workspaceId),
+        ),
+      )
+      .innerJoin(
+        legalListVerificationRuns,
+        and(
+          eq(legalListVerificationRuns.id, outcomes.sourceRunId),
+          eq(legalListVerificationRuns.workspaceId, workspaceId),
+        ),
+      )
+      .where(
+        and(eq(outcomes.workspaceId, workspaceId), eq(outcomes.runId, runId)),
+      )
+      .orderBy(asc(legalListClaims.position)),
+    VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX,
+  );
+  const rows =
+    read.type === "complete"
+      ? read.rows
+      : panic("A run carried more outcomes than its source run has claims");
+  const [first] = rows;
+  if (first === undefined) {
+    return null;
+  }
+  return {
+    sourceRunId: first.sourceRunId,
+    sourceRunCreatedAt: first.sourceRunCreatedAt.toISOString(),
+    carriedCount: rows.filter((row) => row.outcome === "carried").length,
+    notCarried: rows.flatMap((row) =>
+      row.outcome === "carried"
+        ? []
+        : [
+            {
+              sourceClaimId: row.sourceClaimId,
+              text: row.text,
+              outcome: row.outcome,
+              targetClaimId: row.targetClaimId,
+            },
+          ],
+    ),
+  };
+};
+
 /** `null` when the workspace holds no such run. */
 export const readVerificationRun = async ({
   tx,
@@ -648,6 +760,7 @@ export const readVerificationRun = async ({
     startedAt: run.startedAt?.toISOString() ?? null,
     finishedAt: run.finishedAt?.toISOString() ?? null,
     blocks,
+    carryOver: await readCarryOver({ tx, workspaceId, runId }),
     claims: claims.map((claim) =>
       presentClaim({
         claim,
