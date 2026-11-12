@@ -120,6 +120,42 @@
     "wave": "stored-document-objects-dry-run"
   },
   {
+    "source": "cz-ns",
+    "parserVersion": 30,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-nss",
+    "parserVersion": 36,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-us",
+    "parserVersion": 42,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-regional",
+    "parserVersion": 25,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "sk-courts",
+    "parserVersion": 31,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "sk-us",
+    "parserVersion": 27,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
     "source": "pl-uodo",
     "parserVersion": 19,
     "type": "pending-enrolment-wave",

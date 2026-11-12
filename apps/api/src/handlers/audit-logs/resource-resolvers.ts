@@ -215,6 +215,10 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  [AUDIT_RESOURCE_TYPE.DATA_EXPORT]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",

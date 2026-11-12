@@ -517,6 +517,9 @@ export const ENUM_COLUMN_ROLES = {
   organization_access_states: {
     origin: ATTRIBUTE,
   },
+  organization_data_exports: {
+    version_scope: ATTRIBUTE,
+  },
   organization_settings: {
     ai_billing_drafts_mode: ATTRIBUTE,
     document_processing_mode: ATTRIBUTE,

@@ -88,6 +88,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "oauth_grant_revocations",
   "oauth_refresh_token",
   "organization_creation_requests",
+  "organization_data_exports",
   "organization_professional_use_acceptances",
   "pdf_signing_sessions",
   "pending_uploads",

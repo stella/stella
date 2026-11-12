@@ -35,6 +35,7 @@ export const AUDIT_RESOURCE_TYPE = {
   CHAT_FILE: "chat_file",
   CHAT_MESSAGE: "chat_message",
   CHAT_THREAD: "chat_thread",
+  DATA_EXPORT: "data_export",
   CHAT_TOOL_EXECUTION: "chat_tool_execution",
   CHAT_TOOL_GRANT: "chat_tool_grant",
   /** A standing approval for chat's browser actions on one website. */

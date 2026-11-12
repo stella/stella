@@ -99,6 +99,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.usage_event",
   [AUDIT_RESOURCE_TYPE.USAGE_PROVIDER_EVENT]:
     "settings.organization.auditResourceKinds.usage_provider_event",
+  [AUDIT_RESOURCE_TYPE.DATA_EXPORT]:
+    "settings.organization.auditResourceKinds.data_export",
   [AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION]:
     "settings.organization.auditResourceKinds.desktop_edit_session",
   [AUDIT_RESOURCE_TYPE.BILINGUAL_TRANSLATION_RUN]:

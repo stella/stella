@@ -142,6 +142,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `contacts.search` | read | stella:read | — | generic invoke → `stella capability contacts search` |
 | `contacts.update` | write | stella:contacts_write | — | covered by `save_contact` |
 
+## data-exports
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `data-exports.get` | read | stella:admin_read | — | generic invoke → `stella capability data-exports get` |
+| `data-exports.list` | read | stella:admin_read | — | generic invoke → `stella capability data-exports list` |
+
 ## dictation
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -813,6 +820,7 @@ mechanics, and similar), not gaps in coverage.
 | mcp_transport | 12 |
 | native_device | 5 |
 | native_tool_ui | 10 |
+| organization_export | 2 |
 | provider_secret | 33 |
 | public_indexing | 10 |
 | realtime_stream | 9 |
