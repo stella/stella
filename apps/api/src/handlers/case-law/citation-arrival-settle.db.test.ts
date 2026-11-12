@@ -35,6 +35,9 @@ let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
 const sourceId = createSafeId<"caseLawSource">();
+// A case number is unique within a source, so a second holder of a key can
+// only come from another court's source.
+const otherSourceId = createSafeId<"caseLawSource">();
 const citing = createSafeId<"caseLawDecision">();
 
 const base = {
@@ -48,9 +51,10 @@ const base = {
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  await db
-    .insert(caseLawSources)
-    .values({ id: sourceId, adapterKey: "cz-ns", name: "arrival settle" });
+  await db.insert(caseLawSources).values([
+    { id: sourceId, adapterKey: "cz-ns", name: "arrival settle" },
+    { id: otherSourceId, adapterKey: "cz-regional", name: "other court" },
+  ]);
   await db.insert(caseLawDecisions).values({
     ...base,
     id: citing,
@@ -71,13 +75,21 @@ type Arrival = {
   caseNumber: string;
   key: string;
   decisionDate: string;
+  source?: SafeId<"caseLawSource">;
 };
 
 /** Store a decision and its identifier as a row write does, then announce it. */
-const storeArrival = async ({ id, caseNumber, key, decisionDate }: Arrival) =>
+const storeArrival = async ({
+  id,
+  caseNumber,
+  key,
+  decisionDate,
+  source = sourceId,
+}: Arrival) =>
   await runCitationGraphTransaction(db.transaction.bind(db), async (tx) => {
     await tx.insert(caseLawDecisions).values({
       ...base,
+      sourceId: source,
       id,
       caseNumber,
       citationKey: key,
@@ -169,6 +181,7 @@ test("a second holder of the key retracts the first link in the same write", asy
     caseNumber: "29 Cdo 61/2017",
     key,
     decisionDate: "2018-01-15",
+    source: otherSourceId,
   });
 
   // Two holders and nothing in the citation that tells them apart: unlinked,

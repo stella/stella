@@ -1050,6 +1050,17 @@ const writeCitationResolutionCursor = async (
   `);
 };
 
+/** Settle the unsettled citations a write names, inside that write. */
+const settleSelectedCitations = async (
+  tx: CitationGraphTransaction,
+  selection: SQL,
+): Promise<CitationResolutionCounts> => {
+  // audit: skip — derived citation graph, not a user action
+  const result: unknown = await tx.execute(resolutionStatement(selection));
+  const row = executedRows(result).at(0);
+  return isRecord(row) ? countsOf(row) : EMPTY_COUNTS;
+};
+
 /**
  * Settle the citations of one decision, in the transaction that just wrote
  * them.
@@ -1066,14 +1077,11 @@ const writeCitationResolutionCursor = async (
 export const resolveCitationsForDecision = async (
   tx: CitationGraphTransaction,
   decisionId: SafeId<"caseLawDecision">,
-): Promise<CitationResolutionCounts> => {
-  // audit: skip — derived citation graph, not a user action
-  const result: unknown = await tx.execute(
-    resolutionStatement(sql`AND c.citing_decision_id = ${decisionId}::uuid`),
+): Promise<CitationResolutionCounts> =>
+  await settleSelectedCitations(
+    tx,
+    sql`AND c.citing_decision_id = ${decisionId}::uuid`,
   );
-  const row = executedRows(result).at(0);
-  return isRecord(row) ? countsOf(row) : EMPTY_COUNTS;
-};
 
 /** A citation about to be written, in the columns classification reads. */
 export type UnwrittenCitation = {
@@ -1279,16 +1287,14 @@ export const settleReopenedCitations = async (
   }
   // One jsonb parameter, so the statement's text is the same whatever the
   // number of rows and one prepared plan serves every write.
-  // audit: skip — derived citation graph, not a user action
-  const result: unknown = await tx.execute(
-    resolutionStatement(sql`
+  return await settleSelectedCitations(
+    tx,
+    sql`
       AND c.id = ANY (ARRAY(
         SELECT jsonb_array_elements_text(${JSON.stringify(ids)}::text::jsonb)::uuid
       ))
-    `),
+    `,
   );
-  const row = executedRows(result).at(0);
-  return isRecord(row) ? countsOf(row) : EMPTY_COUNTS;
 };
 
 export type ReopenCitationsForKeyOptions = {
