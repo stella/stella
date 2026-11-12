@@ -91,7 +91,10 @@ mod tests {
     for first in &searches {
       for second in &searches {
         let tagged = [
-          first.iter().map(|key| (*key, "keychain")).collect::<Vec<_>>(),
+          first
+            .iter()
+            .map(|key| (*key, "keychain"))
+            .collect::<Vec<_>>(),
           second.iter().map(|key| (*key, "token")).collect(),
         ];
         let everything: Vec<Found> = tagged.iter().flatten().copied().collect();

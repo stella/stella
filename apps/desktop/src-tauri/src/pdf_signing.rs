@@ -291,7 +291,11 @@ pub async fn dialog_listing() -> DialogListing {
   DialogListing {
     state: listing.state,
     state_message_key: listing.state_message_key,
-    identities: listing.identities.iter().map(DialogIdentity::from).collect(),
+    identities: listing
+      .identities
+      .iter()
+      .map(DialogIdentity::from)
+      .collect(),
   }
 }
 
@@ -1138,8 +1142,11 @@ fn open_dialog(
     return Err("A PDF signing dialog is already open.".to_string());
   }
 
-  let listed: Vec<DialogIdentity> =
-    content.identities.iter().map(DialogIdentity::from).collect();
+  let listed: Vec<DialogIdentity> = content
+    .identities
+    .iter()
+    .map(DialogIdentity::from)
+    .collect();
   // Everything the dialog renders travels in the hash, the session token
   // included in what does not: the webview never sees it. The dialog holds no
   // strings of its own, so its wording rides along and it renders in the
