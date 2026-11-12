@@ -425,10 +425,11 @@ test("a new chat on the remembered computer opens nothing by itself; its send op
   act(() => {
     result.current.openDesktopForSend();
   });
+  const launching = getDesktopLaunch().pending();
 
   expect(desktop.open).toHaveBeenCalledTimes(1);
   expect(desktop.open).toHaveBeenCalledWith(DESKTOP_PING_URL);
-  expect(await getDesktopLaunch().pending()?.outcome).toBe("connected");
+  expect(await launching?.outcome).toBe("connected");
   expect(desktop.open).toHaveBeenCalledTimes(1);
 });
 
@@ -457,10 +458,11 @@ test("choosing the computer while none is connected opens stella desktop on that
   act(() => {
     runOn.select(CODEX);
   });
+  const launching = getDesktopLaunch().pending();
 
   expect(desktop.open).toHaveBeenCalledTimes(1);
   expect(desktop.open).toHaveBeenCalledWith(DESKTOP_PING_URL);
+  expect(await launching?.outcome).toBe("connected");
   await server.releaseNext();
-  expect(await getDesktopLaunch().pending()?.outcome).toBe("connected");
   expect(desktop.open).toHaveBeenCalledTimes(1);
 });
