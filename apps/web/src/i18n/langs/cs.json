@@ -1957,6 +1957,7 @@
       "refusalNoComputer": "Žádný z vašich počítačů není připojen. Otevřete stella desktop a odešlete zprávu znovu.",
       "refusalPermissionAboveLimit": "Vaše organizace tato oprávnění programovacímu agentovi ve vašem počítači nepovoluje. Vyberte jinou možnost v nabídce Oprávnění.",
       "refusalPermissionUnavailable": "Programovací agent ve vašem počítači s těmito oprávněními běžet nemůže. Vyberte jinou možnost v nabídce Oprávnění.",
+      "refusalReasoningEffortUnavailable": "Programovací agent ve vašem počítači tuto úroveň uvažování pro daný model nenabízí. Vyberte jinou v nabídce Úroveň uvažování.",
       "refusalTooLarge": "Tato konverzace je příliš dlouhá na předání do vašeho počítače. Pro spuštění tam začněte nový chat.",
       "refusalUnavailable": "Spouštění chatů ve vašem počítači není pro váš účet dostupné.",
       "runOn": "Spustit na",

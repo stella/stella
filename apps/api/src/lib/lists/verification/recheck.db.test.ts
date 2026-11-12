@@ -325,6 +325,7 @@ const fakeGrader = () => {
         grades: [
           {
             claimId: "C1",
+            statedDate: null,
             verdict: "supported",
             score: 84,
             refs: [{ factId: "F2", rel: "supports" }],
@@ -406,6 +407,7 @@ const graderAnswering = (promptIds: readonly string[]) => {
       return {
         grades: promptIds.map((claimId) => ({
           claimId,
+          statedDate: null,
           verdict: "supported",
           score: 80,
           refs: [{ factId: "F2", rel: "supports" }],
@@ -476,6 +478,13 @@ test("a re-check appends its grade and never rewrites the claim", async () => {
       },
       // The board minute reads as the run pinned it; only the transfer is new.
       facts: { removed: [] },
+      // The words date the claim, so the grader is not needed for it.
+      assertedOn: {
+        type: "dated",
+        source: "text",
+        date: "2021-04-05",
+        precision: "day",
+      },
     },
   });
   const payload = events.at(0)?.payload;

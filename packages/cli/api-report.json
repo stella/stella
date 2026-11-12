@@ -244,6 +244,7 @@
         "./capabilities/matters.duplicate.json",
         "./capabilities/matters.justifications.list.json",
         "./capabilities/matters.list.json",
+        "./capabilities/matters.member-candidates.list.json",
         "./capabilities/matters.members.add.json",
         "./capabilities/matters.members.list.json",
         "./capabilities/matters.members.remove.json",

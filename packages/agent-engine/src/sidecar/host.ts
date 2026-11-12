@@ -328,6 +328,7 @@ const probeOutcome = ({
       id: model.id,
       label: model.displayName === "" ? model.id : model.displayName,
       isDefault: model.isDefault,
+      reasoningEfforts: [...model.reasoningEfforts],
     })),
   };
 };
@@ -893,6 +894,7 @@ export class SidecarHost {
       networkHosts: declared.hosts,
       toolPath: message.toolPath,
       model: message.model,
+      reasoningEffort: message.reasoningEffort,
       instructions: message.instructions,
       policy: message.policy,
       mcp: binding.value,

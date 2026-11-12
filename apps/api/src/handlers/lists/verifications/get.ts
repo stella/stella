@@ -36,6 +36,10 @@ const config = {
     "words is not detected), null when the list holds more facts than one " +
     "check reads. Nothing is graded again until asked: re-check those " +
     "claims with lists.verifications.claim-rechecks.bulk.create. " +
+    "`assertedOn` is the date the claim's words give (`dated`, with a " +
+    "`day`, `month` or `year` precision stored as its first day and its " +
+    "`source`: the words, or the grader when they name no complete date), " +
+    "or `none`. " +
     "`carryOver` says what the run took from the previous run of the same " +
     "document and list. Notes and fact links follow a claim with the same " +
     "words or with edited words in the same paragraph or page; other " +

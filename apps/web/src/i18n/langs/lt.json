@@ -1957,6 +1957,7 @@
       "refusalNoComputer": "Nė vienas jūsų kompiuteris neprijungtas. Atidarykite stella desktop ir siųskite dar kartą.",
       "refusalPermissionAboveLimit": "Jūsų organizacija neleidžia programavimo agentui jūsų kompiuteryje veikti su šiais leidimais. Pasirinkite kitą parinktį meniu Leidimai.",
       "refusalPermissionUnavailable": "Programavimo agentas jūsų kompiuteryje negali veikti su šiais leidimais. Pasirinkite kitą parinktį meniu Leidimai.",
+      "refusalReasoningEffortUnavailable": "Programavimo agentas jūsų kompiuteryje šiam modeliui nesiūlo šio samprotavimo lygio. Pasirinkite kitą meniu Samprotavimo lygis.",
       "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
       "runOn": "Paleisti",

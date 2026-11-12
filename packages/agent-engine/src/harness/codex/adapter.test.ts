@@ -164,6 +164,7 @@ const turnInput = (
   threadId: "stella-thread-1",
   workspaceDir,
   model: "gpt-test",
+  reasoningEffort: null,
   instructions: "Use the stella MCP server.",
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
@@ -269,6 +270,18 @@ describe("Codex adapter over a stdio app-server", () => {
         context: { usedTokens: 150, windowTokens: FAKE_CONTEXT_WINDOW },
       },
     });
+  });
+
+  test("asks the model for the run's reasoning effort on turn/start, and for none when the run leaves it to the harness", async () => {
+    const turnStart = (
+      received: readonly { method?: string; params?: unknown }[],
+    ) => received.find(({ method }) => method === "turn/start")?.params;
+    const chosen = await run("tool_calls", {
+      overrides: { reasoningEffort: "high" },
+    });
+    expect(turnStart(chosen.received())).toMatchObject({ effort: "high" });
+    const left = await run("tool_calls");
+    expect(turnStart(left.received())).not.toHaveProperty("effort");
   });
 
   test("its one approval mode runs in the workspace sandbox, asks before leaving it, and writes caches to the package cache", async () => {
@@ -1246,7 +1259,7 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
-  test("a probe reports version, account, visible models and capabilities without a session", async () => {
+  test("a probe reports version, account, visible models with the efforts stella knows, and capabilities without a session", async () => {
     const harness = harnessFor("probe");
     const probed = await harness.adapter.probe();
     if (Result.isError(probed)) {
@@ -1260,7 +1273,7 @@ describe("Codex adapter over a stdio app-server", () => {
           id: "gpt-test",
           displayName: "GPT Test",
           isDefault: true,
-          reasoningEfforts: ["medium"],
+          reasoningEfforts: ["medium", "high"],
           inputModalities: ["text", "image"],
         },
       ],

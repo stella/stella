@@ -9,6 +9,7 @@ import { useShallow } from "zustand/shallow";
 
 import type { ContactType } from "@stll/api-contract";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { getPossibleDuplicateMatters } from "@stll/api-contract/matter-duplicates";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -33,7 +34,6 @@ import {
   ContactPicker,
 } from "@/components/contact-picker";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { getPossibleDuplicateMatters } from "@/components/workspaces/create-matter-dialog.logic";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useCreateContact } from "@/lib/contacts/mutations";

@@ -13,6 +13,7 @@ import {
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH,
   DESKTOP_RUNNER_NETWORK_POLICIES,
+  DESKTOP_RUNNER_REASONING_EFFORTS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
   desktopRunnerAttachmentSchema,
   desktopRunnerQuestionAnswersSchema,
@@ -314,6 +315,8 @@ export const sidecarHostMessageSchema = v.variant("type", [
     /** The chat's own cache folder, writable in every sandbox. */
     cacheDir: absolutePathSchema,
     model: modelIdSchema,
+    /** The effort the turn asks the model for; `null` leaves it to the harness. */
+    reasoningEffort: v.nullable(v.picklist(DESKTOP_RUNNER_REASONING_EFFORTS)),
     instructions: v.pipe(v.string(), v.maxLength(65_536)),
     messages: v.pipe(
       v.array(modelMessageSchema),
@@ -472,6 +475,10 @@ const probeOutcomeSchema = v.variant("type", [
           id: modelIdSchema,
           label: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
           isDefault: v.boolean(),
+          reasoningEfforts: v.pipe(
+            v.array(v.picklist(DESKTOP_RUNNER_REASONING_EFFORTS)),
+            v.maxLength(DESKTOP_RUNNER_REASONING_EFFORTS.length),
+          ),
         }),
       ),
       v.maxLength(MAX_MODELS),

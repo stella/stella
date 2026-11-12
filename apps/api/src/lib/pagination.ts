@@ -118,10 +118,10 @@ const hasControlCharacter = (text: string): boolean => {
  *
  * The test is the one property every encoder here shares: base64 of readable
  * text. Deliberately no length rule; `WzIwXQ` (`[20]`) is a whole cursor, and
- * `encodeGlobalSearchCursor` concatenates two base64 payloads around `==`, so
- * no single length class covers the surface. What that costs is that a decimal
- * offset cursor (`10`) falls outside the class: such a surface passes its own
- * predicate rather than being read by this one.
+ * a global search cursor issued behind an offset prefix is two base64 payloads
+ * around `==`, so no single length class covers the surface. What that costs
+ * is that a decimal offset cursor (`10`) falls outside the class: such a
+ * surface passes its own predicate rather than being read by this one.
  */
 export const isIssuablePaginationCursor = (value: string): boolean => {
   if (!CURSOR_ALPHABET.test(value)) {
