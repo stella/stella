@@ -680,6 +680,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("field-parts-inside-field.fixture.tsx", [
     "field-parts-inside-field/field-parts-inside-field",
   ]),
+  fixtureRuleOverride("no-dom-node-poll-assertion.fixture.tsx", [
+    "no-dom-node-poll-assertion/no-dom-node-poll-assertion",
+  ]),
   fixtureRuleOverride("no-secret-in-log-sink.fixture.ts", [
     "no-secret-in-log-sink/no-secret-in-log-sink",
   ]),
@@ -2337,6 +2340,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
+    "./.oxlint-plugins/no-dom-node-poll-assertion.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
     "./.oxlint-plugins/require-polite-publisher-fetch.ts",
@@ -4555,6 +4559,18 @@ const config = defineConfig({
       ],
       rules: {
         "field-parts-inside-field/field-parts-inside-field": "error",
+      },
+    },
+    {
+      // A failing polled assertion on a DOM node formats the whole happy-dom
+      // graph and blocks the event loop for seconds on every poll.
+      files: [
+        "apps/*/src/**/*.test.{ts,tsx}",
+        "packages/*/src/**/*.test.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-dom-node-poll-assertion.fixture.tsx",
+      ],
+      rules: {
+        "no-dom-node-poll-assertion/no-dom-node-poll-assertion": "error",
       },
     },
     {
