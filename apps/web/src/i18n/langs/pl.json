@@ -2094,7 +2094,7 @@
       "modelDefault": "Domyślny (zalecany)",
       "placeState": "{place}. {state}",
       "yourComputer": "Twój komputer",
-      "yourComputerDescription": "Korzysta z Codex lub Claude Code na Twoim komputerze w ramach Twojej własnej subskrypcji. Może odczytywać i zmieniać pliki w folderze tego czatu i pyta przed uruchomieniem poleceń."
+      "yourComputerDescription": "Korzysta z Codex lub Claude Code na Twoim komputerze w ramach Twojej własnej subskrypcji. Może odczytywać i zmieniać pliki w folderze tego czatu; uprawnienia określają, co może zrobić bez pytania."
     },
     "selection": {
       "askInNewChat": "Zapytaj w nowym czacie",

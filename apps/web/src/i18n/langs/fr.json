@@ -2094,7 +2094,7 @@
       "modelDefault": "Par défaut (recommandé)",
       "placeState": "{place}. {state}",
       "yourComputer": "Votre ordinateur",
-      "yourComputerDescription": "Utilise Codex ou Claude Code sur votre ordinateur avec votre propre abonnement. Il peut lire et modifier les fichiers du dossier de cette conversation et demande avant d’exécuter des commandes."
+      "yourComputerDescription": "Utilise Codex ou Claude Code sur votre ordinateur avec votre propre abonnement. Il peut lire et modifier les fichiers du dossier de cette conversation ; ses autorisations fixent ce qu’il peut faire sans demander."
     },
     "selection": {
       "askInNewChat": "Demander dans une nouvelle conversation",

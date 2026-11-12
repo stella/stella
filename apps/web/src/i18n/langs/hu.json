@@ -2094,7 +2094,7 @@
       "modelDefault": "Alapértelmezett (ajánlott)",
       "placeState": "{place}. {state}",
       "yourComputer": "Az Ön számítógépe",
-      "yourComputerDescription": "A Codexet vagy a Claude Code-ot használja az Ön számítógépén, a saját előfizetésével. Olvashatja és módosíthatja a csevegés mappájában lévő fájlokat, és parancsok futtatása előtt rákérdez."
+      "yourComputerDescription": "A Codexet vagy a Claude Code-ot használja az Ön számítógépén, a saját előfizetésével. Olvashatja és módosíthatja a csevegés mappájában lévő fájlokat; az engedélyek határozzák meg, mit tehet rákérdezés nélkül."
     },
     "selection": {
       "askInNewChat": "Kérdés új csevegésben",

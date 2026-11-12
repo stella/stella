@@ -1656,7 +1656,7 @@
   "chat.runOn.modelDefault": "Default (recommended)",
   "chat.runOn.placeState": "{place}. {state}",
   "chat.runOn.yourComputer": "Your computer",
-  "chat.runOn.yourComputerDescription": "Uses Codex or Claude Code on your computer with your own subscription. It can read and change files in this chat's folder and asks before running commands.",
+  "chat.runOn.yourComputerDescription": "Uses Codex or Claude Code on your computer with your own subscription. It can read and change files in this chat's folder; its permissions decide what it does without asking.",
   "chat.selection.askInNewChat": "Ask in new chat",
   "chat.selection.quoteInReply": "Quote in reply",
   "chat.selection.quotedText": "“{quote}”",

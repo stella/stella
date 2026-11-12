@@ -2094,7 +2094,7 @@
       "modelDefault": "Predvolený (odporúčaný)",
       "placeState": "{place}. {state}",
       "yourComputer": "Váš počítač",
-      "yourComputerDescription": "Použije Codex alebo Claude Code vo vašom počítači s vaším vlastným predplatným. Môže čítať a meniť súbory v priečinku tohto chatu a pred spustením príkazov sa opýta."
+      "yourComputerDescription": "Použije Codex alebo Claude Code vo vašom počítači s vaším vlastným predplatným. Môže čítať a meniť súbory v priečinku tohto chatu; čo smie urobiť bez opýtania, určujú jeho oprávnenia."
     },
     "selection": {
       "askInNewChat": "Opýtať sa v novom chate",

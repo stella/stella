@@ -2094,7 +2094,7 @@
       "modelDefault": "Numatytasis (rekomenduojamas)",
       "placeState": "{place}. {state}",
       "yourComputer": "Jūsų kompiuteris",
-      "yourComputerDescription": "Naudoja Codex arba Claude Code jūsų kompiuteryje su jūsų pačių prenumerata. Gali skaityti ir keisti šio pokalbio aplanko failus, o prieš paleisdamas komandas paklausia."
+      "yourComputerDescription": "Naudoja Codex arba Claude Code jūsų kompiuteryje su jūsų pačių prenumerata. Gali skaityti ir keisti šio pokalbio aplanko failus; leidimai nustato, ką jis gali daryti neklausdamas."
     },
     "selection": {
       "askInNewChat": "Klausti naujame pokalbyje",

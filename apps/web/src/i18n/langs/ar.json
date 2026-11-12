@@ -2094,7 +2094,7 @@
       "modelDefault": "الافتراضي (موصى به)",
       "placeState": "{place}. {state}",
       "yourComputer": "حاسوبك",
-      "yourComputerDescription": "يستخدم Codex أو Claude Code على حاسوبك باشتراكك الخاص. يمكنه قراءة الملفات وتغييرها في مجلد هذه الدردشة، ويسألك قبل تشغيل الأوامر."
+      "yourComputerDescription": "يستخدم Codex أو Claude Code على حاسوبك باشتراكك الخاص. يمكنه قراءة الملفات وتغييرها في مجلد هذه الدردشة، وتحدد الأذونات ما يمكنه فعله دون أن يسألك."
     },
     "selection": {
       "askInNewChat": "اسأل في دردشة جديدة",

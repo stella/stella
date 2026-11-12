@@ -2094,7 +2094,7 @@
       "modelDefault": "Vaikimisi (soovitatud)",
       "placeState": "{place}. {state}",
       "yourComputer": "Sinu arvuti",
-      "yourComputerDescription": "Kasutab sinu arvutis Codexit või Claude Code'i sinu enda tellimusega. See saab lugeda ja muuta selle vestluse kausta faile ning küsib enne käskude käivitamist."
+      "yourComputerDescription": "Kasutab sinu arvutis Codexit või Claude Code'i sinu enda tellimusega. See saab lugeda ja muuta selle vestluse kausta faile; õigused määravad, mida see tohib küsimata teha."
     },
     "selection": {
       "askInNewChat": "Küsi uues vestluses",

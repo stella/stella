@@ -2094,7 +2094,7 @@
       "modelDefault": "Noklusējuma (ieteicams)",
       "placeState": "{place}. {state}",
       "yourComputer": "Jūsu dators",
-      "yourComputerDescription": "Izmanto Codex vai Claude Code jūsu datorā ar jūsu pašu abonementu. Tas var lasīt un mainīt failus šīs tērzēšanas mapē un pirms komandu palaišanas pajautā."
+      "yourComputerDescription": "Izmanto Codex vai Claude Code jūsu datorā ar jūsu pašu abonementu. Tas var lasīt un mainīt failus šīs tērzēšanas mapē; atļaujas nosaka, ko tas drīkst darīt bez jautāšanas."
     },
     "selection": {
       "askInNewChat": "Jautāt jaunā tērzēšanā",

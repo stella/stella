@@ -2094,7 +2094,7 @@
       "modelDefault": "Predeterminado (recomendado)",
       "placeState": "{place}. {state}",
       "yourComputer": "Tu ordenador",
-      "yourComputerDescription": "Usa Codex o Claude Code en tu ordenador con tu propia suscripción. Puede leer y cambiar archivos de la carpeta de este chat y pregunta antes de ejecutar comandos."
+      "yourComputerDescription": "Usa Codex o Claude Code en tu ordenador con tu propia suscripción. Puede leer y cambiar archivos de la carpeta de este chat; sus permisos deciden qué puede hacer sin preguntar."
     },
     "selection": {
       "askInNewChat": "Preguntar en un chat nuevo",
