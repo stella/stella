@@ -3,7 +3,6 @@ import { expect, test } from "bun:test";
 // 40,628 generated entries, with 3 OFAC aliases and 5 EU/UK aliases each.
 // Enforce an absolute retained-heap cap as well as a >50% reduction against
 // the legacy index measured on the same populated fixture.
-// oxlint-disable-next-line no-literal-document-byte-limit/no-literal-document-byte-limit -- a heap cap, equal to the document limit only by chance
 const INDEX_HEAP_CAP_BYTES = 200 * 1024 * 1024;
 const FIXTURE_ENTRIES = 40_628;
 const probePath = `${import.meta.dir}/test-fixtures/screening-memory-probe.ts`;

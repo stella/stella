@@ -1,25 +1,22 @@
 import { expect, test } from "bun:test";
 
-import {
-  MULTIPART_DOCUMENT_MAX_BYTES,
-  UPLOAD_DOCUMENT_MAX_BYTES,
-} from "../../packages/api-contract/src/limits.ts";
+import { UPLOAD_DOCUMENT_MAX_BYTES } from "../../packages/api-contract/src/document-version-upload.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const MIB = 1024 * 1024;
+const LIMIT_MIB = String(UPLOAD_DOCUMENT_MAX_BYTES / MIB);
 
-test("rejects the document limits written out as products and literals", async () => {
+test("rejects the document limit written out as products and literals", async () => {
   expect(
     await lintSingleRule(
       "no-literal-document-byte-limit",
       [
-        `const MAX_REFERENCED_DOCX_BYTES = ${String(UPLOAD_DOCUMENT_MAX_BYTES / MIB)} * 1024 * 1024;`,
+        `const MAX_REFERENCED_DOCX_BYTES = ${LIMIT_MIB} * 1024 * 1024;`,
         `const policy = { maxBytes: ${String(UPLOAD_DOCUMENT_MAX_BYTES)} };`,
-        `const tooLarge = ${String(UPLOAD_DOCUMENT_MAX_BYTES / MIB)} * 1024 * 1024 + 1;`,
-        `const formMax = ${String(MULTIPART_DOCUMENT_MAX_BYTES / MIB)} * 1024 * 1024;`,
+        `const tooLarge = ${LIMIT_MIB} * 1024 * 1024 + 1;`,
       ].join("\n"),
     ),
-  ).toEqual([1, 2, 3, 4]);
+  ).toEqual([1, 2, 3]);
 });
 
 test("accepts other byte budgets and the imported constant", async () => {
@@ -36,22 +33,21 @@ test("accepts other byte budgets and the imported constant", async () => {
   ).toEqual([]);
 });
 
-test("exempts the owner module and the CLI copy generated from it", async () => {
-  const source = `export const UPLOAD_DOCUMENT_MAX_BYTES = ${String(UPLOAD_DOCUMENT_MAX_BYTES / MIB)} * 1024 * 1024;`;
-  expect(
-    await lintSingleRule("no-literal-document-byte-limit", source, {
-      sourcePath: "packages/api-contract/src/document-version-upload.ts",
-    }),
-  ).toEqual([]);
-  expect(
-    await lintSingleRule("no-literal-document-byte-limit", source, {
-      sourcePath:
-        "packages/cli/src/generated/document-version-upload-transport.ts",
-    }),
-  ).toEqual([]);
-  expect(
-    await lintSingleRule("no-literal-document-byte-limit", source, {
-      sourcePath: "packages/api-contract/src/other.ts",
-    }),
-  ).toEqual([1]);
+test("exempts the owner, its generated CLI copy and the listed coincident budgets", async () => {
+  const source = `export const LIMIT = ${LIMIT_MIB} * 1024 * 1024;`;
+  const paths = [
+    "packages/api-contract/src/document-version-upload.ts",
+    "packages/cli/src/generated/document-version-upload-transport.ts",
+    "packages/api-contract/src/skill-runner.ts",
+    "packages/api-contract/src/other.ts",
+  ];
+  const reported = await Promise.all(
+    paths.map(
+      async (sourcePath) =>
+        await lintSingleRule("no-literal-document-byte-limit", source, {
+          sourcePath,
+        }),
+    ),
+  );
+  expect(reported).toEqual([[], [], [], [1]]);
 });

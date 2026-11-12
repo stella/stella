@@ -19,6 +19,6 @@ export default {
     kind: "custom-rule",
     rule: "no-literal-document-byte-limit",
     reason:
-      "Reports a numeric literal or product of literals equal to either limit in `apps/*/src` and `packages/*/src` outside the owner and its generated CLI copy.",
+      "Reports a numeric literal or product of literals equal to the document limit in `apps/*/src` and `packages/*/src` outside the owner, its generated CLI copy and the listed coincident budgets.",
   },
 } as const satisfies OwnershipEntry;

@@ -67,7 +67,8 @@ describe("admitMultipartRequest", () => {
       });
 
       expect(Result.isOk(await admitMultipartRequest(request))).toBe(admitted);
-      expect(request.bodyUsed).toBe(false);
+      // A refused form is never read; an admitted one is handed on bounded.
+      expect(request.bodyUsed).toBe(admitted);
     },
   );
 
