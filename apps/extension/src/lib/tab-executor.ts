@@ -49,7 +49,6 @@ import {
   readContainedTabs,
   readTabOwner,
   reclaimControlledTab,
-  releaseContainedTabs,
   switchContainedTab,
 } from "./tab-containment";
 
@@ -202,23 +201,6 @@ export const readControlledTabId = async (
 ): Promise<number | null> => {
   const state = await readControlledTabState();
   return state?.controllerId === controllerId ? state.tabId : null;
-};
-
-/**
- * Hands the browser to `controllerId`: another controller's controlled tab
- * stops being controlled, and every contained tab goes back to the member,
- * in the same step. Returns whether anything was taken over.
- */
-export const takeOverControl = async (
-  controllerId: string,
-): Promise<boolean> => {
-  const state = await readControlledTabState();
-  if (state?.controllerId === controllerId) {
-    return false;
-  }
-  await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
-  await releaseContainedTabs();
-  return true;
 };
 
 /** Returns whether `tabId` was the controlled tab. */
@@ -687,55 +669,60 @@ const runPageOperation = async (
           }
         }
       };
-      rememberSensitiveFields(document);
-      // From the first injection on, secret values are learned as they
-      // change, not only when a command looks: a password typed while the
-      // user has the tab, then shown by a page that swaps or retypes the
-      // field, is still known. Installed once per document, in the
-      // extension's isolated world, where the page cannot remove it.
-      const WATCH_KEY = "stellaSecretWatch";
-      if (Reflect.get(globalThis, WATCH_KEY) !== true) {
-        Reflect.set(globalThis, WATCH_KEY, true);
-        const learn = (node: unknown) => {
-          if (node instanceof Element) {
-            rememberSecretValue(node);
-          }
-        };
-        const onEdit = (event: Event) => {
-          learn(event.composedPath().at(0));
-        };
-        document.addEventListener("input", onEdit, true);
-        document.addEventListener("change", onEdit, true);
-        new MutationObserver((records) => {
-          for (const record of records) {
-            if (
-              record.type === "attributes" &&
-              record.attributeName === "type" &&
-              record.oldValue?.toLowerCase() === "password" &&
-              record.target instanceof Element
-            ) {
-              sensitiveHistory.add(record.target);
+      // Learns the page's secret values and keeps learning them. Runs only
+      // once a desktop sign-in refusal is ruled out: a page handed to the
+      // member is never read, so none of its values are kept.
+      const learnSecrets = () => {
+        rememberSensitiveFields(document);
+        // From the first injection on, secret values are learned as they
+        // change, not only when a command looks: a password typed while the
+        // user has the tab, then shown by a page that swaps or retypes the
+        // field, is still known. Installed once per document, in the
+        // extension's isolated world, where the page cannot remove it.
+        const WATCH_KEY = "stellaSecretWatch";
+        if (Reflect.get(globalThis, WATCH_KEY) !== true) {
+          Reflect.set(globalThis, WATCH_KEY, true);
+          const learn = (node: unknown) => {
+            if (node instanceof Element) {
+              rememberSecretValue(node);
             }
-            learn(record.target);
-            for (const removed of record.removedNodes) {
-              if (removed instanceof Element) {
-                learn(removed);
-                for (const field of removed.querySelectorAll(
-                  "input, textarea",
-                )) {
-                  learn(field);
+          };
+          const onEdit = (event: Event) => {
+            learn(event.composedPath().at(0));
+          };
+          document.addEventListener("input", onEdit, true);
+          document.addEventListener("change", onEdit, true);
+          new MutationObserver((records) => {
+            for (const record of records) {
+              if (
+                record.type === "attributes" &&
+                record.attributeName === "type" &&
+                record.oldValue?.toLowerCase() === "password" &&
+                record.target instanceof Element
+              ) {
+                sensitiveHistory.add(record.target);
+              }
+              learn(record.target);
+              for (const removed of record.removedNodes) {
+                if (removed instanceof Element) {
+                  learn(removed);
+                  for (const field of removed.querySelectorAll(
+                    "input, textarea",
+                  )) {
+                    learn(field);
+                  }
                 }
               }
             }
-          }
-        }).observe(document, {
-          attributeFilter: ["autocomplete", "id", "name", "type"],
-          attributeOldValue: true,
-          attributes: true,
-          childList: true,
-          subtree: true,
-        });
-      }
+          }).observe(document, {
+            attributeFilter: ["autocomplete", "id", "name", "type"],
+            attributeOldValue: true,
+            attributes: true,
+            childList: true,
+            subtree: true,
+          });
+        }
+      };
       // A rect(...) clip or a clip-path that leaves nothing to see.
       const clippedAway = (style: CSSStyleDeclaration) => {
         // Computed as `rect(top, right, bottom, left)`; `auto` edges parse
@@ -1155,6 +1142,7 @@ const runPageOperation = async (
       if (refusedSignIn !== null) {
         return refusedSignIn;
       }
+      learnSecrets();
 
       if (pageOperation.kind === "snapshot") {
         const interactiveSelector = [
@@ -1769,6 +1757,8 @@ export type AdoptControlledTabResult =
 export const adoptControlledTab = async (
   controllerId: string,
   tab: chrome.tabs.Tab,
+  /** Takes the browser back for this connection, once the tab qualifies. */
+  takeOver: (() => Promise<void>) | null,
 ): Promise<AdoptControlledTabResult> => {
   const [controller, stellaTabs] = await Promise.all([
     readBrowserController(),
@@ -1782,6 +1772,9 @@ export const adoptControlledTab = async (
     parseControllableUrl(tab.url) === null
   ) {
     return { status: "unsupported-page" };
+  }
+  if (takeOver !== null) {
+    await takeOver();
   }
   // The user's hand-over always succeeds: at chat's tab limit the oldest of
   // chat's other tabs stays confined but is no longer chat's.
@@ -1903,6 +1896,12 @@ type ExecuteBrowserCommandOptions = {
   signal: AbortSignal;
   /** How a page that asks for a sign-in is treated; set by the transport. */
   signIn: SignInPolicy;
+  /**
+   * For an `open` by a controller that does not hold the browser: hands it
+   * over, run once every check of the open passed and right before the tab
+   * changes. `null` when the controller holds it already.
+   */
+  takeOver: (() => Promise<void>) | null;
 };
 
 /** The tab's top document now; see `TopDocument`. */
@@ -1963,7 +1962,7 @@ type CommandProgress = { dispatched: boolean };
 
 type CommandRun = Pick<
   ExecuteBrowserCommandOptions,
-  "budget" | "signal" | "signIn"
+  "budget" | "signal" | "signIn" | "takeOver"
 > & {
   controllerId: string;
   progress: CommandProgress;
@@ -2009,7 +2008,7 @@ const runOpen = async (
     BrowserControlCommand,
     { action: typeof BROWSER_CONTROL_ACTION.open }
   >,
-  { budget, controllerId, progress, signal, signIn }: CommandRun,
+  { budget, controllerId, progress, signal, signIn, takeOver }: CommandRun,
 ): Promise<BrowserControlResult> => {
   const requested = parseControllableUrl(command.url);
   if (requested === null) {
@@ -2032,6 +2031,14 @@ const runOpen = async (
   const overBudget = await budget.charge();
   if (overBudget !== null) {
     return budgetExceeded(overBudget);
+  }
+  // Nothing refused the page: only now may the browser change hands.
+  if (takeOver !== null) {
+    if (isStopped(signal)) {
+      await budget.refund();
+      return cancelled();
+    }
+    await takeOver();
   }
   progress.dispatched = true;
   const opened = await openControlledTab(controllerId, requested, {
@@ -2375,10 +2382,23 @@ const runElementAction = async (
 const runBrowserCommand = async (
   controllerId: string,
   command: BrowserControlCommand,
-  { budget, observedTab, signal, signIn }: ExecuteBrowserCommandOptions,
+  {
+    budget,
+    observedTab,
+    signal,
+    signIn,
+    takeOver,
+  }: ExecuteBrowserCommandOptions,
   progress: CommandProgress,
 ): Promise<BrowserControlResult> => {
-  const run: CommandRun = { budget, controllerId, progress, signal, signIn };
+  const run: CommandRun = {
+    budget,
+    controllerId,
+    progress,
+    signal,
+    signIn,
+    takeOver,
+  };
   try {
     if (isStopped(signal)) {
       return cancelled();

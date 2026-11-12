@@ -7,6 +7,12 @@ import {
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
+import {
+  admitControl,
+  CONTROL_ADMISSION,
+  CONTROL_TRANSPORT,
+  takeOverControl,
+} from "./control-owner";
 import { SIGN_IN_POLICY, type SignInPolicy } from "./sign-in-policy";
 import { releaseToUser } from "./tab-containment";
 import {
@@ -14,7 +20,6 @@ import {
   executeBrowserCommand,
   forgetControlledTab,
   replaceControlledTab,
-  takeOverControl,
 } from "./tab-executor";
 
 type TabChange = { status?: string; url?: string };
@@ -344,11 +349,13 @@ const run = async (
     observedTab = OBSERVED_TAB,
     signal = new AbortController().signal,
     signIn = SIGN_IN_POLICY.withholdSecrets,
+    takeOver = null,
   }: {
     budget?: ReturnType<typeof createBudget>["budget"];
     observedTab?: typeof OBSERVED_TAB | null;
     signal?: AbortSignal;
     signIn?: SignInPolicy;
+    takeOver?: (() => Promise<void>) | null;
   } = {},
 ) =>
   await executeBrowserCommand(CONTROLLER_ID, command, {
@@ -356,20 +363,124 @@ const run = async (
     observedTab,
     signal,
     signIn,
+    takeOver,
   });
 
 describe("taking the browser over", () => {
-  test("ends another controller's control, and leaves its own alone", async () => {
-    const installed = installFakeChrome();
-    expect(await takeOverControl(CONTROLLER_ID)).toBe(false);
-    expect(installed.session["browserControlledTab"]).toBeDefined();
+  const DESKTOP_ID = "desktop:thread-1";
 
-    expect(await takeOverControl("desktop:thread-1")).toBe(true);
-    expect(installed.session["browserControlledTab"]).toBeUndefined();
-    // Nothing is left for the previous controller to act on.
-    expect(await run({ action: "snapshot" })).toMatchObject({
-      code: BROWSER_CONTROL_ERROR_CODE.noControlledTab,
+  test("a desktop takeover leaves the web connection nothing to list, switch to or act on", async () => {
+    installFakeChrome();
+    for (const action of ["open", "snapshot", "switch-tab", "click"] as const) {
+      expect(
+        await admitControl({
+          action,
+          controllerId: CONTROLLER_ID,
+          transport: CONTROL_TRANSPORT.web,
+        }),
+      ).toBe(CONTROL_ADMISSION.holds);
+    }
+    // A desktop chat without the browser may only open a page.
+    expect(
+      await admitControl({
+        action: "snapshot",
+        controllerId: DESKTOP_ID,
+        transport: CONTROL_TRANSPORT.desktop,
+      }),
+    ).toBe(CONTROL_ADMISSION.refused);
+    expect(
+      await admitControl({
+        action: "open",
+        controllerId: DESKTOP_ID,
+        transport: CONTROL_TRANSPORT.desktop,
+      }),
+    ).toBe(CONTROL_ADMISSION.takesOver);
+
+    await takeOverControl(DESKTOP_ID);
+    // Every command of the web connection is refused before it runs,
+    // including a new tab, which would list the desktop's tabs, and a
+    // tab switch, which would read one.
+    for (const action of ["open", "snapshot", "switch-tab", "click"] as const) {
+      expect(
+        await admitControl({
+          action,
+          controllerId: CONTROLLER_ID,
+          transport: CONTROL_TRANSPORT.web,
+        }),
+      ).toBe(CONTROL_ADMISSION.refused);
+    }
+    // Another desktop chat is refused as well, unless it opens a page.
+    expect(
+      await admitControl({
+        action: "switch-tab",
+        controllerId: "desktop:thread-2",
+        transport: CONTROL_TRANSPORT.desktop,
+      }),
+    ).toBe(CONTROL_ADMISSION.refused);
+    expect(
+      await admitControl({
+        action: "snapshot",
+        controllerId: DESKTOP_ID,
+        transport: CONTROL_TRANSPORT.desktop,
+      }),
+    ).toBe(CONTROL_ADMISSION.holds);
+  });
+
+  test("a refused open leaves the previous holder's tab and rules exactly as they were", async () => {
+    const installed = installFakeChrome();
+    installed.session["browserContainedTabs"] = {
+      adoptedTabIds: [],
+      chatTabIds: [],
+      controlledTabId: CONTROLLED_TAB_ID,
+      controlledUserNavigated: false,
+      openedTabIds: [],
+      userTabIds: [9],
+    };
+    const before = structuredClone(installed.session);
+    const takeOver = async () => {
+      await takeOverControl(DESKTOP_ID);
+    };
+
+    // An address the origin policy refuses.
+    expect(
+      await run({ action: "open", url: "https://10.0.0.1/" }, { takeOver }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.navigationFailed });
+    // A spent budget.
+    expect(
+      await run(
+        { action: "open", url: PAGE_URL },
+        { budget: createBudget(0).budget, takeOver },
+      ),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.budgetExceeded });
+    expect(installed.session).toEqual(before);
+  });
+
+  test("an open nothing refused hands the browser over before the tab changes", async () => {
+    const installed = installFakeChrome();
+    installed.handlers["snapshot"] = () => [
+      {
+        frameId: 0,
+        result: frameSnapshot("Library", "https://example.com/next"),
+      },
+    ];
+    const order: string[] = [];
+    installed.log.push = new Proxy(installed.log.push, {
+      apply: (target, thisArg, entries: string[]) => {
+        order.push(...entries);
+        return Reflect.apply(target, thisArg, entries);
+      },
     });
+    await run(
+      { action: "open", url: "https://example.com/next" },
+      {
+        takeOver: async () => {
+          order.push("take-over");
+          await takeOverControl(DESKTOP_ID);
+        },
+      },
+    );
+    expect(order.at(0)).toBe("take-over");
+    expect(installed.session["browserControlOwner"]).toBe(DESKTOP_ID);
   });
 });
 
@@ -420,6 +531,136 @@ describe("a page that asks for a sign-in", () => {
       { signIn: SIGN_IN_POLICY.handToMember },
       { signIn: SIGN_IN_POLICY.withholdSecrets },
     ]);
+  });
+
+  test("the page script refuses a sign-in before it reads or watches anything", async () => {
+    const { handlers } = installFakeChrome();
+    const injected: {
+      func: ((operation: unknown) => unknown) | undefined;
+      operation: unknown;
+    } = { func: undefined, operation: undefined };
+    handlers["snapshot"] = (injection) => {
+      injected.func = injection.func;
+      injected.operation = injection.args?.[0];
+      return [{ frameId: 0, result: { refused: "sign-in" } }];
+    };
+    await run({ action: "snapshot" }, desktop);
+    const { func, operation } = injected;
+    if (func === undefined) {
+      throw new TypeError("No script was injected.");
+    }
+
+    // A login form on an ordinary site: one visible password field whose
+    // value the member has typed. Reading its value, listening for input
+    // or observing the document would keep the credential.
+    const touched: string[] = [];
+    class FakeElement {
+      parentElement = null;
+      shadowRoot = null;
+      getAttribute(name: string) {
+        return name === "type" ? "password" : null;
+      }
+      getClientRects() {
+        return [{}];
+      }
+      getBoundingClientRect() {
+        return { bottom: 20, height: 20, right: 100, width: 100 };
+      }
+      getRootNode() {
+        return {};
+      }
+      closest() {
+        return null;
+      }
+      querySelectorAll() {
+        return [];
+      }
+    }
+    class FakeInput extends FakeElement {
+      id = "password";
+      name = "password";
+      type = "password";
+      get value() {
+        touched.push("value");
+        return "typed-secret-6612";
+      }
+    }
+    const field = new FakeInput();
+    const style = {
+      clip: "auto",
+      clipPath: "none",
+      color: "rgb(0, 0, 0)",
+      display: "block",
+      fontSize: "16px",
+      opacity: "1",
+      overflowX: "visible",
+      overflowY: "visible",
+      textIndent: "0px",
+      visibility: "visible",
+      getPropertyValue: () => "",
+    };
+    const globals: Record<string, unknown> = {
+      document: {
+        addEventListener: () => touched.push("listener"),
+        querySelectorAll: () => [field],
+      },
+      Element: FakeElement,
+      HTMLInputElement: FakeInput,
+      // Kinds the page has none of: nothing is an instance.
+      HTMLSelectElement: class {
+        readonly kind = "select";
+      },
+      HTMLTextAreaElement: class {
+        readonly kind = "textarea";
+      },
+      MutationObserver: class {
+        constructor() {
+          touched.push("observer");
+        }
+
+        observe() {
+          touched.push("observe");
+        }
+      },
+      ShadowRoot: class {
+        readonly kind = "shadow-root";
+      },
+      window: {
+        getComputedStyle: () => style,
+        location: { href: "https://library.example/login" },
+        origin: "https://library.example",
+        scrollX: 0,
+        scrollY: 0,
+      },
+    };
+    const saved = Object.keys(globals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+    );
+    for (const [key, value] of Object.entries(globals)) {
+      Object.defineProperty(globalThis, key, { configurable: true, value });
+    }
+    try {
+      expect(func(operation)).toEqual({ refused: "sign-in" });
+      const kept: unknown = Reflect.get(globalThis, "stellaSecretValues");
+      expect(kept instanceof Set ? [...kept] : []).toEqual([]);
+      expect(Reflect.get(globalThis, "stellaSecretWatch")).toBeUndefined();
+      expect(touched).toEqual([]);
+    } finally {
+      for (const [key, descriptor] of saved) {
+        if (descriptor === undefined) {
+          Reflect.deleteProperty(globalThis, key);
+        } else {
+          Object.defineProperty(globalThis, key, descriptor);
+        }
+      }
+      for (const key of [
+        "stellaSecretValues",
+        "stellaSensitiveFields",
+        "stellaSecretWatch",
+      ]) {
+        Reflect.deleteProperty(globalThis, key);
+      }
+    }
   });
 
   test("on an identity provider's page is never injected into", async () => {
@@ -666,18 +907,20 @@ describe("controlled tab confinement", () => {
       await adoptControlledTab(
         CONTROLLER_ID,
         userTab(CONTROLLER_TAB_ID, PAGE_URL),
+        null,
       ),
     ).toEqual({ status: "unsupported-page" });
     expect(
       await adoptControlledTab(
         CONTROLLER_ID,
         userTab(5, "https://my.stll.app/matters"),
+        null,
       ),
     ).toEqual({ status: "unsupported-page" });
     expect(log).toEqual([]);
 
     expect(
-      await adoptControlledTab(CONTROLLER_ID, userTab(5, PAGE_URL)),
+      await adoptControlledTab(CONTROLLER_ID, userTab(5, PAGE_URL), null),
     ).toEqual({ status: "adopted", tabId: 5, url: PAGE_URL });
     expect(log).toEqual([
       `rules:except:${CONTROLLER_TAB_ID},${CONTROLLED_TAB_ID},-1`,
@@ -965,7 +1208,11 @@ describe("chat's tabs", () => {
       { frameId: 0, result: frameSnapshot("Invoice") },
     ];
     expect(
-      await adoptControlledTab(CONTROLLER_ID, userTab(handedOver, PAGE_URL)),
+      await adoptControlledTab(
+        CONTROLLER_ID,
+        userTab(handedOver, PAGE_URL),
+        null,
+      ),
     ).toMatchObject({ status: "adopted" });
     expect(
       await run(
@@ -1107,7 +1354,7 @@ describe("chat's tabs", () => {
       controlledTabId: CONTROLLED_TAB_ID,
       controlledUserNavigated: false,
       openedTabIds: [CONTROLLER_TAB_ID],
-      userTabIds: [USER_TAB_ID],
+      userTabIds: [9],
     };
     expect(
       await run(switchTo(CONTROLLER_TAB_ID, "https://my.stll.app/chat"), {

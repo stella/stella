@@ -6,6 +6,7 @@ import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
+  type BrowserControlErrorCode,
   type BrowserControlResult,
   type BrowserExtensionRequest,
   type BrowserExtensionResponse,
@@ -19,6 +20,12 @@ import {
 } from "../lib/access";
 import { browserControlError } from "../lib/browser-control-result";
 import { storedCommandBudget } from "../lib/command-budget";
+import {
+  admitControl,
+  CONTROL_ADMISSION,
+  CONTROL_TRANSPORT,
+  takeOverControl,
+} from "../lib/control-owner";
 import { createControlSession } from "../lib/control-session";
 import {
   controllerForSender,
@@ -50,7 +57,6 @@ import {
   sortCommittedNavigation,
   sortNavigationTarget,
 } from "../lib/opened-tabs";
-import { parseControllableUrl } from "../lib/origin-policy";
 import {
   isExtensionPageSender,
   parsePopupRequest,
@@ -74,7 +80,6 @@ import {
   forgetControlledTab,
   readControlledTabId,
   replaceControlledTab,
-  takeOverControl,
 } from "../lib/tab-executor";
 import { trustedStellaOriginFromUrl } from "../lib/trusted-origin";
 
@@ -210,21 +215,30 @@ type ControlledCommand = Pick<
 > & {
   /**
    * Checked inside the session, once changes queued ahead of the command
-   * have been applied; a result refuses the command. `null` for none.
+   * have been applied: refuses the command, or admits it, with the takeover
+   * an `open` runs once nothing refused it.
    */
-  admit: (() => Promise<BrowserControlResult | null>) | null;
+  admit: () => Promise<Admission>;
   signIn: SignInPolicy;
-  /**
-   * Runs right before the command executes, after the ledger found no
-   * earlier result for it; `null` for none.
-   */
-  beforeExecute: (() => Promise<void>) | null;
 };
+
+type Admission =
+  | { type: "refused"; result: BrowserControlResult }
+  | { type: "admitted"; takeOver: (() => Promise<void>) | null };
+
+const ADMITTED = { takeOver: null, type: "admitted" } as const;
+
+const refused = (
+  code: BrowserControlErrorCode,
+  message: string,
+): Admission => ({
+  result: browserControlError(code, message),
+  type: "refused",
+});
 
 /** One command from either transport, through the one control session. */
 const runControlledCommand = async ({
   admit,
-  beforeExecute,
   command,
   controllerId,
   observedTab,
@@ -233,9 +247,9 @@ const runControlledCommand = async ({
   turnId,
 }: ControlledCommand): Promise<BrowserControlResult> => {
   const execution = await session.runCommand(turnId, async (signal) => {
-    const refusal = admit === null ? null : await admit();
-    if (refusal !== null) {
-      return refusal;
+    const admission = await admit();
+    if (admission.type === "refused") {
+      return admission.result;
     }
     if (!(await hasAllSiteAccess())) {
       return browserControlError(
@@ -246,15 +260,14 @@ const runControlledCommand = async ({
     return await executeAtMostOnce({
       command,
       controllerId,
-      execute: async () => {
-        await beforeExecute?.();
-        return await executeBrowserCommand(controllerId, command, {
+      execute: async () =>
+        await executeBrowserCommand(controllerId, command, {
           budget: storedCommandBudget({ command, controllerId, turnId }),
           observedTab,
           signal,
           signIn,
-        });
-      },
+          takeOver: admission.takeOver,
+        }),
       toolCallId,
     });
   });
@@ -273,14 +286,26 @@ const runCommand = async (
   await runControlledCommand({
     admit: async () => {
       const controller = await controllerForSender(senderUrl);
-      return controller?.controllerId === message.controllerId
-        ? null
-        : browserControlError(
+      if (controller?.controllerId !== message.controllerId) {
+        return refused(
+          BROWSER_CONTROL_ERROR_CODE.staleController,
+          "Connect stella from the extension popup before using browser actions.",
+        );
+      }
+      // While a desktop chat holds the browser, this connection lists,
+      // switches to and acts on nothing.
+      const admission = await admitControl({
+        action: message.command.action,
+        controllerId: controller.controllerId,
+        transport: CONTROL_TRANSPORT.web,
+      });
+      return admission === CONTROL_ADMISSION.holds
+        ? ADMITTED
+        : refused(
             BROWSER_CONTROL_ERROR_CODE.staleController,
-            "Connect stella from the extension popup before using browser actions.",
+            "stella desktop is using the browser now. Connect stella again from the extension popup to take it back.",
           );
     },
-    beforeExecute: null,
     command: message.command,
     controllerId: message.controllerId,
     observedTab: message.observedTab,
@@ -304,9 +329,9 @@ const DESKTOP_ACTIONS: ReadonlySet<string> = new Set([
 /**
  * A command from a coding agent on this computer. Chrome only starts the
  * host for this extension and the member allowed it, so there is no pairing
- * to check. Its first page that will actually load takes the browser over
- * from whichever chat had it: that chat loses its controlled tab and its
- * tabs are handed back to the member, in one step.
+ * to check. A desktop chat that does not hold the browser may only open a
+ * page, which takes the browser over once nothing refused it: the previous
+ * holder loses its controlled tab and its tabs go back to the member.
  */
 const runDesktopCommand = async (
   message: DesktopCommand,
@@ -320,13 +345,30 @@ const runDesktopCommand = async (
     );
   }
   const result = await runControlledCommand({
-    admit: null,
-    beforeExecute: async () => {
-      if (
-        command.action === BROWSER_CONTROL_ACTION.open &&
-        parseControllableUrl(command.url) !== null
-      ) {
-        await takeOverControl(controllerId);
+    admit: async () => {
+      const admission = await admitControl({
+        action: command.action,
+        controllerId,
+        transport: CONTROL_TRANSPORT.desktop,
+      });
+      switch (admission) {
+        case CONTROL_ADMISSION.holds:
+          return ADMITTED;
+        case CONTROL_ADMISSION.takesOver:
+          return {
+            takeOver: async () => {
+              await takeOverControl(controllerId);
+            },
+            type: "admitted",
+          };
+        case CONTROL_ADMISSION.refused:
+          return refused(
+            BROWSER_CONTROL_ERROR_CODE.noControlledTab,
+            "Another chat is using the browser. Open a page to take it over.",
+          );
+        default:
+          admission satisfies never;
+          return panic("Unhandled control admission");
       }
     },
     command,
@@ -452,7 +494,21 @@ const handlePopupRequest = async (
         if (controller === null || tab === null) {
           return { status: "unsupported-tab" };
         }
-        const adopted = await adoptControlledTab(controller.controllerId, tab);
+        // Handing a tab over takes the browser back from a desktop chat.
+        const { controllerId } = controller;
+        const adopted = await adoptControlledTab(
+          controllerId,
+          tab,
+          (await admitControl({
+            action: BROWSER_CONTROL_ACTION.snapshot,
+            controllerId,
+            transport: CONTROL_TRANSPORT.web,
+          })) === CONTROL_ADMISSION.holds
+            ? null
+            : async () => {
+                await takeOverControl(controllerId);
+              },
+        );
         if (adopted.status === "unsupported-page") {
           return { status: "unsupported-page" };
         }
