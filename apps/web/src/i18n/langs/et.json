@@ -2239,6 +2239,15 @@
       "field": "Väli",
       "input": "Sisend",
       "interrupted": "Katkes enne lõpetamist",
+      "localOutput": {
+        "cut": "Kuvatakse esimesed {kept} (kokku {total})",
+        "diff": "Muudatused",
+        "elsewhere": "Avage arvutis, kus see käivitati",
+        "empty": "Väljund puudub",
+        "failed": "stella töölauarakendus selles arvutis ei suutnud seda kuvada.",
+        "notKept": "Sellest sammust pole selles arvutis midagi salvestatud",
+        "reading": "Loetakse sellest arvutist"
+      },
       "output": "Väljund",
       "patternInPath": "{pattern} asukohas {path}",
       "readFile": "Faili lugemine",

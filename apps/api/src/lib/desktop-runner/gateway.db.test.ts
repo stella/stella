@@ -72,6 +72,7 @@ import {
   workspaceMembers,
 } from "@/api/db/schema";
 import { createMembershipSafeDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import {
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
@@ -149,6 +150,7 @@ import type {
   MintRunToken,
   RunnerTimers,
 } from "@/api/lib/desktop-runner/session";
+import { runOutputKey } from "@/api/lib/desktop-runner/step-output-grants";
 import {
   type DesktopRunnerDb,
   readNewestQueuedCommands,
@@ -162,6 +164,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { chatLocalFilesUndoScalingScenario } from "@/api/tests/read-scaling/chat-local-files-undo";
+import { chatLocalRunStepOutputGrantScalingScenario } from "@/api/tests/read-scaling/chat-local-run-step-output-grant";
 import { chatLocalRunnersScalingScenario } from "@/api/tests/read-scaling/chat-local-runners";
 import { desktopRunnerUpgradeScalingScenario } from "@/api/tests/read-scaling/desktop-runner-upgrade";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
@@ -4614,6 +4617,50 @@ describe("chat turns on a computer", () => {
     const large = await chatLocalRunnersScalingScenario.measure(fixture);
     expect(small.statements).toBeGreaterThan(0);
     expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+
+  test("the computer gets each run's output key, and a step output grant reads only the owner's one run", async () => {
+    const counted = createDesktopRunnerControl({
+      // SAFETY: PGlite and Bun SQL expose the same Drizzle query APIs.
+      db: asTestRaw<DesktopRunnerDb>(withQueryLogger(db, queryCountLogger)),
+      doorbell: sharedDoorbell,
+      now,
+      timing: TIMING,
+    });
+    const { desktopId, desktop } = shared();
+    const runId = await assignRun(desktopId);
+    const start = await desktop.receive("run.start", ofRun(runId));
+    // The key the grant derives from, which no stored command holds.
+    expect(start.outputKey).toBe(runOutputKey(env.BETTER_AUTH_SECRET, runId));
+    const [queued] = await db
+      .select({ payload: desktopRunnerCommands.payload })
+      .from(desktopRunnerCommands)
+      .where(eq(desktopRunnerCommands.runId, runId));
+    expect(JSON.stringify(queued?.payload)).not.toContain(start.outputKey);
+    desktop.send({ type: "run.accepted", runId });
+    const fixture = { control: counted, owner, runId };
+    const small =
+      await chatLocalRunStepOutputGrantScalingScenario.measure(fixture);
+    for (let index = 0; index < 20; index += 1) {
+      const other = await assignRun(desktopId);
+      await desktop.receive("run.start", ofRun(other));
+      desktop.send({ type: "run.accepted", runId: other });
+      desktop.send(textEvent(other, 1, "Working"));
+      await desktop.receive("ack", ofRun(other));
+    }
+    const large =
+      await chatLocalRunStepOutputGrantScalingScenario.measure(fixture);
+    expect(small.rows).toBe(1);
+    expect(readScalingViolations({ small, large })).toEqual([]);
+    // Another member's grant finds no run by that id.
+    expect(
+      (
+        await counted.readRun({
+          owner: { organizationId: ids.orgB, userId: ids.userB1 },
+          runId,
+        })
+      ).unwrap(),
+    ).toBeNull();
   });
 
   test("a computer that goes away mid-turn keeps the turn waiting until it returns, and the chat is told both", async () => {

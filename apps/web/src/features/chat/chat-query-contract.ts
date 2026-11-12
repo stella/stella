@@ -268,6 +268,17 @@ export const chatKeys = {
     threadId,
     turnId,
   ],
+  localRunStepOutput: (
+    activeOrganizationId: string,
+    userId: string,
+    callId: string,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "local-run-step-output",
+    callId,
+  ],
   browserSiteGrants: (activeOrganizationId: string, userId: string) => [
     ...chatKeys.all,
     activeOrganizationId,

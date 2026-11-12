@@ -163,6 +163,8 @@ const TOKEN_SHAPE = "t".repeat(DESKTOP_RUNNER_MAX_TOKEN_LENGTH);
 const ATTACHMENT_LINK_SHAPE = `https://${"l".repeat(
   DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH - "https://".length,
 )}`;
+/** A run's output key, derived when the command is sent. */
+const OUTPUT_KEY_SHAPE = "0".repeat(64);
 
 /** Whether `message`, as sent, fits one frame. */
 const fitsOneFrame = (message: unknown) =>
@@ -316,6 +318,7 @@ const startRun = async (
       token: TOKEN_SHAPE,
       expiresAt: deps.now().toISOString(),
     },
+    outputKey: OUTPUT_KEY_SHAPE,
   });
   if (!checked.success) {
     return Result.err(invalid(message.type, checked.issues));

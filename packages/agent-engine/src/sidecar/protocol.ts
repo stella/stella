@@ -141,6 +141,15 @@ export type SidecarHolderMode = (typeof SIDECAR_HOLDER_MODES)[number];
  */
 export const SIDECAR_CHECKPOINT_STORE_SUFFIX = ".checkpoints";
 
+/**
+ * Beside a run's folder, under the folder's name with this suffix, what the
+ * runs' steps produced (`step-outputs.ts`): one folder per run holding the
+ * run's output key, which the desktop writes, and one file per step, which
+ * the sidecar writes. The desktop serves them to a page on this computer and
+ * removes them with the folder.
+ */
+export const SIDECAR_STEP_OUTPUT_STORE_SUFFIX = ".step-outputs";
+
 /** Runs one `hello` may resume or list. */
 export const SIDECAR_MAX_HELD_RUNS = 1000;
 

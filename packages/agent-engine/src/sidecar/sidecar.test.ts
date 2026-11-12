@@ -21,6 +21,7 @@ import {
 } from "../../scripts/fake-claude-code-cli";
 import {
   FAKE_OUTDATED_VERSION,
+  FAKE_PRIVATE_TEXT,
   FAKE_THREAD_ID,
   type FakeScenario,
 } from "../../scripts/fake-codex-app-server";
@@ -41,6 +42,7 @@ import {
   sidecarMessageSchema,
   type SidecarRunMessage,
 } from "./protocol";
+import { stepOutputPath } from "./step-outputs";
 
 /**
  * The holder as the desktop runs it: a process serving the protocol on a
@@ -918,6 +920,39 @@ describe("harness holder over its socket", () => {
     );
     // Nothing after the run's last message.
     expect(client.messages.at(-1)).toMatchObject({ type: "run.finished" });
+  });
+
+  test("keeps a step's output and diff on this computer, and no message to the desktop carries them", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "native_tools");
+    await client.waitFor(is("run.finished", runId));
+    const workspaceDir = path.join(holder.root, "workspace");
+    const kept = (toolCallId: string) =>
+      readFileSync(
+        stepOutputPath({ workspaceDir, runId, toolCallId }),
+        "utf-8",
+      );
+    expect(kept("call-heredoc")).toBe(`{"bytes":22}\nzsh: permission denied`);
+    expect(kept("call-long")).toBe(`{"bytes":2}\nok`);
+    // An update keeps its diff; an added file's text reads as added lines.
+    const diff = [
+      "--- /workspace/drafts/lease.md",
+      "+++ /workspace/drafts/lease.md",
+      FAKE_PRIVATE_TEXT.diff,
+      "--- /workspace/drafts/notice.md",
+      "+++ /workspace/drafts/notice.md",
+      "+-Rent is due monthly.",
+      "++Rent is due quarterly.",
+      "",
+    ].join("\n");
+    expect(kept("call-edit")).toBe(
+      `{"bytes":${String(Buffer.byteLength(diff))}}\n${diff}`,
+    );
+    // What the API receives is what the desktop receives: none of it.
+    const sent = JSON.stringify(client.messages);
+    expect(sent).not.toContain("permission denied");
+    expect(sent).not.toContain("Rent is due");
   });
 
   test("hands the harness the loopback proxy and a run secret, never the run token", async () => {

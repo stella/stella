@@ -531,6 +531,7 @@
       },
       {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "attachments": [
@@ -584,6 +585,7 @@
       },
       {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "attachments": [],
@@ -805,6 +807,7 @@
       "direction": "server",
       "input": {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "attachments": [],
@@ -855,6 +858,7 @@
       },
       "parsed": {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "attachments": [],
@@ -1193,6 +1197,7 @@
         "name": "restricted network policy",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "attachments": [],
@@ -1244,6 +1249,7 @@
         "name": "home filesystem policy",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "attachments": [],
@@ -1295,6 +1301,7 @@
         "name": "unknown harness",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "attachments": [],
@@ -1346,6 +1353,7 @@
         "name": "run.start without an MCP binding",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "attachments": [],
@@ -1414,6 +1422,7 @@
         "name": "unknown approval mode",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "attachments": [],
@@ -1465,6 +1474,7 @@
         "name": "unknown reasoning effort",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "attachments": [],
@@ -1516,6 +1526,7 @@
         "name": "run.start without an approval mode",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "attachments": [],

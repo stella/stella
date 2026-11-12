@@ -44,6 +44,7 @@ use super::harness::{
   NotForwarded, RunOutput, RunSink,
 };
 use super::run_folders;
+use super::step_outputs;
 use crate::harness_sidecar::{
   self, HarnessLaunchSettings, HarnessProbe, HarnessProcess, HarnessSidecar,
   RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore, SidecarRunOutput,
@@ -944,6 +945,12 @@ impl HarnessHost for SidecarHarnessHost {
     }
     // Made with the folder; the one place outside it the run may write.
     let cache = run_folders::chat_cache(&workspace);
+    // Kept before the harness starts, so every step it keeps can be read.
+    if let Some(key) = &start.output_key
+      && let Err(error) = step_outputs::keep_key(&workspace, &start.run_id, &key.0)
+    {
+      tracing::warn!(target: LOG_TARGET, %error, "a run's output key was not kept");
+    }
     let credentials = cached.and_then(|cached| cached.credentials);
     let thread_id = start
       .harness_session_id

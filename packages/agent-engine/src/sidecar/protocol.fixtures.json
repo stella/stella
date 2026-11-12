@@ -55,7 +55,8 @@
       "folder_busy",
       "failed"
     ],
-    "checkpointStoreSuffix": ".checkpoints"
+    "checkpointStoreSuffix": ".checkpoints",
+    "stepOutputStoreSuffix": ".step-outputs"
   },
   "valid": {
     "host": [

@@ -29,6 +29,7 @@ import {
   type HarnessChatToolCallPart,
   isRunningToolPart,
 } from "@/components/chat/chat-ui-tools";
+import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
 import {
   localRunToolSubtitleText,
   localRunToolView,
@@ -731,58 +732,57 @@ const ToolCallCardComponent = ({
           />
         )}
       </Tooltip>
-      {expanded &&
-        (showMcpExactCall ||
-          codeToolSource !== undefined ||
-          showCodeToolOutput ||
-          toolInput !== undefined ||
-          hasOutput) && (
-          <div className="space-y-1 ps-2 pt-1 pb-2">
-            {showMcpExactCall && (
+      {expanded && canExpand && (
+        <div className="space-y-1 ps-2 pt-1 pb-2">
+          {showMcpExactCall && (
+            <ToolCallCodeBlock
+              code={JSON.stringify({ input: toolInput, tool: name }, null, 2)}
+              label={t("chat.toolCall.exactCall")}
+              language="json"
+              tone="call"
+            />
+          )}
+          {!showMcpExactCall &&
+            codeToolSource === undefined &&
+            toolInput !== undefined && (
               <ToolCallCodeBlock
-                code={JSON.stringify({ input: toolInput, tool: name }, null, 2)}
-                label={t("chat.toolCall.exactCall")}
+                code={JSON.stringify(toolInput, null, 2)}
+                label={t("chat.toolCall.input")}
                 language="json"
                 tone="call"
               />
             )}
-            {!showMcpExactCall &&
-              codeToolSource === undefined &&
-              toolInput !== undefined && (
-                <ToolCallCodeBlock
-                  code={JSON.stringify(toolInput, null, 2)}
-                  label={t("chat.toolCall.input")}
-                  language="json"
-                  tone="call"
-                />
-              )}
-            {codeToolSource !== undefined && (
-              <ToolCallCodeBlock
-                code={codeToolSource}
-                label={t("chat.toolCall.sourceCode")}
-                language="typescript"
-                lineNumbers
-                tone="call"
-              />
-            )}
-            {codeToolLogs.length > 0 && (
-              <ToolCallCodeBlock
-                code={codeToolLogs.join("\n")}
-                label={t("chat.toolCall.consoleLogs")}
-                language="text"
-                tone="result"
-              />
-            )}
-            {hasOutput && "output" in part && (
-              <ToolCallCodeBlock
-                code={JSON.stringify(part.output, null, 2)}
-                label={t("chat.toolCall.output")}
-                language="json"
-                tone="result"
-              />
-            )}
-          </div>
-        )}
+          {codeToolSource !== undefined && (
+            <ToolCallCodeBlock
+              code={codeToolSource}
+              label={t("chat.toolCall.sourceCode")}
+              language="typescript"
+              lineNumbers
+              tone="call"
+            />
+          )}
+          {codeToolLogs.length > 0 && (
+            <ToolCallCodeBlock
+              code={codeToolLogs.join("\n")}
+              label={t("chat.toolCall.consoleLogs")}
+              language="text"
+              tone="result"
+            />
+          )}
+          {hasOutput && "output" in part && (
+            <ToolCallCodeBlock
+              code={JSON.stringify(part.output, null, 2)}
+              label={t("chat.toolCall.output")}
+              language="json"
+              tone="result"
+            />
+          )}
+          <LocalRunStepOutputDetails
+            activeOrganizationId={activeOrganizationId}
+            part={part}
+          />
+        </div>
+      )}
       {hasError && errorMessage && (
         <ToolCallFailureDetails
           errorMessage={errorMessage}

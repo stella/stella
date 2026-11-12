@@ -26,6 +26,11 @@ pub(crate) const MAX_HELD_RUNS: usize = 1000;
 /// Beside a run's folder, the sidecar's checkpoints live under the folder's
 /// name with this suffix; removing a folder removes them too.
 pub(crate) const CHECKPOINT_STORE_SUFFIX: &str = ".checkpoints";
+/// Beside a run's folder, what its runs' steps produced lives under the
+/// folder's name with this suffix: `<runId>/key` (the run's output key, which
+/// the desktop writes) and `<runId>/<stepKey>` (a `{"bytes":<n>}` header line,
+/// then the step's kept bytes, which the sidecar writes).
+pub(crate) const STEP_OUTPUT_STORE_SUFFIX: &str = ".step-outputs";
 /// Hex characters of the holder's secret.
 pub(crate) const SECRET_HEX_LENGTH: usize = 64;
 
@@ -587,6 +592,10 @@ mod tests {
     assert_eq!(
       fixtures["vocabulary"]["checkpointStoreSuffix"].as_str(),
       Some(CHECKPOINT_STORE_SUFFIX)
+    );
+    assert_eq!(
+      fixtures["vocabulary"]["stepOutputStoreSuffix"].as_str(),
+      Some(STEP_OUTPUT_STORE_SUFFIX)
     );
   }
 

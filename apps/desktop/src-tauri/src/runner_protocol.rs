@@ -226,6 +226,18 @@ impl std::fmt::Debug for McpToken {
   }
 }
 
+/// The key a run's step outputs are read with: the desktop checks a page's
+/// grant against it, so `Debug` never prints it.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub(crate) struct OutputKey(pub(crate) String);
+
+impl std::fmt::Debug for OutputKey {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter.write_str("OutputKey(..)")
+  }
+}
+
 /// Answers to a blocking question, keyed by question id: option labels or
 /// free text. They may hold a secret the question asked for, so `Debug`
 /// prints only the question ids. Parsing enforces the contract's bounds.
@@ -482,6 +494,11 @@ pub(crate) struct RunStart {
   pub(crate) attachments: Vec<RunAttachment>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
+  /// The key a page's grant to read the run's step outputs derives from. An
+  /// API from before step outputs sends none, and its runs' outputs are kept
+  /// but never served.
+  #[serde(default)]
+  pub(crate) output_key: Option<OutputKey>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -876,6 +893,9 @@ mod tests {
       let debug = format!("{parsed:?}");
       for token in ["run-token-1", "run-token-2"] {
         assert!(!debug.contains(token), "{debug}");
+      }
+      if let Some(key) = message["outputKey"].as_str() {
+        assert!(!debug.contains(key), "{debug}");
       }
     }
   }

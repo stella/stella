@@ -125,6 +125,27 @@ export const localRunToolView = ({
   }
 };
 
+/** What a step's details show of what it produced on the computer. */
+export type LocalRunStepOutputKind = "command" | "diff";
+
+/**
+ * Whether a step produced something the member can open on the computer
+ * that ran it: a command's output or a change's diff. `null` for any other
+ * call, which keeps nothing there.
+ */
+export const localRunStepOutputKind = (
+  name: string,
+): LocalRunStepOutputKind | null => {
+  switch (name) {
+    case CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution:
+      return "command";
+    case CHAT_LOCAL_RUN_TOOL_NAMES.fileChange:
+      return "diff";
+    default:
+      return null;
+  }
+};
+
 /**
  * A subtitle as the row shows it. The two sentences that place a value in a
  * phrase are translated at the call site and passed in.

@@ -21,6 +21,7 @@ mod sidecar_host;
 )]
 mod sidecar_host_tests;
 mod state;
+pub(crate) mod step_outputs;
 #[cfg(test)]
 mod tests;
 
@@ -308,6 +309,16 @@ const RUNS_DIRECTORY: &str = "agent-runs";
 /// own beside its folder now; what is left here is removed once no holder of
 /// an earlier version, whose runs may still use it, is left.
 const RETIRED_PACKAGE_CACHE_DIRECTORY: &str = "agent-package-cache";
+
+/// Where the runs' folders are, with what sits beside each (its checkpoints,
+/// its step outputs, its cache); `None` without a data folder.
+pub(crate) fn run_folders_directory() -> Option<std::path::PathBuf> {
+  dirs::data_dir().map(|data| {
+    data
+      .join(crate::config::APP_DATA_DIR_NAME)
+      .join(RUNS_DIRECTORY)
+  })
+}
 
 /// The folders on this computer every run writes to, which a skill folder must
 /// stay out of.

@@ -2239,6 +2239,15 @@
       "field": "Pole",
       "input": "Vstup",
       "interrupted": "Přerušeno před dokončením",
+      "localOutput": {
+        "cut": "Zobrazeno prvních {kept} z {total}",
+        "diff": "Změny",
+        "elsewhere": "Otevřete na počítači, kde krok běžel",
+        "empty": "Žádný výstup",
+        "failed": "Desktopová aplikace stella na tomto počítači to nedokázala zobrazit.",
+        "notKept": "Z tohoto kroku není na tomto počítači nic uloženo",
+        "reading": "Načítání z tohoto počítače"
+      },
       "output": "Výstup",
       "patternInPath": "{pattern} v {path}",
       "readFile": "Čtení souboru",

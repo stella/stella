@@ -45,6 +45,7 @@ import {
   harnessSessionId,
 } from "../harness/events";
 import { readSkillFolderNetworkHosts } from "../harness/skill-network-hosts";
+import type { HarnessStepOutput } from "../harness/step-output";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import type { ProtocolLog } from "../protocol-log";
@@ -73,6 +74,7 @@ import type {
   SidecarRestoreOutcome,
   SidecarRunStart,
 } from "./protocol";
+import { keepStepOutput } from "./step-outputs";
 
 /**
  * The sidecar's command loop: any number of concurrent runs, one harness
@@ -953,6 +955,29 @@ export class SidecarHost {
     };
 
     /**
+     * Keep what a step produced on this computer, for the member to open
+     * here. The run goes on without it: the step's row then says its output
+     * is not on this computer.
+     */
+    const keepOutputOf = async (
+      toolCallId: string,
+      localOutput: HarnessStepOutput | undefined,
+    ) => {
+      if (localOutput === undefined) {
+        return;
+      }
+      const kept = await keepStepOutput({
+        workspaceDir: message.workspaceDir,
+        runId,
+        toolCallId,
+        output: localOutput,
+      });
+      if (Result.isError(kept)) {
+        this.options.log("a step's output was not kept on this computer");
+      }
+    };
+
+    /**
      * The adapter's events with harness request ids replaced by runner UUIDs.
      * An approval request is announced after the chunks of its event: the
      * mapper asks for the next event only once those are written.
@@ -1002,11 +1027,14 @@ export class SidecarHost {
             outcome.value = HARNESS_FAILURE_OUTCOME[event.failure.type];
             yield event;
             break;
+          case "tool.completed":
+            await keepOutputOf(event.toolCall.id, event.result.localOutput);
+            yield event;
+            break;
           case "text.delta":
           case "text.completed":
           case "reasoning.completed":
           case "tool.started":
-          case "tool.completed":
           case "retrying":
             yield event;
             break;

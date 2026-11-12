@@ -17,6 +17,7 @@ import {
   policyViolation,
 } from "@stll/api-contract/desktop-runner";
 
+import { env } from "@/api/env";
 import type {
   ApiServerWebSocket,
   ApiSocketSession,
@@ -34,6 +35,7 @@ import {
   openRunAnswer,
   storedRunAnswerSchema,
 } from "@/api/lib/desktop-runner/sealed-answers";
+import { runOutputKey } from "@/api/lib/desktop-runner/step-output-grants";
 import {
   claimRunnerSession,
   type DesktopRunnerDb,
@@ -339,7 +341,7 @@ type Composed =
 
 /**
  * A stored command as the message to send: a `run.start` with a fresh
- * token, a `run.answer` with its answers opened.
+ * token and its run's output key, a `run.answer` with its answers opened.
  */
 const compose = async (
   state: SessionState,
@@ -366,6 +368,7 @@ const compose = async (
       ...stored.output,
       attachments,
       mcp: { ...stored.output.mcp, ...token },
+      outputKey: runOutputKey(env.BETTER_AUTH_SECRET, command.runId),
     };
   }
   if (command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer) {

@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { AGENT_HARNESSES } from "./agent-harness";
 import { API_STORABLE_INSTANT_CHECK } from "./api-date";
 import { STELLA_API_VERSION_PREFIX } from "./api-version";
+import { chatLocalRunOutputKeySchema } from "./chat-local-run-step-output";
 import {
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   chatLocalRunShownText,
@@ -853,6 +854,12 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
       token: tokenSchema,
       expiresAt: instantSchema,
     }),
+    /**
+     * The key the run's step outputs are read with on the computer
+     * (`chat-local-run-step-output`). Derived when the command is sent, so a
+     * stored `run.start` never holds one.
+     */
+    outputKey: chatLocalRunOutputKeySchema,
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runInput),

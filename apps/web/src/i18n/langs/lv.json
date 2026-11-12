@@ -2239,6 +2239,15 @@
       "field": "Lauks",
       "input": "Ievade",
       "interrupted": "Pārtraukts pirms pabeigšanas",
+      "localOutput": {
+        "cut": "Rāda pirmos {kept} no {total}",
+        "diff": "Izmaiņas",
+        "elsewhere": "Atveriet datorā, kurā tas tika izpildīts",
+        "empty": "Nav izvades",
+        "failed": "stella darbvirsmas lietotne šajā datorā to nevarēja parādīt.",
+        "notKept": "No šī soļa šajā datorā nekas nav saglabāts",
+        "reading": "Notiek lasīšana no šī datora"
+      },
       "output": "Izvade",
       "patternInPath": "{pattern} ({path})",
       "readFile": "Faila lasīšana",

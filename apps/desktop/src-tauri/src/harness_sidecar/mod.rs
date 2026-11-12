@@ -61,7 +61,7 @@ use endpoint::Endpoints;
 pub(crate) use protocol::{
   CHECKPOINT_STORE_SUFFIX, FolderRestore as SidecarFolderRestore,
   HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
-  RestoreOutcome, SidecarRunStart, SkillFolderRef,
+  RestoreOutcome, STEP_OUTPUT_STORE_SUFFIX, SidecarRunStart, SkillFolderRef,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProbeFailure,
