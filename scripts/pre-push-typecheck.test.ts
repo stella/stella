@@ -64,11 +64,13 @@ const createRepository = (
   packages: Record<string, { typecheck: string; source?: string }>,
 ) => {
   const repository = mkdtempSync(path.join(os.tmpdir(), "pre-push-typecheck-"));
-  mkdirSync(path.join(repository, "apps", "web"), { recursive: true });
-  writeFileSync(
-    path.join(repository, "apps", "web", "package.json"),
-    JSON.stringify({ name: "@stll/web" }),
-  );
+  for (const app of ["api", "web"]) {
+    mkdirSync(path.join(repository, "apps", app), { recursive: true });
+    writeFileSync(
+      path.join(repository, "apps", app, "package.json"),
+      JSON.stringify({ name: `@stll/${app}` }),
+    );
+  }
   for (const [name, { typecheck, source = "export {};\n" }] of Object.entries(
     packages,
   )) {
