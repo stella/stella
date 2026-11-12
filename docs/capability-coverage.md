@@ -819,7 +819,7 @@ mechanics, and similar), not gaps in coverage.
 | chat_thread_ui | 26 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
-| document_processing | 26 |
+| document_processing | 27 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |

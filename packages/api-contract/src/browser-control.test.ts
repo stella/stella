@@ -3,15 +3,19 @@ import { describe, expect, test } from "bun:test";
 import {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_CONTENT_TRUST,
+  BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_CONTROL_TARGET_METADATA,
+  BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserControlCommand,
   type BrowserControlResult,
   formatElementReference,
   isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
   parseBrowserControlResult,
+  parseBrowserDesktopRequest,
+  parseBrowserDesktopResponse,
   parseBrowserExtensionPeerVersion,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
@@ -449,5 +453,73 @@ describe("extension peer version", () => {
     ["not an object", "stella-browser-extension"],
   ])("ignores %s", (_name, input) => {
     expect(parseBrowserExtensionPeerVersion(input)).toBeNull();
+  });
+});
+
+describe("stella desktop transport", () => {
+  const command = {
+    command: { action: "snapshot" },
+    controllerId: "thread-1",
+    observedTab: null,
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    requestId: "request-1",
+    source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
+    toolCallId: "call-1",
+    turnId: "run-1",
+    type: "command",
+  } as const;
+
+  test("takes commands only from stella desktop, at this protocol", () => {
+    expect(parseBrowserDesktopRequest(command)).toEqual(command);
+    expect(
+      parseBrowserDesktopRequest({
+        ...command,
+        source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserDesktopRequest({
+        ...command,
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+      }),
+    ).toBeNull();
+  });
+
+  test("reads a hello at any protocol, so a mismatch can be named", () => {
+    for (const protocolVersion of [
+      BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+    ]) {
+      expect(
+        parseBrowserDesktopRequest({
+          protocolVersion,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
+          type: "hello",
+        }),
+      ).not.toBeNull();
+      expect(
+        parseBrowserDesktopResponse({
+          protocolVersion,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "hello",
+        }),
+      ).not.toBeNull();
+    }
+  });
+
+  test("carries a sign-in refusal back as a result", () => {
+    const response = {
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      requestId: "request-1",
+      result: {
+        code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+        message: "This page asks for a sign-in.",
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        status: "error",
+      },
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "command-result",
+    } as const;
+    expect(parseBrowserDesktopResponse(response)).toEqual(response);
   });
 });

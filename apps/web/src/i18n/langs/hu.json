@@ -3359,6 +3359,8 @@
       "organizationMemberLimitReached": "Ez a szervezet elérte a tagok korlátját.",
       "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
+      "runActiveLimitReached": "A szervezet elérte az egyidejűleg futó feladatok korlátját. Várja meg, amíg az egyik befejeződik, majd próbálja újra.",
+      "runDailyLimitReached": "A szervezet elérte a feladatok napi korlátját. Próbálja újra éjfél után (Europe/Prague).",
       "sharepointAccessDenied": "A Microsoft megtagadta a hozzáférést ehhez a webhelyhez, dokumentumtárhoz vagy fájlhoz.",
       "sharepointFileTooLarge": "Ez a fájl túl nagy az importáláshoz.",
       "sharepointInvalidCursor": "A lista megváltozott a böngészés közben. Nyissa meg újra a mappát.",
@@ -3374,8 +3376,6 @@
       "validationRequired": "Egy kötelező mező üres.",
       "validationTooLong": "Túl hosszú: legfeljebb {limit, number} karakter lehet.",
       "validationTooShort": "Túl rövid: legalább {limit, number} karakter kell.",
-      "verificationActiveLimitReached": "A szervezet elérte az egyidejű ellenőrzések számának korlátját. Várja meg egy ellenőrzés befejezését, majd próbálja újra.",
-      "verificationDailyLimitReached": "A szervezet elérte az ellenőrzések napi korlátját. Próbálja újra éjfél után (Europe/Prague).",
       "versionConflict": "Valaki más módosította, miközben szerkesztette. Töltse újra az aktuális verzióért."
     },
     "failedToAcceptInvitation": "Nem sikerült elfogadni a meghívót",
