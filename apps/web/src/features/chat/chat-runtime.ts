@@ -21,6 +21,11 @@ import {
 } from "@stll/api-contract";
 import type { ChatSendRequest, ChatTurnIntent } from "@stll/api-contract";
 import {
+  isSameLocalRunQuestionPause,
+  type LocalRunQuestionPause,
+  localRunQuestionPauseOf,
+} from "@stll/api-contract/chat-local-run-question";
+import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   chatLocalRunComputerEventSchema,
   type ChatLocalRunComputerWait,
@@ -49,11 +54,6 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
-import {
-  isSameLocalRunQuestionPause,
-  type LocalRunQuestionPause,
-  localRunQuestionPauseOf,
-} from "@/components/chat/local-run-question.logic";
 import { createBrowserExtensionTool } from "@/features/chat/browser-control/browser-client-tool";
 import {
   BrowserBridgeUnmountedError,
