@@ -250,7 +250,7 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
     ),
   ).toBeTruthy();
   expect(view.getByText("Permissions")).toBeTruthy();
-  // The places alone: no permission mode to pick.
+  // The places and the chat's folder alone: no permission mode to pick.
   expect(
     view
       .getAllByRole("menuitemradio")
@@ -259,6 +259,7 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
     `${messages.chat.runOn.cloud}${messages.chat.runOn.cloudDescription}`,
     "Codex",
     "Claude Code",
+    messages.chat.localRun.folderOwn,
   ]);
 });
 

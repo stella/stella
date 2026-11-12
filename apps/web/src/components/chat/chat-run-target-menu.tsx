@@ -330,7 +330,7 @@ export const ChatRunTargetMenu = ({
         <>
           <MenuSeparator />
           <MenuRadioGroup value={runFolderValue(selected)}>
-            <MenuGroupLabel>{t("chat.localRun.folder")}</MenuGroupLabel>
+            <MenuGroupLabel>{t("common.folder")}</MenuGroupLabel>
             <MenuRadioItem
               onClick={() => choose(withRunFolder(selected, undefined))}
               value={CHAT_OWN_FOLDER_VALUE}

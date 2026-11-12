@@ -162,8 +162,8 @@ wire_values!(RejectReason {
   FolderUnreadable => "folder_unreadable",
 });
 
-/// How a folder linked on the computer stands, as `hello` and
-/// `linked_folders.status` report it.
+// How a folder linked on the computer stands, as `hello` and
+// `linked_folders.status` report it.
 wire_values!(LinkedFolderState {
   Available => "available",
   Offline => "offline",

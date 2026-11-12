@@ -10,6 +10,7 @@ import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -39,9 +40,7 @@ const answer = (approval: ChatLocalFolderApproval) => Result.ok({ approval });
  * folder is unlinked on the computer; linked again, it is asked again.
  * Idempotent.
  */
-export const createApproveLocalFolder = (
-  dependencies?: FolderApprovalDependencies,
-) =>
+const createApproveLocalFolder = (dependencies?: FolderApprovalDependencies) =>
   createSafeRootHandler(
     config,
     async function* ({
@@ -91,4 +90,12 @@ export const createApproveLocalFolder = (
     },
   );
 
-export default createApproveLocalFolder();
+const approveLocalFolder = createApproveLocalFolder();
+
+declareAggregateMutation(approveLocalFolder, {
+  type: "independent",
+  reason:
+    "One conditional UPDATE adds a link id to the caller's own runner rows of one computer, with its audit event in the same transaction; no aggregate spans other rows.",
+});
+
+export default approveLocalFolder;

@@ -17,17 +17,12 @@ import {
 import { localRunnersOptions } from "@/features/chat/queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { queryView } from "@/lib/query-view.logic";
-
-const approveLocalFolder = async ({ desktopId, linkId }: ChatLocalRunFolder) =>
-  unwrapApiResponse(
-    await api.chat["local-runners"]({ desktopId })
-      .folders({ linkId })
-      .approval.put(),
-  );
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 /**
  * The OK the member gives before the first turn works in a folder they
@@ -50,10 +45,23 @@ export const LocalFolderApproval = ({
   );
   const approve = useIdempotentMutation({
     idempotencyScope: `chat.local-folder.${target.folder?.linkId ?? "none"}.approve`,
-    mutationFn: approveLocalFolder,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: runners.queryKey });
-    },
+    // Only the member's own click allows a folder: an agent cannot let
+    // itself work somewhere, so the write has no automation capability.
+    mutationFn: resourceMutation({
+      mutation: "approveLocalFolder",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async ({ desktopId, linkId }: ChatLocalRunFolder) =>
+        await invokeAppOnlyWrite(
+          "chat.local-runners.folder-approval.update",
+          async () =>
+            unwrapApiResponse(
+              await api.chat["local-runners"]({ desktopId })
+                .folders({ linkId })
+                .approval.put(),
+            ),
+        ),
+    }),
     onError: (error) => {
       getAnalytics().captureError(error, {
         fingerprintKey: "LocalFolderApproval:failure",

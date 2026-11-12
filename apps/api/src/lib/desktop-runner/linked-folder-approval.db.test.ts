@@ -156,4 +156,30 @@ describe("the member's OK for a linked folder", () => {
     expect(await approvedFolderIds(desktopId)).toEqual([]);
     expect(await approvalAudits(unlisted)).toEqual([]);
   });
+
+  test("records nothing for a computer of another member or organization", async () => {
+    const { desktopId, linkId } = await seedComputer();
+    const others: readonly RunOwner[] = [
+      { userId: ids.userA2, organizationId: ids.orgA },
+      { userId: ids.userA1, organizationId: ids.orgB },
+      { userId: ids.userB1, organizationId: ids.orgB },
+    ];
+
+    expect(
+      await Promise.all(
+        others.map(
+          async (other) =>
+            await approveLinkedFolder(runnerDb(), {
+              owner: other,
+              desktopId,
+              linkId,
+              recordAuditEvent: memberRecorder(),
+            }),
+        ),
+      ),
+    ).toEqual([false, false, false]);
+
+    expect(await approvedFolderIds(desktopId)).toEqual([]);
+    expect(await approvalAudits(linkId)).toEqual([]);
+  });
 });

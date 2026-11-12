@@ -11,6 +11,7 @@ import {
   type DesktopRunnerHarnessReport,
   type DesktopRunnerLinkedFolder,
 } from "./desktop-runner";
+import { displayNameSchema } from "./display-name";
 import { USER_FILE_URL_PREFIX } from "./user-file-url";
 
 /**
@@ -49,7 +50,7 @@ const localModelSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
 export const chatLocalRunFolderSchema = v.strictObject({
   desktopId: v.pipe(v.string(), v.uuid()),
   linkId: v.pipe(v.string(), v.uuid()),
-  name: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
+  name: displayNameSchema({ maxLength: 255 }),
 });
 export type ChatLocalRunFolder = v.InferOutput<typeof chatLocalRunFolderSchema>;
 

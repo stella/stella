@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "recordLinkedFolders (apps/api/src/lib/desktop-runner/store.ts) stores the folder list a computer reports on its current runner socket, the same socket bookkeeping as recordHarnessStatus. No member acts in that write; the member's approval of a folder is audited in approveLinkedFolder, in the approval's transaction."
+}
