@@ -1,7 +1,8 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import type { EntityAction } from "@stll/ui/entity-actions";
 import { cn } from "@stll/ui/utils";
 
@@ -14,6 +15,7 @@ import {
 } from "@/components/workspaces/tasks/task-detail-constants";
 import type { TaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
 import { api } from "@/lib/api";
+import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -33,17 +35,25 @@ import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 const useTaskStatusChange = (workspaceId: string) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const mutation = useMutation({
-    mutationFn: async ({
-      taskId,
-      status,
-    }: {
-      taskId: string;
-      status: TaskStatus;
-    }) => {
+  const mutation = useCapabilityMutation({
+    capability: "tasks.update",
+    target: resourceRef({
+      type: RESOURCE_TYPE.WORKSPACE,
+      id: toSafeId<"workspace">(workspaceId),
+    }),
+    mutationFn: async (
+      {
+        taskId,
+        status,
+      }: {
+        taskId: string;
+        status: TaskStatus;
+      },
+      request,
+    ) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .patch({ taskId: toSafeId<"entity">(taskId), status });
+        .patch({ taskId: toSafeId<"entity">(taskId), status }, request);
       return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {

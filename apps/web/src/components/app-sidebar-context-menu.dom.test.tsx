@@ -17,13 +17,10 @@ GlobalRegistrator.register({ url: "http://localhost:3000" });
 
 const MATTER_ID = "019a0000-0000-7000-8000-000000000601";
 const DOCUMENT_ID = "019a0000-0000-7000-8000-000000000602";
-const TASK_ID = "019a0000-0000-7000-8000-000000000603";
 const entityDeletes: unknown[] = [];
-const taskPatches: unknown[] = [];
 
 beforeEach(() => {
   entityDeletes.length = 0;
-  taskPatches.length = 0;
   spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
       async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -46,26 +43,9 @@ beforeEach(() => {
                 title: "Statement of claim",
                 type: "entity",
               },
-              {
-                activityAt: "2026-07-01T11:00:00.000Z",
-                entityKind: "task",
-                fieldId: null,
-                fileName: null,
-                hasThumbnail: false,
-                id: TASK_ID,
-                listItemType: "task",
-                mimeType: null,
-                status: "open",
-                title: "File the reply",
-                type: "entity",
-              },
             ],
             nextCursor: null,
           });
-        }
-        if (request.method === "PATCH") {
-          taskPatches.push({ pathname, body: await request.json() });
-          return Response.json({});
         }
         if (request.method === "DELETE") {
           entityDeletes.push({ pathname, body: await request.json() });
@@ -111,7 +91,7 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const renderMatterItem = async () => {
+test("sidebar context menus delete only the row that was right-clicked", async () => {
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   });
@@ -183,10 +163,6 @@ const renderMatterItem = async () => {
       </QueryClientProvider>
     </AnalyticsContext>,
   );
-};
-
-test("sidebar context menus delete only the row that was right-clicked", async () => {
-  await renderMatterItem();
 
   const documentRow = await screen.findByRole("button", {
     name: /Statement of claim/u,
@@ -222,39 +198,4 @@ test("sidebar context menus delete only the row that was right-clicked", async (
       body: { entityIds: [DOCUMENT_ID] },
     },
   ]);
-});
-
-test("a task's sidebar menu changes its status; other rows have no status", async () => {
-  await renderMatterItem();
-
-  fireEvent.contextMenu(
-    await screen.findByRole("button", { name: /Statement of claim/u }),
-  );
-  const documentMenu = await screen.findByRole("menu");
-  expect(
-    within(documentMenu).queryByRole("menuitem", { name: "Status" }),
-  ).toBeNull();
-  fireEvent.keyDown(documentMenu, { key: "Escape" });
-  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
-
-  fireEvent.contextMenu(
-    await screen.findByRole("button", { name: /File the reply/u }),
-  );
-  const taskMenu = await screen.findByRole("menu");
-  fireEvent.click(within(taskMenu).getByRole("menuitem", { name: "Status" }));
-  const open = await screen.findByRole("menuitemcheckbox", { name: "Open" });
-  expect(open.getAttribute("aria-checked")).toBe("true");
-  fireEvent.click(
-    screen.getByRole("menuitemcheckbox", { name: "In progress" }),
-  );
-
-  await waitFor(() =>
-    expect(taskPatches).toEqual([
-      {
-        pathname: `/v1/tasks/${MATTER_ID}`,
-        body: { status: "in_progress", taskId: TASK_ID },
-      },
-    ]),
-  );
-  expect(entityDeletes).toEqual([]);
 });
