@@ -141,8 +141,16 @@ const TaskDetailPanelContent = ({
 
   const name = task?.name ?? t("untitled");
 
-  const updateMutation = useMutation({
-    mutationFn: async (update: TaskUpdate) => {
+  const saveTask = resourceMutation({
+    mutation: "updateTask",
+    queryClient,
+    mutationFn: async ({
+      update,
+    }: {
+      update: TaskUpdate;
+      workspaceId: string;
+      entityId: string;
+    }) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .patch({
@@ -151,6 +159,10 @@ const TaskDetailPanelContent = ({
         });
       return unwrapApiResponse(response);
     },
+  });
+  const updateMutation = useMutation({
+    mutationFn: async (update: TaskUpdate) =>
+      await saveTask({ update, workspaceId, entityId: update.taskId }),
     onSuccess: async (_data, variables) => {
       if (taskUpdateClearsWorkflowReason(variables)) {
         setWorkflowReason("");
