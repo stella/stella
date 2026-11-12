@@ -4474,7 +4474,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Utwórz playbook do przeglądu umów stanowisko po stanowisku na podstawie wcześniej podpisanych umów, krótkiego wywiadu i standardów rynkowych.",
-          "name": "Utwórz playbook"
+          "name": "Utwórz playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Dodaj stanowiska do jednego z moich istniejących playbooków.",
+              "name": "Rozszerz playbook"
+            },
+            "fromContracts": {
+              "body": "Utwórz playbook dla umów o zachowaniu poufności na podstawie moich wcześniej podpisanych umów.",
+              "name": "Zacznij od wcześniejszych umów"
+            },
+            "fromMarketStandards": {
+              "body": "Utwórz playbook dla umów z dostawcami, wychodząc od stanowisk zgodnych ze standardami rynkowymi.",
+              "name": "Zacznij od standardów rynkowych"
+            }
+          }
         }
       },
       "builtInSection": "Wbudowane umiejętności",
@@ -4724,6 +4738,10 @@
       "optionPlaceholder": "Wartość opcji",
       "optionsLabel": "Opcje",
       "outline": "Spis treści",
+      "pendingPane": {
+        "description": "Odpowiedz na pytania na czacie. Gdy zatwierdzisz pierwszy zapis, playbook otworzy się tutaj i będzie można go edytować obok rozmowy.",
+        "title": "Twój playbook pojawi się tutaj"
+      },
       "positionOfTotal": "Stanowisko {index} z {total}",
       "positionRemoved": "Stanowisko usunięte",
       "positions": "Stanowiska",

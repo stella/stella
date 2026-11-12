@@ -4474,7 +4474,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Looge lepingute ülevaatamise playbook seisukoht seisukoha haaval, tuginedes oma varem allkirjastatud lepingutele, lühikesele intervjuule ja turul tavapärastele standarditele.",
-          "name": "Loo playbook"
+          "name": "Loo playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Lisa seisukohti ühte minu olemasolevasse playbooki.",
+              "name": "Täienda playbooki"
+            },
+            "fromContracts": {
+              "body": "Koosta konfidentsiaalsuslepingute playbook minu varem allkirjastatud lepingute põhjal.",
+              "name": "Alusta varasematest lepingutest"
+            },
+            "fromMarketStandards": {
+              "body": "Koosta tarnelepingute playbook, lähtudes turul tavapärastest seisukohtadest.",
+              "name": "Alusta turustandarditest"
+            }
+          }
         }
       },
       "builtInSection": "Sisseehitatud oskused",
@@ -4724,6 +4738,10 @@
       "optionPlaceholder": "Valiku väärtus",
       "optionsLabel": "Valikud",
       "outline": "Struktuur",
+      "pendingPane": {
+        "description": "Vasta vestluses küsimustele. Kui kinnitad esimese salvestamise, avaneb playbook siin ja saad seda vestluse kõrval muuta.",
+        "title": "Sinu playbook ilmub siia"
+      },
       "positionOfTotal": "Seisukoht {index}/{total}",
       "positionRemoved": "Seisukoht eemaldatud",
       "positions": "Seisukohad",
