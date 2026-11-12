@@ -1758,7 +1758,7 @@ export const installPgliteModelRunBudgets = async (
   const counter = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261112143745_model_run_caps_owner",
+      "20261112203235_model_run_caps_owner",
       "migration.sql",
     ),
   ).filter((statement) => {

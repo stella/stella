@@ -29,7 +29,7 @@ const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const CAPS_MIGRATION = "20261005120400_list_verification_run_caps";
-const OWNER_MIGRATION = "20261112143745_model_run_caps_owner";
+const OWNER_MIGRATION = "20261112203235_model_run_caps_owner";
 
 /** Every migration that shaped the counter and its triggers, in order. */
 const MIGRATIONS = [
