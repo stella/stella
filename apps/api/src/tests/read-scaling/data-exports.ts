@@ -102,6 +102,7 @@ export const seedDataExportReadScaling = async (
             attempt: 1,
             partCount: 1,
             createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+            completedAt: new Date(Date.UTC(2026, 0, 1, 1, index)),
             expiresAt: new Date("2030-01-01T00:00:00Z"),
             // Internal plan and per-part matter IDs grow with the population;
             // neither is exposed by the fixed-page or detail projections.

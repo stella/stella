@@ -58,7 +58,7 @@ export const seedDataExportScenario = async (
   try {
     await database.execute(sql`INSERT INTO organization_data_exports
     (id, organization_id, requested_by, version_scope, status, attempt, failures,
-      created_at, heartbeat_at, expires_at)
+      created_at, heartbeat_at, expires_at, completed_at)
     SELECT ('01990000-00c1-7000-8000-' || lpad(to_hex(i), 12, '0'))::uuid, md5('export-org-' || i)::uuid,
       CASE WHEN ${cohort} = 'transitions' AND i % 3 = 2 THEN NULL ELSE ${USER_ID} END,
       'all',
@@ -67,7 +67,9 @@ export const seedDataExportScenario = async (
       1, CASE WHEN i % 2 = 0 THEN ${DATA_EXPORT_MAX_FAILURES - 1} ELSE 0 END,
       CASE WHEN ${cohort} = 'quiet' THEN '2026-01-10T12:00:00Z'::timestamptz ELSE '2026-01-01T12:00:00Z'::timestamptz END,
       CASE WHEN ${cohort} = 'quiet' THEN '2026-01-10T12:00:00Z'::timestamptz ELSE '2026-01-01T12:00:00Z'::timestamptz END,
-      CASE WHEN ${cohort} = 'quiet' THEN '2026-02-01T12:00:00Z'::timestamptz ELSE '2026-01-01T12:00:00Z'::timestamptz END
+      CASE WHEN ${cohort} = 'quiet' THEN '2026-02-01T12:00:00Z'::timestamptz ELSE '2026-01-01T12:00:00Z'::timestamptz END,
+      -- A ready export carries the time it finished; an active one none.
+      CASE WHEN ${cohort} <> 'queued' AND i % 3 = 0 THEN '2026-01-01T12:00:00Z'::timestamptz END
     FROM generate_series(1, ${rows}::integer) AS i`);
   } finally {
     await database.execute(

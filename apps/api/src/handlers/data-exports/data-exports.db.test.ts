@@ -203,9 +203,15 @@ const insertExport = async (
 ) => {
   const id = toSafeId<"dataExport">(Bun.randomUUIDv7());
   createdExportIds.push(id);
+  const active =
+    values.status === undefined ||
+    values.status === "queued" ||
+    values.status === "running";
   await testDb.insert(organizationDataExports).values({
     id,
     versionScope: "all",
+    // A finished export carries the time it finished; an active one none.
+    completedAt: active ? null : new Date("2026-10-01T00:00:00.000Z"),
     ...values,
   });
   return id;
@@ -916,7 +922,10 @@ describe("data export maintenance", () => {
     } finally {
       await testDb
         .update(organizationDataExports)
-        .set({ status: "failed" })
+        .set({
+          status: "failed",
+          completedAt: new Date("2026-10-01T00:00:00.000Z"),
+        })
         .where(inArray(organizationDataExports.id, [first, second]));
     }
   });
@@ -981,7 +990,10 @@ describe("data export maintenance", () => {
     // Free organisation A's single export slot for the tests that follow.
     await testDb
       .update(organizationDataExports)
-      .set({ status: "failed" })
+      .set({
+        status: "failed",
+        completedAt: new Date("2026-10-01T00:00:00.000Z"),
+      })
       .where(eq(organizationDataExports.id, stale));
   });
 });
@@ -1079,7 +1091,10 @@ describe("starting an export", () => {
   const finishActive = async () => {
     await testDb
       .update(organizationDataExports)
-      .set({ status: "failed" })
+      .set({
+        status: "failed",
+        completedAt: new Date("2026-10-01T00:00:00.000Z"),
+      })
       .where(
         and(
           eq(organizationDataExports.organizationId, ids.orgB),
@@ -1691,7 +1706,10 @@ describe("run ownership", () => {
     expect(row?.attempt).toBe(2);
     await testDb
       .update(organizationDataExports)
-      .set({ status: "failed" })
+      .set({
+        status: "failed",
+        completedAt: new Date("2026-10-01T00:00:00.000Z"),
+      })
       .where(eq(organizationDataExports.id, exportId));
   });
 
@@ -1739,7 +1757,10 @@ describe("run ownership", () => {
     expect(row?.parts).toEqual([]);
     await testDb
       .update(organizationDataExports)
-      .set({ status: "failed" })
+      .set({
+        status: "failed",
+        completedAt: new Date("2026-10-01T00:00:00.000Z"),
+      })
       .where(eq(organizationDataExports.id, exportId));
   });
 
@@ -1765,7 +1786,10 @@ describe("run ownership", () => {
     expect(row?.failures).toBe(0);
     await testDb
       .update(organizationDataExports)
-      .set({ status: "failed" })
+      .set({
+        status: "failed",
+        completedAt: new Date("2026-10-01T00:00:00.000Z"),
+      })
       .where(eq(organizationDataExports.id, exportId));
   });
 });

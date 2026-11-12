@@ -3311,6 +3311,7 @@ testState.beforeAll(async () => {
     requestedBy: ids.userB1,
     status: "failed",
     versionScope: "all",
+    completedAt: new Date("2026-01-01T00:00:00.000Z"),
   });
   await testDb.insert(vatRates).values({
     id: vatRateB,
