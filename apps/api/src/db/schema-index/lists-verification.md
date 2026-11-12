@@ -93,39 +93,39 @@ legal_list_claims.asserted_on                                  date             
 legal_list_claims.asserted_on_precision                        text             null              lists-verification.ts:460
 legal_list_claims.asserted_on_source                           text             default,not null  lists-verification.ts:465  Where the date came from, or `none`; `pending` only on claims written before claims carried dates, until the backfill reads their words.
 legal_list_claims.decider                                      jsonb            default,not null  lists-verification.ts:471  Who decided the verdict: the language model, or the decision model when the organization turned it on (`verdict-decider.ts`).
-legal_list_claims.created_at                                   timestamptz      default,not null  lists-verification.ts:475
+legal_list_claims.created_at                                   timestamptz      default,not null  lists-verification.ts:472
 ```
 
-## legal_list_claim_review_events · `legalListClaimReviewEvents` · lists-verification.ts:594 · rls
+## legal_list_claim_review_events · `legalListClaimReviewEvents` · lists-verification.ts:591 · rls
 
 Reviewer actions on a claim, append-only.
 
 ```text
-legal_list_claim_review_events.{...entityFeatureGateColumns()}              spread                             lists-verification.ts:597
-legal_list_claim_review_events.{...entityFeatureOrganizationGateColumns()}  spread                             lists-verification.ts:598
-legal_list_claim_review_events.id                                           pUuid            pk,not null       lists-verification.ts:599
-legal_list_claim_review_events.workspace_id                                 safeWorkspaceId  fk,not null       lists-verification.ts:600
-legal_list_claim_review_events.run_id                                       safeUuid         fk,not null       lists-verification.ts:601
-legal_list_claim_review_events.claim_id                                     safeUuid         fk,not null       lists-verification.ts:602
-legal_list_claim_review_events.kind                                         text             not null          lists-verification.ts:603
-legal_list_claim_review_events.payload                                      jsonb            not null          lists-verification.ts:607  Typed as written now, so a writer cannot leave out a required reason.
-legal_list_claim_review_events.actor_id                                     text             fk,null           lists-verification.ts:608
-legal_list_claim_review_events.created_at                                   timestamptz      default,not null  lists-verification.ts:616  The insert's own clock, not the transaction's start: events are folded in this order, and a reviewer whose transaction began earlier but took the claim's lock…
-legal_list_claim_review_events.carried_from_run_id                          safeUuid         null              lists-verification.ts:621  A decision carried from the previous run of the document: the run and the event it copies.
-legal_list_claim_review_events.carried_from_event_id                        safeUuid         null              lists-verification.ts:624
+legal_list_claim_review_events.{...entityFeatureGateColumns()}              spread                             lists-verification.ts:594
+legal_list_claim_review_events.{...entityFeatureOrganizationGateColumns()}  spread                             lists-verification.ts:595
+legal_list_claim_review_events.id                                           pUuid            pk,not null       lists-verification.ts:596
+legal_list_claim_review_events.workspace_id                                 safeWorkspaceId  fk,not null       lists-verification.ts:597
+legal_list_claim_review_events.run_id                                       safeUuid         fk,not null       lists-verification.ts:598
+legal_list_claim_review_events.claim_id                                     safeUuid         fk,not null       lists-verification.ts:599
+legal_list_claim_review_events.kind                                         text             not null          lists-verification.ts:600
+legal_list_claim_review_events.payload                                      jsonb            not null          lists-verification.ts:604  Typed as written now, so a writer cannot leave out a required reason.
+legal_list_claim_review_events.actor_id                                     text             fk,null           lists-verification.ts:605
+legal_list_claim_review_events.created_at                                   timestamptz      default,not null  lists-verification.ts:613  The insert's own clock, not the transaction's start: events are folded in this order, and a reviewer whose transaction began earlier but took the claim's lock…
+legal_list_claim_review_events.carried_from_run_id                          safeUuid         null              lists-verification.ts:618  A decision carried from the previous run of the document: the run and the event it copies.
+legal_list_claim_review_events.carried_from_event_id                        safeUuid         null              lists-verification.ts:621
 ```
 
-## legal_list_claim_carry_outcomes · `legalListClaimCarryOutcomes` · lists-verification.ts:717
+## legal_list_claim_carry_outcomes · `legalListClaimCarryOutcomes` · lists-verification.ts:714
 
 What became of each reviewed claim of the previous run of a document when the next run completed (`lib/lists/verification/carry-over.ts`): carried to a matchin…
 
 ```text
-legal_list_claim_carry_outcomes.{...entityFeatureGateColumns()}              spread                        lists-verification.ts:720
-legal_list_claim_carry_outcomes.{...entityFeatureOrganizationGateColumns()}  spread                        lists-verification.ts:721
-legal_list_claim_carry_outcomes.workspace_id                                 safeWorkspaceId  fk,not null  lists-verification.ts:722
-legal_list_claim_carry_outcomes.run_id                                       safeUuid         fk,not null  lists-verification.ts:724  The run the decisions were carried to.
-legal_list_claim_carry_outcomes.source_run_id                                safeUuid         fk,not null  lists-verification.ts:725
-legal_list_claim_carry_outcomes.source_claim_id                              safeUuid         fk,not null  lists-verification.ts:727
-legal_list_claim_carry_outcomes.outcome                                      text             not null     lists-verification.ts:728
-legal_list_claim_carry_outcomes.target_claim_id                              safeUuid         fk,null      lists-verification.ts:730  The matching claim of this run; null when nothing matched.
+legal_list_claim_carry_outcomes.{...entityFeatureGateColumns()}              spread                        lists-verification.ts:717
+legal_list_claim_carry_outcomes.{...entityFeatureOrganizationGateColumns()}  spread                        lists-verification.ts:718
+legal_list_claim_carry_outcomes.workspace_id                                 safeWorkspaceId  fk,not null  lists-verification.ts:719
+legal_list_claim_carry_outcomes.run_id                                       safeUuid         fk,not null  lists-verification.ts:721  The run the decisions were carried to.
+legal_list_claim_carry_outcomes.source_run_id                                safeUuid         fk,not null  lists-verification.ts:722
+legal_list_claim_carry_outcomes.source_claim_id                              safeUuid         fk,not null  lists-verification.ts:724
+legal_list_claim_carry_outcomes.outcome                                      text             not null     lists-verification.ts:725
+legal_list_claim_carry_outcomes.target_claim_id                              safeUuid         fk,null      lists-verification.ts:727  The matching claim of this run; null when nothing matched.
 ```
