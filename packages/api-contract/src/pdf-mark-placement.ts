@@ -157,29 +157,54 @@ export type MarkPlacement =
 
 const isWhitespace = (character: string) => /\s/u.test(character);
 
+/** ASCII is its own NFKC form; these are its `\s` units. */
+const ASCII_LIMIT = 0x80;
+const isAsciiWhitespace = (code: number) =>
+  code === 0x20 || (code >= 0x09 && code <= 0x0d);
+
 /**
  * The page text without whitespace and with every character in its
  * compatibility form, and where each unit came from. PDF.js gives a
  * selection's ligatures as their letters ("fi") while LibPDF keeps the
  * glyph's own character ("\uFB01"), so both sides are compared as NFKC.
  * Each character is normalized on its own so every unit of an expansion
- * still points back at the one character it came from.
+ * still points back at the one character it came from; ASCII, most of any
+ * page, is taken as it is.
  */
 const squeeze = (text: string) => {
   const units: string[] = [];
   const starts: number[] = [];
   const ends: number[] = [];
+  /** A page repeats few characters beyond ASCII; each is folded once. */
+  const foldedByPoint = new Map<number, string[]>();
   let index = 0;
-  for (const character of text) {
-    const next = index + character.length;
-    if (!isWhitespace(character)) {
-      for (const unit of normalizeUnicode(character, "NFKC").split("")) {
-        if (!isWhitespace(unit)) {
-          units.push(unit);
-          starts.push(index);
-          ends.push(next);
-        }
+  while (index < text.length) {
+    const point =
+      text.codePointAt(index) ?? panic("A unit inside the text has no point");
+    if (point < ASCII_LIMIT) {
+      if (!isAsciiWhitespace(point)) {
+        units.push(text.charAt(index));
+        starts.push(index);
+        ends.push(index + 1);
       }
+      index += 1;
+      continue;
+    }
+    const character = String.fromCodePoint(point);
+    const next = index + character.length;
+    let folded = foldedByPoint.get(point);
+    if (folded === undefined) {
+      folded = isWhitespace(character)
+        ? []
+        : normalizeUnicode(character, "NFKC")
+            .split("")
+            .filter((unit) => !isWhitespace(unit));
+      foldedByPoint.set(point, folded);
+    }
+    for (const unit of folded) {
+      units.push(unit);
+      starts.push(index);
+      ends.push(next);
     }
     index = next;
   }
