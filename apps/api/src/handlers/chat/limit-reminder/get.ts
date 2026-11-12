@@ -13,6 +13,7 @@ import {
 } from "@/api/handlers/chat/limit-reminder/shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 
 const config = {
   contract: "patch",
@@ -68,9 +69,15 @@ const getChatLimitReminder = createSafeRootHandler(
     if (found === null) {
       return Result.err(chatThreadNotFound());
     }
-    return Result.ok({
+    const response = {
       remindAt: found.reminder?.remindAt.toISOString() ?? null,
-    } satisfies ChatLimitReminderResponse);
+    };
+    return Result.ok(
+      response satisfies AssertNoExtraFields<
+        typeof response,
+        ChatLimitReminderResponse
+      >,
+    );
   },
 );
 

@@ -14,6 +14,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
   contract: "patch",
@@ -82,5 +83,11 @@ const cancelChatLimitReminder = createSafeRootHandler(
     return Result.ok({ remindAt: null } satisfies ChatLimitReminderResponse);
   },
 );
+
+declareAggregateMutation(cancelChatLimitReminder, {
+  type: "independent",
+  reason:
+    "Deletes the member's one reminder row for the chat, keyed by the chat; no other row holds an invariant with it.",
+});
 
 export default cancelChatLimitReminder;
