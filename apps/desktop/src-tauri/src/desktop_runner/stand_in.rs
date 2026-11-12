@@ -422,9 +422,11 @@ async fn serve(settings: Settings) -> Result<(), String> {
         start_timeout: Duration::from_secs(30),
         shutdown_grace: Duration::from_secs(10),
         backoff: ReconnectBackoff::DEFAULT,
+        // Each chat's runs keep their cache beside its folder; there is no
+        // shared cache from an older layout to remove.
+        retired_dirs: Vec::new(),
       },
       workspaces: data.join("agent-runs"),
-      package_cache: data.join("agent-package-cache"),
       probe_interval: super::sidecar_host::PROBE_INTERVAL,
     },
     Arc::new(StandInHarnesses {
