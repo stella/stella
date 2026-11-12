@@ -1872,7 +1872,7 @@
       "refusalConflictingRunMode": "Šis pieprasījums vienlaikus prasa darboties ar mākoņa aģentu un jūsu datorā. Izvēlieties vienu izvēlnē Palaist.",
       "refusalHarnessUnavailable": "Programmēšanas aģents jūsu datorā šobrīd nevar pieņemt šo pieprasījumu. Pārbaudiet to lietotnē stella desktop.",
       "refusalModelUnavailable": "Programmēšanas aģents jūsu datorā vairs nepiedāvā šo modeli. Izvēlieties citu izvēlnē Palaist.",
-      "refusalNoComputer": "Neviens no jūsu datoriem nav savienots. Atveriet stella desktop un nosūtiet vēlreiz.",
+      "refusalNoComputer": "Neviens no jūsu datoriem nav savienots.",
       "refusalPermissionAboveLimit": "Jūsu organizācija neļauj programmēšanas aģentam jūsu datorā darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
       "refusalPermissionUnavailable": "Programmēšanas aģents jūsu datorā nevar darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
       "refusalReasoningEffortUnavailable": "Programmēšanas aģents jūsu datorā šim modelim nepiedāvā šo spriešanas līmeni. Izvēlieties citu izvēlnē Spriešanas līmenis.",

@@ -1872,7 +1872,7 @@
       "refusalConflictingRunMode": "To żądanie ma działać jednocześnie z agentem w chmurze i na Twoim komputerze. Wybierz jedno w menu Uruchom na.",
       "refusalHarnessUnavailable": "Agent programistyczny na Twoim komputerze nie może teraz przyjąć tego żądania. Sprawdź go w stella desktop.",
       "refusalModelUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje już tego modelu. Wybierz inny w menu Uruchom na.",
-      "refusalNoComputer": "Żaden z Twoich komputerów nie jest połączony. Otwórz stella desktop i wyślij ponownie.",
+      "refusalNoComputer": "Żaden z Twoich komputerów nie jest połączony.",
       "refusalPermissionAboveLimit": "Twoja organizacja nie pozwala agentowi programistycznemu na Twoim komputerze działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
       "refusalPermissionUnavailable": "Agent programistyczny na Twoim komputerze nie może działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
       "refusalReasoningEffortUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje tego poziomu rozumowania dla modelu. Wybierz inny w menu Poziom rozumowania.",

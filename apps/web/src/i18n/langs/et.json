@@ -1872,7 +1872,7 @@
       "refusalConflictingRunMode": "See päring soovib käivituda korraga pilveagendiga ja sinu arvutis. Vali menüüs Käivita üks.",
       "refusalHarnessUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa seda päringut praegu vastu võtta. Kontrolli seda stella desktopis.",
       "refusalModelUnavailable": "Sinu arvutis töötav programmeerimisagent seda mudelit enam ei paku. Vali menüüs Käivita mõni teine.",
-      "refusalNoComputer": "Ükski sinu arvuti pole ühendatud. Ava stella desktop ja saada uuesti.",
+      "refusalNoComputer": "Ükski sinu arvuti pole ühendatud.",
       "refusalPermissionAboveLimit": "Sinu organisatsioon ei luba sinu arvutis töötavale programmeerimisagendile neid õigusi. Vali menüüs Õigused mõni muu valik.",
       "refusalPermissionUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa nende õigustega töötada. Vali menüüs Õigused mõni muu valik.",
       "refusalReasoningEffortUnavailable": "Sinu arvutis töötav programmeerimisagent ei paku selle mudeli jaoks seda arutlustaset. Vali menüüs Arutlustase mõni teine.",

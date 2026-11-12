@@ -38,6 +38,7 @@ import {
   localRunnersOptions,
   modelOptionsOptions,
 } from "@/features/chat/queries";
+import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { queryView } from "@/lib/query-view.logic";
 
 type ChatModelSelectorProps = {
@@ -85,7 +86,8 @@ type ChatRunOnChipProps = {
 
 /**
  * Where the chat runs: [Cloud], or [Your computer · Codex], with why the
- * computer cannot take a turn now when it says so (offline, signed out). Its
+ * computer cannot take a turn now when it says so (offline, signed out, or
+ * stella desktop opening). Its
  * name for assistive technology says the place in full ("Runs on: Your
  * computer, Codex").
  */
@@ -97,6 +99,7 @@ const ChatRunOnChip = ({
 }: ChatRunOnChipProps) => {
   const t = useTranslations();
   const stateLabel = useLocalRunTargetStateLabel();
+  const desktop = useDesktopLaunch(activeOrganizationId);
   const [open, setOpen] = useState(false);
   const runnersView = queryView(
     useQuery(localRunnersOptions(activeOrganizationId)),
@@ -126,14 +129,23 @@ const ChatRunOnChip = ({
     const targetState =
       readiness === undefined ? null : localRunTargetState(readiness, selected);
     // A failed read claims nothing about the agent; the model's own state
-    // is the model chip's to say.
+    // is the model chip's to say. An offline computer whose desktop is
+    // opening says so instead.
     const placeState = () => {
       if (readFailed) {
         return t("chat.runOn.checkFailed");
       }
-      return targetState === null || targetState.type === "model_unavailable"
-        ? null
-        : stateLabel(targetState);
+      if (targetState === null || targetState.type === "model_unavailable") {
+        return null;
+      }
+      if (
+        desktop.state.type === "opening" &&
+        targetState.type === "harness" &&
+        targetState.option.state === "offline"
+      ) {
+        return t("settings.account.desktopCardOpeningTitle");
+      }
+      return stateLabel(targetState);
     };
     const state = placeState();
     const selection = t("chat.runOn.localSelection", { harness });

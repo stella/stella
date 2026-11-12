@@ -1872,7 +1872,7 @@
       "refusalConflictingRunMode": "Táto požiadavka sa má spustiť zároveň v cloudovom agentovi aj vo vašom počítači. Vyberte jedno v ponuke Spustiť na.",
       "refusalHarnessUnavailable": "Programovací agent vo vašom počítači teraz túto požiadavku nemôže prevziať. Skontrolujte ho v stella desktop.",
       "refusalModelUnavailable": "Programovací agent vo vašom počítači už tento model neponúka. Vyberte iný v ponuke Spustiť na.",
-      "refusalNoComputer": "Žiadny z vašich počítačov nie je pripojený. Otvorte stella desktop a odošlite správu znova.",
+      "refusalNoComputer": "Žiadny z vašich počítačov nie je pripojený.",
       "refusalPermissionAboveLimit": "Vaša organizácia tieto oprávnenia programovaciemu agentovi vo vašom počítači nepovoľuje. Vyberte inú možnosť v ponuke Oprávnenia.",
       "refusalPermissionUnavailable": "Programovací agent vo vašom počítači s týmito oprávneniami bežať nemôže. Vyberte inú možnosť v ponuke Oprávnenia.",
       "refusalReasoningEffortUnavailable": "Programovací agent vo vašom počítači túto úroveň uvažovania pre daný model neponúka. Vyberte inú v ponuke Úroveň uvažovania.",

@@ -21,7 +21,7 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
-import type { ChatLocalRunComputerWait } from "@stll/api-contract/chat-run-target";
+import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -165,14 +165,17 @@ import {
   findChatRequestError,
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
+import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import type { NewestLocalTurn } from "@/features/chat/queries";
+import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
@@ -1237,15 +1240,25 @@ const MessageRenderFallback = ({ message }: { message: ChatUIMessage }) => {
 };
 
 /**
- * The turn waits on its computer: for it to pick the run up, with the time
- * since the turn was sent, or to come back after it went away mid-turn.
+ * The turn waits on its computer: for stella desktop to open before it is
+ * sent, for the computer to pick the run up, with the time since the turn
+ * was sent, or to come back after it went away mid-turn.
  */
-const ComputerWaitIndicator = ({
-  wait,
-}: {
-  wait: ChatLocalRunComputerWait;
-}) => {
+const ComputerWaitIndicator = ({ wait }: { wait: ChatComputerWait }) => {
   const t = useTranslations();
+  const label = (() => {
+    switch (wait.status) {
+      case "opening_desktop":
+        return t("settings.account.desktopCardOpeningTitle");
+      case "delivering":
+        return t("chat.localRun.waitingForPickup");
+      case "waiting":
+        return t("chat.localRun.waitingForComputer");
+      default:
+        wait satisfies never;
+        return panic("Unknown computer wait");
+    }
+  })();
 
   return (
     <Message from="assistant">
@@ -1256,9 +1269,7 @@ const ComputerWaitIndicator = ({
               which reads when the turn was sent instead. */}
           <span className="flex items-center gap-2" role="status">
             <StatusMark status="pending" />
-            {wait.status === "delivering"
-              ? t("chat.localRun.waitingForPickup")
-              : t("chat.localRun.waitingForComputer")}
+            {label}
           </span>
           {wait.status === "delivering" ? (
             <ElapsedSince since={wait.since} />
@@ -1334,6 +1345,46 @@ const LocalRunLimitResetMessage = ({ resetsAt }: { resetsAt: string }) => {
   return t("chat.localRun.errorLimitResetsAt", {
     time: format.dateTime(new Date(resetsAt), MEDIUM_DATE_SHORT_TIME_FORMAT),
   });
+};
+
+/**
+ * For a turn refused because none of the member's computers is connected:
+ * opens stella desktop on this click, waits for a computer to connect, and
+ * then sends the turn again by itself. One click opens the desktop once;
+ * while it opens the button says so and takes no other click.
+ */
+const OpenDesktopAndResendButton = ({
+  disabled,
+  onResend,
+}: {
+  disabled: boolean;
+  onResend: (options?: ChatResendOptions) => void | PromiseLike<void>;
+}) => {
+  const t = useTranslations();
+  const { activeOrganizationId } = useAuthenticatedUser();
+  const desktop = useDesktopLaunch(activeOrganizationId);
+  const opening = desktop.state.type === "opening";
+  return (
+    <Button
+      disabled={disabled || opening}
+      onClick={() => {
+        detached(
+          (async () => {
+            if ((await desktop.launch()) === "connected") {
+              await onResend();
+            }
+          })(),
+          "chat-thread-messages.open-desktop-and-resend",
+        );
+      }}
+      size="sm"
+      variant="destructive-outline"
+    >
+      {opening
+        ? t("settings.account.desktopCardOpeningTitle")
+        : t("settings.account.desktopOpenApp")}
+    </Button>
+  );
 };
 
 export const ChatErrorMessage = ({
@@ -1420,6 +1471,12 @@ export const ChatErrorMessage = ({
             >
               {t("chat.sendWithoutAnonymization")}
             </Button>
+          )}
+          {onResend && refusal?.code === CHAT_LOCAL_RUN_REFUSAL.noComputer && (
+            <OpenDesktopAndResendButton
+              disabled={isGenerating}
+              onResend={onResend}
+            />
           )}
           {onResend && canRetryChatRequest(error) && (
             <Button
@@ -1604,7 +1661,7 @@ type ChatThreadMessagesProps = {
   /** The turn runs on the member's computer and waits on it (to pick the
    *  run up, or to come back); the turn shows the wait in place of its live
    *  status. */
-  computerWait?: ChatLocalRunComputerWait | null | undefined;
+  computerWait?: ChatComputerWait | null | undefined;
   /** When this page sent the running turn's message (`performance.now()`);
    *  its live status counts from it. `null` for a turn the page joined. */
   turnSentAt?: number | null | undefined;

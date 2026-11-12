@@ -1872,7 +1872,7 @@
       "refusalConflictingRunMode": "Ez a kérés egyszerre futna a felhőbeli ügynökkel és a számítógépén. Válasszon egyet a Futtatás itt menüben.",
       "refusalHarnessUnavailable": "A számítógépén futó kódoló ügynök most nem tudja fogadni ezt a kérést. Ellenőrizze a stella desktopban.",
       "refusalModelUnavailable": "A számítógépén futó kódoló ügynök már nem kínálja ezt a modellt. Válasszon másikat a Futtatás itt menüben.",
-      "refusalNoComputer": "Egyik számítógépe sem csatlakozik. Nyissa meg a stella desktopot, majd küldje el újra.",
+      "refusalNoComputer": "Egyik számítógépe sem csatlakozik.",
       "refusalPermissionAboveLimit": "A szervezete nem adja meg ezeket az engedélyeket a számítógépén futó kódoló ügynöknek. Válasszon másik lehetőséget az Engedélyek menüben.",
       "refusalPermissionUnavailable": "A számítógépén futó kódoló ügynök nem futhat ezekkel az engedélyekkel. Válasszon másik lehetőséget az Engedélyek menüben.",
       "refusalReasoningEffortUnavailable": "A számítógépén futó kódoló ügynök nem kínálja ezt a gondolkodási szintet a modellhez. Válasszon másikat a Gondolkodási szint menüben.",

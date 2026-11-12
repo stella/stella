@@ -1872,7 +1872,7 @@
       "refusalConflictingRunMode": "Ši užklausa prašo veikti ir su debesies agentu, ir jūsų kompiuteryje. Pasirinkite vieną meniu Paleisti.",
       "refusalHarnessUnavailable": "Programavimo agentas jūsų kompiuteryje dabar negali priimti šios užklausos. Patikrinkite jį per stella desktop.",
       "refusalModelUnavailable": "Programavimo agentas jūsų kompiuteryje šio modelio nebesiūlo. Pasirinkite kitą meniu Paleisti.",
-      "refusalNoComputer": "Nė vienas jūsų kompiuteris neprijungtas. Atidarykite stella desktop ir siųskite dar kartą.",
+      "refusalNoComputer": "Nė vienas jūsų kompiuteris neprijungtas.",
       "refusalPermissionAboveLimit": "Jūsų organizacija neleidžia programavimo agentui jūsų kompiuteryje veikti su šiais leidimais. Pasirinkite kitą parinktį meniu Leidimai.",
       "refusalPermissionUnavailable": "Programavimo agentas jūsų kompiuteryje negali veikti su šiais leidimais. Pasirinkite kitą parinktį meniu Leidimai.",
       "refusalReasoningEffortUnavailable": "Programavimo agentas jūsų kompiuteryje šiam modeliui nesiūlo šio samprotavimo lygio. Pasirinkite kitą meniu Samprotavimo lygis.",

@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import type {
   ChatLocalRunReadiness,
@@ -9,6 +9,7 @@ import type {
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat" });
+const previousFetch = globalThis.fetch;
 
 const { cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
@@ -20,9 +21,16 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { localRunnersOptions } = await import("@/features/chat/queries");
 const { ChatRunTargetMenu, LocalModelOptions } =
   await import("./chat-run-target-menu");
+const desktopBridge = await import("@/lib/desktop-bridge");
+const { DESKTOP_PING_URL } =
+  await import("@/features/chat/desktop-launch.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  globalThis.fetch = previousFetch;
+  mock.restore();
+});
 afterAll(async () => {
   cleanup();
   await unregisterDomEnvironment();
@@ -296,4 +304,75 @@ test("picking another agent starts it on its recommended model, and the chosen a
   });
   fireEvent.click(claude);
   expect(chosen).toEqual([LOCAL]);
+});
+
+test("choosing an agent on a computer that is not connected opens stella desktop once, and the agent is offered once it connects", async () => {
+  const offline: ChatLocalRunReadiness =
+    READINESS.status === "enabled"
+      ? {
+          ...READINESS,
+          runners: READINESS.runners.map((runner) => ({
+            ...runner,
+            connected: false,
+          })),
+        }
+      : READINESS;
+  // Opening the desktop is what connects the computer, as on a real machine;
+  // the read that sees it is held so the test sees the wait.
+  let opened = false;
+  const connected = Promise.withResolvers<undefined>();
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request) => {
+      const { pathname } = new URL(
+        input instanceof Request ? input.url : String(input),
+      );
+      if (!pathname.endsWith("/chat/local-runners")) {
+        return Response.json(
+          { message: "Unexpected request" },
+          { status: 500 },
+        );
+      }
+      await connected.promise;
+      return Response.json(opened ? READINESS : offline);
+    },
+    { preconnect: previousFetch.preconnect },
+  );
+  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(() => {
+    opened = true;
+  });
+  const { view, chosen } = renderMenu({ kind: "cloud" }, offline);
+
+  const codex = await waitFor(() => {
+    const item = view
+      .getAllByRole("menuitem")
+      .find((candidate) => candidate.textContent.startsWith("Codex"));
+    if (item === undefined) {
+      throw new Error("no Codex row");
+    }
+    return item;
+  });
+  expect(codex.textContent).toContain(messages.chat.runOn.hintOffline);
+  expect(open).not.toHaveBeenCalled();
+
+  fireEvent.click(codex);
+
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(open).toHaveBeenCalledWith(DESKTOP_PING_URL);
+  await waitFor(() =>
+    expect(codex.textContent).toContain(
+      messages.settings.account.desktopCardOpeningTitle,
+    ),
+  );
+  // A second click while it opens takes nothing: one open per gesture.
+  fireEvent.click(codex);
+  expect(open).toHaveBeenCalledTimes(1);
+
+  connected.resolve(undefined);
+
+  // Connected: the agent is offered to pick, nothing was chosen for the
+  // member, and the desktop was opened once.
+  expect(await radioItem(view, "Codex")).toBeTruthy();
+  expect(view.queryByText(messages.chat.runOn.hintOffline)).toBeNull();
+  expect(chosen).toEqual([]);
+  expect(open).toHaveBeenCalledTimes(1);
 });

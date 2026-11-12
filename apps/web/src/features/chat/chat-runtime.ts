@@ -28,7 +28,6 @@ import {
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   chatLocalRunComputerEventSchema,
-  type ChatLocalRunComputerWait,
   type ChatLocalRunQuestionReply,
 } from "@stll/api-contract/chat-run-target";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
@@ -69,6 +68,12 @@ import { getChatRuntimeContextKind } from "@/features/chat/chat-query-contract";
 import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
 import { createChatSendTiming } from "@/features/chat/chat-send-timing";
 import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
+import { getDesktopLaunch } from "@/features/chat/desktop-launch";
+import {
+  type ChatComputerWait,
+  heldForDesktop,
+  OPENING_DESKTOP_WAIT,
+} from "@/features/chat/desktop-launch.logic";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatTimingSurface } from "@/lib/analytics/types";
 import { api } from "@/lib/api";
@@ -167,11 +172,12 @@ type ChatRuntimeSnapshot = {
   status: ChatClientState;
   stop: ChatStopState;
   turnAbandoned: boolean;
-  /** The turn runs on the member's computer and waits on it: for it to pick
-   *  the run up (counted from the send), or to come back after it went away
-   *  mid-turn; `null` while it runs. A rejoin replays the run's events, so a
-   *  reload reads the same. */
-  computerWait: ChatLocalRunComputerWait | null;
+  /** The turn runs on the member's computer and waits on it: for stella
+   *  desktop to open before this page sends it, for it to pick the run up
+   *  (counted from the send), or to come back after it went away mid-turn;
+   *  `null` while it runs. A rejoin replays the run's events, so a reload
+   *  reads the same. */
+  computerWait: ChatComputerWait | null;
   /** When this page sent the message its running request carries, on the
    *  `performance.now()` clock: the start every turn's live elapsed time
    *  counts from, on stella or on the member's computer alike. `null` once
@@ -824,40 +830,60 @@ export const createChatRuntime = ({
           }),
       });
       const requestBody = readQueryResult(prepared);
-      return observeChatProviderDiagnostic(
-        keepPostedMessagesInSnapshots(
-          messages,
-          upstreamConnection.connect(
-            // The envelope names only the message this request posts: the
-            // server reads the thread's history from its own store and checks
-            // just that the envelope carries the posted message, so a long
-            // thread is never uploaded again with every send
-            // (`chat-runtime-send-budget.test.ts`).
-            messages.slice(-1),
-            requestBody,
-            abortSignal,
-            {
-              ...runContext,
-              // The API owns tool schemas and derives browser availability
-              // from browserExtension. Keep local executors registered without
-              // uploading their schemas on every send and continuation.
-              clientTools: [],
-            },
+      const send = () =>
+        observeChatProviderDiagnostic(
+          keepPostedMessagesInSnapshots(
+            messages,
+            upstreamConnection.connect(
+              // The envelope names only the message this request posts: the
+              // server reads the thread's history from its own store and
+              // checks just that the envelope carries the posted message, so
+              // a long thread is never uploaded again with every send
+              // (`chat-runtime-send-budget.test.ts`).
+              messages.slice(-1),
+              requestBody,
+              abortSignal,
+              {
+                ...runContext,
+                // The API owns tool schemas and derives browser availability
+                // from browserExtension. Keep local executors registered
+                // without uploading their schemas on every send and
+                // continuation.
+                clientTools: [],
+              },
+            ),
           ),
-        ),
-        {
-          scope: {
-            type: "handler",
-            handlerId: `chat-provider-diagnostic.${key.scope}.${getChatRuntimeContextKind(context)}`,
+          {
+            scope: {
+              type: "handler",
+              handlerId: `chat-provider-diagnostic.${key.scope}.${getChatRuntimeContextKind(context)}`,
+            },
+            onDiagnostic: (diagnostic) => {
+              providerDiagnostic = diagnostic;
+            },
+            onLocalRunLimit: (resetsAt) => {
+              localRunLimitResetsAt = resetsAt;
+            },
           },
-          onDiagnostic: (diagnostic) => {
-            providerDiagnostic = diagnostic;
-          },
-          onLocalRunLimit: (resetsAt) => {
-            localRunLimitResetsAt = resetsAt;
-          },
+        );
+      // A send for the member's computer while stella desktop opens (the
+      // member's own send or Run on pick started it) waits for the launch,
+      // shown as such, and goes out once it ends.
+      const launching =
+        context?.getRunTarget?.().kind === "local"
+          ? getDesktopLaunch().pending()
+          : null;
+      if (launching === null) {
+        return send();
+      }
+      return heldForDesktop({
+        outcome: launching,
+        signal: abortSignal,
+        onHold: (held) => {
+          setSnapshot({ computerWait: held ? OPENING_DESKTOP_WAIT : null });
         },
-      );
+        send,
+      });
     },
   } satisfies ConnectConnectionAdapter;
 

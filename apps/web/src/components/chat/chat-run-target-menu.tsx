@@ -37,6 +37,7 @@ import {
   sameRunTarget,
 } from "@/components/chat/chat-run-target-menu.logic";
 import { localRunnersOptions } from "@/features/chat/queries";
+import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -203,6 +204,42 @@ const ReadinessRetry = ({ retry }: { retry: () => Promise<unknown> }) => {
   );
 };
 
+/**
+ * An agent on a computer that is not connected. Choosing it opens stella
+ * desktop on this click and says so until a computer connects; the agent
+ * is then offered in its place. A launch that times out leaves the row as
+ * it was. The menu stays open meanwhile.
+ */
+const OfflineHarnessItem = ({
+  activeOrganizationId,
+  name,
+  hint,
+}: {
+  activeOrganizationId: string;
+  name: string;
+  hint: string;
+}) => {
+  const t = useTranslations();
+  const desktop = useDesktopLaunch(activeOrganizationId);
+  const opening = desktop.state.type === "opening";
+  return (
+    <MenuItem
+      closeOnClick={false}
+      disabled={opening}
+      onClick={() => {
+        detached(desktop.launch(), "chat-run-on.open-desktop");
+      }}
+    >
+      <PlaceLabel
+        description={
+          opening ? t("settings.account.desktopCardOpeningTitle") : hint
+        }
+        title={name}
+      />
+    </MenuItem>
+  );
+};
+
 type ChatRunTargetMenuProps = {
   activeOrganizationId: string;
   /** Reads the member's computers only while the menu is open. */
@@ -271,6 +308,16 @@ export const ChatRunTargetMenu = ({
         )}
         {options.map((option) => {
           const name = CHAT_LOCAL_HARNESS_NAMES[option.harness];
+          if (option.state === "offline") {
+            return (
+              <OfflineHarnessItem
+                activeOrganizationId={activeOrganizationId}
+                hint={hint(option) ?? ""}
+                key={option.harness}
+                name={name}
+              />
+            );
+          }
           if (option.state !== "ready") {
             return (
               <MenuItem disabled key={option.harness}>
