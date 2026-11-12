@@ -1,6 +1,8 @@
 /**
- * Wire-shaped AVT fixtures for the logic tests, pinned to the verification
- * API's response types so a change to the contract breaks them loudly.
+ * Wire-shaped AVT fixtures for the logic tests and the browser specs, pinned
+ * to the verification API's response types so a change to the contract breaks
+ * them loudly. Imports stay within `wire.ts` and `safe-id`, which the browser
+ * specs' project compiles.
  */
 
 import type {
@@ -9,7 +11,7 @@ import type {
   EvidenceFact,
   VerificationClaim,
   VerificationRun,
-} from "@/features/avt/types";
+} from "@/features/avt/wire";
 import { toSafeId } from "@/lib/safe-id";
 
 const uuid = (suffix: number) =>

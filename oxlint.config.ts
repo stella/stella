@@ -353,6 +353,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-e2e-router-push.fixture.ts", [
     "no-raw-e2e-router-push/no-raw-e2e-router-push",
   ]),
+  fixtureRuleOverride("no-raw-e2e-route-fulfill.fixture.ts", [
+    "no-raw-e2e-route-fulfill/no-raw-e2e-route-fulfill",
+  ]),
   fixtureRuleOverride("no-raw-api-error-telemetry.fixture.ts", [
     "no-raw-api-error-telemetry/no-raw-api-error-telemetry",
   ]),
@@ -2324,6 +2327,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-json-import-attribute.ts",
     "./.oxlint-plugins/require-stable-geometry.ts",
     "./.oxlint-plugins/no-raw-e2e-router-push.ts",
+    "./.oxlint-plugins/no-raw-e2e-route-fulfill.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/semantic-controls.ts",
@@ -2587,6 +2591,15 @@ const config = defineConfig({
       excludeFiles: ["apps/web/e2e/helpers/decision-reader.ts"],
       rules: {
         "no-raw-e2e-router-push/no-raw-e2e-router-push": "error",
+      },
+    },
+    {
+      // A raw fulfill takes any JSON, so a mocked body drifts from the API
+      // contract unnoticed; the owner types every body by its route.
+      files: ["apps/web/e2e/**/*.ts"],
+      excludeFiles: ["apps/web/e2e/helpers/route-mock.ts"],
+      rules: {
+        "no-raw-e2e-route-fulfill/no-raw-e2e-route-fulfill": "error",
       },
     },
     {
