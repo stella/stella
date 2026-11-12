@@ -10,7 +10,7 @@ import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
 } from "./transcription";
 
-test("the native transcription contract matches the typed one", () => {
+test("the typed transcription contract reads the native one", () => {
   expect(contract).toStrictEqual({
     modelsPath: DESKTOP_DICTATION_MODELS_PATH,
     transcribePath: DESKTOP_DICTATION_TRANSCRIBE_PATH,

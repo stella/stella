@@ -535,6 +535,7 @@ mod tests {
   use std::sync::atomic::{AtomicUsize, Ordering};
 
   use super::*;
+  use crate::dictation_format::{AppClass, Stroke, is_untyped};
 
   const RATE: u32 = 16_000;
 
@@ -890,6 +891,41 @@ mod tests {
     assert_eq!(result, Err(TIMED_OUT.to_string()));
     assert_eq!(sent.load(Ordering::SeqCst), 5);
     assert_eq!(DEADLINE, Duration::from_secs(120));
+  }
+
+  #[tokio::test]
+  async fn a_cloud_transcript_typed_raw_never_presses_return_or_types_a_control() {
+    let answers = [
+      "ls\r\n-la\n",
+      "pwd\u{2028}rm\u{2029}\u{202E}x\u{2066}\u{1b}[A",
+    ];
+    let mut next = answers.iter();
+    let transcript = upload(
+      vec![vec![1], vec![2]],
+      DEADLINE,
+      || true,
+      |_piece| {
+        let text = next.next().copied().unwrap_or_default().to_string();
+        async move { Ok(text) }
+      },
+    )
+    .await
+    .unwrap();
+    assert!(transcript.contains(['\r', '\n', '\u{2028}', '\u{202E}']));
+    // Cleanup off, refused, timed out or skipped: the transcript is typed raw.
+    for class in [
+      AppClass::Terminal,
+      AppClass::Other,
+      AppClass::Chat,
+      AppClass::Rich,
+    ] {
+      let strokes = dictation_cleanup::strokes(&transcript, None, class);
+      let [Stroke::Text(text)] = strokes.as_slice() else {
+        panic!("{class:?} gets a keystroke from a raw transcript");
+      };
+      assert_eq!(text.as_str(), "ls  -la pwd rm x [A ", "{class:?}");
+      assert!(!text.as_str().chars().any(is_untyped), "{class:?}");
+    }
   }
 
   #[test]

@@ -7,6 +7,7 @@ import {
   isTranscriptionModelId,
   TRANSCRIPTION_MODELS,
 } from "@stll/ai-catalog/transcription";
+import { DESKTOP_DICTATION_UNTYPED_CHARACTERS } from "@stll/api-contract/desktop-dictation-cleanup";
 import {
   desktopDictationModelsSchema,
   MAX_DESKTOP_DICTATION_TRANSCRIPT_LENGTH,
@@ -295,6 +296,14 @@ test("a granted desktop's audio is transcribed with the region's default model a
     modelId: defaultTranscriptionModelId("eu"),
     language: "cs",
   });
+});
+
+test("a transcript is answered without a character the desktop would not type", async () => {
+  const text = "ls\r\n-la\u2028pwd\u2029\u202Eok\u2066\u0007";
+  expect(DESKTOP_DICTATION_UNTYPED_CHARACTERS.test(text)).toBe(true);
+  const { response } = await exerciseTranscribe({ text });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ text: "ls -la pwd ok " });
 });
 
 test("a transcript longer than its answer allows is refused, not answered", async () => {

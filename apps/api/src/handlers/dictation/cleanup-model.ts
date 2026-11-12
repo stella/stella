@@ -110,6 +110,10 @@ const ALLOWED_GROWTH_CHARACTERS = 16;
 const SPACED_CHARACTERS = /[\p{Cc}\u2028\u2029]+/gu;
 const DROPPED_CHARACTERS = /[\u202A-\u202E\u2066-\u2069]/gu;
 
+/** A model's or provider's text as the desktop may type it. */
+export const typedDictationText = (text: string): string =>
+  text.replaceAll(DROPPED_CHARACTERS, "").replaceAll(SPACED_CHARACTERS, " ");
+
 export type DictationCleanupRejection =
   "too-long" | "too-short" | "no-text" | "too-many-breaks" | "invalid";
 
@@ -301,9 +305,7 @@ export const acceptDictationCleanup = (
     ({ type: kind, text, bold }): DesktopDictationSegment[] => {
       switch (kind) {
         case "text": {
-          const typed = text
-            .replaceAll(DROPPED_CHARACTERS, "")
-            .replaceAll(SPACED_CHARACTERS, " ");
+          const typed = typedDictationText(text);
           return typed.length === 0 ? [] : [{ type: kind, text: typed, bold }];
         }
         case "lineBreak":

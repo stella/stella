@@ -17,6 +17,7 @@ import { MAX_TRANSCRIPTION_MULTIPART_BYTES } from "@stll/api-contract/transcript
 import { classifyFailure } from "@stll/errors";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
+import { typedDictationText } from "@/api/handlers/dictation/cleanup-model";
 import { desktopDictationBodySchema } from "@/api/handlers/dictation/schema";
 import {
   DEFAULT_DICTATION_DEPENDENCIES,
@@ -289,9 +290,12 @@ export const createDesktopDictationTranscribeEndpoint = ({
                 { ...DEFAULT_DICTATION_DEPENDENCIES, ...dependencies },
               ),
             );
+            // The desktop types this text; the provider's answer is not
+            // trusted to hold only typeable characters.
+            const text = typedDictationText(result.text);
             // One chunk is at most a minute of speech; a longer answer is
             // not a transcript of it.
-            if (result.text.length > MAX_DESKTOP_DICTATION_TRANSCRIPT_LENGTH) {
+            if (text.length > MAX_DESKTOP_DICTATION_TRANSCRIPT_LENGTH) {
               return Result.err(
                 classifyFailure(
                   new HandlerError({
@@ -306,7 +310,7 @@ export const createDesktopDictationTranscribeEndpoint = ({
                 ),
               );
             }
-            return Result.ok({ text: result.text });
+            return Result.ok({ text });
           },
         });
       },

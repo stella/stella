@@ -1,11 +1,12 @@
-//! How a cleaned-up dictation becomes keystrokes in the app that has focus.
+//! How a dictation becomes keystrokes in the app that has focus.
 //!
 //! The one owner of that mapping: segments arrive from the cleanup answer,
 //! the focused app picks a class, and the class decides which keystroke a
-//! line break, a paragraph or bold becomes. Text never presses a key:
-//! control characters and the Unicode line and paragraph separators in it
-//! become spaces and bidirectional controls are dropped, so only the strokes
-//! planned here can send Return.
+//! line break, a paragraph or bold becomes. Text never presses a key: every
+//! text stroke, cleaned or raw, from this computer or stella AI, is
+//! [`TypedText`], in which control characters and the Unicode line and
+//! paragraph separators became spaces and bidirectional controls were
+//! dropped, so only the strokes planned here can send Return.
 //!
 //! Only a known app gets formatting keystrokes. A word processor or mail app
 //! gets Return for a paragraph, Shift+Return for a line and Command/Control+B
@@ -186,8 +187,8 @@ impl AppClass {
   }
 }
 
-/// Characters a segment's text may never carry: controls, the Unicode line
-/// and paragraph separators, and the bidirectional controls.
+/// Characters text is never typed with: controls, the Unicode line and
+/// paragraph separators, and the bidirectional controls.
 pub fn is_untyped(character: char) -> bool {
   character.is_control() || is_separator(character) || is_bidi_control(character)
 }
@@ -209,10 +210,46 @@ pub enum Key {
   B,
 }
 
+/// Text with every control and separator replaced by a space and every
+/// bidirectional control dropped. Its only constructor applies that rule,
+/// so no text stroke can carry a character that presses a key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypedText(String);
+
+impl TypedText {
+  pub fn new(text: &str) -> Self {
+    Self(typeable(text))
+  }
+
+  pub fn as_str(&self) -> &str {
+    &self.0
+  }
+
+  fn push(&mut self, text: &str) {
+    self.0.push_str(&typeable(text));
+  }
+}
+
+/// `text` with controls and separators as spaces and without bidirectional
+/// controls.
+fn typeable(text: &str) -> String {
+  text
+    .chars()
+    .filter(|character| !is_bidi_control(*character))
+    .map(|character| {
+      if character.is_control() || is_separator(character) {
+        ' '
+      } else {
+        character
+      }
+    })
+    .collect()
+}
+
 /// One input event sequence for the focused app.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stroke {
-  Text(String),
+  Text(TypedText),
   Key(Key),
   Shift(Key),
   /// With the platform's command modifier: Command on macOS, Control on
@@ -220,10 +257,11 @@ pub enum Stroke {
   Command(Key),
 }
 
-/// The transcript exactly as dictation types it without cleanup. The
-/// trailing space lets the next dictation continue the sentence.
+/// The transcript as dictation types it without cleanup: as is, except for
+/// the characters no text is typed with. The trailing space lets the next
+/// dictation continue the sentence.
 pub fn raw(transcript: &str) -> Vec<Stroke> {
-  vec![Stroke::Text(format!("{transcript} "))]
+  vec![Stroke::Text(TypedText::new(&format!("{transcript} ")))]
 }
 
 /// The strokes that type `segments` into an app of `class`. A dictation that
@@ -278,17 +316,7 @@ fn normalized(segments: &[Segment]) -> Vec<Piece> {
     .iter()
     .map(|segment| match segment {
       Segment::Text { text, bold } => Piece::Text {
-        text: text
-          .chars()
-          .filter(|character| !is_bidi_control(*character))
-          .map(|character| {
-            if character.is_control() || is_separator(character) {
-              ' '
-            } else {
-              character
-            }
-          })
-          .collect(),
+        text: typeable(text),
         bold: *bold,
       },
       Segment::LineBreak => Piece::Break { paragraph: false },
@@ -325,9 +353,9 @@ impl Plan {
       return;
     }
     if let Some(Stroke::Text(previous)) = self.0.last_mut() {
-      previous.push_str(text);
+      previous.push(text);
     } else {
-      self.0.push(Stroke::Text(text.to_string()));
+      self.0.push(Stroke::Text(TypedText::new(text)));
     }
   }
 
@@ -350,7 +378,8 @@ impl Plan {
   fn space(&mut self) {
     match self.0.last() {
       None => {}
-      Some(Stroke::Text(previous)) if previous.ends_with(char::is_whitespace) => {}
+      Some(Stroke::Text(previous))
+        if previous.as_str().ends_with(char::is_whitespace) => {}
       Some(_) => self.text(" "),
     }
   }
@@ -381,8 +410,10 @@ mod tests {
     }
   }
 
+  /// A stroke of exactly `value`, bypassing the rule [`TypedText::new`]
+  /// applies, so a comparison shows what that rule produced.
   fn typed(value: &str) -> Stroke {
-    Stroke::Text(value.to_string())
+    Stroke::Text(TypedText(value.to_string()))
   }
 
   /// "nový řádek a tedy nový řádek se rozhodl odejít tečka"
@@ -630,7 +661,7 @@ mod tests {
       assert!(!strokes.contains(&Stroke::Key(Key::Return)), "{class:?}");
       for stroke in &strokes {
         if let Stroke::Text(value) = stroke {
-          assert!(!value.contains(['\n', '\r']), "{class:?}");
+          assert!(!value.as_str().contains(['\n', '\r']), "{class:?}");
         }
       }
     }
@@ -690,5 +721,12 @@ mod tests {
       "Lhůta je 24 dní.\n\nKonec textu"
     );
     assert_eq!(plain_text(&[Segment::LineBreak]), "");
+  }
+
+  #[test]
+  fn raw_text_never_breaks_a_line_or_carries_a_control() {
+    let transcript = "ls\n-la\rpwd\u{2028}echo\u{2029}\u{202E}ok\u{2066}\u{7}done";
+    assert!(transcript.chars().any(is_untyped));
+    assert_eq!(raw(transcript), vec![typed("ls -la pwd echo ok done ")]);
   }
 }

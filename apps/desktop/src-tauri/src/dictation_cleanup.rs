@@ -712,10 +712,50 @@ mod tests {
 
   #[test]
   fn without_a_cleaned_answer_the_raw_transcript_is_typed_exactly() {
-    let raw = vec![Stroke::Text("nový řádek a tedy ".to_string())];
+    let raw = dictation_format::raw("nový řádek a tedy");
     for class in [AppClass::Rich, AppClass::Chat, AppClass::Terminal] {
       assert_eq!(strokes("nový řádek a tedy", None, class), raw);
       assert_eq!(strokes("nový řádek a tedy", Some(&[]), class), raw);
+    }
+    let [Stroke::Text(typed)] = raw.as_slice() else {
+      panic!("raw text is one text stroke");
+    };
+    assert_eq!(typed.as_str(), "nový řádek a tedy ");
+  }
+
+  /// Every raw outcome `clean_up` has (cleanup off, refused, timed out,
+  /// implausible, or the transcript too long to send) types the transcript
+  /// as plain text: no keystroke, and no character that is not typed.
+  #[test]
+  fn a_raw_transcript_with_controls_types_only_plain_text() {
+    let short = "ls\r\n-la\u{2028}pwd\u{2029}\u{202E}ok\u{2066}\u{1b}[A";
+    let long = format!(
+      "{short} {}",
+      "slovo ".repeat(contract().max_transcript_length)
+    );
+    assert!(long.chars().count() > contract().max_transcript_length);
+    for transcript in [short, long.as_str()] {
+      assert!(transcript.chars().any(dictation_format::is_untyped));
+      for cleaned in [None, Some(&[][..])] {
+        for class in [
+          AppClass::Rich,
+          AppClass::Chat,
+          AppClass::Browser,
+          AppClass::PlainBrowser,
+          AppClass::Terminal,
+          AppClass::Other,
+        ] {
+          let typed = strokes(transcript, cleaned, class);
+          let [Stroke::Text(text)] = typed.as_slice() else {
+            panic!("{class:?} gets a keystroke from raw text");
+          };
+          assert!(
+            !text.as_str().chars().any(dictation_format::is_untyped),
+            "{class:?}"
+          );
+          assert!(text.as_str().starts_with("ls  -la pwd ok [A "), "{class:?}");
+        }
+      }
     }
   }
 
