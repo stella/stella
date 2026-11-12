@@ -99,8 +99,8 @@ describe("a tasks list's query", () => {
   });
 
   test("whose maps onto the server's assignee filter", () => {
-    expect(read({ whose: "everyone", show: "open" }).assignee).toBe("any");
-    expect(read({ whose: "unassigned", show: "open" }).assignee).toBe(
+    expect(read({ whose: "everyone", show: "open" })["assignee"]).toBe("any");
+    expect(read({ whose: "unassigned", show: "open" })["assignee"]).toBe(
       "unassigned",
     );
   });
@@ -111,7 +111,7 @@ describe("a tasks list's query", () => {
       assignee: "me",
       dateTo: "2026-10-27",
     });
-    expect(read({ whose: "mine", show: "all" }).openOnly).toBe("false");
+    expect(read({ whose: "mine", show: "all" })["openOnly"]).toBe("false");
   });
 
   test("one matter's list names it, and a next page its cursor", () => {

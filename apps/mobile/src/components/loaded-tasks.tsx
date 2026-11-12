@@ -123,7 +123,7 @@ export const LoadedTasks = ({
       contentInsetAdjustmentBehavior="automatic"
       keyExtractor={(task) => task.id}
       ListEmptyComponent={empty}
-      ListFooterComponent={footer}
+      ListFooterComponent={footer ?? undefined}
       refreshControl={
         <RefreshControl
           onRefresh={onReload}
