@@ -1068,6 +1068,34 @@ describe("chat prompt builders", () => {
     );
   });
 
+  test("the prompt text builders keep the turn's target, as their parts do", () => {
+    const localRun = { type: "local_run", webSearch: "asks" } as const;
+    const refRegistry = createChatRefRegistry();
+    const workspace = {
+      entityCount: 1,
+      refRegistry,
+      userContext: null,
+      workspaceId: WORKSPACE_ID,
+      workspaceName: "Matter Alpha",
+    };
+    expect(
+      buildGlobalPrompt({ promptTarget: localRun, userContext: null }),
+    ).toBe(
+      buildGlobalPromptParts({ promptTarget: localRun, userContext: null })
+        .fullPrompt,
+    );
+    expect(
+      buildWorkspacePromptText({ ...workspace, promptTarget: localRun }),
+    ).toBe(
+      buildWorkspacePromptParts({ ...workspace, promptTarget: localRun })
+        .fullPrompt,
+    );
+    // And the target changes the text: a local turn is not told the cloud's.
+    expect(
+      buildGlobalPrompt({ promptTarget: localRun, userContext: null }),
+    ).not.toBe(buildGlobalPrompt({ userContext: null }));
+  });
+
   test("organization instructions keep a single delimited block", () => {
     const prompt = buildGlobalPromptParts({
       organizationAIInstructions:

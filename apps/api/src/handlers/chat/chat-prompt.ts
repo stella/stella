@@ -1394,24 +1394,11 @@ type BuildGlobalPromptProps = {
   userContext: UserContext | null;
 };
 
-export const buildGlobalPrompt = ({
-  featureAccessContext,
-  documentedChatReads = [],
-  organizationAIInstructions = "",
-  practiceJurisdictions = [],
-  skillMetadata = [],
-  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
-  userContext,
-}: BuildGlobalPromptProps) =>
-  buildGlobalPromptParts({
-    featureAccessContext,
-    documentedChatReads,
-    organizationAIInstructions,
-    practiceJurisdictions,
-    skillMetadata,
-    toolAvailability,
-    userContext,
-  }).fullPrompt;
+// The text is the parts' full prompt, from the same props: a wrapper that
+// listed them again could drop one (the prompt target once fell back to the
+// cloud here).
+export const buildGlobalPrompt = (props: BuildGlobalPromptProps) =>
+  buildGlobalPromptParts(props).fullPrompt;
 
 export const buildGlobalPromptParts = ({
   featureAccessContext,
@@ -1669,34 +1656,10 @@ type BuildWorkspacePromptTextProps = {
   workspaceName: string;
 };
 
-export const buildWorkspacePromptText = ({
-  featureAccessContext,
-  documentedChatReads = [],
-  entityCount,
-  extractedProperties = [],
-  organizationAIInstructions = "",
-  practiceJurisdictions = [],
-  refRegistry,
-  skillMetadata = [],
-  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
-  userContext,
-  workspaceId,
-  workspaceName,
-}: BuildWorkspacePromptTextProps) =>
-  buildWorkspacePromptParts({
-    featureAccessContext,
-    documentedChatReads,
-    entityCount,
-    extractedProperties,
-    organizationAIInstructions,
-    practiceJurisdictions,
-    refRegistry,
-    skillMetadata,
-    toolAvailability,
-    userContext,
-    workspaceId,
-    workspaceName,
-  }).fullPrompt;
+// See `buildGlobalPrompt`: the props pass through whole.
+export const buildWorkspacePromptText = (
+  props: BuildWorkspacePromptTextProps,
+) => buildWorkspacePromptParts(props).fullPrompt;
 
 export const buildWorkspacePromptParts = ({
   featureAccessContext,

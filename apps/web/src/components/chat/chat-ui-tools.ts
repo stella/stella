@@ -126,11 +126,23 @@ type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
   "ask-user" | "create-document" | "request_secret" | "connect_connector"
 >;
-export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
+/**
+ * A harness-native step of a coding agent on the member's computer. The
+ * member approves one like any other call (`isApprovalToolName` accepts its
+ * name), and its input is the contract's (`chat-local-run-tool`).
+ */
+type HarnessToolName = keyof typeof HARNESS_TOOL_TITLE_KEYS;
+type HarnessChatToolCallPart = Omit<TanStackChatToolCallPart, "name"> & {
+  name: HarnessToolName;
+};
+export type ApprovalToolName =
+  BuiltInApprovalToolName | HarnessToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
   ApprovalToolName | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
-export type ApprovalToolPart = RegisteredChatUIToolCallPart & {
+export type ApprovalToolPart = (
+  RegisteredChatUIToolCallPart | HarnessChatToolCallPart
+) & {
   name: ApprovalToolName;
   approval: {
     approved?: boolean | undefined;
