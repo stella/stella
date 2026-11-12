@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { isChatLocalRunToolName } from "@stll/api-contract/chat-local-run-tool";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -410,11 +411,35 @@ const TOOL_CALL_STATUS_LABEL_KEYS = {
  *  what the call saved. */
 export type ToolCallAction = { label: string; onClick: () => void };
 
-export const toolFailureLabelKey = (
-  rawErrorDetails: ReturnType<typeof getToolOutputError>,
-  state: ToolPart["state"],
-) => {
-  if (rawErrorDetails !== undefined) {
+/**
+ * Whether a coding agent's own step reports that it failed: its result is
+ * `{ status: "failed" }` (`chat-local-run-tool`), with no error envelope.
+ */
+const localRunStepFailed = (name: string, output: unknown): boolean =>
+  isChatLocalRunToolName(name) &&
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === "failed";
+
+/**
+ * How a call that did not complete reads: failed when its result says so
+ * (an error envelope, or a coding agent's step reporting `failed`);
+ * interrupted only when it ended without such a result (its turn was
+ * stopped or cut off, or the result is a cancellation).
+ */
+export const toolFailureLabelKey = ({
+  name,
+  output,
+  state,
+}: {
+  name: string;
+  output: unknown;
+  state: ToolPart["state"];
+}) => {
+  if (
+    getToolOutputError(output) !== undefined ||
+    localRunStepFailed(name, output)
+  ) {
     return "chat.toolCall.failed";
   }
   return state === "error" ? "chat.toolCall.interrupted" : undefined;
@@ -549,7 +574,11 @@ const ToolCallCardComponent = ({
   // never produced an `output.error`) still reads as failed via a generic
   // interrupted label.
   const rawErrorDetails = getToolOutputError(part.output);
-  const failureLabelKey = toolFailureLabelKey(rawErrorDetails, part.state);
+  const failureLabelKey = toolFailureLabelKey({
+    name,
+    output: part.output,
+    state: part.state,
+  });
   const errorMessage =
     failureLabelKey === undefined ? undefined : t(failureLabelKey);
   // A call its turn cut off (a stop, a new message) never finished; that is
@@ -564,7 +593,8 @@ const ToolCallCardComponent = ({
   })();
   // A running call waits on nothing; the turn's live status names the work.
   const settledStatusLabel =
-    hasError || stopped ? errorMessage : t(TOOL_CALL_STATUS_LABEL_KEYS[status]);
+    errorMessage ??
+    (status === "failed" ? undefined : t(TOOL_CALL_STATUS_LABEL_KEYS[status]));
   const statusLabel = isLoading ? undefined : settledStatusLabel;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
