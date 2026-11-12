@@ -396,9 +396,10 @@ beforeAll(async () => {
       ),
       // A run against another list: never a source, though newer.
       claimRow(otherListRunId, createSafeId<"legalListClaim">(), 0, {
-        ...PREVIOUS[0],
+        text: "The payment was made on 9 March.",
         block: "p1",
-      } as SeedClaim),
+        verdict: supported,
+      }),
     ]);
     // Rows from before reasons were required got past a check that did
     // not exist yet. The live check is NOT VALID for the same reason, so
@@ -630,14 +631,15 @@ describe("completing the next run of a document", () => {
           limit: 10,
         }),
     );
-    if (history.type !== "read") {
-      return panic(`History reads as ${history.type}`);
-    }
-    expect(history.history.items.map((item) => item.carriedFrom)).toEqual([
+    const page =
+      history.type === "read"
+        ? history.history
+        : panic(`History reads as ${history.type}`);
+    expect(page.items.map((item) => item.carriedFrom)).toEqual([
       { runId: previousRunId, runCreatedAt: PREVIOUS_RUN_AT.toISOString() },
       { runId: previousRunId, runCreatedAt: PREVIOUS_RUN_AT.toISOString() },
     ]);
-    expect(history.history.items.at(-1)?.after.status).toBe("reviewed");
+    expect(page.items.at(-1)?.after.status).toBe("reviewed");
   });
 
   test("a replayed completion carries nothing twice", async () => {

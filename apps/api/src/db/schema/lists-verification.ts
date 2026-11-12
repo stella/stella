@@ -691,6 +691,10 @@ export const legalListClaimCarryOutcomes = p.pgTable(
     p
       .index("legal_list_claim_carry_outcomes_source_claim_idx")
       .on(table.workspaceId, table.sourceClaimId),
+    // The feature gate finds a claim's outcomes by either claim.
+    p
+      .index("legal_list_claim_carry_outcomes_target_claim_idx")
+      .on(table.workspaceId, table.targetClaimId),
     p.check(
       "legal_list_claim_carry_outcomes_outcome_check",
       sql`${table.outcome} IN (${CARRY_OUTCOME_SQL_VALUES})`,
@@ -706,6 +710,14 @@ export const legalListClaimCarryOutcomes = p.pgTable(
         [
           table.runId,
           { kind: "owned-by-parent", parent: legalListVerificationRuns },
+        ],
+        [
+          table.sourceClaimId,
+          { kind: "owned-by-parent", parent: legalListClaims },
+        ],
+        [
+          table.targetClaimId,
+          { kind: "owned-by-parent", parent: legalListClaims },
         ],
       ]),
     }),

@@ -6188,6 +6188,8 @@
         "column:public.legal_list_claim_carry_outcomes.run_id:SELECT:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.legal_list_claim_carry_outcomes.source_claim_id:SELECT:EFFECTIVE",
         "column:public.legal_list_claim_carry_outcomes.source_claim_id:SELECT:GRANTOR:census_admin:GRANTABLE:false",
+        "column:public.legal_list_claim_carry_outcomes.target_claim_id:SELECT:EFFECTIVE",
+        "column:public.legal_list_claim_carry_outcomes.target_claim_id:SELECT:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.legal_list_claim_carry_outcomes.workspace_id:SELECT:EFFECTIVE",
         "column:public.legal_list_claim_carry_outcomes.workspace_id:SELECT:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.legal_list_claim_review_events.claim_id:SELECT:EFFECTIVE",

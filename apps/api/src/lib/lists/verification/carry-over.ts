@@ -411,8 +411,8 @@ export const carryReviewsToRun = async ({
     recordConflict: legalListClaims.recordConflict,
   };
   // Claims per run are capped by their position check.
-  const readClaims = (ofRun: SafeId<"legalListVerificationRun">) =>
-    readBounded(
+  const readClaims = async (ofRun: SafeId<"legalListVerificationRun">) =>
+    await readBounded(
       tx
         .select(claimColumns)
         .from(legalListClaims)

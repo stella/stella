@@ -53,6 +53,7 @@ CREATE TABLE "legal_list_claim_carry_outcomes" (
 -- Built with the empty table, so nothing is scanned.
 CREATE INDEX "legal_list_claim_carry_outcomes_run_idx" ON "legal_list_claim_carry_outcomes" ("workspace_id", "run_id");--> statement-breakpoint
 CREATE INDEX "legal_list_claim_carry_outcomes_source_claim_idx" ON "legal_list_claim_carry_outcomes" ("workspace_id", "source_claim_id");--> statement-breakpoint
+CREATE INDEX "legal_list_claim_carry_outcomes_target_claim_idx" ON "legal_list_claim_carry_outcomes" ("workspace_id", "target_claim_id");--> statement-breakpoint
 
 ALTER TABLE "legal_list_claim_carry_outcomes" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "legal_list_claim_carry_outcomes" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
