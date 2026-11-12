@@ -4,28 +4,28 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## legal_graph_edges · `legalGraphEdges` · lists-graph.ts:80 · rls
+## legal_graph_edges · `legalGraphEdges` · lists-graph.ts:81 · rls
 
 One typed link of the matter graph, between blocks that already exist: a claim and a fact it cites, a fact and the document it is sourced from (at a Spot).
 
 ```text
-legal_graph_edges.{...entityFeatureGateColumns()}              spread                                lists-graph.ts:83
-legal_graph_edges.{...entityFeatureWorkspaceGateColumns()}     spread                                lists-graph.ts:84
-legal_graph_edges.{...entityFeatureOrganizationGateColumns()}  spread                                lists-graph.ts:85
-legal_graph_edges.id                                           uuid             pk,default,not null  lists-graph.ts:86
-legal_graph_edges.workspace_id                                 safeWorkspaceId  fk,not null          lists-graph.ts:91
-legal_graph_edges.kind                                         text             not null             lists-graph.ts:92
-legal_graph_edges.from_kind                                    text             not null             lists-graph.ts:93
-legal_graph_edges.from_claim_id                                safeUuid         fk,null              lists-graph.ts:97   A claim end names the claim and its run; any other end, the entity.
-legal_graph_edges.from_claim_run_id                            safeUuid         fk,null              lists-graph.ts:98
-legal_graph_edges.from_entity_id                               safeUuid         fk,null              lists-graph.ts:99
-legal_graph_edges.to_kind                                      text             not null             lists-graph.ts:100
-legal_graph_edges.to_entity_id                                 safeUuid         fk,not null          lists-graph.ts:103
-legal_graph_edges.stance                                       text             null                 lists-graph.ts:105  How a cited fact bears on the claim; null for every other kind.
-legal_graph_edges.source_id                                    safeUuid         fk,null              lists-graph.ts:109  The Spot (a fact's source passage) the edge rests on; null when the edge carries no Spot of its own, with the reason why.
-legal_graph_edges.provenance_reason                            text             null                 lists-graph.ts:110
-legal_graph_edges.producer_kind                                text             not null             lists-graph.ts:112
-legal_graph_edges.producer_id                                  uuid             null                 lists-graph.ts:117  The record that holds the producing act (`GRAPH_EDGE_PRODUCER_KINDS`); null only for an import.
-legal_graph_edges.confidence                                   text             null                 lists-graph.ts:120  How far the edge can be relied on, on the facts' scale; null when the producer did not say.
-legal_graph_edges.created_at                                   timestamptz      default,not null     lists-graph.ts:121
+legal_graph_edges.{...entityFeatureGateColumns()}              spread                                lists-graph.ts:84
+legal_graph_edges.{...entityFeatureWorkspaceGateColumns()}     spread                                lists-graph.ts:85
+legal_graph_edges.{...entityFeatureOrganizationGateColumns()}  spread                                lists-graph.ts:86
+legal_graph_edges.id                                           uuid             pk,default,not null  lists-graph.ts:87
+legal_graph_edges.workspace_id                                 safeWorkspaceId  fk,not null          lists-graph.ts:92
+legal_graph_edges.kind                                         text             not null             lists-graph.ts:93
+legal_graph_edges.from_kind                                    text             not null             lists-graph.ts:94
+legal_graph_edges.from_claim_id                                safeUuid         fk,null              lists-graph.ts:96   A claim end names the claim and its run; any other end, the entity.
+legal_graph_edges.from_claim_run_id                            safeUuid         fk,null              lists-graph.ts:97
+legal_graph_edges.from_entity_id                               safeUuid         fk,null              lists-graph.ts:98
+legal_graph_edges.to_kind                                      text             not null             lists-graph.ts:99
+legal_graph_edges.to_entity_id                                 safeUuid         fk,not null          lists-graph.ts:100
+legal_graph_edges.stance                                       text             null                 lists-graph.ts:102  How a cited fact bears on the claim; null for every other kind.
+legal_graph_edges.source_id                                    safeUuid         fk,null              lists-graph.ts:105  The Spot (a fact's source passage) the edge rests on; null when the edge carries no Spot of its own, with the reason why.
+legal_graph_edges.provenance_reason                            text             null                 lists-graph.ts:106
+legal_graph_edges.producer_kind                                text             not null             lists-graph.ts:109
+legal_graph_edges.producer_id                                  uuid             null                 lists-graph.ts:114  The record that holds the producing act (`GRAPH_EDGE_PRODUCER_KINDS`); null only for an import.
+legal_graph_edges.confidence                                   text             null                 lists-graph.ts:117  How far the edge can be relied on, on the facts' scale; null when the producer did not say.
+legal_graph_edges.created_at                                   timestamptz      default,not null     lists-graph.ts:118
 ```
