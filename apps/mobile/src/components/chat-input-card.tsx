@@ -239,13 +239,20 @@ const StepsCard = ({
             decide({ ...allowed, [approval.interruptId]: approved });
           }}
           onGranted={() => {
-            decide(
+            // The grant lands after a request, while other approvals may
+            // have been decided: it is applied to the decisions as they are
+            // now, never to the ones it started from.
+            const granted = (current: Readonly<Record<string, boolean>>) =>
               allowedWithGrant(
                 approvals,
-                { ...allowed, [approval.interruptId]: true },
+                { ...current, [approval.interruptId]: true },
                 approval.toolName,
-              ),
-            );
+              );
+            if (loneApproval) {
+              send(granted({}));
+              return;
+            }
+            setAllowed(granted);
           }}
           source={source}
           threadId={threadId}
@@ -282,7 +289,9 @@ const StepsCard = ({
           {`${t("documentPreparing")}: ${input.name}`}
         </Text>
       ))}
-      {loneApproval || onlyDrafts ? null : (
+      {/* A lone approval is answered with its buttons; drafts alone are sent
+          as the card shows, and Submit sends them again after a failure. */}
+      {loneApproval ? null : (
         <Button
           className="self-start"
           disabled={busy || !complete}
