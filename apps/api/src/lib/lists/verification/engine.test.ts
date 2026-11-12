@@ -811,6 +811,7 @@ describe("gradeClaims", () => {
     expect(Result.isOk(result) ? result.value : null).toEqual({
       type: "incomplete",
       grades: new Map(),
+      assertedDates: new Map(),
       ungraded: 1,
     });
   });

@@ -566,6 +566,8 @@ const stalenessOfClaim = ({
     },
     now,
   );
+};
+
 type AssertedDateColumns = Pick<
   typeof legalListClaims.$inferSelect,
   "text" | "assertedOn" | "assertedOnPrecision" | "assertedOnSource"
