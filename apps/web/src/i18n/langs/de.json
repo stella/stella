@@ -3298,6 +3298,8 @@
       "organizationMemberLimitReached": "Diese Organisation hat ihr Mitgliederlimit erreicht.",
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
+      "runActiveLimitReached": "Ihre Organisation hat das Limit für gleichzeitig laufende Vorgänge erreicht. Warten Sie, bis einer abgeschlossen ist, und versuchen Sie es erneut.",
+      "runDailyLimitReached": "Ihre Organisation hat das Tageslimit für Vorgänge erreicht. Versuchen Sie es nach Mitternacht (Europe/Prague) erneut.",
       "sharepointAccessDenied": "Microsoft hat den Zugriff auf diese Website, Bibliothek oder Datei verweigert.",
       "sharepointFileTooLarge": "Diese Datei ist zu groß für den Import.",
       "sharepointInvalidCursor": "Die Liste hat sich während des Durchsuchens geändert. Öffnen Sie den Ordner erneut.",
@@ -3313,8 +3315,6 @@
       "validationRequired": "Ein Pflichtfeld ist leer.",
       "validationTooLong": "Zu lang: höchstens {limit, number} Zeichen.",
       "validationTooShort": "Zu kurz: mindestens {limit, number} Zeichen.",
-      "verificationActiveLimitReached": "Ihre Organisation hat das Limit für gleichzeitige Überprüfungen erreicht. Warten Sie, bis eine Überprüfung abgeschlossen ist, und versuchen Sie es erneut.",
-      "verificationDailyLimitReached": "Ihre Organisation hat das Tageslimit für Überprüfungen erreicht. Versuchen Sie es nach Mitternacht (Europe/Prague) erneut.",
       "versionConflict": "Jemand anderes hat dies während Ihrer Bearbeitung geändert. Laden Sie die aktuelle Version neu."
     },
     "failedToAcceptInvitation": "Einladung konnte nicht angenommen werden",
