@@ -331,6 +331,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.generations.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generations-create` |
 | `lists.generations.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generations-list` |
 | `lists.get` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists get` |
+| `lists.graph.neighbours.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists graph-neighbours-list` |
+| `lists.graph.nodes.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists graph-nodes-list` |
+| `lists.graph.paths.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists graph-paths-list` |
 | `lists.items.activity.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-activity-list` |
 | `lists.items.comments.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-comments-create` |
 | `lists.items.fact-details.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-fact-details-update` |
