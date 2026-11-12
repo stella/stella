@@ -181,6 +181,35 @@ describe("Polish decisions sign under their ruling", () => {
     expect(roleFindings(blocks)).toEqual([]);
   });
 
+  test.each([
+    ["SAOS", async () => await saosBlocks("548531")],
+    [
+      "the court's portal",
+      async () => await ncourtBlocks("pl-ncourt-viii-gc-1117-25.xml.gz"),
+    ],
+  ])(
+    "VIII GC 1117/25 from %s: the judge signs as Sędzia under the ruling and under the reasons",
+    async (_, read) => {
+      const blocks = await read();
+
+      expect(withRole(blocks, "holding").at(-1)).toStartWith("IV. ");
+      expect(withRole(blocks, "signature")).toEqual([
+        "Sędzia Przemysław Kociński",
+        "Sędzia Przemysław Kociński",
+      ]);
+      expect(roleFindings(blocks)).toEqual([]);
+    },
+  );
+
+  test("IV GC 42/26: the court assessor signs the reasons as ASR", async () => {
+    const blocks = await saosBlocks("546903");
+
+    expect(withRole(blocks, "signature")).toEqual(["ASR Maciej Skuczyński"]);
+    expect(withRole(blocks, "argumentation")).not.toContain(
+      "ASR Maciej Skuczyński",
+    );
+  });
+
   test("KIO 1675/10: the chamber's label and its blank sign, and the spaced reasons heading opens the reasons", async () => {
     const blocks = await saosBlocks("116508");
     // The court prints the heading spaced out (`U z a s a d n i e n i e`).

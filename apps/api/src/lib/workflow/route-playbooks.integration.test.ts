@@ -22,8 +22,6 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentReviewRuns,
   documentTypes,
@@ -33,7 +31,6 @@ import {
   properties,
   propertyDependencies,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
@@ -43,7 +40,7 @@ import type {
 } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 import { routeClassifiedDocuments } from "@/api/lib/workflow/route-playbooks";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { memberScopedDb } from "@/api/tests/helpers/application-role-db";
 import {
   createTestIds,
   setupRlsTestData,
@@ -208,18 +205,11 @@ beforeAll(async () => {
     },
   ]);
 
-  const scopedDb: ScopedDb = async (fn) => {
-    const result = await createSafeDb(
-      db,
-      [ids.wsA1],
-      ids.orgA,
-      ids.userA1,
-    )(async (tx) => fn(asTestRaw<Transaction>(tx)));
-    if (result.isErr()) {
-      throw result.error;
-    }
-    return result.value;
-  };
+  const scopedDb = memberScopedDb(db, {
+    organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1],
+    userId: ids.userA1,
+  });
 
   await routeClassifiedDocuments({
     workspaceId: ids.wsA1,

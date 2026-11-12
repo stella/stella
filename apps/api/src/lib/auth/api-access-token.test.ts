@@ -269,13 +269,78 @@ describe("which routes an API access token opens", () => {
       Object.keys(API_OAUTH_ROUTES).filter((key) => key.includes(" /v1/chat")),
     ).toEqual([
       "GET /v1/chat/threads",
+      "PATCH /v1/chat/threads/:threadId/read-state",
+      "PATCH /v1/chat/threads/:threadId/pin-state",
       "GET /v1/chat/threads/:threadId/messages",
       "GET /v1/chat/threads/:threadId/messages/older",
       "POST /v1/chat",
       "GET /v1/chat/threads/:threadId/turns/:turnId/resume",
       "GET /v1/chat/threads/:threadId/turns/:turnId/join",
       "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
+      "GET /v1/chat/runs/active",
     ]);
+  });
+
+  test("the chats list's active runs open at the chat scope", () => {
+    const runs = { method: "GET", route: "/v1/chat/runs/active" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...runs, scopes: ["stella:chat"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...runs,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("the reader's read and pin marks on a chat open at the chat scope", () => {
+    for (const route of [
+      "/v1/chat/threads/:threadId/read-state",
+      "/v1/chat/threads/:threadId/pin-state",
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "PATCH",
+          route,
+          scopes: ["stella:chat"],
+        }),
+      ).toEqual({ admitted: true });
+      expect(
+        admitApiAccessTokenRoute({
+          method: "PATCH",
+          route,
+          scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+    }
+  });
+
+  test("the person's event stream opens at the read scope, its siblings never", () => {
+    const events = {
+      method: "GET",
+      route: "/v1/notifications/events",
+    } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...events, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...events,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    for (const [method, route] of [
+      ["GET", "/v1/notifications"],
+      ["POST", "/v1/notifications/read-all"],
+      ["POST", "/v1/notifications/announcements"],
+      ["PATCH", "/v1/notifications/:notificationId/read"],
+      ["GET", "/workspaces/:workspaceId/events"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: MOBILE_SCOPES }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
   });
 
   test("search results open at the read scope", () => {

@@ -56,6 +56,8 @@ const routeServer = serveRoutesForTest([
 ]);
 afterAll(async () => {
   await routeServer.stop();
+  testFetchState.restore();
+  await releaseAgentAuthTestDb();
 });
 
 // One member's whole credential set, minted through the endpoints that issue
@@ -87,11 +89,6 @@ beforeAll(async () => {
     },
     { preconnect: passThroughFetch.preconnect },
   );
-});
-
-afterAll(async () => {
-  testFetchState.restore();
-  await releaseAgentAuthTestDb();
 });
 
 const BASE = "http://localhost";

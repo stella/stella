@@ -1,5 +1,6 @@
 mod accessibility_guide;
 mod account;
+mod account_switch;
 mod activity;
 mod activity_calls;
 mod activity_commands;

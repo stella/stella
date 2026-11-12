@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "The organization data export worker's heartbeat writes progress counters, the part plan and finished-part checkpoints, fenced on the run's attempt; it never changes the export's status. Every status change goes through the transition owner with its audit event, and the export request and every download link are audited."
+}

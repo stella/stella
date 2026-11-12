@@ -35,7 +35,7 @@ import {
 } from "@stll/ui/list";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 
 const CLI_INSTALL_COMMAND = "npm i -g @stll/cli";
 
@@ -185,7 +185,7 @@ const SetupList = ({ rows }: { rows: readonly SetupRow[] }) => (
               <TruncatedText>{row.value}</TruncatedText>
             </code>
           )}
-          <CopyActionButton
+          <CopyControl
             iconClassName="size-4"
             iconOnly
             size="icon-sm"

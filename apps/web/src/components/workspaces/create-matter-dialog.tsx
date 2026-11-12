@@ -25,6 +25,7 @@ import { Field, FieldLabel } from "@stll/ui/field";
 import { BuildingIcon, UserIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -62,9 +63,12 @@ export const SelectedClient = ({
     ) : (
       <BuildingIcon className="text-muted-foreground size-4" />
     )}
-    <BidiText as="span" className="truncate text-sm font-medium">
+    <TruncatedText
+      className="text-sm font-medium"
+      render={<BidiText as="span" />}
+    >
       {client.displayName}
-    </BidiText>
+    </TruncatedText>
     <Button
       aria-label={clearLabel}
       className="ms-auto"
@@ -356,7 +360,9 @@ const CreateMatterDialogBody = ({
                   className="flex items-center gap-2 text-sm"
                   key={workspace.id}
                 >
-                  <span className="truncate font-medium">{workspace.name}</span>
+                  <TruncatedText className="font-medium">
+                    {workspace.name}
+                  </TruncatedText>
                   <span className="text-muted-foreground text-xs">
                     {workspace.reference}
                   </span>

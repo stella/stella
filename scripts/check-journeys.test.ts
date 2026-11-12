@@ -98,6 +98,10 @@ type Scenario = {
   session?: "required" | "notification-error";
   redirect?: "once" | "chain";
   searchSlot?: string;
+  probeSlot?: string;
+  probeError?: string;
+  probeRunning?: "once" | "always";
+  probeRunSeconds?: string;
 };
 
 type WorkflowRun = {
@@ -152,6 +156,46 @@ const mcpPayload = ({ name, rpc }: McpPayloadOptions) => {
     return readFixture(undefined);
   }
   return readFixture(SENTINEL);
+};
+
+type ToolResultOptions = {
+  scenario: Scenario;
+  args: unknown;
+  payload: unknown;
+};
+const toolResult = ({ scenario, args, payload }: ToolResultOptions) => {
+  if (scenario.probeError !== undefined) {
+    return {
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ error: { code: scenario.probeError } }),
+        },
+      ],
+    };
+  }
+  const continued =
+    typeof args === "object" && args !== null && "continuation_token" in args;
+  const running =
+    scenario.probeRunning === "always" ||
+    (scenario.probeRunning === "once" && !continued);
+  const wrongShape = scenario.rpc === "wrong-shape";
+  let text = JSON.stringify(payload);
+  if (wrongShape) {
+    text = JSON.stringify({ unrelated: SENTINEL });
+  }
+  if (running) {
+    text = JSON.stringify({
+      status: "running",
+      continuationToken: "fixture-continuation",
+      retryAfterMs: 1,
+    });
+  }
+  return {
+    isError: scenario.rpc === "tool-error",
+    content: [{ type: "text", text }],
+  };
 };
 
 type RedirectFixtureOptions = { pathname: string; mode: Scenario["redirect"] };
@@ -263,7 +307,7 @@ const assetStatusFor = (scenario: Scenario, attempt: number | undefined) =>
 
 type RunOptions = {
   scenario?: Scenario;
-  mode?: "web" | "cli" | "desktop";
+  mode?: "web" | "cli" | "desktop" | "search-probe";
   token?: string;
 };
 const run = async ({
@@ -398,23 +442,14 @@ const run = async ({
           return new Response(null, { status: 400 });
         }
         calls.push({ name: body.params.name, args: body.params.arguments });
-        const payload = mcpPayload({
-          name: body.params.name,
-          rpc: scenario.rpc,
+        result = toolResult({
+          scenario,
+          args: body.params.arguments,
+          payload: mcpPayload({
+            name: body.params.name,
+            rpc: scenario.rpc,
+          }),
         });
-        result = {
-          isError: scenario.rpc === "tool-error",
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                scenario.rpc === "wrong-shape"
-                  ? { unrelated: SENTINEL }
-                  : payload,
-              ),
-            },
-          ],
-        };
       }
       const envelope = {
         jsonrpc: "2.0",
@@ -484,6 +519,7 @@ rm -f "$response"
           ? "scripts/check-desktop-release-policy.sh"
           : "scripts/check-journeys.sh",
         ...(mode === "cli" ? ["--cli"] : []),
+        ...(mode === "search-probe" ? ["--search-probe"] : []),
       ],
       {
         cwd: ROOT,
@@ -496,6 +532,9 @@ rm -f "$response"
           JOURNEY_CLI_URL: server.url.toString().replace(/\/$/u, ""),
           JOURNEY_RETRY_PAUSE_SECONDS: "0",
           JOURNEY_SEARCH_SLOT: scenario.searchSlot ?? "0",
+          JOURNEY_PROBE_SLOT: scenario.probeSlot ?? "0",
+          JOURNEY_PROBE_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
+          JOURNEY_PROBE_RUN_SECONDS: scenario.probeRunSeconds ?? "240",
           STELLA_DESKTOP_RETRY_PAUSE_SECONDS: "0",
           STELLA_DESKTOP_NOW_EPOCH: "1791536400",
           JOURNEY_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
@@ -541,10 +580,12 @@ rm -f "$response"
         ).toHaveLength(1);
       }
       for (const line of lines.filter(
-        (entry) => !entry.startsWith("journey-detail "),
+        (entry) =>
+          !entry.startsWith("journey-detail ") &&
+          !entry.startsWith("journey-timing "),
       )) {
         expect(line).toMatch(
-          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|stale_result|contract_error|publish_lagging|pending_release|promotion_unavailable|registry_rejected|no_credential|auth_rejected|ok)$/u,
+          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|stale_result|contract_error|publish_lagging|pending_release|promotion_unavailable|registry_rejected|no_credential|auth_rejected|network_error|run_budget|ok)$/u,
         );
       }
     }
@@ -1140,6 +1181,172 @@ describe("scheduled read journeys", () => {
   });
 });
 
+describe("case-law search probe", () => {
+  type ProbeArgs = { queries: string[]; country: string; courts?: string[] };
+  const probeArgs = (args: unknown) => {
+    if (
+      typeof args !== "object" ||
+      args === null ||
+      !("queries" in args) ||
+      !Array.isArray(args.queries) ||
+      !("country" in args)
+    ) {
+      throw new TypeError("not probe arguments");
+    }
+    return {
+      queries: args.queries.map(String),
+      country: String(args.country),
+      ...("courts" in args && Array.isArray(args.courts)
+        ? { courts: args.courts.map(String) }
+        : {}),
+    } satisfies ProbeArgs;
+  };
+
+  test("searches every country and two apex courts once, without retries", async () => {
+    const result = await run({ mode: "search-probe" });
+    expect(result.exit).toBe(0);
+    expect(result.calls.map(({ name }) => name)).toEqual(
+      Array.from({ length: 7 }, () => "search_case_law"),
+    );
+    const args = result.calls.map(({ args: call }) => probeArgs(call));
+    expect(args.map(({ country }) => country)).toEqual([
+      "CZE",
+      "SVK",
+      "POL",
+      "HUN",
+      "EU",
+      "CZE",
+      "POL",
+    ]);
+    expect(args.slice(0, 5).every(({ courts }) => courts === undefined)).toBe(
+      true,
+    );
+    expect(args.at(5)?.courts).toEqual(["NS"]);
+    expect(args.at(6)?.courts).toEqual(["SN"]);
+    expect(result.stdout.match(/ passed ok/gu)).toHaveLength(7);
+    expect(result.stdout).not.toContain("passed_after_retry");
+  });
+
+  test("asks something new in every slot of a day", async () => {
+    const queries = new Set<string>();
+    for (const probeSlot of ["0", "1", "20", "287", "288"]) {
+      const result = await run({
+        mode: "search-probe",
+        scenario: { probeSlot },
+      });
+      expect(result.exit).toBe(0);
+      const first = result.calls.at(0);
+      expect(first).toBeDefined();
+      queries.add(probeArgs(first?.args).queries.join(" "));
+    }
+    expect(queries.size).toBe(5);
+  });
+
+  test("fails without a retry when the first hit times out", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeError: "public_read_timeout" },
+    });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(7);
+    expect(result.stdout).toContain("journey mcp_probe_cze failed timeout");
+    expect(result.stdout).toContain("tool error public_read_timeout");
+  });
+
+  test("counts the timeout family and tells other tool errors apart", async () => {
+    for (const code of [
+      "upstream_unavailable",
+      "search_index_unavailable",
+      "public_read_unfinished",
+      "continuation_expired",
+    ]) {
+      const result = await run({
+        mode: "search-probe",
+        scenario: { probeError: code },
+      });
+      expect(result.exit).toBe(1);
+      expect(result.stdout).toContain("journey mcp_probe_pol failed timeout");
+    }
+    const other = await run({
+      mode: "search-probe",
+      scenario: { probeError: "internal_error" },
+    });
+    expect(other.exit).toBe(1);
+    expect(other.stdout).toContain(
+      "journey mcp_probe_pol failed contract_error",
+    );
+  });
+
+  test("follows a continuation once with the same arguments", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeRunning: "once" },
+    });
+    expect(result.exit).toBe(0);
+    expect(result.calls).toHaveLength(14);
+    expect(result.calls.at(1)?.args).toEqual({
+      ...probeArgs(result.calls.at(0)?.args),
+      limit: 3,
+      continuation_token: "fixture-continuation",
+    });
+  });
+
+  test("treats a search still running after its continuations as a timeout", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeRunning: "always" },
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("journey mcp_probe_cze failed timeout");
+    expect(result.stdout).toContain("still running after 3 continuations");
+    expect(
+      [...result.counts.values()].reduce((sum, value) => sum + value, 0),
+    ).toBeLessThanOrEqual(30);
+  });
+
+  test("fails on a client-side timeout", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { delay: 500 },
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("failed timeout");
+  });
+
+  test("fails without credentials and asks nothing", async () => {
+    const result = await run({ mode: "search-probe", token: "" });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("journey mcp_probe failed no_credential");
+    expect(result.counts.get("/mcp")).toBeUndefined();
+  });
+
+  test("fails on a search the run budget skipped", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeRunSeconds: "-1" },
+    });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(0);
+    expect(result.stdout.match(/ failed run_budget/gu)).toHaveLength(7);
+  });
+
+  test("follows no continuation once the run budget is spent", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeRunning: "always", probeRunSeconds: "0" },
+    });
+    expect(result.exit).toBe(1);
+    expect(
+      result.calls.every(
+        ({ args }) =>
+          typeof args === "object" &&
+          args !== null &&
+          !("continuation_token" in args),
+      ),
+    ).toBe(true);
+  });
+});
+
 test("schedules bounded journeys and routes alerts", async () => {
   const workflow = await Bun.file(
     new URL("../.github/workflows/journey-canary.yml", import.meta.url),
@@ -1168,6 +1375,20 @@ test("schedules bounded journeys and routes alerts", async () => {
   ).text();
   expect(alerts).toContain("- Journey canary");
   expect(alerts).toContain('".github/workflows/journey-canary.yml"');
+  expect(alerts).toContain("- Case-law search probe");
+  expect(alerts).toContain('".github/workflows/case-law-search-probe.yml"');
+  const probe = await Bun.file(
+    new URL("../.github/workflows/case-law-search-probe.yml", import.meta.url),
+  ).text();
+  expect(probe).toContain("vars.CASE_LAW_SEARCH_PROBE_ENABLED == 'true'");
+  expect(probe).toContain("persist-credentials: false");
+  expect(probe).toContain(
+    "bash scripts/retry.sh bash scripts/check-journeys.sh --search-probe",
+  );
+  expect(probe).toContain('RETRY_PASSTHROUGH_EXIT_CODES: "1"');
+  for (const action of probe.matchAll(/uses: (\S+)/gu)) {
+    expect(action[1]).toMatch(/@[0-9a-f]{40}$/u);
+  }
 });
 
 test("redacts known credential values literally and strips terminal controls", async () => {

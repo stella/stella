@@ -27,7 +27,7 @@
 //!   finds what this one left (`run_folders`).
 
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   num::NonZeroU32,
   path::PathBuf,
   sync::{Arc, Mutex, MutexGuard, PoisonError},
@@ -40,19 +40,20 @@ use tokio::sync::{Notify, mpsc, watch};
 use uuid::Uuid;
 
 use super::harness::{
-  EmitError, Forwarded, HarnessHost, HarnessReports, JournaledRun, NotForwarded,
-  RunOutput, RunSink,
+  EmitError, FolderAnswer, Forwarded, HarnessHost, HarnessReports, JournaledRun,
+  NotForwarded, RunOutput, RunSink,
 };
 use super::run_folders;
 use crate::harness_sidecar::{
   self, HarnessLaunchSettings, HarnessProbe, HarnessProcess, HarnessSidecar,
-  ResumeError, SidecarDelivery, SidecarRunOutput, SidecarRunStart, SidecarSettings,
-  SkillFolderRef,
+  RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore, SidecarRunOutput,
+  SidecarRunStart, SidecarSettings, SkillFolderRef,
 };
 use crate::runner_protocol::{
-  Harness, HarnessReport, HarnessUnavailableReason, JsonObject, MAX_FRAME_BYTES,
-  MissingHarness, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
-  RunTokenRefresh, UnavailableHarness,
+  FolderRestore, FolderRestoreOutcome, Harness, HarnessReport,
+  HarnessUnavailableReason, JsonObject, MAX_FRAME_BYTES, MissingHarness, RejectReason,
+  RunAnswer, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  UnavailableHarness,
 };
 
 const LOG_TARGET: &str = "desktop_runner::host";
@@ -113,10 +114,9 @@ pub(crate) trait LocalHarnesses: Send + Sync + 'static {
 pub(crate) struct HostSettings {
   /// The supervisor's settings; `api_origin` is the connecting account's.
   pub(crate) sidecar: SidecarSettings,
-  /// Where each chat's folder is made.
+  /// Where each chat's folder is made, with its checkpoints and cache beside
+  /// it.
   pub(crate) workspaces: PathBuf,
-  /// The package-manager cache every run on this computer shares.
-  pub(crate) package_cache: PathBuf,
   pub(crate) probe_interval: Duration,
 }
 
@@ -136,6 +136,9 @@ struct HostRun {
   /// after a restart.
   model: Option<String>,
   thread_id: Option<String>,
+  /// The chat folder the run works in; unknown for a run picked up after a
+  /// restart, whose holder still refuses a restore of the folder it uses.
+  folder_id: Option<Uuid>,
 }
 
 struct Shared {
@@ -151,8 +154,18 @@ struct Shared {
   probes: Mutex<HashMap<String, ProcessGrant>>,
   /// Held grants, by run id or probe request id.
   grants: Mutex<HashMap<String, Box<dyn Send + Sync>>>,
-  /// Keeps a run starting in a folder apart from that folder's removal.
-  folders: Mutex<()>,
+  /// The folders being restored. Held while a run starts in a folder, a
+  /// folder is removed, or a restore begins: none of them overlaps another.
+  folders: run_folders::FolderLock,
+  /// The restores going on, by the API's restore id. The API sends one again
+  /// on each new socket until it is answered; a copy that arrives while it
+  /// runs gets no answer of its own, since the one answer goes out on the
+  /// socket that is up when it ends.
+  restores: Mutex<HashSet<String>>,
+  /// Every restore request the host was handed, repeats included, so a test
+  /// knows a resend arrived before it moves on.
+  #[cfg(all(test, unix))]
+  restores_asked: std::sync::atomic::AtomicUsize,
 }
 
 /// One per app: the supervisor and its holder connection outlive runner
@@ -167,13 +180,25 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl SidecarHarnessHost {
+  /// How many restore requests the host was handed, repeats included.
+  #[cfg(all(test, unix))]
+  pub(crate) fn restores_asked(&self) -> usize {
+    self
+      .shared
+      .restores_asked
+      .load(std::sync::atomic::Ordering::SeqCst)
+  }
+
   pub(crate) fn new(
     settings: HostSettings,
     harnesses: Arc<dyn LocalHarnesses>,
   ) -> Self {
     Self {
       shared: Arc::new(Shared {
-        folders: Mutex::new(()),
+        folders: Mutex::new(HashSet::new()),
+        restores: Mutex::new(HashSet::new()),
+        #[cfg(all(test, unix))]
+        restores_asked: std::sync::atomic::AtomicUsize::new(0),
         settings,
         harnesses,
         sidecar: Mutex::new(None),
@@ -795,6 +820,7 @@ impl HarnessHost for SidecarHarnessHost {
           grant: None,
           model: None,
           thread_id: None,
+          folder_id: None,
         },
       );
       fresh.push(run);
@@ -825,18 +851,22 @@ impl HarnessHost for SidecarHarnessHost {
     }
     let workspace = self.shared.workspace(folder_id);
     let opened = {
-      let _held = locked(&self.shared.folders);
-      run_folders::open(&workspace, SystemTime::now())
+      let restoring = locked(&self.shared.folders);
+      if restoring.contains(&folder_id) {
+        return Err(RejectReason::FolderBusy);
+      }
+      let opened = run_folders::open(&workspace, SystemTime::now());
+      // Held until the folder is recorded as used, so no restore begins in
+      // between.
+      drop(restoring);
+      opened
     };
     if let Err(error) = opened {
       tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "a run's folder could not be made");
       return Err(RejectReason::AtCapacity);
     }
-    let package_cache = &self.shared.settings.package_cache;
-    if let Err(error) = crate::local_store::create_private_dir(package_cache) {
-      tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "the package cache could not be made");
-      return Err(RejectReason::AtCapacity);
-    }
+    // Made with the folder; the one place outside it the run may write.
+    let cache = run_folders::chat_cache(&workspace);
     let credentials = cached.and_then(|cached| cached.credentials);
     let thread_id = start
       .harness_session_id
@@ -849,6 +879,7 @@ impl HarnessHost for SidecarHarnessHost {
         grant: credentials.as_ref().and_then(|held| held.grant.clone()),
         model: Some(start.model.clone()),
         thread_id: Some(thread_id.clone()),
+        folder_id: Some(folder_id),
       },
     );
     let run_id = start.run_id.clone();
@@ -860,7 +891,7 @@ impl HarnessHost for SidecarHarnessHost {
       config_dir: installed.config_dir.to_string_lossy().into_owned(),
       launch: credentials.map(|held| held.settings).unwrap_or_default(),
       workspace_dir: workspace.to_string_lossy().into_owned(),
-      cache_dir: package_cache.to_string_lossy().into_owned(),
+      cache_dir: cache.to_string_lossy().into_owned(),
       skill_folders: skill_folders_within(
         SKILL_FOLDER_BUDGET,
         Arc::clone(&self.shared.harnesses),
@@ -931,6 +962,71 @@ impl HarnessHost for SidecarHarnessHost {
 
   fn token(&self, refresh: RunTokenRefresh) -> Forwarded {
     self.forward("token", |sidecar| sidecar.token(refresh))
+  }
+
+  fn restore_folder(&self, restore: FolderRestore, answer: FolderAnswer) {
+    let folder_id = restore.folder_id.uuid();
+    // The same restore asked again while it runs: its answer comes when it
+    // ends, on whichever socket is up then.
+    let fresh = locked(&self.shared.restores).insert(restore.restore_id.clone());
+    #[cfg(all(test, unix))]
+    self
+      .shared
+      .restores_asked
+      .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    if !fresh {
+      return;
+    }
+    // The holder makes the final call: it refuses a restore of a folder one
+    // of its runs uses, and a run in a folder it restores. Another restore
+    // of the folder is another operation, and refused the same way.
+    let in_use = locked(&self.shared.runs)
+      .values()
+      .any(|run| run.folder_id == Some(folder_id));
+    if in_use || !locked(&self.shared.folders).insert(folder_id) {
+      locked(&self.shared.restores).remove(&restore.restore_id);
+      answer.send(FolderRestoreOutcome::FolderBusy);
+      return;
+    }
+    let Some(sidecar) = self.shared.sidecar() else {
+      locked(&self.shared.folders).remove(&folder_id);
+      locked(&self.shared.restores).remove(&restore.restore_id);
+      answer.send(FolderRestoreOutcome::Failed);
+      return;
+    };
+    let shared = Arc::clone(&self.shared);
+    let workspace = shared.workspace(folder_id);
+    tokio::spawn(async move {
+      let restored = sidecar
+        .restore_folder(SidecarFolderRestore {
+          request_id: Uuid::new_v4().to_string(),
+          workspace_dir: workspace.to_string_lossy().into_owned(),
+          run_id: restore.run_id,
+        })
+        .await;
+      locked(&shared.folders).remove(&folder_id);
+      locked(&shared.restores).remove(&restore.restore_id);
+      let outcome = match restored {
+        Ok(outcome) => folder_outcome(outcome),
+        Err(error) => {
+          tracing::warn!(target: LOG_TARGET, ?error, "a folder restore got no answer");
+          FolderRestoreOutcome::Failed
+        }
+      };
+      tracing::info!(target: LOG_TARGET, outcome = outcome.wire_name(), "a folder restore ended");
+      answer.send(outcome);
+    });
+  }
+}
+
+/// The holder's answer in the runner protocol's words.
+const fn folder_outcome(outcome: RestoreOutcome) -> FolderRestoreOutcome {
+  match outcome {
+    RestoreOutcome::Restored => FolderRestoreOutcome::Restored,
+    RestoreOutcome::NoCheckpoint => FolderRestoreOutcome::NoCheckpoint,
+    RestoreOutcome::NotNewest => FolderRestoreOutcome::NotNewest,
+    RestoreOutcome::FolderBusy => FolderRestoreOutcome::FolderBusy,
+    RestoreOutcome::Failed => FolderRestoreOutcome::Failed,
   }
 }
 

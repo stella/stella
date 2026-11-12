@@ -133,6 +133,16 @@ const command = (id: string, status: string, extra: object = {}) => ({
   ...extra,
 });
 
+/** Text a native step carries that chat must never show. */
+export const FAKE_PRIVATE_TEXT = {
+  heredoc: "Tenant owes 4,200 in arrears.",
+  diff: "-Rent is due monthly.\n+Rent is due quarterly.",
+  explanation: "Working through the private plan",
+} as const;
+
+/** A command longer than chat shows. */
+export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
+
 /** A connector tool: any MCP server other than the stella binding. */
 export const FAKE_MCP_CALL = {
   type: "mcpToolCall",
@@ -423,6 +433,80 @@ export const FAKE_SCENARIOS = {
       },
       error: null,
     }),
+    completed(),
+  ],
+  /**
+   * Native steps chat names beyond their kind, as the app server reports
+   * them: the fields stella shows sit next to text it must never forward.
+   */
+  native_tools: [
+    ...freshTurn(),
+    {
+      notify: "turn/plan/updated",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        explanation: FAKE_PRIVATE_TEXT.explanation,
+        plan: [
+          { step: "Read the lease", status: "completed" },
+          { step: "Draft the notice", status: "inProgress" },
+        ],
+      },
+    },
+    item(
+      "completed",
+      command("call-heredoc", "failed", {
+        command: `/bin/zsh -lc "cat > notes.md <<'EOF'\n${FAKE_PRIVATE_TEXT.heredoc}\nEOF"`,
+        aggregatedOutput: "zsh: permission denied",
+        exitCode: 1,
+      }),
+    ),
+    item(
+      "completed",
+      command("call-long", "completed", {
+        command: FAKE_LONG_COMMAND,
+        aggregatedOutput: "ok",
+        exitCode: 0,
+      }),
+    ),
+    item("completed", {
+      type: "fileChange",
+      id: "call-edit",
+      changes: [
+        {
+          path: "/workspace/drafts/lease.md",
+          kind: { type: "update", move_path: null },
+          diff: FAKE_PRIVATE_TEXT.diff,
+        },
+        {
+          path: "/workspace/drafts/notice.md",
+          kind: { type: "add" },
+          diff: FAKE_PRIVATE_TEXT.diff,
+        },
+      ],
+      status: "completed",
+    }),
+    {
+      notify: "turn/plan/updated",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        explanation: null,
+        plan: [
+          { step: "Read the lease", status: "completed" },
+          { step: "Draft the notice", status: "completed" },
+        ],
+      },
+    },
+    // Another turn's plan is not this turn's step.
+    {
+      notify: "turn/plan/updated",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: "turn-other",
+        plan: [{ step: "Elsewhere", status: "pending" }],
+      },
+    },
     completed(),
   ],
   /** Reasoning, an MCP tool call, a command and a streamed answer. */
@@ -750,8 +834,26 @@ export const FAKE_SCENARIOS = {
     item("completed", agentMessage("m-slow", SLOW_TEXT_WORDS.join(""))),
     completed(),
   ],
+  /** A message completes, then the model is at capacity before the next. */
   capacity_retry: [
     ...freshTurn(),
+    {
+      notify: "item/agentMessage/delta",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "m-1",
+        delta: "Reading.",
+      },
+    },
+    {
+      notify: "item/completed",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        item: agentMessage("m-1", "Reading."),
+      },
+    },
     completed("failed", OVERLOADED),
     ...continuation([
       {
@@ -782,6 +884,20 @@ export const FAKE_SCENARIOS = {
         },
       ]),
     ).flat(),
+  ],
+  /** The model is at capacity while a message is still streaming. */
+  capacity_mid_message: [
+    ...freshTurn(),
+    {
+      notify: "item/agentMessage/delta",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "m-1",
+        delta: "Readi",
+      },
+    },
+    completed("failed", OVERLOADED),
   ],
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
   /** One blocking question asking two questions under one id. */

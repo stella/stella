@@ -168,6 +168,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   agent_skill_comment: null,
   agent_skill_proposal: null,
   ai_memory: null,
+  // A conflict check names a prospective client; it stays off the matter feed.
+  conflict_check: null,
   announcement: null,
   audit_log: null,
   legal_resolve: null,
@@ -178,6 +180,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   chat_thread: null,
   chat_tool_execution: null,
   chat_tool_grant: null,
+  chat_browser_site_grant: null,
   clause: null,
   clause_category: null,
   clause_template_link: null,
@@ -207,6 +210,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   rate_entry: null,
   rate_table: null,
   report_export: null,
+  data_export: null,
   saved_search: null,
   // Personal history is never shared through a matter's activity feed.
   search_history: null,

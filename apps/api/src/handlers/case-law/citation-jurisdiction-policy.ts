@@ -51,6 +51,7 @@ export type CitationResolutionJurisdictionPolicy = {
  */
 export const CITATION_RESOLUTION_JURISDICTION_POLICY = {
   AUT: { alsoResolvesTo: ["EU"] },
+  BRA: { alsoResolvesTo: [] },
   CZE: { alsoResolvesTo: ["EU"] },
   EU: { alsoResolvesTo: [] },
   GBR: { alsoResolvesTo: ["EU"] },

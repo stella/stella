@@ -34,6 +34,7 @@ import {
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
+  chatBrowserSiteGrantPolicies,
   chatMessagePolicies,
   chatMessageRevisionPolicies,
   chatMessageSearchDocumentPolicies,
@@ -78,6 +79,7 @@ import {
   wsOrganizationScopedRequestPolicies,
   wsOrganizationUserPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 } from "@/api/db/rls";
 import type {
   BankAccount,
@@ -572,6 +574,7 @@ export {
   orgPolicies,
   orgReadOnlyPolicies,
   savedSearchPolicies,
+  chatBrowserSiteGrantPolicies,
   chatToolGrantPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
@@ -591,6 +594,7 @@ export {
   wsDataScopePolicies,
   wsOrganizationScopedRequestPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 };
 
 export type {
