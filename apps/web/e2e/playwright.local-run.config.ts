@@ -5,7 +5,7 @@ import { devices } from "@stll/playwright-tools/devices";
 
 // Chats that run on the member's computer, against the stand-in computer:
 // `bun run agent:up -- --local-runner` starts it locally, and CI starts it
-// with `local-run/start-computer.ts`. There is one computer and the tests
+// with `packages/scripts/src/e2e-local-runner.ts`. There is one computer and the tests
 // take it offline and relink it, so they run one at a time.
 
 // Mirrors apps/api/scripts/seed-test-user.ts: repo-root .playwright/.

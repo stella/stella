@@ -7,14 +7,15 @@ import {
   LOCAL_RUNNER_LINK_FILE,
   LOCAL_RUNNER_SWITCHES,
   localRunnerDir,
-} from "@stll/scripts/src/agent-local-runner";
+} from "@stll/scripts/src/agent-local-runner-files";
 
 import { apiGet } from "../helpers/api";
 import { expect } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
-// The stand-in computer the suite drives (see `start-computer.ts`) and the
-// page objects for choosing where a chat runs. Only `chooseRunOn` and
+// The stand-in computer the suite drives (started by
+// `packages/scripts/src/e2e-local-runner.ts` or `agent:up -- --local-runner`)
+// and the page objects for choosing where a chat runs. Only `chooseRunOn` and
 // `choosePermission` know how the composer offers that choice.
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");

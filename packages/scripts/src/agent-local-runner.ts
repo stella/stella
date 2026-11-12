@@ -29,30 +29,23 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
-import { DEV_STATE_DIR, devStatePath } from "./dev-runtime";
+import {
+  LOCAL_RUNNER_DATA_FOLDER_FILE,
+  LOCAL_RUNNER_LINK_FILE,
+  LOCAL_RUNNER_SWITCHES,
+  localRunnerDir,
+} from "./agent-local-runner-files";
+import { devStatePath } from "./dev-runtime";
 
 export const LOCAL_RUNNER_FLAG = "--local-runner";
 
 const MANIFEST = "apps/desktop/src-tauri/Cargo.toml";
 const EXAMPLE = "runner_stand_in";
 const FEATURE = "dev-runner-stand-in";
-const STATE_DIR = "local-runner";
 const RECORD_FILE = "local-runner.json";
 const LOG_FILE = "local-runner.log";
 const BUILD_LOG_FILE = "local-runner-build.log";
-/**
- * The files a test or a person creates in the state folder to change the
- * stand-in computer: `offline` takes it offline until removed, `relink`
- * links it again with a new device key (the stand-in removes it once linked).
- */
-export const LOCAL_RUNNER_SWITCHES = {
-  offline: "offline",
-  relink: "relink",
-} as const;
-export const LOCAL_RUNNER_LINK_FILE = "link.json";
-// Written by the stand-in: its folder under the development app's data,
-// `.../runner-stand-in/<checkout>`.
-export const LOCAL_RUNNER_DATA_FOLDER_FILE = "data-folder";
+// The data folder the stand-in names is `.../runner-stand-in/<checkout>`.
 const DATA_FOLDER_PARENT = "runner-stand-in";
 const CODEX_STAND_IN = "packages/agent-engine/scripts/fake-codex-by-model.ts";
 const CLAUDE_CODE_STAND_IN =
@@ -62,9 +55,6 @@ const READY_TIMEOUT_MS = 120_000;
 const STOP_TIMEOUT_MS = 20_000;
 const POLL_MS = 1000;
 const LOG_TAIL_LINES = 30;
-
-export const localRunnerDir = (root: string) =>
-  path.join(root, DEV_STATE_DIR, STATE_DIR);
 
 const recordSchema = v.object({
   pid: v.pipe(v.number(), v.integer(), v.minValue(2)),

@@ -6069,7 +6069,7 @@ jobs:
         if: steps.e2e-stack.outcome == 'success'
         env:
           XDG_DATA_HOME: ${{ github.workspace }}/.stella-dev/data
-        run: bun apps/web/e2e/local-run/start-computer.ts
+        run: bun packages/scripts/src/e2e-local-runner.ts
 
       - *ghcr_browser_image_login
 
