@@ -15,6 +15,7 @@ import * as React from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { REVIEW_STATUS_DECISION } from "@stll/api-contract/review-decision";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, FileTextIcon } from "@stll/ui/icons";
@@ -38,7 +39,6 @@ import {
   provenanceEdgeKey,
 } from "@/features/avt/graph/graph-model.logic";
 import { RECORD_CONFLICT_VAR, stateHue } from "@/features/avt/state-chip";
-import { REVIEW_STATUS_META } from "@/features/avt/types";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 
@@ -343,7 +343,7 @@ export const GraphCanvas = ({
         }
         const settled =
           claim.reviewStatus !== null &&
-          REVIEW_STATUS_META[claim.reviewStatus].settles;
+          REVIEW_STATUS_DECISION.claim[claim.reviewStatus] !== null;
         return (
           <GraphNode
             box={box}
