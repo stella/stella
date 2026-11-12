@@ -349,7 +349,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
       "--permission-mode",
       "acceptEdits",
       "--allowedTools",
-      "mcp__stella,WebSearch",
+      "mcp__stella",
       "--session-id",
       sessionId ?? "",
       "--model",
@@ -1204,14 +1204,20 @@ describe("Claude Code approval modes", () => {
   const valueOf = (args: readonly string[], flag: string) =>
     args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
 
-  test("the CLI's web tools run at every level: search without asking, fetch under the permission mode", async () => {
-    for (const approvals of ["ask", "auto", "full_auto"] as const) {
+  test("web search asks at Ask and runs unasked above it; fetching a page follows the permission mode", async () => {
+    const allowedAt = async (
+      approvals: HarnessTurnInput["policy"]["approvals"],
+    ) => {
       const args = await argsFor(approvals);
-      const allowed = (valueOf(args, "--allowedTools") ?? "").split(",");
-      expect(allowed).toContain("WebSearch");
-      expect(allowed).not.toContain("WebFetch");
       expect(args).not.toContain("--disallowedTools");
       expect(args).not.toContain("--disallowed-tools");
+      return (valueOf(args, "--allowedTools") ?? "").split(",");
+    };
+    const ask = await allowedAt("ask");
+    expect(ask).toEqual(["mcp__stella"]);
+    for (const approvals of ["auto", "full_auto"] as const) {
+      const allowed = await allowedAt(approvals);
+      expect(allowed).toEqual(["mcp__stella", "WebSearch"]);
     }
   });
 

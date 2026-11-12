@@ -1015,7 +1015,7 @@ describe("chat prompt builders", () => {
       userContext: null,
     }).fullPrompt;
     const local = buildGlobalPromptParts({
-      promptTarget: "local_run",
+      promptTarget: { type: "local_run", webSearch: "unasked" },
       toolAvailability: noWeb,
       userContext: null,
     }).fullPrompt;
@@ -1034,11 +1034,38 @@ describe("chat prompt builders", () => {
     ]) {
       expect(local).not.toContain(cloudOnly);
     }
-    expect(local).toContain("search and read the web with your own web tools");
+    expect(local).toContain("search and read the web with your own web tools.");
     expect(local).toContain("stella MCP server");
     // The rules every turn follows stay.
     expect(local).toContain("TRUTHFULNESS:");
     expect(local).toContain("DECISION CITATIONS:");
+  });
+
+  test("a turn on the member's computer is told how its web search runs at the permission level", () => {
+    const promptFor = (webSearch: "unasked" | "asks" | "off") =>
+      buildGlobalPromptParts({
+        promptTarget: { type: "local_run", webSearch },
+        userContext: null,
+      }).fullPrompt;
+    const unasked = promptFor("unasked");
+    const asks = promptFor("asks");
+    const off = promptFor("off");
+    expect(unasked).not.toContain("waits for the member's approval");
+    expect(unasked).not.toContain("web search is off");
+    expect(asks).toContain(
+      "each web search waits for the member's approval, which shows them your query",
+    );
+    expect(asks).not.toContain("web search is off");
+    // Off says so plainly, keeps the web reachable, and names the way to turn
+    // search on, so the agent never claims it cannot reach the web at all.
+    expect(off).toContain(
+      "Your own web search is off at the current permission setting",
+    );
+    expect(off).toContain("You can still reach the web");
+    expect(off).toContain("a higher permission setting turns web search on");
+    expect(off).not.toContain(
+      "search and read the web with your own web tools",
+    );
   });
 
   test("organization instructions keep a single delimited block", () => {

@@ -247,7 +247,9 @@ describe("Codex adapter over a stdio app-server", () => {
       approvalPolicy: "on-request",
       sandbox: "workspace-write",
       config: {
-        web_search: "live",
+        // Codex runs only at Ask, where it cannot pause a search for
+        // approval, so its web search is off.
+        web_search: "disabled",
         "sandbox_workspace_write.network_access": true,
         "sandbox_workspace_write.writable_roots": [CACHE_DIR],
         "sandbox_workspace_write.exclude_tmpdir_env_var": false,

@@ -5,6 +5,10 @@ import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import {
+  CHAT_LOCAL_RUN_WEB_SEARCH,
+  CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
+} from "@stll/api-contract/chat-run-target";
+import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   type DesktopRunnerApprovalMode,
 } from "@stll/api-contract/desktop-runner";
@@ -290,8 +294,28 @@ const FIXED_ENV = {
   ENABLE_CLAUDEAI_MCP_SERVERS: "false",
 } as const;
 
-/** The CLI's own tools that run without asking at every permission level. */
-const UNASKED_NATIVE_TOOLS = ["WebSearch"] as const;
+/** The CLI's web search tool, pre-allowed where the level runs it unasked. */
+const WEB_SEARCH_TOOL = "WebSearch";
+
+/**
+ * The tools that run without the CLI asking. The stella MCP server enforces
+ * its own approvals for writes. Web search follows the permission level:
+ * pre-allowed where the level runs it without asking; at Ask it goes through
+ * the approval request, which carries its query. Fetching a page follows the
+ * permission mode like any other tool.
+ */
+const allowedTools = (
+  serverName: string,
+  approvals: HarnessRunPolicy["approvals"],
+): string => {
+  const searchesUnasked =
+    CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS["claude-code"][approvals] ===
+    CHAT_LOCAL_RUN_WEB_SEARCH.unasked;
+  return [
+    `mcp__${serverName}`,
+    ...(searchesUnasked ? [WEB_SEARCH_TOOL] : []),
+  ].join(",");
+};
 
 const PROTOCOL_ARGS = [
   "--output-format",
@@ -622,13 +646,8 @@ const turnArgs = (
   ...settingsArgs(input, skills, options.platform),
   ...(skills === null ? [] : ["--plugin-dir", skills.dir]),
   ...NETWORK_ARGS[input.policy.network],
-  // The stella MCP server enforces its own approvals for writes. Web search
-  // runs at the model provider, which already holds the turn, and changes
-  // nothing on the computer, so it never waits for approval, as Codex's does
-  // not. Fetching a page goes out from the computer and follows the
-  // permission mode like any other tool.
   "--allowedTools",
-  [`mcp__${input.mcp.serverName}`, ...UNASKED_NATIVE_TOOLS].join(","),
+  allowedTools(input.mcp.serverName, input.policy.approvals),
   target.type === "fresh" ? "--session-id" : "--resume",
   target.sessionId,
   "--model",

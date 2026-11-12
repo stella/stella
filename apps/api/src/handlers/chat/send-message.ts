@@ -23,7 +23,11 @@ import {
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
@@ -65,6 +69,7 @@ import {
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
   chatVolatilePromptSection,
+  CLOUD_PROMPT_TARGET,
   extendChatUntrustedPromptSuffix,
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
@@ -2389,11 +2394,22 @@ const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
 /** A turn on the computer gets its files, unless a raw copy would defeat anonymization. */
 /**
  * A coding agent on the member's computer answers with its own tools, so its
- * prompt names none of stella's cloud tools or settings.
+ * prompt names none of stella's cloud tools or settings, and says how its web
+ * search runs at the turn's permission level. A turn bound for a computer
+ * runs there or is refused, so the run target alone decides.
  */
 const turnPromptTarget = (
-  localRun: LocalChatRun | undefined,
-): ChatPromptTarget => (localRun === undefined ? "cloud" : "local_run");
+  runTarget: ChatRunTarget | undefined,
+): ChatPromptTarget =>
+  runTarget === undefined || runTarget.kind === CHAT_RUN_TARGET_KIND.cloud
+    ? CLOUD_PROMPT_TARGET
+    : {
+        type: "local_run",
+        webSearch:
+          CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS[runTarget.harness][
+            runTarget.approvals
+          ],
+      };
 
 const turnCopiesFiles = (
   localRun: LocalChatRun | undefined,
@@ -3210,7 +3226,7 @@ export const createSendMessage = (
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
           copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
-          promptTarget: turnPromptTarget(localRun),
+          promptTarget: turnPromptTarget(body.runTarget),
           recordAuditEvent,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,

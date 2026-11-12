@@ -26,6 +26,7 @@ import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
 } from "@stll/api-contract/chat-docx-suggestions";
+import type { ChatLocalRunWebSearch } from "@stll/api-contract/chat-run-target";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import type {
   ReaderAnnotationColor,
@@ -550,30 +551,53 @@ const buildCoreRuleSections = ({
  * or a coding agent on the member's computer (Codex, Claude Code) with its
  * own tools and stella's tools over MCP.
  */
-export type ChatPromptTarget = "cloud" | "local_run";
+export type ChatPromptTarget =
+  | { type: "cloud" }
+  | {
+      type: "local_run";
+      /** How the agent's own web search runs at the turn's permission level. */
+      webSearch: ChatLocalRunWebSearch;
+    };
+
+export const CLOUD_PROMPT_TARGET = {
+  type: "cloud",
+} as const satisfies ChatPromptTarget;
 
 const LOCAL_RUN_IDENTITY =
   "You are a coding agent on the member's computer, working inside stella, a legal workspace. Answer directly; skip greetings and persona.";
 
-const LOCAL_RUN_CAPABILITIES =
-  "WHAT YOU CAN DO: You run with your own tools on the member's computer. You can read and change the files in your working folder, run commands, and search and read the web with your own web tools. stella's own tools (matters, documents, tasks, contacts, case law and legislation) reach you from the stella MCP server; use them for anything in the member's stella workspace. Your permission setting decides what you do without asking; when you ask for approval, stella shows the request to the member.";
+/**
+ * What the agent is told about its own web search, which follows the
+ * permission level: it must not claim it cannot search when a search only
+ * waits for approval, nor search where it cannot.
+ */
+const LOCAL_RUN_WEB_SEARCH = {
+  unasked: "You can search and read the web with your own web tools.",
+  asks: "You can search and read the web with your own web tools; at the current permission setting each web search waits for the member's approval, which shows them your query.",
+  off: "Your own web search is off at the current permission setting, because a search there cannot wait for the member's approval. You can still reach the web, for example by fetching a page you have the address of with a command. When a search would help, say that a higher permission setting turns web search on.",
+} as const satisfies Record<ChatLocalRunWebSearch, string>;
+
+const localRunCapabilities = (webSearch: ChatLocalRunWebSearch) =>
+  `WHAT YOU CAN DO: You run with your own tools on the member's computer. You can read and change the files in your working folder and run commands. ${LOCAL_RUN_WEB_SEARCH[webSearch]} stella's own tools (matters, documents, tasks, contacts, case law and legislation) reach you from the stella MCP server; use them for anything in the member's stella workspace. Your permission setting decides what you do without asking; when you ask for approval, stella shows the request to the member.`;
 
 const LOCAL_RUN_WRITES =
   "WRITES: Changes to stella data (matters, documents, tasks, contacts) go through the stella MCP server's write tools, and the member approves each one before it runs. Never state or imply a change was made until its tool returns success; a pending approval is not a completed action.";
 
 const LOCAL_RUN_EXTERNAL_FACT_SOURCING =
-  "EXTERNAL-FACT SOURCING: Ground factual answers in a source. Use stella's case-law and legislation tools for law they hold, and your own web search for everything else, reading the pages when snippets are short or contradict. Answer from your own knowledge only when no source helps, and say so plainly.";
+  "EXTERNAL-FACT SOURCING: Ground factual answers in a source. Use stella's case-law and legislation tools for law they hold, and the web for everything else, reading the pages when snippets are short or contradict. Answer from your own knowledge only when no source helps, and say so plainly.";
 
 /**
  * The rules for a turn that a coding agent answers on the member's computer:
  * the rules every turn follows, and what that agent can do there. Nothing
  * here names stella's cloud tools or settings (code mode, `ask-user`, the
  * chat's web-search switch, skill loading or subagents): the agent has none
- * of them, and its own web search is always on.
+ * of them, and its own web search follows the permission level.
  */
-const buildLocalRunCoreRuleSections = (): readonly string[] => [
+const buildLocalRunCoreRuleSections = (
+  webSearch: ChatLocalRunWebSearch,
+): readonly string[] => [
   LOCAL_RUN_IDENTITY,
-  LOCAL_RUN_CAPABILITIES,
+  localRunCapabilities(webSearch),
   TRUTHFULNESS_RULE,
   TOOL_FAILURE_RECOVERY_RULE,
   LOCAL_RUN_WRITES,
@@ -1057,7 +1081,7 @@ export const buildChatSystemPromptParts = async ({
   skillBindingScope,
   threadId,
   toolAvailability,
-  promptTarget = "cloud",
+  promptTarget = CLOUD_PROMPT_TARGET,
   userContext,
   userId,
   workspaceId,
@@ -1391,7 +1415,7 @@ export const buildGlobalPrompt = ({
 
 export const buildGlobalPromptParts = ({
   featureAccessContext,
-  promptTarget = "cloud",
+  promptTarget = CLOUD_PROMPT_TARGET,
   documentedChatReads = [],
   organizationAIInstructions = "",
   practiceJurisdictions = [],
@@ -1676,7 +1700,7 @@ export const buildWorkspacePromptText = ({
 
 export const buildWorkspacePromptParts = ({
   featureAccessContext,
-  promptTarget = "cloud",
+  promptTarget = CLOUD_PROMPT_TARGET,
   documentedChatReads = [],
   entityCount,
   extractedProperties = [],
@@ -3334,7 +3358,7 @@ type BuildPromptProps = {
 
 const buildPromptParts = ({
   featureAccessContext,
-  promptTarget = "cloud",
+  promptTarget = CLOUD_PROMPT_TARGET,
   documentedChatReads,
   organizationAIInstructions,
   practiceJurisdictions,
@@ -3361,8 +3385,8 @@ const buildPromptParts = ({
   // reach it as its own skills.
   const cacheStablePrefix = brandChatCacheStablePrefix(
     joinPromptSections(
-      promptTarget === "local_run"
-        ? buildLocalRunCoreRuleSections()
+      promptTarget.type === "local_run"
+        ? buildLocalRunCoreRuleSections(promptTarget.webSearch)
         : [
             ...buildCoreRuleSections({
               skillCatalogStatus:
@@ -3402,7 +3426,7 @@ const buildPromptParts = ({
       buildOrganizationAIInstructionsPrompt(organizationAIInstructions ?? ""),
     ),
     // Team skills and the user's own (`listAvailableChatSkillMetadata`).
-    ...(promptTarget === "local_run"
+    ...(promptTarget.type === "local_run"
       ? []
       : [
           chatUserPromptSection(
