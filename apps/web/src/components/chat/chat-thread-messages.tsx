@@ -2198,6 +2198,7 @@ const AssistantMessageParts = ({
     ) {
       return (
         <LocalRunQuestionCard
+          draftKey={localRunQuestion.draftKey}
           key={localRunQuestionPause.interruptId}
           onAnswer={localRunQuestion.answer}
           pause={localRunQuestionPause}

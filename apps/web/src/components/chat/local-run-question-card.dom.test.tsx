@@ -37,6 +37,7 @@ const { openChatThreadDomPage } =
 const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
 const { toSafeId } = await import("@/lib/safe-id");
+const { useChatDraftStore } = await import("@/lib/chat-draft-store");
 
 afterEach(async () => {
   await act(async () => cleanup());
@@ -89,15 +90,19 @@ const pause: LocalRunQuestionPause = {
   questions: [governingLaw, signatories, passphrase],
 };
 
-const mountCard = () => {
+const DRAFT_KEY = "global:00000000-0000-7000-8000-0000000000d1";
+
+const mountCard = (delivery: "sent" | "not_sent" = "sent") => {
   const answers: { interruptId: string; answers: unknown }[] = [];
   const view = render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <LocalRunQuestionCard
+          draftKey={DRAFT_KEY}
           onAnswer={async (interruptId, given) => {
             answers.push({ interruptId, answers: given });
             await Promise.resolve();
+            return delivery;
           }}
           pause={pause}
         />
@@ -194,6 +199,39 @@ describe("local run question card", () => {
     expect(
       screen.queryByRole("button", { name: messages.chat.askUser.submit }),
     ).toBeNull();
+  });
+
+  test("an answer that did not go out leaves the card usable, not on a spinner", async () => {
+    mountCard("not_sent");
+    fireEvent.click(button(messages.chat.localRunQuestion.dismiss));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", {
+          name: messages.chat.localRunQuestion.dismiss,
+        }) === null,
+      ).toBe(false);
+    });
+  });
+
+  test("own words left unsent go to the composer when the card closes; a secret's never do", async () => {
+    useChatDraftStore.setState({ draftsByThreadKey: {} });
+    const { view } = mountCard();
+    fireEvent.click(button(messages.chat.askUser.custom));
+    fireEvent.change(screen.getByLabelText(signatories.prompt), {
+      target: { value: "The guarantor signs too" },
+    });
+    fireEvent.change(screen.getByLabelText(passphrase.prompt), {
+      target: { value: "open sesame" },
+    });
+    // The turn ended without the answer: the card goes.
+    await act(async () => {
+      view.unmount();
+    });
+    const draft = JSON.stringify(
+      useChatDraftStore.getState().getDraft(DRAFT_KEY)?.doc ?? null,
+    );
+    expect(draft).toContain("The guarantor signs too");
+    expect(draft).not.toContain("open sesame");
   });
 
   test("dismiss sends no answers", () => {

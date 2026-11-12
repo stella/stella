@@ -1846,6 +1846,8 @@ export const useChatSession = ({
     stop,
     leave,
     isGenerating,
+    /** A stop was asked for and the turn has not ended yet. */
+    stopPending: stopState.status === "pending",
     turnAbandoned,
     computerWait,
     turnSentAt,

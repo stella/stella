@@ -23,11 +23,16 @@ import { Step, Steps } from "@stll/ui/steps";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import { unsentOwnWords } from "@/components/chat/local-run-question.logic";
 import { SecretInput } from "@/components/secret-input";
+import type { LocalRunAnswerDelivery } from "@/features/chat/chat-runtime";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import {
   useFormattingLocale,
   useStepsMarkerStyle,
 } from "@/i18n/formatting-context";
+import { useChatDraftStore } from "@/lib/chat-draft-store";
 import { detached } from "@/lib/detached";
 
 type LocalRunQuestionCardProps = {
@@ -36,7 +41,9 @@ type LocalRunQuestionCardProps = {
   onAnswer: (
     interruptId: string,
     answers: Record<string, string[]> | null,
-  ) => Promise<void>;
+  ) => Promise<LocalRunAnswerDelivery>;
+  /** The thread's composer draft; see `ChatLocalRunQuestionContextValue`. */
+  draftKey: string;
 };
 
 type Sent = { type: "answered" } | { type: "dismissed" } | null;
@@ -51,6 +58,7 @@ type Sent = { type: "answered" } | { type: "dismissed" } | null;
 export const LocalRunQuestionCard = ({
   pause,
   onAnswer,
+  draftKey,
 }: LocalRunQuestionCardProps) => {
   const t = useTranslations();
   const formattingLocale = useFormattingLocale();
@@ -84,10 +92,34 @@ export const LocalRunQuestionCard = ({
   const send = (answers: Record<string, string[]> | null) => {
     setSent(answers === null ? { type: "dismissed" } : { type: "answered" });
     detached(
-      onAnswer(pause.interruptId, answers),
+      (async () => {
+        // An answer that did not go out leaves the card usable again,
+        // never on a spinner that waits for nothing.
+        if ((await onAnswer(pause.interruptId, answers)) === "not_sent") {
+          setSent(null);
+        }
+      })(),
       "local-run-question-card.answer",
     );
   };
+
+  // Words typed into the card and not sent (the turn stopped, a new
+  // message replaced it, it was answered elsewhere) go to the composer, so
+  // they are not lost; a secret's never do.
+  const unsent = useLatestCallback(() =>
+    sent === null ? unsentOwnWords(questions, drafts) : "",
+  );
+  useExternalSyncEffect(
+    () => () => {
+      const words = unsent();
+      if (words !== "") {
+        useChatDraftStore
+          .getState()
+          .insertInlineContent(draftKey, [{ type: "text", text: words }]);
+      }
+    },
+    [draftKey, unsent],
+  );
 
   const handleSubmit: NonNullable<ComponentProps<"form">["onSubmit"]> = (
     event,

@@ -13,6 +13,9 @@ import type { ChatRuntime } from "@/features/chat/chat-runtime";
 export type ChatLocalRunQuestionContextValue = {
   pause: LocalRunQuestionPause | null;
   answer: ChatRuntime["answerLocalRunQuestion"];
+  /** The thread's composer draft, where words typed into a question that
+   *  closed unsent are kept. */
+  draftKey: string;
 };
 
 export const ChatLocalRunQuestionContext =

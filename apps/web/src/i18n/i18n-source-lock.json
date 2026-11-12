@@ -1704,6 +1704,7 @@
   "chat.stopFailed": "Couldn't stop the answer. Try again.",
   "chat.stopResponse": "Stop",
   "chat.stopped": "Stopped",
+  "chat.stopping": "Stopping…",
   "chat.suggestTitle": "Suggest a title",
   "chat.suggestTitleUnavailableAnonymized": "Title suggestions are unavailable for anonymized conversations.",
   "chat.suggestedFollowupsLabel": "Suggested follow-up prompts",
