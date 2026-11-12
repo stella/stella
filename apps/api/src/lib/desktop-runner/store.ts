@@ -2063,7 +2063,10 @@ export const readChatRunSession = async (
   { owner, chat, desktopId, harness }: ChatRunSessionOptions,
 ): Promise<string | null> => {
   // The run that last wrote the session: a later one resumed it or replaced
-  // it, whatever state it ended in.
+  // it, whatever state it ended in. A run that never reached its prompt (it
+  // failed to start, needed a sign-in, was stopped or lost before the harness
+  // opened a session) holds no session id and changed none, so it does not
+  // hide the session before it.
   const newest = db
     .select({
       state: runs.state,
@@ -2078,6 +2081,7 @@ export const readChatRunSession = async (
         eq(runs.harness, harness),
         eq(runs.userId, owner.userId),
         eq(runs.organizationId, owner.organizationId),
+        isNotNull(runs.harnessSessionId),
       ),
     )
     .orderBy(desc(runs.createdAt), desc(runs.runId))

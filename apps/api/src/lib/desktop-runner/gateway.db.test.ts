@@ -3476,6 +3476,46 @@ describe("chat turns on a computer", () => {
       ).toBeNull();
     });
 
+    test("a run that never reached its prompt does not hide the session before it", async () => {
+      const { chatThreadId } = await answeredThread("codex-session-kept");
+      const secondTurnId = await startTurn(chatThreadId);
+      // The second turn's run ends before the harness opened a session.
+      const { desktopId, desktop } = shared();
+      const failed = collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          startPlan(desktopId),
+        ).stream({
+          chatRunId: `chat-run-${secondTurnId}`,
+          chatTurnId: secondTurnId,
+          messages: [{ role: "user", content: "Work on the matter" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive(
+        "run.start",
+        (message) =>
+          message.type === "run.start" && message.folderId === chatThreadId,
+      );
+      expect(start.harnessSessionId).toBe("codex-session-kept");
+      desktop.send({ type: "run.accepted", runId: start.runId });
+      await desktopRun(desktop, start.runId).finish("needs_login", null);
+      await failed.done;
+
+      // Sending that turn again continues the first answer, so it resumes
+      // the session the first run left.
+      const again = await replayFrom(
+        chatThreadId,
+        await askedBy(secondTurnId),
+        "Work on the matter",
+      );
+      expect(await runTurn(chatThreadId, again, "codex-session-kept")).toBe(
+        "codex-session-kept",
+      );
+    });
+
     test("an answer from elsewhere in between starts a fresh session", async () => {
       const { chatThreadId } = await answeredThread("codex-session-cloud");
       // A turn answered in the cloud: the computer's session never saw it.
