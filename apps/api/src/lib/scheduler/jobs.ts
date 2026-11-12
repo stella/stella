@@ -63,7 +63,10 @@ import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/des
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
 import { DISPATCH_NATIVE_EXTRACTION_TASK } from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
-import { RECONCILE_DOCUMENT_REVIEW_RUNS_TASK } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
+import {
+  RECONCILE_DOCUMENT_REVIEW_RUNS_TASK,
+  RECONCILE_LIST_VERIFICATION_RUNS_TASK,
+} from "@/api/lib/scheduler/tasks/document-run-reconcile";
 import { RECEIVE_EMAIL_DELIVERABILITY_TASK } from "@/api/lib/scheduler/tasks/email-deliverability-receive";
 import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
 import { REPAIR_FILE_DERIVATIVES_TASK } from "@/api/lib/scheduler/tasks/file-derivative-repair";
@@ -74,7 +77,6 @@ import { RECEIVE_INBOUND_MAIL_TASK } from "@/api/lib/scheduler/tasks/inbound-mai
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
 import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import { REFRESH_LEGISLATION_FACETS_TASK } from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
-import { RECONCILE_LIST_VERIFICATION_RUNS_TASK } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
 import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
 import { RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK } from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
@@ -748,7 +750,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Re-drive document review runs no queued job owns anymore",
+    description:
+      "Fail stuck document review runs and re-drive the ones no queued job owns anymore",
     id: "documentReviews.reconcileQueuedRuns.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
@@ -757,7 +760,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   },
   {
     description:
-      "Re-drive list verification and fact extraction runs no queued job owns anymore",
+      "Fail stuck list verification and fact extraction runs and re-drive the ones no queued job owns anymore",
     id: "listVerifications.reconcileQueuedRuns.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },

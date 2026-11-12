@@ -120,8 +120,10 @@ import {
 } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import {
   RECONCILE_DOCUMENT_REVIEW_RUNS_TASK,
+  RECONCILE_LIST_VERIFICATION_RUNS_TASK,
   reconcileDocumentReviewRuns,
-} from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
+  reconcileListVerificationRuns,
+} from "@/api/lib/scheduler/tasks/document-run-reconcile";
 import {
   RECEIVE_EMAIL_DELIVERABILITY_TASK,
   receiveEmailDeliverability,
@@ -167,10 +169,6 @@ import {
   REFRESH_LEGISLATION_FACETS_TASK,
   refreshLegislationFacetsTask,
 } from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
-import {
-  RECONCILE_LIST_VERIFICATION_RUNS_TASK,
-  reconcileListVerificationRuns,
-} from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import {
   curateAiMemories,
   MEMORY_CURATOR_TASK,

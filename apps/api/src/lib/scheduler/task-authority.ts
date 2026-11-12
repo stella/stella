@@ -184,8 +184,8 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Hands pending deadline scans to their queue.",
   ),
   "documentReviews.reconcileQueuedRuns": platform(
-    "document-review-run-reconcile.ts",
-    "Hands queued runs back to their queue, whose worker resolves the requester's run actor.",
+    "document-run-reconcile.ts",
+    "Fails stuck runs and hands queued runs back to their queue, whose worker resolves the requester's run actor.",
   ),
   "entityBuffers.reconcileIntents": platform(
     "buffer-intent-reconciliation.ts",
@@ -242,7 +242,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Public legal corpus sitemap.",
   ),
   "listVerifications.reconcileQueuedRuns": platform(
-    "list-verification-run-reconcile.ts",
+    "document-run-reconcile.ts",
     "Fails stuck runs and hands queued runs back to their queue, whose worker resolves the requester's run actor.",
   ),
   "memory.curator": platform(

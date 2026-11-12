@@ -25,13 +25,13 @@ import {
   deleteOrganizationFileWithSignal,
 } from "@/api/lib/files/delete-organization-file";
 import { logger } from "@/api/lib/observability/logger";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
   scanPendingRows,
-} from "@/api/lib/queue-reconcile-scan";
-import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
-import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+} from "@/api/lib/queue/reconcile-scan";
+import type { ReconcileScanResult } from "@/api/lib/queue/reconcile-scan";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedStyleSetId } from "@/api/lib/safe-id-boundaries";

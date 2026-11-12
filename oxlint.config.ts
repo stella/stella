@@ -602,6 +602,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-banned-glyph.fixture.tsx", [
     "no-banned-glyph/no-banned-glyph",
   ]),
+  fixtureRuleOverride("no-hand-built-document-run-queue.fixture.ts", [
+    "no-hand-built-document-run-queue/no-hand-built-document-run-queue",
+  ]),
   fixtureRuleOverride("no-hand-built-step-marker.fixture.tsx", [
     "no-hand-built-step-marker/no-hand-built-step-marker",
   ]),
@@ -2141,6 +2144,7 @@ const config = defineConfig({
     "./.oxlint-plugins/retention-source-independence.ts",
     "./.oxlint-plugins/retention-oracle-owner.ts",
     "./.oxlint-plugins/no-banned-glyph.ts",
+    "./.oxlint-plugins/no-hand-built-document-run-queue.ts",
     "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
@@ -6153,6 +6157,17 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.{ts,tsx,mts,cts}"],
       rules: {
         "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write":
+          "error",
+      },
+    },
+    {
+      // A document run queue has one owner,
+      // apps/api/src/lib/queue/document-run-queue.ts; a module that reads a
+      // document run table does not build its own BullMQ queue or worker.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "no-hand-built-document-run-queue/no-hand-built-document-run-queue":
           "error",
       },
     },

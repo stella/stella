@@ -65,13 +65,13 @@ import {
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
   scanPendingRows,
-} from "@/api/lib/queue-reconcile-scan";
-import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
-import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+} from "@/api/lib/queue/reconcile-scan";
+import type { ReconcileScanResult } from "@/api/lib/queue/reconcile-scan";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
