@@ -1049,7 +1049,7 @@ const rescore = async (
 };
 
 const main = async () => {
-  const [command, ...rest] = process.argv.slice(2);
+  const [command = "", ...rest] = process.argv.slice(2);
   switch (command) {
     case "check": {
       if (!(await check(rest))) {
@@ -1077,7 +1077,7 @@ const main = async () => {
       return;
     }
     default: {
-      panic(`Unknown command ${String(command)}: check, text, run or score`);
+      panic(`Unknown command "${command}": check, text, run or score`);
     }
   }
 };
