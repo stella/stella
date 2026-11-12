@@ -3,7 +3,7 @@ import { SEARCH_HISTORY_COUNTRY_CONSTRAINT_VALIDATION } from "../search-history-
 
 export default {
   id: "repairs-search-history-country-constraint-validation",
-  revision: 1425,
+  revision: 1438,
   type: "repairs",
   values: [SEARCH_HISTORY_COUNTRY_CONSTRAINT_VALIDATION],
 } satisfies OnlineMigrationEntry;

@@ -3,7 +3,7 @@ import { SEARCH_HISTORY_COUNTRY_CONSTRAINTS } from "../search-history-country-co
 
 export default {
   id: "constraints-search-history-country-constraints",
-  revision: 1426,
+  revision: 1439,
   type: "constraints",
   values: [...SEARCH_HISTORY_COUNTRY_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;

@@ -2,7 +2,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 
 export default {
   id: "indexes-search-history-entries-legacy-documents-pending-idx",
-  revision: 1423,
+  revision: 1436,
   type: "indexes",
   values: [
     {
