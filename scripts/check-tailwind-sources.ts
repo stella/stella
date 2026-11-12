@@ -48,7 +48,7 @@ type PackageJson = v.InferOutput<typeof packageJsonSchema>;
 const readPackageJson = (file: string): PackageJson =>
   v.parse(packageJsonSchema, JSON.parse(readFileSync(file, "utf-8")));
 
-const GLOB_CHARACTERS = new Set(["*", "{", "["]);
+const GLOB_CHARACTERS = ["*", "{", "["];
 
 /** The quoted argument of a `<directive> "<argument>"` line, if it is one. */
 const directiveArgument = (
@@ -106,7 +106,7 @@ export const readSourceRoots = (entryFile: string, css: string): string[] =>
     .map((source) => {
       const segments = source.split("/");
       const firstGlob = segments.findIndex((part) =>
-        [...part].some((character) => GLOB_CHARACTERS.has(character)),
+        GLOB_CHARACTERS.some((character) => part.includes(character)),
       );
       const staticPart =
         firstGlob === -1 ? segments : segments.slice(0, firstGlob);
