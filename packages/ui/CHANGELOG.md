@@ -1,5 +1,21 @@
 # @stll/ui
 
+## 0.70.0
+
+### Minor Changes
+
+- [#7621](https://github.com/stella/stella/pull/7621) [`010b3cb`](https://github.com/stella/stella/commit/010b3cb50b5f12466dcc81ba387a4765cb1184ce) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep text that does not fit inside its container, and show the whole of it on hover, focus or tap only where it is actually cut.
+
+  `@stll/workspace-ui/field-value` no longer exports `getIntClassName`: numeric field values render through `NumericFieldText`, which cuts them with `TruncatedText`.
+
+  `@stll/ui` widens `TruncatedText` (more `lines` values and a `hint` switch) and changes `COMPOSER_PLACEHOLDER_CLASS`; the composer placeholder renders through the new `ComposerPlaceholder`.
+
+- [#8294](https://github.com/stella/stella/pull/8294) [`8997182`](https://github.com/stella/stella/commit/899718207e93ac2ed8cab63ea022f595d5b5ad02) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `ViewChromeBar`, the row that holds a view switcher and its `ViewToolbarChrome` on one line at every width. `ViewToolbarChrome` no longer wraps: it keeps the end of the row and scrolls horizontally once it outgrows two thirds of it.
+
+### Patch Changes
+
+- [#8329](https://github.com/stella/stella/pull/8329) [`53ddfb1`](https://github.com/stella/stella/commit/53ddfb1619d4b2d41e5cdc4fd88699a5077e8606) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DocumentIdentityBadge` statute and case-number labels are named by their full form (`role="img"`, `aria-label`), so assistive technology reads `262/2006` even when a narrow slot shows `262/06`.
+
 ## 0.69.0
 
 ### Minor Changes

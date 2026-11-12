@@ -1,5 +1,33 @@
 # @stll/cli
 
+## 6.11.0
+
+### Minor Changes
+
+- [#5798](https://github.com/stella/stella/pull/5798) [`a428d7d`](https://github.com/stella/stella/commit/a428d7d0845eb4cc849a4384e65f20666e66c621) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `data-exports` capabilities: start an organization data export, list and read exports, and get download links for their parts and manifest.
+
+- [#6660](https://github.com/stella/stella/pull/6660) [`ab7a496`](https://github.com/stella/stella/commit/ab7a4968b8e0e52dd7006c0b13c0e3096d65c0c7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clear law history for the selected country.
+
+### Patch Changes
+
+- [#6815](https://github.com/stella/stella/pull/6815) [`3e19e3e`](https://github.com/stella/stella/commit/3e19e3ea27fe2071bdc0d562d0abb0450a666cb4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Include the pending Brazil jurisdiction in generated CLI contract schemas.
+
+- [#8341](https://github.com/stella/stella/pull/8341) [`bd9660d`](https://github.com/stella/stella/commit/bd9660dc779559dd6750f3edf3386f8cb7f2b373) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `conflict-checks.list`, `.get`, `.create`, `.review` and `.link` run and record internal conflict-of-interest checks where a deployment enables them.
+
+- [#8188](https://github.com/stella/stella/pull/8188) [`8110007`](https://github.com/stella/stella/commit/81100072265ab161356dc559e29aba9ab910bf17) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `resolve_law_citation` resolves article citations (`čl. 38`, `článok 46`) to their article, and a bare number to the article when the act has no section of that number.
+
+- [#8325](https://github.com/stella/stella/pull/8325) [`1e121e9`](https://github.com/stella/stella/commit/1e121e9c7b6f054d44827b4a216b8ac1ffb21874) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `lists.verifications.claim-rechecks.create`: checks one verified claim again against the list's current facts and records the new grade as a review event, leaving the run's claim unchanged. Claim reviews accept `fact-link` to link or unlink a fact of the verified list, and the review history lists links and re-checks.
+
+- [#8369](https://github.com/stella/stella/pull/8369) [`6ecc506`](https://github.com/stella/stella/commit/6ecc50659b97b0e0362b6f8802357d8814e3dc7a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.get` returns `carryOver`: what a verification took from the previous verification of the same document against the same list. Notes and fact links follow a claim with the same words or with edited words in the same paragraph or page; other reviewer decisions follow only the same words with an unchanged verdict. It counts the reviewed claims that came across whole and lists the rest as `text-changed`, `verdict-changed`, `unmatched` or `ambiguous`. `lists.verifications.claim-reviews.list` entries carry `carriedFrom`, the earlier verification an action was first taken on.
+
+- [#8338](https://github.com/stella/stella/pull/8338) [`9beb462`](https://github.com/stella/stella/commit/9beb46276580e9949fa6d6d3852d121f1a0b8525) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `sharepoint.sites.list`, `sharepoint.drives.list` and `sharepoint.drives.items.list` to browse SharePoint sites, document libraries, OneDrive and folders with your own connected Microsoft account, and `sharepoint.imports.create` to copy chosen files into a matter as documents. Importing a file again adds a version only when its content changed. They are available when the deployment enables SharePoint and your organization has turned the connection on.
+
+- [#8336](https://github.com/stella/stella/pull/8336) [`3f1f76f`](https://github.com/stella/stella/commit/3f1f76f4ad2af44458ae6e89c5538e32709767e1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills.upload` and `uploads.create` (purpose `agent_skill`) accept skill packs up to 50 MB, up from 2 MB. A pack may hold up to 1,000 files, 50 MB uncompressed and 500 resources. `skills.upload` now also answers the installed skill's `name`.
+
+- [#8362](https://github.com/stella/stella/pull/8362) [`5221098`](https://github.com/stella/stella/commit/5221098a06bcc7decbe451071b9af0791df76d1d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `tasks.create` accepts an idempotency key: a retried create with the same key returns the first task or list item instead of creating another.
+- Updated dependencies []:
+  - @stll/agent-input@0.4.3
+
 ## 6.10.0
 
 ### Minor Changes

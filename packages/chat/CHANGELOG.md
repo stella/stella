@@ -1,5 +1,18 @@
 # @stll/chat
 
+## 0.4.5
+
+### Patch Changes
+
+- [#7621](https://github.com/stella/stella/pull/7621) [`010b3cb`](https://github.com/stella/stella/commit/010b3cb50b5f12466dcc81ba387a4765cb1184ce) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep text that does not fit inside its container, and show the whole of it on hover, focus or tap only where it is actually cut.
+
+  `@stll/workspace-ui/field-value` no longer exports `getIntClassName`: numeric field values render through `NumericFieldText`, which cuts them with `TruncatedText`.
+
+  `@stll/ui` widens `TruncatedText` (more `lines` values and a `hint` switch) and changes `COMPOSER_PLACEHOLDER_CLASS`; the composer placeholder renders through the new `ComposerPlaceholder`.
+
+- Updated dependencies [[`53ddfb1`](https://github.com/stella/stella/commit/53ddfb1619d4b2d41e5cdc4fd88699a5077e8606), [`010b3cb`](https://github.com/stella/stella/commit/010b3cb50b5f12466dcc81ba387a4765cb1184ce), [`8997182`](https://github.com/stella/stella/commit/899718207e93ac2ed8cab63ea022f595d5b5ad02)]:
+  - @stll/ui@0.70.0
+
 ## 0.4.4
 
 ### Patch Changes

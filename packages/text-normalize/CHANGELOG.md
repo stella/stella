@@ -1,5 +1,11 @@
 # @stll/text-normalize
 
+## 0.8.0
+
+### Minor Changes
+
+- [#8245](https://github.com/stella/stella/pull/8245) [`74bfae6`](https://github.com/stella/stella/commit/74bfae60cecf3be82e6d9554cf3448ef9a3c17eb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/text-normalize/hungarian-letters` adds `restoreHungarianLetters`, which reads the Latin-1 stand-ins "õ" and "û" (and their capitals) as the Hungarian "ő" and "ű".
+
 ## 0.7.0
 
 ### Minor Changes
