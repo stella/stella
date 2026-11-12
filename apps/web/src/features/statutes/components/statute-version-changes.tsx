@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { StatuteChangeCounts } from "@stll/legal-ast/statute-compare";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -61,11 +62,11 @@ export const StatuteVersionChanges = ({
       )}
       data-slot="statute-version-changes"
     >
-      <span className="min-w-0 truncate">
+      <TruncatedText render={<span />}>
         {parts.length === 0
           ? t("statutes.versionChangesNone")
           : parts.map(partLabel).join(" · ")}
-      </span>
+      </TruncatedText>
       {inserted + deleted === 0 ? null : (
         <Tooltip
           content={wordsLabel}
