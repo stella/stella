@@ -5,6 +5,10 @@ import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import {
+  CHAT_LOCAL_RUN_WEB_SEARCH,
+  CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
+} from "@stll/api-contract/chat-run-target";
+import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   type DesktopRunnerApprovalMode,
   knownReasoningEfforts,
@@ -292,6 +296,37 @@ const FIXED_ENV = {
   // Connectors from the claude.ai account are not part of a stella turn.
   ENABLE_CLAUDEAI_MCP_SERVERS: "false",
 } as const;
+
+/** The CLI's web search tool, pre-allowed where the level runs it unasked. */
+const WEB_SEARCH_TOOL = "WebSearch";
+
+/**
+ * The tools that run without the CLI asking. The stella MCP server enforces
+ * its own approvals for writes, and the browser server asks the member by
+ * the run's approval mode. Web search follows the permission level:
+ * pre-allowed where the level runs it without asking; at Ask it goes through
+ * the approval request, which carries its query. Fetching a page follows the
+ * permission mode like any other tool.
+ */
+const allowedTools = ({
+  approvals,
+  browserServerName,
+  serverName,
+}: {
+  approvals: HarnessRunPolicy["approvals"];
+  /** The run's browser server; `null` when it has none. */
+  browserServerName: string | null;
+  serverName: string;
+}): string => {
+  const searchesUnasked =
+    CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS["claude-code"][approvals] ===
+    CHAT_LOCAL_RUN_WEB_SEARCH.unasked;
+  return [
+    `mcp__${serverName}`,
+    ...(browserServerName === null ? [] : [`mcp__${browserServerName}`]),
+    ...(searchesUnasked ? [WEB_SEARCH_TOOL] : []),
+  ].join(",");
+};
 
 const PROTOCOL_ARGS = [
   "--output-format",
@@ -623,13 +658,12 @@ const turnArgs = (
   ...settingsArgs(input, skills, options.platform),
   ...(skills === null ? [] : ["--plugin-dir", skills.dir]),
   ...NETWORK_ARGS[input.policy.network],
-  // The stella MCP server enforces its own approvals for writes; the
-  // extension holds the browser to its own policy.
   "--allowedTools",
-  [
-    `mcp__${input.mcp.serverName}`,
-    ...(input.browser === null ? [] : [`mcp__${input.browser.serverName}`]),
-  ].join(","),
+  allowedTools({
+    approvals: input.policy.approvals,
+    browserServerName: input.browser?.serverName ?? null,
+    serverName: input.mcp.serverName,
+  }),
   target.type === "fresh" ? "--session-id" : "--resume",
   target.sessionId,
   "--model",

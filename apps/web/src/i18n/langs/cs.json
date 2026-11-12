@@ -3312,6 +3312,8 @@
       "organizationMemberLimitReached": "Tato organizace dosáhla limitu členů.",
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",
       "providerRateLimited": "Byl dosažen limit požadavků poskytovatele. Zkuste to brzy znovu.",
+      "runActiveLimitReached": "Vaše organizace dosáhla limitu současně probíhajících úloh. Počkejte, až některá doběhne, a zkuste to znovu.",
+      "runDailyLimitReached": "Vaše organizace dosáhla denního limitu úloh. Zkuste to znovu po půlnoci (Europe/Prague).",
       "sharepointAccessDenied": "Microsoft odepřel přístup k tomuto webu, knihovně nebo souboru.",
       "sharepointFileTooLarge": "Tento soubor je příliš velký na import.",
       "sharepointInvalidCursor": "Seznam se během procházení změnil. Otevřete složku znovu.",
@@ -3327,8 +3329,6 @@
       "validationRequired": "Povinné pole je prázdné.",
       "validationTooLong": "Příliš dlouhé: použijte nejvýše {limit, number} znaků.",
       "validationTooShort": "Příliš krátké: použijte alespoň {limit, number} znaků.",
-      "verificationActiveLimitReached": "Vaše organizace dosáhla limitu současně probíhajících ověření. Počkejte na dokončení některého ověření a zkuste to znovu.",
-      "verificationDailyLimitReached": "Vaše organizace dosáhla denního limitu ověření. Zkuste to znovu po půlnoci (Europe/Prague).",
       "versionConflict": "Někdo jiný to během vaší úpravy změnil. Načtěte znovu aktuální verzi."
     },
     "failedToAcceptInvitation": "Nepodařilo se přijmout pozvánku",

@@ -504,6 +504,7 @@ export const ENUM_COLUMNS = {
   mcp_connectors: ["auth_type"],
   mcp_user_connections: ["response_disposition"],
   mcp_web_handoff: ["kind"],
+  model_run_budgets: ["run_kind"],
   notifications: ["entity_type", "kind"],
   number_series: ["document_type"],
   number_series_allocations: ["document_type"],

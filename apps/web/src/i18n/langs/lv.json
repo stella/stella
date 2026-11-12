@@ -3312,6 +3312,8 @@
       "organizationMemberLimitReached": "Šī organizācija ir sasniegusi dalībnieku limitu.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
+      "runActiveLimitReached": "Jūsu organizācija ir sasniegusi vienlaicīgi izpildāmo uzdevumu limitu. Pagaidiet, līdz kāds uzdevums beidzas, un mēģiniet vēlreiz.",
+      "runDailyLimitReached": "Jūsu organizācija ir sasniegusi uzdevumu dienas limitu. Mēģiniet vēlreiz pēc pusnakts (Europe/Prague).",
       "sharepointAccessDenied": "Microsoft liedza piekļuvi šai vietnei, bibliotēkai vai failam.",
       "sharepointFileTooLarge": "Šis fails ir pārāk liels, lai to importētu.",
       "sharepointInvalidCursor": "Saraksts pārlūkošanas laikā mainījās. Atveriet mapi vēlreiz.",
@@ -3327,8 +3329,6 @@
       "validationRequired": "Obligātais lauks ir tukšs.",
       "validationTooLong": "Pārāk garš: izmantojiet ne vairāk kā {limit, number} rakstzīmes.",
       "validationTooShort": "Pārāk īss: izmantojiet vismaz {limit, number} rakstzīmes.",
-      "verificationActiveLimitReached": "Jūsu organizācija ir sasniegusi vienlaicīgu pārbaužu limitu. Pagaidiet, līdz kāda pārbaude beidzas, un mēģiniet vēlreiz.",
-      "verificationDailyLimitReached": "Jūsu organizācija ir sasniegusi pārbaužu dienas limitu. Mēģiniet vēlreiz pēc pusnakts (Europe/Prague).",
       "versionConflict": "Kāds cits to mainīja, kamēr rediģējāt. Pārlādējiet, lai iegūtu pašreizējo versiju."
     },
     "failedToAcceptInvitation": "Neizdevās pieņemt uzaicinājumu",

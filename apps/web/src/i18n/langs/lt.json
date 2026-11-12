@@ -3312,6 +3312,8 @@
       "organizationMemberLimitReached": "Ši organizacija pasiekė narių ribą.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
+      "runActiveLimitReached": "Jūsų organizacija pasiekė vienu metu vykdomų užduočių limitą. Palaukite, kol viena užduotis bus baigta, ir bandykite dar kartą.",
+      "runDailyLimitReached": "Jūsų organizacija pasiekė dienos užduočių limitą. Bandykite dar kartą po vidurnakčio (Europe/Prague).",
       "sharepointAccessDenied": "Microsoft atsisakė suteikti prieigą prie šios svetainės, bibliotekos ar failo.",
       "sharepointFileTooLarge": "Šis failas per didelis importuoti.",
       "sharepointInvalidCursor": "Sąrašas pasikeitė naršant. Atidarykite aplanką iš naujo.",
@@ -3327,8 +3329,6 @@
       "validationRequired": "Privalomas laukas tuščias.",
       "validationTooLong": "Per ilga: naudokite ne daugiau kaip {limit, number} simbolių.",
       "validationTooShort": "Per trumpa: naudokite ne mažiau kaip {limit, number} simbolių.",
-      "verificationActiveLimitReached": "Jūsų organizacija pasiekė vienu metu vykdomų patikrų limitą. Palaukite, kol viena patikra bus baigta, ir bandykite dar kartą.",
-      "verificationDailyLimitReached": "Jūsų organizacija pasiekė dienos patikrų limitą. Bandykite dar kartą po vidurnakčio (Europe/Prague).",
       "versionConflict": "Kažkas kitas tai pakeitė, kol redagavote. Įkelkite iš naujo, kad gautumėte dabartinę versiją."
     },
     "failedToAcceptInvitation": "Nepavyko priimti kvietimo",
