@@ -22,6 +22,8 @@ const getContext = () =>
     failurePolicy: "fail_closed",
   })).context;
 
+type DictationOperation = "transcribe" | "cleanup";
+
 /** Each operation counts in budgets of its own: a dictation cleaned up after
  *  desktop transcription never spends the server transcription budget. */
 const OPERATIONS = {
@@ -38,7 +40,7 @@ const OPERATIONS = {
     refusal: "Too many dictation cleanup requests",
   },
 } as const satisfies Record<
-  string,
+  DictationOperation,
   {
     counterPrefix: string;
     userBudget: BudgetName;
@@ -50,7 +52,7 @@ const OPERATIONS = {
 type DictationLimitOptions = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
-  operation?: keyof typeof OPERATIONS;
+  operation?: DictationOperation;
   context?: Pick<RateLimitContext, "increment" | "decrement" | "complete">;
 };
 

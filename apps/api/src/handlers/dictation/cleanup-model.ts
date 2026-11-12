@@ -71,6 +71,16 @@ const DROPPED_CHARACTERS = /[\u202A-\u202E\u2066-\u2069]/gu;
 export type DictationCleanupRejection =
   "too-long" | "too-short" | "no-text" | "too-many-breaks" | "invalid";
 
+/** Code points, counted the way the desktop counts them (Rust
+ *  `chars().count()`), so both sides apply the same bounds to one answer. */
+const codePointCount = (text: string): number => {
+  let count = 0;
+  for (const _codePoint of text) {
+    count += 1;
+  }
+  return count;
+};
+
 const COMMAND_WORDS: ReadonlySet<string> = new Set(
   DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY.commandWords,
 );
@@ -78,7 +88,7 @@ const NON_CONTENT_CHARACTERS = /[^\p{L}\p{N}]/gu;
 
 /** Letters and digits, the part of a text cleanup must keep. */
 const contentLength = (text: string): number =>
-  [...text.replaceAll(NON_CONTENT_CHARACTERS, "")].length;
+  codePointCount(text.replaceAll(NON_CONTENT_CHARACTERS, ""));
 
 /** The transcript's letters and digits outside spoken command words, which
  *  a correct answer replaces by punctuation, breaks or bold. */
@@ -88,7 +98,7 @@ const dictatedContentLength = (transcript: string): number =>
     .split(/\s+/u)
     .map((word) => word.replaceAll(NON_CONTENT_CHARACTERS, ""))
     .filter((word) => word.length > 0 && !COMMAND_WORDS.has(word))
-    .reduce((total, word) => total + [...word].length, 0);
+    .reduce((total, word) => total + codePointCount(word), 0);
 
 /**
  * Why an answer lost content, when it did: it keeps less than the contract's
@@ -120,7 +130,7 @@ const implausibility = (
   const breaks = segments.length - texts.length;
   const allowedBreaks = Math.max(
     minBreakAllowance,
-    Math.floor([...transcript].length / transcriptCharactersPerBreak),
+    Math.floor(codePointCount(transcript) / transcriptCharactersPerBreak),
   );
   return breaks > allowedBreaks ? "too-many-breaks" : null;
 };
@@ -156,11 +166,11 @@ export const acceptDictationCleanup = (
   );
   const typedLength = segments.reduce(
     (total, segment) =>
-      total + (segment.type === "text" ? [...segment.text].length : 0),
+      total + (segment.type === "text" ? codePointCount(segment.text) : 0),
     0,
   );
   const allowedLength =
-    Math.ceil([...transcript].length * ALLOWED_GROWTH_RATIO) +
+    Math.ceil(codePointCount(transcript) * ALLOWED_GROWTH_RATIO) +
     ALLOWED_GROWTH_CHARACTERS;
   if (typedLength > allowedLength) {
     return Result.err("too-long");
