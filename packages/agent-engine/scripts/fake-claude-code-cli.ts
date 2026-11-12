@@ -1248,6 +1248,8 @@ const run = async (
         endpoints: claudeMcpEndpoints(registeredServers),
         stellaServer: FAKE_STELLA_SERVER,
       });
+      // Kept on this computer, for the test to see what the agent read.
+      log({ pageCanaries: browsed.read });
       for (const call of browsed.steps) {
         write({
           type: "assistant",

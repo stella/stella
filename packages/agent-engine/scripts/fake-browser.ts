@@ -363,6 +363,7 @@ const toolResultSchema = v.object({
 const pageSchema = v.object({
   url: v.string(),
   title: v.string(),
+  text: v.string(),
   elements: v.array(
     v.object({
       ref: v.string(),
@@ -401,7 +402,12 @@ const runFakeBrowserAgent = async ({
   stella: McpEndpoint;
   stellaServer: string;
   start: string;
-}): Promise<{ steps: FakeAgentStep[]; answer: string }> => {
+}): Promise<{
+  steps: FakeAgentStep[];
+  answer: string;
+  /** The canaries the decision's page text held, as the agent read it. */
+  read: string[];
+}> => {
   const steps: FakeAgentStep[] = [];
   let requestId = 0;
   const initialized = new Set<string>();
@@ -467,6 +473,11 @@ const runFakeBrowserAgent = async ({
       ref: refOf(results.elements, "link", DECISION.title),
     }),
   );
+  // The agent read the decision, canaries and all: what follows proves they
+  // went no further.
+  const read = FIXTURE_CANARIES.filter((canary) =>
+    decision.text.includes(canary),
+  );
   // Not a search field: the member is asked first.
   await call(browserServer, browser, "type", {
     ref: refOf(decision.elements, "textbox", "Note"),
@@ -476,6 +487,7 @@ const runFakeBrowserAgent = async ({
     url: new URL("/account", start).href,
   });
   return {
+    read,
     steps,
     answer: `The notice period runs from delivery, as held in [${decision.title}](${decision.url}).`,
   };

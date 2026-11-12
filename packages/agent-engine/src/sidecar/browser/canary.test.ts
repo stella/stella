@@ -15,6 +15,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 import { waitFor } from "@stll/test-kit";
 
 import {
@@ -145,7 +146,7 @@ const connectDesktop = async (
       desktop.lines.push(line);
       const message = v.parse(sidecarMessageSchema, JSON.parse(line));
       desktop.messages.push(message);
-      // The member allows typing outside a search field.
+      // The member allows every step they are asked about.
       if (message.type === "run.approval_request") {
         send({
           type: "run.approval",
@@ -175,7 +176,10 @@ const connectDesktop = async (
   return { ...desktop, send };
 };
 
-const browse = async (harness: keyof typeof FAKES) => {
+const browse = async (
+  harness: keyof typeof FAKES,
+  approvals: DesktopRunnerApprovalMode,
+) => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-canary-"));
   cleanups.push(() => {
     rmSync(root, { force: true, recursive: true });
@@ -279,7 +283,7 @@ const browse = async (harness: keyof typeof FAKES) => {
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the notice period decision." }],
     harnessSessionId: null,
-    policy: { network: "open", fs: "workspace", approvals: "ask" },
+    policy: { network: "open", fs: "workspace", approvals },
     mcp: {
       serverName: "stella",
       url: `${api.origin}/mcp`,
@@ -299,7 +303,12 @@ const browse = async (harness: keyof typeof FAKES) => {
       ? [message.chunk]
       : [],
   );
-  return { api, chrome, chunks, desktop, finished, library };
+  // What the fake agent noted on this computer about the pages it read.
+  const harnessLog = readFileSync(path.join(root, "fake.log"), "utf-8")
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line): unknown => JSON.parse(line));
+  return { api, chrome, chunks, desktop, finished, harnessLog, library };
 };
 
 /** Each tool call as the run reported it: its name and the input it kept. */
@@ -339,83 +348,105 @@ const toolResults = (chunks: readonly Record<string, unknown>[]) =>
       : [],
   );
 
-describe.each(["codex", "claude-code"] as const)(
-  "a local %s run browsing the member's Chrome",
-  (harness) => {
-    test("searches, opens and cites a result, and no page content leaves the computer", async () => {
-      const { api, chrome, chunks, desktop, finished, library } =
-        await browse(harness);
-      expect(finished).toMatchObject({ outcome: "completed" });
+/**
+ * The steps the member is asked about, by approval mode: the agent clicks
+ * the search button and a result, and types into a search field and into
+ * a note field.
+ */
+const ASKED = {
+  ask: ["click", "click", "type"],
+  auto: ["type"],
+  full_auto: [],
+} as const satisfies Record<DesktopRunnerApprovalMode, readonly string[]>;
 
-      // The agent searched the library, opened the decision and was sent
-      // to the member at the sign-in page.
-      expect(chrome.commands.map(({ action }) => action)).toEqual([
-        "open",
-        "fill",
-        "snapshot",
-        "click",
-        "click",
-        "fill",
-        "open",
-      ]);
-      const calls = toolCalls(chunks);
-      // The member was asked before the agent typed outside a search field.
-      const approvals = desktop.messages.filter(
+const APPROVAL_STEP = /^browser-step-/u;
+
+describe.each(
+  (["codex", "claude-code"] as const).flatMap((harness) =>
+    (["ask", "auto", "full_auto"] as const).map(
+      (approvals) => [harness, approvals] as const,
+    ),
+  ),
+)("a local %s run browsing the member's Chrome (%s)", (harness, approvals) => {
+  test("searches, opens and cites a result, and no page content leaves the computer", async () => {
+    const { api, chrome, chunks, desktop, finished, harnessLog, library } =
+      await browse(harness, approvals);
+    expect(finished).toMatchObject({ outcome: "completed" });
+
+    // The agent searched the library, opened the decision and was sent
+    // to the member at the sign-in page.
+    expect(chrome.commands.map(({ action }) => action)).toEqual([
+      "open",
+      "fill",
+      "snapshot",
+      "click",
+      "click",
+      "fill",
+      "open",
+    ]);
+    const calls = toolCalls(chunks);
+    // The member was asked exactly about the steps the mode holds back,
+    // with the step's kind and never the page's content.
+    expect(
+      desktop.messages.filter(
         (message) => message.type === "run.approval_request",
-      );
-      expect(approvals).toHaveLength(1);
-      expect(calls.filter(({ id }) => id.startsWith("browser-type-"))).toEqual([
-        {
-          id: expect.stringMatching(/^browser-type-/u),
-          name: "local_browser",
-          input: {
-            action: "type",
-            url: `${library.origin}${FIXTURE_CITATION.path}`,
-          },
-        },
-      ]);
-      expect(
-        calls
-          .filter(
-            ({ id, name }) =>
-              name === CHAT_LOCAL_RUN_TOOL_NAMES.browser &&
-              !id.startsWith("browser-type-"),
-          )
-          .map(({ input, name }) => ({ input, name })),
-      ).toEqual([
-        {
-          name: "local_browser",
-          input: { action: "open", url: `${library.origin}/` },
-        },
-        { name: "local_browser", input: { action: "type" } },
-        { name: "local_browser", input: { action: "snapshot" } },
-        { name: "local_browser", input: { action: "click" } },
-        { name: "local_browser", input: { action: "click" } },
-        { name: "local_browser", input: { action: "type" } },
-        {
-          name: "local_browser",
-          input: { action: "open", url: `${library.origin}/account` },
-        },
-      ]);
-      expect(calls.some(({ name }) => name === "search_case_law")).toBe(true);
-      expect(toolResults(chunks)).toContainEqual({ status: "needs_member" });
+      ),
+    ).toHaveLength(ASKED[approvals].length);
+    expect(
+      calls
+        .filter(({ id }) => APPROVAL_STEP.test(id))
+        .map(({ input, name }) => ({ input, name })),
+    ).toEqual(
+      ASKED[approvals].map((action) => ({
+        name: "local_browser",
+        input: { action },
+      })),
+    );
+    expect(
+      calls
+        .filter(
+          ({ id, name }) =>
+            name === CHAT_LOCAL_RUN_TOOL_NAMES.browser &&
+            !APPROVAL_STEP.test(id),
+        )
+        .map(({ input, name }) => ({ input, name })),
+    ).toEqual([
+      {
+        name: "local_browser",
+        input: { action: "open", url: `${library.origin}/` },
+      },
+      { name: "local_browser", input: { action: "type" } },
+      { name: "local_browser", input: { action: "snapshot" } },
+      { name: "local_browser", input: { action: "click" } },
+      { name: "local_browser", input: { action: "click" } },
+      { name: "local_browser", input: { action: "type" } },
+      {
+        name: "local_browser",
+        input: { action: "open", url: `${library.origin}/account` },
+      },
+    ]);
+    expect(calls.some(({ name }) => name === "search_case_law")).toBe(true);
+    expect(toolResults(chunks)).toContainEqual({ status: "needs_member" });
 
-      // It cites the decision it opened.
-      expect(JSON.stringify(chunks)).toContain(
-        `[${FIXTURE_CITATION.title}](${library.origin}${FIXTURE_CITATION.path})`,
-      );
+    // It cites the decision it opened.
+    expect(JSON.stringify(chunks)).toContain(
+      `[${FIXTURE_CITATION.title}](${library.origin}${FIXTURE_CITATION.path})`,
+    );
 
-      // Nothing of the pages it read reached the desktop or stella's API,
-      // while the agent's own stella call did reach the API.
-      expect(api.received.length).toBeGreaterThan(0);
-      for (const canary of FIXTURE_CANARIES) {
-        for (const line of desktop.lines) {
-          expect(line).not.toContain(canary);
-        }
-        for (const request of api.received) {
-          expect(request).not.toContain(canary);
-        }
+    // Both canaries reached the agent: the check below has something to
+    // find.
+    expect(harnessLog).toContainEqual({ pageCanaries: [...FIXTURE_CANARIES] });
+
+    // Nothing of the pages it read reached the desktop or stella's API,
+    // while the agent's own stella call did reach the API.
+    expect(api.received.length).toBeGreaterThan(0);
+    for (const canary of FIXTURE_CANARIES) {
+      for (const line of desktop.lines) {
+        expect(line).not.toContain(canary);
       }
-    });
-  },
-);
+      for (const request of api.received) {
+        expect(request).not.toContain(canary);
+      }
+    }
+  });
+});

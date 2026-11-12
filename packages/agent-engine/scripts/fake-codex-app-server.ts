@@ -1344,6 +1344,8 @@ const run = async (
         endpoints: codexMcpEndpoints(threadStart),
         stellaServer: FAKE_STELLA_SERVER,
       });
+      // Kept on this computer, for the test to see what the agent read.
+      log({ pageCanaries: browsed.read });
       const notifyItem = (phase: "started" | "completed", body: object) => {
         write({
           method: `item/${phase}`,
