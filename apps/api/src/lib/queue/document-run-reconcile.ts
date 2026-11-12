@@ -54,9 +54,9 @@ export const documentRunReconciler = <E extends Error>(
 
 /**
  * One task over the run kinds it is given: each kind fails its stuck runs,
- * then re-drives the queued runs its queue no longer holds a job for. Every
- * kind is swept before a failure is reported, so one broken queue does not
- * cost the others their sweep.
+ * then re-drives the queued runs its queue no longer holds a job for. The
+ * kinds sweep side by side and every one finishes before a failure is
+ * reported, so one broken queue does not cost the others their sweep.
  */
 export const documentRunReconcileTask =
   (event: string, reconcilers: readonly RunReconciler[]): SchedulerTask =>
@@ -64,15 +64,15 @@ export const documentRunReconcileTask =
     if (signal.aborted) {
       panic("SchedulerAborted");
     }
-    const swept: { key: string; failedStuck: number; queued: QueuedSweep }[] =
-      [];
-    for (const reconciler of reconcilers) {
-      swept.push({
-        key: reconciler.key,
-        failedStuck: await reconciler.reconcileStuck(db),
-        queued: await reconciler.reconcileQueued(db),
-      });
-    }
+    // Each kind sweeps its own table; within a kind, the stuck sweep runs
+    // first so a run it fails is never handed back.
+    const swept = await Promise.all(
+      reconcilers.map(async (reconciler) => {
+        const failedStuck = await reconciler.reconcileStuck(db);
+        const queued = await reconciler.reconcileQueued(db);
+        return { key: reconciler.key, failedStuck, queued };
+      }),
+    );
     const counts: [string, number][] = [];
     for (const { key, failedStuck, queued } of swept) {
       if (Result.isError(queued)) {

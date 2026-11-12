@@ -567,8 +567,7 @@ const workerQueueNames = (
     const binding =
       callee.type === "Identifier" ? bindings.get(callee.name) : undefined;
     return (
-      binding !== undefined &&
-      binding.imported === DOCUMENT_RUN_QUEUE_FACTORY &&
+      binding?.imported === DOCUMENT_RUN_QUEUE_FACTORY &&
       resolveModulePath(relativePath, binding.module) ===
         DOCUMENT_RUN_QUEUE_FILE
     );
