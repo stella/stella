@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
@@ -33,6 +33,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   activityBlocks,
@@ -43,13 +45,24 @@ import {
   matchedSuggestions,
   nextSuggestion,
   segmentTitles,
+  suggestionPieces,
+  suggestionSummary,
 } from "./activity-calendar-logic";
 import type {
   ActivityBlock,
   ActivitySuggestion,
+  SuggestionSummary,
 } from "./activity-calendar-logic";
 import { calendarDate, timedSegments } from "./activity-logic";
-import type { ActivityDaySnapshot } from "./activity-types";
+import type {
+  ActivityAppExclusion,
+  ActivityDaySnapshot,
+} from "./activity-types";
+import {
+  BrowserTitlesNotice,
+  OpenAccessibilitySettingsButton,
+} from "./ActivityCaptureDetails";
+import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivitySuggestionCard } from "./ActivitySuggestionCard";
 import type {
@@ -68,9 +81,13 @@ import type {
   BillingDraftSettings,
   BillingDraftSettingsControl,
 } from "./billing-draft-settings";
+import type { CaptureModeCommand } from "./capture-modes";
 import { EVIDENCE_DETAIL_LIMIT, matchDay } from "./day-review-logic";
 import type { MatchedSegment } from "./day-review-logic";
-import { useDurationLabel } from "./use-duration-label";
+import { SuggestionPieceLabel } from "./SuggestionPieceLabel";
+import { explainedBrowsers, missingTitlesReason } from "./title-capture-logic";
+import type { ExplainedBrowser } from "./title-capture-logic";
+import { useDurationLabel, useMinutesLabel } from "./use-duration-label";
 
 const ACTIVITY_COLUMN_ID = "activity";
 const ENTRIES_COLUMN_ID = "entries";
@@ -108,15 +125,17 @@ export type ActivityCalendarPreferences = {
 };
 
 /** An Activity block's hover: its range, then each app with its time and the
- * title it spent longest on. */
+ * title it spent longest on, then why a browser in it recorded no titles. */
 const ActivityBlockDetails = ({
   details,
   range,
   sourceAppVisuals,
+  titlesNotice,
 }: {
   details: ReturnType<typeof blockDetails>;
   range: string;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+  titlesNotice: ReactElement | null;
 }) => {
   const t = useTranslations("activity");
   const durationLabel = useDurationLabel();
@@ -132,15 +151,20 @@ const ActivityBlockDetails = ({
             />
             <div className="flex min-w-0 flex-1 flex-col">
               <div className="flex items-baseline justify-between gap-3">
-                <bdi className="truncate font-medium">{row.name}</bdi>
+                <TruncatedText className="font-medium" render={<bdi />}>
+                  {row.name}
+                </TruncatedText>
                 <span className="text-muted-foreground shrink-0 tabular-nums">
                   {durationLabel(row.durationMs)}
                 </span>
               </div>
               {row.title === null ? null : (
-                <bdi className="text-muted-foreground truncate">
+                <TruncatedText
+                  className="text-muted-foreground"
+                  render={<bdi />}
+                >
                   {row.title}
-                </bdi>
+                </TruncatedText>
               )}
             </div>
           </li>
@@ -151,6 +175,12 @@ const ActivityBlockDetails = ({
           {t("moreApps", { count: details.hiddenCount })}
         </p>
       ) : null}
+      {titlesNotice === null ? null : (
+        <>
+          <Separator />
+          {titlesNotice}
+        </>
+      )}
     </div>
   );
 };
@@ -276,15 +306,24 @@ const SubmissionFeedback = ({
   );
 };
 
+/** Sends a capture-settings command, as the Settings window does. */
+export type CaptureCommandRunner = (
+  command: CaptureDetailsCommand | CaptureModeCommand["command"],
+  args?: Record<string, unknown>,
+  onSuccess?: () => void,
+  onFailure?: () => void,
+) => void;
+
 type ActivityDayCalendarProps = {
   header: ReactNode;
-  /** A question or note that belongs under the header, such as the
+  /** Shown under the header row: why titles are not recorded, or the
    * browser question; nothing when absent. */
   notice?: ReactNode;
   snapshot: ActivityDaySnapshot;
   preferences: ActivityCalendarPreferences;
   onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
   onCopy: (text: string, onSettled: (copied: boolean) => void) => void;
+  onCaptureCommand: CaptureCommandRunner;
   onReviewStatusChange: (status: ActivityReviewStatus) => void;
 };
 
@@ -295,6 +334,7 @@ export const ActivityDayCalendar = ({
   preferences,
   onPreferencesChange,
   onCopy,
+  onCaptureCommand,
   onReviewStatusChange,
 }: ActivityDayCalendarProps) => {
   const t = useTranslations("activity");
@@ -311,6 +351,7 @@ export const ActivityDayCalendar = ({
   });
   const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set());
   const [openCard, setOpenCard] = useState<OpenCard>({ type: "closed" });
+  const titlesNotices = useTitlesNotices(snapshot, onCaptureCommand);
 
   const timeZone = Temporal.Now.timeZoneId();
   const nowMs = Temporal.Now.instant().epochMilliseconds;
@@ -444,26 +485,27 @@ export const ActivityDayCalendar = ({
     openNext(suggestion);
   };
 
-  const formatRange = (startMs: number, endMs: number) =>
-    format.dateTimeRange(startMs, endMs, {
-      hour: "numeric",
-      minute: "2-digit",
-    });
   const hours = (tenths: number) =>
     format.number(tenths / 10, {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     });
+  const summaryLabel = useSummaryLabel();
+  // Matters group the day, so its blocks wait for them: drawn before they
+  // arrive, every block a matter claims would be drawn again as another one,
+  // under a pointer or focus already on it. The grid shows meanwhile.
+  const matched = candidates.type !== "loading";
   const columns = useCalendarColumns({
-    segments: day.segments,
+    segments: matched ? day.segments : [],
     granularity: preferences.granularity,
     sourceAppVisuals: snapshot.sourceAppVisuals,
     rangeSelection: editable,
-    draftedEntries,
-    suggestions,
+    draftedEntries: matched ? draftedEntries : [],
+    suggestions: matched ? suggestions : [],
     narrativeFor: (suggestion) => narratives.editFor(suggestion).narrative,
     onActivate: (suggestion) =>
       open({ id: suggestion.id, type: "suggestion" }, suggestion),
+    titlesNoticeFor: titlesNotices.forApps,
   });
 
   const card =
@@ -480,11 +522,9 @@ export const ActivityDayCalendar = ({
         edit={narratives.editFor(openSuggestion)}
         candidates={matters}
         editable={editable}
-        timeLabel={t("rangeHours", {
-          range: formatRange(openSuggestion.startMs, openSuggestion.endMs),
-          hours: hours(openSuggestion.roundedTenths),
-        })}
+        timeLabel={summaryLabel(suggestionSummary(openSuggestion))}
         sourceAppVisuals={snapshot.sourceAppVisuals}
+        titlesNotice={titlesNotices.forSuggestion(openSuggestion)}
         assist={narratives.view(openSuggestion)}
         earlierEntries={narratives.earlierEntries(openSuggestion)}
         flags={narratives.flags(openSuggestion)}
@@ -598,6 +638,42 @@ export const ActivityDayCalendar = ({
   );
 };
 
+/** What a suggestion card's header says about its time: its range or how
+ * many pieces it has, the minutes they hold and the hours they bill. */
+const useSummaryLabel = () => {
+  const t = useTranslations("activity");
+  const format = useFormatter();
+  const minutesLabel = useMinutesLabel();
+  const hours = (tenths: number) =>
+    format.number(tenths / 10, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
+  return (summary: SuggestionSummary) => {
+    const duration = minutesLabel(summary.minutes);
+    switch (summary.type) {
+      case "range":
+        return t("suggestionRange", {
+          duration,
+          hours: hours(summary.tenths),
+          range: format.dateTimeRange(summary.startMs, summary.endMs, {
+            hour: "numeric",
+            minute: "2-digit",
+          }),
+        });
+      case "pieces":
+        return t("suggestionPieces", {
+          count: summary.count,
+          duration,
+          hours: hours(summary.tenths),
+        });
+      default:
+        summary satisfies never;
+        return panic("Unhandled suggestion summary");
+    }
+  };
+};
+
 /** The card for a range selected on the grid, named by the range it opened
  * with. */
 const rangeCard = (range: DayCalendarRange): RangeCard => ({
@@ -644,6 +720,9 @@ type CalendarColumnsOptions = {
   suggestions: readonly ActivitySuggestion[];
   narrativeFor: (suggestion: ActivitySuggestion) => string;
   onActivate: (suggestion: ActivitySuggestion) => void;
+  /** Why browsers among these apps recorded no titles, with the action that
+   * records them; `null` when there is nothing to explain. */
+  titlesNoticeFor: (identifiers: readonly string[]) => ReactElement | null;
 };
 
 /** The Activity column (recorded time) and the Time entries column (created
@@ -657,6 +736,7 @@ function useCalendarColumns({
   suggestions,
   narrativeFor,
   onActivate,
+  titlesNoticeFor,
 }: CalendarColumnsOptions): DayCalendarColumn[] {
   const t = useTranslations("activity");
   const format = useFormatter();
@@ -670,25 +750,22 @@ function useCalendarColumns({
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     });
-  const hoursUnit = (tenths: number) =>
-    format.number(tenths / 10, {
-      maximumFractionDigits: 1,
-      minimumFractionDigits: 1,
-      style: "unit",
-      unit: "hour",
-      unitDisplay: "narrow",
-    });
   const durationLabel = useDurationLabel();
+  const minutesLabel = useMinutesLabel();
   const titleOf = segmentTitles(segments);
 
   const activity = activityBlocks(segments, granularity).map(
     (block): DayCalendarBlock => {
       const range = formatRange(block.startMs, block.endMs);
-      const tooltip = (
+      const titlesNotice = titlesNoticeFor(
+        block.apps.map(({ identifier }) => identifier),
+      );
+      const details = (
         <ActivityBlockDetails
           details={blockDetails(block.sources, titleOf)}
           range={range}
           sourceAppVisuals={sourceAppVisuals}
+          titlesNotice={titlesNotice}
         />
       );
       const apps = format.list(
@@ -747,11 +824,17 @@ function useCalendarColumns({
         title: (
           <span className="flex min-w-0 items-center gap-1.5">
             {appIcon}
-            <bdi className="truncate">{label}</bdi>
+            <TruncatedText hint={false} render={<bdi />}>
+              {label}
+            </TruncatedText>
           </span>
         ),
         tone: activityTone(block),
-        tooltip,
+        // The notice holds an action, so the hover must stay reachable.
+        tooltip: {
+          content: details,
+          type: titlesNotice === null ? "text" : "actions",
+        },
       };
     },
   );
@@ -779,35 +862,32 @@ function useCalendarColumns({
   for (const suggestion of suggestions) {
     const name = suggestion.matter?.name ?? t("newEntry");
     const roundedHours = hours(suggestion.roundedTenths);
-    const accessibleLabel = t("suggestionLabel", {
-      matter: name,
-      hours: roundedHours,
-    });
-    // The description reads first, as on a timesheet; the range stands in
-    // while there is none.
+    // Each piece shows its own time; the matter's total is its card's.
     const narrative = narrativeFor(suggestion).trim();
-    for (const run of suggestion.runs) {
+    for (const piece of suggestionPieces(suggestion)) {
+      const range = formatRange(piece.startMs, piece.endMs);
+      const duration = minutesLabel(piece.minutes);
       entries.push({
-        accessibleLabel,
-        caption:
-          narrative.length > 0 ? (
-            <bdi>{narrative}</bdi>
-          ) : (
-            t("rangeHours", {
-              range: formatRange(run.startMs, run.endMs),
-              hours: roundedHours,
-            })
-          ),
-        endMs: run.endMs,
-        id: `${suggestion.id}:${String(run.startMs)}`,
+        accessibleLabel: t("suggestionPieceLabel", {
+          duration,
+          hours: roundedHours,
+          matter: name,
+          range,
+        }),
+        // The description reads under the time, as on a timesheet.
+        ...(narrative.length > 0 ? { caption: <bdi>{narrative}</bdi> } : {}),
+        endMs: piece.endMs,
+        id: `${suggestion.id}:${String(piece.startMs)}`,
         kind: "entry",
         onActivate: () => onActivate(suggestion),
-        startMs: run.startMs,
+        startMs: piece.startMs,
         state: "suggestion",
         title: (
-          <bdi>
-            {name} · {hoursUnit(suggestion.roundedTenths)}
-          </bdi>
+          <SuggestionPieceLabel
+            duration={duration}
+            matter={name}
+            range={range}
+          />
         ),
         tone: matterTone(suggestion.matter),
       });
@@ -855,6 +935,88 @@ function matterTone(
     ? { type: "neutral" }
     : { color: matter.color, matterId: matter.id, type: "matter" };
 }
+
+/** The titles a card's description names: those whose time went to its
+ * matter, the longest first in each app. */
+const matterTitles = (suggestion: ActivitySuggestion, matterId: string) =>
+  suggestion.evidence.flatMap(({ details }) =>
+    details
+      .filter(({ matter }) => matter?.id === matterId)
+      .slice(0, EVIDENCE_DETAIL_LIMIT)
+      .map(({ title }) => title),
+  );
+
+/** Why time recorded no titles, with the action that changes it: for an
+ * Activity block's apps, and for a suggestion's empty Titles tab. Browsers
+ * turned on from here keep their confirmation while the day is open. */
+const useTitlesNotices = (
+  snapshot: ActivityDaySnapshot,
+  onCaptureCommand: CaptureCommandRunner,
+) => {
+  const t = useTranslations("activity");
+  const { record, turnedOn } = useBrowserTitleRequests(onCaptureCommand);
+  const browsersNotice = (browsers: readonly ExplainedBrowser[]) =>
+    browsers.length === 0 ? null : (
+      <BrowserTitlesNotice browsers={browsers} onRecord={record} />
+    );
+  const forSuggestion = (suggestion: ActivitySuggestion) => {
+    const reason = missingTitlesReason(
+      snapshot,
+      suggestion.apps.map(({ identifier }) => identifier),
+      turnedOn,
+    );
+    switch (reason.type) {
+      case "none":
+        return null;
+      case "accessibilityRequired":
+        return (
+          <div className="flex flex-col items-start gap-1.5">
+            <p>{t("titlesNeedAccessibility")}</p>
+            <OpenAccessibilitySettingsButton
+              onCommand={onCaptureCommand}
+              variant="outline"
+            />
+          </div>
+        );
+      case "browsers":
+        return browsersNotice(reason.browsers);
+      default:
+        reason satisfies never;
+        return panic("Unhandled missing titles reason");
+    }
+  };
+  return {
+    forApps: (identifiers: readonly string[]) =>
+      browsersNotice(explainedBrowsers(snapshot, identifiers, turnedOn)),
+    forSuggestion,
+  };
+};
+
+/** Browsers turned on from this window while the day is open. A repeated
+ * press while one request is in flight sends nothing. */
+const useBrowserTitleRequests = (onCaptureCommand: CaptureCommandRunner) => {
+  const pending = useRef(new Set<string>());
+  const [turnedOn, setTurnedOn] = useState<ReadonlySet<string>>(new Set());
+  const settle = (identifier: string) => pending.current.delete(identifier);
+  const record = ({ identifier, name }: ActivityAppExclusion) => {
+    if (pending.current.has(identifier)) {
+      return;
+    }
+    pending.current.add(identifier);
+    onCaptureCommand(
+      "activity_set_browser_title_capture",
+      { identifier, name, enabled: true },
+      () => {
+        settle(identifier);
+        setTurnedOn((current) => new Set([...current, identifier]));
+      },
+      () => {
+        settle(identifier);
+      },
+    );
+  };
+  return { record, turnedOn };
+};
 
 type SuggestionDraftsOptions = {
   drafting: BillingDraftSettingsControl;
@@ -1004,11 +1166,14 @@ function useSuggestionDrafts({
   const [edits, setEdits] = useState<Record<string, SuggestionEdit>>({});
   const [statuses, setStatuses] = useState<Record<string, DraftStatus>>({});
 
-  // The template never exceeds what a time entry accepts.
+  // The template never exceeds what a time entry accepts. A card that starts
+  // on no matter starts with no description: its time is not one matter's
+  // work until the user says whose it is.
   const template = (suggestion: ActivitySuggestion) => {
-    const titles = suggestion.evidence.flatMap(({ details }) =>
-      details.slice(0, EVIDENCE_DETAIL_LIMIT).map(({ title }) => title),
-    );
+    if (suggestion.matter === null) {
+      return "";
+    }
+    const titles = matterTitles(suggestion, suggestion.matter.id);
     const text =
       titles.length > 0
         ? t("narrativeEvidence", {
@@ -1026,7 +1191,8 @@ function useSuggestionDrafts({
   };
   const editFor = (suggestion: ActivitySuggestion): SuggestionEdit =>
     edits[suggestion.id] ?? {
-      billable: true,
+      // Billable time is a matter's time.
+      billable: suggestion.matter !== null,
       matter: suggestion.matter,
       narrative: template(suggestion),
       written: 0,

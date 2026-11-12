@@ -13,8 +13,10 @@ import {
 import { EMPTY_CLAIM_REVIEW } from "@/features/avt/claim-review.logic";
 import type { ClaimReview } from "@/features/avt/types";
 import {
+  confirmLabel,
   contestedFactIds,
   countClaims,
+  dispositionGuidance,
   effectiveState,
   needsAttention,
   resolveClaimView,
@@ -106,13 +108,74 @@ describe("AVT triage", () => {
 
     expect(
       needsAttention(
-        { state: "supported", refs: claim.refs },
+        { state: "supported", refs: claim.refs, qualifiers: [] },
         contestedFactIds(facts),
       ),
     ).toBe(true);
     expect(
-      needsAttention({ state: "supported", refs: claim.refs }, NONE_CONTESTED),
+      needsAttention(
+        { state: "supported", refs: claim.refs, qualifiers: [] },
+        NONE_CONTESTED,
+      ),
     ).toBe(false);
+  });
+
+  // The review each qualifier asks for comes from the server; a clean
+  // verdict on a held footing leaves the routine claims, and the count, the
+  // bulk accept and the claim's own copy agree about it.
+  test("a qualifier that asks for judgement takes a clean verdict out of the routine claims", () => {
+    const held = makeClaim({
+      suffix: 1,
+      verdict: supported(),
+      refs: [{ factEntityId: factId(1), rel: "supports" }],
+      qualifiers: [
+        { kind: "unsourced-only", explanation: null, review: "routine" },
+        { kind: "rests-on-held", explanation: null, review: "needs-judgement" },
+      ],
+    });
+    const unsourced = makeClaim({
+      suffix: 2,
+      verdict: supported(),
+      refs: [{ factEntityId: factId(2), rel: "supports" }],
+      qualifiers: [
+        { kind: "unsourced-only", explanation: null, review: "routine" },
+      ],
+    });
+    const counts = countClaims([held, unsourced], NONE_CONTESTED);
+    expect({
+      attnTotal: counts.attnTotal,
+      routine: counts.routineTotal,
+    }).toEqual({ attnTotal: 1, routine: 1 });
+    expect(routineUnsettledClaimIds([held, unsourced], NONE_CONTESTED)).toEqual(
+      [unsourced.id],
+    );
+    expect(
+      dispositionGuidance(
+        { state: "supported", refs: held.refs, qualifiers: held.qualifiers },
+        NONE_CONTESTED,
+      ),
+    ).toEqual({
+      tone: "manual",
+      guideKey: "avt.guidance.manualJudgement",
+      askKey: "avt.disposition.restsOnHeld",
+    });
+    // Confirming it is confirming a verdict, not a claim that is ready.
+    expect(confirmLabel("supported", "manual")).toBe("avt.confirm.verdict");
+    expect(confirmLabel("supported", "ready")).toBe("avt.confirm.supported");
+    expect(
+      dispositionGuidance(
+        {
+          state: "supported",
+          refs: unsourced.refs,
+          qualifiers: unsourced.qualifiers,
+        },
+        NONE_CONTESTED,
+      ),
+    ).toEqual({
+      tone: "ready",
+      guideKey: "avt.guidance.readyToConfirm",
+      askKey: "avt.disposition.unsourcedOnly",
+    });
   });
 
   test("set-aside claims never need attention, even on contested facts", () => {
@@ -123,6 +186,7 @@ describe("AVT triage", () => {
         {
           state: "notverifiable",
           refs: [{ factEntityId: factId(1), rel: "supports" }],
+          qualifiers: [],
         },
         contestedFactIds(facts),
       ),

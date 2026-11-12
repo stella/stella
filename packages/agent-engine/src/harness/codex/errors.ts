@@ -9,6 +9,8 @@ import type { CodexRateLimits, CodexTurnError } from "./protocol";
 
 const EXHAUSTED_PERCENT = 100;
 const HTTP_UNAUTHORIZED = 401;
+/** Codex's error code for a model at capacity. */
+const SERVER_OVERLOADED = "serverOverloaded";
 
 /** Rate-limit updates are partial; omitted windows keep earlier values. */
 export const mergeRateLimits = (
@@ -87,12 +89,14 @@ const httpStatus = (info: CodexTurnError["codexErrorInfo"]): number | null => {
 };
 
 /**
- * The selected model was at capacity. Codex itself retries transient errors
- * inside a turn; this one ends the turn, and a continuation on the same
- * thread is how it resumes (approach from t3code, MIT, `CodexAdapterV2.ts`).
+ * The selected model was at capacity (`serverOverloaded`), a transient state
+ * of the provider; the member's own allowance is `usageLimitExceeded`. Codex
+ * itself retries transient errors inside a turn; this one ends the turn, and
+ * a continuation on the same thread is how it resumes (approach from t3code,
+ * MIT, `CodexAdapterV2.ts`).
  */
 export const isCapacityFailure = (error: CodexTurnError | null): boolean =>
-  errorCode(error?.codexErrorInfo ?? null) === "serverOverloaded";
+  errorCode(error?.codexErrorInfo ?? null) === SERVER_OVERLOADED;
 
 type ClassifyTurnFailureOptions = {
   error: CodexTurnError | null;
@@ -122,6 +126,10 @@ export const classifyTurnFailure = ({
       message,
       resetsAt: usageLimitResetsAt(rateLimits),
     };
+  }
+  // Reached once the continuations are spent, or when no turn may continue.
+  if (code === SERVER_OVERLOADED) {
+    return { type: "model_at_capacity", message };
   }
   if (message.includes(SHARING_LIMIT_TEXT)) {
     // This allowance has its own reset, which the plan's rate limits do not say.

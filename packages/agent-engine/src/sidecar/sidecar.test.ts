@@ -25,6 +25,7 @@ import {
   type FakeScenario,
 } from "../../scripts/fake-codex-app-server";
 import { bundledHarnessCompatibility } from "../harness/compatibility";
+import { PROTOCOL_LOG_OFF } from "../protocol-log";
 import {
   HOLDER_ENDPOINT_FILE,
   HOLDER_LOG_FILE,
@@ -155,7 +156,10 @@ const place = (): Place => {
 type HolderProcess = Place & { exited: Promise<number> };
 
 /** The holder as `main.ts`, the way the desktop starts it. */
-const spawnHolder = async (at: Place = place()): Promise<HolderProcess> => {
+const spawnHolder = async (
+  at: Place = place(),
+  environment: Readonly<Record<string, string>> = {},
+): Promise<HolderProcess> => {
   const child = Bun.spawn(
     [process.execPath, MAIN, "--dir", at.dir, "--endpoint", at.endpoint],
     {
@@ -166,6 +170,7 @@ const spawnHolder = async (at: Place = place()): Promise<HolderProcess> => {
         PATH: process.env["PATH"] ?? "",
         FAKE_HARNESS_LOG: at.fakeLog,
         OPENAI_API_KEY: "inherited-key",
+        ...environment,
       },
     },
   );
@@ -912,6 +917,52 @@ describe("harness holder over its socket", () => {
     expect(holder.log()).not.toContain(secret);
   });
 
+  test("with the protocol log on, the holder log has each message's structure and none of its content", async () => {
+    const holder = await spawnHolder(place(), {
+      STELLA_AGENT_PROTOCOL_LOG: "redacted",
+    });
+    const { client } = await desktop(holder);
+    const codexRun = runStart(client, holder, "stella_tools");
+    await client.waitFor(is("run.finished", codexRun));
+    const claudeRun = claudeRunStart(client, holder, "stella_tools");
+    await client.waitFor(is("run.finished", claudeRun));
+    const secret = holder.secret();
+    client.send({ type: "shutdown" });
+    expect(await holder.exited).toBe(0);
+    const log = holder.log();
+    expect(log).toContain("the protocol log is on");
+    for (const line of [
+      /protocol sidecar connection=1 in type=run\.start runId=#[0-9a-f]{8} /u,
+      /protocol sidecar connection=1 out type=run\.finished /u,
+      /protocol codex pid=\d+ out method=turn\/start id=\d+ /u,
+      /protocol codex pid=\d+ in method=turn\/completed /u,
+      /protocol claude-code pid=\d+ out type=user /u,
+      /protocol claude-code pid=\d+ in type=result /u,
+    ]) {
+      expect(log).toMatch(line);
+    }
+    // What the member and the model wrote, and where the run's files are.
+    const written = [codexRun, claudeRun]
+      .flatMap((runId) => chunksOf(client, runId))
+      .flatMap((chunk) =>
+        ["delta", "content", "args", "result"].flatMap((key) => {
+          const value: unknown = chunk[key];
+          return typeof value === "string" && value.length >= 6 ? [value] : [];
+        }),
+      );
+    expect(written.length).toBeGreaterThan(0);
+    for (const content of [
+      "Find the lease decision.",
+      "Use the stella MCP server.",
+      RUN_TOKEN,
+      secret,
+      holder.root,
+      ...written,
+    ]) {
+      expect(log).not.toContain(content);
+    }
+  });
+
   test("hands the harness the run's approval mode and the computer's package cache", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
@@ -1325,6 +1376,7 @@ describe("harness holder over its socket", () => {
         return true;
       },
       log: () => {},
+      protocolLog: PROTOCOL_LOG_OFF,
       environment: {
         PATH: process.env["PATH"] ?? "",
         FAKE_HARNESS_LOG: path.join(root, "fake.log"),
@@ -1410,6 +1462,7 @@ describe("harness holder over its socket", () => {
           return true;
         },
         log: () => {},
+        protocolLog: PROTOCOL_LOG_OFF,
         environment: {
           PATH: process.env["PATH"] ?? "",
           FAKE_HARNESS_LOG: path.join(root, "fake.log"),
@@ -1595,6 +1648,7 @@ describe("holder limits and timers", () => {
       unackedRetentionMs: 60_000,
       processGrantTimeoutMs: 60_000,
       limits: { maxMessages: 1000, maxBytes: 1024 * 1024 },
+      protocolLog: { type: "set", setting: "off" },
       ...overrides,
     });
     const server = Result.isOk(started)

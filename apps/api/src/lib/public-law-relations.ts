@@ -21,6 +21,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCourtWeights: "case_law_court_weights",
   caseLawCoverageSlices: "case_law_coverage_slices",
   caseLawDecisionAliases: "case_law_decision_aliases",
+  caseLawDecisionAnchorRedirects: "case_law_decision_anchor_redirects",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
   publishedCaseLawDecisions: "case_law_published_decisions",
@@ -369,6 +370,12 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   case_law_decision_aliases: {
     retired_decision_id: "permitted",
     canonical_decision_id: "permitted",
+  },
+  // Where an earlier document's anchor went; the redirect read answers from it.
+  case_law_decision_anchor_redirects: {
+    decision_id: "required",
+    from_anchor: "required",
+    to_anchor: "required",
   },
   case_law_decision_identifiers: {
     decision_id: "required",

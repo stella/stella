@@ -178,7 +178,7 @@ test("unreadable payloads are persisted as they are read, not once the batch dra
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,
     limit: REVISIONS,
-    leaseMs: 600_000,
+    fillWindowMs: 600_000,
     payloadReadConcurrency: READ_CONCURRENCY,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,

@@ -72,6 +72,12 @@ export const KILL_SWITCHES = {
     offHint:
       "Search refinement and summaries are turned off. Do not retry until they are turned back on.",
   },
+  "email-assist": {
+    default: KILL_SWITCH_STATE.on,
+    owner: "apps/api/src/handlers/ai",
+    offHint:
+      "Email summaries and reply drafts are turned off. Do not retry until they are turned back on.",
+  },
   "case-law-research": {
     default: KILL_SWITCH_STATE.on,
     owner: "apps/api/src/handlers/case-law",
@@ -221,6 +227,8 @@ export const ACTION_KIND_KILL_SWITCH = {
   "properties.preview": "workflows",
   "search.refine": "search-assist",
   "search.summarize": "search-assist",
+  "email.summarize": "email-assist",
+  "email.draft-reply": "email-assist",
   "playbooks.derive-ask": "document-reviews",
   "case-law.analysis": "case-law-research",
   "case-law.search-refine": "case-law-research",

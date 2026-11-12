@@ -11,6 +11,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -241,11 +242,15 @@ const CrumbText = ({
   const title = withTitle ? parts.title : null;
   return (
     <span className="flex min-w-0 items-center gap-1">
-      <bdi className={cn(title === null ? "min-w-0 truncate" : "shrink-0")}>
-        {parts.label}
-      </bdi>
+      {title === null ? (
+        <TruncatedText render={<bdi />}>{parts.label}</TruncatedText>
+      ) : (
+        <bdi className="shrink-0">{parts.label}</bdi>
+      )}
       {title !== null && (
-        <bdi className="min-w-0 truncate font-normal">{title}</bdi>
+        <TruncatedText className="font-normal" render={<bdi />}>
+          {title}
+        </TruncatedText>
       )}
     </span>
   );
