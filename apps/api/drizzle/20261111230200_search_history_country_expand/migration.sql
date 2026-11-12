@@ -8,7 +8,7 @@ ALTER TABLE "search_history_entries" ADD COLUMN "base_lookup_key" varchar(64);
 ALTER TABLE "search_history_entries" ADD COLUMN "country_repair_failed_at" timestamptz;
 --> statement-breakpoint
 ALTER TABLE "search_history_entries" ADD CONSTRAINT "search_history_entries_country_check"
-  CHECK ("country" IS NULL OR "country" IN ('AUT', 'CZE', 'EU', 'GBR', 'HUN', 'POL', 'SVK', 'USA')) NOT VALID;
+  CHECK ("country" IS NULL OR "country" IN ('AUT', 'BRA', 'CZE', 'EU', 'GBR', 'HUN', 'POL', 'SVK', 'USA')) NOT VALID;
 --> statement-breakpoint
 
 ALTER TABLE "search_history_owners" ADD COLUMN "legacy_cleared_at" timestamptz;
@@ -23,7 +23,7 @@ CREATE TABLE "search_history_country_clears" (
   CONSTRAINT "search_history_country_clears_org_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE cascade,
   CONSTRAINT "search_history_country_clears_user_fk" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE cascade,
   CONSTRAINT "search_history_country_clears_owner_fk" FOREIGN KEY ("organization_id", "user_id") REFERENCES "search_history_owners"("organization_id", "user_id") ON DELETE cascade,
-  CONSTRAINT "search_history_country_clears_country_check" CHECK ("country" IN ('AUT', 'CZE', 'EU', 'GBR', 'HUN', 'POL', 'SVK', 'USA'))
+  CONSTRAINT "search_history_country_clears_country_check" CHECK ("country" IN ('AUT', 'BRA', 'CZE', 'EU', 'GBR', 'HUN', 'POL', 'SVK', 'USA'))
 );
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "search_history_country_clears" TO stella;
