@@ -211,6 +211,21 @@ export const choosePermission = async (
   await permissionItem(page, mode).click();
 };
 
+/**
+ * The most permissive mode the computer offers: Claude Code runs in full
+ * auto only where its sandbox exists (macOS), Auto elsewhere.
+ */
+export const widestPermission = async (
+  page: Page,
+): Promise<"fullAuto" | "auto"> => {
+  await runOnButton(page).click();
+  const disabled = await permissionItem(page, "fullAuto").getAttribute(
+    "aria-disabled",
+  );
+  await page.keyboard.press("Escape");
+  return disabled === "true" ? "auto" : "fullAuto";
+};
+
 /** The permission the open Run on menu shows as chosen. */
 export const chosenPermission = async (page: Page) => {
   await runOnButton(page).click();

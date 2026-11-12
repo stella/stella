@@ -15,6 +15,7 @@ import {
   stopButton,
   THREAD_URL,
   transcript,
+  widestPermission,
 } from "./computer";
 
 // The stand-in CLIs' scenarios, named by the models they list
@@ -133,8 +134,10 @@ test("new chats start on the last Run on choice, and on Ask whatever permission 
     agent: "claude-code",
     model: "tool_calls",
   });
-  await choosePermission(page, "fullAuto");
-  expect(await chosenPermission(page)).toEqual(["fullAuto"]);
+  const widest = await widestPermission(page);
+  test.info().annotations.push({ type: "permission", description: widest });
+  await choosePermission(page, widest);
+  expect(await chosenPermission(page)).toEqual([widest]);
   await send(page, "Remember where this ran");
   await expect(transcript(page)).toContainText(ANSWERS["claude-code"].answer, {
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
