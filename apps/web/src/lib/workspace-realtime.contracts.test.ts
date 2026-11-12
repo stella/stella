@@ -400,6 +400,20 @@ test("cache invalidation failures preserve every registered mutation's committed
   );
   for (const mutation of mutationNames) {
     const queryClient = new QueryClient();
+    // A registered reader of what the write changes, so every contract has
+    // something to refresh, including one whose resource has no static scope.
+    const [resource, ...resources] =
+      RESOURCE_MUTATION_CONTRACTS[mutation].resources;
+    queryClient.getQueryCache().build(queryClient, {
+      queryKey: ["registered-reader", mutation],
+      queryFn: async () => null,
+      meta: {
+        resourceReads: {
+          resources: [resource, ...resources],
+          scope: { type: "workspace", workspaceId: WORKSPACE_ID },
+        },
+      },
+    });
     const failure = new TypeError("Cache invalidation unavailable");
     const invalidate = spyOn(
       queryClient,

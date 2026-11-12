@@ -3,7 +3,6 @@ import { useRouteContext } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { RESOURCE_MUTATION_ID_HEADER } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import {
@@ -21,6 +20,7 @@ import type {
 } from "@/features/avt/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -159,16 +159,22 @@ export const useClaimReviewActions = (scope: RunScope) => {
         await runWorkspaceMutation({
           client: queryClient,
           request: async (mutationId) =>
-            unwrapApiResponse(
-              await api.lists({ workspaceId })["claim-reviews"].post(
-                { runId, claimId, event },
-                {
-                  headers: {
-                    ...request.headers,
-                    [RESOURCE_MUTATION_ID_HEADER]: mutationId,
-                  },
-                },
-              ),
+            await invokeCapability(
+              "lists.verifications.claim-reviews.create",
+              async (declared) =>
+                unwrapApiResponse(
+                  await api.lists({ workspaceId })["claim-reviews"].post(
+                    { runId, claimId, event },
+                    {
+                      ...declared,
+                      headers: {
+                        "Idempotency-Key": request.headers["Idempotency-Key"],
+                        "x-stella-mutation-id": mutationId,
+                        ...declared.headers,
+                      },
+                    },
+                  ),
+                ),
             ),
           queryKeys: [],
         }),
@@ -210,16 +216,22 @@ export const useClaimReviewActions = (scope: RunScope) => {
         await runWorkspaceMutation({
           client: queryClient,
           request: async (mutationId) =>
-            unwrapApiResponse(
-              await api.lists({ workspaceId })["claim-reviews"].bulk.post(
-                { runId, claimIds },
-                {
-                  headers: {
-                    ...request.headers,
-                    [RESOURCE_MUTATION_ID_HEADER]: mutationId,
-                  },
-                },
-              ),
+            await invokeCapability(
+              "lists.verifications.claim-reviews.bulk.create",
+              async (declared) =>
+                unwrapApiResponse(
+                  await api.lists({ workspaceId })["claim-reviews"].bulk.post(
+                    { runId, claimIds },
+                    {
+                      ...declared,
+                      headers: {
+                        "Idempotency-Key": request.headers["Idempotency-Key"],
+                        "x-stella-mutation-id": mutationId,
+                        ...declared.headers,
+                      },
+                    },
+                  ),
+                ),
             ),
           queryKeys: [],
         }),
