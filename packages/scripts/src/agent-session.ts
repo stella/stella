@@ -379,7 +379,7 @@ const readStoredAgentKey = (root: string) => {
   return isStoredAgentKey(parsed) ? parsed : null;
 };
 
-const readSessionCookie = (root: string) => {
+export const readSessionCookie = (root: string) => {
   const parsed: unknown = JSON.parse(
     readFileSync(path.join(root, STORAGE_STATE_PATH), "utf-8"),
   );

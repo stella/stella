@@ -29,8 +29,12 @@ import { fakeHarnessLog } from "./fake-harness-peer";
 export const BY_MODEL_SCENARIOS = [
   "text",
   "tool_calls",
+  "native_tools",
+  "harness_items",
   "stella_tools",
   "approval",
+  "approval_outcome",
+  "writes_file",
   "blocking_question",
   "async_question",
   "usage_limit",

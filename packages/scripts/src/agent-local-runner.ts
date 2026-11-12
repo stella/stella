@@ -40,11 +40,19 @@ const STATE_DIR = "local-runner";
 const RECORD_FILE = "local-runner.json";
 const LOG_FILE = "local-runner.log";
 const BUILD_LOG_FILE = "local-runner-build.log";
-const OFFLINE_FILE = "offline";
-const LINK_FILE = "link.json";
+/**
+ * The files a test or a person creates in the state folder to change the
+ * stand-in computer: `offline` takes it offline until removed, `relink`
+ * links it again with a new device key (the stand-in removes it once linked).
+ */
+export const LOCAL_RUNNER_SWITCHES = {
+  offline: "offline",
+  relink: "relink",
+} as const;
+export const LOCAL_RUNNER_LINK_FILE = "link.json";
 // Written by the stand-in: its folder under the development app's data,
 // `.../runner-stand-in/<checkout>`.
-const DATA_FOLDER_FILE = "data-folder";
+export const LOCAL_RUNNER_DATA_FOLDER_FILE = "data-folder";
 const DATA_FOLDER_PARENT = "runner-stand-in";
 const CODEX_STAND_IN = "packages/agent-engine/scripts/fake-codex-by-model.ts";
 const CLAUDE_CODE_STAND_IN =
@@ -55,7 +63,7 @@ const STOP_TIMEOUT_MS = 20_000;
 const POLL_MS = 1000;
 const LOG_TAIL_LINES = 30;
 
-const localRunnerDir = (root: string) =>
+export const localRunnerDir = (root: string) =>
   path.join(root, DEV_STATE_DIR, STATE_DIR);
 
 const recordSchema = v.object({
@@ -335,7 +343,9 @@ export const startLocalRunner = async ({
       script: path.join(root, CLAUDE_CODE_STAND_IN),
       log: path.join(state, "claude-code.log"),
     });
-    rmSync(path.join(state, OFFLINE_FILE), { force: true });
+    for (const name of Object.values(LOCAL_RUNNER_SWITCHES)) {
+      rmSync(path.join(state, name), { force: true });
+    }
     const logPath = devStatePath(root, LOG_FILE);
     const log = openSync(logPath, "a");
     const child = spawn(built.value, [], {
@@ -380,7 +390,7 @@ export const startLocalRunner = async ({
         `The stand-in computer exited:\n${tail(devStatePath(root, LOG_FILE))}`,
       );
     }
-    const linkPath = path.join(state, LINK_FILE);
+    const linkPath = path.join(state, LOCAL_RUNNER_LINK_FILE);
     const link = existsSync(linkPath)
       ? v.safeParse(linkSchema, JSON.parse(readFileSync(linkPath, "utf-8")))
       : null;
@@ -429,7 +439,10 @@ export const printLocalRunner = (
     `CLI logs:      ${path.join(state, "codex.log")}, ${path.join(state, "claude-code.log")}`,
   );
   console.log(
-    `offline:       touch ${path.join(state, OFFLINE_FILE)} (remove it to reconnect)`,
+    `offline:       touch ${path.join(state, LOCAL_RUNNER_SWITCHES.offline)} (remove it to reconnect)`,
+  );
+  console.log(
+    `relink:        touch ${path.join(state, LOCAL_RUNNER_SWITCHES.relink)} (a new device key for the same computer)`,
   );
 };
 
@@ -465,7 +478,7 @@ export const stopLocalRunner = async (root: string) => {
  */
 export const forgetLocalRunner = (root: string) => {
   const state = localRunnerDir(root);
-  const dataFile = path.join(state, DATA_FOLDER_FILE);
+  const dataFile = path.join(state, LOCAL_RUNNER_DATA_FOLDER_FILE);
   const data = existsSync(dataFile) ? readFileSync(dataFile, "utf-8") : "";
   // Only the folder the stand-in named for itself, never another path.
   if (
@@ -475,5 +488,5 @@ export const forgetLocalRunner = (root: string) => {
     rmSync(data, { recursive: true, force: true });
   }
   rmSync(dataFile, { force: true });
-  rmSync(path.join(state, LINK_FILE), { force: true });
+  rmSync(path.join(state, LOCAL_RUNNER_LINK_FILE), { force: true });
 };

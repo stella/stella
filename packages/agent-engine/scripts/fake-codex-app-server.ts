@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -56,7 +56,22 @@ export type FakeStep =
    * Send these while watching for `turn/interrupt`: one answers it, ends the
    * turn `interrupted` and the scenario. No later step may expect a request.
    */
-  | { untilInterrupted: readonly FakeOutput[] };
+  | { untilInterrupted: readonly FakeOutput[] }
+  /**
+   * Play `approved` when the client's answer to the last request approved
+   * it (`accept` or `acceptForSession`), `denied` otherwise.
+   */
+  | {
+      byDecision: {
+        approved: readonly FakeStep[];
+        denied: readonly FakeStep[];
+      };
+    }
+  /**
+   * Write `text` to `file` under the working directory, as an agent's edit
+   * does on disk, and log the path written.
+   */
+  | { writeFile: string; text: string };
 
 const userAgent = (version: string) =>
   `stella/${version} (Mac OS 27.0; arm64) test`;
@@ -207,9 +222,12 @@ const continuation = (outcome: FakeStep[]): FakeStep[] => [
   ...outcome,
 ];
 
-/** A command the harness asks to run, declined, then the turn's answer. */
-const commandApproval = (reason: string | null): FakeStep[] => [
-  ...freshTurn(),
+/** What the approval scenarios answer once the command ran. */
+export const FAKE_APPROVED_ANSWER = "Removed draft.md.";
+export const FAKE_DENIED_ANSWER = "Left it in place.";
+
+/** The command the approval scenarios ask to run, and the request for it. */
+const removeDraft = (reason: string | null): FakeStep[] => [
   item("started", {
     ...command("call-rm", "inProgress"),
     command: "rm draft.md",
@@ -227,13 +245,43 @@ const commandApproval = (reason: string | null): FakeStep[] => [
       command: "rm draft.md",
     },
   },
+];
+
+/** The command declined, whatever the client answered. */
+const draftLeft = (): FakeStep[] => [
   item("completed", {
     ...command("call-rm", "declined"),
     command: "rm draft.md",
   }),
-  item("completed", agentMessage("m-2", "Left it in place.")),
+  item("completed", agentMessage("m-2", FAKE_DENIED_ANSWER)),
   completed(),
 ];
+
+/** A command the harness asks to run, declined, then the turn's answer. */
+const commandApproval = (reason: string | null): FakeStep[] => [
+  ...freshTurn(),
+  ...removeDraft(reason),
+  ...draftLeft(),
+];
+
+/** The file `writes_file` adds to its working directory, and its text. */
+export const FAKE_WRITTEN_FILE = {
+  path: "notes.md",
+  text: "Rent is due quarterly.\n",
+} as const;
+
+const writtenNotes = (status: string) => ({
+  type: "fileChange",
+  id: "call-write",
+  changes: [
+    {
+      path: FAKE_WRITTEN_FILE.path,
+      kind: { type: "add" },
+      diff: `+${FAKE_WRITTEN_FILE.text}`,
+    },
+  ],
+  status,
+});
 
 /** The context window the fake reports, as Codex does with its token usage. */
 export const FAKE_CONTEXT_WINDOW = 258_400;
@@ -589,6 +637,36 @@ export const FAKE_SCENARIOS = {
     completed(),
   ],
   approval: commandApproval("Deletes a file"),
+  /** The command runs when the client approves it and not otherwise. */
+  approval_outcome: [
+    ...freshTurn(),
+    ...removeDraft("Deletes a file"),
+    {
+      byDecision: {
+        approved: [
+          item("completed", {
+            ...command("call-rm", "completed", {
+              aggregatedOutput: "",
+              exitCode: 0,
+            }),
+            command: "rm draft.md",
+          }),
+          item("completed", agentMessage("m-2", FAKE_APPROVED_ANSWER)),
+          completed(),
+        ],
+        denied: draftLeft(),
+      },
+    },
+  ],
+  /** Adds a file to the working directory on disk, as an agent's edit does. */
+  writes_file: [
+    ...freshTurn(),
+    item("started", writtenNotes("inProgress")),
+    { writeFile: FAKE_WRITTEN_FILE.path, text: FAKE_WRITTEN_FILE.text },
+    item("completed", writtenNotes("completed")),
+    item("completed", agentMessage("m-write", "Wrote notes.md.")),
+    completed(),
+  ],
   /** A harness that gives no reason, here as an empty one. */
   approval_without_reason: commandApproval(""),
   blocking_question: [
@@ -1030,6 +1108,34 @@ export type FakeScenario = keyof typeof FAKE_SCENARIOS;
 export const isScenario = (name: string): name is FakeScenario =>
   Object.hasOwn(FAKE_SCENARIOS, name);
 
+/** The decision ids that let an approval request's action go ahead. */
+const APPROVING_DECISIONS = ["accept", "acceptForSession"] as const;
+
+const DecisionResultSchema = v.looseObject({ decision: v.string() });
+
+/**
+ * Play a step that needs no client message: the steps a `byDecision` picks
+ * by the client's last response, or a file written on disk (none follow).
+ */
+const playLocally = (
+  step: Extract<FakeStep, { byDecision: unknown } | { writeFile: string }>,
+  lastResponse: { result?: unknown } | null,
+  log: (entry: object) => void,
+): readonly FakeStep[] => {
+  if ("writeFile" in step) {
+    const written = path.resolve(process.cwd(), step.writeFile);
+    writeFileSync(written, step.text);
+    log({ wrote: written });
+    return [];
+  }
+  const decision = v.safeParse(DecisionResultSchema, lastResponse?.result);
+  const decided = decision.success ? decision.output.decision : null;
+  log({ decision: decided });
+  return APPROVING_DECISIONS.some((id) => id === decided)
+    ? step.byDecision.approved
+    : step.byDecision.denied;
+};
+
 const IncomingSchema = v.looseObject({
   id: v.optional(v.union([v.string(), v.number()])),
   method: v.optional(v.string()),
@@ -1260,7 +1366,10 @@ export const run = async (
     return "interrupted";
   };
   let serverRequestId = 1000;
-  for (const step of steps) {
+  /** The client's answer to the last request a step sent. */
+  let lastResponse: { result?: unknown } | null = null;
+  const queue = [...steps];
+  for (let step = queue.shift(); step !== undefined; step = queue.shift()) {
     if ("expect" in step) {
       const message = await nextRequest(step.expect);
       if (message === null) {
@@ -1291,13 +1400,19 @@ export const run = async (
         method: step.request,
         params: step.params,
       });
-      if (step.wait !== false && (await take("responses")) === null) {
-        return;
+      if (step.wait !== false) {
+        lastResponse = await take("responses");
+        if (lastResponse === null) {
+          return;
+        }
       }
     } else if ("awaitResponse" in step) {
-      if ((await take("responses")) === null) {
+      lastResponse = await take("responses");
+      if (lastResponse === null) {
         return;
       }
+    } else if ("byDecision" in step || "writeFile" in step) {
+      queue.unshift(...playLocally(step, lastResponse, log));
     } else if ("ignoreTerm" in step) {
       process.on("SIGTERM", () => {
         log({ ignored: "SIGTERM" });

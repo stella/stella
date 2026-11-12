@@ -31,7 +31,17 @@ export type FakeStep =
   | { cancelLast: true }
   | { raw: string }
   | { sleep: number }
-  | { exit: number };
+  | { exit: number }
+  /**
+   * Play `approved` when the client allowed the last control request,
+   * `denied` otherwise.
+   */
+  | {
+      byDecision: {
+        approved: readonly FakeStep[];
+        denied: readonly FakeStep[];
+      };
+    };
 
 /** A scenario that starts differently when the client resumes a session. */
 type FakeScenario =
@@ -234,6 +244,10 @@ export const FAKE_PRIVATE_TEXT = {
 
 /** A command longer than chat shows. */
 export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
+
+/** What `approval_outcome` answers once the command ran, or did not. */
+export const FAKE_APPROVED_ANSWER = "Removed draft.md.";
+export const FAKE_DENIED_ANSWER = "Left the draft in place.";
 
 export const FAKE_APPROVAL_REASON = "\u001B[33mDeletes a file\u001B[0m";
 
@@ -591,6 +605,33 @@ export const FAKE_SCENARIOS = {
     toolResult("call-out", "File created."),
     assistant("msg-3", [{ type: "text", text: "Left the draft in place." }]),
     result(),
+  ],
+  /** The command runs when the client allows it and not otherwise. */
+  approval_outcome: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-rm", "Bash", { command: "rm draft.md" }),
+    ]),
+    canUseTool(
+      "call-rm",
+      "Bash",
+      { command: "rm draft.md" },
+      { decision_reason: FAKE_APPROVAL_REASON },
+    ),
+    {
+      byDecision: {
+        approved: [
+          toolResult("call-rm", ""),
+          assistant("msg-2", [{ type: "text", text: FAKE_APPROVED_ANSWER }]),
+          result(),
+        ],
+        denied: [
+          toolResult("call-rm", "The user denied this action.", true),
+          assistant("msg-2", [{ type: "text", text: FAKE_DENIED_ANSWER }]),
+          result(),
+        ],
+      },
+    },
   ],
   /** An approval without suggested rules offers no session-wide decision. */
   one_off_approval: [
@@ -954,6 +995,13 @@ const UserInputSchema = v.looseObject({
 const OBSERVED_ENV =
   /^(?:ANTHROPIC_|CLAUDE|AWS_BEARER_TOKEN_BEDROCK$|DISABLE_AUTOUPDATER$|ENABLE_CLAUDEAI_MCP_SERVERS$|FAKE_KEEP$|BUN_INSTALL_CACHE_DIR$|npm_config_cache$|PIP_CACHE_DIR$|UV_CACHE_DIR$|PLAYWRIGHT_BROWSERS_PATH$|XDG_CACHE_HOME$)/u;
 
+/** A permission answer as the client sends it. */
+const PermissionAnswerSchema = v.looseObject({
+  response: v.looseObject({
+    response: v.looseObject({ behavior: v.string() }),
+  }),
+});
+
 export const run = async (
   steps: readonly FakeStep[],
   log: (entry: object) => void,
@@ -980,7 +1028,10 @@ export const run = async (
   });
 
   let cliRequestId = 0;
-  for (const step of steps) {
+  /** The client's answer to the last control request a step sent. */
+  let lastResponse: { response?: unknown } | null = null;
+  const queue = [...steps];
+  for (let step = queue.shift(); step !== undefined; step = queue.shift()) {
     if ("expect" in step) {
       const message = await take("requests");
       if (message === null) {
@@ -1018,9 +1069,20 @@ export const run = async (
         request_id: `cli-${String(cliRequestId)}`,
         request: step.control,
       });
-      if ((await take("responses")) === null) {
+      lastResponse = await take("responses");
+      if (lastResponse === null) {
         return;
       }
+    } else if ("byDecision" in step) {
+      const answer = v.safeParse(PermissionAnswerSchema, lastResponse);
+      const approved =
+        answer.success && answer.output.response.response.behavior === "allow";
+      log({
+        decision: answer.success ? answer.output.response.response : null,
+      });
+      queue.unshift(
+        ...(approved ? step.byDecision.approved : step.byDecision.denied),
+      );
     } else if ("cancelLast" in step) {
       write({ type: "control_cancel_request", request_id: "cli-withdrawn" });
     } else if ("raw" in step) {

@@ -14,7 +14,10 @@
 //! journal in the development app's data folder (`data_folder`).
 //! While `<state>/offline` exists the runner is stopped and the host and its
 //! holder keep running, as when the app loses its network; removing the file
-//! starts a fresh runner. SIGTERM or Ctrl-C stops the runs and the holder.
+//! starts a fresh runner. Creating `<state>/relink` links the same computer
+//! again with a new device key, as signing in again does, and starts a fresh
+//! runner on it; the file is removed once linked. SIGTERM or Ctrl-C stops the
+//! runs and the holder.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -58,6 +61,7 @@ const CLAUDE_CODE_VERSION: &str = "2.1.309";
 const NAMESPACE: &str = "stand-in";
 const JOURNAL_KEY: [u8; 32] = [7; 32];
 const OFFLINE_FILE: &str = "offline";
+const RELINK_FILE: &str = "relink";
 const LINK_FILE: &str = "link.json";
 const DEVICE_KEY_FILE: &str = "device.pkcs8";
 /// Names the data folder, so `agent:reset` can remove it.
@@ -192,8 +196,9 @@ struct Redeemed {
 
 /// Link a new device key as the browser approval does: `/grant` under the
 /// member's web session, then `/redeem-link` with the device's proof. A new
-/// link is a new computer, so it gets a new desktop id.
-async fn link(settings: &Settings) -> Result<Linked, String> {
+/// link is a new computer with a new desktop id; a relink (`computer`) keeps
+/// the computer's.
+async fn link(settings: &Settings, computer: Option<uuid::Uuid>) -> Result<Linked, String> {
   let pkcs8 = DeviceKey::generate()?;
   let device = DeviceKey::from_pkcs8(&pkcs8)?;
   let jkt = device.thumbprint()?;
@@ -255,7 +260,7 @@ async fn link(settings: &Settings) -> Result<Linked, String> {
     api: settings.api.clone(),
     user_id: settings.user_id.clone(),
     organization_id: settings.organization_id.clone(),
-    desktop_id: uuid::Uuid::new_v4(),
+    desktop_id: computer.unwrap_or_else(uuid::Uuid::new_v4),
     key: redeemed.key,
     expires_at: redeemed.expires_at,
   };
@@ -349,11 +354,21 @@ async fn terminated() {
   }
 }
 
-/// Settles once `offline` exists (`true`) or no longer does (`false`).
-async fn offline_becomes(offline: &Path, wanted: bool) {
-  while offline.exists() != wanted {
+/// Settles once `file` exists (`true`) or no longer does (`false`).
+async fn file_becomes(file: &Path, wanted: bool) {
+  while file.exists() != wanted {
     tokio::time::sleep(POLL).await;
   }
+}
+
+/// What the stand-in does once its runner stopped.
+enum Next {
+  /// Start a fresh runner once it is online.
+  Continue,
+  /// Link this computer again, then start a fresh runner.
+  Relink,
+  /// Stop the runs and the holder, and exit.
+  Stop,
 }
 
 /// Where the host keeps holders, run folders, the journal and the CLIs'
@@ -387,12 +402,12 @@ async fn serve(settings: Settings) -> Result<(), String> {
     Some(linked) => linked,
     None => {
       tracing::info!(target: LOG_TARGET, "linking a new computer");
-      link(&settings).await?
+      link(&settings, None).await?
     }
   };
   let desktop_id = linked.link.desktop_id;
   tracing::info!(target: LOG_TARGET, %desktop_id, "linked");
-  let linked = Arc::new(linked);
+  let mut linked = Arc::new(linked);
   let host = SidecarHarnessHost::new(
     HostSettings {
       sidecar: SidecarSettings {
@@ -430,12 +445,13 @@ async fn serve(settings: Settings) -> Result<(), String> {
     }
   });
   let offline = settings.state.join(OFFLINE_FILE);
+  let relink = settings.state.join(RELINK_FILE);
   let (_wake, wakes) = watch::channel(0_u64);
   let termination = terminated();
   tokio::pin!(termination);
   loop {
     tokio::select! {
-      () = offline_becomes(&offline, false) => {}
+      () = file_becomes(&offline, false) => {}
       () = &mut termination => break,
     }
     let (stop, stopped) = watch::channel(false);
@@ -457,17 +473,25 @@ async fn serve(settings: Settings) -> Result<(), String> {
     });
     tracing::info!(target: LOG_TARGET, "runner starting");
     let task = tokio::spawn(runner.run());
-    let stopping = tokio::select! {
-      () = offline_becomes(&offline, true) => false,
-      () = &mut termination => true,
+    let next = tokio::select! {
+      () = file_becomes(&offline, true) => Next::Continue,
+      () = file_becomes(&relink, true) => Next::Relink,
+      () = &mut termination => Next::Stop,
     };
     tracing::info!(target: LOG_TARGET, "runner stopping");
     stop.send_replace(true);
     if task.await.is_err() {
       tracing::warn!(target: LOG_TARGET, "the runner task failed");
     }
-    if stopping {
-      break;
+    match next {
+      Next::Stop => break,
+      Next::Continue => {}
+      Next::Relink => {
+        tracing::info!(target: LOG_TARGET, %desktop_id, "linking this computer again");
+        linked = Arc::new(link(&settings, Some(desktop_id)).await?);
+        std::fs::remove_file(&relink)
+          .map_err(|error| format!("{}: {error}", relink.display()))?;
+      }
     }
   }
   tracing::info!(target: LOG_TARGET, "stopping the runs and the holder");

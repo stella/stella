@@ -20,8 +20,10 @@ import { fakeHarnessLog } from "./fake-harness-peer";
 /** The scenarios the model menu offers, in its order. */
 export const CLAUDE_BY_MODEL_SCENARIOS = [
   "tool_calls",
+  "native_tools",
   "stella_tools",
   "approvals",
+  "approval_outcome",
   "question",
   "interrupt",
   "usage_limit",
