@@ -395,6 +395,11 @@ export const ItemCompletedSchema = v.object({
   item: v.object({ id: v.optional(v.string()) }),
 });
 
+/** The item a started item notification names, with its kind. */
+export const ItemStartedSchema = v.object({
+  item: v.object({ type: v.string(), id: v.optional(v.string()) }),
+});
+
 /** The notifications Stella sends the server. */
 export type CodexClientNotificationMethod = "initialized";
 

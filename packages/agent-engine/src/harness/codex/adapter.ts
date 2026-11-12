@@ -555,6 +555,7 @@ const startTurn = async (
   const appServer = new CodexProcess({
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
+    reportError: options.onBackgroundError,
   });
   const session = turnSession(options, input, appServer);
   const connected = await connect({

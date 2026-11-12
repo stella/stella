@@ -1,5 +1,7 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
+
+import type { DetachedRejectionSink } from "@stll/errors";
 
 import type { HarnessLiveSession } from "../adapter";
 import { harnessSessionId } from "../events";
@@ -13,6 +15,7 @@ import type { AppServerClient, AppServerHandlers } from "./app-server-client";
 import {
   BackgroundTerminalsListResponseSchema,
   ItemCompletedSchema,
+  ItemStartedSchema,
   METHOD_NOT_FOUND,
 } from "./protocol";
 
@@ -35,11 +38,22 @@ const MAX_TERMINAL_PAGES = 10;
 /** The live sessions this adapter made, to continue a turn in. */
 const KEPT = new WeakMap<HarnessLiveSession, CodexProcess>();
 
-/** The item ids of the thread's background terminals; `null` if unread. */
+/**
+ * Why the thread's background terminals could not be listed: the harness
+ * has no such method (an older release, which keeps none past a turn), or
+ * it failed to answer it, refused it otherwise or answered with a shape the
+ * pinned protocol does not define.
+ */
+class CodexTerminalListError extends TaggedError("CodexTerminalListError")<{
+  reason: "unsupported" | "failed";
+  message: string;
+}> {}
+
+/** The item ids of the thread's background terminals. */
 const listTerminals = async (
   client: AppServerClient,
   threadId: string,
-): Promise<ReadonlySet<string> | null> => {
+): Promise<Result<ReadonlySet<string>, CodexTerminalListError>> => {
   const items = new Set<string>();
   let cursor: string | null = null;
   for (let page = 0; page < MAX_TERMINAL_PAGES; page += 1) {
@@ -48,22 +62,36 @@ const listTerminals = async (
       "thread/backgroundTerminals/list",
       cursor === null ? { threadId } : { threadId, cursor },
     );
-    const parsed = Result.isOk(listed)
-      ? v.safeParse(BackgroundTerminalsListResponseSchema, listed.value)
-      : null;
-    // A harness without the list (an older release) keeps nothing running.
-    if (parsed === null || !parsed.success) {
-      return null;
+    if (Result.isError(listed)) {
+      return Result.err(
+        new CodexTerminalListError({
+          reason:
+            listed.error.code === METHOD_NOT_FOUND ? "unsupported" : "failed",
+          message: listed.error.message,
+        }),
+      );
+    }
+    const parsed = v.safeParse(
+      BackgroundTerminalsListResponseSchema,
+      listed.value,
+    );
+    if (!parsed.success) {
+      return Result.err(
+        new CodexTerminalListError({
+          reason: "failed",
+          message: "The harness listed its background terminals malformed.",
+        }),
+      );
     }
     for (const terminal of parsed.output.data) {
       items.add(terminal.itemId);
     }
     cursor = parsed.output.nextCursor;
     if (cursor === null) {
-      return items;
+      break;
     }
   }
-  return items;
+  return Result.ok(items);
 };
 
 const IGNORED: AppServerHandlers = {
@@ -89,13 +117,25 @@ export class CodexProcess {
   private terminals: ReadonlySet<string> = new Set();
   /** Items that completed while a list was on its way; `null` otherwise. */
   private completedWhileListing: Set<string> | null = null;
+  /**
+   * Command items started and not completed, as the notifications report
+   * them: the inventory when the harness fails to list its terminals.
+   */
+  private readonly runningCommands = new Set<string>();
   private kept: KeptSession | null = null;
   private readonly gracePeriodMs: number;
   private readonly detached: Detached;
+  private readonly reportError: DetachedRejectionSink;
 
-  constructor(options: { gracePeriodMs: number; detached: Detached }) {
+  constructor(options: {
+    gracePeriodMs: number;
+    detached: Detached;
+    /** Where a failure that changes nothing for the turn is reported. */
+    reportError: DetachedRejectionSink;
+  }) {
     this.gracePeriodMs = options.gracePeriodMs;
     this.detached = options.detached;
+    this.reportError = options.reportError;
   }
 
   /** The process that keeps `session`, if this adapter made it. */
@@ -201,22 +241,51 @@ export class CodexProcess {
     return kept.session;
   }
 
-  /** How many background terminals run now, read from the harness. */
+  /**
+   * How many background terminals run now, read from the harness. A harness
+   * without the list (an older release) keeps none past a turn. One that
+   * fails to list them is reported, and the commands its notifications show
+   * started and not completed stand in: a failed read is not an empty one,
+   * and ending those commands would end work the agent still runs.
+   */
   private async refresh(client: AppServerClient, threadId: string) {
     const completed = new Set<string>();
     this.completedWhileListing = completed;
     const listed = await listTerminals(client, threadId);
     this.completedWhileListing = null;
+    const inventory = Result.isOk(listed)
+      ? listed.value
+      : this.inventoryWithout(listed.error);
     // A command that exited while the list was on its way is not running.
     this.terminals = new Set(
-      [...(listed ?? [])].filter((itemId) => !completed.has(itemId)),
+      [...inventory].filter((itemId) => !completed.has(itemId)),
     );
     this.background.set(this.terminals.size);
     return this.terminals.size;
   }
 
+  /** What runs in the background when the harness did not list it. */
+  private inventoryWithout(error: CodexTerminalListError): ReadonlySet<string> {
+    if (error.reason === "unsupported") {
+      return new Set();
+    }
+    this.reportError(error, "codex-live.list");
+    return new Set(this.runningCommands);
+  }
+
   /** A background terminal's item completes once its command exits. */
   private observe(method: string, params: unknown) {
+    if (method === "item/started") {
+      const started = v.safeParse(ItemStartedSchema, params);
+      if (
+        started.success &&
+        started.output.item.type === "commandExecution" &&
+        started.output.item.id !== undefined
+      ) {
+        this.runningCommands.add(started.output.item.id);
+      }
+      return;
+    }
     if (method !== "item/completed") {
       return;
     }
@@ -225,6 +294,7 @@ export class CodexProcess {
     if (itemId === undefined) {
       return;
     }
+    this.runningCommands.delete(itemId);
     this.completedWhileListing?.add(itemId);
     if (!this.terminals.has(itemId)) {
       return;

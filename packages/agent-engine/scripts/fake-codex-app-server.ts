@@ -322,6 +322,26 @@ const FAKE_SCENARIOS = {
       result: { data: [backgroundTerminal("call-serve")], nextCursor: null },
     },
   ],
+  /** A dev server left running, and a list of terminals that fails. */
+  background_terminal_list_fails: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      error: { code: -32_603, message: "Internal error" },
+    },
+  ],
+  /** A dev server left running, and a release without the terminal list. */
+  background_terminal_list_unsupported: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      error: { code: -32_601, message: "Method not found" },
+    },
+  ],
   /** As above, but the server exits while the chat waits for its next turn. */
   background_terminal_exits: [
     ...freshTurn(),

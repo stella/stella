@@ -1700,6 +1700,30 @@ describe("Codex background terminals after a turn", () => {
     );
   });
 
+  test("a failed terminal list is reported and keeps the commands the turn left running", async () => {
+    const { turn } = await completedTurn("background_terminal_list_fails");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    // Not read as an empty inventory: the started command still counts.
+    expect(live.backgroundTasks).toBe(1);
+    expect(backgroundErrors.splice(0)).toEqual([
+      expect.objectContaining({
+        _tag: "CodexTerminalListError",
+        reason: "failed",
+      }),
+    ]);
+    await live.end();
+  });
+
+  test("a release without the terminal list keeps nothing past the turn", async () => {
+    const { turn } = await completedTurn(
+      "background_terminal_list_unsupported",
+    );
+    expect(await turn.release()).toBeNull();
+  });
+
   test("a turn without background work closes its process as before", async () => {
     const { turn } = await completedTurn("tool_calls");
     expect(await turn.release()).toBeNull();
