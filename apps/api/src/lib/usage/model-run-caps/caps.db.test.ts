@@ -292,7 +292,7 @@ const expectRefusal = (
   reason: keyof typeof MODEL_RUN_CAP_CODES,
 ) => {
   if (Result.isOk(outcome)) {
-    return panic(`Expected a ${reason} refusal for ${kind}`);
+    panic(`Expected a ${reason} refusal for ${kind}`);
   }
   expect(outcome.error).toBeInstanceOf(ModelRunCapError);
   expect(outcome.error).toMatchObject({
