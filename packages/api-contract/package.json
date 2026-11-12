@@ -30,6 +30,7 @@
     "./workspace-status": "./src/workspace-status.ts",
     "./journey-prerequisites": "./src/journey-prerequisites.ts",
     "./visual-preview": "./src/visual-preview.ts",
+    "./skill-runner": "./src/skill-runner.ts",
     "./ai-disclosure": "./src/ai-disclosure.ts",
     "./ai-decision-provider": "./src/ai-decision-provider.ts",
     "./review-decision": "./src/review-decision.ts",

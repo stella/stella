@@ -522,6 +522,21 @@
         "vite": "catalog:",
       },
     },
+    "apps/skill-runner": {
+      "name": "@stll/skill-runner",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/api-contract": "workspace:*",
+        "@stll/docx-core": "catalog:",
+        "@stll/sha256": "workspace:*",
+        "better-result": "catalog:",
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
     "apps/visual-preview": {
       "name": "@stll/visual-preview",
       "version": "0.0.0",
@@ -3535,6 +3550,8 @@
     "@stll/scripts": ["@stll/scripts@workspace:packages/scripts"],
 
     "@stll/sha256": ["@stll/sha256@workspace:packages/sha256"],
+
+    "@stll/skill-runner": ["@stll/skill-runner@workspace:apps/skill-runner"],
 
     "@stll/skills": ["@stll/skills@workspace:packages/skills"],
 
