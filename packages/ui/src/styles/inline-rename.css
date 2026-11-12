@@ -20,7 +20,12 @@
   line-height: inherit;
 }
 
+/* The field's 10ch floor lives here as a fixed length: a parent sizing its
+   row from its content ignores a percentage floor and lays the field out
+   wider than it measured, so the overflow came out of the siblings (a
+   breadcrumb's matter name shrank to nothing beside its number). */
 [data-slot="inline-rename-mirror"] {
+  min-inline-size: 10ch;
   visibility: hidden;
   white-space: pre;
   overflow: hidden;

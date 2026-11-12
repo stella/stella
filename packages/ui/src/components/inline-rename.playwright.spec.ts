@@ -75,6 +75,21 @@ for (const scenario of [
   });
 }
 
+for (const query of ["?sibling=true", "?sibling=true&fallback=true"]) {
+  test(`a short field keeps its sibling's width in a content-sized row ${query}`, async ({
+    page,
+  }) => {
+    await page.goto(fixturePath + query);
+    const sibling = page.locator("[data-sibling]");
+    const before = (await metrics(sibling)).rect.width;
+    expect(before).toBeGreaterThan(0);
+    await openEditor(page);
+    expect(
+      Math.abs((await metrics(sibling)).rect.width - before),
+    ).toBeLessThanOrEqual(TOLERANCE_PX);
+  });
+}
+
 for (const query of [
   "",
   "?fallback=true",
