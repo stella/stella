@@ -1,20 +1,16 @@
+/**
+ * The scheduler sweep every document run queue shares: fail the runs a dead
+ * worker or a lost job left behind, then hand back the queued runs no job
+ * owns. Each queue's reconcile task is built here from its queue, so the
+ * sweeps cannot drift apart; each task module keeps only its own feature
+ * gating and which run kinds it sweeps.
+ */
+
 import { panic, Result } from "better-result";
 
-import { documentReviewRunQueue } from "@/api/lib/document-review/run-queue";
-import {
-  reconcileQueuedFactExtractionRuns,
-  reconcileStuckFactExtractionRuns,
-} from "@/api/lib/lists/generation/run-queue";
-import { listVerificationRunQueue } from "@/api/lib/lists/verification/run-queue";
 import type { ReconcileQueuedRunsResult } from "@/api/lib/queue/reconcile-scan";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
-
-export const RECONCILE_DOCUMENT_REVIEW_RUNS_TASK =
-  "documentReviews.reconcileQueuedRuns" as const;
-
-export const RECONCILE_LIST_VERIFICATION_RUNS_TASK =
-  "listVerifications.reconcileQueuedRuns" as const;
 
 type QueuedSweep = Result<ReconcileQueuedRunsResult, SchedulerTaskFailure>;
 
@@ -27,7 +23,8 @@ type RunReconciler = {
   reconcileQueued: (db: SchedulerDb) => Promise<QueuedSweep>;
 };
 
-const asQueuedSweep = <E extends Error>(
+/** A queued sweep's failure, as the scheduler records it. */
+export const asQueuedSweep = <E extends Error>(
   queued: Result<ReconcileQueuedRunsResult, E>,
 ): QueuedSweep =>
   Result.isError(queued)
@@ -40,7 +37,7 @@ const asQueuedSweep = <E extends Error>(
     : Result.ok(queued.value);
 
 /** A queue built by `createDocumentRunQueue`, swept with its own rules. */
-const documentRunReconciler = <E extends Error>(
+export const documentRunReconciler = <E extends Error>(
   key: string,
   queue: {
     reconcileStuck: (args: { db: SchedulerDb }) => Promise<number>;
@@ -61,7 +58,7 @@ const documentRunReconciler = <E extends Error>(
  * kind is swept before a failure is reported, so one broken queue does not
  * cost the others their sweep.
  */
-const documentRunReconcileTask =
+export const documentRunReconcileTask =
   (event: string, reconcilers: readonly RunReconciler[]): SchedulerTask =>
   async ({ db, logger, signal }) => {
     if (signal.aborted) {
@@ -92,26 +89,3 @@ const documentRunReconcileTask =
     logger.info(event, Object.fromEntries(counts));
     return Result.ok();
   };
-
-/** Fail stuck document reviews and re-drive the ones no job owns anymore. */
-export const reconcileDocumentReviewRuns = documentRunReconcileTask(
-  "scheduler.document_review_runs_reconciled",
-  [documentRunReconciler("documentReviewRuns", documentReviewRunQueue)],
-);
-
-/**
- * The same for list verifications, and for fact extractions, which belong to
- * the same feature and share one organization budget.
- */
-export const reconcileListVerificationRuns = documentRunReconcileTask(
-  "scheduler.list_verification_runs_reconciled",
-  [
-    documentRunReconciler("listVerificationRuns", listVerificationRunQueue),
-    {
-      key: "listFactExtractionRuns",
-      reconcileStuck: async (db) => await reconcileStuckFactExtractionRuns(db),
-      reconcileQueued: async (db) =>
-        asQueuedSweep(await reconcileQueuedFactExtractionRuns({ db })),
-    },
-  ],
-);
