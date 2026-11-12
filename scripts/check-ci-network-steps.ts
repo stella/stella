@@ -607,7 +607,10 @@ const packageScriptFetches = (
   return logicalLines(run).flatMap((line) =>
     segments(line).flatMap((segment) => {
       const name = PACKAGE_SCRIPT_RUN.exec(segment)?.groups?.["name"];
-      const command = name === undefined ? undefined : scripts[name];
+      if (name === undefined) {
+        return [];
+      }
+      const command = scripts[name];
       if (typeof command !== "string") {
         return [];
       }
