@@ -2,12 +2,14 @@ import { panic } from "better-result";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
+  ClaimGrade,
   ClaimOverrideState,
   ClaimRef,
   ClaimReviewAction,
   ClaimReviewOrigin,
   ClaimReviewStatus,
   ClaimState,
+  RecheckFactChanges,
   RecordConflict,
   RecordConflictResolution,
   VerificationEvidence,
@@ -35,6 +37,24 @@ export type ClaimReview = {
   /** A set-aside claim a reviewer reclassified as a checkable fact. */
   reopened: boolean;
   recordConflictResolution: RecordConflictResolution | null;
+  /** Facts a reviewer pointed the claim at, in the order they were linked. */
+  linkedFactIds: SafeId<"entity">[];
+  /** The latest re-check: the grade the claim is read with in place of the
+   *  run's, which stays on the claim row. Null until one is asked for. */
+  recheck: ClaimRecheck | null;
+};
+
+export type ClaimRecheck = {
+  grade: ClaimGrade;
+  /** The facts it was graded against, as changes to the run's. */
+  facts: RecheckFactChanges;
+  modelRef: string | null;
+  checkedAt: Date;
+  /** Who asked for it; null once their account is gone. */
+  checkedBy: string | null;
+  /** The facts the claim was linked to when it was graded, which the grader
+   *  was pointed at. Folded from the events before it, never stored. */
+  linkedFactIds: SafeId<"entity">[];
 };
 
 export const EMPTY_CLAIM_REVIEW: ClaimReview = {
@@ -47,6 +67,8 @@ export const EMPTY_CLAIM_REVIEW: ClaimReview = {
   decidedBy: null,
   reopened: false,
   recordConflictResolution: null,
+  linkedFactIds: [],
+  recheck: null,
 };
 
 const applyEvent = (
@@ -54,6 +76,13 @@ const applyEvent = (
   { payload, actorId, createdAt }: ClaimReviewEvent,
 ): ClaimReview => {
   const decided = { decidedAt: createdAt, decidedBy: actorId };
+  // Decisions taken on the grade a claim is read with; whatever changes what
+  // the claim is measured against withdraws them.
+  const withdrawn = {
+    status: null,
+    statusOrigin: null,
+    override: null,
+  } as const;
   switch (payload.kind) {
     case "status": {
       return {
@@ -79,23 +108,48 @@ const applyEvent = (
     // measured against, so a status or override given before described a
     // claim that no longer exists and is withdrawn.
     case "reopen": {
-      return {
-        ...review,
-        ...decided,
-        reopened: true,
-        status: null,
-        statusOrigin: null,
-        override: null,
-      };
+      return { ...review, ...decided, ...withdrawn, reopened: true };
     }
     case "record-conflict": {
       return {
         ...review,
         ...decided,
+        ...withdrawn,
         recordConflictResolution: payload.resolution,
-        status: null,
-        statusOrigin: null,
-        override: null,
+      };
+    }
+    // A link records what the reviewer points to; it changes no verdict
+    // until the claim is checked again.
+    case "fact-link": {
+      const others = review.linkedFactIds.filter(
+        (factId) => factId !== payload.factEntityId,
+      );
+      return {
+        ...review,
+        linkedFactIds:
+          payload.change === "link"
+            ? [...others, payload.factEntityId]
+            : others,
+      };
+    }
+    // A re-check grades the claim afresh, so it also withdraws a reopening
+    // and a record conflict's resolution: the new grade says itself whether
+    // the claim is checkable and which records conflict.
+    case "recheck": {
+      return {
+        ...review,
+        ...decided,
+        ...withdrawn,
+        reopened: false,
+        recordConflictResolution: null,
+        recheck: {
+          grade: payload.grade,
+          facts: payload.facts,
+          modelRef: payload.modelRef,
+          checkedAt: createdAt,
+          checkedBy: actorId,
+          linkedFactIds: review.linkedFactIds,
+        },
       };
     }
     default: {
@@ -103,6 +157,24 @@ const applyEvent = (
       return panic(`Unhandled review event: ${String(payload)}`);
     }
   }
+};
+
+/**
+ * Whether the claim's links changed since the grade it is read with: the
+ * facts it is linked to now differ from those its latest re-check was
+ * pointed at, or, never re-checked, any are linked at all (the run's grade
+ * was pointed at none). Linking and unlinking change no grade; this says
+ * the grade is out of date until the claim is checked again. Derived on
+ * every read, never stored.
+ */
+export const linksChangedSinceGrade = (review: ClaimReview): boolean => {
+  const graded = new Set(
+    review.recheck === null ? [] : review.recheck.linkedFactIds,
+  );
+  return (
+    graded.size !== review.linkedFactIds.length ||
+    review.linkedFactIds.some((factId) => !graded.has(factId))
+  );
 };
 
 /** Events must arrive in `created_at, id` order, as the index returns them. */
@@ -146,22 +218,48 @@ type ClaimReviewTarget = {
   recordConflict: RecordConflict | null;
 };
 
+/**
+ * The grade a claim is read with: its latest re-check's, else the one its
+ * run wrote. Every reader resolves a claim through this, so a re-check
+ * changes what each of them sees while the claim row stays as written.
+ */
+export const gradeOf = <Claim extends ClaimReviewTarget>(
+  claim: Claim,
+  review: ClaimReview | null,
+): Claim | ClaimGrade => review?.recheck?.grade ?? claim;
+
 export type ClaimReviewEventRejection =
   | "override-on-record-conflict"
   | "reopen-checkable-claim"
   | "already-reopened"
   | "no-record-conflict"
-  | "governing-fact-not-in-conflict";
+  | "governing-fact-not-in-conflict"
+  | "fact-already-linked"
+  | "fact-not-linked"
+  | "recheck-set-aside-claim";
+
+/**
+ * Whether the claim can be checked again. A claim set aside as not
+ * verifiable is reopened first, so a reviewer has said why it is checkable.
+ */
+export const rejectRecheck = (
+  claim: ClaimReviewTarget,
+  review: ClaimReview,
+): "recheck-set-aside-claim" | null =>
+  gradeOf(claim, review).state === CLAIM_STATE.NOTVERIFIABLE && !review.reopened
+    ? "recheck-set-aside-claim"
+    : null;
 
 /**
  * Whether an event makes sense for this claim as it currently stands. Null
  * when it does; otherwise why not, so the handler can refuse it with a reason.
  */
 export const rejectReviewEvent = (
-  claim: ClaimReviewTarget,
+  rawClaim: ClaimReviewTarget,
   review: ClaimReview,
   payload: ClaimReviewAction,
 ): ClaimReviewEventRejection | null => {
+  const claim = gradeOf(rawClaim, review);
   switch (payload.kind) {
     case "status":
     case "note": {
@@ -192,6 +290,16 @@ export const rejectReviewEvent = (
         return "governing-fact-not-in-conflict";
       }
       return null;
+    }
+    case "fact-link": {
+      const linked = review.linkedFactIds.includes(payload.factEntityId);
+      if (payload.change === "link") {
+        return linked ? "fact-already-linked" : null;
+      }
+      return linked ? null : "fact-not-linked";
+    }
+    case "recheck": {
+      return rejectRecheck(rawClaim, review);
     }
     default: {
       payload satisfies never;
@@ -245,15 +353,17 @@ export type ViewTarget = ReviewedClaim & {
 };
 
 /**
- * The claim as a reviewer sees it after their own decisions: a reopened
- * set-aside claim is a checkable fact with no coverage until re-checked, and
- * a governed record conflict takes the verdict of the governing record. An
- * override never changes this; it is an annotation beside the verdict.
+ * The claim as a reviewer sees it after their own decisions: its latest
+ * re-check's grade when it has one, a reopened set-aside claim is a checkable
+ * fact with no coverage until re-checked, and a governed record conflict
+ * takes the verdict of the governing record. An override never changes this;
+ * it is an annotation beside the verdict.
  */
 export const reviewedView = (
-  claim: ViewTarget,
+  rawClaim: ViewTarget,
   review: ClaimReview,
 ): ReviewedClaim => {
+  const claim = gradeOf(rawClaim, review);
   if (review.reopened && claim.state === CLAIM_STATE.NOTVERIFIABLE) {
     return { state: CLAIM_STATE.NOCOVER, refs: [] };
   }

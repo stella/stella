@@ -2,11 +2,17 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { documentProcessingRuns, extractedContent } from "@/api/db/schema";
+import {
+  documentProcessingRuns,
+  entityVersions,
+  extractedContent,
+} from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { envBase } from "@/api/env-base";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -153,12 +159,12 @@ describe("OCR text export", () => {
 
 describe("OCR text export matter access", () => {
   const ids = createTestIds();
+  const ocrRunId = toSafeId<"documentProcessingRun">(Bun.randomUUIDv7());
   let database: TestDatabase;
 
   beforeAll(async () => {
     database = await getTestDb();
     await setupRlsTestData(database, ids);
-    const ocrRunId = toSafeId<"documentProcessingRun">(Bun.randomUUIDv7());
     await database.insert(documentProcessingRuns).values({
       id: ocrRunId,
       organizationId: ids.orgA,
@@ -186,30 +192,128 @@ describe("OCR text export matter access", () => {
     await releaseTestDb();
   });
 
-  const read = async ({
+  const memberScopedDb = ({
     memberId,
     workspaceIds,
   }: {
     memberId: typeof ids.userA1;
     workspaceIds: (typeof ids.wsA1)[];
   }) =>
+    asTestRaw<ScopedDb>(
+      createMembershipScopedDb(markRlsDatabase(database), {
+        organizationId: ids.orgA,
+        serverValidatedWorkspaceIds: workspaceIds,
+        userId: memberId,
+      }),
+    );
+
+  const read = async ({
+    memberId,
+    workspaceIds,
+    format = "text",
+    scopedDb = memberScopedDb({ memberId, workspaceIds }),
+    recordAuditEvent = async () => undefined,
+  }: {
+    memberId: typeof ids.userA1;
+    workspaceIds: (typeof ids.wsA1)[];
+    format?: "searchable-pdf" | "text";
+    scopedDb?: ScopedDb;
+    recordAuditEvent?: AuditRecorder;
+  }) =>
     await readOcrExport({
       source: { kind: "request", sessionId: "fixture-session" },
       readSessionAuthority: async () => null,
       fieldId: ids.fileFieldA1,
-      format: "text",
+      format,
       organizationId: ids.orgA,
-      recordAuditEvent: async () => undefined,
-      scopedDb: asTestRaw<ScopedDb>(
-        createMembershipScopedDb(markRlsDatabase(database), {
-          organizationId: ids.orgA,
-          serverValidatedWorkspaceIds: workspaceIds,
-          userId: memberId,
-        }),
-      ),
+      recordAuditEvent,
+      scopedDb,
       userId: memberId,
       workspaceId: ids.wsA1,
     });
+
+  const withStoredSearchablePdf = async (run: () => Promise<void>) => {
+    const fake = startFakeS3();
+    try {
+      fake.put(
+        envBase.S3_BUCKET,
+        createOcrSearchablePdfKey({
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          runId: ocrRunId,
+        }),
+        new TextEncoder().encode("%PDF-1.7"),
+        "application/pdf",
+      );
+      await run();
+    } finally {
+      fake.stop();
+    }
+  };
+
+  test("a searchable PDF link for a live version expires within a minute", async () => {
+    await withStoredSearchablePdf(async () => {
+      const response = await read({
+        format: "searchable-pdf",
+        memberId: ids.userA1,
+        workspaceIds: [ids.wsA1],
+      });
+      expect(response).toBeInstanceOf(Response);
+      if (!(response instanceof Response)) {
+        return;
+      }
+      expect(response.status).toBe(302);
+      const location = new URL(response.headers.get("location") ?? "");
+      const expiresIn = Number(location.searchParams.get("X-Amz-Expires"));
+      expect(expiresIn).toBeGreaterThan(0);
+      expect(expiresIn).toBeLessThanOrEqual(60);
+    });
+  });
+
+  test("a version deleted while the export is prepared issues no link", async () => {
+    await withStoredSearchablePdf(async () => {
+      const scopedDb = memberScopedDb({
+        memberId: ids.userA1,
+        workspaceIds: [ids.wsA1],
+      });
+      let reads = 0;
+      const deletingAfterFirstRead = asTestRaw<ScopedDb>(
+        async (fn: Parameters<ScopedDb>[0]) => {
+          const result = await scopedDb(fn);
+          reads += 1;
+          if (reads === 1) {
+            await database
+              .update(entityVersions)
+              .set({ deletedAt: new Date("2026-02-01T00:00:00.000Z") })
+              .where(eq(entityVersions.id, ids.entityVersionA1));
+          }
+          return result;
+        },
+      );
+      const events: AuditEvent[] = [];
+      try {
+        const response = await read({
+          format: "searchable-pdf",
+          memberId: ids.userA1,
+          workspaceIds: [ids.wsA1],
+          scopedDb: deletingAfterFirstRead,
+          recordAuditEvent: async (_tx, event) => {
+            events.push(...(Array.isArray(event) ? event : [event]));
+          },
+        });
+        expect(response).toBeInstanceOf(HttpStatusResponse);
+        if (response instanceof HttpStatusResponse) {
+          expect(response.code).toBe(404);
+        }
+        expect(events).toEqual([]);
+      } finally {
+        await database
+          .update(entityVersions)
+          .set({ deletedAt: null })
+          .where(eq(entityVersions.id, ids.entityVersionA1));
+      }
+    });
+  });
 
   test("exports a readable matter and returns not found for an unreadable matter", async () => {
     const readable = await read({
