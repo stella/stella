@@ -47,7 +47,7 @@ import { McpAuthenticationError } from "@/api/mcp/errors";
  * assigns its capability exactly this scope. A realtime, file-delivery or
  * search-screen handler has no capability; its entry names that reason and the
  * scope its domain carries, and the test holds the handler to that reason
- * instead. Account-control routes
+ * instead, or to being a member plumbing endpoint. Account-control routes
  * (sign-in methods, keys, connections, deletion) never belong here: a lost
  * phone must not be able to keep itself connected.
  */
@@ -55,6 +55,27 @@ export const API_OAUTH_ROUTES = {
   "POST /v1/dictation/transcribe": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/dictation/transcribe.ts",
+  },
+  // The Outlook add-in's email helpers: a summary of the open email and a
+  // reply draft. Each sends only the email text in its body to the model and
+  // stores nothing; they are add-in buttons, not agent capabilities.
+  "POST /v1/ai/summarize": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/summarize.ts",
+    uncataloged: "native_tool_ui",
+  },
+  "POST /v1/ai/draft-email": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/draft-email.ts",
+    uncataloged: "native_tool_ui",
+  },
+  // A question about the open email. Naming a matter adds that matter's
+  // search results, read under the token's own scopes, so a token without
+  // `stella:read` gets an answer from the email alone.
+  "POST /v1/ai/ask-email": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/ask-email.ts",
+    uncataloged: "native_tool_ui",
   },
   "GET /v1/workspaces/:workspaceId/vocabulary": {
     scope: "stella:read",
@@ -166,6 +187,15 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/threads/list.ts",
   },
+  // The reader's own marks on a chat in the chats list.
+  "PATCH /v1/chat/threads/:threadId/read-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/read-state/update.ts",
+  },
+  "PATCH /v1/chat/threads/:threadId/pin-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/pin-state/update.ts",
+  },
   "GET /v1/chat/threads/:threadId/messages": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/messages/list.ts",
@@ -200,6 +230,21 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/turns/cancel.ts",
     uncataloged: "realtime_stream",
+  },
+  // Which chats are working or waiting on the person, for the chats list.
+  "GET /v1/chat/runs/active": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/runs/list.ts",
+    uncataloged: "chat_thread_ui",
+  },
+  // The person's event stream. Its events carry no content (notifications
+  // changed, chat runs changed, a resource set changed); the app re-reads
+  // through the routes above. It carries more than chat, so it takes the
+  // read scope.
+  "GET /v1/notifications/events": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/notifications/events.ts",
+    uncataloged: "plumbing",
   },
   // The caller's own timers. The organization-wide admin timer routes stay
   // closed to access tokens.
@@ -281,13 +326,20 @@ export const API_OAUTH_ROUTES = {
     handler: `apps/api/src/handlers/${string}.ts`;
     /** The named export serving the route, when it is not the default. */
     exportName?: string;
-    /** Why the handler has no capability: its `mcp.internal` reason. */
+    /**
+     * Why the handler has no capability: its `mcp.internal` reason, or
+     * `plumbing` for a `defineEndpoint.member` endpoint (`lib/endpoints.ts`),
+     * which has no handler config to carry one.
+     */
     uncataloged?:
       | "realtime_stream"
       | "upload_mechanics"
       | "search_ui"
       | "native_device"
-      | "session_token_exchange";
+      | "native_tool_ui"
+      | "session_token_exchange"
+      | "chat_thread_ui"
+      | "plumbing";
   }
 >;
 

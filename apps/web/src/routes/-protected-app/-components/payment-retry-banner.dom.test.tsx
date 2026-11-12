@@ -194,7 +194,7 @@ test("a delayed access response stays in its organization cache and retry copy e
     await waitFor(() => {
       expect(view.getByRole("status").textContent).toContain("Payment issue");
     });
-    await waitFor(() => expect(view.queryByRole("status")).toBeNull());
+    await waitFor(() => expect(view.queryByRole("status") === null).toBe(true));
   } finally {
     oldResponse.resolve(Response.json(none));
     newResponse.resolve(Response.json(none));

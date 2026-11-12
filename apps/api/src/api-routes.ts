@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/agent-auth/routes";
 import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
+import { emailAIRoute } from "@/api/handlers/ai/routes";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
@@ -27,7 +28,9 @@ import {
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
+import { conflictChecksRoute } from "@/api/handlers/conflict-checks/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
+import { dataExportsRoute } from "@/api/handlers/data-exports/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
@@ -91,6 +94,7 @@ import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
+import { softLawRoute } from "@/api/handlers/soft-law/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { syntheticRoute } from "@/api/handlers/synthetic/routes";
 import { myTasksRoute, tasksRoute } from "@/api/handlers/tasks/routes";
@@ -198,6 +202,7 @@ export const apiRoutes = mount([
   internalTimeEntriesRoute,
   myTimeEntriesRoute,
   timeEntryReportRoute,
+  conflictChecksRoute,
   memberTimeTargetsRoute,
   timeTimersRoute,
   servedIfLoaded(localDevRoutes?.devPublicRoute),
@@ -259,6 +264,7 @@ export const apiRoutes = mount([
       contactsRoute,
       legislationRoute,
       legislationCorpusRoute,
+      softLawRoute,
       publicLegislationRoute,
       publicSanctionsRoute,
       mobileUpdatesRoute,
@@ -275,6 +281,7 @@ export const apiRoutes = mount([
       chatMcpAppsRoute,
       chatRunOutputsRoute,
       dictationRoute,
+      emailAIRoute,
       userFilesRoute,
       skillsRoute,
       usageRoute,
@@ -287,6 +294,7 @@ export const apiRoutes = mount([
       workObligationsRoute,
       myWorkRoute,
       accountExportsRoute,
+      dataExportsRoute,
       meRoute,
       servedIfLoaded(localDevRoutes?.devRoute),
       verifyAuthRoute,

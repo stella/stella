@@ -25,6 +25,7 @@ import {
   structuredOutputWireJsonSchema,
 } from "@/api/lib/tanstack-ai-generate";
 import { isMockTextAdapter } from "@/api/lib/tanstack-ai-models";
+import { answerSchemaForShape } from "@/api/lib/workflow/ai-answer-schema";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildBatchSchema,
@@ -107,6 +108,36 @@ export type WorkflowDataGeneration = {
   /** The batch as it was asked, each property in its resolved answer shape. */
   properties: AIBatchProperty[];
   fit: RequestFit<PreparedInputFile>;
+};
+
+/**
+ * What a finished batch holds for one property it was asked. A property the
+ * request owed an answer for but whose entry is absent is `omitted`: the
+ * request failed for it, which says nothing about the document, so a caller
+ * must fail rather than read it as "not stated".
+ */
+export type PropertyOutput =
+  | { type: "returned"; result: WorkflowDataOutput[string] }
+  | { type: "refused" }
+  /** A select with no options is left out of the request: nothing could be
+   *  chosen, so there is no answer to owe. */
+  | { type: "not-asked" }
+  | { type: "omitted" };
+
+export const propertyOutput = (
+  generation: Pick<WorkflowDataGeneration, "output" | "refusedPropertyIds">,
+  property: AIBatchProperty,
+): PropertyOutput => {
+  if (generation.refusedPropertyIds.has(property.id)) {
+    return { type: "refused" };
+  }
+  const result = generation.output[property.id];
+  if (result !== undefined) {
+    return { type: "returned", result };
+  }
+  return answerSchemaForShape(property.content, property.answerShape) === null
+    ? { type: "not-asked" }
+    : { type: "omitted" };
 };
 
 /** Everything but the tier, which only the chunk's admission can state. */

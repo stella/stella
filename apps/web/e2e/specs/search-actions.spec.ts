@@ -1,6 +1,8 @@
 import type { Page } from "@playwright/test";
 
 import { apiStatus } from "../helpers/api";
+import type { ApiOk } from "../helpers/route-mock";
+import { apiJson, respond } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 import {
   PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
@@ -267,15 +269,13 @@ test.describe("global create actions", () => {
     const navigationRoute = "**/v1/workspaces/navigation**";
     await page.route(navigationRoute, async (route) => {
       const response = await route.fetch();
-      const body: unknown = await response.json();
-      if (
-        typeof body !== "object" ||
-        body === null ||
-        !("workspaces" in body)
-      ) {
-        throw new Error("Navigation response has no workspaces");
-      }
-      await route.fulfill({ response, json: { ...body, workspaces: [] } });
+      const body: ApiOk<"v1/workspaces/navigation", "get"> =
+        await response.json();
+      await respond(
+        route,
+        apiJson("v1/workspaces/navigation", "get", { ...body, workspaces: [] }),
+        { response },
+      );
     });
     await openSearch(page, `/workspaces/${testWorkspace.id}`);
     await page

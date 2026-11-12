@@ -12,11 +12,18 @@ import { documentAnnotationKeys } from "@/components/pdf/annotations/document-an
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { claimCommentKeys } from "@/features/avt/claim-comments-query";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
+import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
 import { chatLimitReminderOptions } from "@/features/chat/chat-limit-reminder";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
+import {
+  sharepointAccessOptions,
+  sharepointChildrenOptions,
+  sharepointDrivesOptions,
+  sharepointSitesOptions,
+} from "@/features/sharepoint/sharepoint-queries";
 import { timeTimersOptions } from "@/features/time-timers/queries";
 import { accountDataExportLatestOptions } from "@/lib/account/account-data-export-queries";
 import {
@@ -132,6 +139,8 @@ const OAUTH_REDIRECT = "an OAuth redirect, not cached";
 const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 const READ_FRESH = "read fresh at each use, never cached";
+const SHAREPOINT_QUERIES = "features/sharepoint/sharepoint-queries.ts";
+const SHAREPOINT_VIEWER = { organizationId: ORG, userId: USER };
 
 const SEARCH_PROBE = {
   editedByUserIds: [],
@@ -369,6 +378,17 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       chatLimitReminderOptions({
         activeOrganizationId: ORG,
         threadRef: { scope: "global", threadId: toChatThreadId("thread") },
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "chat/browser-site-grants/list.ts": {
+    kind: "keyed",
+    calls: ['api.chat["browser-site-grants"].get'],
+    files: ["features/chat/browser-control/browser-site-grants.ts"],
+    keys: () => [
+      browserSiteGrantsOptions({
+        activeOrganizationId: ORG,
         userId: USER,
       }).queryKey,
     ],
@@ -663,17 +683,38 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     opaqueKeys: { "searchKeys.query(params)": KEY_TYPE_HAS_USER },
     keys: () => [searchInfiniteOptions(SEARCH_PROBE).queryKey],
   },
-  "sharepoint/list-drive-root.ts": {
-    kind: "no-web-caller",
-    calls: ["api.sharepoint.drive.root.get"],
+  "sharepoint/drives/items/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.drives().items().children.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [
+      sharepointChildrenOptions(SHAREPOINT_VIEWER, {
+        driveId: "drive-probe",
+        folderId: null,
+      }).queryKey,
+    ],
+  },
+  "sharepoint/drives/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.drives.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointDrivesOptions(SHAREPOINT_VIEWER, null).queryKey],
   },
   "sharepoint/oauth-callback.ts": {
     kind: "not-per-user",
     reason: OAUTH_REDIRECT,
   },
+  "sharepoint/sites/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.sites.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointSitesOptions(SHAREPOINT_VIEWER, "").queryKey],
+  },
   "sharepoint/status.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ["api.sharepoint.connection.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointAccessOptions(SHAREPOINT_VIEWER).queryKey],
   },
   "signals/count.ts": {
     kind: "keyed",

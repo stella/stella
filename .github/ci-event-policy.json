@@ -43,6 +43,7 @@
     "nightly-test.yml/valkey-suites": "main",
     "nightly-test.yml/smoke-suite": "main",
     "nightly-test.yml/migration-exact-base-upgrade": "main",
+    "nightly-test.yml/script-test-declarations": "main",
     "api-test-memory.yml/measure": "main",
     "api-test-memory.yml/refresh": "main",
     "sync-branch-protection.yml/sync": "main",
@@ -148,6 +149,7 @@
     "release-tag.yml/tag": "main",
     "release-tag.yml/finalize-eligibility": "main",
     "release-tag.yml/finalize": "main",
+    "release-tag.yml/land-release-pr": "main",
     "release-tag.yml/marketing-freshness": "main",
     "catalogue-upstream.yml/catalogue-upstream": "main",
     "audit-branch-protection.yml/audit-branch": "main",
@@ -162,6 +164,8 @@
     "generated-conflicts-publish.yml/publish": "main",
     "desktop-release-canary.yml/check-latest": "main",
     "journey-canary.yml/journeys": "main",
+    "case-law-cold-search-gate.yml/cold-search": "dispatch-only",
+    "case-law-search-probe.yml/probe": "main",
     "user-journeys.yml/staging-commit": "main",
     "user-journeys.yml/staging": "main",
     "user-journeys.yml/local-stack": "main",
@@ -170,6 +174,10 @@
     "deploy-landing.yml/scope": "main",
     "deploy-landing.yml/build": "main",
     "deploy-landing.yml/deploy": "main",
+    "deploy-outlook-addin.yml/scope": "main",
+    "deploy-outlook-addin.yml/build": "main",
+    "deploy-outlook-addin.yml/deploy-staging": "main",
+    "deploy-outlook-addin.yml/deploy-production": "main",
     "safe-chain-cache.yml/warm": "main",
     "ci.yml/ci-plan": "pr-fast",
     "ci.yml/generated-sources": "pr-fast",
@@ -235,6 +243,7 @@
     "type-cost-measurement.yml/measure": "main",
     "queue-admission.yml/admission": "dispatch-only",
     "playbook-clause-eval.yml/playbook-clause-eval": "dispatch-only",
+    "playbook-journey.yml/playbook-journey": "main",
     "ci-runner-loss-retry.yml/retry": "pr-fast",
     "ci.yml/dependency-review": "pr-fast",
     "ci.yml/dependency-audit": "pr-fast",
@@ -270,6 +279,10 @@
       "cancelInProgress": false
     },
     "deploy-landing.yml": {
+      "role": "publish",
+      "cancelInProgress": false
+    },
+    "deploy-outlook-addin.yml": {
       "role": "publish",
       "cancelInProgress": false
     },

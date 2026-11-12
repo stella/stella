@@ -44,3 +44,28 @@ test("the shared identifier whitespace matches ECMAScript whitespace", () => {
   }
   expect(DECISION_IDENTIFIER_WHITESPACE).toBe(whitespace.join(""));
 });
+
+test("the shared corpus exercises every declared filing-year format", () => {
+  for (const { jurisdiction, filingYearRule } of Object.values(
+    DECISION_DOCKET_GRAMMARS,
+  )) {
+    if (filingYearRule.type === "none-in-format") {
+      continue;
+    }
+    for (const format of filingYearRule.formats) {
+      for (const pattern of format.patterns) {
+        expect(
+          DECISION_DOCKET_FILING_YEAR_FIXTURES.some(
+            (fixture) =>
+              fixture.jurisdiction === jurisdiction &&
+              pattern.test(foldDecisionIdentifierInput(fixture.caseNumber)),
+          ),
+          `${jurisdiction}: ${pattern.source}`,
+        ).toBe(true);
+        if (format.type === "encoded") {
+          expect(pattern.source, jurisdiction).toContain("(?<year>");
+        }
+      }
+    }
+  }
+});

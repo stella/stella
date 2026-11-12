@@ -44,6 +44,14 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Install the docs MCP server
+        # typecheck:repo checks .claude/mcp against the packages installed
+        # there, which are outside the root lockfile.
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun run setup:mcp
+        env:
+          NPM_TOKEN: ""
+
       - name: Full typecheck (no --affected, no turbo cache)
         # The API compiler and web contract generator each build the API graph.
         # Keep their peak memory separate, as in the full release check.

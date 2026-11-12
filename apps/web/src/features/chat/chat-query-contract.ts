@@ -1,5 +1,6 @@
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
+import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
@@ -102,6 +103,8 @@ export type ChatThreadTitleKey = {
 
 export type GroupedChatThreadsKey = {
   activeOrganizationId: string;
+  /** Only the reader's pinned, or only their unpinned, threads. */
+  pinState?: ChatThreadPinState | undefined;
   search?: string | undefined;
   userId: string;
   /** Only the threads that live in this matter. */
@@ -227,17 +230,23 @@ export const chatKeys = {
     "decision-thread",
     key.decisionId,
   ],
-  groupedThreads: ({
-    activeOrganizationId,
-    search,
-    userId,
-    workspaceId,
-  }: GroupedChatThreadsKey) => [
+  /** Every grouped thread list of the reader, whatever its filters. */
+  groupedThreadLists: (activeOrganizationId: string, userId: string) => [
     ...chatKeys.all,
     activeOrganizationId,
     userId,
     "threads",
     "grouped",
+  ],
+  groupedThreads: ({
+    activeOrganizationId,
+    pinState,
+    search,
+    userId,
+    workspaceId,
+  }: GroupedChatThreadsKey) => [
+    ...chatKeys.groupedThreadLists(activeOrganizationId, userId),
+    pinState ?? "",
     search ?? "",
     workspaceId ?? "",
   ],
@@ -256,6 +265,25 @@ export const chatKeys = {
     userId,
     "limit-reminder",
     threadKey,
+  ],
+  localFilesUndo: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+    turnId: string,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "local-files-undo",
+    threadId,
+    turnId,
+  ],
+  browserSiteGrants: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "browser-site-grants",
   ],
   modelOptions: (activeOrganizationId: string) => [
     ...chatKeys.all,

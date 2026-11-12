@@ -34,6 +34,7 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import type { DocumentSource } from "@/api/lib/document-source";
 import {
   documentWriteRefusal,
   DocumentWriteRefusedError,
@@ -103,6 +104,8 @@ type CreateEntityFromBufferInput = {
         sourceWorkspaceId: SafeId<"workspace">;
       }
     | undefined;
+  /** Provenance of the first version's bytes; recorded on the audit event too. */
+  source?: DocumentSource | undefined;
   afterCreate?:
     | ((tx: Transaction, result: CreateEntityFromBufferValue) => Promise<void>)
     | undefined;
@@ -184,6 +187,7 @@ export const createEntityFromBuffer = async ({
   parentId,
   scanWarnings,
   provenance,
+  source,
   afterCreate,
   dependencies = defaultCreateEntityFromBufferDependencies,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
@@ -457,6 +461,7 @@ export const createEntityFromBuffer = async ({
           entityId,
           versionNumber: 1,
           stamp: entityStamp.stamp,
+          ...(source !== undefined && { source }),
         });
 
         await tx
@@ -519,7 +524,12 @@ export const createEntityFromBuffer = async ({
               },
             },
           },
-          ...(provenance && { metadata: { provenance } }),
+          ...((provenance !== undefined || source !== undefined) && {
+            metadata: {
+              ...(provenance !== undefined && { provenance }),
+              ...(source !== undefined && { source }),
+            },
+          }),
         });
 
         await afterCreate?.(tx, {

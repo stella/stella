@@ -70,7 +70,7 @@
     "lint:changed": "bun run generate && bun scripts/lint-changed.ts",
     "lint:fix": "turbo run lint:fix",
     "lint:profile:api": "bun --cwd=apps/api run lint:profile",
-    "lint:profile:web": "bun run generate && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --debug timings --format=default apps/web",
+    "lint:profile:web": "bun run generate && bun scripts/lint.ts --no-type-check --debug timings --format=default apps/web",
     "assets:check": "bun test scripts/check-public-assets.test.ts && bun scripts/check-public-assets.ts",
     "lint:ws": "sherif -r unsync-similar-dependencies -i '@babel/core@^7.29.0' && bun packages/scripts/src/workspace-hygiene.ts",
     "new-package": "bun scripts/new-package.ts",
@@ -114,7 +114,7 @@
     "check:api-timeout-mutations": "bun scripts/check-api-timeout-mutations.ts",
     "check:query-cache-types": "bun run generate && bun --filter @stll/scripts test -- src/query-cache-types.test.ts && bun packages/scripts/src/query-cache-types.ts",
     "check:query-data-state": "bun scripts/query-data-state-baseline.ts --check",
-    "check:docs-sources": "bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error .claude/mcp/doc-sources.ts",
+    "check:docs-sources": "bun scripts/lint.ts --no-type-aware .claude/mcp/doc-sources.ts",
     "check:office-fixture-metadata": "bun --filter @stll/docx-utils check:office-fixture-metadata",
     "check:instruction-references": "bun scripts/check-instruction-references.ts --check",
     "check:railway-template-draft": "bun scripts/check-railway-template-draft.ts",
@@ -148,6 +148,7 @@
     "generate": "turbo run generate:route-tree generate:messages generate:api-types generate:capability-runtime --filter=@stll/web --filter=@stll/api"
   },
   "devDependencies": {
+    "@better-auth/core": "catalog:",
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@emnapi/core": "1.11.3",

@@ -87,6 +87,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // Caller-supplied audio is transient; optional matter access is authorized
   // through MemberCaller and covered by dictation/transcribe.test.ts.
   dictation: WAIVER_REASON.noTenantReadSurface,
+  // The Outlook add-in's email helpers answer from the email text in the
+  // request body and read no stored record.
+  ai: WAIVER_REASON.noTenantReadSurface,
   clauses: WAIVER_REASON.preExistingGap,
   "document-types": WAIVER_REASON.preExistingGap,
   fields: WAIVER_REASON.preExistingGap,

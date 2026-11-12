@@ -5,8 +5,11 @@
   "adoptUnsupported": {
     "message": "stellaga saab kasutada ainult avalikke HTTPS-lehti."
   },
+  "usingTabs": {
+    "message": "Kasutusel:"
+  },
   "downloadKept": {
-    "message": "Allalaadimised, mis lõppesid, kui stella vahekaarti juhtis, ja jäeti alles: $COUNT$. Enne avamist kontrolli, kust need pärinevad.",
+    "message": "Alles jäetud allalaadimised: $COUNT$, kontrolli enne avamist",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -14,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "Allalaadimised, mille stella vahekaarti juhtides peatas: $COUNT$.",
+    "message": "Peatatud allalaadimised: $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -22,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "Kui stella vahekaarti juhtis: peatatud allalaadimised: $STOPPED$. Lõpetatud ja alles jäetud allalaadimised (enne avamist kontrolli, kust need pärinevad): $KEPT$.",
+    "message": "Peatatud allalaadimised: $STOPPED$ · alles jäetud: $KEPT$, kontrolli enne avamist",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -42,15 +45,10 @@
     "message": "Ava stella rakenduse vahekaart ja proovi uuesti."
   },
   "connectionPurpose": {
-    "message": "Kui seda vestluses palute, saab stella avada ja lugeda veebisaite eraldi vahekaardil teie sisselogimistega."
+    "message": "Avab ja loeb vestluse jaoks veebisaite teie sisselogimistega."
   },
   "statusConnected": {
-    "message": "Ühendatud: $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
+    "message": "Ühendatud"
   },
   "statusNotConnected": {
     "message": "Pole ühendatud"
@@ -60,14 +58,6 @@
   },
   "statusOpenStella": {
     "message": "Ühendamiseks avage stella"
-  },
-  "statusTabHandedOver": {
-    "message": "Vahekaart anti stellale: $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
   },
   "allowAndConnect": {
     "message": "Luba juurdepääs ja ühenda"
@@ -84,20 +74,14 @@
   "disconnectTab": {
     "message": "Katkesta ühendus"
   },
-  "disconnectDescription": {
-    "message": "stella lõpetab ühendatud vahekaardi kasutamise."
-  },
   "revokeAccess": {
-    "message": "Eemalda juurdepääs veebisaitidele"
-  },
-  "revokeDescription": {
-    "message": "Eemaldab veebisaitide avamise ja lugemise loa."
+    "message": "Eemalda juurdepääs"
   },
   "checkingAccess": {
     "message": "Ühenduse kontrollimine…"
   },
   "statusConnectedElsewhere": {
-    "message": "stella on ühendatud teisel aadressil"
+    "message": "Ühendatud mujal"
   },
   "connectStellaInstead": {
     "message": "Ühenda stella hoopis siin"

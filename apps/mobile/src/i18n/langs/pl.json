@@ -15,6 +15,7 @@
     "noMatchesDescription": "Żaden tytuł czatu ani sprawa nie zawiera „{search}”.",
     "search": "Szukaj czatów",
     "loadFailed": "Nie udało się wczytać Twoich rozmów.",
+    "runsLoadFailed": "Nie udało się sprawdzić, które rozmowy czekają na Ciebie.",
     "retry": "Spróbuj ponownie",
     "untitled": "Rozmowa bez tytułu",
     "loadMoreFailed": "Wczytaj więcej",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "Nie udało się wczytać tej rozmowy.",
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
+    "markRead": "Przeczytane",
+    "markUnread": "Nieprzeczytane",
+    "pin": "Przypnij",
+    "unpin": "Odepnij",
+    "unread": "Nieprzeczytana",
+    "markReadFailed": "Nie udało się oznaczyć rozmowy jako przeczytanej.",
+    "markUnreadFailed": "Nie udało się oznaczyć rozmowy jako nieprzeczytanej.",
+    "pinFailed": "Nie udało się przypiąć rozmowy.",
+    "unpinFailed": "Nie udało się odpiąć rozmowy.",
     "sections": {
+      "needsYou": "Czekają na Ciebie",
+      "working": "W toku",
+      "pinned": "Przypięte",
       "today": "Dzisiaj",
       "yesterday": "Wczoraj",
       "week": "Ostatnie 7 dni",
@@ -47,6 +60,22 @@
     "answerStopped": "Zatrzymano.",
     "answerNeedsInput": "Ta odpowiedź wymaga Twojej decyzji. Dokończ ją w stelli w przeglądarce.",
     "answerFailed": "Nie udało się dokończyć odpowiedzi.",
+    "answerAwaitingInput": "Ta odpowiedź wymaga Twojej decyzji.",
+    "alreadyAnswered": "Odpowiedź została już udzielona.",
+    "answerSendFailed": "Nie udało się wysłać odpowiedzi. Spróbuj ponownie.",
+    "approvalTitle": "Zezwolić na to działanie?",
+    "approvalAllowOnce": "Zezwól raz",
+    "approvalDeny": "Odmów",
+    "inputEmpty": "Puste",
+    "inputRequest": "Dane wejściowe",
+    "questionTitle": "Prośba o wyjaśnienie",
+    "questionChooseSeveral": "Wybierz wszystkie pasujące",
+    "questionOwnWords": "Napisz własną",
+    "questionShowOptions": "Pokaż opcje",
+    "questionPlaceholder": "Twoja odpowiedź",
+    "questionSecretPlaceholder": "Twoja odpowiedź pozostanie ukryta",
+    "questionDismiss": "Odrzuć i zatrzymaj",
+    "submitAnswers": "Wyślij odpowiedzi",
     "composerMenu": "Otwórz menu załączników i narzędzi",
     "attachFile": "Załącz plik",
     "attachment": "Załącznik",
@@ -62,7 +91,12 @@
     "sendFileRefused": "Nie udało się wysłać pliku, więc wiadomość nie została wysłana. Usuń plik i spróbuj ponownie.",
     "sendFileNotAnonymizable": "Ta rozmowa jest anonimizowana, a stella nie mogła zanonimizować jednego z plików, więc nic nie wysłano. Usuń plik i spróbuj ponownie.",
     "pickTitle": "Wybierz rozmowę",
-    "pickDescription": "Wybierz wątek z listy lub rozpocznij nowy przyciskiem +."
+    "pickDescription": "Wybierz wątek z listy lub rozpocznij nowy przyciskiem +.",
+    "runBanner": {
+      "needsYou": "Czeka na Ciebie",
+      "finished": "Zakończono",
+      "openHint": "Otwiera rozmowę"
+    }
   },
   "tasks": {
     "emptyTitle": "Brak otwartych zadań",
@@ -151,7 +185,11 @@
     "scanDocument": "Zeskanuj dokument",
     "newTask": "Nowe zadanie",
     "uploadDocument": "Prześlij dokument",
-    "uploadFailed": "Nie udało się przesłać dokumentu. Spróbuj ponownie."
+    "uploadFailed": "Nie udało się przesłać dokumentu. Spróbuj ponownie.",
+    "startTimer": "Uruchom licznik",
+    "pauseTimer": "Wstrzymaj licznik",
+    "resumeTimer": "Wznów licznik",
+    "timerRunning": "Licznik działa"
   },
   "entity": {
     "type": "Typ",
@@ -199,7 +237,6 @@
     }
   },
   "signIn": {
-    "beta": "Beta",
     "headline": "Jasność w każdej sprawie.",
     "subtitle": "Dokumenty, orzecznictwo i przegląd pod kontrolą. Z pomocą AI.",
     "submit": "Zaloguj się",
@@ -351,5 +388,13 @@
     "share": "Udostępnij",
     "cancel": "Anuluj",
     "openFailed": "Nie udało się otworzyć linku."
+  },
+  "share": {
+    "title": "Dodaj do stelli",
+    "start": "Rozpocznij",
+    "uploading": "Przesyłanie {done} z {total}…",
+    "filesOnly": "Zapisane zostaną tylko pliki; linki i tekst zostaną pominięte.",
+    "unavailableTitle": "Nie ma czego dodać",
+    "unavailable": "Ten udostępniony element już nie istnieje. Udostępnij go ponownie z innej aplikacji."
   }
 }

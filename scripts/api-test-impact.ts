@@ -31,7 +31,8 @@ export const API_ALL_RULES = {
   patches: /^patches\//u,
   // Keep this list aligned with the local actions used by the API-running jobs
   // in ci.yml. api-test-impact.test.ts fails when a new action is wired there.
-  github: /^\.github\/(?:workflows\/ci\.yml|actions\/ci-install(?:\/.*)?)$/u,
+  github:
+    /^\.github\/(?:workflows\/ci\.yml|actions\/(?:ci-install|flaky-test-quarantine)(?:\/.*)?)$/u,
   migrations: /^apps\/api\/drizzle\//u,
   database: /^apps\/api\/src\/db\//u,
   runner: /^apps\/api\/scripts\//u,

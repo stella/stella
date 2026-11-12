@@ -2,6 +2,7 @@ import type { ChatClientState, ToolCallState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
+import { getChatTurnDurationMs } from "@stll/api-contract/chat-turn-duration";
 
 import { getChatToolActivityCategory } from "@/components/chat/chat-activity.logic";
 import { isUserInputChatToolName } from "@/components/chat/chat-ui-tools";
@@ -19,13 +20,46 @@ export type ChatTurnStatusInput = {
   phase: TurnActivePhase | null;
   state: ChatClientState;
   timing?: ChatTurnTiming | null | undefined;
+  /** When this page sent the turn's message, on the `performance.now()`
+   *  clock; `null` for a turn the page joined. */
+  sentAt: number | null;
+};
+
+/**
+ * How long the running turn has taken, on the `performance.now()` clock, the
+ * same for a turn on stella and one on the member's computer. A turn this
+ * page sent counts from the send. A turn it joined (a reload) counts from
+ * the server's start when its reading has arrived, and from when the page
+ * first showed it before then. Nothing here waits for a streamed chunk.
+ */
+export const liveTurnElapsedMs = ({
+  sentAt,
+  timing,
+  shownAt,
+  now,
+}: {
+  sentAt: number | null;
+  timing: ChatTurnTiming | null | undefined;
+  shownAt: number;
+  now: number;
+}): number => {
+  if (sentAt !== null) {
+    return Math.max(0, now - sentAt);
+  }
+  const fromServer =
+    timing === null || timing === undefined
+      ? undefined
+      : getChatTurnDurationMs(timing, now);
+  return fromServer ?? Math.max(0, now - shownAt);
 };
 
 export type TurnLiveStatus =
   { type: "none" } | { type: "live"; phase: TurnActivePhase };
 
 /** Maps every SDK chat state to the turn's sole live-status line. */
-export const turnLiveStatus = (turn: ChatTurnStatusInput): TurnLiveStatus => {
+export const turnLiveStatus = (
+  turn: Pick<ChatTurnStatusInput, "phase" | "state">,
+): TurnLiveStatus => {
   switch (turn.state) {
     case "ready":
     case "error":

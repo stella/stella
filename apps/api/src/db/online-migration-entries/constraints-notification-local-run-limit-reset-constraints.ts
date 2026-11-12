@@ -3,7 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 
 export default {
   id: "constraints-notification-local-run-limit-reset-constraints",
-  revision: 1427,
+  revision: 1451,
   type: "constraints",
   values: [...NOTIFICATION_LOCAL_RUN_LIMIT_RESET_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;
