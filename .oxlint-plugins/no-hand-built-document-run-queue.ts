@@ -9,7 +9,8 @@
 // grow a second copy of it, so the rule reports the construction imports in
 // such a module.
 //
-// Flags, in a module that imports a document run table from the schema:
+// Flags, in a module that imports a document run table from the schema
+// (by name, or read through a namespace import of it):
 //   import { BullMqWorker } from "@/api/lib/bullmq-queue";
 //   import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 //   import * as queues from "@/api/lib/bullmq-queue";
@@ -26,7 +27,13 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { canonicalModuleId } from "./module-id.ts";
-import { getImportedName, isAstNode, repoRelativeFilename } from "./utils.ts";
+import {
+  getImportedName,
+  isAstNode,
+  isIdentifier,
+  memberPropertyName,
+  repoRelativeFilename,
+} from "./utils.ts";
 
 const RULE_NAME = "no-hand-built-document-run-queue";
 
@@ -88,13 +95,16 @@ export default eslintCompatPlugin({
         schema: [],
       },
       createOnce(context) {
+        let skipped = true;
+        let imports: unknown[] = [];
+        let readsRunTable = false;
+        /** Local names of namespace imports of the schema. */
+        let schemaNamespaces = new Set<string>();
         return {
           Program(program) {
             const file = repoRelativeFilename(context);
-            if (file === OWNER || BACKLOG.has(file)) {
-              return;
-            }
-            const imports = (
+            skipped = file === OWNER || BACKLOG.has(file);
+            imports = (
               isAstNode(program) && Array.isArray(program.body)
                 ? program.body
                 : []
@@ -104,24 +114,49 @@ export default eslintCompatPlugin({
                 statement.type === "ImportDeclaration" &&
                 !isTypeOnly(statement),
             );
-            const readsRunTable = imports.some((statement) => {
+            readsRunTable = false;
+            schemaNamespaces = new Set();
+            for (const statement of imports) {
               const source = sourceOf(statement);
-              return (
-                source !== null &&
-                isSchemaModule(canonicalModuleId(source, file)) &&
-                specifiersOf(statement).some((specifier) => {
-                  const name = getImportedName(specifier);
-                  return (
-                    name !== null &&
-                    !isTypeOnly(specifier) &&
-                    DOCUMENT_RUN_TABLES.has(name)
-                  );
-                })
-              );
-            });
-            if (!readsRunTable) {
+              if (
+                source === null ||
+                !isSchemaModule(canonicalModuleId(source, file))
+              ) {
+                continue;
+              }
+              for (const specifier of specifiersOf(statement)) {
+                if (!isAstNode(specifier) || isTypeOnly(specifier)) {
+                  continue;
+                }
+                if (
+                  specifier.type === "ImportNamespaceSpecifier" &&
+                  isIdentifier(specifier.local)
+                ) {
+                  schemaNamespaces.add(specifier.local.name);
+                }
+                const name = getImportedName(specifier);
+                if (name !== null && DOCUMENT_RUN_TABLES.has(name)) {
+                  readsRunTable = true;
+                }
+              }
+            }
+          },
+          MemberExpression(node) {
+            if (
+              !readsRunTable &&
+              isAstNode(node) &&
+              isIdentifier(node.object) &&
+              schemaNamespaces.has(node.object.name)
+            ) {
+              const table = memberPropertyName(node);
+              readsRunTable = table !== null && DOCUMENT_RUN_TABLES.has(table);
+            }
+          },
+          "Program:exit"() {
+            if (skipped || !readsRunTable) {
               return;
             }
+            const file = repoRelativeFilename(context);
             for (const statement of imports) {
               const source = sourceOf(statement);
               if (source === null) {

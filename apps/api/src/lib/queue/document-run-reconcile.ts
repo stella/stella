@@ -52,19 +52,37 @@ export const documentRunReconciler = <E extends Error>(
     asQueuedSweep(await queue.reconcileQueued({ db })),
 });
 
-type RunSweep = { key: string; failedStuck: number; queued: QueuedSweep };
+type RunSweep = {
+  key: string;
+  failedStuck: Result<number, SchedulerTaskFailure>;
+  queued: QueuedSweep;
+};
 
 /**
  * One kind's sweep: fail its stuck runs, then re-drive the queued runs its
  * queue no longer holds a job for. The stuck sweep runs first, so a run it
- * fails is never handed back.
+ * fails is never handed back. A phase that rejects is recorded as that
+ * phase's failure and the other phase still runs.
  */
 export const sweepDocumentRuns = async (
   db: SchedulerDb,
   reconciler: RunReconciler,
 ): Promise<RunSweep> => {
-  const failedStuck = await reconciler.reconcileStuck(db);
-  const queued = await reconciler.reconcileQueued(db);
+  const phaseFailure = (phase: string) => (cause: unknown) =>
+    new SchedulerTaskFailure({
+      message: `${reconciler.key} ${phase} sweep failed`,
+      cause,
+    });
+  const failedStuck = await Result.tryPromise({
+    try: async () => await reconciler.reconcileStuck(db),
+    catch: phaseFailure("stuck"),
+  });
+  const queued = Result.flatten(
+    await Result.tryPromise({
+      try: async () => await reconciler.reconcileQueued(db),
+      catch: phaseFailure("queued"),
+    }),
+  );
   return { key: reconciler.key, failedStuck, queued };
 };
 
@@ -84,18 +102,35 @@ export const documentRunReconcileTask =
     }
     const swept = await sweep(db);
     const counts: [string, number][] = [];
+    const failures: SchedulerTaskFailure[] = [];
     for (const { key, failedStuck, queued } of swept) {
-      if (Result.isError(queued)) {
-        return Result.err(queued.error);
+      if (Result.isError(failedStuck)) {
+        failures.push(failedStuck.error);
+      } else {
+        counts.push([`${key}.failedStuck`, failedStuck.value]);
       }
-      const { handedOff, scanned, unattributed } = queued.value;
-      counts.push(
-        [`${key}.failedStuck`, failedStuck],
-        [`${key}.requeued`, handedOff],
-        [`${key}.scanned`, scanned],
-        [`${key}.unattributed`, unattributed],
-      );
+      if (Result.isError(queued)) {
+        failures.push(queued.error);
+      } else {
+        const { handedOff, scanned, unattributed } = queued.value;
+        counts.push(
+          [`${key}.requeued`, handedOff],
+          [`${key}.scanned`, scanned],
+          [`${key}.unattributed`, unattributed],
+        );
+      }
     }
     logger.info(event, Object.fromEntries(counts));
-    return Result.ok();
+    if (failures.length === 0) {
+      return Result.ok();
+    }
+    // Every phase that failed is reported, not only the first.
+    return Result.err(
+      failures.length === 1
+        ? (failures.at(0) ?? panic("A recorded failure is missing"))
+        : new SchedulerTaskFailure({
+            message: failures.map(({ message }) => message).join("; "),
+            cause: failures,
+          }),
+    );
   };

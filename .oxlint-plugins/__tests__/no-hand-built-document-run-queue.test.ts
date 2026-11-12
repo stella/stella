@@ -35,6 +35,27 @@ describe.serial(RULE, () => {
     ).toEqual([2]);
   });
 
+  test("reads the table through a namespace import of the schema", async () => {
+    expect(
+      await lint(
+        [
+          'import * as schema from "@/api/db/schema";',
+          'import { Queue } from "bullmq";',
+          "export const runs = schema.documentReviewRuns;",
+        ].join("\n"),
+      ),
+    ).toEqual([2]);
+    expect(
+      await lint(
+        [
+          'import * as schema from "@/api/db/schema";',
+          'import { Queue } from "bullmq";',
+          "export const flows = schema.flowRuns;",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
   test("accepts the owner's factory beside a document run table", async () => {
     expect(
       await lint(

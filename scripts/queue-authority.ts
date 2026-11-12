@@ -477,7 +477,11 @@ const accessedMemberName = (node: Node | undefined): string | null => {
   return node.property.type === "Identifier" ? node.property.name : null;
 };
 
-/** The value of `key` in a call's first, object-literal argument. */
+/**
+ * The value `key` takes in a call's first, object-literal argument, read in
+ * assignment order: a spread after the property may replace it, so the value
+ * is then unknown.
+ */
 const optionValue = (call: CallExpression, key: string): Expression | null => {
   const first = call.arguments.at(0);
   if (first === undefined || first.type === "SpreadElement") {
@@ -487,13 +491,15 @@ const optionValue = (call: CallExpression, key: string): Expression | null => {
   if (options.type !== "ObjectExpression") {
     return null;
   }
-  const property = options.properties.find(
-    (candidate): candidate is ObjectProperty =>
-      isPropertyAssignment(candidate) &&
-      !candidate.computed &&
-      propertyName(candidate.key) === key,
-  );
-  return property === undefined ? null : property.value;
+  let value: Expression | null = null;
+  for (const property of options.properties) {
+    if (!isPropertyAssignment(property)) {
+      value = null;
+    } else if (!property.computed && propertyName(property.key) === key) {
+      value = property.value;
+    }
+  }
+  return value;
 };
 
 /**
@@ -564,12 +570,23 @@ const workerQueueNames = (
   );
   const factoryCalls = findNodes(file, "CallExpression").filter((call) => {
     const { callee } = call;
-    const binding =
-      callee.type === "Identifier" ? bindings.get(callee.name) : undefined;
+    if (callee.type === "Identifier") {
+      const binding = bindings.get(callee.name);
+      return (
+        binding?.imported === DOCUMENT_RUN_QUEUE_FACTORY &&
+        resolveModulePath(relativePath, binding.module) ===
+          DOCUMENT_RUN_QUEUE_FILE
+      );
+    }
+    // A call through a namespace import of the factory's module.
+    const namespace =
+      callee.type === "MemberExpression" && callee.object.type === "Identifier"
+        ? namespaces.get(callee.object.name)
+        : undefined;
     return (
-      binding?.imported === DOCUMENT_RUN_QUEUE_FACTORY &&
-      resolveModulePath(relativePath, binding.module) ===
-        DOCUMENT_RUN_QUEUE_FILE
+      namespace !== undefined &&
+      accessedMemberName(callee) === DOCUMENT_RUN_QUEUE_FACTORY &&
+      resolveModulePath(relativePath, namespace) === DOCUMENT_RUN_QUEUE_FILE
     );
   });
   if (constructions.length === 0 && factoryCalls.length === 0) {
@@ -1812,6 +1829,32 @@ const selfTestWorkerConstructors = (): string[] => {
     failures.push(
       "a createDocumentRunQueue call without a literal name must not resolve",
     );
+  }
+  const namespacedQueues = workerQueueNames(
+    "apps/api/src/lib/runs/run-queue.ts",
+    'import * as runQueues from "@/api/lib/queue/document-run-queue"; const JOBS = runQueues.createDocumentRunJobs({ name: "runs", jobName: "run" }); export const runs = runQueues.createDocumentRunQueue({ jobs: JOBS });',
+    () => null,
+  );
+  if (JSON.stringify(namespacedQueues) !== JSON.stringify(["runs"])) {
+    failures.push(
+      `a createDocumentRunQueue call through a namespace must count as its module's Worker; got ${JSON.stringify(namespacedQueues)}`,
+    );
+  }
+  for (const source of [
+    'import { createDocumentRunJobs, createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; const JOBS = createDocumentRunJobs({ name: "runs", jobName: "run", ...options }); export const runs = createDocumentRunQueue({ jobs: JOBS });',
+    'import { createDocumentRunJobs, createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; const JOBS = createDocumentRunJobs({ name: "runs", jobName: "run" }); export const runs = createDocumentRunQueue({ jobs: JOBS, ...options });',
+  ]) {
+    if (
+      workerQueueNames(
+        "apps/api/src/lib/runs/run-queue.ts",
+        source,
+        () => null,
+      ) !== null
+    ) {
+      failures.push(
+        "a spread that may replace the queue's name must not resolve",
+      );
+    }
   }
   if (
     workerQueueNames(
