@@ -370,7 +370,9 @@ impl Runner {
       // lease is not held while they run: every other account request
       // would wait on it. The connection authorizes again afterwards.
       drop(authorized);
-      self.wait_for_first_reports().await;
+      if !self.wait_for_first_reports().await {
+        return Ended::Stopped;
+      }
       authorized = match self.authorized().await {
         Ok(authorized) => authorized,
         Err(ended) => return ended,
@@ -453,22 +455,28 @@ impl Runner {
   /// been probed, so the hello says what each can do. Runs the API sent
   /// while the computer was away then start on a known report instead of
   /// being refused as not installed.
-  async fn wait_for_first_reports(&self) {
+  /// Resolves `false` when the runner is told to stop meanwhile: a slow
+  /// probe never holds up turning local agents off or on again.
+  async fn wait_for_first_reports(&mut self) -> bool {
     let Some(mut changes) = self.reports.changes() else {
-      return;
+      return true;
     };
+    let reports = &self.reports;
     let settled = async {
-      while !self.reports.settled() {
+      while !reports.settled() {
         if changes.changed().await.is_err() {
           return;
         }
       }
     };
-    if tokio::time::timeout(FIRST_REPORTS_WAIT, settled)
-      .await
-      .is_err()
-    {
-      tracing::info!("desktop runner connects before every harness was probed");
+    tokio::select! {
+      waited = tokio::time::timeout(FIRST_REPORTS_WAIT, settled) => {
+        if waited.is_err() {
+          tracing::info!("desktop runner connects before every harness was probed");
+        }
+        true
+      }
+      () = Self::next_stop(&mut self.stop) => false,
     }
   }
 
