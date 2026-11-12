@@ -25,12 +25,12 @@ import type {
 } from "@/features/avt/graph/graph-model.logic";
 import { chronologyOf } from "@/features/avt/graph/graph-model.logic";
 import {
+  GraphPages,
   useOpenedClaim,
   useVerificationGraphModel,
 } from "@/features/avt/graph/verification-graph";
 import { StateSwatch } from "@/features/avt/state-chip";
 import { STATE_META } from "@/features/avt/types";
-import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 
 /** Claims a row names before folding the rest behind "N more". */
@@ -43,7 +43,6 @@ type ChronologyProps = {
 
 export const Chronology = ({ workspaceId, listId }: ChronologyProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const { query, model } = useVerificationGraphModel({ workspaceId, listId });
   const claimPanel = useOpenedClaim();
 
@@ -71,11 +70,21 @@ export const Chronology = ({ workspaceId, listId }: ChronologyProps) => {
     );
   }
   const groups = chronologyOf(model);
+  const pages = (
+    <GraphPages
+      factOverflow={model.factOverflow}
+      factsShown={model.facts.length}
+      query={query}
+    />
+  );
   if (groups.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm">
-        {t("avt.chronology.empty")}
-      </p>
+      <div className="flex flex-col gap-3">
+        <p className="text-muted-foreground text-sm">
+          {t("avt.chronology.empty")}
+        </p>
+        {pages}
+      </div>
     );
   }
   return (
@@ -109,27 +118,7 @@ export const Chronology = ({ workspaceId, listId }: ChronologyProps) => {
           </section>
         ),
       )}
-      {model.factOverflow && (
-        <p className="text-muted-foreground text-xs">
-          {t("avt.graph.factOverflow", {
-            count: format.number(model.facts.length),
-          })}
-        </p>
-      )}
-      {query.hasNextPage && (
-        <div>
-          <Button
-            loading={query.isFetchingNextPage}
-            onClick={() =>
-              detached(query.fetchNextPage(), "avt-chronology.load-more")
-            }
-            size="sm"
-            variant="outline"
-          >
-            {t("avt.graph.loadMore")}
-          </Button>
-        </div>
-      )}
+      {pages}
       <GraphClaimSheet
         onClose={claimPanel.close}
         opened={claimPanel.opened}

@@ -139,9 +139,12 @@ export const citationStroke = (edge: GraphCitation) => {
   }
 };
 
-const curve = (x1: number, y1: number, x2: number, y2: number) => {
-  const bend = (x1 + x2) / 2;
-  return `M ${String(x1)} ${String(y1)} C ${String(bend)} ${String(y1)}, ${String(bend)} ${String(y2)}, ${String(x2)} ${String(y2)}`;
+type Point = { x: number; y: number };
+
+/** A link from one card's edge to another's, bending halfway across. */
+const curve = ({ from, to }: { from: Point; to: Point }) => {
+  const bend = (from.x + to.x) / 2;
+  return `M ${String(from.x)} ${String(from.y)} C ${String(bend)} ${String(from.y)}, ${String(bend)} ${String(to.y)}, ${String(to.x)} ${String(to.y)}`;
 };
 
 type GraphCanvasProps = {
@@ -214,12 +217,10 @@ export const GraphCanvas = ({
     const { color, dash } = citationStroke(edge);
     return [
       <path
-        d={curve(
-          columns.claim.x + columns.claim.width,
-          centreY(from),
-          columns.fact.x,
-          centreY(to),
-        )}
+        d={curve({
+          from: { x: columns.claim.x + columns.claim.width, y: centreY(from) },
+          to: { x: columns.fact.x, y: centreY(to) },
+        })}
         data-edge={key}
         fill="none"
         key={key}
@@ -244,12 +245,10 @@ export const GraphCanvas = ({
     return [
       <path
         className="stroke-muted-foreground"
-        d={curve(
-          columns.fact.x + columns.fact.width,
-          centreY(from),
-          columns.source.x,
-          centreY(to),
-        )}
+        d={curve({
+          from: { x: columns.fact.x + columns.fact.width, y: centreY(from) },
+          to: { x: columns.source.x, y: centreY(to) },
+        })}
         data-provenance={key}
         fill="none"
         key={`${key}|${JSON.stringify(edge.locator)}`}

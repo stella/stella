@@ -102,6 +102,8 @@ export const AvtView = ({
         </div>
       ) : (
         <ListReading
+          // Another list is another reading: its panel and filters start over.
+          key={listId}
           listId={listId}
           mode={mode}
           onModeChange={onModeChange}

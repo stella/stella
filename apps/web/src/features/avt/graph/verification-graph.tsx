@@ -59,6 +59,7 @@ import type { ClaimState } from "@/features/avt/types";
 import { STATE_META } from "@/features/avt/types";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type VerificationGraphProps = {
   workspaceId: string;
@@ -87,13 +88,24 @@ export const useVerificationGraphModel = ({
  *  decision taken in it shows at once. */
 // A decision taken in the panel refreshes the graph through its write's
 // contract; opening and closing the panel reads nothing.
+// Closing the panel hands focus back to what opened it.
 export const useOpenedClaim = () => {
   const [opened, setOpened] = React.useState<OpenedClaim | null>(null);
+  const trigger = React.useRef<HTMLElement | null>(null);
   return {
     opened,
-    open: (claim: { statementId: string; id: string }) =>
-      setOpened({ runId: claim.statementId, claimId: claim.id }),
-    close: () => setOpened(null),
+    open: (claim: { statementId: string; id: string }) => {
+      if (opened === null) {
+        const active = document.activeElement;
+        trigger.current = active instanceof HTMLElement ? active : null;
+      }
+      setOpened({ runId: claim.statementId, claimId: claim.id });
+    },
+    close: () => {
+      setOpened(null);
+      trigger.current?.focus();
+      trigger.current = null;
+    },
   };
 };
 
@@ -135,10 +147,14 @@ export const VerificationGraph = ({
   }
   return (
     <GraphBody
-      hasMore={query.hasNextPage}
-      loadingMore={query.isFetchingNextPage}
       model={model}
-      onLoadMore={() => detached(query.fetchNextPage(), "avt-graph.load-more")}
+      pages={
+        <GraphPages
+          factOverflow={model.factOverflow}
+          factsShown={model.facts.length}
+          query={query}
+        />
+      }
       onCloseClaim={claimPanel.close}
       onOpenClaim={claimPanel.open}
       onReview={onReview}
@@ -151,9 +167,8 @@ export const VerificationGraph = ({
 type GraphBodyProps = {
   workspaceId: string;
   model: GraphModel;
-  hasMore: boolean;
-  loadingMore: boolean;
-  onLoadMore: () => void;
+  /** The later pages: how to read them, and whether reading one failed. */
+  pages: React.ReactNode;
   onOpenClaim: (claim: { statementId: string; id: string }) => void;
   onReview: () => void;
   /** The claim whose panel is open, docked beside the canvas on a wide
@@ -165,16 +180,13 @@ type GraphBodyProps = {
 const GraphBody = ({
   workspaceId,
   model,
-  hasMore,
-  loadingMore,
-  onLoadMore,
+  pages,
   onOpenClaim,
   onReview,
   opened,
   onCloseClaim,
 }: GraphBodyProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const isMobile = useIsMobile();
   const [filters, setFilters] = React.useState<GraphFilters>(
     DEFAULT_GRAPH_FILTERS,
@@ -307,26 +319,64 @@ const GraphBody = ({
           />
         </>
       )}
-      {(hasMore || model.factOverflow) && (
-        <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-xs">
-          {model.factOverflow && (
-            <span>
-              {t("avt.graph.factOverflow", {
-                count: format.number(model.facts.length),
-              })}
-            </span>
-          )}
-          {hasMore && (
-            <Button
-              loading={loadingMore}
-              onClick={onLoadMore}
-              size="sm"
-              variant="outline"
-            >
-              {t("avt.graph.loadMore")}
-            </Button>
-          )}
-        </div>
+      {pages}
+    </div>
+  );
+};
+
+type GraphPagesProps = {
+  query: Pick<
+    ReturnType<typeof useVerificationGraphModel>["query"],
+    | "hasNextPage"
+    | "isFetchingNextPage"
+    | "isFetchNextPageError"
+    | "fetchNextPage"
+  >;
+  factOverflow: boolean;
+  factsShown: number;
+};
+
+/** Below a reading: how many facts it carries when the list holds more,
+ *  and the next page. A later page that fails to read says so and offers a
+ *  retry; the pages already read stay. */
+export const GraphPages = ({
+  query,
+  factOverflow,
+  factsShown,
+}: GraphPagesProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  if (!query.hasNextPage && !factOverflow) {
+    return null;
+  }
+  return (
+    <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-xs">
+      {factOverflow && (
+        <span>
+          {t("avt.graph.factOverflow", { count: format.number(factsShown) })}
+        </span>
+      )}
+      {query.hasNextPage && (
+        <Button
+          loading={query.isFetchingNextPage}
+          onClick={() =>
+            detached(
+              (async () => {
+                const next = await query.fetchNextPage();
+                if (next.isFetchNextPageError) {
+                  notifyUserError(next.error, t("common.loadFailed"));
+                }
+              })(),
+              "avt-graph.load-more",
+            )
+          }
+          size="sm"
+          variant="outline"
+        >
+          {query.isFetchNextPageError
+            ? t("common.retry")
+            : t("avt.graph.loadMore")}
+        </Button>
       )}
     </div>
   );

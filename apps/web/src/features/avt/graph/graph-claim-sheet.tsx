@@ -4,6 +4,8 @@
  * taken here is the one the review shows.
  */
 
+import * as React from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -83,9 +85,16 @@ export const GraphClaimPane = ({
   onClose,
 }: GraphClaimPaneProps) => {
   const t = useTranslations();
+  // The panel takes focus when it opens, so the keyboard reaches its close
+  // button and review controls next; it keeps it as another claim opens.
+  const focusOnOpen = React.useCallback((element: HTMLElement | null) => {
+    element?.focus({ preventScroll: true });
+  }, []);
   return (
     <aside
       aria-label={t("avt.graph.claimTitle")}
+      ref={focusOnOpen}
+      tabIndex={-1}
       className="bg-background relative flex h-[calc(100dvh-13rem)] min-h-64 w-[min(26rem,40%)] shrink-0 flex-col overflow-hidden rounded-xl border"
       data-testid="avt-graph-claim-pane"
     >
