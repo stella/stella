@@ -15,6 +15,7 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 import type { VerificationGraphPage } from "@/features/avt/types";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
+const realMatchMedia = window.matchMedia.bind(window);
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
@@ -133,18 +134,10 @@ const dimmed = (element: HTMLElement) => element.dataset["dimmed"] === "true";
 
 beforeEach(() => {
   narrow = false;
-  spyOn(window, "matchMedia").mockImplementation(
-    (query: string) =>
-      ({
-        matches: narrow ? !query.includes("min-width") : true,
-        media: query,
-        onchange: null,
-        addEventListener: () => undefined,
-        removeEventListener: () => undefined,
-        addListener: () => undefined,
-        removeListener: () => undefined,
-        dispatchEvent: () => false,
-      }) satisfies MediaQueryList,
+  // The test DOM lays nothing out: a query that matches everything (or
+  // nothing) stands in for the screen width the test asks for.
+  spyOn(window, "matchMedia").mockImplementation((query: string) =>
+    realMatchMedia(!narrow || !query.includes("min-width") ? "all" : "not all"),
   );
   spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
@@ -204,11 +197,12 @@ test("a record conflict draws both records from its claim", async () => {
   const edges = [...canvas().querySelectorAll<SVGPathElement>("[data-edge]")]
     .map((edge) => edge.dataset["edge"])
     .filter((key) => key?.startsWith(graphClaimId(2)) === true);
-  expect(edges.toSorted()).toEqual(
-    [
+  expect(edges).toHaveLength(2);
+  expect(new Set(edges)).toEqual(
+    new Set([
       `${graphClaimId(2)}|${graphFactId(2)}`,
       `${graphClaimId(2)}|${graphFactId(3)}`,
-    ].toSorted(),
+    ]),
   );
 });
 
