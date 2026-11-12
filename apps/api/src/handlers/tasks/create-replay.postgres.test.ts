@@ -169,13 +169,13 @@ describe.skipIf(!enabled)("list item create replay (postgres)", () => {
 
         const first = await invoke("add-fact-lost-response");
         if (first instanceof Response || !("entityId" in first)) {
-          return panic("The first create did not return the new item");
+          panic("The first create did not return the new item");
         }
 
         // The response was lost; the client retries with the same key.
         const replay = await invoke("add-fact-lost-response");
         if (!(replay instanceof Response)) {
-          return panic("The retry ran the create again instead of replaying");
+          panic("The retry ran the create again instead of replaying");
         }
         expect(replay.headers.get("Idempotency-Replayed")).toBe("true");
         expect(await replay.json()).toEqual({ entityId: first.entityId });
@@ -186,7 +186,7 @@ describe.skipIf(!enabled)("list item create replay (postgres)", () => {
         // A new add of the same statement is a new intent with a new key.
         const second = await invoke("add-fact-second-intent");
         if (second instanceof Response || !("entityId" in second)) {
-          return panic("A new key did not create a new item");
+          panic("A new key did not create a new item");
         }
         expect(second.entityId).not.toBe(first.entityId);
         const afterSecond = await stored();

@@ -11,7 +11,9 @@ import {
 describe("commit effects", () => {
   test("outside a deferred transaction an effect runs at once", () => {
     const ran: string[] = [];
-    afterCommit(() => ran.push("notify"));
+    afterCommit(() => {
+      ran.push("notify");
+    });
     expect(ran).toEqual(["notify"]);
   });
 
@@ -19,9 +21,13 @@ describe("commit effects", () => {
     const ran: string[] = [];
     const value = await withDeferredCommitEffects(
       async () => {
-        afterCommit(() => ran.push("notify"));
+        afterCommit(() => {
+          ran.push("notify");
+        });
         await Promise.resolve();
-        afterCommit(() => ran.push("flush"));
+        afterCommit(() => {
+          ran.push("flush");
+        });
         expect(ran).toEqual([]);
         return "written";
       },
@@ -35,7 +41,9 @@ describe("commit effects", () => {
     const ran: string[] = [];
     await withDeferredCommitEffects(
       async () => {
-        afterCommit(() => ran.push("notify"));
+        afterCommit(() => {
+          ran.push("notify");
+        });
         return await Promise.resolve("refused");
       },
       () => false,
@@ -43,9 +51,11 @@ describe("commit effects", () => {
     const rejection = await rejectionOf(
       withDeferredCommitEffects(
         async () => {
-          afterCommit(() => ran.push("notify"));
+          afterCommit(() => {
+            ran.push("notify");
+          });
           await Promise.resolve();
-          return panic("rolled back");
+          panic("rolled back");
         },
         () => true,
       ),
@@ -63,8 +73,14 @@ describe("commit effects", () => {
     let late: Promise<void> | undefined;
     await withDeferredCommitEffects(
       async () => {
-        late = gate.then(() => afterCommit(() => ran.push("late")));
-        return await Promise.resolve();
+        const registerLate = async () => {
+          await gate;
+          afterCommit(() => {
+            ran.push("late");
+          });
+        };
+        late = registerLate();
+        await Promise.resolve();
       },
       () => false,
     );
