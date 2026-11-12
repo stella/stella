@@ -769,6 +769,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "external-effect",
   },
+  "POST /v1/search/case-law": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/search/facets": {
     type: "non-replay",
     reason: "current-state",
@@ -1152,6 +1156,16 @@ const CREATE_MUTATION_DISPOSITIONS = {
     reason:
       "Money movement keeps its current payment transaction and is never replayed.",
   },
+  "src/handlers/lists/verifications/claim-rechecks/create.ts": {
+    type: "non-replay",
+    reason:
+      "The re-check's own receipt is the request key recorded on its review event and checked under the claim's lock, so a repeat returns the first outcome; the model call runs between two transactions, outside one scoped request receipt.",
+  },
+  "src/handlers/sharepoint/imports/create.ts": {
+    type: "non-replay",
+    reason:
+      "Each file is re-read from SharePoint and converges on its stored content digest, so a repeat is a no-op without a receipt; the object writes and Graph reads sit outside a scoped replay receipt.",
+  },
 } as const satisfies Record<string, { type: "non-replay"; reason: string }>;
 
 const ROOT_MUTATION_DISPOSITIONS_ENTRIES = new Map<
@@ -1171,8 +1185,6 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "The source form resolves a live document version before creation, so a manual retry can submit a different version for the same user intent.",
   "src/handlers/properties/create.ts":
     "Property creation participates in upload task chains whose completion is outside this create operation.",
-  "src/handlers/tasks/create.ts":
-    "Task creation is followed by field writes, so the create response does not represent the completed task workflow.",
   "src/handlers/views/create.ts":
     "View selection and template workflows generate fresh caller IDs, so a create receipt cannot represent the complete selection intent.",
   "src/handlers/workspaces/create.ts":

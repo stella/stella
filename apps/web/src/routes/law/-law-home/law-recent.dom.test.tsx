@@ -1100,8 +1100,9 @@ test("clearing visible recents waits for a delayed import and leaves server and 
     await waitFor(() => {
       expect(serverQueries).toEqual([]);
       expect(
-        screen.queryByRole("button", { name: /Local query|Earlier query/u }),
-      ).toBeNull();
+        screen.queryByRole("button", { name: /Local query|Earlier query/u }) ===
+          null,
+      ).toBe(true);
     });
   } finally {
     finishImport.resolve(undefined);
@@ -1181,7 +1182,9 @@ test("removing a saved query waits for a delayed import and leaves it absent", a
       queryKey: ["law-search-history"],
     });
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: /Saved query/u })).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /Saved query/u }) === null,
+      ).toBe(true);
       expect(serverEntries).toEqual([]);
       expect(storage.getItem(key)).toBeNull();
     });
@@ -1419,9 +1422,11 @@ for (const [operation, title] of [
         expect(deleteAttempts).toBe(2);
         expect(serverEntries).toEqual([]);
         expect(storage.getItem(key)).toBeNull();
-        expect(screen.queryByText(messages.lawHome.importFailed)).toBeNull();
+        expect(screen.queryByText(messages.lawHome.importFailed) === null).toBe(
+          true,
+        );
         expect(screen.getByText(messages.lawHome.noRecent)).toBeTruthy();
-        expect(screen.queryByRole("alertdialog")).toBeNull();
+        expect(screen.queryByRole("alertdialog") === null).toBe(true);
         expect(imports).toBe(1);
       });
     } finally {

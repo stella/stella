@@ -479,6 +479,13 @@ export const LIMITS = {
   caseLawProvisionCandidateBudget: 5000,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
+  /**
+   * One page of the search palette's case-law section, split across the
+   * countries it asks. Small: the section is a glance beside the matter
+   * results, and the full case-law search pages further.
+   */
+  searchCaseLawSectionPageSizeDefault: 10,
+  searchCaseLawSectionPageSizeMax: 20,
   /** Maximum visible text returned by any global-search preview response. */
   searchPreviewResponseCharacterLimit: 16_000,
   /** Messages surrounding the best match in a global-search chat preview. */

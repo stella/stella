@@ -8384,14 +8384,6 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/document-reviews/finding-decision-event.test.ts": {
-      "peakMb": 216,
-      "baselineMb": 216,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-3"
-      }
-    },
     "src/handlers/document-reviews/finding-decisions.postgres.test.ts": {
       "peakMb": 184,
       "baselineMb": 184,
@@ -18792,7 +18784,7 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/corpus-index-projection-margin-stop.db.test.ts": {
+    "src/lib/legal-search/corpus-index-projection-long-commit-window.db.test.ts": {
       "peakMb": 765,
       "baselineMb": 184,
       "source": {
@@ -22760,14 +22752,6 @@
         "job": "measure-1"
       }
     },
-    "src/lib/search/index-global-case-law.db.test.ts": {
-      "peakMb": 700,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
-      }
-    },
     "src/lib/search/index-global-filter-only.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
@@ -26670,14 +26654,6 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-1"
-      }
-    },
-    "src/tests/query-perf/case-law-search-fixture.test.ts": {
-      "peakMb": 179,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
       }
     },
     "src/tests/query-perf/coverage.test.ts": {

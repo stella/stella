@@ -268,8 +268,12 @@
         "tokens": 36611
       },
       {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 36883
+      },
+      {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
-        "tokens": 36907
+        "tokens": 37179
       }
     ],
     "google/default": [
@@ -454,8 +458,12 @@
         "tokens": 37353
       },
       {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37637
+      },
+      {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
-        "tokens": 37656
+        "tokens": 37940
       }
     ],
     "mistral/extended": [
@@ -520,8 +528,12 @@
         "tokens": 37879
       },
       {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38163
+      },
+      {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
-        "tokens": 38183
+        "tokens": 38467
       }
     ],
     "openai/default": [
@@ -586,8 +598,12 @@
         "tokens": 36929
       },
       {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37213
+      },
+      {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
-        "tokens": 37232
+        "tokens": 37516
       }
     ],
     "openai/extended": [
@@ -652,8 +668,12 @@
         "tokens": 37445
       },
       {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37728
+      },
+      {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
-        "tokens": 37748
+        "tokens": 38031
       }
     ],
     "openrouter-anthropic/default": [
@@ -718,8 +738,12 @@
         "tokens": 37340
       },
       {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37625
+      },
+      {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
-        "tokens": 37640
+        "tokens": 37925
       }
     ],
     "openrouter-anthropic/extended": [
@@ -784,8 +808,12 @@
         "tokens": 37852
       },
       {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38136
+      },
+      {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
-        "tokens": 38152
+        "tokens": 38436
       }
     ],
     "openrouter/default": [
@@ -850,8 +878,12 @@
         "tokens": 37340
       },
       {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37625
+      },
+      {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
-        "tokens": 37640
+        "tokens": 37925
       }
     ],
     "openrouter/extended": [
@@ -916,8 +948,12 @@
         "tokens": 37852
       },
       {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38136
+      },
+      {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
-        "tokens": 38152
+        "tokens": 38436
       }
     ]
   },

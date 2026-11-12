@@ -88,6 +88,21 @@ type VerdictChipProps = {
 /** The verdict chip of one claim, muted when the record is silent. */
 export const VerdictChip = ({ state, claim }: VerdictChipProps) => {
   const t = useTranslations();
+  if (state === "nocover" && !isRecordSilent(state, claim)) {
+    // What a gap is, on hover, so the panel keeps to the next step.
+    return (
+      <Tooltip>
+        <TooltipTrigger render={<span />}>
+          <StateChip state={state} />
+        </TooltipTrigger>
+        <TooltipPopup className="max-w-72">
+          {t.rich("avt.claimDetail.basis.gap", {
+            strong: (chunks) => <b>{chunks}</b>,
+          })}
+        </TooltipPopup>
+      </Tooltip>
+    );
+  }
   if (!isRecordSilent(state, claim)) {
     return <StateChip state={state} />;
   }
@@ -127,16 +142,23 @@ export const QualifierChips = ({ claim }: { claim: QualifiedClaim }) => {
   });
 };
 
-/** Every qualifier with what it says, for the claim detail. */
+/**
+ * What the grader said about this claim, for the claim detail. A qualifier
+ * the system sets by rule says only its rule, which its chip's tooltip
+ * already holds, so it gets no line of its own.
+ */
 export const QualifierNotes = ({ claim }: { claim: QualifiedClaim }) => {
   const t = useTranslations();
   const explain = useQualifierExplanation();
-  if (claim.qualifiers.length === 0) {
+  const graded = claim.qualifiers.filter(
+    (qualifier) => qualifier.explanation !== null,
+  );
+  if (graded.length === 0) {
     return null;
   }
   return (
     <ul aria-label={t("avt.qualifiers.heading")} className="space-y-1.5">
-      {claim.qualifiers.map((qualifier) => {
+      {graded.map((qualifier) => {
         const meta = QUALIFIER_META[qualifier.kind];
         return (
           <li

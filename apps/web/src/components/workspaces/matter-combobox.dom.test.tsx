@@ -372,7 +372,7 @@ describe("matter combobox", () => {
     await openList(input);
 
     await testing.waitFor(() =>
-      expect(ui.getAllByRole("option")).toHaveLength(2),
+      expect(ui.getAllByRole("option").length).toBe(2),
     );
     expect(ui.queryByText(messages.common.noResults)).toBeNull();
   });

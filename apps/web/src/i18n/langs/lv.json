@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Slēdziens ir skaidrs, taču viena saistītā fakta interpretācija ir apstrīdēta; pirms apstiprināšanas pārskatiet to.",
       "contradicted": "Reģistrs neatbilst šim apgalvojumam. Pirms slēdziena apstiprināšanas tas jāizvērtē cilvēkam.",
-      "nocover": "Neviens enkurfakts neattiecas uz šo apgalvojumu, tāpēc nav nekā, pret ko to pārbaudīt. Apstiprināšana nav obligāta.",
+      "nocover": "Neviens saraksta fakts vēl neattiecas uz šo apgalvojumu.",
       "notverifiable": "Atlikts kā nepārbaudāms; apstiprināšana nav obligāta. Ja apgalvojumu patiesībā var pārbaudīt, atveriet to vēlreiz tālāk.",
       "recordconflict": "Divi pierādījumi reģistrā ir pretrunā. Iepriekš izlemiet, kurš ir noteicošais, vai nododiet jautājumu pierādījumu komandai; rīks neizvēlēsies jūsu vietā.",
       "restsOnHeld": "Fakts, uz kuru balstās šis slēdziens, ir aizturēts pārskatīšanai; apstipriniet, ka slēdziens ir spēkā arī bez tā, vai pārbaudiet apgalvojumu vēlreiz, kad fakts būs noskaidrots.",
@@ -381,6 +381,30 @@
         "label": "Bez avota"
       }
     },
+    "gap": {
+      "addFact": "Pievienot faktu no dokumenta",
+      "addFactFailed": "Faktu neizdevās pievienot",
+      "factOffList": "Fakts, kura sarakstā vairs nav",
+      "linkFact": "Sasaistīt faktu",
+      "linkFailed": "Faktu neizdevās sasaistīt",
+      "linked": "Sasaistītie fakti",
+      "linkedMark": "Saistīts",
+      "linksChanged": "Saites ir mainījušās kopš pēdējās pārbaudes.",
+      "noFacts": "Neviens saraksta fakts neatbilst.",
+      "recheck": "Pārbaudīt vēlreiz",
+      "recheckFailed": "Apgalvojumu neizdevās pārbaudīt vēlreiz",
+      "searchFacts": "Meklēt saraksta faktos",
+      "sheet": {
+        "passage": "Fragments",
+        "passageHint": "Dokumenta vārdi, kas pierāda faktu.",
+        "statementRequired": "Uzrakstiet faktu.",
+        "statementTooLong": "Fakts var būt ne garāks par {limit} rakstzīmēm.",
+        "submit": "Pievienot un pārbaudīt vēlreiz",
+        "title": "Pievienot faktu no dokumenta"
+      },
+      "showNextSteps": "Rādīt nākamos soļus",
+      "unlink": "Atsaistīt: {fact}"
+    },
     "guidance": {
       "escalate": "Nodot tālāk",
       "manualJudgement": "Cilvēka lēmums",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Pieņemts kā standarta",
         "conflictReopened": "Pretrunas atrisinājums atsaukts",
         "escalated": "Nodots pierādījumu komandai",
+        "factLinked": "Fakts sasaistīts",
+        "factUnlinked": "Fakts atsaistīts",
         "governed": "Izvēlēts noteicošais ieraksts",
         "noteCleared": "Piezīme noņemta",
         "noteSaved": "Piezīme saglabāta",
         "overridden": "Slēdziens mainīts",
         "overrideWithdrawn": "Slēdziena maiņa atsaukta",
+        "rechecked": "Apgalvojums pārbaudīts vēlreiz",
         "reopened": "Atvērts vēlreiz kā pārbaudāms apgalvojums",
         "statusCleared": "Pārskatīšanas statuss noņemts",
         "statusDisputed": "Atzīmēts kā apstrīdēts",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Bijušais dalībnieks",
       "kinds": {
+        "factLink": "Faktu sasaistes",
         "override": "Mainīti slēdzieni",
+        "recheck": "Atkārtotas pārbaudes",
         "recordConflict": "Pretrunu atrisinājumi",
         "reopen": "Atvēršanas vēlreiz",
         "status": "Statusa izmaiņas"
@@ -461,6 +490,11 @@
       "unresolveConflict": "Kāpēc atsaukt šo atrisinājumu?",
       "withdrawOverride": "Kāpēc atgriezties pie rīka slēdziena?"
     },
+    "recheck": {
+      "currentVerdict": "Slēdziens pēc atkārtotas pārbaudes",
+      "runVerdict": "Pārbaudes slēdziens",
+      "summary": "Pārbaudīts vēlreiz {checkedAt}, izmantojot {count, plural, zero {# faktu} one {# faktu} other {# faktus}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Apstrīdēts} needsEvidence {Vajag pierādījumus} other {{origin, select, bulk {Pieņemts kā standarta} other {Pārskatīts}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "Nav saglabāts",
       "failedTitle": "Jūsu izmaiņas netika saglabātas"
     },
-    "sourceMediumTooltip": "Avota nesējs ir neitrāls raksturojums. Tas pats par sevi nemazina ticamību.",
     "states": {
       "contradicted": {
         "chip": "Pretrunā",
@@ -2635,6 +2668,7 @@
     "queued": "Rindā",
     "reason": "Iemesls",
     "recommended": "Ieteiktie",
+    "reconnect": "Pievienot vēlreiz",
     "reconnecting": "Atkārtota savienošana…",
     "reference": "Atsauce",
     "refresh": "Atsvaidzināt",
@@ -3284,6 +3318,14 @@
       "organizationMemberLimitReached": "Šī organizācija ir sasniegusi dalībnieku limitu.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
+      "sharepointAccessDenied": "Microsoft liedza piekļuvi šai vietnei, bibliotēkai vai failam.",
+      "sharepointFileTooLarge": "Šis fails ir pārāk liels, lai to importētu.",
+      "sharepointInvalidCursor": "Saraksts pārlūkošanas laikā mainījās. Atveriet mapi vēlreiz.",
+      "sharepointNotAFile": "Importēt var tikai failus, nevis mapes vai piezīmju grāmatiņas.",
+      "sharepointNotConnected": "Lai izmantotu SharePoint un OneDrive, pievienojiet savu Microsoft kontu.",
+      "sharepointNotFound": "Šīs vietnes, bibliotēkas vai faila vairs nav, vai arī tas netiek koplietots ar jums.",
+      "sharepointReconnectRequired": "Jūsu Microsoft pieslēgšanās termiņš ir beidzies. Pievienojiet SharePoint un OneDrive vēlreiz.",
+      "sharepointThrottled": "Microsoft ierobežo pieprasījumus. Drīzumā mēģiniet vēlreiz.",
       "skillSourceUnreachable": "Prasmes avotu neizdevās ielādēt. Pārbaudiet, vai saite ved uz publisku GitHub repozitoriju, vai mēģiniet vēlreiz vēlāk.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
       "usageLimitExceeded": "Sasniegts lietošanas limits.",
@@ -4512,7 +4554,6 @@
       "otherTitle": "Citas integrācijas",
       "probe": "Pārbaudīt",
       "recommendedFor": "Ieteicams: {jurisdictions}",
-      "reconnect": "Pievienot vēlreiz",
       "saveToken": "Saglabāt tokenu",
       "tokenHelp": "Kā iegūt tokenu",
       "tokenLabel": "Bearer tokens",
@@ -5396,8 +5437,6 @@
   "search": {
     "aiRefine": "Uzlabot vaicājumu ar AI",
     "caseLawEmptyState": "Sāciet rakstīt, lai meklētu tiesu nolēmumus.",
-    "caseLawMatchingDecisions": "{count, plural, zero {# atbilstošu nolēmumu} one {# atbilstošs nolēmums} other {# atbilstoši nolēmumi}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ atbilstošu nolēmumu} one {#+ atbilstošs nolēmums} other {#+ atbilstoši nolēmumi}}",
     "chatCoveragePartial": "Ne visas tērzēšanas sarunas tika pārmeklētas pilnībā.",
     "continueInChat": "Turpināt tērzēšanā",
     "dateFrom": "No",
@@ -5934,6 +5973,63 @@
       "usageUnitsThisPeriod": "Šī perioda lietojuma vienības"
     }
   },
+  "sharepoint": {
+    "admin": {
+      "description": "Dalībnieki pievieno savu Microsoft kontu un importē failus lietās. stella nolasa tikai to, ko katrs dalībnieks var atvērt pakalpojumā Microsoft 365.",
+      "disableConfirm": "Izslēgt",
+      "disableDescription": "Visu dalībnieku Microsoft savienojums tiks noņemts, un viņu saglabātā pieslēgšanās dzēsta. Jau importētie dokumenti paliks savās lietās. Ja šo funkciju ieslēgsiet atkal, dalībniekiem būs jāpievienojas vēlreiz.",
+      "disableInputLabel": "Ievadiet {confirmation}, lai izslēgtu",
+      "disableTitle": "Izslēgt SharePoint un OneDrive?",
+      "toggleLabel": "Atļaut SharePoint un OneDrive"
+    },
+    "askAdmin": "Jūsu organizācijai izslēgts. Lūdziet administratoram to ieslēgt.",
+    "connectFailed": "Neizdevās pievienot SharePoint un OneDrive",
+    "connected": "SharePoint un OneDrive pievienoti",
+    "description": "Importējiet failus no SharePoint un OneDrive lietās.",
+    "disconnectDescription": "Jūsu Microsoft pieslēgšanās tiks noņemta no stella. Jau importētie dokumenti paliks savās lietās.",
+    "disconnectTitle": "Atvienot SharePoint un OneDrive?",
+    "disconnected": "SharePoint un OneDrive atvienoti",
+    "import": {
+      "alreadyCurrent": "{count, plural, zero {# failu jau bija atjaunināti.} one {# fails jau bija atjaunināts.} other {# faili jau bija atjaunināti.}}",
+      "created": "Importēts",
+      "done": "Faili importēti no SharePoint vai OneDrive",
+      "failedReason": "Failu neizdevās nokopēt. Mēģiniet vēlreiz vēlāk.",
+      "partial": "Neizdevās importēt {failed, number} no {total, plural, zero {# failu} one {# faila} other {# failu}}.",
+      "progress": "Importēti {done, number} no {total, number}",
+      "unchanged": "Jau aktuāls",
+      "unconfirmed": "Nav apstiprināts",
+      "unconfirmedCount": "{count, plural, zero {# failu nav apstiprināts; importējiet tos vēlreiz.} one {# fails nav apstiprināts; importējiet to vēlreiz.} other {# faili nav apstiprināti; importējiet tos vēlreiz.}}",
+      "unconfirmedReason": "Importēšana apstājās, pirms šis fails tika apstiprināts. Importējiet to vēlreiz.",
+      "versioned": "Jauna versija"
+    },
+    "oauthReasons": {
+      "consentDenied": "Microsoft pieslēgšanās tika atcelta, vai piekļuve netika piešķirta.",
+      "expired": "Pieslēgšanās ilga pārāk ilgi. Pievienojieties vēlreiz.",
+      "notConfigured": "Šī stella instalācija nav iestatīta Microsoft pieslēgšanās izmantošanai. Sazinieties ar savu administratoru.",
+      "notEnabled": "Jūsu organizācija nav ieslēgusi SharePoint un OneDrive.",
+      "tryAgain": "Microsoft pieslēgšanās netika pabeigta. Pievienojieties vēlreiz.",
+      "userMismatch": "Pieslēgšanās tika sākta no cita konta vai citas organizācijas. Pievienojieties vēlreiz no šī."
+    },
+    "picker": {
+      "description": "Atlasiet failus, ko nokopēt uz šo lietu (ne vairāk kā {max, number}).",
+      "emptyFolder": "Šī mape ir tukša.",
+      "menuItem": "No SharePoint vai OneDrive",
+      "myOneDrive": "Mans OneDrive",
+      "noFollowedSites": "Meklējiet vietni vai atveriet Mans OneDrive.",
+      "noLibraries": "Šeit nav dokumentu bibliotēku.",
+      "notConnected": "Lai pārlūkotu SharePoint un OneDrive, pievienojiet savu Microsoft kontu.",
+      "notImportable": "Nevar importēt",
+      "reconnectRequired": "Jūsu Microsoft pieslēgšanās termiņš ir beidzies. Lai turpinātu pārlūkošanu, pievienojieties vēlreiz.",
+      "searchSites": "Meklēt vietnes",
+      "selectedCount": "{count, plural, =0 {Nav atlasīts neviens fails} zero {Atlasīti # failu} one {Atlasīts # fails} other {Atlasīti # faili}}",
+      "selectionLimit": "Maksimālais failu skaits, ko var importēt vienlaikus: {max, number}.",
+      "sites": "Vietnes",
+      "throttledFor": "Microsoft ierobežo pieprasījumus. Mēģiniet vēlreiz pēc {seconds, plural, zero {# sekundēm} one {# sekundes} other {# sekundēm}}.",
+      "title": "Importēt no SharePoint vai OneDrive"
+    },
+    "reconnectRequired": "Pierakstīšanās beidzās",
+    "title": "SharePoint un OneDrive"
+  },
   "skillHistory": {
     "acceptStale": "Pieņemt un pārrakstīt jaunākos labojumus",
     "backToCurrent": "Atpakaļ uz pašreizējo versiju",
@@ -6059,6 +6155,11 @@
     "title": "Tiesību akti",
     "validity": "Spēkā no {from} līdz {to}",
     "versionAppliedInDecision": "Nolēmumā <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> piemērotā redakcija (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, zero {# pievienotu noteikumu} one {# pievienots noteikums} other {# pievienoti noteikumi}}",
+    "versionChangesChanged": "{count, plural, zero {# grozītu noteikumu} one {# grozīts noteikums} other {# grozīti noteikumi}}",
+    "versionChangesNone": "Formulējums nav mainīts",
+    "versionChangesRemoved": "{count, plural, zero {# svītrotu noteikumu} one {# svītrots noteikums} other {# svītroti noteikumi}}",
+    "versionChangesWords": "{inserted, plural, zero {# ievietotu vārdu} one {# ievietots vārds} other {# ievietoti vārdi}}, {deleted, plural, zero {# svītrotu vārdu} one {# svītrots vārds} other {# svītroti vārdi}}",
     "wordingVersionUnknown": "Redakcijas versijas datums nav pieejams"
   },
   "styleSets": {
@@ -6779,6 +6880,7 @@
     "deletedItem": "Izdzēsts: {name}",
     "deletingWorkspace": "Dzēš lietu",
     "documentSwitcher": {
+      "download": "Lejupielādēt šo failu",
       "searchPlaceholder": "Atrast dokumentu…",
       "trigger": "Pārslēgt dokumentu"
     },

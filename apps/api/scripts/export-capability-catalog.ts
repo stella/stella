@@ -228,6 +228,10 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // dedicated read-only scope would understate what it does.
   reports: "stella:matters_write",
   "seller-profiles": "stella:billing_write",
+  // Browse a connected SharePoint or OneDrive account and copy files into a
+  // matter as documents: the copy writes document content, so it takes the
+  // document write consent; the browse reads downgrade to the read scope.
+  sharepoint: "stella:documents_write",
   skills: "stella:skills",
   "style-sets": "stella:templates",
   tasks: "stella:matters_write",
@@ -475,6 +479,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   rates: "FEATURE_TIME_BILLING",
   "saved-time-narratives": "FEATURE_TIME_BILLING",
   "seller-profiles": "FEATURE_TIME_BILLING",
+  sharepoint: "FEATURE_SHAREPOINT",
   "template-packs": "FEATURE_TEMPLATE_PACKS",
   "time-entries": "FEATURE_TIME_BILLING",
   "time-timers": "FEATURE_TIME_BILLING",

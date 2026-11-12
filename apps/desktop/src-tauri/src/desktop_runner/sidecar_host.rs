@@ -114,10 +114,9 @@ pub(crate) trait LocalHarnesses: Send + Sync + 'static {
 pub(crate) struct HostSettings {
   /// The supervisor's settings; `api_origin` is the connecting account's.
   pub(crate) sidecar: SidecarSettings,
-  /// Where each chat's folder is made.
+  /// Where each chat's folder is made, with its checkpoints and cache beside
+  /// it.
   pub(crate) workspaces: PathBuf,
-  /// The package-manager cache every run on this computer shares.
-  pub(crate) package_cache: PathBuf,
   pub(crate) probe_interval: Duration,
 }
 
@@ -856,11 +855,8 @@ impl HarnessHost for SidecarHarnessHost {
       tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "a run's folder could not be made");
       return Err(RejectReason::AtCapacity);
     }
-    let package_cache = &self.shared.settings.package_cache;
-    if let Err(error) = crate::local_store::create_private_dir(package_cache) {
-      tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "the package cache could not be made");
-      return Err(RejectReason::AtCapacity);
-    }
+    // Made with the folder; the one place outside it the run may write.
+    let cache = run_folders::chat_cache(&workspace);
     let credentials = cached.and_then(|cached| cached.credentials);
     let thread_id = start
       .harness_session_id
@@ -885,7 +881,7 @@ impl HarnessHost for SidecarHarnessHost {
       config_dir: installed.config_dir.to_string_lossy().into_owned(),
       launch: credentials.map(|held| held.settings).unwrap_or_default(),
       workspace_dir: workspace.to_string_lossy().into_owned(),
-      cache_dir: package_cache.to_string_lossy().into_owned(),
+      cache_dir: cache.to_string_lossy().into_owned(),
       skill_folders: skill_folders_within(
         SKILL_FOLDER_BUDGET,
         Arc::clone(&self.shared.harnesses),

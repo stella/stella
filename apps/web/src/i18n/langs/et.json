@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Otsus on selge, kuid ühe aluseks oleva fakti tõlgendus on vaidlustatud; vaadake see enne kinnitamist üle.",
       "contradicted": "Register ei toeta seda väidet. Enne otsuse kinnitamist peab inimene selle üle vaatama.",
-      "nocover": "Ükski ankurfakt ei käsitle seda väidet, seega pole seda millegi põhjal kontrollida. Kinnitamine on vabatahtlik.",
+      "nocover": "Ükski loendi fakt ei kata seda väidet veel.",
       "notverifiable": "Kõrvale jäetud kui kontrollimatu; kinnitamine on vabatahtlik. Kui väidet saab tegelikult kontrollida, avage see allpool uuesti.",
       "recordconflict": "Registri kaks tõendit on vastuolus. Otsustage eespool, kumb on aluseks, või edastage asi tõendite töörühmale; tööriist ei vali teie eest.",
       "restsOnHeld": "Fakt, millele see otsus tugineb, on ülevaatuseks peatatud; kinnitage, et otsus kehtib ka ilma selleta, või kontrollige väidet uuesti, kui fakt on selgunud.",
@@ -381,6 +381,30 @@
         "label": "Allikata"
       }
     },
+    "gap": {
+      "addFact": "Lisa fakt dokumendist",
+      "addFactFailed": "Fakti ei saanud lisada",
+      "factOffList": "Fakt, mida loendis enam ei ole",
+      "linkFact": "Seo fakt",
+      "linkFailed": "Fakti ei saanud siduda",
+      "linked": "Seotud faktid",
+      "linkedMark": "Seotud",
+      "linksChanged": "Seosed on viimasest kontrollist saati muutunud.",
+      "noFacts": "Ükski loendi fakt ei vasta.",
+      "recheck": "Kontrolli uuesti",
+      "recheckFailed": "Väidet ei saanud uuesti kontrollida",
+      "searchFacts": "Otsi loendi fakte",
+      "sheet": {
+        "passage": "Lõik",
+        "passageHint": "Dokumendi sõnad, mis fakti tõendavad.",
+        "statementRequired": "Kirjutage fakt.",
+        "statementTooLong": "Fakt võib olla kuni {limit} märki pikk.",
+        "submit": "Lisa ja kontrolli uuesti",
+        "title": "Lisa fakt dokumendist"
+      },
+      "showNextSteps": "Näita järgmisi samme",
+      "unlink": "Tühista seos: {fact}"
+    },
     "guidance": {
       "escalate": "Edasta edasi",
       "manualJudgement": "Inimese otsustus",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Tavapärasena kinnitatud",
         "conflictReopened": "Vastuolu lahendus võetud tagasi",
         "escalated": "Edastatud tõendite töörühmale",
+        "factLinked": "Fakt seotud",
+        "factUnlinked": "Fakti seos tühistatud",
         "governed": "Aluseks olev kirje valitud",
         "noteCleared": "Märkus eemaldatud",
         "noteSaved": "Märkus salvestatud",
         "overridden": "Otsus asendatud",
         "overrideWithdrawn": "Asendus võetud tagasi",
+        "rechecked": "Väide kontrollitud uuesti",
         "reopened": "Uuesti avatud kontrollitava väitena",
         "statusCleared": "Kontrolli olek eemaldatud",
         "statusDisputed": "Märgitud vaidlustatuks",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Endine liige",
       "kinds": {
+        "factLink": "Faktiseosed",
         "override": "Asendatud otsused",
+        "recheck": "Korduskontrollid",
         "recordConflict": "Vastuolude lahendused",
         "reopen": "Uuesti avamised",
         "status": "Oleku muudatused"
@@ -461,6 +490,11 @@
       "unresolveConflict": "Miks see lahendus tagasi võtta?",
       "withdrawOverride": "Miks naasta tööriista otsuse juurde?"
     },
+    "recheck": {
+      "currentVerdict": "Otsus pärast uuesti kontrollimist",
+      "runVerdict": "Kontrollkäigu otsus",
+      "summary": "Kontrollitud uuesti {checkedAt} {count, plural, one {# fakti} other {# fakti}} alusel."
+    },
     "review": {
       "decided": "{status, select, disputed {Vaidlustatud} needsEvidence {Vajab tõendeid} other {{origin, select, bulk {Tavapärasena kinnitatud} other {Kontrollitud}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "Salvestamata",
       "failedTitle": "Teie muudatust ei salvestatud"
     },
-    "sourceMediumTooltip": "Allika kandja on neutraalne kirjeldus ega vähenda iseenesest kindlust.",
     "states": {
       "contradicted": {
         "chip": "Vastuolus",
@@ -2635,6 +2668,7 @@
     "queued": "Ootel",
     "reason": "Põhjus",
     "recommended": "Soovitatud",
+    "reconnect": "Ühenda uuesti",
     "reconnecting": "Taasühendamine…",
     "reference": "Viide",
     "refresh": "Värskenda",
@@ -3284,6 +3318,14 @@
       "organizationMemberLimitReached": "See organisatsioon on jõudnud liikmete piirangu täitumiseni.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",
+      "sharepointAccessDenied": "Microsoft keelas juurdepääsu sellele saidile, teegile või failile.",
+      "sharepointFileTooLarge": "See fail on importimiseks liiga suur.",
+      "sharepointInvalidCursor": "Loend muutus sirvimise ajal. Avage kaust uuesti.",
+      "sharepointNotAFile": "Importida saab ainult faile, mitte kaustu ega märkmikke.",
+      "sharepointNotConnected": "SharePointi ja OneDrive'i kasutamiseks ühendage oma Microsofti konto.",
+      "sharepointNotFound": "See sait, teek või fail ei ole enam olemas või seda ei ole teiega jagatud.",
+      "sharepointReconnectRequired": "Teie Microsofti sisselogimine on aegunud. Ühendage SharePoint ja OneDrive uuesti.",
+      "sharepointThrottled": "Microsoft piirab päringuid. Proovige varsti uuesti.",
       "skillSourceUnreachable": "Oskuse allikat ei saanud laadida. Kontrollige, kas link viitab avalikule GitHubi hoidlale, või proovige hiljem uuesti.",
       "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
       "usageLimitExceeded": "Kasutuslimiit on täis.",
@@ -4512,7 +4554,6 @@
       "otherTitle": "Muud integratsioonid",
       "probe": "Kontrolli",
       "recommendedFor": "Soovitatud: {jurisdictions}",
-      "reconnect": "Ühenda uuesti",
       "saveToken": "Salvesta token",
       "tokenHelp": "Kuidas token hankida",
       "tokenLabel": "Bearer-token",
@@ -5396,8 +5437,6 @@
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
     "caseLawEmptyState": "Alustage tippimist, et otsida kohtulahendeid.",
-    "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
     "chatCoveragePartial": "Kõiki vestlusi ei otsitud täielikult.",
     "continueInChat": "Jätka vestluses",
     "dateFrom": "Alates",
@@ -5934,6 +5973,63 @@
       "usageUnitsThisPeriod": "Selle perioodi kasutusühikud"
     }
   },
+  "sharepoint": {
+    "admin": {
+      "description": "Liikmed ühendavad oma Microsofti konto ja impordivad faile toimikutesse. stella loeb ainult seda, mida iga liige saab Microsoft 365-s avada.",
+      "disableConfirm": "Lülita välja",
+      "disableDescription": "Kõigi liikmete Microsofti ühendus eemaldatakse ja nende salvestatud sisselogimine kustutatakse. Juba imporditud dokumendid jäävad oma toimikutesse. Kui lülitate funktsiooni uuesti sisse, peavad liikmed uuesti ühenduma.",
+      "disableInputLabel": "Väljalülitamiseks sisestage {confirmation}",
+      "disableTitle": "Lülitada SharePoint ja OneDrive välja?",
+      "toggleLabel": "Luba SharePoint ja OneDrive"
+    },
+    "askAdmin": "Teie organisatsioonile välja lülitatud. Paluge administraatoril see sisse lülitada.",
+    "connectFailed": "SharePointi ja OneDrive'i ühendamine ebaõnnestus",
+    "connected": "SharePoint ja OneDrive on ühendatud",
+    "description": "Impordi faile SharePointist ja OneDrive'ist toimikutesse.",
+    "disconnectDescription": "Teie Microsofti sisselogimine eemaldatakse stellast. Juba imporditud dokumendid jäävad oma toimikutesse.",
+    "disconnectTitle": "Katkestada SharePointi ja OneDrive'i ühendus?",
+    "disconnected": "SharePointi ja OneDrive'i ühendus on katkestatud",
+    "import": {
+      "alreadyCurrent": "{count, plural, one {# fail oli juba ajakohane.} other {# faili olid juba ajakohased.}}",
+      "created": "Imporditud",
+      "done": "Failid imporditi SharePointist või OneDrive'ist",
+      "failedReason": "Faili ei õnnestunud kopeerida. Proovige hiljem uuesti.",
+      "partial": "Ei õnnestunud importida {failed, number} faili (kokku {total, plural, one {# fail} other {# faili}}).",
+      "progress": "Imporditud {done, number}/{total, number}",
+      "unchanged": "Juba ajakohane",
+      "unconfirmed": "Kinnitamata",
+      "unconfirmedCount": "{count, plural, one {# fail jäi kinnitamata; importige see uuesti.} other {# faili jäid kinnitamata; importige need uuesti.}}",
+      "unconfirmedReason": "Import peatus enne selle faili kinnitamist. Importige see uuesti.",
+      "versioned": "Uus versioon"
+    },
+    "oauthReasons": {
+      "consentDenied": "Microsofti sisselogimine tühistati või juurdepääsu ei antud.",
+      "expired": "Sisselogimine kestis liiga kaua. Ühendage uuesti.",
+      "notConfigured": "See stella paigaldus ei ole Microsofti sisselogimiseks seadistatud. Võtke ühendust oma administraatoriga.",
+      "notEnabled": "Teie organisatsioon ei ole SharePointi ja OneDrive'i sisse lülitanud.",
+      "tryAgain": "Microsofti sisselogimine ei lõppenud. Ühendage uuesti.",
+      "userMismatch": "Sisselogimine alustati teisest kontost või organisatsioonist. Ühendage uuesti sellest."
+    },
+    "picker": {
+      "description": "Valige kuni {max, number} faili, mis sellesse toimikusse kopeerida.",
+      "emptyFolder": "See kaust on tühi.",
+      "menuItem": "SharePointist või OneDrive'ist",
+      "myOneDrive": "Minu OneDrive",
+      "noFollowedSites": "Otsige saiti või avage Minu OneDrive.",
+      "noLibraries": "Siin ei ole dokumenditeeke.",
+      "notConnected": "SharePointi ja OneDrive'i sirvimiseks ühendage oma Microsofti konto.",
+      "notImportable": "Ei saa importida",
+      "reconnectRequired": "Teie Microsofti sisselogimine on aegunud. Sirvimise jätkamiseks ühendage uuesti.",
+      "searchSites": "Otsi saite",
+      "selectedCount": "{count, plural, =0 {Faile pole valitud} one {# fail valitud} other {# faili valitud}}",
+      "selectionLimit": "Korraga saab importida kuni {max, number} faili.",
+      "sites": "Saidid",
+      "throttledFor": "Microsoft piirab päringuid. Proovige uuesti {seconds, plural, one {# sekundi} other {# sekundi}} pärast.",
+      "title": "Impordi SharePointist või OneDrive'ist"
+    },
+    "reconnectRequired": "Sisselogimine aegus",
+    "title": "SharePoint ja OneDrive"
+  },
   "skillHistory": {
     "acceptStale": "Võta vastu ja kirjuta uuemad muudatused üle",
     "backToCurrent": "Tagasi praeguse versiooni juurde",
@@ -6059,6 +6155,11 @@
     "title": "Õigusaktid",
     "validity": "Kehtib {from} kuni {to}",
     "versionAppliedInDecision": "Kohtulahendis <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> kohaldatud redaktsioon (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# säte lisatud} other {# sätet lisatud}}",
+    "versionChangesChanged": "{count, plural, one {# säte muudetud} other {# sätet muudetud}}",
+    "versionChangesNone": "Sõnastus muutmata",
+    "versionChangesRemoved": "{count, plural, one {# säte välja jäetud} other {# sätet välja jäetud}}",
+    "versionChangesWords": "{inserted, plural, one {# sõna lisatud} other {# sõna lisatud}}, {deleted, plural, one {# sõna kustutatud} other {# sõna kustutatud}}",
     "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
   },
   "styleSets": {
@@ -6779,6 +6880,7 @@
     "deletedItem": "Kustutatud: {name}",
     "deletingWorkspace": "Toimiku kustutamine",
     "documentSwitcher": {
+      "download": "Laadi see fail alla",
       "searchPlaceholder": "Otsi dokumenti…",
       "trigger": "Vaheta dokumenti"
     },
