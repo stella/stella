@@ -637,9 +637,9 @@ export const measureScheduledJobRun = async ({
     });
   }
   const task =
-    createSchedulerTaskRegistry(
-      noopTask,
-      createCaseLawCoverageRefreshTask({
+    createSchedulerTaskRegistry({
+      reapOwnerlessChatTurns: noopTask,
+      refreshCaseLawCoverage: createCaseLawCoverageRefreshTask({
         compute: computeCaseLawCoverageAnswer,
         createRuntime: (options) =>
           createScriptBackfillRuntime({
@@ -647,7 +647,8 @@ export const measureScheduledJobRun = async ({
             readVerdict: async () => await Promise.resolve(admission),
           }),
       }),
-    ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
+      syncSoftLaw: noopTask,
+    }).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   // The search configuration is cached for 60 s, and the scheduled jobs run
   // minutes apart, so a production run reads it cold. Every measured run does
   // too, instead of depending on what an earlier run left in the cache.

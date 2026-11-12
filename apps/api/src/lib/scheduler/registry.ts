@@ -225,6 +225,7 @@ import {
   REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import { SYNC_SOFT_LAW_TASK } from "@/api/lib/scheduler/tasks/soft-law-sync";
 import {
   REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
   refreshStatuteSitemapShardsTask,
@@ -348,13 +349,25 @@ type SchedulerTaskRegistryOptions = {
   resetReviewOrganization?: SchedulerTask;
 };
 
-const schedulerTasks = (
-  reapOwnerlessChatTurns: SchedulerTask,
-  refreshCaseLawCoverage: SchedulerTask,
-) => ({
+/**
+ * Tasks whose work lives in a handler slice. The composition root builds them,
+ * so scheduler code keeps its dependencies pointing from handlers to lib.
+ */
+type InjectedSchedulerTasks = {
+  reapOwnerlessChatTurns: SchedulerTask;
+  refreshCaseLawCoverage: SchedulerTask;
+  syncSoftLaw: SchedulerTask;
+};
+
+const schedulerTasks = ({
+  reapOwnerlessChatTurns,
+  refreshCaseLawCoverage,
+  syncSoftLaw,
+}: InjectedSchedulerTasks) => ({
   ...SCHEDULER_TASKS,
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
   [REFRESH_CASE_LAW_COVERAGE_TASK]: refreshCaseLawCoverage,
+  [SYNC_SOFT_LAW_TASK]: syncSoftLaw,
 });
 
 export type RegisteredSchedulerTaskName = keyof ReturnType<
@@ -366,18 +379,21 @@ export type RegisteredSchedulerTaskName = keyof ReturnType<
  * persisted rows whose task no build code answers for anymore.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
-  Object.keys(schedulerTasks(noopTask, noopTask)),
+  Object.keys(
+    schedulerTasks({
+      reapOwnerlessChatTurns: noopTask,
+      refreshCaseLawCoverage: noopTask,
+      syncSoftLaw: noopTask,
+    }),
+  ),
 );
 
 export const createSchedulerTaskRegistry = (
-  reapOwnerlessChatTurns: SchedulerTask,
-  refreshCaseLawCoverage: SchedulerTask,
+  injected: InjectedSchedulerTasks,
   options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
-    Object.entries(
-      schedulerTasks(reapOwnerlessChatTurns, refreshCaseLawCoverage),
-    ).map(([name, registered]) => {
+    Object.entries(schedulerTasks(injected)).map(([name, registered]) => {
       const entry =
         name === RESET_REVIEW_ORGANIZATION_TASK
           ? (options.resetReviewOrganization ?? registered)
