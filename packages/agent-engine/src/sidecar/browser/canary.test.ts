@@ -304,7 +304,11 @@ const browse = async (
       : [],
   );
   // What the fake agent noted on this computer about the pages it read.
-  const harnessLog = readFileSync(path.join(root, "fake.log"), "utf-8")
+  const harnessLogFile = path.join(root, "fake.log");
+  // No file when the harness never started; the run's outcome says why.
+  const harnessLog = (
+    existsSync(harnessLogFile) ? readFileSync(harnessLogFile, "utf-8") : ""
+  )
     .split("\n")
     .filter((line) => line !== "")
     .map((line): unknown => JSON.parse(line));
@@ -359,12 +363,21 @@ const ASKED = {
   full_auto: [],
 } as const satisfies Record<DesktopRunnerApprovalMode, readonly string[]>;
 
-const APPROVAL_STEP = /^browser-step-/u;
+const APPROVAL_STEP_PREFIX = "browser-step-";
+
+/** Claude Code offers full auto only where its sandbox runs. */
+const offersMode = (
+  harness: keyof typeof FAKES,
+  approvals: DesktopRunnerApprovalMode,
+) =>
+  approvals !== "full_auto" ||
+  harness === "codex" ||
+  process.platform === "darwin";
 
 describe.each(
   (["codex", "claude-code"] as const).flatMap((harness) =>
-    (["ask", "auto", "full_auto"] as const).map(
-      (approvals) => [harness, approvals] as const,
+    (["ask", "auto", "full_auto"] as const).flatMap((approvals) =>
+      offersMode(harness, approvals) ? [[harness, approvals] as const] : [],
     ),
   ),
 )("a local %s run browsing the member's Chrome (%s)", (harness, approvals) => {
@@ -394,7 +407,7 @@ describe.each(
     ).toHaveLength(ASKED[approvals].length);
     expect(
       calls
-        .filter(({ id }) => APPROVAL_STEP.test(id))
+        .filter(({ id }) => id.startsWith(APPROVAL_STEP_PREFIX))
         .map(({ input, name }) => ({ input, name })),
     ).toEqual(
       ASKED[approvals].map((action) => ({
@@ -407,7 +420,7 @@ describe.each(
         .filter(
           ({ id, name }) =>
             name === CHAT_LOCAL_RUN_TOOL_NAMES.browser &&
-            !APPROVAL_STEP.test(id),
+            !id.startsWith(APPROVAL_STEP_PREFIX),
         )
         .map(({ input, name }) => ({ input, name })),
     ).toEqual([
