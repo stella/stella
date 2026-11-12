@@ -5,6 +5,10 @@ import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import {
+  CHAT_LOCAL_RUN_WEB_SEARCH,
+  CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
+} from "@stll/api-contract/chat-run-target";
+import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   type DesktopRunnerApprovalMode,
   knownReasoningEfforts,
@@ -303,6 +307,34 @@ const FIXED_ENV = {
   // Connectors from the claude.ai account are not part of a stella turn.
   ENABLE_CLAUDEAI_MCP_SERVERS: "false",
 } as const;
+
+/** The CLI's web search tool, pre-allowed where the level runs it unasked. */
+const WEB_SEARCH_TOOL = "WebSearch";
+
+/**
+ * The tools that run without the CLI asking. The stella MCP server enforces
+ * its own approvals for writes. Web search follows the permission level:
+ * pre-allowed where the level runs it without asking; at Ask it goes through
+ * the approval request, which carries its query. Fetching a page follows the
+ * permission mode like any other tool.
+ */
+const allowedToolsArgs = (
+  serverName: string,
+  approvals: HarnessRunPolicy["approvals"],
+): string[] => {
+  if (approvals === "plan") {
+    return [];
+  }
+  const searchesUnasked =
+    CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS["claude-code"][approvals] ===
+    CHAT_LOCAL_RUN_WEB_SEARCH.unasked;
+  return [
+    "--allowedTools",
+    [`mcp__${serverName}`, ...(searchesUnasked ? [WEB_SEARCH_TOOL] : [])].join(
+      ",",
+    ),
+  ];
+};
 
 const PROTOCOL_ARGS = [
   "--output-format",
@@ -635,12 +667,10 @@ const turnArgs = (
   ...(skills === null ? [] : ["--plugin-dir", skills.dir]),
   ...NETWORK_ARGS[input.policy.network],
   // The stella MCP server enforces its own approvals for destructive
-  // calls. In plan nothing is allowed ahead: a stella call is asked about
-  // like any other until the member approves the plan, so no write lands
-  // before it (the turn stays this way after approval: asks more, not less).
-  ...(input.policy.approvals === "plan"
-    ? []
-    : ["--allowedTools", `mcp__${input.mcp.serverName}`]),
+  // calls. In plan nothing is allowed ahead: every call is asked about until
+  // the member approves the plan, so nothing lands before it (the turn stays
+  // this way after approval: asks more, not less).
+  ...allowedToolsArgs(input.mcp.serverName, input.policy.approvals),
   target.type === "fresh" ? "--session-id" : "--resume",
   target.sessionId,
   "--model",

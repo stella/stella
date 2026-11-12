@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import path from "node:path";
 import * as v from "valibot";
 
+import { CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS } from "@stll/api-contract/chat-run-target";
+
 import {
   type HarnessRunPolicy,
   HarnessStartError,
@@ -76,6 +78,18 @@ const CODEX_LEVEL = {
 } as const satisfies Record<
   CodexApprovalMode,
   { approvalPolicy: "untrusted" | "on-request"; networkAccess: boolean }
+>;
+/**
+ * Codex's `web_search` setting for each way its search runs: live search of
+ * the web, or none. Codex cannot pause a search for approval, so the
+ * contract's table never asks it to.
+ */
+const WEB_SEARCH_MODE = {
+  unasked: "live",
+  off: "disabled",
+} as const satisfies Record<
+  (typeof CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS)["codex"][HarnessRunPolicy["approvals"]],
+  string
 >;
 /** A dotted config key carries the name, so it must stay a bare TOML key. */
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
@@ -192,6 +206,13 @@ const threadParams = (
     sandbox: SANDBOX_MODE[input.policy.fs],
     developerInstructions: input.instructions,
     config: {
+      // Codex's own web search follows the permission level: live rather
+      // than from its cached index where the level runs it without asking,
+      // and off where a search would need the member's approval.
+      web_search:
+        WEB_SEARCH_MODE[
+          CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS.codex[input.policy.approvals]
+        ],
       "sandbox_workspace_write.network_access":
         NETWORK_ACCESS[input.policy.network] && level.networkAccess,
       // Package caches live outside the workspace; the temp directory and

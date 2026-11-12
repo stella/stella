@@ -1002,6 +1002,100 @@ describe("chat prompt builders", () => {
     }
   });
 
+  test("a turn on the member's computer gets no cloud tool or setting sentence, and says its web search is its own", () => {
+    const noWeb = {
+      docxEditMode: null,
+      templateAuthoring: false,
+      webResearch: false,
+      folioAgentDocTools: false,
+      subagents: true,
+    } as const;
+    const cloud = buildGlobalPromptParts({
+      toolAvailability: noWeb,
+      userContext: null,
+    }).fullPrompt;
+    const local = buildGlobalPromptParts({
+      promptTarget: { type: "local_run", webSearch: "unasked" },
+      toolAvailability: noWeb,
+      userContext: null,
+    }).fullPrompt;
+    // The cloud turn is told about the chat's switch and its own tools.
+    expect(cloud).toContain("Web research is not enabled for this thread");
+    expect(cloud).toContain("execute_typescript");
+    for (const cloudOnly of [
+      "Web research is not enabled",
+      "enable web search",
+      "web_search",
+      "fetch_url",
+      "execute_typescript",
+      "`ask-user`",
+      "load-skill",
+      "spawn_subagents",
+    ]) {
+      expect(local).not.toContain(cloudOnly);
+    }
+    expect(local).toContain("search and read the web with your own web tools.");
+    expect(local).toContain("stella MCP server");
+    // The rules every turn follows stay.
+    expect(local).toContain("TRUTHFULNESS:");
+    expect(local).toContain("DECISION CITATIONS:");
+  });
+
+  test("a turn on the member's computer is told how its web search runs at the permission level", () => {
+    const promptFor = (webSearch: "unasked" | "asks" | "off") =>
+      buildGlobalPromptParts({
+        promptTarget: { type: "local_run", webSearch },
+        userContext: null,
+      }).fullPrompt;
+    const unasked = promptFor("unasked");
+    const asks = promptFor("asks");
+    const off = promptFor("off");
+    expect(unasked).not.toContain("waits for the member's approval");
+    expect(unasked).not.toContain("web search is off");
+    expect(asks).toContain(
+      "each web search waits for the member's approval, which shows them your query",
+    );
+    expect(asks).not.toContain("web search is off");
+    // Off says so plainly, keeps the web reachable, and names the way to turn
+    // search on, so the agent never claims it cannot reach the web at all.
+    expect(off).toContain(
+      "Your own web search is off at the current permission setting",
+    );
+    expect(off).toContain("You can still reach the web");
+    expect(off).toContain("a higher permission setting turns web search on");
+    expect(off).not.toContain(
+      "search and read the web with your own web tools",
+    );
+  });
+
+  test("the prompt text builders keep the turn's target, as their parts do", () => {
+    const localRun = { type: "local_run", webSearch: "asks" } as const;
+    const refRegistry = createChatRefRegistry();
+    const workspace = {
+      entityCount: 1,
+      refRegistry,
+      userContext: null,
+      workspaceId: WORKSPACE_ID,
+      workspaceName: "Matter Alpha",
+    };
+    expect(
+      buildGlobalPrompt({ promptTarget: localRun, userContext: null }),
+    ).toBe(
+      buildGlobalPromptParts({ promptTarget: localRun, userContext: null })
+        .fullPrompt,
+    );
+    expect(
+      buildWorkspacePromptText({ ...workspace, promptTarget: localRun }),
+    ).toBe(
+      buildWorkspacePromptParts({ ...workspace, promptTarget: localRun })
+        .fullPrompt,
+    );
+    // And the target changes the text: a local turn is not told the cloud's.
+    expect(
+      buildGlobalPrompt({ promptTarget: localRun, userContext: null }),
+    ).not.toBe(buildGlobalPrompt({ userContext: null }));
+  });
+
   test("organization instructions keep a single delimited block", () => {
     const prompt = buildGlobalPromptParts({
       organizationAIInstructions:

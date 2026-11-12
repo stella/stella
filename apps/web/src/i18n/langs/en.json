@@ -3314,6 +3314,8 @@
       "organizationMemberLimitReached": "This organization has reached its member limit.",
       "providerKeyRejected": "The provider rejected the API key.",
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.",
+      "runActiveLimitReached": "Your organization has reached its limit of runs in progress. Wait for one to finish, then try again.",
+      "runDailyLimitReached": "Your organization has reached its daily run limit. Try again after midnight (Europe/Prague).",
       "sharepointAccessDenied": "Microsoft denied access to this site, library or file.",
       "sharepointFileTooLarge": "This file is too large to import.",
       "sharepointInvalidCursor": "The list changed while you were browsing. Open the folder again.",
@@ -3329,8 +3331,6 @@
       "validationRequired": "A required field is empty.",
       "validationTooLong": "Too long: use at most {limit, number} characters.",
       "validationTooShort": "Too short: use at least {limit, number} characters.",
-      "verificationActiveLimitReached": "Your organization has reached its active verification limit. Wait for a verification to finish, then try again.",
-      "verificationDailyLimitReached": "Your organization has reached its daily verification limit. Try again after midnight (Europe/Prague).",
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version."
     },
     "failedToAcceptInvitation": "Failed to accept invitation",
