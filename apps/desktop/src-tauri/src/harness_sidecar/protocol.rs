@@ -18,7 +18,7 @@ use crate::runner_protocol::{
   RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 4;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 5;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.

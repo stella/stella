@@ -44,7 +44,10 @@ import {
  *   is reported in `harness.process` before it is asked anything, and is
  *   used only after `harness.process_granted`. The report is sent again
  *   whenever a connection resumes a run whose process still runs.
- * - Unknown fields are ignored (objects strip them). Unknown message types and
+ * - Unknown fields are ignored (objects strip them), except in `run.start`:
+ *   its fields set what a run may read, write and reach, so one this holder
+ *   does not know is refused rather than dropped, and the run never starts
+ *   with fewer limits than the desktop sent. Unknown message types and
  *   closed values are rejected; the sidecar answers each rejected line with a
  *   `rejected` message naming why.
  * - Run ids, approval request ids, decisions, outcomes and policies use the
@@ -56,7 +59,7 @@ import {
  * `protocol.fixtures.json` holds valid and rejected examples of every message;
  * the desktop's serde types round-trip the same file.
  */
-export const SIDECAR_PROTOCOL = 4;
+export const SIDECAR_PROTOCOL = 5;
 
 /**
  * Largest line either side writes or accepts, in UTF-8 bytes. A `run.start`
@@ -302,7 +305,7 @@ export const sidecarHostMessageSchema = v.variant("type", [
     requestId: requestIdSchema,
     ...harnessLaunchEntries,
   }),
-  v.object({
+  v.strictObject({
     type: v.literal(SIDECAR_HOST_MESSAGE.runStart),
     runId: runIdSchema,
     /** The stella thread the run's chunks are stamped with. */
