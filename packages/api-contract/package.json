@@ -140,6 +140,7 @@
     "./entity-options": "./src/entity-options.ts",
     "./folio-collab": "./src/folio-collab.ts",
     "./legal-reader-annotations": "./src/legal-reader-annotations.ts",
+    "./verification-scope": "./src/verification-scope.ts",
     "./pdf-mark-placement": "./src/pdf-mark-placement.ts",
     "./file-download-renditions": "./src/file-download-renditions.ts",
     "./marked-pdf-export": "./src/marked-pdf-export.ts",
