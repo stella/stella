@@ -180,8 +180,11 @@ export const ENUM_COLUMN_ROLES = {
     interaction_type: ATTRIBUTE,
     interruption_reason: ATTRIBUTE,
   },
+  // Any recorded decision may replace another (a conflict later waived); the
+  // decision path still moves it through the transition owner, with a
+  // revision in the predicate.
   conflict_checks: {
-    decision: LIFECYCLE,
+    decision: ATTRIBUTE,
     outcome: ATTRIBUTE,
   },
   contact_relationships: {

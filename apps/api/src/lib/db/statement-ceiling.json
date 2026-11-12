@@ -4,7 +4,7 @@
   "worker": {},
   "scheduler": {
     "reviewOrganization.reset": {
-      "threshold": 966,
+      "threshold": 967,
       "reason": "The complete canonical table sweep, fixture seeding and audit queries plus transaction round trips in the real registered reset tests. Post-commit search flushes the reseed starts without awaiting run outside the task's counter and are not part of this count."
     }
   }
