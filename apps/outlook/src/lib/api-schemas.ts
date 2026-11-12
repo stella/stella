@@ -6,6 +6,7 @@
 //   POST /v1/uploads/:workspaceId/presign             apps/api/src/handlers/uploads/create.ts
 //   POST /v1/uploads/:workspaceId/:uploadId/finalize  apps/api/src/handlers/uploads/update.ts
 //   GET  /v1/entities/:workspaceId/entity/:entityId   apps/api/src/handlers/entities/get.ts
+//   POST /v1/ai/ask-email                            apps/api/src/handlers/ai/ask-email.ts
 
 import * as v from "valibot";
 
@@ -56,6 +57,26 @@ const entityResponseSchema = v.object({
     }),
   ),
 });
+
+const askEmailResponseSchema = v.object({
+  answer: v.string(),
+  sources: v.array(
+    v.object({
+      entityId: v.string(),
+      fieldId: nullableString,
+      /** The `[n]` the answer cites this document by. */
+      number: v.number(),
+      title: v.string(),
+      workspaceId: v.string(),
+    }),
+  ),
+});
+
+type AskEmailResponse = v.InferOutput<typeof askEmailResponseSchema>;
+export type AskEmailSource = AskEmailResponse["sources"][number];
+
+export const parseAskEmailResponse = (input: unknown) =>
+  v.safeParse(askEmailResponseSchema, input);
 
 export const parseWorkspacesResponse = (input: unknown) =>
   v.safeParse(workspacesResponseSchema, input);

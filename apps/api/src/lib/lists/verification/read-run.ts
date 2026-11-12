@@ -39,7 +39,9 @@ import {
   gradedClaimType,
   VERIFICATION_LIMITS,
 } from "@/api/lib/lists/verification/contract";
+import { verificationBlockId } from "@/api/lib/lists/verification/document-text";
 import { suggestedGoverningFactId } from "@/api/lib/lists/verification/governing-suggestion";
+import { scopedBlockContext } from "@/api/lib/lists/verification/paragraph-scope";
 import {
   claimQualifiers,
   restingFactIds,
@@ -744,6 +746,7 @@ export const readVerificationRun = async ({
     fileFieldId: run.fileFieldId,
     entityVersionId: run.entityVersionId,
     evidence: run.evidence,
+    scope: run.scope,
     // How each pinned fact stands on the list now: what the computed
     // qualifiers read, so a reader shows the same footing they state.
     factStandings: [...standings].map(([factEntityId, standing]) => ({
@@ -848,8 +851,9 @@ type ReadRecheckTargetArgs = ReadVerificationRunArgs & {
 /**
  * What re-checking one claim reads: the claim as written, the facts its run
  * pinned, the run's document version, and the text of the block the claim
- * sits in (the grader reads it for the claim's meaning). `null` when the
- * workspace holds no such claim.
+ * sits in, cut to the run's paragraph range as the run's grading read it
+ * (the grader reads it for the claim's meaning). `null` when the workspace
+ * holds no such claim.
  */
 export const readRecheckTarget = async ({
   tx,
@@ -868,6 +872,7 @@ export const readRecheckTarget = async ({
         },
         evidence: legalListVerificationRuns.evidence,
         entityVersionId: legalListVerificationRuns.entityVersionId,
+        scope: legalListVerificationRuns.scope,
       })
       .from(legalListClaims)
       .innerJoin(
@@ -911,9 +916,17 @@ export const readRecheckTarget = async ({
       )
       .limit(1)
   ).at(0);
+  const { scope, ...target } = row;
   return {
-    ...row,
-    blockText: block?.text ?? panic("A claim's block is missing from its run"),
+    ...target,
+    context: scopedBlockContext(
+      {
+        id: verificationBlockId(anchor),
+        text: block?.text ?? panic("A claim's block is missing from its run"),
+      },
+      scope,
+      anchor,
+    ),
   };
 };
 

@@ -340,19 +340,27 @@ const messageActionsThreadRef = (
  *  thread re-renders on every streamed chunk, while the line only changes
  *  with the running assistant message. */
 const ActiveTurnStatus = memo(
-  ({ assistant }: { assistant: ChatUIMessage | undefined }) => {
+  ({
+    assistant,
+    sentAt,
+  }: {
+    assistant: ChatUIMessage | undefined;
+    sentAt: number | null | undefined;
+  }) => {
     const t = useTranslations();
+    const turnSentAt = sentAt ?? null;
     return (
       <ChatTurnStatus
         turn={
           assistant === undefined
-            ? { state: "submitted", phase: null }
+            ? { state: "submitted", phase: null, sentAt: turnSentAt }
             : {
                 state: "streaming",
                 phase: turnPhaseFromParts(assistant.parts, (name) =>
                   t(getChatToolTitleKey(name)),
                 ),
                 timing: assistant.metadata?.turnTiming,
+                sentAt: turnSentAt,
               }
         }
       />
@@ -420,6 +428,7 @@ export const ChatThreadMessages = ({
   showToolCalls,
   stickyUserMessages = false,
   computerWait = null,
+  turnSentAt,
   newestLocalTurn,
   queuedMessages,
   queuedMessageActions,
@@ -644,7 +653,7 @@ export const ChatThreadMessages = ({
           const active = generationActive && turnIndex === turns.length - 1;
           const status =
             active && computerWait === null ? (
-              <ActiveTurnStatus assistant={assistant} />
+              <ActiveTurnStatus assistant={assistant} sentAt={turnSentAt} />
             ) : null;
           if (turn.type === "orphan") {
             return (
@@ -1596,6 +1605,9 @@ type ChatThreadMessagesProps = {
    *  run up, or to come back); the turn shows the wait in place of its live
    *  status. */
   computerWait?: ChatLocalRunComputerWait | null | undefined;
+  /** When this page sent the running turn's message (`performance.now()`);
+   *  its live status counts from it. `null` for a turn the page joined. */
+  turnSentAt?: number | null | undefined;
   /**
    * The newest turn of a chat that runs on the member's computer: the
    * message that answered it offers to undo its file changes.

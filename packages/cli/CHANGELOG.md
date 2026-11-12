@@ -1,5 +1,13 @@
 # @stll/cli
 
+## 6.11.1
+
+### Patch Changes
+
+- [#8352](https://github.com/stella/stella/pull/8352) [`f4683ca`](https://github.com/stella/stella/commit/f4683ca55ff4b4d3e000845611da901904ae35ff) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills.resources.create` and `skills.resources.update` accept resource files up to 2,000,000 characters, up from 100,000. `skills.resources.upload` rejects a file whose text exceeds that limit instead of truncating it.
+
+- [#8340](https://github.com/stella/stella/pull/8340) [`bb5330e`](https://github.com/stella/stella/commit/bb5330e5f026aa20fe223b9cc5450d482991d5c0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.create` takes `paragraphs` (`82-136`) to check only that range of the document's paragraphs, by the numbers the document prints on them; a range the document does not have is refused. Runs report their `scope`.
+
 ## 6.11.0
 
 ### Minor Changes

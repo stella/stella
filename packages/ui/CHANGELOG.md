@@ -1,5 +1,17 @@
 # @stll/ui
 
+## 0.71.0
+
+### Minor Changes
+
+- [#8366](https://github.com/stella/stella/pull/8366) [`7ac6369`](https://github.com/stella/stella/commit/7ac63690af36c69a3e80e14ebf738a911fbb578d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ButtonTextRun` takes `variant="plain"` for a run of prose whose text mark draws its own line; the default `link` variant is unchanged.
+
+### Patch Changes
+
+- [#8367](https://github.com/stella/stella/pull/8367) [`64b1a13`](https://github.com/stella/stella/commit/64b1a130fc710feaeb068e9f971a035b237b7eb0) Thanks [@shanehobson](https://github.com/shanehobson)! - `HorizontalScroller` places its previous and next arrows beside the row instead of on top of it, so an arrow no longer covers an item. An arrow that cannot scroll takes no room.
+
+- [#8348](https://github.com/stella/stella/pull/8348) [`7e56257`](https://github.com/stella/stella/commit/7e5625775367ae55b8719fe9a7dabbd79edc9688) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `IdentityText` opens the full name beside the clipped one instead of above it, so the popup never covers the row above in a list.
+
 ## 0.70.0
 
 ### Minor Changes

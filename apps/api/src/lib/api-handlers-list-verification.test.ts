@@ -131,6 +131,7 @@ describe("verification handler access admission", () => {
       entityVersionId: createSafeId<"entityVersion">(),
       contentSha256: "a".repeat(64),
       evidence: { listId: createSafeId<"legalList">(), facts: [] },
+      scope: { kind: "whole" },
       status: "completed",
       errorCode: null,
       requestedBy: "user_a",

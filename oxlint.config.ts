@@ -686,6 +686,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-dom-node-poll-assertion.fixture.tsx", [
     "no-dom-node-poll-assertion/no-dom-node-poll-assertion",
   ]),
+  fixtureRuleOverride("text-mark-not-in-button.fixture.tsx", [
+    "text-mark-not-in-button/text-mark-not-in-button",
+  ]),
   fixtureRuleOverride("no-secret-in-log-sink.fixture.ts", [
     "no-secret-in-log-sink/no-secret-in-log-sink",
   ]),
@@ -2160,6 +2163,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
+    "./.oxlint-plugins/mobile-window-overlay-owner.ts",
     "./.oxlint-plugins/tooltip-provider-owner.ts",
     "./.oxlint-plugins/copy-feedback-owner.ts",
     "./.oxlint-plugins/sql-client-owner.ts",
@@ -2345,6 +2349,7 @@ const config = defineConfig({
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/no-dom-node-poll-assertion.ts",
+    "./.oxlint-plugins/text-mark-not-in-button.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
     "./.oxlint-plugins/require-polite-publisher-fetch.ts",
@@ -3027,6 +3032,16 @@ const config = defineConfig({
           "error",
           { allowedColumnExpressions: ["table.metadata"] },
         ],
+      },
+    },
+    {
+      // Exercise mobile-window-overlay-owner against its regression fixture;
+      // the rule is otherwise scoped to apps/mobile/src.
+      files: [
+        ".oxlint-plugins/__fixtures__/mobile-window-overlay-owner.fixture.tsx",
+      ],
+      rules: {
+        "mobile-window-overlay-owner/mobile-window-overlay-owner": "error",
       },
     },
     {
@@ -4588,6 +4603,19 @@ const config = defineConfig({
       },
     },
     {
+      // A text mark is prose; a Button is one atomic box that would lift a
+      // mark crossing a line out of the paragraph's reading order. Clickable
+      // prose is ButtonTextRun.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/text-mark-not-in-button.fixture.tsx",
+      ],
+      rules: {
+        "text-mark-not-in-button/text-mark-not-in-button": "error",
+      },
+    },
+    {
       // `react/jsx-key` owns missing and array-produced keys, but does not
       // compare explicit keys on static siblings. Equal sibling identities
       // make React reconciliation ambiguous across navigation and refreshes.
@@ -5056,6 +5084,14 @@ const config = defineConfig({
       ],
       rules: {
         "no-constructed-fetch-object/no-constructed-fetch-object": "error",
+      },
+    },
+    {
+      // Only WindowOverlay reaches the window layer above the native stack;
+      // the owner row is in restricted-import.ts.
+      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      rules: {
+        "mobile-window-overlay-owner/mobile-window-overlay-owner": "error",
       },
     },
     {

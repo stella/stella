@@ -523,6 +523,22 @@
         "vite": "catalog:",
       },
     },
+    "apps/skill-runner": {
+      "name": "@stll/skill-runner",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/api-contract": "workspace:*",
+        "@stll/docx-core": "catalog:",
+        "@stll/fetch": "workspace:*",
+        "@stll/sha256": "workspace:*",
+        "better-result": "catalog:",
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
     "apps/visual-preview": {
       "name": "@stll/visual-preview",
       "version": "0.0.0",
@@ -930,7 +946,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.4.5",
+      "version": "0.4.6",
       "dependencies": {
         "@ag-ui/core": "1.0.3",
         "@stll/ai-catalog": "workspace:^",
@@ -979,7 +995,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "6.11.0",
+      "version": "6.11.1",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1679,7 +1695,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.70.0",
+      "version": "0.71.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1779,7 +1795,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.18.0",
+      "version": "0.18.1",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
@@ -3536,6 +3552,8 @@
     "@stll/scripts": ["@stll/scripts@workspace:packages/scripts"],
 
     "@stll/sha256": ["@stll/sha256@workspace:packages/sha256"],
+
+    "@stll/skill-runner": ["@stll/skill-runner@workspace:apps/skill-runner"],
 
     "@stll/skills": ["@stll/skills@workspace:packages/skills"],
 

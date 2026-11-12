@@ -7,6 +7,10 @@
  * always the document's words, never the model's paraphrase. A quote that
  * cannot be found is shown back once for correction; one that still cannot
  * be found is not a claim this run can point at.
+ *
+ * A run limited to a paragraph range sends only that range's text, so its
+ * cost follows the range; a claim's anchor is still an offset into its whole
+ * block, where the reader shows it.
  */
 
 import { Result } from "better-result";
@@ -32,6 +36,7 @@ import {
   createVerificationCall,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
+import type { VerificationPassage } from "@/api/lib/lists/verification/paragraph-scope";
 
 /** Blocks per extraction call: small enough that the model does not skim. */
 const WINDOW_BLOCKS = 40;
@@ -77,6 +82,16 @@ List claims in the order they appear. Only list claims in the blocks you are ask
 
 type Window = { from: number; to: number };
 
+/** A passage as the model reads it: its block's id, and only its slice. */
+const passageBlock = ({
+  block,
+  start,
+  end,
+}: VerificationPassage): VerificationBlock => ({
+  ...block,
+  text: block.text.slice(start, end),
+});
+
 const windowTask = (
   blocks: readonly VerificationBlock[],
   { from, to }: Window,
@@ -93,22 +108,30 @@ type Grounding =
   | { type: "grounded"; claim: ExtractedClaim }
   | { type: "misquoted"; raw: RawClaim; reason: string };
 
+/**
+ * The quote's place in the passage the model read, as offsets into the
+ * whole block: a scoped run's anchors land where the reader shows the
+ * document, not where its slice began.
+ */
 const ground = (
   raw: RawClaim,
   blockIndexById: ReadonlyMap<string, number>,
-  blocks: readonly VerificationBlock[],
+  passages: readonly VerificationPassage[],
   cursor: Map<string, number>,
 ): Grounding => {
   const blockIndex = blockIndexById.get(raw.blockId);
-  const block = blockIndex === undefined ? undefined : blocks.at(blockIndex);
-  if (blockIndex === undefined || block === undefined) {
+  const passage =
+    blockIndex === undefined ? undefined : passages.at(blockIndex);
+  if (blockIndex === undefined || passage === undefined) {
     return {
       type: "misquoted",
       raw,
       reason: "names a block that does not exist",
     };
   }
-  const span = locateQuote(block.text, raw.quote, cursor.get(block.id) ?? 0);
+  const { block } = passage;
+  const read = block.text.slice(passage.start, passage.end);
+  const span = locateQuote(read, raw.quote, cursor.get(block.id) ?? 0);
   if (span === null) {
     return {
       type: "misquoted",
@@ -117,22 +140,23 @@ const ground = (
     };
   }
   cursor.set(block.id, span.end);
-  const text = block.text
+  const text = read
     .slice(span.start, span.end)
     .slice(0, VERIFICATION_LIMITS.CLAIM_TEXT_MAX);
+  const start = passage.start + span.start;
   const anchor: ClaimAnchor =
     block.source.type === "docx-block"
       ? {
           type: "docx-block",
           blockId: block.source.blockId,
-          start: span.start,
-          end: span.start + text.length,
+          start,
+          end: start + text.length,
         }
       : {
           type: "pdf-page",
           pageNumber: block.source.pageNumber,
-          start: span.start,
-          end: span.start + text.length,
+          start,
+          end: start + text.length,
         };
   return {
     type: "grounded",
@@ -151,13 +175,15 @@ const repairMessage = (
     .join("\n")}\nAnswer with only these claims.`;
 
 type ExtractClaimsArgs = {
-  blocks: readonly VerificationBlock[];
+  /** The text the run reads, in reading order: every block whole, or the
+   *  slices a paragraph scope keeps. A claim's `blockIndex` indexes this. */
+  passages: readonly VerificationPassage[];
   deps: VerificationModelDeps;
 };
 
 /** Every grounded claim in reading order, capped at the per-run maximum. */
 export const extractClaims = async ({
-  blocks,
+  passages,
   deps,
 }: ExtractClaimsArgs): Promise<
   Result<ExtractedClaim[], WorkflowIntegrationError>
@@ -169,6 +195,7 @@ export const extractClaims = async ({
     shared: null,
     outputSchema: extractionSchema,
   });
+  const blocks = passages.map(passageBlock);
   const blockIndexById = new Map(
     blocks.map((block, index) => [block.id, index]),
   );
@@ -193,7 +220,7 @@ export const extractClaims = async ({
             const grounded: ExtractedClaim[] = [];
             const misquoted: { raw: RawClaim; reason: string }[] = [];
             for (const raw of output.value.claims) {
-              const result = ground(raw, blockIndexById, blocks, cursor);
+              const result = ground(raw, blockIndexById, passages, cursor);
               if (result.type === "grounded") {
                 grounded.push(result.claim);
               } else {
@@ -212,7 +239,7 @@ export const extractClaims = async ({
               return repaired;
             }
             for (const raw of repaired.value.claims) {
-              const result = ground(raw, blockIndexById, blocks, cursor);
+              const result = ground(raw, blockIndexById, passages, cursor);
               if (result.type === "grounded") {
                 grounded.push(result.claim);
               }

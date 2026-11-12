@@ -8,6 +8,7 @@ import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   featureEnrolments,
+  legalGraphEdges,
   legalListClaimReviewEvents,
   legalListClaims,
   legalListVerificationBlocks,
@@ -56,6 +57,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
       const userId = toSafeId<"user">("verification_user");
       const runId = createSafeId<"legalListVerificationRun">();
       const claimId = createSafeId<"legalListClaim">();
+      const factId = createSafeId<"entity">();
       const scopedDatabase = markRlsDatabase({
         transaction: async <T>(fn: (tx: Transaction) => Promise<T>) =>
           await db.transaction(fn),
@@ -92,6 +94,9 @@ describe.skipIf(!enabled)("list verification row security", () => {
           CREATE TABLE legal_list_items (entity_id uuid, list_id uuid, workspace_id uuid, UNIQUE (entity_id, list_id, workspace_id));
           CREATE TABLE fields (id uuid, workspace_id uuid, entity_version_id uuid, content jsonb);
           GRANT SELECT ON fields TO stella;
+          CREATE TABLE entities (id uuid PRIMARY KEY, workspace_id uuid, list_item_type text, UNIQUE (id, workspace_id));
+          GRANT SELECT ON entities TO stella;
+          CREATE TABLE legal_list_item_sources (id uuid PRIMARY KEY);
           CREATE VIEW stella_authorized_workspaces AS SELECT NULL::uuid AS authorized_workspace_id WHERE false;
           GRANT SELECT ON stella_authorized_workspaces TO stella;
         `);
@@ -127,6 +132,8 @@ describe.skipIf(!enabled)("list verification row security", () => {
           "20261005120300_list_verification_access_revoked",
           "20261110120000_legal_list_claim_qualifiers",
           "20261112025400_legal_list_claim_carry_over",
+          "20261112080005_legal_list_verification_run_scope",
+          "20261112112228_legal_graph_edges",
         ]) {
           const source = await Bun.file(
             new URL(
@@ -250,7 +257,9 @@ describe.skipIf(!enabled)("list verification row security", () => {
           state: "nocover",
           text: "A dated meeting.",
           anchor: { type: "docx-block", blockId: "p1", start: 0, end: 16 },
+          refs: [{ factEntityId: factId, rel: "record" }],
         } as const satisfies typeof legalListClaims.$inferInsert;
+        await client`INSERT INTO entities VALUES (${factId}, ${workspaceId}, 'fact')`;
         await actor.writeDb(
           async (tx) => await tx.insert(legalListClaims).values(claim),
         );
@@ -272,6 +281,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
           "legal_list_claims",
           "legal_list_claim_review_events",
           "legal_list_verification_blocks",
+          "legal_graph_edges",
         ]) {
           await client.unsafe(`ALTER TABLE ${table} OWNER TO ${ownerRole}`);
         }
@@ -441,6 +451,29 @@ describe.skipIf(!enabled)("list verification row security", () => {
               ),
           ),
         ).toEqual([{ text: "A dated meeting." }]);
+        // The completion writes the claim's citation as the worker, in the
+        // run's matter; the root connection cannot read it back.
+        expect(
+          await actor.writeDb(
+            async (tx) =>
+              await tx
+                .select({
+                  fromClaimId: legalGraphEdges.fromClaimId,
+                  toEntityId: legalGraphEdges.toEntityId,
+                  stance: legalGraphEdges.stance,
+                  producerId: legalGraphEdges.producerId,
+                })
+                .from(legalGraphEdges),
+          ),
+        ).toEqual([
+          {
+            fromClaimId: claimId,
+            toEntityId: factId,
+            stance: "record",
+            producerId: runId,
+          },
+        ]);
+        expect(await db.select().from(legalGraphEdges)).toHaveLength(0);
         const revokedRunId = createSafeId<"legalListVerificationRun">();
         await db
           .insert(legalListVerificationRuns)

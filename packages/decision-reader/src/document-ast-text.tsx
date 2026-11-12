@@ -17,6 +17,7 @@ import type {
   Inline,
   ParagraphBlock,
   ParagraphListDepth,
+  ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 import { getParagraphNumberPieceId } from "@stll/legal-ast/document-search-pieces";
 import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
@@ -1368,6 +1369,44 @@ const CASE_NUMBER_CLASS =
   "reader-chrome text-muted-foreground mb-2 text-end text-[calc(0.95rem*var(--reader-text-scale))]";
 
 /**
+ * The formula a court decides under and the state above it (`JMÉNEM
+ * REPUBLIKY`, `ČESKÁ REPUBLIKA`): centred with the title, a step below it
+ * and at reading size. It is the court's words, not a heading, so the
+ * outline never lists it. One class for the paragraph role and for the same
+ * line read out of a stored caption.
+ */
+const OPENING_FORMULA_CLASS =
+  "mb-5 text-center text-[calc(1rem*var(--reader-text-scale))] leading-snug font-semibold tracking-wider";
+
+/**
+ * Whether a paragraph of each role is running text, set as prose. Total over
+ * the roles, so a new role cannot reach the page without deciding it; a role
+ * that is not prose states its own alignment in `paragraphClassValues`.
+ */
+const PARAGRAPH_ROLE_IS_PROSE = {
+  "case-number": false,
+  "opening-formula": false,
+  intro: true,
+  history: true,
+  argumentation: true,
+  holding: true,
+  dissent: true,
+  closing: false,
+  signature: false,
+  quote: true,
+  parties: false,
+  "front-matter": false,
+  apparatus: true,
+  "publisher-note": true,
+  syllabus: true,
+  headnotes: true,
+  summary: true,
+  counsel: true,
+  panel: true,
+  unknown: true,
+} as const satisfies Record<ParagraphRole, boolean>;
+
+/**
  * A statute list item's printed designator split off the words it opens, so
  * the designator hangs in a gutter and the item's wrapped lines align with
  * its words (`reader-list-hang` in reader.css). The split is drawn, not
@@ -1428,19 +1467,9 @@ const paragraphClassValues = (block: ParagraphBlock) => {
   // them like level-3 headings instead of bleeding into the
   // body copy.
   const isRomanNumeralDivider = /^[IVX]+\.?$/u.test(block.plainText.trim());
-  // Non-body roles (case number, closing formula, signature)
-  // need their own alignment; every other paragraph — including
-  // intro, argumentation and unroled body text — is running text.
-  const nonProseRoles = new Set([
-    "case-number",
-    "closing",
-    "signature",
-    "parties",
-    "front-matter",
-  ]);
   const isProse =
     !isRomanNumeralDivider &&
-    (block.role === undefined || !nonProseRoles.has(block.role));
+    (block.role === undefined || PARAGRAPH_ROLE_IS_PROSE[block.role]);
   return [
     LEGAL_TEXT_CLASS_NAME,
     "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
@@ -1460,6 +1489,7 @@ const paragraphClassValues = (block: ParagraphBlock) => {
     isRomanNumeralDivider &&
       "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm font-semibold",
     block.role === "case-number" && CASE_NUMBER_CLASS,
+    block.role === "opening-formula" && OPENING_FORMULA_CLASS,
     block.role === "closing" && "mt-8 text-center",
     block.role === "signature" &&
       "reader-signature text-muted-foreground mt-1 text-end",
@@ -1612,15 +1642,15 @@ export const WrappedParagraphRun = ({
 /**
  * How a caption line is drawn: as the reader draws the same line where a
  * parser stored it as a block of its own. The kind of decision is the
- * decision title; the court, the state and the formula are the centred
- * headings; the docket is the case-number line.
+ * decision title; the court is a centred heading; the state and the formula
+ * are the opening formula; the docket is the case-number line.
  */
 const CAPTION_LINE_PRESENTATION = {
   court: { className: HEADING_CLASS["case-law"][3], tag: "p" },
   "case-number": { className: CASE_NUMBER_CLASS, tag: "p" },
-  state: { className: HEADING_CLASS["case-law"][3], tag: "p" },
+  state: { className: OPENING_FORMULA_CLASS, tag: "p" },
   "decision-type": { className: HEADING_CLASS["case-law"][1], tag: "h1" },
-  formula: { className: HEADING_CLASS["case-law"][3], tag: "p" },
+  formula: { className: OPENING_FORMULA_CLASS, tag: "p" },
 } as const satisfies Record<
   CaptionLineKind,
   { className: string; tag: "h1" | "p" }
