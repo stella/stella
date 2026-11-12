@@ -25,6 +25,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import { resolveListVerificationAccess } from "@/api/lib/lists/verification/access-context";
 import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
@@ -358,6 +359,7 @@ const recordRecheck = async ({
       payload,
       actorId: args.userId,
     });
+    await writeGraphEdges(tx, args.workspaceId, { type: "recheck", eventId });
     await args.recordAuditEvent(tx, {
       action: AUDIT_ACTION.REVIEW,
       resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
