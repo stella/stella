@@ -55,8 +55,8 @@ import type {
   GraphEdgeFilter,
   GraphEdgeView,
   GraphLookupCursor,
-  GraphNode,
   GraphNodeRef,
+  GraphNodeView,
   GraphWalk,
 } from "@/api/lib/lists/graph/read";
 import type {
@@ -911,7 +911,7 @@ describe("graph reads for agents", () => {
   const nodeOf = async (
     matter: Matter,
     ref: GraphNodeRef,
-  ): Promise<GraphNode> =>
+  ): Promise<GraphNodeView> =>
     (await scoped(
       matter.workspaceId,
       async (tx) => await readGraphNode(tx, matter.workspaceId, ref),
@@ -959,7 +959,7 @@ describe("graph reads for agents", () => {
       ).nodes,
     ).toEqual([]);
 
-    const pages: GraphNode[][] = [];
+    const pages: GraphNodeView[][] = [];
     let after: GraphLookupCursor | null = null;
     do {
       const cursor: GraphLookupCursor | null = after;
@@ -1023,7 +1023,6 @@ describe("graph reads for agents", () => {
       { kind: "cites", stance: "supports", decision: "proposed", count: 1 },
       { kind: "sourced-from", stance: null, decision: "proposed", count: 1 },
     ]);
-    expect(neighbourhood.summaryComplete).toBe(true);
     const spot = neighbourhood.edges.find(
       (edge) => edge.kind === "sourced-from",
     );

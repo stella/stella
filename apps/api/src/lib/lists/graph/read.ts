@@ -9,16 +9,16 @@
  * features the caller cannot see, and an edge whose far end, claim or Spot is
  * hidden is left out by the join, never filtered afterwards.
  *
- * Bounded by construction: a lookup reads at most `limit` + 1 nodes per kind,
- * a neighbourhood page at most `limit` + 1 edges and one grouped count, and a
- * walk at most `GRAPH_READ_LIMITS.WALK_EDGES_PER_HOP` + 1 edges per hop for
- * at most `GRAPH_READ_LIMITS.WALK_DEPTH_MAX` hops.
+ * Bounded by construction, one statement per read: a lookup reads at most
+ * `limit` + 1 nodes, a neighbourhood page at most `limit` + 1 edges beside
+ * one grouped count, and a walk at most `GRAPH_READ_LIMITS.WALK_EDGES_MAX` + 1
+ * edges within `GRAPH_READ_LIMITS.WALK_DEPTH_MAX` hops.
  */
 
 import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias, unionAll } from "drizzle-orm/pg-core";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
@@ -33,6 +33,7 @@ import {
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded, readCursorPage } from "@/api/lib/db/read-bounded";
 import { escapeLike } from "@/api/lib/escape-like";
 import type { FactConfidence } from "@/api/lib/lists/fact-details";
 import {
@@ -64,11 +65,8 @@ export const GRAPH_READ_LIMITS = {
   WALK_DEPTH_MAX: 3,
   /** Paths one walk returns. */
   WALK_PATHS_MAX: 50,
-  /** Edges one hop of a walk reads; a hop with more is reported truncated. */
-  WALK_EDGES_PER_HOP: 200,
-  /** Edges one neighbourhood summary counts; past it the summary says it
-   *  is partial. */
-  SUMMARY_EDGES_MAX: 5000,
+  /** Edges one walk reads; a walk reaching more is reported truncated. */
+  WALK_EDGES_MAX: 200,
   /** Characters of a lookup's text. */
   LOOKUP_TEXT_MAX: 200,
   /** Characters of a node label: a fact's or document's name, a claim's
@@ -86,7 +84,7 @@ type GraphLookupNodeKind = (typeof GRAPH_LOOKUP_NODE_KINDS)[number];
 
 export type GraphNodeRef = { kind: GraphNodeKind; id: string };
 
-export type GraphNode = GraphNodeRef & {
+export type GraphNodeView = GraphNodeRef & {
   label: string;
   /** For a claim: the verified document it was read from, and the run
    *  that read it. */
@@ -105,8 +103,8 @@ type GraphEdgeQuote = {
 export type GraphEdgeView = {
   id: SafeId<"legalGraphEdge">;
   kind: GraphEdgeKind;
-  from: GraphNode;
-  to: GraphNode;
+  from: GraphNodeView;
+  to: GraphNodeView;
   stance: GraphEdgeStance | null;
   decision: GraphEdgeDecision;
   confidence: FactConfidence | null;
@@ -323,7 +321,7 @@ const viewOf = (row: EdgeRow): GraphEdgeView => {
   const decision = isDecision(row.decision)
     ? row.decision
     : panic(`Unknown graph edge decision: ${row.decision}`);
-  const from: GraphNode =
+  const from: GraphNodeView =
     row.fromClaimId === null
       ? {
           kind: row.fromKind,
@@ -339,7 +337,7 @@ const viewOf = (row: EdgeRow): GraphEdgeView => {
           documentId: row.claimDocumentId,
           runId: row.fromClaimRunId,
         };
-  const to: GraphNode = {
+  const to: GraphNodeView = {
     kind: row.toKind,
     id: row.toEntityId,
     label: truncate(row.toName),
@@ -397,40 +395,37 @@ const touching = (nodes: readonly GraphNodeRef[]): SQL => {
   return sides.length === 0 ? sql`false` : (or(...sides) ?? sql`false`);
 };
 
-const readEdgePage = async ({
+/** The current, visible edges matching `filter` that `scope` selects, in id
+ *  order after `after`: one page query, bounded by its reader. */
+const edgeQuery = ({
   tx,
   workspaceId,
-  nodes,
+  scope,
   filter,
   after,
-  limit,
 }: {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
-  nodes: readonly GraphNodeRef[];
+  scope: SQL;
   filter: GraphEdgeFilter;
   after: string | null;
-  limit: number;
-}): Promise<GraphEdgeView[]> =>
-  (
-    await selectEdges(tx)
-      .where(
-        and(
-          eq(legalGraphEdges.workspaceId, workspaceId),
-          touching(nodes),
-          visibleEnds,
-          currentCitation,
-          ...filterSql(filter),
-          ...(after === null ? [] : [sql`${legalGraphEdges.id} > ${after}`]),
-        ),
-      )
-      .orderBy(asc(legalGraphEdges.id))
-      .limit(limit)
-  ).map(viewOf);
+}) =>
+  selectEdges(tx)
+    .where(
+      and(
+        eq(legalGraphEdges.workspaceId, workspaceId),
+        scope,
+        visibleEnds,
+        currentCitation,
+        ...filterSql(filter),
+        ...(after === null ? [] : [sql`${legalGraphEdges.id} > ${after}`]),
+      ),
+    )
+    .orderBy(asc(legalGraphEdges.id));
 
 const nodeKey = (node: GraphNodeRef) => `${node.kind}:${node.id}`;
 
-const otherEnd = (edge: GraphEdgeView, node: GraphNodeRef): GraphNode =>
+const otherEnd = (edge: GraphEdgeView, node: GraphNodeRef): GraphNodeView =>
   nodeKey(edge.from) === nodeKey(node) ? edge.to : edge.from;
 
 /** One node as the caller can see it, or null. */
@@ -438,7 +433,7 @@ export const readGraphNode = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
   node: GraphNodeRef,
-): Promise<GraphNode | null> => {
+): Promise<GraphNodeView | null> => {
   if (node.kind === "claim") {
     const claim = (
       await tx
@@ -501,7 +496,7 @@ export const readGraphNode = async (
 };
 
 type GraphNeighbourhood = {
-  node: GraphNode;
+  node: GraphNodeView;
   /** Every current edge of the node matching the filter, counted by kind,
    *  stance and decision; the page lists some of them. */
   summary: {
@@ -510,12 +505,16 @@ type GraphNeighbourhood = {
     decision: GraphEdgeDecision;
     count: number;
   }[];
-  /** False when the node has more matching edges than the summary counts. */
-  summaryComplete: boolean;
-  edges: (GraphEdgeView & { neighbour: GraphNode })[];
+  edges: (GraphEdgeView & { neighbour: GraphNodeView })[];
   /** Where the next page starts, or null on the last. */
-  after: SafeId<"legalGraphEdge"> | null;
+  after: string | null;
 };
+
+/** At most one summary row per kind, stance (or none) and decision. */
+const SUMMARY_GROUPS_MAX =
+  GRAPH_EDGE_KINDS.length *
+  (GRAPH_EDGE_STANCES.length + 1) *
+  GRAPH_EDGE_DECISIONS.length;
 
 /** One hop from a node: a summary of its edges and a page of them. */
 export const readGraphNeighbourhood = async ({
@@ -528,19 +527,12 @@ export const readGraphNeighbourhood = async ({
 }: {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
-  node: GraphNode;
+  node: GraphNodeView;
   filter: GraphEdgeFilter;
   after: string | null;
   limit: number;
 }): Promise<GraphNeighbourhood> => {
-  const where = and(
-    eq(legalGraphEdges.workspaceId, workspaceId),
-    touching([node]),
-    visibleEnds,
-    currentCitation,
-    ...filterSql(filter),
-  );
-  // Counted over at most SUMMARY_EDGES_MAX of the node's edges.
+  // Grouped outside, because a decision is a subquery per edge.
   const counted = tx
     .select({
       kind: legalGraphEdges.kind,
@@ -577,71 +569,116 @@ export const readGraphNeighbourhood = async ({
         eq(legalListItemSources.workspaceId, legalGraphEdges.workspaceId),
       ),
     )
-    .where(where)
-    .limit(GRAPH_READ_LIMITS.SUMMARY_EDGES_MAX + 1)
+    .where(
+      and(
+        eq(legalGraphEdges.workspaceId, workspaceId),
+        touching([node]),
+        visibleEnds,
+        currentCitation,
+        ...filterSql(filter),
+      ),
+    )
     .as("graph_neighbourhood_edges");
-  const grouped = await tx
-    .select({
-      kind: counted.kind,
-      stance: counted.stance,
-      decision: counted.decision,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(counted)
-    .groupBy(counted.kind, counted.stance, counted.decision)
-    .orderBy(counted.kind, counted.stance, counted.decision)
-    // One row per kind, stance and decision at most.
-    .limit(
-      GRAPH_EDGE_KINDS.length *
-        (GRAPH_EDGE_STANCES.length + 1) *
-        GRAPH_EDGE_DECISIONS.length,
-    );
-  const total = grouped.reduce((sum, row) => sum + row.count, 0);
-  const summary = grouped.map((row) => ({
-    kind: row.kind,
-    stance: row.stance,
-    decision: isDecision(row.decision)
-      ? row.decision
-      : panic(`Unknown graph edge decision: ${row.decision}`),
-    count: row.count,
-  }));
-  const page = await readEdgePage({
-    tx,
-    workspaceId,
-    nodes: [node],
-    filter,
-    after,
-    limit: limit + 1,
-  });
-  const edges = page.slice(0, limit);
+  const grouped = await readBounded(
+    tx
+      .select({
+        kind: counted.kind,
+        stance: counted.stance,
+        decision: counted.decision,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(counted)
+      .groupBy(counted.kind, counted.stance, counted.decision)
+      .orderBy(counted.kind, counted.stance, counted.decision),
+    SUMMARY_GROUPS_MAX,
+  );
+  if (grouped.type === "overflow") {
+    return panic("A neighbourhood summary has more groups than its kinds");
+  }
+  const page = await readCursorPage(
+    edgeQuery({ tx, workspaceId, scope: touching([node]), filter, after }),
+    { limit, cursorForItem: (row) => row.id },
+  );
   return {
     node,
-    summary,
-    summaryComplete: total <= GRAPH_READ_LIMITS.SUMMARY_EDGES_MAX,
-    edges: edges.map((edge) => ({ ...edge, neighbour: otherEnd(edge, node) })),
-    after: page.length > limit ? (edges.at(-1)?.id ?? null) : null,
+    summary: grouped.rows.map((row) => ({
+      kind: row.kind,
+      stance: row.stance,
+      decision: isDecision(row.decision)
+        ? row.decision
+        : panic(`Unknown graph edge decision: ${row.decision}`),
+      count: row.count,
+    })),
+    edges: page.items.map(viewOf).map((edge) => ({
+      ...edge,
+      neighbour: otherEnd(edge, node),
+    })),
+    after: page.nextCursor,
   };
 };
 
 type GraphPath = {
   /** The nodes along the path, the start first. */
-  nodes: GraphNode[];
+  nodes: GraphNodeView[];
   /** The edge between each node and the next. */
   edges: GraphEdgeView[];
 };
 
 export type GraphWalk = {
-  start: GraphNode;
+  start: GraphNodeView;
   paths: GraphPath[];
-  /** Whether a hop read its edge cap or the walk its path cap: more paths
-   *  exist than the walk returns. */
+  /** Whether the walk reached its edge cap or its path cap: more paths
+   *  exist than it returns. */
   truncated: boolean;
+};
+
+const edgeEnd = sql`COALESCE(${legalGraphEdges.fromClaimId}, ${legalGraphEdges.fromEntityId})`;
+
+/**
+ * The ids of edges within `depth` hops of `start`, either way along them,
+ * nearest first: one recursive statement whose reach stops at
+ * `WALK_EDGES_MAX` + 1 edges.
+ */
+const walkEdgeIds = ({
+  workspaceId,
+  startId,
+  depth,
+  filter,
+}: {
+  workspaceId: SafeId<"workspace">;
+  startId: string;
+  depth: number;
+  filter: GraphEdgeFilter;
+}): SQL => {
+  const step = and(
+    eq(legalGraphEdges.workspaceId, workspaceId),
+    currentCitation,
+    ...filterSql(filter),
+  );
+  const touchingNode = (nodeId: SQL) =>
+    sql`(${legalGraphEdges.fromClaimId} = ${nodeId} OR ${legalGraphEdges.fromEntityId} = ${nodeId} OR ${legalGraphEdges.toEntityId} = ${nodeId})`;
+  const farEnd = (nodeId: SQL) =>
+    sql`CASE WHEN ${edgeEnd} = ${nodeId} THEN ${legalGraphEdges.toEntityId} ELSE ${edgeEnd} END`;
+  const start = sql`${startId}::uuid`;
+  return sql`WITH RECURSIVE graph_walk(edge_id, node_id, hops) AS (
+      SELECT ${legalGraphEdges.id}, ${farEnd(start)}, 1
+      FROM ${legalGraphEdges}
+      WHERE ${step} AND ${touchingNode(start)}
+    UNION ALL
+      SELECT ${legalGraphEdges.id}, ${farEnd(sql`graph_walk.node_id`)}, graph_walk.hops + 1
+      FROM graph_walk
+      JOIN ${legalGraphEdges}
+        ON ${touchingNode(sql`graph_walk.node_id`)}
+        AND ${legalGraphEdges.id} <> graph_walk.edge_id
+      WHERE graph_walk.hops < ${depth} AND ${step}
+    )
+    SELECT edge_id FROM graph_walk LIMIT ${GRAPH_READ_LIMITS.WALK_EDGES_MAX + 1}`;
 };
 
 /**
  * Every simple path from `start` of up to `depth` hops along edges matching
- * the filter, in either direction. Each hop reads the edges of the previous
- * hop's ends in one bounded query.
+ * the filter, in either direction, shortest first. The edges come from one
+ * bounded statement; the paths are assembled from them.
  */
 export const walkGraph = async ({
   tx,
@@ -653,74 +690,92 @@ export const walkGraph = async ({
 }: {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
-  start: GraphNode;
+  start: GraphNodeView;
   depth: number;
   filter: GraphEdgeFilter;
   maxPaths: number;
 }): Promise<GraphWalk> => {
-  let frontier: GraphPath[] = [{ nodes: [start], edges: [] }];
-  const paths: GraphPath[] = [];
-  let truncated = false;
-  for (let hop = 0; hop < depth && frontier.length > 0; hop += 1) {
-    const ends = [
-      ...new Map(
-        frontier.map((path) => {
-          const end = path.nodes.at(-1) ?? panic("A path has no end");
-          return [nodeKey(end), end] as const;
-        }),
-      ).values(),
-    ];
-    const edges = await readEdgePage({
+  const reached = await readCursorPage(
+    edgeQuery({
       tx,
       workspaceId,
-      nodes: ends,
+      scope: sql`${legalGraphEdges.id} IN (${walkEdgeIds({
+        workspaceId,
+        startId: start.id,
+        depth,
+        filter,
+      })})`,
       filter,
       after: null,
-      limit: GRAPH_READ_LIMITS.WALK_EDGES_PER_HOP + 1,
-    });
-    if (edges.length > GRAPH_READ_LIMITS.WALK_EDGES_PER_HOP) {
-      truncated = true;
+    }),
+    {
+      limit: GRAPH_READ_LIMITS.WALK_EDGES_MAX,
+      cursorForItem: (row) => row.id,
+    },
+  );
+  const edges = reached.items.map(viewOf);
+  const touchingEnd = new Map<string, GraphEdgeView[]>();
+  for (const edge of edges) {
+    for (const end of [edge.from, edge.to]) {
+      const key = nodeKey(end);
+      const known = touchingEnd.get(key);
+      if (known === undefined) {
+        touchingEnd.set(key, [edge]);
+      } else {
+        known.push(edge);
+      }
     }
-    const hopEdges = edges.slice(0, GRAPH_READ_LIMITS.WALK_EDGES_PER_HOP);
+  }
+  const paths: GraphPath[] = [];
+  let frontier: GraphPath[] = [{ nodes: [start], edges: [] }];
+  for (let hop = 0; hop < depth && frontier.length > 0; hop += 1) {
     const next: GraphPath[] = [];
     for (const path of frontier) {
       const end = path.nodes.at(-1) ?? panic("A path has no end");
+      const endEdges = touchingEnd.get(nodeKey(end));
+      if (endEdges === undefined) {
+        continue;
+      }
       const visited = new Set(path.nodes.map(nodeKey));
-      for (const edge of hopEdges) {
-        const touchesEnd =
-          nodeKey(edge.from) === nodeKey(end) ||
-          nodeKey(edge.to) === nodeKey(end);
+      for (const edge of endEdges) {
         const neighbour = otherEnd(edge, end);
-        if (!touchesEnd || visited.has(nodeKey(neighbour))) {
-          continue;
+        if (!visited.has(nodeKey(neighbour))) {
+          next.push({
+            nodes: [...path.nodes, neighbour],
+            edges: [...path.edges, edge],
+          });
         }
-        next.push({
-          nodes: [...path.nodes, neighbour],
-          edges: [...path.edges, edge],
-        });
       }
     }
     paths.push(...next);
-    frontier = next;
-    if (paths.length >= maxPaths) {
-      break;
-    }
+    frontier = paths.length > maxPaths ? [] : next;
   }
-  if (paths.length > maxPaths) {
-    truncated = true;
-  }
-  return { start, paths: paths.slice(0, maxPaths), truncated };
+  return {
+    start,
+    paths: paths.slice(0, maxPaths),
+    truncated: reached.nextCursor !== null || paths.length > maxPaths,
+  };
 };
-
-type GraphLookupHit = GraphNode & { kind: GraphLookupNodeKind };
 
 /** Where a lookup page ends: the kind it reached and the last id in it. */
 export type GraphLookupCursor = { kind: GraphLookupNodeKind; id: string };
 
+type GraphLookupHit = GraphNodeView & { kind: GraphLookupNodeKind };
+
+const LOOKUP_RANK = {
+  fact: 0,
+  claim: 1,
+  document: 2,
+} as const satisfies Record<GraphLookupNodeKind, number>;
+
+const kindAtRank = (rank: number): GraphLookupNodeKind =>
+  GRAPH_LOOKUP_NODE_KINDS.find((kind) => LOOKUP_RANK[kind] === rank) ??
+  panic(`Unknown lookup rank: ${String(rank)}`);
+
 /**
  * Nodes of the given kinds whose name (a fact, a document) or words (a
- * claim) contain `text`, case-insensitively, in kind order and then id
- * order, after `after`.
+ * claim) contain `text`, case-insensitively, in kind order (facts, claims,
+ * documents) and then id order, after `after`: one statement.
  */
 export const lookupGraphNodes = async ({
   tx,
@@ -738,128 +793,94 @@ export const lookupGraphNodes = async ({
   limit: number;
 }): Promise<{ nodes: GraphLookupHit[]; after: GraphLookupCursor | null }> => {
   const pattern = `%${escapeLike(text)}%`;
-  const ordered = GRAPH_LOOKUP_NODE_KINDS.filter(
-    (kind) =>
-      kinds.includes(kind) &&
-      (after === null ||
-        GRAPH_LOOKUP_NODE_KINDS.indexOf(kind) >=
-          GRAPH_LOOKUP_NODE_KINDS.indexOf(after.kind)),
+  const afterNode = (rank: SQL, id: SQL) =>
+    after === null
+      ? sql`true`
+      : sql`(${rank}, ${id}) > (${LOOKUP_RANK[after.kind]}::int, ${after.id}::uuid)`;
+  const entityKinds = sql.join(
+    [
+      ...(kinds.includes("fact")
+        ? [sql`${entities.listItemType} = ${LIST_ITEM_TYPE.FACT}`]
+        : []),
+      ...(kinds.includes("document")
+        ? [sql`${entities.kind} = 'document'`]
+        : []),
+      sql`false`,
+    ],
+    sql` OR `,
   );
-  const hits: GraphLookupHit[] = [];
-  for (const kind of ordered) {
-    const remaining = limit + 1 - hits.length;
-    if (remaining <= 0) {
-      break;
-    }
-    const afterId = after !== null && after.kind === kind ? after.id : null;
-    hits.push(
-      ...(await lookupKind({
-        tx,
-        workspaceId,
-        kind,
-        pattern,
-        afterId,
-        limit: remaining,
-      })),
+  const entityRank = sql<number>`CASE WHEN ${entities.listItemType} = ${LIST_ITEM_TYPE.FACT} THEN ${LOOKUP_RANK.fact}::int ELSE ${LOOKUP_RANK.document}::int END`;
+  const entityNodes = tx
+    .select({
+      rank: entityRank.as("rank"),
+      id: sql<string>`${entities.id}`.as("id"),
+      label: sql<string>`${entities.name}`.as("label"),
+      documentId: sql<SafeId<"entity"> | null>`NULL::uuid`.as("document_id"),
+      runId: sql<SafeId<"legalListVerificationRun"> | null>`NULL::uuid`.as(
+        "run_id",
+      ),
+    })
+    .from(entities)
+    .where(
+      and(
+        eq(entities.workspaceId, workspaceId),
+        sql`(${entityKinds})`,
+        // sql-perf-allow: bounded by one matter's entities (workspace_id leads the scan) and the page limit.
+        sql`${entities.name} ILIKE ${pattern}`,
+        afterNode(entityRank, sql`${entities.id}`),
+      ),
     );
-  }
-  const page = hits.slice(0, limit);
-  const last = page.at(-1);
+  const claimRank = sql<number>`${LOOKUP_RANK.claim}::int`;
+  const claimNodes = tx
+    .select({
+      rank: claimRank.as("rank"),
+      id: sql<string>`${legalListClaims.id}`.as("id"),
+      label: sql<string>`${legalListClaims.text}`.as("label"),
+      documentId:
+        sql<SafeId<"entity"> | null>`${legalListVerificationRuns.entityId}`.as(
+          "document_id",
+        ),
+      runId:
+        sql<SafeId<"legalListVerificationRun"> | null>`${legalListClaims.runId}`.as(
+          "run_id",
+        ),
+    })
+    .from(legalListClaims)
+    .innerJoin(
+      legalListVerificationRuns,
+      and(
+        eq(legalListVerificationRuns.id, legalListClaims.runId),
+        eq(legalListVerificationRuns.workspaceId, legalListClaims.workspaceId),
+      ),
+    )
+    .where(
+      and(
+        eq(legalListClaims.workspaceId, workspaceId),
+        kinds.includes("claim") ? sql`true` : sql`false`,
+        // sql-perf-allow: bounded by one matter's claims (legal_list_claims_run_idx leads with workspace_id) and the page limit.
+        sql`${legalListClaims.text} ILIKE ${pattern}`,
+        afterNode(claimRank, sql`${legalListClaims.id}`),
+      ),
+    );
+  const page = await readCursorPage(
+    unionAll(entityNodes, claimNodes).orderBy(sql`rank`, sql`id`),
+    { limit, cursorForItem: (row) => `${String(row.rank)}:${row.id}` },
+  );
+  const nodes = page.items.map((row): GraphLookupHit => ({
+    kind: kindAtRank(row.rank),
+    id: row.id,
+    label: truncate(row.label),
+    documentId: row.documentId,
+    runId: row.runId,
+  }));
+  const last = nodes.at(-1);
   return {
-    nodes: page,
+    nodes,
     after:
-      hits.length > limit && last !== undefined
+      page.nextCursor !== null && last !== undefined
         ? { kind: last.kind, id: last.id }
         : null,
   };
-};
-
-const lookupKind = async ({
-  tx,
-  workspaceId,
-  kind,
-  pattern,
-  afterId,
-  limit,
-}: {
-  tx: Transaction;
-  workspaceId: SafeId<"workspace">;
-  kind: GraphLookupNodeKind;
-  pattern: string;
-  afterId: string | null;
-  limit: number;
-}): Promise<GraphLookupHit[]> => {
-  switch (kind) {
-    case "claim": {
-      return (
-        await tx
-          .select({
-            id: legalListClaims.id,
-            text: legalListClaims.text,
-            documentId: legalListVerificationRuns.entityId,
-            runId: legalListClaims.runId,
-          })
-          .from(legalListClaims)
-          .innerJoin(
-            legalListVerificationRuns,
-            and(
-              eq(legalListVerificationRuns.id, legalListClaims.runId),
-              eq(
-                legalListVerificationRuns.workspaceId,
-                legalListClaims.workspaceId,
-              ),
-            ),
-          )
-          .where(
-            and(
-              eq(legalListClaims.workspaceId, workspaceId),
-              sql`${legalListClaims.text} ILIKE ${pattern}`,
-              ...(afterId === null
-                ? []
-                : [sql`${legalListClaims.id} > ${afterId}`]),
-            ),
-          )
-          .orderBy(asc(legalListClaims.id))
-          .limit(limit)
-      ).map((row) => ({
-        kind: "claim" as const,
-        id: row.id,
-        label: truncate(row.text),
-        documentId: row.documentId,
-        runId: row.runId,
-      }));
-    }
-    case "fact":
-    case "document": {
-      return (
-        await tx
-          .select({ id: entities.id, name: entities.name })
-          .from(entities)
-          .where(
-            and(
-              eq(entities.workspaceId, workspaceId),
-              kind === "fact"
-                ? eq(entities.listItemType, LIST_ITEM_TYPE.FACT)
-                : eq(entities.kind, "document"),
-              sql`${entities.name} ILIKE ${pattern}`,
-              ...(afterId === null ? [] : [sql`${entities.id} > ${afterId}`]),
-            ),
-          )
-          .orderBy(asc(entities.id))
-          .limit(limit)
-      ).map((row) => ({
-        kind,
-        id: row.id,
-        label: truncate(row.name),
-        documentId: null,
-        runId: null,
-      }));
-    }
-    default: {
-      kind satisfies never;
-      return panic(`Unhandled lookup kind: ${String(kind)}`);
-    }
-  }
 };
 
 /**
@@ -867,7 +888,7 @@ const lookupKind = async ({
  * delivery is audited as the run's own read is.
  */
 export const deliveredRunIds = (
-  nodes: readonly GraphNode[],
+  nodes: readonly GraphNodeView[],
 ): SafeId<"legalListVerificationRun">[] => [
   ...new Set(
     nodes.flatMap((node) => (node.runId === null ? [] : [node.runId])),

@@ -78,11 +78,12 @@ const config = {
 
 const decodeCursor = (cursor: string): GraphLookupCursor | null => {
   const parts = decodePaginationCursor(cursor);
-  const [kind, id] = parts ?? [];
+  if (parts?.length !== 2) {
+    return null;
+  }
+  const [kind, id] = parts;
   const lookupKind = GRAPH_LOOKUP_NODE_KINDS.find((value) => value === kind);
-  return parts?.length === 2 &&
-    lookupKind !== undefined &&
-    isUuidPaginationCursorPart(id)
+  return lookupKind !== undefined && isUuidPaginationCursorPart(id)
     ? { kind: lookupKind, id }
     : null;
 };

@@ -4,7 +4,7 @@ import type { Transaction } from "@/api/db/root";
 import { legalListVerificationRuns } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { GraphNode } from "@/api/lib/lists/graph/read";
+import type { GraphNodeView } from "@/api/lib/lists/graph/read";
 import { deliveredRunIds } from "@/api/lib/lists/graph/read";
 import { recordVerificationReads } from "@/api/lib/lists/verification/read-audit";
 import { verificationRunListIdColumn } from "@/api/lib/lists/verification/read-run";
@@ -22,7 +22,7 @@ export const recordGraphReads = async ({
   recordAuditEvent,
 }: {
   tx: Transaction;
-  nodes: readonly GraphNode[];
+  nodes: readonly GraphNodeView[];
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;

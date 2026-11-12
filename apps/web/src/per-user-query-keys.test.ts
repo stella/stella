@@ -283,6 +283,21 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     reason:
       "The actor determines the read-audit receipt; returned run content is shared within the matter.",
   },
+  "lists/graph/nodes/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
+  "lists/graph/neighbours/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
+  "lists/graph/paths/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
   "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
     kind: "keyed",

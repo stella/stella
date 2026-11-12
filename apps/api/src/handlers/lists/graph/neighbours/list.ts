@@ -40,10 +40,8 @@ const config = {
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Read what one node of the matter's graph is linked to, one hop either " +
-    "way. `summary` counts the node's links by `kind`, `stance` and " +
-    "`decision` (`summaryComplete` is false past " +
-    `${String(GRAPH_READ_LIMITS.SUMMARY_EDGES_MAX)} links); ` +
-    "`edges` is a page of them. Each edge names `from`, `to` and the " +
+    "way. `summary` counts all the node's links by `kind`, `stance` and " +
+    "`decision`; `edges` is a page of them. Each edge names `from`, `to` and the " +
     "`neighbour` at its far end, its `kind` (`cites`: a claim rests on a " +
     "fact, with `stance` `supports`, `conflicts` or `record`; " +
     "`sourced-from`: a fact comes from a document), who produced it " +
