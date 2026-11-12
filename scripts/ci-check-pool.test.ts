@@ -322,7 +322,8 @@ test("pooled conditions keep change selection, receipt reuse and event gates", (
   expect(pr).toContain("Queue authority");
   const queue = selected(planChecks(rest, context("merge_group", "")));
   expect(queue).toContain("Content delivery declarations");
-  expect(queue).not.toContain("Bridge-version guard");
+  // The guard compares against the merge group's base, so the queue runs it.
+  expect(queue).toContain("Bridge-version guard");
   const reused = selected(
     planChecks(
       policy,
