@@ -17,6 +17,7 @@
 
 import { Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import {
@@ -148,8 +149,8 @@ const paragraphNumberOf = ({
   if (!PARAGRAPH_NUMBER_NAME_RE.test(name)) {
     return undefined;
   }
-  const number = Number(name);
-  return number >= 1 ? number : undefined;
+  const number = parseIntegerToken(name, { sign: "unsigned", min: 1 });
+  return number.isOk() ? number.value : undefined;
 };
 
 /** Trim the outer edges of a paragraph's inline run, and nothing inside. */
