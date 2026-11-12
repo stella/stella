@@ -16,6 +16,7 @@ export const API_OAUTH_RESOURCE_SCOPES = [
   "stella:billing_write",
   "stella:documents_write",
   "stella:contacts_write",
+  "stella:admin_write",
 ] as const;
 
 export type ApiOAuthResourceScope = (typeof API_OAUTH_RESOURCE_SCOPES)[number];

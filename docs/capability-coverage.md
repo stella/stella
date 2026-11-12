@@ -374,12 +374,14 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.cells.retry` | write | stella:matters_write | — | generic invoke → `stella capability matters cells-retry` |
 | `matters.contacts.create` | write | stella:matters_write | — | curated tool `link_matter_contact` |
 | `matters.contacts.delete` | write, destructive | stella:matters_write | — | covered by `link_matter_contact` |
+| `matters.contacts.list` | read | stella:read | — | covered by `list_matters` |
 | `matters.correspondence.get` | read | stella:read | — | generic invoke → `stella capability matters correspondence-get` |
 | `matters.correspondence.list` | read | stella:read | — | generic invoke → `stella capability matters correspondence-list` |
 | `matters.correspondence.update` | write | stella:matters_write | — | generic invoke → `stella capability matters correspondence-update` |
 | `matters.create` | write | stella:matters_write | — | curated tool `save_matter` |
 | `matters.delete` | write, destructive | stella:matters_write | — | curated tool `delete_matter` |
 | `matters.duplicate` | write | stella:matters_write | — | generic invoke → `stella capability matters duplicate` |
+| `matters.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.justifications.list` | read | stella:read | — | generic invoke → `stella capability matters justifications-list` |
 | `matters.list` | read | stella:read | — | curated tool `list_matters` |
 | `matters.member-candidates.list` | read | stella:read | — | generic invoke → `stella capability matters member-candidates-list` |

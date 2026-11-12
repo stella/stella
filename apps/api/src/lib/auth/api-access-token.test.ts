@@ -238,6 +238,64 @@ describe("which routes an API access token opens", () => {
     }
   });
 
+  test("a matter's settings change with the matters scope, its members only with the admin one", () => {
+    const admit = (method: string, route: string, scopes: string[]) =>
+      admitApiAccessTokenRoute({ method, route, scopes });
+    for (const route of [
+      "/v1/workspaces/:workspaceId",
+      "/v1/workspaces/:workspaceId/contacts",
+    ]) {
+      expect(admit("GET", route, ["stella:read"])).toEqual({
+        admitted: true,
+      });
+    }
+    for (const [method, route] of [
+      ["POST", "/v1/workspaces/:workspaceId"],
+      ["DELETE", "/v1/workspaces/:workspaceId"],
+      ["POST", "/v1/workspaces/:workspaceId/archive"],
+      ["POST", "/v1/workspaces/:workspaceId/unarchive"],
+      ["POST", "/v1/workspaces/:workspaceId/duplicate"],
+      ["PUT", "/v1/workspaces/:workspaceId/contacts"],
+      ["DELETE", "/v1/workspaces/:workspaceId/contacts/:workspaceContactId"],
+    ] as const) {
+      expect(admit(method, route, ["stella:read"])).toEqual({
+        admitted: false,
+        reason: "scope",
+      });
+      expect(admit(method, route, ["stella:matters_write"])).toEqual({
+        admitted: true,
+      });
+    }
+    // Granting or revoking access to a matter is an admin act: the matters
+    // scope alone does not reach it.
+    for (const [method, route] of [
+      ["PUT", "/v1/workspaces/:workspaceId/members"],
+      ["DELETE", "/v1/workspaces/:workspaceId/members/:userId"],
+    ] as const) {
+      expect(
+        admit(method, route, ["stella:read", "stella:matters_write"]),
+      ).toEqual({ admitted: false, reason: "scope" });
+      expect(admit(method, route, ["stella:admin_write"])).toEqual({
+        admitted: true,
+      });
+    }
+    // The matter's other settings stay closed: its correspondence address,
+    // anonymization terms and workflow runs.
+    for (const [method, route] of [
+      ["POST", "/v1/workspaces/:workspaceId/correspondence/address"],
+      ["PUT", "/v1/workspaces/:workspaceId/anonymization-terms"],
+      ["POST", "/v1/workspaces/:workspaceId/workflow/start"],
+    ] as const) {
+      expect(
+        admit(method, route, [
+          "stella:read",
+          "stella:matters_write",
+          "stella:admin_write",
+        ]),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
   test("an upload opens at its domain scope, its folder steps never", () => {
     for (const route of [
       "/v1/uploads/:workspaceId/presign",
