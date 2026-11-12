@@ -288,6 +288,8 @@
       "reopened": "Atvērts vēlreiz, gaida pārbaudi",
       "reopenedTooltip": "Pārbaudītājs to pārklasificēja par pārbaudāmu faktu; tiešā pārbaude pret reģistru vēl nav veikta.",
       "sourceCount": "{count, plural, zero {# avotu} one {# avots} other {# avoti}}",
+      "verdictBy": "Slēdzienu sniedza {model}",
+      "verdictByGenerativeModel": "Slēdzienu sniedza ģeneratīvais modelis; lēmumu modelis to nenoteica",
       "whyVerdict": "Slēdziena pamatojums: enkurfakti"
     },
     "claimTypes": {
@@ -5970,7 +5972,13 @@
       "usageStatusTrialing": "Izmēģinājuma periods",
       "usageUnitCount": "{count, plural, zero {# vienību} one {# vienība} other {# vienības}}",
       "usageUnitsBalanceTemplate": "Pieejamas {remaining} vienības",
-      "usageUnitsThisPeriod": "Šī perioda lietojuma vienības"
+      "usageUnitsThisPeriod": "Šī perioda lietojuma vienības",
+      "verificationDecisionModel": {
+        "description": "Pārbaudot dokumentu pēc saraksta faktiem, lēmumu modelis izvēlas katra apgalvojuma slēdzienu. Ģeneratīvais modelis joprojām atrod un citē faktus. Ja lēmumu modelis nav pietiekami pārliecināts, spēkā paliek ģeneratīvā modeļa slēdziens.",
+        "title": "Dokumentu pārbaudes slēdzieni",
+        "unavailable": "Šai organizācijai nav pieejams neviens lēmumu modelis.",
+        "updated": "Pārbaudes iestatījums atjaunināts"
+      }
     }
   },
   "sharepoint": {

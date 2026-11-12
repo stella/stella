@@ -288,6 +288,8 @@
       "reopened": "Reabierta, comprobación pendiente",
       "reopenedTooltip": "Un revisor la reclasificó como hecho comprobable; aún está pendiente la comprobación en vivo del registro.",
       "sourceCount": "{count, plural, one {# fuente} other {# fuentes} many {# fuentes}}",
+      "verdictBy": "Resultado de {model}",
+      "verdictByGenerativeModel": "Resultado del modelo generativo; el modelo de decisión no lo determinó",
       "whyVerdict": "Motivo de este resultado: hechos de referencia"
     },
     "claimTypes": {
@@ -5970,7 +5972,13 @@
       "usageStatusTrialing": "En prueba",
       "usageUnitCount": "{count, plural, one {# unidad} many {# unidades} other {# unidades}}",
       "usageUnitsBalanceTemplate": "{remaining} unidades disponibles",
-      "usageUnitsThisPeriod": "Unidades de uso de este periodo"
+      "usageUnitsThisPeriod": "Unidades de uso de este periodo",
+      "verificationDecisionModel": {
+        "description": "Al verificar un documento con los hechos de una lista, el modelo de decisión elige el resultado de cada afirmación. El modelo generativo sigue encontrando y citando los hechos. Si el modelo de decisión no está lo bastante seguro, se mantiene el resultado del modelo generativo.",
+        "title": "Resultados de la verificación de documentos",
+        "unavailable": "Esta organización no tiene ningún modelo de decisión disponible.",
+        "updated": "Ajuste de verificación actualizado"
+      }
     }
   },
   "sharepoint": {

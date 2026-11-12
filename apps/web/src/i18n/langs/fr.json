@@ -288,6 +288,8 @@
       "reopened": "Rouverte, vérification en attente",
       "reopenedTooltip": "Un relecteur a requalifié cette affirmation en fait vérifiable ; une vérification en direct du dossier est encore en attente.",
       "sourceCount": "{count, plural, one {# source} other {# sources} many {# sources}}",
+      "verdictBy": "Verdict rendu par {model}",
+      "verdictByGenerativeModel": "Verdict rendu par le modèle génératif ; le modèle de décision ne l’a pas tranché",
       "whyVerdict": "Pourquoi ce verdict : faits d’ancrage"
     },
     "claimTypes": {
@@ -5970,7 +5972,13 @@
       "usageStatusTrialing": "Période d'essai",
       "usageUnitCount": "{count, plural, one {# unité} many {# unités} other {# unités}}",
       "usageUnitsBalanceTemplate": "{remaining} unités disponibles",
-      "usageUnitsThisPeriod": "Unités d’utilisation sur cette période"
+      "usageUnitsThisPeriod": "Unités d’utilisation sur cette période",
+      "verificationDecisionModel": {
+        "description": "Lorsqu’un document est vérifié au regard des faits d’une liste, le modèle de décision choisit le verdict de chaque affirmation. Le modèle génératif continue de trouver et de citer les faits. Si le modèle de décision n’est pas assez sûr, le verdict du modèle génératif est conservé.",
+        "title": "Verdicts de la vérification des documents",
+        "unavailable": "Aucun modèle de décision n’est disponible pour cette organisation.",
+        "updated": "Paramètre de vérification mis à jour"
+      }
     }
   },
   "sharepoint": {

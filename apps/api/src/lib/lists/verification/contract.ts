@@ -9,6 +9,7 @@
 
 import { panic } from "better-result";
 
+import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provider";
 import type { ReviewDecision } from "@stll/api-contract/review-decision";
 import type { SpotTarget } from "@stll/api-contract/spot";
 
@@ -362,12 +363,65 @@ export type RecordConflictResolution =
 export const CLAIM_FACT_LINK_CHANGES = ["link", "unlink"] as const;
 type ClaimFactLinkChange = (typeof CLAIM_FACT_LINK_CHANGES)[number];
 
+/**
+ * Why the language model's verdict stood although the organization asked
+ * the decision model to decide it: the decision reasons (no model, under its
+ * confidence floor, a refusal, a failed call), the decision model's verdict
+ * not fitting what the grader cited (`incompatible`), or the call not being
+ * admitted (budget or access) before it was sent (`not-admitted`).
+ */
+export const VERDICT_FALLBACK_REASONS = [
+  ...DECISION_UNDECIDED_REASONS,
+  "incompatible",
+  "not-admitted",
+] as const;
+export type VerdictFallbackReason = (typeof VERDICT_FALLBACK_REASONS)[number];
+
+/**
+ * Who decided a grade's verdict. `llm` with no fallback: the decision model
+ * was not asked. `llm` with a fallback: it was asked and the language
+ * model's verdict stood, for that reason. `decision-model`: its verdict
+ * replaced the language model's (`replaced`), which still found the facts,
+ * citations and qualifiers the verdict rests on.
+ */
+export type VerdictProvenance =
+  | { kind: "llm"; fallback: null }
+  | {
+      kind: "llm";
+      fallback: {
+        reason: VerdictFallbackReason;
+        model: string | null;
+        confidence: number | null;
+      };
+    }
+  | {
+      kind: "decision-model";
+      model: string;
+      confidence: number;
+      replaced: ClaimState;
+    };
+
+export const LLM_VERDICT = {
+  kind: "llm",
+  fallback: null,
+} as const satisfies VerdictProvenance;
+
 /** A claim's grade: its verdict, the facts it cites, and the grader's
  *  caveats. The run writes one per claim; a re-check records another. */
 export type ClaimGrade = ClaimVerdict & {
   refs: ClaimRef[];
   qualifiers: GraderClaimQualifier[];
+  /** Who decided the verdict. Absent on re-checks recorded before it was
+   *  kept, all of which the language model decided (`verdictProvenanceOf`). */
+  decider?: VerdictProvenance;
 };
+
+/** A grade as the grader writes it now: its provenance always recorded. */
+export type DecidedClaimGrade = ClaimGrade & { decider: VerdictProvenance };
+
+export const verdictProvenanceOf = (grade: {
+  decider?: VerdictProvenance;
+}): VerdictProvenance => grade.decider ?? LLM_VERDICT;
 
 /**
  * The type a graded claim is read with. Extraction sets aside the claims it

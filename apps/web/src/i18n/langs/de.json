@@ -288,6 +288,8 @@
       "reopened": "Erneut geöffnet, Prüfung ausstehend",
       "reopenedTooltip": "Ein Prüfer hat dies als überprüfbaren Fakt neu klassifiziert; der Live-Abgleich mit dem Bestand steht noch aus.",
       "sourceCount": "{count, plural, one {# Quelle} other {# Quellen}}",
+      "verdictBy": "Ergebnis von {model}",
+      "verdictByGenerativeModel": "Ergebnis vom generativen Modell; das Entscheidungsmodell hat es nicht bestimmt",
       "whyVerdict": "Begründung des Ergebnisses – Ankerfakten"
     },
     "claimTypes": {
@@ -5970,7 +5972,13 @@
       "usageStatusTrialing": "Testphase",
       "usageUnitCount": "{count, plural, one {# Einheit} other {# Einheiten}}",
       "usageUnitsBalanceTemplate": "{remaining} Einheiten verfügbar",
-      "usageUnitsThisPeriod": "Nutzungseinheiten in diesem Zeitraum"
+      "usageUnitsThisPeriod": "Nutzungseinheiten in diesem Zeitraum",
+      "verificationDecisionModel": {
+        "description": "Wird ein Dokument anhand der Fakten einer Liste geprüft, wählt das Entscheidungsmodell das Ergebnis für jede Aussage. Das generative Modell findet und zitiert weiterhin die Fakten. Ist das Entscheidungsmodell nicht sicher genug, gilt das Ergebnis des generativen Modells.",
+        "title": "Ergebnisse der Dokumentprüfung",
+        "unavailable": "Für diese Organisation ist kein Entscheidungsmodell verfügbar.",
+        "updated": "Prüfeinstellung aktualisiert"
+      }
     }
   },
   "sharepoint": {

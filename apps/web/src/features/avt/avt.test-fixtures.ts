@@ -50,6 +50,7 @@ type MakeClaimArgs = {
   recheck?: VerificationClaim["recheck"];
   staleness?: VerificationClaim["staleness"];
   assertedOn?: VerificationClaim["assertedOn"];
+  decider?: VerificationClaim["decider"];
 };
 
 export const makeClaim = ({
@@ -69,12 +70,14 @@ export const makeClaim = ({
   recheck = null,
   staleness = [],
   assertedOn = { type: "none" },
+  decider = { kind: "llm", fallback: null },
 }: MakeClaimArgs): VerificationClaim => ({
   id: claimId(suffix),
   position: suffix,
   type,
   framing: "asserted",
   verdict,
+  decider,
   qualifiers,
   suggestedGoverningFactId,
   text: `Claim ${String(suffix)}`,

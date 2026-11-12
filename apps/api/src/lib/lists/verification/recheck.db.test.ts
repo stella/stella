@@ -26,6 +26,7 @@ import {
   legalListVerificationBlocks,
   legalListVerificationBudgets,
   legalListVerificationRuns,
+  organizationSettings,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -54,6 +55,7 @@ import type {
 } from "@/api/lib/lists/verification/recheck";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { fakeVerdictDecisionModel } from "@/api/tests/helpers/fake-verdict-decision-model";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -781,6 +783,61 @@ test("an organization at its daily limit is refused before any of several claims
       .set({ startsToday: 0 })
       .where(eq(legalListVerificationBudgets.organizationId, organizationId));
   }
+});
+
+test("with the organization's switch on, a re-check records the decision model that decided it", async () => {
+  const enabled = (on: boolean) => ({
+    verificationDecisionModelEnabled: on,
+  });
+  await testDb
+    .insert(organizationSettings)
+    .values({
+      id: createSafeId<"organizationSettings">(),
+      organizationId,
+      ...enabled(true),
+    })
+    .onConflictDoUpdate({
+      target: organizationSettings.organizationId,
+      set: enabled(true),
+    });
+  const jev = fakeVerdictDecisionModel({
+    answer: { choice: "refuted", confidence: 0.95 },
+  });
+  const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+  try {
+    const outcome = await recheckClaim({
+      ...recheckContext(),
+      claimId: secondGapClaim,
+      requestKey: "decided-by-the-decision-model",
+      generateObjectForTask: graderAnswering(["C1"]).generate,
+      decisionModel: jev.client,
+    });
+    expect(outcome.unwrap("The re-check could not reach the database")).toEqual(
+      { type: "rechecked", replayed: false },
+    );
+  } finally {
+    restoreMode();
+    await testDb
+      .update(organizationSettings)
+      .set(enabled(false))
+      .where(eq(organizationSettings.organizationId, organizationId));
+  }
+  expect(jev.requests).toHaveLength(1);
+  const decider = {
+    kind: "decision-model",
+    model: "jev-1.14",
+    confidence: 0.95,
+    replaced: "supported",
+  };
+  expect((await recheckEvents(secondGapClaim)).at(-1)?.payload).toMatchObject({
+    kind: "recheck",
+    requestKey: "decided-by-the-decision-model",
+    grade: { state: "contradicted", decider },
+  });
+  expect(await readClaim(secondGapClaim)).toMatchObject({
+    verdict: { state: "contradicted" },
+    decider,
+  });
 });
 
 test("only a fact of the verified list that is checked against can be linked", async () => {

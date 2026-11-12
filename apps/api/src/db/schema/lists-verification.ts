@@ -10,6 +10,7 @@ import {
   CLAIM_STATE,
   CLAIM_STATES,
   CLAIM_TYPES,
+  LLM_VERDICT,
   MATCHED_CLAIM_CARRY_OUTCOMES,
   PARAGRAPH_NUMBERINGS,
   SCORED_CLAIM_STATES,
@@ -25,6 +26,7 @@ import type {
   ClaimReviewEventPayload,
   ClaimReviewReasonRule,
   RecordConflict,
+  VerdictProvenance,
   VerificationEvidence,
   VerificationScope,
 } from "@/api/lib/lists/verification/contract";
@@ -464,6 +466,9 @@ export const legalListClaims = p.pgTable(
       .text("asserted_on_source", { enum: CLAIM_ASSERTED_ON_SOURCES })
       .notNull()
       .default("pending"),
+    // Who decided the verdict: the language model, or the decision model
+    // when the organization turned it on (`verdict-decider.ts`).
+    decider: jsonb().$type<VerdictProvenance>().notNull().default(LLM_VERDICT),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [

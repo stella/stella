@@ -36,6 +36,7 @@ import updateOrganizationSettings from "@/api/handlers/organization-settings/upd
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-key";
 import updateWebSearchKey from "@/api/handlers/organization-settings/update-web-search-key";
+import updateVerificationDecisionModel from "@/api/handlers/organization-settings/verification-decision-model/update";
 import { mount, routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
@@ -95,6 +96,9 @@ export const organizationSettingsRoute = mount(
       },
       "/sanctions-monitoring": { POST: updateSanctionsMonitoring },
       "/local-runs": { POST: updateLocalRunApprovalCeiling },
+      "/verification-decision-model": {
+        POST: updateVerificationDecisionModel,
+      },
       "/practice-jurisdictions": { POST: updatePracticeJurisdictions },
       "/preview": { POST: previewOrganizationSettings },
       "/ai-availability": { GET: readAIAvailability },

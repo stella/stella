@@ -43,12 +43,13 @@ import type { ExtractedClaim } from "@/api/lib/lists/verification/claim-extract"
 import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
 import {
   gradedClaimType,
+  LLM_VERDICT,
   VERIFICATION_LIMITS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
 } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimAssertedDate,
-  ClaimGrade,
+  DecidedClaimGrade,
   VerificationEvidence,
   VerificationRunErrorCode,
   VerificationScope,
@@ -73,6 +74,7 @@ import {
   completeVerificationRun,
   failVerificationRun,
 } from "@/api/lib/lists/verification/run-persistence";
+import { readVerdictDecider } from "@/api/lib/lists/verification/verdict-decider-setting";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -97,6 +99,7 @@ import {
   formatModelRef,
   getTanStackTextModelInfoForTask,
 } from "@/api/lib/tanstack-ai-models";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 const QUEUE_NAME = "legal-list-verification-runs";
 
@@ -562,7 +565,7 @@ const resolvePinnedFile = async (
 type ClaimRow = typeof legalListClaims.$inferInsert;
 
 type GradedClaims = {
-  grades: ReadonlyMap<string, ClaimGrade>;
+  grades: ReadonlyMap<string, DecidedClaimGrade>;
   assertedDates: ReadonlyMap<string, ClaimAssertedDate>;
 };
 
@@ -596,6 +599,8 @@ const claimRows = (
         refs: [],
         recordConflict: null,
         qualifiers: [],
+        // Extraction set it aside; no verdict was asked of any model.
+        decider: LLM_VERDICT,
       };
     }
     const grade =
@@ -608,6 +613,7 @@ const claimRows = (
       refs: grade.refs,
       recordConflict: grade.recordConflict,
       qualifiers: grade.qualifiers,
+      decider: grade.decider,
     };
   });
 
@@ -649,7 +655,25 @@ const runPassages = (
 type VerificationExecutionBoundaries = {
   readDocument?: typeof readVerificationDocument;
   generateObjectForTask?: VerificationModelDeps["generateObjectForTask"];
+  /** The decision model the verdict decider asks, in place of the org's. */
+  decisionModel?: DecisionModel | null;
 };
+
+/** Who decides this run's verdicts: the organization's switch as it stands
+ *  when grading starts (`verdict-decider.ts`). */
+const runVerdictDecider = async (
+  actor: RunActor,
+  config: Pick<VerificationModelDeps, "orgAIConfig">,
+  execution: VerificationExecutionBoundaries,
+) =>
+  await actor.writeDb(
+    async (tx) =>
+      await readVerdictDecider(tx, {
+        organizationId: actor.organizationId,
+        orgAIConfig: config.orgAIConfig,
+        decisionModel: execution.decisionModel,
+      }),
+  );
 
 /** Null on success, else the code the run failed with. */
 type ExecuteRunArgs = {
@@ -816,6 +840,7 @@ const executeRun = async ({
     ),
     facts: run.evidence.facts,
     deps,
+    verdictDecider: await runVerdictDecider(actor, config.value, execution),
   });
   if (Result.isError(graded)) {
     if (graded.error.cause instanceof ListVerificationRunCapError) {

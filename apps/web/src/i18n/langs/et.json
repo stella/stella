@@ -288,6 +288,8 @@
       "reopened": "Uuesti avatud, kontroll ootel",
       "reopenedTooltip": "Kontrollija liigitas selle uuesti kontrollitavaks faktiks; reaalajas registrikontroll on veel ootel.",
       "sourceCount": "{count, plural, one {# allikas} other {# allikat}}",
+      "verdictBy": "Otsuse tegi {model}",
+      "verdictByGenerativeModel": "Otsuse tegi generatiivne mudel; otsustusmudel seda ei otsustanud",
       "whyVerdict": "Otsuse põhjendus: ankurfaktid"
     },
     "claimTypes": {
@@ -5970,7 +5972,13 @@
       "usageStatusTrialing": "Prooviperiood",
       "usageUnitCount": "{count, plural, one {# ühik} other {# ühikut}}",
       "usageUnitsBalanceTemplate": "Saadaval on {remaining} ühikut",
-      "usageUnitsThisPeriod": "Selle perioodi kasutusühikud"
+      "usageUnitsThisPeriod": "Selle perioodi kasutusühikud",
+      "verificationDecisionModel": {
+        "description": "Kui dokumenti kontrollitakse loendi faktide põhjal, valib otsustusmudel iga väite otsuse. Generatiivne mudel leiab ja tsiteerib fakte endiselt. Kui otsustusmudel pole piisavalt kindel, jääb kehtima generatiivse mudeli otsus.",
+        "title": "Dokumentide kontrollimise otsused",
+        "unavailable": "Sellel organisatsioonil pole ühtegi otsustusmudelit saadaval.",
+        "updated": "Kontrollimise seadistus on uuendatud"
+      }
     }
   },
   "sharepoint": {

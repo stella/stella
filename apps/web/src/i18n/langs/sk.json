@@ -288,6 +288,8 @@
       "reopened": "Znovu otvorené, čaká na kontrolu",
       "reopenedTooltip": "Kontrolujúca osoba preklasifikovala toto tvrdenie ako overiteľný fakt; porovnanie so živými záznamami zatiaľ neprebehlo.",
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdrojov} other {# zdroja}}",
+      "verdictBy": "Záver určil {model}",
+      "verdictByGenerativeModel": "Záver určil generatívny model; rozhodovací model ho neurčil",
       "whyVerdict": "Odôvodnenie záveru: referenčné fakty"
     },
     "claimTypes": {
@@ -5970,7 +5972,13 @@
       "usageStatusTrialing": "Skúšobná verzia",
       "usageUnitCount": "{count, plural, one {# jednotka} few {# jednotky} other {# jednotiek} many {# jednotky}}",
       "usageUnitsBalanceTemplate": "K dispozícii je {remaining} jednotiek",
-      "usageUnitsThisPeriod": "Jednotky využitia za toto obdobie"
+      "usageUnitsThisPeriod": "Jednotky využitia za toto obdobie",
+      "verificationDecisionModel": {
+        "description": "Pri overovaní dokumentu podľa faktov zo zoznamu zvolí záver ku každému tvrdeniu rozhodovací model. Fakty aj naďalej vyhľadá a ocituje generatívny model. Ak si rozhodovací model nie je dosť istý, platí záver generatívneho modelu.",
+        "title": "Závery pri overovaní dokumentov",
+        "unavailable": "Tejto organizácii nie je k dispozícii žiadny rozhodovací model.",
+        "updated": "Nastavenie overovania bolo aktualizované"
+      }
     }
   },
   "sharepoint": {
