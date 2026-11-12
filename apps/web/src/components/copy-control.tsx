@@ -23,7 +23,7 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 /** What a Copy writes: plain text, with rich text where it has any. */
-export type CopyContent = { plain: string; html?: string | undefined };
+type CopyContent = { plain: string; html?: string | undefined };
 
 /** A control that copies a value it holds, or the reader's selected words. */
 type CopyControlKind = "selection" | "value";

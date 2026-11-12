@@ -4,7 +4,7 @@
  * and indentation varies. Nothing else is folded, so a difference in any
  * character, case or punctuation remains.
  */
-export const clipboardComparable = (text: string): string =>
+const clipboardComparable = (text: string): string =>
   text.replaceAll(/\s+/gu, "");
 
 /**
