@@ -1946,6 +1946,28 @@
       "secretAnswer": "Atbilde ir paslēpta",
       "secretPlaceholder": "Jūsu atbilde paliks paslēpta"
     },
+    "makeSkill": {
+      "command": "Izveidot prasmi no šīs sarunas",
+      "drafted": "Prasmes melnraksts ir gatavs. Pārskatiet to un pēc tam ieslēdziet.",
+      "drafting": "Gatavo prasmes melnrakstu no šīs sarunas…",
+      "emptyThread": "Vispirms nosūtiet ziņu, pēc tam no sarunas varēs izveidot prasmi.",
+      "failed": "No šīs sarunas neizdevās izveidot prasmi",
+      "review": {
+        "description": "Prasmes melnrakstā ir šie vārdi. Tos var redzēt ikviens, kam ir piekļuve šai prasmei.",
+        "kind": {
+          "organization": "Organizācija",
+          "person": "Persona"
+        },
+        "replaceHint": "Noņemiet atzīmi pie vārda, lai to aizstātu ar vispārīgu vietturi.",
+        "role": {
+          "organization": "organizācijas nosaukums",
+          "person": "personas vārds"
+        },
+        "saveAll": "Paturēt visus un saglabāt",
+        "saveReplacing": "Aizstāt neatzīmētos un saglabāt",
+        "title": "Vai saglabāt šos vārdus prasmē?"
+      }
+    },
     "matterRuns": {
       "needsYou": "{count, plural, zero {# tērzēšanu gaida jūs} one {# tērzēšana gaida jūs} other {# tērzēšanas gaida jūs}}",
       "working": "{count, plural, zero {# tērzēšanu darbojas} one {# tērzēšana darbojas} other {# tērzēšanas darbojas}}"
@@ -3343,6 +3365,10 @@
       "sharepointNotFound": "Šīs vietnes, bibliotēkas vai faila vairs nav, vai arī tas netiek koplietots ar jums.",
       "sharepointReconnectRequired": "Jūsu Microsoft pieslēgšanās termiņš ir beidzies. Pievienojiet SharePoint un OneDrive vēlreiz.",
       "sharepointThrottled": "Microsoft ierobežo pieprasījumus. Drīzumā mēģiniet vēlreiz.",
+      "skillFromChatAnonymizedThread": "No anonimizētas sarunas prasmi pagaidām nevar izveidot.",
+      "skillFromChatEmptyThread": "Šajā sarunā vēl nav nekā, no kā izveidot prasmi.",
+      "skillFromChatThreadNotFound": "Šo sarunu neizdevās atrast.",
+      "skillFromChatWithdrawn": "Šīs sarunas saturs ir atsaukts, tāpēc no tās nevar izveidot prasmi.",
       "skillSourceUnreachable": "Prasmes avotu neizdevās ielādēt. Pārbaudiet, vai saite ved uz publisku GitHub repozitoriju, vai mēģiniet vēlreiz vēlāk.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
       "usageLimitExceeded": "Sasniegts lietošanas limits.",

@@ -1946,6 +1946,28 @@
       "secretAnswer": "Réponse masquée",
       "secretPlaceholder": "Votre réponse reste masquée"
     },
+    "makeSkill": {
+      "command": "Créer une compétence à partir de cette conversation",
+      "drafted": "Le brouillon de la compétence est prêt. Relisez-le, puis activez-le.",
+      "drafting": "Préparation d'un brouillon de compétence à partir de cette conversation…",
+      "emptyThread": "Envoyez d'abord un message, une compétence pourra ensuite être créée à partir de la conversation.",
+      "failed": "Impossible de créer une compétence à partir de cette conversation",
+      "review": {
+        "description": "Le brouillon de la compétence contient ces noms. Toute personne ayant accès à cette compétence pourra les voir.",
+        "kind": {
+          "organization": "Organisation",
+          "person": "Personne"
+        },
+        "replaceHint": "Décochez un nom pour le remplacer par un espace réservé générique.",
+        "role": {
+          "organization": "nom de l'organisation",
+          "person": "nom de la personne"
+        },
+        "saveAll": "Tout conserver et enregistrer",
+        "saveReplacing": "Remplacer les noms décochés et enregistrer",
+        "title": "Enregistrer ces noms dans la compétence ?"
+      }
+    },
     "matterRuns": {
       "needsYou": "{count, plural, one {# conversation vous attend} other {# conversations vous attendent} many {# conversations vous attendent}}",
       "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}"
@@ -3343,6 +3365,10 @@
       "sharepointNotFound": "Ce site, cette bibliothèque ou ce fichier n’existe plus ou n’est pas partagé avec vous.",
       "sharepointReconnectRequired": "Votre connexion Microsoft a expiré. Reconnectez SharePoint et OneDrive.",
       "sharepointThrottled": "Microsoft limite les requêtes. Réessayez dans quelques instants.",
+      "skillFromChatAnonymizedThread": "Il n'est pas encore possible de créer une compétence à partir d'une conversation anonymisée.",
+      "skillFromChatEmptyThread": "Cette conversation ne contient encore rien à partir de quoi créer une compétence.",
+      "skillFromChatThreadNotFound": "Cette conversation est introuvable.",
+      "skillFromChatWithdrawn": "Le contenu de cette conversation a été retiré : impossible d'en créer une compétence.",
       "skillSourceUnreachable": "La source de la compétence n’a pas pu être chargée. Vérifiez que le lien mène à un dépôt GitHub public, ou réessayez plus tard.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte.",

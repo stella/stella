@@ -22,9 +22,9 @@ import {
   refineSearchOutputSchema,
   searchSummaryOutputSchema,
 } from "@/api/handlers/search/ai";
-import { aiGenerationSchema } from "@/api/handlers/skills/drafts/generate";
 import { aiRevisionSchema } from "@/api/handlers/skills/proposals/from-comments/create";
 import { prefillOutputSchema } from "@/api/handlers/templates/prefill";
+import { aiGenerationSchema } from "@/api/lib/agent-skills/draft-prompt";
 import { changeSummarySchema } from "@/api/lib/ai-change-summary";
 import { bboxOutputSchema } from "@/api/lib/bbox/ai-prompts";
 import {
@@ -252,6 +252,13 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       schema: aiGenerationSchema,
       answer:
         '{"markdown":"---\\nname: nda-review\\ndescription: Review a mutual NDA against the firm\'s standard positions.\\n---\\n\\n# NDA review\\n\\nCheck the term, the definition of confidential information and the carve-outs.","resources":[{"path":"references/nda-positions.md","content":"# Standard positions\\n\\n- Term: at most three years."}]}',
+    },
+    {
+      file: "handlers/skills/from-chat/create.ts",
+      outputSchema: "aiGenerationSchema",
+      schema: aiGenerationSchema,
+      answer:
+        '{"markdown":"---\\nname: delay-claim-reply\\ndescription: Reply to a passenger\'s delay claim the way this firm does.\\n---\\n\\n# Delay claim reply\\n\\nCheck <flight number> against the delay records before answering <passenger name>.","resources":[{"path":"references/defences.md","content":"# Defences\\n\\n- Extraordinary circumstances need evidence."}]}',
     },
     {
       file: "handlers/skills/proposals/from-comments/create.ts",

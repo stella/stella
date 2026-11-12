@@ -1946,6 +1946,28 @@
       "secretAnswer": "Odpowiedź ukryta",
       "secretPlaceholder": "Twoja odpowiedź pozostanie ukryta"
     },
+    "makeSkill": {
+      "command": "Utwórz umiejętność z tej rozmowy",
+      "drafted": "Szkic umiejętności jest gotowy. Przejrzyj go, a potem go włącz.",
+      "drafting": "Przygotowuję szkic umiejętności z tej rozmowy…",
+      "emptyThread": "Najpierw wyślij wiadomość, potem będzie można utworzyć umiejętność z rozmowy.",
+      "failed": "Nie udało się utworzyć umiejętności z tej rozmowy",
+      "review": {
+        "description": "Szkic umiejętności zawiera te nazwiska i nazwy. Może je zobaczyć każdy, kto ma dostęp do tej umiejętności.",
+        "kind": {
+          "organization": "Organizacja",
+          "person": "Osoba"
+        },
+        "replaceHint": "Odznacz pozycję, aby zastąpić ją ogólnym symbolem zastępczym.",
+        "role": {
+          "organization": "nazwa organizacji",
+          "person": "imię i nazwisko"
+        },
+        "saveAll": "Zachowaj wszystkie i zapisz",
+        "saveReplacing": "Zastąp odznaczone i zapisz",
+        "title": "Zapisać te nazwiska i nazwy w umiejętności?"
+      }
+    },
     "matterRuns": {
       "needsYou": "{count, plural, one {# czat czeka na Ciebie} few {# czaty czekają na Ciebie} many {# czatów czeka na Ciebie} other {# czatu czeka na Ciebie}}",
       "working": "{count, plural, one {# czat pracuje} few {# czaty pracują} many {# czatów pracuje} other {# czatu pracuje}}"
@@ -3343,6 +3365,10 @@
       "sharepointNotFound": "Ta witryna, biblioteka lub ten plik już nie istnieje albo nie jest Ci udostępniony.",
       "sharepointReconnectRequired": "Twoje logowanie do Microsoft wygasło. Połącz ponownie SharePoint i OneDrive.",
       "sharepointThrottled": "Microsoft ogranicza liczbę żądań. Spróbuj ponownie za chwilę.",
+      "skillFromChatAnonymizedThread": "Z zanonimizowanej rozmowy nie można jeszcze utworzyć umiejętności.",
+      "skillFromChatEmptyThread": "Ta rozmowa nie zawiera jeszcze niczego, z czego można utworzyć umiejętność.",
+      "skillFromChatThreadNotFound": "Nie znaleziono tej rozmowy.",
+      "skillFromChatWithdrawn": "Treść tej rozmowy została wycofana, więc nie można utworzyć z niej umiejętności.",
       "skillSourceUnreachable": "Nie udało się wczytać źródła umiejętności. Sprawdź, czy link prowadzi do publicznego repozytorium GitHub, lub spróbuj ponownie później.",
       "thirdPartyBoundaryRefusal": "Żądanie próbowało użyć treści spoza dozwolonego kontekstu obszaru roboczego.",
       "usageLimitExceeded": "Osiągnięto limit użycia.",

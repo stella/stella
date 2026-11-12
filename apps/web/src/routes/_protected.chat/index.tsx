@@ -480,6 +480,14 @@ function ChatIndex() {
           type: "info",
         });
       },
+      "make-skill": () => {
+        // Like `/rename-chat`: an unsent draft has nothing to learn from.
+        controller.setContent(composerText(""));
+        stellaToast.add({
+          title: t("chat.makeSkill.emptyThread"),
+          type: "info",
+        });
+      },
     });
     if (handledReserved) {
       const newThreadMessage = newThreadMessages.at(0);

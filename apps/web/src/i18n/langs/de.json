@@ -1946,6 +1946,28 @@
       "secretAnswer": "Antwort verborgen",
       "secretPlaceholder": "Ihre Antwort bleibt verborgen"
     },
+    "makeSkill": {
+      "command": "Skill aus dieser Konversation erstellen",
+      "drafted": "Der Skill-Entwurf ist fertig. Prüfen Sie ihn und schalten Sie ihn dann ein.",
+      "drafting": "Skill-Entwurf aus dieser Konversation wird erstellt…",
+      "emptyThread": "Zuerst eine Nachricht senden, dann kann aus der Konversation ein Skill erstellt werden.",
+      "failed": "Aus dieser Konversation konnte kein Skill erstellt werden",
+      "review": {
+        "description": "Der Skill-Entwurf enthält diese Namen. Jeder mit Zugriff auf diesen Skill kann sie sehen.",
+        "kind": {
+          "organization": "Organisation",
+          "person": "Person"
+        },
+        "replaceHint": "Entfernen Sie das Häkchen bei einem Namen, um ihn durch einen allgemeinen Platzhalter zu ersetzen.",
+        "role": {
+          "organization": "Name der Organisation",
+          "person": "Name der Person"
+        },
+        "saveAll": "Alle behalten und speichern",
+        "saveReplacing": "Nicht markierte ersetzen und speichern",
+        "title": "Diese Namen im Skill speichern?"
+      }
+    },
     "matterRuns": {
       "needsYou": "{count, plural, one {# Chat wartet auf Sie} other {# Chats warten auf Sie}}",
       "working": "{count, plural, one {# Chat arbeitet} other {# Chats arbeiten}}"
@@ -3343,6 +3365,10 @@
       "sharepointNotFound": "Diese Website, Bibliothek oder Datei existiert nicht mehr oder ist nicht für Sie freigegeben.",
       "sharepointReconnectRequired": "Ihre Microsoft-Anmeldung ist abgelaufen. Verbinden Sie SharePoint und OneDrive erneut.",
       "sharepointThrottled": "Microsoft begrenzt die Anfragen. Versuchen Sie es in Kürze erneut.",
+      "skillFromChatAnonymizedThread": "Aus einer anonymisierten Konversation kann noch kein Skill erstellt werden.",
+      "skillFromChatEmptyThread": "Diese Konversation enthält noch nichts, woraus ein Skill erstellt werden kann.",
+      "skillFromChatThreadNotFound": "Diese Konversation wurde nicht gefunden.",
+      "skillFromChatWithdrawn": "Der Inhalt dieser Konversation wurde zurückgezogen, daher kann daraus kein Skill erstellt werden.",
       "skillSourceUnreachable": "Die Skill-Quelle konnte nicht geladen werden. Prüfen Sie, ob der Link auf ein öffentliches GitHub-Repository verweist, oder versuchen Sie es später erneut.",
       "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Arbeitsbereichs-Kontexts zu verwenden.",
       "usageLimitExceeded": "Nutzungslimit erreicht.",

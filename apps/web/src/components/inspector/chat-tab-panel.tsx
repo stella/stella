@@ -109,6 +109,7 @@ import {
   settleQueuedChatSend,
   subscribeQueuedChatSend,
 } from "@/features/chat/queued-chat-sends";
+import { useMakeSkillFromChat } from "@/features/chat/use-make-skill-from-chat";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -436,6 +437,7 @@ export const ChatTabPanel = ({
   // label while the real conversation title stayed stale on every other
   // surface. Pre-first-message renames stay label-only, as before.
   const renameThread = useRenameChatThread(threadRef);
+  const makeSkillFromChat = useMakeSkillFromChat();
   const hasThreadMessages = messages.length > 0;
   // The tab store keeps a document's chat across reloads only once its
   // conversation exists on the server.
@@ -609,6 +611,17 @@ export const ChatTabPanel = ({
             return;
           }
           startLabelEditingWithSuggestion();
+        },
+        "make-skill": (args) => {
+          editorController.setContent(composerText(""));
+          if (!hasThreadMessages) {
+            stellaToast.add({
+              title: t("chat.makeSkill.emptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          makeSkillFromChat({ intent: args, threadRef });
         },
       });
       if (!handledReserved) {

@@ -110,6 +110,11 @@ export default {
           "Recaps the window `loadRecapMessageWindow` returns, which reads the send mode after the messages.",
       },
       {
+        path: "apps/api/src/handlers/skills/from-chat/create.ts",
+        reason:
+          "Drafts a skill from the window `loadRecapMessageWindow` returns, which reads the send mode after the messages, and refuses an anonymized thread.",
+      },
+      {
         path: "apps/api/src/handlers/chat/improve-prompt.ts",
         reason:
           "Sends only the composer text, and refuses a request in anonymized mode.",

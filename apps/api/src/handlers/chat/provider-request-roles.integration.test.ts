@@ -31,6 +31,7 @@ import { applyChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import createSkillComment from "@/api/handlers/skills/comments/create";
 import generateSkillDraft from "@/api/handlers/skills/drafts/generate";
+import draftSkillFromChat from "@/api/handlers/skills/from-chat/create";
 import createProposalFromComments from "@/api/handlers/skills/proposals/from-comments/create";
 import createSkillResource from "@/api/handlers/skills/resources/create";
 import rewriteSkillResource from "@/api/handlers/skills/resources/rewrite";
@@ -177,7 +178,13 @@ const boundaryOf = (run: TaskRun) =>
 /** A handler context for the organization's owner. */
 const handlerContext = (
   run: TaskRun,
-  fields: { body?: unknown; params?: unknown; query?: unknown },
+  fields: {
+    body?: unknown;
+    params?: unknown;
+    query?: unknown;
+    /** For a builder that anonymizes through the organization's catalogs. */
+    scopedDb?: ScopedDb;
+  },
 ) =>
   createTestHandlerContext({
     scopedDb: NO_DB,
@@ -456,6 +463,28 @@ const TASK_REQUESTS = {
         asTestRaw<Parameters<typeof generateSkillDraft.handler>[0]>(
           handlerContext(run, {
             body: { intent: "Review an NDA against our playbook." },
+          }),
+        ),
+      );
+    },
+  },
+  "skill-from-chat": {
+    file: "handlers/skills/from-chat/create.ts",
+    task: "short-text",
+    settings: { caching: true, sendMode: false },
+    run: async (run) => {
+      await draftSkillFromChat.handler(
+        asTestRaw<Parameters<typeof draftSkillFromChat.handler>[0]>(
+          handlerContext(run, {
+            body: { threadId: await seedThread() },
+            scopedDb: asTestRaw<ScopedDb>(
+              createScopedDb(
+                testDb,
+                [ids.wsA1, ids.wsA2],
+                ids.orgA,
+                ids.userA1,
+              ),
+            ),
           }),
         ),
       );
