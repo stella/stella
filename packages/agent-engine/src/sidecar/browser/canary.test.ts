@@ -143,7 +143,17 @@ const connectDesktop = async (
       buffer = buffer.slice(newline + 1);
       newline = buffer.indexOf("\n");
       desktop.lines.push(line);
-      desktop.messages.push(v.parse(sidecarMessageSchema, JSON.parse(line)));
+      const message = v.parse(sidecarMessageSchema, JSON.parse(line));
+      desktop.messages.push(message);
+      // The member allows typing outside a search field.
+      if (message.type === "run.approval_request") {
+        send({
+          type: "run.approval",
+          runId: message.runId,
+          requestId: message.requestId,
+          decision: "approve",
+        });
+      }
     }
   });
   const send = (message: object) => {
@@ -240,6 +250,7 @@ const browse = async (harness: keyof typeof FAKES) => {
     harness,
     executable,
     model: MODELS[harness],
+    reasoningEffort: null,
     configDir,
     launch: PLAIN_LAUNCH,
     workspaceDir,
@@ -291,6 +302,7 @@ const toolCalls = (chunks: readonly Record<string, unknown>[]) => {
     const input = args.get(chunk["toolCallId"]);
     return [
       {
+        id: chunk["toolCallId"],
         name: chunk["toolCallName"],
         input: input === undefined ? undefined : JSON.parse(input),
       },
@@ -322,11 +334,33 @@ describe.each(["codex", "claude-code"] as const)(
         "snapshot",
         "click",
         "click",
+        "fill",
         "open",
       ]);
       const calls = toolCalls(chunks);
+      // The member was asked before the agent typed outside a search field.
+      const approvals = desktop.messages.filter(
+        (message) => message.type === "run.approval_request",
+      );
+      expect(approvals).toHaveLength(1);
+      expect(calls.filter(({ id }) => id.startsWith("browser-type-"))).toEqual([
+        {
+          id: expect.stringMatching(/^browser-type-/u),
+          name: "local_browser",
+          input: {
+            action: "type",
+            url: `${library.origin}${FIXTURE_CITATION.path}`,
+          },
+        },
+      ]);
       expect(
-        calls.filter(({ name }) => name === CHAT_LOCAL_RUN_TOOL_NAMES.browser),
+        calls
+          .filter(
+            ({ id, name }) =>
+              name === CHAT_LOCAL_RUN_TOOL_NAMES.browser &&
+              !id.startsWith("browser-type-"),
+          )
+          .map(({ input, name }) => ({ input, name })),
       ).toEqual([
         {
           name: "local_browser",
@@ -336,6 +370,7 @@ describe.each(["codex", "claude-code"] as const)(
         { name: "local_browser", input: { action: "snapshot" } },
         { name: "local_browser", input: { action: "click" } },
         { name: "local_browser", input: { action: "click" } },
+        { name: "local_browser", input: { action: "type" } },
         {
           name: "local_browser",
           input: { action: "open", url: `${library.origin}/account` },

@@ -47,7 +47,7 @@ const fixturePageSchema = v.object({
   text: v.string(),
   elements: v.array(
     v.object({
-      role: v.picklist(["textbox", "button", "link"]),
+      role: v.picklist(["searchbox", "textbox", "button", "link"]),
       name: v.string(),
       href: v.optional(v.string()),
     }),
@@ -65,7 +65,7 @@ const fixturePage = (url: URL): FixturePage | null => {
         title: "Fixture library",
         text: "Search the fixture library.",
         elements: [
-          { role: "textbox", name: "Search" },
+          { role: "searchbox", name: "Search" },
           { role: "button", name: "Search" },
         ],
       };
@@ -88,7 +88,10 @@ const fixturePage = (url: URL): FixturePage | null => {
       return {
         title: DECISION.title,
         text: `The notice period runs from delivery, not from dispatch. ${FIXTURE_CANARIES[0]} The claimant, ${FIXTURE_CANARIES[1]}, lost the appeal.`,
-        elements: [{ role: "link", name: "Back to results", href: "/" }],
+        elements: [
+          { role: "link", name: "Back to results", href: "/" },
+          { role: "textbox", name: "Note" },
+        ],
       };
     case "/account":
       return { title: "Sign in", text: "", elements: [], signIn: true };
@@ -450,7 +453,7 @@ const runFakeBrowserAgent = async ({
   await call(stellaServer, stella, "search_case_law", { query: FIXTURE_QUERY });
   const home = page(await call(browserServer, browser, "open", { url: start }));
   await call(browserServer, browser, "type", {
-    ref: refOf(home.elements, "textbox"),
+    ref: refOf(home.elements, "searchbox"),
     text: FIXTURE_QUERY,
   });
   const typed = page(await call(browserServer, browser, "snapshot", {}));
@@ -464,6 +467,11 @@ const runFakeBrowserAgent = async ({
       ref: refOf(results.elements, "link", DECISION.title),
     }),
   );
+  // Not a search field: the member is asked first.
+  await call(browserServer, browser, "type", {
+    ref: refOf(decision.elements, "textbox", "Note"),
+    text: "Check the notice period",
+  });
   await call(browserServer, browser, "open", {
     url: new URL("/account", start).href,
   });

@@ -5,7 +5,7 @@
 // sockets only to a Unix socket path. Servers stay allowed: the bridge
 // listens on a Unix socket and the MCP endpoint on 127.0.0.1.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
 import { createNetworkCallDetector } from "./network-call.ts";
 import {
@@ -135,7 +135,7 @@ export default eslintCompatPlugin({
             ? memberPropertyName(expression)
             : null;
         };
-        const checkSource = (node: unknown, source: unknown) => {
+        const checkSource = (node: ESTree.Node, source: unknown) => {
           const value = staticStringValue(source);
           if (value !== null && BANNED_MODULES.has(value)) {
             context.report({
