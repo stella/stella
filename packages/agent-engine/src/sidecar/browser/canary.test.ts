@@ -270,12 +270,33 @@ const browse = async (harness: keyof typeof FAKES) => {
   return { api, chrome, chunks, desktop, finished, library };
 };
 
-const toolCalls = (chunks: readonly Record<string, unknown>[]) =>
-  chunks.flatMap((chunk) =>
-    chunk["type"] === EventType.TOOL_CALL_END
-      ? [{ name: chunk["toolName"], input: chunk["input"] }]
-      : [],
+/** Each tool call as the run reported it: its name and the input it kept. */
+const toolCalls = (chunks: readonly Record<string, unknown>[]) => {
+  const args = new Map(
+    chunks.flatMap((chunk) =>
+      chunk["type"] === EventType.TOOL_CALL_ARGS &&
+      typeof chunk["toolCallId"] === "string" &&
+      typeof chunk["delta"] === "string"
+        ? [[chunk["toolCallId"], chunk["delta"]] as const]
+        : [],
+    ),
   );
+  return chunks.flatMap((chunk) => {
+    if (
+      chunk["type"] !== EventType.TOOL_CALL_START ||
+      typeof chunk["toolCallId"] !== "string"
+    ) {
+      return [];
+    }
+    const input = args.get(chunk["toolCallId"]);
+    return [
+      {
+        name: chunk["toolCallName"],
+        input: input === undefined ? undefined : JSON.parse(input),
+      },
+    ];
+  });
+};
 
 const toolResults = (chunks: readonly Record<string, unknown>[]) =>
   chunks.flatMap((chunk) =>
@@ -324,16 +345,9 @@ describe.each(["codex", "claude-code"] as const)(
       expect(toolResults(chunks)).toContainEqual({ status: "needs_member" });
 
       // It cites the decision it opened.
-      const answer = chunks
-        .flatMap((chunk) =>
-          chunk["type"] === EventType.TEXT_MESSAGE_CONTENT &&
-          typeof chunk["delta"] === "string"
-            ? [chunk["delta"]]
-            : [],
-        )
-        .join("");
-      expect(answer).toContain(FIXTURE_CITATION.title);
-      expect(answer).toContain(`${library.origin}${FIXTURE_CITATION.path}`);
+      expect(JSON.stringify(chunks)).toContain(
+        `[${FIXTURE_CITATION.title}](${library.origin}${FIXTURE_CITATION.path})`,
+      );
 
       // Nothing of the pages it read reached the desktop or stella's API,
       // while the agent's own stella call did reach the API.
