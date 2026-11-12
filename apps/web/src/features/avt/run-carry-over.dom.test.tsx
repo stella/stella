@@ -41,8 +41,12 @@ const mount = (carryOver: RunCarryOver) => {
       <FormattingProvider locale="en" timeZone="UTC">
         <RunCarryOverControl
           carryOver={carryOver}
-          onOpenRun={(runId) => opened.push(runId)}
-          onShowClaim={(claimId) => shown.push(claimId)}
+          onOpenRun={(runId) => {
+            opened.push(runId);
+          }}
+          onShowClaim={(claimId) => {
+            shown.push(claimId);
+          }}
         />
       </FormattingProvider>
     </IntlProvider>,

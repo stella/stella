@@ -23,6 +23,7 @@ import {
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { readFactTiers, readSourceKinds } from "@/api/lib/lists/fact-tiers";
 import { factTier } from "@/api/lib/lists/source-kind";
 import type {
@@ -583,37 +584,43 @@ const readCarryOver = async ({
   runId,
 }: ReadVerificationRunArgs) => {
   const outcomes = legalListClaimCarryOutcomes;
-  const rows = await tx
-    .select({
-      sourceRunId: outcomes.sourceRunId,
-      sourceRunCreatedAt: legalListVerificationRuns.createdAt,
-      sourceClaimId: outcomes.sourceClaimId,
-      outcome: outcomes.outcome,
-      targetClaimId: outcomes.targetClaimId,
-      text: legalListClaims.text,
-    })
-    .from(outcomes)
-    .innerJoin(
-      legalListClaims,
-      and(
-        eq(legalListClaims.id, outcomes.sourceClaimId),
-        eq(legalListClaims.runId, outcomes.sourceRunId),
-        eq(legalListClaims.workspaceId, workspaceId),
-      ),
-    )
-    .innerJoin(
-      legalListVerificationRuns,
-      and(
-        eq(legalListVerificationRuns.id, outcomes.sourceRunId),
-        eq(legalListVerificationRuns.workspaceId, workspaceId),
-      ),
-    )
-    .where(
-      and(eq(outcomes.workspaceId, workspaceId), eq(outcomes.runId, runId)),
-    )
-    .orderBy(asc(legalListClaims.position))
-    // One outcome per claim of the previous run.
-    .limit(VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX);
+  // One outcome per claim of the previous run, whose claims are capped.
+  const read = await readBounded(
+    tx
+      .select({
+        sourceRunId: outcomes.sourceRunId,
+        sourceRunCreatedAt: legalListVerificationRuns.createdAt,
+        sourceClaimId: outcomes.sourceClaimId,
+        outcome: outcomes.outcome,
+        targetClaimId: outcomes.targetClaimId,
+        text: legalListClaims.text,
+      })
+      .from(outcomes)
+      .innerJoin(
+        legalListClaims,
+        and(
+          eq(legalListClaims.id, outcomes.sourceClaimId),
+          eq(legalListClaims.runId, outcomes.sourceRunId),
+          eq(legalListClaims.workspaceId, workspaceId),
+        ),
+      )
+      .innerJoin(
+        legalListVerificationRuns,
+        and(
+          eq(legalListVerificationRuns.id, outcomes.sourceRunId),
+          eq(legalListVerificationRuns.workspaceId, workspaceId),
+        ),
+      )
+      .where(
+        and(eq(outcomes.workspaceId, workspaceId), eq(outcomes.runId, runId)),
+      )
+      .orderBy(asc(legalListClaims.position)),
+    VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX,
+  );
+  const rows =
+    read.type === "complete"
+      ? read.rows
+      : panic("A run carried more outcomes than its source run has claims");
   const [first] = rows;
   if (first === undefined) {
     return null;

@@ -13,6 +13,7 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type {
@@ -115,17 +116,23 @@ type NotCarriedRowProps = {
  *  matched a claim of this run shows it; one that matched none cannot. */
 const NotCarriedRow = ({ claim, onShow }: NotCarriedRowProps) => {
   const t = useTranslations();
+  const targetClaimId = claim.targetClaimId;
   const body = (
     <>
-      <span className="line-clamp-2 font-serif text-sm" dir="auto">
+      {/* A claim that opens in this run shows its whole words there. */}
+      <TruncatedText
+        className="block font-serif text-sm"
+        dir="auto"
+        hint={targetClaimId === null}
+        lines={2}
+      >
         {claim.text}
-      </span>
+      </TruncatedText>
       <span className="text-muted-foreground block text-xs">
         {t(NOT_CARRIED_LABEL_KEYS[claim.outcome])}
       </span>
     </>
   );
-  const targetClaimId = claim.targetClaimId;
   if (targetClaimId === null) {
     return <div className="space-y-0.5 px-2 py-1.5 text-start">{body}</div>;
   }

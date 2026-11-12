@@ -28,6 +28,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { matchClaims } from "@/api/lib/lists/verification/claim-match";
 import type { MatchableClaim } from "@/api/lib/lists/verification/claim-match";
 import type {
@@ -223,7 +224,7 @@ type CarryRow = {
  * Every reviewed source claim's outcome and the actions that follow it. A
  * claim with no action that could follow is left out.
  */
-export const planRunCarry = ({
+const planRunCarry = ({
   runId,
   workspaceId,
   sourceRunId,
@@ -242,8 +243,9 @@ export const planRunCarry = ({
   const targets = new Map(targetClaims.map((claim) => [claim.id, claim]));
   const base = { workspaceId, runId, sourceRunId };
   return sourceClaims.flatMap((claim): CarryRow[] => {
-    const events = sourceEvents.get(claim.id) ?? [];
+    const events = sourceEvents.get(claim.id);
     if (
+      events === undefined ||
       !events.some(
         (event) => CLAIM_REVIEW_CARRY_RULE[event.payload.kind] !== "never",
       )
@@ -370,33 +372,37 @@ export const carryReviewsToRun = async ({
   if (source === undefined) {
     return 0;
   }
-  const events = await tx
-    .select({
-      id: legalListClaimReviewEvents.id,
-      claimId: legalListClaimReviewEvents.claimId,
-      payload: legalListClaimReviewEvents.payload,
-      actorId: legalListClaimReviewEvents.actorId,
-      createdAt: legalListClaimReviewEvents.createdAt,
-    })
-    .from(legalListClaimReviewEvents)
-    .where(
-      and(
-        eq(legalListClaimReviewEvents.workspaceId, run.workspaceId),
-        eq(legalListClaimReviewEvents.runId, source.id),
+  // Bounded by what the writers allow: claims per run, actions per claim.
+  // A read past that would mean the bound broke; then nothing is carried
+  // rather than half a review.
+  const eventRead = await readBounded(
+    tx
+      .select({
+        id: legalListClaimReviewEvents.id,
+        claimId: legalListClaimReviewEvents.claimId,
+        payload: legalListClaimReviewEvents.payload,
+        actorId: legalListClaimReviewEvents.actorId,
+        createdAt: legalListClaimReviewEvents.createdAt,
+      })
+      .from(legalListClaimReviewEvents)
+      .where(
+        and(
+          eq(legalListClaimReviewEvents.workspaceId, run.workspaceId),
+          eq(legalListClaimReviewEvents.runId, source.id),
+        ),
+      )
+      // The fold's order, as `readClaimReviews` reads it.
+      .orderBy(
+        asc(legalListClaimReviewEvents.createdAt),
+        asc(legalListClaimReviewEvents.id),
       ),
-    )
-    // The fold's order, as `readClaimReviews` reads it.
-    .orderBy(
-      asc(legalListClaimReviewEvents.createdAt),
-      asc(legalListClaimReviewEvents.id),
-    )
-    .limit(
-      VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX *
-        VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX,
-    );
-  if (events.length === 0) {
+    VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX *
+      VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX,
+  );
+  if (eventRead.type === "overflow" || eventRead.rows.length === 0) {
     return 0;
   }
+  const events = eventRead.rows;
   const claimColumns = {
     id: legalListClaims.id,
     text: legalListClaims.text,
@@ -404,20 +410,28 @@ export const carryReviewsToRun = async ({
     state: legalListClaims.state,
     recordConflict: legalListClaims.recordConflict,
   };
+  // Claims per run are capped by their position check.
   const readClaims = (ofRun: SafeId<"legalListVerificationRun">) =>
-    tx
-      .select(claimColumns)
-      .from(legalListClaims)
-      .where(
-        and(
-          eq(legalListClaims.workspaceId, run.workspaceId),
-          eq(legalListClaims.runId, ofRun),
-        ),
-      )
-      .orderBy(asc(legalListClaims.position))
-      .limit(VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX);
-  const sourceClaims = await readClaims(source.id);
-  const targetClaims = await readClaims(run.id);
+    readBounded(
+      tx
+        .select(claimColumns)
+        .from(legalListClaims)
+        .where(
+          and(
+            eq(legalListClaims.workspaceId, run.workspaceId),
+            eq(legalListClaims.runId, ofRun),
+          ),
+        )
+        .orderBy(asc(legalListClaims.position)),
+      VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX,
+    );
+  const sourceRead = await readClaims(source.id);
+  const targetRead = await readClaims(run.id);
+  if (sourceRead.type === "overflow" || targetRead.type === "overflow") {
+    return 0;
+  }
+  const sourceClaims = sourceRead.rows;
+  const targetClaims = targetRead.rows;
 
   const sourceEvents = new Map<
     SafeId<"legalListClaim">,
