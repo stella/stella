@@ -148,6 +148,7 @@
     "addContactFailed": "The contact could not be added. Try again.",
     "personalDescription": "Without a client, the matter is personal and only you see it. Add a client to share it with your team.",
     "possibleDuplicates": "Possible duplicates",
+    "duplicatesFailed": "Matters with a similar name could not be checked.",
     "team": "Members",
     "teamHint": "Who else works on the matter. You are always on it.",
     "you": "You",

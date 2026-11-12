@@ -148,6 +148,7 @@
     "addContactFailed": "Não foi possível adicionar o contato. Tente novamente.",
     "personalDescription": "Sem cliente, o caso é pessoal e só você o vê. Adicione um cliente para compartilhá-lo com sua equipe.",
     "possibleDuplicates": "Possíveis duplicatas",
+    "duplicatesFailed": "Não foi possível verificar casos com nome parecido.",
     "team": "Membros",
     "teamHint": "Quem mais trabalha no caso. Você sempre faz parte dele.",
     "you": "Você",

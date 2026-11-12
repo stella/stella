@@ -148,6 +148,7 @@
     "addContactFailed": "Kontaktu neizdevās pievienot. Mēģiniet vēlreiz.",
     "personalDescription": "Bez klienta lieta ir personīga, un to redzat tikai jūs. Pievienojiet klientu, lai to kopīgotu ar komandu.",
     "possibleDuplicates": "Iespējamie dublikāti",
+    "duplicatesFailed": "Lietas ar līdzīgu nosaukumu neizdevās pārbaudīt.",
     "team": "Dalībnieki",
     "teamHint": "Kas vēl strādā pie lietas. Jūs tajā esat vienmēr.",
     "you": "Jūs",

@@ -148,6 +148,7 @@
     "addContactFailed": "A kapcsolatot nem sikerült hozzáadni. Próbálja újra.",
     "personalDescription": "Ügyfél nélkül az ügy személyes, és csak Ön látja. Adjon hozzá ügyfelet, hogy megoszthassa a csapatával.",
     "possibleDuplicates": "Lehetséges duplikátumok",
+    "duplicatesFailed": "A hasonló nevű ügyeket nem sikerült ellenőrizni.",
     "team": "Tagok",
     "teamHint": "Ki dolgozik még az ügyön. Ön mindig tagja.",
     "you": "Ön",

@@ -148,6 +148,7 @@
     "addContactFailed": "Le contact n’a pas pu être ajouté. Réessayez.",
     "personalDescription": "Sans client, le dossier est personnel et vous seul le voyez. Ajoutez un client pour le partager avec votre équipe.",
     "possibleDuplicates": "Doublons possibles",
+    "duplicatesFailed": "Les dossiers au nom similaire n’ont pas pu être vérifiés.",
     "team": "Membres",
     "teamHint": "Qui d’autre travaille sur le dossier. Vous en faites toujours partie.",
     "you": "Vous",

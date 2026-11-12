@@ -148,6 +148,7 @@
     "addContactFailed": "No se pudo añadir el contacto. Inténtelo de nuevo.",
     "personalDescription": "Sin cliente, el asunto es personal y solo usted lo ve. Añada un cliente para compartirlo con su equipo.",
     "possibleDuplicates": "Posibles duplicados",
+    "duplicatesFailed": "No se pudieron comprobar los asuntos con un nombre parecido.",
     "team": "Miembros",
     "teamHint": "Quién más trabaja en el asunto. Usted siempre forma parte.",
     "you": "Usted",

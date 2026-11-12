@@ -148,6 +148,7 @@
     "addContactFailed": "Der Kontakt konnte nicht hinzugefügt werden. Versuchen Sie es erneut.",
     "personalDescription": "Ohne Klient ist die Akte persönlich und nur Sie sehen sie. Fügen Sie einen Klienten hinzu, um sie mit Ihrem Team zu teilen.",
     "possibleDuplicates": "Mögliche Duplikate",
+    "duplicatesFailed": "Akten mit ähnlichem Namen konnten nicht geprüft werden.",
     "team": "Mitglieder",
     "teamHint": "Wer sonst an der Akte arbeitet. Sie selbst sind immer dabei.",
     "you": "Sie",

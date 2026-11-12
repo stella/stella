@@ -148,6 +148,7 @@
     "addContactFailed": "Nepavyko pridėti kontakto. Bandykite dar kartą.",
     "personalDescription": "Be kliento byla yra asmeninė ir ją matote tik jūs. Pridėkite klientą, kad galėtumėte ja dalytis su komanda.",
     "possibleDuplicates": "Galimi dublikatai",
+    "duplicatesFailed": "Nepavyko patikrinti bylų panašiu pavadinimu.",
     "team": "Nariai",
     "teamHint": "Kas dar dirba su byla. Jūs joje esate visada.",
     "you": "Jūs",

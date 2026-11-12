@@ -7,6 +7,7 @@ import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { getPossibleDuplicateMatters } from "@stll/api-contract/matter-duplicates";
+import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { Text } from "@stll/ui/text";
@@ -67,10 +68,14 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
   const [candidates, setCandidates] = useState<Promise<
     Result<MemberCandidate[], ApiError>
   > | null>(null);
-  const [matters] = useState(async () => await listMatters({ fetch, source }));
+  const loadMatters = async () => await listMatters({ fetch, source });
+  const [matters, setMatters] = useState(loadMatters);
+  // A client being added to the address book is not chosen yet; creating
+  // the matter meanwhile would open it without that client.
+  const [addingClient, setAddingClient] = useState(false);
   const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [creating, startCreating] = useTransition();
-  const ready = name.trim() !== "" && !creating;
+  const ready = name.trim() !== "" && !creating && !addingClient;
 
   const pickClient = (contact: ContactChoice | null) => {
     setClient(contact);
@@ -160,6 +165,7 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
           <ContactPicker
             clearLabel={t("removeClient")}
             disabled={creating}
+            onAddingChange={setAddingClient}
             onSelect={pickClient}
             selected={client}
             source={source}
@@ -174,6 +180,9 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
                 clientId={client.id}
                 matters={matters}
                 name={name}
+                onRetry={() => {
+                  setMatters(loadMatters());
+                }}
               />
             </Suspense>
           )}
@@ -220,15 +229,27 @@ const PossibleDuplicates = ({
   clientId,
   matters,
   name,
+  onRetry,
 }: {
   clientId: string;
   matters: Promise<Result<MatterSummary[], ApiError>>;
   name: string;
+  onRetry: () => void;
 }) => {
   const t = useTranslations("matters");
   const loaded = use(matters);
   if (Result.isError(loaded)) {
-    return null;
+    // Not the same as no look-alikes: the check did not run.
+    return (
+      <View className="flex-row items-center gap-3 px-1">
+        <Text className="flex-1" variant="caption">
+          {t("duplicatesFailed")}
+        </Text>
+        <Button onPress={onRetry} size="sm" variant="outline">
+          {t("retry")}
+        </Button>
+      </View>
+    );
   }
   const duplicates = getPossibleDuplicateMatters({
     clientId,

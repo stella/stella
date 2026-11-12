@@ -45,6 +45,7 @@ const ContactGlyph = ({ type }: { type: ContactType }) => {
 export const ContactPicker = ({
   clearLabel,
   disabled,
+  onAddingChange,
   onSelect,
   selected,
   source,
@@ -52,6 +53,11 @@ export const ContactPicker = ({
   /** What the button clearing the chosen contact says, such as "Remove client". */
   clearLabel: string;
   disabled: boolean;
+  /**
+   * Told when a new contact starts and stops going into the address book,
+   * so a form holds its own submit until the contact it will use exists.
+   */
+  onAddingChange: (adding: boolean) => void;
   onSelect: (contact: ContactChoice | null) => void;
   selected: ContactChoice | null;
   source: AccessTokenSource;
@@ -118,6 +124,7 @@ export const ContactPicker = ({
     const intent = `${type}:${displayName}`;
     const requestId = requestIds.current.get(intent) ?? randomUUID();
     requestIds.current.set(intent, requestId);
+    onAddingChange(true);
     startAdding(async () => {
       setFailure(null);
       const created = await createContact({
@@ -127,6 +134,7 @@ export const ContactPicker = ({
         source,
         type,
       });
+      onAddingChange(false);
       if (Result.isOk(created)) {
         choose(created.value);
         return;

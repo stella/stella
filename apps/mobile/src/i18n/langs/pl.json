@@ -148,6 +148,7 @@
     "addContactFailed": "Nie udało się dodać kontaktu. Spróbuj ponownie.",
     "personalDescription": "Bez klienta sprawa jest osobista i widzisz ją tylko Ty. Dodaj klienta, aby udostępnić ją zespołowi.",
     "possibleDuplicates": "Możliwe duplikaty",
+    "duplicatesFailed": "Nie udało się sprawdzić spraw o podobnej nazwie.",
     "team": "Członkowie",
     "teamHint": "Kto jeszcze pracuje nad sprawą. Ty zawsze w niej jesteś.",
     "you": "Ty",

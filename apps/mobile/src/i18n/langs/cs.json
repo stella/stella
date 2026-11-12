@@ -148,6 +148,7 @@
     "addContactFailed": "Kontakt se nepodařilo přidat. Zkuste to znovu.",
     "personalDescription": "Bez klienta je spis osobní a vidíte ho jen vy. Přidejte klienta, abyste ho mohli sdílet s týmem.",
     "possibleDuplicates": "Možné duplicity",
+    "duplicatesFailed": "Spisy s podobným názvem se nepodařilo zkontrolovat.",
     "team": "Členové",
     "teamHint": "Kdo další na spisu pracuje. Vy jste na něm vždy.",
     "you": "Vy",

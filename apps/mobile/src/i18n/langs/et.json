@@ -148,6 +148,7 @@
     "addContactFailed": "Kontakti ei õnnestunud lisada. Proovige uuesti.",
     "personalDescription": "Ilma kliendita on asi isiklik ja näete seda ainult teie. Lisage klient, et seda meeskonnaga jagada.",
     "possibleDuplicates": "Võimalikud duplikaadid",
+    "duplicatesFailed": "Sarnase nimega asju ei õnnestunud kontrollida.",
     "team": "Liikmed",
     "teamHint": "Kes veel asjaga tegeleb. Teie olete alati liige.",
     "you": "Teie",
