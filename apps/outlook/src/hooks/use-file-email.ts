@@ -1,8 +1,6 @@
 import { useState } from "react";
 
-import { Result } from "better-result";
-
-import type { SafeId } from "@stll/api-contract";
+import { panic, Result } from "better-result";
 
 import {
   type FiledEmail,
@@ -18,12 +16,14 @@ import {
   outlookUserErrorMessage,
 } from "@/lib/outlook-api-error";
 import { isAttachmentReadError, OutlookError } from "@/lib/outlook-error";
-import type { MailSnapshot } from "@/types";
+import type { MailSnapshot, WorkspaceSummary } from "@/types";
 
 type FiledMessage = {
   readonly result: FiledEmail;
   readonly skippedAttachments: MessageFile["skippedAttachments"];
   readonly source: MessageFile["source"];
+  /** The matter the email went to, as chosen at the click. */
+  readonly workspace: WorkspaceSummary;
 };
 
 type RetryFinalize = Omit<FiledMessage, "result"> & {
@@ -50,7 +50,7 @@ type SaveArgs = {
   isCurrent: (itemInstanceKey: string) => boolean;
   loadLatest: () => Promise<MailSnapshot>;
   snapshot: MailSnapshot;
-  workspaceId: SafeId<"workspace">;
+  workspace: WorkspaceSummary;
 };
 
 const errorMessage = (error: unknown, messages: FileEmailMessages): string => {
@@ -74,13 +74,35 @@ const errorMessage = (error: unknown, messages: FileEmailMessages): string => {
   return messages.errorFallback;
 };
 
-export const isFileEmailActive = (state: FileEmailState): boolean =>
-  state.type === "reading" || state.type === "uploading";
+export const isFileEmailActive = (state: FileEmailState): boolean => {
+  switch (state.type) {
+    case "reading":
+    case "uploading":
+      return true;
+    case "complete":
+    case "error":
+    case "idle":
+      return false;
+    default:
+      state satisfies never;
+      return panic("Unknown filing state");
+  }
+};
+
+/**
+ * The matter of an upload that went through but was not confirmed. Until it
+ * is, filing finishes that upload there: a new one elsewhere could leave the
+ * email in two matters.
+ */
+export const pendingFinalizeWorkspace = (
+  state: FileEmailState,
+): WorkspaceSummary | null =>
+  state.type === "error" ? (state.retry?.workspace ?? null) : null;
 
 /**
  * Files the selected message into a matter as one `.eml` document. A
  * finalize that did not answer is kept so "try again" finalizes the stored
- * upload instead of uploading the message twice.
+ * upload, in its own matter, instead of uploading the message twice.
  */
 export const useFileEmail = (messages: FileEmailMessages) => {
   const [state, setState] = useState<FileEmailState>({ type: "idle" });
@@ -89,15 +111,13 @@ export const useFileEmail = (messages: FileEmailMessages) => {
     isCurrent,
     loadLatest,
     snapshot,
-    workspaceId,
+    workspace,
   }: SaveArgs) => {
-    const retry =
-      state.type === "error" && state.retry?.pending.workspaceId === workspaceId
-        ? state.retry
-        : null;
+    const retry = state.type === "error" ? state.retry : null;
     let filedMessage: Omit<FiledMessage, "result"> = retry ?? {
       skippedAttachments: [],
       source: "mailbox",
+      workspace,
     };
     const filed = await Result.tryPromise({
       catch: (cause) => cause,
@@ -121,9 +141,13 @@ export const useFileEmail = (messages: FileEmailMessages) => {
         filedMessage = {
           skippedAttachments: message.skippedAttachments,
           source: message.source,
+          workspace,
         };
         setState({ type: "uploading" });
-        return await fileEmailToMatter({ eml: message.file, workspaceId });
+        return await fileEmailToMatter({
+          eml: message.file,
+          workspaceId: workspace.id,
+        });
       },
     });
     if (Result.isError(filed)) {
@@ -136,6 +160,7 @@ export const useFileEmail = (messages: FileEmailMessages) => {
                 pending: error.pending,
                 skippedAttachments: filedMessage.skippedAttachments,
                 source: filedMessage.source,
+                workspace: filedMessage.workspace,
               }
             : null,
         type: "error",
@@ -147,6 +172,7 @@ export const useFileEmail = (messages: FileEmailMessages) => {
       skippedAttachments: filedMessage.skippedAttachments,
       source: filedMessage.source,
       type: "complete",
+      workspace: filedMessage.workspace,
     });
   };
 

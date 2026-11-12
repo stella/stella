@@ -12,48 +12,28 @@ import {
   buildAIDraftRequest,
   buildAISummaryRequest,
 } from "@/hooks/ai-request.logic";
+import {
+  type AssistRequest,
+  type AssistTurn,
+  createAssistTurns,
+} from "@/hooks/assist-turns.logic";
 import { type AskEmailSource, parseAskEmailResponse } from "@/lib/api-schemas";
 import { requestOutlookApi } from "@/lib/outlook-api-client";
 import {
   OutlookAPIError,
   outlookUserErrorMessage,
 } from "@/lib/outlook-api-error";
-import type { MailSnapshot } from "@/types";
 
 const AI_REQUEST_TIMEOUT_MS = 70_000;
 /** Older turns drop off; the pane is a working surface, not a history. */
 const MAX_TURNS = 6;
-
-export type AssistKind = "answer" | "draft" | "summary";
-
-export type AssistTurnState =
-  | { type: "loading" }
-  | { sources: AskEmailSource[]; text: string; type: "ready" }
-  | { message: string; type: "error" };
-
-export type AssistTurn = {
-  readonly id: string;
-  readonly kind: AssistKind;
-  /** What the user asked for, shown as the turn's heading. */
-  readonly prompt: string;
-  readonly state: AssistTurnState;
-};
-
-type AskArgs = {
-  /** The text sent to the model: the question, or the reply instruction. */
-  instruction: string;
-  kind: AssistKind;
-  prompt: string;
-  snapshot: MailSnapshot;
-  workspaceId: string | null;
-};
 
 const request = async ({
   instruction,
   kind,
   snapshot,
   workspaceId,
-}: AskArgs): Promise<{ sources: AskEmailSource[]; text: string }> => {
+}: AssistRequest): Promise<{ sources: AskEmailSource[]; text: string }> => {
   if (kind === "summary") {
     const response = await requestOutlookApi({
       body: buildAISummaryRequest({ text: snapshot.bodyText }),
@@ -90,47 +70,39 @@ const request = async ({
  */
 export const useAssist = (errorFallback: string) => {
   const [turns, setTurns] = useState<AssistTurn[]>([]);
-
-  const update = (id: string, state: AssistTurnState) =>
-    setTurns((current) =>
-      current.map((turn) => (turn.id === id ? { ...turn, state } : turn)),
-    );
-
-  const ask = (args: AskArgs) => {
-    const id = crypto.randomUUID();
-    const turn: AssistTurn = {
-      id,
-      kind: args.kind,
-      prompt: args.prompt,
-      state: { type: "loading" },
-    };
-    setTurns((current) => [turn, ...current].slice(0, MAX_TURNS));
-    run(id, args).catch(() =>
-      update(id, { message: errorFallback, type: "error" }),
-    );
-  };
-
-  const run = async (id: string, args: AskArgs) => {
-    const result = await Result.tryPromise({
-      catch: (cause) => cause,
-      try: async () => await request(args),
-    });
-    if (Result.isError(result)) {
-      update(id, {
-        message:
-          result.error instanceof OutlookAPIError
-            ? outlookUserErrorMessage(result.error, errorFallback)
-            : errorFallback,
-        type: "error",
-      });
-      return;
-    }
-    update(id, { ...result.value, type: "ready" });
-  };
+  const [assist] = useState(() =>
+    createAssistTurns({
+      errorFallback,
+      maxTurns: MAX_TURNS,
+      newId: () => crypto.randomUUID(),
+      onChange: setTurns,
+      send: async (args) => {
+        const result = await Result.tryPromise({
+          catch: (cause) => cause,
+          try: async () => await request(args),
+        });
+        if (Result.isError(result)) {
+          return {
+            message:
+              result.error instanceof OutlookAPIError
+                ? outlookUserErrorMessage(result.error, errorFallback)
+                : errorFallback,
+            type: "error",
+          };
+        }
+        return {
+          sources: result.value.sources,
+          text: result.value.text,
+          type: "ready",
+        };
+      },
+    }),
+  );
 
   return {
-    ask,
+    ask: assist.ask,
     isBusy: turns.some((turn) => turn.state.type === "loading"),
+    retry: assist.retry,
     turns,
   };
 };

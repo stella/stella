@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { panic } from "better-result";
+
 import { Badge } from "@stll/ui/badge";
 import { Button } from "@stll/ui/components/button";
 import { ExternalLinkIcon } from "@stll/ui/icons";
@@ -22,7 +24,11 @@ import { Notice } from "@/components/notice";
 import { Panel } from "@/components/panel";
 import type { Translate } from "@/components/panel";
 import { env } from "@/env";
-import { type FileEmailState, isFileEmailActive } from "@/hooks/use-file-email";
+import {
+  type FileEmailState,
+  isFileEmailActive,
+  pendingFinalizeWorkspace,
+} from "@/hooks/use-file-email";
 import { buildSavedEmailUrl } from "@/lib/saved-email-url";
 import type { WorkspaceSummary } from "@/types";
 
@@ -42,12 +48,79 @@ type FilingSectionProps = {
   workspaceError: string | null;
 };
 
+type OpenFilingState = Exclude<FileEmailState, { type: "complete" }>;
+
 /**
  * Filing in one step. With a matter in view (suggested from the email, or
  * chosen) the section is that matter and one button; the full list opens
  * only on "Change". Once filed, it says where.
  */
-export const FilingSection = ({
+export const FilingSection = (props: FilingSectionProps) => {
+  const { saveState, t } = props;
+  switch (saveState.type) {
+    case "complete":
+      return <FiledPanel saveState={saveState} t={t} />;
+    case "error":
+    case "idle":
+    case "reading":
+    case "uploading":
+      return <FilingPanel {...props} saveState={saveState} />;
+    default:
+      saveState satisfies never;
+      return panic("Unknown filing state");
+  }
+};
+
+const FiledPanel = ({
+  saveState,
+  t,
+}: {
+  saveState: Extract<FileEmailState, { type: "complete" }>;
+  t: Translate;
+}) => (
+  <Panel
+    action={
+      <Button
+        render={
+          <a
+            href={buildSavedEmailUrl({
+              baseUrl: env.webOrigin,
+              entityId: saveState.result.entityId,
+              fieldId: saveState.result.fieldId,
+              workspaceId: saveState.result.workspaceId,
+            })}
+            rel="noreferrer"
+            target="_blank"
+          />
+        }
+        size="xs"
+        variant="ghost"
+      >
+        {t("openSavedEmail")}
+        <ExternalLinkIcon />
+      </Button>
+    }
+    title={t("chooseMatter")}
+  >
+    <FiledRow saveState={saveState} t={t} />
+  </Panel>
+);
+
+const fileButtonLabel = (state: OpenFilingState, t: Translate): string => {
+  switch (state.type) {
+    case "error":
+      return state.retry === null ? t("fileEmail") : t("finishSaving");
+    case "idle":
+    case "reading":
+    case "uploading":
+      return t("fileEmail");
+    default:
+      state satisfies never;
+      return panic("Unknown filing state");
+  }
+};
+
+const FilingPanel = ({
   matches,
   onChoose,
   onFile,
@@ -58,49 +131,21 @@ export const FilingSection = ({
   targetIsSuggestion,
   t,
   workspaceError,
-}: FilingSectionProps) => {
+}: FilingSectionProps & { saveState: OpenFilingState }) => {
   const [picking, setPicking] = useState(false);
-  const showPicker = target === null || picking;
-
-  if (saveState.type === "complete") {
-    return (
-      <Panel
-        action={
-          <Button
-            render={
-              <a
-                href={buildSavedEmailUrl({
-                  baseUrl: env.webOrigin,
-                  entityId: saveState.result.entityId,
-                  fieldId: saveState.result.fieldId,
-                  workspaceId: saveState.result.workspaceId,
-                })}
-                rel="noreferrer"
-                target="_blank"
-              />
-            }
-            size="xs"
-            variant="ghost"
-          >
-            {t("openSavedEmail")}
-            <ExternalLinkIcon />
-          </Button>
-        }
-        title={t("chooseMatter")}
-      >
-        <FiledRow saveState={saveState} t={t} target={target} />
-      </Panel>
-    );
-  }
-
   const active = isFileEmailActive(saveState);
+  // An upload awaiting confirmation keeps its matter in view until it is
+  // finished; filing it elsewhere could leave the email in two matters.
+  const pending = pendingFinalizeWorkspace(saveState);
+  const shown = pending ?? target;
+  const showPicker = shown === null || (picking && pending === null);
 
   return (
     <Panel
       action={
-        target === null ? undefined : (
+        shown === null ? undefined : (
           <Button
-            disabled={active}
+            disabled={active || pending !== null}
             onClick={() => setPicking(!showPicker)}
             size="xs"
             variant="ghost"
@@ -144,18 +189,18 @@ export const FilingSection = ({
           onQueryChange={onQueryChange}
           query={query}
           t={t}
-          targetId={target?.id ?? null}
+          targetId={shown?.id ?? null}
         />
       ) : (
         <List>
           <ListItem className="px-3">
             <ListItemMedia>
-              <MatterIcon matter={{ color: null, id: target.id }} />
+              <MatterIcon matter={{ color: null, id: shown.id }} />
             </ListItemMedia>
             <MatterText
-              isSuggested={targetIsSuggestion}
+              isSuggested={targetIsSuggestion && pending === null}
               t={t}
-              workspace={target}
+              workspace={shown}
             />
           </ListItem>
         </List>
@@ -165,12 +210,10 @@ export const FilingSection = ({
           className="w-full"
           disabled={active}
           loading={active}
-          onClick={() => onFile(target)}
+          onClick={() => onFile(shown)}
           size="lg"
         >
-          {saveState.type === "error" && saveState.retry !== null
-            ? t("finishSaving")
-            : t("fileEmail")}
+          {fileButtonLabel(saveState, t)}
         </Button>
       )}
       {saveState.type === "error" ? (
@@ -277,11 +320,9 @@ const MatterPicker = ({
 const FiledRow = ({
   saveState,
   t,
-  target,
 }: {
   saveState: Extract<FileEmailState, { type: "complete" }>;
   t: Translate;
-  target: WorkspaceSummary | null;
 }) => {
   const notes = [
     saveState.source === "rebuilt" ? t("savedRebuilt") : null,
@@ -299,9 +340,13 @@ const FiledRow = ({
           </ListItemMedia>
           <ListItemContent>
             <ListItemTitle>
-              {target ? <bdi>{target.name}</bdi> : t("saveSuccess")}
+              <bdi>{saveState.workspace.name}</bdi>
             </ListItemTitle>
-            <ListItemDescription>{t("filedDescription")}</ListItemDescription>
+            <ListItemDescription>
+              {saveState.skippedAttachments.length > 0
+                ? t("filedWithoutSomeAttachments")
+                : t("filedDescription")}
+            </ListItemDescription>
           </ListItemContent>
         </ListItem>
       </List>

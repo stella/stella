@@ -200,6 +200,26 @@ describe("runReplyChecks", () => {
       t: translator,
     });
     expect(composingWithFile).toEqual([]);
+
+    const composingWithInlineImageOnly = runReplyChecks({
+      draft: "Please find the markup attached.",
+      snapshot: snapshot({
+        attachments: [
+          {
+            contentType: "image/png",
+            id: "2",
+            isInline: true,
+            name: "logo.png",
+            size: 1,
+          },
+        ],
+        mode: "compose",
+      }),
+      t: translator,
+    });
+    expect(composingWithInlineImageOnly.map((c) => c.title)).toEqual([
+      "The draft mentions an attachment",
+    ]);
   });
 
   test("lists the dates the draft names", () => {

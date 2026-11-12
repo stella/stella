@@ -28,7 +28,7 @@ import { CheckRow } from "@/components/check-row";
 import { Notice } from "@/components/notice";
 import type { Translate } from "@/components/panel";
 import { env } from "@/env";
-import type { AssistKind, AssistTurn } from "@/hooks/use-assist";
+import type { AssistKind, AssistTurn } from "@/hooks/assist-turns.logic";
 import type { AskEmailSource } from "@/lib/api-schemas";
 import { buildSavedEmailUrl } from "@/lib/saved-email-url";
 import { type DraftPlacement, placeDraft } from "@/outlook";
@@ -58,10 +58,12 @@ const paragraphs = (text: string): { offset: number; text: string }[] =>
 
 /** One thing the assistant was asked, and what came back. */
 export const AssistTurnView = ({
+  onRetry,
   snapshot,
   t,
   turn,
 }: {
+  onRetry: () => void;
   snapshot: MailSnapshot;
   t: Translate;
   turn: AssistTurn;
@@ -73,16 +75,18 @@ export const AssistTurnView = ({
         <Icon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
         <span className="line-clamp-2 text-pretty">{turn.prompt}</span>
       </h3>
-      <TurnBody snapshot={snapshot} t={t} turn={turn} />
+      <TurnBody onRetry={onRetry} snapshot={snapshot} t={t} turn={turn} />
     </article>
   );
 };
 
 const TurnBody = ({
+  onRetry,
   snapshot,
   t,
   turn,
 }: {
+  onRetry: () => void;
   snapshot: MailSnapshot;
   t: Translate;
   turn: AssistTurn;
@@ -104,7 +108,10 @@ const TurnBody = ({
   if (state.type === "error") {
     return (
       <Notice role="alert" title={t("aiUnavailable")} tone="risk">
-        {state.message}
+        <p>{state.message}</p>
+        <Button className="mt-1" onClick={onRetry} size="xs" variant="outline">
+          {t("tryAgain")}
+        </Button>
       </Notice>
     );
   }
@@ -181,6 +188,7 @@ const AnswerBody = ({
 );
 
 type Placement =
+  | { draft: string; type: "placing" }
   | { draft: string; type: "placed"; value: DraftPlacement }
   | { draft: string; message: string; type: "error" };
 
@@ -195,13 +203,28 @@ const DraftBody = ({
 }) => {
   const [draft, setDraft] = useState(initialDraft);
   const [placement, setPlacement] = useState<Placement | null>(null);
+  // The text last prepended to the open draft. Outlook gives no handle to
+  // take it back out, so the same text is never inserted twice.
+  const [inBody, setInBody] = useState<string | null>(null);
   // A placement reports on the text it placed; editing after it clears it.
   const current = placement?.draft === draft ? placement : null;
   const checks = runReplyChecks({ draft, snapshot, t });
+  const placing = placement?.type === "placing";
+  const alreadyInBody = inBody === draft;
 
   const place = () => {
+    if (placing || alreadyInBody) {
+      return;
+    }
+    setPlacement({ draft, type: "placing" });
+    const placed = (value: DraftPlacement) => {
+      if (value === "composeBody") {
+        setInBody(draft);
+      }
+      setPlacement({ draft, type: "placed", value });
+    };
     placeDraft(draft)
-      .then((value) => setPlacement({ draft, type: "placed", value }))
+      .then((value) => placed(value))
       .catch((error: unknown) =>
         setPlacement({
           draft,
@@ -228,7 +251,12 @@ const DraftBody = ({
         </List>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={draft.trim().length === 0} onClick={place} size="sm">
+        <Button
+          disabled={draft.trim().length === 0 || alreadyInBody || placing}
+          loading={placing}
+          onClick={place}
+          size="sm"
+        >
           <MailIcon />
           {snapshot.mode === "compose"
             ? t("insertIntoDraft")
@@ -244,6 +272,11 @@ const DraftBody = ({
           </span>
         ) : null}
       </div>
+      {inBody !== null && !alreadyInBody ? (
+        <p className="text-muted-foreground px-1 text-xs text-pretty">
+          {t("earlierDraftInserted")}
+        </p>
+      ) : null}
       {current?.type === "error" ? (
         <Notice role="alert" title={t("draftPlacementError")} tone="risk">
           {current.message}

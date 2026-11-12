@@ -14,6 +14,7 @@ import {
   assertOfficeRuntimeEntryIsIsolated,
   assertOutlookReleaseVersion,
   createContentHashedAssetName,
+  FONT_LICENCE_FILE_NAME,
   getOutlookDeploymentHeaderRules,
   normalizeOutlookReleaseOrigins,
   resolveOutlookFrameAncestors,
@@ -213,9 +214,10 @@ for (const fileName of readdirSync(PUBLIC_ASSETS_DIR)) {
   );
 }
 // DM Sans, the design system's face (`--font-sans`), served beside the
-// hashed code; the same files the web app ships (licence: public/fonts/OFL.txt).
+// hashed code; the same files the web app ships. The OFL requires its text to
+// travel with the fonts, so OFL.txt ships too.
 for (const fileName of readdirSync(PUBLIC_FONTS_DIR)) {
-  if (!fileName.endsWith(".woff2")) {
+  if (!fileName.endsWith(".woff2") && fileName !== FONT_LICENCE_FILE_NAME) {
     continue;
   }
   copyFileSync(

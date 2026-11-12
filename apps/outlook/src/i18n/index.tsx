@@ -34,7 +34,7 @@ const outlookLocale = (): OutlookLocale => {
 const messages = {
   outlook: {
     aiDataNotice:
-      "Questions and drafts send this email's text, and passages from the matter's documents, to your organization's AI provider. Check every answer before you rely on it.",
+      "Summaries, questions and drafts send this email's text to your organization's AI provider. Questions also send passages from the matter's documents. Check every answer before you rely on it.",
     aiDataNoticeLabel: "How answers are made",
     aiErrorFallback: "stella could not answer. Try again in a moment.",
     aiUnavailable: "AI is unavailable right now",
@@ -66,10 +66,13 @@ const messages = {
       "Attach it to the reply before you send.",
     draftPlacementError: "Could not insert or copy the draft",
     draftReply: "Draft reply",
+    earlierDraftInserted:
+      "An earlier version is already in your draft. Remove it there before you insert this one.",
     emailTooLarge: "This email is too large to save to stella.",
     externalRecipients: "External recipients",
     fileEmail: "File email",
     filedDescription: "Filed with its attachments",
+    filedWithoutSomeAttachments: "Filed without some of its attachments",
     finishSaving: "Finish saving",
     groundedIn: "Answers draw on documents in <matter>{matterName}</matter>",
     groundedInEmailOnly:
@@ -95,7 +98,6 @@ const messages = {
     saveFailed: "Save failed",
     saveNotFinalized:
       "The email was uploaded but stella has not confirmed it yet. Try again to finish saving.",
-    saveSuccess: "Saved to matter",
     savedRebuilt:
       "Outlook could not provide the original message, so it was rebuilt from its fields; inline images are not included.",
     signInCancelled:
@@ -115,6 +117,7 @@ const messages = {
     subjectFallback: "(No subject)",
     suggested: "Suggested",
     summarize: "Summarize",
+    tryAgain: "Try again",
     working: "Working on it",
   },
 } as const;

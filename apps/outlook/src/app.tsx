@@ -1,6 +1,5 @@
 import { useTranslations } from "use-intl";
 
-import { toSafeId } from "@stll/api-contract/safe-id";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { AppHeader } from "@/components/app-header";
@@ -143,7 +142,7 @@ const MessageApp = ({
             isCurrent,
             loadLatest,
             snapshot,
-            workspaceId: toSafeId<"workspace">(workspace.id),
+            workspace,
           })
         }
         onQueryChange={setQuery}
@@ -167,6 +166,9 @@ const MessageApp = ({
             snapshot,
             workspaceId: target?.id ?? null,
           })
+        }
+        onRetry={(turnId) =>
+          assist.retry(turnId, { snapshot, workspaceId: target?.id ?? null })
         }
         snapshot={snapshot}
         t={t}

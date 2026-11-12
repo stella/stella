@@ -3,7 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Result } from "better-result";
 
 import { isAttachmentReadError, OutlookError } from "@/lib/outlook-error";
-import { loadMailSnapshot, subscribeMailboxItemChanges } from "@/outlook";
+import {
+  loadMailSnapshot,
+  subscribeComposeFieldChanges,
+  subscribeMailboxItemChanges,
+} from "@/outlook";
 import type { MailSnapshot } from "@/types";
 
 type MailSnapshotState =
@@ -88,10 +92,16 @@ export const useMailSnapshot = ({
       setState({ type: "loading" });
       void load(`item-${String(itemInstanceSequence.current)}`);
     });
+    // Same item, new recipients or files: re-read it under the same key, so
+    // the pane keeps its state and the draft checks see the current fields.
+    const unsubscribeComposeFields = subscribeComposeFieldChanges(() => {
+      void load(`item-${String(itemInstanceSequence.current)}`);
+    });
     return () => {
       active = false;
       loadSequence.current += 1;
       unsubscribe();
+      unsubscribeComposeFields();
     };
   }, [load]);
 

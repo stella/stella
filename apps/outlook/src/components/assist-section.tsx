@@ -19,7 +19,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { AssistTurnView } from "@/components/assist-turn";
 import { Panel } from "@/components/panel";
 import type { Translate } from "@/components/panel";
-import type { AssistKind, AssistTurn } from "@/hooks/use-assist";
+import type { AssistKind, AssistTurn } from "@/hooks/assist-turns.logic";
 import type { MailSnapshot, WorkspaceSummary } from "@/types";
 
 type AssistSectionProps = {
@@ -31,6 +31,8 @@ type AssistSectionProps = {
     kind: AssistKind;
     prompt: string;
   }) => void;
+  /** Sends a failed turn's request again. */
+  onRetry: (turnId: string) => void;
   snapshot: MailSnapshot;
   t: Translate;
   turns: AssistTurn[];
@@ -45,6 +47,7 @@ export const AssistSection = ({
   isBusy,
   matter,
   onAsk,
+  onRetry,
   snapshot,
   t,
   turns,
@@ -161,6 +164,7 @@ export const AssistSection = ({
           {turns.map((turn) => (
             <AssistTurnView
               key={turn.id}
+              onRetry={() => onRetry(turn.id)}
               snapshot={snapshot}
               t={t}
               turn={turn}

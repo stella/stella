@@ -19,6 +19,8 @@ export const OUTLOOK_RELEASE_VERSION_PATTERN = /^\d+\.\d+\.\d+\.\d+$/u;
 export const NO_CACHE_HEADER = "no-cache, max-age=0, must-revalidate";
 export const IMMUTABLE_ASSET_CACHE_HEADER =
   "public, max-age=31536000, immutable";
+/** The fonts' licence (SIL OFL 1.1), shipped beside them in `/assets`. */
+export const FONT_LICENCE_FILE_NAME = "OFL.txt";
 
 const OFFICE_JS_ORIGIN = "https://appsforoffice.microsoft.com";
 const DEFAULT_OFFICE_FRAME_ANCESTORS = [
@@ -193,6 +195,13 @@ export const getOutlookDeploymentHeaderRules = (
     {
       headers: { "Cache-Control": NO_CACHE_HEADER },
       path: "/assets/dm-sans-*.woff2",
+    },
+    {
+      headers: {
+        "Cache-Control": NO_CACHE_HEADER,
+        "X-Content-Type-Options": "nosniff",
+      },
+      path: `/assets/${FONT_LICENCE_FILE_NAME}`,
     },
   ];
 };

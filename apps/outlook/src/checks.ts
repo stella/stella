@@ -76,7 +76,8 @@ export const extractPotentialDates = (snapshot: MailSnapshot): string[] =>
  * - Recipients outside the user's domain are flagged only while composing,
  *   where the user chose them; a reply goes back to the person who wrote.
  * - A draft that names an attachment is flagged when the reply will carry
- *   none: a reply from read mode never does.
+ *   no attached file: a reply from read mode never does, and an inline
+ *   image does not count.
  * - Dates in the draft are listed so the user confirms them.
  */
 export const runReplyChecks = ({
@@ -106,8 +107,10 @@ export const runReplyChecks = ({
     }
   }
 
+  // An inline image is part of the body, not the file the draft names.
   const replyHasAttachments =
-    snapshot.mode === "compose" && snapshot.attachments.length > 0;
+    snapshot.mode === "compose" &&
+    snapshot.attachments.some((attachment) => !attachment.isInline);
   if (mentionsAttachment(draft) && !replyHasAttachments) {
     checks.push({
       description: t("draftMentionsAttachmentDescription"),
