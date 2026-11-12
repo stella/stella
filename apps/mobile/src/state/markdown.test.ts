@@ -151,18 +151,16 @@ describe("blocks", () => {
 });
 
 const spansOf = (block: Block): Span[] => {
-  switch (block.type) {
-    case "code":
-      return [];
-    case "list":
-      return block.items.flat();
-    case "table":
-      return [...block.header.flat(), ...block.rows.flat().flat()];
-    case "heading":
-    case "paragraph":
-    case "quote":
-      return block.spans;
+  if (block.type === "code") {
+    return [];
   }
+  if (block.type === "list") {
+    return block.items.flat();
+  }
+  if (block.type === "table") {
+    return [...block.header.flat(), ...block.rows.flat().flat()];
+  }
+  return block.spans;
 };
 
 const MATTER = "0191a3c4-5e6f-7a8b-9c0d-1e2f3a4b5c6d";
