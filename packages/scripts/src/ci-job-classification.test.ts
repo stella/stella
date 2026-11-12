@@ -128,7 +128,7 @@ test("the working tree and a revision read one decision layout", () => {
   };
   try {
     // A tree without a privileged job has no decisions directory at all.
-    writeFileSync(path.join(root, "README.md"), "fixture\n");
+    writeFileSync(path.join(root, "placeholder.txt"), "fixture\n");
     commit("no decisions");
     expect(read()).toEqual({ workingTree: {}, revision: {} });
 
