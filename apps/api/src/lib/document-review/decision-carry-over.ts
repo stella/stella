@@ -211,7 +211,7 @@ const DOCUMENT_REVIEW_RUN_COLUMNS = {
   fileFieldId: documentReviewRuns.fileFieldId,
   status: documentReviewRuns.status,
   createdAt: documentReviewRuns.createdAt,
-} satisfies DocumentRunColumns<SafeId<"documentReviewRun">>;
+} satisfies DocumentRunColumns<"documentReviewRun">;
 
 /** How many findings inherited a reading, and what became of every
  *  answered finding of the previous review, keyed by that finding. */

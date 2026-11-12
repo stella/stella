@@ -329,7 +329,7 @@ const VERIFICATION_RUN_COLUMNS = {
   fileFieldId: legalListVerificationRuns.fileFieldId,
   status: legalListVerificationRuns.status,
   createdAt: legalListVerificationRuns.createdAt,
-} satisfies DocumentRunColumns<SafeId<"legalListVerificationRun">>;
+} satisfies DocumentRunColumns<"legalListVerificationRun">;
 
 type CarryReviewsArgs = {
   tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select" | "insert">;

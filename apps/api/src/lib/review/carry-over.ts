@@ -20,7 +20,7 @@ import type {
   PgTable,
 } from "drizzle-orm/pg-core";
 
-import type { SafeId } from "@/api/lib/branded-types";
+import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 
 /**
  * What became of one reviewed item when the next run of its document
@@ -50,9 +50,9 @@ export const MATCHED_CARRY_OUTCOMES = [
 
 /** The columns of a feature's run table the lookup reads. Every review run
  *  table names a document by its entity and file field. */
-export type DocumentRunColumns<RunId extends SafeId<string>> = {
+export type DocumentRunColumns<RunKind extends SafeIdType> = {
   table: PgTable;
-  id: AnyPgColumn<{ data: RunId }>;
+  id: AnyPgColumn<{ data: SafeId<RunKind>; notNull: true }>;
   workspaceId: AnyPgColumn;
   entityId: AnyPgColumn;
   fileFieldId: AnyPgColumn;
@@ -60,11 +60,11 @@ export type DocumentRunColumns<RunId extends SafeId<string>> = {
   createdAt: AnyPgColumn;
 };
 
-type PreviousCompletedRunArgs<RunId extends SafeId<string>> = {
+type PreviousCompletedRunArgs<RunKind extends SafeIdType> = {
   tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">;
-  columns: DocumentRunColumns<RunId>;
+  columns: DocumentRunColumns<RunKind>;
   run: {
-    id: RunId;
+    id: SafeId<RunKind>;
     workspaceId: SafeId<"workspace">;
     entityId: SafeId<"entity">;
     fileFieldId: SafeId<"field">;
@@ -80,12 +80,12 @@ type PreviousCompletedRunArgs<RunId extends SafeId<string>> = {
  * from. A query, not a result, so a caller may await it or use it as a
  * subquery; it names at most one run.
  */
-export const previousCompletedRunQuery = <RunId extends SafeId<string>>({
+export const previousCompletedRunQuery = <RunKind extends SafeIdType>({
   tx,
   columns,
   run,
   sameAs,
-}: PreviousCompletedRunArgs<RunId>) =>
+}: PreviousCompletedRunArgs<RunKind>) =>
   tx
     .select({ id: columns.id })
     .from(columns.table)
