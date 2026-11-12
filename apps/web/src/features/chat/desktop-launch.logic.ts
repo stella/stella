@@ -61,7 +61,7 @@ export const needsDesktopLaunch = (
   !hasConnectedComputer(readiness);
 
 /** A launch that waits for a computer, and how its wait ends. */
-export type DesktopLaunchWait = { outcome: Promise<DesktopLaunchOutcome> };
+type DesktopLaunchWait = { outcome: Promise<DesktopLaunchOutcome> };
 
 type DesktopLaunchOptions = {
   /** Hands the ping link to the operating system. */
