@@ -140,6 +140,7 @@ describe("verification handler access admission", () => {
       createdAt: new Date("2026-01-01T00:00:00Z"),
       startedAt: null,
       finishedAt: null,
+      unreadParts: [],
     } satisfies typeof legalListVerificationRuns.$inferSelect;
     try {
       for (const exists of [true, false]) {
