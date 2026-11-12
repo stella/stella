@@ -18,22 +18,22 @@ conflict_checks.results            jsonb               not null          conflic
 conflict_checks.outcome            text                not null          conflict-checks.ts:115  The most severe finding when the check ran; fixed at insert.
 conflict_checks.decision           text                default,not null  conflict-checks.ts:117  A person's decision on the check; `pending` until one is recorded.
 conflict_checks.decision_revision  integer             default,not null  conflict-checks.ts:122  Advances with every recorded decision, so a stale one is refused.
-conflict_checks.decided_by         text                fk,null           conflict-checks.ts:126
-conflict_checks.decided_at         timestamptz         null              conflict-checks.ts:129
-conflict_checks.decision_note      text                null              conflict-checks.ts:130
-conflict_checks.consent_reference  varchar             null              conflict-checks.ts:132  The client's consent a waiver rests on; set only for `waived`.
-conflict_checks.created_at         timestamptz         default,not null  conflict-checks.ts:135
-conflict_checks.updated_at         timestamptz         default,not null  conflict-checks.ts:136
+conflict_checks.decided_by         text                fk,null           conflict-checks.ts:123
+conflict_checks.decided_at         timestamptz         null              conflict-checks.ts:126
+conflict_checks.decision_note      text                null              conflict-checks.ts:127
+conflict_checks.consent_reference  varchar             null              conflict-checks.ts:129  The client's consent a waiver rests on; set only for `waived`.
+conflict_checks.created_at         timestamptz         default,not null  conflict-checks.ts:132
+conflict_checks.updated_at         timestamptz         default,not null  conflict-checks.ts:133
 ```
 
-## conflict_check_matters · `conflictCheckMatters` · conflict-checks.ts:189
+## conflict_check_matters · `conflictCheckMatters` · conflict-checks.ts:186
 
 The matter a check was run for, when there is one.
 
 ```text
-conflict_check_matters.id                 pUuid               pk,not null       conflict-checks.ts:192
-conflict_check_matters.organization_id    safeOrganizationId  fk,not null       conflict-checks.ts:193
-conflict_check_matters.conflict_check_id  safeUuid            fk,not null       conflict-checks.ts:196
-conflict_check_matters.workspace_id       safeWorkspaceId     fk,not null       conflict-checks.ts:197
-conflict_check_matters.created_at         timestamptz         default,not null  conflict-checks.ts:198
+conflict_check_matters.id                 pUuid               pk,not null       conflict-checks.ts:189
+conflict_check_matters.organization_id    safeOrganizationId  fk,not null       conflict-checks.ts:190
+conflict_check_matters.conflict_check_id  safeUuid            fk,not null       conflict-checks.ts:193
+conflict_check_matters.workspace_id       safeWorkspaceId     fk,not null       conflict-checks.ts:194
+conflict_check_matters.created_at         timestamptz         default,not null  conflict-checks.ts:195
 ```
