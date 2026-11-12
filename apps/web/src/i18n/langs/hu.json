@@ -1900,7 +1900,6 @@
       "restored": "Fájlmódosítások visszavonva"
     },
     "localRun": {
-      "cloud": "stella-felhő",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
       "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
       "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
@@ -1909,7 +1908,6 @@
       "errorRestoring": "A számítógépe még visszavonja a fájlmódosításokat. Néhány pillanat múlva küldje el újra.",
       "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "filesNotShared": "A meg nem osztható fájlok a számítógépén maradnak: {fileNames}",
-      "onThisComputer": "{harness} ezen a számítógépen",
       "permissionAboveLimit": "A szervezete nem engedélyezi",
       "permissionAskDescription": "A csevegés mappájában lévő fájlokat magától szerkeszti; minden más előtt rákérdez.",
       "permissionAutoDescription": "Amit biztonságosnak ítél, magától elvégzi; a többire rákérdez.",
@@ -1926,8 +1924,6 @@
       "refusalPermissionUnavailable": "A számítógépén futó kódoló ügynök nem futhat ezekkel az engedélyekkel. Válasszon másik lehetőséget az Engedélyek menüben.",
       "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
-      "runOn": "Futtatás itt",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Korlát elérve eddig: {time}",
       "stateModelUnavailable": "A modell már nem érhető el",
@@ -2084,6 +2080,22 @@
     "richContentLoading": "Interaktív tartalom betöltése…",
     "richContentTitle": "Interaktív tartalom",
     "richContentUnavailable": "Ez a tartalom nem jeleníthető meg biztonságosan.",
+    "runOn": {
+      "chipLabel": "Futás helye: {place}",
+      "cloud": "Felhő",
+      "cloudDescription": "A felhőben fut. Bárhonnan elérhető.",
+      "harnessModels": "{harness}-modellek",
+      "hintInstall": "Telepítse a stella desktopból",
+      "hintOffline": "Nyissa meg a stella desktopot a számítógépén",
+      "hintSignIn": "Jelentkezzen be a stella desktopban",
+      "hintUpdate": "Frissítse a stella desktopból",
+      "localPlace": "Az Ön számítógépe, {harness}",
+      "localSelection": "Az Ön számítógépe · {harness}",
+      "modelDefault": "Alapértelmezett (ajánlott)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Az Ön számítógépe",
+      "yourComputerDescription": "A Codexet vagy a Claude Code-ot használja az Ön számítógépén, a saját előfizetésével. Olvashatja és módosíthatja a csevegés mappájában lévő fájlokat, és parancsok futtatása előtt rákérdez."
+    },
     "selection": {
       "askInNewChat": "Kérdés új csevegésben",
       "quoteInReply": "Idézés a válaszban",

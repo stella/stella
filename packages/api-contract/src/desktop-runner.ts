@@ -487,6 +487,12 @@ const tokenSchema = v.pipe(
 const harnessModelSchema = v.object({
   id: modelIdSchema,
   label: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  /**
+   * The model the harness runs when none is named, which the chat offers
+   * first as its recommended one. A report from before desktops sent it
+   * marks none.
+   */
+  isDefault: v.optional(v.boolean()),
 });
 
 const harnessReportSchema = v.variant("state", [

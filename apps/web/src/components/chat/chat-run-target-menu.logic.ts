@@ -197,6 +197,32 @@ export const localRunMaxApprovals = (
 
 const SEPARATOR = "::";
 
+/** A ready harness's model, as its report lists it. */
+export type LocalHarnessModel = Extract<
+  ChatLocalHarnessOption,
+  { state: "ready" }
+>["models"][number];
+
+/**
+ * The model a ready harness runs when none is named: the one its report
+ * marks, else its first. Offered first, as the recommended one.
+ */
+export const defaultHarnessModel = (
+  option: Extract<ChatLocalHarnessOption, { state: "ready" }>,
+): LocalHarnessModel =>
+  option.models.find(({ isDefault }) => isDefault === true) ??
+  option.models.at(0) ??
+  panic("A ready harness reports at least one model");
+
+/**
+ * Where a turn runs, as the where chip's radio value: stella's models in
+ * the cloud, or one harness on the member's computer whatever its model.
+ */
+export const runOnPlaceValue = (target: ChatRunTarget): string =>
+  target.kind === "local"
+    ? `${CHAT_RUN_TARGET_KIND.local}${SEPARATOR}${target.harness}`
+    : CHAT_RUN_TARGET_KIND.cloud;
+
 /**
  * The menu's radio value for where a turn runs: the harness and model, not
  * the permission mode, which has its own choice.

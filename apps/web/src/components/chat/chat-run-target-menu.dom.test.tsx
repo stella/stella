@@ -173,29 +173,51 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
     ),
   ).toBeTruthy();
   expect(view.getByText("Permissions")).toBeTruthy();
+  // The places alone: no permission mode to pick.
   expect(
     view
       .getAllByRole("menuitemradio")
       .map((item) => item.textContent.replace(/^Selected/u, "")),
-  ).toEqual(["stella cloud"]);
+  ).toEqual([
+    `${messages.chat.runOn.cloud}${messages.chat.runOn.cloudDescription}`,
+    "Codex",
+    "Claude Code",
+  ]);
 });
 
 test("a cloud turn has no permission choice", async () => {
   const { view } = renderMenu({ kind: "cloud" });
-  await waitFor(() => view.getByText("Run on"));
+  await waitFor(() => view.getByText(messages.chat.runOn.yourComputer));
   expect(view.queryByText("Permissions")).toBeNull();
 });
 
-test("the run-on group opens with its label, the cloud choice and a ready computer", async () => {
+test("the places open with the cloud, the member's computer and its ready agents", async () => {
   const { view, chosen } = renderMenu(CODEX);
-  expect(await waitFor(() => view.getByText("Run on"))).toBeTruthy();
-  expect(view.getByText("Codex on this computer")).toBeTruthy();
+  expect(
+    await waitFor(() => view.getByText(messages.chat.runOn.yourComputer)),
+  ).toBeTruthy();
+  expect(view.getByText("Codex")).toBeTruthy();
   const cloud = view
     .getAllByRole("menuitemradio")
-    .find((item) => item.textContent.includes("stella cloud"));
+    .find((item) => item.textContent.includes(messages.chat.runOn.cloud));
   expect(cloud).toBeDefined();
   if (cloud !== undefined) {
     fireEvent.click(cloud);
   }
   expect(chosen).toEqual([{ kind: "cloud" }]);
+});
+
+test("picking another agent starts it on its recommended model, and the chosen agent keeps its own", async () => {
+  const { view, chosen } = renderMenu(CODEX);
+  const claude = await waitFor(() => {
+    const item = view
+      .getAllByRole("menuitemradio")
+      .find((candidate) => candidate.textContent.endsWith("Claude Code"));
+    if (item === undefined) {
+      throw new Error("no Claude Code choice");
+    }
+    return item;
+  });
+  fireEvent.click(claude);
+  expect(chosen).toEqual([LOCAL]);
 });

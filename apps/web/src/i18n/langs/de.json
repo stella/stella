@@ -1900,7 +1900,6 @@
       "restored": "Dateiänderungen rückgängig gemacht"
     },
     "localRun": {
-      "cloud": "stella-Cloud",
       "errorLimitReached": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Versuchen Sie es erneut, sobald das Limit zurückgesetzt ist.",
       "errorLimitResetsAt": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Sie können es ab {time} erneut versuchen.",
       "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
@@ -1909,7 +1908,6 @@
       "errorRestoring": "Ihr Computer macht noch Dateiänderungen rückgängig. Senden Sie dies gleich noch einmal.",
       "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "filesNotShared": "Dateien, die nicht geteilt werden konnten, bleiben auf Ihrem Computer: {fileNames}",
-      "onThisComputer": "{harness} auf diesem Computer",
       "permissionAboveLimit": "Von Ihrer Organisation nicht erlaubt",
       "permissionAskDescription": "Bearbeitet Dateien im Ordner des Chats selbst; fragt vor allem anderen nach.",
       "permissionAutoDescription": "Erledigt selbst, was es für sicher hält; fragt beim Rest nach.",
@@ -1926,8 +1924,6 @@
       "refusalPermissionUnavailable": "Der Coding-Agent auf Ihrem Computer kann mit diesen Berechtigungen nicht laufen. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
-      "runOn": "Ausführen auf",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit erreicht bis {time}",
       "stateModelUnavailable": "Modell nicht mehr verfügbar",
@@ -2084,6 +2080,22 @@
     "richContentLoading": "Interaktiver Inhalt wird geladen…",
     "richContentTitle": "Interaktiver Inhalt",
     "richContentUnavailable": "Dieser Inhalt kann nicht sicher angezeigt werden.",
+    "runOn": {
+      "chipLabel": "Läuft auf: {place}",
+      "cloud": "Cloud",
+      "cloudDescription": "Läuft in der Cloud. Funktioniert überall.",
+      "harnessModels": "{harness}-Modelle",
+      "hintInstall": "Installieren Sie es in stella desktop",
+      "hintOffline": "Öffnen Sie stella desktop auf Ihrem Computer",
+      "hintSignIn": "Melden Sie sich in stella desktop an",
+      "hintUpdate": "Aktualisieren Sie es in stella desktop",
+      "localPlace": "Ihr Computer, {harness}",
+      "localSelection": "Ihr Computer · {harness}",
+      "modelDefault": "Standard (empfohlen)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Ihr Computer",
+      "yourComputerDescription": "Nutzt Codex oder Claude Code auf Ihrem Computer mit Ihrem eigenen Abo. Es kann Dateien im Ordner dieses Chats lesen und ändern und fragt, bevor es Befehle ausführt."
+    },
     "selection": {
       "askInNewChat": "In neuem Chat fragen",
       "quoteInReply": "In Antwort zitieren",

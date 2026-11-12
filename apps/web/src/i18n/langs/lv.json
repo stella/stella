@@ -1900,7 +1900,6 @@
       "restored": "Failu izmaiņas atsauktas"
     },
     "localRun": {
-      "cloud": "stella mākonis",
       "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",
       "errorLimitResetsAt": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Vēlreiz mēģināt varēsiet pēc {time}.",
       "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
@@ -1909,7 +1908,6 @@
       "errorRestoring": "Jūsu dators vēl atsauc failu izmaiņas. Pēc brīža nosūtiet to vēlreiz.",
       "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
       "filesNotShared": "Faili, kurus neizdevās kopīgot, paliek jūsu datorā: {fileNames}",
-      "onThisComputer": "{harness} šajā datorā",
       "permissionAboveLimit": "Jūsu organizācija to neatļauj",
       "permissionAskDescription": "Tērzēšanas mapes failus rediģē pats; par visu citu jautā.",
       "permissionAutoDescription": "To, ko uzskata par drošu, dara pats; par pārējo jautā.",
@@ -1926,8 +1924,6 @@
       "refusalPermissionUnavailable": "Programmēšanas aģents jūsu datorā nevar darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
       "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
       "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
-      "runOn": "Palaist",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limits sasniegts līdz {time}",
       "stateModelUnavailable": "Modelis vairs nav pieejams",
@@ -2084,6 +2080,22 @@
     "richContentLoading": "Notiek interaktīvā satura ielāde…",
     "richContentTitle": "Interaktīvs saturs",
     "richContentUnavailable": "Šo saturu nevar droši parādīt.",
+    "runOn": {
+      "chipLabel": "Darbojas: {place}",
+      "cloud": "Mākonis",
+      "cloudDescription": "Darbojas mākonī. Pieejams no jebkuras vietas.",
+      "harnessModels": "{harness} modeļi",
+      "hintInstall": "Instalējiet to no stella desktop",
+      "hintOffline": "Atveriet stella desktop savā datorā",
+      "hintSignIn": "Piesakieties stella desktop",
+      "hintUpdate": "Atjauniniet to no stella desktop",
+      "localPlace": "Jūsu dators, {harness}",
+      "localSelection": "Jūsu dators · {harness}",
+      "modelDefault": "Noklusējuma (ieteicams)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Jūsu dators",
+      "yourComputerDescription": "Izmanto Codex vai Claude Code jūsu datorā ar jūsu pašu abonementu. Tas var lasīt un mainīt failus šīs tērzēšanas mapē un pirms komandu palaišanas pajautā."
+    },
     "selection": {
       "askInNewChat": "Jautāt jaunā tērzēšanā",
       "quoteInReply": "Citēt atbildē",

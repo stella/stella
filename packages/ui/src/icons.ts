@@ -121,6 +121,7 @@ export {
   ClipboardListIcon,
   Clock3Icon,
   ClockIcon,
+  CloudIcon,
   CogIcon,
   Columns2Icon,
   Columns3Icon,

@@ -1900,7 +1900,6 @@
       "restored": "تم التراجع عن تغييرات الملفات"
     },
     "localRun": {
-      "cloud": "سحابة stella",
       "errorLimitReached": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. حاول مرة أخرى بعد إعادة ضبط الحد.",
       "errorLimitResetsAt": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. يمكنك المحاولة مرة أخرى بعد {time}.",
       "errorNeedsLogin": "يطلب وكيل البرمجة على حاسوبك تسجيل الدخول مجددًا. سجّل الدخول عبر stella desktop ثم حاول مرة أخرى.",
@@ -1909,7 +1908,6 @@
       "errorRestoring": "لا يزال حاسوبك يتراجع عن تغييرات الملفات. أرسل هذا مرة أخرى بعد قليل.",
       "errorUnavailable": "توقف حاسوبك عن معالجة هذا الرد. تأكد من أن stella desktop مفتوح ومتصل، ثم حاول مرة أخرى.",
       "filesNotShared": "تبقى الملفات التي تعذّرت مشاركتها على حاسوبك: {fileNames}",
-      "onThisComputer": "{harness} على هذا الحاسوب",
       "permissionAboveLimit": "غير مسموح به في مؤسستك",
       "permissionAskDescription": "يعدّل الملفات في مجلد الدردشة من تلقاء نفسه، ويسأل قبل أي شيء آخر.",
       "permissionAutoDescription": "ينفّذ من تلقاء نفسه ما يراه آمنًا، ويسأل عن الباقي.",
@@ -1926,8 +1924,6 @@
       "refusalPermissionUnavailable": "لا يمكن لوكيل البرمجة على حاسوبك العمل بهذه الأذونات. اختر خيارًا آخر من قائمة الأذونات.",
       "refusalTooLarge": "هذه الدردشة أطول من أن تُنقل إلى حاسوبك. ابدأ دردشة جديدة لتشغيلها هناك.",
       "refusalUnavailable": "تشغيل الدردشات على حاسوبك غير متاح لحسابك.",
-      "runOn": "التشغيل على",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "تم بلوغ الحد حتى {time}",
       "stateModelUnavailable": "النموذج لم يعد متاحًا",
@@ -2084,6 +2080,22 @@
     "richContentLoading": "جارٍ تحميل المحتوى التفاعلي…",
     "richContentTitle": "محتوى تفاعلي",
     "richContentUnavailable": "لا يمكن عرض هذا المحتوى بأمان.",
+    "runOn": {
+      "chipLabel": "مكان التشغيل: {place}",
+      "cloud": "السحابة",
+      "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
+      "harnessModels": "نماذج {harness}",
+      "hintInstall": "ثبّته من stella desktop",
+      "hintOffline": "افتح stella desktop على حاسوبك",
+      "hintSignIn": "سجّل الدخول من stella desktop",
+      "hintUpdate": "حدّثه من stella desktop",
+      "localPlace": "حاسوبك، {harness}",
+      "localSelection": "حاسوبك · {harness}",
+      "modelDefault": "الافتراضي (موصى به)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "حاسوبك",
+      "yourComputerDescription": "يستخدم Codex أو Claude Code على حاسوبك باشتراكك الخاص. يمكنه قراءة الملفات وتغييرها في مجلد هذه الدردشة، ويسألك قبل تشغيل الأوامر."
+    },
     "selection": {
       "askInNewChat": "اسأل في دردشة جديدة",
       "quoteInReply": "اقتبس في الرد",
