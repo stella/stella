@@ -3,6 +3,16 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import {
+  answersInOwnWords,
+  canSubmitLocalRunAnswers,
+  EMPTY_LOCAL_RUN_QUESTION_DRAFT,
+  localRunAnswerOf,
+  localRunAnswersOf,
+  type LocalRunQuestionDraft,
+  type LocalRunQuestionPause,
+  toggleLocalRunOption,
+} from "@stll/api-contract/chat-local-run-question";
 import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
@@ -13,16 +23,6 @@ import { Step, Steps } from "@stll/ui/steps";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
-import {
-  answersInOwnWords,
-  canSubmitLocalRunAnswers,
-  EMPTY_LOCAL_RUN_QUESTION_DRAFT,
-  localRunAnswerOf,
-  localRunAnswersOf,
-  type LocalRunQuestionDraft,
-  type LocalRunQuestionPause,
-  toggleLocalRunOption,
-} from "@/components/chat/local-run-question.logic";
 import { SecretInput } from "@/components/secret-input";
 import {
   useFormattingLocale,

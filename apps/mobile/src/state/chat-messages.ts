@@ -6,6 +6,8 @@ import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 import type { ChatDraft, SentFile } from "@/state/chat-attachments";
+import { pendingInputOf } from "@/state/chat-pending-input";
+import type { PendingInput } from "@/state/chat-pending-input";
 
 /**
  * A stored message part. Text, tool calls and attached files are drawn;
@@ -32,6 +34,8 @@ const messageSchema = v.object({
   role: v.string(),
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
   parts: v.array(partSchema),
+  /** Read only for whether the message's turn waits for the person. */
+  metadata: v.optional(v.unknown()),
 });
 
 const messagesPageSchema = v.object({
@@ -39,6 +43,8 @@ const messagesPageSchema = v.object({
   olderCursor: v.nullable(v.string()),
   activeTurnId: v.optional(v.nullable(v.string()), null),
   usedAnonymization: v.optional(v.boolean(), false),
+  /** Where the thread's turns run, read where a paused one is answered. */
+  runTarget: v.optional(v.unknown()),
 });
 
 /**
@@ -56,14 +62,16 @@ export type ChatEntry = {
 
 /**
  * Messages oldest first, the cursor for the page before them (null at the
- * thread's start), the turn still answering, if one is, and whether the
- * thread has sent anonymized text, which every later message must keep to.
+ * thread's start), the turn still answering, if one is, whether the thread
+ * has sent anonymized text, which every later message must keep to, and, on
+ * the thread's latest page, what its paused turn waits for.
  */
 export type ChatMessagesPage = {
   readonly entries: readonly ChatEntry[];
   readonly olderCursor: string | null;
   readonly activeTurnId: string | null;
   readonly usedAnonymization: boolean;
+  readonly pendingInput: PendingInput | null;
 };
 
 type StoredMessage = v.InferOutput<typeof messageSchema>;
@@ -132,13 +140,25 @@ export const sentEntry = ({
   files: files.map(({ mimeType, name }) => ({ mimeType, name })),
 });
 
+/**
+ * A page as the thread shows it. Only the latest page can end on a turn
+ * that waits. A waiting turn is still the thread's active one, so the page
+ * names it in `activeTurnId` as well.
+ */
 const toPage = (
   page: v.InferOutput<typeof messagesPageSchema>,
+  { latest }: { readonly latest: boolean },
 ): ChatMessagesPage => ({
   entries: page.messages.flatMap((message) => toChatEntry(message) ?? []),
   olderCursor: page.olderCursor,
   activeTurnId: page.activeTurnId,
   usedAnonymization: page.usedAnonymization,
+  pendingInput: latest
+    ? pendingInputOf({
+        message: page.messages.at(-1),
+        runTarget: page.runTarget,
+      })
+    : null,
 });
 
 /** An older page in front of what is loaded, without a message twice. */
@@ -194,7 +214,7 @@ export const readChatThread = async ({
         source,
       }),
     );
-    return Result.ok(toPage(page));
+    return Result.ok(toPage(page, { latest: true }));
   });
 
 /** The page of messages before `before`, the cursor a previous read returned. */
@@ -220,5 +240,5 @@ export const readOlderChatMessages = async ({
         source,
       }),
     );
-    return Result.ok(toPage(page));
+    return Result.ok(toPage(page, { latest: false }));
   });

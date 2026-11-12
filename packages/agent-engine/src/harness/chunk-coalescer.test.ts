@@ -267,6 +267,7 @@ describe("coalescing invariants", () => {
       model: "gpt-test",
       runId: "run-1",
       threadId: "thread-1",
+      workspaceDir: "/workspace",
       generateId: () => {
         generated += 1;
         return `id-${String(generated)}`;

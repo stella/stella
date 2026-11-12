@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "PL_NCOURT",
   "key": "pl-ncourt",
-  "parserVersion": 33,
+  "parserVersion": 36,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

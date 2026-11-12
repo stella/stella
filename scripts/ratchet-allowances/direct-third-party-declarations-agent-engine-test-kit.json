@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "packages/agent-engine declares @stll/test-kit as a dev dependency so its checkpoint tests wait on file state with waitFor instead of real timers, as the test timer rule asks; the same version is already used by apps/api and packages/concurrency."
+}

@@ -33,9 +33,20 @@ export const DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL = {
       `SELECT finding.id ${PENDING_DECISIONS} LIMIT 1`,
       [],
     );
+    // The anti-join is a durable checkpoint: every committed batch stays
+    // done, and the decide handler writes a missing baseline itself when it
+    // next changes the finding. So a missing baseline is resumable pending
+    // work, never a reason to refuse boot: a live write that decides a
+    // finding without its event must not stop every new API task.
     return pending.length === 0
       ? { type: "complete" }
-      : { type: "incomplete", reason: "Finding decision history is pending" };
+      : {
+          type: "pending",
+          reason: "Finding decision history is pending",
+          cursor: null,
+          holdUntil: null,
+          heldSince: null,
+        };
   },
   repair: async (connection) => {
     for (;;) {

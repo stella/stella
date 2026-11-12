@@ -81,6 +81,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Authenticated account holders can create organizations on every deployment",
   ],
   [
+    "/v1/ai",
+    "The Outlook add-in's email summary and reply draft are available on every deployment and enforce their email-assist kill switch, model availability and usage admission",
+  ],
+  [
     "/v1/dictation/transcribe",
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
   ],
@@ -109,12 +113,24 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "The member's own unfinished chat runs are readable on every deployment that serves chat",
   ],
   [
+    "/v1/chat/threads/:threadId/read-state",
+    "A member's own read marks on their chats are set on every deployment that serves chat",
+  ],
+  [
+    "/v1/chat/threads/:threadId/pin-state",
+    "A member's own pins on their chats are set on every deployment that serves chat",
+  ],
+  [
     "/v1/chat/browser-site-grants",
     "A member's standing website approvals for chat's browser actions are listed, added and removed on every deployment that serves chat; the browser tool itself needs the member's paired extension",
   ],
   [
     "/v1/chat/local-runners",
     "The chat computer list is mounted on every deployment and answers hidden unless the member's local-agents feature decision is enabled",
+  ],
+  [
+    "/v1/chat/threads/:threadId/turns/:turnId/local-files",
+    "Undoing a turn's file changes is mounted on every deployment; there is something to undo only once the member's local-agents feature let the turn's run start",
   ],
   [
     "/v1/chat/local-runs",
@@ -139,6 +155,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/me/data-exports",
     "A personal data export is available to every account on every deployment",
+  ],
+  [
+    "/v1/data-exports",
+    "Organization data export (data portability) is available on every deployment",
   ],
   [
     "/v1/chat/threads/:threadId/connectors/:toolCallId",
@@ -175,6 +195,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/mcp/oauth/mobile-client-metadata.json",
     "The mobile app's client identity is published by every deployment it can sign in to",
+  ],
+  [
+    "/v1/mcp/oauth/outlook-client-metadata.json",
+    "The Outlook add-in's client identity is published by every deployment that configures its task-pane origin; others answer 404",
   ],
   ["/favicon.ico", "The API host's icon is served by every deployment"],
   [

@@ -137,7 +137,7 @@ test("lifetimes and labels do not hide subsequent test code", () => {
   ]);
 });
 
-test("test attributes inside strings and comments cannot turn production code into tests", () => {
+test("`#[test]` attributes inside strings and comments cannot turn production code into tests", () => {
   const source = `// #[test]
 fn production() { Instant::now(); }
 const EXAMPLE: &str = "#[cfg(test)] mod tests {";
@@ -641,7 +641,7 @@ test("Rust baseline parser expands each count into stable occurrence membership"
   ).toEqual([`${FILE}::1`, `${FILE}::2`]);
 });
 
-test("test scope ends at its matching brace despite nested blocks and string braces", () => {
+test("a test scope ends at its matching brace despite nested blocks and string braces", () => {
   const source = `#[test] fn example() {
   if true { let value = "}"; Instant::now(); }
 }
@@ -654,7 +654,7 @@ fn second_production() { Command::new("worker"); }`;
   ]);
 });
 
-test("test markers inside non-test conditional attributes do not activate scope", () => {
+test("`test` markers inside non-test conditional attributes do not activate scope", () => {
   const source = `#[cfg(not(test))] fn production() { Instant::now(); }
 #[cfg(feature = "test")] fn feature_only() { thread::sleep(duration); }`;
   expect(scanRustTestDeterminism({ source, integrationTest: false })).toEqual(
@@ -942,7 +942,7 @@ test.each([
   "unsafe impl Send for Helper",
   "default impl Trait for Helper",
   "#[allow(dead_code)] impl<'a, T> Trait for Helper<'a, T> where T: Clone",
-])("test scope covers associated helpers in %s", (header) => {
+])("a test scope covers associated helpers in %s", (header) => {
   const source = `#[cfg(test)] ${header} {
   fn helper() { thread::sleep(duration); }
 }

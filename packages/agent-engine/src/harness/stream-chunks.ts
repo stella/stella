@@ -9,6 +9,11 @@ import {
 import { panic } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
+import {
+  CHAT_LOCAL_RUN_INTERRUPT_REASONS,
+  chatLocalRunApprovalReason,
+} from "@stll/api-contract/chat-local-run-tool";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
@@ -26,6 +31,7 @@ import {
   type HarnessToolCall,
   type HarnessUsage,
 } from "./events";
+import { shownToolInput, shownToolResult } from "./tool-parts";
 
 /**
  * The one mapping from harness events to TanStack stream chunks for local
@@ -44,6 +50,10 @@ import {
 /** CUSTOM event reporting how the turn's context was established. */
 export const HARNESS_CONTINUATION_EVENT = "harness.continuation";
 
+/** CUSTOM event carrying the harness's native session id. */
+export const harnessSessionIdEvent = (harness: AgentHarness) =>
+  `${harness}.session-id`;
+
 /** Tool name for a harness question, matching Codex's native item name. */
 export const HARNESS_QUESTION_TOOL = CHAT_LOCAL_RUN_QUESTION_TOOL;
 
@@ -52,6 +62,11 @@ export type HarnessChunkContext = {
   model: string;
   runId: string;
   threadId: string;
+  /**
+   * The run's folder: a native step's file names are reported relative to
+   * it.
+   */
+  workspaceDir: string;
   generateId: () => string;
   now: () => number;
 };
@@ -59,10 +74,15 @@ export type HarnessChunkContext = {
 const FAILURE_CODE = {
   auth_required: "harness.auth_required",
   usage_limit: "harness.usage_limit",
+  // The provider's own transient outage, not the harness's: the chat's code
+  // for it, so the member reads "try again in a moment".
+  model_at_capacity: AI_FAILURE_CODES.provider_unavailable,
   provider_error: "harness.provider_error",
   harness_exited: "harness.exited",
   protocol_violation: "harness.protocol_violation",
   sandbox_unavailable: "harness.sandbox_unavailable",
+  retry_stalled: "harness.retry_stalled",
+  tools_unavailable: "harness.tools_unavailable",
 } as const satisfies Record<HarnessFailure["type"], string>;
 
 const toTokenUsage = (usage: HarnessUsage): TokenUsage => {
@@ -145,7 +165,7 @@ class ChunkMapper {
         this.push(
           {
             type: EventType.CUSTOM,
-            name: `${this.context.harness}.session-id`,
+            name: harnessSessionIdEvent(this.context.harness),
             value: { sessionId: event.sessionId },
           },
           {
@@ -307,8 +327,8 @@ class ChunkMapper {
     }
     this.opened.add(toolCall.id);
     this.unresolved.add(toolCall.id);
-    const args =
-      toolCall.input === undefined ? "{}" : JSON.stringify(toolCall.input);
+    const input = this.shownInput(toolCall);
+    const args = input === undefined ? "{}" : JSON.stringify(input);
     this.push(
       {
         type: EventType.TOOL_CALL_START,
@@ -327,9 +347,13 @@ class ChunkMapper {
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
         toolName: toolCall.name,
-        input: toolCall.input,
+        input,
       },
     );
+  }
+
+  private shownInput(toolCall: HarnessToolCall) {
+    return shownToolInput(toolCall, this.context.workspaceDir);
   }
 
   private resolveToolCall(
@@ -357,7 +381,16 @@ class ChunkMapper {
     }
     this.ensureSegment();
     this.openToolCall(toolCall);
-    this.resolveToolCall(toolCall.id, result.content, result.status);
+    this.resolveToolCall(
+      toolCall.id,
+      shownToolResult(
+        toolCall,
+        result.content,
+        result.status === "failed",
+        this.context.workspaceDir,
+      ),
+      result.status,
+    );
   }
 
   private text(messageId: string, fullText: string) {
@@ -417,14 +450,14 @@ class ChunkMapper {
           interrupts: [
             {
               id: request.requestId,
-              reason: "tool_call",
+              reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval,
               message: approvalMessage(request),
               toolCallId: request.toolCall.id,
               metadata: {
                 kind: "approval",
-                reason: request.reason,
+                reason: chatLocalRunApprovalReason(request.reason),
                 toolName: request.toolCall.name,
-                input: request.toolCall.input,
+                input: this.shownInput(request.toolCall),
                 approvalKind: request.kind,
                 decisions: request.options.map(({ decision }) => decision),
               },
@@ -459,7 +492,7 @@ class ChunkMapper {
           interrupts: [
             {
               id: request.requestId,
-              reason: "user_input",
+              reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.question,
               message: request.questions.map(({ prompt }) => prompt).join("\n"),
               toolCallId: request.toolCall.id,
               metadata: {

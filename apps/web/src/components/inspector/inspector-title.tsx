@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 type InspectorTitleProps = {
@@ -28,15 +29,16 @@ export const InspectorTitle = ({
       </h2>
     );
   }
-  // The heading draws the editable box (hover fill, inset, ellipsis) and the
-  // button runs inline inside it, so the title keeps one typographic
-  // treatment and its colour, and the button's stretched hit area still
-  // covers the whole row. Spaces are kept as typed (`whitespace-pre`).
+  // The heading draws the editable box (hover fill, inset) and the button
+  // runs inline inside it, so the title keeps one typographic treatment and
+  // its colour, and the button's stretched hit area still covers the whole
+  // row. The text inside the button is cut at the heading's width; spaces are
+  // kept as typed (`whitespace-pre`).
   return (
     <h2
       className={cn(
         className,
-        "hover:bg-accent relative -mx-1 my-0 overflow-hidden rounded-sm px-1 text-start text-ellipsis whitespace-pre",
+        "hover:bg-accent relative -mx-1 my-0 rounded-sm px-1 text-start",
       )}
       data-slot="inspector-title"
     >
@@ -45,7 +47,7 @@ export const InspectorTitle = ({
         onClick={onEdit}
         variant="plain"
       >
-        {children}
+        <TruncatedText className="whitespace-pre">{children}</TruncatedText>
       </Button>
     </h2>
   );

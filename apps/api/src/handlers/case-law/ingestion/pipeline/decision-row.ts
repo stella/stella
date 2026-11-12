@@ -227,7 +227,7 @@ const writeDecisionRow = async (
       composition,
       composedSupplements,
       shape: { preservesExistingDetail },
-      plan: { payloadColumns, storedPayloadUnchanged },
+      plan: { payloadColumns, replacedBlockAnchors, storedPayloadUnchanged },
       inputProvenance,
     } = write;
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
@@ -286,7 +286,9 @@ const writeDecisionRow = async (
         // against.
         return await lostRowWriteStatus(tx, write, existing.id, {
           payloadFenced:
-            storedPayloadUnchanged || inputProvenance.type === "stored",
+            storedPayloadUnchanged ||
+            replacedBlockAnchors !== null ||
+            inputProvenance.type === "stored",
         });
       }
 

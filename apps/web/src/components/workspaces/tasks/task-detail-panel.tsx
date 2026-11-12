@@ -18,6 +18,7 @@ import {
 import { Input } from "@stll/ui/input";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -74,6 +75,7 @@ import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/acces
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { DAY_AND_MONTH_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
@@ -140,8 +142,16 @@ const TaskDetailPanelContent = ({
 
   const name = task?.name ?? t("untitled");
 
-  const updateMutation = useMutation({
-    mutationFn: async (update: TaskUpdate) => {
+  const saveTask = resourceMutation({
+    mutation: "updateTask",
+    queryClient,
+    mutationFn: async ({
+      update,
+    }: {
+      update: TaskUpdate;
+      workspaceId: string;
+      entityId: string;
+    }) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .patch({
@@ -150,6 +160,10 @@ const TaskDetailPanelContent = ({
         });
       return unwrapApiResponse(response);
     },
+  });
+  const updateMutation = useMutation({
+    mutationFn: async (update: TaskUpdate) =>
+      await saveTask({ update, workspaceId, entityId: update.taskId }),
     onSuccess: async (_data, variables) => {
       if (taskUpdateClearsWorkflowReason(variables)) {
         setWorkflowReason("");
@@ -613,9 +627,9 @@ const TaskDetailPanelContent = ({
         >
           <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
         </Button>
-        <span className="min-w-0 flex-1 truncate text-xs font-medium">
+        <TruncatedText className="flex-1 text-xs font-medium">
           {isNewTask ? t("newTask") : name}
-        </span>
+        </TruncatedText>
         <Button
           aria-label={tCommon("close")}
           onClick={handleClose}

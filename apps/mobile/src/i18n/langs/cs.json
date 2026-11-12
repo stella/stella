@@ -15,6 +15,7 @@
     "noMatchesDescription": "Žádný název konverzace ani spisu neobsahuje „{search}“.",
     "search": "Hledat konverzace",
     "loadFailed": "Vaše konverzace se nepodařilo načíst.",
+    "runsLoadFailed": "Nepodařilo se zjistit, které konverzace na vás čekají.",
     "retry": "Zkusit znovu",
     "untitled": "Konverzace bez názvu",
     "loadMoreFailed": "Načíst další",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "Tuto konverzaci se nepodařilo načíst.",
     "greeting": "Na čem chcete pracovat?",
     "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
+    "markRead": "Přečteno",
+    "markUnread": "Nepřečteno",
+    "pin": "Připnout",
+    "unpin": "Odepnout",
+    "unread": "Nepřečteno",
+    "markReadFailed": "Konverzaci se nepodařilo označit jako přečtenou.",
+    "markUnreadFailed": "Konverzaci se nepodařilo označit jako nepřečtenou.",
+    "pinFailed": "Konverzaci se nepodařilo připnout.",
+    "unpinFailed": "Konverzaci se nepodařilo odepnout.",
     "sections": {
+      "needsYou": "Čeká na vás",
+      "working": "Probíhá",
+      "pinned": "Připnuté",
       "today": "Dnes",
       "yesterday": "Včera",
       "week": "Posledních 7 dní",
@@ -47,6 +60,23 @@
     "answerStopped": "Zastaveno.",
     "answerNeedsInput": "Tato odpověď čeká na váš vstup. Pokračujte v ní ve webové aplikaci stella.",
     "answerFailed": "Odpověď se nepodařilo dokončit.",
+    "answerAwaitingInput": "Tato odpověď čeká na váš vstup.",
+    "alreadyAnswered": "Na tohle už bylo odpovězeno.",
+    "answerSendFailed": "Odpověď se nepodařilo odeslat. Zkuste to znovu.",
+    "approvalTitle": "Povolit tuto akci?",
+    "approvalAllowOnce": "Povolit jednou",
+    "approvalDeny": "Zamítnout",
+    "inputEmpty": "Prázdné",
+    "inputRequest": "Vstup",
+    "questionTitle": "Žádost o upřesnění",
+    "questionChooseSeveral": "Vyberte vše, co platí",
+    "questionSelectAll": "Vybrat vše",
+    "questionOwnWords": "Napsat vlastní",
+    "questionShowOptions": "Zobrazit možnosti",
+    "questionPlaceholder": "Vaše odpověď",
+    "questionSecretPlaceholder": "Vaše odpověď zůstane skrytá",
+    "questionDismiss": "Zamítnout a zastavit",
+    "submitAnswers": "Odeslat odpovědi",
     "composerMenu": "Otevřít nabídku příloh a nástrojů",
     "attachFile": "Připojit soubor",
     "attachment": "Příloha",
@@ -62,7 +92,12 @@
     "sendFileRefused": "Soubor se nepodařilo odeslat, takže se zpráva neodeslala. Odeberte soubor a zkuste to znovu.",
     "sendFileNotAnonymizable": "Tato konverzace je anonymizovaná a stella nedokázala anonymizovat jeden ze souborů, takže se nic neodeslalo. Odeberte soubor a zkuste to znovu.",
     "pickTitle": "Vyberte konverzaci",
-    "pickDescription": "Vyberte vlákno ze seznamu nebo začněte nové tlačítkem +."
+    "pickDescription": "Vyberte vlákno ze seznamu nebo začněte nové tlačítkem +.",
+    "runBanner": {
+      "needsYou": "Čeká na vás",
+      "finished": "Dokončeno",
+      "openHint": "Otevře konverzaci"
+    }
   },
   "tasks": {
     "emptyTitle": "Žádné otevřené úkoly",
@@ -151,7 +186,11 @@
     "scanDocument": "Naskenovat dokument",
     "newTask": "Nový úkol",
     "uploadDocument": "Nahrát dokument",
-    "uploadFailed": "Dokument se nepodařilo nahrát. Zkuste to znovu."
+    "uploadFailed": "Dokument se nepodařilo nahrát. Zkuste to znovu.",
+    "startTimer": "Spustit časovač",
+    "pauseTimer": "Pozastavit časovač",
+    "resumeTimer": "Pokračovat v časovači",
+    "timerRunning": "Časovač běží"
   },
   "entity": {
     "type": "Typ",
@@ -199,7 +238,6 @@
     }
   },
   "signIn": {
-    "beta": "Beta",
     "headline": "Jasno v každém případě.",
     "subtitle": "Dokumenty, judikatura i revize pod kontrolou. S pomocí AI.",
     "submit": "Přihlásit se",
@@ -351,5 +389,13 @@
     "share": "Sdílet",
     "cancel": "Zrušit",
     "openFailed": "Odkaz se nepodařilo otevřít."
+  },
+  "share": {
+    "title": "Přidat do stelly",
+    "start": "Začít",
+    "uploading": "Nahrávám {done} z {total}…",
+    "filesOnly": "Uloží se jen soubory; odkazy a text se vynechají.",
+    "unavailableTitle": "Není co přidat",
+    "unavailable": "Tato sdílená položka už tu není. Sdílejte ji znovu z druhé aplikace."
   }
 }

@@ -14,6 +14,7 @@
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import type { Block } from "./document-ast.js";
+import { designatedTitle } from "./heading-designator-levels.js";
 
 /** A contents line is a title, not a sentence: anything longer is text. */
 const CONTENTS_LINE_MAX_LENGTH = 160;
@@ -46,8 +47,7 @@ const LEADING_TITLE_DASH = /^[–—-]\s+/u;
 /**
  * A heading title in the form two copies of it compare equal in: the same
  * letters whatever the case, spacing, Unicode composition, leading dash or
- * closing punctuation. The reader's contents use it to tell that a model's
- * section and the document's heading name the same part.
+ * closing punctuation.
  */
 export const comparableHeadingTitle = (title: string): string =>
   trimTitlePunctuation(
@@ -56,6 +56,31 @@ export const comparableHeadingTitle = (title: string): string =>
       .trim()
       .replace(LEADING_TITLE_DASH, ""),
   ).toLocaleLowerCase("und");
+
+/**
+ * Whether a model's section and a document's heading name the same part. A
+ * model usually leaves out the number the publisher set before the heading
+ * (`Arguments` for `II. Arguments`), so a number stated on one side only says
+ * nothing. Numbers stated on both sides must agree: `I. Motion` and
+ * `II. Motion` are two parts.
+ *
+ * A publisher's contents list repeats its headings verbatim, so finding one
+ * compares `comparableHeadingTitle` alone.
+ */
+export const headingTitlesNameSamePart = (
+  left: string,
+  right: string,
+): boolean => {
+  const first = designatedTitle(left);
+  const second = designatedTitle(right);
+  return (
+    comparableHeadingTitle(first.words) ===
+      comparableHeadingTitle(second.words) &&
+    (first.token === null ||
+      second.token === null ||
+      first.token.toLowerCase() === second.token.toLowerCase())
+  );
+};
 
 /**
  * The titles a block lists when it can be part of a table of contents: each

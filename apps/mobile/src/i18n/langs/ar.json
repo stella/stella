@@ -15,6 +15,7 @@
     "noMatchesDescription": "لا يحتوي أي عنوان محادثة أو ملف قانوني على \"{search}\".",
     "search": "البحث في المحادثات",
     "loadFailed": "تعذّر تحميل محادثاتك.",
+    "runsLoadFailed": "تعذّر التحقق من المحادثات التي بانتظارك.",
     "retry": "إعادة المحاولة",
     "untitled": "محادثة بلا عنوان",
     "loadMoreFailed": "تحميل المزيد",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "تعذّر تحميل هذه المحادثة.",
     "greeting": "ما الذي تودّ العمل عليه؟",
     "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
+    "markRead": "مقروءة",
+    "markUnread": "غير مقروءة",
+    "pin": "تثبيت",
+    "unpin": "إلغاء التثبيت",
+    "unread": "غير مقروءة",
+    "markReadFailed": "تعذّر تعليم المحادثة كمقروءة.",
+    "markUnreadFailed": "تعذّر تعليم المحادثة كغير مقروءة.",
+    "pinFailed": "تعذّر تثبيت المحادثة.",
+    "unpinFailed": "تعذّر إلغاء تثبيت المحادثة.",
     "sections": {
+      "needsYou": "بانتظارك",
+      "working": "قيد العمل",
+      "pinned": "المثبّتة",
       "today": "اليوم",
       "yesterday": "أمس",
       "week": "آخر 7 أيام",
@@ -47,6 +60,23 @@
     "answerStopped": "تم الإيقاف.",
     "answerNeedsInput": "تحتاج هذه الإجابة إلى إدخالك. تابعها في stella على الويب.",
     "answerFailed": "تعذّر إكمال الإجابة.",
+    "answerAwaitingInput": "تحتاج هذه الإجابة إلى إدخالك.",
+    "alreadyAnswered": "تمت الإجابة على هذا بالفعل.",
+    "answerSendFailed": "تعذّر إرسال إجابتك. حاول مرة أخرى.",
+    "approvalTitle": "هل تسمح بهذا الإجراء؟",
+    "approvalAllowOnce": "السماح مرة واحدة",
+    "approvalDeny": "رفض",
+    "inputEmpty": "فارغ",
+    "inputRequest": "المدخلات",
+    "questionTitle": "طلب التوضيح",
+    "questionChooseSeveral": "اختر كل ما ينطبق",
+    "questionSelectAll": "تحديد الكل",
+    "questionOwnWords": "اكتب إجابتك الخاصة",
+    "questionShowOptions": "عرض الخيارات",
+    "questionPlaceholder": "إجابتك",
+    "questionSecretPlaceholder": "تبقى إجابتك مخفية",
+    "questionDismiss": "تجاهل وإيقاف",
+    "submitAnswers": "إرسال الإجابات",
     "composerMenu": "فتح قائمة المرفقات والأدوات",
     "attachFile": "إرفاق ملف",
     "attachment": "مرفق",
@@ -62,7 +92,12 @@
     "sendFileRefused": "تعذّر إرسال أحد الملفات، لذا لم تُرسَل الرسالة. أزِل الملف وحاول مرة أخرى.",
     "sendFileNotAnonymizable": "هذه المحادثة مُجهَّلة، وتعذّر على stella تجهيل أحد الملفات، لذا لم يُرسَل شيء. أزِل الملف وحاول مرة أخرى.",
     "pickTitle": "اختر محادثة",
-    "pickDescription": "اختر سلسلة من القائمة أو ابدأ واحدة جديدة بزر +."
+    "pickDescription": "اختر سلسلة من القائمة أو ابدأ واحدة جديدة بزر +.",
+    "runBanner": {
+      "needsYou": "بانتظارك",
+      "finished": "اكتمل",
+      "openHint": "يفتح المحادثة"
+    }
   },
   "tasks": {
     "emptyTitle": "لا توجد مهام مفتوحة",
@@ -151,7 +186,11 @@
     "scanDocument": "مسح مستند ضوئيًا",
     "newTask": "مهمة جديدة",
     "uploadDocument": "رفع مستند",
-    "uploadFailed": "تعذّر رفع المستند. حاول مرة أخرى."
+    "uploadFailed": "تعذّر رفع المستند. حاول مرة أخرى.",
+    "startTimer": "بدء المؤقت",
+    "pauseTimer": "إيقاف المؤقت مؤقتًا",
+    "resumeTimer": "استئناف المؤقت",
+    "timerRunning": "المؤقت يعمل"
   },
   "entity": {
     "type": "النوع",
@@ -199,7 +238,6 @@
     }
   },
   "signIn": {
-    "beta": "تجريبي",
     "headline": "وضوح لكل قضية.",
     "subtitle": "المستندات والاجتهاد القضائي والمراجعة تحت السيطرة. مدعومة بالذكاء الاصطناعي.",
     "submit": "تسجيل الدخول",
@@ -351,5 +389,13 @@
     "share": "مشاركة",
     "cancel": "إلغاء",
     "openFailed": "تعذّر فتح الرابط."
+  },
+  "share": {
+    "title": "إضافة إلى stella",
+    "start": "ابدأ",
+    "uploading": "جارٍ رفع {done} من {total}…",
+    "filesOnly": "تُحفظ الملفات فقط، وتُستبعد الروابط والنص.",
+    "unavailableTitle": "لا شيء للإضافة",
+    "unavailable": "لم تعد هذه المشاركة متاحة. شاركها مرة أخرى من التطبيق الآخر."
   }
 }

@@ -15,6 +15,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
 import type { TransitionTransaction } from "@/api/lib/db/transitions";
 import { defineTransitions, transition } from "@/api/lib/db/transitions";
+import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
+import { carryReviewsToRun } from "@/api/lib/lists/verification/carry-over";
 import { VERIFICATION_RUN_ACTIVE_STATUSES } from "@/api/lib/lists/verification/contract";
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
@@ -86,7 +88,12 @@ type CompleteVerificationRunArgs = {
   claims: readonly (typeof legalListClaims.$inferInsert)[];
 };
 
-/** Store the exact source text and claims only while the run is still active. */
+/**
+ * Store the exact source text and claims only while the run is still active,
+ * then carry the previous run's review decisions to the matching claims and
+ * write the graph edges the claims and carried re-checks cite, all in one
+ * transaction: a run is never seen completed without them.
+ */
 export const completeVerificationRun = async ({
   tx,
   runId,
@@ -174,6 +181,10 @@ export const completeVerificationRun = async ({
           target: [legalListClaims.runId, legalListClaims.position],
         }),
   );
+  await carryReviewsToRun({ tx, runId, workspaceId });
+  // Derived from the stored claims and the re-checks carried to them, so a
+  // re-delivered job's edges are the ones its first delivery wrote.
+  await writeGraphEdges(tx, workspaceId, { type: "run", runId });
 };
 
 type FailVerificationRunArgs = {

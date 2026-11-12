@@ -222,6 +222,19 @@ export const FAKE_MCP_CALL = {
 };
 
 /** The reason the CLI wrote for its terminal, with color escapes. */
+/** Text a built-in tool's input carries that chat must never show. */
+export const FAKE_PRIVATE_TEXT = {
+  heredoc: "Tenant owes 4,200 in arrears.",
+  oldString: "Rent is due monthly.",
+  newString: "Rent is due quarterly.",
+  written: "Confidential settlement terms.",
+  fetchPrompt: "Summarise the termination rules",
+  activeForm: "Working through the private plan",
+} as const;
+
+/** A command longer than chat shows. */
+export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
+
 export const FAKE_APPROVAL_REASON = "\u001B[33mDeletes a file\u001B[0m";
 
 export const FAKE_PERMISSION_SUGGESTION = {
@@ -354,6 +367,107 @@ const FAKE_SCENARIOS = {
       true,
     ),
     result({ usage: undefined }),
+  ],
+  /**
+   * Each built-in tool chat names beyond its name, as the CLI reports it:
+   * the fields stella shows sit next to text it must never forward.
+   */
+  native_tools: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-heredoc", "Bash", {
+        command: `cat > notes.md <<'EOF'\n${FAKE_PRIVATE_TEXT.heredoc}\nEOF`,
+        description: "Write the notes",
+      }),
+    ]),
+    toolResult("call-heredoc", ""),
+    assistant("msg-2", [
+      toolUse("call-long", "Bash", { command: FAKE_LONG_COMMAND }),
+    ]),
+    toolResult("call-long", "ok"),
+    assistant("msg-3", [
+      toolUse("call-edit", "Edit", {
+        file_path: "/workspace/drafts/lease.md",
+        old_string: FAKE_PRIVATE_TEXT.oldString,
+        new_string: FAKE_PRIVATE_TEXT.newString,
+      }),
+    ]),
+    toolResult("call-edit", "The file was updated."),
+    assistant("msg-4", [
+      toolUse("call-multi", "MultiEdit", {
+        file_path: "/workspace/drafts/lease.md",
+        edits: [
+          {
+            old_string: FAKE_PRIVATE_TEXT.oldString,
+            new_string: FAKE_PRIVATE_TEXT.newString,
+          },
+        ],
+      }),
+    ]),
+    toolResult("call-multi", "Applied 1 edit."),
+    assistant("msg-5", [
+      toolUse("call-write", "Write", {
+        file_path: "/elsewhere/out.md",
+        content: FAKE_PRIVATE_TEXT.written,
+      }),
+    ]),
+    toolResult("call-write", "File created."),
+    assistant("msg-6", [
+      toolUse("call-notebook", "NotebookEdit", {
+        notebook_path: "/workspace/analysis.ipynb",
+        new_source: FAKE_PRIVATE_TEXT.written,
+      }),
+    ]),
+    toolResult("call-notebook", "Updated cell."),
+    assistant("msg-7", [
+      toolUse("call-read", "Read", {
+        file_path: "/workspace/drafts/lease.md",
+        offset: 1,
+        limit: 20,
+      }),
+    ]),
+    toolResult("call-read", "1→lease"),
+    assistant("msg-8", [
+      toolUse("call-grep", "Grep", {
+        pattern: "termination",
+        path: "/workspace/drafts",
+        output_mode: "content",
+      }),
+    ]),
+    toolResult("call-grep", "lease.md: termination"),
+    assistant("msg-9", [toolUse("call-glob", "Glob", { pattern: "**/*.md" })]),
+    toolResult("call-glob", "drafts/lease.md"),
+    assistant("msg-10", [
+      toolUse("call-search", "WebSearch", { query: "civil code lease" }),
+    ]),
+    toolResult("call-search", "Web search results"),
+    assistant("msg-11", [
+      toolUse("call-fetch", "WebFetch", {
+        url: "https://example.test/civil-code",
+        prompt: FAKE_PRIVATE_TEXT.fetchPrompt,
+      }),
+    ]),
+    toolResult("call-fetch", "A page."),
+    assistant("msg-12", [
+      toolUse("call-todo", "TodoWrite", {
+        todos: [
+          {
+            content: "Read the lease",
+            status: "completed",
+            activeForm: FAKE_PRIVATE_TEXT.activeForm,
+          },
+          {
+            content: "Draft the notice",
+            status: "in_progress",
+            activeForm: FAKE_PRIVATE_TEXT.activeForm,
+          },
+        ],
+      }),
+    ]),
+    toolResult("call-todo", "Todos updated."),
+    assistant("msg-13", [toolUse("call-task", "Task", { prompt: "Look" })]),
+    toolResult("call-task", "Done."),
+    result(),
   ],
   /** Streamed text, reasoning, a connector call, a command, an answer. */
   tool_calls: [
