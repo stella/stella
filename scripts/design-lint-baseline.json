@@ -837,7 +837,6 @@
     "apps/web/src/components/feedback-dialog.logic.ts": 1,
     "apps/web/src/components/inspector/anonymization-facet.tsx": 1,
     "apps/web/src/components/inspector/pdf-signing-stamp.logic.ts": 1,
-    "apps/web/src/components/references/reference.logic.ts": 1,
     "apps/web/src/components/templates/registry-autofill.ts": 1,
     "apps/web/src/components/workspaces/table/select-row-content.tsx": 1,
     "apps/web/src/components/workspaces/tasks/task-badges.tsx": 1,

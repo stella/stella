@@ -7,6 +7,7 @@ import { PROCESS_SUMMARY_KINDS } from "@stll/api-contract/chat-tool-activity";
 import type { ProcessSummaryKind } from "@stll/api-contract/chat-tool-activity";
 import { Text } from "@stll/ui/text";
 
+import { keyedBy } from "@/components/keyed";
 import { ChevronDownIcon, ChevronRightIcon } from "@/icons.gen";
 import type { AnswerBlock, AnswerStep } from "@/state/chat-answer";
 import { useAppColors } from "@/theme";
@@ -70,9 +71,8 @@ export const AnswerSteps = ({
       </Pressable>
       {open ? (
         <View style={[styles.steps, { borderColor: colors.border }]}>
-          {block.steps.map((step, index) => (
-            // oxlint-disable-next-line react/no-array-index-key -- the same step can run twice in one answer.
-            <View key={index} style={styles.step}>
+          {keyedBy(block.steps, title).map(({ item: step, key }) => (
+            <View key={key} style={styles.step}>
               <Text
                 style={[
                   styles.label,

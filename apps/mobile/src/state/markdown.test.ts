@@ -158,7 +158,9 @@ const spansOf = (block: Block): Span[] => {
       return block.items.flat();
     case "table":
       return [...block.header.flat(), ...block.rows.flat().flat()];
-    default:
+    case "heading":
+    case "paragraph":
+    case "quote":
       return block.spans;
   }
 };

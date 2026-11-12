@@ -102,7 +102,12 @@ const readString = (
  */
 export const referenceFromMentionAttrs = (
   attrs: unknown,
-  { renderWorkspaceId }: HrefContext = {},
+  {
+    renderWorkspaceId,
+  }: {
+    /** The matter the surface renders in, for an entity attrs name none. */
+    renderWorkspaceId?: string | undefined;
+  } = {},
 ): ChatReference | null => {
   if (!isRecord(attrs)) {
     return null;

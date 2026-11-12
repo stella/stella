@@ -5,6 +5,7 @@ import { Platform, ScrollView, StyleSheet, View } from "react-native";
 import { MOBILE_REDIRECT_SCHEMES } from "@stll/api-contract/mobile-client";
 import { Text } from "@stll/ui/text";
 
+import { keyedBy } from "@/components/keyed";
 import { useOpenLink } from "@/components/open-link";
 import { ThreadMatter } from "@/components/thread-matter";
 import { useOpenReference } from "@/components/use-open-reference";
@@ -107,15 +108,15 @@ const Spans = ({ spans }: { spans: readonly Span[] }) => {
   });
 };
 
+/** A cell's words, which with its place among equal cells is its key. */
+const spansText = (spans: readonly Span[]) =>
+  spans.map((span) => span.text).join("");
+
 const TableView = ({ block }: { block: Extract<Block, { type: "table" }> }) => {
   const colors = useAppColors();
   const row = (cells: readonly Span[][], header: boolean) =>
-    cells.map((cell, column) => (
-      <View
-        // oxlint-disable-next-line react/no-array-index-key -- a cell's column is its identity.
-        key={column}
-        style={[styles.cell, { borderColor: colors.border }]}
-      >
+    keyedBy(cells, spansText).map(({ item: cell, key }) => (
+      <View key={key} style={[styles.cell, { borderColor: colors.border }]}>
         <Text
           selectable
           style={[
@@ -138,12 +139,13 @@ const TableView = ({ block }: { block: Extract<Block, { type: "table" }> }) => {
         <View style={[styles.row, { backgroundColor: colors.background }]}>
           {row(block.header, true)}
         </View>
-        {block.rows.map((cells, index) => (
-          // oxlint-disable-next-line react/no-array-index-key -- rows have no identity but their position.
-          <View key={index} style={styles.row}>
-            {row(cells, false)}
-          </View>
-        ))}
+        {keyedBy(block.rows, (cells) => cells.map(spansText).join("|")).map(
+          ({ item: cells, key }) => (
+            <View key={key} style={styles.row}>
+              {row(cells, false)}
+            </View>
+          ),
+        )}
       </View>
     </ScrollView>
   );
