@@ -294,33 +294,40 @@ const BROWSER_GATE = {
 
 type BrowserGate = (typeof BROWSER_GATE)[keyof typeof BROWSER_GATE];
 
+type StepGates = Record<"click" | "search" | "type", BrowserGate>;
+
 /**
  * When a click or a typing step asks the member, by the run's approval
  * mode. Opening, reading and typing into a search field never ask; a
  * sign-in page still goes to the member at every level. One gate for
  * every harness: the server asks, whatever the harness itself was told to
- * allow.
+ * allow. A mode added to the contract fails here until its rule is set.
  */
-const BROWSER_GATES = {
-  ask: {
-    click: BROWSER_GATE.ask,
-    search: BROWSER_GATE.run,
-    type: BROWSER_GATE.ask,
-  },
-  auto: {
-    click: BROWSER_GATE.run,
-    search: BROWSER_GATE.run,
-    type: BROWSER_GATE.ask,
-  },
-  full_auto: {
-    click: BROWSER_GATE.run,
-    search: BROWSER_GATE.run,
-    type: BROWSER_GATE.run,
-  },
-} as const satisfies Record<
-  DesktopRunnerApprovalMode,
-  Record<"click" | "search" | "type", BrowserGate>
->;
+const stepGates = (approvals: DesktopRunnerApprovalMode): StepGates => {
+  switch (approvals) {
+    case "ask":
+      return {
+        click: BROWSER_GATE.ask,
+        search: BROWSER_GATE.run,
+        type: BROWSER_GATE.ask,
+      };
+    case "auto":
+      return {
+        click: BROWSER_GATE.run,
+        search: BROWSER_GATE.run,
+        type: BROWSER_GATE.ask,
+      };
+    case "full_auto":
+      return {
+        click: BROWSER_GATE.run,
+        search: BROWSER_GATE.run,
+        type: BROWSER_GATE.run,
+      };
+    default:
+      approvals satisfies never;
+      return panic("Unhandled approval mode");
+  }
+};
 
 /** Whether `command` waits for the member under `approvals`. */
 export const browserStepGate = (
@@ -329,9 +336,9 @@ export const browserStepGate = (
 ): BrowserGate => {
   switch (command.action) {
     case BROWSER_CONTROL_ACTION.click:
-      return BROWSER_GATES[approvals].click;
+      return stepGates(approvals).click;
     case BROWSER_CONTROL_ACTION.fill:
-      return BROWSER_GATES[approvals][
+      return stepGates(approvals)[
         command.target.role === SEARCH_FIELD_ROLE ? "search" : "type"
       ];
     case BROWSER_CONTROL_ACTION.open:
