@@ -2,6 +2,11 @@ import { EventSchema } from "@ag-ui/core/schemas";
 import { EventType } from "@tanstack/ai";
 import * as v from "valibot";
 
+import { harnessSessionIdEvent } from "@stll/agent-engine";
+import {
+  AGENT_HARNESSES,
+  type AgentHarness,
+} from "@stll/api-contract/agent-harness";
 import {
   chatLocalRunAnswersRefusal,
   type ChatLocalRunQuestionReply,
@@ -13,6 +18,29 @@ import type { DesktopRunnerChunk } from "@stll/api-contract/desktop-runner";
 import { isRecord } from "@/api/lib/type-guards";
 
 const requestIdSchema = v.pipe(v.string(), v.uuid());
+const sessionIdSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(256));
+
+/**
+ * The harness session a chunk reports its run opened: the
+ * `<harness>.session-id` CUSTOM event a harness sends once the session it
+ * started or resumed took the turn, before any of the turn's output. Any
+ * other chunk reports none.
+ */
+export const openedSessionOf = (
+  chunk: unknown,
+): { harness: AgentHarness; sessionId: string } | null => {
+  if (!isRecord(chunk) || chunk["type"] !== EventType.CUSTOM) {
+    return null;
+  }
+  const harness = AGENT_HARNESSES.find(
+    (candidate) => harnessSessionIdEvent(candidate) === chunk["name"],
+  );
+  const value = chunk["value"];
+  const sessionId = isRecord(value) ? value["sessionId"] : undefined;
+  return harness !== undefined && v.is(sessionIdSchema, sessionId)
+    ? { harness, sessionId }
+    : null;
+};
 
 type HarnessQuestions = v.InferOutput<typeof questionsSchema>;
 

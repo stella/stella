@@ -9,7 +9,10 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { HARNESS_CONTINUATION_EVENT } from "@stll/agent-engine";
+import {
+  HARNESS_CONTINUATION_EVENT,
+  harnessSessionIdEvent,
+} from "@stll/agent-engine";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
 import {
@@ -377,7 +380,7 @@ const LOCAL_RUN_EVENT_DISPOSITION = {
  * only these pass; the rest of what a desktop sends goes no further.
  */
 const LOCAL_RUN_CUSTOM_EVENTS: ReadonlySet<string> = new Set([
-  ...AGENT_HARNESSES.map((harness) => `${harness}.session-id`),
+  ...AGENT_HARNESSES.map(harnessSessionIdEvent),
   HARNESS_CONTINUATION_EVENT,
 ]);
 
