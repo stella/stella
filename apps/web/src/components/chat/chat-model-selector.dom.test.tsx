@@ -193,6 +193,7 @@ test("the where chip switches the place, and the model chip lists that place's m
   ).toBeTruthy();
   await choose(places, "Codex");
   expect(chosen).toEqual([LOCAL_TARGET]);
+  await closeMenu();
 
   // On the computer: the agent's models and none of stella's. This agent
   // marks no default, so none is called recommended.
@@ -210,6 +211,7 @@ test("the where chip switches the place, and the model chip lists that place's m
 
   await choose(await openMenu(CODEX_PLACE), messages.chat.runOn.cloud);
   expect(chosen).toEqual([LOCAL_TARGET, { kind: "cloud" }]);
+  await closeMenu();
   const cloudModels = await openMenu(AUTO_LABEL);
   expect(within(cloudModels).getByPlaceholderText(SEARCH)).toBeTruthy();
   expect(within(cloudModels).getByText(CLOUD_MODEL.displayName)).toBeTruthy();
@@ -286,6 +288,7 @@ test("an agent starts on the model it marks as its default, offered first", asyn
   );
   await choose(await openMenu(CLOUD_PLACE), "Codex");
   expect(chosen).toEqual([{ ...LOCAL_TARGET, model: "gpt-6.1-sol" }]);
+  await closeMenu();
   const models = await openMenu("GPT-6.1 Sol");
   expect(
     within(models)

@@ -231,7 +231,7 @@ export const ChatRunTargetMenu = ({
   // Until the member's computers are read, no agent is listed; a member who
   // may not run turns on a computer sees only the way back to the cloud.
   const listed = chatLocalHarnessOptions(readiness);
-  const options = listed === null ? NO_HARNESS_OPTIONS : listed;
+  const options = listed ?? NO_HARNESS_OPTIONS;
   const choose = (target: ChatRunTarget) => {
     if (!sameRunTarget(target, selected)) {
       onSelect(target);

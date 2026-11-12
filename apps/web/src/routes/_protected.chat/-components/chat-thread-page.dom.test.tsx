@@ -248,6 +248,10 @@ const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
       if (pathname.endsWith("/chat/skill-availability")) {
         return Response.json({ unavailable: [] });
       }
+      // The composer's where chip: this member runs no turns on a computer.
+      if (pathname.endsWith("/chat/local-runners")) {
+        return Response.json({ status: "hidden" });
+      }
       // The open chat keeps itself read.
       if (
         pathname.endsWith(`/chat/threads/${threadRef.threadId}/read-state`) &&
