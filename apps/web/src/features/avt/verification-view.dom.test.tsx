@@ -2080,10 +2080,11 @@ test("an addition whose create answer was lost replays that create on retry, eve
   await waitFor(() => expect(createWrites).toBe(1));
   // The panel that sent the create goes away before the retry.
   await waitFor(() =>
-    expect(within(sheet).getByLabelText(messages.common.fact)).toHaveProperty(
-      "disabled",
-      true,
-    ),
+    expect(
+      within(sheet)
+        .getByLabelText(messages.common.fact)
+        .hasAttribute("disabled"),
+    ).toBe(true),
   );
   fireEvent.click(
     within(sheet).getByRole("button", { name: messages.common.cancel }),
