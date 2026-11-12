@@ -230,12 +230,17 @@ const OfflineHarnessItem = ({
         detached(desktop.launch(), "chat-run-on.open-desktop");
       }}
     >
-      <PlaceLabel
-        description={
-          opening ? t("settings.account.desktopCardOpeningTitle") : hint
-        }
-        title={name}
-      />
+      {/* PlaceLabel's layout; the description is a status region that
+          stays mounted, so the change to the opening message is announced. */}
+      <span className="flex min-w-0 flex-col py-0.5">
+        <span>{name}</span>
+        <span
+          className="text-muted-foreground text-2xs text-pretty"
+          role="status"
+        >
+          {opening ? t("settings.account.desktopCardOpeningTitle") : hint}
+        </span>
+      </span>
     </MenuItem>
   );
 };

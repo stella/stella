@@ -11,7 +11,7 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 GlobalRegistrator.register({ url: "https://app.example.test/chat" });
 const previousFetch = globalThis.fetch;
 
-const { cleanup, fireEvent, render, waitFor } =
+const { cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -349,6 +349,10 @@ test("choosing an agent on a computer that is not connected opens stella desktop
     return item;
   });
   expect(codex.textContent).toContain(messages.chat.runOn.hintOffline);
+  // The row's description is a status region before the click, so the
+  // change to the opening message is announced.
+  const status = within(codex).getByRole("status");
+  expect(status.textContent).toBe(messages.chat.runOn.hintOffline);
   expect(open).not.toHaveBeenCalled();
 
   fireEvent.click(codex);
@@ -356,10 +360,11 @@ test("choosing an agent on a computer that is not connected opens stella desktop
   expect(open).toHaveBeenCalledTimes(1);
   expect(open).toHaveBeenCalledWith(DESKTOP_PING_URL);
   await waitFor(() =>
-    expect(codex.textContent).toContain(
+    expect(status.textContent).toBe(
       messages.settings.account.desktopCardOpeningTitle,
     ),
   );
+  expect(within(codex).getByRole("status")).toBe(status);
   // A second click while it opens takes nothing: one open per gesture.
   fireEvent.click(codex);
   expect(open).toHaveBeenCalledTimes(1);
