@@ -512,6 +512,7 @@
         "openSource": "Abrir a verificação de {date}",
         "outcomes": {
           "ambiguous": "Várias correspondências possíveis",
+          "textChanged": "A redação mudou",
           "unmatched": "Nenhuma alegação correspondente",
           "verdictChanged": "O veredito mudou"
         },

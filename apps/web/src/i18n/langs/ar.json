@@ -512,6 +512,7 @@
         "openSource": "فتح تحقق {date}",
         "outcomes": {
           "ambiguous": "عدة تطابقات محتملة",
+          "textChanged": "تغيّرت الصياغة",
           "unmatched": "لا يوجد ادعاء مطابق",
           "verdictChanged": "تغيّرت النتيجة"
         },

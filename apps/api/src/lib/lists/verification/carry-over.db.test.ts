@@ -138,7 +138,10 @@ const PREVIOUS: readonly SeedClaim[] = [
     text: "The contract was signed in Prague on Monday.",
     block: "p4",
     verdict: supported,
-    events: [{ kind: "status", status: "reviewed", origin: "single" }],
+    events: [
+      { kind: "status", status: "reviewed", origin: "single" },
+      { kind: "note", note: "Signed at the Prague office." },
+    ],
   },
   {
     key: "regraded",
@@ -497,7 +500,7 @@ describe("completing the next run of a document", () => {
       ["same", "carried", "same"],
       ["conflict", "carried", "conflict"],
       ["legacy", "carried", "legacy"],
-      ["edited", "carried", "edited"],
+      ["edited", "text-changed", "edited"],
       ["regraded", "verdict-changed", "regraded"],
       ["gone", "unmatched", null],
       ["doubled", "ambiguous", null],
@@ -548,7 +551,11 @@ describe("completing the next run of a document", () => {
         (event): StoredClaimReviewEventPayload => event.payload,
       ),
     ).toEqual([{ kind: "override", state: "tension" }]);
-    expect(reviewOf("edited").status).toBe("reviewed");
+    // Edited words: the decision on the old words is withdrawn even though
+    // the verdict is the same; the note follows.
+    expect(eventsOn(events, "edited").map((event) => event.kind)).toEqual([
+      "note",
+    ]);
     // Decided on a verdict the new run no longer gives: withdrawn; the note
     // still follows.
     expect(eventsOn(events, "regraded").map((event) => event.kind)).toEqual([
@@ -573,8 +580,14 @@ describe("completing the next run of a document", () => {
     expect(run?.carryOver).toEqual({
       sourceRunId: previousRunId,
       sourceRunCreatedAt: PREVIOUS_RUN_AT.toISOString(),
-      carriedCount: 4,
+      carriedCount: 3,
       notCarried: [
+        {
+          sourceClaimId: idOf(previousClaimIds, "edited"),
+          text: "The contract was signed in Prague on Monday.",
+          outcome: "text-changed",
+          targetClaimId: idOf(nextClaimIds, "edited"),
+        },
         {
           sourceClaimId: idOf(previousClaimIds, "regraded"),
           text: "The fee was paid late.",

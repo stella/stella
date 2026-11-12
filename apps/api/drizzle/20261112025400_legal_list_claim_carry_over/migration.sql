@@ -47,8 +47,8 @@ CREATE TABLE "legal_list_claim_carry_outcomes" (
   CONSTRAINT "legal_list_claim_carry_outcomes_run_fk" FOREIGN KEY ("run_id", "workspace_id") REFERENCES "legal_list_verification_runs"("id", "workspace_id") ON DELETE CASCADE,
   CONSTRAINT "legal_list_claim_carry_outcomes_source_claim_fk" FOREIGN KEY ("source_claim_id", "source_run_id", "workspace_id") REFERENCES "legal_list_claims"("id", "run_id", "workspace_id") ON DELETE CASCADE,
   CONSTRAINT "legal_list_claim_carry_outcomes_target_claim_fk" FOREIGN KEY ("target_claim_id", "run_id", "workspace_id") REFERENCES "legal_list_claims"("id", "run_id", "workspace_id") ON DELETE CASCADE,
-  CONSTRAINT "legal_list_claim_carry_outcomes_outcome_check" CHECK ("outcome" IN ('carried', 'verdict-changed', 'unmatched', 'ambiguous')),
-  CONSTRAINT "legal_list_claim_carry_outcomes_target_check" CHECK (("target_claim_id" IS NOT NULL) = ("outcome" IN ('carried', 'verdict-changed')))
+  CONSTRAINT "legal_list_claim_carry_outcomes_outcome_check" CHECK ("outcome" IN ('carried', 'text-changed', 'verdict-changed', 'unmatched', 'ambiguous')),
+  CONSTRAINT "legal_list_claim_carry_outcomes_target_check" CHECK (("target_claim_id" IS NOT NULL) = ("outcome" IN ('carried', 'text-changed', 'verdict-changed')))
 );--> statement-breakpoint
 -- Built with the empty table, so nothing is scanned.
 CREATE INDEX "legal_list_claim_carry_outcomes_run_idx" ON "legal_list_claim_carry_outcomes" ("workspace_id", "run_id");--> statement-breakpoint

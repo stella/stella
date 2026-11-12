@@ -512,6 +512,7 @@
         "openSource": "Ouvrir la vérification du {date}",
         "outcomes": {
           "ambiguous": "Plusieurs correspondances possibles",
+          "textChanged": "La formulation a changé",
           "unmatched": "Aucune affirmation correspondante",
           "verdictChanged": "Le verdict a changé"
         },

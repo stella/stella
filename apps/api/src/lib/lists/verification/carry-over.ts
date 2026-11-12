@@ -80,11 +80,16 @@ export type CarriedSourceEvent = {
   createdAt: Date;
 };
 
+/** Whether the matching claim of the new run has the same words. */
+export type ClaimWording = "same" | "edited";
+
 /** Why one action did or did not follow its claim. */
 export type CarryDecision =
   | "carried"
+  /** Decided on words the new run's claim no longer has. */
+  | "words-changed"
   /** Decided on a verdict the new run does not give the claim. */
-  | "withdrawn"
+  | "verdict-changed"
   /** A re-check: the new run is itself a fresh grade. */
   | "fresh-grade"
   /** Already true of the new claim once the actions before it followed
@@ -98,24 +103,31 @@ export type ClaimCarryPlan = {
     eventId: SafeId<"legalListClaimReviewEvent">;
     decision: CarryDecision;
   }[];
-  outcome: Extract<ClaimCarryOutcome, "carried" | "verdict-changed">;
+  outcome: Extract<
+    ClaimCarryOutcome,
+    "carried" | "text-changed" | "verdict-changed"
+  >;
 };
 
 /**
- * Which of one claim's actions follow it to its match in the new run. Each
- * action is judged on the verdict it was taken on (the source claim's grade
- * just before it, re-checks included) against the new claim's verdict, and
- * replayed on the new claim's fold so nothing that no longer applies is
- * written. Null when the claim has no action that could follow.
+ * Which of one claim's actions follow it to its match in the new run. A
+ * decision follows only to the same words: edited words may say something
+ * else (two parties swapped), so a decision on the old words is withdrawn.
+ * Each one is also judged on the verdict it was taken on (the source claim's
+ * grade just before it, re-checks included) against the new claim's
+ * verdict, and replayed on the new claim's fold so nothing that no longer
+ * applies is written. Null when the claim has no action that could follow.
  */
 export const planClaimCarry = ({
   source,
   events,
   target,
+  wording,
 }: {
   source: VerdictTarget;
   events: readonly CarriedSourceEvent[];
   target: VerdictTarget;
+  wording: ClaimWording;
 }): ClaimCarryPlan | null => {
   if (
     !events.some(
@@ -131,6 +143,7 @@ export const planClaimCarry = ({
       event,
       decidedOn: gradeOf(source, before),
       target,
+      wording,
       carried,
     });
     decisions.push({ eventId: event.id, decision });
@@ -141,21 +154,32 @@ export const planClaimCarry = ({
   return {
     events: carried,
     decisions,
-    outcome: decisions.some(({ decision }) => decision === "withdrawn")
-      ? "verdict-changed"
-      : "carried",
+    outcome: planOutcome(decisions.map(({ decision }) => decision)),
   };
+};
+
+/** What the claim's outcome says: edited words first, since they withdraw
+ *  every decision whatever the verdict. */
+const planOutcome = (
+  decisions: readonly CarryDecision[],
+): ClaimCarryPlan["outcome"] => {
+  if (decisions.includes("words-changed")) {
+    return "text-changed";
+  }
+  return decisions.includes("verdict-changed") ? "verdict-changed" : "carried";
 };
 
 const carryDecision = ({
   event,
   decidedOn,
   target,
+  wording,
   carried,
 }: {
   event: CarriedSourceEvent;
   decidedOn: VerdictTarget;
   target: VerdictTarget;
+  wording: ClaimWording;
   carried: readonly CarriedSourceEvent[];
 }): CarryDecision => {
   const rule = CLAIM_REVIEW_CARRY_RULE[event.payload.kind];
@@ -163,9 +187,12 @@ const carryDecision = ({
     case "never": {
       return "fresh-grade";
     }
-    case "same-verdict": {
+    case "unchanged-claim": {
+      if (wording === "edited") {
+        return "words-changed";
+      }
       if (!sameReviewedVerdict(decidedOn, target)) {
-        return "withdrawn";
+        return "verdict-changed";
       }
       break;
     }
@@ -246,8 +273,12 @@ export const planRunCarry = ({
           targets.get(match.targetId) ??
           panic("A claim matched outside the new run");
         const plan =
-          planClaimCarry({ source: claim, events, target }) ??
-          panic("A reviewed claim has nothing to plan");
+          planClaimCarry({
+            source: claim,
+            events,
+            target,
+            wording: match.type === "matched" ? "same" : "edited",
+          }) ?? panic("A reviewed claim has nothing to plan");
         return [
           {
             outcome: {

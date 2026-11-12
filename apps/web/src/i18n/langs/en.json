@@ -512,6 +512,7 @@
         "openSource": "Open the run of {date}",
         "outcomes": {
           "ambiguous": "Several possible matches",
+          "textChanged": "Wording changed",
           "unmatched": "No matching claim",
           "verdictChanged": "Verdict changed"
         },

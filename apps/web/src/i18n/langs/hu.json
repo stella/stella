@@ -512,6 +512,7 @@
         "openSource": "A(z) {date} ellenőrzés megnyitása",
         "outcomes": {
           "ambiguous": "Több lehetséges egyezés",
+          "textChanged": "A megfogalmazás megváltozott",
           "unmatched": "Nincs megfelelő állítás",
           "verdictChanged": "A következtetés megváltozott"
         },

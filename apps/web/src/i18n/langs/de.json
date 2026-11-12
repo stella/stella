@@ -512,6 +512,7 @@
         "openSource": "Prüfung vom {date} öffnen",
         "outcomes": {
           "ambiguous": "Mehrere mögliche Treffer",
+          "textChanged": "Wortlaut geändert",
           "unmatched": "Keine passende Behauptung",
           "verdictChanged": "Ergebnis hat sich geändert"
         },

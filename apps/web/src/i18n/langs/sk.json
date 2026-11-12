@@ -512,6 +512,7 @@
         "openSource": "Otvoriť overenie z {date}",
         "outcomes": {
           "ambiguous": "Viac možných zhôd",
+          "textChanged": "Znenie sa zmenilo",
           "unmatched": "Žiadne zodpovedajúce tvrdenie",
           "verdictChanged": "Záver sa zmenil"
         },

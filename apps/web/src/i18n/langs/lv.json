@@ -512,6 +512,7 @@
         "openSource": "Atvērt {date} pārbaudi",
         "outcomes": {
           "ambiguous": "Vairākas iespējamas atbilstības",
+          "textChanged": "Formulējums mainījies",
           "unmatched": "Nav atbilstoša apgalvojuma",
           "verdictChanged": "Slēdziens mainījies"
         },

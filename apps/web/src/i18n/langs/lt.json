@@ -512,6 +512,7 @@
         "openSource": "Atidaryti {date} tikrinimą",
         "outcomes": {
           "ambiguous": "Keli galimi atitikmenys",
+          "textChanged": "Formuluotė pasikeitė",
           "unmatched": "Atitinkamo teiginio nėra",
           "verdictChanged": "Išvada pasikeitė"
         },

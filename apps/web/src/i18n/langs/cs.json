@@ -512,6 +512,7 @@
         "openSource": "Otevřít ověření z {date}",
         "outcomes": {
           "ambiguous": "Více možných shod",
+          "textChanged": "Znění se změnilo",
           "unmatched": "Žádné odpovídající tvrzení",
           "verdictChanged": "Závěr se změnil"
         },

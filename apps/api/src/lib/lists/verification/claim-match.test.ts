@@ -263,6 +263,22 @@ describe("claim matching", () => {
     expect(matches.get("old")).toEqual({ type: "unmatched" });
   });
 
+  test("swapped parties in the same paragraph do not read as the same claim", () => {
+    const old = "The seller shall pay the buyer";
+    const swapped = "The buyer shall pay the seller";
+    // The fixture reaches the second pass: the words differ, the bag of
+    // words does not.
+    expect(normaliseClaimText(swapped)).not.toBe(normaliseClaimText(old));
+    expect(normaliseClaimText(swapped).split(" ").toSorted()).toEqual(
+      normaliseClaimText(old).split(" ").toSorted(),
+    );
+    const matches = matchClaims(
+      [{ id: "old", text: old, anchor: anchorIn(1) }],
+      [{ id: "new", text: swapped, anchor: anchorIn(1) }],
+    );
+    expect(matches.get("old")).toEqual({ type: "unmatched" });
+  });
+
   test("two edited claims that fit one new claim are ambiguous", () => {
     const old = (id: string, text: string): Claim => ({
       id,

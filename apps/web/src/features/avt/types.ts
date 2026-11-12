@@ -61,6 +61,7 @@ export type NotCarriedClaim = RunCarryOver["notCarried"][number];
 
 /** Why a reviewed claim's decisions did not all come across. */
 export const NOT_CARRIED_LABEL_KEYS = {
+  "text-changed": "avt.runs.carryOver.outcomes.textChanged",
   "verdict-changed": "avt.runs.carryOver.outcomes.verdictChanged",
   unmatched: "avt.runs.carryOver.outcomes.unmatched",
   ambiguous: "avt.runs.carryOver.outcomes.ambiguous",

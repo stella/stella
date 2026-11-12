@@ -512,6 +512,7 @@
         "openSource": "Abrir la verificación del {date}",
         "outcomes": {
           "ambiguous": "Varias coincidencias posibles",
+          "textChanged": "La redacción cambió",
           "unmatched": "Ninguna afirmación coincidente",
           "verdictChanged": "El resultado cambió"
         },

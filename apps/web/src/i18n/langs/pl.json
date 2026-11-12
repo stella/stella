@@ -512,6 +512,7 @@
         "openSource": "Otwórz przebieg z {date}",
         "outcomes": {
           "ambiguous": "Kilka możliwych dopasowań",
+          "textChanged": "Brzmienie się zmieniło",
           "unmatched": "Brak pasującego twierdzenia",
           "verdictChanged": "Rozstrzygnięcie się zmieniło"
         },

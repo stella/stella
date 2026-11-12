@@ -10,6 +10,7 @@ import type {
   CarryDecision,
 } from "@/api/lib/lists/verification/carry-over";
 import type {
+  ClaimCarryOutcome,
   ClaimReviewEventKind,
   RecordConflict,
   StoredClaimReviewEventPayload,
@@ -128,22 +129,35 @@ const EXAMPLES = {
   }
 >;
 
-/** What each carry rule does to an action on the same, and on a changed,
- *  verdict. */
+/** What each carry rule does to an action on the same claim, on a changed
+ *  verdict, and on edited words. */
 const EXPECTED = {
-  always: { same: "carried", changed: "carried" },
-  "same-verdict": { same: "carried", changed: "withdrawn" },
-  never: { same: "fresh-grade", changed: "fresh-grade" },
+  always: { same: "carried", changed: "carried", edited: "carried" },
+  "unchanged-claim": {
+    same: "carried",
+    changed: "verdict-changed",
+    edited: "words-changed",
+  },
+  never: { same: "fresh-grade", changed: "fresh-grade", edited: "fresh-grade" },
 } as const satisfies Record<
   (typeof CLAIM_REVIEW_CARRY_RULE)[ClaimReviewEventKind],
-  { same: CarryDecision; changed: CarryDecision }
+  { same: CarryDecision; changed: CarryDecision; edited: CarryDecision }
 >;
+
+/** The outcome a claim's single decision gives it. */
+const OUTCOME_OF = {
+  carried: "carried",
+  "verdict-changed": "verdict-changed",
+  "words-changed": "text-changed",
+  "fresh-grade": null,
+  redundant: "carried",
+} as const satisfies Record<CarryDecision, ClaimCarryOutcome | null>;
 
 const decisionsOf = (plan: ReturnType<typeof planClaimCarry>) =>
   plan?.decisions.map(({ decision }) => decision) ?? null;
 
 describe("which review actions follow a claim to the next run", () => {
-  test("every action kind is judged by the carry map, on the same and a changed verdict", () => {
+  test("every action kind is judged by the carry map, on the same claim, a changed verdict and edited words", () => {
     const exercised: ClaimReviewEventKind[] = [];
     for (const kind of CLAIM_REVIEW_EVENT_KINDS) {
       const example = EXAMPLES[kind];
@@ -151,26 +165,38 @@ describe("which review actions follow a claim to the next run", () => {
       // The changed verdict is one the rule can tell apart.
       expect(sameReviewedVerdict(example.claim, example.changed)).toBe(false);
       const events = example.events();
-      const same = planClaimCarry({
-        source: example.claim,
-        events,
-        target: example.claim,
-      });
-      const changed = planClaimCarry({
-        source: example.claim,
-        events,
-        target: example.changed,
-      });
-      if (CLAIM_REVIEW_CARRY_RULE[kind] === "never") {
-        // Nothing on the claim could follow, so it is not recorded at all.
-        expect(same).toBeNull();
-        expect(changed).toBeNull();
-      } else {
-        expect(decisionsOf(same)).toEqual([expected.same]);
-        expect(decisionsOf(changed)).toEqual([expected.changed]);
-        expect(changed?.outcome).toBe(
-          expected.changed === "withdrawn" ? "verdict-changed" : "carried",
-        );
+      const plans = {
+        same: planClaimCarry({
+          source: example.claim,
+          events,
+          target: example.claim,
+          wording: "same",
+        }),
+        changed: planClaimCarry({
+          source: example.claim,
+          events,
+          target: example.changed,
+          wording: "same",
+        }),
+        edited: planClaimCarry({
+          source: example.claim,
+          events,
+          target: example.claim,
+          wording: "edited",
+        }),
+      };
+      for (const variant of ["same", "changed", "edited"] as const) {
+        const plan = plans[variant];
+        if (CLAIM_REVIEW_CARRY_RULE[kind] === "never") {
+          // Nothing on the claim could follow, so it is not recorded at all.
+          expect(plan).toBeNull();
+        } else {
+          const decision: CarryDecision = expected[variant];
+          expect(decisionsOf(plan)).toEqual([decision]);
+          expect<ClaimCarryOutcome | null | undefined>(plan?.outcome).toBe(
+            OUTCOME_OF[decision],
+          );
+        }
       }
       exercised.push(kind);
     }
@@ -198,9 +224,10 @@ describe("which review actions follow a claim to the next run", () => {
       source: SUPPORTED,
       events: [reviewed, recheck, disputed, note],
       target: CONTRADICTED,
+      wording: "same",
     });
     expect(plan?.decisions).toEqual([
-      { eventId: reviewed.id, decision: "withdrawn" },
+      { eventId: reviewed.id, decision: "verdict-changed" },
       { eventId: recheck.id, decision: "fresh-grade" },
       { eventId: disputed.id, decision: "carried" },
       { eventId: note.id, decision: "carried" },
@@ -227,6 +254,7 @@ describe("which review actions follow a claim to the next run", () => {
           source: CONFLICT_AB,
           events: [governed],
           target: swapped,
+          wording: "same",
         }),
       ),
     ).toEqual(["carried"]);
@@ -239,9 +267,10 @@ describe("which review actions follow a claim to the next run", () => {
             ...CONFLICT_AB,
             recordConflict: conflict([FACT_B, FACT_C]),
           },
+          wording: "same",
         }),
       ),
-    ).toEqual(["withdrawn"]);
+    ).toEqual(["verdict-changed"]);
   });
 
   test("a reopening already carried is not written twice", () => {
@@ -264,10 +293,34 @@ describe("which review actions follow a claim to the next run", () => {
       source: NOT_VERIFIABLE,
       events: [first, recheck, second],
       target: NOT_VERIFIABLE,
+      wording: "same",
     });
     expect(decisionsOf(plan)).toEqual(["carried", "fresh-grade", "redundant"]);
     expect(plan?.events).toEqual([first]);
     expect(plan?.outcome).toBe("carried");
+  });
+
+  test("edited words keep the notes and links, never the decisions", () => {
+    const reviewed = event({
+      kind: "status",
+      status: "reviewed",
+      origin: "single",
+    });
+    const note = event({ kind: "note", note: "Matches the bank statement." });
+    const link = event({
+      kind: "fact-link",
+      factEntityId: FACT_A,
+      change: "link",
+    });
+    const plan = planClaimCarry({
+      source: SUPPORTED,
+      events: [reviewed, note, link],
+      target: SUPPORTED,
+      wording: "edited",
+    });
+    expect(decisionsOf(plan)).toEqual(["words-changed", "carried", "carried"]);
+    expect(plan?.events).toEqual([note, link]);
+    expect(plan?.outcome).toBe("text-changed");
   });
 
   test("an override recorded before reasons were required still follows", () => {
@@ -276,6 +329,7 @@ describe("which review actions follow a claim to the next run", () => {
       source: SUPPORTED,
       events: [legacy],
       target: SUPPORTED,
+      wording: "same",
     });
     expect(plan?.events).toEqual([legacy]);
     expect(plan?.events.at(0)?.payload.reason).toBeUndefined();

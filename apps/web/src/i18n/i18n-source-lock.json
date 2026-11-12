@@ -394,6 +394,7 @@
   "avt.runs.back": "All documents",
   "avt.runs.carryOver.openSource": "Open the run of {date}",
   "avt.runs.carryOver.outcomes.ambiguous": "Several possible matches",
+  "avt.runs.carryOver.outcomes.textChanged": "Wording changed",
   "avt.runs.carryOver.outcomes.unmatched": "No matching claim",
   "avt.runs.carryOver.outcomes.verdictChanged": "Verdict changed",
   "avt.runs.carryOver.summary.carried": "{count, number} carried",

@@ -9,7 +9,9 @@
  *    does not either: a moved paragraph keeps its claims.
  * 2. Edited words in the same place. A claim with no exact counterpart
  *    matches a claim of the same block (DOCX paragraph or PDF page) whose
- *    words overlap by at least `CLAIM_MATCH_SIMILARITY_MIN`.
+ *    words, in order, are at least `CLAIM_MATCH_SIMILARITY_MIN` alike.
+ *    Edited words may say something else, so only notes and fact links
+ *    follow such a match (`CLAIM_REVIEW_CARRY_RULE`).
  *
  * A pairing is made only when it is the single candidate on both sides.
  * Several candidates are `ambiguous`, none is `unmatched`: a guess would
@@ -20,8 +22,8 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import type { ClaimAnchor } from "@/api/lib/lists/verification/contract";
 
-/** Dice overlap of two claims' words a pairing in the same block needs:
- *  one word in ten may change, one in five for a five-word claim. */
+/** How alike, in order, two claims' words must be to pair in the same
+ *  block (`claimTextSimilarity`): two word edits in ten, one in five. */
 export const CLAIM_MATCH_SIMILARITY_MIN = 0.8;
 
 export type MatchableClaim<Id extends string> = {
@@ -57,31 +59,43 @@ export const normaliseClaimText = (text: string): string =>
 const wordsOf = (normalised: string): string[] =>
   normalised.match(WORD_PATTERN) ?? [];
 
+/** Fewest word insertions, deletions and substitutions turning one word
+ *  sequence into the other. */
+const wordEditDistance = (
+  left: readonly string[],
+  right: readonly string[],
+): number => {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (const [row, word] of left.entries()) {
+    const current = [row + 1];
+    for (const [column, other] of right.entries()) {
+      current.push(
+        Math.min(
+          (previous[column + 1] ?? 0) + 1,
+          (current[column] ?? 0) + 1,
+          (previous[column] ?? 0) + (word === other ? 0 : 1),
+        ),
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length] ?? 0;
+};
+
 /**
- * Dice coefficient of two word multisets: twice the shared words over all
- * words. 1 for the same words in any order, 0 when none is shared or either
- * side has no words.
+ * How alike two claims' words are, in order: one minus the word edit
+ * distance over the longer claim's length. Order counts, so "the seller
+ * shall pay the buyer" and "the buyer shall pay the seller" are not alike
+ * however many words they share. 0 when either side has no words.
  */
 export const claimTextSimilarity = (left: string, right: string): number => {
   const leftWords = wordsOf(normaliseClaimText(left));
   const rightWords = wordsOf(normaliseClaimText(right));
-  const total = leftWords.length + rightWords.length;
+  const longer = Math.max(leftWords.length, rightWords.length);
   if (leftWords.length === 0 || rightWords.length === 0) {
     return 0;
   }
-  const counts = new Map<string, number>();
-  for (const word of leftWords) {
-    counts.set(word, (counts.get(word) ?? 0) + 1);
-  }
-  let shared = 0;
-  for (const word of rightWords) {
-    const remaining = counts.get(word) ?? 0;
-    if (remaining > 0) {
-      shared += 1;
-      counts.set(word, remaining - 1);
-    }
-  }
-  return (2 * shared) / total;
+  return 1 - wordEditDistance(leftWords, rightWords) / longer;
 };
 
 /** The block a claim sits in, as both runs name it. */

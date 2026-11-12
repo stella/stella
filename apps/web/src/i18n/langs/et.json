@@ -512,6 +512,7 @@
         "openSource": "Ava kontroll {date}",
         "outcomes": {
           "ambiguous": "Mitu võimalikku vastet",
+          "textChanged": "Sõnastus muutus",
           "unmatched": "Vastavat väidet pole",
           "verdictChanged": "Otsus muutus"
         },
