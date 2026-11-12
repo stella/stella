@@ -360,6 +360,7 @@ const HARNESS_TOOL_TITLE_KEYS = {
   command_execution: "chat.tool.command_execution",
   file_change: "chat.tool.file_change",
   harness_web_search: "chat.tool.harness_web_search",
+  harness_native_tool: "chat.tool.unknown",
   request_user_input: "chat.tool.request_user_input",
   request_permissions: "chat.tool.request_permissions",
   harness_unsupported_item: "chat.tool.harness_unsupported_item",

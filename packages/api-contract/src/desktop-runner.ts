@@ -355,7 +355,12 @@ export const DESKTOP_RUNNER_NETWORK_POLICIES = ["open"] as const;
 export const DESKTOP_RUNNER_FS_POLICIES = ["workspace"] as const;
 
 /**
- * How much a local run asks before it acts, chosen per thread.
+ * How much a local run asks before it acts, chosen per thread, listed from
+ * the mode that does least on its own.
+ * - `plan`: nothing that changes files runs without asking. The agent reads
+ *   and researches, then proposes a plan and waits; once the member approves
+ *   the plan the run continues as in `ask`, and a declined plan leaves it
+ *   planning. Only a harness that can pause on a plan offers it.
  * - `ask`: edits inside the run workspace go ahead; commands and anything
  *   else are asked about.
  * - `auto`: the harness decides what is safe to do on its own and asks
@@ -366,6 +371,7 @@ export const DESKTOP_RUNNER_FS_POLICIES = ["workspace"] as const;
  *   harness does not offer it.
  */
 export const DESKTOP_RUNNER_APPROVAL_MODES = [
+  "plan",
   "ask",
   "auto",
   "full_auto",

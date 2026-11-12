@@ -244,6 +244,27 @@ export const FAKE_PERMISSION_SUGGESTION = {
   destination: "localSettings",
 };
 
+/** The plan the plan scenarios propose, as the CLI adds it to the call. */
+export const FAKE_PLAN = "## Plan\n\n1. Read the lease.\n2. Draft the notice.";
+
+/** What the CLI suggests remembering when it asks about a plan in plan mode. */
+const SET_MODE_SUGGESTION = {
+  type: "setMode",
+  mode: "acceptEdits",
+  destination: "session",
+};
+
+/** The plan call as the CLI asks about it: the model's input plus the plan. */
+const proposePlan = (toolUseId: string): FakeStep[] => [
+  assistant("msg-plan", [toolUse(toolUseId, "ExitPlanMode", {})]),
+  canUseTool(
+    toolUseId,
+    "ExitPlanMode",
+    { plan: FAKE_PLAN, planFilePath: "/plans/lease.md" },
+    { permission_suggestions: [SET_MODE_SUGGESTION] },
+  ),
+];
+
 /** The host a sandboxed command reaches in the sandbox scenarios. */
 export const FAKE_SANDBOX_HOST = "registry.example.test";
 
@@ -590,6 +611,23 @@ const FAKE_SCENARIOS = {
     ),
     toolResult("call-out", "File created."),
     assistant("msg-3", [{ type: "text", text: "Left the draft in place." }]),
+    result(),
+  ],
+  /** An approved plan, then the turn continues in its approved mode. */
+  plan_approved: [
+    ...freshTurn(),
+    ...proposePlan("call-plan"),
+    toolResult("call-plan", "User has approved your plan."),
+    { expect: "set_permission_mode" },
+    assistant("msg-2", [{ type: "text", text: "Drafting the notice." }]),
+    result(),
+  ],
+  /** A declined plan: the CLI stays in plan mode and the turn ends. */
+  plan_declined: [
+    ...freshTurn(),
+    ...proposePlan("call-plan"),
+    toolResult("call-plan", "The user denied this action.", true),
+    assistant("msg-2", [{ type: "text", text: "Waiting for a new plan." }]),
     result(),
   ],
   /** An approval without suggested rules offers no session-wide decision. */

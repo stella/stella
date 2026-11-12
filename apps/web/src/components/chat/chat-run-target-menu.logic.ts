@@ -23,6 +23,10 @@ import type { TranslationKey } from "@/i18n/types";
 
 /** Each permission mode's name and what it lets a run do on its own. */
 export const LOCAL_RUN_PERMISSION_KEYS = {
+  plan: {
+    label: "chat.localRun.permissionPlan",
+    description: "chat.localRun.permissionPlanDescription",
+  },
   ask: {
     label: "common.ask",
     description: "chat.localRun.permissionAskDescription",

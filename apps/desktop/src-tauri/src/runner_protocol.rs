@@ -197,8 +197,10 @@ wire_values!(NetworkPolicy { Open => "open" });
 
 wire_values!(FsPolicy { Workspace => "workspace" });
 
-// How much a run asks before it acts; `Ask` is every harness's default.
+// How much a run asks before it acts, from the mode that does least on its
+// own; `Ask` is every harness's default.
 wire_values!(ApprovalMode {
+  Plan => "plan",
   Ask => "ask",
   Auto => "auto",
   FullAuto => "full_auto",

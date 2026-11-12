@@ -179,15 +179,18 @@ const isCapability = (value: string): value is HarnessCapability =>
   Object.hasOwn(CLAUDE_CODE_CAPABILITIES, value);
 
 /**
- * The CLI's permission mode per approval mode. In `acceptEdits`, edits inside
- * the working directory go ahead and anything else, including a path outside
- * it, is asked about through the permission prompt; in `auto`, the CLI's own
- * review approves what it judges safe and asks about the rest. Full auto adds
- * the CLI's OS sandbox to `acceptEdits` (see `sandboxSettings`). A mode that
- * skips permission checks is never used: it would also approve a command's
- * request to leave the sandbox.
+ * The CLI's permission mode per approval mode. In `plan`, nothing that
+ * changes files runs without asking: the agent reads and researches, then
+ * calls `ExitPlanMode` with its plan, which is asked about like any call. In
+ * `acceptEdits`, edits inside the working directory go ahead and anything
+ * else, including a path outside it, is asked about through the permission
+ * prompt; in `auto`, the CLI's own review approves what it judges safe and
+ * asks about the rest. Full auto adds the CLI's OS sandbox to `acceptEdits`
+ * (see `sandboxSettings`). A mode that skips permission checks is never
+ * used: it would also approve a command's request to leave the sandbox.
  */
 const PERMISSION_MODE = {
+  plan: "plan",
   ask: "acceptEdits",
   auto: "auto",
   full_auto: "acceptEdits",
@@ -233,6 +236,14 @@ const sandboxSettings = (
     },
   },
 });
+
+/**
+ * The CLI mode a plan-level turn continues in once its plan is approved:
+ * Ask's. The CLI on its own would return to `default`, which also asks about
+ * edits; the mode the thread used before Plan is not known here, and Ask is
+ * the mode every harness supports.
+ */
+const APPROVED_PLAN_MODE = PERMISSION_MODE.ask;
 
 /** The CLI's refusal when the sandbox it was told to require cannot start. */
 const SANDBOX_REFUSAL = "Sandbox required but unavailable";
@@ -651,6 +662,8 @@ const openSession = async (
     sandboxNetworkHosts: new Set(
       input.policy.approvals === "full_auto" ? input.networkHosts : [],
     ),
+    approvedPlanMode:
+      input.policy.approvals === "plan" ? APPROVED_PLAN_MODE : null,
   });
   const connected = await connect({
     options,
