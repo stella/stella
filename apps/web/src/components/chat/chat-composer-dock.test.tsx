@@ -84,6 +84,7 @@ describe("chat composer dock", () => {
         harness: "codex",
         model: "gpt-5-codex",
         approvals: "ask",
+        reasoningEffort: null,
       }),
     ).not.toContain("lucide-globe");
   });
