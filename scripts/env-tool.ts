@@ -198,23 +198,18 @@ export const renderEnvironmentEntries = (
 export const renderApiEnvExample = () =>
   renderEnvironmentEntries(
     ENV_CATALOG.filter(
-      ({ documented, owner }) =>
-        documented && owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
+      ({ owner }) => owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
     ),
   );
 
 export const renderWebEnvExample = () =>
   renderEnvironmentEntries(
-    ENV_CATALOG.filter(
-      ({ documented, owner }) => documented && owner === ENV_OWNER.web,
-    ),
+    ENV_CATALOG.filter(({ owner }) => owner === ENV_OWNER.web),
   );
 
 export const renderCollabEnvExample = () =>
   renderEnvironmentEntries(
-    ENV_CATALOG.filter(
-      ({ documented, owner }) => documented && owner === ENV_OWNER.collab,
-    ),
+    ENV_CATALOG.filter(({ owner }) => owner === ENV_OWNER.collab),
   );
 
 const BUN_ENV_READER =
@@ -1255,9 +1250,7 @@ const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
     existingEnvPaths.length > 0 ? existingEnvPaths : [baseEnvPath]
   ).map((envPath) => repoRelativePath(REPO_ROOT, envPath));
   console.log(`Environment doctor: ${app} (${displayedEnvPaths.join(", ")})`);
-  for (const entry of ENV_CATALOG.filter(
-    ({ documented, owner }) => documented && owners.has(owner),
-  )) {
+  for (const entry of ENV_CATALOG.filter(({ owner }) => owners.has(owner))) {
     const value = validation.values[entry.name];
     console.log(
       `${entry.name}: ${formatEnvValue(entry, value)} [${sourceLabel(entry.name, fileValues)}; ${entry.exposure}]`,
