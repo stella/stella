@@ -1882,7 +1882,9 @@
         "$TURBO_ROOT$/apps/web/src/routes/auth/route.tsx",
         "$TURBO_ROOT$/apps/web/src/components/workspace-primary-nav.ts",
         "$TURBO_ROOT$/apps/web/src/components/sidebar-user-menu.tsx",
+        // The phone draws the web's recorded chats and its step titles.
         "$TURBO_ROOT$/apps/web/src/components/chat/__fixtures__/recorded-conversations/**",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
         "$TURBO_ROOT$/packages/ui/src/**"
       ]
     },

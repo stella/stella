@@ -75,6 +75,8 @@
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
     "./chat": "./src/chat.ts",
     "./chat-message-content": "./src/chat-message-content.ts",
+    "./chat-reference-href": "./src/chat-reference-href.ts",
+    "./chat-tool-activity": "./src/chat-tool-activity.ts",
     "./chat-turn-duration": "./src/chat-turn-duration.ts",
     "./table-chart": "./src/table-chart.ts",
     "./chat-turn-errors": "./src/chat-turn-errors.ts",
