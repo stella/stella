@@ -197,6 +197,7 @@ describe("reduceSendQueue", () => {
         type: "turn-boundary-checked",
         isGenerating: false,
         status,
+        awaitingMember: false,
       });
 
       expect(result.dispatchedEntry).toBeNull();
@@ -252,6 +253,7 @@ describe("reduceSendQueue", () => {
       conversationId: CONVERSATION_ID,
       drainHeld: true,
       editSessionIds: ["edited"],
+      heldForMember: true,
       isGenerating: true,
       queue: [makeEntry("a"), makeEntry("b")],
       wasGenerating: true,
@@ -266,6 +268,7 @@ describe("reduceSendQueue", () => {
       conversationId: "conversation-2",
       drainHeld: false,
       editSessionIds: [],
+      heldForMember: false,
       isGenerating: false,
       queue: [],
       wasGenerating: false,
@@ -289,6 +292,7 @@ describe("reduceSendQueue", () => {
       type: "turn-boundary-checked",
       isGenerating: false,
       status: "ready",
+      awaitingMember: false,
     });
 
     expect(first.dispatchedEntry).toEqual(entry);
