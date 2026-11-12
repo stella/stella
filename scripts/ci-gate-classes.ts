@@ -209,6 +209,15 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       },
     },
   },
+  "e2e-local-runs": {
+    class: "correctness",
+    steps: {
+      "Login to GitHub Container Registry for browser images": {
+        class: "advisory",
+        owner: "ci",
+      },
+    },
+  },
   "e2e-landing": {
     class: "correctness",
     steps: {

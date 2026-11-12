@@ -5952,6 +5952,171 @@ jobs:
 
   # Every depth: a landing change is checked in its own pull request and
   # merge group, not only by the scheduled full run.
+  # Chats that run on the member's computer, end to end: the web app and API
+  # with the desktop crate's runner as a stand-in computer (its own runner,
+  # journal and harness host, the agent engine sidecar from source) and
+  # scripted stand-ins for Codex and Claude Code.
+  e2e-local-runs:
+    needs: ci-plan
+    if: >-
+      inputs.pr_depth_only != true
+      && needs.ci-plan.outputs.run_required != 'false'
+      && (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.e2e_core_required == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
+    steps:
+      - *checkout_input_sha
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
+        env:
+          NPM_TOKEN: ""
+
+      # The desktop crate links the Linux webview libraries even when only its
+      # runner runs.
+      - name: Install desktop build libraries
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+
+      - name: Restore the stand-in computer build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            apps/desktop/src-tauri/target
+          key: local-run-stand-in-${{ runner.os }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}-${{ hashFiles('apps/desktop/src-tauri/src/**', 'apps/desktop/src-tauri/examples/**', 'apps/desktop/src-tauri/build.rs') }}
+          restore-keys: |
+            local-run-stand-in-${{ runner.os }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}-
+
+      - name: Fetch Rust dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+
+      - name: Build the stand-in computer
+        timeout-minutes: 20
+        run: cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --example runner_stand_in --features dev-runner-stand-in --frozen
+
+      - name: Prepare environment
+        run: |
+          cp apps/api/.env.example apps/api/.env
+          cp apps/web/.env.example apps/web/.env
+
+      - name: Prepare generated sources
+        env:
+          STELLA_VERIFY: prepare
+        run: bun scripts/ci-generated-sources.ts prepare
+
+      # A turn its computer does not pick up fails after 4 s instead of 2 min.
+      - name: Start docker stack and API server
+        id: e2e-stack
+        uses: ./.github/actions/setup-e2e-stack
+        env:
+          E2E_DESKTOP_RUNNER_PICKUP_MS: "4000"
+        with:
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Start web dev server
+        if: steps.e2e-stack.outcome == 'success'
+        run: |
+          cd apps/web
+          nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
+          echo $! > /tmp/web.pid
+
+      - name: Wait for web dev server
+        if: steps.e2e-stack.outcome == 'success'
+        run: |
+          for i in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "Web up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Web never came up"
+          tail -200 /tmp/web.log || true
+          exit 1
+
+      # Its run folders stay under the workspace, which the browser container
+      # mounts, so the tests can read what a run left on the computer.
+      - name: Start the stand-in computer
+        timeout-minutes: 5
+        if: steps.e2e-stack.outcome == 'success'
+        env:
+          XDG_DATA_HOME: ${{ github.workspace }}/.stella-dev/data
+        run: bun apps/web/e2e/local-run/start-computer.ts
+
+      - *ghcr_browser_image_login
+
+      - name: Install Playwright browsers
+        timeout-minutes: 3
+        if: steps.e2e-stack.outcome == 'success'
+        uses: ./.github/actions/setup-playwright
+
+      - name: Run local run browser suite
+        timeout-minutes: 12
+        if: steps.e2e-stack.outcome == 'success'
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-local-run-browser-suite.json
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:local-run
+
+      - name: Upload Playwright report
+        if: always() && steps.e2e-stack.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-local-runs
+          path: apps/web/e2e/test-results/local-run/
+          retention-days: 7
+
+      - name: Upload server and computer logs
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: server-logs-local-runs
+          path: |
+            /tmp/api.log
+            /tmp/web.log
+            .stella-dev/local-runner.log
+            .stella-dev/local-runner-build.log
+            .stella-dev/local-runner/*.log
+          retention-days: 7
+
+      - name: Upload browser test timings
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-local-runs-timings
+          path: .cache/playwright-timings/*.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - *merge_group_cancel
+
   e2e-landing:
     needs: [ci-plan, pr-heavy-gate]
     if: >-
@@ -7356,6 +7521,7 @@ jobs:
         scan-engine-wasm-drift,
         e2e-production-shard,
         e2e-vite-canary,
+        e2e-local-runs,
         e2e-landing,
         stack-redaction-browsers,
         api-image-smoke,
@@ -7504,6 +7670,7 @@ jobs:
             "scan-engine-wasm-drift": "scan_engine_wasm_required",
             "e2e-production-shard": "e2e_production_required",
             "e2e-vite-canary": "e2e_core_required",
+            "e2e-local-runs": "e2e_core_required",
             "fix-tests-on-base": "fix_tests_on_base_required",
             "landing-build": "landing_build_required",
             "legal-atlas-image": "legal_atlas_image_required",
