@@ -296,8 +296,9 @@ describe("local run question card", () => {
       editor.chain().focus("end").insertContent("Also check clause 4. ").run();
     });
     await closeCard();
+    // Its own paragraph, so it never runs into what was typed.
     expect(editor.getText()).toBe(
-      "Also check clause 4. The guarantor signs too",
+      "Also check clause 4. \n\nThe guarantor signs too",
     );
   });
 
