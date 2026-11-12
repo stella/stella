@@ -9,11 +9,14 @@ import { FullWindowOverlay } from "react-native-screens";
  * Here it is drawn in a layer of the window above them all. On Android the
  * stack draws inside the app's own view tree, so a view after it is on top
  * already. Either way, a touch that misses the content reaches the screen
- * beneath.
+ * beneath, and VoiceOver keeps reading that screen: the layer is not modal,
+ * which iOS would otherwise make it.
  */
 export const WindowOverlay = ({ children }: React.PropsWithChildren) =>
   Platform.OS === "ios" ? (
-    <FullWindowOverlay>{children}</FullWindowOverlay>
+    <FullWindowOverlay unstable_accessibilityContainerViewIsModal={false}>
+      {children}
+    </FullWindowOverlay>
   ) : (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       {children}
