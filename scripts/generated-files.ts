@@ -1871,12 +1871,12 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
-    // Refreshes only the reviewed digests of jobs whose kind, qualifier and
-    // privilege are unchanged since the merge base; new, reclassified and
-    // privileged jobs keep failing the check until a human reviews them.
+    // Removes only the decisions of jobs that are not privileged or no longer
+    // exist; a privileged job without a current approval keeps failing the
+    // check until a human reviews it.
     // This file loads without imports in reduced checkouts, so the paths are
     // spelled out; a test binds them to scripts/ci-job-classification/inputs.ts.
-    id: "ci-job-classification-digests",
+    id: "ci-job-classification-decisions",
     outputKind: "committed",
     outputs: [
       ".github/ci-job-classification-decisions/**",
@@ -1900,7 +1900,7 @@ const GENERATOR_DECLARATIONS = [
     // preload every `--check` command must use; it runs as the default mode.
     checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
     // Its outputs live under .github/, which the autofix action may not
-    // modify, so pull requests refresh them by hand.
+    // modify, so pull requests run it by hand or through the pre-push hook.
     autofix: false,
     after: [],
   },
