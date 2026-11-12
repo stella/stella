@@ -103,7 +103,9 @@ const config = {
     "with, each with their user id, name, email and image, ordered by name. " +
     "Pass a userId to matters.create's memberUserIds or to " +
     "matters.members.add.",
-  permissions: { workspace: ["read"] },
+  // The firm directory is for those who share matters: a read-only
+  // collaborator, such as an external or an intern, gets no list of people.
+  permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
