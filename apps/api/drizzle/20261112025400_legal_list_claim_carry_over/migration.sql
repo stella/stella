@@ -1,4 +1,4 @@
--- requires: 20261111150000_legal_list_claim_rechecks
+-- requires: 20261111184500_legal_list_claim_rechecks
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '10s';--> statement-breakpoint
 
