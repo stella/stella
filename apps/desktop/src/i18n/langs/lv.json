@@ -66,6 +66,10 @@
     "accountWindowTitle": "Savienot kontu",
     "accountTitle": "Savienot šo kontu?",
     "accountSubtitle": "Savienojiet stella desktop ar šo kontu un organizāciju.",
+    "switchWindowTitle": "Mainīt kontu",
+    "switchTitle": "Pārslēgties uz citu kontu?",
+    "switchSubtitle": "stella desktop ir savienots ar kontu {currentEmail}. Atvienot to un tā vietā savienot {email}?",
+    "switchConfirm": "Atvienot un savienot",
     "accountEmail": "Konts",
     "organizationName": "Organizācija",
     "allow": "Atļaut",
@@ -422,6 +426,16 @@
     "accessibilityRequired": "Lai ierakstītu detaļas, atļaujiet piekļuvi Pieejamības iestatījumos. Lietotņu nosaukumi joprojām tiek ierakstīti.",
     "openAccessibilitySettings": "Atvērt Pieejamības iestatījumus",
     "detailsUnavailable": "Detaļas šajā ierīcē nav pieejamas. Lietotņu nosaukumi joprojām tiek ierakstīti.",
+    "browserTitlesWithheld": "Pārlūkprogrammas {browser} logu nosaukumi netiek ierakstīti.",
+    "recordTitlesFromNow": "Ierakstīt no šī brīža",
+    "browserTitlesRecordedFromNow": "Pārlūkprogrammas {browser} logu nosaukumi tiek ierakstīti no šī brīža.",
+    "earlierTimeStaysUntitled": "Agrākais laiks paliks bez nosaukumiem.",
+    "titlesNotRecorded": "Logu nosaukumi netiek ierakstīti.",
+    "accessibilityAccessMissing": "Lietotnei stella nav piekļuves Pieejamības iestatījumos. Ja sarakstā tā jau ir ieslēgta, izslēdziet to un atkal ieslēdziet.",
+    "titlesNeedAccessibility": "Bez piekļuves Pieejamības iestatījumos logu nosaukumi netiek ierakstīti.",
+    "recordAppNameOnly": "Ierakstīt tikai lietotnes {name} nosaukumu",
+    "recordAppDetails": "Ierakstīt lietotnes {name} detaļas",
+    "appNameOnlyApps": "Lietotnes, kurām ieraksta tikai nosaukumu",
     "recording": "Notiek ierakstīšana",
     "paused": "Apturēts",
     "pause": "Apturēt",
@@ -760,7 +774,9 @@
         "notCompleted": "Pierakstīšanās netika pabeigta. Mēģiniet vēlreiz.",
         "timedOut": "Pierakstīšanās ilga pārāk ilgi. Mēģiniet vēlreiz.",
         "unavailable": "Claude Code šajā datorā neizdevās palaist. Mēģiniet vēlreiz."
-      }
+      },
+      "unknown": "Neizdevās pārbaudīt pierakstīšanos Claude Code. Pēc brīža pārbaudiet vēlreiz.",
+      "checkAgain": "Pārbaudīt vēlreiz"
     },
     "install": {
       "notInstalled": "{name} šajā datorā vēl nav instalēts.",

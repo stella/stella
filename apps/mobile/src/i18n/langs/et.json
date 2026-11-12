@@ -15,6 +15,7 @@
     "noMatchesDescription": "Ükski vestluse pealkiri ega toimik ei sisalda teksti „{search}”.",
     "search": "Otsi vestlusi",
     "loadFailed": "Teie vestlusi ei õnnestunud laadida.",
+    "runsLoadFailed": "Ei õnnestunud kontrollida, millised vestlused teid ootavad.",
     "retry": "Proovi uuesti",
     "untitled": "Pealkirjata vestlus",
     "loadMoreFailed": "Laadi veel",
@@ -24,7 +25,19 @@
     "threadLoadFailed": "Seda vestlust ei õnnestunud laadida.",
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
+    "markRead": "Loetud",
+    "markUnread": "Lugemata",
+    "pin": "Kinnita",
+    "unpin": "Eemalda kinnitamine",
+    "unread": "Lugemata",
+    "markReadFailed": "Vestlust ei õnnestunud loetuks märkida.",
+    "markUnreadFailed": "Vestlust ei õnnestunud lugemata märkida.",
+    "pinFailed": "Vestlust ei õnnestunud kinnitada.",
+    "unpinFailed": "Vestluse kinnitamist ei õnnestunud eemaldada.",
     "sections": {
+      "needsYou": "Ootavad teid",
+      "working": "Töös",
+      "pinned": "Kinnitatud",
       "today": "Täna",
       "yesterday": "Eile",
       "week": "Viimased 7 päeva",
@@ -62,7 +75,12 @@
     "sendFileRefused": "Üht faili ei saanud saata, seega sõnumit ei saadetud. Eemalda fail ja proovi uuesti.",
     "sendFileNotAnonymizable": "See vestlus on anonüümitud ja stella ei saanud üht faili anonüümida, seega midagi ei saadetud. Eemalda fail ja proovi uuesti.",
     "pickTitle": "Vali vestlus",
-    "pickDescription": "Vali loendist lõim või alusta uut nupuga +."
+    "pickDescription": "Vali loendist lõim või alusta uut nupuga +.",
+    "runBanner": {
+      "needsYou": "Ootab teid",
+      "finished": "Valmis",
+      "openHint": "Avab vestluse"
+    }
   },
   "tasks": {
     "emptyTitle": "Avatud ülesandeid pole",
@@ -151,7 +169,11 @@
     "scanDocument": "Skanni dokument",
     "newTask": "Uus ülesanne",
     "uploadDocument": "Laadi üles dokument",
-    "uploadFailed": "Dokumenti ei õnnestunud üles laadida. Proovige uuesti."
+    "uploadFailed": "Dokumenti ei õnnestunud üles laadida. Proovige uuesti.",
+    "startTimer": "Käivita taimer",
+    "pauseTimer": "Peata taimer",
+    "resumeTimer": "Jätka taimerit",
+    "timerRunning": "Taimer käib"
   },
   "entity": {
     "type": "Tüüp",

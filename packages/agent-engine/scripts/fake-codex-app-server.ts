@@ -755,8 +755,26 @@ const FAKE_SCENARIOS = {
       additionalDetails: null,
     }),
   ],
+  /** A message completes, then the model is at capacity before the next. */
   capacity_retry: [
     ...freshTurn(),
+    {
+      notify: "item/agentMessage/delta",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "m-1",
+        delta: "Reading.",
+      },
+    },
+    {
+      notify: "item/completed",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        item: agentMessage("m-1", "Reading."),
+      },
+    },
     completed("failed", OVERLOADED),
     ...continuation([
       {
@@ -787,6 +805,20 @@ const FAKE_SCENARIOS = {
         },
       ]),
     ).flat(),
+  ],
+  /** The model is at capacity while a message is still streaming. */
+  capacity_mid_message: [
+    ...freshTurn(),
+    {
+      notify: "item/agentMessage/delta",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "m-1",
+        delta: "Readi",
+      },
+    },
+    completed("failed", OVERLOADED),
   ],
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
   /** One blocking question asking two questions under one id. */

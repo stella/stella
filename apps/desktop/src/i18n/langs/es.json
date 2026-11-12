@@ -66,6 +66,10 @@
     "accountWindowTitle": "Conectar cuenta",
     "accountTitle": "¿Conectar esta cuenta?",
     "accountSubtitle": "Conecta stella desktop a esta cuenta y organización.",
+    "switchWindowTitle": "Cambiar de cuenta",
+    "switchTitle": "¿Cambiar a otra cuenta?",
+    "switchSubtitle": "stella desktop está conectado a {currentEmail}. ¿Desconectar esa cuenta y conectar {email} en su lugar?",
+    "switchConfirm": "Desconectar y conectar",
     "accountEmail": "Cuenta",
     "organizationName": "Organización",
     "allow": "Permitir",
@@ -422,6 +426,16 @@
     "accessibilityRequired": "Permita el acceso de Accesibilidad para registrar detalles. Los nombres de las aplicaciones se siguen registrando.",
     "openAccessibilitySettings": "Abrir ajustes de Accesibilidad",
     "detailsUnavailable": "Los detalles no están disponibles en este dispositivo. Los nombres de las aplicaciones se siguen registrando.",
+    "browserTitlesWithheld": "Los títulos de las ventanas de {browser} no se registran.",
+    "recordTitlesFromNow": "Registrar a partir de ahora",
+    "browserTitlesRecordedFromNow": "Los títulos de las ventanas de {browser} se registran a partir de ahora.",
+    "earlierTimeStaysUntitled": "El tiempo anterior queda sin títulos.",
+    "titlesNotRecorded": "Los títulos de las ventanas no se registran.",
+    "accessibilityAccessMissing": "stella no tiene acceso de Accesibilidad. Si ya aparece activada en la lista, desactívela y vuelva a activarla.",
+    "titlesNeedAccessibility": "Sin acceso de Accesibilidad no se registran los títulos de las ventanas.",
+    "recordAppNameOnly": "Registrar solo el nombre de la aplicación {name}",
+    "recordAppDetails": "Registrar detalles de {name}",
+    "appNameOnlyApps": "Aplicaciones que registran solo el nombre",
     "recording": "Registrando",
     "paused": "En pausa",
     "pause": "Pausar",
@@ -760,7 +774,9 @@
         "notCompleted": "El inicio de sesión no se completó. Inténtalo de nuevo.",
         "timedOut": "El inicio de sesión tardó demasiado. Inténtalo de nuevo.",
         "unavailable": "No se pudo iniciar Claude Code en este ordenador. Inténtalo de nuevo."
-      }
+      },
+      "unknown": "No se pudo comprobar el inicio de sesión de Claude Code. Vuelve a comprobarlo en un momento.",
+      "checkAgain": "Comprobar de nuevo"
     },
     "install": {
       "notInstalled": "{name} aún no está instalado en este ordenador.",

@@ -66,6 +66,10 @@
     "accountWindowTitle": "Połącz konto",
     "accountTitle": "Połączyć to konto?",
     "accountSubtitle": "Połącz stella desktop z tym kontem i organizacją.",
+    "switchWindowTitle": "Zmień konto",
+    "switchTitle": "Przełączyć na inne konto?",
+    "switchSubtitle": "stella desktop jest połączony z kontem {currentEmail}. Odłączyć je i połączyć zamiast niego {email}?",
+    "switchConfirm": "Odłącz i połącz",
     "accountEmail": "Konto",
     "organizationName": "Organizacja",
     "allow": "Zezwól",
@@ -422,6 +426,16 @@
     "accessibilityRequired": "Zezwól na dostęp w ustawieniach dostępności, aby rejestrować szczegóły. Nazwy aplikacji są nadal rejestrowane.",
     "openAccessibilitySettings": "Otwórz ustawienia dostępności",
     "detailsUnavailable": "Szczegóły są niedostępne na tym urządzeniu. Nazwy aplikacji są nadal rejestrowane.",
+    "browserTitlesWithheld": "Tytuły okien z {browser} nie są rejestrowane.",
+    "recordTitlesFromNow": "Rejestruj od teraz",
+    "browserTitlesRecordedFromNow": "Tytuły okien z {browser} są rejestrowane od teraz.",
+    "earlierTimeStaysUntitled": "Wcześniejszy czas pozostanie bez tytułów.",
+    "titlesNotRecorded": "Tytuły okien nie są rejestrowane.",
+    "accessibilityAccessMissing": "stella nie ma dostępu w ustawieniach dostępności. Jeśli na liście jest już włączona, wyłącz ją i włącz ponownie.",
+    "titlesNeedAccessibility": "Bez dostępu w ustawieniach dostępności tytuły okien nie są rejestrowane.",
+    "recordAppNameOnly": "Rejestruj tylko nazwę aplikacji {name}",
+    "recordAppDetails": "Rejestruj szczegóły aplikacji {name}",
+    "appNameOnlyApps": "Aplikacje rejestrujące tylko nazwę",
     "recording": "Zapisywanie",
     "paused": "Wstrzymano",
     "pause": "Wstrzymaj",
@@ -760,7 +774,9 @@
         "notCompleted": "Logowanie nie zostało dokończone. Spróbuj ponownie.",
         "timedOut": "Logowanie trwało zbyt długo. Spróbuj ponownie.",
         "unavailable": "Nie udało się uruchomić Claude Code na tym komputerze. Spróbuj ponownie."
-      }
+      },
+      "unknown": "Nie udało się sprawdzić logowania do Claude Code. Sprawdź ponownie za chwilę.",
+      "checkAgain": "Sprawdź ponownie"
     },
     "install": {
       "notInstalled": "{name} nie jest jeszcze zainstalowany na tym komputerze.",

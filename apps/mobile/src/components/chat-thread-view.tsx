@@ -20,6 +20,8 @@ import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
 import { useChatTurn } from "@/components/use-chat-turn";
 import type { LiveTurn } from "@/components/use-chat-turn";
+import { useMarkChatReadWhileOpen } from "@/components/use-mark-chat-read";
+import { WriteFailureNotice } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -201,6 +203,13 @@ const ThreadMessages = ({
     threadId,
   });
   const { live } = turn;
+  const markFailure = useMarkChatReadWhileOpen({
+    answer: live?.answer.status === "streaming" ? "streaming" : "settled",
+    matterId,
+    revision: entries.at(-1)?.id ?? null,
+    source,
+    threadId,
+  });
   const shown = entries.filter(
     (entry) =>
       entry.id !== live?.answer.messageId && entry.id !== live?.question?.id,
@@ -302,6 +311,14 @@ const ThreadMessages = ({
         renderItem={({ item }) => <ChatMessage entry={item} />}
       />
       <View style={screenStyles.readable}>
+        {markFailure === null ? null : (
+          <View style={styles.markFailure}>
+            <WriteFailureNotice
+              failure={markFailure}
+              message={t("markReadFailed")}
+            />
+          </View>
+        )}
         <ChatComposer
           busy={turn.busy}
           canStop={turn.canStop}
@@ -388,6 +405,10 @@ const styles = StyleSheet.create({
   },
   live: {
     gap: 16,
+  },
+  markFailure: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   notice: {
     fontSize: 13,

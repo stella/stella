@@ -254,9 +254,21 @@ type PendingOnlineMigrationStep = {
   introducedBy: OnlineStepIntroduction;
 };
 
+/**
+ * A repair startup found not complete outside its deploy window: a
+ * migration-owned one once a newer migration exists, or a code-owned one.
+ */
+export type RegressedOnlineRepair = {
+  name: string;
+  introducedBy: OnlineStepIntroduction;
+  reason: string;
+};
+
 export type OnlineMigrationStartupReport = {
   newestAppliedMigration: string;
   pending: PendingOnlineMigrationStep[];
+  /** Also listed in `pending`; startup reports these as errors. */
+  regressed: RegressedOnlineRepair[];
 };
 
 /**
@@ -293,6 +305,7 @@ export const reportOnlineMigrations = async (
         const report: OnlineMigrationStartupReport = {
           newestAppliedMigration: row["name"],
           pending: [],
+          regressed: [],
         };
         const outcome = await walkOnlineMigrations({
           connection,
@@ -352,14 +365,32 @@ const reportPendingStep = ({
 };
 
 /**
- * A migration-owned repair with a durable pending checkpoint is deployable
- * under any release, so a newer applied migration never refuses boot over
- * it: its readers already serve the pending state (the newest release boots
- * beside it the same way), and the migrate run or the repair's scheduled
- * owner resumes the checkpoint after boot. Refusing would only stop every
- * task, of every version, until something else finished the walk. Work with
- * no checkpoint has nothing durable to resume, so it keeps the newest-release
- * rule.
+ * An online repair never refuses boot. Its completion is a live read
+ * of shared data, and every task already running serves that same data, so
+ * refusing a new task protects no reader: it only removes capacity, and a
+ * replaced task (a Spot interruption, a scale-out, an out-of-memory restart)
+ * then cannot come back. Refusing would stop every task, of every version,
+ * until something else finished the walk.
+ *
+ * - `pending` (a durable checkpoint) is resumed by the migrate run or the
+ *   repair's scheduled owner, under any release.
+ * - `incomplete` for the newest applied migration is the deploy window.
+ * - `incomplete` once a newer migration exists is an error for an operator:
+ *   either live writes broke the postcondition after a migrate run asserted it
+ *   (a defect in a writer), or a migrate run applied the newer migration and
+ *   stopped before its repair walk finished (that release never finished
+ *   deploying, and the older one already served this state in its deploy
+ *   window). The next migrate run repairs both; neither is a reason to stop
+ *   serving.
+ *
+ * - A code-owned repair (a live requirement its source owns, with no deploy
+ *   window) that is not complete is reported the same way. Its own readers
+ *   fail closed per request; the rest of the API keeps serving.
+ *
+ * This is the one rule for repairs: startup refuses only what differs between
+ * the booting release and the database (its schema migrations, index shapes),
+ * never the state of shared rows. `online-migrations.test.ts` holds every
+ * registered repair to it.
  */
 type ReportPendingRepairOptions = Omit<ReportPendingStepOptions, "reason"> & {
   completion: Exclude<OnlineRepairCompletion, { type: "complete" }>;
@@ -372,14 +403,27 @@ const reportPendingRepair = ({
 }: ReportPendingRepairOptions): void => {
   switch (completion.type) {
     case "pending":
-      if (typeof step.introducedBy === "string") {
-        recordPendingStep(report, step);
-        return;
+      if (typeof step.introducedBy !== "string") {
+        report.regressed.push({
+          name: step.name,
+          introducedBy: step.introducedBy,
+          reason: completion.reason,
+        });
       }
-      reportPendingStep({ report, step, reason: completion.reason });
+      recordPendingStep(report, step);
       return;
     case "incomplete":
-      reportPendingStep({ report, step, reason: completion.reason });
+      if (
+        typeof step.introducedBy !== "string" ||
+        step.introducedBy !== report.newestAppliedMigration
+      ) {
+        report.regressed.push({
+          name: step.name,
+          introducedBy: step.introducedBy,
+          reason: completion.reason,
+        });
+      }
+      recordPendingStep(report, step);
       return;
     default:
       completion satisfies never;

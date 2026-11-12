@@ -6208,14 +6208,6 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/chat/browser-snapshot-history.test.ts": {
-      "peakMb": 336,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
-      }
-    },
     "src/handlers/chat/chat-message-parts-older-rows.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
@@ -7230,14 +7222,6 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-3"
-      }
-    },
-    "src/handlers/chat/thread-title.test.ts": {
-      "peakMb": 184,
-      "baselineMb": 184,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-1"
       }
     },
     "src/handlers/chat/threads/list.integration.test.ts": {
@@ -12670,6 +12654,14 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-2"
+      }
+    },
+    "src/lib/ai-generation/thread-title.test.ts": {
+      "peakMb": 184,
+      "baselineMb": 184,
+      "source": {
+        "runId": "42807986206",
+        "job": "measure-1"
       }
     },
     "src/lib/ai-provider-probe.test.ts": {
@@ -18800,7 +18792,7 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/corpus-index-projection-margin-stop.db.test.ts": {
+    "src/lib/legal-search/corpus-index-projection-long-commit-window.db.test.ts": {
       "peakMb": 765,
       "baselineMb": 184,
       "source": {

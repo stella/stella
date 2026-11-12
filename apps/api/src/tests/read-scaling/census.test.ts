@@ -20,9 +20,12 @@ import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
 import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
+import { chatPinnedThreadsScalingScenario } from "./chat-threads";
 import { claimCommentScalingScenarios } from "./claim-comments";
+import { reviewHistoryScalingScenarios } from "./claim-review-history";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
+import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
@@ -49,6 +52,7 @@ import {
   scenarioMembershipViolations,
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
+import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
@@ -72,16 +76,19 @@ const measuredApiScenarios = [
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  decisionAnchorRedirectsScalingScenario,
   decisionFilterValidationScalingScenario,
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
   chatLocalFilesUndoScalingScenario,
   chatActiveRunsScalingScenario,
+  chatPinnedThreadsScalingScenario,
   browserSiteGrantsScalingScenario,
   chatMcpAppBundleScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
+  ...reviewHistoryScalingScenarios,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
@@ -98,6 +105,7 @@ const measuredApiScenarios = [
   organizationAuditExportScalingScenario,
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
+  ...sharepointBrowseScalingScenarios,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

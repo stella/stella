@@ -2,6 +2,7 @@ import {
   CLAIM_ANCHOR_TYPES,
   CLAIM_FRAMINGS,
   CLAIM_REVIEW_EVENT_KINDS,
+  CLAIM_REVIEW_REASON_RULE,
   CLAIM_STATE,
   CLAIM_STATES,
   CLAIM_TYPES,
@@ -15,9 +16,11 @@ import type {
   ClaimAnchor,
   ClaimRef,
   ClaimReviewEventPayload,
+  ClaimReviewReasonRule,
   RecordConflict,
   VerificationEvidence,
 } from "@/api/lib/lists/verification/contract";
+import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
 import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
 
 import {
@@ -62,8 +65,24 @@ const CLAIM_FRAMING_SQL_VALUES = quoted(CLAIM_FRAMINGS);
 const CLAIM_STATE_SQL_VALUES = quoted(CLAIM_STATES);
 const SCORED_CLAIM_STATE_SQL_VALUES = quoted(SCORED_CLAIM_STATES);
 const REVIEW_EVENT_KIND_SQL_VALUES = quoted(CLAIM_REVIEW_EVENT_KINDS);
+const reviewKindsWhereReason = (rules: readonly ClaimReviewReasonRule[]) =>
+  quoted(
+    CLAIM_REVIEW_EVENT_KINDS.filter((kind) =>
+      rules.includes(CLAIM_REVIEW_REASON_RULE[kind]),
+    ),
+  );
+const REASON_REQUIRED_KIND_SQL_VALUES = reviewKindsWhereReason(["required"]);
+const REASON_ALLOWED_KIND_SQL_VALUES = reviewKindsWhereReason([
+  "required",
+  "optional",
+]);
+const NOTE_MAX_SQL = sql.raw(String(VERIFICATION_LIMITS.NOTE_MAX));
 const NOTVERIFIABLE_SQL = sql.raw(`'${CLAIM_STATE.NOTVERIFIABLE}'`);
 const RECORDCONFLICT_SQL = sql.raw(`'${CLAIM_STATE.RECORDCONFLICT}'`);
+const NOCOVER_SQL = sql.raw(`'${CLAIM_STATE.NOCOVER}'`);
+const RECORD_SILENT_SQL = sql.raw(
+  `'${"record-silent" satisfies GraderClaimQualifier["kind"]}'`,
+);
 
 const verificationBudgetOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
   FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_verification_budgets'::regclass)`;
@@ -385,6 +404,9 @@ export const legalListClaims = p.pgTable(
     anchor: jsonb().$type<ClaimAnchor>().notNull(),
     refs: jsonb().$type<ClaimRef[]>().notNull().default([]),
     recordConflict: jsonb("record_conflict").$type<RecordConflict>(),
+    // Caveats the grader gave with the verdict. Qualifiers computed from the
+    // facts as they stand now are never stored.
+    qualifiers: jsonb().$type<GraderClaimQualifier[]>().notNull().default([]),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -441,6 +463,14 @@ export const legalListClaims = p.pgTable(
       "legal_list_claims_refs_shape_check",
       sql`jsonb_typeof(${table.refs}) = 'array'`,
     ),
+    // Only missing coverage can be explained by a record that is not
+    // expected to speak to the point.
+    p.check(
+      "legal_list_claims_qualifiers_check",
+      sql`jsonb_typeof(${table.qualifiers}) = 'array'
+        AND (${table.state} = ${NOCOVER_SQL}
+          OR NOT ${table.qualifiers} @> jsonb_build_array(jsonb_build_object('kind', ${RECORD_SILENT_SQL})))`,
+    ),
     p.check(
       "legal_list_claims_anchor_shape_check",
       sql`${table.anchor}->>'type' IN (${CLAIM_ANCHOR_TYPE_SQL_VALUES})`,
@@ -478,6 +508,9 @@ export const legalListClaimReviewEvents = p.pgTable(
     runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
     claimId: safeUuid<"legalListClaim">("claim_id").notNull(),
     kind: p.text("kind", { enum: CLAIM_REVIEW_EVENT_KINDS }).notNull(),
+    // Typed as written now, so a writer cannot leave out a required reason.
+    // Rows from before reasons were required lack one: readers that report
+    // reasons widen to `StoredClaimReviewEventPayload` (`reviewReasonOf`).
     payload: jsonb().$type<ClaimReviewEventPayload>().notNull(),
     actorId: p
       .text("actor_id")
@@ -514,6 +547,19 @@ export const legalListClaimReviewEvents = p.pgTable(
     p.check(
       "legal_list_claim_review_events_payload_kind_check",
       sql`${table.payload}->>'kind' = ${table.kind}`,
+    ),
+    // A reason, when given, is text with something besides spaces in it;
+    // actions that change the verdict must give one. Added NOT VALID and
+    // never validated: events recorded before reasons were required keep
+    // their payload as written and read back as "no reason recorded".
+    p.check(
+      "legal_list_claim_review_events_reason_check",
+      sql`CASE WHEN ${table.payload}->'reason' IS NULL
+        THEN ${table.kind} NOT IN (${REASON_REQUIRED_KIND_SQL_VALUES})
+        ELSE ${table.kind} IN (${REASON_ALLOWED_KIND_SQL_VALUES})
+          AND jsonb_typeof(${table.payload}->'reason') = 'string'
+          AND char_length(btrim(${table.payload}->>'reason')) BETWEEN 1 AND ${NOTE_MAX_SQL}
+        END`,
     ),
     ...entityFeaturePolicies(
       table,

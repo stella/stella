@@ -66,6 +66,10 @@
     "accountWindowTitle": "Connect account",
     "accountTitle": "Connect this account?",
     "accountSubtitle": "Connect stella desktop to this account and organization.",
+    "switchWindowTitle": "Switch account",
+    "switchTitle": "Switch to another account?",
+    "switchSubtitle": "stella desktop is connected to {currentEmail}. Disconnect it and connect {email} instead?",
+    "switchConfirm": "Disconnect and connect",
     "accountEmail": "Account",
     "organizationName": "Organization",
     "allow": "Allow",
@@ -422,6 +426,16 @@
     "accessibilityRequired": "Allow Accessibility access to record details. App names are still recorded.",
     "openAccessibilitySettings": "Open Accessibility settings",
     "detailsUnavailable": "Details are unavailable on this device. App names are still recorded.",
+    "browserTitlesWithheld": "Window titles from {browser} are not recorded.",
+    "recordTitlesFromNow": "Record from now on",
+    "browserTitlesRecordedFromNow": "Window titles from {browser} are recorded from now on.",
+    "earlierTimeStaysUntitled": "Earlier time stays without titles.",
+    "titlesNotRecorded": "Window titles are not recorded.",
+    "accessibilityAccessMissing": "stella has no Accessibility access. If it already shows as on in the list, turn it off and on again.",
+    "titlesNeedAccessibility": "Window titles are not recorded without Accessibility access.",
+    "recordAppNameOnly": "Record app name only for {name}",
+    "recordAppDetails": "Record details for {name}",
+    "appNameOnlyApps": "Apps recording names only",
     "recording": "Recording",
     "paused": "Paused",
     "pause": "Pause",
@@ -760,7 +774,9 @@
         "notCompleted": "The sign-in did not finish. Try again.",
         "timedOut": "The sign-in took too long. Try again.",
         "unavailable": "Claude Code could not be started on this computer. Try again."
-      }
+      },
+      "unknown": "Couldn't check the Claude Code sign-in. Check again in a moment.",
+      "checkAgain": "Check again"
     },
     "install": {
       "notInstalled": "{name} is not installed on this computer yet.",

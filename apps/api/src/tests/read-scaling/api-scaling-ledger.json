@@ -141,10 +141,6 @@
       "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
-      "id": "GET /v1/chat/threads",
-      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
-    },
-    {
       "id": "GET /v1/chat/threads/:threadId/messages",
       "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
@@ -754,10 +750,6 @@
     },
     {
       "id": "GET /v1/sharepoint/connection",
-      "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
-    },
-    {
-      "id": "GET /v1/sharepoint/drive/root",
       "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
@@ -1411,6 +1403,14 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "PATCH /v1/chat/threads/:threadId/pin-state",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/chat/threads/:threadId/read-state",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "PATCH /v1/chat/threads/:threadId/title",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1488,6 +1488,10 @@
     },
     {
       "id": "PATCH /v1/lists/:workspaceId/items",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/lists/:workspaceId/source-documents",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2148,6 +2152,10 @@
     },
     {
       "id": "POST /v1/lists/:workspaceId/sections",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/source-documents/kinds",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {

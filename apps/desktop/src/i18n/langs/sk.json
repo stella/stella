@@ -66,6 +66,10 @@
     "accountWindowTitle": "Pripojiť účet",
     "accountTitle": "Pripojiť tento účet?",
     "accountSubtitle": "Pripojte stella desktop k tomuto účtu a organizácii.",
+    "switchWindowTitle": "Prepnúť účet",
+    "switchTitle": "Prepnúť na iný účet?",
+    "switchSubtitle": "stella desktop je pripojený k účtu {currentEmail}. Odpojiť ho a namiesto neho pripojiť {email}?",
+    "switchConfirm": "Odpojiť a pripojiť",
     "accountEmail": "Účet",
     "organizationName": "Organizácia",
     "allow": "Povoliť",
@@ -422,6 +426,16 @@
     "accessibilityRequired": "Na záznam podrobností povoľte prístup k Prístupnosti. Názvy aplikácií sa zaznamenávajú aj bez neho.",
     "openAccessibilitySettings": "Otvoriť nastavenia Prístupnosti",
     "detailsUnavailable": "Podrobnosti na tomto zariadení nie sú dostupné. Názvy aplikácií sa naďalej zaznamenávajú.",
+    "browserTitlesWithheld": "Názvy okien z {browser} sa nezaznamenávajú.",
+    "recordTitlesFromNow": "Zaznamenávať odteraz",
+    "browserTitlesRecordedFromNow": "Názvy okien z {browser} sa odteraz zaznamenávajú.",
+    "earlierTimeStaysUntitled": "Skorší čas zostane bez názvov.",
+    "titlesNotRecorded": "Názvy okien sa nezaznamenávajú.",
+    "accessibilityAccessMissing": "stella nemá prístup k Prístupnosti. Ak ju v zozname už vidíte zapnutú, vypnite ju a znova zapnite.",
+    "titlesNeedAccessibility": "Bez prístupu k Prístupnosti sa názvy okien nezaznamenávajú.",
+    "recordAppNameOnly": "Zaznamenávať iba názov aplikácie {name}",
+    "recordAppDetails": "Zaznamenávať podrobnosti aplikácie {name}",
+    "appNameOnlyApps": "Aplikácie so záznamom iba názvu",
     "recording": "Zaznamenáva sa",
     "paused": "Pozastavené",
     "pause": "Pozastaviť",
@@ -760,7 +774,9 @@
         "notCompleted": "Prihlásenie sa nedokončilo. Skúste to znova.",
         "timedOut": "Prihlásenie trvalo príliš dlho. Skúste to znova.",
         "unavailable": "Claude Code sa na tomto počítači nepodarilo spustiť. Skúste to znova."
-      }
+      },
+      "unknown": "Prihlásenie do Claude Code sa nepodarilo overiť. O chvíľu to overte znova.",
+      "checkAgain": "Overiť znova"
     },
     "install": {
       "notInstalled": "{name} ešte nie je na tomto počítači nainštalovaný.",

@@ -520,6 +520,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-layout-motion-classes.fixture.ts", [
     "no-layout-motion-classes/no-layout-motion-classes",
   ]),
+  fixtureRuleOverride("require-truncated-text.fixture.ts", [
+    "require-truncated-text/require-truncated-text",
+  ]),
   fixtureRuleOverride("prefer-temporal.fixture.ts", [
     "prefer-temporal/prefer-temporal",
   ]),
@@ -636,6 +639,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
+  ]),
+  fixtureRuleOverride("no-hand-drawn-run-state.fixture.tsx", [
+    "no-hand-drawn-run-state/no-hand-drawn-run-state",
   ]),
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
@@ -2102,6 +2108,7 @@ const config = defineConfig({
     "./.oxlint-plugins/refusal-code.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-layout-motion-classes.ts",
+    "./.oxlint-plugins/require-truncated-text.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
     "./.oxlint-plugins/no-raw-error-output.ts",
@@ -2137,6 +2144,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-person-select.ts",
     "./.oxlint-plugins/searchable-long-select.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
+    "./.oxlint-plugins/no-hand-drawn-run-state.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
     "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
@@ -2369,6 +2377,7 @@ const config = defineConfig({
     "./.oxlint-plugins/confine-owner.ts",
     "./.oxlint-plugins/mcp-authorized-context-owner.ts",
     "./.oxlint-plugins/no-unanchored-footnotes.ts",
+    "./.oxlint-plugins/no-template-block-anchor.ts",
     "./.oxlint-plugins/no-parser-inline-flatten.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/count-gated-completion.ts",
@@ -2759,6 +2768,53 @@ const config = defineConfig({
         "tailwindcss/no-unknown-classes": [
           "error",
           { allowlist: customCssClassNames },
+        ],
+      },
+    },
+    {
+      // Text is cut short only through `<TruncatedText>` (or another owner the
+      // rule lists), which caps it at its container and shows what was cut.
+      // Tests assert on rendered class names, so they stay out of scope.
+      files: [
+        "apps/web/**/*.{js,jsx,ts,tsx}",
+        "apps/desktop/src/**/*.{js,jsx,ts,tsx}",
+        "apps/playground/src/**/*.{js,jsx,ts,tsx}",
+        "apps/landing/src/**/*.{js,jsx,ts,tsx}",
+        "packages/ui/src/**/*.{js,jsx,ts,tsx}",
+        "packages/chat/src/**/*.{js,jsx,ts,tsx}",
+        "packages/workspace-ui/src/**/*.{js,jsx,ts,tsx}",
+        "packages/decision-reader/src/**/*.{js,jsx,ts,tsx}",
+        "packages/mcp-apps/src/**/*.{js,jsx,ts,tsx}",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}"],
+      rules: {
+        "require-truncated-text/require-truncated-text": [
+          "error",
+          {
+            // Primitives that style text their callers render. Each entry
+            // names the exact token, so another truncation in the same file
+            // still fails.
+            allowedFiles: [
+              {
+                path: "packages/ui/src/components/select.tsx",
+                reason:
+                  "Base UI's Select.Value renders the chosen label itself; the open list shows it in full.",
+                utilities: ["truncate"],
+              },
+              {
+                path: "packages/ui/src/components/sidebar.tsx",
+                reason:
+                  "Menu buttons style the label span their callers render as children.",
+                utilities: ["[&>span:last-child]:truncate"],
+              },
+              {
+                path: "packages/ui/src/components/tooltip.tsx",
+                reason:
+                  "The viewport cuts the outgoing content to one line while the popup morphs to the incoming content's size.",
+                utilities: ["**:data-previous:truncate"],
+              },
+            ],
+          },
         ],
       },
     },
@@ -4311,6 +4367,22 @@ const config = defineConfig({
       ],
       rules: {
         "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "off",
+      },
+    },
+    {
+      // A run state (a chat waiting on the reader, a chat working) is drawn
+      // by `RunStateMark` from `@stll/ui/run-state-mark`, on the web and the
+      // phone alike; its shared table is the one place a state gets a look.
+      files: [...productUiFiles, "apps/mobile/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "packages/ui/src/components/run-state-mark.tsx",
+        "packages/ui/src/components/run-state-mark.native.tsx",
+        "packages/ui/src/components/run-state-mark.shared.ts",
+      ],
+      rules: {
+        "no-hand-drawn-run-state/no-hand-drawn-run-state": "error",
       },
     },
     {
@@ -6728,6 +6800,20 @@ const config = defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts"],
       rules: {
         "no-unanchored-footnotes/no-unanchored-footnotes": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-template-block-anchor.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/**/__fixtures__/**",
+      ],
+      rules: {
+        "no-template-block-anchor/no-template-block-anchor": "error",
       },
     },
     {
