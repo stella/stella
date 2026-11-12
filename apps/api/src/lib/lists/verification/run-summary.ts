@@ -102,6 +102,11 @@ const countAsReviewed = async <Run extends CountedRun>({
     return [];
   }
   const runIds = runs.map((run) => run.id);
+  const viewEvents = and(
+    eq(legalListClaimReviewEvents.workspaceId, workspaceId),
+    inArray(legalListClaimReviewEvents.runId, runIds),
+    inArray(legalListClaimReviewEvents.kind, [...REVIEWED_VIEW_EVENT_KINDS]),
+  );
   const events = await tx
     .select({
       claimId: legalListClaimReviewEvents.claimId,
@@ -110,15 +115,7 @@ const countAsReviewed = async <Run extends CountedRun>({
       createdAt: legalListClaimReviewEvents.createdAt,
     })
     .from(legalListClaimReviewEvents)
-    .where(
-      and(
-        eq(legalListClaimReviewEvents.workspaceId, workspaceId),
-        inArray(legalListClaimReviewEvents.runId, runIds),
-        inArray(legalListClaimReviewEvents.kind, [
-          ...REVIEWED_VIEW_EVENT_KINDS,
-        ]),
-      ),
-    )
+    .where(viewEvents)
     .orderBy(
       asc(legalListClaimReviewEvents.createdAt),
       asc(legalListClaimReviewEvents.id),
@@ -147,7 +144,16 @@ const countAsReviewed = async <Run extends CountedRun>({
       and(
         eq(legalListClaims.workspaceId, workspaceId),
         inArray(legalListClaims.runId, runIds),
-        inArray(legalListClaims.id, [...eventsByClaim.keys()]),
+        // The reviewed claims as a subquery, not one parameter per claim: a
+        // page of runs can hold more reviewed claims than a statement takes
+        // parameters.
+        inArray(
+          legalListClaims.id,
+          tx
+            .select({ claimId: legalListClaimReviewEvents.claimId })
+            .from(legalListClaimReviewEvents)
+            .where(viewEvents),
+        ),
       ),
     )
     .limit(eventsByClaim.size);
