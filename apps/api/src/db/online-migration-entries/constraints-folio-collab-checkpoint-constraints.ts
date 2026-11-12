@@ -3,7 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 
 export default {
   id: "constraints-folio-collab-checkpoint-constraints",
-  revision: 1451,
+  revision: 1455,
   type: "constraints",
   values: [...FOLIO_COLLAB_CHECKPOINT_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;
