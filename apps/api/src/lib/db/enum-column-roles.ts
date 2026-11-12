@@ -510,6 +510,9 @@ export const ENUM_COLUMN_ROLES = {
   mcp_web_handoff: {
     kind: ATTRIBUTE,
   },
+  model_run_budgets: {
+    run_kind: ATTRIBUTE,
+  },
   notifications: {
     entity_type: ATTRIBUTE,
     kind: ATTRIBUTE,

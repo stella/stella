@@ -59,7 +59,7 @@ import type {
   VerificationModelDeps,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationPassage } from "@/api/lib/lists/verification/paragraph-scope";
-import type { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
+import type { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 
 const CONCURRENCY = 3;
 /** Calls after the first a failing window gets. */
@@ -222,8 +222,7 @@ const repairMessage = (
     .join("\n")}\nAnswer with only these claims.`;
 
 /** Why extraction stops the whole run: no window may go on without it. */
-type ExtractionStop =
-  ListVerificationAccessRevokedError | ListVerificationRunCapError;
+type ExtractionStop = ListVerificationAccessRevokedError | ModelRunCapError;
 
 /** One window's outcome once its retries are spent. */
 type WindowOutcome =

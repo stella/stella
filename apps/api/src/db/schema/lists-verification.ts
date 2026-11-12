@@ -30,7 +30,6 @@ import type {
   VerificationUnreadPart,
 } from "@/api/lib/lists/verification/contract";
 import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
-import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
 
 import {
   entityFeatureGateChecks,
@@ -41,7 +40,6 @@ import { entityFeaturePolicies } from "../entity-feature-policies";
 import {
   jsonb,
   organization,
-  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -100,60 +98,6 @@ const RECORD_SILENT_SQL = sql.raw(
 const PARAGRAPH_NUMBERING_SQL_VALUES = quoted(PARAGRAPH_NUMBERINGS);
 const WHOLE_DOCUMENT_SCOPE_SQL = sql.raw(
   `'${JSON.stringify(WHOLE_DOCUMENT_SCOPE)}'::jsonb`,
-);
-
-const verificationBudgetOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
-  FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_verification_budgets'::regclass)`;
-
-export const legalListVerificationBudgets = p.pgTable.withRLS(
-  "legal_list_verification_budgets",
-  {
-    organizationId: safeOrganizationId("organization_id").primaryKey(),
-    activeRuns: p.integer("active_runs").notNull().default(0),
-    startsDay: p
-      .date("starts_day", { mode: "string" })
-      .notNull()
-      .default(sql`stella_list_verification_day(CURRENT_TIMESTAMP)`),
-    startsToday: p.integer("starts_today").notNull().default(0),
-    activeLimit: p
-      .integer("active_limit")
-      .notNull()
-      .default(DEFAULT_VERIFICATION_RUN_CAPS.active),
-    dailyLimit: p
-      .integer("daily_limit")
-      .notNull()
-      .default(DEFAULT_VERIFICATION_RUN_CAPS.startsPerDay),
-  },
-  (table) => [
-    ...orgPolicies(),
-    p
-      .foreignKey({
-        name: "legal_list_verification_budgets_org_fk",
-        columns: [table.organizationId],
-        foreignColumns: [organization.id],
-      })
-      .onDelete("cascade"),
-    p.pgPolicy("legal_list_verification_budgets_owner_access", {
-      for: "all",
-      to: "public",
-      using: verificationBudgetOwner,
-      withCheck: verificationBudgetOwner,
-    }),
-    p.pgPolicy("legal_list_verification_budgets_no_delete", {
-      as: "restrictive",
-      for: "delete",
-      to: stella,
-      using: sql`false`,
-    }),
-    p.check(
-      "legal_list_verification_budgets_nonnegative",
-      sql`${table.activeRuns} >= 0 AND ${table.startsToday} >= 0`,
-    ),
-    p.check(
-      "legal_list_verification_budgets_limits",
-      sql`${table.activeLimit} BETWEEN 1 AND 100 AND ${table.dailyLimit} BETWEEN 1 AND 1000`,
-    ),
-  ],
 );
 
 /**
