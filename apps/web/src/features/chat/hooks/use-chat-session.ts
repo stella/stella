@@ -1728,6 +1728,11 @@ export const useChatSession = ({
   // ended: TanStack can report a turn ready while it still loads, and a send
   // then would be refused as busy with no later turn end to retry it on.
   const queueTurnRunning = isGenerating || clientLoading;
+  // A turn paused on the member (an approval or question card, or a
+  // question from the computer) holds the queue until the wait is over.
+  const turnAwaitsMember =
+    getAwaitedAssistantMessageId(messages) !== null ||
+    snapshot.localRunQuestion !== null;
   useExternalSyncEffect(() => {
     applySendQueueEvent({
       type: "generation-status-synced",
@@ -1802,6 +1807,7 @@ export const useChatSession = ({
       type: "turn-boundary-checked",
       isGenerating: queueTurnRunning,
       status,
+      awaitingMember: turnAwaitsMember,
     });
     if (!dispatched) {
       return;
@@ -1825,6 +1831,7 @@ export const useChatSession = ({
     // matching the original effect's re-run cadence 1:1.
     queuedMessages,
     status,
+    turnAwaitsMember,
   ]);
 
   return {
