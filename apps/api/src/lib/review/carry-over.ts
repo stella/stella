@@ -1,0 +1,103 @@
+/**
+ * What every review feature that re-runs over a document shares when it
+ * carries a reviewer's work to the new run: which earlier run it carries
+ * from, and the words it uses for what became of each reviewed item.
+ *
+ * List verification (`lists/verification/carry-over.ts`) and document review
+ * (`document-review/decision-carry-over.ts`) each keep their own matcher and
+ * writer, since a claim and a finding are compared differently; both find
+ * the earlier run here and report through `CARRY_OUTCOMES`. A second
+ * "previous completed run" query elsewhere is refused by the guard in
+ * `carry-over.guard.test.ts`.
+ */
+
+import { and, desc, eq, ne } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import type {
+  AnyPgColumn,
+  PgAsyncDatabase,
+  PgQueryResultHKT,
+  PgTable,
+} from "drizzle-orm/pg-core";
+
+import type { SafeId } from "@/api/lib/branded-types";
+
+/**
+ * What became of one reviewed item when the next run of its document
+ * completed. `carried`: every decision followed; `text-changed`: the matching
+ * item's words or evidence changed, so decisions taken on the old ones were
+ * withdrawn; `verdict-changed`: the new run reached another verdict, or
+ * measured it against another standard, so decisions taken on the old one
+ * were withdrawn (notes and links may still follow where a feature keeps
+ * them); `unmatched`: nothing in the new run matches; `ambiguous`: more than
+ * one thing could.
+ */
+export const CARRY_OUTCOMES = [
+  "carried",
+  "text-changed",
+  "verdict-changed",
+  "unmatched",
+  "ambiguous",
+] as const;
+export type CarryOutcome = (typeof CARRY_OUTCOMES)[number];
+
+/** Outcomes that leave the new run with a matching item. */
+export const MATCHED_CARRY_OUTCOMES = [
+  "carried",
+  "text-changed",
+  "verdict-changed",
+] as const satisfies readonly CarryOutcome[];
+
+/** The columns of a feature's run table the lookup reads. Every review run
+ *  table names a document by its entity and file field. */
+export type DocumentRunColumns<RunId extends SafeId<string>> = {
+  table: PgTable;
+  id: AnyPgColumn<{ data: RunId }>;
+  workspaceId: AnyPgColumn;
+  entityId: AnyPgColumn;
+  fileFieldId: AnyPgColumn;
+  status: AnyPgColumn;
+  createdAt: AnyPgColumn;
+};
+
+type PreviousCompletedRunArgs<RunId extends SafeId<string>> = {
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">;
+  columns: DocumentRunColumns<RunId>;
+  run: {
+    id: RunId;
+    workspaceId: SafeId<"workspace">;
+    entityId: SafeId<"entity">;
+    fileFieldId: SafeId<"field">;
+  };
+  /** What else the earlier run must share with this one (list
+   *  verification: the same list). */
+  sameAs?: SQL;
+};
+
+/**
+ * The newest completed run of the same document (same entity, same file
+ * field) other than `run`: the run a re-run carries its reviewer's work
+ * from. A query, not a result, so a caller may await it or use it as a
+ * subquery; it names at most one run.
+ */
+export const previousCompletedRunQuery = <RunId extends SafeId<string>>({
+  tx,
+  columns,
+  run,
+  sameAs,
+}: PreviousCompletedRunArgs<RunId>) =>
+  tx
+    .select({ id: columns.id })
+    .from(columns.table)
+    .where(
+      and(
+        eq(columns.workspaceId, run.workspaceId),
+        eq(columns.entityId, run.entityId),
+        eq(columns.fileFieldId, run.fileFieldId),
+        eq(columns.status, "completed"),
+        ne(columns.id, run.id),
+        sameAs,
+      ),
+    )
+    .orderBy(desc(columns.createdAt), desc(columns.id))
+    .limit(1);

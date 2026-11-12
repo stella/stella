@@ -16,7 +16,7 @@
  */
 
 import { panic } from "better-result";
-import { and, asc, desc, eq, ne } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import {
@@ -31,7 +31,6 @@ import { readBounded } from "@/api/lib/db/read-bounded";
 import { matchClaims } from "@/api/lib/lists/verification/claim-match";
 import type { MatchableClaim } from "@/api/lib/lists/verification/claim-match";
 import type {
-  ClaimCarryOutcome,
   ClaimReviewEventPayload,
   ClaimState,
   RecordConflict,
@@ -51,6 +50,11 @@ import {
   gradeOf,
   rejectReviewEvent,
 } from "@/api/lib/lists/verification/review-fold";
+import type {
+  CarryOutcome,
+  DocumentRunColumns,
+} from "@/api/lib/review/carry-over";
+import { previousCompletedRunQuery } from "@/api/lib/review/carry-over";
 
 /** The verdict a decision was taken on: what decides whether it follows. */
 type VerdictTarget = {
@@ -108,7 +112,7 @@ export type ClaimCarryPlan = {
     decision: CarryDecision;
   }[];
   outcome: Extract<
-    ClaimCarryOutcome,
+    CarryOutcome,
     "carried" | "text-changed" | "verdict-changed"
   >;
 };
@@ -316,6 +320,17 @@ const carriedPayload = (
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- a carried copy keeps its origin's payload as written; the database admits it by its origin
   payload as ClaimReviewEventPayload;
 
+/** The verification run columns the shared previous-run lookup reads. */
+const VERIFICATION_RUN_COLUMNS = {
+  table: legalListVerificationRuns,
+  id: legalListVerificationRuns.id,
+  workspaceId: legalListVerificationRuns.workspaceId,
+  entityId: legalListVerificationRuns.entityId,
+  fileFieldId: legalListVerificationRuns.fileFieldId,
+  status: legalListVerificationRuns.status,
+  createdAt: legalListVerificationRuns.createdAt,
+} satisfies DocumentRunColumns<SafeId<"legalListVerificationRun">>;
+
 type CarryReviewsArgs = {
   tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select" | "insert">;
   runId: SafeId<"legalListVerificationRun">;
@@ -352,25 +367,15 @@ export const carryReviewsToRun = async ({
   if (run === undefined) {
     return 0;
   }
+  // The source is the newest completed run of the same document against
+  // the same list.
   const source = (
-    await tx
-      .select({ id: legalListVerificationRuns.id })
-      .from(legalListVerificationRuns)
-      .where(
-        and(
-          eq(legalListVerificationRuns.workspaceId, run.workspaceId),
-          eq(legalListVerificationRuns.entityId, run.entityId),
-          eq(legalListVerificationRuns.fileFieldId, run.fileFieldId),
-          eq(legalListVerificationRuns.status, "completed"),
-          ne(legalListVerificationRuns.id, run.id),
-          eq(verificationRunListIdColumn, run.listId),
-        ),
-      )
-      .orderBy(
-        desc(legalListVerificationRuns.createdAt),
-        desc(legalListVerificationRuns.id),
-      )
-      .limit(1)
+    await previousCompletedRunQuery({
+      tx,
+      columns: VERIFICATION_RUN_COLUMNS,
+      run,
+      sameAs: eq(verificationRunListIdColumn, run.listId),
+    })
   ).at(0);
   if (source === undefined) {
     return 0;

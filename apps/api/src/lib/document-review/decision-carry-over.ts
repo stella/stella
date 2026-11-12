@@ -16,10 +16,16 @@
  * by the confirmed-topic cap); one UPDATE copies every match by joining the
  * prior rows back through their ids, so no decision, decider, or timestamp is
  * round-tripped through the application.
+ *
+ * The earlier run is found, and what became of each answered prior finding is
+ * named, by the review carry-over core (`lib/review/carry-over.ts`), shared
+ * with list verification. Outcomes are returned, not stored: a finding row
+ * keeps its decision and flags, and the run read shows them, so nothing
+ * reads an outcome back yet.
  */
 
 import { panic } from "better-result";
-import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import { stableStringify } from "@stll/stable-stringify";
 
@@ -37,6 +43,11 @@ import type {
   DocumentReviewFindingFlag,
   DocumentReviewFindingPayload,
 } from "@/api/lib/document-review/run-contract";
+import type {
+  CarryOutcome,
+  DocumentRunColumns,
+} from "@/api/lib/review/carry-over";
+import { previousCompletedRunQuery } from "@/api/lib/review/carry-over";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import {
   canonicalRulesInput,
@@ -104,6 +115,12 @@ const wasAnswered = ({ decision, flags }: CarryOverFinding): boolean =>
 const isUntouched = ({ decision, flags }: CarryOverFinding): boolean =>
   decision === DOCUMENT_REVIEW_DECISION.OPEN && flags.length === 0;
 
+/** The carried pairs, and what became of every answered prior finding. */
+export type CarryPlan = {
+  carried: CarriedDecision[];
+  outcomes: Map<SafeId<"documentReviewFinding">, CarryOutcome>;
+};
+
 /**
  * Pair each new finding with the answered prior finding it repeats verbatim.
  *
@@ -114,12 +131,12 @@ const isUntouched = ({ decision, flags }: CarryOverFinding): boolean =>
  * a run migrated from the older basis can hold a finding whose position it does
  * not list. No rules to compare means no way to say the decision still applies.
  */
-export const matchCarriedDecisions = ({
+export const planCarriedDecisions = ({
   current,
   prior,
   currentPositions,
   priorPositions,
-}: MatchCarriedDecisionsArgs): CarriedDecision[] => {
+}: MatchCarriedDecisionsArgs): CarryPlan => {
   const answeredPrior = new Map<string, CarryOverFinding>();
   for (const finding of prior) {
     if (!wasAnswered(finding)) {
@@ -127,8 +144,13 @@ export const matchCarriedDecisions = ({
     }
     answeredPrior.set(comparisonKey(finding), finding);
   }
+  const outcomes = new Map<SafeId<"documentReviewFinding">, CarryOutcome>();
   if (answeredPrior.size === 0) {
-    return [];
+    return { carried: [], outcomes };
+  }
+  // A position the new run did not answer leaves its reading behind.
+  for (const previous of answeredPrior.values()) {
+    outcomes.set(previous.id, "unmatched");
   }
 
   const currentById = positionsById(currentPositions);
@@ -136,32 +158,69 @@ export const matchCarriedDecisions = ({
 
   const carried: CarriedDecision[] = [];
   for (const finding of current) {
-    if (!isUntouched(finding)) {
-      continue;
-    }
     const previous = answeredPrior.get(comparisonKey(finding));
     if (previous === undefined) {
+      continue;
+    }
+    // A finding already answered on this run (a replayed completion) is
+    // not the prior reading's to fill.
+    if (!isUntouched(finding)) {
+      outcomes.delete(previous.id);
+      continue;
+    }
+    const currentPosition = currentById.get(finding.positionId);
+    const priorPosition = priorById.get(finding.positionId);
+    if (finding.outcome !== previous.outcome) {
+      outcomes.set(previous.id, "verdict-changed");
       continue;
     }
     if (
       findingFingerprint(finding.payload, finding.outcome) !==
       findingFingerprint(previous.payload, previous.outcome)
     ) {
+      outcomes.set(previous.id, "text-changed");
       continue;
     }
-    const currentPosition = currentById.get(finding.positionId);
-    const priorPosition = priorById.get(finding.positionId);
     if (
       currentPosition === undefined ||
       priorPosition === undefined ||
       positionStandard(currentPosition) !== positionStandard(priorPosition)
     ) {
+      // Measured against another standard: the verdict a reviewer judged
+      // is not the one this run gives.
+      outcomes.set(previous.id, "verdict-changed");
       continue;
     }
+    outcomes.set(previous.id, "carried");
     carried.push({ findingId: finding.id, priorFindingId: previous.id });
   }
-  return carried;
+  return { carried, outcomes };
 };
+
+/** The carried pairs alone. */
+export const matchCarriedDecisions = (
+  args: MatchCarriedDecisionsArgs,
+): CarriedDecision[] => planCarriedDecisions(args).carried;
+
+/** The document review run columns the shared previous-run lookup reads. */
+const DOCUMENT_REVIEW_RUN_COLUMNS = {
+  table: documentReviewRuns,
+  id: documentReviewRuns.id,
+  workspaceId: documentReviewRuns.workspaceId,
+  entityId: documentReviewRuns.entityId,
+  fileFieldId: documentReviewRuns.fileFieldId,
+  status: documentReviewRuns.status,
+  createdAt: documentReviewRuns.createdAt,
+} satisfies DocumentRunColumns<SafeId<"documentReviewRun">>;
+
+/** How many findings inherited a reading, and what became of every
+ *  answered finding of the previous review, keyed by that finding. */
+export type CarryOverResult = {
+  carried: number;
+  outcomes: ReadonlyMap<SafeId<"documentReviewFinding">, CarryOutcome>;
+};
+
+const NOTHING_CARRIED: CarryOverResult = { carried: 0, outcomes: new Map() };
 
 type CarryOverDecisionsArgs = {
   tx: Transaction;
@@ -173,7 +232,8 @@ type CarryOverDecisionsArgs = {
 
 /**
  * Copy the readings a completed run inherits from the document's previous
- * review. Returns how many findings inherited one.
+ * review. Returns how many findings inherited one, and the outcome of every
+ * answered finding of that review.
  *
  * "Previous review" is the newest completed run for the same document. There
  * is one basis shape and one finding shape now, so any earlier review of the
@@ -186,21 +246,12 @@ export const carryOverDecisions = async ({
   runId,
   entityId,
   fileFieldId,
-}: CarryOverDecisionsArgs): Promise<number> => {
-  const previousRun = tx
-    .select({ id: documentReviewRuns.id })
-    .from(documentReviewRuns)
-    .where(
-      and(
-        eq(documentReviewRuns.workspaceId, workspaceId),
-        eq(documentReviewRuns.entityId, entityId),
-        eq(documentReviewRuns.fileFieldId, fileFieldId),
-        eq(documentReviewRuns.status, "completed"),
-        ne(documentReviewRuns.id, runId),
-      ),
-    )
-    .orderBy(desc(documentReviewRuns.createdAt), desc(documentReviewRuns.id))
-    .limit(1);
+}: CarryOverDecisionsArgs): Promise<CarryOverResult> => {
+  const previousRun = previousCompletedRunQuery({
+    tx,
+    columns: DOCUMENT_REVIEW_RUN_COLUMNS,
+    run: { id: runId, workspaceId, entityId, fileFieldId },
+  });
 
   const runsRead = await readBounded(
     tx
@@ -209,7 +260,7 @@ export const carryOverDecisions = async ({
       .where(
         and(
           eq(documentReviewRuns.workspaceId, workspaceId),
-          // sql-perf-allow: bounded by this run and one previous run
+          // Bounded by this run and one previous run.
           or(
             eq(documentReviewRuns.id, runId),
             inArray(documentReviewRuns.id, previousRun),
@@ -227,7 +278,7 @@ export const carryOverDecisions = async ({
     panic("Carry-over ran for a review run that does not exist");
   const priorRun = runs.find(({ id }) => id !== runId);
   if (priorRun === undefined) {
-    return 0;
+    return NOTHING_CARRIED;
   }
 
   // Both sides in one read: the rows this run just committed, and the rows of
@@ -257,14 +308,14 @@ export const carryOverDecisions = async ({
     (row.runId === runId ? current : prior).push(row);
   }
 
-  const carried = matchCarriedDecisions({
+  const { carried, outcomes } = planCarriedDecisions({
     current,
     prior,
     currentPositions: thisRun.basis.playbook.definitionSnapshot.positions.items,
     priorPositions: priorRun.basis.playbook.definitionSnapshot.positions.items,
   });
   if (carried.length === 0) {
-    return 0;
+    return { carried: 0, outcomes };
   }
 
   // The prior rows are joined back by id rather than having their decision,
@@ -294,5 +345,5 @@ export const carryOverDecisions = async ({
        AND target.decision = ${DOCUMENT_REVIEW_DECISION.OPEN}
        AND cardinality(target.flags) = 0`);
 
-  return carried.length;
+  return { carried: carried.length, outcomes };
 };

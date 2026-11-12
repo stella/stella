@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "lib/review is the domain directory for what list verification and document review share as review features; its first module owns the previous-run lookup and outcome vocabulary both carry-overs used to define separately."
+}

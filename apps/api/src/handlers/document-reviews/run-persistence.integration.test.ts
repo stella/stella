@@ -654,7 +654,7 @@ describe("document review run persistence", () => {
           fileFieldId: target.fileFieldId,
         }),
     );
-    expect(carried).toBe(1);
+    expect(carried.carried).toBe(1);
     expect(await decisionsOf(repeatRun)).toEqual([
       { decision: "accepted", decidedBy: ids.userA1, decidedAt },
     ]);
@@ -689,7 +689,10 @@ describe("document review run persistence", () => {
           fileFieldId: target.fileFieldId,
         }),
     );
-    expect(carriedAfterChange).toBe(0);
+    expect(carriedAfterChange.carried).toBe(0);
+    // Same conclusion over other words: the reading stays behind as
+    // text-changed.
+    expect([...carriedAfterChange.outcomes.values()]).toEqual(["text-changed"]);
     expect(await decisionsOf(changedRun)).toEqual([
       { decision: "open", decidedBy: null, decidedAt: null },
     ]);
