@@ -22,7 +22,6 @@ import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import {
   legalListClaimCarryOutcomes,
   legalListClaimReviewEvents,
-  legalListClaims,
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -34,6 +33,7 @@ import type { MatchableClaim } from "@/api/lib/lists/verification/claim-match";
 import type {
   ClaimCarryOutcome,
   ClaimReviewEventPayload,
+  ClaimState,
   RecordConflict,
   StoredClaimReviewEventPayload,
 } from "@/api/lib/lists/verification/contract";
@@ -41,7 +41,10 @@ import {
   CLAIM_REVIEW_CARRY_RULE,
   VERIFICATION_LIMITS,
 } from "@/api/lib/lists/verification/contract";
-import { verificationRunListIdColumn } from "@/api/lib/lists/verification/read-run";
+import {
+  readRunClaimsForCarry,
+  verificationRunListIdColumn,
+} from "@/api/lib/lists/verification/read-run";
 import {
   claimReviewSteps,
   foldClaimReview,
@@ -51,7 +54,7 @@ import {
 
 /** The verdict a decision was taken on: what decides whether it follows. */
 type VerdictTarget = {
-  state: (typeof legalListClaims.$inferSelect)["state"];
+  state: ClaimState;
   recordConflict: RecordConflict | null;
 };
 
@@ -403,30 +406,19 @@ export const carryReviewsToRun = async ({
     return 0;
   }
   const events = eventRead.rows;
-  const claimColumns = {
-    id: legalListClaims.id,
-    text: legalListClaims.text,
-    anchor: legalListClaims.anchor,
-    state: legalListClaims.state,
-    recordConflict: legalListClaims.recordConflict,
-  };
-  // Claims per run are capped by their position check.
-  const readClaims = async (ofRun: SafeId<"legalListVerificationRun">) =>
-    await readBounded(
-      tx
-        .select(claimColumns)
-        .from(legalListClaims)
-        .where(
-          and(
-            eq(legalListClaims.workspaceId, run.workspaceId),
-            eq(legalListClaims.runId, ofRun),
-          ),
-        )
-        .orderBy(asc(legalListClaims.position)),
-      VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX,
-    );
-  const sourceRead = await readClaims(source.id);
-  const targetRead = await readClaims(run.id);
+  // The source claims' written grades are resolved through their review
+  // fold (`planClaimCarry`); the new run's claims have no review yet, so
+  // their written grade is the one reviewers see.
+  const sourceRead = await readRunClaimsForCarry({
+    tx,
+    workspaceId: run.workspaceId,
+    runId: source.id,
+  });
+  const targetRead = await readRunClaimsForCarry({
+    tx,
+    workspaceId: run.workspaceId,
+    runId: run.id,
+  });
   if (sourceRead.type === "overflow" || targetRead.type === "overflow") {
     return 0;
   }

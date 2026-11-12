@@ -8,6 +8,7 @@
 
 import { panic } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
@@ -571,6 +572,43 @@ export const readVerifiedClaim = async ({
     pinned: row.evidence.facts,
   });
 };
+
+type ReadRunClaimsForCarryArgs = {
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"legalListVerificationRun">;
+};
+
+/**
+ * A run's claims as carrying review decisions forward matches them: words,
+ * place, and the grade the run wrote. The caller resolves a reviewed
+ * claim's grade through its fold (`gradeOf`); claims per run are capped by
+ * their position check.
+ */
+export const readRunClaimsForCarry = async ({
+  tx,
+  workspaceId,
+  runId,
+}: ReadRunClaimsForCarryArgs) =>
+  await readBounded(
+    tx
+      .select({
+        id: legalListClaims.id,
+        text: legalListClaims.text,
+        anchor: legalListClaims.anchor,
+        state: legalListClaims.state,
+        recordConflict: legalListClaims.recordConflict,
+      })
+      .from(legalListClaims)
+      .where(
+        and(
+          eq(legalListClaims.workspaceId, workspaceId),
+          eq(legalListClaims.runId, runId),
+        ),
+      )
+      .orderBy(asc(legalListClaims.position)),
+    VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX,
+  );
 
 /**
  * What the run carried from the previous run of its document: the run it
