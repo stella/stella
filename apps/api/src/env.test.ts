@@ -551,29 +551,33 @@ describe("local development access", () => {
     );
   });
 
-  test("keeps the auth rate-limit bypass to NODE_ENV=development with the opt-in", () => {
-    const withoutOptIn = bootApiEnvironment({
-      ...baseEnv,
-      E2E_DISABLE_AUTH_RATE_LIMIT: "true",
-      NODE_ENV: "development",
-    });
-    const testProcess = bootApiEnvironment({
-      ...baseEnv,
-      E2E_DISABLE_AUTH_RATE_LIMIT: "true",
-      NODE_ENV: "test",
-      STELLA_LOCAL_DEV: "1",
-    });
-    const development = bootApiEnvironment({
-      ...baseEnv,
-      ...LOCAL_DEV_ENV,
-      E2E_DISABLE_AUTH_RATE_LIMIT: "true",
-    });
+  test.each([
+    ["E2E_DISABLE_AUTH_RATE_LIMIT", "true"],
+    ["E2E_DESKTOP_RUNNER_PICKUP_MS", "4000"],
+  ])(
+    "keeps the browser-test knob %s to NODE_ENV=development with the opt-in",
+    (name, value) => {
+      const withoutOptIn = bootApiEnvironment({
+        ...baseEnv,
+        [name]: value,
+        NODE_ENV: "development",
+      });
+      const testProcess = bootApiEnvironment({
+        ...baseEnv,
+        [name]: value,
+        NODE_ENV: "test",
+        STELLA_LOCAL_DEV: "1",
+      });
+      const development = bootApiEnvironment({
+        ...baseEnv,
+        ...LOCAL_DEV_ENV,
+        [name]: value,
+      });
 
-    for (const refused of [withoutOptIn, testProcess]) {
-      expect(refused.stderr.toString()).toContain(
-        "E2E_DISABLE_AUTH_RATE_LIMIT is test-only",
-      );
-    }
-    expect(development.exitCode, development.stderr.toString()).toBe(0);
-  });
+      for (const refused of [withoutOptIn, testProcess]) {
+        expect(refused.stderr.toString()).toContain(`${name} is test-only`);
+      }
+      expect(development.exitCode, development.stderr.toString()).toBe(0);
+    },
+  );
 });
