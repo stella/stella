@@ -89,6 +89,7 @@ describe("the sweep after a command", () => {
       kill: (pid) => {
         killed.push(pid);
         rmSync(path.join(root, String(pid)), { recursive: true });
+        return true;
       },
     });
     expect(swept.isOk()).toBe(true);
@@ -100,7 +101,7 @@ describe("the sweep after a command", () => {
     const swept = await sweepNewProcesses({
       procRoot: root,
       baseline: new Set(),
-      kill: () => undefined,
+      kill: () => false,
     });
     expect(swept.isErr() && swept.error.message).toBe(
       "Processes the command started are still running",

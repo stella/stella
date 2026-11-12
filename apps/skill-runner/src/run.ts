@@ -75,7 +75,7 @@ type RunError = SkillRunnerArchiveError | SkillRunnerIsolationError;
  */
 type ProcessSweep = {
   procRoot: string;
-  kill: (pid: number) => void;
+  kill: (pid: number) => boolean;
 };
 
 type RunOptions = {

@@ -135,7 +135,7 @@ export const sweepNewProcesses = async ({
 }: {
   procRoot: string;
   baseline: ReadonlySet<number>;
-  kill: (pid: number) => void;
+  kill: (pid: number) => boolean;
 }): Promise<Result<void, SkillRunnerIsolationError>> => {
   for (let round = 0; round < SWEEP_ROUNDS; round += 1) {
     const pids = await processIds(procRoot);
