@@ -6,6 +6,7 @@ import { authorizeSkillBinding } from "@/api/handlers/skills/skill-binding";
 import { uniqueSlug } from "@/api/handlers/skills/slug";
 import {
   findSkillDraftNames,
+  type SkillDraftName,
   unapprovedSkillDraftNames,
 } from "@/api/lib/agent-skills/draft-names";
 import {
@@ -14,6 +15,7 @@ import {
 } from "@/api/lib/agent-skills/draft-package";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { installSkill } from "@/api/lib/skills/install";
 
@@ -62,6 +64,11 @@ const config = {
   body: saveDraftBodySchema,
 } satisfies HandlerConfig;
 
+/** Stored, or back for review with the names its author has not approved. */
+type SaveDraftOutcome =
+  | { type: "review"; names: SkillDraftName[] }
+  | { type: "saved"; skill: { id: SafeId<"agentSkill"> } };
+
 /**
  * Store a reviewed skill draft as a private, disabled skill. Its text is
  * checked for names of people and organizations again, as it is now: a name
@@ -91,7 +98,7 @@ const saveSkillDraft = createSafeRootHandler(
     );
     const unapproved = unapprovedSkillDraftNames(names, body.approvedNames);
     if (unapproved.length > 0) {
-      return Result.ok({ type: "review" as const, names: unapproved });
+      return Result.ok<SaveDraftOutcome>({ type: "review", names: unapproved });
     }
 
     const binding = { boundClientId: null, boundWorkspaceId: null };
@@ -113,7 +120,7 @@ const saveSkillDraft = createSafeRootHandler(
         user,
       }),
     );
-    return Result.ok({ type: "saved" as const, skill: installed });
+    return Result.ok<SaveDraftOutcome>({ type: "saved", skill: installed });
   },
 );
 
