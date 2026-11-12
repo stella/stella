@@ -66,28 +66,26 @@ export const RoleProvider = ({ children }: React.PropsWithChildren) => {
     },
   );
   useEffect(() => {
-    if (source === null) {
-      return;
+    // A read that settles after the sign-in changed is dropped.
+    const live = { current: true };
+    if (source !== null) {
+      void (async () => {
+        const role = await readMyRole({ fetch, source });
+        if (live.current) {
+          settle(source, attempt, role);
+        }
+      })();
     }
-    let current = true;
-    void (async () => {
-      const role = await readMyRole({ fetch, source });
-      if (current) {
-        settle(source, attempt, role);
-      }
-    })();
     return () => {
-      current = false;
+      live.current = false;
     };
   }, [attempt, source]);
 
   // A read settled for an earlier sign-in says nothing of this one.
   const read: RoleRead =
-    settled !== null && settled.source === source
-      ? settled.read
-      : { status: "loading" };
+    settled?.source === source ? settled.read : { status: "loading" };
   const retrying =
-    read.status === "failed" && settled !== null && settled.attempt < attempt;
+    read.status === "failed" && (settled?.attempt ?? attempt) < attempt;
   const retry = () => {
     if (read.status === "failed" && !retrying) {
       setAttempt((count) => count + 1);

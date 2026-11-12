@@ -13,7 +13,7 @@ type NameProps = {
   /** The name the screen was opened with, shown until the matter is read. */
   readonly fallback: string;
   readonly matterId: string;
-  readonly children: (name: string) => React.ReactNode;
+  readonly children: (name: string) => React.JSX.Element | string;
 };
 
 /**
@@ -56,7 +56,7 @@ const ReadNameOf = ({
   fallback,
   load,
 }: {
-  readonly children: (name: string) => React.ReactNode;
+  readonly children: (name: string) => React.JSX.Element | string;
   readonly fallback: string;
   readonly load: Promise<Result<MatterDetail, ApiError>>;
 }) => {

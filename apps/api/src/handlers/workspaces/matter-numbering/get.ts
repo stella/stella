@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -6,6 +7,13 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import { projectionPayload } from "@/api/lib/projection-totality";
+
+/** The two settings the answer carries, and nothing else of the row. */
+const matterNumberingSchema = v.strictObject({
+  matterNumberPattern: v.string(),
+  matterNumberPadding: v.number(),
+});
 
 const config = {
   contract: "patch",
@@ -43,12 +51,14 @@ const readMatterNumbering = createSafeRootHandler(
         }),
       ),
     );
-    return Result.ok({
-      matterNumberPattern:
-        row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
-      matterNumberPadding:
-        row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
-    });
+    return Result.ok(
+      projectionPayload(matterNumberingSchema, {
+        matterNumberPattern:
+          row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
+        matterNumberPadding:
+          row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
+      }),
+    );
   },
 );
 
