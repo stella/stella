@@ -1,6 +1,7 @@
 import { PDF, PdfArray, PdfString, PlaceholderError } from "@libpdf/core";
 import type {
   DigestAlgorithm,
+  PDFForm,
   Signer,
   SignWarning,
   TimestampAuthority,
@@ -39,7 +40,11 @@ import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 import type { PdfSigningKeyType } from "@/api/db/schema";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
-import { isSignedPdf } from "@/api/lib/files/pdf-signatures";
+import {
+  appendSigningRevision,
+  carriesSignatureValue,
+  isSignedPdf,
+} from "@/api/lib/files/pdf-signatures";
 import type { PdfSigningSignatureAlgorithm } from "@/api/lib/files/pdf-signing/certificate";
 import {
   certificationPathReachesAnchor,
@@ -220,6 +225,59 @@ const pinFileIdentifier = (pdf: PDF, source: Uint8Array) => {
   );
 };
 
+/** Whether every widget of every non-signature field has a normal appearance. */
+const everyFieldHasAppearance = (form: PDFForm) =>
+  form
+    .getFields()
+    .filter((field) => field.type !== "signature")
+    .every((field) =>
+      field.getWidgets().every((widget) => widget.hasNormalAppearance()),
+    );
+
+/**
+ * The document both phases sign into.
+ *
+ * A form with `/NeedAppearances true` (ISO 32000-1, 12.7.2) leaves drawing
+ * its fields to the viewer. Adobe Acrobat then regenerates them on open, an
+ * edit after the signed revision, and shows no signature at all. So an
+ * unsigned form gets its appearances generated and the flag dropped in an
+ * incremental update of its own, ahead of the signing revision. A form
+ * that already holds a signature value is left alone: that update would
+ * count as a change after its signatures. So is a form whose fields LibPDF
+ * cannot all draw (it skips read-only fields), where clearing the flag
+ * would hide their values.
+ *
+ * Built from the base bytes alone, with the file identifier pinned before
+ * the update is written, so both phases get the same bytes.
+ */
+const loadSigningDocument = async (basePdf: Uint8Array): Promise<PDF> => {
+  const pdf = await PDF.load(basePdf);
+  const form = pdf.getForm();
+  if (
+    form === null ||
+    !form.properties.needAppearances ||
+    carriesSignatureValue({ pdf, source: basePdf })
+  ) {
+    return pdf;
+  }
+  pinFileIdentifier(pdf, basePdf);
+  const acroForm = form.acroForm();
+  // Fields loaded from a file are not marked stale, so nothing would be
+  // drawn without marking them. Checkboxes and radios keep the state
+  // appearances they already have.
+  const drawn = Result.try(() => {
+    acroForm.markAllNeedAppearanceUpdate();
+    acroForm.updateAppearances();
+  });
+  if (Result.isError(drawn) || !everyFieldHasAppearance(form)) {
+    return await PDF.load(basePdf);
+  }
+  // A file LibPDF cannot append to is rewritten by the signing save anyway,
+  // so the appearances simply ride along in it.
+  const appended = await appendSigningRevision(pdf);
+  return Result.isError(appended) ? pdf : await PDF.load(appended.value);
+};
+
 /**
  * Put the stamp's field on the page, when there is one, and name the field
  * to sign into. Runs on a freshly loaded document in both phases; the stamp
@@ -356,7 +414,7 @@ export const captureSigningDigest = async (
   const prepare = async (): Promise<
     Result<void, CaptureSigningDigestError>
   > => {
-    const pdf = await PDF.load(invocation.basePdf);
+    const pdf = await loadSigningDocument(invocation.basePdf);
     // Checked here, before any digest exists, so the desktop never asks for
     // a PIN on a document the signature would invalidate.
     // A signature is appended as a new revision; where LibPDF would rewrite
@@ -547,7 +605,7 @@ export const applySignature = async (
   ): Promise<Result<SignedOnce, unknown>> => {
     const passed = await Result.tryPromise({
       try: async (): Promise<Result<SignedOnce, PdfSigningStampError>> => {
-        const pdf = await PDF.load(invocation.basePdf);
+        const pdf = await loadSigningDocument(invocation.basePdf);
         pinFileIdentifier(pdf, invocation.basePdf);
         const fieldName = await prepareSignatureField(pdf, invocation);
         if (Result.isError(fieldName)) {
@@ -618,6 +676,13 @@ export const applySignature = async (
       return panic("a signing pass produced neither a result nor an error");
     }
     warnings.push(...libpdfWarnings(signed.warnings));
+    if (signed.pdf.getForm()?.properties.needAppearances === true) {
+      warnings.push({
+        code: "FIELD_APPEARANCES_LEFT_TO_VIEWER",
+        message:
+          "The form leaves drawing its fields to the viewer, so some viewers may not show this signature.",
+      });
+    }
 
     const timestamp = timestampAuthority.used();
     if (
