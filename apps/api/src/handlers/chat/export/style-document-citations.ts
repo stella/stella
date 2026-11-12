@@ -366,6 +366,8 @@ const transformTable = (
           case "preservedBlock":
           case "bookmarkStart":
           case "bookmarkEnd":
+          case "commentRangeStart":
+          case "commentRangeEnd":
           case "moveFromRangeStart":
           case "moveFromRangeEnd":
           case "moveToRangeStart":
@@ -404,6 +406,8 @@ const transformBlock = (
     case "preservedBlock":
     case "bookmarkStart":
     case "bookmarkEnd":
+    case "commentRangeStart":
+    case "commentRangeEnd":
     case "moveFromRangeStart":
     case "moveFromRangeEnd":
     case "moveToRangeStart":
@@ -545,6 +549,8 @@ export const styleDocumentCitationsWithCounts = (
         case "preservedBlock":
         case "bookmarkStart":
         case "bookmarkEnd":
+        case "commentRangeStart":
+        case "commentRangeEnd":
         case "moveFromRangeStart":
         case "moveFromRangeEnd":
         case "moveToRangeStart":
