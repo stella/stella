@@ -3359,6 +3359,8 @@
       "organizationMemberLimitReached": "بلغت هذه المؤسسة الحد الأقصى للأعضاء.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
+      "runActiveLimitReached": "وصلت مؤسستك إلى الحد الأقصى للمهام الجارية في الوقت نفسه. انتظر حتى تكتمل إحداها، ثم حاول مرة أخرى.",
+      "runDailyLimitReached": "وصلت مؤسستك إلى الحد اليومي للمهام. حاول مرة أخرى بعد منتصف الليل (Europe/Prague).",
       "sharepointAccessDenied": "رفضت Microsoft منح الوصول إلى هذا الموقع أو المكتبة أو الملف.",
       "sharepointFileTooLarge": "هذا الملف كبير جدًا بحيث لا يمكن استيراده.",
       "sharepointInvalidCursor": "تغيّرت القائمة أثناء التصفح. افتح المجلد مرة أخرى.",
@@ -3374,8 +3376,6 @@
       "validationRequired": "حقل مطلوب فارغ.",
       "validationTooLong": "طويل جدًا: استخدم {limit, number} حرفًا كحد أقصى.",
       "validationTooShort": "قصير جدًا: استخدم {limit, number} حرفًا على الأقل.",
-      "verificationActiveLimitReached": "وصلت مؤسستك إلى الحد الأقصى لعمليات التحقق المتزامنة. انتظر حتى تكتمل إحدى عمليات التحقق، ثم حاول مرة أخرى.",
-      "verificationDailyLimitReached": "وصلت مؤسستك إلى الحد اليومي لعمليات التحقق. حاول مرة أخرى بعد منتصف الليل (Europe/Prague).",
       "versionConflict": "غيّر شخص آخر هذا أثناء تحريرك له. أعد التحميل للحصول على النسخة الحالية."
     },
     "failedToAcceptInvitation": "تعذّر قبول الدعوة",

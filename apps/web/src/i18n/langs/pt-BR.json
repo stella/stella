@@ -3359,6 +3359,8 @@
       "organizationMemberLimitReached": "Esta organização atingiu o limite de membros.",
       "providerKeyRejected": "O provedor rejeitou a chave de API.",
       "providerRateLimited": "O limite de solicitações do provedor foi atingido. Tente novamente em instantes.",
+      "runActiveLimitReached": "Sua organização atingiu o limite de processamentos simultâneos. Aguarde a conclusão de um deles e tente novamente.",
+      "runDailyLimitReached": "Sua organização atingiu o limite diário de processamentos. Tente novamente após a meia-noite (Europe/Prague).",
       "sharepointAccessDenied": "A Microsoft negou o acesso a este site, biblioteca ou arquivo.",
       "sharepointFileTooLarge": "Este arquivo é grande demais para ser importado.",
       "sharepointInvalidCursor": "A lista mudou enquanto você navegava. Abra a pasta novamente.",
@@ -3374,8 +3376,6 @@
       "validationRequired": "Um campo obrigatório está vazio.",
       "validationTooLong": "Muito longo: use no máximo {limit, number} caracteres.",
       "validationTooShort": "Muito curto: use pelo menos {limit, number} caracteres.",
-      "verificationActiveLimitReached": "Sua organização atingiu o limite de verificações simultâneas. Aguarde a conclusão de uma verificação e tente novamente.",
-      "verificationDailyLimitReached": "Sua organização atingiu o limite diário de verificações. Tente novamente após a meia-noite (Europe/Prague).",
       "versionConflict": "Outra pessoa alterou isto enquanto você editava. Recarregue para obter a versão atual."
     },
     "failedToAcceptInvitation": "Falha ao aceitar o convite",
