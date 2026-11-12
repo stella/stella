@@ -45,6 +45,7 @@ type MakeClaimArgs = {
   review?: ClaimReview | null;
   anchor?: VerificationClaim["anchor"];
   suggestedGoverningFactId?: VerificationClaim["suggestedGoverningFactId"];
+  recheck?: VerificationClaim["recheck"];
 };
 
 export const makeClaim = ({
@@ -61,6 +62,7 @@ export const makeClaim = ({
     end: 10,
   },
   suggestedGoverningFactId = null,
+  recheck = null,
 }: MakeClaimArgs): VerificationClaim => ({
   id: claimId(suffix),
   position: suffix,
@@ -73,6 +75,7 @@ export const makeClaim = ({
   anchor,
   refs,
   review,
+  recheck,
 });
 
 export const makeRun = (
