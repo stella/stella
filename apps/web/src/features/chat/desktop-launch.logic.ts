@@ -35,8 +35,11 @@ const OPENING = { type: "opening" } as const satisfies DesktopLaunchState;
 /**
  * Whether one of the member's computers is connected now. A read that failed
  * says nothing either way, so the launch keeps waiting until its deadline.
+ * `signal` aborts once the launch no longer needs the answer.
  */
-export type ReadComputerConnected = () => Promise<Result<boolean, Error>>;
+export type ReadComputerConnected = (
+  signal: AbortSignal,
+) => Promise<Result<boolean, Error>>;
 
 /** Whether any of the member's computers has its runner connected. */
 export const hasConnectedComputer = (readiness: ChatLocalRunReadiness) =>
@@ -57,11 +60,15 @@ export const needsDesktopLaunch = (
   readiness?.status === "enabled" &&
   !hasConnectedComputer(readiness);
 
+/** A launch that waits for a computer, and how its wait ends. */
+export type DesktopLaunchWait = { outcome: Promise<DesktopLaunchOutcome> };
+
 type DesktopLaunchOptions = {
   /** Hands the ping link to the operating system. */
   openDesktop: () => void;
   now: () => number;
-  sleep: (milliseconds: number) => Promise<void>;
+  /** Settles after `milliseconds`, or at once (either way) once aborted. */
+  sleep: (milliseconds: number, signal: AbortSignal) => Promise<void>;
   timeoutMs?: number;
   pollMs?: number;
 };
@@ -78,8 +85,8 @@ export type DesktopLaunch = {
   launch: (
     readConnected: ReadComputerConnected,
   ) => Promise<DesktopLaunchOutcome>;
-  /** The outcome of the launch waiting now; `null` when none is. */
-  pending: () => Promise<DesktopLaunchOutcome> | null;
+  /** The launch waiting now; `null` when none is. */
+  pending: () => DesktopLaunchWait | null;
   state: () => DesktopLaunchState;
   subscribe: (listener: () => void) => () => void;
 };
@@ -110,29 +117,70 @@ export const createDesktopLaunch = ({
     }
   };
 
+  /** Waits `milliseconds` unless `signal` ends it first; never rejects. */
+  const pause = async (milliseconds: number, signal: AbortSignal) =>
+    await sleep(milliseconds, signal).then(
+      () => "elapsed" as const,
+      () => "elapsed" as const,
+    );
+
+  /**
+   * One read, bounded by the wait's deadline: a read still out when the
+   * deadline passes (a slow or hanging request) is abandoned and aborted, so
+   * the launch ends on time. A later launch that extends the deadline keeps
+   * the read going.
+   */
+  const boundedRead = async (
+    wait: { deadline: number },
+    readConnected: ReadComputerConnected,
+  ): Promise<"connected" | "not_connected" | "deadline"> => {
+    const reading = new AbortController();
+    const read = readConnected(reading.signal).then((result) =>
+      result.isOk() && result.value
+        ? ("connected" as const)
+        : ("not_connected" as const),
+    );
+    for (;;) {
+      const remaining = wait.deadline - now();
+      if (remaining <= 0) {
+        reading.abort();
+        return "deadline";
+      }
+      const timer = new AbortController();
+      const settled = await Promise.race([
+        read,
+        pause(remaining, timer.signal),
+      ]);
+      timer.abort();
+      if (settled !== "elapsed") {
+        return settled;
+      }
+    }
+  };
+
   const watch = async (
     wait: { deadline: number },
     readConnected: ReadComputerConnected,
   ): Promise<DesktopLaunchOutcome> => {
     for (;;) {
-      const read = await readConnected();
-      if (read.isOk() && read.value) {
+      const read = await boundedRead(wait, readConnected);
+      if (read === "connected") {
         return "connected";
       }
       const remaining = wait.deadline - now();
-      if (remaining <= 0) {
+      if (read === "deadline" || remaining <= 0) {
         return "timed_out";
       }
-      await sleep(Math.min(pollMs, remaining));
+      await pause(Math.min(pollMs, remaining), new AbortController().signal);
     }
   };
 
   return {
-    launch: (readConnected) => {
+    launch: async (readConnected) => {
       openDesktop();
       if (waiting !== null) {
         waiting.wait.deadline = now() + timeoutMs;
-        return waiting.outcome;
+        return await waiting.outcome;
       }
       const wait = { deadline: now() + timeoutMs };
       const outcome = watch(wait, readConnected).then((result) => {
@@ -142,9 +190,9 @@ export const createDesktopLaunch = ({
       });
       waiting = { wait, outcome };
       setState(OPENING);
-      return outcome;
+      return await outcome;
     },
-    pending: () => waiting?.outcome ?? null,
+    pending: () => (waiting === null ? null : { outcome: waiting.outcome }),
     state: () => state,
     subscribe: (listener) => {
       listeners.add(listener);

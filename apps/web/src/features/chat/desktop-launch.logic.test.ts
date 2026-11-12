@@ -5,6 +5,7 @@ import type {
   ChatLocalRunReadiness,
   ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
+import { createTestClock, deferred } from "@stll/test-kit";
 
 import {
   createDesktopLaunch,
@@ -20,44 +21,63 @@ class ReadFailedError extends TaggedError("ReadFailedError")<{
   message: string;
 }> {}
 
+/** Further than any launch in these tests waits, extensions included. */
+const BEYOND_EVERY_DEADLINE_MS = 10 * DESKTOP_LAUNCH_TIMEOUT_MS;
+
 /**
- * A launch on a fake clock: each `sleep` moves it forward at once, and
- * `reads` answers each read in turn (the last answer repeats). `onRead`
- * sees the clock at every read, so a test can act at a given moment.
+ * A launch on a test clock that moves only when `settle` moves it. `reads`
+ * answers each read in turn (the last answer repeats; `hangs` never
+ * answers). `onRead` sees the clock at every read, so a test can act at a
+ * given moment.
  */
 const launchHarness = (
-  reads: readonly (boolean | "fails")[],
-  onRead: (now: number) => void = () => undefined,
+  reads: readonly (boolean | "fails" | "hangs")[],
+  onRead: (elapsed: number) => void = () => undefined,
 ) => {
-  let now = 0;
+  const clock = createTestClock();
   const opened: number[] = [];
   let readCount = 0;
+  const abandonedReads: number[] = [];
   const desktop = createDesktopLaunch({
     openDesktop: () => {
-      opened.push(now);
+      opened.push(clock.monotonic());
     },
-    now: () => now,
-    sleep: async (milliseconds) => {
-      now += milliseconds;
-      await Promise.resolve();
+    now: clock.monotonic,
+    sleep: async (milliseconds, signal) => {
+      await clock.sleep(milliseconds, { signal });
     },
   });
-  const read: ReadComputerConnected = async () => {
-    onRead(now);
+  const read: ReadComputerConnected = async (signal) => {
+    onRead(clock.monotonic());
     const answer = reads[Math.min(readCount, reads.length - 1)] ?? false;
+    const index = readCount;
     readCount += 1;
-    return await Promise.resolve(
-      answer === "fails"
-        ? Result.err(new ReadFailedError({ message: "read failed" }))
-        : Result.ok(answer),
-    );
+    if (answer === "hangs") {
+      signal.addEventListener("abort", () => {
+        abandonedReads.push(index);
+      });
+      return await deferred<Result<boolean, Error>>().promise;
+    }
+    return answer === "fails"
+      ? Result.err(new ReadFailedError({ message: "read failed" }))
+      : Result.ok(answer);
+  };
+  /** Runs the clock until `outcome` settles; when, on the launch's clock. */
+  const settle = async <T>(outcome: Promise<T>) => {
+    const settled = outcome.then((value) => ({
+      value,
+      at: clock.monotonic(),
+    }));
+    await clock.advance(BEYOND_EVERY_DEADLINE_MS);
+    return await settled;
   };
   return {
     desktop,
     read,
     opened,
+    abandonedReads,
     reads: () => readCount,
-    now: () => now,
+    settle,
   };
 };
 
@@ -70,10 +90,12 @@ describe("a desktop launch", () => {
     // The link went out synchronously, inside the gesture that called it.
     expect(harness.opened).toEqual([0]);
     expect(harness.desktop.state()).toEqual({ type: "opening" });
-    expect(harness.desktop.pending()).toBe(outcome);
+    expect(harness.desktop.pending()).not.toBeNull();
 
-    expect(await outcome).toBe("connected");
-    expect(harness.now()).toBe(2 * DESKTOP_LAUNCH_POLL_MS);
+    expect(await harness.settle(outcome)).toEqual({
+      value: "connected",
+      at: 2 * DESKTOP_LAUNCH_POLL_MS,
+    });
     expect(harness.opened).toEqual([0]);
     expect(harness.desktop.state()).toEqual({ type: "idle" });
     expect(harness.desktop.pending()).toBeNull();
@@ -82,8 +104,10 @@ describe("a desktop launch", () => {
   test("times out at its deadline without opening the desktop again", async () => {
     const harness = launchHarness([false]);
 
-    expect(await harness.desktop.launch(harness.read)).toBe("timed_out");
-    expect(harness.now()).toBe(DESKTOP_LAUNCH_TIMEOUT_MS);
+    expect(await harness.settle(harness.desktop.launch(harness.read))).toEqual({
+      value: "timed_out",
+      at: DESKTOP_LAUNCH_TIMEOUT_MS,
+    });
     expect(harness.opened).toEqual([0]);
     // One read at the start, one per poll, and one at the deadline.
     expect(harness.reads()).toBe(
@@ -92,39 +116,70 @@ describe("a desktop launch", () => {
     expect(harness.desktop.state()).toEqual({ type: "idle" });
   });
 
+  test("times out at its deadline while a read is still out, and abandons that read", async () => {
+    const harness = launchHarness([false, "hangs"]);
+
+    expect(await harness.settle(harness.desktop.launch(harness.read))).toEqual({
+      value: "timed_out",
+      at: DESKTOP_LAUNCH_TIMEOUT_MS,
+    });
+    expect(harness.reads()).toBe(2);
+    expect(harness.abandonedReads).toEqual([1]);
+    expect(harness.desktop.state()).toEqual({ type: "idle" });
+  });
+
   test("keeps waiting through a read that failed", async () => {
     const harness = launchHarness(["fails", true]);
 
-    expect(await harness.desktop.launch(harness.read)).toBe("connected");
+    expect(
+      (await harness.settle(harness.desktop.launch(harness.read))).value,
+    ).toBe("connected");
     expect(harness.reads()).toBe(2);
   });
 
   test("a second gesture while it waits opens the desktop once more and joins the same wait with a fresh deadline", async () => {
     const SECOND_GESTURE_AT = 40_000;
-    const joined: Promise<DesktopLaunchOutcome>[] = [];
-    const harness = launchHarness([false], (now) => {
-      if (now === SECOND_GESTURE_AT) {
-        joined.push(harness.desktop.launch(harness.read));
+    const joined: {
+      outcome: Promise<DesktopLaunchOutcome>;
+      waitBefore: unknown;
+      waitAfter: unknown;
+    }[] = [];
+    const harness = launchHarness([false], (elapsed) => {
+      if (elapsed === SECOND_GESTURE_AT) {
+        const waitBefore = harness.desktop.pending()?.outcome;
+        const outcome = harness.desktop.launch(harness.read);
+        joined.push({
+          outcome,
+          waitBefore,
+          waitAfter: harness.desktop.pending()?.outcome,
+        });
       }
     });
 
     const first = harness.desktop.launch(harness.read);
 
-    expect(await first).toBe("timed_out");
-    expect(joined).toEqual([first]);
+    expect(await harness.settle(first)).toEqual({
+      value: "timed_out",
+      at: SECOND_GESTURE_AT + DESKTOP_LAUNCH_TIMEOUT_MS,
+    });
+    // The second gesture joined the wait under way instead of starting one.
+    expect(joined).toHaveLength(1);
+    expect(joined[0]?.waitAfter).toBe(joined[0]?.waitBefore);
+    expect(await joined[0]?.outcome).toBe("timed_out");
     expect(harness.opened).toEqual([0, SECOND_GESTURE_AT]);
-    expect(harness.now()).toBe(SECOND_GESTURE_AT + DESKTOP_LAUNCH_TIMEOUT_MS);
   });
 
   test("a launch after one ended opens the desktop and waits afresh", async () => {
     const harness = launchHarness([true]);
 
-    expect(await harness.desktop.launch(harness.read)).toBe("connected");
+    expect(
+      (await harness.settle(harness.desktop.launch(harness.read))).value,
+    ).toBe("connected");
     const again = harness.desktop.launch(harness.read);
 
     expect(harness.opened).toHaveLength(2);
-    expect(harness.desktop.pending()).toBe(again);
-    expect(await again).toBe("connected");
+    expect(harness.desktop.pending()).not.toBeNull();
+    expect((await harness.settle(again)).value).toBe("connected");
   });
 });
 
@@ -164,7 +219,7 @@ describe("a turn held while the desktop opens", () => {
       signal: new AbortController().signal,
     });
 
-    expect(await outcome).toBe("connected");
+    expect((await harness.settle(outcome)).value).toBe("connected");
     await turn.drained;
 
     expect(turn.events).toEqual(["hold", "release", "send"]);
@@ -180,7 +235,7 @@ describe("a turn held while the desktop opens", () => {
       signal: new AbortController().signal,
     });
 
-    expect(await outcome).toBe("timed_out");
+    expect((await harness.settle(outcome)).value).toBe("timed_out");
     await turn.drained;
 
     expect(turn.events).toEqual(["hold", "release", "send"]);
@@ -188,12 +243,11 @@ describe("a turn held while the desktop opens", () => {
   });
 
   test("nothing is sent while the launch waits", async () => {
-    const waiting = Promise.withResolvers<DesktopLaunchOutcome>();
+    const waiting = deferred<DesktopLaunchOutcome>();
     const turn = await drainHeld({
       outcome: waiting.promise,
       signal: new AbortController().signal,
     });
-    await Promise.resolve();
 
     expect(turn.events).toEqual(["hold"]);
 
@@ -205,7 +259,7 @@ describe("a turn held while the desktop opens", () => {
 
   test("a Stop while it waits sends nothing", async () => {
     const stop = new AbortController();
-    const waiting = Promise.withResolvers<DesktopLaunchOutcome>();
+    const waiting = deferred<DesktopLaunchOutcome>();
     const turn = await drainHeld({
       outcome: waiting.promise,
       signal: stop.signal,

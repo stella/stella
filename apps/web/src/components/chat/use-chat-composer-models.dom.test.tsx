@@ -428,7 +428,7 @@ test("a new chat on the remembered computer opens nothing by itself; its send op
 
   expect(desktop.open).toHaveBeenCalledTimes(1);
   expect(desktop.open).toHaveBeenCalledWith(DESKTOP_PING_URL);
-  expect(await getDesktopLaunch().pending()).toBe("connected");
+  expect(await getDesktopLaunch().pending()?.outcome).toBe("connected");
   expect(desktop.open).toHaveBeenCalledTimes(1);
 });
 
@@ -448,7 +448,7 @@ test("choosing the computer while none is connected opens stella desktop on that
   const desktop = computerConnectingOnOpen();
   const server = serve({ computers: desktop.computers });
   const { result, queryClient } = await renderReadyComposer();
-  await queryClient.fetchQuery(localRunnersOptions(ORGANIZATION_ID));
+  await queryClient.query(localRunnersOptions(ORGANIZATION_ID));
   const runOn = result.current.models.runTarget;
   if (runOn.type !== "choice") {
     throw new Error("The composer offers no Run on choice");
@@ -461,6 +461,6 @@ test("choosing the computer while none is connected opens stella desktop on that
   expect(desktop.open).toHaveBeenCalledTimes(1);
   expect(desktop.open).toHaveBeenCalledWith(DESKTOP_PING_URL);
   await server.releaseNext();
-  expect(await getDesktopLaunch().pending()).toBe("connected");
+  expect(await getDesktopLaunch().pending()?.outcome).toBe("connected");
   expect(desktop.open).toHaveBeenCalledTimes(1);
 });

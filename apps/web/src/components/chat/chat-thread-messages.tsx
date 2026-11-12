@@ -1350,14 +1350,18 @@ const LocalRunLimitResetMessage = ({ resetsAt }: { resetsAt: string }) => {
 /**
  * For a turn refused because none of the member's computers is connected:
  * opens stella desktop on this click, waits for a computer to connect, and
- * then sends the turn again by itself. One click opens the desktop once;
- * while it opens the button says so and takes no other click.
+ * then sends the turn again by itself, unless something superseded this
+ * refusal meanwhile (`holdResend`'s signal). One click opens the desktop
+ * once; while it opens the button says so and takes no other click.
  */
 const OpenDesktopAndResendButton = ({
   disabled,
+  holdResend,
   onResend,
 }: {
   disabled: boolean;
+  /** Starts this click's resend; its signal aborts once it is superseded. */
+  holdResend: () => AbortSignal;
   onResend: (options?: ChatResendOptions) => void | PromiseLike<void>;
 }) => {
   const t = useTranslations();
@@ -1368,9 +1372,11 @@ const OpenDesktopAndResendButton = ({
     <Button
       disabled={disabled || opening}
       onClick={() => {
+        const superseded = holdResend();
         detached(
           (async () => {
-            if ((await desktop.launch()) === "connected") {
+            const outcome = await desktop.launch();
+            if (outcome === "connected" && !superseded.aborted) {
               await onResend();
             }
           })(),
@@ -1424,6 +1430,22 @@ export const ChatErrorMessage = ({
     aiErrorKindFromMessage(error.message) === "local_runner_limit_reached"
       ? localRunLimitResetsAtFromThrown(error)
       : null;
+  // The resend an "Open stella desktop" click holds until a computer
+  // connects belongs to this refusal: Resend, another refusal in its place,
+  // or the card leaving the page (a new send, another thread) drops it.
+  const desktopResend = useRef<AbortController | null>(null);
+  useExternalSyncEffect(
+    () => () => {
+      desktopResend.current?.abort();
+    },
+    [error],
+  );
+  const holdDesktopResend = () => {
+    desktopResend.current?.abort();
+    const held = new AbortController();
+    desktopResend.current = held;
+    return held.signal;
+  };
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1475,6 +1497,7 @@ export const ChatErrorMessage = ({
           {onResend && refusal?.code === CHAT_LOCAL_RUN_REFUSAL.noComputer && (
             <OpenDesktopAndResendButton
               disabled={isGenerating}
+              holdResend={holdDesktopResend}
               onResend={onResend}
             />
           )}
@@ -1482,6 +1505,7 @@ export const ChatErrorMessage = ({
             <Button
               disabled={isGenerating}
               onClick={() => {
+                desktopResend.current?.abort();
                 detached(onResend(), "chat-thread-messages.resend");
               }}
               size="sm"

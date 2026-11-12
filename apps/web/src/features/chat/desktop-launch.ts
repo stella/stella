@@ -17,7 +17,9 @@ export const getDesktopLaunch = (): DesktopLaunch => {
       openDesktopUrl(DESKTOP_PING_URL);
     },
     now: () => Temporal.Now.instant().epochMilliseconds,
-    sleep,
+    sleep: async (milliseconds, signal) => {
+      await sleep(milliseconds, { signal });
+    },
   });
   return desktopLaunch;
 };

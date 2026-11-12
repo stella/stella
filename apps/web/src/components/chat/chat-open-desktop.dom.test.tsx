@@ -30,6 +30,7 @@ const { default: messages } = await import("@/i18n/langs/en.json");
 const { chatFetchClient } = await import("@/features/chat/chat-fetch");
 const { DESKTOP_PING_URL } =
   await import("@/features/chat/desktop-launch.logic");
+const { getDesktopLaunch } = await import("@/features/chat/desktop-launch");
 const desktopBridge = await import("@/lib/desktop-bridge");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
@@ -198,4 +199,81 @@ test("a refusal for another reason offers no Open stella desktop", async () => {
       name: messages.settings.account.desktopOpenApp,
     }),
   ).toBeNull();
+});
+
+/**
+ * The no-computer refusal on the page, with stella desktop's connection
+ * held until the test lets the computer connect.
+ */
+const renderHeldRefusal = async () => {
+  const error = await refusedTurn(CHAT_LOCAL_RUN_REFUSAL.noComputer);
+  const readiness = Promise.withResolvers<Response>();
+  globalThis.fetch = Object.assign(async () => await readiness.promise, {
+    preconnect: () => undefined,
+  });
+  spyOn(desktopBridge, "openDesktopUrl").mockImplementation(() => undefined);
+  const resends: number[] = [];
+  const view = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <AuthenticatedUserProvider user={user}>
+          <ChatErrorMessage
+            error={error}
+            isGenerating={false}
+            onResend={() => {
+              resends.push(resends.length);
+            }}
+          />
+        </AuthenticatedUserProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+  await act(async () => {
+    fireEvent.click(
+      view.getByRole("button", {
+        name: messages.settings.account.desktopOpenApp,
+      }),
+    );
+  });
+  const launch = getDesktopLaunch().pending();
+  if (launch === null) {
+    throw new Error("expected stella desktop to be opening");
+  }
+  /** The computer connects; resolves once the launch has seen it. */
+  const connect = async () => {
+    await act(async () => {
+      readiness.resolve(json(CONNECTED));
+      expect(await launch.outcome).toBe("connected");
+      // What the click held runs within a few microtasks of the outcome;
+      // twenty leave it ample room to send, were it still to.
+      for (let turn = 0; turn < 20; turn += 1) {
+        await Promise.resolve();
+      }
+    });
+  };
+  return { view, resends, connect };
+};
+
+test("Resend before the computer connects sends the turn once; the held resend is dropped", async () => {
+  const page = await renderHeldRefusal();
+
+  await act(async () => {
+    fireEvent.click(
+      page.view.getByRole("button", { name: messages.chat.resend }),
+    );
+  });
+  expect(page.resends).toEqual([0]);
+
+  await page.connect();
+
+  expect(page.resends).toEqual([0]);
+});
+
+test("a refusal that left the page before the computer connects sends nothing", async () => {
+  const page = await renderHeldRefusal();
+
+  page.view.unmount();
+  await page.connect();
+
+  expect(page.resends).toEqual([]);
 });

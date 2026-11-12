@@ -12,6 +12,7 @@ import {
 } from "@/features/chat/desktop-launch.logic";
 import { localRunnersOptions } from "@/features/chat/queries";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { detached } from "@/lib/detached";
 
 class ComputerReadError extends TaggedError("ComputerReadError")<{
   message: string;
@@ -27,14 +28,26 @@ const readComputerConnected =
     queryClient: QueryClient,
     activeOrganizationId: string,
   ): ReadComputerConnected =>
-  async () =>
-    (
+  async (signal) => {
+    const options = localRunnersOptions(activeOrganizationId);
+    // An abandoned read stops its request too; each poll is its own retry.
+    signal.addEventListener(
+      "abort",
+      () => {
+        detached(
+          queryClient.cancelQueries({
+            queryKey: options.queryKey,
+            exact: true,
+          }),
+          "desktop-launch.cancel-read",
+        );
+      },
+      { once: true },
+    );
+    return (
       await Result.tryPromise({
         try: async () =>
-          await queryClient.fetchQuery({
-            ...localRunnersOptions(activeOrganizationId),
-            staleTime: 0,
-          }),
+          await queryClient.query({ ...options, staleTime: 0, retry: false }),
         catch: (cause) =>
           new ComputerReadError({
             message: "The member's computers could not be read",
@@ -42,6 +55,7 @@ const readComputerConnected =
           }),
       })
     ).map(hasConnectedComputer);
+  };
 
 type UseDesktopLaunchResult = {
   state: DesktopLaunchState;

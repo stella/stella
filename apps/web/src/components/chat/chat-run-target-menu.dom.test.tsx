@@ -307,16 +307,13 @@ test("picking another agent starts it on its recommended model, and the chosen a
 });
 
 test("choosing an agent on a computer that is not connected opens stella desktop once, and the agent is offered once it connects", async () => {
-  const offline: ChatLocalRunReadiness =
-    READINESS.status === "enabled"
-      ? {
-          ...READINESS,
-          runners: READINESS.runners.map((runner) => ({
-            ...runner,
-            connected: false,
-          })),
-        }
-      : READINESS;
+  const offline: ChatLocalRunReadiness = {
+    ...READINESS,
+    runners: READINESS.runners.map((runner) => ({
+      ...runner,
+      connected: false,
+    })),
+  };
   // Opening the desktop is what connects the computer, as on a real machine;
   // the read that sees it is held so the test sees the wait.
   let opened = false;

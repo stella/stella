@@ -488,6 +488,9 @@ export const createChatRuntime = ({
    *  the server settles it, and a result for it would only be refused. */
   let stoppedTurnId: SafeId<"chatTurn"> | null = null;
   let stopBeforeHeaders: "none" | "requested" = "none";
+  /** A send held while stella desktop opens, before anything is posted.
+   *  Stop releases it at once and nothing is sent. */
+  let desktopHold: AbortController | null = null;
   const isStoppedTurn = (): boolean =>
     stoppedTurnId !== null && stoppedTurnId === turnId;
   /** The server refused the latest request for a turn it had already
@@ -871,15 +874,23 @@ export const createChatRuntime = ({
       // shown as such, and goes out once it ends.
       const launching =
         context?.getRunTarget?.().kind === "local"
-          ? getDesktopLaunch().pending()
+          ? (getDesktopLaunch().pending()?.outcome ?? null)
           : null;
       if (launching === null) {
         return send();
       }
+      const hold = new AbortController();
+      desktopHold = hold;
       return heldForDesktop({
         outcome: launching,
-        signal: abortSignal,
+        signal:
+          abortSignal === undefined
+            ? hold.signal
+            : AbortSignal.any([abortSignal, hold.signal]),
         onHold: (held) => {
+          if (!held && desktopHold === hold) {
+            desktopHold = null;
+          }
           setSnapshot({ computerWait: held ? OPENING_DESKTOP_WAIT : null });
         },
         send,
@@ -1674,6 +1685,14 @@ export const createChatRuntime = ({
       // already approved would otherwise keep acting on the page.
       browserTool.cancel();
       sendTiming.abandoned();
+      if (desktopHold !== null) {
+        // The turn still waits for stella desktop and nothing was posted:
+        // it ends here, unsent, whenever a computer connects.
+        desktopHold.abort();
+        desktopHold = null;
+        setSnapshot({ turnAbandoned: true });
+        return;
+      }
       const stoppedTurn = turnId;
       if (stoppedTurn === null && isTurnActive()) {
         // Delivery cancellation no longer ends the accepted server turn.
