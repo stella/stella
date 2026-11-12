@@ -365,7 +365,7 @@ impl LinkedFolders {
   /// The folder a run with the link works in, when it can work there now.
   pub fn resolve(&self, id: Uuid) -> Result<PathBuf, LinkedFolderRefusal> {
     let link = self
-      .stored()
+      .stored_or_none()
       .into_iter()
       .find(|link| Uuid::parse_str(&link.id).ok() == Some(id))
       .ok_or(LinkedFolderRefusal::Unlinked)?;
@@ -556,8 +556,13 @@ mod tests {
       folders.remove(&Uuid::new_v4().to_string()),
       Err(LinkedFolderListError::Storage)
     );
-    // Reading it lists nothing, and the stored text stays as it was.
+    // Reading it lists nothing, no run can name a folder in it, and the
+    // stored text stays as it was.
     assert_eq!(folders.listed(), Vec::<String>::new());
+    assert_eq!(
+      folders.resolve(Uuid::new_v4()),
+      Err(LinkedFolderRefusal::Unlinked)
+    );
     assert_eq!(fs::read_to_string(&stored).unwrap(), "{ not a list");
   }
 
