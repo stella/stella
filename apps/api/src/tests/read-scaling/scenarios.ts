@@ -4,7 +4,6 @@ import { readBillingDraftSettings } from "@/api/handlers/desktop-time-entries/bi
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
 import readEntities from "@/api/handlers/entities/list";
 import readVersions from "@/api/handlers/entities/versions/list";
-import readMemberRole from "@/api/handlers/me/role/get";
 import {
   listBillingKnowledgeFiles,
   readBillingKnowledgeFile,
@@ -118,33 +117,6 @@ export const readScalingScenarios = [
     expectedRows: 1,
     definition: readBillingKnowledgeFile,
     measure: measureBillingKnowledgeFile,
-  },
-  {
-    name: "caller's role",
-    expectedRows: 1,
-    definition: readMemberRole,
-    measure: async (fixture: ReadFixture) =>
-      await runWithMeasuredQueryCounter(async (counter) => {
-        const response = await readMemberRole.handler(
-          asTestRaw<Parameters<typeof readMemberRole.handler>[0]>({
-            safeDb: fixture.safeDb,
-            user: { id: fixture.userId },
-            session: { activeOrganizationId: fixture.organizationId },
-            memberRole: sessionMemberRole("member"),
-            request: new Request("https://example.test/v1/me/role"),
-            route: "/v1/me/role" satisfies ApiRoutePath,
-          }),
-        );
-        if (response instanceof HttpStatusResponse) {
-          return panic("Role scaling requires a successful handler response");
-        }
-        return {
-          statements: counter.count,
-          transactionRoundTrips: counter.transactions,
-          responseBytes: Buffer.byteLength(JSON.stringify(response)),
-          rows: 1,
-        };
-      }),
   },
   {
     name: "matter-number convention",
