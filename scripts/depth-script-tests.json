@@ -24,6 +24,7 @@
   "scripts/oxlint-safe-fixers.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/oxlint-tailwind-design-system.test.ts": "Generates the Tailwind class cache from cold, compiling every repository design system.",
   "scripts/precommit-lint.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
+  "scripts/run-unlisted-script-tests.test.ts": "Parses every unlisted script test's full repository import closure.",
   "scripts/selfhost-contract.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/source-fingerprint-baseline.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/staging-named-waiver.test.ts": "Runs the staging status writer in separate shells across the outcome matrix.",

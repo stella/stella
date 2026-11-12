@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "CZ_NSS",
   "key": "cz-nss",
-  "parserVersion": 36,
+  "parserVersion": 37,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

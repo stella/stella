@@ -6,6 +6,7 @@ import {
   generatedVisualPageSchema,
   generatedVisualPartSchema,
 } from "@stll/api-contract/generated-visual";
+import { toSafeId } from "@stll/api-contract/safe-id";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
@@ -15,6 +16,13 @@ import {
   DOCKED_CHAT_LEGAL_ROUTES,
   installDockedLegalFixtures,
 } from "../helpers/docked-chat-legal-fixtures";
+import {
+  apiError,
+  apiJson,
+  contractJson,
+  respond,
+  staticBody,
+} from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 
 // Trace snapshots run script inside every frame, and Chromium counts that
@@ -51,42 +59,51 @@ test("generated view is live inline, reloads, and acts only on user gestures", a
   await installDockedChatHistory(page);
   await installDockedLegalFixtures(page);
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-    await route.fulfill({
-      json: {
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/messages", "get", {
         ...dockedChatMessagePage,
         messages: [
           {
-            id: "019a0000-0000-7000-8000-000000000002",
+            id: toSafeId<"chatMessage">("019a0000-0000-7000-8000-000000000002"),
             role: "assistant",
+            revision: 0,
+            edited: false,
             createdAt: "2026-01-01T00:00:00.000Z",
             parts: [part],
           },
         ],
-      },
-    });
+      }),
+    );
   });
   let reads = 0;
   await page.route(`**/v1/user-files/${fileId}/visual`, async (route) => {
     reads += 1;
-    await route.fulfill({
-      json: visual,
-      headers: { "cache-control": "private, no-store" },
-    });
+    await respond(
+      route,
+      // The route answers with a raw response; its body's contract is the
+      // generated-visual page schema.
+      contractJson(generatedVisualPageSchema, visual, {
+        "cache-control": "private, no-store",
+      }),
+    );
   });
   await context.route(externalUrl, async (route) => {
-    await route.fulfill({
-      contentType: "text/html",
-      body: "<p>Decision source</p>",
-    });
+    await respond(
+      route,
+      staticBody({ contentType: "text/html", body: "<p>Decision source</p>" }),
+    );
   });
   const sends: string[] = [];
   await page.route(/\/v1\/chat\/?(?:\?|$)/u, async (route) => {
     if (route.request().method() === "POST") {
       sends.push(route.request().url());
-      await route.fulfill({
-        status: 503,
-        json: { message: "This fixture does not execute model requests" },
-      });
+      await respond(
+        route,
+        apiError(503, {
+          message: "This fixture does not execute model requests",
+        }),
+      );
       return;
     }
     await route.continue();

@@ -4,7 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { Frame, FramePanel } from "@stll/ui/frame";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { usePermissions } from "@/hooks/use-permissions";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -84,7 +84,7 @@ function OrganizationGeneralPage() {
                 {organization.id}
               </bdi>
             </div>
-            <CopyActionButton text={organization.id} variant="outline" />
+            <CopyControl text={organization.id} variant="outline" />
           </div>
         </FramePanel>
       </Frame>

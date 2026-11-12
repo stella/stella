@@ -1,6 +1,14 @@
 import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
+import type { AIErrorKind } from "@stll/api-contract";
+
+import {
+  buildEmailSummaryMessage,
+  EMAIL_GENERATION_FINISH_POLICY,
+  EMAIL_SUMMARY_SYSTEM_PROMPT,
+  generateEmailText,
+} from "@/api/handlers/ai/email-generation";
 import {
   compactChatMessagesForModel,
   COMPACTION_SUMMARY_MESSAGE_ID,
@@ -10,6 +18,7 @@ import {
   planModelCompaction,
 } from "@/api/handlers/chat/compaction";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId } from "@/api/lib/branded-types";
 import { compactionGenerationRequest } from "@/api/lib/chat/compaction-tokens";
 import { HISTORY_TRIMMED_NOTICE } from "@/api/lib/chat/context-notice";
@@ -341,6 +350,85 @@ const modelCompactionDriver = textCallSiteDriver({
     ),
 });
 
+// --- Outlook email helpers ----------------------------------------------------
+
+/** What the add-in receives: the text, or the status of the failure it shows. */
+type EmailAnswer =
+  { type: "text"; text?: string } | { type: "failed"; status: number };
+
+/** The statuses an AI failure answers with other than 502. */
+const EMAIL_FAILURE_STATUS: Partial<Record<AIErrorKind, number>> = {
+  quota_exhausted: 429,
+  provider_billing: 402,
+};
+
+const emailSummaryDriver = textCallSiteDriver({
+  name: "generateEmailText",
+  finishPolicy: EMAIL_GENERATION_FINISH_POLICY,
+  run: async (cassette): Promise<EmailAnswer> => {
+    const admission = testModelAdmission(organizationId, "email.summarize");
+    const result = await generateEmailText({
+      request: {
+        system: EMAIL_SUMMARY_SYSTEM_PROMPT,
+        message: buildEmailSummaryMessage({
+          text: "Please confirm the lease signing on 5 May at 10:00.",
+          language: "en",
+        }),
+        maxOutputTokens: 1024,
+        failureMessage: "Could not summarize the email. Please try again.",
+      },
+      admission,
+      organizationId,
+      userId: toSafeId<"user">("user_ai_text_replay"),
+      orgAIConfig: replayOrgAIConfig(cassette),
+      managedAIResidency: "eu",
+      caching: { enabled: false, reason: "org-disabled" },
+      analytics: createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
+        feature: "email.summarize",
+        modelTier: admission.modelTier,
+        traceId: "ai-text-replay",
+      }),
+      abortSignal: new AbortController().signal,
+    });
+    if (Result.isError(result)) {
+      return { type: "failed", status: result.error.status };
+    }
+    const expected = expectedTextOutcome(
+      cassette.expect,
+      EMAIL_GENERATION_FINISH_POLICY,
+    );
+    return expected.type === "success" && expected.text === undefined
+      ? { type: "text" }
+      : { type: "text", text: result.value };
+  },
+  answerFor: (expected): EmailAnswer => {
+    switch (expected.type) {
+      case "success": {
+        if (expected.text === undefined) {
+          return { type: "text" };
+        }
+        const text = expected.text.trim();
+        return text === ""
+          ? { type: "failed", status: 502 }
+          : { type: "text", text };
+      }
+      case "failure":
+        return {
+          type: "failed",
+          status: EMAIL_FAILURE_STATUS[expected.kind] ?? 502,
+        };
+      case "incomplete":
+      case "refusal":
+      case "unfinished":
+        return { type: "failed", status: 502 };
+      default:
+        expected satisfies never;
+        return panic("Unhandled email helper outcome");
+    }
+  },
+});
+
 /**
  * Every call site the replay drives, by file (relative to `apps/api/src`),
  * with one driver per runtime reference the file makes to a text export of
@@ -349,6 +437,7 @@ const modelCompactionDriver = textCallSiteDriver({
 export const TEXT_CALL_SITE_DRIVERS: Readonly<
   Record<string, readonly TextCallSiteDriver[]>
 > = {
+  "handlers/ai/email-generation.ts": [emailSummaryDriver],
   "handlers/chat/compaction.ts": [chatCompactionDriver, modelCompactionDriver],
 };
 

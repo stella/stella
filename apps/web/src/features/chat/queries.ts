@@ -8,6 +8,7 @@ import type {
 import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
@@ -30,6 +31,7 @@ import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
 
 import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
@@ -108,8 +110,19 @@ const EMPTY_ATTACHED_FILES: ChatThreadAttachedFiles = {
   files: [],
 };
 
+/**
+ * The member's newest turn of a chat that runs on their computer, and the
+ * message that answered it: only this turn's file changes can be undone.
+ */
+export type NewestLocalTurn = {
+  id: SafeId<"chatTurn">;
+  assistantMessageId: SafeId<"chatMessage"> | null;
+};
+
 type ThreadFetch = {
   activeSkill: ActiveSkillChatContext | null;
+  /** Absent for a cloud chat. */
+  newestLocalTurn?: NewestLocalTurn | undefined;
   /** The thread's turn not yet settled; null when every turn has settled. */
   activeTurnId: SafeId<"chatTurn"> | null;
   attachedFiles: ChatThreadAttachedFiles;
@@ -205,6 +218,9 @@ const fetchThreadMessages = async (
   return {
     activeSkill: data.activeSkill,
     activeTurnId: data.activeTurnId,
+    ...(data.newestLocalTurn === null
+      ? {}
+      : { newestLocalTurn: data.newestLocalTurn }),
     attachedFiles: data.attachedFiles,
     forkProvenance: data.forkProvenance,
     messages: deserializeChatMessages(data.messages),
@@ -256,11 +272,13 @@ export const fetchOlderMessages = async ({
 
 const fetchGroupedChatThreads = async ({
   cursor,
+  pinState,
   search,
   signal,
   workspaceId,
 }: {
   cursor?: string | undefined;
+  pinState?: ChatThreadPinState | undefined;
   search?: string | undefined;
   signal?: AbortSignal | undefined;
   workspaceId?: string | undefined;
@@ -270,6 +288,7 @@ const fetchGroupedChatThreads = async ({
     query: {
       limit: CHAT_THREADS_PAGE_SIZE,
       ...(cursor !== undefined && { cursor }),
+      ...(pinState !== undefined && { pinState }),
       ...(search !== undefined && { search }),
       ...(workspaceId !== undefined && {
         workspaceId: toSafeId<"workspace">(workspaceId),
@@ -468,6 +487,12 @@ export const listChatHistoryItems = (
 
 export type ChatThreadFetched = {
   activeSkill: ActiveSkillChatContext | null;
+  /**
+   * The member's newest turn when the chat runs on their computer, whose
+   * file changes the chat offers to undo; absent for a cloud chat and a
+   * file thread.
+   */
+  newestLocalTurn?: NewestLocalTurn | undefined;
   /**
    * The thread's turn not yet settled when this page was read, which the
    * composer's Stop cancels. Null when every turn has settled.
@@ -1073,15 +1098,24 @@ const fetchChatLocalRunners = async (signal: AbortSignal) =>
  * Models submenu opens, like the model options, and kept briefly: a computer
  * signing in or reaching a limit shows on the next open.
  */
+/**
+ * The member's computers and what each can run. They report themselves to
+ * the API over their own sockets; no stella mutation changes them, so the
+ * read declares itself independent of resource writes.
+ */
 export const localRunnersOptions = (activeOrganizationId: string) =>
-  queryOptions({
-    queryKey: chatKeys.localRunners(activeOrganizationId),
-    staleTime: 30_000,
-    queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: chatKeys.localRunners(activeOrganizationId),
+      staleTime: 30_000,
+      queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
+    }),
+    { type: "independent" },
+  );
 
 export const groupedChatThreadsOptions = ({
   activeOrganizationId,
+  pinState,
   search,
   userId,
   workspaceId,
@@ -1090,6 +1124,7 @@ export const groupedChatThreadsOptions = ({
   return infiniteQueryOptions({
     queryKey: chatKeys.groupedThreads({
       activeOrganizationId,
+      pinState,
       search: normalizedSearch,
       userId,
       workspaceId,
@@ -1099,6 +1134,7 @@ export const groupedChatThreadsOptions = ({
     queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
       await fetchGroupedChatThreads({
         cursor: pageParam,
+        pinState,
         search: normalizedSearch,
         signal,
         workspaceId,
@@ -1153,6 +1189,11 @@ export const chatDraftMetaOptions = ({
         webSearchEnabled: data.webSearchEnabled,
         model: data.model,
         reasoningEffort: data.reasoningEffort,
+        // Where the first send runs, as the draft's Run on choice stored it.
+        runTarget: data.runTarget,
+        // A draft the server holds no row for starts from the member's last
+        // Run on choice instead.
+        threadExists: data.threadExists,
         // The draft's cache-stable context floor (system prompt + tools), so
         // the hero meter shows the honest baseline instead of 0% before send.
         context: data.context,

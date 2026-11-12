@@ -11,12 +11,43 @@ import { PDF } from "@libpdf/core";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
+/** Where one extracted line sits on its page, in PDF points. */
+export type PdfLineBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export type PdfPageText = {
   /** 1-based, as the viewer numbers pages. */
   pageNumber: number;
   /** Kept as extracted, never trimmed: offsets index into it. */
   text: string;
+  /**
+   * One box per line of `text` (its "\n"-separated lines, in order), so a
+   * reader of paragraphs can weigh indents and gaps. Null when the
+   * extractor's lines do not spell `text` exactly, so a box is never paired
+   * with the wrong line.
+   */
+  lineBoxes: readonly PdfLineBox[] | null;
 };
+
+const lineBoxesOf = ({
+  text,
+  lines,
+}: {
+  text: string;
+  lines: readonly { text: string; bbox: PdfLineBox }[];
+}): PdfLineBox[] | null =>
+  lines.map((line) => line.text).join("\n") === text
+    ? lines.map(({ bbox }) => ({
+        x: bbox.x,
+        y: bbox.y,
+        width: bbox.width,
+        height: bbox.height,
+      }))
+    : null;
 
 type ReadPdfPageTextsOptions = {
   bytes: Uint8Array;
@@ -36,7 +67,12 @@ export const readPdfPageTexts = async ({
     if (pageNumbers !== undefined && !pageNumbers.has(pageNumber)) {
       continue;
     }
-    pages.push({ pageNumber, text: page.extractText().text });
+    const extracted = page.extractText();
+    pages.push({
+      pageNumber,
+      text: extracted.text,
+      lineBoxes: lineBoxesOf(extracted),
+    });
   }
   return pages;
 };

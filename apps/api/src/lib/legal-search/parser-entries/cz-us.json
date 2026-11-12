@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "CZ_US",
   "key": "cz-us",
-  "parserVersion": 41,
+  "parserVersion": 43,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

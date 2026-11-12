@@ -37,6 +37,7 @@ import {
 } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -375,7 +376,7 @@ const TemplateRow = ({
             variant="plain"
             {...capabilityProps}
           >
-            <span className="truncate text-sm">{template.name}</span>
+            <TruncatedText className="text-sm">{template.name}</TruncatedText>
           </Button>
         )}
       </CapabilityAction>
@@ -436,7 +437,7 @@ const BuiltInTemplateRow = ({
             variant="plain"
             {...capabilityProps}
           >
-            <span className="truncate text-sm">{name}</span>
+            <TruncatedText className="text-sm">{name}</TruncatedText>
           </Button>
         )}
       </CapabilityAction>

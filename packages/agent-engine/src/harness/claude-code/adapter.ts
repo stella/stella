@@ -7,9 +7,11 @@ import * as v from "valibot";
 import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   type DesktopRunnerApprovalMode,
+  knownReasoningEfforts,
 } from "@stll/api-contract/desktop-runner";
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
+import type { ProtocolLog } from "../../protocol-log";
 import {
   type HarnessAdapter,
   type HarnessAuth,
@@ -94,8 +96,12 @@ export type ClaudeCodeHarnessAdapterOptions = {
   gracePeriodMs: number;
   /** How long any control request to the harness waits for its answer. */
   requestTimeoutMs: number;
+  /** See `HarnessProcessDeadlines.startupRequestMs`. */
+  startupRequestTimeoutMs?: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /** Where the CLI's protocol lines go, redacted. */
+  protocolLog: ProtocolLog;
   /** The platform the CLI runs on, which decides whether it can sandbox. */
   platform: NodeJS.Platform;
 };
@@ -191,7 +197,9 @@ const PERMISSION_MODE = {
 } as const satisfies Record<HarnessRunPolicy["approvals"], string>;
 /**
  * The CLI's network is open. Outside full auto its sandbox is off; in full
- * auto the sandbox's proxy asks about each new host and the turn allows it.
+ * auto the sandbox's proxy asks about each new host, and the turn lets
+ * through only the hosts the run's skills declare (`networkHosts`) and asks
+ * the member about any other.
  */
 const NETWORK_ARGS = {
   open: [],
@@ -390,10 +398,12 @@ const connect = async ({
   };
   const started = startClaudeCli({
     launch: options.launch,
+    protocolLog: options.protocolLog,
     args,
     detached: createDetached(options.onBackgroundError),
     deadlines: {
       requestMs: options.requestTimeoutMs,
+      startupRequestMs: options.startupRequestTimeoutMs,
       terminateMs: options.gracePeriodMs,
     },
     cwd,
@@ -501,7 +511,7 @@ const modelsOf = ({ models }: Initialized): HarnessModel[] => {
     id: model.value,
     displayName: model.displayName,
     isDefault: index === defaultIndex,
-    reasoningEfforts: model.supportedEffortLevels ?? [],
+    reasoningEfforts: knownReasoningEfforts(model.supportedEffortLevels),
     inputModalities: TEXT_ONLY,
   }));
 };
@@ -620,6 +630,9 @@ const turnArgs = (
   target.sessionId,
   "--model",
   input.model,
+  ...(input.reasoningEffort === null
+    ? []
+    : ["--effort", input.reasoningEffort]),
 ];
 
 type OpenedSession = {
@@ -641,7 +654,10 @@ const openSession = async (
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
     stellaServer: input.mcp.serverName,
-    allowSandboxNetwork: input.policy.approvals === "full_auto",
+    // Outside full auto the sandbox is off and every command is asked about.
+    sandboxNetworkHosts: new Set(
+      input.policy.approvals === "full_auto" ? input.networkHosts : [],
+    ),
   });
   const connected = await connect({
     options,

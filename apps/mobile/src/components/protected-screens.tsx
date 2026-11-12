@@ -2,6 +2,7 @@ import { Stack, ThemeProvider, useRouter, useSegments } from "expo-router";
 import type { Href } from "expo-router";
 import { useTranslations } from "use-intl";
 
+import { ActiveChatRunsProvider } from "@/components/active-chat-runs";
 import { ChangesProvider } from "@/components/changes";
 import {
   HeaderSearchProvider,
@@ -10,6 +11,7 @@ import {
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
 import { PushRegistration } from "@/components/push-registration";
+import { RunBanners } from "@/components/run-banner";
 import { SelectionProvider, useSelection } from "@/components/selection";
 import { TimerActivitySync } from "@/components/timer-activity-sync";
 import { barGlyph } from "@/components/ui/bar-glyph";
@@ -31,9 +33,12 @@ export const ProtectedScreens = () => {
         <MattersViewProvider>
           <ChangesProvider>
             <SelectionProvider>
-              <TimerActivitySync />
-              <PushRegistration />
-              <Screens />
+              <ActiveChatRunsProvider>
+                <TimerActivitySync />
+                <PushRegistration />
+                <Screens />
+                <RunBanners />
+              </ActiveChatRunsProvider>
             </SelectionProvider>
           </ChangesProvider>
         </MattersViewProvider>
@@ -168,6 +173,13 @@ const Screens = () => {
                     >
                       {matters("noGrouping")}
                     </Stack.Toolbar.MenuAction>
+                    <Stack.Toolbar.MenuAction
+                      onPress={() => {
+                        router.push("/archived-matters");
+                      }}
+                    >
+                      {matters("archivedMatters")}
+                    </Stack.Toolbar.MenuAction>
                   </Stack.Toolbar.Menu>
                 ) : null}
               </Stack.Toolbar>
@@ -213,7 +225,7 @@ const Screens = () => {
               options={{
                 ...pushedScreen,
                 presentation: "formSheet",
-                sheetAllowedDetents: [0.5, 1],
+                sheetAllowedDetents: [0.75, 1],
                 sheetGrabberVisible: true,
               }}
             />
@@ -233,6 +245,10 @@ const Screens = () => {
                 sheetAllowedDetents: [0.75, 1],
                 sheetGrabberVisible: true,
               }}
+            />
+            <Stack.Screen
+              name="share/[shareId]"
+              options={{ ...pushedScreen, presentation: "modal" }}
             />
             <Stack.Screen name="timers/index" options={pushedScreen} />
             <Stack.Screen
@@ -265,6 +281,16 @@ const Screens = () => {
               name="matter/[workspaceId]/index"
               options={pushedScreen}
             />
+            <Stack.Screen
+              name="matter/[workspaceId]/info"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen name="archived-matters" options={pushedScreen} />
             <Stack.Screen
               name="document/[workspaceId]/[entityId]"
               options={pushedScreen}

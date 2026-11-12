@@ -4,12 +4,16 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
+import type {
+  ChatLocalRunTarget,
+  ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import { modelSelectionLabel } from "@stll/chat/model-selector";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { LaptopIcon } from "@stll/ui/icons";
+import { CloudIcon, LaptopIcon } from "@stll/ui/icons";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ProviderValue } from "@/components/ai-config-role-models.logic";
@@ -17,12 +21,18 @@ import { AIProviderIcon } from "@/components/ai-provider-icons";
 import {
   CHAT_MODEL_MENU_POPUP_CLASS_NAME,
   ChatModelOptionsMenu,
+  chatRunOnTarget,
   type ComposerModelsMenuProps,
-  EFFORT_LABEL_KEY,
 } from "@/components/chat/chat-model-options-menu";
+import { EFFORT_LABEL_KEY } from "@/components/chat/chat-model-options-menu.logic";
+import {
+  ChatRunTargetMenu,
+  useLocalRunTargetStateLabel,
+} from "@/components/chat/chat-run-target-menu";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
   localRunModelLabel,
+  localRunTargetState,
 } from "@/components/chat/chat-run-target-menu.logic";
 import {
   localRunnersOptions,
@@ -43,8 +53,140 @@ type TriggerView = {
 };
 
 /**
- * Auto routing plus explicit model/effort selection for one thread, or the
- * harness and model of a thread that runs on the member's computer.
+ * The composer bar's two choices, from the composer's one choice owner:
+ * where the chat runs (the cloud or the member's computer, with its coding
+ * agent) and which model it uses there. A composer whose turns can run only
+ * in the cloud, or a member who may not run turns on a computer, sees the
+ * model chip alone.
+ */
+export const ChatComposerChips = ({
+  disabled = false,
+  models,
+}: ChatModelSelectorProps) => (
+  <>
+    {models.runTarget.type === "choice" && (
+      <ChatRunOnChip
+        activeOrganizationId={models.activeOrganizationId}
+        disabled={disabled || models.state === "loading"}
+        onSelect={models.runTarget.select}
+        selected={models.runTarget.selected}
+      />
+    )}
+    <ChatModelSelector disabled={disabled} models={models} />
+  </>
+);
+
+type ChatRunOnChipProps = {
+  activeOrganizationId: string;
+  disabled: boolean;
+  selected: ChatRunTarget;
+  onSelect: (target: ChatRunTarget) => void;
+};
+
+/**
+ * Where the chat runs: [Cloud], or [Your computer · Codex], with why the
+ * computer cannot take a turn now when it says so (offline, signed out). Its
+ * name for assistive technology says the place in full ("Runs on: Your
+ * computer, Codex").
+ */
+const ChatRunOnChip = ({
+  activeOrganizationId,
+  disabled,
+  selected,
+  onSelect,
+}: ChatRunOnChipProps) => {
+  const t = useTranslations();
+  const stateLabel = useLocalRunTargetStateLabel();
+  const [open, setOpen] = useState(false);
+  const runnersView = queryView(
+    useQuery(localRunnersOptions(activeOrganizationId)),
+  );
+  const readiness =
+    runnersView.type === "items" ? runnersView.items : undefined;
+  const readFailed = runnersView.type === "error";
+  // A member who may not run turns on a computer has one place: no chip. A
+  // failed read proves nothing, so the chip stays and says so.
+  if (
+    !readFailed &&
+    readiness?.status !== "enabled" &&
+    selected.kind !== "local"
+  ) {
+    return null;
+  }
+  const view = (() => {
+    if (selected.kind !== "local") {
+      const place = t("chat.runOn.cloud");
+      return {
+        label: place,
+        name: place,
+        icon: <CloudIcon aria-hidden="true" className="size-3.5" />,
+      };
+    }
+    const harness = CHAT_LOCAL_HARNESS_NAMES[selected.harness];
+    const targetState =
+      readiness === undefined ? null : localRunTargetState(readiness, selected);
+    // A failed read claims nothing about the agent; the model's own state
+    // is the model chip's to say.
+    const placeState = () => {
+      if (readFailed) {
+        return t("chat.runOn.checkFailed");
+      }
+      return targetState === null || targetState.type === "model_unavailable"
+        ? null
+        : stateLabel(targetState);
+    };
+    const state = placeState();
+    const selection = t("chat.runOn.localSelection", { harness });
+    const place = t("chat.runOn.localPlace", { harness });
+    return {
+      label:
+        state === null
+          ? selection
+          : t("chat.localRun.selectionStateLabel", { selection, state }),
+      name:
+        state === null ? place : t("chat.runOn.placeState", { place, state }),
+      icon: <LaptopIcon aria-hidden="true" className="size-3.5" />,
+    };
+  })();
+  const name = t("chat.runOn.chipLabel", { place: view.name });
+
+  return (
+    <Menu onOpenChange={setOpen} open={open}>
+      <MenuTrigger
+        render={
+          <Button
+            aria-label={name}
+            data-composer-chip="run-on"
+            // Until the stored choice is known, nothing can be picked on it.
+            disabled={disabled}
+            size="xs"
+            variant="muted"
+          />
+        }
+        tooltip={name}
+      >
+        {view.icon}
+        <TruncatedText className="max-w-44" render={<BidiText as="span" />}>
+          {view.label}
+        </TruncatedText>
+      </MenuTrigger>
+      <MenuPopup align="start" className="w-80" side="top" sideOffset={6}>
+        <ChatRunTargetMenu
+          activeOrganizationId={activeOrganizationId}
+          enabled={open}
+          key={open ? "open" : "closed"}
+          onSelect={onSelect}
+          selected={selected}
+        />
+      </MenuPopup>
+    </Menu>
+  );
+};
+
+/**
+ * The model chip: Auto routing or an explicit model and effort in the cloud,
+ * or the model of the coding agent on the member's computer, with a model it
+ * no longer offers marked so.
  */
 export const ChatModelSelector = ({
   disabled = false,
@@ -52,10 +194,10 @@ export const ChatModelSelector = ({
 }: ChatModelSelectorProps) => {
   const [open, setOpen] = useState(false);
   const [detailsRequested, setDetailsRequested] = useState(false);
-  const selectedTarget = models.runTarget?.selected;
-  const localTrigger = useLocalRunTrigger(
+  const selectedTarget = chatRunOnTarget(models.runTarget);
+  const localTrigger = useLocalModelTrigger(
     models.activeOrganizationId,
-    selectedTarget?.kind === "local" ? selectedTarget : null,
+    selectedTarget.kind === "local" ? selectedTarget : null,
   );
   // stella's models are read only for a thread that runs on them.
   const cloudTrigger = useCloudModelTrigger(
@@ -76,7 +218,9 @@ export const ChatModelSelector = ({
                 ? "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5"
                 : "text-muted-foreground hover:text-foreground gap-1.5",
             )}
-            disabled={disabled}
+            data-composer-chip="model"
+            // Until the stored choice is known, nothing can be picked on it.
+            disabled={disabled || models.state === "loading"}
             onFocus={() => setDetailsRequested(true)}
             onMouseEnter={() => setDetailsRequested(true)}
             size="xs"
@@ -86,9 +230,9 @@ export const ChatModelSelector = ({
         tooltip={trigger.label}
       >
         {trigger.icon}
-        <BidiText as="span" className="max-w-36 truncate">
+        <TruncatedText className="max-w-36" render={<BidiText as="span" />}>
           {trigger.label}
-        </BidiText>
+        </TruncatedText>
       </MenuTrigger>
       <MenuPopup
         align="start"
@@ -108,10 +252,12 @@ export const ChatModelSelector = ({
 };
 
 /**
- * The harness and model a thread on the member's computer runs with, named
- * as the harness reports the model; `null` for a thread on stella's models.
+ * The model a chat on the member's computer runs with, named as its coding
+ * agent names it, with the reasoning effort when one is chosen, and marked
+ * when the agent no longer offers it, which the API would refuse. `null` for
+ * a chat in the cloud.
  */
-const useLocalRunTrigger = (
+const useLocalModelTrigger = (
   activeOrganizationId: string,
   target: ChatLocalRunTarget | null,
 ): TriggerView | null => {
@@ -125,18 +271,28 @@ const useLocalRunTrigger = (
   if (target === null) {
     return null;
   }
+  const readiness =
+    runnersView.type === "items" ? runnersView.items : undefined;
+  const modelLabel = localRunModelLabel(readiness, target) ?? target.model;
   const model =
-    localRunModelLabel(
-      runnersView.type === "items" ? runnersView.items : undefined,
-      target,
-    ) ?? target.model;
+    target.reasoningEffort === null
+      ? modelLabel
+      : t("chat.modelSelector.selectionLabel", {
+          model: modelLabel,
+          effort: t(EFFORT_LABEL_KEY[target.reasoningEffort]),
+        });
+  const gone =
+    readiness !== undefined &&
+    localRunTargetState(readiness, target).type === "model_unavailable";
   return {
-    label: t("chat.localRun.selectionLabel", {
-      harness: CHAT_LOCAL_HARNESS_NAMES[target.harness],
-      model,
-    }),
-    icon: <LaptopIcon aria-hidden="true" className="size-3.5" />,
-    chosen: true,
+    label: gone
+      ? t("chat.localRun.selectionStateLabel", {
+          selection: model,
+          state: t("chat.localRun.stateModelUnavailable"),
+        })
+      : model,
+    icon: null,
+    chosen: false,
   };
 };
 

@@ -1,0 +1,1067 @@
+import { panic, Result } from "better-result";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import { asc, eq, inArray, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/pglite";
+
+import { STATUTE_VERSION_CHANGES_METHOD } from "@stll/api-contract/statute-version-changes";
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+
+import type { ScopedDb } from "@/api/db/safe-db";
+import {
+  legislationDocuments,
+  legislationSources,
+  systemAuditRuns,
+} from "@/api/db/schema";
+import {
+  declareWriterContract,
+  processLegislationDocument,
+} from "@/api/handlers/legislation/ingestion";
+import type { LegislationCorpusDependencies } from "@/api/handlers/legislation/ingestion";
+import {
+  backfillVersionChangesPage,
+  decodeVersionChangesCursor,
+  encodeVersionChangesCursor,
+} from "@/api/handlers/legislation/version-changes-backfill";
+import type { VersionChangesCursor } from "@/api/handlers/legislation/version-changes-backfill";
+import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
+import { withdrawLegislationVersions } from "@/api/handlers/legislation/withdrawal";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import {
+  parsePersistedCorpusAst,
+  planCorpusDocumentWrite,
+} from "@/api/lib/legal-search/corpus-storage";
+import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
+import { readVersionChangePayloads } from "@/api/lib/legal-search/legislation-version-blocks";
+import {
+  planVersionChangeTasks,
+  prepareVersionChanges,
+  refreshVersionChanges,
+  writePreparedVersionChangesTx,
+} from "@/api/lib/legal-search/legislation-version-changes";
+import { recoverVersionChanges } from "@/api/lib/legal-search/legislation-version-changes-recovery";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  createTestPglite,
+  withPublicLawReaderRole,
+} from "@/api/tests/pglite-test-db";
+
+/**
+ * Each consolidation stores what it changed against the eligible one before
+ * it. Ingestion writes the summaries a stored version can outdate, in
+ * whatever order the versions arrive; the backfill fills the rest, and a run
+ * repeated over a corpus it already filled computes and writes nothing.
+ */
+
+let client: Awaited<ReturnType<typeof createTestPglite>>;
+let db: ReturnType<typeof drizzle>;
+let scopedDb: ScopedDb;
+
+const legislationDb: LegislationReadDb = async (read) =>
+  await withPublicLawReaderRole(db, async (roleTx) => {
+    // The production driver answers `execute` with the rows themselves;
+    // PGlite wraps them in a result object.
+    const tx = new Proxy(roleTx, {
+      get: (target, property, receiver) => {
+        if (property !== "execute") {
+          return Reflect.get(target, property, receiver);
+        }
+        return async (...args: Parameters<typeof roleTx.execute>) =>
+          (await roleTx.execute(...args)).rows;
+      },
+    });
+    // SAFETY: this PGlite transaction executes under the production
+    // public-law role; the proxy adapts only execute's result shape.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded role transaction stands in for LegislationReadTransaction
+    return await read(tx as unknown as LegislationReadTransaction);
+  });
+
+const sourceId = createSafeId<"legislationSource">();
+
+const corpus = {
+  mode: "dual-write",
+  write: async (input) => {
+    const plan = planCorpusDocumentWrite(input);
+    switch (plan.type) {
+      case "put":
+        return await Promise.resolve(
+          Result.ok({
+            type: "written",
+            written: plan.written,
+          }),
+        );
+      case "skipped-empty":
+      case "skipped-unchanged":
+        return await Promise.resolve(Result.ok(plan));
+      default:
+        return plan satisfies never;
+    }
+  },
+} satisfies LegislationCorpusDependencies;
+
+const heading = (text: string): Block => ({
+  type: "heading",
+  id: `h:${text}`,
+  anchorId: `h:${text}`,
+  level: 4,
+  inlines: [{ type: "text", text }],
+  plainText: text,
+});
+
+const paragraph = (id: string, text: string): Block => ({
+  type: "paragraph",
+  id,
+  anchorId: id,
+  inlines: [{ type: "text", text }],
+  plainText: text,
+});
+
+const ast = (blocks: Block[]): DocumentAst => ({
+  version: 1,
+  source: { system: "test", documentId: "", webUrl: "", printUrl: "" },
+  metadata: {
+    caseNumber: null,
+    ecli: null,
+    court: null,
+    decisionDate: null,
+    decisionType: null,
+    keywords: [],
+    statutes: [],
+  },
+  blocks,
+});
+
+/** Three wordings of one act: enacted, a one-word amendment, an addition. */
+const WORDINGS = {
+  enacted: [
+    heading("§ 1"),
+    paragraph("p1", "Nájemce smí byt užívat k podnikání."),
+    heading("§ 2"),
+    paragraph("p2", "Pronajímatel odevzdá byt ve stavu způsobilém."),
+  ],
+  amended: [
+    heading("§ 1"),
+    paragraph("p1", "Nájemce nesmí byt užívat k podnikání."),
+    heading("§ 2"),
+    paragraph("p2", "Pronajímatel odevzdá byt ve stavu způsobilém."),
+  ],
+  extended: [
+    heading("§ 1"),
+    paragraph("p1", "Nájemce nesmí byt užívat k podnikání."),
+    heading("§ 2"),
+    paragraph("p2", "Pronajímatel odevzdá byt ve stavu způsobilém."),
+    heading("§ 3"),
+    paragraph("p3", "Tento zákon nabývá účinnosti dnem vyhlášení."),
+  ],
+} as const;
+
+const plainText = (blocks: readonly Block[]): string =>
+  blocks
+    .map((block) => ("plainText" in block ? block.plainText : ""))
+    .join("\n");
+
+const consolidation = ({
+  eli,
+  validFrom,
+  lastDay,
+  blocks,
+}: {
+  eli: string;
+  validFrom: string;
+  lastDay: string | null;
+  blocks: readonly Block[];
+}): LegislationDocumentInput => ({
+  sourceId,
+  eli,
+  title: "Zákon o nájmu",
+  country: "CZE",
+  language: "cs",
+  documentType: "zákon",
+  effectiveDate: validFrom,
+  version: {
+    type: "consolidation",
+    validFrom,
+    end:
+      lastDay === null
+        ? { type: "open" }
+        : { type: "last-day-in-force", on: lastDay },
+  },
+  fulltext: plainText(blocks),
+  ast: ast([...blocks]),
+  rawHash: `${eli}:${validFrom}:${plainText(blocks).length}`,
+});
+
+const storeAll = async (inputs: readonly LegislationDocumentInput[]) => {
+  const ids: SafeId<"legislationDocument">[] = [];
+  for (const input of inputs) {
+    const result = await processLegislationDocument(input, scopedDb, {
+      corpus,
+    });
+    if (result.type !== "stored") {
+      panic("fixture version was not stored");
+    }
+    ids.push(result.id);
+  }
+  return ids;
+};
+
+const summaries = async (eli: string) =>
+  await db
+    .select({
+      validFrom: legislationDocuments.versionValidFrom,
+      summary: legislationDocuments.changeSummary,
+    })
+    .from(legislationDocuments)
+    .where(eq(legislationDocuments.eli, eli))
+    .orderBy(asc(legislationDocuments.versionValidFrom));
+
+const countsOf = async (eli: string) =>
+  (await summaries(eli)).map(({ summary }) =>
+    summary?.type === "compared" ? summary.counts : (summary?.type ?? null),
+  );
+
+const ONE_WORD = {
+  provisions: { changed: 1, added: 0, removed: 0 },
+  words: { inserted: 1, deleted: 1 },
+};
+const ONE_PROVISION_ADDED = {
+  provisions: { changed: 0, added: 1, removed: 0 },
+  words: { inserted: 8, deleted: 0 },
+};
+
+const work = (eli: string) => [
+  consolidation({
+    eli,
+    validFrom: "2020-01-01",
+    lastDay: "2020-12-31",
+    blocks: WORDINGS.enacted,
+  }),
+  consolidation({
+    eli,
+    validFrom: "2021-01-01",
+    lastDay: "2021-12-31",
+    blocks: WORDINGS.amended,
+  }),
+  consolidation({
+    eli,
+    validFrom: "2022-01-01",
+    lastDay: null,
+    blocks: WORDINGS.extended,
+  }),
+];
+
+const IN_ORDER = "/eli/cz/sb/2019/1";
+const OUT_OF_ORDER = "/eli/cz/sb/2019/2";
+const BACKFILLED = ["/eli/cz/sb/2019/3", "/eli/cz/sb/2019/4"];
+
+const walk = async (apply: boolean, pageSize: number) => {
+  const pages = [];
+  const read = async (after: VersionChangesCursor | null) =>
+    (
+      await backfillVersionChangesPage({
+        db: scopedDb,
+        after,
+        pageSize,
+        apply,
+      })
+    ).unwrap();
+  let page = await read(null);
+  while (page.cursor !== null) {
+    pages.push(page);
+    // Every position a run prints is one it can resume from.
+    page = await read(
+      decodeVersionChangesCursor(encodeVersionChangesCursor(page.cursor)),
+    );
+  }
+  return pages;
+};
+
+const total = (
+  pages: readonly { planned: number; written: number }[],
+  field: "planned" | "written",
+) => pages.reduce((sum, page) => sum + page[field], 0);
+
+beforeAll(async () => {
+  client = await createTestPglite();
+  db = drizzle({ client });
+  scopedDb = async (callback) =>
+    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+  await db.insert(legislationSources).values({
+    id: sourceId,
+    adapterKey: "version-changes-test",
+    name: "Version changes test",
+    expressionNamespace: "version-changes",
+  });
+});
+
+afterAll(async () => {
+  await client.close();
+});
+
+describe("ingestion", () => {
+  test("stores each consolidation's changes against the one before it", async () => {
+    await storeAll(work(IN_ORDER));
+
+    expect(await countsOf(IN_ORDER)).toEqual([
+      "first",
+      ONE_WORD,
+      ONE_PROVISION_ADDED,
+    ]);
+  });
+
+  test("reaches the same summaries whatever order the versions arrive in", async () => {
+    await storeAll(work(IN_ORDER));
+    const [enacted, amended, extended] = work(OUT_OF_ORDER);
+    if (
+      enacted === undefined ||
+      amended === undefined ||
+      extended === undefined
+    ) {
+      panic("fixture work has three versions");
+    }
+    await storeAll([extended, enacted, amended]);
+
+    expect(await countsOf(OUT_OF_ORDER)).toEqual(await countsOf(IN_ORDER));
+  });
+
+  test("the versions list serves the counts of the wording each row holds", async () => {
+    await storeAll(work(IN_ORDER));
+    const [newest] = (
+      await db
+        .select({ id: legislationDocuments.id })
+        .from(legislationDocuments)
+        .where(eq(legislationDocuments.eli, IN_ORDER))
+        .orderBy(asc(legislationDocuments.versionValidFrom))
+    ).toReversed();
+    if (newest === undefined) {
+      panic("fixture work was not stored");
+    }
+
+    const page = await listStatuteVersionsHandler({
+      documentId: newest.id,
+      query: {},
+      legislationDb,
+      surface: "pages",
+    });
+    if (!("items" in page)) {
+      panic("version list was refused");
+    }
+
+    expect(page.items.map(({ changes }) => changes)).toEqual([
+      ONE_PROVISION_ADDED,
+      ONE_WORD,
+      null,
+    ]);
+  });
+});
+
+describe("backfill", () => {
+  beforeEach(async () => {
+    await db
+      .delete(legislationDocuments)
+      .where(eq(legislationDocuments.sourceId, sourceId));
+    await storeAll(work(IN_ORDER));
+    await storeAll(work(OUT_OF_ORDER));
+    const stored = await Promise.all(
+      BACKFILLED.map(async (eli) => await storeAll(work(eli))),
+    );
+    // As versions stored before ingestion wrote summaries hold them.
+    await db
+      .update(legislationDocuments)
+      .set({ changeSummary: null })
+      .where(inArray(legislationDocuments.id, stored.flat()));
+  });
+
+  test("a report counts the missing summaries and writes nothing", async () => {
+    const pages = await walk(false, 1);
+
+    expect(total(pages, "planned")).toBe(6);
+    expect(total(pages, "written")).toBe(0);
+    for (const eli of BACKFILLED) {
+      expect(await countsOf(eli)).toEqual([null, null, null]);
+    }
+  });
+
+  test("an apply fills them, one Work per page, as ingestion would have", async () => {
+    const pages = await walk(true, 1);
+
+    expect(total(pages, "planned")).toBe(6);
+    expect(total(pages, "written")).toBe(6);
+    for (const eli of BACKFILLED) {
+      expect(await countsOf(eli)).toEqual(await countsOf(IN_ORDER));
+    }
+  });
+
+  test("a repeated run computes and writes nothing, and leaves every summary as it was", async () => {
+    await walk(true, 1);
+    const before = await Promise.all(BACKFILLED.map(summaries));
+    const pages = await walk(true, 2);
+
+    expect(total(pages, "planned")).toBe(0);
+    expect(total(pages, "written")).toBe(0);
+    expect(await Promise.all(BACKFILLED.map(summaries))).toEqual(before);
+  });
+
+  test("a rewritten wording outdates its own summary and the next one, and only those", async () => {
+    await walk(true, 1);
+    const [eli] = BACKFILLED;
+    if (eli === undefined) {
+      panic("fixture has a backfilled Work");
+    }
+    // A parser fix rewrites the middle version's AST in place.
+    await db
+      .update(legislationDocuments)
+      .set({ documentAst: ast([...WORDINGS.enacted]) })
+      .where(eq(legislationDocuments.versionValidFrom, "2021-01-01"));
+
+    const pages = await walk(true, 10);
+
+    // Every Work's middle version changed, so each recomputes two summaries.
+    expect(total(pages, "planned")).toBe(2 * 4);
+    expect(await countsOf(eli)).toEqual([
+      "first",
+      {
+        provisions: { changed: 0, added: 0, removed: 0 },
+        words: { inserted: 0, deleted: 0 },
+      },
+      {
+        provisions: { changed: 1, added: 1, removed: 0 },
+        words: { inserted: 9, deleted: 1 },
+      },
+    ]);
+  });
+});
+
+test("query count grows by comparison batches rather than by work or version", async () => {
+  const reportCounts: number[] = [];
+  const applyCounts: number[] = [];
+  for (const count of [2, 4, 8]) {
+    const benchmarkSource = createSafeId<"legislationSource">();
+    await db.insert(legislationSources).values({
+      id: benchmarkSource,
+      adapterKey: `version-query-budget-${count}`,
+      name: "Version query budget",
+    });
+    for (let index = 0; index < count; index += 1) {
+      await storeAll(
+        work(`eli/cz/budget/${count}/${index}`).map((input) => ({
+          ...input,
+          sourceId: benchmarkSource,
+        })),
+      );
+    }
+    await db
+      .update(legislationDocuments)
+      .set({ changeSummary: null })
+      .where(eq(legislationDocuments.sourceId, benchmarkSource));
+    let statements = 0;
+    const measured = drizzle({
+      client,
+      logger: {
+        logQuery: (query) => {
+          if (/^\s*(?:select|with|update)\b/iu.test(query)) {
+            statements += 1;
+          }
+        },
+      },
+    });
+    const measuredDb: ScopedDb = async (callback) =>
+      await measured.transaction(async (tx) => await callback(asTestRaw(tx)));
+    const options = {
+      db: measuredDb,
+      after: { sourceId: benchmarkSource, eli: "" },
+      pageSize: count,
+    };
+    const report = (
+      await backfillVersionChangesPage({
+        ...options,
+        apply: false,
+      })
+    ).unwrap();
+    expect(report.planned).toBe(3 * count);
+    reportCounts.push(statements);
+    statements = 0;
+    const applied = (
+      await backfillVersionChangesPage({
+        ...options,
+        apply: true,
+      })
+    ).unwrap();
+    expect(applied.written).toBe(3 * count);
+    applyCounts.push(statements);
+  }
+  expect(reportCounts).toEqual([3, 3, 3]);
+  // Payload reads batch two comparisons; one ordered lock query covers every write.
+  expect(applyCounts).toEqual([8, 11, 17]);
+});
+
+test("canonical object ASTs are compared outside SQL transactions", async () => {
+  const eli = "eli/cz/canonical-summary";
+  await storeAll(work(eli));
+  const rows = await db
+    .select({
+      id: legislationDocuments.id,
+      documentAst: legislationDocuments.documentAst,
+    })
+    .from(legislationDocuments)
+    .where(eq(legislationDocuments.eli, eli));
+  const objects = new Map(
+    rows.map((row) => {
+      const key = `legislation/cze/versions/${row.id}/ast.zst`;
+      return [key, parsePersistedCorpusAst(row.documentAst)] as const;
+    }),
+  );
+  await db
+    .update(legislationDocuments)
+    .set({
+      documentAst: null,
+      astS3Key: sql`'legislation/cze/versions/' || ${legislationDocuments.id} || '/ast.zst'`,
+      changeSummary: null,
+    })
+    .where(eq(legislationDocuments.eli, eli));
+  let insideTransaction = false;
+  const objectReads = new Set<string>();
+  const trackedDb: ScopedDb = async (callback) =>
+    await scopedDb(async (tx) => {
+      insideTransaction = true;
+      try {
+        return await callback(tx);
+      } finally {
+        insideTransaction = false;
+      }
+    });
+  const refreshed = (
+    await refreshVersionChanges({
+      db: trackedDb,
+      works: [{ sourceId, eli, language: "cs" }],
+      readPayloads: async (options) =>
+        await readVersionChangePayloads({
+          ...options,
+          mode: "canonical",
+          readObjectAst: async (key) => {
+            objectReads.add(key);
+            expect(insideTransaction).toBe(false);
+            const object = objects.get(key);
+            return object === undefined
+              ? panic("Canonical fixture object is missing")
+              : object;
+          },
+        }),
+    })
+  ).unwrap();
+  expect(refreshed.written).toBe(3);
+  expect([...objectReads].toSorted()).toEqual([...objects.keys()].toSorted());
+  expect(await countsOf(eli)).toEqual(["first", ONE_WORD, ONE_PROVISION_ADDED]);
+});
+
+test("batch summaries refuse target and base revisions replaced after their read", async () => {
+  const eli = "eli/cz/revision-race-summary";
+  const ids = await storeAll(work(eli));
+  const first = ids.at(0);
+  if (first === undefined) {
+    panic("Revision race fixture has a first version");
+  }
+  await db
+    .update(legislationDocuments)
+    .set({ changeSummary: null })
+    .where(eq(legislationDocuments.eli, eli));
+  let replaced = false;
+  const result = (
+    await refreshVersionChanges({
+      db: scopedDb,
+      works: [{ sourceId, eli, language: "cs" }],
+      readPayloads: async (options) => {
+        const payloads = (await readVersionChangePayloads(options)).unwrap();
+        if (!replaced && payloads.has(first)) {
+          replaced = true;
+          await db
+            .update(legislationDocuments)
+            .set({
+              documentAst: ast([
+                heading("§ 1"),
+                paragraph("p1", "Změněné znění."),
+              ]),
+            })
+            .where(eq(legislationDocuments.id, first));
+        }
+        return Result.ok(payloads);
+      },
+    })
+  ).unwrap();
+  expect(replaced).toBe(true);
+  expect(result).toEqual({ planned: 3, written: 1, superseded: 2 });
+  expect(
+    (await summaries(eli)).map(({ summary }) => summary?.type ?? null),
+  ).toEqual([null, null, "compared"]);
+});
+
+test("history overflow returns a typed error without a partial comparison plan", async () => {
+  const eli = "eli/cz/version-history-bound";
+  await db.execute(sql`
+    INSERT INTO legislation_documents
+      (id, source_id, eli, title, country, language, version_valid_from)
+    SELECT gen_random_uuid(), ${sourceId}, ${eli}, 'Zákon o nájmu', 'CZE', 'cs',
+      DATE '1900-01-01' + n
+    FROM generate_series(1, 10001) AS series(n)
+  `);
+  try {
+    const result = await planVersionChangeTasks({
+      db: scopedDb,
+      works: [{ sourceId, eli, language: "cs" }],
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        _tag: "VersionChangeReadLimitError",
+        cap: 10_000,
+      });
+    }
+    const auditsBefore = await projectionAuditRows();
+    await recoverVersionChanges({
+      db: scopedDb,
+      works: [{ sourceId, eli, language: "cs" }],
+    });
+    expect(await projectionAuditRows()).toEqual(auditsBefore);
+  } finally {
+    await db
+      .delete(legislationDocuments)
+      .where(eq(legislationDocuments.eli, eli));
+  }
+});
+
+const projectionAuditRows = async () =>
+  await db
+    .select()
+    .from(systemAuditRuns)
+    .where(sql`${systemAuditRuns.actor} = 'system:legislation-version-changes'`)
+    .orderBy(asc(systemAuditRuns.id));
+
+describe("projection audit transaction", () => {
+  test.each(["commit", "audit-failure", "later-failure"] as const)(
+    "summary and audit rows settle together: %s",
+    async (outcome) => {
+      const eli = `eli/cz/projection-audit-${outcome}`;
+      await storeAll(work(eli));
+      await db
+        .update(legislationDocuments)
+        .set({ changeSummary: null })
+        .where(eq(legislationDocuments.eli, eli));
+      const before = await projectionAuditRows();
+      const tasks = (
+        await planVersionChangeTasks({
+          db: scopedDb,
+          works: [{ sourceId, eli, language: "cs" }],
+        })
+      ).unwrap();
+      const writes = (
+        await prepareVersionChanges({ db: scopedDb, tasks })
+      ).unwrap();
+      expect(writes).toHaveLength(3);
+      const result = await Result.tryPromise({
+        try: async () =>
+          await scopedDb(async (tx) => {
+            if (outcome === "audit-failure") {
+              await tx.execute(
+                sql`CREATE FUNCTION pg_temp.reject_projection_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'projection audit rejected'; END $$`,
+              );
+              await tx.execute(
+                sql`CREATE TRIGGER reject_projection_audit BEFORE INSERT ON system_audit_runs FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_projection_audit()`,
+              );
+            }
+            const value = await writePreparedVersionChangesTx(tx, writes);
+            if (outcome === "later-failure") {
+              await tx.execute(sql`SELECT 1 / 0`);
+            }
+            return value;
+          }),
+        catch: (cause) => cause,
+      });
+      const after = await projectionAuditRows();
+      switch (outcome) {
+        case "commit": {
+          expect(result.isOk()).toBe(true);
+          expect(await countsOf(eli)).toEqual([
+            "first",
+            ONE_WORD,
+            ONE_PROVISION_ADDED,
+          ]);
+          expect(
+            after.filter(({ id }) => !before.some((row) => row.id === id)),
+          ).toEqual([
+            expect.objectContaining({
+              actor: "system:legislation-version-changes",
+              counts: { summaries: 3 },
+            }),
+          ]);
+          const replay = (
+            await refreshVersionChanges({
+              db: scopedDb,
+              works: [{ sourceId, eli, language: "cs" }],
+            })
+          ).unwrap();
+          expect(replay.written).toBe(0);
+          expect(await projectionAuditRows()).toEqual(after);
+          break;
+        }
+        case "audit-failure":
+        case "later-failure":
+          expect(result.isErr()).toBe(true);
+          if (result.isErr()) {
+            expect(result.error).toMatchObject({
+              cause: expect.objectContaining({
+                message:
+                  outcome === "audit-failure"
+                    ? "projection audit rejected"
+                    : "division by zero",
+              }),
+            });
+          }
+          expect(await countsOf(eli)).toEqual([null, null, null]);
+          expect(after).toEqual(before);
+          break;
+        default:
+          outcome satisfies never;
+      }
+    },
+  );
+});
+
+const rejectProjectionAudits = async () => {
+  await db.execute(sql`CREATE TEMP SEQUENCE version_summary_audit_attempts`);
+  await db.execute(sql`
+    CREATE FUNCTION pg_temp.reject_version_summary_audit() RETURNS trigger
+    LANGUAGE plpgsql AS $$ BEGIN
+      PERFORM nextval('pg_temp.version_summary_audit_attempts');
+      RAISE EXCEPTION 'version summary audit rejected';
+    END $$
+  `);
+  await db.execute(sql`
+    CREATE TRIGGER reject_version_summary_audit
+    BEFORE INSERT ON system_audit_runs
+    FOR EACH ROW WHEN (NEW.actor = 'system:legislation-version-changes')
+    EXECUTE FUNCTION pg_temp.reject_version_summary_audit()
+  `);
+};
+
+const allowProjectionAudits = async () => {
+  await db.execute(
+    sql`DROP TRIGGER reject_version_summary_audit ON system_audit_runs`,
+  );
+  await db.execute(sql`DROP FUNCTION pg_temp.reject_version_summary_audit()`);
+  await db.execute(sql`DROP SEQUENCE pg_temp.version_summary_audit_attempts`);
+};
+
+test.each(["missing", "stale"] as const)(
+  "an identical skipped replay repairs a %s summary after an audit failure",
+  async (state) => {
+    const eli = `eli/cz/summary-replay-${state}`;
+    const input = work(eli).at(0);
+    if (input === undefined) {
+      panic("Replay fixture has a version");
+    }
+    const [id] = await storeAll([input]);
+    if (id === undefined) {
+      panic("Replay fixture was stored");
+    }
+    await db
+      .update(legislationDocuments)
+      .set({
+        changeSummary:
+          state === "missing"
+            ? null
+            : sql`jsonb_set(${legislationDocuments.changeSummary}, '{payloadRevision}', to_jsonb((${legislationDocuments.changeSummary}->>'payloadRevision')::bigint - 1))`,
+      })
+      .where(eq(legislationDocuments.id, id));
+    const before = await summaries(eli);
+    const auditsBefore = await projectionAuditRows();
+    await rejectProjectionAudits();
+    try {
+      const failed = await processLegislationDocument(input, scopedDb, {
+        corpus,
+      });
+      expect(failed).toMatchObject({ type: "stored", id, skipped: true });
+      expect(await summaries(eli)).toEqual(before);
+      expect(await projectionAuditRows()).toEqual(auditsBefore);
+      expect(
+        (
+          await db.execute(
+            sql`SELECT is_called FROM pg_temp.version_summary_audit_attempts`,
+          )
+        ).rows,
+      ).toEqual([{ is_called: true }]);
+    } finally {
+      await allowProjectionAudits();
+    }
+    const replay = await processLegislationDocument(input, scopedDb, {
+      corpus,
+    });
+    expect(replay).toMatchObject({ type: "stored", id, skipped: true });
+    expect(await countsOf(eli)).toEqual(["first"]);
+    const repaired = await projectionAuditRows();
+    expect(repaired).toHaveLength(auditsBefore.length + 1);
+    expect(repaired.at(-1)?.counts).toEqual({ summaries: 1 });
+    const freshSummaries = await summaries(eli);
+    const fresh = await processLegislationDocument(input, scopedDb, { corpus });
+    expect(fresh).toMatchObject({ type: "stored", id, skipped: true });
+    expect(await summaries(eli)).toEqual(freshSummaries);
+    expect(await projectionAuditRows()).toEqual(repaired);
+  },
+);
+
+const publisherWork = (eli: string) =>
+  work(eli).map((input, index) => ({
+    ...input,
+    expression: { publisherId: `version-changes:${eli}/${index}` },
+  }));
+
+const withdrawalFor = async (
+  input: ReturnType<typeof publisherWork>[number],
+  id: SafeId<"legislationDocument">,
+) => {
+  const row = (
+    await db
+      .select({
+        observedPayloadRevision: legislationDocuments.payloadRevision,
+        observedSourceHash: legislationDocuments.sourceHash,
+      })
+      .from(legislationDocuments)
+      .where(eq(legislationDocuments.id, id))
+  ).at(0);
+  if (row === undefined) {
+    return panic("Withdrawal fixture was stored");
+  }
+  return {
+    sourceId: input.sourceId,
+    eli: input.eli,
+    language: input.language,
+    publisherId: input.expression.publisherId,
+    basis: "publisher-unlisted",
+    ...row,
+  } as const;
+};
+
+test.each(["commit", "retry"] as const)(
+  "a withdrawal repairs the eligible successor: %s",
+  async (outcome) => {
+    const eli = `eli/cz/summary-withdrawal-${outcome}`;
+    const inputs = publisherWork(eli);
+    const ids = await storeAll(inputs);
+    const input = inputs.at(1);
+    const middleId = ids.at(1);
+    if (input === undefined || middleId === undefined) {
+      panic("Withdrawal fixture has three versions");
+    }
+    const withdrawal = await withdrawalFor(input, middleId);
+    if (outcome === "retry") {
+      const before = await summaries(eli);
+      const auditsBefore = await projectionAuditRows();
+      await rejectProjectionAudits();
+      try {
+        expect(
+          await withdrawLegislationVersions([withdrawal], scopedDb),
+        ).toEqual([{ type: "withdrawn", id: middleId }]);
+        expect(await summaries(eli)).toEqual(before);
+        expect(await projectionAuditRows()).toEqual(auditsBefore);
+        expect(
+          (
+            await db.execute(
+              sql`SELECT is_called FROM pg_temp.version_summary_audit_attempts`,
+            )
+          ).rows,
+        ).toEqual([{ is_called: true }]);
+      } finally {
+        await allowProjectionAudits();
+      }
+    }
+    expect(
+      await withdrawLegislationVersions([withdrawal, withdrawal], scopedDb),
+    ).toEqual([
+      { type: outcome === "commit" ? "withdrawn" : "unchanged", id: middleId },
+      { type: "unchanged", id: middleId },
+    ]);
+    expect((await countsOf(eli)).at(-1)).toEqual({
+      provisions: { changed: 1, added: 1, removed: 0 },
+      words: { inserted: 9, deleted: 1 },
+    });
+    const repaired = await projectionAuditRows();
+    expect(await withdrawLegislationVersions([withdrawal], scopedDb)).toEqual([
+      { type: "unchanged", id: middleId },
+    ]);
+    expect(await projectionAuditRows()).toEqual(repaired);
+  },
+);
+
+test("re-dating a version beyond its successor repairs the former successor", async () => {
+  const eli = "eli/cz/summary-redated-version";
+  const inputs = publisherWork(eli);
+  const ids = await storeAll(inputs);
+  const firstId = ids.at(0);
+  const middleId = ids.at(1);
+  const newestId = ids.at(2);
+  const middleInput = inputs.at(1);
+  if (
+    firstId === undefined ||
+    middleId === undefined ||
+    newestId === undefined ||
+    middleInput === undefined
+  ) {
+    panic("Redating fixture has three versions");
+  }
+  expect(await countsOf(eli)).toEqual(["first", ONE_WORD, ONE_PROVISION_ADDED]);
+  const moved = await processLegislationDocument(
+    {
+      ...middleInput,
+      effectiveDate: "2023-01-01",
+      version: {
+        type: "consolidation",
+        validFrom: "2023-01-01",
+        end: { type: "open" },
+      },
+    },
+    scopedDb,
+    { corpus },
+  );
+  expect(moved).toMatchObject({ type: "stored", id: middleId });
+  const formerSuccessor = (
+    await db
+      .select({ summary: legislationDocuments.changeSummary })
+      .from(legislationDocuments)
+      .where(eq(legislationDocuments.id, newestId))
+  ).at(0);
+  expect(formerSuccessor?.summary).toMatchObject({
+    type: "compared",
+    base: { documentId: firstId },
+    counts: {
+      provisions: { changed: 1, added: 1, removed: 0 },
+      words: { inserted: 9, deleted: 1 },
+    },
+  });
+});
+
+test.each(["payload", "withdrawal", "window", "method"] as const)(
+  "the first versions page validates its summary and off-page predecessor: %s",
+  async (change) => {
+    const eli = `eli/cz/summary-read-freshness-${change}`;
+    const ids = await storeAll(work(eli));
+    const middleId = ids.at(1);
+    const newestId = ids.at(2);
+    if (middleId === undefined || newestId === undefined) {
+      panic("Reader freshness fixture has three versions");
+    }
+    const readPage = async () => {
+      const page = await listStatuteVersionsHandler({
+        documentId: newestId,
+        query: { limit: 1 },
+        legislationDb,
+        surface: "pages",
+      });
+      if (!("items" in page)) {
+        return panic("Reader freshness page was refused");
+      }
+      return page.items;
+    };
+    expect(
+      (await readPage()).map(({ id, changes }) => ({ id, changes })),
+    ).toEqual([{ id: newestId, changes: ONE_PROVISION_ADDED }]);
+    await scopedDb(async (tx) => {
+      await declareWriterContract(tx);
+      switch (change) {
+        case "payload":
+          await tx
+            .update(legislationDocuments)
+            .set({ documentAst: ast([...WORDINGS.enacted]) })
+            .where(eq(legislationDocuments.id, middleId));
+          break;
+        case "withdrawal":
+          await tx
+            .update(legislationDocuments)
+            .set({
+              windowDisposition: "withdrawn",
+              windowDispositionBasis: "publisher-unlisted",
+            })
+            .where(eq(legislationDocuments.id, middleId));
+          break;
+        case "window":
+          await tx
+            .update(legislationDocuments)
+            .set({ versionValidFrom: "2023-01-01", versionValidTo: null })
+            .where(eq(legislationDocuments.id, middleId));
+          break;
+        case "method":
+          await tx
+            .update(legislationDocuments)
+            .set({
+              changeSummary: sql`jsonb_set(${legislationDocuments.changeSummary}, '{method}', to_jsonb(${STATUTE_VERSION_CHANGES_METHOD + 1}::integer))`,
+            })
+            .where(eq(legislationDocuments.id, newestId));
+          break;
+        default:
+          change satisfies never;
+      }
+    });
+    const rows = await readPage();
+    const newest = rows.find(({ id }) => id === newestId);
+    if (change === "window") {
+      // The re-dated predecessor now sorts first; read the former newest too.
+      const page = await listStatuteVersionsHandler({
+        documentId: newestId,
+        query: {},
+        legislationDb,
+        surface: "pages",
+      });
+      if (!("items" in page)) {
+        panic("Re-dated reader page was refused");
+      }
+      expect(page.items.find(({ id }) => id === newestId)?.changes).toBeNull();
+    } else {
+      expect(newest?.changes).toBeNull();
+    }
+  },
+);
+
+test("a replayed withdrawal batch reads each affected history once", async () => {
+  const inputs = publisherWork("eli/cz/withdrawal-summary-read-budget");
+  const ids = await storeAll(inputs);
+  const input = inputs.at(1);
+  const id = ids.at(1);
+  if (input === undefined || id === undefined) {
+    panic("Withdrawal read-budget fixture has three versions");
+  }
+  const withdrawal = await withdrawalFor(input, id);
+  await withdrawLegislationVersions([withdrawal], scopedDb);
+  let historyReads = 0;
+  const measured = drizzle({
+    client,
+    logger: {
+      logQuery: (query) => {
+        if (/^select\b/iu.test(query) && query.includes('"change_summary"')) {
+          historyReads += 1;
+        }
+      },
+    },
+  });
+  const measuredDb: ScopedDb = async (callback) =>
+    await measured.transaction(async (tx) => await callback(asTestRaw(tx)));
+  for (const count of [1, 10]) {
+    historyReads = 0;
+    const outcomes = await withdrawLegislationVersions(
+      Array.from({ length: count }, () => withdrawal),
+      measuredDb,
+    );
+    expect(outcomes).toEqual(
+      Array.from({ length: count }, () => ({ type: "unchanged", id })),
+    );
+    expect(historyReads).toBe(1);
+  }
+});

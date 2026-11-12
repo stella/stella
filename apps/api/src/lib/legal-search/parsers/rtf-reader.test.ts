@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 /**
  * The RTF reader against the constructs the court dialect states.
  *
@@ -292,10 +292,171 @@ describe("code pages", () => {
     expect(
       readRtf(
         bytesOf(
-          String.raw`{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fcharset0 Arial;}{\f1\fcharset128 MS Mincho;}}caf\'e9\f1 abc\par }`,
+          String.raw`{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fcharset0 Arial;}{\f1\fcharset130 Johab;}}caf\'e9\f1 abc\par }`,
         ),
       ).warnings,
     ).toBeUndefined();
+  });
+
+  test("a double-byte font's lead and trail byte read as one character", () => {
+    // A Hungarian writer that set "§" in a Japanese font: `\'81\'98` is "§"
+    // in Shift-JIS, and two undefined bytes in the document's windows-1250.
+    const fonts = String.raw`{\fonttbl{\f0\fcharset128 Arial;}{\f1\fcharset238 Arial CE;}}`;
+    const document = readRtf(
+      bytesOf(
+        String.raw`{\rtf1\ansi\ansicpg1250\deff0${fonts}\f0 Mt.134. \'81\'98 (2) \f1 bekezd\'e9se\par }`,
+      ),
+    );
+    expect(document.warnings).toBeUndefined();
+    expect(document.package.document.content.map(textOf)).toEqual([
+      "Mt.134. § (2) bekezdése",
+    ]);
+  });
+
+  test("every double-byte charset reads its pairs through its own code page", () => {
+    // Characters each set writes as a lead and a trail byte. A trail byte in
+    // the ASCII range is written literally, as RTF writers do: `\'83A` is
+    // "ア" in Shift-JIS, `\'bbO` is "臺" in Big5.
+    const CHARSETS = [
+      {
+        charset: 128,
+        bytes: String.raw`\'81\'98\'93\'8c\'8b\'9e\'83A\'83C`,
+        text: "§東京アイ",
+      },
+      {
+        charset: 129,
+        bytes: String.raw`\'a1\'d7\'bc\'ad\'bf\'ef\'b0\'a1\'b3\'aa`,
+        text: "§서울가나",
+      },
+      {
+        charset: 134,
+        bytes: String.raw`\'a1\'ec\'b1\'b1\'be\'a9\'d6\'d0\'81@`,
+        text: "§北京中丂",
+      },
+      {
+        charset: 136,
+        bytes: String.raw`\'a1\'b1\'bbO\'a5_\'a4\'a4\'a4\'e5`,
+        text: "§臺北中文",
+      },
+    ] as const;
+    for (const { charset, bytes, text } of CHARSETS) {
+      const document = readRtf(
+        bytesOf(
+          String.raw`{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fcharset0 Arial;}{\f1\fcharset${String(charset)} F;}}a {\f1 ${bytes}} b\par }`,
+        ),
+      );
+      expect(document.warnings).toBeUndefined();
+      expect(document.package.document.content.map(textOf)).toEqual([
+        `a ${text} b`,
+      ]);
+    }
+  });
+
+  test("Shift-JIS text reads as the decoder reads its bytes whole", () => {
+    // Any sequence of valid Shift-JIS characters, written byte by byte, in
+    // runs split at character boundaries by group and font changes.
+    const decoder = new TextDecoder("shift_jis", { fatal: true });
+    const character = fc
+      .tuple(
+        fc.oneof(
+          fc.integer({ min: 0x81, max: 0x9f }),
+          fc.integer({ min: 0xe0, max: 0xfc }),
+        ),
+        fc.oneof(
+          fc.integer({ min: 0x40, max: 0x7e }),
+          fc.integer({ min: 0x80, max: 0xfc }),
+        ),
+      )
+      .filter((pair) =>
+        Result.try(() => decoder.decode(Uint8Array.from(pair))).isOk(),
+      );
+    const piece = fc.record({
+      pairs: fc.array(character, { minLength: 1, maxLength: 6 }),
+      grouped: fc.boolean(),
+    });
+    assertProperty(
+      "Shift-JIS text reads as the decoder reads its bytes whole",
+      fc.property(fc.array(piece, { minLength: 1, maxLength: 6 }), (pieces) => {
+        const written = pieces
+          .map(({ pairs, grouped }) => {
+            const escaped = pairs
+              .flat()
+              .map((byte) =>
+                byte >= 0x80 || byte === 0x5c || byte === 0x7b || byte === 0x7d
+                  ? String.raw`\'${byte.toString(16)}`
+                  : String.fromCodePoint(byte),
+              )
+              .join("");
+            return grouped ? `{\\f0 ${escaped}}` : String.raw`\f0 ${escaped}`;
+          })
+          .join("");
+        const expected = pieces
+          .map(({ pairs }) => decoder.decode(Uint8Array.from(pairs.flat())))
+          .join("");
+        const document = readRtf(
+          bytesOf(
+            String.raw`{\rtf1\ansi\ansicpg1250\deff1{\fonttbl{\f0\fcharset128 MS Mincho;}{\f1\fcharset238 Arial CE;}}${written}\par }`,
+          ),
+        );
+        expect(document.warnings).toBeUndefined();
+        expect(document.package.document.content.map(textOf).join("")).toBe(
+          expected,
+        );
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  test("no byte or escape reaches the text as a C1 control character", () => {
+    // 0x81 is undefined in windows-1250; a lone Shift-JIS lead byte has no
+    // trail; `\u133` names U+0085. None is a character the writer typed.
+    const cases = [
+      {
+        rtf: String.raw`{\rtf1\ansi\ansicpg1250 a\'81b\par }`,
+        warning: "rtf: bytes undefined in windows-1250",
+      },
+      {
+        rtf: String.raw`{\rtf1\ansi\ansicpg1250\deff0{\fonttbl{\f0\fcharset128 F;}}a\'81\par }`,
+        warning: "rtf: bytes undefined in shift_jis",
+      },
+      {
+        rtf: String.raw`{\rtf1\ansi\ansicpg1252\uc1 a\u133?b\par }`,
+        warning: String.raw`rtf: \u names a C1 control character`,
+      },
+    ];
+    for (const { rtf, warning } of cases) {
+      const document = readRtf(bytesOf(rtf));
+      const text = document.package.document.content.map(textOf).join("");
+      expect(text).not.toMatch(/[\u0080-\u009f]/u);
+      expect(text).toContain(String.fromCodePoint(0xff_fd));
+      expect(document.warnings).toEqual([warning]);
+    }
+  });
+
+  test("no byte under any code page decodes to a C1 control character", () => {
+    assertProperty(
+      "no byte under any code page decodes to a C1 control character",
+      fc.property(
+        fc.constantFrom(1250, 1251, 1252, 1253, 1254, 1257, 874, 932, 949),
+        fc.array(fc.integer({ min: 0x80, max: 0xff }), { maxLength: 12 }),
+        (codePage, bytes) => {
+          const escaped = bytes
+            .map((byte) => String.raw`\'${byte.toString(16)}`)
+            .join("");
+          const document = readRtf(
+            bytesOf(
+              String.raw`{\rtf1\ansi\ansicpg${String(codePage)} ${escaped}\par }`,
+            ),
+          );
+          const text = document.package.document.content.map(textOf).join("");
+          expect(text).not.toMatch(/[\u0080-\u009f]/u);
+          expect(document.warnings === undefined).toBe(
+            !text.includes(String.fromCodePoint(0xff_fd)),
+          );
+        },
+      ),
+      { numRuns: 300 },
+    );
   });
 
   test("a code page outside the map is reported, not guessed at", () => {

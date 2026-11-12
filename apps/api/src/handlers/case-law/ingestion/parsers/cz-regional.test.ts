@@ -144,6 +144,32 @@ describe("parseRegionalDecision", () => {
       expect(introBlocks.length).toBe(2);
     });
 
+    test("maps the state and the formula in the header to the opening formula", () => {
+      const input = baseInput({
+        header: [
+          makePara("ČESKÁ REPUBLIKA"),
+          makePara("ROZSUDEK"),
+          makePara("JMÉNEM REPUBLIKY"),
+          makePara("Obvodní soud pro Prahu 1 rozhodl samosoudcem"),
+        ],
+      });
+
+      const { documentAst } = parseRegionalDecision(input);
+
+      expect(
+        documentAst.blocks.map((block) => [
+          block.type,
+          "role" in block ? block.role : undefined,
+          block.plainText,
+        ]),
+      ).toEqual([
+        ["paragraph", "opening-formula", "ČESKÁ REPUBLIKA"],
+        ["heading", "decision-title", "ROZSUDEK"],
+        ["paragraph", "opening-formula", "JMÉNEM REPUBLIKY"],
+        ["paragraph", "intro", "Obvodní soud pro Prahu 1 rozhodl samosoudcem"],
+      ]);
+    });
+
     test("adds the takto: lead-in before verdict", () => {
       const input = baseInput({
         verdict: [makePara("Žaloba se zamítá.")],

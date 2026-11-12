@@ -17,6 +17,12 @@ import {
   requiresPerCallChatApproval,
   USE_CONNECTOR_SECRET_TOOL_NAME,
 } from "@stll/api-contract/chat-secret";
+import {
+  formatReadableInputValue,
+  getCompleteConnectorInputRows,
+  getReadableInputRows,
+  humanizeIdentifier,
+} from "@stll/api-contract/chat-tool-input-rows";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -33,6 +39,7 @@ import {
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
@@ -64,11 +71,7 @@ import {
   buildRegistryWriteSummaryRows,
   findCachedReaderAnnotationRows,
   findReaderAnnotationMark,
-  formatReadableInputValue,
-  getCompleteConnectorInputRows,
-  getReadableInputRows,
   getReaderAnnotationEditTargetId,
-  humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
 import {
@@ -190,9 +193,12 @@ const SuggestChangesSummary = ({
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
       {activeFileName && (
-        <div className="text-foreground-strong-muted truncate font-medium">
+        <TruncatedText
+          className="text-foreground-strong-muted font-medium"
+          render={<div />}
+        >
           {activeFileName}
-        </div>
+        </TruncatedText>
       )}
       <div className="text-muted-foreground">
         {t("docxEditSummary", { count: operations.length })}
@@ -203,11 +209,13 @@ const SuggestChangesSummary = ({
           // oxlint-disable-next-line react/no-array-index-key -- previewEdits is a read-only summary of an immutable AI tool-call input; never edited/reordered by the user.
           key={index}
         >
-          <span className="text-foreground-strong-muted truncate">
+          <TruncatedText className="text-foreground-strong-muted">
             {edit.summary}
-          </span>
+          </TruncatedText>
           {edit.text !== null && (
-            <span className="text-muted-foreground truncate">{edit.text}</span>
+            <TruncatedText className="text-muted-foreground">
+              {edit.text}
+            </TruncatedText>
           )}
         </div>
       ))}
@@ -245,12 +253,19 @@ const CreateWorkspaceDocumentSummary = ({
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
-      <div className="text-foreground-strong-muted truncate font-medium">
+      <TruncatedText
+        className="text-foreground-strong-muted font-medium"
+        render={<div />}
+      >
         {fileName}
-      </div>
-      <div className="text-muted-foreground line-clamp-4 whitespace-pre-wrap">
+      </TruncatedText>
+      <TruncatedText
+        className="text-muted-foreground whitespace-pre-wrap"
+        lines={4}
+        render={<div />}
+      >
         {markdownPreview}
-      </div>
+      </TruncatedText>
     </div>
   );
 };
@@ -578,7 +593,7 @@ export const ToolApprovalCard = ({
     ? getToolOutputError(part.output)
     : undefined;
   const failureLabelKey = isFailed
-    ? toolFailureLabelKey(rawErrorDetails, part.state)
+    ? toolFailureLabelKey({ name, output: part.output, state: part.state })
     : undefined;
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
@@ -1070,7 +1085,7 @@ const RegistryWriteSummaryRow = ({
           className="size-3.5 shrink-0"
           matter={{ color: matter.color, id: matter.id }}
         />
-        <span className="truncate">{matter.name}</span>
+        <TruncatedText>{matter.name}</TruncatedText>
       </span>
     ) : (
       value
