@@ -232,21 +232,6 @@ export const envApiServerSchema = {
     "false",
   ),
   /**
-   * Test-only: how long a local run may wait for its computer to pick it up
-   * before the turn fails as not reached (the runner gateway's
-   * `unacceptedRunMs`), so a browser test reaches that failure in seconds.
-   */
-  E2E_DESKTOP_RUNNER_PICKUP_MS: v.optional(
-    v.pipe(
-      v.string(),
-      v.digits(),
-      v.toNumber(),
-      v.integer(),
-      v.minValue(1000),
-      v.maxValue(MAX_TIMER_DELAY_MS),
-    ),
-  ),
-  /**
    * Local executable the Dev menu runs to reach the public-law corpus that
    * PUBLIC_LAW_DATABASE_URL and CORPUS_INDEX_Q09_SEARCH_ENDPOINT point at
    * (for example, a script that opens local tunnels). It lives outside the
@@ -1051,7 +1036,6 @@ type EnvApiInvariantInput = InboundMailReceivingInput &
     BETTER_AUTH_URL: string;
     DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
     E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
-    E2E_DESKTOP_RUNNER_PICKUP_MS?: number | undefined;
     EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
     FEATURE_ACTION_ADMISSION?: boolean | undefined;
     FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
@@ -1316,7 +1300,6 @@ export const envApiInvariantViolation = ({
   BETTER_AUTH_URL,
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
-  E2E_DESKTOP_RUNNER_PICKUP_MS,
   EMAIL_PROVIDER,
   FEATURE_ACTION_ADMISSION,
   FEATURE_ORG_ACCESS_STATE,
@@ -1432,18 +1415,11 @@ export const envApiInvariantViolation = ({
       return "GOTENBERG_URL must use HTTPS unless it targets a loopback address or a private deployment network.";
     }
   }
-  const browserTestKnob = [
-    { name: "E2E_DISABLE_AUTH_RATE_LIMIT", set: E2E_DISABLE_AUTH_RATE_LIMIT },
-    {
-      name: "E2E_DESKTOP_RUNNER_PICKUP_MS",
-      set: E2E_DESKTOP_RUNNER_PICKUP_MS !== undefined,
-    },
-  ].find(({ set }) => set);
   if (
-    browserTestKnob !== undefined &&
+    E2E_DISABLE_AUTH_RATE_LIMIT &&
     !(localDevOpen && nodeEnv === NODE_ENV.development)
   ) {
-    return `${browserTestKnob.name} is test-only and requires NODE_ENV=development with STELLA_LOCAL_DEV=1.`;
+    return "E2E_DISABLE_AUTH_RATE_LIMIT is test-only and requires NODE_ENV=development with STELLA_LOCAL_DEV=1.";
   }
   if (DEV_PUBLIC_LAW_CONNECT_COMMAND !== undefined && !localDevOpen) {
     return "DEV_PUBLIC_LAW_CONNECT_COMMAND is only supported in local development and tests.";

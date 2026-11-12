@@ -1,5 +1,4 @@
 import { rootDb } from "@/api/db/root";
-import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import type { HttpServer } from "@/api/http/context";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
@@ -71,21 +70,6 @@ export const getDesktopRunnerControl = (): {
 
 let gateway: DesktopRunnerGateway | null = null;
 
-/** Sweeps per pickup window, so a run past it ends soon after. */
-const SWEEPS_PER_PICKUP_WINDOW = 4;
-
-/**
- * The pickup window a browser test shortens (`E2E_DESKTOP_RUNNER_PICKUP_MS`),
- * swept often enough to end a run soon after it; the defaults otherwise.
- */
-const browserTestTiming = (pickupMs: number | undefined) =>
-  pickupMs === undefined
-    ? {}
-    : {
-        limits: { unacceptedRunMs: pickupMs },
-        timing: { sweepIntervalMs: pickupMs / SWEEPS_PER_PICKUP_WINDOW },
-      };
-
 /** Start accepting runner sockets in this task; called once by the server boot. */
 export const startDesktopRunnerGateway = async () => {
   gateway ??= createDesktopRunnerGateway({
@@ -97,7 +81,6 @@ export const startDesktopRunnerGateway = async () => {
     mintRunToken: mintAgentRunToken,
     isKeyLive: desktopKeyLiveness(rootDb),
     isRunnerEnabled: runnerFeatureAccess({ db: rootDb }),
-    ...browserTestTiming(env.E2E_DESKTOP_RUNNER_PICKUP_MS),
   });
   await gateway.start();
 };
