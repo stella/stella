@@ -3540,6 +3540,32 @@ describe("chat turns on a computer", () => {
       );
     });
 
+    test("a run lost before its session was named starts the retry fresh", async () => {
+      const { chatThreadId } = await answeredThread("codex-session-lost");
+      const secondTurnId = await startTurn(chatThreadId);
+      await failedRunTurn(
+        chatThreadId,
+        secondTurnId,
+        async () => [],
+        "needs_login",
+      );
+      // As if the computer went quiet after the harness took the prompt and
+      // before the session's id arrived: the run is lost with no session.
+      await db
+        .update(desktopRunnerRuns)
+        .set({ state: "lost", outcome: null, harnessSessionId: null })
+        .where(eq(desktopRunnerRuns.chatTurnId, secondTurnId));
+
+      const again = await replayFrom(
+        chatThreadId,
+        await askedBy(secondTurnId),
+        "Work on the matter",
+      );
+      expect(
+        await runTurn(chatThreadId, again, "codex-session-lost-new"),
+      ).toBeNull();
+    });
+
     test("a run whose session took its prompt and ended unnamed starts the retry fresh", async () => {
       const { chatThreadId } = await answeredThread("codex-session-taken");
       const secondTurnId = await startTurn(chatThreadId);
