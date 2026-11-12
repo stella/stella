@@ -437,6 +437,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("request-lifetime.fixture.ts", [
     "request-lifetime/confine-request-reads",
   ]),
+  fixtureRuleOverride("no-literal-document-byte-limit.fixture.ts", [
+    "no-literal-document-byte-limit/no-literal-document-byte-limit",
+  ]),
   fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
     "no-ambient-nondeterminism/no-ambient-nondeterminism",
   ]),

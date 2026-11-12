@@ -274,11 +274,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/load/document-bytes-admission.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/observability/event-loop-delay.test.ts": {
     "count": 4,
     "owner": "api",

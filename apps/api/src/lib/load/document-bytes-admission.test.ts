@@ -14,7 +14,8 @@ describe("byte admission", () => {
       secondAdmitted = true;
       return release;
     });
-    await Bun.sleep(5);
+    // Nothing grants a waiter but a release, so settled microtasks are enough.
+    await Promise.resolve();
     expect(secondAdmitted).toBeFalse();
 
     first?.();
@@ -45,7 +46,8 @@ describe("byte admission", () => {
       order.push("small");
       return release;
     });
-    await Bun.sleep(5);
+    // Nothing grants a waiter but a release, so settled microtasks are enough.
+    await Promise.resolve();
     // The small one would fit beside the running work, but it queued behind
     // the large one.
     expect(order).toEqual([]);
