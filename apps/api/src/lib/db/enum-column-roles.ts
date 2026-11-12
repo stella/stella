@@ -390,6 +390,15 @@ export const ENUM_COLUMN_ROLES = {
   justifications: {
     entity_feature_gate: ATTRIBUTE,
   },
+  legal_graph_edges: {
+    confidence: ATTRIBUTE,
+    entity_feature_gate: ATTRIBUTE,
+    from_kind: ATTRIBUTE,
+    kind: ATTRIBUTE,
+    producer_kind: ATTRIBUTE,
+    stance: ATTRIBUTE,
+    to_kind: ATTRIBUTE,
+  },
   legal_list_claim_carry_outcomes: {
     entity_feature_gate: ATTRIBUTE,
     outcome: ATTRIBUTE,

@@ -755,6 +755,36 @@ const FAKE_SCENARIOS = {
       additionalDetails: null,
     }),
   ],
+  /** stella's MCP server fails to start after the turn began. */
+  stella_mcp_failed: [
+    ...freshTurn(),
+    {
+      notify: "mcpServer/startupStatus/updated",
+      params: {
+        name: "stella",
+        status: "failed",
+        error: "connection refused",
+        failureReason: null,
+        threadId: FAKE_THREAD_ID,
+      },
+    },
+    { sleep: 5000 },
+  ],
+  /** A member's own MCP server fails; the turn runs on. */
+  other_mcp_failed: [
+    ...freshTurn(),
+    {
+      notify: "mcpServer/startupStatus/updated",
+      params: {
+        name: "their-notes",
+        status: "failed",
+        error: "connection refused",
+        failureReason: null,
+        threadId: FAKE_THREAD_ID,
+      },
+    },
+    completed(),
+  ],
   /** A message completes, then the model is at capacity before the next. */
   capacity_retry: [
     ...freshTurn(),

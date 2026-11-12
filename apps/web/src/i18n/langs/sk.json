@@ -1966,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {Na vás čaká # chat} few {Na vás čakajú # chaty} many {Na vás čaká # chatu} other {Na vás čaká # chatov}}",
-      "working": "{count, plural, one {Pracuje # chat} few {Pracujú # chaty} many {Pracuje # chatu} other {Pracuje # chatov}}"
+      "waitsOn": {
+        "approval": "Čaká na vaše schválenie",
+        "askUser": "Pýta sa vás",
+        "clientTool": "Pokračuje, keď otvoríte chat",
+        "harnessQuestion": "Agent vo vašom počítači má otázku"
+      },
+      "working": "{count, plural, one {Pracuje # chat} few {Pracujú # chaty} many {Pracuje # chatu} other {Pracuje # chatov}}",
+      "workingNow": "Pracuje"
     },
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mcpReconnect": {
@@ -4467,7 +4474,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Vytvorte playbook na kontrolu zmlúv pozíciu po pozícii na základe vašich predtým podpísaných zmlúv, krátkeho rozhovoru a bežných trhových štandardov.",
-          "name": "Vytvoriť playbook"
+          "name": "Vytvoriť playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pridaj pozície do jedného z mojich existujúcich playbookov.",
+              "name": "Rozšíriť playbook"
+            },
+            "fromContracts": {
+              "body": "Vytvor playbook pre dohody o mlčanlivosti z mojich predtým podpísaných dohôd.",
+              "name": "Začať z predošlých zmlúv"
+            },
+            "fromMarketStandards": {
+              "body": "Vytvor playbook pre dodávateľské zmluvy a vychádzaj z bežných trhových pozícií.",
+              "name": "Začať z trhových štandardov"
+            }
+          }
         }
       },
       "builtInSection": "Vstavané zručnosti",
@@ -4717,6 +4738,10 @@
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",
+      "pendingPane": {
+        "description": "Odpovedzte na otázky v chate. Keď schválite prvé uloženie, playbook sa otvorí tu a môžete ho upravovať popri konverzácii.",
+        "title": "Váš playbook sa zobrazí tu"
+      },
       "positionOfTotal": "Pozícia {index} z {total}",
       "positionRemoved": "Pozícia odstránená",
       "positions": "Pozície",

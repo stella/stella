@@ -1966,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat aguarda você} other {# chats aguardam você} many {# chats aguardam você}}",
-      "working": "{count, plural, one {# chat em andamento} other {# chats em andamento} many {# chats em andamento}}"
+      "waitsOn": {
+        "approval": "Aguarda sua aprovação",
+        "askUser": "Faz uma pergunta a você",
+        "clientTool": "Continua quando você abrir este chat",
+        "harnessQuestion": "O agente no seu computador tem uma pergunta"
+      },
+      "working": "{count, plural, one {# chat em andamento} other {# chats em andamento} many {# chats em andamento}}",
+      "workingNow": "Em andamento"
     },
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
     "mcpReconnect": {
@@ -4467,7 +4474,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Crie um playbook de revisão de contratos posição por posição, com base nos seus contratos já assinados, em uma breve entrevista e nos padrões usuais de mercado.",
-          "name": "Criar um playbook"
+          "name": "Criar um playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Adicione posições a um dos meus playbooks existentes.",
+              "name": "Ampliar um playbook"
+            },
+            "fromContracts": {
+              "body": "Crie um playbook para acordos de confidencialidade com base nos meus acordos já assinados.",
+              "name": "Começar por contratos anteriores"
+            },
+            "fromMarketStandards": {
+              "body": "Crie um playbook para contratos com fornecedores, partindo das posições usuais de mercado.",
+              "name": "Começar pelos padrões de mercado"
+            }
+          }
         }
       },
       "builtInSection": "Habilidades integradas",
@@ -4717,6 +4738,10 @@
       "optionPlaceholder": "Valor da opção",
       "optionsLabel": "Opções",
       "outline": "Esquema",
+      "pendingPane": {
+        "description": "Responda às perguntas no chat. Depois que você aprovar o primeiro salvamento, o playbook abre aqui e você pode editá-lo ao lado da conversa.",
+        "title": "Seu playbook aparecerá aqui"
+      },
       "positionOfTotal": "Posição {index} de {total}",
       "positionRemoved": "Posição removida",
       "positions": "Posições",

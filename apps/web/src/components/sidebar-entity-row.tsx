@@ -12,6 +12,8 @@ import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import { MatterActivityRow } from "@/components/matter-activity-row";
 import { SidebarMenuSubItem } from "@/components/sidebar";
+import type { TaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
+import { useTaskStatusAction } from "@/components/workspaces/tasks/task-status-menu";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
@@ -24,6 +26,8 @@ type SidebarEntityRowProps = {
   onDelete: (opener: HTMLElement | null) => void;
   name: string;
   onOpen: () => void;
+  /** A task's status, which its menu can change; `null` for other kinds. */
+  taskStatus: TaskStatus | null;
   workspaceId: string;
 };
 
@@ -35,12 +39,14 @@ export const SidebarEntityRow = ({
   onDelete,
   name,
   onOpen,
+  taskStatus,
   workspaceId,
 }: SidebarEntityRowProps) => {
   const t = useTranslations();
   const returnFocus = useRef<HTMLButtonElement | null>(null);
   const renameEntity = useRenameEntity();
-  const canRename = usePermissions({ entity: ["update"] });
+  const canUpdate = usePermissions({ entity: ["update"] });
+  const taskStatusAction = useTaskStatusAction(workspaceId);
   const canDelete = usePermissions({ entity: ["delete"] });
   const rename = useInlineRename({
     initial: name,
@@ -52,7 +58,7 @@ export const SidebarEntityRow = ({
     },
   });
   const actions: EntityAction[] = [
-    ...(canRename
+    ...(canUpdate
       ? [
           {
             icon: <PenLineIcon />,
@@ -60,6 +66,9 @@ export const SidebarEntityRow = ({
             onClick: () => rename.startEditing(),
           },
         ]
+      : []),
+    ...(canUpdate && taskStatus !== null
+      ? [taskStatusAction(entityId, taskStatus)]
       : []),
     ...(canDelete
       ? [

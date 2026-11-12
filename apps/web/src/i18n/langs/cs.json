@@ -1966,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {Na vás čeká # chat} few {Na vás čekají # chaty} many {Na vás čeká # chatu} other {Na vás čeká # chatů}}",
-      "working": "{count, plural, one {Pracuje # chat} few {Pracují # chaty} many {Pracuje # chatu} other {Pracuje # chatů}}"
+      "waitsOn": {
+        "approval": "Čeká na vaše schválení",
+        "askUser": "Ptá se vás",
+        "clientTool": "Pokračuje, až chat otevřete",
+        "harnessQuestion": "Agent ve vašem počítači má dotaz"
+      },
+      "working": "{count, plural, one {Pracuje # chat} few {Pracují # chaty} many {Pracuje # chatu} other {Pracuje # chatů}}",
+      "workingNow": "Pracuje"
     },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mcpReconnect": {
@@ -4467,7 +4474,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Vytvořte playbook pro kontrolu smluv pozici po pozici na základě vašich dříve podepsaných smluv, krátkého rozhovoru a běžných tržních standardů.",
-          "name": "Vytvořit playbook"
+          "name": "Vytvořit playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Přidej pozice do jednoho z mých stávajících playbooků.",
+              "name": "Rozšířit playbook"
+            },
+            "fromContracts": {
+              "body": "Vytvoř playbook pro dohody o mlčenlivosti z mých dříve podepsaných dohod.",
+              "name": "Začít z dřívějších smluv"
+            },
+            "fromMarketStandards": {
+              "body": "Vytvoř playbook pro dodavatelské smlouvy a vyjdi z běžných tržních pozic.",
+              "name": "Začít z tržních standardů"
+            }
+          }
         }
       },
       "builtInSection": "Vestavěné dovednosti",
@@ -4717,6 +4738,10 @@
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",
+      "pendingPane": {
+        "description": "Odpovězte na otázky v chatu. Jakmile schválíte první uložení, playbook se otevře zde a můžete ho upravovat vedle konverzace.",
+        "title": "Váš playbook se zobrazí zde"
+      },
       "positionOfTotal": "Pozice {index} z {total}",
       "positionRemoved": "Pozice odstraněna",
       "positions": "Pozice",

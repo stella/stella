@@ -1966,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# conversation vous attend} other {# conversations vous attendent} many {# conversations vous attendent}}",
-      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}"
+      "waitsOn": {
+        "approval": "Attend votre approbation",
+        "askUser": "Vous pose une question",
+        "clientTool": "Reprend quand vous ouvrez cette conversation",
+        "harnessQuestion": "L’agent sur votre ordinateur a une question"
+      },
+      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}",
+      "workingNow": "En cours"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mcpReconnect": {
@@ -4467,7 +4474,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Créez un playbook de revue de contrats critère par critère, à partir de vos contrats déjà signés, d’un court entretien et des usages du marché.",
-          "name": "Créer un playbook"
+          "name": "Créer un playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Ajoute des critères à l’un de mes playbooks existants.",
+              "name": "Compléter un playbook"
+            },
+            "fromContracts": {
+              "body": "Crée un playbook pour les accords de confidentialité à partir de mes accords déjà signés.",
+              "name": "Partir de contrats passés"
+            },
+            "fromMarketStandards": {
+              "body": "Crée un playbook pour les contrats fournisseurs en partant des critères conformes aux usages du marché.",
+              "name": "Partir des usages du marché"
+            }
+          }
         }
       },
       "builtInSection": "Compétences intégrées",
@@ -4717,6 +4738,10 @@
       "optionPlaceholder": "Valeur de l'option",
       "optionsLabel": "Options",
       "outline": "Plan",
+      "pendingPane": {
+        "description": "Répondez aux questions dans la conversation. Une fois le premier enregistrement approuvé, le playbook s’ouvre ici et vous pouvez le modifier à côté de la conversation.",
+        "title": "Votre playbook apparaîtra ici"
+      },
       "positionOfTotal": "Critère {index} sur {total}",
       "positionRemoved": "Critère supprimé",
       "positions": "Critères",

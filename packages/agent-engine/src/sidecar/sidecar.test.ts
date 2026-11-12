@@ -464,6 +464,31 @@ describe("harness holder over its socket", () => {
     await desktop(holder);
   });
 
+  test("a newer desktop's hello makes a holder with no runs exit, after the rejection", async () => {
+    const holder = await spawnHolder();
+    const newer = await connect(holder.endpoint);
+    newer.send({ ...helloMessage(holder), protocol: SIDECAR_PROTOCOL + 1 });
+    expect(await newer.waitFor(is("rejected"))).toMatchObject({
+      reason: "protocol_mismatch",
+    });
+    expect(await holder.exited).toBe(0);
+  });
+
+  test("a newer desktop's hello lets a holder finish its runs before it exits", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "interrupt_queued");
+    await client.waitFor(is("run.event", runId));
+    const newer = await connect(holder.endpoint);
+    newer.send({ ...helloMessage(holder), protocol: SIDECAR_PROTOCOL + 1 });
+    await newer.waitFor(is("rejected"));
+    // The run it holds still runs and reaches its desktop.
+    client.send({ type: "run.cancel", runId });
+    const finished = await client.waitFor(is("run.finished", runId));
+    client.send({ type: "ack", runId, seq: finished.seq });
+    expect(await holder.exited).toBe(0);
+  });
+
   test("rejects unknown and invalid lines once authenticated", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);

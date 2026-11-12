@@ -1966,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# pokalbis laukia jūsų} few {# pokalbiai laukia jūsų} many {# pokalbio laukia jūsų} other {# pokalbių laukia jūsų}}",
-      "working": "{count, plural, one {# pokalbis vykdomas} few {# pokalbiai vykdomi} many {# pokalbio vykdoma} other {# pokalbių vykdoma}}"
+      "waitsOn": {
+        "approval": "Laukia jūsų patvirtinimo",
+        "askUser": "Užduoda jums klausimą",
+        "clientTool": "Tęsis, kai atidarysite šį pokalbį",
+        "harnessQuestion": "Jūsų kompiuteryje veikiantis agentas turi klausimą"
+      },
+      "working": "{count, plural, one {# pokalbis vykdomas} few {# pokalbiai vykdomi} many {# pokalbio vykdoma} other {# pokalbių vykdoma}}",
+      "workingNow": "Vykdoma"
     },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mcpReconnect": {
@@ -4467,7 +4474,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Kurkite sutarčių peržiūros vadovą pozicija po pozicijos, remdamiesi anksčiau pasirašytomis sutartimis, trumpu pokalbiu ir įprastais rinkos standartais.",
-          "name": "Kurti peržiūros vadovą"
+          "name": "Kurti peržiūros vadovą",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pridėk pozicijų į vieną iš mano esamų peržiūros vadovų.",
+              "name": "Papildyti peržiūros vadovą"
+            },
+            "fromContracts": {
+              "body": "Sukurk konfidencialumo sutarčių peržiūros vadovą pagal mano anksčiau pasirašytas sutartis.",
+              "name": "Pradėti nuo ankstesnių sutarčių"
+            },
+            "fromMarketStandards": {
+              "body": "Sukurk tiekimo sutarčių peržiūros vadovą pagal įprastas rinkos pozicijas.",
+              "name": "Pradėti nuo rinkos standartų"
+            }
+          }
         }
       },
       "builtInSection": "Integruoti įgūdžiai",
@@ -4717,6 +4738,10 @@
       "optionPlaceholder": "Parinkties reikšmė",
       "optionsLabel": "Parinktys",
       "outline": "Struktūra",
+      "pendingPane": {
+        "description": "Atsakykite į klausimus pokalbyje. Kai patvirtinsite pirmąjį išsaugojimą, peržiūros vadovas atsidarys čia ir galėsite jį redaguoti šalia pokalbio.",
+        "title": "Jūsų peržiūros vadovas atsiras čia"
+      },
       "positionOfTotal": "Pozicija {index} iš {total}",
       "positionRemoved": "Pozicija pašalinta",
       "positions": "Pozicijos",

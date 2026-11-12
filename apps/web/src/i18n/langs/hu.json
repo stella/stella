@@ -1966,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# csevegés vár Önre} other {# csevegés vár Önre}}",
-      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}"
+      "waitsOn": {
+        "approval": "Az Ön jóváhagyására vár",
+        "askUser": "Kérdést tesz fel Önnek",
+        "clientTool": "Folytatódik, amikor megnyitja ezt a csevegést",
+        "harnessQuestion": "Az Ön számítógépén futó ügynöknek kérdése van"
+      },
+      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}",
+      "workingNow": "Folyamatban"
     },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mcpReconnect": {
@@ -4467,7 +4474,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Hozzon létre szerződés-felülvizsgálati playbookot álláspontról álláspontra, a korábban aláírt szerződései, egy rövid interjú és a szokásos piaci standardok alapján.",
-          "name": "Playbook létrehozása"
+          "name": "Playbook létrehozása",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Adj hozzá álláspontokat az egyik meglévő playbookomhoz.",
+              "name": "Playbook bővítése"
+            },
+            "fromContracts": {
+              "body": "Készíts playbookot titoktartási megállapodásokhoz a korábban aláírt megállapodásaim alapján.",
+              "name": "Kiindulás korábbi szerződésekből"
+            },
+            "fromMarketStandards": {
+              "body": "Készíts playbookot beszállítói szerződésekhez a szokásos piaci álláspontokból kiindulva.",
+              "name": "Kiindulás a piaci standardokból"
+            }
+          }
         }
       },
       "builtInSection": "Beépített készségek",
@@ -4717,6 +4738,10 @@
       "optionPlaceholder": "Lehetőség értéke",
       "optionsLabel": "Lehetőségek",
       "outline": "Vázlat",
+      "pendingPane": {
+        "description": "Válaszoljon a kérdésekre a csevegésben. Miután jóváhagyta az első mentést, a playbook itt nyílik meg, és a beszélgetés mellett szerkesztheti.",
+        "title": "A playbook itt fog megjelenni"
+      },
       "positionOfTotal": "{index}. álláspont, összesen {total}",
       "positionRemoved": "Álláspont eltávolítva",
       "positions": "Álláspontok",

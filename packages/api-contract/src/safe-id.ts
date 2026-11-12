@@ -109,6 +109,7 @@ export type SafeIdType =
   | "desktopEditSession"
   | "legalListClaim"
   | "legalListClaimReviewEvent"
+  | "legalGraphEdge"
   | "legalListVerificationRun"
   | "bilingualTranslationRun"
   | "bilingualTranslationRow"

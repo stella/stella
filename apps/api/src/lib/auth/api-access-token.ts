@@ -69,6 +69,14 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/ai/draft-email.ts",
     uncataloged: "native_tool_ui",
   },
+  // A question about the open email. Naming a matter adds that matter's
+  // search results, read under the token's own scopes, so a token without
+  // `stella:read` gets an answer from the email alone.
+  "POST /v1/ai/ask-email": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/ask-email.ts",
+    uncataloged: "native_tool_ui",
+  },
   "GET /v1/workspaces/:workspaceId/vocabulary": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/vocabulary/get.ts",

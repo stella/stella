@@ -1966,7 +1966,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat is waiting for you} other {# chats are waiting for you}}",
-      "working": "{count, plural, one {# chat is working} other {# chats are working}}"
+      "waitsOn": {
+        "approval": "Needs your approval",
+        "askUser": "Asks you a question",
+        "clientTool": "Continues when you open this chat",
+        "harnessQuestion": "The agent on your computer has a question"
+      },
+      "working": "{count, plural, one {# chat is working} other {# chats are working}}",
+      "workingNow": "Working"
     },
     "maxAttachmentsReached": "Maximum {count} files per message",
     "mcpReconnect": {
@@ -4467,7 +4474,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Build a contract review playbook position by position, drawing on your past signed contracts, a short interview, and market-standard defaults.",
-          "name": "Build a playbook"
+          "name": "Build a playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Add positions to one of my existing playbooks.",
+              "name": "Extend a playbook"
+            },
+            "fromContracts": {
+              "body": "Build a non-disclosure agreement playbook from my past signed agreements.",
+              "name": "Start from past contracts"
+            },
+            "fromMarketStandards": {
+              "body": "Build a playbook for supplier agreements, starting from market-standard positions.",
+              "name": "Start from market standards"
+            }
+          }
         }
       },
       "builtInSection": "Built-in skills",
@@ -4717,6 +4738,10 @@
       "optionPlaceholder": "Option value",
       "optionsLabel": "Options",
       "outline": "Outline",
+      "pendingPane": {
+        "description": "Answer the questions in the chat. After you approve the first save, the playbook opens here and you can edit it next to the conversation.",
+        "title": "Your playbook will appear here"
+      },
       "positionOfTotal": "Position {index} of {total}",
       "positionRemoved": "Position removed",
       "positions": "Positions",
