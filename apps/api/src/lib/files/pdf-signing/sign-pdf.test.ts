@@ -1,10 +1,12 @@
 import { PDF } from "@libpdf/core";
+import type { TimestampAuthority } from "@libpdf/core";
 import { beforeEach, describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { archivalTimestampSize } from "@/api/lib/files/pdf-signing/archival-timestamp";
 import { createTrackedRevocationProvider } from "@/api/lib/files/pdf-signing/revocation";
 import {
   applySignature,
@@ -75,6 +77,48 @@ const buildBasePdf = async () => {
 
 const SIGNING_TIME = new Date("2026-06-01T12:00:00.000Z");
 
+/** Trust in exactly these anchors, nothing shipped. */
+const anchorTrust = (anchors: readonly Uint8Array[]) => ({
+  anchors,
+  pinnedUnits: new Set<string>(),
+});
+
+/**
+ * An authority that answers the signature's timestamp from `first` and every
+ * later request, the archival document timestamp, from `later`.
+ */
+const scriptedAuthority = (
+  first: TimestampAuthority,
+  later: TimestampAuthority,
+): TimestampAuthority => {
+  let calls = 0;
+  return {
+    timestamp: async (digest, algorithm) => {
+      calls += 1;
+      return await (calls === 1 ? first : later).timestamp(digest, algorithm);
+    },
+  };
+};
+
+const latin1 = (bytes: Uint8Array) => Buffer.from(bytes).toString("latin1");
+
+/**
+ * The `/ByteRange` of the last document timestamp; LibPDF writes it after
+ * the dictionary's `/Type`.
+ */
+const docTimeStampByteRange = (bytes: Uint8Array) => {
+  const text = latin1(bytes);
+  const at = text.lastIndexOf("/DocTimeStamp");
+  if (at === -1) {
+    return null;
+  }
+  const dictionary = text.slice(at);
+  const match = /\/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]/u.exec(
+    dictionary,
+  );
+  return match === null ? null : match.slice(1).map(Number);
+};
+
 const digestOf = async (
   invocation: Parameters<typeof captureSigningDigest>[0],
 ) => (await settled(captureSigningDigest(invocation))).digestHex;
@@ -102,7 +146,7 @@ const buildInvocation = async () => {
       signatureAlgorithm: "RSASSA-PKCS1-v1_5" as const,
       signingTime: SIGNING_TIME,
       stamp: null,
-      timestampTrustAnchors: [] as Uint8Array[],
+      timestampTrust: anchorTrust([]),
     },
     privateKey,
   };
@@ -260,13 +304,15 @@ describe("two-phase PDF signing", () => {
           },
           { authority: working, url: "https://tsa-up.example/" },
         ],
-        timestampTrustAnchors: [working.signer.der],
+        timestampTrust: anchorTrust([working.signer.der]),
       }),
     );
 
     // The timestamp is phase 2's alone: adding it did not change the digest
-    // phase 1 published, or the signer above would have refused.
-    expect(working.issued()).toBe(1);
+    // phase 1 published, or the signer above would have refused. The second
+    // token is the archival one, fetched down the same list.
+    expect(working.issued()).toBe(2);
+    expect(applied.level).toBe("B-LTA");
     expect(applied.timestampAuthorityUrl).toBe("https://tsa-up.example/");
     expect(applied.bytes.byteLength).toBeGreaterThan(
       invocation.basePdf.byteLength,
@@ -278,15 +324,23 @@ describe("two-phase PDF signing", () => {
     const ROOT_CRL_URL = "http://crl.example/root.crl";
 
     const signUnderIssuingCa = async ({
+      archivalAuthority,
       chainComplete,
       crlServed = true,
+      extraCrls = {},
       leafRevoked = false,
+      now,
       timestampAnchors,
       timestampSigner,
     }: {
+      /** Answers every timestamp request after the signature's own. */
+      archivalAuthority?: TimestampAuthority;
       chainComplete: boolean;
       crlServed?: boolean;
+      /** More CRLs the revocation fetcher serves, by URL. */
+      extraCrls?: Record<string, Uint8Array>;
       leafRevoked?: boolean;
+      now?: () => number;
       /** Default: pin the timestamp authority's own certificate. */
       timestampAnchors?: (signer: TestCertificate) => Uint8Array[];
       timestampSigner?: TestCertificate;
@@ -323,7 +377,7 @@ describe("two-phase PDF signing", () => {
           if (url === ROOT_CRL_URL) {
             return rootCrl;
           }
-          return url === CRL_URL ? crl : null;
+          return url === CRL_URL ? crl : (extraCrls[url] ?? null);
         },
       });
 
@@ -371,11 +425,18 @@ describe("two-phase PDF signing", () => {
             revocationProvider,
             signature,
             timestampAuthorities: [
-              { authority: tsa, url: "https://tsa.example/" },
+              {
+                authority:
+                  archivalAuthority === undefined
+                    ? tsa
+                    : scriptedAuthority(tsa, archivalAuthority),
+                url: "https://tsa.example/",
+              },
             ],
-            timestampTrustAnchors: (
-              timestampAnchors ?? ((signer) => [signer.der])
-            )(tsa.signer),
+            ...(now !== undefined && { now }),
+            timestampTrust: anchorTrust(
+              (timestampAnchors ?? ((signer) => [signer.der]))(tsa.signer),
+            ),
           }),
         );
         return {
@@ -384,6 +445,7 @@ describe("two-phase PDF signing", () => {
           crl,
           fetched,
           globalFetches,
+          tsa,
         };
       } finally {
         testFetchState.restore();
@@ -402,7 +464,7 @@ describe("two-phase PDF signing", () => {
         ),
       ).toBe(true);
 
-      expect(applied.level).toBe("B-LT");
+      expect(applied.level).toBe("B-LTA");
       expect(applied.warnings).toEqual([]);
       expect(fetched).toContain(CRL_URL);
       expect(globalFetches).toEqual([]);
@@ -450,17 +512,20 @@ describe("two-phase PDF signing", () => {
       );
     });
 
-    test("never counts time from an authority no anchor vouches for", async () => {
+    test("timestamps with an authority no anchor vouches for, and says so", async () => {
+      // A public, non-qualified authority: the level names what the
+      // signature carries; trust is the validator's call, reported here.
       const { applied } = await signUnderIssuingCa({
         chainComplete: true,
         timestampAnchors: () => [],
       });
 
-      expect(applied.level).toBe("B-B");
+      expect(applied.level).toBe("B-LTA");
       expect(applied.timestampAuthorityUrl).toBe("https://tsa.example/");
-      expect(applied.warnings.map(({ code }) => code)).toContain(
+      expect(applied.warnings.map(({ code }) => code)).toEqual([
         "TIMESTAMP_UNTRUSTED",
-      );
+        "ARCHIVE_TIMESTAMP_UNTRUSTED",
+      ]);
     });
 
     test("trusts time whose chain reaches a configured CA", async () => {
@@ -509,10 +574,177 @@ describe("two-phase PDF signing", () => {
         timestampSigner: minted,
       });
 
-      expect(applied.level).toBe("B-B");
-      expect(applied.warnings.map(({ code }) => code)).toContain(
-        "TIMESTAMP_UNTRUSTED",
+      // Its chain cannot be completed either, so no validation data.
+      expect(applied.level).toBe("B-T");
+      expect(applied.warnings.map(({ code }) => code)).toEqual(
+        expect.arrayContaining([
+          "TIMESTAMP_UNTRUSTED",
+          "TIMESTAMP_CHAIN_INCOMPLETE",
+        ]),
       );
+    });
+
+    describe("the archival document timestamp", () => {
+      const ARCHIVE_CRL_URL = "http://crl.example/archive-tsa.crl";
+
+      /** An archival authority issued by its own CA, with a CRL URL. */
+      const archivalAuthorityUnderCa = async () => {
+        const tsaCa = await createTestCertificate({
+          keyPool,
+          commonName: "Archive timestamp CA",
+          isCa: true,
+        });
+        const authority = await createTestTimestampAuthority({
+          signer: await createTestTimestampCertificate({
+            keyPool,
+            crlUrl: ARCHIVE_CRL_URL,
+            issuer: tsaCa,
+          }),
+        });
+        return { authority, crl: await createTestCrl(tsaCa), tsaCa };
+      };
+
+      test("seals the B-LT document with a document timestamp over all of it", async () => {
+        const { applied, basePdf, crl, tsa } = await signUnderIssuingCa({
+          chainComplete: true,
+        });
+
+        expect(applied.level).toBe("B-LTA");
+        expect(applied.warnings).toEqual([]);
+        expect(tsa.issued()).toBe(2);
+        expect(
+          Buffer.from(applied.bytes.subarray(0, basePdf.byteLength)).equals(
+            Buffer.from(basePdf),
+          ),
+        ).toBe(true);
+        const text = latin1(applied.bytes);
+        expect(text).toContain("/SubFilter /ETSI.RFC3161");
+        // The timestamp covers the whole document before it, the signature's
+        // store included; its authority's data was already in that store,
+        // so nothing follows it.
+        const range = docTimeStampByteRange(applied.bytes);
+        expect(range?.at(0)).toBe(0);
+        expect((range?.at(2) ?? 0) + (range?.at(3) ?? 0)).toBe(
+          applied.bytes.byteLength,
+        );
+        expect(
+          Buffer.from(applied.bytes).indexOf(Buffer.from(crl)),
+        ).toBeLessThan(range?.at(1) ?? 0);
+        expect(await PDF.load(applied.bytes)).toBeDefined();
+      });
+
+      test("adds the archival authority's validation data in one more store", async () => {
+        const archival = await archivalAuthorityUnderCa();
+        const { applied, globalFetches } = await signUnderIssuingCa({
+          archivalAuthority: archival.authority,
+          chainComplete: true,
+          extraCrls: { [ARCHIVE_CRL_URL]: archival.crl },
+          timestampAnchors: (signer) => [signer.der, archival.tsaCa.der],
+        });
+
+        expect(applied.level).toBe("B-LTA");
+        expect(applied.warnings).toEqual([]);
+        expect(globalFetches).toEqual([]);
+        const range = docTimeStampByteRange(applied.bytes);
+        const end = (range?.at(2) ?? 0) + (range?.at(3) ?? 0);
+        // The authority's CRL lands after the timestamp, in its own update.
+        expect(end).toBeLessThan(applied.bytes.byteLength);
+        expect(
+          Buffer.from(applied.bytes).indexOf(Buffer.from(archival.crl)),
+        ).toBeGreaterThan(end);
+      });
+
+      test("stays B-LT, timestamp kept, when the archival authority has no revocation data", async () => {
+        const archival = await archivalAuthorityUnderCa();
+        const { applied } = await signUnderIssuingCa({
+          archivalAuthority: archival.authority,
+          chainComplete: true,
+          timestampAnchors: (signer) => [signer.der, archival.tsaCa.der],
+        });
+
+        expect(applied.level).toBe("B-LT");
+        expect(applied.warnings.map(({ code }) => code)).toEqual([
+          "ARCHIVE_REVOCATION_UNAVAILABLE",
+        ]);
+        expect(docTimeStampByteRange(applied.bytes)).not.toBeNull();
+        expect(await PDF.load(applied.bytes)).toBeDefined();
+      });
+
+      test("reaches B-LTA with an archival authority no anchor vouches for, and says so", async () => {
+        const archival = await createTestTimestampAuthority({ keyPool });
+        const { applied } = await signUnderIssuingCa({
+          archivalAuthority: archival,
+          chainComplete: true,
+        });
+
+        expect(applied.level).toBe("B-LTA");
+        expect(applied.warnings.map(({ code }) => code)).toEqual([
+          "ARCHIVE_TIMESTAMP_UNTRUSTED",
+        ]);
+        // Its certificate is new to the store, so one more update after the
+        // timestamp carries a store again (its streams may be compressed, so
+        // the certificate itself is not searched for).
+        const range = docTimeStampByteRange(applied.bytes);
+        const end = (range?.at(2) ?? 0) + (range?.at(3) ?? 0);
+        expect(end).toBeLessThan(applied.bytes.byteLength);
+        expect(latin1(applied.bytes).lastIndexOf("/DSS")).toBeGreaterThan(end);
+        expect(archival.issued()).toBe(1);
+      });
+
+      test("keeps the B-LT bytes when no authority issues the archival timestamp", async () => {
+        const { applied } = await signUnderIssuingCa({
+          archivalAuthority: {
+            timestamp: async () => {
+              throw new Error("authority unreachable");
+            },
+          },
+          chainComplete: true,
+        });
+
+        expect(applied.level).toBe("B-LT");
+        expect(applied.warnings.map(({ code }) => code)).toEqual([
+          "ARCHIVE_TIMESTAMP_UNAVAILABLE",
+        ]);
+        expect(docTimeStampByteRange(applied.bytes)).toBeNull();
+        expect(await PDF.load(applied.bytes)).toBeDefined();
+      });
+
+      test("keeps the B-LT bytes when the archival token outgrows its reservation", async () => {
+        const { applied } = await signUnderIssuingCa({
+          archivalAuthority: await createTestTimestampAuthority({
+            keyPool,
+            misbehaviour: { padding: 60 },
+          }),
+          chainComplete: true,
+        });
+
+        expect(applied.level).toBe("B-LT");
+        expect(applied.warnings.map(({ code }) => code)).toEqual([
+          "ARCHIVE_TIMESTAMP_UNAVAILABLE",
+        ]);
+        expect(docTimeStampByteRange(applied.bytes)).toBeNull();
+      });
+
+      test("skips the archival timestamp when phase 2's budget is spent", async () => {
+        // The first reading starts the budget; the next one finds it spent.
+        const readings = [0, 74_000];
+        const { applied, tsa } = await signUnderIssuingCa({
+          chainComplete: true,
+          now: () => readings.shift() ?? 74_000,
+        });
+
+        expect(applied.level).toBe("B-LT");
+        expect(applied.warnings.map(({ code }) => code)).toEqual([
+          "ARCHIVE_TIMESTAMP_UNAVAILABLE",
+        ]);
+        expect(tsa.issued()).toBe(1);
+      });
+
+      test("reserves room for at least the signature's own token", () => {
+        expect(archivalTimestampSize(0)).toBe(16_384);
+        expect(archivalTimestampSize(30_000)).toBeGreaterThanOrEqual(34_096);
+        expect(archivalTimestampSize(30_000) % 1024).toBe(0);
+      });
     });
 
     test("refuses to embed a signature whose certificate is revoked", async () => {

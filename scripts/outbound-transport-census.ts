@@ -1357,4 +1357,9 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     path: "apps/api/src/scripts/subset-stamp-fonts.ts",
     reason: "Issues request authority for operator-requested font downloads.",
   },
+  {
+    path: "apps/api/src/scripts/update-qualified-tsa-trust.ts",
+    reason:
+      "Issues request authority for operator-requested EU trusted list downloads.",
+  },
 ] as const satisfies readonly OutboundPermitGrantOwner[];
