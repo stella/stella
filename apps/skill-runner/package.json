@@ -11,6 +11,7 @@
   "dependencies": {
     "@stll/api-contract": "workspace:*",
     "@stll/docx-core": "catalog:",
+    "@stll/fetch": "workspace:*",
     "@stll/sha256": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"

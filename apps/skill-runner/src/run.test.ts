@@ -85,9 +85,11 @@ describe("one skill command", () => {
       "-e",
       'const fs = require("node:fs"); fs.mkdirSync("out"); fs.writeFileSync("out/memo.md", "# Memo\\n" + fs.readFileSync("case.json", "utf8"));',
     ]);
-    const result = await runSkillCommand(input, transport, {
-      environment: { PATH: process.env["PATH"] },
-    });
+    const result = (
+      await runSkillCommand(input, transport, {
+        environment: { PATH: process.env["PATH"] },
+      })
+    ).unwrap();
     expect(result.outcome).toBe("exited");
     expect(result.exitCode).toBe(0);
     expect(result.changedFiles.map(({ path }) => path)).toEqual([
@@ -105,12 +107,15 @@ describe("one skill command", () => {
 
   test("the skill's own files are readable and never stored with the workspace", async () => {
     const { input, objects, transport } = await setup(
-      [BUN, "-e", 'await import(process.env.SKILL_DIR + "/scripts/hello.ts")'],
+      // The skill sits beside the workspace, outside it.
+      [BUN, "../skills/facts/scripts/hello.ts"],
       { workspace: null },
     );
-    const result = await runSkillCommand(input, transport, {
-      environment: { PATH: process.env["PATH"] },
-    });
+    const result = (
+      await runSkillCommand(input, transport, {
+        environment: { PATH: process.env["PATH"] },
+      })
+    ).unwrap();
     expect(result.stdout.text).toBe("from the skill\n");
     expect(
       await filesOf(objects.get("https://s3.test/workspace-out.zip")!),
@@ -123,15 +128,17 @@ describe("one skill command", () => {
       "-e",
       "console.log(JSON.stringify(process.env))",
     ]);
-    const result = await runSkillCommand(input, transport, {
-      environment: {
-        PATH: process.env["PATH"],
-        AWS_ACCESS_KEY_ID: "AKIAEXAMPLE",
-        AWS_SECRET_ACCESS_KEY: "secret",
-        AWS_SESSION_TOKEN: "token",
-        AWS_LAMBDA_RUNTIME_API: "127.0.0.1:9001",
-      },
-    });
+    const result = (
+      await runSkillCommand(input, transport, {
+        environment: {
+          PATH: process.env["PATH"],
+          AWS_ACCESS_KEY_ID: "AKIAEXAMPLE",
+          AWS_SECRET_ACCESS_KEY: "secret",
+          AWS_SESSION_TOKEN: "token",
+          AWS_LAMBDA_RUNTIME_API: "127.0.0.1:9001",
+        },
+      })
+    ).unwrap();
     const seen = JSON.parse(result.stdout.text) as Record<string, string>;
     expect(Object.keys(seen).filter((key) => key.startsWith("AWS_"))).toEqual(
       [],
@@ -151,9 +158,11 @@ describe("one skill command", () => {
       ],
       { egressProxyUrl: proxy },
     );
-    const result = await runSkillCommand(input, transport, {
-      environment: { PATH: process.env["PATH"] },
-    });
+    const result = (
+      await runSkillCommand(input, transport, {
+        environment: { PATH: process.env["PATH"] },
+      })
+    ).unwrap();
     expect(result.stdout.text).toBe(`${proxy} ${proxy}\n`);
   });
 
@@ -163,9 +172,11 @@ describe("one skill command", () => {
       "-e",
       'require("node:fs").rmSync("case.json")',
     ]);
-    const result = await runSkillCommand(input, transport, {
-      environment: { PATH: process.env["PATH"] },
-    });
+    const result = (
+      await runSkillCommand(input, transport, {
+        environment: { PATH: process.env["PATH"] },
+      })
+    ).unwrap();
     expect(result.removedFiles).toEqual(["case.json"]);
     expect(
       await filesOf(objects.get("https://s3.test/workspace-out.zip")!),
@@ -178,20 +189,20 @@ describe("one skill command", () => {
       { ...input, skill: { ...input.skill, sha256: "0".repeat(64) } },
       transport,
       { environment: { PATH: process.env["PATH"] } },
-    ).then(
-      () => null,
-      (error: unknown) => error,
     );
-    expect(refused).toBeInstanceOf(Error);
-    expect(String(refused)).toContain("does not match its digest");
+    expect(refused.isErr() && refused.error.message).toBe(
+      "Skill archive does not match its digest",
+    );
     expect(objects.has("https://s3.test/workspace-out.zip")).toBe(false);
   });
 
   test("a program that does not exist is reported as not started", async () => {
     const { input, transport } = await setup(["definitely-not-a-program-here"]);
-    const result = await runSkillCommand(input, transport, {
-      environment: { PATH: "/nonexistent" },
-    });
+    const result = (
+      await runSkillCommand(input, transport, {
+        environment: { PATH: "/nonexistent" },
+      })
+    ).unwrap();
     expect(result.outcome).toBe("not_started");
     expect(result.exitCode).toBeNull();
   });

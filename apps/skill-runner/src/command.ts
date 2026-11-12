@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { spawn } from "node:child_process";
 
 import {
@@ -88,12 +89,14 @@ export const runCommand = async ({
     });
     const timer = setTimeout(() => {
       timedOut = true;
-      if (child.pid !== undefined) {
-        try {
-          process.kill(-child.pid, "SIGKILL");
-        } catch {
-          child.kill("SIGKILL");
-        }
+      const group = child.pid;
+      // The whole process group, so nothing the command started survives;
+      // the child alone when the group is already gone.
+      if (
+        group === undefined ||
+        Result.try(() => process.kill(-group, "SIGKILL")).isErr()
+      ) {
+        child.kill("SIGKILL");
       }
     }, timeoutMs);
     child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));

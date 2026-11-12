@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -51,76 +52,140 @@ const changes = (
   removedFiles: [...before.keys()].filter((file) => !after.has(file)),
 });
 
+const transfer = async <T>(
+  message: string,
+  move: () => Promise<T>,
+): Promise<Result<T, SkillRunnerArchiveError>> =>
+  await Result.tryPromise({
+    try: move,
+    catch: (cause) => new SkillRunnerArchiveError({ message, cause }),
+  });
+
+type RunOptions = {
+  environment?: Readonly<Record<string, string | undefined>>;
+  root?: string;
+};
+
+const runInFolder = async (
+  root: string,
+  input: SkillRunnerInput,
+  transport: ArchiveTransport,
+  environment: Readonly<Record<string, string | undefined>>,
+): Promise<Result<SkillRunnerResult, SkillRunnerArchiveError>> => {
+  const workspace = path.join(root, "workspace");
+  const skillDir = path.join(root, "skills", input.skill.name);
+  const places = {
+    home: path.join(root, "home"),
+    cache: path.join(root, "cache"),
+    tmp: path.join(root, "tmp"),
+    skillDir,
+  };
+  const prepared = await transfer("Run folders could not be made", async () => {
+    for (const dir of [workspace, places.home, places.cache, places.tmp]) {
+      await mkdir(dir, { recursive: true });
+    }
+  });
+  if (prepared.isErr()) {
+    return Result.err(prepared.error);
+  }
+
+  const skillArchive = await transfer(
+    "Skill archive could not be downloaded",
+    async () =>
+      await transport.get(input.skill.getUrl, SKILL_LIMITS.archiveBytes),
+  );
+  if (skillArchive.isErr()) {
+    return Result.err(skillArchive.error);
+  }
+  if (sha256Hex(skillArchive.value) !== input.skill.sha256) {
+    return Result.err(
+      new SkillRunnerArchiveError({
+        message: "Skill archive does not match its digest",
+      }),
+    );
+  }
+  const skill = await extractArchive(
+    skillArchive.value,
+    skillDir,
+    SKILL_LIMITS,
+  );
+  if (skill.isErr()) {
+    return Result.err(skill.error);
+  }
+  const workspaceUrl = input.workspaceGetUrl;
+  if (workspaceUrl !== null) {
+    const archive = await transfer(
+      "Workspace could not be downloaded",
+      async () =>
+        await transport.get(workspaceUrl, WORKSPACE_LIMITS.archiveBytes),
+    );
+    if (archive.isErr()) {
+      return Result.err(archive.error);
+    }
+    const laid = await extractArchive(
+      archive.value,
+      workspace,
+      WORKSPACE_LIMITS,
+    );
+    if (laid.isErr()) {
+      return Result.err(laid.error);
+    }
+  }
+
+  const before = await listFolder(workspace, WORKSPACE_LIMITS);
+  if (before.isErr()) {
+    return Result.err(before.error);
+  }
+  const ran = await runCommand({
+    argv: input.command.argv,
+    cwd: path.join(workspace, input.command.cwd),
+    env: commandEnvironment(environment, places, input.egressProxyUrl),
+    timeoutMs: input.command.timeoutMs,
+  });
+  const after = await listFolder(workspace, WORKSPACE_LIMITS);
+  if (after.isErr()) {
+    return Result.err(after.error);
+  }
+  const packed = await packFolder(workspace, after.value);
+  if (packed.isErr()) {
+    return Result.err(packed.error);
+  }
+  const stored = await transfer(
+    "Workspace could not be stored",
+    async () => await transport.put(input.workspacePutUrl, packed.value),
+  );
+  if (stored.isErr()) {
+    return Result.err(stored.error);
+  }
+  return Result.ok({ ...ran, ...changes(before.value, after.value) });
+};
+
 /**
  * Run one skill command: lay out the skill and the chat's workspace in a
  * fresh folder, run the command with an allowlisted environment, store the
  * workspace back and report what changed. The skill's files sit outside the
- * workspace, so nothing a command does to them is kept.
+ * workspace, so nothing a command does to them is kept. The folder is
+ * removed whatever the outcome.
  */
 export const runSkillCommand = async (
   input: SkillRunnerInput,
   transport: ArchiveTransport,
-  options: {
-    environment?: Readonly<Record<string, string | undefined>>;
-    root?: string;
-  } = {},
-): Promise<SkillRunnerResult> => {
-  const root = await mkdtemp(path.join(options.root ?? tmpdir(), "skill-run-"));
-  try {
-    const workspace = path.join(root, "workspace");
-    const skillDir = path.join(root, "skills", input.skill.name);
-    const places = {
-      home: path.join(root, "home"),
-      cache: path.join(root, "cache"),
-      tmp: path.join(root, "tmp"),
-      skillDir,
-    };
-    await Promise.all(
-      [workspace, places.home, places.cache, places.tmp].map(
-        async (dir) => await mkdir(dir, { recursive: true }),
-      ),
-    );
-
-    const skillArchive = await transport.get(
-      input.skill.getUrl,
-      SKILL_LIMITS.archiveBytes,
-    );
-    const digest = sha256Hex(skillArchive);
-    if (digest !== input.skill.sha256) {
-      throw new SkillRunnerArchiveError({
-        message: "Skill archive does not match its digest",
-      });
-    }
-    await extractArchive(skillArchive, skillDir, SKILL_LIMITS);
-    if (input.workspaceGetUrl !== null) {
-      await extractArchive(
-        await transport.get(
-          input.workspaceGetUrl,
-          WORKSPACE_LIMITS.archiveBytes,
-        ),
-        workspace,
-        WORKSPACE_LIMITS,
-      );
-    }
-
-    const before = await listFolder(workspace, WORKSPACE_LIMITS);
-    const ran = await runCommand({
-      argv: input.command.argv,
-      cwd: path.join(workspace, input.command.cwd),
-      env: commandEnvironment(
-        options.environment ?? lambdaEnvironment(),
-        places,
-        input.egressProxyUrl,
-      ),
-      timeoutMs: input.command.timeoutMs,
-    });
-    const after = await listFolder(workspace, WORKSPACE_LIMITS);
-    await transport.put(
-      input.workspacePutUrl,
-      await packFolder(workspace, after),
-    );
-    return { ...ran, ...changes(before, after) };
-  } finally {
-    await rm(root, { recursive: true, force: true });
+  options: RunOptions = {},
+): Promise<Result<SkillRunnerResult, SkillRunnerArchiveError>> => {
+  const root = await transfer(
+    "Run folder could not be made",
+    async () =>
+      await mkdtemp(path.join(options.root ?? tmpdir(), "skill-run-")),
+  );
+  if (root.isErr()) {
+    return Result.err(root.error);
   }
+  const outcome = await runInFolder(
+    root.value,
+    input,
+    transport,
+    options.environment ?? lambdaEnvironment(),
+  );
+  await rm(root.value, { recursive: true, force: true });
+  return outcome;
 };
