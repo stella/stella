@@ -219,6 +219,48 @@ describe("the parts of a part (PL. ÚS 1/2021)", () => {
   });
 });
 
+describe("the state and the formula above a ruling", () => {
+  /** The head of the decision, up to its first part marker. */
+  const head = (blocks: readonly Block[]) =>
+    blocks
+      .slice(0, 4)
+      .map((block) =>
+        block.type === "heading" || block.type === "paragraph"
+          ? { type: block.type, role: block.role, text: textOf(block) }
+          : { type: block.type },
+      );
+
+  test.each([
+    // The title, the formula and the docket are set in one type.
+    ["sk-us-pl-us-10-2014", "PL. ÚS 10/2014", "PL. ÚS 10/2014-78"],
+    // The state is set in the title's type.
+    ["sk-us-iii-us-86-05", "III. ÚS 86/05", "III. ÚS 86/05-45"],
+  ])(
+    "%s: the state and the formula are the opening formula, the title stands alone",
+    async (name, caseNumber, docket) => {
+      const blocks = await parsedFixture(name, caseNumber);
+      expect(head(blocks)).toEqual([
+        {
+          type: "paragraph",
+          role: "opening-formula",
+          text: "SLOVENSKÁ REPUBLIKA",
+        },
+        {
+          type: "heading",
+          role: "decision-title",
+          text: "NÁLEZ Ústavného súdu Slovenskej republiky",
+        },
+        {
+          type: "paragraph",
+          role: "opening-formula",
+          text: "V mene Slovenskej republiky",
+        },
+        { type: "paragraph", role: undefined, text: docket },
+      ]);
+    },
+  );
+});
+
 describe("PL. ÚS 10/2014", () => {
   test("the hyphen the court's file prints as U+00AD reads as a hyphen", async () => {
     const blocks = await parsedFixture("sk-us-pl-us-10-2014", "PL. ÚS 10/2014");
@@ -226,11 +268,11 @@ describe("PL. ÚS 10/2014", () => {
       .map((block) => ("inlines" in block ? textOf(block) : ""))
       .join("\n");
     expect(text).not.toContain(String.fromCodePoint(0xad));
+    // The docket under the formula is a line of its own, not the title's.
+    expect(paragraphs(blocks).map(textOf)).toContain("PL. ÚS 10/2014-78");
     expect(
-      headings(blocks, 1).some((heading) =>
-        heading.includes("PL. ÚS 10/2014-78"),
-      ),
-    ).toBe(true);
+      headings(blocks, 1).some((heading) => heading.includes("PL. ÚS")),
+    ).toBe(false);
     expect(text).toContain("peer-to-peer (P2P)");
     expect(text).toContain("C-293/12 a C-594/12");
     // Hyphens at a line's end are the court's too: a compound and a docket.
