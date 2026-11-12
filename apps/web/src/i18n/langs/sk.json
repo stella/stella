@@ -6812,6 +6812,7 @@
     "deletedItem": "Odstránené: {name}",
     "deletingWorkspace": "Mazanie spisu",
     "documentSwitcher": {
+      "download": "Stiahnuť tento súbor",
       "searchPlaceholder": "Nájsť dokument…",
       "trigger": "Prepnúť dokument"
     },

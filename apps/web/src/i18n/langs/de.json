@@ -6812,6 +6812,7 @@
     "deletedItem": "Gelöscht: {name}",
     "deletingWorkspace": "Akte wird gelöscht",
     "documentSwitcher": {
+      "download": "Diese Datei herunterladen",
       "searchPlaceholder": "Dokument suchen…",
       "trigger": "Dokument wechseln"
     },

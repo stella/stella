@@ -5742,6 +5742,7 @@
   "workspaces.deleteWorkspaceConfirmDescription": "Are you sure you want to delete this matter? This action cannot be undone.",
   "workspaces.deletedItem": "Deleted: {name}",
   "workspaces.deletingWorkspace": "Deleting matter",
+  "workspaces.documentSwitcher.download": "Download this file",
   "workspaces.documentSwitcher.searchPlaceholder": "Find a document…",
   "workspaces.documentSwitcher.trigger": "Switch document",
   "workspaces.documentsCount": "{count, plural, one {# document} other {# documents}}",
