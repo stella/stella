@@ -20,7 +20,8 @@ export const DOCUMENT_VERSION_UPLOAD_TRANSPORT = {
  * hold it under one process byte budget sized from this value.
  *
  * Every client reads this one value: the browser and the CLI refuse a larger
- * file before reading it, and the desktop app bounds an Office download by it.
+ * file before reading it. The desktop app edits only what it can save back as
+ * a multipart checkpoint, the smaller `MULTIPART_DOCUMENT_MAX_BYTES`.
  */
 export const UPLOAD_DOCUMENT_MAX_BYTES: number = 200 * 1024 * 1024;
 

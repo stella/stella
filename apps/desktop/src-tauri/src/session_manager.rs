@@ -81,11 +81,12 @@ const LIBRE_OFFICE_LOCK_SUFFIX: &str = "#";
 const MICROSOFT_OFFICE_LOCK_PREFIX: &str = "~$";
 const SUPPORT_EMAIL: &str = "hello@stll.app";
 const CONTENT_TYPES_ENTRY: &str = "[Content_Types].xml";
-/// The API contract's `UPLOAD_DOCUMENT_MAX_BYTES`, which `build.rs` reads from
-/// its source: no stored document is larger, so none the server holds is
-/// refused here.
+/// The API contract's `MULTIPART_DOCUMENT_MAX_BYTES`, which `build.rs` derives
+/// from the contract's source. Each checkpoint goes back as one multipart form,
+/// so a larger file could be opened but never saved: it is refused before the
+/// user edits it.
 const MAX_OFFICE_DOWNLOAD_BYTES: u64 =
-  match u64::from_str_radix(env!("STELLA_UPLOAD_DOCUMENT_MAX_BYTES"), 10) {
+  match u64::from_str_radix(env!("STELLA_EDITABLE_DOCUMENT_MAX_BYTES"), 10) {
     Ok(bytes) => bytes,
     Err(_) => panic!("build.rs emits the document limit as a decimal integer"),
   };

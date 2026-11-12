@@ -1506,9 +1506,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
   "APP_VARIANT",
-  // The desktop build script reads the API contract's document limit and
-  // hands it to the crate at compile time.
-  "STELLA_UPLOAD_DOCUMENT_MAX_BYTES",
+  // The desktop build script derives the largest editable document from the
+  // API contract's limits and hands it to the crate at compile time.
+  "STELLA_EDITABLE_DOCUMENT_MAX_BYTES",
   "APPLE_TEAM_ID",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",

@@ -9,12 +9,13 @@ export default {
   ],
   summary:
     "`UPLOAD_DOCUMENT_MAX_BYTES` is the one document limit: the presigned " +
-    "upload, the browser and CLI preflights, DOCX stamping, OCR, the readers " +
-    "of stored files and the desktop Office download all read it (the CLI " +
-    "through its generated copy of the module, the desktop app through " +
-    "`build.rs`). `MULTIPART_DOCUMENT_MAX_BYTES` derives the smaller bound a " +
-    "multipart form through the API may carry from the server's ingress " +
-    "ceiling. The API's process-wide document byte budget is sized from it.",
+    "upload, the browser and CLI preflights, DOCX stamping, OCR and the " +
+    "readers of stored files all read it (the CLI through its generated copy " +
+    "of the module). `MULTIPART_DOCUMENT_MAX_BYTES` derives the smaller bound " +
+    "a multipart form through the API may carry from the server's ingress " +
+    "ceiling; the desktop app, which saves edits as multipart checkpoints, " +
+    "bounds an editable Office download by it through `build.rs`. The API's " +
+    "process-wide document byte budget is sized from the document limit.",
   enforcement: {
     kind: "custom-rule",
     rule: "no-literal-document-byte-limit",
