@@ -1614,8 +1614,9 @@ test("a gap claim leads with adding or linking a fact; a silent one offers that 
  * reads per viewer (each claim's comments, the organization's settings);
  * those are answered as empty and not recorded.
  */
+type AnsweredRequest = RecordedRequest & { idempotencyKey: string | null };
 const answerSignedIn = (answered: ReadonlyMap<string, () => Response>) => {
-  const seen: RecordedRequest[] = [];
+  const seen: AnsweredRequest[] = [];
   const product = fetchBoundary.getMockImplementation();
   fetchBoundary.mockImplementation(
     Object.assign(
@@ -1641,6 +1642,7 @@ const answerSignedIn = (answered: ReadonlyMap<string, () => Response>) => {
           method: request.method,
           path: pathname,
           body: text === "" ? null : JSON.parse(text),
+          idempotencyKey: request.headers.get("Idempotency-Key"),
         });
         return answer();
       },
@@ -1995,6 +1997,127 @@ test("an addition that failed midway finishes as first submitted, its fields hel
     sourceEntityId: documentId,
     sourceEntityVersionId: versionId,
   });
+});
+
+test("an addition whose create answer was lost replays that create on retry, even after leaving the claim", async () => {
+  const seeded = seededRun();
+  const documentId = "0199a3c4-5b6d-7e8f-9a0b-000000009211";
+  const versionId = "0199a3c4-5b6d-7e8f-9a0b-000000009212";
+  const addedFactId = "0199a3c4-5b6d-7e8f-9a0b-000000009213";
+  const lists = `/v1/lists/${workspaceId}`;
+  let createWrites = 0;
+  const seen = answerSignedIn(
+    new Map([
+      [
+        `GET /v1/entities/${workspaceId}/entity/${documentId}`,
+        () =>
+          Response.json({ entityId: documentId, currentVersionId: versionId }),
+      ],
+      [
+        `PUT /v1/tasks/${workspaceId}`,
+        () => {
+          createWrites += 1;
+          // The first create may have landed; its answer never arrives.
+          return createWrites === 1
+            ? Response.json({ error: "unavailable" }, { status: 503 })
+            : Response.json({ entityId: addedFactId });
+        },
+      ],
+      [
+        `POST ${lists}/item-sources`,
+        () => Response.json({ id: "0199a3c4-5b6d-7e8f-9a0b-000000009214" }),
+      ],
+      [
+        `POST ${lists}/claim-reviews`,
+        () =>
+          Response.json({
+            claimId: seeded.claims.at(3)?.id,
+            review: { ...EMPTY_CLAIM_REVIEW, linkedFactIds: [addedFactId] },
+          }),
+      ],
+      [
+        `POST ${lists}/claim-rechecks`,
+        () => Response.json({ replayed: false, claim: seeded.claims.at(3) }),
+      ],
+    ]),
+  );
+  const { client } = await mount(seeded, true);
+  client.setQueryData(workspaceFilesOptions(workspaceId).queryKey, [
+    {
+      entityId: documentId,
+      fieldId: "0199a3c4-5b6d-7e8f-9a0b-000000009215",
+      name: "Lender's notice",
+      fileName: "notice.docx",
+      parentId: null,
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      sizeBytes: 12_000,
+    },
+  ]);
+  selectClaim(4);
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.addFact }),
+  );
+  const sheet = await screen.findByRole("dialog", {
+    name: messages.avt.gap.sheet.title,
+  });
+  const picker = within(sheet).getByRole("combobox", {
+    name: messages.common.document,
+  });
+  await act(async () => {
+    picker.focus();
+    fireEvent.input(picker, {
+      target: { value: "notice" },
+      inputType: "insertText",
+    });
+  });
+  fireEvent.click(
+    await screen.findByRole("option", { name: "Lender's notice" }),
+  );
+  fireEvent.click(
+    within(sheet).getByRole("button", { name: messages.avt.gap.sheet.submit }),
+  );
+  await waitFor(() => expect(createWrites).toBe(1));
+  // The panel that sent the create goes away before the retry.
+  await waitFor(() =>
+    expect(within(sheet).getByLabelText(messages.common.fact)).toHaveProperty(
+      "disabled",
+      true,
+    ),
+  );
+  fireEvent.click(
+    within(sheet).getByRole("button", { name: messages.common.cancel }),
+  );
+  selectClaim(2);
+  selectClaim(4);
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.addFact }),
+  );
+  const reopened = await screen.findByRole("dialog", {
+    name: messages.avt.gap.sheet.title,
+  });
+  fireEvent.click(
+    within(reopened).getByRole("button", {
+      name: messages.avt.gap.sheet.submit,
+    }),
+  );
+  await waitFor(() =>
+    expect(seen.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      `PUT /v1/tasks/${workspaceId}`,
+      `PUT /v1/tasks/${workspaceId}`,
+      `GET /v1/entities/${workspaceId}/entity/${documentId}`,
+      `POST ${lists}/item-sources`,
+      `POST ${lists}/claim-reviews`,
+      `POST ${lists}/claim-rechecks`,
+    ]),
+  );
+  // One key for the create, so the server replays a create that landed
+  // instead of adding the fact a second time.
+  const [lost, retried] = seen;
+  expect(lost?.idempotencyKey).toEqual(expect.any(String));
+  expect(retried?.idempotencyKey).toBe(lost?.idempotencyKey ?? "");
+  expect(retried?.body).toEqual(lost?.body);
+  expect(seen.at(3)?.body).toMatchObject({ itemEntityId: addedFactId });
 });
 
 test("a re-checked claim reads its new verdict beside the run's, and names a fact the run never pinned", async () => {
