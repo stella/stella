@@ -1677,14 +1677,11 @@ const czNsMatchesStored = (
     return false;
   }
   const held = czNsHeldUnid(stored);
-  switch (held.type) {
-    case "named":
-      return sameUnid(payload.unid, held.unid);
-    case "unnamed":
-      return listsStoredDocket(payload, stored);
-    case "contradictory":
-      return false;
+  if (held.type === "named") {
+    return sameUnid(payload.unid, held.unid);
   }
+  // A row whose ids disagree matches nothing; one naming none, its docket.
+  return held.type === "unnamed" && listsStoredDocket(payload, stored);
 };
 
 /**
