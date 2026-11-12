@@ -69,23 +69,6 @@ export const isContested = (
   return refs.some((ref) => flagged.has(ref.factEntityId));
 };
 
-/**
- * A claim NEEDS ATTENTION if its verdict is a conflict (contradicted, in
- * tension, record conflict), its interpretation is contested, or it carries
- * a qualifier that asks for judgement (a held or differently scoped
- * footing). Everything else is ROUTINE: the per-claim review controls stay
- * available for the record, but it needs no individual sign-off. The server
- * holds bulk acceptance to the same rule.
- */
-export const needsAttention = (
-  claim: TriageTarget,
-  contested: ReadonlySet<FactId>,
-): boolean =>
-  claim.state !== "notverifiable" &&
-  (isConflictState(claim.state) ||
-    isContested(claim, contested) ||
-    judgementQualifier(claim) !== undefined);
-
 /** A claim is SETTLED once a human decides it either way, in the shared
  *  vocabulary every review surface reads (`REVIEW_STATUS_DECISION`): marking
  *  it as needing evidence decides nothing and keeps it open. */
@@ -155,6 +138,8 @@ export const resolveClaimView = (
     // The server read the claim's qualifiers against the verdict it has
     // until it is checked again, so they are kept unchanged.
     qualifiers: claim.qualifiers,
+    // The server read it with the reopening already applied.
+    needsAttention: claim.needsAttention,
     // Missing coverage has no conflict to suggest a record for.
     suggestedGoverningFactId: null,
     text: claim.text,
@@ -331,9 +316,14 @@ type ClaimCounts = {
   routineUnsettled: number;
 };
 
+/**
+ * Tallies for the tiles. Whether a claim NEEDS ATTENTION (a conflict, a
+ * contested reading, a qualifier that asks for judgement) is the server's
+ * (`claim.needsAttention`), the same reading bulk acceptance refuses by, so
+ * the routine claims offered here are the ones the server accepts.
+ */
 export const countClaims = (
   claims: readonly VerificationClaim[],
-  contested: ReadonlySet<FactId>,
 ): ClaimCounts => {
   const byState: Record<ClaimState, number> = {
     supported: 0,
@@ -359,17 +349,7 @@ export const countClaims = (
       needsEvidence += 1;
     }
     const settled = isSettled(claim.review);
-    if (
-      needsAttention(
-        {
-          state,
-          refs: claim.refs,
-          qualifiers: claim.qualifiers,
-          recheck: claim.recheck,
-        },
-        contested,
-      )
-    ) {
+    if (claim.needsAttention) {
       attnTotal += 1;
       if (settled) {
         attnSettled += 1;
@@ -395,21 +375,11 @@ export const countClaims = (
  *  someone marked as needing evidence is left for them, as the server does. */
 export const routineUnsettledClaimIds = (
   claims: readonly VerificationClaim[],
-  contested: ReadonlySet<FactId>,
 ): VerificationClaim["id"][] =>
   claims
-    .map(resolveClaimView)
     .filter(
       (claim) =>
-        !needsAttention(
-          {
-            state: effectiveState(claim, claim.review),
-            refs: claim.refs,
-            qualifiers: claim.qualifiers,
-            recheck: claim.recheck,
-          },
-          contested,
-        ) && (claim.review?.status ?? null) === null,
+        !claim.needsAttention && (claim.review?.status ?? null) === null,
     )
     .map((claim) => claim.id);
 
