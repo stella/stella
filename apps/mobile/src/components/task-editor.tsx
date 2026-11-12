@@ -25,7 +25,7 @@ import { useChanged } from "@/components/changes";
 import { ChoiceChip } from "@/components/choice-chip";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { SectionTitle } from "@/components/matter-team";
-import { useCan } from "@/components/role";
+import { RoleFailureNotice, useCan } from "@/components/role";
 import { TaskAssignees } from "@/components/task-assignees";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
@@ -197,6 +197,7 @@ const TaskFields = ({
 
   return (
     <View className="gap-5">
+      <RoleFailureNotice />
       <TaskName
         // A saved or restored name starts the field afresh.
         key={values.name}
