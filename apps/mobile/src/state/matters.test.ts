@@ -122,6 +122,23 @@ describe("listing matters", () => {
     const { fetch } = server(() => Response.json({ workspaces: [{ id: 7 }] }));
     expect(await outcome(fetch)).toBe("ApiRequestError");
   });
+
+  test("the archived ones come from the same route, filtered by status", async () => {
+    const { fetch, calls } = server(() =>
+      Response.json({ workspaces: [MATTER] }),
+    );
+    const archived = await listMatters({
+      fetch,
+      source: sourceFor(fetch),
+      status: "archived",
+    });
+    expect(archived.isOk() ? archived.value.map(({ id }) => id) : []).toEqual([
+      "matter-1",
+    ]);
+    expect(calls).toEqual([
+      "https://stella.example.com/v1/workspaces?status=archived Bearer access-0",
+    ]);
+  });
 });
 
 describe("opening a matter", () => {

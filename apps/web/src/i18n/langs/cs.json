@@ -643,100 +643,21 @@
       "pickList": "Vyberte seznam, s jehož fakty se porovnávají dokumenty tohoto spisu."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Vytvořit dvojjazyčnou verzi",
-      "creating": "Vytváření…",
-      "description": "Vytvoří kopii dokumentu ve dvou sloupcích: vlevo původní text, vpravo kopie k překladu s vlastním číslováním. Kopie se uloží do tohoto spisu jako nový dokument.",
-      "sameLanguage": "Zvolte dva různé jazyky.",
-      "sourceLanguage": "Zdrojový jazyk",
-      "title": "Dvojjazyčná verze"
-    },
-    "error": {
-      "title": "Dvojjazyčnou verzi se nepodařilo vytvořit"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> je připraven, k překladu {rowCount, plural, one {je # řádek} few {jsou # řádky} other {je # řádků} many {je # řádku}}.",
-      "title": "Dvojjazyčná verze vytvořena"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Doplní sloupec s překladem v tomto dvousloupcovém dokumentu. Zkontrolujte, co se stane s každým řádkem a jak se překládají definované pojmy, a poté spusťte překlad.",
-      "prepare": "Připravit",
-      "preparing": "Načítání dokumentu…",
-      "preparingHint": "Načtení celého dokumentu a posouzení každého řádku trvá až dvě minuty.",
-      "title": "Přeložit dvojjazyčnou verzi"
+      "prepare": "Připravit"
     },
     "dispositions": {
-      "inline": "Oba jazyky",
       "keep": "Ponechat beze změny"
     },
-    "error": {
-      "prepareTitle": "Dokument se nepodařilo připravit",
-      "startTitle": "Překlad se nepodařilo spustit"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Pro překlad není dostupný žádný model AI.",
-      "applyFailed": "Překlady se nepodařilo zapsat zpět do dokumentu.",
-      "documentChanged": "Dokument se během překladu změnil. Připravte jej znovu.",
-      "documentUnresolved": "Dokument nebo jeho soubor už není dostupný.",
-      "enqueueFailed": "Překlad se nepodařilo zařadit do fronty.",
-      "internal": "Překlad byl neočekávaně přerušen.",
-      "notBilingual": "Tento dokument neobsahuje dvojjazyčnou tabulku.",
-      "translationFailed": "Dávku řádků se nepodařilo přeložit.",
-      "unknown": "Překlad byl neočekávaně přerušen."
-    },
-    "glossary": {
-      "add": "Přidat pojem",
-      "description": "Tyto překlady se použijí ve všech řádcích. Pojem bez překladu je nutné doplnit, nebo odebrat.",
-      "empty": "Nebyly nalezeny žádné definované pojmy.",
-      "formsHint": "Další tvary oddělte čárkami.",
-      "formsSource": "Další tvary pojmu",
-      "formsTarget": "Další tvary překladu",
-      "incomplete": "Doplňte chybějící překlady, nebo tyto pojmy odeberte.",
-      "origins": {
-        "detected": "Nalezeno",
-        "user": "Vlastní"
-      },
-      "term": "Pojem",
-      "title": "Definované pojmy",
-      "tooManyForms": "Pojem může mít nejvýše {max} dalších tvarů.",
-      "translation": "Překlad"
-    },
     "kinds": {
-      "heading": "Nadpis",
-      "listItem": "Položka seznamu",
-      "paragraph": "Odstavec",
-      "table": "Celá tabulka"
-    },
-    "origins": {
-      "default": "Neposouzeno",
-      "model": "AI"
+      "paragraph": "Odstavec"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# řádek byl vynechán} few {# řádky byly vynechány} other {# řádků bylo vynecháno} many {# řádku bylo vynecháno}}: neobsahují text, který lze přeložit.",
-      "start": "Spustit překlad",
       "starting": "Spouštění…"
     },
     "rows": {
-      "description": "Zvolte, co se stane s každým řádkem sloupce s překladem.",
-      "ordinal": "#",
-      "sourceText": "Zdrojový text",
-      "title": "Řádky",
-      "whatToDo": "Co udělat"
-    },
-    "run": {
-      "cancelled": "Překlad byl zrušen.",
-      "doneSummary": "{count, plural, one {Přeložen # řádek} few {Přeloženy # řádky} other {Přeloženo # řádků} many {Přeloženo # řádku}}.",
-      "doneTitle": "Překlad dokončen",
-      "failedRows": "{count, plural, one {# řádek se nepodařilo přeložit} few {# řádky se nepodařilo přeložit} other {# řádků se nepodařilo přeložit} many {# řádku se nepodařilo přeložit}}.",
-      "failedTitle": "Překlad byl zastaven",
-      "hint": "Překlad běží na serveru. Nechte toto okno otevřené, abyste ho mohli sledovat.",
-      "moreRows": "{count, plural, one {a další # řádek} few {a další # řádky} other {a dalších # řádků} many {a další # řádku}}",
-      "progress": "Přeloženo {completed} z {total} řádků",
-      "title": "Probíhá překlad…",
-      "warningsTitle": "Řádky ke kontrole"
+      "title": "Řádky"
     }
   },
   "billing": {
@@ -1249,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# negativní} few {# negativní} many {# negativní} other {# negativních}}",
       "none": "Zatím nejsou zaznamenány žádné citace.",
       "notInStella": "Zatím není ve stelle",
-      "openAtCitation": "Otevřít na místě citace",
       "openDecision": "Otevřít rozhodnutí",
       "paragraphLabel": "Bod {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1933,7 +1853,6 @@
       "restored": "Změny souborů vráceny"
     },
     "localRun": {
-      "cloud": "Cloud stella",
       "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
       "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
       "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",
@@ -1942,7 +1861,6 @@
       "errorRestoring": "Váš počítač ještě vrací změny souborů. Odešlete to znovu za chvíli.",
       "errorUnavailable": "Váš počítač přestal tuto odpověď zpracovávat. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
       "filesNotShared": "Soubory, které se nepodařilo sdílet, zůstávají ve vašem počítači: {fileNames}",
-      "onThisComputer": "{harness} v tomto počítači",
       "permissionAboveLimit": "Vaše organizace to nepovoluje",
       "permissionAskDescription": "Soubory ve složce chatu upravuje sám; na vše ostatní se zeptá.",
       "permissionAutoDescription": "Co považuje za bezpečné, udělá sám; na zbytek se zeptá.",
@@ -1962,8 +1880,6 @@
       "refusalReasoningEffortUnavailable": "Programovací agent ve vašem počítači tuto úroveň uvažování pro daný model nenabízí. Vyberte jinou v nabídce Úroveň uvažování.",
       "refusalTooLarge": "Tato konverzace je příliš dlouhá na předání do vašeho počítače. Pro spuštění tam začněte nový chat.",
       "refusalUnavailable": "Spouštění chatů ve vašem počítači není pro váš účet dostupné.",
-      "runOn": "Spustit na",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
       "stateLimitUntil": "Limit vyčerpán do {time}",
       "stateModelUnavailable": "Model už není k dispozici",
@@ -2127,6 +2043,23 @@
     "richContentLoading": "Načítání interaktivního obsahu…",
     "richContentTitle": "Interaktivní obsah",
     "richContentUnavailable": "Tento obsah nelze bezpečně zobrazit.",
+    "runOn": {
+      "checkFailed": "Počítač se nepodařilo zkontrolovat",
+      "chipLabel": "Kde běží: {place}",
+      "cloud": "Cloud",
+      "cloudDescription": "Běží v cloudu. Funguje odkudkoli.",
+      "harnessModels": "Modely {harness}",
+      "hintInstall": "Nainstalujte ho ve stella desktop",
+      "hintOffline": "Otevřete stella desktop ve svém počítači",
+      "hintSignIn": "Přihlaste se ve stella desktop",
+      "hintUpdate": "Aktualizujte ho ve stella desktop",
+      "localPlace": "Váš počítač, {harness}",
+      "localSelection": "Váš počítač · {harness}",
+      "modelDefault": "Výchozí (doporučeno)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Váš počítač",
+      "yourComputerDescription": "Použije Codex nebo Claude Code ve vašem počítači s vaším vlastním předplatným. Může číst a měnit soubory ve složce tohoto chatu; co smí udělat bez ptaní, určují jeho oprávnění."
+    },
     "selection": {
       "askInNewChat": "Zeptat se v novém chatu",
       "quoteInReply": "Citovat v odpovědi",

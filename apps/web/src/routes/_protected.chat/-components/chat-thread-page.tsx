@@ -13,7 +13,7 @@ import { useTranslations } from "use-intl";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { Button, buttonVariants } from "@stll/ui/button";
-import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
+import { NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -49,9 +49,9 @@ import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { MoveToSideButton } from "@/components/inspector/move-to-side-button";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { useAIKeyGate } from "@/components/require-ai-key";
-import Tooltip from "@/components/tooltip";
 import { UsageFallbackNotice } from "@/components/usage/usage-fallback-notice";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
@@ -666,18 +666,9 @@ export const ChatThreadPage = ({
           <div className="relative flex w-full flex-1 flex-col overflow-hidden">
             <ChromeHeaderActions>
               <ChatThreadFilesButton attachedFiles={data.attachedFiles} />
-              <Tooltip
-                content={t("inspector.moveToSide")}
-                render={
-                  <Button
-                    className="hidden md:inline-flex"
-                    onClick={moveToSide}
-                    size="icon-sm"
-                    variant="ghost"
-                  >
-                    <Minimize2Icon className="size-4" />
-                  </Button>
-                }
+              <MoveToSideButton
+                className="hidden md:inline-flex"
+                onClick={moveToSide}
               />
               <ChatHistoryLink />
               <NewChatButton

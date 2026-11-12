@@ -188,6 +188,39 @@ describe("chat composer census", () => {
     expect(discovered).toEqual(runOnDeclines);
   });
 
+  test("every composer bar shows where its chat runs and its model as two chips from one owner", () => {
+    // The dock is the composer bar of every surface (the new chat, the
+    // thread page, the inspector tab, the file chat); its models come from
+    // `useChatComposerModels`, which owns both choices.
+    const chipRenderers = sourceModules.filter((file) =>
+      /<ChatComposerChips\b/u.test(sourceOf(file)),
+    );
+    expect(chipRenderers).toEqual(["components/chat/chat-composer-dock.tsx"]);
+    const chips = sourceOf("components/chat/chat-model-selector.tsx");
+    expect(chips).toMatch(/<ChatRunOnChip\b/u);
+    expect(chips).toMatch(/<ChatModelSelector\b/u);
+    // Neither chip, nor the where menu, renders anywhere else.
+    const strays = sourceModules.filter(
+      (file) =>
+        file !== "components/chat/chat-model-selector.tsx" &&
+        /<(?:ChatRunOnChip|ChatModelSelector|ChatRunTargetMenu)\b/u.test(
+          sourceOf(file),
+        ),
+    );
+    expect(strays).toEqual([]);
+    for (const surface of [
+      "routes/_protected.chat/index.tsx",
+      "routes/_protected.chat/-components/chat-thread-page.tsx",
+      "components/inspector/chat-tab-panel.tsx",
+    ]) {
+      const source = sourceOf(surface);
+      expect(source).toMatch(/\buseChatComposerModels\(/u);
+      expect(source).toMatch(
+        /<ChatComposerDock\b[\s\S]*?models=\{composerModels\.models\}/u,
+      );
+    }
+  });
+
   test("every follow-up chip surface gives its editor the same follow-up", () => {
     const discovered = sourceModules.filter((file) =>
       /<SuggestedFollowupChips\b/u.test(sourceOf(file)),

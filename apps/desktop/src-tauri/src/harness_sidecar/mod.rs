@@ -588,6 +588,7 @@ pub(crate) fn harness_report(
         .map(|model| HarnessModel {
           id: model.id.clone(),
           label: model.label.clone(),
+          is_default: model.is_default,
           // Each effort once, in the contract's order.
           reasoning_efforts: ReasoningEffort::ALL
             .iter()

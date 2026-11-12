@@ -184,6 +184,8 @@ export const answerEntry = (
     .join("\n\n"),
   tools: answer.tools,
   files: [],
+  // The stored answer names its drafts once the thread is read again.
+  drafts: [],
 });
 
 /**

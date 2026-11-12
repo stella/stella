@@ -1202,7 +1202,7 @@ describe("approval modes and reasoning efforts", () => {
           state: "ready",
           version: HARNESS_VERSION,
           capabilities: ["approvals"],
-          // Codex runs in one approval mode.
+          // A harness that offers only Ask.
           approvalModes: ["ask"],
           models: [{ id: MODEL, label: "GPT-5 Codex" }],
         },
@@ -3528,6 +3528,133 @@ describe("chat turns on a computer", () => {
       );
       expect(
         await runTurn(chatThreadId, regenerated, "codex-session-regen-new"),
+      ).toBeNull();
+    });
+
+    /**
+     * Run turn `turnId` on the shared computer to a run that ends without an
+     * answer after sending `chunks`, and settle the turn as failed, as the
+     * send does. Returns the session the run was started to resume.
+     */
+    const failedRunTurn = async (
+      chatThreadId: SafeId<"chatThread">,
+      turnId: SafeId<"chatTurn">,
+      chunks: (runId: string) => Promise<unknown[]>,
+      outcome: "interrupted" | "needs_login",
+    ) => {
+      const { desktopId, desktop } = shared();
+      const turn = collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          startPlan(desktopId),
+        ).stream({
+          chatRunId: `chat-run-${turnId}`,
+          chatTurnId: turnId,
+          messages: [{ role: "user", content: "Work on the matter" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive(
+        "run.start",
+        (message) =>
+          message.type === "run.start" && message.folderId === chatThreadId,
+      );
+      desktop.send({ type: "run.accepted", runId: start.runId });
+      const run = desktopRun(desktop, start.runId);
+      await run.events(await chunks(start.runId));
+      await run.finish(outcome, null);
+      await turn.done;
+      await failTurn(chatThreadId, turnId);
+      return start.harnessSessionId;
+    };
+
+    test("a run that never reached its prompt does not hide the session before it", async () => {
+      const { chatThreadId } = await answeredThread("codex-session-kept");
+      const secondTurnId = await startTurn(chatThreadId);
+      // The second turn's run ends before the harness took its prompt.
+      expect(
+        await failedRunTurn(
+          chatThreadId,
+          secondTurnId,
+          async () => [],
+          "needs_login",
+        ),
+      ).toBe("codex-session-kept");
+
+      // Sending that turn again continues the first answer, so it resumes
+      // the session the first run left.
+      const again = await replayFrom(
+        chatThreadId,
+        await askedBy(secondTurnId),
+        "Work on the matter",
+      );
+      expect(await runTurn(chatThreadId, again, "codex-session-kept")).toBe(
+        "codex-session-kept",
+      );
+    });
+
+    test("a run lost before its session was named starts the retry fresh", async () => {
+      const { chatThreadId } = await answeredThread("codex-session-lost");
+      const secondTurnId = await startTurn(chatThreadId);
+      await failedRunTurn(
+        chatThreadId,
+        secondTurnId,
+        async () => [],
+        "needs_login",
+      );
+      // As if the computer went quiet after the harness took the prompt and
+      // before the session's id arrived: the run is lost with no session.
+      await db
+        .update(desktopRunnerRuns)
+        .set({ state: "lost", outcome: null, harnessSessionId: null })
+        .where(eq(desktopRunnerRuns.chatTurnId, secondTurnId));
+
+      const again = await replayFrom(
+        chatThreadId,
+        await askedBy(secondTurnId),
+        "Work on the matter",
+      );
+      expect(
+        await runTurn(chatThreadId, again, "codex-session-lost-new"),
+      ).toBeNull();
+    });
+
+    test("a run whose session took its prompt and ended unnamed starts the retry fresh", async () => {
+      const { chatThreadId } = await answeredThread("codex-session-taken");
+      const secondTurnId = await startTurn(chatThreadId);
+      // The session took the prompt; the run then ended without naming it,
+      // so the session may hold work the chat never stored.
+      expect(
+        await failedRunTurn(
+          chatThreadId,
+          secondTurnId,
+          async (runId) =>
+            // What the desktop sent before it went quiet: no end of the turn.
+            (
+              await harnessChunks(runId, [
+                {
+                  type: "session.started",
+                  sessionId: harnessSessionId("codex-session-taken"),
+                  continuation: { type: "resumed" },
+                },
+              ])
+            ).filter(
+              (chunk) =>
+                isRecord(chunk) && chunk["type"] !== EventType.RUN_ERROR,
+            ),
+          "interrupted",
+        ),
+      ).toBe("codex-session-taken");
+
+      const again = await replayFrom(
+        chatThreadId,
+        await askedBy(secondTurnId),
+        "Work on the matter",
+      );
+      expect(
+        await runTurn(chatThreadId, again, "codex-session-taken-new"),
       ).toBeNull();
     });
 

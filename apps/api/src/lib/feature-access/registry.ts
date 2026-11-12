@@ -6,6 +6,7 @@
 // parser-output-unchanged: requiring time billing for the desktop activity timeline leaves parsed records unchanged.
 // parser-output-unchanged: registering desktop dictation access leaves ingestion features and parsed records unchanged.
 // parser-output-unchanged: registering conflict-check access leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: gating desktop dictation cleanup on its access leaves ingestion features and parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -141,7 +142,9 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     enrolment: "self-serve",
   },
   // Desktop-gated too: the desktop offers dictation only while this decision
-  // is enabled. Speech stays on the computer, so nothing here reaches the API.
+  // is enabled. Speech stays on the computer; only the optional text cleanup
+  // reaches the API, and `handlers/dictation/cleanup.ts` refuses it without
+  // this decision.
   "desktop-dictation": {
     enrolment: "invitation",
   },

@@ -18,9 +18,12 @@ import {
   type StoredSession,
 } from "@/connection/session";
 
+import { compileDraftDocument } from "./chat-documents";
 import { readChatThread } from "./chat-messages";
 import {
+  allowedWithGrant,
   continuationOf,
+  grantableApproval,
   isSamePendingInput,
   pendingInputKey,
   pendingInputOf,
@@ -176,11 +179,11 @@ describe("a turn waiting for an approval", () => {
 
   test("is read from the stored thread with the call it asks to run", () => {
     const pending = answerable(pendingOfPage(exchange(deny, 0)));
-    expect(pending.type).toBe("approvals");
+    expect(pending.type).toBe("steps");
     expect(pending.owner).toEqual({ type: "cloud" });
     expect(pending.parentRunId).toBe("run-recorded-1");
     expect(
-      pending.type === "approvals"
+      pending.type === "steps"
         ? pending.approvals.map(({ interruptId, toolName, input }) => ({
             interruptId,
             toolName,
@@ -200,7 +203,12 @@ describe("a turn waiting for an approval", () => {
     const pending = answerable(pendingOfPage(exchange(deny, 0)));
     const { request } = exchange(deny, 1);
     const body = wireBody({
-      answer: { type: "approvals", allowed: { "approval_call-1": false } },
+      answer: {
+        type: "steps",
+        allowed: { "approval_call-1": false },
+        asked: {},
+        documents: {},
+      },
       pending,
       runId: request.runId,
     });
@@ -223,7 +231,12 @@ describe("a turn waiting for an approval", () => {
     const pending = answerable(pendingOfPage(exchange(allowed, 0)));
     const { request } = exchange(allowed, 1);
     const body = wireBody({
-      answer: { type: "approvals", allowed: { "approval_call-1": true } },
+      answer: {
+        type: "steps",
+        allowed: { "approval_call-1": true },
+        asked: {},
+        documents: {},
+      },
       pending,
       runId: request.runId,
     });
@@ -238,16 +251,20 @@ describe("a turn waiting for an approval", () => {
     const pending = answerable(pendingOfPage(exchange(both, 0)));
     expect(
       continuationOf(pending, {
-        type: "approvals",
+        type: "steps",
         allowed: { "approval_call-1": true },
+        asked: {},
+        documents: {},
       }),
     ).toBeUndefined();
     // The web sends both answers in the step that decides the last one.
     const { request } = exchange(both, 2);
     const body = wireBody({
       answer: {
-        type: "approvals",
+        type: "steps",
         allowed: { "approval_call-1": true, "approval_call-2": true },
+        asked: {},
+        documents: {},
       },
       pending,
       runId: request.runId,
@@ -348,7 +365,7 @@ describe("a turn waiting for the model's questions", () => {
     expect(pending.owner).toEqual({ type: "cloud" });
     expect(pending.parentRunId).toBe("run-recorded-1");
     expect(
-      pending.type === "ask-user"
+      pending.type === "steps"
         ? pending.asks.map(({ interruptId, questions }) => ({
             interruptId,
             questions,
@@ -367,8 +384,10 @@ describe("a turn waiting for the model's questions", () => {
     const { request } = exchange(askUser, 1);
     const body = wireBody({
       answer: {
-        type: "ask-user",
-        answers: { "client_tool_call-1": [{ question, answer: "Buyer" }] },
+        type: "steps",
+        allowed: {},
+        asked: { "client_tool_call-1": [{ question, answer: "Buyer" }] },
+        documents: {},
       },
       pending,
       runId: request.runId,
@@ -426,14 +445,21 @@ describe("a turn waiting for the model's questions", () => {
       { "client_tool_call-1": [{ question: "Another?", answer: "Buyer" }] },
       { "client_tool_call-1": [{ question, selected: ["Buyer"] }] },
     ]) {
-      expect(continuationOf(pending, { type: "ask-user", answers })).toBe(
-        undefined,
-      );
+      expect(
+        continuationOf(pending, {
+          type: "steps",
+          allowed: {},
+          asked: answers,
+          documents: {},
+        }),
+      ).toBe(undefined);
     }
     expect(
       continuationOf(pending, {
-        type: "approvals",
+        type: "steps",
         allowed: { "client_tool_call-1": true },
+        asked: {},
+        documents: {},
       }),
     ).toBe(undefined);
   });
@@ -450,14 +476,302 @@ describe("a turn waiting for the model's questions", () => {
   });
 });
 
-describe("a turn waiting for input only the web app gives", () => {
-  test("names the web app for a tool only a browser tab runs", () => {
-    const clientTool = recorded("client-tool");
-    expect(pendingOfPage(exchange(clientTool, 0))).toEqual({
-      type: "elsewhere",
+describe("a turn waiting for a draft the model wrote", () => {
+  const clientTool = recorded("client-tool");
+
+  test("is answered with the compiled draft, as the web sends it", () => {
+    const pending = answerable(pendingOfPage(exchange(clientTool, 0)));
+    if (pending.type !== "steps") {
+      throw new Error("The draft is not a step");
+    }
+    expect(pending.approvals).toEqual([]);
+    expect(pending.asks).toEqual([]);
+    const [document] = pending.documents;
+    if (document === undefined) {
+      throw new Error("The turn waits for no draft");
+    }
+    const { request } = exchange(clientTool, 1);
+    const body = wireBody({
+      answer: {
+        type: "steps",
+        allowed: {},
+        asked: {},
+        documents: {
+          [document.interruptId]: compileDraftDocument(
+            document.input,
+            "Could not create document",
+          ),
+        },
+      },
+      pending,
+      runId: request.runId,
     });
+    expect(body.parentRunId).toBe(request.parentRunId);
+    expect(body.resume).toEqual(request.resume);
+    expect(stepFields(body.forwardedProps.message.parts)).toEqual(
+      stepFields(request.forwardedProps.message.parts),
+    );
   });
 });
+
+/** A paused message of one model step, for steps the recordings lack. */
+const pausedStep = ({
+  interrupts,
+  parts,
+}: {
+  interrupts: readonly unknown[];
+  parts: readonly unknown[];
+}) => ({
+  id: "00000000-0000-7000-8000-0000000000m1",
+  role: "assistant",
+  metadata: {
+    turnOutcome: { type: "awaiting-user" },
+    resumeSnapshot: {
+      resumeState: { threadId: THREAD_ID, runId: "run-step" },
+      pendingInterrupts: interrupts,
+    },
+  },
+  parts,
+});
+
+const serverCall = (id: string, name: string) => ({
+  type: "tool-call",
+  id,
+  name,
+  arguments: "{}",
+  input: { name: id },
+  state: "approval-requested",
+  approval: { id: `approval_${id}`, needsApproval: true },
+  metadata: { stellaStepId: id, stellaToolExecutor: "server" },
+});
+
+const askCall = (id: string) => ({
+  type: "tool-call",
+  id,
+  name: "ask-user",
+  arguments: "{}",
+  input: {
+    analysis: "The draft depends on the side.",
+    questions: [{ question: "Which side?", reason: "It decides the draft." }],
+  },
+  state: "input-complete",
+  metadata: { stellaStepId: id, stellaToolExecutor: "client" },
+});
+
+const approvalInterrupt = (id: string) => ({
+  id: `approval_${id}`,
+  reason: "tool_call",
+  toolCallId: id,
+  metadata: { kind: "approval" },
+});
+
+const clientInterrupt = (id: string) => ({
+  id: `client_tool_${id}`,
+  reason: "tanstack:client_tool_execution",
+  toolCallId: id,
+  metadata: { kind: "client_tool" },
+});
+
+describe("a step with an approval and the model's questions", () => {
+  const step = pausedStep({
+    interrupts: [approvalInterrupt("call-1"), clientInterrupt("call-2")],
+    parts: [serverCall("call-1", "mcp__external__delete"), askCall("call-2")],
+  });
+
+  test("waits for both, and sends them together", () => {
+    const pending = answerable(
+      pendingInputOf({ message: step, runTarget: null }),
+    );
+    expect(pending.type).toBe("steps");
+    const answer = {
+      type: "steps",
+      allowed: { "approval_call-1": true },
+      asked: {
+        "client_tool_call-2": [{ question: "Which side?", answer: "Buyer" }],
+      },
+      documents: {},
+    } as const;
+    expect(continuationOf(pending, { ...answer, allowed: {} })).toBeUndefined();
+    expect(continuationOf(pending, { ...answer, asked: {} })).toBeUndefined();
+    const settles = continuationOf(pending, answer);
+    expect(settles?.resume).toEqual([
+      {
+        interruptId: "approval_call-1",
+        status: "resolved",
+        payload: { approved: true },
+      },
+      {
+        interruptId: "client_tool_call-2",
+        status: "resolved",
+        payload: { answers: [{ question: "Which side?", answer: "Buyer" }] },
+      },
+    ]);
+    // The answered calls first, then the result the questions' answer adds.
+    expect(stepFields(settles?.parts ?? [])).toEqual([
+      {
+        type: "tool-call",
+        id: "call-1",
+        state: "approval-responded",
+        output: undefined,
+        toolCallId: undefined,
+        content: undefined,
+      },
+      {
+        type: "tool-call",
+        id: "call-2",
+        state: "complete",
+        output: { answers: [{ question: "Which side?", answer: "Buyer" }] },
+        toolCallId: undefined,
+        content: undefined,
+      },
+      {
+        type: "tool-result",
+        id: undefined,
+        state: "complete",
+        output: undefined,
+        toolCallId: "call-2",
+        content: {
+          answers: [{ question: "Which side?", answer: "Buyer" }],
+        },
+      },
+    ]);
+  });
+});
+
+describe("a standing grant given from an approval", () => {
+  const step = pausedStep({
+    interrupts: [
+      approvalInterrupt("call-1"),
+      approvalInterrupt("call-2"),
+      approvalInterrupt("call-3"),
+      approvalInterrupt("call-4"),
+    ],
+    parts: [
+      serverCall("call-1", "mcp__acme__send"),
+      serverCall("call-2", "mcp__acme__archive"),
+      serverCall("call-3", "mcp__other__send"),
+      serverCall("call-4", "use_connector_secret"),
+    ],
+  });
+
+  test("allows the step's other approvals it covers, and no others", () => {
+    const pending = answerable(
+      pendingInputOf({ message: step, runTarget: null }),
+    );
+    if (pending.type !== "steps") {
+      throw new Error("Not a step");
+    }
+    expect(
+      allowedWithGrant(
+        pending.approvals,
+        { "approval_call-1": true, "approval_call-4": false },
+        "mcp__acme__send",
+      ),
+    ).toEqual({
+      "approval_call-1": true,
+      "approval_call-2": true,
+      "approval_call-4": false,
+    });
+  });
+
+  test("is offered only for a tool a stored grant may cover", () => {
+    expect(grantableApproval("mcp__acme__send")).toBe(true);
+    expect(grantableApproval("web_search")).toBe(true);
+    expect(grantableApproval("use_connector_secret")).toBe(false);
+    expect(grantableApproval("suggest_changes")).toBe(false);
+    expect(grantableApproval("use-browser")).toBe(false);
+  });
+});
+
+describe("a step only another place takes", () => {
+  const clientStep = (name: string, state: string, approved?: boolean) =>
+    pendingInputOf({
+      message: pausedStep({
+        interrupts: [clientInterrupt("call-1")],
+        parts: [
+          {
+            type: "tool-call",
+            id: "call-1",
+            name,
+            arguments: "{}",
+            input: {},
+            state,
+            ...(approved === undefined
+              ? {}
+              : {
+                  approval: {
+                    id: "approval_call-1",
+                    needsApproval: true,
+                    approved,
+                  },
+                }),
+            metadata: { stellaToolExecutor: "client" },
+          },
+        ],
+      }),
+      runTarget: null,
+    });
+
+  test("names the computer for a browser command allowed from here", () => {
+    expect(clientStep("use-browser", "approval-responded", true)).toEqual({
+      type: "elsewhere",
+      reason: "browser",
+    });
+  });
+
+  test("says why a key or a connection is not added from the phone", () => {
+    expect(clientStep("request_secret", "input-complete")).toEqual({
+      type: "elsewhere",
+      reason: "secret",
+    });
+    expect(clientStep("connect_connector", "input-complete")).toEqual({
+      type: "elsewhere",
+      reason: "connector",
+    });
+  });
+
+  test("asks about a browser command like any other call", () => {
+    const pending = answerable(
+      pendingInputOf({
+        message: pausedStep({
+          interrupts: [approvalInterrupt("call-1")],
+          parts: [serverCall("call-1", "use-browser")],
+        }),
+        runTarget: null,
+      }),
+    );
+    expect(pending.type === "steps" ? pending.approvals.length : 0).toBe(1);
+  });
+});
+
+/** The fields of sent parts a continuation sets: which call or result, and its answer. */
+function stepFields(parts: unknown) {
+  return v.parse(v.array(v.unknown()), parts).map((part) => {
+    const read = v.parse(
+      v.looseObject({
+        type: v.string(),
+        id: v.optional(v.string()),
+        toolCallId: v.optional(v.string()),
+        state: v.optional(v.string()),
+        output: v.optional(v.unknown()),
+        content: v.optional(v.string()),
+      }),
+      part,
+    );
+    return {
+      type: read.type,
+      id: read.id,
+      toolCallId: read.toolCallId,
+      state: read.state,
+      output: read.output,
+      // A result's answer as JSON; its key order is the serializer's.
+      content:
+        read.content === undefined
+          ? undefined
+          : (JSON.parse(read.content) as unknown),
+    };
+  });
+}
 
 const governingLaw = {
   id: "law",
@@ -559,10 +873,10 @@ describe("a turn a coding agent paused on its question", () => {
         message: pausedOnQuestion,
         runTarget: { kind: "cloud" },
       }),
-    ).toEqual({ type: "elsewhere" });
+    ).toEqual({ type: "elsewhere", reason: "other" });
     expect(
       pendingInputOf({ message: pausedOnQuestion, runTarget: undefined }),
-    ).toEqual({ type: "elsewhere" });
+    ).toEqual({ type: "elsewhere", reason: "other" });
   });
 
   test("sends answers the server accepts, keeping the call as stored", () => {
@@ -675,8 +989,10 @@ describe("a computer's approval", () => {
     );
     const body = wireBody({
       answer: {
-        type: "approvals",
+        type: "steps",
         allowed: { [APPROVAL_REQUEST_ID]: true },
+        asked: {},
+        documents: {},
       },
       pending,
       runId: "run-local-2",
@@ -728,7 +1044,7 @@ describe("a computer's approval", () => {
         },
         runTarget: LOCAL_TARGET,
       }),
-    ).toEqual({ type: "elsewhere" });
+    ).toEqual({ type: "elsewhere", reason: "other" });
   });
 });
 

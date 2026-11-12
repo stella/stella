@@ -685,6 +685,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-dom-node-poll-assertion.fixture.tsx", [
     "no-dom-node-poll-assertion/no-dom-node-poll-assertion",
   ]),
+  fixtureRuleOverride("review-decision-map-owner.fixture.ts", [
+    "review-decision-map-owner/review-decision-map-owner",
+  ]),
   fixtureRuleOverride("text-mark-not-in-button.fixture.tsx", [
     "text-mark-not-in-button/text-mark-not-in-button",
   ]),
@@ -2343,6 +2346,7 @@ const config = defineConfig({
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/no-dom-node-poll-assertion.ts",
+    "./.oxlint-plugins/review-decision-map-owner.ts",
     "./.oxlint-plugins/text-mark-not-in-button.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
@@ -2863,7 +2867,6 @@ const config = defineConfig({
       // compiler's existing bailout for the current call sites, but keep the
       // category enabled everywhere else so the list can only shrink.
       files: [
-        "apps/web/src/components/bilingual-review-rows.tsx",
         "apps/web/src/components/search-dialog.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx",
@@ -3445,19 +3448,7 @@ const config = defineConfig({
         "apps/landing/src/**/*.{ts,tsx}",
       ],
       rules: {
-        "no-layout-motion-classes/no-layout-motion-classes": [
-          "error",
-          {
-            allowedFiles: [
-              {
-                path: "apps/landing/src/components/react/ProductShowcase.tsx",
-                reason:
-                  "Marketing motion: showcase tiles settle in as the carousel scrolls; nothing waits on it.",
-                utilities: ["duration-[500ms]"],
-              },
-            ],
-          },
-        ],
+        "no-layout-motion-classes/no-layout-motion-classes": "error",
       },
     },
     {
@@ -4591,6 +4582,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-dom-node-poll-assertion/no-dom-node-poll-assertion": "error",
+      },
+    },
+    {
+      // What a review status means as the shared decision has one owner,
+      // REVIEW_STATUS_DECISION in @stll/api-contract/review-decision.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/review-decision-map-owner.fixture.ts",
+      ],
+      rules: {
+        "review-decision-map-owner/review-decision-map-owner": "error",
       },
     },
     {

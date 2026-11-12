@@ -6837,7 +6837,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
   },
   {
     "name": "add_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Add matter member changes state or starts stateful work.",
@@ -6875,7 +6875,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
   },
   {
     "name": "remove_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Remove matter member changes state or starts stateful work.",
@@ -14405,7 +14405,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   },
   {
     "name": "add_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Add matter member changes state or starts stateful work.",
@@ -14443,7 +14443,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   },
   {
     "name": "remove_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Remove matter member changes state or starts stateful work.",

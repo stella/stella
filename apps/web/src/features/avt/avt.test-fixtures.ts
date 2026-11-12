@@ -50,7 +50,19 @@ type MakeClaimArgs = {
   recheck?: VerificationClaim["recheck"];
   staleness?: VerificationClaim["staleness"];
   assertedOn?: VerificationClaim["assertedOn"];
+  /** The server's answer. By default a conflict needs attention and every
+   *  other verdict does not; a test with a contested fact or a judgement
+   *  qualifier says so itself. */
+  needsAttention?: boolean;
 };
+
+/** Test data only: which verdicts default to needing attention. The rule
+ *  itself is the server's (`claimNeedsAttention`). */
+const CONFLICT_VERDICTS: ReadonlySet<ClaimVerdict["state"]> = new Set([
+  "contradicted",
+  "tension",
+  "recordconflict",
+]);
 
 export const makeClaim = ({
   suffix,
@@ -69,6 +81,7 @@ export const makeClaim = ({
   recheck = null,
   staleness = [],
   assertedOn = { type: "none" },
+  needsAttention = CONFLICT_VERDICTS.has(verdict.state),
 }: MakeClaimArgs): VerificationClaim => ({
   id: claimId(suffix),
   position: suffix,
@@ -76,6 +89,7 @@ export const makeClaim = ({
   framing: "asserted",
   verdict,
   qualifiers,
+  needsAttention,
   suggestedGoverningFactId,
   text: `Claim ${String(suffix)}`,
   assertedOn,
