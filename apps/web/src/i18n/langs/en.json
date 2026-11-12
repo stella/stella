@@ -245,7 +245,6 @@
       "claims": "{count, plural, one {# claim rests on this fact} other {# claims rest on this fact}}",
       "empty": "This list has no facts yet.",
       "moreClaims": "{count, plural, one {# more claim} other {# more claims}}",
-      "moreSources": "{count, plural, one {+# source} other {+# sources}}",
       "undated": "Undated"
     },
     "claimDetail": {

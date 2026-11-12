@@ -203,7 +203,6 @@
   "avt.chronology.claims": "{count, plural, one {# claim rests on this fact} other {# claims rest on this fact}}",
   "avt.chronology.empty": "This list has no facts yet.",
   "avt.chronology.moreClaims": "{count, plural, one {# more claim} other {# more claims}}",
-  "avt.chronology.moreSources": "{count, plural, one {+# source} other {+# sources}}",
   "avt.chronology.undated": "Undated",
   "avt.claimDetail.basis.anchorFactsDisagree": "Anchor facts disagree",
   "avt.claimDetail.basis.conflictCount": "{count, plural, one {# conflict} other {# conflicts}}",

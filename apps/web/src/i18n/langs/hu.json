@@ -245,7 +245,6 @@
       "claims": "{count, plural, one {# állítás alapul ezen a tényen} other {# állítás alapul ezen a tényen}}",
       "empty": "Ez a lista még nem tartalmaz tényeket.",
       "moreClaims": "{count, plural, one {még # állítás} other {még # állítás}}",
-      "moreSources": "{count, plural, one {+# forrás} other {+# forrás}}",
       "undated": "Dátum nélkül"
     },
     "claimDetail": {

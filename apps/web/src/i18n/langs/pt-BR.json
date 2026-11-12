@@ -245,7 +245,6 @@
       "claims": "{count, plural, one {# alegação se baseia neste fato} many {# alegações se baseiam neste fato} other {# alegações se baseiam neste fato}}",
       "empty": "Esta lista ainda não tem fatos.",
       "moreClaims": "{count, plural, one {mais # alegação} many {mais # alegações} other {mais # alegações}}",
-      "moreSources": "{count, plural, one {+# fonte} many {+# fontes} other {+# fontes}}",
       "undated": "Sem data"
     },
     "claimDetail": {

@@ -245,7 +245,6 @@
       "claims": "{count, plural, one {# väide tugineb sellele faktile} other {# väidet tugineb sellele faktile}}",
       "empty": "Selles loendis pole veel fakte.",
       "moreClaims": "{count, plural, one {veel # väide} other {veel # väidet}}",
-      "moreSources": "{count, plural, one {+# allikas} other {+# allikat}}",
       "undated": "Kuupäevata"
     },
     "claimDetail": {

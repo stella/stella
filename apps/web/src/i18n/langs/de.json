@@ -245,7 +245,6 @@
       "claims": "{count, plural, one {# Behauptung beruht auf diesem Fakt} other {# Behauptungen beruhen auf diesem Fakt}}",
       "empty": "Diese Liste enthält noch keine Fakten.",
       "moreClaims": "{count, plural, one {# weitere Behauptung} other {# weitere Behauptungen}}",
-      "moreSources": "{count, plural, one {+# Quelle} other {+# Quellen}}",
       "undated": "Ohne Datum"
     },
     "claimDetail": {

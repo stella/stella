@@ -192,7 +192,6 @@ const ChronologyItem = ({
       ? null
       : dateText(fact.occurredOn, fact.occurredOnPrecision);
   const shownClaims = expanded ? claims : claims.slice(0, CLAIMS_SHOWN);
-  const source = sources.at(0);
   const notes = [
     fact.tier === "document" ? null : t(TIER_LABEL_KEYS[fact.tier]),
     fact.held ? t("avt.graph.held") : null,
@@ -212,27 +211,25 @@ const ChronologyItem = ({
         >
           {fact.text}
         </BidiText>
-        {(source !== undefined || notes.length > 0) && (
+        {(sources.length > 0 || notes.length > 0) && (
           <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs">
             {notes.length > 0 && <span>{notes.join(" · ")}</span>}
-            {notes.length > 0 && source !== undefined && (
-              <span aria-hidden="true">·</span>
-            )}
-            {source !== undefined && (
-              <FactSource
-                documentId={source.sourceId}
-                documentName={source.name}
-                locator={source.locator}
-                workspaceId={workspaceId}
-              />
-            )}
-            {sources.length > 1 && (
-              <span className="tabular-nums">
-                {t("avt.chronology.moreSources", {
-                  count: sources.length - 1,
-                })}
-              </span>
-            )}
+            {/* Every place the fact is cited opens its document there. */}
+            {sources.map((source, index) => (
+              <React.Fragment
+                key={`${source.sourceId}|${JSON.stringify(source.locator)}`}
+              >
+                {(index > 0 || notes.length > 0) && (
+                  <span aria-hidden="true">·</span>
+                )}
+                <FactSource
+                  documentId={source.sourceId}
+                  documentName={source.name}
+                  locator={source.locator}
+                  workspaceId={workspaceId}
+                />
+              </React.Fragment>
+            ))}
           </div>
         )}
         {claims.length > 0 && (

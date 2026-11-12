@@ -245,7 +245,6 @@
       "claims": "{count, plural, zero {# apgalvojumi balstās uz šo faktu} one {# apgalvojums balstās uz šo faktu} other {# apgalvojumi balstās uz šo faktu}}",
       "empty": "Šajā sarakstā vēl nav faktu.",
       "moreClaims": "{count, plural, zero {vēl # apgalvojumi} one {vēl # apgalvojums} other {vēl # apgalvojumi}}",
-      "moreSources": "{count, plural, zero {+# avoti} one {+# avots} other {+# avoti}}",
       "undated": "Bez datuma"
     },
     "claimDetail": {

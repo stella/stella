@@ -245,7 +245,6 @@
       "claims": "{count, plural, one {# tvrdenie sa opiera o tento fakt} few {# tvrdenia sa opierajú o tento fakt} many {# tvrdenia sa opiera o tento fakt} other {# tvrdení sa opiera o tento fakt}}",
       "empty": "Tento zoznam zatiaľ nemá žiadne fakty.",
       "moreClaims": "{count, plural, one {# ďalšie tvrdenie} few {# ďalšie tvrdenia} many {# ďalšieho tvrdenia} other {# ďalších tvrdení}}",
-      "moreSources": "{count, plural, one {+# zdroj} few {+# zdroje} many {+# zdroja} other {+# zdrojov}}",
       "undated": "Bez dátumu"
     },
     "claimDetail": {

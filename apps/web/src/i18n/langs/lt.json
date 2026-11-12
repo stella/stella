@@ -245,7 +245,6 @@
       "claims": "{count, plural, one {# teiginys grindžiamas šiuo faktu} few {# teiginiai grindžiami šiuo faktu} many {# teiginio grindžiama šiuo faktu} other {# teiginių grindžiama šiuo faktu}}",
       "empty": "Šiame sąraše dar nėra faktų.",
       "moreClaims": "{count, plural, one {dar # teiginys} few {dar # teiginiai} many {dar # teiginio} other {dar # teiginių}}",
-      "moreSources": "{count, plural, one {+# šaltinis} few {+# šaltiniai} many {+# šaltinio} other {+# šaltinių}}",
       "undated": "Be datos"
     },
     "claimDetail": {
