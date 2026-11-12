@@ -254,7 +254,10 @@ impl Shared {
 
   /// Keep a ready report through the first probe that finds the harness
   /// unavailable. `true` when it was kept: the caller probes again soon.
-  fn keep_ready_once(&self, harness: Harness) -> bool {
+  /// The kept report takes the probe's freshly read `credentials` all the
+  /// same: a sign-in changes them (a ChatGPT profile's key changes on every
+  /// sign-in), and a run starts with the cached ones.
+  fn keep_ready_once(&self, harness: Harness, credentials: Option<&HarnessCredentials>) -> bool {
     locked(&self.cache)
       .iter_mut()
       .find(|(id, _)| *id == harness)
@@ -263,6 +266,7 @@ impl Shared {
           matches!(held.report, HarnessReport::Ready(_)) && !held.kept_through_failure;
         if keep {
           held.kept_through_failure = true;
+          held.credentials = credentials.cloned();
         }
         keep
       })
@@ -676,7 +680,7 @@ async fn probe(shared: &Shared, sidecar: &HarnessSidecar, harness: Harness) -> P
     Ok(outcome) => {
       let report = harness_sidecar::harness_report(harness, &outcome);
       if matches!(report, HarnessReport::Unavailable(_))
-        && shared.keep_ready_once(harness)
+        && shared.keep_ready_once(harness, credentials.as_ref())
       {
         tracing::info!(target: LOG_TARGET, "a ready harness failed one probe; checking again soon");
         return Probed::KeptReady;

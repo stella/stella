@@ -344,18 +344,38 @@ impl Runner {
     self.journal.replace(namespace.to_owned(), journal);
   }
 
-  async fn connect_once(&mut self) -> Ended {
+  /// The account to connect as, with its journal open and the host told
+  /// which API it serves.
+  async fn authorized(&mut self) -> Result<Authorized, Ended> {
     let authorized = match self.auth.authorize().await {
       Ok(Some(authorized)) => authorized,
-      Ok(None) => return Ended::SignedOut,
+      Ok(None) => return Err(Ended::SignedOut),
       Err(_unavailable) => {
         tracing::warn!("desktop runner account unavailable");
-        return Ended::Failed;
+        return Err(Ended::Failed);
       }
     };
     self.ensure_journal(&authorized.namespace).await;
     self.host.connecting(&authorized.api_base_url);
-    self.wait_for_first_reports().await;
+    Ok(authorized)
+  }
+
+  async fn connect_once(&mut self) -> Ended {
+    let mut authorized = match self.authorized().await {
+      Ok(authorized) => authorized,
+      Err(ended) => return ended,
+    };
+    if !self.reports.settled() {
+      // The probes need the host `connecting` started, but the account's
+      // lease is not held while they run: every other account request
+      // would wait on it. The connection authorizes again afterwards.
+      drop(authorized);
+      self.wait_for_first_reports().await;
+      authorized = match self.authorized().await {
+        Ok(authorized) => authorized,
+        Err(ended) => return ended,
+      };
+    }
     self.reattach();
     let (request, secure) = match upgrade_request(&authorized, self.config.desktop_id) {
       Ok(request) => request,
