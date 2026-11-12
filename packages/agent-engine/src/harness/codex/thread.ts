@@ -42,7 +42,7 @@ const NETWORK_ACCESS = {
  *   asking; leaving it is asked about.
  * `never` is not used: it would turn those questions into silent refusals.
  */
-export const CODEX_APPROVAL_POLICY = {
+const CODEX_APPROVAL_POLICY = {
   ask: "untrusted",
   auto: "on-request",
   full_auto: "on-request",

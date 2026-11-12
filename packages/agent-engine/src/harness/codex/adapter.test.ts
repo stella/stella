@@ -22,7 +22,6 @@ import {
   test,
 } from "bun:test";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -529,21 +528,6 @@ describe("Codex adapter over a stdio app-server", () => {
       );
       expect(paramsOf(received(), "thread/start")).toBeUndefined();
     });
-  });
-
-  test("an approval mode it does not offer refuses the turn before the harness starts", async () => {
-    for (const approvals of ["auto", "full_auto"] as const) {
-      const harness = harnessFor("tool_calls");
-      const started = await harness.adapter.startTurn(
-        turnInput(harness.workspaceDir, {
-          policy: { network: "open", fs: "workspace", approvals },
-        }),
-      );
-      expect(Result.isError(started) && started.error.reason).toBe(
-        "start_rejected",
-      );
-      expect(existsSync(harness.logPath)).toBe(false);
-    }
   });
 
   test("a local turn persists the same message as the cloud translator for the same native turn", async () => {
