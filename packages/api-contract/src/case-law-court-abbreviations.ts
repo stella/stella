@@ -137,6 +137,20 @@ export const COURT_NAME_REGISTRY = {
     },
   ],
   // Hungary issues no ECLI, so the name is the only source there is. The
+  // Brazilian lawyers cite the courts by their sigla; the "Superior Tribunal"
+  // and "Tribunal Superior" forms differ only by word order.
+  BRA: [
+    { pattern: /^supremo\s+tribunal\s+federal$/iu, shortCode: "STF" },
+    { pattern: /^superior\s+tribunal\s+de\s+justiça$/iu, shortCode: "STJ" },
+    { pattern: /^tribunal\s+superior\s+do\s+trabalho$/iu, shortCode: "TST" },
+    { pattern: /^tribunal\s+superior\s+eleitoral$/iu, shortCode: "TSE" },
+    { pattern: /^superior\s+tribunal\s+militar$/iu, shortCode: "STM" },
+    {
+      pattern:
+        /^tribunal\s+de\s+justiça\s+do\s+distrito\s+federal\s+e\s+dos\s+territórios$/iu,
+      shortCode: "TJDFT",
+    },
+  ],
   // Kúria is written out rather than abbreviated in Hungarian prose, which is
   // why its chip is the name; `LB` is the pre-2012 Legfelsőbb Bíróság, the
   // same court under the name its older decisions carry.

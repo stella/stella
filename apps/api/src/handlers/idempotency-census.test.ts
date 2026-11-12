@@ -232,6 +232,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PATCH /v1/chat/threads/:threadId/pin-state": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/chat/threads/:threadId/read-state": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PATCH /v1/chat/threads/:threadId/title": {
     type: "non-replay",
     reason: "current-state",
@@ -319,6 +327,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "POST /v1/ai-autocomplete/stream": {
     type: "non-replay",
     reason: "stream",
+  },
+  "POST /v1/ai/draft-email": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/ai/summarize": {
+    type: "non-replay",
+    reason: "current-state",
   },
   "POST /v1/api-keys": {
     type: "non-replay",
@@ -448,6 +464,11 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "POST /v1/chat/threads/:threadId/turns/:turnId/cancel": {
     type: "non-replay",
     reason: "stream",
+  },
+  // A repeat answers the turn's undo that is queued, sent or done.
+  "POST /v1/chat/threads/:threadId/turns/:turnId/local-files/undo": {
+    type: "non-replay",
+    reason: "current-state",
   },
   "POST /v1/chat/tool-grants": {
     type: "non-replay",
@@ -1130,6 +1151,11 @@ const CREATE_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason:
       "Money movement keeps its current payment transaction and is never replayed.",
+  },
+  "src/handlers/sharepoint/imports/create.ts": {
+    type: "non-replay",
+    reason:
+      "Each file is re-read from SharePoint and converges on its stored content digest, so a repeat is a no-op without a receipt; the object writes and Graph reads sit outside a scoped replay receipt.",
   },
 } as const satisfies Record<string, { type: "non-replay"; reason: string }>;
 

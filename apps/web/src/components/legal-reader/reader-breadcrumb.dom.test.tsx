@@ -11,11 +11,6 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
-
 GlobalRegistrator.register();
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
@@ -43,6 +38,8 @@ const AnalysisProviders = ({ children }: { children: ReactNode }) => (
 );
 
 afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   // React work left on a fake clock runs inside act and before cleanup, so
   // later renders in the file never wait behind it.
   act(() => {

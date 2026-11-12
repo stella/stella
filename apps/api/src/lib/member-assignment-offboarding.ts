@@ -28,6 +28,7 @@ import {
   desktopEditHandoffs,
   desktopEditSessions,
   desktopPresence,
+  desktopRunnerFolderRestores,
   desktopRunnerRuns,
   desktopRunners,
   entities,
@@ -1519,7 +1520,7 @@ type ClearMemberScopedDataOptions = Pick<
 
 /**
  * The member's desktop runners, on the owner connection the runner tables
- * admit; their runs, queued commands and events cascade, and an open runner
+ * admit; their runs, queued commands, events and folder restores cascade, and an open runner
  * socket closes on its next heartbeat.
  */
 const clearMemberDesktopRunners = async ({
@@ -1852,10 +1853,12 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [member.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
   [timerActivityDevices.userId, "cleared"],
-  // Removal deletes the member's runners; their runs, queued commands and
-  // events cascade, and an open runner socket closes on its next heartbeat.
+  // Removal deletes the member's runners; their runs, queued commands,
+  // events and folder restores cascade, and an open runner socket closes on
+  // its next heartbeat.
   [desktopRunners.userId, "cleared"],
   [desktopRunnerRuns.userId, "cleared"],
+  [desktopRunnerFolderRestores.userId, "cleared"],
   [searchHistoryEntries.userId, "cleared"],
   [searchHistoryOwners.userId, "cleared"],
   [searchHistoryTombstones.userId, "cleared"],

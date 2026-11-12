@@ -31,6 +31,7 @@ import {
 } from "./button.shared";
 import { Loader } from "./loader";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
+import { TruncatedText } from "./truncated-text";
 
 /**
  * Disabled styling for a button that is only `aria-disabled`.
@@ -254,13 +255,12 @@ const BUTTON_SIZE_CONTENT = {
  * A button never grows past its container (`max-w-full` on every variant).
  * A one-line text label is cut to fit with an ellipsis; the button's
  * accessible name keeps the whole text, and `tooltip` can show it. The label
- * is a plain span, not a `TruncatedText`: a tooltip root in every button's
+ * is a `TruncatedText` without its own hint: a tooltip root in every button's
  * label would cost every screen with many buttons. `layout="wrap"` lets a
  * label take several lines instead. An inline button is a word in a sentence
  * and a plain button lays out its own content, so neither has a one-line
  * label to cut.
  */
-const BUTTON_LABEL_CLASS = "block min-w-0 truncate";
 
 const cutsLabel = ({
   layout,
@@ -294,13 +294,13 @@ const containedLabel = (children: ReactNode): ReactNode => {
   const closeRun = () => {
     if (run.length > 0) {
       parts.push(
-        <span
-          className={BUTTON_LABEL_CLASS}
+        <TruncatedText
           data-slot="button-label"
+          hint={false}
           key={`label:${String(parts.length)}`}
         >
           {run}
-        </span>,
+        </TruncatedText>,
       );
       run = [];
     }
