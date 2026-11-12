@@ -26,6 +26,7 @@ import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import {
   type ChatToolCallPart,
   getChatToolTitleKey,
+  type HarnessChatToolCallPart,
   isRunningToolPart,
 } from "@/components/chat/chat-ui-tools";
 import {
@@ -54,7 +55,8 @@ import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 
-type ToolPart = ChatToolCallPart;
+/** A stella or connector tool's call, or a coding agent's own step. */
+type ToolPart = ChatToolCallPart | HarnessChatToolCallPart;
 
 const getToolInput = (part: ToolPart): unknown => {
   if (!("input" in part)) {
