@@ -53,6 +53,17 @@ type StartAppServerOptions = {
 /** A request's answer as the server wrote it. */
 type AppServerAnswer = Result<unknown, AppServerRequestError>;
 
+/**
+ * Startup requests, which wait on the startup deadline: initialize covers
+ * the CLI's first launch (an antivirus scan, a busy computer); starting or
+ * resuming a thread waits for its MCP servers, stella's among them.
+ */
+const STARTUP_REQUESTS: ReadonlySet<CodexClientRequestMethod> = new Set([
+  "initialize",
+  "thread/start",
+  "thread/resume",
+]);
+
 export type AppServerClient = {
   /**
    * Sends a request and settles with its answer. `onAnswer` sees the
@@ -153,7 +164,12 @@ export const startAppServer = ({
       if (onAnswer !== undefined) {
         answerHooks.set(id, onAnswer);
       }
-      const answer = await server.request(id, method, { id, method, params });
+      const answer = await server.request(
+        id,
+        method,
+        { id, method, params },
+        STARTUP_REQUESTS.has(method) ? deadlines.startupRequestMs : undefined,
+      );
       // Unanswered (timed out, closed): the hook hears it here instead.
       if (answerHooks.delete(id)) {
         onAnswer?.(answer);

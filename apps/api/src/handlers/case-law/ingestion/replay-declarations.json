@@ -154,5 +154,23 @@
     "parserVersion": 27,
     "type": "pending-enrolment-wave",
     "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-uodo",
+    "parserVersion": 19,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-courts",
+    "parserVersion": 35,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-ncourt",
+    "parserVersion": 35,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
   }
 ]

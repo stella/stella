@@ -518,6 +518,14 @@ describe("local harness chunks", () => {
         type: "sandbox_unavailable",
         message: "The sandbox could not start.",
       },
+      retry_stalled: {
+        type: "retry_stalled",
+        message: "The harness kept retrying the provider without progress.",
+      },
+      tools_unavailable: {
+        type: "tools_unavailable",
+        message: "The harness could not connect to the stella MCP server.",
+      },
     } as const satisfies {
       [Type in HarnessFailure["type"]]: Extract<HarnessFailure, { type: Type }>;
     };

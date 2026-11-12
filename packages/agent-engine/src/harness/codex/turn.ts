@@ -486,6 +486,26 @@ export class CodexTurnSession {
         }
         return;
       }
+      case "mcpServer/startupStatus/updated": {
+        const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
+        // Only stella's own server is the turn's to fail on; a member's
+        // other servers are theirs.
+        if (
+          parsed !== null &&
+          parsed.name === this.stellaServer &&
+          parsed.status === "failed"
+        ) {
+          this.emit({
+            type: "turn.failed",
+            failure: {
+              type: "tools_unavailable",
+              message:
+                "The harness could not connect to the stella MCP server.",
+            },
+          });
+        }
+        return;
+      }
       case "turn/plan/updated": {
         const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
         if (parsed !== null && parsed.turnId === this.turnId) {

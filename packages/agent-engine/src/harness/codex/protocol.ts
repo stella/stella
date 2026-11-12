@@ -262,6 +262,12 @@ export const CODEX_NOTIFICATIONS = {
     threadId: v.string(),
     requestId: RequestId,
   }),
+  /** An MCP server's startup changed state; stella's must not fail. */
+  "mcpServer/startupStatus/updated": v.object({
+    name: v.string(),
+    status: v.string(),
+    error: v.nullish(v.string()),
+  }),
   "account/rateLimits/updated": v.object({
     rateLimits: v.object({
       limitId: v.nullish(v.string()),

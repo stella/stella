@@ -36,6 +36,13 @@ export const respondError = (
   message: string,
 ) => Result.err(new HarnessRespondError({ reason, message }));
 
+/**
+ * How long a turn waits after the harness says it is retrying the provider,
+ * with nothing else happening, before it ends as stalled. Long, so a slow
+ * provider that recovers is never cut off.
+ */
+const RETRY_STALL_MS = 10 * 60_000;
+
 const isTerminal = (event: HarnessEvent) =>
   event.type === "turn.completed" ||
   event.type === "turn.interrupted" ||
@@ -58,8 +65,11 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
   private readonly inputs = new Set<string>();
   /** Inputs whose `input.settled` is not out yet. */
   private readonly unsettled = new Set<string>();
+  /** Armed by a retry; any other event before it fires is progress. */
+  private retryStall: ReturnType<typeof setTimeout> | null = null;
 
   readonly gracePeriodMs: number;
+  private readonly retryStallMs: number;
   private readonly detached: Detached;
   private readonly shutdownContext: `${string}.shutdown`;
 
@@ -68,8 +78,11 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
     detached: Detached;
     /** Names the turn's shutdown in a detached failure, e.g. `codex-turn`. */
     name: string;
+    /** See `RETRY_STALL_MS`. */
+    retryStallMs?: number;
   }) {
     this.gracePeriodMs = options.gracePeriodMs;
+    this.retryStallMs = options.retryStallMs ?? RETRY_STALL_MS;
     this.detached = options.detached;
     this.shutdownContext = `${options.name}.shutdown`;
   }
@@ -171,12 +184,37 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
         this.settleInput(inputId, "rejected");
       }
     }
+    this.watchRetries(event);
     this.queue.push(event);
     if (isTerminal(event)) {
       this.hasEnded = true;
       this.queue.close();
       this.terminal.resolve(undefined);
       this.detached(this.shutdown(), this.shutdownContext);
+    }
+  }
+
+  /**
+   * A retry with nothing after it for `retryStallMs` ends the turn as
+   * stalled; anything else the harness does in between is progress.
+   */
+  private watchRetries(event: HarnessEvent) {
+    if (event.type === "retrying") {
+      this.retryStall ??= setTimeout(() => {
+        this.retryStall = null;
+        this.emit({
+          type: "turn.failed",
+          failure: {
+            type: "retry_stalled",
+            message: "The harness kept retrying the provider without progress.",
+          },
+        });
+      }, this.retryStallMs);
+      return;
+    }
+    if (this.retryStall !== null) {
+      clearTimeout(this.retryStall);
+      this.retryStall = null;
     }
   }
 

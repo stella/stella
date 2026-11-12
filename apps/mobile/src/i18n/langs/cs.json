@@ -70,6 +70,7 @@
     "inputRequest": "Vstup",
     "questionTitle": "Žádost o upřesnění",
     "questionChooseSeveral": "Vyberte vše, co platí",
+    "questionSelectAll": "Vybrat vše",
     "questionOwnWords": "Napsat vlastní",
     "questionShowOptions": "Zobrazit možnosti",
     "questionPlaceholder": "Vaše odpověď",
