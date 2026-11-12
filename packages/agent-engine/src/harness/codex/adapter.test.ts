@@ -244,7 +244,7 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(threadStart?.params).toMatchObject({
       model: "gpt-test",
       cwd: workspaceDir,
-      approvalPolicy: "on-request",
+      approvalPolicy: "untrusted",
       sandbox: "workspace-write",
       config: {
         "sandbox_workspace_write.network_access": true,
@@ -271,22 +271,35 @@ describe("Codex adapter over a stdio app-server", () => {
     });
   });
 
-  test("its one approval mode runs in the workspace sandbox, asks before leaving it, and writes caches to the package cache", async () => {
-    const { received, startup } = await run("tool_calls");
-    const threadStart = received().find(
-      ({ method }) => method === "thread/start",
-    );
-    expect(threadStart?.params).toMatchObject({
-      approvalPolicy: "on-request",
-      sandbox: "workspace-write",
-      config: {
-        "sandbox_workspace_write.writable_roots": [CACHE_DIR],
-        "sandbox_workspace_write.exclude_tmpdir_env_var": false,
-        "sandbox_workspace_write.exclude_slash_tmp": false,
-      },
-    });
-    expect(startup().packageCache).toEqual(packageCacheEnvironment(CACHE_DIR));
-  });
+  test.each([
+    ["ask", "untrusted"],
+    ["auto", "on-request"],
+    ["full_auto", "on-request"],
+  ] as const)(
+    "at %s it runs in the workspace sandbox with Codex's %s policy, asks before leaving it, and writes caches to the package cache",
+    async (approvals, approvalPolicy) => {
+      const { received, startup } = await run("tool_calls", {
+        overrides: {
+          policy: { network: "open", fs: "workspace", approvals },
+        },
+      });
+      const threadStart = received().find(
+        ({ method }) => method === "thread/start",
+      );
+      expect(threadStart?.params).toMatchObject({
+        approvalPolicy,
+        sandbox: "workspace-write",
+        config: {
+          "sandbox_workspace_write.writable_roots": [CACHE_DIR],
+          "sandbox_workspace_write.exclude_tmpdir_env_var": false,
+          "sandbox_workspace_write.exclude_slash_tmp": false,
+        },
+      });
+      expect(startup().packageCache).toEqual(
+        packageCacheEnvironment(CACHE_DIR),
+      );
+    },
+  );
 
   test("a managed tool comes first on the server's PATH and the inherited PATH stays", async () => {
     const toolDir = path.join(tmpdir(), "stella-managed-bun", "bin");
@@ -1186,7 +1199,7 @@ describe("Codex adapter over a stdio app-server", () => {
         },
       ],
       capabilities: ["approvals", "interrupt", "resume", "image_input"],
-      approvalModes: ["ask"],
+      approvalModes: ["ask", "auto", "full_auto"],
       usageLimit: null,
     });
     const methods = harness.received().map(({ method }) => method);

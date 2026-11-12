@@ -31,13 +31,22 @@ const NETWORK_ACCESS = {
   open: true,
 } as const satisfies Record<HarnessRunPolicy["network"], boolean>;
 /**
- * Codex runs every command inside its sandbox and asks before acting outside
- * it; stella relays the question. That is its one approval mode: `never`
- * would turn those questions into silent refusals, so Codex offers no other.
+ * Codex's approval policy per approval mode. At every level Codex runs each
+ * command inside its workspace sandbox and asks before acting outside it;
+ * stella relays the question.
+ * - `ask`: `untrusted`. Only commands Codex knows to be read-only run without
+ *   asking; every other command is asked about.
+ * - `auto`: `on-request`. Codex decides what it can do inside the sandbox on
+ *   its own and asks about the rest.
+ * - `full_auto`: `on-request`. Everything inside the sandbox runs without
+ *   asking; leaving it is asked about.
+ * `never` is not used: it would turn those questions into silent refusals.
  */
-export const CODEX_APPROVAL_MODE =
-  "ask" satisfies HarnessRunPolicy["approvals"];
-const APPROVAL_POLICY = "on-request";
+export const CODEX_APPROVAL_POLICY = {
+  ask: "untrusted",
+  auto: "on-request",
+  full_auto: "on-request",
+} as const satisfies Record<HarnessRunPolicy["approvals"], string>;
 /** A dotted config key carries the name, so it must stay a bare TOML key. */
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
 
@@ -144,7 +153,7 @@ const threadParams = (
   return {
     model: input.model,
     cwd: input.workspaceDir,
-    approvalPolicy: APPROVAL_POLICY,
+    approvalPolicy: CODEX_APPROVAL_POLICY[input.policy.approvals],
     sandbox: SANDBOX_MODE[input.policy.fs],
     developerInstructions: input.instructions,
     config: {

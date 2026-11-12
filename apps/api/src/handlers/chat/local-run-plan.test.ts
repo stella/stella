@@ -107,7 +107,7 @@ const READY: PickedDesktop = {
     state: "ready",
     version: "0.50.0",
     capabilities: ["approvals", "interrupt"],
-    // Codex runs in one approval mode.
+    // A harness that offers only Ask.
     approvalModes: ["ask"],
     models: [{ id: MODEL, label: "GPT-5 Codex" }],
   },

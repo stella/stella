@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { DESKTOP_RUNNER_APPROVAL_MODES } from "@stll/api-contract/desktop-runner";
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
 import type { ProtocolLog } from "../../protocol-log";
@@ -39,7 +40,7 @@ import {
   ModelListResponseSchema,
   TurnStartResponseSchema,
 } from "./protocol";
-import { CODEX_APPROVAL_MODE, openThread } from "./thread";
+import { openThread } from "./thread";
 import { type CodexCapacityRetry, CodexTurnSession } from "./turn";
 
 /**
@@ -395,7 +396,9 @@ const probe = async (
       auth,
       models,
       capabilities: capabilities(),
-      approvalModes: [CODEX_APPROVAL_MODE],
+      // Every level: `CODEX_APPROVAL_POLICY` maps each, and Codex sandboxes
+      // every command at every level.
+      approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
       // The probe does not read rate limits; a limited turn reports them.
       usageLimit: null,
     });
@@ -417,14 +420,6 @@ const startTurn = async (
   }
   if (!path.isAbsolute(input.workspaceDir)) {
     panic("Codex adapter: the workspace directory must be an absolute path");
-  }
-  if (input.policy.approvals !== CODEX_APPROVAL_MODE) {
-    return Result.err(
-      new HarnessStartError({
-        reason: "start_rejected",
-        message: "The harness runs in one approval mode only.",
-      }),
-    );
   }
   const session = new CodexTurnSession({
     gracePeriodMs: options.gracePeriodMs,
