@@ -245,14 +245,16 @@ export const localRunTargetFor = ({
   maxApprovals: DesktopRunnerApprovalMode;
 }): ChatRunTarget => {
   const effort = selected.kind === "local" ? selected.reasoningEffort : null;
-  const offered =
-    option.models.find(({ id }) => id === model)?.reasoningEfforts ?? [];
+  // No such model offers no effort.
+  const offered = option.models.find(
+    ({ id }) => id === model,
+  )?.reasoningEfforts;
   return {
     kind: "local",
     harness: option.harness,
     model,
     reasoningEffort:
-      effort !== null && offered.includes(effort) ? effort : null,
+      effort !== null && offered?.includes(effort) === true ? effort : null,
     approvals: approvalModeWithin({
       mode:
         selected.kind === "local" &&

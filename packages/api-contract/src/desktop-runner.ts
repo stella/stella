@@ -396,13 +396,13 @@ export type DesktopRunnerReasoningEffort =
 /**
  * The efforts of `reported` this contract carries, each once and in ladder
  * order, so a harness naming an effort stella does not know yet still
- * reports the model.
+ * reports the model. A model that reports none (`undefined`) offers none.
  */
 export const knownReasoningEfforts = (
-  reported: readonly string[],
+  reported: readonly string[] | undefined,
 ): DesktopRunnerReasoningEffort[] =>
-  DESKTOP_RUNNER_REASONING_EFFORTS.filter((effort) =>
-    reported.includes(effort),
+  DESKTOP_RUNNER_REASONING_EFFORTS.filter(
+    (effort) => reported?.includes(effort) === true,
   );
 
 const MAX_SEQ = 4_294_967_295;

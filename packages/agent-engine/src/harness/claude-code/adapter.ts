@@ -508,7 +508,7 @@ const modelsOf = ({ models }: Initialized): HarnessModel[] => {
     id: model.value,
     displayName: model.displayName,
     isDefault: index === defaultIndex,
-    reasoningEfforts: knownReasoningEfforts(model.supportedEffortLevels ?? []),
+    reasoningEfforts: knownReasoningEfforts(model.supportedEffortLevels),
     inputModalities: TEXT_ONLY,
   }));
 };
