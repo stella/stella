@@ -82,6 +82,7 @@ pub async fn local_linked_folders_pick(
   app: AppHandle,
   gates: State<'_, FeatureGates>,
 ) -> Result<bool, LocalLinkedFolderCommandError> {
+  let probing = linked_folders(&gates)?;
   let folders = linked_folders(&gates)?;
   let (picked, answer) = tokio::sync::oneshot::channel();
   let mut dialog = app.dialog().file();
@@ -101,9 +102,18 @@ pub async fn local_linked_folders_pick(
     .into_path()
     .ok()
     .ok_or(LinkedFolderListError::Unreadable)?;
-  off_the_loop(move || folders.add(&path))
+  // Only the look at the folder is bounded: one that does not answer in
+  // time is unreadable and never linked. Linking itself touches only the
+  // stored list, so it always finishes and its outcome is the answer.
+  let candidate = off_the_loop(move || probing.probe(&path))
     .await
     .unwrap_or(Err(LinkedFolderListError::Unreadable))?;
+  tokio::task::spawn_blocking(move || folders.commit(candidate))
+    .await
+    .map_err(crate::logging::replaced_logged(
+      "a linked folder could not be stored",
+      LinkedFolderListError::Storage,
+    ))??;
   announce(&app);
   Ok(true)
 }

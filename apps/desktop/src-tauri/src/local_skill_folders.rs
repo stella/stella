@@ -203,17 +203,13 @@ fn plain_path(path: &Path) -> Option<String> {
 
 /// The folders a run can write to: stella's own, the folders a member linked
 /// for runs to work in, and the temp directories every harness sandbox leaves
-/// writable. Each is listed as named and as resolved, in the form a stored
-/// folder's path takes.
+/// writable, in the form a stored folder's path takes. stella's own and the
+/// temp directories are listed as named and as resolved; a linked folder is
+/// stored already resolved, so its mount, which may not answer, is never
+/// touched here.
 fn run_writable_folders() -> Vec<PathBuf> {
   crate::desktop_runner::run_folders_on_this_computer()
     .into_iter()
-    .chain(
-      crate::local_linked_folders::LinkedFolders::for_this_computer()
-        .listed()
-        .into_iter()
-        .map(PathBuf::from),
-    )
     .chain([std::env::temp_dir(), PathBuf::from("/tmp")])
     .flat_map(|root| {
       let resolved = fs::canonicalize(&root)
@@ -223,6 +219,12 @@ fn run_writable_folders() -> Vec<PathBuf> {
         .map(PathBuf::from);
       std::iter::once(root).chain(resolved)
     })
+    .chain(
+      crate::local_linked_folders::LinkedFolders::for_this_computer()
+        .listed()
+        .into_iter()
+        .map(PathBuf::from),
+    )
     .collect()
 }
 
