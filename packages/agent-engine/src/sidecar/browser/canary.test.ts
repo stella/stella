@@ -184,6 +184,16 @@ const browse = async (harness: keyof typeof FAKES) => {
   const endpoint = path.join(root, "stella-holder-1.4.0.sock");
   const api = startApi();
   const library = startFixtureLibrary();
+  // A home folder with a Chrome profile, where the holder registers the
+  // native host: without one it offers no browser tools.
+  const home = path.join(root, "home");
+  const profile = path.join(
+    home,
+    ...(process.platform === "darwin"
+      ? ["Library", "Application Support", "Google", "Chrome"]
+      : [".config", "google-chrome"]),
+  );
+  mkdirSync(profile, { recursive: true });
   cleanups.push(library.stop);
 
   const holder = Bun.spawn(
@@ -196,6 +206,7 @@ const browse = async (harness: keyof typeof FAKES) => {
         PATH: process.env["PATH"] ?? "",
         FAKE_HARNESS_LOG: path.join(root, "fake.log"),
         FAKE_BROWSER_START: `${library.origin}/`,
+        HOME: home,
       },
     },
   );
@@ -209,6 +220,16 @@ const browse = async (harness: keyof typeof FAKES) => {
     description: "the holder to start",
   });
 
+  // Chrome starts the host the holder registers once its browser is up.
+  const manifest = path.join(
+    profile,
+    "NativeMessagingHosts",
+    "app.stll.browser.json",
+  );
+  await waitFor(() => (existsSync(manifest) ? true : undefined), {
+    ...WAIT,
+    description: "the holder to register the browser host",
+  });
   const chrome = startFakeExtension({
     hostCommand: [
       process.execPath,
