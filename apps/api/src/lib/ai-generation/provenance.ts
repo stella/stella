@@ -150,6 +150,21 @@ export const generateArtefact = async <T>({
 export const authorArtefact = <T>(value: T): ArtefactValue<T> =>
   new Artefact(value, { type: "authored" });
 
+/**
+ * The value of an artefact no stored decision fed, for an answer its caller
+ * returns and never stores. Nothing it came from can be withdrawn, so it
+ * needs no projection; one that cites decisions must be read through one.
+ */
+export const readUnsourcedArtefact = <T>(artefact: ArtefactValue<T>): T => {
+  const { value, origin } = artefact[readValue]();
+  if (origin.type === "generated" && origin.decisionIds.length > 0) {
+    return panic(
+      "A sourced artefact is read through its withdrawal projection",
+    );
+  }
+  return value;
+};
+
 type ReadArtefactTextOptions = {
   value: string;
   origin: ArtefactOrigin;
