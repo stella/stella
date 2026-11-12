@@ -96,6 +96,9 @@ const chatEventSchema = v.union([
     type: v.literal("TOOL_CALL_RESULT"),
     toolCallId: v.string(),
     content: v.optional(v.string()),
+    // `output-error` for a call that failed or was cancelled, which the
+    // stored message keeps as an errored call.
+    state: v.optional(v.string()),
   }),
   v.object({
     type: v.literal("RUN_FINISHED"),
@@ -127,7 +130,8 @@ export type AnswerStatus =
 /**
  * A part of an answer as it arrives, in the shape of a stored message's
  * part, so both draw through `answerBlocks`: text, reasoning, and tool
- * calls, each complete once its result came back.
+ * calls, each complete once its result came back, or errored when the
+ * result says the call failed or was cancelled.
  */
 type StreamedPart =
   | { readonly type: "text" | "thinking"; readonly content: string }
@@ -135,7 +139,7 @@ type StreamedPart =
       readonly type: "tool-call";
       readonly id: string;
       readonly name: string;
-      readonly state: "input-streaming" | "complete";
+      readonly state: "input-streaming" | "complete" | "error";
       readonly output?: unknown;
     };
 
@@ -233,7 +237,7 @@ export const applyChatEvent = (
           part.type === "tool-call" && part.id === event.toolCallId
             ? {
                 ...part,
-                state: "complete",
+                state: event.state === "output-error" ? "error" : "complete",
                 output: resultOutput(event.content),
               }
             : part,

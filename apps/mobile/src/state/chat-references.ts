@@ -44,8 +44,10 @@ export type ChatTextReference =
   | {
       readonly kind: "decision";
       readonly label: string;
-      /** Null for a decision named by its docket, which the phone cannot open yet. */
+      /** The decision's id, when the link names it by id. */
       readonly decisionId: string | null;
+      /** The docket or ECLI the link names it by otherwise, found by a search. */
+      readonly docket: string | null;
     }
   /** A person, a skill or a source the turn was scoped to: a label alone. */
   | { readonly kind: "label"; readonly label: string };
@@ -102,13 +104,13 @@ const toTextReference = (reference: ChatReference): ChatTextReference => {
       };
     case "decision": {
       const { locator } = reference;
+      const ref = locator.type === "ref" ? locator.ref.trim() : "";
+      const named = isCaseLawDecisionId(ref);
       return {
         kind: "decision",
         label: reference.label,
-        decisionId:
-          locator.type === "ref" && isCaseLawDecisionId(locator.ref)
-            ? locator.ref.trim()
-            : null,
+        decisionId: named ? ref : null,
+        docket: named || ref === "" ? null : ref,
       };
     }
     case "skill":
@@ -125,8 +127,9 @@ const toTextReference = (reference: ChatReference): ChatTextReference => {
 
 /**
  * Where tapping a reference goes: a screen of the app, `resolve` for an
- * item whose kind decides its screen and must be read first, or undefined
- * for one that opens nothing.
+ * item whose kind decides its screen and must be read first, `find` for a
+ * decision named by its docket, which a search turns into its id, or
+ * undefined for one that opens nothing.
  */
 export type ReferenceTarget =
   | { readonly type: "route"; readonly href: Href }
@@ -135,7 +138,8 @@ export type ReferenceTarget =
       readonly matterId: string;
       readonly entityId: string;
       readonly name: string;
-    };
+    }
+  | { readonly type: "find"; readonly docket: string };
 
 export const referenceTarget = (
   reference: ChatTextReference,
@@ -173,15 +177,12 @@ export const referenceTarget = (
         },
       };
     case "decision":
-      return reference.decisionId === null
+      if (reference.decisionId !== null) {
+        return { type: "route", href: decisionRoute(reference.decisionId) };
+      }
+      return reference.docket === null
         ? undefined
-        : {
-            type: "route",
-            href: {
-              pathname: "/law/[decisionId]",
-              params: { decisionId: reference.decisionId },
-            },
-          };
+        : { type: "find", docket: reference.docket };
     case "label":
       return undefined;
     default:
@@ -189,3 +190,15 @@ export const referenceTarget = (
       return panic(`Unhandled reference: ${String(reference)}`);
   }
 };
+
+/** A decision's own screen; `caseNumber` names it before its text loads. */
+export const decisionRoute = (
+  decisionId: string,
+  caseNumber?: string,
+): Href => ({
+  pathname: "/law/[decisionId]",
+  params: {
+    decisionId,
+    ...(caseNumber === undefined ? {} : { caseNumber }),
+  },
+});

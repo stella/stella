@@ -500,6 +500,10 @@ describe("registry and connector scope chips", () => {
     expect(referenceFromHref("#stella-connector=Bad Slug", "x")).toEqual({
       type: "unresolved",
     });
+    // A skill link that names no skill reads as its label too.
+    expect(referenceFromHref("#stella-skill-ref=", "x")).toEqual({
+      type: "unresolved",
+    });
     expect(
       referenceFromMentionAttrs({
         id: "nope",

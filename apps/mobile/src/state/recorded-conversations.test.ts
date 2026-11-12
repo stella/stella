@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -109,7 +110,11 @@ const storedEntries = async (page: unknown): Promise<readonly ChatEntry[]> => {
     source,
     threadId: "thread",
   });
-  return read.isOk() ? read.value.entries : [];
+  // A page the phone cannot read fails the replay rather than reading as an
+  // empty thread.
+  return read.isOk()
+    ? read.value.entries
+    : panic(`A recorded page did not read: ${read.error._tag}`);
 };
 
 /** The answer as the phone draws it while it streams, from the whole body. */

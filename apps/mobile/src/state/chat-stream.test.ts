@@ -214,6 +214,24 @@ describe("drawing an answer from its events", () => {
       steps: [{ type: "tool", label: "list_templates", status: "failed" }],
       work: new Map(),
     });
+    // A local agent's step that failed or was cancelled says so in the
+    // result's state, not its content; the stored message keeps it errored.
+    for (const content of ['{"status":"failed"}', '{"status":"interrupted"}']) {
+      const errored = applyChatEvent(started, {
+        type: "TOOL_CALL_RESULT",
+        toolCallId: "call-1",
+        content,
+        state: "output-error",
+      });
+      expect(
+        answerEntry(errored, "2026-10-20T10:00:00.000Z").blocks[1],
+      ).toEqual({
+        type: "steps",
+        key: "1",
+        steps: [{ type: "tool", label: "list_templates", status: "failed" }],
+        work: new Map(),
+      });
+    }
   });
 
   test("is still streaming until the run says it finished", () => {

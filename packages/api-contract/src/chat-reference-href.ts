@@ -198,7 +198,11 @@ export const referenceFromHref = (
 
   if (href.startsWith(SKILL_REF_HREF_PREFIX)) {
     const slug = href.slice(SKILL_REF_HREF_PREFIX.length);
-    return slug.length > 0 ? asReference({ type: "skill", slug, label }) : null;
+    // A skill link that names no skill reads as its label, like any other
+    // reference that cannot be resolved.
+    return slug.length > 0
+      ? asReference({ type: "skill", slug, label })
+      : { type: "unresolved" };
   }
 
   const target = parseChatResourceHref(href);

@@ -66,10 +66,13 @@ describe("where a reference in chat text opens", () => {
     });
   });
 
-  test("a decision named by its docket, a person and a skill open nothing", () => {
+  test("a decision named by its docket is found by a search", () => {
     expect(
       target("#stella-decision=Pl.%20%C3%9AS%201%2F23", "Pl. ÚS 1/23"),
-    ).toBeUndefined();
+    ).toEqual({ type: "find", docket: "Pl. ÚS 1/23" });
+  });
+
+  test("a person and a skill open nothing", () => {
     expect(target(`#stella-user=${ENTITY}`, "Jana")).toBeUndefined();
     expect(
       target("#stella-skill-ref=nda-review", "NDA review"),

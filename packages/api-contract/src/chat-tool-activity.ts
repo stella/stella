@@ -382,10 +382,19 @@ export const isProcessPart = (part: ChatActivityPart): boolean => {
 /**
  * Whether a process part shows as a step. Reasoning with no text, a tool
  * result, and a skill the model failed to load (it tries another) show
- * nothing. A finished web search or page fetch shows among the answer's
- * sources instead.
+ * nothing. A finished web search or page fetch is a step too, unless the
+ * surface shows it among the answer's sources instead (the web's sources
+ * tray); a surface without one keeps it as a step, so it is not lost.
  */
-export const isVisibleProcessStep = (part: ChatActivityPart): boolean => {
+export const isVisibleProcessStep = (
+  part: ChatActivityPart,
+  {
+    searchesShownApart,
+  }: {
+    /** The surface lists finished searches and fetches as sources. */
+    readonly searchesShownApart: boolean;
+  },
+): boolean => {
   if (part.type === "thinking") {
     return typeof part.content === "string" && part.content.trim() !== "";
   }
@@ -402,6 +411,7 @@ export const isVisibleProcessStep = (part: ChatActivityPart): boolean => {
     return false;
   }
   return !(
+    searchesShownApart &&
     (part.name === "web_search" || part.name === "fetch_url") &&
     part.state === "complete"
   );

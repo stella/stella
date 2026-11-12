@@ -152,13 +152,17 @@ const labelEnd = (text: string, open: number): number => {
  * The destination of a link whose `(` stands at `open`, unescaped, and the
  * index after its closing `)`. A destination is either `<…>`, which may hold
  * spaces and parentheses, or bare, which ends at a space or at a `)` that
- * closes no `(` of its own. An optional title after it is skipped.
+ * closes no `(` of its own. Spaces may stand around it, and an optional
+ * title after it is skipped.
  */
 const linkDestination = (
   text: string,
   open: number,
 ): { href: string; end: number } | undefined => {
   let at = open + 1;
+  while (text[at] === " ") {
+    at += 1;
+  }
   let href = "";
   if (text[at] === "<") {
     at += 1;
@@ -270,10 +274,10 @@ export const parseInline = (text: string, context: MarkdownContext): Span[] => {
       const end = text.indexOf("**", at + 2);
       if (end > at + 2) {
         flush();
-        spans.push({
-          text: unescapeMarkdown(text.slice(at + 2, end)),
-          bold: true,
-        });
+        // Emphasis holds spans of its own: a mention in bold is still a chip.
+        for (const span of parseInline(text.slice(at + 2, end), context)) {
+          spans.push({ ...span, bold: true });
+        }
         at = end + 2;
         continue;
       }
@@ -289,10 +293,9 @@ export const parseInline = (text: string, context: MarkdownContext): Span[] => {
       const opens = at === 0 || !isWordChar(text[at - 1]);
       if (closes && opens) {
         flush();
-        spans.push({
-          text: unescapeMarkdown(text.slice(at + 1, end)),
-          italic: true,
-        });
+        for (const span of parseInline(text.slice(at + 1, end), context)) {
+          spans.push({ ...span, italic: true });
+        }
         at = end + 1;
         continue;
       }
@@ -379,6 +382,17 @@ const isDelimiterRow = (line: string): boolean => {
   });
 };
 
+/** Whether a line opens a block other than a paragraph or a table row. */
+const startsBlock = (line: string): boolean => {
+  const trimmed = line.trim();
+  return (
+    trimmed.startsWith(FENCE) ||
+    trimmed.startsWith(">") ||
+    heading(trimmed) !== undefined ||
+    listItem(line) !== undefined
+  );
+};
+
 /** Whether a line ends in a hard line break of two or more spaces. */
 const breaksAfter = (line: string): boolean => line.endsWith("  ");
 
@@ -437,8 +451,11 @@ export const parseMarkdown = (
       const rows: Span[][][] = [];
       index += 2;
       while (index < lines.length) {
-        const row = (lines[index] ?? "").trim();
-        if (row === "" || !row.includes("|")) {
+        const rowLine = lines[index] ?? "";
+        const row = rowLine.trim();
+        // A table ends at a blank line, a line with no cells, or the start
+        // of another block.
+        if (row === "" || !row.includes("|") || startsBlock(rowLine)) {
           break;
         }
         const cells = tableCells(row);
@@ -492,7 +509,7 @@ export const parseMarkdown = (
     // break: two spaces (how a sent message stores its line breaks) or a
     // backslash.
     const previous = paragraph.at(-1);
-    if (previous?.endsWith("\\") === true) {
+    if (previous !== undefined && (lines[index - 1] ?? "").endsWith("\\")) {
       paragraph[paragraph.length - 1] = `${previous.slice(0, -1)}\n`;
     } else if (previous !== undefined) {
       const joint = breaksAfter(lines[index - 1] ?? "") ? "\n" : " ";

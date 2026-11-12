@@ -88,7 +88,6 @@ export const AnswerSteps = ({
               </Text>
               {step.type === "reasoning" && step.text !== "" ? (
                 <Text
-                  numberOfLines={6}
                   selectable
                   style={[styles.reasoning, { color: colors.muted }]}
                 >

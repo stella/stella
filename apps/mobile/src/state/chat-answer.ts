@@ -108,7 +108,12 @@ export const answerBlocks = (
       }
       continue;
     }
-    const steps = group.items.filter(isVisibleProcessStep).map(toStep);
+    // The phone has no sources tray, so a finished search stays a step.
+    const steps = group.items
+      .filter((part) =>
+        isVisibleProcessStep(part, { searchesShownApart: false }),
+      )
+      .map(toStep);
     if (steps.length > 0) {
       blocks.push({
         type: "steps",

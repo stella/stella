@@ -126,18 +126,28 @@ describe("runs of steps", () => {
     ]);
   });
 
-  test("show reasoning with text and calls, not results, failed skill loads or finished searches", () => {
+  test("show reasoning with text and calls, not results or failed skill loads", () => {
+    const parts = [
+      { type: "thinking", content: " " },
+      { type: "thinking", content: "Which register?" },
+      { type: "tool-result", content: "{}" },
+      call("load-skill", "error"),
+      call("web_search", "complete", { results: [] }),
+      call("web_search", "input-streaming"),
+      call("execute_typescript", "complete", { success: false }),
+    ];
+    // A finished search is a source where the surface lists sources, and a
+    // step where it does not.
     expect(
-      [
-        { type: "thinking", content: " " },
-        { type: "thinking", content: "Which register?" },
-        { type: "tool-result", content: "{}" },
-        call("load-skill", "error"),
-        call("web_search", "complete", { results: [] }),
-        call("web_search", "input-streaming"),
-        call("execute_typescript", "complete", { success: false }),
-      ].map(isVisibleProcessStep),
+      parts.map((part) =>
+        isVisibleProcessStep(part, { searchesShownApart: true }),
+      ),
     ).toEqual([false, true, false, false, false, true, true]);
+    expect(
+      parts.map((part) =>
+        isVisibleProcessStep(part, { searchesShownApart: false }),
+      ),
+    ).toEqual([false, true, false, false, true, true, true]);
   });
 
   test("count what landed by kind, leaving out failures, waits and running calls", () => {

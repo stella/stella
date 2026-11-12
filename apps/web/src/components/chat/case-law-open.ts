@@ -9,6 +9,7 @@ import {
   type CaseLawDecisionRouteParams,
   extractCaseLawDecisionIdFromIdRouteParam,
   isCaseLawDecisionId,
+  pickCaseLawDecisionHit,
 } from "@stll/api-contract/case-law-decision-route";
 import type { ChatDecisionLocator } from "@stll/api-contract/chat-reference-href";
 
@@ -20,7 +21,6 @@ import { api } from "@/lib/api";
 import {
   decodeCaseLawDecisionRef,
   defaultCaseLawCountryForLocale,
-  pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";
 import { unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";

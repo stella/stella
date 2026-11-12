@@ -1979,7 +1979,9 @@ const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
   });
 
 const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean =>
-  entry.type !== "standard" || isVisibleProcessStep(entry.part);
+  entry.type !== "standard" ||
+  // Finished searches and fetches show in the sources tray instead.
+  isVisibleProcessStep(entry.part, { searchesShownApart: true });
 
 type ProcessStepTitleKey =
   ReturnType<typeof getChatToolTitleKey> | "chat.reasoning";

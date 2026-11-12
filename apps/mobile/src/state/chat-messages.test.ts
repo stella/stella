@@ -110,6 +110,34 @@ describe("what a thread shows of a stored message", () => {
     });
   });
 
+  test("keeps a finished web search as a step, having no sources tray", () => {
+    expect(
+      toChatEntry({
+        id: "m4",
+        role: "assistant",
+        createdAt: CREATED_AT,
+        parts: [
+          {
+            type: "tool-call",
+            name: "web_search",
+            arguments: "{}",
+            state: "complete",
+            output: { results: [] },
+          },
+          { type: "text", content: "Found it." },
+        ],
+      })?.blocks,
+    ).toEqual([
+      {
+        type: "steps",
+        key: "0",
+        steps: [{ type: "tool", label: "web_search", status: "done" }],
+        work: new Map([["research", 1]]),
+      },
+      { type: "text", key: "1", markdown: "Found it." },
+    ]);
+  });
+
   test("names the files the person attached, and shows a message of files alone", () => {
     expect(
       toChatEntry({

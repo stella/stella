@@ -221,6 +221,7 @@ describe("mentions and citations", () => {
           kind: "decision",
           label: "Pl. ÚS 1/23",
           decisionId: DECISION,
+          docket: null,
         },
       },
       {
@@ -326,5 +327,62 @@ describe("plain text", () => {
         CONTEXT,
       ),
     ).toBe("Two documents: loan_terms.\n\n- one\n- two");
+  });
+
+  test("names a reference in bold, and a link with spaces around its target", () => {
+    expect(
+      plainText(
+        `See **[the lease](#stella-entity=${MATTER}:${ENTITY})** and [the act]( https://x.test/a ).`,
+        CONTEXT,
+      ),
+    ).toBe("See the lease and the act.");
+  });
+});
+
+describe("what CommonMark and GFM say around spans and blocks", () => {
+  test("a mention in bold is a bold chip", () => {
+    expect(
+      parseInline(
+        `**[the lease](#stella-entity=${MATTER}:${ENTITY})**`,
+        CONTEXT,
+      ),
+    ).toEqual([
+      {
+        text: "the lease",
+        bold: true,
+        reference: {
+          kind: "entity",
+          label: "the lease",
+          name: "the lease",
+          matterId: MATTER,
+          entityId: ENTITY,
+          mimeType: null,
+        },
+      },
+    ]);
+  });
+
+  test("a table ends where another block starts", () => {
+    expect(
+      parseMarkdown(
+        [
+          "| a | b |",
+          "| - | - |",
+          "| 1 | 2 |",
+          "# Next | section | detail",
+        ].join("\n"),
+        CONTEXT,
+      ).map((block) => block.type),
+    ).toEqual(["table", "heading"]);
+  });
+
+  test("only a backslash at the very end of a line breaks it", () => {
+    expect(parseMarkdown("one\\\ntwo", CONTEXT)).toEqual([
+      { type: "paragraph", spans: [{ text: "one\ntwo" }] },
+    ]);
+    // Followed by spaces, it is the two spaces that break the line.
+    expect(parseMarkdown("C:\\  \nnext", CONTEXT)).toEqual([
+      { type: "paragraph", spans: [{ text: "C:\\\nnext" }] },
+    ]);
   });
 });
