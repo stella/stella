@@ -809,7 +809,7 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
 | assistant_chat | 16 |
-| auth_plumbing | 39 |
+| auth_plumbing | 40 |
 | billing_ui | 1 |
 | chat_thread_ui | 26 |
 | compound_consent | 1 |
