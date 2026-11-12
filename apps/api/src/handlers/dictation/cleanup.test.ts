@@ -286,7 +286,8 @@ test("a line break or carriage return inside text never reaches the desktop", as
     }),
   });
   expect(response.status).toBe(200);
+  // One line ending, however many characters spell it, is one space.
   expect(await response.json()).toEqual({
-    segments: [{ type: "text", text: "first  second", bold: false }],
+    segments: [{ type: "text", text: "first second", bold: false }],
   });
 });

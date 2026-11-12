@@ -22,11 +22,9 @@
   allow(dead_code, reason = "only builds with the speech engine type these")
 )]
 
-use serde::Deserialize;
-
-/// One piece of a cleaned-up dictation, as the API sends it.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+/// One piece of a cleaned-up dictation; `dictation_cleanup` reads it from
+/// the API's answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Segment {
   Text { text: String, bold: bool },
   LineBreak,

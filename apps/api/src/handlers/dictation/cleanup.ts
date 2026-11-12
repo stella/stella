@@ -12,6 +12,10 @@ import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { aiHandlerError } from "@/api/lib/ai-error";
+import {
+  generateArtefact,
+  readUnsourcedArtefact,
+} from "@/api/lib/ai-generation/provenance";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -35,11 +39,12 @@ import {
   dictationCleanupModelOutputSchema,
 } from "./cleanup-model";
 
+const GENERATOR = "apps/api/src/handlers/dictation/cleanup.ts";
 const REQUIRED_FEATURE_ID = "desktop-dictation" satisfies DesktopFeatureId;
 /** The desktop stops waiting after about five seconds and types the raw
  *  transcript; a generation that outlives it would only spend usage. */
-const CLEANUP_DEADLINE_MS = 5_000;
-const CLEANUP_OUTPUT_TOKENS = 8_000;
+const CLEANUP_DEADLINE_MS = 5000;
+const CLEANUP_OUTPUT_TOKENS = 8000;
 
 type DictationCleanupEndpointOptions = {
   authorizeAccount?: typeof authorizeDesktopAccount;
@@ -159,42 +164,50 @@ export const createDictationCleanupEndpoint = ({
                       workspaceId: null,
                     },
                   });
-                  const output = yield* Result.await(
-                    Result.tryPromise({
-                      try: async () =>
-                        await generateObjectForTask({
-                          dataClass: "customer",
-                          admission: modelAdmission,
-                          userId: account.userId,
-                          organizationId: account.organizationId,
-                          orgAIConfig,
-                          managedAIResidency,
-                          task: "short-text",
-                          serviceTier: "standard",
-                          analytics,
-                          caching: resolveCaching({
-                            promptCachingEnabled,
+                  const generated = await Result.tryPromise({
+                    try: async () =>
+                      await generateArtefact({
+                        generator: GENERATOR,
+                        // The request carries the transcript itself; no
+                        // stored record or decision feeds the answer.
+                        sources: { decisionIds: [], inputs: [] },
+                        generate: async () =>
+                          await generateObjectForTask({
+                            dataClass: "customer",
+                            admission: modelAdmission,
+                            userId: account.userId,
+                            organizationId: account.organizationId,
+                            orgAIConfig,
+                            managedAIResidency,
                             task: "short-text",
-                            scopeKey: null,
+                            serviceTier: "standard",
+                            analytics,
+                            caching: resolveCaching({
+                              promptCachingEnabled,
+                              task: "short-text",
+                              scopeKey: null,
+                            }),
+                            tenantWorkspaceIds: [],
+                            abortSignal: actionSignal,
+                            deadlineMs: CLEANUP_DEADLINE_MS,
+                            systemPromptOrigin: "server-built",
+                            system: DICTATION_CLEANUP_SYSTEM_PROMPT,
+                            prompt: buildDictationCleanupPrompt(body),
+                            outputSchema: dictationCleanupModelOutputSchema,
+                            outputTokenBudget: CLEANUP_OUTPUT_TOKENS,
                           }),
-                          tenantWorkspaceIds: [],
-                          abortSignal: actionSignal,
-                          deadlineMs: CLEANUP_DEADLINE_MS,
-                          systemPromptOrigin: "server-built",
-                          system: DICTATION_CLEANUP_SYSTEM_PROMPT,
-                          prompt: buildDictationCleanupPrompt(body),
-                          outputSchema: dictationCleanupModelOutputSchema,
-                          outputTokenBudget: CLEANUP_OUTPUT_TOKENS,
-                        }),
-                      catch: (cause) => {
-                        analytics.captureError(cause);
-                        return aiHandlerError(cause, {
-                          status: 502,
-                          message: "Dictation cleanup failed",
-                        });
-                      },
-                    }),
-                  );
+                      }),
+                    catch: (cause: unknown) => cause,
+                  });
+                  const output = yield* generated
+                    .andThen((artefact) => artefact.map(readUnsourcedArtefact))
+                    .mapError((cause) => {
+                      analytics.captureError(cause);
+                      return aiHandlerError(cause, {
+                        status: 502,
+                        message: "Dictation cleanup failed",
+                      });
+                    });
                   const accepted = acceptDictationCleanup(
                     output,
                     body.transcript,

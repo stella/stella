@@ -24,8 +24,11 @@ test("the native contract file matches the typed cleanup contract", () => {
 });
 
 test("the shared response fixture is a valid cleanup answer", () => {
-  expect(v.parse(desktopDictationCleanupResponseSchema, fixture)).toEqual(
-    fixture,
+  // The native client reads the same file, so it is checked as an answer
+  // off the wire, not as the type its JSON import infers.
+  const answer: unknown = fixture;
+  expect(answer).toEqual(
+    v.parse(desktopDictationCleanupResponseSchema, answer),
   );
 });
 

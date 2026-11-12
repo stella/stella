@@ -3,7 +3,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 GlobalRegistrator.register({ url: "http://localhost/" });
 
-const { act, cleanup, fireEvent, render } =
+const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { clearMocks, mockIPC } = await import("@tauri-apps/api/mocks");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
@@ -138,15 +138,12 @@ test("turning cleanup off asks the native side and shows its answer", async () =
     name: defaultMessages.dictation.cleanup.title,
   });
 
-  await act(async () => {
-    fireEvent.click(toggle);
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
-  });
+  fireEvent.click(toggle);
 
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
   expect(calls).toEqual([{ enabled: false }]);
-  expect(toggle.getAttribute("aria-checked")).toBe("false");
 });
 
 test("hides the cleanup switch while dictation is off", async () => {

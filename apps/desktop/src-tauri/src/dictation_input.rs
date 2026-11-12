@@ -27,22 +27,24 @@ pub fn send(strokes: &[Stroke]) -> Result<(), TypeTextFailed> {
 }
 
 /// Asks `held` every `poll` until it reports nothing held, for at most
-/// `limit`. Whether everything was released in time.
+/// `limit` of the time `elapsed` reports; `pause` waits between the asks.
+/// Whether everything was released in time.
 #[cfg(any(target_os = "windows", test))]
 fn released_within(
   limit: std::time::Duration,
   poll: std::time::Duration,
   mut held: impl FnMut() -> bool,
+  elapsed: impl Fn() -> std::time::Duration,
+  mut pause: impl FnMut(std::time::Duration),
 ) -> bool {
-  let deadline = std::time::Instant::now() + limit;
   loop {
     if !held() {
       return true;
     }
-    if std::time::Instant::now() >= deadline {
+    if elapsed() >= limit {
       return false;
     }
-    std::thread::sleep(poll);
+    pause(poll);
   }
 }
 
@@ -54,11 +56,18 @@ fn released_within(
 pub fn wait_for_released_modifiers() -> bool {
   use winsafe::co::VK;
 
-  released_within(RELEASE_WAIT, RELEASE_POLL, || {
-    [VK::CONTROL, VK::MENU, VK::SHIFT, VK::LWIN, VK::RWIN]
-      .into_iter()
-      .any(winsafe::GetAsyncKeyState)
-  })
+  let started = std::time::Instant::now();
+  released_within(
+    RELEASE_WAIT,
+    RELEASE_POLL,
+    || {
+      [VK::CONTROL, VK::MENU, VK::SHIFT, VK::LWIN, VK::RWIN]
+        .into_iter()
+        .any(winsafe::GetAsyncKeyState)
+    },
+    || started.elapsed(),
+    std::thread::sleep,
+  )
 }
 
 /// macOS posts every event with its own modifier flags, so a held key does
@@ -185,31 +194,47 @@ const CHUNK_UNITS: usize = 64;
 
 #[cfg(test)]
 mod tests {
-  use std::time::{Duration, Instant};
+  use std::{cell::Cell, time::Duration};
 
   use super::*;
 
   #[test]
   fn typing_goes_ahead_once_the_keys_are_released() {
+    let now = Cell::new(Duration::ZERO);
+    let poll = Duration::from_millis(1);
     let mut polls = 0;
     assert!(released_within(
       RELEASE_WAIT,
-      Duration::from_millis(1),
+      poll,
       || {
         polls += 1;
         polls < 4
-      }
+      },
+      || now.get(),
+      |by| now.set(now.get() + by),
     ));
     assert_eq!(polls, 4);
+    assert_eq!(now.get(), poll * 3);
   }
 
   #[test]
   fn keys_held_past_the_wait_type_nothing_and_the_wait_is_bounded() {
-    let started = Instant::now();
+    let now = Cell::new(Duration::ZERO);
     let limit = Duration::from_millis(40);
-    assert!(!released_within(limit, Duration::from_millis(5), || true));
-    let waited = started.elapsed();
-    assert!(waited >= limit);
-    assert!(waited < limit * 10);
+    let poll = Duration::from_millis(5);
+    let mut polls = 0;
+    assert!(!released_within(
+      limit,
+      poll,
+      || {
+        polls += 1;
+        true
+      },
+      || now.get(),
+      |by| now.set(now.get() + by),
+    ));
+    // It waits the whole limit and gives up at the first ask past it.
+    assert_eq!(now.get(), limit);
+    assert_eq!(polls, 9);
   }
 }

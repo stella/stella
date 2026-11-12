@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -62,8 +62,9 @@ const ALLOWED_GROWTH_RATIO = 1.1;
 const ALLOWED_GROWTH_CHARACTERS = 16;
 
 // Controls and the Unicode line and paragraph separators would break a line
-// or press a key, so they become spaces; bidirectional controls would reorder
-// the text around them, so they are dropped.
+// or press a key, so each run of them becomes one space ("\r\n" too);
+// bidirectional controls would reorder the text around them, so they are
+// dropped. Text that is only a space stays: it separates the words around it.
 const SPACED_CHARACTERS = /[\p{Cc}\u2028\u2029]+/gu;
 const DROPPED_CHARACTERS = /[\u202A-\u202E\u2066-\u2069]/gu;
 
@@ -125,30 +126,31 @@ const implausibility = (
 };
 
 /**
- * The model's segments as the desktop types them: controls and separators
- * become spaces, bidirectional controls are dropped, text emptied by that is
- * dropped, breaks lose their placeholder fields, and the whole answer must
- * stay within the transcript's size without losing content. A refused answer
- * makes the desktop type the raw transcript.
+ * The model's segments as the desktop types them: each run of controls and
+ * separators becomes one space, bidirectional controls are dropped, text
+ * emptied by that is dropped, breaks lose their placeholder fields, and the
+ * whole answer must stay within the transcript's size without losing
+ * content. A refused answer makes the desktop type the raw transcript.
  */
 export const acceptDictationCleanup = (
   output: DictationCleanupModelOutput,
   transcript: string,
 ): Result<DesktopDictationCleanupResponse, DictationCleanupRejection> => {
   const segments = output.segments.flatMap(
-    ({ type, text, bold }): DesktopDictationSegment[] => {
-      switch (type) {
+    ({ type: kind, text, bold }): DesktopDictationSegment[] => {
+      switch (kind) {
         case "text": {
           const typed = text
             .replaceAll(DROPPED_CHARACTERS, "")
             .replaceAll(SPACED_CHARACTERS, " ");
-          return typed.length === 0 ? [] : [{ type, text: typed, bold }];
+          return typed.length === 0 ? [] : [{ type: kind, text: typed, bold }];
         }
         case "lineBreak":
         case "paragraphBreak":
-          return [{ type }];
+          return [{ type: kind }];
         default:
-          return type satisfies never;
+          kind satisfies never;
+          return panic("Unhandled dictation cleanup segment type");
       }
     },
   );

@@ -34,14 +34,19 @@ impl Choice {
   /// The stored preference; anything unknown reads as automatic.
   pub fn parse(stored: Option<&str>) -> Self {
     stored
-      .and_then(|value| MODEL_LANGUAGES.iter().find(|language| **language == value))
-      .map_or(Self::Automatic, |language| Self::Language(*language))
+      .and_then(|value| {
+        MODEL_LANGUAGES
+          .iter()
+          .copied()
+          .find(|language| *language == value)
+      })
+      .map_or(Self::Automatic, Self::Language)
   }
 
   pub const fn stored(&self) -> &'static str {
-    match self {
+    match *self {
       Self::Automatic => AUTOMATIC,
-      Self::Language(language) => *language,
+      Self::Language(language) => language,
     }
   }
 }

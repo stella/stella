@@ -77,7 +77,29 @@ struct CleanupRequest<'a> {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CleanupResponse {
-  segments: Vec<Segment>,
+  segments: Vec<WireSegment>,
+}
+
+/// One segment exactly as the contract shapes it. The breaks are empty
+/// struct variants because serde checks unknown fields only on those: a
+/// unit variant would accept a break that carries text the contract
+/// refuses.
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+enum WireSegment {
+  Text { text: String, bold: bool },
+  LineBreak {},
+  ParagraphBreak {},
+}
+
+impl From<WireSegment> for Segment {
+  fn from(segment: WireSegment) -> Self {
+    match segment {
+      WireSegment::Text { text, bold } => Self::Text { text, bold },
+      WireSegment::LineBreak {} => Self::LineBreak,
+      WireSegment::ParagraphBreak {} => Self::ParagraphBreak,
+    }
+  }
 }
 
 /// The answer's segments, held to the contract's bounds. A serde error is
@@ -88,15 +110,15 @@ pub fn parse_segments(body: &[u8]) -> Result<Vec<Segment>, String> {
   let contract = contract();
   let valid = response.segments.len() <= contract.max_segments
     && response.segments.iter().all(|segment| match segment {
-      Segment::Text { text, .. } => {
+      WireSegment::Text { text, .. } => {
         !text.is_empty()
           && text.chars().count() <= contract.max_transcript_length
           && !text.chars().any(dictation_format::is_untyped)
       }
-      Segment::LineBreak | Segment::ParagraphBreak => true,
+      WireSegment::LineBreak {} | WireSegment::ParagraphBreak {} => true,
     });
   if valid {
-    Ok(response.segments)
+    Ok(response.segments.into_iter().map(Segment::from).collect())
   } else {
     Err(INVALID.to_string())
   }
@@ -104,7 +126,10 @@ pub fn parse_segments(body: &[u8]) -> Result<Vec<Segment>, String> {
 
 /// Letters and digits, the part of a text cleanup must keep.
 fn content_length(text: &str) -> usize {
-  text.chars().filter(|character| character.is_alphanumeric()).count()
+  text
+    .chars()
+    .filter(|character| character.is_alphanumeric())
+    .count()
 }
 
 /// The transcript's letters and digits outside spoken command words, which a
@@ -119,7 +144,9 @@ fn dictated_content_length(transcript: &str, command_words: &[String]) -> usize 
         .filter(|character| character.is_alphanumeric())
         .collect::<String>()
     })
-    .filter(|word| !word.is_empty() && !command_words.iter().any(|command| command == word))
+    .filter(|word| {
+      !word.is_empty() && !command_words.iter().any(|command| command == word)
+    })
     .map(|word| word.chars().count())
     .sum()
 }
@@ -439,19 +466,17 @@ mod tests {
   #[test]
   fn the_bounded_wait_runs_from_a_thread_without_a_runtime() {
     let outcome = std::thread::spawn(|| {
-      let started = std::time::Instant::now();
+      // A future that never finishes can only end by the limit firing.
       let pending = bounded(
         Duration::from_millis(50),
         std::future::pending::<Result<Vec<Segment>, String>>(),
       );
       let ready = bounded(Duration::from_secs(1), async { 7 });
-      (pending, ready, started.elapsed())
+      (pending, ready)
     })
     .join()
     .expect("a plain dictation thread must not panic");
-    assert_eq!(outcome.0, None);
-    assert_eq!(outcome.1, Some(7));
-    assert!(outcome.2 < Duration::from_secs(1));
+    assert_eq!(outcome, (None, Some(7)));
   }
 
   #[test]

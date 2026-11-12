@@ -65,7 +65,7 @@ pub fn current(app: &AppHandle) -> Option<FocusTarget> {
 
 #[cfg(target_os = "windows")]
 pub fn current(app: &AppHandle) -> Option<FocusTarget> {
-  use winsafe::{HWND, prelude::Handle as _};
+  use winsafe::HWND;
 
   let window = HWND::GetForegroundWindow()?;
   let foreground = crate::foreground_app::current(app)?;
