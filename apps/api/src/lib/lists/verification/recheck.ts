@@ -43,6 +43,7 @@ import {
 } from "@/api/lib/lists/verification/claim-grade";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type {
+  ClaimAssertedDate,
   ClaimGrade,
   ClaimReviewEventPayload,
   ClaimState,
@@ -302,6 +303,9 @@ type GradeRechecksArgs = {
   resolveAccess: () => Promise<ListVerificationAccessProof | null>;
 };
 
+/** A claim's new grade and the date its grading read. */
+type RecheckGrading = { grade: ClaimGrade; assertedOn: ClaimAssertedDate };
+
 /** Why a batch's grading failed, as each of its claims reports it. */
 const gradingRefusal = (cause: unknown): RecheckRefusal => {
   if (cause instanceof ListVerificationRunCapError) {
@@ -321,7 +325,7 @@ const gradeRechecks = async ({
   accessProof,
   resolveAccess,
 }: GradeRechecksArgs): Promise<
-  Map<SafeId<"legalListClaim">, ClaimGrade | RecheckRefusal>
+  Map<SafeId<"legalListClaim">, RecheckGrading | RecheckRefusal>
 > => {
   const { safeDb, organizationId, workspaceId, userId } = args;
   const deps: VerificationModelDeps = {
@@ -382,7 +386,7 @@ const gradeRechecks = async ({
   });
   const results = new Map<
     SafeId<"legalListClaim">,
-    ClaimGrade | RecheckRefusal
+    RecheckGrading | RecheckRefusal
   >();
   for (const { batch, graded } of perBatch) {
     for (const claim of batch) {
@@ -392,19 +396,20 @@ const gradeRechecks = async ({
       }
       // A claim the grader left unanswered, even after its repair round,
       // fails alone; the batch's answered claims keep their grades.
+      const grade = graded.value.grades.get(claim.claimId);
+      const assertedOn = graded.value.assertedDates.get(claim.claimId);
       results.set(
         claim.claimId,
-        graded.value.grades.get(claim.claimId) ?? {
-          type: "grading-failed",
-          cause: graded.value,
-        },
+        grade === undefined || assertedOn === undefined
+          ? { type: "grading-failed", cause: graded.value }
+          : { grade, assertedOn },
       );
     }
   }
   return results;
 };
 
-type GradedClaim = { claim: ReadyClaim; grade: ClaimGrade };
+type GradedClaim = { claim: ReadyClaim } & RecheckGrading;
 
 type RecordRechecksArgs = {
   args: RecheckClaimsArgs;
@@ -482,13 +487,14 @@ const recordRechecks = async ({
       return outcomes;
     }
     const facts = factChangesFrom(prepared.pinned, prepared.current);
-    const events = writable.map(({ claim, grade }) => {
+    const events = writable.map(({ claim, grade, assertedOn }) => {
       const payload = {
         kind: "recheck",
         requestKey: claim.requestKey,
         grade,
         facts,
         modelRef,
+        assertedOn,
       } as const satisfies ClaimReviewEventPayload;
       return {
         ...scope,
@@ -624,7 +630,7 @@ export const recheckClaims = async (
     if ("type" in result) {
       outcomes.set(claim.claimId, result);
     } else {
-      graded.push({ claim, grade: result });
+      graded.push({ claim, ...result });
     }
   }
   if (graded.length === 0) {

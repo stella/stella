@@ -27,7 +27,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { readFactTiers, readSourceKinds } from "@/api/lib/lists/fact-tiers";
 import { factTier } from "@/api/lib/lists/source-kind";
+import { claimAssertedDate } from "@/api/lib/lists/verification/claim-date";
 import type {
+  ClaimAssertedDate,
   ClaimRef,
   ClaimState,
   ClaimVerdict,
@@ -564,6 +566,47 @@ const stalenessOfClaim = ({
     },
     now,
   );
+type AssertedDateColumns = Pick<
+  typeof legalListClaims.$inferSelect,
+  "text" | "assertedOn" | "assertedOnPrecision" | "assertedOnSource"
+>;
+
+/**
+ * The date a claim asserts, as its reviewers read it: its latest
+ * re-check's reading, else its run's. A claim written before claims carried
+ * dates is read from its words now, exactly as the backfill stores it.
+ */
+export const assertedDateOfClaim = (
+  claim: AssertedDateColumns,
+  review: ClaimReview | null,
+): ClaimAssertedDate => {
+  const rechecked = review?.recheck?.assertedOn ?? null;
+  if (rechecked !== null) {
+    return rechecked;
+  }
+  const source = claim.assertedOnSource;
+  switch (source) {
+    case "pending": {
+      return claimAssertedDate(claim.text, null);
+    }
+    case "none": {
+      return { type: "none" };
+    }
+    case "text":
+    case "grader": {
+      return {
+        type: "dated",
+        source,
+        date: claim.assertedOn ?? panic("A dated claim has no date"),
+        precision:
+          claim.assertedOnPrecision ?? panic("A dated claim has no precision"),
+      };
+    }
+    default: {
+      source satisfies never;
+      return panic(`Unhandled asserted date source: ${String(source)}`);
+    }
+  }
 };
 
 type PresentClaimArgs = {
@@ -603,6 +646,7 @@ const presentClaim = ({
       standings,
     ),
     text: claim.text,
+    assertedOn: assertedDateOfClaim(claim, review),
     anchor: claim.anchor,
     refs: graded.refs,
     review: record === null ? null : serializeClaimReview(record),
