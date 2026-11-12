@@ -67,7 +67,7 @@ const COLUMN_PLANS = {
     shares: { statement: 0.15, claim: 0.3, fact: 0.32, source: 0.23 },
   },
   single: {
-    minWidth: 680,
+    minWidth: 620,
     shares: { statement: 0, claim: 0.36, fact: 0.38, source: 0.26 },
   },
 } as const;
@@ -596,7 +596,7 @@ const ColumnLabels = ({
           key: "claim",
           column: columns.claim,
           label: statement.name,
-          tally: t("avt.graph.claimCount", { count: statement.claimCount }),
+          tally: t("avt.graph.claimCount", { count: model.claims.length }),
         }
       : {
           key: "claim",
