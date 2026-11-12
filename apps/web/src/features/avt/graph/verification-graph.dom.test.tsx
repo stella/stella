@@ -28,7 +28,7 @@ const {
   Outlet,
   RouterProvider,
 } = await import("@tanstack/react-router");
-const { QueryClient, QueryClientProvider } =
+const { InfiniteQueryObserver, QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { createTranslator } = await import("use-intl/core");
@@ -39,7 +39,7 @@ const { VerificationGraph } = await import("./verification-graph");
 const { Chronology } = await import("./chronology");
 const { verificationGraphOptions, verificationRunOptions } =
   await import("@/features/avt/queries");
-const { makeClaim, makeRun, noCover } =
+const { contradicted, makeClaim, makeRun, noCover } =
   await import("@/features/avt/avt.test-fixtures");
 const {
   GRAPH_TEXT,
@@ -49,6 +49,8 @@ const {
   sourceId,
   statementId,
 } = await import("./graph.test-fixtures");
+const { EMPTY_CLAIM_REVIEW } =
+  await import("@/features/avt/claim-review.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
 const workspaceId = "019b0000-0000-7000-8000-000000000001";
@@ -56,8 +58,8 @@ const clients: InstanceType<typeof QueryClient>[] = [];
 let narrow = false;
 
 /** The run a claim of the first statement opens in the panel. */
-const firstStatementRun = () => {
-  const claim = makeClaim({ suffix: 1, verdict: noCover });
+const firstStatementRun = (verdict = noCover) => {
+  const claim = makeClaim({ suffix: 1, verdict });
   return {
     ...makeRun([{ ...claim, id: graphClaimId(2), text: GRAPH_TEXT.payment }]),
     id: statementId(1),
@@ -67,6 +69,7 @@ const firstStatementRun = () => {
 const mount = async (
   view: "graph" | "chronology",
   page: VerificationGraphPage = graphPage(),
+  run = firstStatementRun(),
 ) => {
   setTranslator(createTranslator({ locale: "en", messages }));
   const client = new QueryClient({
@@ -84,7 +87,6 @@ const mount = async (
       pageParams: [null],
     },
   );
-  const run = firstStatementRun();
   client.setQueryData(
     verificationRunOptions(workspaceId, run.id).queryKey,
     run,
@@ -256,6 +258,91 @@ test("clicking a claim docks the review's claim panel beside the focused graph",
       name: messages.avt.graph.claimTitle,
     }),
   ).toBeNull();
+});
+
+test("a decision in the docked panel shows on the graph without reading the run again", async () => {
+  const page = graphPage();
+  const run = firstStatementRun(contradicted());
+  await mount("graph", page, run);
+  const client = clients.at(-1) ?? panic("No query client");
+  // The graph read is live: its refetch is what this test counts.
+  const unsubscribe = new InfiniteQueryObserver(client, {
+    ...verificationGraphOptions({ workspaceId, listId: page.listId }),
+    enabled: true,
+    staleTime: Infinity,
+  }).subscribe(() => undefined);
+  const claim = run.claims.at(0) ?? panic("No claim in the run");
+  const reviewed = {
+    ...EMPTY_CLAIM_REVIEW,
+    status: "reviewed",
+    statusOrigin: "single",
+    decidedAt: "2026-09-01T10:00:00Z",
+    decidedBy: "user-graph",
+    eventCount: 1,
+  } as const;
+  const seen: string[] = [];
+  spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const { pathname } = new URL(request.url);
+        seen.push(`${request.method} ${pathname}`);
+        if (request.method === "POST" && pathname.endsWith("/claim-reviews")) {
+          return Response.json({ claimId: claim.id, review: reviewed });
+        }
+        if (pathname.endsWith("/verifications/graph")) {
+          return Response.json({
+            ...page,
+            claims: page.claims.map((item) =>
+              item.id === graphClaimId(2)
+                ? { ...item, reviewStatus: "reviewed" }
+                : item,
+            ),
+          });
+        }
+        return Response.json(
+          { message: `Unexpected request ${request.method} ${pathname}` },
+          { status: 500 },
+        );
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+  try {
+    fireEvent.click(node(`claim:${graphClaimId(2)}`));
+    const pane = await screen.findByRole("complementary", {
+      name: messages.avt.graph.claimTitle,
+    });
+    const settledMark = () =>
+      node(`claim:${graphClaimId(2)}`).querySelector("svg") !== null;
+    expect(settledMark()).toBe(false);
+    fireEvent.click(
+      within(pane).getByRole("button", { name: messages.avt.confirm.verdict }),
+    );
+    await waitFor(() => expect(settledMark()).toBe(true));
+    // One write, one graph read; the run the panel shows is never read
+    // again, and the panel stays open beside the graph.
+    expect(seen).toEqual([
+      `POST /v1/lists/${workspaceId}/claim-reviews`,
+      `GET /v1/lists/${workspaceId}/verifications/graph`,
+    ]);
+    expect(
+      client.getQueryState(verificationRunOptions(workspaceId, run.id).queryKey)
+        ?.isInvalidated,
+    ).toBe(false);
+    expect(
+      client
+        .getQueryData(verificationRunOptions(workspaceId, run.id).queryKey)
+        ?.claims.at(0)?.review?.status,
+    ).toBe("reviewed");
+    expect(
+      screen.getByRole("complementary", {
+        name: messages.avt.graph.claimTitle,
+      }),
+    ).toBeTruthy();
+  } finally {
+    unsubscribe();
+  }
 });
 
 // The filters narrow one model, which the list form draws without the

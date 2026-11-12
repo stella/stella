@@ -45,7 +45,7 @@ export const Chronology = ({ workspaceId, listId }: ChronologyProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const { query, model } = useVerificationGraphModel({ workspaceId, listId });
-  const claimPanel = useOpenedClaim(workspaceId);
+  const claimPanel = useOpenedClaim();
 
   if (query.isPending) {
     return (

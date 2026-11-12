@@ -7,7 +7,7 @@
 
 import * as React from "react";
 
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -54,7 +54,7 @@ import {
   nodeKey,
 } from "@/features/avt/graph/graph-model.logic";
 import { useScrollViewport } from "@/features/avt/graph/use-scroll-viewport";
-import { avtKeys, verificationGraphOptions } from "@/features/avt/queries";
+import { verificationGraphOptions } from "@/features/avt/queries";
 import type { ClaimState } from "@/features/avt/types";
 import { STATE_META } from "@/features/avt/types";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -85,22 +85,15 @@ export const useVerificationGraphModel = ({
 
 /** The claim panel over a graph view: closing it re-reads the graph, so a
  *  decision taken in it shows at once. */
-export const useOpenedClaim = (workspaceId: string) => {
-  const queryClient = useQueryClient();
+// A decision taken in the panel refreshes the graph through its write's
+// contract; opening and closing the panel reads nothing.
+export const useOpenedClaim = () => {
   const [opened, setOpened] = React.useState<OpenedClaim | null>(null);
   return {
     opened,
     open: (claim: { statementId: string; id: string }) =>
       setOpened({ runId: claim.statementId, claimId: claim.id }),
-    close: () => {
-      setOpened(null);
-      detached(
-        queryClient.invalidateQueries({
-          queryKey: avtKeys.graphAll(workspaceId),
-        }),
-        "avt-graph.refresh-after-claim",
-      );
-    },
+    close: () => setOpened(null),
   };
 };
 
@@ -111,7 +104,7 @@ export const VerificationGraph = ({
 }: VerificationGraphProps) => {
   const t = useTranslations();
   const { query, model } = useVerificationGraphModel({ workspaceId, listId });
-  const claimPanel = useOpenedClaim(workspaceId);
+  const claimPanel = useOpenedClaim();
 
   if (query.isPending) {
     return <GraphSkeleton />;

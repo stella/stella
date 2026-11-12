@@ -329,8 +329,8 @@ export const verificationGraphOptions = ({
   workspaceId: string;
   listId: string;
 }) =>
-  // The graph reads the list's facts and their sources live, so a change to
-  // the list's facts marks it stale.
+  // The graph reads the list's facts and their sources live and each claim
+  // as its reviewers see it, so a change to either marks it stale.
   resourceQueryOptions(
     infiniteQueryOptions({
       queryKey: avtKeys.graph(workspaceId, listId),
@@ -351,7 +351,10 @@ export const verificationGraphOptions = ({
       staleTime: 0,
     }),
     {
-      resources: [RESOURCE_TYPE.LEGAL_LIST],
+      resources: [
+        RESOURCE_TYPE.LEGAL_LIST,
+        RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+      ],
       scope: { type: "workspace", workspaceId },
     },
   );
