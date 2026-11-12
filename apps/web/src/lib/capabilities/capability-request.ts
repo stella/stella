@@ -39,7 +39,8 @@ export type AppOnlyWriteId =
   | "folio-collaboration.refresh-token"
   | "folio-collaboration.seed.acknowledge"
   | "organization-settings.local-runs.update"
-  | "organizations.audit-export.create";
+  | "organizations.audit-export.create"
+  | "search.case-law-section.list";
 
 /** Declares an app-only write that deliberately has no automation capability. */
 export const invokeAppOnlyWrite = async <TResult>(

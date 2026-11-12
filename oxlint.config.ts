@@ -353,6 +353,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-e2e-router-push.fixture.ts", [
     "no-raw-e2e-router-push/no-raw-e2e-router-push",
   ]),
+  fixtureRuleOverride("no-raw-e2e-route-fulfill.fixture.ts", [
+    "no-raw-e2e-route-fulfill/no-raw-e2e-route-fulfill",
+  ]),
   fixtureRuleOverride("no-raw-api-error-telemetry.fixture.ts", [
     "no-raw-api-error-telemetry/no-raw-api-error-telemetry",
   ]),
@@ -679,6 +682,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("field-parts-inside-field.fixture.tsx", [
     "field-parts-inside-field/field-parts-inside-field",
+  ]),
+  fixtureRuleOverride("no-dom-node-poll-assertion.fixture.tsx", [
+    "no-dom-node-poll-assertion/no-dom-node-poll-assertion",
   ]),
   fixtureRuleOverride("no-secret-in-log-sink.fixture.ts", [
     "no-secret-in-log-sink/no-secret-in-log-sink",
@@ -2321,6 +2327,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-json-import-attribute.ts",
     "./.oxlint-plugins/require-stable-geometry.ts",
     "./.oxlint-plugins/no-raw-e2e-router-push.ts",
+    "./.oxlint-plugins/no-raw-e2e-route-fulfill.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/semantic-controls.ts",
@@ -2337,6 +2344,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
+    "./.oxlint-plugins/no-dom-node-poll-assertion.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
     "./.oxlint-plugins/require-polite-publisher-fetch.ts",
@@ -2583,6 +2591,15 @@ const config = defineConfig({
       excludeFiles: ["apps/web/e2e/helpers/decision-reader.ts"],
       rules: {
         "no-raw-e2e-router-push/no-raw-e2e-router-push": "error",
+      },
+    },
+    {
+      // A raw fulfill takes any JSON, so a mocked body drifts from the API
+      // contract unnoticed; the owner types every body by its route.
+      files: ["apps/web/e2e/**/*.ts"],
+      excludeFiles: ["apps/web/e2e/helpers/route-mock.ts"],
+      rules: {
+        "no-raw-e2e-route-fulfill/no-raw-e2e-route-fulfill": "error",
       },
     },
     {
@@ -3042,6 +3059,7 @@ const config = defineConfig({
       rules: {
         "copy-feedback-owner/copy-feedback-owner": "error",
         "copy-feedback-owner/no-raw-copy-listener": "error",
+        "copy-feedback-owner/no-raw-clipboard-write": "error",
       },
     },
     {
@@ -4558,6 +4576,18 @@ const config = defineConfig({
       },
     },
     {
+      // A failing polled assertion on a DOM node formats the whole happy-dom
+      // graph and blocks the event loop for seconds on every poll.
+      files: [
+        "apps/*/src/**/*.test.{ts,tsx}",
+        "packages/*/src/**/*.test.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-dom-node-poll-assertion.fixture.tsx",
+      ],
+      rules: {
+        "no-dom-node-poll-assertion/no-dom-node-poll-assertion": "error",
+      },
+    },
+    {
       // `react/jsx-key` owns missing and array-produced keys, but does not
       // compare explicit keys on static siblings. Equal sibling identities
       // make React reconciliation ambiguous across navigation and refreshes.
@@ -4958,19 +4988,21 @@ const config = defineConfig({
       },
     },
     {
-      // A Copy control confirms through its owner: CopyButton for a fixed
-      // value, useSelectionCopy for selected words, which also confirms the
-      // reader's own Cmd+C. The sanctioned copy listeners and the feedback
-      // owner are listed in the rule; a test fires synthetic events.
+      // Every Copy goes through @/components/copy-control, which writes the
+      // clipboard, holds the one native copy listener and confirms a Copy
+      // when the clipboard holds what it copies. The sanctioned owners are
+      // listed in the rule; a test fires synthetic events.
       files: [
         ...PRODUCT_FRONTEND_FILES,
         "packages/ui/src/**/*.{ts,tsx}",
         "packages/chat/src/**/*.{ts,tsx}",
+        "packages/decision-reader/src/**/*.{ts,tsx}",
       ],
       excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
       rules: {
         "copy-feedback-owner/copy-feedback-owner": "error",
         "copy-feedback-owner/no-raw-copy-listener": "error",
+        "copy-feedback-owner/no-raw-clipboard-write": "error",
       },
     },
     {

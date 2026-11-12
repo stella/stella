@@ -23,12 +23,18 @@ import {
   FileSearchIcon,
   FlagIcon,
   HistoryIcon,
+  MoreHorizontalIcon,
   PenIcon,
   SearchIcon,
   SplitIcon,
   XCircleIcon,
+  XIcon,
 } from "@stll/ui/icons";
-import type { ReviewDecisionState } from "@stll/ui/review-decision-actions";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import type {
+  ReviewDecisionEmphasis,
+  ReviewDecisionState,
+} from "@stll/ui/review-decision-actions";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import { ReviewStatusDot } from "@stll/ui/review-severity-dot";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
@@ -48,6 +54,12 @@ import { cn } from "@stll/ui/utils";
 import { ListSourceForm } from "@/components/workspaces/list-source-form";
 import { ClaimComments } from "@/features/avt/claim-comments";
 import {
+  GapNextSteps,
+  LinkedFacts,
+  LinkedMark,
+  RecheckSummary,
+} from "@/features/avt/claim-gap";
+import {
   isRecordSilent,
   QualifierChips,
   QualifierNotes,
@@ -66,7 +78,6 @@ import {
   ConfBadge,
   InterpNote,
   MatchStepper,
-  MediumChip,
   RECORD_CONFLICT_BG_VAR,
   RECORD_CONFLICT_FG_VAR,
   RECORD_CONFLICT_VAR,
@@ -111,7 +122,7 @@ import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 type ClaimDetailPanelProps = {
   workspaceId: string;
   /** The run, and the list it checked against, which owns its facts'
-   *  sources. */
+   *  sources and is where a gap's fact is added or linked from. */
   run: Pick<VerificationRun, "id" | "evidence">;
   /** The claim as displayed (see `resolveClaimView`). */
   claim: VerificationClaim;
@@ -143,20 +154,37 @@ export const ClaimDetailPanel = ({
   const contestedClaim = isContested(claim, contested);
   const settled = isSettled(review);
   const guidance = dispositionGuidance(
-    { state, refs: claim.refs, qualifiers: claim.qualifiers },
+    {
+      state,
+      refs: claim.refs,
+      qualifiers: claim.qualifiers,
+      recheck: claim.recheck,
+    },
     contested,
   );
   // Escalating a record conflict hands it to the evidence team: there is no
   // verdict left for this reviewer to confirm or dispute until it is
   // resolved, so those controls go inactive rather than settling the claim.
   const isEscalated = review?.recordConflictResolution?.kind === "escalated";
-  const DispositionIcon = DISPOSITION_TONE_STYLE[guidance.tone].icon;
   const override = review?.override ?? null;
 
   const setStatus = (status: ClaimReviewStatus | null) => {
     onReviewEvent({ kind: "status", status });
   };
   const factScope = { workspaceId, listId: run.evidence.listId, runId };
+  // The facts the verdict cites, each shown once under it; a record
+  // conflict shows its facts in its own block instead.
+  const cited = new Map(
+    verdict.state === "recordconflict"
+      ? []
+      : claim.refs.flatMap((ref) => {
+          const fact = factsById.get(ref.factEntityId);
+          return fact === undefined ? [] : [[ref.factEntityId, fact] as const];
+        }),
+  );
+  // Coverage the record should give leads with filling it; the review
+  // decisions step back to quiet controls.
+  const gap = state === "nocover" && !isRecordSilent(state, claim);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -166,38 +194,10 @@ export const ClaimDetailPanel = ({
             <VerdictChip claim={claim} state={state} />
             <QualifierChips claim={claim} />
             <TypeChip type={claim.type} />
-            {review?.reopened === true && (
-              <Tooltip>
-                <TooltipTrigger render={<span />}>
-                  <ReviewStatusBadge
-                    icon={<HistoryIcon aria-hidden="true" className="size-3" />}
-                    size="sm"
-                    tone="highlight"
-                  >
-                    {t("avt.claimDetail.reopened")}
-                  </ReviewStatusBadge>
-                </TooltipTrigger>
-                <TooltipPopup>
-                  {t("avt.claimDetail.reopenedTooltip")}
-                </TooltipPopup>
-              </Tooltip>
-            )}
-            {override !== null && (
-              <Tooltip>
-                <TooltipTrigger render={<span />}>
-                  <ReviewStatusBadge
-                    icon={<PenIcon aria-hidden="true" className="size-3" />}
-                    size="sm"
-                    tone={STATE_COLOR[override].tone}
-                  >
-                    {t("avt.claimDetail.overridden")}
-                  </ReviewStatusBadge>
-                </TooltipTrigger>
-                <TooltipPopup>
-                  {t("avt.claimDetail.overrideTooltip")}
-                </TooltipPopup>
-              </Tooltip>
-            )}
+            <ReviewMarks
+              override={override}
+              reopened={review?.reopened === true}
+            />
             <SaveIndicator state={saveState} />
           </div>
           <MatchStepper stepper={stepper} />
@@ -227,6 +227,9 @@ export const ClaimDetailPanel = ({
           conflictCount={conflicts.length}
           supportCount={supports.length}
         />
+        {claim.recheck !== null && (
+          <RecheckSummary recheck={claim.recheck} state={claim.verdict.state} />
+        )}
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
@@ -249,31 +252,27 @@ export const ClaimDetailPanel = ({
             />
           )}
 
-          {claim.refs.length > 0 && verdict.state !== "recordconflict" && (
-            <section className="space-y-2">
-              <h3 className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
-                {t("avt.claimDetail.whyVerdict")}
-              </h3>
-              {[...supports, ...conflicts].map((ref) => {
-                const fact = factsById.get(ref.factEntityId);
-                return fact === undefined ? null : (
-                  <FactCard
-                    fact={fact}
-                    key={ref.factEntityId}
-                    rel={ref.rel}
-                    scope={factScope}
-                  />
-                );
-              })}
-            </section>
-          )}
+          <VerdictFacts
+            canReview={canReview}
+            claim={claim}
+            cited={cited}
+            refs={[...supports, ...conflicts]}
+            scope={factScope}
+          />
+
+          <LinkedFacts
+            {...factScope}
+            cited={cited}
+            claim={claim}
+            disabled={!canReview}
+          />
 
           <section className="space-y-2.5 border-t pt-3.5">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
                 {t("avt.claimDetail.humanReview")}
               </h3>
-              {!settled && !isEscalated && (
+              {!settled && !isEscalated && guidance.guideKey !== null && (
                 <ReviewStatusBadge
                   tone={DISPOSITION_TONE_STYLE[guidance.tone].tone}
                 >
@@ -281,35 +280,20 @@ export const ClaimDetailPanel = ({
                 </ReviewStatusBadge>
               )}
             </div>
-            {isEscalated && (
-              <p className="text-muted-foreground flex items-start gap-1.5 text-xs leading-relaxed">
-                <FlagIcon
-                  aria-hidden="true"
-                  className="mt-0.5 size-3.5 shrink-0"
-                />
-                {t("avt.claimDetail.escalatedReview")}
-              </p>
-            )}
-            {!isEscalated && !settled && (
-              <p
-                className={cn(
-                  "flex items-start gap-1.5 text-xs leading-relaxed",
-                  DISPOSITION_TONE_STYLE[guidance.tone].textClass,
-                )}
-                style={DISPOSITION_TONE_STYLE[guidance.tone].textStyle}
-              >
-                <DispositionIcon
-                  aria-hidden="true"
-                  className="mt-0.5 size-3.5 shrink-0"
-                />
-                {t(guidance.askKey)}
-              </p>
-            )}
-            <DecisionRow
+            <ReviewAsk
+              asking={!settled || gap}
+              escalated={isEscalated}
+              guidance={guidance}
+            />
+            <ReviewActions
               acceptLabel={t(confirmLabel(state, guidance.tone))}
-              disabled={isEscalated || !canReview}
+              canReview={canReview}
+              claim={claim}
+              escalated={isEscalated}
+              gap={gap}
               onStatus={setStatus}
-              review={review}
+              scope={factScope}
+              state={state}
             />
 
             {isScoredState(verdict.state) && (
@@ -361,6 +345,88 @@ export const ClaimDetailPanel = ({
         </div>
       </ScrollArea>
     </div>
+  );
+};
+
+/** Marks on the claim's own review: reopened, and a verdict overridden. */
+const ReviewMarks = ({
+  reopened,
+  override,
+}: {
+  reopened: boolean;
+  override: ClaimOverrideState | null;
+}) => {
+  const t = useTranslations();
+  return (
+    <>
+      {reopened && (
+        <Tooltip>
+          <TooltipTrigger render={<span />}>
+            <ReviewStatusBadge
+              icon={<HistoryIcon aria-hidden="true" className="size-3" />}
+              size="sm"
+              tone="highlight"
+            >
+              {t("avt.claimDetail.reopened")}
+            </ReviewStatusBadge>
+          </TooltipTrigger>
+          <TooltipPopup>{t("avt.claimDetail.reopenedTooltip")}</TooltipPopup>
+        </Tooltip>
+      )}
+      {override !== null && (
+        <Tooltip>
+          <TooltipTrigger render={<span />}>
+            <ReviewStatusBadge
+              icon={<PenIcon aria-hidden="true" className="size-3" />}
+              size="sm"
+              tone={STATE_COLOR[override].tone}
+            >
+              {t("avt.claimDetail.overridden")}
+            </ReviewStatusBadge>
+          </TooltipTrigger>
+          <TooltipPopup>{t("avt.claimDetail.overrideTooltip")}</TooltipPopup>
+        </Tooltip>
+      )}
+    </>
+  );
+};
+
+/** What the reviewer is asked: that it was handed on when escalated, else
+ *  the disposition's question while there is one to answer. */
+const ReviewAsk = ({
+  escalated,
+  asking,
+  guidance,
+}: {
+  escalated: boolean;
+  asking: boolean;
+  guidance: ReturnType<typeof dispositionGuidance>;
+}) => {
+  const t = useTranslations();
+  if (escalated) {
+    return (
+      <p className="text-muted-foreground flex items-start gap-1.5 text-xs leading-relaxed">
+        <FlagIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+        {t("avt.claimDetail.escalatedReview")}
+      </p>
+    );
+  }
+  if (!asking) {
+    return null;
+  }
+  const style = DISPOSITION_TONE_STYLE[guidance.tone];
+  const Icon = style.icon;
+  return (
+    <p
+      className={cn(
+        "flex items-start gap-1.5 text-xs leading-relaxed",
+        style.textClass,
+      )}
+      style={style.textStyle}
+    >
+      <Icon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+      {t(guidance.askKey)}
+    </p>
   );
 };
 
@@ -497,10 +563,118 @@ const ReopenControl = ({ disabled, onReopen }: ReopenControlProps) => {
   );
 };
 
+type ReviewActionsProps = {
+  scope: { workspaceId: string; listId: string; runId: string };
+  claim: VerificationClaim;
+  state: ClaimState;
+  /** Coverage the record should give: its next steps lead. */
+  gap: boolean;
+  acceptLabel: string;
+  canReview: boolean;
+  escalated: boolean;
+  onStatus: (status: ClaimReviewStatus | null) => void;
+};
+
+/**
+ * What a reviewer can do with the claim. A gap leads with adding the
+ * missing fact; while it is undecided, the decision pair folds into the
+ * next steps' menu so nothing out-weighs that.
+ */
+const ReviewActions = ({
+  scope,
+  claim,
+  state,
+  gap,
+  acceptLabel,
+  canReview,
+  escalated,
+  onStatus,
+}: ReviewActionsProps) => {
+  const { review } = claim;
+  const decisionDisabled = escalated || !canReview;
+  const folded = gap && decisionState(review) === "pending";
+  return (
+    <>
+      {state === "nocover" && (
+        <GapNextSteps
+          {...scope}
+          claim={claim}
+          disabled={!canReview}
+          more={
+            folded ? (
+              <DecisionMenu
+                acceptLabel={acceptLabel}
+                disabled={decisionDisabled}
+                onStatus={onStatus}
+              />
+            ) : null
+          }
+          needsEvidence={
+            gap
+              ? {
+                  marked: review?.status === "needs-evidence",
+                  onChange: (marked) =>
+                    onStatus(marked ? "needs-evidence" : null),
+                }
+              : null
+          }
+        />
+      )}
+      {!folded && (
+        <DecisionRow
+          acceptLabel={acceptLabel}
+          disabled={decisionDisabled}
+          emphasis={gap ? "quiet" : "primary"}
+          needsEvidenceControl={!gap}
+          onStatus={onStatus}
+          review={review}
+        />
+      )}
+    </>
+  );
+};
+
+/** The decision pair behind one quiet control. */
+const DecisionMenu = ({
+  acceptLabel,
+  disabled,
+  onStatus,
+}: {
+  acceptLabel: string;
+  disabled: boolean;
+  onStatus: (status: ClaimReviewStatus) => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={t("common.actions")}
+        disabled={disabled}
+        render={<Button size="icon-sm" variant="ghost" />}
+      >
+        <MoreHorizontalIcon />
+      </MenuTrigger>
+      <MenuPopup>
+        <MenuItem onClick={() => onStatus("reviewed")}>
+          <CheckIcon />
+          {acceptLabel}
+        </MenuItem>
+        <MenuItem onClick={() => onStatus("disputed")}>
+          <XIcon />
+          {t("avt.claimDetail.flagDispute")}
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
+  );
+};
+
 type DecisionRowProps = {
   review: ClaimReview | null;
   acceptLabel: string;
   disabled: boolean;
+  emphasis: ReviewDecisionEmphasis;
+  /** Off where a gap's next steps offer it. */
+  needsEvidenceControl: boolean;
   onStatus: (status: ClaimReviewStatus | null) => void;
 };
 
@@ -511,6 +685,8 @@ const DecisionRow = ({
   review,
   acceptLabel,
   disabled,
+  emphasis,
+  needsEvidenceControl,
   onStatus,
 }: DecisionRowProps) => {
   const t = useTranslations();
@@ -522,6 +698,7 @@ const DecisionRow = ({
       <ReviewDecisionActions
         acceptLabel={acceptLabel}
         disabled={disabled}
+        emphasis={emphasis}
         onAccept={() => onStatus("reviewed")}
         onReject={() => onStatus("disputed")}
         onReopen={() => onStatus(null)}
@@ -529,7 +706,7 @@ const DecisionRow = ({
         reopenLabel={t("avt.review.undo")}
         state={state}
       />
-      {state === "pending" && (
+      {state === "pending" && needsEvidenceControl && (
         <Button
           aria-pressed={needsEvidence}
           disabled={disabled}
@@ -640,11 +817,13 @@ const NoteSection = ({ review, disabled, onSave }: NoteSectionProps) => {
 
   if (note === "") {
     return (
+      // A quiet text action: full width is kept for a surface's one
+      // primary action.
       <Button
-        className="w-full"
         disabled={disabled}
         onClick={() => setDraft("")}
-        variant="outline"
+        size="sm"
+        variant="ghost"
       >
         <PenIcon /> {t("avt.claimDetail.note.add")}
       </Button>
@@ -690,7 +869,8 @@ type DispositionToneStyle = {
 
 /**
  * Disposition-guidance tone: ready = supported, manual = tension,
- * escalate = record conflict, routine = neutral.
+ * escalate = record conflict, gap = missing coverage to fill,
+ * routine = neutral.
  */
 const DISPOSITION_TONE_STYLE: Record<DispositionTone, DispositionToneStyle> = {
   ready: {
@@ -708,6 +888,11 @@ const DISPOSITION_TONE_STYLE: Record<DispositionTone, DispositionToneStyle> = {
     textClass: "",
     textStyle: { color: RECORD_CONFLICT_VAR },
     icon: SplitIcon,
+  },
+  gap: {
+    tone: "neutral",
+    textClass: "text-muted-foreground",
+    icon: SearchIcon,
   },
   routine: {
     tone: "neutral",
@@ -732,16 +917,11 @@ const VerdictBasis = ({
   const t = useTranslations();
   const { state } = claim.verdict;
   switch (state) {
+    // What missing coverage means is the verdict chip's tooltip; a gap says
+    // what is missing in one line beside its next steps, and a silent
+    // record's chip and caveat already say why nothing is added.
     case "nocover": {
-      // A silent record needs nothing added; its verdict chip and caveat
-      // already say so.
-      return isRecordSilent(state, claim) ? null : (
-        <p className="text-muted-foreground bg-muted rounded-md p-3 text-sm leading-relaxed">
-          {t.rich("avt.claimDetail.basis.gap", {
-            strong: (chunks) => <b className="text-foreground">{chunks}</b>,
-          })}
-        </p>
-      );
+      return null;
     }
     case "notverifiable": {
       return (
@@ -790,20 +970,76 @@ const VerdictBasis = ({
  *  that owns the fact. */
 type FactScope = { workspaceId: string; listId: string; runId: string };
 
+type VerdictFactsProps = {
+  scope: FactScope;
+  claim: VerificationClaim;
+  refs: readonly VerificationClaim["refs"][number][];
+  cited: ReadonlyMap<FactId, ShownFact>;
+  canReview: boolean;
+};
+
+/** The facts the verdict rests on. One the reviewer linked says so on its
+ *  card, where it can be unlinked, rather than appearing a second time. */
+const VerdictFacts = ({
+  scope,
+  claim,
+  refs,
+  cited,
+  canReview,
+}: VerdictFactsProps) => {
+  const t = useTranslations();
+  if (cited.size === 0) {
+    return null;
+  }
+  const linked = new Set(claim.review?.linkedFactIds);
+  return (
+    <section className="space-y-2">
+      <h3 className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
+        {t("avt.claimDetail.whyVerdict")}
+      </h3>
+      {refs.map((ref) => {
+        const fact = cited.get(ref.factEntityId);
+        return fact === undefined ? null : (
+          <FactCard
+            fact={fact}
+            key={ref.factEntityId}
+            linkedMark={
+              linked.has(ref.factEntityId) ? (
+                <LinkedMark
+                  {...scope}
+                  claimId={claim.id}
+                  disabled={!canReview}
+                  factEntityId={ref.factEntityId}
+                  factName={fact.text}
+                />
+              ) : null
+            }
+            rel={ref.rel}
+            scope={scope}
+          />
+        );
+      })}
+    </section>
+  );
+};
+
 const FactCard = ({
   scope,
   fact,
   rel,
+  linkedMark = null,
 }: {
   scope: FactScope;
   fact: ShownFact;
   rel: ClaimFactRelation;
+  /** That the reviewer linked this fact, with its unlink action. */
+  linkedMark?: React.ReactNode;
 }) => {
   const t = useTranslations();
   const supports = rel === "supports";
   return (
     <article className="overflow-hidden rounded-lg border">
-      <div className="bg-muted flex items-center justify-between gap-2 border-b px-3 py-2">
+      <div className="bg-muted flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
         <ReviewStatusBadge
           icon={
             supports ? (
@@ -822,7 +1058,10 @@ const FactCard = ({
               : "avt.claimDetail.relation.conflicts",
           )}
         </ReviewStatusBadge>
-        <ConfBadge level={fact.confidence} />
+        <div className="ms-auto flex flex-wrap items-center justify-end gap-1.5">
+          {linkedMark}
+          <ConfBadge level={fact.confidence} />
+        </div>
       </div>
       <FactBody fact={fact} scope={scope} />
     </article>
@@ -843,7 +1082,16 @@ const FactBody = ({ scope, fact }: { scope: FactScope; fact: ShownFact }) => {
       <p className="text-sm leading-relaxed" dir="auto">
         {fact.text}
       </p>
-      <MediumChip medium={fact.medium} />
+      {/* The kind and medium describe the evidence itself (a calendar entry,
+          an export page); set under the fact, they cannot read as a linked
+          source, which only the footing line below names. */}
+      {(fact.evidenceKind !== null || fact.medium !== null) && (
+        <p className="text-muted-foreground text-xs" dir="auto">
+          {[fact.evidenceKind, fact.medium]
+            .filter((part) => part !== null)
+            .join(" · ")}
+        </p>
+      )}
       <InterpNote note={fact.interpretationNote} />
       {quote !== null && (
         <p
@@ -855,7 +1103,7 @@ const FactBody = ({ scope, fact }: { scope: FactScope; fact: ShownFact }) => {
       )}
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         {/* The fact as it stands now, the footing the claim's qualifiers
-            read. The medium and kind describe the evidence; only a linked
+            read. Only a linked
             document is a source, so a fact without one says so. */}
         {fact.standing.scoring === "held" && (
           <span className="text-foreground inline-flex items-center gap-1.5">
@@ -870,7 +1118,6 @@ const FactBody = ({ scope, fact }: { scope: FactScope; fact: ShownFact }) => {
           tier={fact.standing.tier}
         />
         <EvidenceFactSource source={source} workspaceId={workspaceId} />
-        {fact.evidenceKind !== null && <span>{fact.evidenceKind}</span>}
         <FactDate
           occurredOn={fact.occurredOn}
           precision={fact.occurredOnPrecision}

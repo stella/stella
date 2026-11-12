@@ -7,7 +7,7 @@ import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { AIProviderIcon } from "@/components/ai-provider-icons";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { CONNECT_AI_ASSISTANT_DOCS_URL } from "@/lib/consts";
 
@@ -72,12 +72,12 @@ export const AssistantSetup = ({
           >
             {mcpUrl}
           </TruncatedText>
-          <CopyActionButton size="sm" text={mcpUrl} variant="default" />
+          <CopyControl size="sm" text={mcpUrl} variant="default" />
         </div>
       </div>
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span>{t("agentSetup.selfSetupHint")}</span>
-        <CopyActionButton
+        <CopyControl
           label={t("agentSetup.copy")}
           size="xs"
           text={instructions}

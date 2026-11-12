@@ -157,7 +157,7 @@ describe("with reduced motion", () => {
     expect(label.dataset["reveal"]).toBe("rest");
     expect(label.style.translate).toBe("");
     await waitFor(() => {
-      expect(view.getAllByText(LONG_LABEL)).toHaveLength(2);
+      expect(view.getAllByText(LONG_LABEL).length).toBe(2);
     });
   });
 });

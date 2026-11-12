@@ -18,6 +18,7 @@ import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry"
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type { ClaimReviewEventPayload } from "@/api/lib/lists/verification/contract";
 import {
+  contestedFactIdsOfClaim,
   qualifiersOfClaim,
   readClaimReviews,
   readClaimsForBulkReview,
@@ -119,7 +120,7 @@ const createBulkClaimReviews = createSafeHandler(
               ...reviewedView(claim, review),
               qualifiers: qualifiersOfClaim(claim, review, inputs.standings),
             },
-            inputs.contested,
+            contestedFactIdsOfClaim(inputs, review),
           );
         });
         if (attention.length > 0) {

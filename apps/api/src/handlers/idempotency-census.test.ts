@@ -769,6 +769,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "external-effect",
   },
+  "POST /v1/search/case-law": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/search/facets": {
     type: "non-replay",
     reason: "current-state",
@@ -1151,6 +1155,11 @@ const CREATE_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason:
       "Money movement keeps its current payment transaction and is never replayed.",
+  },
+  "src/handlers/lists/verifications/claim-rechecks/create.ts": {
+    type: "non-replay",
+    reason:
+      "The re-check's own receipt is the request key recorded on its review event and checked under the claim's lock, so a repeat returns the first outcome; the model call runs between two transactions, outside one scoped request receipt.",
   },
   "src/handlers/sharepoint/imports/create.ts": {
     type: "non-replay",

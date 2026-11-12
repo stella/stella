@@ -317,7 +317,7 @@
     "disposition": {
       "contested": "Záver je jednoznačný, ale výklad jedného z použitých faktov je sporný; pred schválením si zaslúži vašu pozornosť.",
       "contradicted": "Záznamy sa od tohto tvrdenia odchyľujú. Pred potvrdením záveru musí rozhodnúť človek.",
-      "nocover": "Žiadny referenčný fakt sa tohto tvrdenia netýka, takže ho nemožno s ničím porovnať. Schválenie je nepovinné.",
+      "nocover": "Toto tvrdenie zatiaľ nepokrýva žiadny fakt zo zoznamu.",
       "notverifiable": "Odložené ako neoveriteľné; schválenie je nepovinné. Ak sa tvrdenie v skutočnosti dá overiť, znovu ho otvorte nižšie.",
       "recordconflict": "Dva dôkazné materiály v spise si odporujú. Vyššie určte, ktorý je rozhodujúci, alebo vec označte pre tím pre dôkazy; nástroj nerozhodne za vás.",
       "restsOnHeld": "Fakt, o ktorý sa tento záver opiera, je pozastavený na kontrolu; potvrďte, že záver platí aj bez neho, alebo tvrdenie po vyriešení faktu overte znova.",
@@ -381,6 +381,30 @@
         "label": "Bez zdroja"
       }
     },
+    "gap": {
+      "addFact": "Pridať fakt z dokumentu",
+      "addFactFailed": "Fakt sa nepodarilo pridať",
+      "factOffList": "Fakt, ktorý už nie je v zozname",
+      "linkFact": "Prepojiť fakt",
+      "linkFailed": "Fakt sa nepodarilo prepojiť",
+      "linked": "Prepojené fakty",
+      "linkedMark": "Prepojené",
+      "linksChanged": "Prepojenia sa od poslednej kontroly zmenili.",
+      "noFacts": "Žiadny fakt v zozname nezodpovedá.",
+      "recheck": "Skontrolovať znova",
+      "recheckFailed": "Tvrdenie sa nepodarilo skontrolovať znova",
+      "searchFacts": "Hľadať medzi faktmi v zozname",
+      "sheet": {
+        "passage": "Pasáž",
+        "passageHint": "Slová v dokumente, ktoré fakt preukazujú.",
+        "statementRequired": "Napíšte fakt.",
+        "statementTooLong": "Fakt môže mať najviac {limit} znakov.",
+        "submit": "Pridať a skontrolovať znova",
+        "title": "Pridať fakt z dokumentu"
+      },
+      "showNextSteps": "Zobraziť ďalšie kroky",
+      "unlink": "Zrušiť prepojenie: {fact}"
+    },
     "guidance": {
       "escalate": "Postúpiť ďalej",
       "manualJudgement": "Vyžaduje úsudok",
@@ -392,11 +416,14 @@
         "acceptedRoutine": "Prijaté ako bežné",
         "conflictReopened": "Vyriešenie rozporu zrušené",
         "escalated": "Odovzdané tímu pre dôkazy",
+        "factLinked": "Prepojený fakt",
+        "factUnlinked": "Zrušené prepojenie faktu",
         "governed": "Zvolený rozhodujúci záznam",
         "noteCleared": "Poznámka odstránená",
         "noteSaved": "Poznámka uložená",
         "overridden": "Záver zmenený",
         "overrideWithdrawn": "Zmena záveru vzatá späť",
+        "rechecked": "Tvrdenie znova skontrolované",
         "reopened": "Znovu otvorené ako overiteľné tvrdenie",
         "statusCleared": "Stav kontroly zrušený",
         "statusDisputed": "Označené ako spochybnené",
@@ -412,7 +439,9 @@
       },
       "formerMember": "Bývalý člen",
       "kinds": {
+        "factLink": "Prepojenia faktov",
         "override": "Zmeny záveru",
+        "recheck": "Opakované kontroly",
         "recordConflict": "Riešenia rozporov v záznamoch",
         "reopen": "Opätovné otvorenia",
         "status": "Zmeny stavu"
@@ -461,6 +490,11 @@
       "unresolveConflict": "Prečo rušíte toto vyriešenie?",
       "withdrawOverride": "Prečo sa vraciate k záveru nástroja?"
     },
+    "recheck": {
+      "currentVerdict": "Záver po opakovanej kontrole",
+      "runVerdict": "Záver kontroly",
+      "summary": "Znova skontrolované {checkedAt} voči {count, plural, one {# faktu} few {# faktom} many {# faktu} other {# faktom}}."
+    },
     "review": {
       "decided": "{status, select, disputed {Spochybnené} needsEvidence {Vyžaduje dôkazy} other {{origin, select, bulk {Prijaté ako bežné} other {Skontrolované}}}} · {decidedAt}",
       "status": {
@@ -502,7 +536,6 @@
       "failed": "Neuložené",
       "failedTitle": "Vaša zmena sa neuložila"
     },
-    "sourceMediumTooltip": "Médium zdroja: neutrálny opis. Samo osebe neznižuje mieru istoty.",
     "states": {
       "contradicted": {
         "chip": "V rozpore",
@@ -5396,8 +5429,6 @@
   "search": {
     "aiRefine": "Vylepšiť dotaz pomocou AI",
     "caseLawEmptyState": "Začnite písať a vyhľadajte v súdnych rozhodnutiach.",
-    "caseLawMatchingDecisions": "{count, plural, one {# zodpovedajúce rozhodnutie} few {# zodpovedajúce rozhodnutia} many {# zodpovedajúceho rozhodnutia} other {# zodpovedajúcich rozhodnutí}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ zodpovedajúce rozhodnutie} few {#+ zodpovedajúce rozhodnutia} many {#+ zodpovedajúceho rozhodnutia} other {#+ zodpovedajúcich rozhodnutí}}",
     "chatCoveragePartial": "Nie všetky chaty boli prehľadané celé.",
     "continueInChat": "Pokračovať v chate",
     "dateFrom": "Od",
@@ -6059,6 +6090,11 @@
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}",
     "versionAppliedInDecision": "Znenie použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# vložené ustanovenie} few {# vložené ustanovenia} many {# vloženého ustanovenia} other {# vložených ustanovení}}",
+    "versionChangesChanged": "{count, plural, one {# zmenené ustanovenie} few {# zmenené ustanovenia} many {# zmeneného ustanovenia} other {# zmenených ustanovení}}",
+    "versionChangesNone": "Znenie bez zmeny",
+    "versionChangesRemoved": "{count, plural, one {# vypustené ustanovenie} few {# vypustené ustanovenia} many {# vypusteného ustanovenia} other {# vypustených ustanovení}}",
+    "versionChangesWords": "{inserted, plural, one {# vložené slovo} few {# vložené slová} many {# vloženého slova} other {# vložených slov}}, {deleted, plural, one {# vypustené slovo} few {# vypustené slová} many {# vypusteného slova} other {# vypustených slov}}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },
   "styleSets": {
@@ -6779,6 +6815,7 @@
     "deletedItem": "Odstránené: {name}",
     "deletingWorkspace": "Mazanie spisu",
     "documentSwitcher": {
+      "download": "Stiahnuť tento súbor",
       "searchPlaceholder": "Nájsť dokument…",
       "trigger": "Prepnúť dokument"
     },

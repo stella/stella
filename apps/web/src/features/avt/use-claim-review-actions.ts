@@ -50,6 +50,7 @@ const QUALIFIER_READ_AFTER = {
   note: "kept",
   reopen: "kept",
   "record-conflict": "reread",
+  "fact-link": "kept",
 } as const satisfies Record<ClaimReviewEvent["kind"], "kept" | "reread">;
 
 type PreviousReviews = {
