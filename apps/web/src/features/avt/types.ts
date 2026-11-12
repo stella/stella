@@ -19,7 +19,6 @@ import type { TranslationKey } from "@/i18n/types";
 
 export type {
   ClaimReview,
-  ClaimVerdict,
   EvidenceFact,
   VerificationClaim,
   VerificationRun,
