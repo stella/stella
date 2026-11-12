@@ -139,6 +139,12 @@ export const documentReviewRuns = p.pgTable(
       .text("executor", { enum: DOCUMENT_REVIEW_RUN_EXECUTORS })
       .notNull()
       .default(DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER),
+    // Whether the run counts against the organization's document review
+    // caps (`lib/usage/model-run-caps`): a review a person starts on one document
+    // does; a playbook run over a table of documents is admitted as one batch
+    // and does not. Set when the run is inserted and never changed, so the
+    // triggers that charge and free the counter see the same answer.
+    orgCapped: p.boolean("org_capped").notNull().default(false),
     // Coarse progress over the expected finding set (see `expectedFindings`).
     total: p.integer().notNull().default(0),
     completed: p.integer().notNull().default(0),
