@@ -75,6 +75,7 @@ import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/acces
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { DAY_AND_MONTH_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
