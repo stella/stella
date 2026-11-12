@@ -71,6 +71,9 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Run canary protocol tests
         run: bun test packages/agent-engine/scripts/mcp-canary-server.test.ts
 

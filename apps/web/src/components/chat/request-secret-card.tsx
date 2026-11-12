@@ -161,29 +161,85 @@ const RequestSecretDetails = ({
   );
 };
 
+type ContinuationStatus = "running" | "failed" | "retrying" | "done";
+
+/**
+ * One credential request moves through these phases in order. Once the
+ * server commits the receipt (status, secretRef, target; never the value),
+ * the card holds it, so a failed chat continuation retries only the
+ * continuation instead of re-submitting the credential. Retry availability
+ * follows the continuation, not the part state: addToolResult writes the
+ * output onto the part before resuming the chat.
+ */
+type SubmissionPhase =
+  | { status: "editing"; submitFailed: boolean }
+  | { status: "submitting" }
+  | {
+      status: "held";
+      receipt: RequestSecretOutput;
+      continuation: ContinuationStatus;
+    };
+
+type PhaseView = {
+  continuation: ContinuationStatus | undefined;
+  heldReceipt: RequestSecretOutput | undefined;
+  isBusy: boolean;
+  submitFailed: boolean;
+};
+
+const readPhase = (phase: SubmissionPhase): PhaseView => {
+  switch (phase.status) {
+    case "editing":
+      return {
+        continuation: undefined,
+        heldReceipt: undefined,
+        isBusy: false,
+        submitFailed: phase.submitFailed,
+      };
+    case "submitting":
+      return {
+        continuation: undefined,
+        heldReceipt: undefined,
+        isBusy: true,
+        submitFailed: false,
+      };
+    case "held":
+      return {
+        continuation: phase.continuation,
+        heldReceipt: phase.receipt,
+        isBusy:
+          phase.continuation === "running" || phase.continuation === "retrying",
+        submitFailed: false,
+      };
+    default: {
+      phase satisfies never;
+      return panic("Unhandled request secret phase");
+    }
+  }
+};
+
 type RequestSecretContinuationRetryProps = {
-  hasError: boolean;
-  isSubmitting: boolean;
+  continuation: ContinuationStatus;
   onRetry: () => void;
 };
 
 const RequestSecretContinuationRetry = ({
-  hasError,
-  isSubmitting,
+  continuation,
   onRetry,
 }: RequestSecretContinuationRetryProps) => {
   const t = useTranslations();
-  if (!hasError) {
+  if (continuation !== "failed" && continuation !== "retrying") {
     return null;
   }
+  const isRetrying = continuation === "retrying";
   return (
     <div className="mt-4 space-y-3">
       <p className="text-destructive text-sm" role="alert">
         {t("chat.requestSecret.continuationError")}
       </p>
       <div className="flex flex-wrap justify-end gap-2">
-        <Button disabled={isSubmitting} onClick={onRetry} type="button">
-          {isSubmitting ? (
+        <Button disabled={isRetrying} onClick={onRetry} type="button">
+          {isRetrying ? (
             <Loader className="size-4" variant="decorative" />
           ) : null}
           {t("chat.requestSecret.retryContinuationAction")}
@@ -208,15 +264,16 @@ export const RequestSecretCard = ({
   const [saveForFuture, setSaveForFuture] = useState(false);
   const [normalConnectionAction, setNormalConnectionAction] =
     useState<NormalConnectionAction>("preserve");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  // The server-committed receipt (status, secretRef, target; never the
-  // value). Held so a failed chat continuation retries only the
-  // continuation instead of re-submitting the credential.
-  const [heldReceipt, setHeldReceipt] = useState<RequestSecretOutput>();
-  // Retry availability follows the failed continuation, not the part state:
-  // addToolResult writes the output onto the part before resuming the chat.
-  const [hasContinuationError, setHasContinuationError] = useState(false);
+  const [phase, setPhase] = useState<SubmissionPhase>({
+    status: "editing",
+    submitFailed: false,
+  });
+  const {
+    continuation,
+    heldReceipt,
+    isBusy: isSubmitting,
+    submitFailed,
+  } = readPhase(phase);
   const input = part.state === "input-streaming" ? null : part.input;
   const output = part.state === "complete" ? part.output : undefined;
   const shownOutput = output ?? heldReceipt;
@@ -236,20 +293,26 @@ export const RequestSecretCard = ({
     ? savedSecretQuery.data
     : undefined;
 
-  const continueWithReceipt = async (receipt: RequestSecretOutput) => {
-    setIsSubmitting(true);
+  const continueWithReceipt = async (
+    receipt: RequestSecretOutput,
+    attempt: "running" | "retrying",
+  ) => {
+    setPhase({ status: "held", receipt, continuation: attempt });
     const result = await Result.tryPromise(
       async () => await continueRequestSecret(part.id, receipt),
     );
-    setHasContinuationError(Result.isError(result));
-    setIsSubmitting(false);
+    setPhase({
+      status: "held",
+      receipt,
+      continuation: Result.isError(result) ? "failed" : "done",
+    });
   };
 
   const retryContinuation = async () => {
-    if (heldReceipt === undefined || isSubmitting) {
+    if (phase.status !== "held" || phase.continuation !== "failed") {
       return;
     }
-    await continueWithReceipt(heldReceipt);
+    await continueWithReceipt(phase.receipt, "retrying");
   };
 
   const submit = async (decision: RequestSecretDecision["decision"]) => {
@@ -257,8 +320,7 @@ export const RequestSecretCard = ({
       input === null ||
       input === undefined ||
       !isPending ||
-      isSubmitting ||
-      heldReceipt !== undefined
+      phase.status !== "editing"
     ) {
       return;
     }
@@ -277,10 +339,6 @@ export const RequestSecretCard = ({
     ) {
       return;
     }
-    const submittedValue = value;
-    setValue("");
-    setIsSubmitting(true);
-    setHasError(false);
     let submission: RequestSecretDecision;
     switch (decision) {
       case "provide": {
@@ -289,7 +347,7 @@ export const RequestSecretCard = ({
         }
         submission = {
           decision,
-          value: submittedValue,
+          value,
           saveForFuture,
           normalConnectionAction: saveForFuture
             ? normalConnectionAction
@@ -316,16 +374,16 @@ export const RequestSecretCard = ({
         panic("Unhandled private input decision");
       }
     }
+    setValue("");
+    setPhase({ status: "submitting" });
     const result = await Result.tryPromise(
       async () => await handleRequestSecret(part.id, submission),
     );
     if (Result.isError(result)) {
-      setHasError(true);
-      setIsSubmitting(false);
+      setPhase({ status: "editing", submitFailed: true });
       return;
     }
-    setHeldReceipt(result.value);
-    await continueWithReceipt(result.value);
+    await continueWithReceipt(result.value, "running");
   };
 
   return (
@@ -354,10 +412,9 @@ export const RequestSecretCard = ({
             : t("chat.requestSecret.declined")}
         </p>
       ) : null}
-      {heldReceipt !== undefined ? (
+      {continuation !== undefined ? (
         <RequestSecretContinuationRetry
-          hasError={hasContinuationError}
-          isSubmitting={isSubmitting}
+          continuation={continuation}
           onRetry={() =>
             detached(
               retryContinuation(),
@@ -385,7 +442,7 @@ export const RequestSecretCard = ({
               value={value}
             />
           ) : null}
-          {hasError ? (
+          {submitFailed ? (
             <p className="text-destructive text-sm" role="alert">
               {t("chat.requestSecret.error")}
             </p>

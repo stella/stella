@@ -237,6 +237,7 @@ export const isSuggestChangesApplyOutput = (
 
 const CHAT_TOOL_TITLE_KEYS = {
   show_visual: "chat.generatedView",
+  show_app: "chat.tool.show_app",
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
   request_secret: "chat.tool.request_secret",

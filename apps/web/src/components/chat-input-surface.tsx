@@ -14,7 +14,7 @@ import {
   COMPOSER_LARGE_ACTION_ROW_CLASS,
   COMPOSER_LARGE_TEXT_WELL_CLASS,
   COMPOSER_LEADING_GROUP_CLASS,
-  COMPOSER_PLACEHOLDER_CLASS,
+  ComposerPlaceholder,
 } from "@stll/ui/composer";
 import { cn } from "@stll/ui/utils";
 
@@ -89,10 +89,11 @@ type ChatInputSurfaceProps = {
    */
   onNewThread?: (() => void) | null | undefined;
   /**
-   * When provided, the (+) menu gains a Models submenu. Omit on surfaces
-   * without a model picker.
+   * The (+) menu's Models submenu, with where the thread's turns run.
+   * Required, so a composer cannot drop the Run on choice by leaving a prop
+   * out; `null` only on a surface that pins the model.
    */
-  models?: ComposerModelsMenuProps | undefined;
+  models: ComposerModelsMenuProps | null;
   /**
    * When provided, the (+) menu gains a Skills submenu, wired to this
    * surface's own editor. Omit on surfaces without skill insertion
@@ -291,17 +292,9 @@ export const ChatInputSurface = ({
                 />
               </ReferenceRenderScope>
               {isBlank && (
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    COMPOSER_PLACEHOLDER_CLASS,
-                    variant === "compact"
-                      ? "start-0 end-0 top-1/2 -translate-y-1/2"
-                      : "start-3 end-3 top-2",
-                  )}
-                >
+                <ComposerPlaceholder stature={variant}>
                   {placeholder}
-                </span>
+                </ComposerPlaceholder>
               )}
             </div>
             <div

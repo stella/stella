@@ -154,7 +154,8 @@ const roleFindings = (
         rule === STRUCTURE_FIDELITY_RULES.SIGNATURE_AS_HOLDING ||
         rule === STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_REASONS ||
         rule === STRUCTURE_FIDELITY_RULES.RECITAL_AS_HOLDING ||
-        rule === STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING,
+        rule === STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING ||
+        rule === STRUCTURE_FIDELITY_RULES.INSTRUCTION_AS_HOLDING,
     )
     .map(({ rule, anchorId }) => `${rule} ${anchorId}`);
 
@@ -255,6 +256,95 @@ test("the recital before the first line that rules is not the ruling", () => {
       "pl",
     ),
   ).toEqual([]);
+});
+
+test("the instruction on appeal under the ruling is not the ruling", () => {
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. oddala odwołanie;"],
+        [
+          "holding",
+          "Na orzeczenie - w terminie 14 dni od jego doręczenia - przysługuje skarga za pośrednictwem Prezesa Krajowej Izby Odwoławczej.",
+        ],
+      ],
+      "pl",
+    ),
+  ).toEqual(["instruction-as-holding p-1"]);
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. oddala odwołanie;"],
+        [
+          undefined,
+          "Na orzeczenie - w terminie 14 dni od jego doręczenia - przysługuje skarga za pośrednictwem Prezesa Krajowej Izby Odwoławczej.",
+        ],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+});
+
+test("a list point the sentence runs on into is the list's paragraph, not a cut", () => {
+  const cut = (blocks: readonly RoledBlock[]) =>
+    structureFidelityIn(roled(blocks), "cs")
+      .filter(({ rule }) => rule === STRUCTURE_FIDELITY_RULES.SENTENCE_CUT)
+      .map(({ anchorId }) => anchorId);
+  expect(
+    cut([
+      [
+        undefined,
+        "a) jak posoudit zásah okamžikový, avšak se zásahem trvajícím a s trvajícími důsledky,",
+      ],
+      [undefined, "b) jak postupovat při kvalifikaci tvrzeného zásahu"],
+    ]),
+  ).toEqual([]);
+  expect(
+    cut([
+      [
+        undefined,
+        "a) jak posoudit zásah okamžikový, avšak se zásahem trvajícím a s trvajícími důsledky,",
+      ],
+      [undefined, "jak postupovat při kvalifikaci tvrzeného zásahu"],
+    ]),
+  ).toEqual(["p-0"]);
+});
+
+test("a verdict's formula lines are its layout, not cuts", () => {
+  const cut = (blocks: readonly RoledBlock[], language: string) =>
+    structureFidelityIn(roled(blocks), language)
+      .filter(({ rule }) => rule === STRUCTURE_FIDELITY_RULES.SENTENCE_CUT)
+      .map(({ anchorId }) => anchorId);
+  expect(
+    cut(
+      [
+        [
+          "holding",
+          "A. D., nar. XX.XX.XXXX v Lučenci, trvale bytom E. G. XXXX/XX, D.,",
+        ],
+        ["holding", "uznáva sa za vinného, že"],
+        [
+          "holding",
+          "v bode 1) dňa 30.12.2016 spôsobil škodu vo výške 1.600,- eur,",
+        ],
+        ["holding", "teda"],
+      ],
+      "sk",
+    ),
+  ).toEqual([]);
+  // Outside the ruling the same break is a cut.
+  expect(
+    cut(
+      [
+        [
+          undefined,
+          "v bode 1) dňa 30.12.2016 spôsobil škodu vo výške 1.600,- eur,",
+        ],
+        [undefined, "teda"],
+      ],
+      "sk",
+    ),
+  ).toEqual(["p-0"]);
 });
 
 test("a decision that opens a ruling before its reasons holds it", () => {

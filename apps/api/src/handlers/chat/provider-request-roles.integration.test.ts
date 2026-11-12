@@ -559,6 +559,7 @@ const ROLE_REQUEST_NAMES = Object.keys(TASK_REQUESTS).filter(
  * fails the scan below.
  */
 const OUTSIDE_THE_CHAT_SURFACE: Readonly<Record<string, string>> = {
+  "handlers/ai/email-generation.ts": "Outlook add-in email summary and reply",
   "handlers/ai-autocomplete/stream.ts": "editor autocomplete",
   "handlers/case-law/analysis/generate.ts": "case-law analysis",
   "handlers/case-law/analysis/significance-run.ts": "case-law analysis",

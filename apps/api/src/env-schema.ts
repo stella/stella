@@ -2,6 +2,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+import { normalizeOutlookTaskPaneOrigin } from "@stll/api-contract/outlook-client";
 import {
   NODE_ENV,
   type NodeEnvLabel,
@@ -146,6 +147,12 @@ export const envApiServerSchema = {
   GOOGLE_GENERATIVE_AI_API_KEY: v.optional(v.string()),
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
+  /**
+   * Optional GitHub token limited to public repositories, for skill sources a
+   * person links. Never the catalogue token: it is sent for any URL a person
+   * enters.
+   */
+  SKILL_IMPORT_GITHUB_TOKEN: v.optional(v.pipe(v.string(), v.minLength(1))),
   OPENROUTER_API_KEY: v.optional(v.string()),
   OPENROUTER_FAST_TIER_API_KEY: v.optional(v.string()),
   OPENROUTER_FAST_TIER_WIF_POLICY_ID: v.optional(
@@ -386,6 +393,21 @@ export const envApiServerSchema = {
   PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
   ...converterSettingsSchema,
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
+  /**
+   * The https origin serving the Outlook add-in's task pane, e.g.
+   * `https://outlook.example.com`. Set, the API publishes the add-in's OAuth
+   * client document, accepts its one redirect on this origin and answers its
+   * browser requests. Unset, the add-in cannot sign in to this deployment.
+   */
+  OUTLOOK_ADDIN_ORIGIN: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        (value) => normalizeOutlookTaskPaneOrigin(value) === value,
+        "OUTLOOK_ADDIN_ORIGIN must be an https origin without a path, e.g. https://outlook.example.com",
+      ),
+    ),
+  ),
   /**
    * RFC 3161 timestamp authorities for PDF signing, in preference order,
    * separated by commas or whitespace. Signing falls back to the next one

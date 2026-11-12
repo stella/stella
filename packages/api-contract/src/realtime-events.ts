@@ -11,6 +11,7 @@ import {
 
 export const REALTIME_EVENT_TYPE = {
   CHAT_RUNS_CHANGED: "chat-runs.changed",
+  CHAT_THREADS_CHANGED: "chat-threads.changed",
   DESKTOP_EDIT_SESSION_CLOSED: "__desktop_edit_session_closed__",
   FLOW_RUN_UPDATE: "flow-run-update",
   NEW_NOTIFICATION: "new-notification",
@@ -155,16 +156,29 @@ const newNotificationEventSchema = v.object({
  * User-channel event announcing that one of the recipient's chat runs started,
  * started or stopped waiting on them, or ended. Content-free for the same
  * reason as the notification event: the client re-reads its active runs
- * through the ordinary authorized endpoint.
+ * through the ordinary authorized endpoint. A run that ends with an answer
+ * also makes its chat unread, so a client showing chat read states re-reads
+ * its chat list too.
  */
 const chatRunsChangedEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED),
   data: v.null(),
 });
 
+/**
+ * User-channel event announcing that the recipient marked one of their chats
+ * read or unread, or pinned or unpinned it, on any device. Content-free: the
+ * client re-reads its chat list through the ordinary authorized endpoint.
+ */
+const chatThreadsChangedEventSchema = v.object({
+  type: v.literal(REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED),
+  data: v.null(),
+});
+
 const userRealtimeEventSchema = v.variant("type", [
   newNotificationEventSchema,
   chatRunsChangedEventSchema,
+  chatThreadsChangedEventSchema,
 ]);
 
 export type ResourceChange = v.InferOutput<typeof resourceChangeSchema>;
@@ -190,6 +204,12 @@ export const newNotificationRealtimeEvent = () =>
 export const chatRunsChangedRealtimeEvent = () =>
   ({
     type: REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED,
+    data: null,
+  }) as const satisfies UserRealtimeEvent;
+
+export const chatThreadsChangedRealtimeEvent = () =>
+  ({
+    type: REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED,
     data: null,
   }) as const satisfies UserRealtimeEvent;
 

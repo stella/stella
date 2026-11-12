@@ -21,6 +21,7 @@ const UNPROJECTED_DATA_BOX_SETTINGS_COLUMNS = [
   "id", // The settings row identity is not part of the data-box inventory.
   "organizationId", // The active organization scopes this read.
   "personalApiKeyPolicy", // API-key policy belongs to general settings.
+  "localRunMaxApprovalMode", // Local run policy belongs to general settings.
   "invoiceLanguage", // Invoice language belongs to invoicing settings.
   "sanctionsMonitoringMode", // Sanctions policy belongs to general settings.
   "matterNumberingEnabled", // Matter numbering belongs to general settings.
@@ -46,6 +47,7 @@ const UNPROJECTED_DATA_BOX_SETTINGS_COLUMNS = [
   "urlFetchApiKeyIv", // Provider encryption metadata must not be projected.
   "managedAIResidency", // AI policy belongs to general settings.
   "promptCachingEnabled", // AI policy belongs to general settings.
+  "aiInstructions", // AI policy belongs to general settings.
   "sharepointConnectionEnabled", // Connection policy belongs to general settings.
   "memoryExtractionEnabled", // Memory policy belongs to general settings.
   "templatePacksHidden", // Template preferences belong to general settings.

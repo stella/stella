@@ -591,6 +591,14 @@ export class WorkflowIntegrationError extends TaggedError(
   cause?: unknown;
 }> {}
 
+/** The documents of one request cannot fit its model, even trimmed. */
+export class DocumentTooLargeError extends TaggedError(
+  "DocumentTooLargeError",
+)<{
+  message: string;
+  budgetBytes: number;
+}> {}
+
 /** Post-generation OOXML structural violations. */
 export class OoxmlValidationError extends TaggedError("OoxmlValidationError")<{
   message: string;

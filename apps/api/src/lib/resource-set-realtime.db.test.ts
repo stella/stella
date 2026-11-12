@@ -41,6 +41,8 @@ const routeServer = serveRoutesForTest([
 ]);
 afterAll(async () => {
   await routeServer.stop();
+  stopSse();
+  await releaseAgentAuthTestDb();
 });
 
 // An open matter tab refreshes its lists from `resource_set_updated` events on
@@ -56,11 +58,6 @@ let testDb: TestDatabase;
 beforeAll(async () => {
   testDb = await initAgentAuthTestDb();
   startSse(realtimeAuthorizers);
-});
-
-afterAll(async () => {
-  stopSse();
-  await releaseAgentAuthTestDb();
 });
 
 const BASE = "http://localhost";

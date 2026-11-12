@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   isSkOpeningFormula,
   isSkPortalMetadataRow,
+  isSkVerdictFormulaLine,
   skSectionHeading,
   skTitleFormulaStart,
 } from "./slovak-document-roles";
@@ -97,6 +98,25 @@ describe("the portal's metadata box", () => {
     "%j is not",
     (text) => {
       expect(isSkPortalMetadataRow(text)).toBe(false);
+    },
+  );
+});
+
+describe("a Slovak criminal verdict's formula lines", () => {
+  test.each([
+    "uznáva sa za vinného, že",
+    "teda",
+    "čím spáchal",
+    "pričom obžalovaný A. D. sa takéhoto konania dopustil",
+    "Za to mu súd ukladá",
+  ])("%p is a formula line", (line) => {
+    expect(isSkVerdictFormulaLine(line)).toBe(true);
+  });
+
+  test.each(["tedaže", "Žalobca uviedol, že", "pričomž"])(
+    "%p is not",
+    (line) => {
+      expect(isSkVerdictFormulaLine(line)).toBe(false);
     },
   );
 });

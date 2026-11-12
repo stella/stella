@@ -9,7 +9,11 @@ import { panic, Result } from "better-result";
  * checked against one source.
  */
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import { AI_FAILURE_CODES, isAIFailureCode } from "@stll/api-contract";
+import {
+  AI_FAILURE_CODES,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
+  isAIFailureCode,
+} from "@stll/api-contract";
 import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { classifyFailure, FAILURE_REASON_GRADE } from "@stll/errors";
@@ -34,6 +38,7 @@ import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  DocumentTooLargeError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -75,13 +80,19 @@ const INCOMPLETE_STREAM_CODES: ReadonlySet<string> = new Set([
 
 /**
  * The run error codes a local chat turn ends with when the computer it ran on
- * reports why it stopped (`local-run-chunks.ts`), by the kind each names.
+ * reports why it stopped (`local-run-chunks.ts`), by the kind each names. A
+ * model at capacity is the provider's outage, reported under its own code by
+ * the harness (`@stll/agent-engine` stream chunks).
  */
 const LOCAL_RUNNER_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
   [AI_FAILURE_CODES.local_runner_needs_login, "local_runner_needs_login"],
   [AI_FAILURE_CODES.local_runner_limit_reached, "local_runner_limit_reached"],
   [AI_FAILURE_CODES.local_runner_unavailable, "local_runner_unavailable"],
   [AI_FAILURE_CODES.local_runner_turn_too_large, "local_runner_turn_too_large"],
+  [AI_FAILURE_CODES.local_runner_not_reached, "local_runner_not_reached"],
+  [AI_FAILURE_CODES.local_runner_relinked, "local_runner_relinked"],
+  [AI_FAILURE_CODES.local_runner_restoring, "local_runner_restoring"],
+  [AI_FAILURE_CODES.provider_unavailable, "provider_unavailable"],
 ]);
 
 /**
@@ -318,6 +329,20 @@ const errorCause = (error: unknown): unknown => {
   return error["cause"];
 };
 
+const UNAVAILABLE_MODEL_CODES: ReadonlySet<string> = new Set([
+  "model_not_found",
+]);
+
+const namesUnavailableModel = (source: unknown): boolean =>
+  [
+    providerErrorBodyOf(source),
+    providerErrorBodyOf(providerMessageBody(source)),
+  ]
+    .map((body) => body?.["code"])
+    .some(
+      (code) => typeof code === "string" && UNAVAILABLE_MODEL_CODES.has(code),
+    );
+
 const providerResponseKind = (error: unknown): AIErrorKind | null => {
   const response = selectProviderResponse(error, "classification");
   const statusCode = response?.status ?? null;
@@ -350,8 +375,8 @@ const providerResponseKind = (error: unknown): AIErrorKind | null => {
     // Only a provider status or explicit provider-owned credential marker
     // counts, which is what keeps a 401 this service raised itself out of
     // here: its curated copy would otherwise be replaced by the provider's.
-    // A provider 403 stays unmapped because it is ambiguous (permission,
-    // region, or account state) where a 401 is not.
+    // A provider 403 otherwise stays unmapped because it is ambiguous
+    // (permission, region, or account state) where a 401 is not.
     if (statusCode === 401 || (statusCode === null && credentialsRejected)) {
       return "provider_credentials_rejected";
     }
@@ -359,6 +384,11 @@ const providerResponseKind = (error: unknown): AIErrorKind | null => {
     // serves the configured model (retired or renamed upstream) — a
     // config problem, not a transient outage, so retrying won't help.
     if (statusCode === 404) {
+      return "model_unavailable";
+    }
+    // A 403 whose body names the model as the refused resource is the same
+    // configuration state: the key cannot use the configured model.
+    if (statusCode === 403 && namesUnavailableModel(response?.source)) {
       return "model_unavailable";
     }
     if (statusCode !== null && statusCode >= HTTP_SERVER_ERROR_MIN) {
@@ -733,6 +763,9 @@ const aiKindHandlerError = (
     case "local_runner_limit_reached":
     case "local_runner_unavailable":
     case "local_runner_turn_too_large":
+    case "local_runner_not_reached":
+    case "local_runner_relinked":
+    case "local_runner_restoring":
     case "unknown":
       return new HandlerError({ ...fallback, code, cause: error });
     default: {
@@ -758,6 +791,15 @@ export const aiHandlerError = (
   error: unknown,
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
+  // Raised before any model call, so no provider failure kind describes it.
+  if (DocumentTooLargeError.is(error)) {
+    return new HandlerError({
+      code: DOCUMENT_TOO_LARGE_ERROR_CODE,
+      status: 413,
+      message: error.message,
+      cause: error,
+    });
+  }
   const kind = classifyAIBoundaryFailure(error);
   const mapped = aiKindHandlerError(kind, error, fallback);
   const handlerError =

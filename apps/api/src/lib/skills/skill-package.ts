@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { SKILL_SOURCE_UNREACHABLE_CODE } from "@stll/api-contract";
 import type { ZipEntry } from "@stll/docx-core/zip";
 import {
   isAllowedResourcePath,
@@ -48,20 +49,30 @@ const USER_GITHUB_FETCH_ACCESS = { source: "user" } as const;
 type GithubSkillFetchAccess =
   { source: "catalogue"; githubToken?: string } | { source: "user" };
 
-const githubSkillFetchHeaders = ({
+/**
+ * GitHub API headers for one skill source request. A catalogue read uses the
+ * catalogue token; a source the person linked uses only the public-repository
+ * token, so it can never read what the catalogue token can see. Either token
+ * goes to api.github.com alone.
+ */
+export const githubSkillFetchHeaders = ({
   access,
   hostname,
+  publicGithubToken,
 }: {
   access: GithubSkillFetchAccess;
   hostname: string;
-}): Record<string, string> => ({
-  ...GITHUB_FETCH_HEADERS,
-  ...(access.source === "catalogue" &&
-  access.githubToken &&
-  hostname === "api.github.com"
-    ? { Authorization: `Bearer ${access.githubToken}` }
-    : {}),
-});
+  publicGithubToken?: string | undefined;
+}): Record<string, string> => {
+  const token =
+    access.source === "catalogue" ? access.githubToken : publicGithubToken;
+  return {
+    ...GITHUB_FETCH_HEADERS,
+    ...(token && hostname === "api.github.com"
+      ? { Authorization: `Bearer ${token}` }
+      : {}),
+  };
+};
 
 type ParsedSkillResource = {
   content: string;
@@ -184,6 +195,8 @@ type SkillSourceRequestBudget = {
   deadlineAt: number;
   permit: ThirdPartyOutboundPermit;
   fetchBytes?: typeof safeOutboundFetchBytes;
+  /** GitHub token limited to public repositories, for sources a person links. */
+  publicGithubToken?: string | undefined;
   remainingRequests?: number;
   timeoutMessage?: string;
 };
@@ -203,17 +216,20 @@ type CreateSkillPackageFetchContextOptions = {
     maxRequests: number;
   };
   fetchBytes?: typeof safeOutboundFetchBytes;
+  publicGithubToken?: string | undefined;
 };
 
 export const createSkillPackageFetchContext = ({
   permit,
   limits,
   fetchBytes = safeOutboundFetchBytes,
+  publicGithubToken,
 }: CreateSkillPackageFetchContextOptions): SkillPackageFetchContext => ({
   requestBudget: {
     deadlineAt: limits?.deadlineAt ?? Number.POSITIVE_INFINITY,
     fetchBytes,
     permit,
+    ...(publicGithubToken ? { publicGithubToken } : {}),
     ...(limits === undefined ? {} : { remainingRequests: limits.maxRequests }),
     timeoutMessage: "Skill import timed out",
   },
@@ -389,12 +405,14 @@ export const fetchGithubCatalogueSkillPackage = async ({
 type DiscoverSkillPackagesFromUrlOptions = {
   fetchBytes?: typeof safeOutboundFetchBytes;
   permit: ThirdPartyOutboundPermit;
+  publicGithubToken?: string | undefined;
   rawUrl: string;
 };
 
 export const discoverSkillPackagesFromUrl = async ({
   fetchBytes = safeOutboundFetchBytes,
   permit,
+  publicGithubToken,
   rawUrl,
 }: DiscoverSkillPackagesFromUrlOptions): Promise<
   Result<SkillPackageDiscovery, HandlerError>
@@ -407,6 +425,7 @@ export const discoverSkillPackagesFromUrl = async ({
           GITHUB_DISCOVERY_TIMEOUT_MS,
         fetchBytes,
         permit,
+        ...(publicGithubToken ? { publicGithubToken } : {}),
       };
       const githubTarget = await parseGithubDiscoveryPath(rawUrl, budget);
       if (githubTarget.isErr()) {
@@ -1325,31 +1344,37 @@ const fetchSafeBytes = async ({
   }
   const response = await (budget.fetchBytes ?? safeOutboundFetchBytes)({
     permit: budget.permit,
-    headers: githubSkillFetchHeaders({ access, hostname: url.hostname }),
+    headers: githubSkillFetchHeaders({
+      access,
+      hostname: url.hostname,
+      publicGithubToken: budget.publicGithubToken,
+    }),
     maxBytes,
     timeoutMs: timeoutMs.value,
     url,
   });
   if (Result.isError(response)) {
     return Result.err(
-      new HandlerError({
-        status: access.source === "catalogue" ? 503 : 400,
-        code: "internal_error",
-        message: response.error.message,
-        cause: response.error,
-      }),
+      access.source === "catalogue"
+        ? new HandlerError({
+            status: 503,
+            code: "internal_error",
+            message: response.error.message,
+            cause: response.error,
+          })
+        : skillSourceUnreachable(response.error.message, response.error),
     );
   }
   if (!response.value.ok) {
+    const message = `Skill source returned HTTP ${response.value.status}`;
     return Result.err(
-      new HandlerError({
-        status:
-          access.source === "catalogue"
-            ? catalogueUpstreamStatus(response.value.status)
-            : 400,
-        code: "internal_error",
-        message: `Skill source returned HTTP ${response.value.status}`,
-      }),
+      access.source === "catalogue"
+        ? new HandlerError({
+            status: catalogueUpstreamStatus(response.value.status),
+            code: "internal_error",
+            message,
+          })
+        : skillSourceUnreachable(message),
     );
   }
   return Result.ok(response.value);
@@ -1373,8 +1398,10 @@ const startSkillSourceRequest = (
   const remainingMs =
     budget.deadlineAt - Temporal.Now.instant().epochMilliseconds;
   if (remainingMs <= 0) {
-    return rejectSkillPackage(
-      budget.timeoutMessage ?? "GitHub skill discovery timed out",
+    return Result.err(
+      skillSourceUnreachable(
+        budget.timeoutMessage ?? "GitHub skill discovery timed out",
+      ),
     );
   }
   return Result.ok(Math.min(GITHUB_API_TIMEOUT_MS, remainingMs));
@@ -1423,19 +1450,17 @@ const githubRefKindExists = async ({
   });
   if (Result.isError(response)) {
     return Result.err(
-      new HandlerError({
-        status: 400,
-        message: response.error.message,
-        cause: response.error,
-      }),
+      skillSourceUnreachable(response.error.message, response.error),
     );
   }
   if (response.value.status === 404) {
     return Result.ok(false);
   }
   if (!response.value.ok) {
-    return rejectSkillPackage(
-      `Skill source returned HTTP ${response.value.status}`,
+    return Result.err(
+      skillSourceUnreachable(
+        `Skill source returned HTTP ${response.value.status}`,
+      ),
     );
   }
   return Result.ok(true);
@@ -1655,7 +1680,9 @@ const parseGithubDiscoveryPath = async (
     return Result.err(resolved.error);
   }
   if (!resolved.value) {
-    return rejectSkillPackage("GitHub branch or folder could not be resolved");
+    return Result.err(
+      skillSourceUnreachable("GitHub branch or folder could not be resolved"),
+    );
   }
   return Result.ok({ owner, repo, ...resolved.value });
 };
@@ -2072,19 +2099,17 @@ const fetchGithubSkillSourceBytes = async ({
       return Result.ok(null);
     }
     return Result.err(
-      new HandlerError({
-        status: 400,
-        message: response.error.message,
-        cause: response.error,
-      }),
+      skillSourceUnreachable(response.error.message, response.error),
     );
   }
   if (!response.value.ok) {
     if (response.value.status === 404) {
       return Result.ok(null);
     }
-    return rejectSkillPackage(
-      `Skill source returned HTTP ${response.value.status}`,
+    return Result.err(
+      skillSourceUnreachable(
+        `Skill source returned HTTP ${response.value.status}`,
+      ),
     );
   }
   return Result.ok(response.value.body);
@@ -2273,3 +2298,16 @@ const checkSkillResourcePath = (path: string): Result<void, HandlerError> =>
 
 const rejectSkillPackage = (message: string) =>
   Result.err(new HandlerError({ status: 400, message }));
+
+/**
+ * A source the person linked could not be fetched. It stays a 400, the
+ * person's link to fix or retry, but carries its own code so the import
+ * dialog can say so instead of a generic failure.
+ */
+const skillSourceUnreachable = (message: string, cause?: unknown) =>
+  new HandlerError({
+    status: 400,
+    code: SKILL_SOURCE_UNREACHABLE_CODE,
+    message,
+    cause,
+  });

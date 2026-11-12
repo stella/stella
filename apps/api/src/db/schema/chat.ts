@@ -14,7 +14,7 @@ import {
   CHAT_TURN_INTERACTION_TYPES,
   CHAT_TURN_INTERRUPTION_REASONS,
 } from "@/api/handlers/chat/chat-turn-state";
-import type { StoredArtefactProvenance } from "@/api/lib/ai-generation/provenance";
+import type { StoredArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
 import type { ChatRunReferenceState } from "@/api/lib/chat/run-log-reference-state";
 import {
   CHAT_THREAD_NAME_KIND,
@@ -293,6 +293,17 @@ export const chatThreads = p.pgTable(
      * content would be accepted and its cursor advanced past the corrected row.
      */
     compactionEpoch: p.integer("compaction_epoch").notNull().default(0),
+    /**
+     * When the thread's reader last had it open. The chat reads unread while
+     * its latest answer settled after this instant; null means the reader
+     * marked it unread, so it reads unread until they open it again. New and
+     * pre-existing threads start at their insert (or the column's addition),
+     * so no answer older than that turns unread. Writes leave `updated_at`
+     * alone: reading a chat does not reorder the history.
+     */
+    lastReadAt: timestamptz("last_read_at").defaultNow(),
+    /** When the reader pinned the chat to the top of their list; null when it is not pinned. */
+    pinnedAt: timestamptz("pinned_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -300,6 +311,12 @@ export const chatThreads = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // The reader's pinned chats, newest activity first, without walking the
+    // rest of their history. Built online (indexes-chat-threads-org-user-pinned-idx).
+    p
+      .index("chat_threads_org_user_pinned_idx")
+      .on(table.organizationId, table.userId, table.updatedAt, table.id)
+      .where(isNotNull(table.pinnedAt)),
     // RESTRICT mirrors the single-column workspace reference: a global thread
     // (workspace_id NULL) is exempt under MATCH SIMPLE, and matter deletion
     // removes threads explicitly before it removes the workspace.

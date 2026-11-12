@@ -33,9 +33,15 @@ import {
 import {
   isBrowserResolvedChatToolCall,
   isChatPastedTextPart,
+  isDeclinedChatToolCall,
   isHarnessChatToolCall,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
+import {
+  askUserAnswersRefusal,
+  askUserInputSchema,
+  askUserOutputSchema,
+} from "@stll/api-contract/chat-ask-user";
 import { chatUserMessageContentSchema } from "@stll/api-contract/chat-message-content";
 import {
   type ChatRunTarget,
@@ -49,6 +55,10 @@ import {
   validateStoredFileRefs,
 } from "@/api/handlers/chat/attachment-validation";
 import {
+  BROWSER_EXTENSION_LOCAL_RUN,
+  type TurnBrowserExtension,
+} from "@/api/handlers/chat/browser-extension-capability";
+import {
   chatMessageFromPersisted,
   continueStoredChatPart,
   getAwaitingUserInteractions,
@@ -61,6 +71,7 @@ import {
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { validatePrivateReceipts } from "@/api/handlers/chat/chat-secret-validation";
+import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type {
@@ -231,6 +242,21 @@ export const resolveBrowserExtensionCapability = (
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     status: BROWSER_EXTENSION_STATUS.unsupportedDevice,
   };
+
+/**
+ * The browser a turn can reach. A turn that runs on the member's computer
+ * cannot reach the extension the web tab reports, whatever its state.
+ */
+export const resolveTurnBrowserExtension = ({
+  reported,
+  runsLocally,
+}: {
+  reported: v.InferOutput<typeof browserExtensionSchema> | undefined;
+  runsLocally: boolean;
+}): TurnBrowserExtension =>
+  runsLocally
+    ? BROWSER_EXTENSION_LOCAL_RUN
+    : resolveBrowserExtensionCapability(reported);
 
 export const activeSkillSchema = activeContextSchema({
   // A built-in skill has no row: `skillName` alone names it.
@@ -1872,6 +1898,15 @@ const validateToolCallPart = ({
   if (Result.isError(outputResult)) {
     return Result.err(outputResult.error);
   }
+  if (part.name === ASK_USER_TOOL_NAME) {
+    const agreement = validateAskUserAnswers({
+      input: validatedInput,
+      output: outputResult.value,
+    });
+    if (Result.isError(agreement)) {
+      return Result.err(agreement.error);
+    }
+  }
   return Result.ok({
     type: "schema",
     name: part.name,
@@ -1885,6 +1920,33 @@ const validateToolCallPart = ({
       },
     }),
   });
+};
+
+/** Answers the schema accepts can still tick values a question never
+ *  offered; the check needs the call's questions beside its answers. */
+const validateAskUserAnswers = ({
+  input,
+  output,
+}: {
+  input: unknown;
+  output: unknown;
+}): Result<void, HandlerError<400>> => {
+  if (!v.is(askUserInputSchema, input) || !v.is(askUserOutputSchema, output)) {
+    return panic(
+      "ask-user payload passed its tool schema but not its contract",
+    );
+  }
+  const refusal = askUserAnswersRefusal(input.questions, output.answers);
+  if (refusal === null) {
+    return Result.ok();
+  }
+  return Result.err(
+    new HandlerError({
+      code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+      status: 400,
+      message: `Invalid answers for ${ASK_USER_TOOL_NAME}: ${refusal}`,
+    }),
+  );
 };
 
 /** A call's input in the form its tool's schema gives it, or why not
@@ -2001,11 +2063,7 @@ const validateToolCallErrorOutput = (
   }
   // Denial is an approval decision, not a failed server execution. The SDK
   // preserves its decision payload on the call and the paired result.
-  if (
-    "approval" in part &&
-    part.approval.approved === false &&
-    isDeniedToolOutput(output)
-  ) {
+  if (isDeclinedChatToolCall(part) && isDeniedToolOutput(output)) {
     return Result.ok({ type: "denied", output });
   }
   if (
@@ -2153,8 +2211,7 @@ const validateToolErrorResult = (
   const content = contentResult.value;
   if (
     part.outcome === "denied" &&
-    "approval" in toolCall.part &&
-    toolCall.part.approval.approved === false &&
+    isDeclinedChatToolCall(toolCall.part) &&
     isDeniedToolOutput(content) &&
     part.error === undefined
   ) {

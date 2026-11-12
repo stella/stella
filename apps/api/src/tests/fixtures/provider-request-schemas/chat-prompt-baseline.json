@@ -60,6 +60,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 35620
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 35862
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 36046
       }
     ],
     "anthropic/extended": [
@@ -122,6 +130,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 36110
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36352
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 36535
       }
     ],
     "bedrock/default": [
@@ -180,6 +196,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 35874
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36122
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 36306
       }
     ],
     "bedrock/extended": [
@@ -238,6 +262,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 36363
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36611
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 36883
       }
     ],
     "google/default": [
@@ -292,6 +324,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 34625
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 34851
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 35035
       }
     ],
     "google/extended": [
@@ -342,6 +382,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 35103
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 35329
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 35513
       }
     ],
     "mistral/default": [
@@ -400,6 +448,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 37096
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37353
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37637
       }
     ],
     "mistral/extended": [
@@ -458,6 +514,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 37623
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37879
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38163
       }
     ],
     "openai/default": [
@@ -516,6 +580,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 36678
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36929
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37213
       }
     ],
     "openai/extended": [
@@ -574,6 +646,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 37193
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37445
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37728
       }
     ],
     "openrouter-anthropic/default": [
@@ -632,6 +712,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 37079
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37340
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37625
       }
     ],
     "openrouter-anthropic/extended": [
@@ -690,6 +778,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 37591
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37852
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38136
       }
     ],
     "openrouter/default": [
@@ -748,6 +844,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 37079
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37340
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37625
       }
     ],
     "openrouter/extended": [
@@ -806,6 +910,14 @@
       {
         "reason": "complete contact save fields exposed to agents",
         "tokens": 37591
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37852
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38136
       }
     ]
   },

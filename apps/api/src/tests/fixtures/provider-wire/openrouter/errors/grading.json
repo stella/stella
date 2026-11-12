@@ -370,6 +370,42 @@
       }
     },
     {
+      "name": "local_runner_not_reached",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_not_reached"
+      },
+      "expected": {
+        "kind": "local_runner_not_reached",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_relinked",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_relinked"
+      },
+      "expected": {
+        "kind": "local_runner_relinked",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_restoring",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_restoring"
+      },
+      "expected": {
+        "kind": "local_runner_restoring",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
       "name": "local_runner_turn_too_large",
       "origin": "local-runner",
       "evidence": {

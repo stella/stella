@@ -755,7 +755,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Re-drive list verification runs no queued job owns anymore",
+    description:
+      "Re-drive list verification and fact extraction runs no queued job owns anymore",
     id: "listVerifications.reconcileQueuedRuns.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },

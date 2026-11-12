@@ -8,6 +8,7 @@ import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-lin
 import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
@@ -66,9 +67,9 @@ const LegalCitationView = ({
     onClick={onClick}
   >
     {appearance === "tray" ? (
-      <BidiText as="span" className="max-w-[20ch] truncate">
+      <TruncatedText className="max-w-[20ch]" render={<BidiText as="span" />}>
         {children}
-      </BidiText>
+      </TruncatedText>
     ) : (
       <InlinePill className="group-hover:bg-accent/80" truncate>
         {children}

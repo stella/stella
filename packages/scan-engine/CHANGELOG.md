@@ -1,5 +1,13 @@
 # @stll/scan-engine
 
+## 0.1.4
+
+### Patch Changes
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Rebuild the WebAssembly engine with wasm-bindgen 0.2.130.
+- Updated dependencies [[`0a79f8c`](https://github.com/stella/stella/commit/0a79f8cb32c2ae337280da83e8859af9d25ae3f4)]:
+  - @stll/fetch@0.3.0
+
 ## 0.1.3
 
 ### Patch Changes

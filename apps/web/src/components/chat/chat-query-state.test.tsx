@@ -60,9 +60,11 @@ const models = {
     scope: "global",
     threadId: toChatThreadId("thread-query-state"),
   },
+  state: "ready",
   selectedModel: "provider::explicit-model",
   selectedReasoningEffort: null,
   selectModel: () => {},
+  runTarget: { type: "cloud_only" },
 } as const;
 
 test("matter picker failure does not label selected context as no matter", async () => {
