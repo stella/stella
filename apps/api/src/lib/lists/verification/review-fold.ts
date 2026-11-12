@@ -6,6 +6,7 @@ import type {
   ClaimOverrideState,
   ClaimRef,
   ClaimReviewAction,
+  ClaimReviewEventKind,
   ClaimReviewOrigin,
   ClaimReviewStatus,
   ClaimState,
@@ -385,6 +386,18 @@ export const reviewedView = (
     refs: claim.refs,
   };
 };
+
+/**
+ * The review event kinds `reviewedView` reads: reopening, resolving a record
+ * conflict and re-checking. Statuses, overrides, notes and fact links leave
+ * every field it reads as they were, so a reader that needs only the
+ * reviewed state of many claims folds just these.
+ */
+export const REVIEWED_VIEW_EVENT_KINDS = [
+  "reopen",
+  "record-conflict",
+  "recheck",
+] as const satisfies readonly ClaimReviewEventKind[];
 
 /** Where a claim stood with its reviewers at one point of its history: the
  *  verdict as they see it, their override beside it, and the status. */
