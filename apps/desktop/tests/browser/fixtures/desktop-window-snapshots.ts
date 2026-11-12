@@ -1,4 +1,5 @@
 import type { ActivitySettingsSnapshot } from "../../../src/activity/activity-types";
+import type { DictationSnapshot } from "../../../src/onboarding/use-dictation";
 import type { PermissionsSnapshot } from "../../../src/shared/permissions";
 import type {
   AppSnapshot,
@@ -25,6 +26,28 @@ export const PERMISSIONS = {
     { permission: "accessibility", status: "notDetermined" },
   ],
 } as const satisfies PermissionsSnapshot;
+
+/** What the setup window reads with dictation available: its microphone
+ *  row joins the others. */
+export const SETUP_PERMISSIONS = {
+  rows: [
+    ...PERMISSIONS.rows,
+    { permission: "microphone", status: "notDetermined" },
+  ],
+} as const satisfies PermissionsSnapshot;
+
+/** Dictation turned on with its speech model in place: the tallest state of
+ *  its setup step, with both permission rows and the field to try it. */
+export const DICTATION_READY = {
+  available: true,
+  enabled: true,
+  failure: null,
+  keys: { code: "Space", modifiers: ["control", "alt"] },
+  model: { status: "ready" },
+  modelBytes: 740363168,
+  phase: "idle",
+  shortcutTaken: false,
+} as const satisfies DictationSnapshot;
 
 export const ACCOUNT = {
   account: {
