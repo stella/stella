@@ -11,7 +11,10 @@ import {
 
 import { apiGet } from "../helpers/api";
 import { expect } from "../helpers/test";
-import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+} from "../helpers/wait-budgets";
 
 // The stand-in computer the suite drives (started by
 // `packages/scripts/src/e2e-local-runner.ts` or `agent:up -- --local-runner`)
@@ -157,8 +160,9 @@ export const transcript = (page: Page) => page.getByRole("log");
 /** Open a new chat and wait for its composer. */
 export const openNewChat = async (page: Page) => {
   await page.goto("/chat", { waitUntil: "commit" });
+  // The first visit compiles the chat route on the dev server.
   await expect(composer(page)).toBeVisible({
-    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
   });
 };
 
@@ -187,9 +191,18 @@ const openRunOnMenu = async (page: Page) => {
   }).toPass({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 };
 
-const closeMenu = async (page: Page) => {
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("menu")).toHaveCount(0);
+/**
+ * Close the Run on menu and its submenu. Choosing a radio item keeps a menu
+ * open, as it does for the member, so each Escape closes one level.
+ */
+const closeMenus = async (page: Page) => {
+  const menus = page.getByRole("menu");
+  await expect(async () => {
+    if ((await menus.count()) > 0) {
+      await page.keyboard.press("Escape");
+    }
+    await expect(menus).toHaveCount(0, { timeout: 1000 });
+  }).toPass({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 };
 
 /** Choose where the chat runs: on stella, or an agent and model on the computer. */
@@ -197,7 +210,7 @@ export const chooseRunOn = async (page: Page, runOn: RunOn) => {
   await openRunOnMenu(page);
   if (runOn.place === "cloud") {
     await page.getByRole("menuitemradio", { name: "stella cloud" }).click();
-    await expect(page.getByRole("menu")).toHaveCount(0);
+    await closeMenus(page);
     return;
   }
   const agent = AGENTS[runOn.agent].name;
@@ -207,7 +220,7 @@ export const chooseRunOn = async (page: Page, runOn: RunOn) => {
   await page
     .getByRole("menuitemradio", { name: runOn.model, exact: true })
     .click();
-  await expect(page.getByRole("menu")).toHaveCount(0);
+  await closeMenus(page);
   await expect(runOnButton(page)).toHaveAccessibleName(
     `${agent} · ${runOn.model}`,
   );
@@ -232,7 +245,7 @@ export const choosePermission = async (
 ) => {
   await openRunOnMenu(page);
   await permissionItem(page, mode).click();
-  await expect(page.getByRole("menu")).toHaveCount(0);
+  await closeMenus(page);
 };
 
 /**
@@ -248,7 +261,7 @@ export const widestPermission = async (
   const offered =
     (await fullAuto.count()) > 0 &&
     (await fullAuto.getAttribute("aria-disabled")) !== "true";
-  await closeMenu(page);
+  await closeMenus(page);
   return offered ? "fullAuto" : "auto";
 };
 
@@ -265,7 +278,7 @@ export const chosenPermission = async (page: Page) => {
       chosen.push(mode);
     }
   }
-  await closeMenu(page);
+  await closeMenus(page);
   return chosen;
 };
 

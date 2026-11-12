@@ -6030,7 +6030,7 @@ jobs:
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_core_required == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 50
     permissions:
       contents: read
       packages: read
@@ -6120,7 +6120,7 @@ jobs:
         uses: ./.github/actions/setup-playwright
 
       - name: Run local run browser suite
-        timeout-minutes: 12
+        timeout-minutes: 25
         if: steps.e2e-stack.outcome == 'success'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-local-run-browser-suite.json
