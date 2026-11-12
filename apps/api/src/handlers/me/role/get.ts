@@ -22,9 +22,12 @@ const config = {
  */
 const readMemberRole = createSafeRootHandler(
   config,
-  // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
   async function* ({ memberRole }) {
-    return Result.ok({ role: roleForDisplay(memberRole) });
+    // The membership the request already resolved: no read of its own.
+    const role = yield* Result.await(
+      Promise.resolve(Result.ok(roleForDisplay(memberRole))),
+    );
+    return Result.ok({ role });
   },
 );
 
