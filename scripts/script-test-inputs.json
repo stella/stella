@@ -24,6 +24,7 @@
     "scripts/check-concurrency-exceptions.test.ts": ["**"],
     "scripts/check-contract-domain-ledger.test.ts": ["**"],
     "scripts/check-deploy-env-contract.test.ts": ["**"],
+    "scripts/check-desktop-support-floor.test.ts": ["**"],
     "scripts/check-dev-runner-config-guard.test.ts": ["**"],
     "scripts/check-duplicate-raster-assets.test.ts": [
       "apps/**/*.{png,jpg,jpeg,webp,gif}"

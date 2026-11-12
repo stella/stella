@@ -59,6 +59,16 @@ export const MAINTENANCE_CUT_GATES: readonly CutGate[] = [
     overriddenByAllowUnprovenMain: false,
   },
   {
+    name: "desktop-support-floor",
+    source: "cut",
+    stage: "pre-cut",
+    check: {
+      kind: "command",
+      command: ["bun", "scripts/check-desktop-support-floor.ts"],
+    },
+    overriddenByAllowUnprovenMain: false,
+  },
+  {
     name: "main-health",
     source: "cut",
     stage: "pre-cut",

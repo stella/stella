@@ -15,6 +15,11 @@ import * as v from "valibot";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
+  DESKTOP_SUPPORT_FLOOR_PATH,
+  moveDesktopSupportFloor,
+  resolveDesktopSupportFloor,
+} from "./check-desktop-support-floor";
+import {
   type CutGateRunner,
   cutMaintenanceRelease,
   IncompleteReleaseListingError,
@@ -36,6 +41,10 @@ const RELEASE_TAG_WORKFLOW = nodePath.resolve(
   "../.github/workflows/release-tag.yml",
 );
 const BASE_SHA = "c".repeat(40);
+// More than 30 days after the previous release's publication, so a cut that
+// records it moves the desktop support floor to it.
+const CUT_CLOCK = new Date("2026-03-10T00:00:00Z");
+const everyReleaseBuildsTheDesktop = () => true;
 const HIGH_ADVISORY =
   "dependency-audit: new high advisory GHSA-0000-0000-0000 in fixture-package";
 
@@ -119,6 +128,11 @@ const releaseTree = (mainVersion = "1.2.3", refusedRef?: string): string => {
     root,
     "apps/landing/src/data/changelog-release-dates.json",
     '{\n  "v1.2.2": "2026-01-01T00:00:00Z"\n}\n',
+  );
+  write(
+    root,
+    DESKTOP_SUPPORT_FLOOR_PATH,
+    '{\n  "minimumVersion": "1.2.2",\n  "supportDays": 30\n}\n',
   );
   write(
     root,
@@ -234,6 +248,14 @@ const runCut = async (
       );
       rmSync(nodePath.join(rootDir, ".changeset/fix-demo.md"));
     },
+    moveDesktopSupportFloor: (releases) =>
+      moveDesktopSupportFloor({
+        rootDir: root,
+        releases,
+        isDesktopBuild: everyReleaseBuildsTheDesktop,
+        now: CUT_CLOCK,
+        writeFile: writeFileSync,
+      }),
     checkPreparedRelease: () => undefined,
     write: (text) => {
       output.push(text);
@@ -321,6 +343,55 @@ describe("the maintenance cut checks the tag gates first", () => {
       `maintenance-release: pre-cut release gates passed: ${PRE_CUT_NAMES.join(", ")}`,
     );
     expect(run.output).toContain("maintenance-release: prepared 1.2.4");
+  });
+
+  test("the cut writes the desktop support floor its clock gives, in the release change", async () => {
+    const root = releaseTree();
+    const readJson = (file: string): unknown =>
+      JSON.parse(readFileSync(nodePath.join(root, file), "utf-8"));
+
+    const run = await runCut(root, {});
+
+    expect(run.error).toBeNull();
+    // Recomputed from the manifest the release change carries: the previous
+    // release, published 2026-02-03, is 30 days old at the cut's clock.
+    const releases = v.parse(
+      v.record(v.string(), v.nullable(v.string())),
+      readJson("apps/landing/src/data/changelog-release-dates.json"),
+    );
+    const expected = resolveDesktopSupportFloor({
+      floor: { minimumVersion: "1.2.2", supportDays: 30 },
+      releases,
+      isDesktopBuild: everyReleaseBuildsTheDesktop,
+      now: CUT_CLOCK,
+    });
+    expect(expected).toMatchObject({
+      status: "resolved",
+      minimumVersion: "1.2.3",
+    });
+    expect(readJson(DESKTOP_SUPPORT_FLOOR_PATH)).toEqual({
+      minimumVersion: "1.2.3",
+      supportDays: 30,
+    });
+    expect(run.output).toContain(
+      `  ${DESKTOP_SUPPORT_FLOOR_PATH} (desktop support floor 1.2.2 to 1.2.3)`,
+    );
+  });
+
+  test("a cut whose previous release never reached production leaves the floor", async () => {
+    const root = releaseTree();
+    const before = readFileSync(
+      nodePath.join(root, DESKTOP_SUPPORT_FLOOR_PATH),
+      "utf-8",
+    );
+
+    const run = await runCut(root, {}, [], [], { kind: "unpromoted" });
+
+    expect(run.error).toBeNull();
+    expect(
+      readFileSync(nodePath.join(root, DESKTOP_SUPPORT_FLOOR_PATH), "utf-8"),
+    ).toBe(before);
+    expect(run.output).toContain("(desktop support floor stays 1.2.2)");
   });
 
   for (const mainVersion of ["1.2.3", "1.2.2"]) {
