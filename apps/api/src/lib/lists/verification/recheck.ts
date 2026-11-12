@@ -30,7 +30,6 @@ import { resolveListVerificationAccess } from "@/api/lib/lists/verification/acce
 import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type {
-  ClaimAnchor,
   ClaimGrade,
   ClaimReviewEventPayload,
   VerificationEvidenceFact,
@@ -131,8 +130,8 @@ type RecheckInput = {
   current: readonly VerificationEvidenceFact[];
   entityVersionId: SafeId<"entityVersion">;
   text: string;
-  blockText: string;
-  anchor: ClaimAnchor;
+  /** The claim's block as the run's grading read it, cut to its range. */
+  context: { text: string; anchor: { start: number; end: number } };
   linkedFactIds: readonly SafeId<"entity">[];
   /** The claim's review events when grading began; any added since (a link,
    *  another re-check) means this grade answers a question no longer asked. */
@@ -202,8 +201,7 @@ const prepareRecheck = async (
         current: evidence.evidence.facts,
         entityVersionId: target.entityVersionId,
         text: target.claim.text,
-        blockText: target.blockText,
-        anchor: target.claim.anchor,
+        context: target.context,
         linkedFactIds: admitted.review.linkedFactIds,
         eventCount: admitted.eventCount,
       },
@@ -272,7 +270,7 @@ const gradeRecheck = async ({
       {
         key: args.claimId,
         text: input.text,
-        context: { text: input.blockText, anchor: input.anchor },
+        context: input.context,
         linkedFactIds: input.linkedFactIds,
       },
     ],

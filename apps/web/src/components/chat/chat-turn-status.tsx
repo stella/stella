@@ -3,11 +3,11 @@ import { useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { getChatTurnDurationMs } from "@stll/api-contract/chat-turn-duration";
 import { Loader } from "@stll/ui/loader";
 
 import {
   type ChatTurnStatusInput,
+  liveTurnElapsedMs,
   type TurnActivePhase,
   turnLiveStatus,
 } from "@/components/chat/chat-turn-status.logic";
@@ -19,31 +19,39 @@ export const ChatTurnStatus = ({ turn }: { turn: ChatTurnStatusInput }) => {
   if (status.type === "none") {
     return null;
   }
-  return <LiveTurnStatus phase={status.phase} timing={turn.timing} />;
+  return (
+    <LiveTurnStatus
+      phase={status.phase}
+      sentAt={turn.sentAt}
+      timing={turn.timing}
+    />
+  );
 };
+
+const TICK_MS = 1000;
 
 const LiveTurnStatus = ({
   phase,
+  sentAt,
   timing,
 }: {
   phase: TurnActivePhase;
+  sentAt: number | null;
   timing: ChatTurnStatusInput["timing"];
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const [shownAt] = useState(() => performance.now());
   const [now, setNow] = useState(() => performance.now());
-  const observedAt =
-    timing?.status === "running" ? timing.observedAt : undefined;
+  // The clock is the external system: the line redraws once a second for as
+  // long as the turn runs, whether or not anything streams.
   useExternalSyncEffect(() => {
-    if (observedAt === undefined) {
-      return undefined;
-    }
     setNow(performance.now());
-    const interval = setInterval(() => setNow(performance.now()), 1000);
+    const interval = setInterval(() => setNow(performance.now()), TICK_MS);
     return () => clearInterval(interval);
-  }, [observedAt]);
-  const durationMs = timing && getChatTurnDurationMs(timing, now);
-  const elapsed = format.number(Math.floor((durationMs ?? 0) / 1000), {
+  }, []);
+  const durationMs = liveTurnElapsedMs({ sentAt, timing, shownAt, now });
+  const elapsed = format.number(Math.floor(durationMs / 1000), {
     style: "unit",
     unit: "second",
     unitDisplay: "narrow",

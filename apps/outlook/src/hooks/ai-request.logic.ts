@@ -1,5 +1,6 @@
 import {
   OUTLOOK_AI_FROM_MAX_CHARS,
+  OUTLOOK_AI_INTENT_MAX_CHARS,
   OUTLOOK_AI_SUBJECT_MAX_CHARS,
   truncateOutlookAIInput,
 } from "@stll/api-contract/outlook-ai";
@@ -17,6 +18,37 @@ export const buildAISummaryRequest = ({
   ...(language ? { language } : {}),
 });
 
+const emailContext = (snapshot: MailSnapshot) => {
+  // An address longer than the endpoint takes is not a usable sender; a long
+  // subject is cut, since its start carries the meaning.
+  const sender = snapshot.from?.email;
+  const originalFrom =
+    sender && sender.length <= OUTLOOK_AI_FROM_MAX_CHARS ? sender : undefined;
+  return {
+    originalBody: truncateOutlookAIInput(snapshot.bodyText),
+    originalSubject: snapshot.subject.slice(0, OUTLOOK_AI_SUBJECT_MAX_CHARS),
+    ...(originalFrom ? { originalFrom } : {}),
+  };
+};
+
+/** A question about the email, answered from its matter when one is given. */
+export const buildAIAskRequest = ({
+  language,
+  question,
+  snapshot,
+  workspaceId,
+}: {
+  language?: string | undefined;
+  question: string;
+  snapshot: MailSnapshot;
+  workspaceId: string | null;
+}) => ({
+  question: question.slice(0, OUTLOOK_AI_INTENT_MAX_CHARS),
+  ...emailContext(snapshot),
+  ...(workspaceId ? { workspaceId } : {}),
+  ...(language ? { language } : {}),
+});
+
 export const buildAIDraftRequest = ({
   intent,
   language,
@@ -25,17 +57,8 @@ export const buildAIDraftRequest = ({
   intent: string;
   language?: string | undefined;
   snapshot: MailSnapshot;
-}) => {
-  // An address longer than the endpoint takes is not a usable sender; a long
-  // subject is cut, since its start carries the meaning.
-  const sender = snapshot.from?.email;
-  const originalFrom =
-    sender && sender.length <= OUTLOOK_AI_FROM_MAX_CHARS ? sender : undefined;
-  return {
-    intent,
-    originalBody: truncateOutlookAIInput(snapshot.bodyText),
-    originalSubject: snapshot.subject.slice(0, OUTLOOK_AI_SUBJECT_MAX_CHARS),
-    ...(originalFrom ? { originalFrom } : {}),
-    ...(language ? { language } : {}),
-  };
-};
+}) => ({
+  intent,
+  ...emailContext(snapshot),
+  ...(language ? { language } : {}),
+});

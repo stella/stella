@@ -8,11 +8,13 @@ import {
   CLAIM_STATES,
   CLAIM_TYPES,
   MATCHED_CLAIM_CARRY_OUTCOMES,
+  PARAGRAPH_NUMBERINGS,
   SCORED_CLAIM_STATES,
   VERIFICATION_LIMITS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
   VERIFICATION_RUN_ERROR_CODES,
   VERIFICATION_RUN_STATUSES,
+  WHOLE_DOCUMENT_SCOPE,
 } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimAnchor,
@@ -21,6 +23,7 @@ import type {
   ClaimReviewReasonRule,
   RecordConflict,
   VerificationEvidence,
+  VerificationScope,
 } from "@/api/lib/lists/verification/contract";
 import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
 import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
@@ -86,6 +89,10 @@ const RECORDCONFLICT_SQL = sql.raw(`'${CLAIM_STATE.RECORDCONFLICT}'`);
 const NOCOVER_SQL = sql.raw(`'${CLAIM_STATE.NOCOVER}'`);
 const RECORD_SILENT_SQL = sql.raw(
   `'${"record-silent" satisfies GraderClaimQualifier["kind"]}'`,
+);
+const PARAGRAPH_NUMBERING_SQL_VALUES = quoted(PARAGRAPH_NUMBERINGS);
+const WHOLE_DOCUMENT_SCOPE_SQL = sql.raw(
+  `'${JSON.stringify(WHOLE_DOCUMENT_SCOPE)}'::jsonb`,
 );
 
 const verificationBudgetOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
@@ -168,6 +175,12 @@ export const legalListVerificationRuns = p.pgTable(
     entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
     contentSha256: p.varchar("content_sha256", { length: 64 }).notNull(),
     evidence: jsonb().$type<VerificationEvidence>().notNull(),
+    // What the run checks: the whole document, or a paragraph range
+    // resolved when the run started (contract.ts `VerificationScope`).
+    scope: jsonb()
+      .$type<VerificationScope>()
+      .notNull()
+      .default(sql`${WHOLE_DOCUMENT_SCOPE_SQL}`),
     status: p
       .text("status", { enum: VERIFICATION_RUN_STATUSES })
       .notNull()
@@ -243,6 +256,27 @@ export const legalListVerificationRuns = p.pgTable(
     p.check(
       "legal_list_verification_runs_pipeline_version_check",
       sql`${table.pipelineVersion} > 0`,
+    ),
+    // A whole-document scope carries nothing else; a paragraph range names
+    // an inclusive range from 1, how it counted, and the two edges it
+    // resolved to.
+    p.check(
+      "legal_list_verification_runs_scope_check",
+      sql`CASE ${table.scope}->>'kind'
+        WHEN 'whole' THEN ${table.scope} = ${WHOLE_DOCUMENT_SCOPE_SQL}
+        WHEN 'paragraphs' THEN CASE
+          WHEN jsonb_typeof(${table.scope}->'from') = 'number'
+            AND jsonb_typeof(${table.scope}->'to') = 'number'
+            AND jsonb_typeof(${table.scope}->'start'->'blockId') = 'string'
+            AND jsonb_typeof(${table.scope}->'start'->'offset') = 'number'
+            AND jsonb_typeof(${table.scope}->'end'->'blockId') = 'string'
+            AND jsonb_typeof(${table.scope}->'end'->'offset') = 'number'
+            AND jsonb_typeof(${table.scope}->'numbering') = 'string'
+          THEN (${table.scope}->>'from')::numeric >= 1
+            AND (${table.scope}->>'to')::numeric >= (${table.scope}->>'from')::numeric
+            AND ${table.scope}->>'numbering' IN (${PARAGRAPH_NUMBERING_SQL_VALUES})
+          ELSE false END
+        ELSE false END`,
     ),
     // The worker rebuilds its tenant scope from this row, so the organization
     // is held to the workspace's own, and both scopes gate every command.

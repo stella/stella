@@ -23,6 +23,7 @@ export { default as constraints_lifecycle_shape_constraints } from "./online-mig
 export { default as constraints_list_claim_qualifiers_constraints } from "./online-migration-entries/constraints-list-claim-qualifiers-constraints";
 export { default as constraints_list_generation_constraints } from "./online-migration-entries/constraints-list-generation-constraints";
 export { default as constraints_list_verification_constraints } from "./online-migration-entries/constraints-list-verification-constraints";
+export { default as constraints_list_verification_scope_constraints } from "./online-migration-entries/constraints-list-verification-scope-constraints";
 export { default as constraints_local_run_approval_ceiling_constraints } from "./online-migration-entries/constraints-local-run-approval-ceiling-constraints";
 export { default as constraints_matter_time_expense_retention_constraints } from "./online-migration-entries/constraints-matter-time-expense-retention-constraints";
 export { default as constraints_notification_task_assigned_constraints } from "./online-migration-entries/constraints-notification-task-assigned-constraints";
@@ -170,6 +171,7 @@ export { default as repairs_lifecycle_shape_constraint_validations } from "./onl
 export { default as repairs_list_claim_qualifiers_constraint_validation } from "./online-migration-entries/repairs-list-claim-qualifiers-constraint-validation";
 export { default as repairs_list_generation_constraint_validations } from "./online-migration-entries/repairs-list-generation-constraint-validations";
 export { default as repairs_list_verification_constraint_validation } from "./online-migration-entries/repairs-list-verification-constraint-validation";
+export { default as repairs_list_verification_scope_constraint_validation } from "./online-migration-entries/repairs-list-verification-scope-constraint-validation";
 export { default as repairs_local_run_approval_ceiling_constraint_validations } from "./online-migration-entries/repairs-local-run-approval-ceiling-constraint-validations";
 export { default as repairs_matter_time_expense_retention_validations } from "./online-migration-entries/repairs-matter-time-expense-retention-validations";
 export { default as repairs_notification_task_assigned_constraint_validations } from "./online-migration-entries/repairs-notification-task-assigned-constraint-validations";
