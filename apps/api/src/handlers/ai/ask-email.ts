@@ -8,6 +8,7 @@ import type {
 
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { loadMatterSearchContexts } from "@/api/handlers/search/ai";
+import type { MatterSearchContext } from "@/api/handlers/search/ai";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
@@ -60,10 +61,6 @@ export type AskPassage = EmailAskPassage & { hit: EntityGlobalSearchHit };
  * rank order. Contacts, case law and the matter record itself are left out:
  * an answer about an email cites the matter's files.
  */
-type MatterSearchContext = Awaited<
-  ReturnType<typeof loadMatterSearchContexts>
->[number];
-
 export const toAskPassages = (
   contexts: readonly MatterSearchContext[],
   workspaceId: SafeId<"workspace">,
@@ -136,18 +133,15 @@ const askEmail = createSafeRootHandler(
       // The search applies the caller's token scopes: a token without matter
       // read access finds no documents, and the answer reads the email alone.
       const contexts = yield* Result.await(
-        Result.tryPromise(
-          async () =>
-            await loadMatterSearchContexts({
-              accessibleWorkspaceIds: [workspaceId],
-              grantedScopes: session.grantedScopes,
-              organizationId,
-              query: body.question,
-              scopedDb,
-              userId: user.id,
-              workspaceId,
-            }),
-        ),
+        loadMatterSearchContexts({
+          accessibleWorkspaceIds: [workspaceId],
+          grantedScopes: session.grantedScopes,
+          organizationId,
+          query: body.question,
+          scopedDb,
+          userId: user.id,
+          workspaceId,
+        }),
       );
       passages = toAskPassages(contexts, workspaceId);
     }
