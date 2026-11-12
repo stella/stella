@@ -47,7 +47,7 @@ const server = (respond: (call: Call) => Response) => {
     }
     const headers = new Headers(init?.headers);
     const call = {
-      url: String(input),
+      url: input,
       method: init?.method ?? "GET",
       token: (headers.get("authorization") ?? "").replace(/^Bearer /u, ""),
       idempotencyKey: headers.get("idempotency-key"),
