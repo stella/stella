@@ -1,12 +1,12 @@
-type ExistingWorkspace = {
-  client?: { id: string } | null;
-  members: {
-    lastActivity?: string | null;
-    userId?: string | null;
-  }[];
-  id: string;
-  name: string;
-  reference?: string | null;
+/**
+ * Whether a matter about to be created looks like one the client already has,
+ * so the web's and the phone's create flows warn about the same matters.
+ */
+
+/** What the check reads of an existing matter. */
+export type DuplicateMatterCandidate = {
+  readonly client?: { readonly id: string } | null | undefined;
+  readonly name: string;
 };
 
 const MIN_DUPLICATE_TOKEN_LENGTH = 3;
@@ -28,7 +28,7 @@ export const isPossibleDuplicateMatter = ({
 }: {
   clientId: string;
   name: string;
-  workspace: ExistingWorkspace;
+  workspace: DuplicateMatterCandidate;
 }) => {
   if (workspace.client?.id !== clientId) {
     return false;
@@ -79,7 +79,10 @@ export const isPossibleDuplicateMatter = ({
   );
 };
 
-export const getPossibleDuplicateMatters = ({
+/** The client's first `limit` matters whose names resemble `name`. */
+export const getPossibleDuplicateMatters = <
+  TWorkspace extends DuplicateMatterCandidate,
+>({
   clientId,
   name,
   workspaces,
@@ -88,9 +91,9 @@ export const getPossibleDuplicateMatters = ({
   clientId: string;
   limit: number;
   name: string;
-  workspaces: ExistingWorkspace[];
-}) => {
-  const result: ExistingWorkspace[] = [];
+  workspaces: readonly TWorkspace[];
+}): TWorkspace[] => {
+  const result: TWorkspace[] = [];
 
   for (const workspace of workspaces) {
     if (

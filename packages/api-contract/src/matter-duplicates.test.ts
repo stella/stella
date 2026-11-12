@@ -3,12 +3,11 @@ import { describe, expect, it } from "bun:test";
 import {
   getPossibleDuplicateMatters,
   isPossibleDuplicateMatter,
-} from "@/components/workspaces/create-matter-dialog.logic";
+} from "./matter-duplicates";
 
 describe("isPossibleDuplicateMatter", () => {
   const workspace = {
     client: { id: "client-1" },
-    members: [],
     id: "workspace-1",
     name: "Acme Employment Dispute",
     reference: "MAT-001",
@@ -64,21 +63,18 @@ describe("getPossibleDuplicateMatters", () => {
       workspaces: [
         {
           client: { id: "client-1" },
-          members: [],
           id: "workspace-1",
           name: "Acme Employment Dispute",
           reference: "MAT-001",
         },
         {
           client: { id: "client-1" },
-          members: [],
           id: "workspace-2",
           name: "Acme Employment Dispute Appeal",
           reference: "MAT-002",
         },
         {
           client: { id: "client-1" },
-          members: [],
           id: "workspace-3",
           name: "Acme",
           reference: "MAT-003",
