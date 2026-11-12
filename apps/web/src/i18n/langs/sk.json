@@ -571,6 +571,21 @@
       "showBefore": "Zobraziť text pred ¶ {from}",
       "verifyParagraphs": "Overiť odseky"
     },
+    "staleness": {
+      "failed": "Tvrdenia sa nepodarilo skontrolovať znova",
+      "finished": "{count, plural, one {# tvrdenie znova skontrolované} few {# tvrdenia znova skontrolované} many {# tvrdenia znova skontrolovaného} other {# tvrdení znova skontrolovaných}}",
+      "partial": "Znova skontrolované: {rechecked, number}, nepodarilo sa: {failed, plural, one {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt zmenený",
+        "factHeld": "Fakt vylúčený",
+        "factRemoved": "Fakt odobraný",
+        "newFactRelated": "Nový súvisiaci fakt"
+      },
+      "recheckAll": "Skontrolovať všetko znova",
+      "recheckLocked": "Kontroluje sa znova spolu s ostatnými zastaranými tvrdeniami",
+      "runLine": "{count, plural, one {# tvrdenie môže byť zastarané} few {# tvrdenia môžu byť zastarané} many {# tvrdenia môže byť zastaraného} other {# tvrdení môže byť zastaraných}}",
+      "running": "{count, plural, one {Znova sa kontroluje # tvrdenie…} few {Znova sa kontrolujú # tvrdenia…} many {Znova sa kontroluje # tvrdenia…} other {Znova sa kontroluje # tvrdení…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "V rozpore",
@@ -628,100 +643,21 @@
       "pickList": "Vyberte zoznam, s ktorého faktami sa porovnávajú dokumenty tohto spisu."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Vytvoriť dvojjazyčnú verziu",
-      "creating": "Vytvára sa…",
-      "description": "Vytvorí kópiu dokumentu v dvoch stĺpcoch: vľavo pôvodný text, vpravo kópia na preklad s vlastným číslovaním. Kópia sa uloží do tohto spisu ako nový dokument.",
-      "sameLanguage": "Zvoľte dva rôzne jazyky.",
-      "sourceLanguage": "Zdrojový jazyk",
-      "title": "Dvojjazyčná verzia"
-    },
-    "error": {
-      "title": "Dvojjazyčnú verziu sa nepodarilo vytvoriť"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> je pripravený, na preklad {rowCount, plural, one {je # riadok} few {sú # riadky} other {je # riadkov} many {je # riadka}}.",
-      "title": "Dvojjazyčná verzia vytvorená"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Doplní stĺpec s prekladom v tomto dvojstĺpcovom dokumente. Skontrolujte, čo sa stane s každým riadkom a ako sa prekladajú definované pojmy, a potom spustite preklad.",
-      "prepare": "Pripraviť",
-      "preparing": "Načítava sa dokument…",
-      "preparingHint": "Načítanie celého dokumentu a posúdenie každého riadka trvá až dve minúty.",
-      "title": "Preložiť dvojjazyčnú verziu"
+      "prepare": "Pripraviť"
     },
     "dispositions": {
-      "inline": "Oba jazyky",
       "keep": "Ponechať bez zmeny"
     },
-    "error": {
-      "prepareTitle": "Dokument sa nepodarilo pripraviť",
-      "startTitle": "Preklad sa nepodarilo spustiť"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Na preklad nie je dostupný žiadny model AI.",
-      "applyFailed": "Preklady sa nepodarilo zapísať späť do dokumentu.",
-      "documentChanged": "Dokument sa počas prekladu zmenil. Pripravte ho znova.",
-      "documentUnresolved": "Dokument alebo jeho súbor už nie je dostupný.",
-      "enqueueFailed": "Preklad sa nepodarilo zaradiť do frontu.",
-      "internal": "Preklad bol nečakane prerušený.",
-      "notBilingual": "Tento dokument neobsahuje dvojjazyčnú tabuľku.",
-      "translationFailed": "Dávku riadkov sa nepodarilo preložiť.",
-      "unknown": "Preklad bol nečakane prerušený."
-    },
-    "glossary": {
-      "add": "Pridať pojem",
-      "description": "Tieto preklady sa použijú vo všetkých riadkoch. Pojem bez prekladu treba doplniť alebo odstrániť.",
-      "empty": "Nenašli sa žiadne definované pojmy.",
-      "formsHint": "Ďalšie tvary oddeľte čiarkami.",
-      "formsSource": "Ďalšie tvary pojmu",
-      "formsTarget": "Ďalšie tvary prekladu",
-      "incomplete": "Doplňte chýbajúce preklady alebo tieto pojmy odstráňte.",
-      "origins": {
-        "detected": "Nájdené",
-        "user": "Vlastné"
-      },
-      "term": "Pojem",
-      "title": "Definované pojmy",
-      "tooManyForms": "Pojem môže mať najviac {max} ďalších tvarov.",
-      "translation": "Preklad"
-    },
     "kinds": {
-      "heading": "Nadpis",
-      "listItem": "Položka zoznamu",
-      "paragraph": "Odsek",
-      "table": "Celá tabuľka"
-    },
-    "origins": {
-      "default": "Neposúdené",
-      "model": "AI"
+      "paragraph": "Odsek"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# riadok bol vynechaný} few {# riadky boli vynechané} other {# riadkov bolo vynechaných} many {# riadka bolo vynechané}}: neobsahujú text, ktorý sa dá preložiť.",
-      "start": "Spustiť preklad",
       "starting": "Spúšťa sa…"
     },
     "rows": {
-      "description": "Zvoľte, čo sa stane s každým riadkom stĺpca s prekladom.",
-      "ordinal": "#",
-      "sourceText": "Zdrojový text",
-      "title": "Riadky",
-      "whatToDo": "Čo urobiť"
-    },
-    "run": {
-      "cancelled": "Preklad bol zrušený.",
-      "doneSummary": "{count, plural, one {Preložený # riadok} few {Preložené # riadky} other {Preložených # riadkov} many {Preložené # riadka}}.",
-      "doneTitle": "Preklad dokončený",
-      "failedRows": "{count, plural, one {# riadok sa nepodarilo preložiť} few {# riadky sa nepodarilo preložiť} other {# riadkov sa nepodarilo preložiť} many {# riadka sa nepodarilo preložiť}}.",
-      "failedTitle": "Preklad bol zastavený",
-      "hint": "Preklad beží na serveri. Nechajte toto okno otvorené, aby ste ho mohli sledovať.",
-      "moreRows": "{count, plural, one {ďalší # riadok} few {ďalšie # riadky} other {ďalších # riadkov} many {ďalšie # riadka}}",
-      "progress": "Preložených {completed} z {total} riadkov",
-      "title": "Prebieha preklad…",
-      "warningsTitle": "Riadky na kontrolu"
+      "title": "Riadky"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# negatívna} few {# negatívne} many {# negatívnej} other {# negatívnych}}",
       "none": "Zatiaľ nie sú zaznamenané žiadne citácie.",
       "notInStella": "Zatiaľ nie je v stelle",
-      "openAtCitation": "Otvoriť na mieste citácie",
       "openDecision": "Otvoriť rozhodnutie",
       "paragraphLabel": "Bod {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1942,6 +1877,7 @@
       "refusalNoComputer": "Žiadny z vašich počítačov nie je pripojený. Otvorte stella desktop a odošlite správu znova.",
       "refusalPermissionAboveLimit": "Vaša organizácia tieto oprávnenia programovaciemu agentovi vo vašom počítači nepovoľuje. Vyberte inú možnosť v ponuke Oprávnenia.",
       "refusalPermissionUnavailable": "Programovací agent vo vašom počítači s týmito oprávneniami bežať nemôže. Vyberte inú možnosť v ponuke Oprávnenia.",
+      "refusalReasoningEffortUnavailable": "Programovací agent vo vašom počítači túto úroveň uvažovania pre daný model neponúka. Vyberte inú v ponuke Úroveň uvažovania.",
       "refusalTooLarge": "Táto konverzácia je príliš dlhá na odovzdanie do vášho počítača. Na spustenie tam začnite nový chat.",
       "refusalUnavailable": "Spúšťanie chatov vo vašom počítači nie je pre váš účet dostupné.",
       "runOn": "Spustiť na",
@@ -2160,6 +2096,7 @@
     "stopFailed": "Odpoveď sa nepodarilo zastaviť. Skúste to znova.",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
+    "stopping": "Zastavujem…",
     "suggestTitle": "Navrhnúť názov",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nie sú dostupné pre anonymizované konverzácie.",
     "suggestedFollowupsLabel": "Navrhované nadväzujúce otázky",
@@ -2696,6 +2633,7 @@
     "organization": "Organizácia",
     "organizationName": "Názov organizácie",
     "organizations": "Organizácie",
+    "outOfDate": "Neaktuálne",
     "page": "Stránka {page}",
     "paymentRetryNotice": "Problém s platbou. Ak chcete zachovať prístup, aktualizujte spôsob platby do {date}.",
     "pin": "Pripnúť",
@@ -4474,7 +4412,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Vytvorte playbook na kontrolu zmlúv pozíciu po pozícii na základe vašich predtým podpísaných zmlúv, krátkeho rozhovoru a bežných trhových štandardov.",
-          "name": "Vytvoriť playbook"
+          "name": "Vytvoriť playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pridaj pozície do jedného z mojich existujúcich playbookov.",
+              "name": "Rozšíriť playbook"
+            },
+            "fromContracts": {
+              "body": "Vytvor playbook pre dohody o mlčanlivosti z mojich predtým podpísaných dohôd.",
+              "name": "Začať z predošlých zmlúv"
+            },
+            "fromMarketStandards": {
+              "body": "Vytvor playbook pre dodávateľské zmluvy a vychádzaj z bežných trhových pozícií.",
+              "name": "Začať z trhových štandardov"
+            }
+          }
         }
       },
       "builtInSection": "Vstavané zručnosti",
@@ -4724,6 +4676,10 @@
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",
+      "pendingPane": {
+        "description": "Odpovedzte na otázky v chate. Keď schválite prvé uloženie, playbook sa otvorí tu a môžete ho upravovať popri konverzácii.",
+        "title": "Váš playbook sa zobrazí tu"
+      },
       "positionOfTotal": "Pozícia {index} z {total}",
       "positionRemoved": "Pozícia odstránená",
       "positions": "Pozície",
@@ -6083,7 +6039,6 @@
     "comments": "Komentáre",
     "commentsEmpty": "Komentár pridáte označením textu.",
     "noRevisions": "Zatiaľ žiadne revízie",
-    "outOfDate": "Neaktuálne",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Bez zhrnutia",
     "proposals": "Návrhy zmien",

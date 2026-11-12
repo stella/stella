@@ -156,10 +156,13 @@ export const resolveClaimView = (
     // Missing coverage has no conflict to suggest a record for.
     suggestedGoverningFactId: null,
     text: claim.text,
+    assertedOn: claim.assertedOn,
     anchor: claim.anchor,
     refs: [],
     review: claim.review,
     recheck: claim.recheck,
+    // The server reads a reopened claim's staleness as it reads a run's.
+    staleness: claim.staleness,
   };
 };
 

@@ -271,6 +271,8 @@ export const answerEntry = (
   text: messageText(answer.parts),
   blocks: answerBlocks(answer.parts),
   files: [],
+  // The stored answer names its drafts once the thread is read again.
+  drafts: [],
 });
 
 /**

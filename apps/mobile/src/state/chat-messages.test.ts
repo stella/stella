@@ -106,6 +106,7 @@ describe("what a thread shows of a stored message", () => {
         { type: "text", key: "5", markdown: "First.\n\nSecond." },
       ],
       files: [{ name: "", mimeType: "" }],
+      drafts: [],
     });
   });
 
@@ -146,6 +147,7 @@ describe("what a thread shows of a stored message", () => {
         { name: "Lease.pdf", mimeType: "application/pdf" },
         { name: "Stamp.png", mimeType: "image/png" },
       ],
+      drafts: [],
     });
   });
 
@@ -172,6 +174,7 @@ describe("what a thread shows of a stored message", () => {
       text: "Summarise this",
       blocks: [],
       files: [{ name: "Lease.pdf", mimeType: "application/pdf" }],
+      drafts: [],
     });
   });
 
@@ -283,6 +286,7 @@ describe("reading a thread", () => {
       text: id,
       blocks: [],
       files: [],
+      drafts: [],
     });
     expect(
       prependOlderPage(

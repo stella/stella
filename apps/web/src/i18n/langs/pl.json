@@ -571,6 +571,21 @@
       "showBefore": "Pokaż tekst przed ¶ {from}",
       "verifyParagraphs": "Sprawdź akapity"
     },
+    "staleness": {
+      "failed": "Nie udało się ponownie sprawdzić twierdzeń",
+      "finished": "{count, plural, one {Ponownie sprawdzono # twierdzenie} few {Ponownie sprawdzono # twierdzenia} many {Ponownie sprawdzono # twierdzeń} other {Ponownie sprawdzono # twierdzenia}}",
+      "partial": "Ponownie sprawdzono: {rechecked, number}, nie udało się: {failed, plural, one {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt zmieniony",
+        "factHeld": "Fakt wykluczony",
+        "factRemoved": "Fakt usunięty",
+        "newFactRelated": "Nowy powiązany fakt"
+      },
+      "recheckAll": "Sprawdź wszystkie ponownie",
+      "recheckLocked": "Jest ponownie sprawdzane razem z innymi nieaktualnymi twierdzeniami",
+      "runLine": "{count, plural, one {# twierdzenie może być nieaktualne} few {# twierdzenia mogą być nieaktualne} many {# twierdzeń może być nieaktualnych} other {# twierdzenia może być nieaktualnego}}",
+      "running": "{count, plural, one {Ponowne sprawdzanie # twierdzenia…} few {Ponowne sprawdzanie # twierdzeń…} many {Ponowne sprawdzanie # twierdzeń…} other {Ponowne sprawdzanie # twierdzenia…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Sprzeczne",
@@ -628,100 +643,21 @@
       "pickList": "Wybierz listę, względem której faktów są weryfikowane dokumenty tej sprawy."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Utwórz wersję dwujęzyczną",
-      "creating": "Tworzenie…",
-      "description": "Tworzy kopię tego dokumentu w dwóch kolumnach: po lewej tekst oryginalny, po prawej kopia do przetłumaczenia z własną numeracją. Kopia zostanie zapisana w tej sprawie jako nowy dokument.",
-      "sameLanguage": "Wybierz dwa różne języki.",
-      "sourceLanguage": "Język źródłowy",
-      "title": "Wersja dwujęzyczna"
-    },
-    "error": {
-      "title": "Nie udało się utworzyć wersji dwujęzycznej"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> jest gotowy, do przetłumaczenia {rowCount, plural, one {jest # wiersz} few {są # wiersze} many {jest # wierszy} other {jest # wiersza}}.",
-      "title": "Utworzono wersję dwujęzyczną"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Uzupełnia kolumnę z tłumaczeniem w tym dwukolumnowym dokumencie. Sprawdź, co stanie się z każdym wierszem i jak oddawane są zdefiniowane pojęcia, a następnie rozpocznij tłumaczenie.",
-      "prepare": "Przygotuj",
-      "preparing": "Odczytywanie dokumentu…",
-      "preparingHint": "Odczytanie całego dokumentu i ocena każdego wiersza trwa do dwóch minut.",
-      "title": "Przetłumacz wersję dwujęzyczną"
+      "prepare": "Przygotuj"
     },
     "dispositions": {
-      "inline": "Oba języki",
       "keep": "Pozostaw bez zmian"
     },
-    "error": {
-      "prepareTitle": "Nie udało się przygotować dokumentu",
-      "startTitle": "Nie udało się rozpocząć tłumaczenia"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Brak dostępnego modelu AI do tłumaczenia.",
-      "applyFailed": "Nie udało się zapisać tłumaczeń z powrotem w dokumencie.",
-      "documentChanged": "Dokument zmienił się w trakcie tłumaczenia. Przygotuj go ponownie.",
-      "documentUnresolved": "Dokument lub jego plik nie jest już dostępny.",
-      "enqueueFailed": "Nie udało się dodać tłumaczenia do kolejki.",
-      "internal": "Tłumaczenie zostało nieoczekiwanie przerwane.",
-      "notBilingual": "Ten dokument nie zawiera tabeli dwujęzycznej.",
-      "translationFailed": "Nie udało się przetłumaczyć partii wierszy.",
-      "unknown": "Tłumaczenie zostało nieoczekiwanie przerwane."
-    },
-    "glossary": {
-      "add": "Dodaj pojęcie",
-      "description": "Te tłumaczenia obowiązują we wszystkich wierszach. Pojęcie bez tłumaczenia trzeba uzupełnić lub usunąć.",
-      "empty": "Nie znaleziono zdefiniowanych pojęć.",
-      "formsHint": "Kolejne formy oddziel przecinkami.",
-      "formsSource": "Inne formy pojęcia",
-      "formsTarget": "Inne formy tłumaczenia",
-      "incomplete": "Uzupełnij brakujące tłumaczenia lub usuń te pojęcia.",
-      "origins": {
-        "detected": "Znalezione",
-        "user": "Własne"
-      },
-      "term": "Pojęcie",
-      "title": "Zdefiniowane pojęcia",
-      "tooManyForms": "Pojęcie może mieć najwyżej {max} innych form.",
-      "translation": "Tłumaczenie"
-    },
     "kinds": {
-      "heading": "Nagłówek",
-      "listItem": "Element listy",
-      "paragraph": "Akapit",
-      "table": "Cała tabela"
-    },
-    "origins": {
-      "default": "Nieocenione",
-      "model": "AI"
+      "paragraph": "Akapit"
     },
     "review": {
-      "droppedRows": "{count, plural, one {Pominięto # wiersz} few {Pominięto # wiersze} many {Pominięto # wierszy} other {Pominięto # wiersza}}: nie zawierają tekstu do przetłumaczenia.",
-      "start": "Rozpocznij tłumaczenie",
       "starting": "Rozpoczynanie…"
     },
     "rows": {
-      "description": "Wybierz, co stanie się z każdym wierszem kolumny z tłumaczeniem.",
-      "ordinal": "#",
-      "sourceText": "Tekst źródłowy",
-      "title": "Wiersze",
-      "whatToDo": "Co zrobić"
-    },
-    "run": {
-      "cancelled": "Tłumaczenie zostało anulowane.",
-      "doneSummary": "{count, plural, one {Przetłumaczono # wiersz} few {Przetłumaczono # wiersze} many {Przetłumaczono # wierszy} other {Przetłumaczono # wiersza}}.",
-      "doneTitle": "Tłumaczenie zakończone",
-      "failedRows": "{count, plural, one {Nie udało się przetłumaczyć # wiersza} few {Nie udało się przetłumaczyć # wierszy} many {Nie udało się przetłumaczyć # wierszy} other {Nie udało się przetłumaczyć # wiersza}}.",
-      "failedTitle": "Tłumaczenie zatrzymane",
-      "hint": "Tłumaczenie działa na serwerze. Zostaw to okno otwarte, aby je śledzić.",
-      "moreRows": "{count, plural, one {jeszcze # wiersz} few {jeszcze # wiersze} many {jeszcze # wierszy} other {jeszcze # wiersza}}",
-      "progress": "Przetłumaczono {completed} z {total} wierszy",
-      "title": "Trwa tłumaczenie…",
-      "warningsTitle": "Wiersze do sprawdzenia"
+      "title": "Wiersze"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
       "none": "Nie odnotowano jeszcze żadnych cytowań.",
       "notInStella": "Jeszcze nie ma go w stelli",
-      "openAtCitation": "Otwórz w miejscu cytowania",
       "openDecision": "Otwórz orzeczenie",
       "paragraphLabel": "Punkt {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1942,6 +1877,7 @@
       "refusalNoComputer": "Żaden z Twoich komputerów nie jest połączony. Otwórz stella desktop i wyślij ponownie.",
       "refusalPermissionAboveLimit": "Twoja organizacja nie pozwala agentowi programistycznemu na Twoim komputerze działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
       "refusalPermissionUnavailable": "Agent programistyczny na Twoim komputerze nie może działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
+      "refusalReasoningEffortUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje tego poziomu rozumowania dla modelu. Wybierz inny w menu Poziom rozumowania.",
       "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
       "runOn": "Uruchom na",
@@ -2160,6 +2096,7 @@
     "stopFailed": "Nie udało się zatrzymać odpowiedzi. Spróbuj ponownie.",
     "stopResponse": "Zatrzymaj",
     "stopped": "Zatrzymano",
+    "stopping": "Zatrzymywanie…",
     "suggestTitle": "Zaproponuj tytuł",
     "suggestTitleUnavailableAnonymized": "Propozycje tytułu są niedostępne dla rozmów zanonimizowanych.",
     "suggestedFollowupsLabel": "Sugerowane pytania uzupełniające",
@@ -2696,6 +2633,7 @@
     "organization": "Organizacja",
     "organizationName": "Nazwa organizacji",
     "organizations": "Organizacje",
+    "outOfDate": "Nieaktualna",
     "page": "Strona {page}",
     "paymentRetryNotice": "Problem z płatnością. Zaktualizuj metodę płatności do {date}, aby zachować dostęp.",
     "pin": "Przypnij",
@@ -4474,7 +4412,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Utwórz playbook do przeglądu umów stanowisko po stanowisku na podstawie wcześniej podpisanych umów, krótkiego wywiadu i standardów rynkowych.",
-          "name": "Utwórz playbook"
+          "name": "Utwórz playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Dodaj stanowiska do jednego z moich istniejących playbooków.",
+              "name": "Rozszerz playbook"
+            },
+            "fromContracts": {
+              "body": "Utwórz playbook dla umów o zachowaniu poufności na podstawie moich wcześniej podpisanych umów.",
+              "name": "Zacznij od wcześniejszych umów"
+            },
+            "fromMarketStandards": {
+              "body": "Utwórz playbook dla umów z dostawcami, wychodząc od stanowisk zgodnych ze standardami rynkowymi.",
+              "name": "Zacznij od standardów rynkowych"
+            }
+          }
         }
       },
       "builtInSection": "Wbudowane umiejętności",
@@ -4724,6 +4676,10 @@
       "optionPlaceholder": "Wartość opcji",
       "optionsLabel": "Opcje",
       "outline": "Spis treści",
+      "pendingPane": {
+        "description": "Odpowiedz na pytania na czacie. Gdy zatwierdzisz pierwszy zapis, playbook otworzy się tutaj i będzie można go edytować obok rozmowy.",
+        "title": "Twój playbook pojawi się tutaj"
+      },
       "positionOfTotal": "Stanowisko {index} z {total}",
       "positionRemoved": "Stanowisko usunięte",
       "positions": "Stanowiska",
@@ -6083,7 +6039,6 @@
     "comments": "Komentarze",
     "commentsEmpty": "Zaznacz tekst, aby go skomentować.",
     "noRevisions": "Brak wersji",
-    "outOfDate": "Nieaktualna",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Bez podsumowania",
     "proposals": "Propozycje zmian",

@@ -46,7 +46,6 @@ const { RouteProviderScopeBoundary } =
   await import("@/components/route-provider-scope/route-provider-scope");
 const { MEMBER_PROVIDER_SCOPES } = await import("@/routes/-app-frame-scope");
 const { InspectorPanel } = await import("./inspector-panel");
-const { BUILT_IN_KINDS } = await import("./view-registry-builtins");
 const { getInspectorViews } = await import("./view-registry");
 const { genericPanelFixtures, warmPanelViewRenderers } =
   await import("@/__fixtures__/panel-tab-view-fixtures");
@@ -207,7 +206,7 @@ await Promise.all(
 );
 
 const panelFixtures = [
-  ...BUILT_IN_KINDS.map((kind) => builtinFixtures[kind]),
+  ...Object.values(builtinFixtures),
   ...genericPanelFixtures,
   ...knowledgePanelFixtures,
 ];
@@ -219,7 +218,6 @@ test("every registered inspector view has a valid panel fixture", () => {
       .toSorted(),
   ).toEqual(
     [
-      ...BUILT_IN_KINDS,
       ...genericPanelFixtures.map(({ viewType }) => viewType),
       ...knowledgePanelFixtures.map(({ viewType }) => viewType),
     ].toSorted(),

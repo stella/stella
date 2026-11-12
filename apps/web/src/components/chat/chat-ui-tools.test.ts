@@ -78,13 +78,13 @@ describe("playbook save consumption", () => {
         handledToolCallIds,
         messages: saves("input-complete"),
       }),
-    ).toEqual({ playbookId: "playbook-b" });
+    ).toEqual({ target: { playbookId: "playbook-b", source: "live" } });
     expect(
       consumePlaybookSaveToolCalls({
         handledToolCallIds,
         messages: saves("complete"),
       }),
-    ).toEqual({ playbookId: null });
+    ).toEqual({ target: null });
     expect(handledToolCallIds).toEqual(new Set(["save-a", "save-b"]));
     expect(
       consumePlaybookSaveToolCalls({

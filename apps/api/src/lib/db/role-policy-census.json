@@ -7161,6 +7161,66 @@
   },
   {
     "schema": "public",
+    "table": "legal_graph_edges",
+    "policy": "entity_feature_gate_maintenance",
+    "command": "ALL",
+    "roles": ["stella_entity_gate"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "legal_graph_edges",
+    "policy": "legal_graph_edges_no_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "RESTRICTIVE",
+    "using": "false",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "legal_graph_edges",
+    "policy": "legal_graph_edges_no_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "RESTRICTIVE",
+    "using": "false",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "legal_graph_edges",
+    "policy": "workspace_entity_feature",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "RESTRICTIVE",
+    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))) AND ((entity_feature_organization_ids = '{}'::text[]) OR (entity_feature_organization_ids <@ ARRAY[( SELECT current_setting('app.organization_id'::text, true) AS current_setting)])))",
+    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))) AND ((entity_feature_organization_ids = '{}'::text[]) OR (entity_feature_organization_ids <@ ARRAY[( SELECT current_setting('app.organization_id'::text, true) AS current_setting)])))"
+  },
+  {
+    "schema": "public",
+    "table": "legal_graph_edges",
+    "policy": "workspace_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "(\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND AND ((source_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM legal_list_item_sources spot\n  WHERE ((spot.id = legal_graph_edges.source_id) AND (spot.workspace_id = legal_graph_edges.workspace_id))))))"
+  },
+  {
+    "schema": "public",
+    "table": "legal_graph_edges",
+    "policy": "workspace_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "legal_list_claim_carry_outcomes",
     "policy": "entity_feature_gate_maintenance",
     "command": "ALL",
@@ -7288,6 +7348,16 @@
     "permissive": "PERMISSIVE",
     "using": "true",
     "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "legal_list_claims",
+    "policy": "legal_list_claims_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('legal_list_claims'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('legal_list_claims'::regclass)::oid)))"
   },
   {
     "schema": "public",

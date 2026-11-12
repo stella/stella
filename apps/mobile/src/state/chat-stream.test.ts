@@ -190,6 +190,7 @@ describe("drawing an answer from its events", () => {
         { type: "text", key: "2", markdown: "Two found." },
       ],
       files: [],
+      drafts: [],
     });
   });
 

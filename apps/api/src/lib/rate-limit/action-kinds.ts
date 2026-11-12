@@ -74,6 +74,7 @@ export const ACTION_KINDS = {
   "search.summarize": MODEL_ACTION,
   "email.summarize": MODEL_ACTION,
   "email.draft-reply": MODEL_ACTION,
+  "email.ask": MODEL_ACTION,
   "playbooks.derive-ask": MODEL_ACTION,
   "case-law.analysis": MODEL_ACTION,
   "case-law.search-refine": MODEL_ACTION,

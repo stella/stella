@@ -8,7 +8,7 @@
  */
 import { ASK_USER_TOOL_NAME, CREATE_DOCUMENT_TOOL_NAME } from "./chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "./chat-connector";
-import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "./chat-run-target";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "./chat-local-run-question";
 import { REQUEST_SECRET_TOOL_NAME } from "./chat-secret";
 import type { BuiltInChatToolPolicyKindByName } from "./chat-tool-policy";
 import { isOwnKey } from "./own-key";

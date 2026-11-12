@@ -745,18 +745,26 @@ export const playbookDetailOptions = (
   organizationId: string,
   playbookId: string,
 ) =>
-  queryOptions({
-    queryKey: knowledgeKeys.playbooks.detail(organizationId, playbookId),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
-        .get({ fetch: { signal } });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: knowledgeKeys.playbooks.detail(organizationId, playbookId),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .playbooks({
+            playbookId: toSafeId<"playbookDefinition">(playbookId),
+          })
+          .get({ fetch: { signal } });
 
-      return unwrapApiResponse(response);
+        return unwrapApiResponse(response);
+      },
+      retry: shouldRetryAPIRequest,
+      staleTime: STALE_TIME.FIVE.MINUTES,
+    }),
+    {
+      resources: [RESOURCE_TYPE.PLAYBOOK],
+      scope: { type: "organization" },
     },
-    retry: shouldRetryAPIRequest,
-    staleTime: STALE_TIME.FIVE.MINUTES,
-  });
+  );
 
 // Approval-version history for a playbook: a small, bounded, per-parent
 // collection (one row per approve call), so a plain list is enough — no
@@ -819,27 +827,33 @@ export const flowDetailOptions = (organizationId: string, flowId: string) =>
 // ── Skills queries ───────────────────────────────────
 
 export const skillsOptions = (organizationId: string, userId: string) =>
-  infiniteQueryOptions({
-    queryKey: knowledgeKeys.skills.list(organizationId, userId, {
-      limit: SKILLS_PAGE_SIZE,
-    }),
-    queryFn: async ({ pageParam, signal }) => {
-      const query: { limit: number; cursor?: string } = {
+  resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: knowledgeKeys.skills.list(organizationId, userId, {
         limit: SKILLS_PAGE_SIZE,
-      };
-      if (pageParam !== "") {
-        query.cursor = pageParam;
-      }
-      const response = await api.skills.get({
-        query,
-        fetch: { signal },
-      });
-      return unwrapApiResponse(response);
+      }),
+      queryFn: async ({ pageParam, signal }) => {
+        const query: { limit: number; cursor?: string } = {
+          limit: SKILLS_PAGE_SIZE,
+        };
+        if (pageParam !== "") {
+          query.cursor = pageParam;
+        }
+        const response = await api.skills.get({
+          query,
+          fetch: { signal },
+        });
+        return unwrapApiResponse(response);
+      },
+      initialPageParam: "",
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      staleTime: STALE_TIME.FIVE.MINUTES,
+    }),
+    {
+      resources: [RESOURCE_TYPE.AGENT_SKILL],
+      scope: { type: "organization" },
     },
-    initialPageParam: "",
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    staleTime: STALE_TIME.FIVE.MINUTES,
-  });
+  );
 
 /**
  * The caller's skills chat cannot offer, with the tools each lacks. The

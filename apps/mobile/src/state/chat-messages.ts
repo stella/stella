@@ -8,6 +8,8 @@ import type { ApiError } from "@/state/api-request";
 import { answerBlocks, messageText } from "@/state/chat-answer";
 import type { AnswerBlock } from "@/state/chat-answer";
 import type { ChatDraft, SentFile } from "@/state/chat-attachments";
+import { draftDocumentsOf } from "@/state/chat-documents";
+import type { ChatDraftDocument } from "@/state/chat-documents";
 import { pendingInputOf } from "@/state/chat-pending-input";
 import type { PendingInput } from "@/state/chat-pending-input";
 
@@ -51,7 +53,8 @@ const messagesPageSchema = v.object({
 
 /**
  * A message as the thread shows it: its text, an answer's texts and the
- * steps between them in order, and the files the person attached.
+ * steps between them in order, the files the person attached, and the
+ * drafts the assistant wrote.
  */
 export type ChatEntry = {
   readonly id: string;
@@ -62,6 +65,7 @@ export type ChatEntry = {
   /** An answer as it is drawn; a person's own message draws its `text`. */
   readonly blocks: readonly AnswerBlock[];
   readonly files: readonly SentFile[];
+  readonly drafts: readonly ChatDraftDocument[];
 };
 
 /**
@@ -102,7 +106,13 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
         ]
       : [];
   });
-  if (text === "" && blocks.length === 0 && files.length === 0) {
+  const drafts = draftDocumentsOf(message.parts);
+  if (
+    text === "" &&
+    blocks.length === 0 &&
+    files.length === 0 &&
+    drafts.length === 0
+  ) {
     return undefined;
   }
   return {
@@ -112,6 +122,7 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     text,
     blocks,
     files,
+    drafts,
   };
 };
 
@@ -132,6 +143,7 @@ export const sentEntry = ({
   blocks: [],
   // The thread names each file; its bytes have gone with the message.
   files: files.map(({ mimeType, name }) => ({ mimeType, name })),
+  drafts: [],
 });
 
 /**

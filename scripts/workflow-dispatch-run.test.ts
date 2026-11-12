@@ -17,6 +17,7 @@ test("every followed dispatch finds its run without relying on the answer", () =
     .filter(({ text }) => text.includes("workflow_run_id"));
   expect(followers.map(({ name }) => name).toSorted()).toEqual([
     "autofix-generated-conflicts.yml",
+    "deploy-outlook-addin.yml",
     "marketing-screenshots-update.yml",
   ]);
   for (const { name, text } of followers) {

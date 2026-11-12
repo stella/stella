@@ -82,6 +82,7 @@ const PAYLOADS: readonly ClaimReviewEventPayload[] = [
     },
     facts: { changed: [], removed: [] },
     modelRef: "test:model",
+    assertedOn: { type: "none" },
   },
 ];
 
@@ -155,6 +156,7 @@ describe("foldClaimReview", () => {
       },
       facts: { changed: [], removed: [] },
       modelRef: null,
+      assertedOn: { type: "none" },
     } as const satisfies ClaimReviewEventPayload;
     const link = (change: "link" | "unlink") =>
       ({
@@ -252,6 +254,7 @@ describe("foldClaimReview", () => {
               },
         facts: { changed: [], removed: [] },
         modelRef: null,
+        assertedOn: { type: "none" },
       } satisfies ClaimReviewEventPayload,
       actorId: "checker",
       createdAt: at(index),
@@ -385,6 +388,7 @@ describe("foldClaimReview", () => {
         },
         facts: { changed: [], removed: [] },
         modelRef: null,
+        assertedOn: { type: "none" },
         checkedAt: at(1),
         checkedBy: "a",
         linkedFactIds: [],

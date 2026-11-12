@@ -21,6 +21,7 @@ import type {
   RetiredChatToolName,
 } from "@stll/api-contract/chat-tool-activity";
 import {
+  externalMcpConnectorSlugOf,
   isApprovalGatedBuiltInChatTool,
   isGrantableChatTool,
 } from "@stll/api-contract/chat-tool-grants";
@@ -131,11 +132,23 @@ type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
   "ask-user" | "create-document" | "request_secret" | "connect_connector"
 >;
-export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
+/**
+ * A harness-native step of a coding agent on the member's computer. The
+ * member approves one like any other call (`isApprovalToolName` accepts its
+ * name), and its input is the contract's (`chat-local-run-tool`).
+ */
+type HarnessToolName = keyof typeof HARNESS_TOOL_TITLE_KEYS;
+export type HarnessChatToolCallPart = Omit<TanStackChatToolCallPart, "name"> & {
+  name: HarnessToolName;
+};
+export type ApprovalToolName =
+  BuiltInApprovalToolName | HarnessToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
   ApprovalToolName | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
-export type ApprovalToolPart = RegisteredChatUIToolCallPart & {
+export type ApprovalToolPart = (
+  RegisteredChatUIToolCallPart | HarnessChatToolCallPart
+) & {
   name: ApprovalToolName;
   approval: {
     approved?: boolean | undefined;
@@ -277,13 +290,6 @@ export const isExternalInputChatToolName = (
 ): toolName is ExternalInputToolName =>
   isOwnKey(EXTERNAL_INPUT_CHAT_TOOL_NAMES, toolName);
 
-export const getExternalMcpConnectorSlugFromToolName = (
-  toolName: `mcp__${string}`,
-): string | null => {
-  const parts = toolName.split("__");
-  return parts.length >= 3 ? (parts.at(1) ?? null) : null;
-};
-
 export const getExternalMcpConnectorApprovalGrant = (
   connectorSlug: string,
 ): ToolApprovalGrant =>
@@ -296,7 +302,7 @@ export const getToolApprovalGrant = (
     return toolName;
   }
 
-  const connectorSlug = getExternalMcpConnectorSlugFromToolName(toolName);
+  const connectorSlug = externalMcpConnectorSlugOf(toolName);
   if (!connectorSlug) {
     return toolName;
   }
@@ -552,8 +558,10 @@ export const isPendingApprovalPart = (
   );
 };
 
+// Any part: a coding agent's step is an approval part too, outside the
+// registered tool names.
 export const isApprovalRespondedPart = (
-  part: ChatPart,
+  part: unknown,
 ): part is ApprovalToolPart & {
   approval: { approved: boolean; id: string; needsApproval: boolean };
   state: "approval-responded";
@@ -1148,6 +1156,15 @@ export const consumeDocumentDeletionToolCalls = ({
 export type PlaybookSaveMessage = DocumentDeletionMessage;
 
 /**
+ * The newest save a session has not handled yet. `history` marks a save that
+ * was loaded with older messages, not made while the session watched.
+ */
+export type PlaybookSaveTarget = {
+  playbookId: string;
+  source: "history" | "live";
+};
+
+/**
  * Consume the successful `save_playbook` calls this session has not handled,
  * returning whether caches changed and the latest playbook to follow. A
  * newly completed older call still changed caches even when a later call
@@ -1163,8 +1180,8 @@ export const consumePlaybookSaveToolCalls = ({
   handledToolCallIds: Set<string>;
   historicalToolCallIds?: ReadonlySet<string>;
   messages: readonly PlaybookSaveMessage[];
-}): { playbookId: string | null } | null => {
-  let latestPlaybookId: string | null = null;
+}): { target: PlaybookSaveTarget | null } | null => {
+  let target: PlaybookSaveTarget | null = null;
   let hasNewSaves = false;
 
   for (const message of messages) {
@@ -1184,19 +1201,20 @@ export const consumePlaybookSaveToolCalls = ({
         continue;
       }
       if (handledToolCallIds.has(part["id"])) {
-        latestPlaybookId = null;
+        target = null;
         continue;
       }
 
       handledToolCallIds.add(part["id"]);
       hasNewSaves = true;
-      latestPlaybookId = historicalToolCallIds?.has(part["id"])
-        ? null
-        : part["output"]["playbookId"];
+      target = {
+        playbookId: part["output"]["playbookId"],
+        source: historicalToolCallIds?.has(part["id"]) ? "history" : "live",
+      };
     }
   }
 
-  return hasNewSaves ? { playbookId: latestPlaybookId } : null;
+  return hasNewSaves ? { target } : null;
 };
 
 /** The playbook a tool call saved, if it is a completed `save_playbook`

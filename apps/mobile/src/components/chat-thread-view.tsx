@@ -14,6 +14,7 @@ import { StellaMark } from "@stll/ui/stella-mark";
 import { Text } from "@stll/ui/text";
 
 import { ChatComposer } from "@/components/chat-composer";
+import { ChatDraftDocuments } from "@/components/chat-draft-document";
 import { ChatInputCard } from "@/components/chat-input-card";
 import type { InputNotice } from "@/components/chat-input-card";
 import { ChatMessage } from "@/components/chat-message";
@@ -380,6 +381,8 @@ const ThreadMessages = ({
                 notice={inputNotice}
                 onAnswer={answer}
                 pending={pending}
+                source={source}
+                threadId={threadId}
               />
             ) : null}
           </View>
@@ -395,7 +398,17 @@ const ThreadMessages = ({
             tintColor={colors.muted}
           />
         }
-        renderItem={({ item }) => <ChatMessage entry={item} />}
+        renderItem={({ item }) =>
+          item.drafts.length === 0 ? (
+            <ChatMessage entry={item} />
+          ) : (
+            // The drafts the answer wrote follow it, each opening its pages.
+            <View style={styles.live}>
+              <ChatMessage entry={item} />
+              <ChatDraftDocuments drafts={item.drafts} />
+            </View>
+          )
+        }
       />
       <View style={screenStyles.readable}>
         {markFailure === null ? null : (

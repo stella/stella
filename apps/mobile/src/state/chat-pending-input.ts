@@ -1,11 +1,35 @@
 import * as v from "valibot";
 
-import { isHarnessChatToolCall } from "@stll/api-contract/chat";
+import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
+import {
+  ASK_USER_TOOL_NAME,
+  CREATE_DOCUMENT_TOOL_NAME,
+  isHarnessChatToolCall,
+} from "@stll/api-contract/chat";
+import {
+  type AskUserAnswer,
+  askUserAnswersRefusal,
+  askUserInputSchema,
+  type AskUserQuestion,
+} from "@stll/api-contract/chat-ask-user";
+import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
+import {
+  type CreateDocumentInput,
+  createDocumentInputSchema,
+} from "@stll/api-contract/chat-create-document";
 import {
   type ChatLocalRunQuestionReply,
   type LocalRunQuestionPause,
   localRunQuestionPauseOf,
 } from "@stll/api-contract/chat-local-run-question";
+import {
+  REQUEST_SECRET_TOOL_NAME,
+  requiresPerCallChatApproval,
+} from "@stll/api-contract/chat-secret";
+import {
+  isChatToolCoveredByGrantOn,
+  isGrantableChatTool,
+} from "@stll/api-contract/chat-tool-grants";
 
 /**
  * A tool call as the thread stores it. A continuation names each call it
@@ -40,6 +64,7 @@ const localRunTargetSchema = v.object({
   harness: v.pipe(v.string(), v.minLength(1)),
   model: v.pipe(v.string(), v.minLength(1)),
   approvals: v.optional(v.string()),
+  reasoningEffort: v.optional(v.nullable(v.string())),
 });
 
 export type LocalRunTarget = v.InferOutput<typeof localRunTargetSchema>;
@@ -78,6 +103,17 @@ export type PendingApproval = {
 };
 
 /**
+ * The model's clarifying questions (the `ask-user` tool), which the person
+ * answers with an option or their own words. The browser resolves the call,
+ * so its interrupt is the call's client-tool interrupt.
+ */
+type PendingAsk = {
+  readonly interruptId: string;
+  readonly questions: readonly AskUserQuestion[];
+  readonly call: StoredToolCall;
+};
+
+/**
  * Whose calls a paused turn holds: stella's own models (`cloud`), or a
  * coding agent on the person's computer (`harness`), whose answer the
  * server forwards to that computer and which a continuation must say runs
@@ -96,22 +132,44 @@ type Resumable = {
 };
 
 /**
- * What a paused turn waits for: approvals of the calls it wants to run, a
- * question a coding agent on the person's computer asked, or input this
- * phone cannot give (a file, a browser action, a saved secret), which the
- * person gives in the web app.
+ * A draft the model wrote with `create-document`, which the client compiles
+ * and answers with the compiler's report, as the web does. It asks the
+ * person nothing; the phone compiles it when it answers the rest.
+ */
+export type PendingDocument = {
+  readonly interruptId: string;
+  readonly input: CreateDocumentInput;
+  readonly call: StoredToolCall;
+};
+
+/**
+ * Why only another place can give what a paused turn waits for: a browser
+ * command the person allowed, which runs in the browser on their computer;
+ * a key, or an app to connect, which the API takes only from a signed-in
+ * browser (`API_OAUTH_ROUTES` keeps keys and connections away from a phone
+ * token); or anything else this build cannot read.
+ */
+export type ElsewhereReason = "browser" | "secret" | "connector" | "other";
+
+/**
+ * What a paused turn waits for: the steps of one model turn (approvals of
+ * the calls it wants to run, its clarifying questions, the drafts it wrote),
+ * a question a coding agent on the person's computer asked, or input this
+ * phone cannot give, and why.
  */
 export type PendingInput =
   | (Resumable & {
-      readonly type: "approvals";
+      readonly type: "steps";
       readonly approvals: readonly PendingApproval[];
+      readonly asks: readonly PendingAsk[];
+      readonly documents: readonly PendingDocument[];
     })
   | (Resumable & {
       readonly type: "question";
       readonly pause: LocalRunQuestionPause;
       readonly call: StoredToolCall;
     })
-  | { readonly type: "elsewhere" };
+  | { readonly type: "elsewhere"; readonly reason: ElsewhereReason };
 
 /** A stored message, as much of it as tells whether its turn waits. */
 type StoredMessageView = {
@@ -121,7 +179,10 @@ type StoredMessageView = {
   readonly parts: readonly unknown[];
 };
 
-const ELSEWHERE: PendingInput = { type: "elsewhere" };
+const elsewhere = (reason: ElsewhereReason): PendingInput => ({
+  type: "elsewhere",
+  reason,
+});
 
 /**
  * What the thread's latest message waits for, or null when its turn waits
@@ -147,7 +208,7 @@ export const pendingInputOf = ({
   }
   const awaiting = v.safeParse(awaitingMetadataSchema, message.metadata);
   if (!awaiting.success) {
-    return ELSEWHERE;
+    return elsewhere("other");
   }
   const { pendingInterrupts, resumeState } = awaiting.output.resumeSnapshot;
   const calls = message.parts.flatMap((part) => {
@@ -156,6 +217,8 @@ export const pendingInputOf = ({
   });
 
   const approvals: PendingApproval[] = [];
+  const asks: PendingAsk[] = [];
+  const documents: PendingDocument[] = [];
   const questions: { pause: LocalRunQuestionPause; call: StoredToolCall }[] =
     [];
   for (const interrupt of pendingInterrupts) {
@@ -166,25 +229,35 @@ export const pendingInputOf = ({
           id === interrupt.toolCallId && state === "input-complete",
       );
       if (call === undefined) {
-        return ELSEWHERE;
+        return elsewhere("other");
       }
       questions.push({ pause, call });
       continue;
     }
-    const call = calls.find(
+    const approved = calls.find(
       ({ approval, state }) =>
         state === "approval-requested" && approval?.id === interrupt.id,
     );
-    if (call === undefined) {
-      // A client tool, a file or a secret: only the web app can answer it.
-      return ELSEWHERE;
+    if (approved !== undefined) {
+      approvals.push({
+        interruptId: interrupt.id,
+        toolName: approved.name,
+        input: approved.input,
+        call: approved,
+      });
+      continue;
     }
-    approvals.push({
-      interruptId: interrupt.id,
-      toolName: call.name,
-      input: call.input,
-      call,
-    });
+    const step = clientStepOf(interrupt, calls);
+    switch (step.type) {
+      case "ask":
+        asks.push(step.ask);
+        continue;
+      case "document":
+        documents.push(step.document);
+        continue;
+      case "elsewhere":
+        return elsewhere(step.reason);
+    }
   }
 
   // Every call waiting for approval must be among the answers: the server
@@ -196,27 +269,86 @@ export const pendingInputOf = ({
   );
   const answered = [
     ...approvals.map(({ call }) => call),
+    ...asks.map(({ call }) => call),
+    ...documents.map(({ call }) => call),
     ...questions.map(({ call }) => call),
   ];
   const owner = ownerOf(answered, runTarget);
   const [question, ...moreQuestions] = questions;
   if (unanswered || owner === undefined || moreQuestions.length > 0) {
-    return ELSEWHERE;
+    return elsewhere("other");
   }
   const resumable = {
     messageId: message.id,
     parentRunId: resumeState.runId,
     owner,
   };
+  const steps = approvals.length + asks.length + documents.length;
   if (question !== undefined) {
-    return approvals.length === 0
+    return steps === 0
       ? { ...resumable, type: "question", ...question }
-      : ELSEWHERE;
+      : elsewhere("other");
   }
-  return approvals.length === 0
-    ? ELSEWHERE
-    : { ...resumable, type: "approvals", approvals };
+  return steps === 0
+    ? elsewhere("other")
+    : { ...resumable, type: "steps", approvals, asks, documents };
 };
+
+/** What a client-tool interrupt asks of the person, if the phone can give it. */
+type ClientStep =
+  | { readonly type: "ask"; readonly ask: PendingAsk }
+  | { readonly type: "document"; readonly document: PendingDocument }
+  | { readonly type: "elsewhere"; readonly reason: ElsewhereReason };
+
+/** The tools whose call only a place other than the phone resolves, and why. */
+const ELSEWHERE_TOOLS: Readonly<Record<string, ElsewhereReason>> = {
+  [BROWSER_CONTROL_TOOL_NAME]: "browser",
+  [REQUEST_SECRET_TOOL_NAME]: "secret",
+  [CONNECT_CONNECTOR_TOOL_NAME]: "connector",
+};
+
+/**
+ * The step a client-tool interrupt waits on: the model's questions or a
+ * draft to compile, each a call still waiting for its result whose input
+ * parses (one that does not could only be answered with something the
+ * server refuses), or a tool only another place resolves.
+ */
+function clientStepOf(
+  interrupt: { readonly id: string; readonly toolCallId?: string | undefined },
+  calls: readonly StoredToolCall[],
+): ClientStep {
+  const call = calls.find(({ id }) => id === interrupt.toolCallId);
+  const reason: ElsewhereReason =
+    call !== undefined && Object.hasOwn(ELSEWHERE_TOOLS, call.name)
+      ? (ELSEWHERE_TOOLS[call.name] ?? "other")
+      : "other";
+  if (call?.state !== "input-complete") {
+    return { type: "elsewhere", reason };
+  }
+  if (call.name === ASK_USER_TOOL_NAME) {
+    const input = v.safeParse(askUserInputSchema, call.input);
+    return input.success
+      ? {
+          type: "ask",
+          ask: {
+            interruptId: interrupt.id,
+            questions: input.output.questions,
+            call,
+          },
+        }
+      : { type: "elsewhere", reason };
+  }
+  if (call.name === CREATE_DOCUMENT_TOOL_NAME) {
+    const input = v.safeParse(createDocumentInputSchema, call.input);
+    return input.success
+      ? {
+          type: "document",
+          document: { interruptId: interrupt.id, input: input.output, call },
+        }
+      : { type: "elsewhere", reason };
+  }
+  return { type: "elsewhere", reason };
+}
 
 /**
  * Who answers the calls: all stella's, or all the computer's, never a mix.
@@ -241,14 +373,17 @@ function ownerOf(
 }
 
 /**
- * The person's answer: each approval allowed or denied, by interrupt id, or
- * the question's answers, or `null` to dismiss it, which stops the agent's
- * turn.
+ * The person's answer: to a turn's steps, each approval allowed or denied
+ * and each set of the model's questions answered, by interrupt id, with
+ * each draft's compiled result; or to a coding agent's question, its
+ * answers, or `null` to dismiss it, which stops the agent's turn.
  */
 export type PendingAnswer =
   | {
-      readonly type: "approvals";
+      readonly type: "steps";
       readonly allowed: Readonly<Record<string, boolean>>;
+      readonly asked: Readonly<Record<string, readonly AskUserAnswer[]>>;
+      readonly documents: Readonly<Record<string, unknown>>;
     }
   | {
       readonly type: "question";
@@ -263,13 +398,44 @@ type ResumeItem =
     }
   | { readonly interruptId: string; readonly status: "cancelled" };
 
+/** One answered call: the call as sent, its resume item, and any result it adds. */
+type Settled = {
+  readonly part: unknown;
+  readonly resume: ResumeItem;
+  readonly result?: unknown;
+};
+
+const given = <T>(
+  answers: Readonly<Record<string, T>>,
+  interruptId: string,
+): T | undefined =>
+  Object.hasOwn(answers, interruptId) ? answers[interruptId] : undefined;
+
+/** A call the client resolved: complete with `output`, and the result that answers it. */
+const resolvedByClient = (
+  call: StoredToolCall,
+  interruptId: string,
+  output: unknown,
+): Settled => ({
+  part: { ...call, state: "complete", output },
+  resume: { interruptId, status: "resolved", payload: output },
+  result: {
+    type: "tool-result",
+    toolCallId: call.id,
+    content: JSON.stringify(output),
+    state: "complete",
+  },
+});
+
 /**
  * What a continuation carries for one answer: the paused message's answered
- * calls, each the stored call with only its answer changed, and the resume
- * item of each interrupt. An approval moves its call to
- * `approval-responded`; a question's call stays as stored, its answer
- * riding in the resume payload. Undefined when the answer does not answer
- * every interrupt.
+ * calls, each the stored call with only its answer changed, then the
+ * results the client adds, and the resume item of each interrupt, as the
+ * web sends them. An approval moves its call to `approval-responded`; the
+ * model's questions and a draft move their call to `complete` with the
+ * answer as its output and add the result that answers it; a coding agent's
+ * question's call stays as stored, its answer riding in the resume payload.
+ * Undefined when the answer does not answer every interrupt.
  */
 export const continuationOf = (
   pending: Exclude<PendingInput, { type: "elsewhere" }>,
@@ -295,33 +461,89 @@ export const continuationOf = (
       ],
     };
   }
-  if (answer.type !== "approvals") {
+  if (answer.type !== "steps") {
     return undefined;
   }
-  const decided = pending.approvals.flatMap((approval) => {
-    const approved = Object.hasOwn(answer.allowed, approval.interruptId)
-      ? answer.allowed[approval.interruptId]
-      : undefined;
-    return approved === undefined || approval.call.approval === undefined
-      ? []
-      : [{ approval, approved, stored: approval.call.approval }];
-  });
-  if (decided.length !== pending.approvals.length) {
+  const settled = [
+    ...pending.approvals.map((approval): Settled | undefined => {
+      const approved = given(answer.allowed, approval.interruptId);
+      const stored = approval.call.approval;
+      return approved === undefined || stored === undefined
+        ? undefined
+        : {
+            part: {
+              ...approval.call,
+              state: "approval-responded",
+              approval: { ...stored, approved },
+            },
+            resume: {
+              interruptId: approval.interruptId,
+              status: "resolved",
+              payload: { approved },
+            },
+          };
+    }),
+    ...pending.asks.map((ask): Settled | undefined => {
+      const answers = given(answer.asked, ask.interruptId);
+      return answers === undefined ||
+        askUserAnswersRefusal(ask.questions, answers) !== null
+        ? undefined
+        : resolvedByClient(ask.call, ask.interruptId, { answers });
+    }),
+    ...pending.documents.map((document): Settled | undefined => {
+      const output = given(answer.documents, document.interruptId);
+      return output === undefined
+        ? undefined
+        : resolvedByClient(document.call, document.interruptId, output);
+    }),
+  ];
+  const complete = settled.flatMap((step) =>
+    step === undefined ? [] : [step],
+  );
+  if (complete.length !== settled.length) {
     return undefined;
   }
   return {
-    parts: decided.map(({ approval, approved, stored }) => ({
-      ...approval.call,
-      state: "approval-responded",
-      approval: { ...stored, approved },
-    })),
-    resume: decided.map(({ approval, approved }) => ({
-      interruptId: approval.interruptId,
-      status: "resolved",
-      payload: { approved },
-    })),
+    parts: [
+      ...complete.map(({ part }) => part),
+      ...complete.flatMap(({ result }) =>
+        result === undefined ? [] : [result],
+      ),
+    ],
+    resume: complete.map(({ resume }) => resume),
   };
 };
+
+/**
+ * The approvals once a grant on `toolName` is stored: every other approval
+ * of the step the grant covers is allowed too, as the web's cards answer
+ * themselves once a grant covers them. A tool asked about on every call is
+ * never covered, and an approval already answered keeps its answer.
+ */
+export const allowedWithGrant = (
+  approvals: readonly PendingApproval[],
+  allowed: Readonly<Record<string, boolean>>,
+  toolName: string,
+): Record<string, boolean> => ({
+  ...Object.fromEntries(
+    approvals.flatMap(({ interruptId, toolName: approvalTool }) =>
+      grantableApproval(approvalTool) &&
+      isChatToolCoveredByGrantOn(toolName, approvalTool)
+        ? [[interruptId, true] as const]
+        : [],
+    ),
+  ),
+  // An approval already answered keeps its answer.
+  ...allowed,
+});
+
+/**
+ * Whether the person may allow `toolName` for the conversation or always,
+ * as the web's approval card offers it: only a tool the grant policy lets a
+ * stored grant cover.
+ */
+export const grantableApproval = (toolName: string): boolean =>
+  isGrantableChatTool(toolName) && !requiresPerCallChatApproval(toolName);
 
 /** Whether two reads name the same pause, so an answer to one still fits the other. */
 export const isSamePendingInput = (
@@ -367,6 +589,10 @@ export const pendingInputKey = (
 ): string =>
   pending.type === "question"
     ? `question:${pending.pause.interruptId}`
-    : `approvals:${pending.parentRunId}:${pending.approvals
+    : `steps:${pending.parentRunId}:${[
+        ...pending.approvals,
+        ...pending.asks,
+        ...pending.documents,
+      ]
         .map(({ interruptId }) => interruptId)
         .join(",")}`;

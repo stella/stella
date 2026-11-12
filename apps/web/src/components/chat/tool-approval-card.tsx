@@ -593,7 +593,7 @@ export const ToolApprovalCard = ({
     ? getToolOutputError(part.output)
     : undefined;
   const failureLabelKey = isFailed
-    ? toolFailureLabelKey(rawErrorDetails, part.state)
+    ? toolFailureLabelKey({ name, output: part.output, state: part.state })
     : undefined;
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;

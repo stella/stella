@@ -48,7 +48,6 @@ export type EnvOwner = (typeof ENV_OWNER)[keyof typeof ENV_OWNER];
 export type EnvCatalogEntry = {
   credentialKind: (typeof ENV_CREDENTIAL_KIND)[keyof typeof ENV_CREDENTIAL_KIND];
   description: string;
-  documented: boolean;
   example: string | undefined;
   exposure: EnvExposure;
   name: string;
@@ -117,7 +116,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AZURE_RESOURCE_NAME",
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
-  "CASE_LAW_DATABASE_POOL_MAX",
   "CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_ENABLED",
   "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
@@ -833,7 +831,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DEPLOY_ENVIRONMENT: ENV_CREDENTIAL_KIND.notCredential,
   BETTER_AUTH_SECRET: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
-  CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DERIVED_AI: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
     ENV_CREDENTIAL_KIND.notCredential,
@@ -844,7 +841,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   CASE_LAW_EU_COMPLETION_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_EU_COMPLETION_MAX_ROWS: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_EU_COMPLETION_MODE: ENV_CREDENTIAL_KIND.notCredential,
-  CASE_LAW_DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   COMPANIES_HOUSE_API_KEY: ENV_CREDENTIAL_KIND.credential,
   CONTENT_ENCRYPTION_KEY: ENV_CREDENTIAL_KIND.credential,
   CORPUS_INDEX_Q09_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
@@ -1168,11 +1164,6 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "VITE_PUBLIC_APP_URL",
 ]);
 
-const HIDDEN_SCHEMA_KEYS = new Set([
-  "CASE_LAW_DATABASE_POOL_MAX",
-  "CASE_LAW_DATABASE_URL",
-]);
-
 const humanizeEnvName = (name: string) => {
   const words = name
     .replace(/^VITE_/u, "")
@@ -1306,7 +1297,6 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
     return {
       credentialKind,
       description: DESCRIPTION_OVERRIDES[name] ?? humanizeEnvName(name),
-      documented: !HIDDEN_SCHEMA_KEYS.has(name),
       example: EXAMPLE_VALUES[name],
       exposure: exposureFor({ name, owner, schema: entrySchema }),
       name,

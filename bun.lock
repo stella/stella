@@ -391,6 +391,7 @@
         "@stll/brand": "workspace:*",
         "@stll/chat-limits": "workspace:*",
         "@stll/concurrency": "workspace:*",
+        "@stll/docx-core": "catalog:",
         "@stll/folio-fonts": "catalog:",
         "@stll/folio-react": "catalog:",
         "@stll/locales": "workspace:*",
@@ -521,6 +522,22 @@
         "@vitejs/plugin-react": "catalog:",
         "tailwindcss": "catalog:",
         "vite": "catalog:",
+      },
+    },
+    "apps/skill-runner": {
+      "name": "@stll/skill-runner",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/api-contract": "workspace:*",
+        "@stll/docx-core": "catalog:",
+        "@stll/fetch": "workspace:*",
+        "@stll/sha256": "workspace:*",
+        "better-result": "catalog:",
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "apps/visual-preview": {
@@ -3536,6 +3553,8 @@
     "@stll/scripts": ["@stll/scripts@workspace:packages/scripts"],
 
     "@stll/sha256": ["@stll/sha256@workspace:packages/sha256"],
+
+    "@stll/skill-runner": ["@stll/skill-runner@workspace:apps/skill-runner"],
 
     "@stll/skills": ["@stll/skills@workspace:packages/skills"],
 

@@ -13,6 +13,7 @@ import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_FEATURE_ID,
+  DESKTOP_RUNNER_REASONING_EFFORTS,
 } from "@stll/api-contract/desktop-runner";
 
 import { approvalDecisionOf } from "@/api/handlers/chat/local-run-chunks";
@@ -50,6 +51,7 @@ const LOCAL: ChatRunTarget = {
   harness: "codex",
   model: MODEL,
   approvals: "ask",
+  reasoningEffort: null,
 };
 
 const snapshotWith = (granted: boolean) =>
@@ -109,7 +111,9 @@ const READY: PickedDesktop = {
     capabilities: ["approvals", "interrupt"],
     // Codex runs in one approval mode.
     approvalModes: ["ask"],
-    models: [{ id: MODEL, label: "GPT-5 Codex" }],
+    models: [
+      { id: MODEL, label: "GPT-5 Codex", reasoningEfforts: ["low", "high"] },
+    ],
   },
 };
 
@@ -194,7 +198,9 @@ describe("routing a chat turn to the member's computer", () => {
           ...READY,
           harness: {
             ...READY.harness,
-            models: [{ id: "another-model", label: "Another" }],
+            models: [
+              { id: "another-model", label: "Another", reasoningEfforts: [] },
+            ],
           },
         },
         CHAT_LOCAL_RUN_REFUSAL.modelUnavailable,
@@ -217,6 +223,23 @@ describe("routing a chat turn to the member's computer", () => {
     }
     const allowed = await resolve({ runTarget: LOCAL });
     expect(allowed.resolved.isOk()).toBe(true);
+  });
+
+  test("a reasoning effort the computer does not report for the model is refused with its own code", async () => {
+    for (const reasoningEffort of ["max", "medium"] as const) {
+      const { resolved } = await resolve({
+        runTarget: { ...LOCAL, reasoningEffort },
+      });
+      expect(refusalCodeOf(resolved)).toBe(
+        CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable,
+      );
+    }
+    for (const reasoningEffort of ["high", null] as const) {
+      const { resolved } = await resolve({
+        runTarget: { ...LOCAL, reasoningEffort },
+      });
+      expect(resolved.isOk()).toBe(true);
+    }
   });
 
   test("a ready computer with the model takes the turn on the chosen harness", async () => {
@@ -311,6 +334,10 @@ describe("a thread's stored run target", () => {
       const target: ChatRunTarget = { ...LOCAL, approvals };
       expect(chatRunTargetOf(storedChatRunTarget(target))).toEqual(target);
     }
+    for (const reasoningEffort of DESKTOP_RUNNER_REASONING_EFFORTS) {
+      const target: ChatRunTarget = { ...LOCAL, reasoningEffort };
+      expect(chatRunTargetOf(storedChatRunTarget(target))).toEqual(target);
+    }
     expect(storedChatRunTarget({ kind: "cloud" })).toBeNull();
     expect(chatRunTargetOf(null)).toEqual({ kind: "cloud" });
   });
@@ -324,6 +351,7 @@ describe("a thread's stored run target", () => {
       { kind: "cloud" },
       { ...LOCAL, model: `${MODEL}-mini` },
       { ...LOCAL, approvals: "full_auto" },
+      { ...LOCAL, reasoningEffort: "high" },
     ] satisfies ChatRunTarget[]) {
       expect(sameChatRunTarget(LOCAL, other)).toBe(false);
       expect(sameChatRunTarget(other, LOCAL)).toBe(false);
@@ -335,6 +363,7 @@ describe("a thread's stored run target", () => {
       { ...LOCAL, harness: "opencode" },
       { ...LOCAL, model: "" },
       { ...LOCAL, approvals: "bypass" },
+      { ...LOCAL, reasoningEffort: "turbo" },
       "codex::gpt-5-codex",
       {},
     ]) {
@@ -342,7 +371,7 @@ describe("a thread's stored run target", () => {
     }
   });
 
-  test("a send that names no approval mode asks", () => {
+  test("a send that names no approval mode asks, and leaves the effort to the harness", () => {
     expect(
       v.parse(chatRunTargetSchema, {
         kind: "local",
