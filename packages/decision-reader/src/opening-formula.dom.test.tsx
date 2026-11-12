@@ -8,7 +8,7 @@ import {
 } from "@stll/legal-ast/decision-caption";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { renderReaderFixture } from "./decision-text.test";
+import { renderReaderFixture } from "../tests/reader-adapters";
 import {
   BlockRenderer,
   DecisionCaptionHeader,
