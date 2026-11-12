@@ -18,6 +18,9 @@
  * document whose parts the reading cannot tell apart says so in its result.
  */
 
+import { Result } from "better-result";
+
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -104,9 +107,9 @@ const declaredBold = (element: Element): boolean | undefined =>
     if (value === "normal" || value === "lighter") {
       return { value: false };
     }
-    const weight = Number(value);
-    return Number.isFinite(weight)
-      ? { value: weight >= BOLD_WEIGHT_THRESHOLD }
+    const weight = parseDecimalToken(value.trim(), { sign: "unsigned" });
+    return Result.isOk(weight)
+      ? { value: weight.value >= BOLD_WEIGHT_THRESHOLD }
       : undefined;
   })?.value;
 
