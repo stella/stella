@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
+import { Result } from "better-result";
 import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import {
   ASK_USER_SELECTION,
   type AskUserAnswer,
@@ -30,6 +32,7 @@ import {
   toggleLocalRunOption,
 } from "@stll/api-contract/chat-local-run-question";
 import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
+import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import {
   getCompleteConnectorInputRows,
   getReadableInputRows,
@@ -39,40 +42,55 @@ import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
 
-import { pendingInputKey } from "@/state/chat-pending-input";
+import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
+import type { WriteFailure } from "@/components/write-failure";
+import type { AccessTokenSource } from "@/connection/session";
+import { useSession } from "@/connection/session-provider";
+import { compileDraftDocument } from "@/state/chat-documents";
+import {
+  allowedWithGrant,
+  grantableApproval,
+  pendingInputKey,
+} from "@/state/chat-pending-input";
 import type {
+  ElsewhereReason,
   PendingAnswer,
   PendingApproval,
-  PendingAsk,
+  PendingDocument,
   PendingInput,
 } from "@/state/chat-pending-input";
+import { storeToolGrant } from "@/state/chat-tool-grants";
 
 /** Why the card's last answer did not continue the turn. */
 export type InputNotice = "failed" | "alreadyAnswered";
 
 /**
  * What a paused turn waits for, answered from the phone: the calls it asks
- * to run, allowed or denied, the model's clarifying questions, or the
- * question a coding agent on the person's computer asked, each with its
- * options and the person's own words. Input only
- * the web app can give is named as such. `busy` holds the card while an
- * answer is on its way.
+ * to run (allowed once, for the conversation, always, or denied), the
+ * model's clarifying questions, the drafts it wrote, which the phone
+ * compiles, or the question a coding agent on the person's computer asked.
+ * A step only another place can take says which place and why. `busy`
+ * holds the card while an answer is on its way.
  */
 export const ChatInputCard = ({
   busy,
   notice,
   onAnswer,
   pending,
+  source,
+  threadId,
 }: {
   busy: boolean;
   notice: InputNotice | undefined;
   onAnswer: (answer: PendingAnswer) => void;
   pending: PendingInput | null;
+  source: AccessTokenSource;
+  threadId: string;
 }) => {
   const t = useTranslations("chat");
   if (pending === null || pending.type === "elsewhere") {
     const said = [
-      pending === null ? undefined : t("answerNeedsInput"),
+      pending === null ? undefined : t(ELSEWHERE_NOTES[pending.reason]),
       notice === "alreadyAnswered" ? t("alreadyAnswered") : undefined,
     ].filter((line) => line !== undefined);
     return said.length === 0 ? null : (
@@ -91,13 +109,24 @@ export const ChatInputCard = ({
         // An earlier pause was answered already; this is the one after it.
         <Text variant="caption">{t("alreadyAnswered")}</Text>
       ) : null}
-      <PendingCard
-        busy={busy}
-        // A new pause starts with nothing entered; the same one keeps it.
-        key={pendingInputKey(pending)}
-        onAnswer={onAnswer}
-        pending={pending}
-      />
+      {pending.type === "steps" ? (
+        <StepsCard
+          busy={busy}
+          // A new pause starts with nothing entered; the same one keeps it.
+          key={pendingInputKey(pending)}
+          onAnswer={onAnswer}
+          pending={pending}
+          source={source}
+          threadId={threadId}
+        />
+      ) : (
+        <QuestionCard
+          busy={busy}
+          key={pendingInputKey(pending)}
+          onAnswer={onAnswer}
+          pause={pending.pause}
+        />
+      )}
       {notice === "failed" ? (
         <Text variant="error">{t("answerSendFailed")}</Text>
       ) : null}
@@ -105,50 +134,47 @@ export const ChatInputCard = ({
   );
 };
 
-/** The card for one kind of pause. */
-const PendingCard = ({
+/** Where each step only another place takes is finished, and why. */
+const ELSEWHERE_NOTES = {
+  browser: "elsewhereBrowser",
+  secret: "elsewhereSecret",
+  connector: "elsewhereConnector",
+  other: "elsewhereOther",
+} as const satisfies Record<ElsewhereReason, string>;
+
+type AskDrafts = Readonly<
+  Record<string, Readonly<Record<number, AskUserDraft>>>
+>;
+
+const draftsOfAsk = (drafts: AskDrafts, interruptId: string) =>
+  Object.hasOwn(drafts, interruptId) ? (drafts[interruptId] ?? {}) : {};
+
+/**
+ * The steps of one model turn, answered together as the server takes them:
+ * each call it asks to run, its clarifying questions (option chips, several
+ * on a multiple-choice question with Select all, or the person's own words),
+ * and the drafts it wrote, which the phone compiles as it answers. A lone
+ * approval is answered with its button; a lone draft is compiled and sent
+ * as soon as the card shows it, as the web settles one; anything else goes
+ * with Submit once every step has its answer.
+ */
+const StepsCard = ({
   busy,
   onAnswer,
   pending,
+  source,
+  threadId,
 }: {
   busy: boolean;
   onAnswer: (answer: PendingAnswer) => void;
-  pending: Exclude<PendingInput, { type: "elsewhere" }>;
-}) => {
-  if (pending.type === "approvals") {
-    return (
-      <ApprovalsCard
-        approvals={pending.approvals}
-        busy={busy}
-        onAnswer={onAnswer}
-      />
-    );
-  }
-  if (pending.type === "ask-user") {
-    return <AskUserCard asks={pending.asks} busy={busy} onAnswer={onAnswer} />;
-  }
-  return <QuestionCard busy={busy} onAnswer={onAnswer} pause={pending.pause} />;
-};
-
-/**
- * The model's clarifying questions, as the web's card asks them: each
- * question with its option chips (several of them on a multiple-choice
- * question, with Select all), and the person's own words in place of the
- * options. Submit answers them all at once, as the server takes them.
- */
-const AskUserCard = ({
-  asks,
-  busy,
-  onAnswer,
-}: {
-  asks: readonly PendingAsk[];
-  busy: boolean;
-  onAnswer: (answer: PendingAnswer) => void;
+  pending: Extract<PendingInput, { type: "steps" }>;
+  source: AccessTokenSource;
+  threadId: string;
 }) => {
   const t = useTranslations("chat");
-  const [drafts, setDrafts] = useState<
-    Readonly<Record<string, Readonly<Record<number, AskUserDraft>>>>
-  >(() =>
+  const { approvals, asks, documents } = pending;
+  const [allowed, setAllowed] = useState<Readonly<Record<string, boolean>>>({});
+  const [drafts, setDrafts] = useState<AskDrafts>(() =>
     Object.fromEntries(
       asks.map(({ interruptId, questions }) => [
         interruptId,
@@ -156,29 +182,95 @@ const AskUserCard = ({
       ]),
     ),
   );
-  const draftsOf = (interruptId: string) =>
-    Object.hasOwn(drafts, interruptId) ? (drafts[interruptId] ?? {}) : {};
-  const answers = asks.flatMap(({ interruptId, questions }) => {
-    const given = askUserAnswersOf(questions, draftsOf(interruptId));
-    return given === null ? [] : [[interruptId, given] as const];
+  const asked = asks.flatMap(({ interruptId, questions }) => {
+    const answers = askUserAnswersOf(
+      questions,
+      draftsOfAsk(drafts, interruptId),
+    );
+    return answers === null ? [] : [[interruptId, answers] as const];
   });
-  const complete = answers.length === asks.length;
+  const decided = approvals.every(({ interruptId }) =>
+    Object.hasOwn(allowed, interruptId),
+  );
+  const complete = decided && asked.length === asks.length;
+  const loneApproval = approvals.length === 1 && asks.length === 0;
+
+  const send = (decisions: Readonly<Record<string, boolean>>) => {
+    onAnswer({
+      type: "steps",
+      allowed: decisions,
+      asked: Object.fromEntries<readonly AskUserAnswer[]>(asked),
+      documents: compiledDocuments(documents, t("documentFailed")),
+    });
+  };
+  const decide = (decisions: Readonly<Record<string, boolean>>) => {
+    if (loneApproval) {
+      send(decisions);
+      return;
+    }
+    setAllowed(decisions);
+  };
+
+  // A turn that only waits for its drafts asks the person nothing: they are
+  // compiled and sent at once.
+  const sendDrafts = useEffectEvent(() => {
+    send({});
+  });
+  const onlyDrafts = approvals.length === 0 && asks.length === 0;
+  useEffect(() => {
+    if (onlyDrafts) {
+      sendDrafts();
+    }
+  }, [onlyDrafts]);
 
   return (
     <View className="gap-4">
-      <Text variant="label">{t("questionTitle")}</Text>
+      {approvals.map((approval) => (
+        <ApprovalRow
+          approval={approval}
+          busy={busy}
+          decision={
+            Object.hasOwn(allowed, approval.interruptId)
+              ? allowed[approval.interruptId]
+              : undefined
+          }
+          key={approval.interruptId}
+          onDecide={(approved) => {
+            decide({ ...allowed, [approval.interruptId]: approved });
+          }}
+          onGranted={() => {
+            // The grant lands after a request, while other approvals may
+            // have been decided: it is applied to the decisions as they are
+            // now, never to the ones it started from.
+            const granted = (current: Readonly<Record<string, boolean>>) =>
+              allowedWithGrant(
+                approvals,
+                { ...current, [approval.interruptId]: true },
+                approval.toolName,
+              );
+            if (loneApproval) {
+              send(granted({}));
+              return;
+            }
+            setAllowed(granted);
+          }}
+          source={source}
+          threadId={threadId}
+        />
+      ))}
+      {asks.length === 0 ? null : (
+        <Text variant="label">{t("questionTitle")}</Text>
+      )}
       {asks.flatMap(({ interruptId, questions }) =>
         questions.map((question, index) => (
           <AskUserField
             busy={busy}
-            draft={askUserDraftOf(draftsOf(interruptId), index)}
+            draft={askUserDraftOf(draftsOfAsk(drafts, interruptId), index)}
             // A question is answered by its place in its ask.
             key={`${interruptId}:${String(index)}`}
             onChange={(next) => {
               setDrafts((current) => {
-                const ask = Object.hasOwn(current, interruptId)
-                  ? (current[interruptId] ?? {})
-                  : {};
+                const ask = draftsOfAsk(current, interruptId);
                 return {
                   ...current,
                   [interruptId]: {
@@ -192,23 +284,41 @@ const AskUserCard = ({
           />
         )),
       )}
-      <Button
-        className="self-start"
-        disabled={busy || !complete}
-        loading={busy}
-        onPress={() => {
-          onAnswer({
-            type: "ask-user",
-            answers: Object.fromEntries<readonly AskUserAnswer[]>(answers),
-          });
-        }}
-        size="sm"
-      >
-        {t("submitAnswers")}
-      </Button>
+      {documents.map(({ input, interruptId }) => (
+        <Text key={interruptId} variant="caption">
+          {`${t("documentPreparing")}: ${input.name}`}
+        </Text>
+      ))}
+      {/* A lone approval is answered with its buttons; drafts alone are sent
+          as the card shows, and Submit sends them again after a failure. */}
+      {loneApproval ? null : (
+        <Button
+          className="self-start"
+          disabled={busy || !complete}
+          loading={busy}
+          onPress={() => {
+            send(allowed);
+          }}
+          size="sm"
+        >
+          {t("submitAnswers")}
+        </Button>
+      )}
     </View>
   );
 };
+
+/** Each draft compiled as the web compiles it, by its interrupt. */
+const compiledDocuments = (
+  documents: readonly PendingDocument[],
+  failedMessage: string,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    documents.map(({ input, interruptId }) => [
+      interruptId,
+      compileDraftDocument(input, failedMessage),
+    ]),
+  );
 
 /** One of the model's questions: its option chips, or the person's own words. */
 const AskUserField = ({
@@ -311,79 +421,32 @@ const AskUserField = ({
 };
 
 /**
- * The calls a turn asks to run. One call is answered with its button; for
- * several, each is decided and the decisions go together, as the server
- * takes them.
+ * One call to allow or deny: what it is, what it was given, and the
+ * answers the web offers. A tool a stored grant may cover is also allowed
+ * for the conversation or always; the grant is stored first, and the call
+ * is allowed once the server has it. A browser command says where it runs.
  */
-const ApprovalsCard = ({
-  approvals,
-  busy,
-  onAnswer,
-}: {
-  approvals: readonly PendingApproval[];
-  busy: boolean;
-  onAnswer: (answer: PendingAnswer) => void;
-}) => {
-  const t = useTranslations("chat");
-  const [allowed, setAllowed] = useState<Readonly<Record<string, boolean>>>({});
-  const single = approvals.length === 1;
-  const decide = (interruptId: string, approved: boolean) => {
-    const next = { ...allowed, [interruptId]: approved };
-    if (single) {
-      onAnswer({ type: "approvals", allowed: next });
-      return;
-    }
-    setAllowed(next);
-  };
-  const decided = approvals.every(({ interruptId }) =>
-    Object.hasOwn(allowed, interruptId),
-  );
-
-  return (
-    <View className="gap-4">
-      {approvals.map((approval) => (
-        <ApprovalRow
-          approval={approval}
-          busy={busy}
-          decision={
-            Object.hasOwn(allowed, approval.interruptId)
-              ? allowed[approval.interruptId]
-              : undefined
-          }
-          key={approval.interruptId}
-          onDecide={(approved) => {
-            decide(approval.interruptId, approved);
-          }}
-        />
-      ))}
-      {single ? null : (
-        <Button
-          disabled={busy || !decided}
-          loading={busy}
-          onPress={() => {
-            onAnswer({ type: "approvals", allowed });
-          }}
-        >
-          {t("submitAnswers")}
-        </Button>
-      )}
-    </View>
-  );
-};
-
-/** One call to allow or deny: what it is, what it was given, and the two answers. */
 const ApprovalRow = ({
   approval,
   busy,
   decision,
   onDecide,
+  onGranted,
+  source,
+  threadId,
 }: {
   approval: PendingApproval;
   busy: boolean;
   decision: boolean | undefined;
   onDecide: (approved: boolean) => void;
+  onGranted: () => void;
+  source: AccessTokenSource;
+  threadId: string;
 }) => {
   const t = useTranslations("chat");
+  const { end } = useSession();
+  const [granting, setGranting] = useState<ChatToolGrantScope>();
+  const [failure, setFailure] = useState<WriteFailure | null>(null);
   const rowOptions = {
     emptyLabel: t("inputEmpty"),
     input: approval.input,
@@ -395,6 +458,29 @@ const ApprovalRow = ({
     approval.toolName === USE_CONNECTOR_SECRET_TOOL_NAME
       ? getCompleteConnectorInputRows(rowOptions)
       : getReadableInputRows(rowOptions);
+  const held = busy || granting !== undefined;
+
+  const grant = async (scope: ChatToolGrantScope) => {
+    setGranting(scope);
+    setFailure(null);
+    const stored = await storeToolGrant({
+      fetch,
+      scope,
+      source,
+      threadId,
+      toolName: approval.toolName,
+    });
+    setGranting(undefined);
+    if (Result.isOk(stored)) {
+      onGranted();
+      return;
+    }
+    if (stored.error._tag === "SignedOutError") {
+      end(source);
+      return;
+    }
+    setFailure(writeFailure(stored.error));
+  };
 
   return (
     <View className="gap-2">
@@ -408,9 +494,12 @@ const ApprovalRow = ({
           <Text selectable>{row.value}</Text>
         </View>
       ))}
+      {approval.toolName === BROWSER_CONTROL_TOOL_NAME ? (
+        <Text variant="caption">{t("approvalBrowserNote")}</Text>
+      ) : null}
       <View className="flex-row flex-wrap gap-2">
         <Button
-          disabled={busy}
+          disabled={held}
           onPress={() => {
             onDecide(true);
           }}
@@ -420,8 +509,34 @@ const ApprovalRow = ({
         >
           {t("approvalAllowOnce")}
         </Button>
+        {grantableApproval(approval.toolName) ? (
+          <>
+            <Button
+              disabled={held}
+              loading={granting === "conversation"}
+              onPress={() => {
+                void grant("conversation");
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {t("approvalAllowInConversation")}
+            </Button>
+            <Button
+              disabled={held}
+              loading={granting === "always"}
+              onPress={() => {
+                void grant("always");
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {t("approvalAlwaysAllow")}
+            </Button>
+          </>
+        ) : null}
         <Button
-          disabled={busy}
+          disabled={held}
           onPress={() => {
             onDecide(false);
           }}
@@ -432,6 +547,7 @@ const ApprovalRow = ({
           {t("approvalDeny")}
         </Button>
       </View>
+      <WriteFailureNotice failure={failure} message={t("grantFailed")} />
     </View>
   );
 };

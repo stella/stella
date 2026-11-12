@@ -324,7 +324,30 @@ describe("which routes an API access token opens", () => {
       "GET /v1/chat/threads/:threadId/turns/:turnId/join",
       "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
       "GET /v1/chat/runs/active",
+      "POST /v1/chat/tool-grants",
     ]);
+  });
+
+  test("a standing approval given in a conversation is stored at the chat scope", () => {
+    const grant = { method: "POST", route: "/v1/chat/tool-grants" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...grant, scopes: ["stella:chat"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...grant,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    // Listing and removing grants stay with signed-in browsers.
+    for (const [method, route] of [
+      ["GET", "/v1/chat/tool-grants"],
+      ["DELETE", "/v1/chat/tool-grants/:grantId"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: MOBILE_SCOPES }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
   });
 
   test("the chats list's active runs open at the chat scope", () => {

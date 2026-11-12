@@ -1882,6 +1882,7 @@
         "$TURBO_ROOT$/apps/web/src/routes/auth/route.tsx",
         "$TURBO_ROOT$/apps/web/src/components/workspace-primary-nav.ts",
         "$TURBO_ROOT$/apps/web/src/components/sidebar-user-menu.tsx",
+        "$TURBO_ROOT$/apps/web/src/components/chat/__fixtures__/recorded-conversations/**",
         "$TURBO_ROOT$/packages/ui/src/**"
       ]
     },
