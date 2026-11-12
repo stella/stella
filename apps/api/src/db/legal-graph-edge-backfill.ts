@@ -1,5 +1,5 @@
 /**
- * Online repair behind migration 20261112054148_legal_graph_edges.
+ * Online repair behind migration 20261112112228_legal_graph_edges.
  *
  * Derives the graph's `cites` and `sourced-from` edges for every claim,
  * re-check and fact Spot written before the writers existed, through the
@@ -422,7 +422,7 @@ export const createLegalGraphEdgeBackfill = ({
   now = () => Temporal.Now.instant().epochMilliseconds,
 }: { now?: () => number } = {}) =>
   ({
-    introducedBy: "20261112054148_legal_graph_edges",
+    introducedBy: "20261112112228_legal_graph_edges",
     name: REPAIR_NAME,
     readCompletion: async (connection) => {
       const checkpoint = await readCheckpoint(connection);
