@@ -107,6 +107,7 @@ const graphInputArbitrary: fc.Arbitrary<GraphInput> = fc
     const claimInputs: GraphClaimInput[] = claims.map((claim, index) => {
       const conflict = claim.conflict;
       const pair = conflict?.pair.map(factId);
+      const governs = conflict?.governs ?? null;
       return {
         id: claimId(index),
         runId: runId(claim.statement % statementCount),
@@ -127,9 +128,9 @@ const graphInputArbitrary: fc.Arbitrary<GraphInput> = fc
                 governingStates: conflict.states,
               },
         governingFactId:
-          conflict === null || conflict.governs === null || pair === undefined
+          governs === null || pair === undefined
             ? null
-            : (pair[conflict.governs] ?? null),
+            : (pair[governs] ?? null),
         reviewStatus: null,
         qualifiers: [],
       };

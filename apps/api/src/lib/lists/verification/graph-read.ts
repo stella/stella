@@ -166,7 +166,10 @@ const readStatementRows = async ({
       desc(runs.id),
     )
     .limit(VERIFICATION_LIMITS.GRAPH_STATEMENTS_PAGE_MAX + 1);
-  if (cursor === null || cursor.afterPosition === null) {
+  if (cursor === null) {
+    return rows;
+  }
+  if (cursor.afterPosition === null) {
     return rows;
   }
   // A page resumed inside a document finishes the run it started on, if
