@@ -771,7 +771,7 @@ const separateOpeningFormula = ({
     id: makeId(),
     anchorId: makeAnchor("p-formula"),
     type: "paragraph",
-    role: "intro",
+    role: "opening-formula",
     inlines: formulaInlines,
     plainText: plainTextOf(formulaInlines).trim(),
   });
@@ -822,7 +822,7 @@ const classifyLines = (lines: readonly ReadPdfLine[]): Block[] => {
         id: makeId(),
         anchorId: makeAnchor(`p${++blockCount}`),
         type: "paragraph",
-        role: "intro",
+        role: "opening-formula",
         inlines: line.inlines,
         plainText: text,
       });
