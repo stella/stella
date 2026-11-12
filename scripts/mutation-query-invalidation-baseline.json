@@ -530,11 +530,7 @@
     "apps/web/src/features/avt/original-pdf-view.tsx:OriginalPdfView/pagesQuery:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/avt/queries.ts:latestVerificationsOptions:queryOptions:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/avt/queries.ts:originalPdfPagesOptions:queryOptions:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
-    "apps/web/src/features/avt/queries.ts:reviewHistoryOptions:infiniteQueryOptions:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/avt/queries.ts:verificationHistoryOptions:infiniteQueryOptions:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
-    "apps/web/src/features/avt/queries.ts:verificationRunOptions:queryOptions:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
-    "apps/web/src/features/avt/review-history.tsx:HistoryEntries/history:useInfiniteQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
-    "apps/web/src/features/avt/review-history.tsx:ReviewerFilter/history:useInfiniteQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/avt/run-history-picker.tsx:RunHistoryPicker/history:useInfiniteQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/avt/use-claim-comments.ts:useClaimComments/view:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/avt/use-claim-comments.ts:useClaimComments:useOptimisticAnnotationMutations:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
@@ -542,8 +538,6 @@
     "apps/web/src/features/avt/use-claim-gap-actions.ts:useClaimGapActions/addFact:useMutation:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
     "apps/web/src/features/avt/use-claim-gap-actions.ts:useClaimGapActions/link:useMutation:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
     "apps/web/src/features/avt/use-claim-gap-actions.ts:useClaimGapActions/recheck:useMutation:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
-    "apps/web/src/features/avt/use-claim-review-actions.ts:useClaimReviewActions/bulk:useIdempotentMutation:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
-    "apps/web/src/features/avt/use-claim-review-actions.ts:useClaimReviewActions/record:useIdempotentMutation:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
     "apps/web/src/features/avt/use-fact-detail-actions.ts:useFactDetailActions/save:useMutation:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
     "apps/web/src/features/avt/use-load-sample-case.ts:useLoadSampleCase/updateView:useUpdateView:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
     "apps/web/src/features/avt/use-load-sample-case.ts:useLoadSampleCase:useMutation:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
@@ -551,9 +545,7 @@
     "apps/web/src/features/avt/use-source-kinds.ts:useSetSourceKind:useMutation:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
     "apps/web/src/features/avt/use-start-verification.ts:useStartVerification/start/latest:queryClient.query:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/avt/verification-detail.tsx:VerificationDetail/filesQuery:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
-    "apps/web/src/features/avt/verification-detail.tsx:VerificationDetail:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/avt/verification-detail.tsx:VerifyAgain/verification:useStartVerification:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
-    "apps/web/src/features/avt/verification-view.tsx:VerificationView:useClaimReviewActions:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
     "apps/web/src/features/case-law/components/case-decision-details-inspector-view.tsx:CaseDecisionDetailsInspectorView/decisionQuery:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx:CaseDecisionInspectorView/analysis:useLazyDecisionAnalysis:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
     "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx:CaseDecisionInspectorView/analysis:useLazyDecisionAnalysis:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
@@ -1827,6 +1819,8 @@
     ],
     "addMcpServer": ["catalogueKeys.all", "knowledgeKeys.mcp.all"],
     "connectMcpServer": ["catalogueKeys.all", "knowledgeKeys.mcp.all"],
-    "saveMcpToken": ["catalogueKeys.all", "knowledgeKeys.mcp.all"]
+    "saveMcpToken": ["catalogueKeys.all", "knowledgeKeys.mcp.all"],
+    "recordClaimReview": ["avtKeys.reviewHistoryOfRun", "avtKeys.run"],
+    "acceptRoutineClaims": ["avtKeys.reviewHistoryOfRun", "avtKeys.run"]
   }
 }
