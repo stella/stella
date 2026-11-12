@@ -24,9 +24,11 @@ export type ParagraphRangeInput =
   | { type: "valid"; paragraphs: string }
   | { type: "invalid"; reason: DecisionParagraphRangeErrorReason };
 
-/** Read the run-start input; spaces around the dash are allowed. */
+/** Read the run-start input; spaces around the range and its dash are
+ *  allowed, a space inside a number (`1 2-13`) is not: dropping it would
+ *  check other paragraphs than the reviewer typed. */
 export const readParagraphRangeInput = (input: string): ParagraphRangeInput => {
-  const compact = input.replaceAll(/\s+/gu, "");
+  const compact = input.trim().replaceAll(/\s+(?=\D)|(?<=\D)\s+/gu, "");
   if (compact === "") {
     return { type: "empty" };
   }

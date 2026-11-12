@@ -63,6 +63,12 @@ describe("readParagraphRangeInput", () => {
       type: "invalid",
       reason: "garbage",
     });
+    // A space inside a number is refused, never closed up into another
+    // number: `1 2-13` is not paragraphs 12 to 13.
+    expect(readParagraphRangeInput("1 2-13")).toEqual({
+      type: "invalid",
+      reason: "garbage",
+    });
     expect(readParagraphRangeInput("  ")).toEqual({ type: "empty" });
   });
 });

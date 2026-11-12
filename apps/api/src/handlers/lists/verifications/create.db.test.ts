@@ -296,6 +296,8 @@ describe("a verification limited to a paragraph range", () => {
     { name: "a range starting at 0", patch: { from: 0 } },
     { name: "a reversed range", patch: { from: 9, to: 4 } },
     { name: "an unknown numbering", patch: { numbering: "guessed" } },
+    { name: "a range without its numbering", patch: { numbering: undefined } },
+    { name: "a null numbering", patch: { numbering: null } },
     { name: "a range without its edges", patch: { start: null } },
   ])("the database refuses $name", async ({ patch }) => {
     const refused = await testDb

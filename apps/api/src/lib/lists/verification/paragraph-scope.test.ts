@@ -48,6 +48,24 @@ describe("resolveParagraphScope", () => {
     });
   });
 
+  test("the last numbered paragraph stops at an annex that follows it", () => {
+    const blocks = [
+      docx("a", "I am a director of the company.", { label: "1." }),
+      docx("b", "I met the buyer in March.", { label: "2." }),
+      docx("c", "The payment was made on 10 August.", { label: "3." }),
+      docx("d", "I did not approve it.", { label: "4." }),
+      docx("e", "It was made without my knowledge."),
+      docx("h", "Annex A", { heading: true }),
+      docx("x", "The bank statement shows a transfer on 11 August."),
+    ];
+    const resolution = resolveParagraphScope(blocks, { from: 4, to: 4 });
+    expect(resolution.type === "resolved" && resolution.scope).toMatchObject({
+      start: { blockId: "d", offset: 0 },
+      // Paragraph 4 keeps its unnumbered text; the annex is outside it.
+      end: { blockId: "h", offset: 0 },
+    });
+  });
+
   test("counts paragraphs in order when the document numbers none", () => {
     const blocks = [
       docx("t", "Letter of instruction", { heading: true }),

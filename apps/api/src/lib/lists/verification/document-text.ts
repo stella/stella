@@ -102,8 +102,15 @@ export const readVerificationDocument = async ({
       fileId: file.fileId,
       mimeType: DOCX_MIME_TYPE,
     });
+    // Bounded and cancellable like the PDF read below, so a stalled read
+    // ends at the caller's deadline.
     const reviewer = await openScannedDocxReviewer(
-      await readStoredFile({ key, mimeType: DOCX_MIME_TYPE }),
+      await readStoredFile({
+        key,
+        mimeType: DOCX_MIME_TYPE,
+        maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+        signal,
+      }),
     );
     const blocks = reviewer
       .getContent()

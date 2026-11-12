@@ -52,6 +52,9 @@ type DocumentParagraph = {
    *  label first, a PDF paragraph's lines joined. */
   text: string;
   heading: boolean;
+  /** The document's own styles mark it a heading (Word's heading styles),
+   *  not a guess from a PDF line's shape. */
+  styledHeading: boolean;
 };
 
 type PdfLine = {
@@ -126,7 +129,13 @@ const pdfParagraphs = (
     const point = { blockIndex: line.blockIndex, offset: line.start };
     const end = { blockIndex: line.blockIndex, offset: line.end };
     if (open === null || join === LINE_JOIN.BREAK) {
-      open = { start: point, end, text: line.printed.text, heading: true };
+      open = {
+        start: point,
+        end,
+        text: line.printed.text,
+        heading: true,
+        styledHeading: false,
+      };
       paragraphs.push(open);
       continue;
     }
@@ -162,6 +171,7 @@ const docxParagraph = (
         ? block.text
         : `${label} ${block.text}`,
     heading: structure?.heading ?? false,
+    styledHeading: structure?.heading ?? false,
   };
 };
 
@@ -415,8 +425,17 @@ export const resolveParagraphScope = (
   }
   const lastIndex = counted[toPosition]?.index ?? -1;
   // The range closes where the next paragraph's section begins: before the
-  // headings that open it, after any unnumbered text of `to` itself.
-  let nextIndex = counted[toPosition + 1]?.index ?? paragraphs.length;
+  // headings that open it, after any unnumbered text of `to` itself. After
+  // the last numbered paragraph, a heading the document styles as one opens
+  // a section the numbering does not reach (an annex, a statement of truth),
+  // so the range closes there. A PDF line shaped like a heading is no such
+  // sign: a paragraph broken across a page reads the same.
+  const trailingHeading = paragraphs.findIndex(
+    ({ styledHeading }, index) => index > lastIndex && styledHeading,
+  );
+  let nextIndex =
+    counted[toPosition + 1]?.index ??
+    (trailingHeading === -1 ? paragraphs.length : trailingHeading);
   while (
     nextIndex - 1 > lastIndex &&
     paragraphs[nextIndex - 1]?.heading === true

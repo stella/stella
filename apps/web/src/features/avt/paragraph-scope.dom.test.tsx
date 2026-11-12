@@ -45,7 +45,19 @@ const range = {
 
 test("a run header names the paragraphs a range run checked", () => {
   const { container } = mount(range);
-  expect(container.textContent).toBe("¶ 82–136");
+  expect(container.querySelector("[aria-hidden]")?.textContent).toBe(
+    "¶ 82–136",
+  );
+  expect(container.querySelector(".sr-only")?.textContent).toBe(
+    "Checked paragraphs 82–136 only.",
+  );
+});
+
+test("a range counted in order says so to a screen reader, not only on hover", () => {
+  const { container } = mount({ ...range, numbering: "ordinal" });
+  expect(container.querySelector(".sr-only")?.textContent).toBe(
+    "Checked paragraphs 82–136 only, counted in order: this document does not number its paragraphs.",
+  );
 });
 
 test("a run over the whole document says nothing extra", () => {

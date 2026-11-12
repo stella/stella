@@ -271,6 +271,7 @@ export const legalListVerificationRuns = p.pgTable(
             AND jsonb_typeof(${table.scope}->'start'->'offset') = 'number'
             AND jsonb_typeof(${table.scope}->'end'->'blockId') = 'string'
             AND jsonb_typeof(${table.scope}->'end'->'offset') = 'number'
+            AND jsonb_typeof(${table.scope}->'numbering') = 'string'
           THEN (${table.scope}->>'from')::numeric >= 1
             AND (${table.scope}->>'to')::numeric >= (${table.scope}->>'from')::numeric
             AND ${table.scope}->>'numbering' IN (${PARAGRAPH_NUMBERING_SQL_VALUES})

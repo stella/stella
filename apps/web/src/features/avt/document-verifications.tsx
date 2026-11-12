@@ -3,7 +3,7 @@
  * one against the view's list, and whether the list reads it as testimony.
  */
 
-import { useId } from "react";
+import { useId, useState } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -17,7 +17,11 @@ import { Switch } from "@stll/ui/switch";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
-import { ParagraphRangeStart, ScopeMark } from "@/features/avt/paragraph-scope";
+import {
+  ParagraphRangeStart,
+  ScopeMark,
+  ScopeRefusalMessage,
+} from "@/features/avt/paragraph-scope";
 import {
   documentFileKey,
   latestVerificationsOptions,
@@ -251,6 +255,7 @@ const DocumentRow = ({
   const canVerify = usePermissions({ entity: ["update"] });
   // Every row's switch is called Testimony; the document's name says which.
   const nameId = useId();
+  const [rangeOpen, setRangeOpen] = useState(false);
   const active = latest?.status === "queued" || latest?.status === "running";
   const verifyDisabled =
     !canVerify || statusLoad !== "loaded" || active || starting;
@@ -269,6 +274,11 @@ const DocumentRow = ({
         </TruncatedText>
         {statusLoad === "loaded" && (
           <LatestRunSummary latest={latest} listId={listId} />
+        )}
+        {/* A refusal that arrives after the range field closed is said
+            here; while the field is open, it says so beside the input. */}
+        {scopeRefusal !== null && !rangeOpen && (
+          <ScopeRefusalMessage refusal={scopeRefusal} />
         )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -326,7 +336,9 @@ const DocumentRow = ({
           <ParagraphRangeStart
             disabled={verifyDisabled}
             onEdit={onRangeEdit}
+            onOpenChange={setRangeOpen}
             onVerify={(paragraphs) => onVerify({ ...target, paragraphs })}
+            open={rangeOpen}
             refusal={scopeRefusal}
             starting={starting}
           />

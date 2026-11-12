@@ -19,7 +19,7 @@ Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 
 const requests: Request[] = [];
 const unexpectedRequests: string[] = [];
-const answers: Response[] = [];
+const answers: (Response | Promise<Response>)[] = [];
 let fetchBoundary: Mock<typeof globalThis.fetch>;
 
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
@@ -143,7 +143,7 @@ beforeEach(() => {
         if (answer === undefined) {
           return panic("No verification response seeded");
         }
-        return answer;
+        return await answer;
       },
       { preconnect: () => undefined },
     ),
@@ -338,6 +338,37 @@ test("a typed range starts a run over those paragraphs only", async () => {
     ...target,
     paragraphs: "82-136",
   });
+});
+
+test("a refusal that arrives after the field closed is said in the document's row", async () => {
+  const { promise: answer, resolve } = Promise.withResolvers<Response>();
+  answers.push(answer);
+  const { messages } = mountDocuments();
+  const { popup, input, submit } = await openRange(messages);
+  fireEvent.change(input, { target: { value: "82-136" } });
+  fireEvent.click(submit);
+  fireEvent.keyDown(popup, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
+  resolve(
+    Response.json(
+      {
+        code: "verification_paragraphs_not_found",
+        message: "Paragraph 136 is not in this document.",
+        hint: "Its paragraphs run from 1 to 120.",
+      },
+      { status: 422 },
+    ),
+  );
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toBe(messages.avt.scope.errors.notFound);
+  expect(notice).not.toHaveBeenCalled();
+  // Open again, the field says it and the row no longer repeats it.
+  const reopened = await openRange(messages);
+  expect(
+    within(reopened.popup).queryByText(messages.avt.scope.errors.notFound) ===
+      null,
+  ).toBe(false);
+  expect(screen.queryByRole("alert") === null).toBe(true);
 });
 
 test("a range the document does not have is said beside the field, not as a toast", async () => {

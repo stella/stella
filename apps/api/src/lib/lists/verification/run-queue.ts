@@ -615,16 +615,20 @@ const resolveRunningActorAccess = async (
       }),
   );
 
-/** The text a run reads, or null when it may read none: too many blocks,
- *  or a stored range that no longer lands in the document (a range never
- *  widens to the whole document). */
+/** The text a run reads, or null when it may read none: more blocks than
+ *  a run stores, or a stored range that no longer lands in the document (a
+ *  range never widens to the whole document). Only the blocks the range
+ *  reads are stored, so a range of a long document fits. */
 const runPassages = (
   blocks: readonly VerificationBlock[],
   scope: VerificationScope,
-) =>
-  blocks.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX
+) => {
+  const passages = scopePassages(blocks, scope);
+  return passages === null ||
+    passages.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX
     ? null
-    : scopePassages(blocks, scope);
+    : passages;
+};
 
 /** Trusted process-local I/O boundaries; never sourced from queued data. */
 type VerificationExecutionBoundaries = {

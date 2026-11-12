@@ -20,6 +20,7 @@ ALTER TABLE "legal_list_verification_runs" ADD CONSTRAINT "legal_list_verificati
         AND jsonb_typeof("scope"->'start'->'offset') = 'number'
         AND jsonb_typeof("scope"->'end'->'blockId') = 'string'
         AND jsonb_typeof("scope"->'end'->'offset') = 'number'
+        AND jsonb_typeof("scope"->'numbering') = 'string'
       THEN ("scope"->>'from')::numeric >= 1
         AND ("scope"->>'to')::numeric >= ("scope"->>'from')::numeric
         AND "scope"->>'numbering' IN ('document', 'ordinal')

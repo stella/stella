@@ -55,6 +55,9 @@ type ScopeErrorKey =
 type ParagraphRangeStartProps = {
   disabled: boolean;
   starting: boolean;
+  /** Owned by the row, which shows a refusal beside it while closed. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   /** Why the server refused this document's last range, if it did. */
   refusal: VerificationScopeRefusal | null;
   onVerify: (paragraphs: string) => void;
@@ -66,6 +69,8 @@ type ParagraphRangeStartProps = {
 export const ParagraphRangeStart = ({
   disabled,
   starting,
+  open,
+  onOpenChange,
   refusal,
   onVerify,
   onEdit,
@@ -73,7 +78,6 @@ export const ParagraphRangeStart = ({
   const t = useTranslations();
   const inputId = React.useId();
   const errorId = React.useId();
-  const [open, setOpen] = React.useState(false);
   const [value, setValue] = React.useState("");
   const [submitted, setSubmitted] = React.useState(false);
   const input = readParagraphRangeInput(value);
@@ -88,7 +92,7 @@ export const ParagraphRangeStart = ({
   })();
 
   return (
-    <Popover onOpenChange={setOpen} open={open}>
+    <Popover onOpenChange={onOpenChange} open={open}>
       <PopoverTrigger
         render={
           <Button
@@ -151,8 +155,9 @@ export const ParagraphRangeStart = ({
   );
 };
 
-/** Why the server refused a range, where the range was asked for again
- *  without its field (verifying a failed range run again). */
+/** Why the server refused a range, where its field is not open: verifying
+ *  a failed range run again, or a refusal that arrived after the reviewer
+ *  closed the field. */
 export const ScopeRefusalMessage = ({
   refusal,
 }: {
@@ -180,6 +185,10 @@ export const ScopeMark = ({ scope }: { scope: VerificationScope }) => {
     range,
     num: (chunks: React.ReactNode) => <bdi dir="ltr">{chunks}</bdi>,
   };
+  const explanation =
+    scope.numbering === "document"
+      ? t.rich("avt.scope.checkedDocument", values)
+      : t.rich("avt.scope.checkedOrdinal", values);
   return (
     <Tooltip>
       <TooltipTrigger
@@ -187,13 +196,12 @@ export const ScopeMark = ({ scope }: { scope: VerificationScope }) => {
           <span className="text-muted-foreground shrink-0 text-xs tabular-nums" />
         }
       >
-        {t.rich("avt.scope.mark", values)}
+        {/* The mark alone reads as the document's own numbers; a screen
+            reader hears how they were counted, as the tooltip says. */}
+        <span aria-hidden>{t.rich("avt.scope.mark", values)}</span>
+        <span className="sr-only">{explanation}</span>
       </TooltipTrigger>
-      <TooltipPopup>
-        {scope.numbering === "document"
-          ? t.rich("avt.scope.checkedDocument", values)
-          : t.rich("avt.scope.checkedOrdinal", values)}
-      </TooltipPopup>
+      <TooltipPopup>{explanation}</TooltipPopup>
     </Tooltip>
   );
 };
