@@ -156,7 +156,10 @@ const countAsReviewed = async <Run extends CountedRun>({
         ),
       ),
     )
-    .limit(eventsByClaim.size);
+    // Bounded by the runs' claims, not by the events read above: a review
+    // committed between the two reads may add a claim the subquery sees, and
+    // the loop skips any claim without events read.
+    .limit(runIds.length * VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX);
   const countsByRun = new Map(runs.map((run) => [run.id, { ...run }] as const));
   for (const claim of claims) {
     const counts = countsByRun.get(claim.runId);
