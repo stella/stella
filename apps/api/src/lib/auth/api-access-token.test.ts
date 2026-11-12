@@ -174,6 +174,14 @@ describe("which routes an API access token opens", () => {
     ).toEqual([]);
   });
 
+  test("the mobile app asks for no administrative consent", () => {
+    expect(
+      MOBILE_SCOPES.filter((scope) =>
+        ["stella:admin_read", "stella:admin_write"].includes(scope),
+      ),
+    ).toEqual([]);
+  });
+
   test("a new document version needs the documents write scope", () => {
     const route = "/v1/entities/:workspaceId/upload-version";
     expect(
@@ -238,7 +246,7 @@ describe("which routes an API access token opens", () => {
     }
   });
 
-  test("a matter's settings change with the matters scope, its members only with the admin one", () => {
+  test("a matter's settings and members change with the matters scope", () => {
     const admit = (method: string, route: string, scopes: string[]) =>
       admitApiAccessTokenRoute({ method, route, scopes });
     for (const route of [
@@ -257,25 +265,19 @@ describe("which routes an API access token opens", () => {
       ["POST", "/v1/workspaces/:workspaceId/duplicate"],
       ["PUT", "/v1/workspaces/:workspaceId/contacts"],
       ["DELETE", "/v1/workspaces/:workspaceId/contacts/:workspaceContactId"],
+      // Who works on the matter is a matter edit, not an admin one.
+      ["PUT", "/v1/workspaces/:workspaceId/members"],
+      ["DELETE", "/v1/workspaces/:workspaceId/members/:userId"],
     ] as const) {
       expect(admit(method, route, ["stella:read"])).toEqual({
         admitted: false,
         reason: "scope",
       });
-      expect(admit(method, route, ["stella:matters_write"])).toEqual({
-        admitted: true,
-      });
-    }
-    // Granting or revoking access to a matter is an admin act: the matters
-    // scope alone does not reach it.
-    for (const [method, route] of [
-      ["PUT", "/v1/workspaces/:workspaceId/members"],
-      ["DELETE", "/v1/workspaces/:workspaceId/members/:userId"],
-    ] as const) {
-      expect(
-        admit(method, route, ["stella:read", "stella:matters_write"]),
-      ).toEqual({ admitted: false, reason: "scope" });
       expect(admit(method, route, ["stella:admin_write"])).toEqual({
+        admitted: false,
+        reason: "scope",
+      });
+      expect(admit(method, route, ["stella:matters_write"])).toEqual({
         admitted: true,
       });
     }

@@ -145,15 +145,14 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/workspaces/duplicate.ts",
   },
-  // Who can open the matter: adding or removing a member grants or revokes
-  // access to privileged material, so it takes the admin consent the
-  // matching MCP tools take, not a matter write.
+  // Who works on the matter: a matter edit, gated by the same matter update
+  // permission the web's members section needs.
   "PUT /v1/workspaces/:workspaceId/members": {
-    scope: "stella:admin_write",
+    scope: "stella:matters_write",
     handler: "apps/api/src/handlers/workspaces/members/add.ts",
   },
   "DELETE /v1/workspaces/:workspaceId/members/:userId": {
-    scope: "stella:admin_write",
+    scope: "stella:matters_write",
     handler: "apps/api/src/handlers/workspaces/members/remove.ts",
   },
   // The matter's other parties, each a contact in a role.
