@@ -565,6 +565,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Undos of an organization-scoped runner's chat folders; the undo routes read the turn through current chat and matter access.",
   "search_history_entries.user_id":
     "The person's own organization-scoped search history; they stay an organization member.",
+  "search_history_country_clears.user_id":
+    "Organization-scoped country clear barriers outlive a matter removal.",
   "search_history_owners.user_id":
     "Organization-scoped history ordering state outlives a matter removal.",
   "search_history_tombstones.user_id":

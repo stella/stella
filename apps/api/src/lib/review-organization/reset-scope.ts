@@ -180,6 +180,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "search_document_preview_passages",
   "search_documents",
   "search_history_entries",
+  "search_history_country_clears",
   "search_history_tombstones",
   "search_history_owners",
   "search_projection_repair_queue",
@@ -231,6 +232,8 @@ export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_R
     // The member's standing approvals, for websites and for tools: both
     // member-scoped, keyed on the same member and organization.
     ["chat_browser_site_grants", "chat_tool_grants"],
+    // Independent search history deletion barriers under one owner policy.
+    ["search_history_country_clears", "search_history_tombstones"],
   ];
 
 /**
