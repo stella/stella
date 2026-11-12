@@ -16,7 +16,6 @@ export const SHARED_LEDGER_PATHS = [
   "packages/property-testing/property-seeds.json",
   "scripts/app-boundary-exceptions.json",
   "scripts/calendar-day-ledger.json",
-  "scripts/chat-fixture-guard-ledger.json",
   "scripts/contract-domain-ledger.json",
   "scripts/dead-columns.allowlist.json",
   "scripts/fill-diagnostics-ledger.json",
