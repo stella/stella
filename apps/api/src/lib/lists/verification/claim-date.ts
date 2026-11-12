@@ -20,6 +20,7 @@
 
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { normalizeUnicode } from "@stll/text-normalize";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -158,7 +159,9 @@ const pattern = (source: string, read: Pattern["read"]): Pattern => ({
 });
 
 const number = (value: string | undefined): number | null =>
-  value === undefined ? null : Number.parseInt(value, 10);
+  value === undefined
+    ? null
+    : parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(null);
 
 /** A month name as written, or null when it is not one: English month names
  *  are capitalised, so "may" and "march" stay verbs. */
@@ -303,11 +306,15 @@ const IDENTIFIER_WORDS = new Set([
   "version",
 ]);
 
-const PREVIOUS_WORD = /(\p{L}+)\.?\s*$/u;
+const NOT_A_LETTER = /\P{L}/u;
 
+/** The word just before `start`, a trailing dot dropped ("No. 2021"). */
 const followsIdentifierWord = (text: string, start: number): boolean => {
-  const word = PREVIOUS_WORD.exec(text.slice(Math.max(0, start - 24), start));
-  return word?.[1] !== undefined && IDENTIFIER_WORDS.has(word[1].toLowerCase());
+  const before = text.slice(Math.max(0, start - 24), start).trimEnd();
+  const word = (before.endsWith(".") ? before.slice(0, -1) : before)
+    .split(NOT_A_LETTER)
+    .at(-1);
+  return word !== undefined && IDENTIFIER_WORDS.has(word.toLowerCase());
 };
 
 type Match = { start: number; end: number; mentions: Mention[] };
