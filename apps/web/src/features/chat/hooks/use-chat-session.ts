@@ -19,6 +19,7 @@ import type {
   ConnectConnectorDecision,
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
@@ -66,7 +67,6 @@ import {
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
 import {
-  buildCreateDocumentDownloadFileName,
   buildCreateDocumentDraftPayload,
   CREATE_DOCUMENT_DRAFT_VIEW,
   type CreateDocumentDraft,
@@ -1857,6 +1857,8 @@ export const useChatSession = ({
     stop,
     leave,
     isGenerating,
+    /** A stop was asked for and the turn has not ended yet. */
+    stopPending: stopState.status === "pending",
     turnAbandoned,
     computerWait,
     turnSentAt,

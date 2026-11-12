@@ -86,6 +86,9 @@ struct StoredLink {
   volume: String,
 }
 
+/// A folder [`LinkedFolders::probe`] found fit to link, not yet linked.
+pub struct LinkCandidate(StoredLink);
+
 #[derive(Serialize, Deserialize, Default)]
 struct StoredLinks {
   links: Vec<StoredLink>,
@@ -218,15 +221,29 @@ impl LinkedFolders {
     }
   }
 
-  /// A stored list that cannot be read counts as empty: no run can name a
-  /// folder in it, and the next change writes a good one.
-  fn stored(&self) -> Vec<StoredLink> {
-    self
-      .preference
-      .read()
-      .and_then(|raw| serde_json::from_str::<StoredLinks>(&raw).ok())
+  /// The stored list. Nothing stored is an empty list; a list that cannot
+  /// be read or parsed is a storage error, so no change ever replaces the
+  /// links it holds.
+  fn stored(&self) -> Result<Vec<StoredLink>, LinkedFolderListError> {
+    let raw = self.preference.read_stored().map_err(|error| {
+      tracing::warn!(target: LOG_TARGET, %error, "the linked folder list could not be read");
+      LinkedFolderListError::Storage
+    })?;
+    let Some(raw) = raw else {
+      return Ok(Vec::new());
+    };
+    serde_json::from_str::<StoredLinks>(&raw)
       .map(|stored| stored.links)
-      .unwrap_or_default()
+      .map_err(crate::logging::replaced_logged(
+        "the linked folder list could not be parsed",
+        LinkedFolderListError::Storage,
+      ))
+  }
+
+  /// For reading only: a list that cannot be read lists no folder, so no
+  /// run can name one in it.
+  fn stored_or_none(&self) -> Vec<StoredLink> {
+    self.stored().unwrap_or_default()
   }
 
   fn store(&self, links: Vec<StoredLink>) -> Result<(), LinkedFolderListError> {
@@ -245,7 +262,11 @@ impl LinkedFolders {
   /// The real paths of the linked folders, read without touching any: what a
   /// skill folder must stay out of, since runs write there.
   pub(crate) fn listed(&self) -> Vec<String> {
-    self.stored().into_iter().map(|link| link.path).collect()
+    self
+      .stored_or_none()
+      .into_iter()
+      .map(|link| link.path)
+      .collect()
   }
 
   fn is_protected(&self, folder: &Path) -> bool {
@@ -260,7 +281,13 @@ impl LinkedFolders {
   fn state_of(&self, link: &StoredLink) -> LinkedFolderState {
     let folder = Path::new(&link.path);
     match fs::symlink_metadata(folder) {
-      Ok(metadata) if metadata.file_type().is_dir() => {}
+      // A volume's root can leave its mount point behind when it goes:
+      // a folder there is offline whatever the empty directory says.
+      Ok(metadata) if metadata.file_type().is_dir() => {
+        if !is_mounted(Path::new(&link.volume)) {
+          return LinkedFolderState::Offline;
+        }
+      }
       // A link or a file where the folder was: it is somewhere else now.
       Ok(_) => return LinkedFolderState::Moved,
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -291,7 +318,7 @@ impl LinkedFolders {
   /// when a folder's mount does not answer, so that it can still be unlinked.
   pub fn unread_statuses(&self) -> Vec<LinkedFolderStatus> {
     self
-      .stored()
+      .stored_or_none()
       .into_iter()
       .map(|link| LinkedFolderStatus {
         id: link.id,
@@ -305,7 +332,7 @@ impl LinkedFolders {
   /// Every link and how its folder stands now.
   pub fn statuses(&self) -> Vec<LinkedFolderStatus> {
     self
-      .stored()
+      .stored_or_none()
       .into_iter()
       .map(|link| {
         let state = self.state_of(&link);
@@ -355,6 +382,15 @@ impl LinkedFolders {
   /// already linked keeps its link. A link is followed only here, where the
   /// member chose it; the list then names the real folder.
   pub fn add(&self, chosen: &Path) -> Result<Uuid, LinkedFolderListError> {
+    let candidate = self.probe(chosen)?;
+    self.commit(candidate)
+  }
+
+  /// Looks at a chosen folder (the slow part: its mount may not answer) and
+  /// answers what linking it would store, changing nothing. A caller that
+  /// gives up on the look never links the folder: only [`Self::commit`]
+  /// does.
+  pub fn probe(&self, chosen: &Path) -> Result<LinkCandidate, LinkedFolderListError> {
     if !chosen.is_absolute() {
       return Err(LinkedFolderListError::NotAFolder);
     }
@@ -375,16 +411,21 @@ impl LinkedFolders {
     if fs::read_dir(folder).is_err() {
       return Err(LinkedFolderListError::Unreadable);
     }
-    let link = StoredLink {
+    Ok(LinkCandidate(StoredLink {
       id: Uuid::new_v4().to_string(),
       name: display_name(folder, &path),
       volume: plain_path(&volume_root(folder)).unwrap_or_else(|| path.clone()),
       path,
-    };
-    // The looks above take time; the list is read again under the lock, so
-    // two adds never each replace it with their own copy.
+    }))
+  }
+
+  /// Links a probed folder: only the stored list is touched, never the
+  /// folder. The list is read again under the lock, so two adds never each
+  /// replace it with their own copy.
+  pub fn commit(&self, candidate: LinkCandidate) -> Result<Uuid, LinkedFolderListError> {
+    let LinkCandidate(link) = candidate;
     let _held = LIST_CHANGE.lock().unwrap_or_else(PoisonError::into_inner);
-    let mut links = self.stored();
+    let mut links = self.stored()?;
     if let Some(existing) = links.iter().find(|listed| listed.path == link.path) {
       return Uuid::parse_str(&existing.id)
         .map_err(|_invalid| LinkedFolderListError::Storage);
@@ -402,7 +443,7 @@ impl LinkedFolders {
   /// Unlinks a folder; the folder itself is not touched.
   pub fn remove(&self, id: &str) -> Result<(), LinkedFolderListError> {
     let _held = LIST_CHANGE.lock().unwrap_or_else(PoisonError::into_inner);
-    let mut links = self.stored();
+    let mut links = self.stored()?;
     links.retain(|link| link.id != id);
     self.store(links)
   }
@@ -500,6 +541,37 @@ mod tests {
         "state": "available",
       }])
     );
+  }
+
+  #[test]
+  fn a_list_that_cannot_be_read_is_never_replaced_by_a_change() {
+    let place = Place::new();
+    let folder = place.folder("matter");
+    let stored = place.root.join("links.json");
+    fs::write(&stored, "{ not a list").unwrap();
+    let folders = place.folders();
+
+    assert_eq!(folders.add(&folder), Err(LinkedFolderListError::Storage));
+    assert_eq!(
+      folders.remove(&Uuid::new_v4().to_string()),
+      Err(LinkedFolderListError::Storage)
+    );
+    // Reading it lists nothing, and the stored text stays as it was.
+    assert_eq!(folders.listed(), Vec::<String>::new());
+    assert_eq!(fs::read_to_string(&stored).unwrap(), "{ not a list");
+  }
+
+  #[test]
+  fn a_probe_alone_links_nothing() {
+    let place = Place::new();
+    let folder = place.folder("matter");
+    let folders = place.folders();
+
+    let candidate = folders.probe(&folder).unwrap();
+    assert_eq!(folders.statuses(), Vec::new());
+
+    let id = folders.commit(candidate).unwrap();
+    assert_eq!(folders.resolve(id), Ok(PathBuf::from(Place::real(&folder))));
   }
 
   #[test]

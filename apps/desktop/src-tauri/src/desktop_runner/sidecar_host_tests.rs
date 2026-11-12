@@ -23,7 +23,7 @@ use crate::harness_sidecar::tests::Fixture;
 use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar, SkillFolderRef};
 use crate::local_linked_folders::LinkedFolderRefusal;
 use crate::runner_protocol::{
-  ApprovalDecision, Harness, LinkedFolderReport, RunApproval,
+  ApprovalDecision, Harness, HarnessReport, LinkedFolderReport, RunApproval,
 };
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -50,7 +50,8 @@ const MODELS: &[&str] = &[
 /// every process it authorizes; Claude Code not installed.
 struct FakeHarnesses {
   root: PathBuf,
-  credentials: Option<HarnessCredentials>,
+  /// What each read of the credentials finds; a test may change it.
+  credentials: Arc<Mutex<Option<HarnessCredentials>>>,
   /// What the host asked to hear when an install ends.
   settled: Arc<Mutex<Option<InstallSettled>>>,
   /// Whether the member linked any folder; a report of them reaches the API
@@ -71,7 +72,7 @@ impl LocalHarnesses for FakeHarnesses {
 
   fn credentials(&self, harness: Harness) -> BoxFuture<'_, Option<HarnessCredentials>> {
     let credentials = (harness == Harness::Codex)
-      .then(|| self.credentials.clone())
+      .then(|| self.credentials.lock().unwrap().clone())
       .flatten();
     Box::pin(async move { credentials })
   }
@@ -229,9 +230,28 @@ impl Place {
     self.host_with(credentials, probe_interval, false)
   }
 
+  /// A host that reports a linked folder when `folders_linked`.
   fn host_with(
     &self,
     credentials: Option<HarnessCredentials>,
+    probe_interval: Duration,
+    folders_linked: bool,
+  ) -> SidecarHarnessHost {
+    self.build_host(Arc::new(Mutex::new(credentials)), probe_interval, folders_linked)
+  }
+
+  /// A host whose credentials are read from `credentials` each time.
+  fn host_reading(
+    &self,
+    credentials: Arc<Mutex<Option<HarnessCredentials>>>,
+    probe_interval: Duration,
+  ) -> SidecarHarnessHost {
+    self.build_host(credentials, probe_interval, false)
+  }
+
+  fn build_host(
+    &self,
+    credentials: Arc<Mutex<Option<HarnessCredentials>>>,
     probe_interval: Duration,
     folders_linked: bool,
   ) -> SidecarHarnessHost {
@@ -289,7 +309,9 @@ impl Place {
 fn ready() -> Value {
   let models: Vec<Value> = MODELS
     .iter()
-    .map(|id| json!({ "id": id, "label": id, "isDefault": false }))
+    .map(|id| {
+      json!({ "id": id, "label": id, "isDefault": false, "reasoningEfforts": ["low", "high"] })
+    })
     .collect();
   json!({
     "type": "ready",
@@ -319,6 +341,7 @@ fn run_start(run_id: &str, model: &str) -> Value {
     "harness": "codex",
     "harnessVersion": VERSION,
     "model": model,
+    "reasoningEffort": "high",
     "harnessSessionId": null,
     "instructions": "Summarize the matter.",
     "messages": [{"role": "user", "content": "Summarize the matter."}],
@@ -489,6 +512,7 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
     start["policy"],
     json!({"network": "open", "fs": "workspace", "approvals": "auto"})
   );
+  assert_eq!(start["reasoningEffort"], "high");
   assert_eq!(start["launch"]["processGrant"], false);
 }
 
@@ -588,8 +612,11 @@ fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
     offline["linkedFolderId"] = json!(OFFLINE_FOLDER_ID);
     let mut unlinked = run_start(&run_id(), "gpt-test");
     unlinked["linkedFolderId"] = json!(run_id());
+    let mut unoffered_effort = run_start(&run_id(), "gpt-test");
+    unoffered_effort["reasoningEffort"] = json!("max");
     let cases = [
       (run_start(&run_id(), "gpt-unknown"), "model_unavailable"),
+      (unoffered_effort, "model_unavailable"),
       (older, "harness_version_unavailable"),
       (claude, "harness_not_installed"),
       (unsandboxed, "policy_unsupported"),
@@ -806,6 +833,101 @@ fn an_install_that_ends_is_probed_and_reported_without_waiting_for_the_interval(
     runner.stop().await;
   });
   stop_holders(&place);
+}
+
+#[test]
+fn a_ready_harness_stays_ready_through_one_failed_probe_and_the_next_decides() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let _connection = connect(&gateway, &[], "ready").await;
+    let failed = json!({
+      "type": "failed",
+      "reason": "harness_unavailable",
+      "message": "the CLI did not answer in time",
+    });
+    place.probe_answers(&failed);
+    let probes = place.received("harness.probe").len();
+    place.install_settles();
+    until("the failed probe", || {
+      place.received("harness.probe").len() > probes
+    })
+    .await;
+    // One failed probe keeps the harness ready.
+    until("the probe's outcome", || {
+      host.kept_through_failure(Harness::Codex)
+    })
+    .await;
+    assert!(matches!(
+      host.reports().iter().find(|report| codex_report(report)),
+      Some(HarnessReport::Ready(_))
+    ));
+    // The next failed probe decides.
+    place.install_settles();
+    until("the second failed probe", || {
+      matches!(
+        host.reports().iter().find(|report| codex_report(report)),
+        Some(HarnessReport::Unavailable(_))
+      )
+    })
+    .await;
+    runner.stop().await;
+  });
+  stop_holders(&place);
+}
+
+#[test]
+fn a_ready_report_kept_through_a_failed_probe_starts_runs_with_the_fresh_credentials() {
+  let place = Place::new();
+  let grants = Arc::new(Grants::default());
+  let credentials = Arc::new(Mutex::new(Some(chatgpt_credentials(&grants))));
+  let id = run_id();
+  run(async {
+    let host = place.host_reading(Arc::clone(&credentials), Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    // A sign-in since the last probe: the credentials changed.
+    credentials
+      .lock()
+      .unwrap()
+      .as_mut()
+      .unwrap()
+      .settings
+      .environment
+      .insert(
+        "STELLA_CODEX_TOKEN_BROKER".to_owned(),
+        "/broker/signed-in-again".to_owned(),
+      );
+    place.probe_answers(&json!({
+      "type": "failed",
+      "reason": "harness_unavailable",
+      "message": "the CLI did not answer in time",
+    }));
+    place.install_settles();
+    until("the probe's outcome", || {
+      host.kept_through_failure(Harness::Codex)
+    })
+    .await;
+    connection.send(run_start(&id, "gpt-test")).await;
+    connection.receive_type("run.accepted").await;
+    until_finished(&mut connection).await;
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  let start = place.received("run.start").remove(0);
+  assert_eq!(
+    start["launch"]["environment"],
+    json!({ "STELLA_CODEX_TOKEN_BROKER": "/broker/signed-in-again" })
+  );
+}
+
+fn codex_report(report: &HarnessReport) -> bool {
+  serde_json::to_value(report).is_ok_and(|value| value["id"] == "codex")
 }
 
 #[test]

@@ -84,7 +84,7 @@ const SANDBOXING: PickedDesktop = {
     version: "2.1.309",
     capabilities: ["approvals", "interrupt"],
     approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
-    models: [{ id: MODEL, label: "Sonnet" }],
+    models: [{ id: MODEL, label: "Sonnet", reasoningEfforts: [] }],
   },
   linkedFolders: [],
   approvedFolderIds: [],
@@ -131,6 +131,7 @@ const send = async (
     harness: "claude-code",
     model: MODEL,
     approvals,
+    reasoningEffort: null,
   };
   const control = asTestRaw<DesktopRunnerControl>({
     pickDesktop: async () => await Promise.resolve(Result.ok(SANDBOXING)),

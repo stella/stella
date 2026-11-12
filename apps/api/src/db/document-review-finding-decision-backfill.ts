@@ -1,4 +1,5 @@
-import { DOCUMENT_REVIEW_FINDING_DECISION } from "@/api/lib/document-review/run-contract";
+import { REVIEW_STATUS_DECISION } from "@stll/api-contract/review-decision";
+
 import { SQL_NULL, sqlCaseExpression } from "@/api/lib/sql-case-expression";
 
 import type { OnlineRepair } from "./online-migration-connection";
@@ -14,7 +15,7 @@ const PENDING_DECISIONS = `
 
 /** The shared decision for each stored word, from the one map that owns it. */
 const DECISION_SQL = sqlCaseExpression({
-  branches: Object.entries(DOCUMENT_REVIEW_FINDING_DECISION).map(
+  branches: Object.entries(REVIEW_STATUS_DECISION.finding).map(
     ([stored, decision]) =>
       `WHEN finding.decision = '${stored}' THEN ${decision === null ? SQL_NULL : `'${decision}'`}`,
   ),

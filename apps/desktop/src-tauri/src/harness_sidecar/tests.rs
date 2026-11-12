@@ -22,7 +22,8 @@ use tokio::sync::{Mutex, mpsc};
 use super::protocol::{ProbeFailure, ProbedModel};
 use super::*;
 use crate::runner_protocol::{
-  FsPolicy, HarnessCapability, McpBinding, McpToken, NetworkPolicy, RunPolicy,
+  FsPolicy, HarnessCapability, McpBinding, McpToken, NetworkPolicy, ReasoningEffort,
+  RunPolicy,
 };
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -213,6 +214,7 @@ fn run_start(model: &str) -> SidecarRunStart {
     workspace_dir: "/data/runs/1".to_owned(),
     cache_dir: "/data/agent-package-cache".to_owned(),
     model: model.to_owned(),
+    reasoning_effort: None,
     instructions: String::new(),
     messages: vec![
       json!({ "role": "user", "content": "Find the lease decision." })
@@ -1151,11 +1153,17 @@ fn probe_outcomes_become_runner_reports() {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
         is_default: true,
+        reasoning_efforts: vec![
+          ReasoningEffort::High,
+          ReasoningEffort::Low,
+          ReasoningEffort::High,
+        ],
       },
       ProbedModel {
         id: "gpt-test".to_owned(),
         label: "Again".to_owned(),
         is_default: false,
+        reasoning_efforts: Vec::new(),
       },
     ],
   };
@@ -1169,6 +1177,8 @@ fn probe_outcomes_become_runner_reports() {
       models: vec![HarnessModel {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
+        is_default: true,
+        reasoning_efforts: vec![ReasoningEffort::Low, ReasoningEffort::High],
       }],
     })
   );

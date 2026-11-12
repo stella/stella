@@ -72,6 +72,7 @@ const CODEX: ChatLocalRunTarget = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 };
 
 /** One connected computer whose Codex is ready. */
@@ -90,7 +91,9 @@ const READINESS: ChatLocalRunReadiness = {
           version: "0.50.0",
           capabilities: ["approvals"],
           approvalModes: ["ask"],
-          models: [{ id: CODEX.model, label: "GPT-5 Codex" }],
+          models: [
+            { id: CODEX.model, label: "GPT-5 Codex", reasoningEfforts: [] },
+          ],
         },
       ],
     },
@@ -459,26 +462,26 @@ const typeDraft = (server: ReturnType<typeof serve>, text: string) => {
 };
 
 const AUTO_LABEL = messages.chat.modelSelector.autoLabel;
-const CODEX_LABEL = "Codex · GPT-5 Codex";
+/** The where chip of a chat on the member's computer, by its full name. */
+const CODEX_LABEL = "Runs on: Your computer, Codex";
+const CLOUD_LABEL = "Runs on: Cloud";
 
 test("a new chat runs on the member's computer when they choose it, and its first send goes there", async () => {
   const server = serve();
   const client = createClient();
   const { ui, appRouter } = await openNewChat(client);
 
-  // The dock's model menu offers Run on before the chat has a thread.
-  const trigger = await ui.findByRole("button", { name: AUTO_LABEL });
+  // The dock's where chip offers the computer before the chat has a thread;
+  // its coding agent starts on its recommended model.
+  expect(await ui.findByRole("button", { name: AUTO_LABEL })).toBeTruthy();
+  const trigger = await ui.findByRole("button", { name: CLOUD_LABEL });
   await testing.act(async () => {
     testing.fireEvent.click(trigger);
   });
-  expect(await ui.findByText(messages.chat.localRun.runOn)).toBeTruthy();
-  const codex = await ui.findByText("Codex on this computer");
+  expect(await ui.findByText(messages.chat.runOn.yourComputer)).toBeTruthy();
+  const codex = await ui.findByText("Codex");
   await testing.act(async () => {
     testing.fireEvent.click(codex);
-  });
-  const model = await ui.findByText("GPT-5 Codex");
-  await testing.act(async () => {
-    testing.fireEvent.click(model);
   });
 
   // The choice is stored on the draft's row and reads back on the dock.
@@ -488,6 +491,8 @@ test("a new chat runs on the member's computer when they choose it, and its firs
     ]),
   );
   expect(await ui.findByRole("button", { name: CODEX_LABEL })).toBeTruthy();
+  // The model chip names the agent's model.
+  expect(await ui.findByRole("button", { name: "GPT-5 Codex" })).toBeTruthy();
 
   typeDraft(server, "Run the tests");
   const send = await ui.findByRole("button", {
@@ -555,7 +560,7 @@ test("a new chat whose remembered computer is offline says so in the bar and doe
   const client = createClient();
   const { ui } = await openNewChat(client);
 
-  const offline = `${CODEX_LABEL} · ${messages.chat.localRun.stateOffline}`;
+  const offline = `${CODEX_LABEL}. ${messages.chat.localRun.stateOffline}`;
   expect(await ui.findByRole("button", { name: offline })).toBeTruthy();
   expect(ui.queryByRole("button", { name: AUTO_LABEL })).toBeNull();
   // A send goes to the computer, which the API refuses with its reason, and
@@ -616,8 +621,10 @@ test("a remembered model the computer no longer offers says so in the bar", asyn
   const client = createClient();
   const { ui } = await openNewChat(client);
 
-  const label = `Codex · gpt-4-codex · ${messages.chat.localRun.stateModelUnavailable}`;
+  // The model chip says it; the where chip still names the computer.
+  const label = `gpt-4-codex · ${messages.chat.localRun.stateModelUnavailable}`;
   expect(await ui.findByRole("button", { name: label })).toBeTruthy();
+  expect(await ui.findByRole("button", { name: CODEX_LABEL })).toBeTruthy();
   expect(server.unexpected).toEqual([]);
 });
 

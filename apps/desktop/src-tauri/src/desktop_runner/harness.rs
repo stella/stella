@@ -110,6 +110,11 @@ pub(crate) trait HarnessReports: Send + Sync + 'static {
   fn linked_folders(&self) -> Vec<LinkedFolderReport> {
     Vec::new()
   }
+  /// Every installed harness has been probed, so the reports say what it
+  /// can do rather than that it is being checked.
+  fn settled(&self) -> bool {
+    true
+  }
 }
 
 /// One thing a run produced, in the order it produced them.

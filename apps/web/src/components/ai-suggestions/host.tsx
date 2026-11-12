@@ -197,6 +197,8 @@ type PromptBarProps = {
    * floating control on top of the bar.
    */
   onStop?: () => void;
+  /** See `ChatComposerActionButton`'s `stopping`. */
+  stopping?: boolean;
   /**
    * Offered after a user-initiated stop: while provided AND the
    * composer is empty, the send arrow becomes a retry button that
@@ -542,6 +544,7 @@ export const PromptBar = (props: PromptBarProps) => {
     presets,
     threadHasMessages = false,
     onStop,
+    stopping = false,
     onRetry,
     editorController,
     emptyPlaceholder,
@@ -987,6 +990,7 @@ export const PromptBar = (props: PromptBarProps) => {
                   detached(submitDraft(), "ai-suggestions-host.submit-draft");
                 }}
                 onStop={onStop}
+                stopping={stopping}
               />
             </ComposerControlSlot>
           }

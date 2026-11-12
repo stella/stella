@@ -19,6 +19,7 @@ import {
   localRunTargetFor,
   localRunTargetState,
   permissionView,
+  reasoningEffortChoices,
   runTargetValue,
   sameRunTarget,
   withRunFolder,
@@ -33,7 +34,7 @@ const READY_CODEX: ChatLocalHarnessReadiness = {
   version: "0.50.0",
   capabilities: ["approvals"],
   approvalModes: ["ask"],
-  models: [{ id: "gpt-5-codex", label: "GPT-5 Codex" }],
+  models: [{ id: "gpt-5-codex", label: "GPT-5 Codex", reasoningEfforts: [] }],
 };
 
 const runner = (
@@ -149,13 +150,14 @@ const LOCAL = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 } as const;
 
 /** A Claude Code that cannot sandbox on this computer. */
 const READY_CLAUDE: Extract<ChatLocalHarnessOption, { state: "ready" }> = {
   harness: "claude-code",
   state: "ready",
-  models: [{ id: "sonnet", label: "Sonnet" }],
+  models: [{ id: "sonnet", label: "Sonnet", reasoningEfforts: [] }],
   approvalModes: ["ask", "auto"],
 };
 const CLAUDE = { ...LOCAL, harness: "claude-code", model: "sonnet" } as const;
@@ -250,6 +252,71 @@ describe("the permission choice", () => {
   });
 });
 
+describe("the reasoning effort choice", () => {
+  const withEfforts = {
+    ...READY_CLAUDE,
+    models: [
+      {
+        id: "sonnet",
+        label: "Sonnet",
+        reasoningEfforts: ["low", "high", "max"],
+      },
+      { id: "opus", label: "Opus", reasoningEfforts: ["high"] },
+      { id: "haiku", label: "Haiku", reasoningEfforts: [] },
+    ],
+  } as const satisfies Extract<ChatLocalHarnessOption, { state: "ready" }>;
+
+  test("offers the selected model's efforts, and nothing for a model without a choice, a cloud turn or a harness that cannot run", () => {
+    expect(reasoningEffortChoices(CLAUDE, [withEfforts])).toEqual([
+      "low",
+      "high",
+      "max",
+    ]);
+    expect(
+      reasoningEffortChoices({ ...CLAUDE, model: "haiku" }, [withEfforts]),
+    ).toBeNull();
+    expect(reasoningEffortChoices({ kind: "cloud" }, [withEfforts])).toBeNull();
+    expect(
+      reasoningEffortChoices(CLAUDE, [
+        { harness: "claude-code", state: "offline" },
+      ]),
+    ).toBeNull();
+  });
+
+  test("a picked model keeps the effort it offers, and leaves one it lacks to the harness", () => {
+    const pick = (
+      selected: Parameters<typeof sameRunTarget>[0],
+      model: string,
+    ) =>
+      localRunTargetFor({
+        selected,
+        option: withEfforts,
+        model,
+        maxApprovals: NO_LIMIT,
+      });
+    expect(pick({ ...CLAUDE, reasoningEffort: "high" }, "opus")).toEqual({
+      ...CLAUDE,
+      model: "opus",
+      reasoningEffort: "high",
+    });
+    for (const model of ["opus", "haiku"]) {
+      expect(pick({ ...CLAUDE, reasoningEffort: "max" }, model)).toEqual({
+        ...CLAUDE,
+        model,
+        reasoningEffort: null,
+      });
+    }
+    expect(pick({ kind: "cloud" }, "sonnet")).toEqual(CLAUDE);
+  });
+
+  test("a different effort is a different target, under the same model", () => {
+    const high = { ...CLAUDE, reasoningEffort: "high" } as const;
+    expect(runTargetValue(high)).toBe(runTargetValue(CLAUDE));
+    expect(sameRunTarget(high, CLAUDE)).toBe(false);
+    expect(sameRunTarget(high, { ...high })).toBe(true);
+  });
+});
+
 describe("the selected run target", () => {
   test("cloud and each local model have distinct menu values", () => {
     const values = [
@@ -278,7 +345,7 @@ describe("the selected run target", () => {
       ...READY_CODEX,
       id: "claude-code",
       approvalModes: ["ask", "auto", "full_auto"],
-      models: [{ id: "sonnet", label: "Sonnet" }],
+      models: [{ id: "sonnet", label: "Sonnet", reasoningEfforts: [] }],
     };
     const readiness = (
       maxApprovals: DesktopRunnerApprovalMode,
@@ -323,6 +390,7 @@ describe("the selected run target", () => {
       harness: "codex",
       model: "gpt-5-codex",
       approvals: "ask",
+      reasoningEffort: null,
     } as const;
     expect(
       localRunModelLabel(
@@ -356,6 +424,7 @@ describe("whether the chosen computer can take a turn now", () => {
     harness: "codex",
     model: "gpt-5-codex",
     approvals: "ask",
+    reasoningEffort: null,
   } as const;
   const enabled = (
     runners: ChatLocalRunnerReadiness[],

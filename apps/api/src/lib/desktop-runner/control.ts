@@ -15,6 +15,7 @@ import {
   type DesktopRunnerHarnessReport,
   type DesktopRunnerLimits,
   type DesktopRunnerLinkedFolder,
+  type DesktopRunnerReasoningEffort,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
   type DesktopRunnerTiming,
@@ -118,6 +119,8 @@ export type StartLocalRunInput = {
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  /** The effort the run asks the model for; the computer must report it. */
+  reasoningEffort: DesktopRunnerReasoningEffort | null;
   /** How much the run asks before it acts; the computer must report it. */
   approvals: DesktopRunnerApprovalMode;
   harnessSessionId: string | null;
@@ -148,6 +151,7 @@ export type StartLocalRunOutcome =
       report: DesktopRunnerHarnessReport | null;
     }
   | { type: "model_unavailable" }
+  | { type: "reasoning_effort_unavailable" }
   | { type: "approvals_unavailable" }
   /** The chat's folder is being restored on its computer. */
   | { type: "folder_busy" }
@@ -315,6 +319,7 @@ const startRun = async (
     harness: input.harness,
     harnessVersion: input.harnessVersion,
     model: input.model,
+    reasoningEffort: input.reasoningEffort,
     harnessSessionId: input.harnessSessionId,
     instructions: input.instructions,
     messages: input.messages,
@@ -356,6 +361,7 @@ const startRun = async (
         harness: input.harness,
         harnessVersion: input.harnessVersion,
         model: input.model,
+        reasoningEffort: input.reasoningEffort,
         approvals: input.approvals,
         workspaceIds: input.workspaceIds,
         linkedFolderId: input.linkedFolderId,

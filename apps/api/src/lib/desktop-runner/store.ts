@@ -29,6 +29,7 @@ import {
   type DesktopRunnerLimits,
   type DesktopRunnerLinkedFolder,
   desktopRunnerLinkedFolderSchema,
+  type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 
 import type { RootDatabase, Transaction } from "@/api/db/root";
@@ -55,7 +56,10 @@ import {
   transitionLifecycle,
   transitionLifecycleBatch,
 } from "@/api/lib/db/transitions";
-import { questionPauseOf } from "@/api/lib/desktop-runner/chunk";
+import {
+  openedSessionOf,
+  questionPauseOf,
+} from "@/api/lib/desktop-runner/chunk";
 import {
   carryFolderRestoreNotes,
   expireFolderRestoresOfKeys,
@@ -959,11 +963,35 @@ const advanceRun = async ({
         set: {
           ...advanced,
           outcome: message.outcome,
-          harnessSessionId: message.harnessSessionId,
+          // A run that ends without naming its session keeps the one it
+          // reported opening.
+          harnessSessionId:
+            message.harnessSessionId ?? sql`${runs.harnessSessionId}`,
         },
         recordTransitionAuditEvent: skipRunAudit,
       });
-    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent: {
+      // The session is recorded as soon as it takes the run's prompt: a run
+      // lost or failed after that may have changed the session, so the
+      // session lookup must see it even without a `run.finished`.
+      const opened = openedSessionOf(message.chunk);
+      return await transitionLifecycle({
+        tx,
+        spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+        id: message.runId,
+        moves: { state: { from: SEQUENCED_RUN_STATES, to: "running" } },
+        guard,
+        set:
+          opened === null
+            ? advanced
+            : {
+                ...advanced,
+                // Only a session of the run's own harness counts.
+                harnessSessionId: sql`case when ${runs.harness} = ${opened.harness} then ${opened.sessionId} else ${runs.harnessSessionId} end`,
+              },
+        recordTransitionAuditEvent: skipRunAudit,
+      });
+    }
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest:
       return await transitionLifecycle({
         tx,
@@ -1628,6 +1656,7 @@ type InsertRunOptions = {
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  reasoningEffort: DesktopRunnerReasoningEffort | null;
   approvals: DesktopRunnerApprovalMode;
   workspaceIds: readonly SafeId<"workspace">[];
   /** The folder linked on the computer the run works in, if any. */
@@ -1658,6 +1687,7 @@ export type InsertedRun =
       report: DesktopRunnerHarnessReport | null;
     }
   | { type: "model_unavailable" }
+  | { type: "reasoning_effort_unavailable" }
   | { type: "approvals_unavailable" }
   /** The chat's folder is being restored on its computer. */
   | { type: "folder_busy" }
@@ -1717,8 +1747,15 @@ export const insertAssignedRun = async (
     if (report?.state !== "ready" || report.version !== harnessVersion) {
       return { type: "harness_unavailable", report };
     }
-    if (!report.models.some(({ id }) => id === options.model)) {
+    const model = report.models.find(({ id }) => id === options.model);
+    if (model === undefined) {
       return { type: "model_unavailable" };
+    }
+    if (
+      options.reasoningEffort !== null &&
+      !model.reasoningEfforts.includes(options.reasoningEffort)
+    ) {
+      return { type: "reasoning_effort_unavailable" };
     }
     if (!report.approvalModes.includes(options.approvals)) {
       return { type: "approvals_unavailable" };
@@ -2182,7 +2219,12 @@ export const readChatRunSession = async (
   { owner, chat, desktopId, harness, linkedFolderId }: ChatRunSessionOptions,
 ): Promise<string | null> => {
   // The run that last wrote the session: a later one resumed it or replaced
-  // it, whatever state it ended in.
+  // it, whatever state it ended in. A run records its session id once the
+  // session takes its prompt. A run without one is passed over only when it
+  // provably never reached the harness: it ended (finished or refused)
+  // without naming a session, or no computer picked it up. Any other run
+  // without one (lost, or still open) may have reached it before its
+  // session id arrived, so it hides the session and the turn starts fresh.
   const newest = db
     .select({
       state: runs.state,
@@ -2198,6 +2240,14 @@ export const readChatRunSession = async (
         eq(runs.userId, owner.userId),
         eq(runs.organizationId, owner.organizationId),
         sql`${runs.linkedFolderId} IS NOT DISTINCT FROM ${linkedFolderId}::uuid`,
+        or(
+          isNotNull(runs.harnessSessionId),
+          and(
+            ne(runs.state, "finished"),
+            ne(runs.state, "rejected"),
+            or(isNull(runs.lostReason), ne(runs.lostReason, "not_reached")),
+          ),
+        ),
       ),
     )
     .orderBy(desc(runs.createdAt), desc(runs.runId))

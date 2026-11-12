@@ -2032,14 +2032,6 @@
         "job": "measure-1"
       }
     },
-    "src/db/schema/docx-suggestions.test.ts": {
-      "peakMb": 179,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
-      }
-    },
     "src/db/schema/entities.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
@@ -16144,14 +16136,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/document-review/run-contract.test.ts": {
-      "peakMb": 184,
-      "baselineMb": 184,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-1"
-      }
-    },
     "src/lib/document-review/run-inputs.test.ts": {
       "peakMb": 784,
       "baselineMb": 179,
@@ -20070,14 +20054,6 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-2"
-      }
-    },
-    "src/lib/lists/review-decision-maps.test.ts": {
-      "peakMb": 216,
-      "baselineMb": 216,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-3"
       }
     },
     "src/lib/lists/sanctions/classification.test.ts": {
@@ -26598,14 +26574,6 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-3"
-      }
-    },
-    "src/tests/module-mock-factories.test.ts": {
-      "peakMb": 184,
-      "baselineMb": 184,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-1"
       }
     },
     "src/tests/pglite-file-snapshot.db.test.ts": {

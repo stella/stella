@@ -581,7 +581,18 @@
   },
   "dictation": {
     "title": "Dictado",
-    "description": "Mantén pulsado {shortcut} y habla. El texto aparece en la aplicación que estás usando. La voz se transcribe en este ordenador y no se guarda.",
+    "description": "Mantén pulsado {shortcut} y habla. El texto aparece en la aplicación que estás usando. La voz se transcribe en este ordenador y no se guarda. Con la corrección con IA activada, el texto transcrito, no el audio, se envía a través de stella al proveedor de IA de tu organización para corregir errores y formato; stella no lo guarda.",
+    "cleanup": {
+      "title": "Corregir con IA",
+      "description": "La voz se sigue transcribiendo en este ordenador y el audio nunca sale de él. Con la corrección activada, el texto transcrito se envía a través de stella al proveedor de IA de tu organización para corregir errores de reconocimiento y aplicar la puntuación y el formato dictados, como «nueva línea» o «negrita». stella no lo guarda."
+    },
+    "language": {
+      "title": "Idioma del dictado",
+      "description": "La voz se reconoce en este idioma y la corrección mantiene el texto en él. Automático usa los idiomas de la interfaz y los teclados de este ordenador.",
+      "automatic": "Automático",
+      "automaticWith": "Automático ({languages})",
+      "noResults": "No se encontraron idiomas"
+    },
     "modelNeeded": "El modelo de voz se ejecuta en este ordenador.",
     "download": "Descargar ({size} MB)",
     "downloading": "Descargando el modelo de voz: {percent} %",
@@ -592,7 +603,10 @@
       "accessibility": "Permite el acceso a Accesibilidad para que stella pueda escribir en otras aplicaciones.",
       "microphone": "stella no oye tu micrófono. Comprueba el acceso al micrófono en Ajustes del Sistema.",
       "modelMissing": "Descarga primero el modelo de voz.",
-      "transcription": "La transcripción ha fallado. Inténtalo de nuevo."
+      "transcription": "La transcripción ha fallado. Inténtalo de nuevo.",
+      "focusChanged": "Cambió a otra aplicación antes de que el texto estuviera listo, así que no se escribió nada. Inténtelo de nuevo.",
+      "focusUnconfirmed": "stella no pudo confirmar qué aplicación tiene el foco, así que no se escribió nada. Inténtalo de nuevo.",
+      "shortcutHeld": "Suelta las teclas del atajo para escribir. No se escribió nada; inténtalo de nuevo."
     }
   },
   "shortcut": {
