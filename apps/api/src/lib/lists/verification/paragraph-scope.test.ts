@@ -4,6 +4,7 @@ import type { VerificationBlock } from "@/api/lib/lists/verification/document-te
 import {
   passageContext,
   resolveParagraphScope,
+  scopedBlockContext,
   scopePassages,
 } from "@/api/lib/lists/verification/paragraph-scope";
 
@@ -130,6 +131,47 @@ describe("passageContext", () => {
     expect(context.text.slice(context.anchor.start, context.anchor.end)).toBe(
       "I agreed the plan on 2 April",
     );
+  });
+});
+
+describe("scopedBlockContext", () => {
+  const page =
+    "81. Outside, before.\n82. I agreed the plan on 2 April.\n83. Outside, after.";
+  const claimStart = page.indexOf("I agreed");
+  const claim = {
+    start: claimStart,
+    end: claimStart + "I agreed the plan on 2 April".length,
+  };
+  const scope = {
+    kind: "paragraphs" as const,
+    from: 82,
+    to: 82,
+    numbering: "document" as const,
+    start: { blockId: "P4", offset: page.indexOf("82.") },
+    end: { blockId: "P4", offset: page.indexOf("83.") },
+  };
+
+  test("a re-check reads the stored page as the run's grading read it", () => {
+    const block: VerificationBlock = {
+      id: "P4",
+      text: page,
+      source: { type: "pdf-page", pageNumber: 4 },
+    };
+    expect(scopedBlockContext({ id: "P4", text: page }, scope, claim)).toEqual(
+      passageContext(
+        { block, start: scope.start.offset, end: scope.end.offset },
+        claim,
+      ),
+    );
+  });
+
+  test("a block the range does not cut, or a whole-document run, reads whole", () => {
+    expect(
+      scopedBlockContext({ id: "P5", text: page }, scope, claim).text,
+    ).toBe(page);
+    expect(
+      scopedBlockContext({ id: "P4", text: page }, { kind: "whole" }, claim),
+    ).toEqual({ text: page, anchor: claim });
   });
 });
 

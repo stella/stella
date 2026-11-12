@@ -314,13 +314,46 @@ export type VerificationPassage = {
  * the rest of its block, so no text outside a range reaches the model. The
  * anchor is moved from whole-block offsets to the passage's own.
  */
-export const passageContext = (
-  { block, start, end }: VerificationPassage,
-  anchor: { start: number; end: number },
+type TextSpan = { start: number; end: number };
+
+const contextBetween = (
+  text: string,
+  { start, end }: TextSpan,
+  anchor: TextSpan,
 ) => ({
-  text: block.text.slice(start, end),
+  text: text.slice(start, end),
   anchor: { start: anchor.start - start, end: anchor.end - start },
 });
+
+export const passageContext = (
+  passage: VerificationPassage,
+  anchor: TextSpan,
+) => contextBetween(passage.block.text, passage, anchor);
+
+/**
+ * What grading reads around a claim in one stored block of a run: the
+ * block's text, cut at a scope edge that lands in it, so a later re-check
+ * reads exactly what the run's own grading read.
+ */
+export const scopedBlockContext = (
+  block: { id: string; text: string },
+  scope: VerificationScope,
+  anchor: TextSpan,
+) => {
+  const inRange = scope.kind === "paragraphs";
+  return contextBetween(
+    block.text,
+    {
+      start:
+        inRange && scope.start.blockId === block.id ? scope.start.offset : 0,
+      end:
+        inRange && scope.end.blockId === block.id
+          ? scope.end.offset
+          : block.text.length,
+    },
+    anchor,
+  );
+};
 
 /** Every block, whole: what a run over the whole document reads. */
 export const wholeDocumentPassages = (

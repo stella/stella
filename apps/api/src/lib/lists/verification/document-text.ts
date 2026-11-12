@@ -64,6 +64,11 @@ export type VerificationDocument =
 
 const pdfPageId = (pageNumber: number): string => `P${String(pageNumber)}`;
 
+/** The id of the block a stored source names: what a run's scope edges
+ *  point at. */
+export const verificationBlockId = (source: VerificationBlockSource): string =>
+  source.type === "docx-block" ? source.blockId : pdfPageId(source.pageNumber);
+
 const readPdfBlocks = async (
   bytes: Uint8Array,
 ): Promise<VerificationBlock[]> => {
