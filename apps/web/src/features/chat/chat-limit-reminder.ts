@@ -27,6 +27,17 @@ const scopeQuery = (threadRef: ChatThreadRef) =>
     ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
     : {};
 
+const readChatLimitReminder = async (
+  threadRef: ChatThreadRef,
+  signal: AbortSignal,
+) =>
+  unwrapApiResponse(
+    await api.chat.threads(threadParams(threadRef))["limit-reminder"].get({
+      query: scopeQuery(threadRef),
+      fetch: { signal },
+    }),
+  );
+
 /**
  * Whether the member asked to hear when the usage limit that stopped this
  * chat's turn on their computer resets, and when that is.
@@ -43,15 +54,8 @@ export const chatLimitReminderOptions = ({
         userId,
         getChatThreadKey(threadRef),
       ),
-      queryFn: async ({ signal }) => {
-        const thread = api.chat.threads(threadParams(threadRef));
-        return unwrapApiResponse(
-          await thread["limit-reminder"].get({
-            query: scopeQuery(threadRef),
-            fetch: { signal },
-          }),
-        );
-      },
+      queryFn: async ({ signal }) =>
+        await readChatLimitReminder(threadRef, signal),
       staleTime: STALE_TIME.FIVE.MINUTES,
     }),
     // The member's own reminder on a chat; set and cancel refresh it.
