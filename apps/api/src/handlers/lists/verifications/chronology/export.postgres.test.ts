@@ -311,11 +311,15 @@ if (!databaseUrl || !runPostgres) {
 
         // A list of a matter outside the caller's scope reads as absent,
         // and so does an id no list has.
-        for (const missing of [foreignListId, createSafeId<"legalList">()]) {
-          // db-await-in-loop: two refusal cases, one read each.
-          const refused = await download({ listId: missing, format: "csv" });
-          expect(refused).toMatchObject({ code: 404 });
-        }
+        expect(
+          await download({ listId: foreignListId, format: "csv" }),
+        ).toMatchObject({ code: 404 });
+        expect(
+          await download({
+            listId: createSafeId<"legalList">(),
+            format: "csv",
+          }),
+        ).toMatchObject({ code: 404 });
       } finally {
         await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(eq(user.id, userId));
