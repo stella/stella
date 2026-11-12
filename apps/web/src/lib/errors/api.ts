@@ -276,6 +276,8 @@ const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
     "chat.localRun.refusalHarnessUnavailable",
   [CHAT_LOCAL_RUN_REFUSAL.modelUnavailable]:
     "chat.localRun.refusalModelUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable]:
+    "chat.localRun.refusalReasoningEffortUnavailable",
   [CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable]:
     "chat.localRun.refusalPermissionUnavailable",
   [CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit]:

@@ -363,6 +363,7 @@ const startRun = (
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
     harnessSessionId: null,
+    reasoningEffort: null,
     policy: { network: "open", fs: "workspace", approvals: "ask" },
     mcp: {
       serverName: "stella",
@@ -604,7 +605,14 @@ describe("harness holder over its socket", () => {
         version: "0.166.0",
         capabilities: ["approvals", "interrupt", "resume", "image_input"],
         approvalModes: ["ask", "auto", "full_auto"],
-        models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
+        models: [
+          {
+            id: "gpt-test",
+            label: "GPT Test",
+            isDefault: true,
+            reasoningEfforts: ["medium", "high"],
+          },
+        ],
       },
     });
     expect(holder.received().map(({ method }) => method)).not.toContain(
@@ -1025,6 +1033,23 @@ describe("harness holder over its socket", () => {
     );
   });
 
+  test("hands the harness the run's reasoning effort", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = startRun(
+      client,
+      holder,
+      {
+        harness: "claude-code",
+        executable: fakeClaude(holder.root, "stella_tools"),
+        model: "sonnet",
+      },
+      { reasoningEffort: "high" },
+    );
+    await client.waitFor(is("run.finished", runId));
+    expect(JSON.stringify(holder.startups())).toContain('"--effort","high"');
+  });
+
   test("relays an approval with one request id and returns the decision", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
@@ -1425,6 +1450,7 @@ describe("harness holder over its socket", () => {
       workspaceDir,
       cacheDir: path.join(root, "agent-package-cache"),
       model: "gpt-test",
+      reasoningEffort: null,
       instructions: "Use the stella MCP server.",
       messages: [{ role: "user", content: "Find the lease decision." }],
       attachments: [],
@@ -1513,6 +1539,7 @@ describe("harness holder over its socket", () => {
         workspaceDir,
         cacheDir: path.join(root, "agent-package-cache"),
         model: "gpt-test",
+        reasoningEffort: null,
         instructions: "Use the stella MCP server.",
         messages: [{ role: "user", content: "Write the report." }],
         attachments: [],

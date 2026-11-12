@@ -571,6 +571,21 @@
       "showBefore": "Rādīt tekstu pirms ¶ {from}",
       "verifyParagraphs": "Pārbaudīt rindkopas"
     },
+    "staleness": {
+      "failed": "Apgalvojumus neizdevās pārbaudīt vēlreiz",
+      "finished": "{count, plural, zero {# apgalvojumi pārbaudīti vēlreiz} one {# apgalvojums pārbaudīts vēlreiz} other {# apgalvojumi pārbaudīti vēlreiz}}",
+      "partial": "Pārbaudīti vēlreiz: {rechecked, number}, neizdevās: {failed, plural, zero {#} one {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakts mainīts",
+        "factHeld": "Fakts izslēgts",
+        "factRemoved": "Fakts noņemts",
+        "newFactRelated": "Jauns saistīts fakts"
+      },
+      "recheckAll": "Pārbaudīt visus vēlreiz",
+      "recheckLocked": "Tiek pārbaudīts vēlreiz kopā ar citiem novecojušiem apgalvojumiem",
+      "runLine": "{count, plural, zero {# apgalvojumi var būt novecojuši} one {# apgalvojums var būt novecojis} other {# apgalvojumi var būt novecojuši}}",
+      "running": "{count, plural, zero {Vēlreiz tiek pārbaudīti # apgalvojumi…} one {Vēlreiz tiek pārbaudīts # apgalvojums…} other {Vēlreiz tiek pārbaudīti # apgalvojumi…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Pretrunā",
@@ -628,100 +643,21 @@
       "pickList": "Izvēlieties sarakstu, pret kura faktiem tiek pārbaudīti šīs lietas dokumenti."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Izveidot divvalodu versiju",
-      "creating": "Veido…",
-      "description": "Izveido šī dokumenta kopiju divās kolonnās: pa kreisi oriģinālteksts, pa labi tulkojamā kopija ar atsevišķu numerāciju. Kopija tiek saglabāta šajā lietā kā jauns dokuments.",
-      "sameLanguage": "Izvēlieties divas dažādas valodas.",
-      "sourceLanguage": "Avota valoda",
-      "title": "Divvalodu versija"
-    },
-    "error": {
-      "title": "Neizdevās izveidot divvalodu versiju"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> ir gatavs, jātulko {rowCount, plural, zero {# rindu} one {# rinda} other {# rindas}}.",
-      "title": "Divvalodu versija izveidota"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Aizpilda šī divu kolonnu dokumenta tulkojuma kolonnu. Pārskatiet, kas notiks ar katru rindu un kā tiek atveidoti definētie termini, un pēc tam sāciet tulkošanu.",
-      "prepare": "Sagatavot",
-      "preparing": "Notiek dokumenta lasīšana…",
-      "preparingHint": "Visa dokumenta izlasīšana un katras rindas novērtēšana aizņem līdz divām minūtēm.",
-      "title": "Tulkot divvalodu versiju"
+      "prepare": "Sagatavot"
     },
     "dispositions": {
-      "inline": "Abas valodas",
       "keep": "Atstāt nemainītu"
     },
-    "error": {
-      "prepareTitle": "Neizdevās sagatavot dokumentu",
-      "startTitle": "Neizdevās sākt tulkošanu"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Tulkošanai nav pieejams neviens AI modelis.",
-      "applyFailed": "Tulkojumus neizdevās ierakstīt atpakaļ dokumentā.",
-      "documentChanged": "Dokuments tulkošanas laikā mainījās. Sagatavojiet to vēlreiz.",
-      "documentUnresolved": "Dokuments vai tā fails vairs nav pieejams.",
-      "enqueueFailed": "Tulkošanu neizdevās ievietot rindā.",
-      "internal": "Tulkošana negaidīti apstājās.",
-      "notBilingual": "Šajā dokumentā nav divvalodu tabulas.",
-      "translationFailed": "Neizdevās iztulkot rindu partiju.",
-      "unknown": "Tulkošana negaidīti apstājās."
-    },
-    "glossary": {
-      "add": "Pievienot terminu",
-      "description": "Šie atveidojumi attiecas uz visām rindām. Termins bez tulkojuma ir jāaizpilda vai jānoņem.",
-      "empty": "Definēti termini nav atrasti.",
-      "formsHint": "Citas formas atdaliet ar komatiem.",
-      "formsSource": "Citas termina formas",
-      "formsTarget": "Citas tulkojuma formas",
-      "incomplete": "Aizpildiet trūkstošos tulkojumus vai noņemiet šos terminus.",
-      "origins": {
-        "detected": "Atrasts",
-        "user": "Jūsu"
-      },
-      "term": "Termins",
-      "title": "Definētie termini",
-      "tooManyForms": "Terminam var būt ne vairāk kā {max} citas formas.",
-      "translation": "Tulkojums"
-    },
     "kinds": {
-      "heading": "Virsraksts",
-      "listItem": "Saraksta punkts",
-      "paragraph": "Rindkopa",
-      "table": "Visa tabula"
-    },
-    "origins": {
-      "default": "Nav novērtēts",
-      "model": "AI"
+      "paragraph": "Rindkopa"
     },
     "review": {
-      "droppedRows": "{count, plural, zero {Izlaistas # rindu} one {Izlaista # rinda} other {Izlaistas # rindas}}: tajās nav tulkojama teksta.",
-      "start": "Sākt tulkošanu",
       "starting": "Sāk…"
     },
     "rows": {
-      "description": "Izvēlieties, kas notiks ar katru tulkojuma kolonnas rindu.",
-      "ordinal": "#",
-      "sourceText": "Avota teksts",
-      "title": "Rindas",
-      "whatToDo": "Ko darīt"
-    },
-    "run": {
-      "cancelled": "Tulkošana tika atcelta.",
-      "doneSummary": "{count, plural, zero {Iztulkotas # rindu} one {Iztulkota # rinda} other {Iztulkotas # rindas}}.",
-      "doneTitle": "Tulkošana pabeigta",
-      "failedRows": "{count, plural, zero {Neizdevās iztulkot # rindu} one {Neizdevās iztulkot # rindu} other {Neizdevās iztulkot # rindas}}.",
-      "failedTitle": "Tulkošana apturēta",
-      "hint": "Tulkošana notiek serverī. Lai sekotu norisei, atstājiet šo logu atvērtu.",
-      "moreRows": "{count, plural, zero {vēl # rindu} one {vēl # rinda} other {vēl # rindas}}",
-      "progress": "Iztulkotas {completed} no {total} rindām",
-      "title": "Notiek tulkošana…",
-      "warningsTitle": "Pārbaudāmās rindas"
+      "title": "Rindas"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
       "none": "Citējumi vēl nav reģistrēti.",
       "notInStella": "Lietotnē stella vēl nav",
-      "openAtCitation": "Atvērt citāta vietā",
       "openDecision": "Atvērt nolēmumu",
       "paragraphLabel": "{paragraph}. punkts",
       "paragraphMark": "¶ {paragraph}",
@@ -1942,6 +1877,7 @@
       "refusalNoComputer": "Neviens no jūsu datoriem nav savienots. Atveriet stella desktop un nosūtiet vēlreiz.",
       "refusalPermissionAboveLimit": "Jūsu organizācija neļauj programmēšanas aģentam jūsu datorā darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
       "refusalPermissionUnavailable": "Programmēšanas aģents jūsu datorā nevar darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
+      "refusalReasoningEffortUnavailable": "Programmēšanas aģents jūsu datorā šim modelim nepiedāvā šo spriešanas līmeni. Izvēlieties citu izvēlnē Spriešanas līmenis.",
       "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
       "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
       "runOn": "Palaist",
@@ -2160,6 +2096,7 @@
     "stopFailed": "Neizdevās apturēt atbildi. Mēģiniet vēlreiz.",
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
+    "stopping": "Aptur…",
     "suggestTitle": "Ieteikt nosaukumu",
     "suggestTitleUnavailableAnonymized": "Anonimizētām sarunām nosaukuma ieteikumi nav pieejami.",
     "suggestedFollowupsLabel": "Ieteiktie papildjautājumi",
@@ -2696,6 +2633,7 @@
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
     "organizations": "Organizācijas",
+    "outOfDate": "Novecojis",
     "page": "{page}. lapa",
     "paymentRetryNotice": "Maksājuma problēma. Lai saglabātu piekļuvi, atjauniniet maksājuma veidu līdz {date}.",
     "pin": "Piespraust",
@@ -6101,7 +6039,6 @@
     "comments": "Komentāri",
     "commentsEmpty": "Atlasiet tekstu, lai to komentētu.",
     "noRevisions": "Vēl nav versiju",
-    "outOfDate": "Novecojis",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Nav kopsavilkuma",
     "proposals": "Izmaiņu priekšlikumi",

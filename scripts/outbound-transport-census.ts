@@ -1061,13 +1061,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
-    path: "packages/cli/src/cli-release-channel.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns public release-channel metadata reads with an injectable transport.",
-    transports: ["global:fetch"],
-  },
-  {
     path: "packages/cli/src/mcp-client.ts",
     class: "package-owned-client",
     reason:

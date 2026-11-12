@@ -18,6 +18,18 @@ import {
   type AskUserQuestion,
   askUserSelectionOf,
 } from "@stll/api-contract/chat-ask-user";
+import {
+  answersInOwnWords,
+  askUserAnswerOf,
+  askUserAnswersOf,
+  type AskUserDraft,
+  askUserDraftOf,
+  askUserDraftsFromAnswers,
+  askUserOptionsOf,
+  initialAskUserDrafts,
+  pickAllAskUserOptions,
+  pickAskUserOption,
+} from "@stll/api-contract/chat-ask-user-draft";
 import { rehypeChatLinks } from "@stll/chat/link-markdown";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -33,18 +45,8 @@ import { cn } from "@stll/ui/utils";
 import { messageComponents } from "@/components/ai-elements/message-response-components";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import {
-  answersInOwnWords,
   ASK_USER_OPTION_LAYOUT,
-  askUserAnswerOf,
-  askUserAnswersOf,
-  type AskUserDraft,
-  askUserDraftOf,
-  askUserDraftsFromAnswers,
   askUserOptionLayout,
-  askUserOptionsOf,
-  initialAskUserDrafts,
-  pickAllAskUserOptions,
-  pickAskUserOption,
 } from "@/components/chat/ask-user-card.logic";
 import type {
   AskUserInput,

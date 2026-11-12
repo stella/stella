@@ -44,7 +44,6 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
-import sha256MigrationLedger from "./scripts/sha256-migration-ledger.json" with { type: "json" };
 import sourceFingerprintBaseline from "./scripts/source-fingerprint-baseline.json" with { type: "json" };
 import {
   SQL_PERF_LINT_EXCLUDES,
@@ -1491,8 +1490,6 @@ const bunNativeFiles = [
   "scripts/verify.ts",
 ];
 
-const sha256AllowedFiles = sha256MigrationLedger.map(({ id }) => id);
-
 const config = defineConfig({
   // Oxlint does not inherit `env` through `extends`.
   env: core.env,
@@ -1550,10 +1547,7 @@ const config = defineConfig({
   rules: {
     "confine-aggregate-lock/confine-aggregate-lock": "error",
     "count-gated-completion/count-gated-completion": "error",
-    "no-raw-sha256/no-raw-sha256": [
-      "error",
-      { allowedFiles: sha256AllowedFiles },
-    ],
+    "no-raw-sha256/no-raw-sha256": "error",
     // Every base rule is decided here or in the vendored presets, never by a
     // spread: a spread replaces preset severities without naming the rules,
     // and scripts/check-oxlint-effective-config.ts fails on that.
@@ -2869,7 +2863,6 @@ const config = defineConfig({
       // compiler's existing bailout for the current call sites, but keep the
       // category enabled everywhere else so the list can only shrink.
       files: [
-        "apps/web/src/components/bilingual-review-rows.tsx",
         "apps/web/src/components/search-dialog.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx",
@@ -3451,19 +3444,7 @@ const config = defineConfig({
         "apps/landing/src/**/*.{ts,tsx}",
       ],
       rules: {
-        "no-layout-motion-classes/no-layout-motion-classes": [
-          "error",
-          {
-            allowedFiles: [
-              {
-                path: "apps/landing/src/components/react/ProductShowcase.tsx",
-                reason:
-                  "Marketing motion: showcase tiles settle in as the carousel scrolls; nothing waits on it.",
-                utilities: ["duration-[500ms]"],
-              },
-            ],
-          },
-        ],
+        "no-layout-motion-classes/no-layout-motion-classes": "error",
       },
     },
     {
@@ -3984,10 +3965,7 @@ const config = defineConfig({
       rules: {
         "prefer-bun-native/no-buffer-string-encoding": "error",
         "prefer-bun-native/no-headers-from-entries": "error",
-        "no-raw-sha256/no-raw-sha256": [
-          "error",
-          { allowedFiles: sha256AllowedFiles, hmacTarget: "bun" },
-        ],
+        "no-raw-sha256/no-raw-sha256": ["error", { hmacTarget: "bun" }],
       },
     },
     {
@@ -7144,9 +7122,7 @@ const config = defineConfig({
     },
     {
       // Module mocks of workspace modules test a fabricated dependency graph.
-      // Scoped to test files and test helpers, where `mock.module` lives;
-      // existing pairs are grandfathered in
-      // scripts/internal-module-mock-ledger.json.
+      // Scoped to test files and test helpers, where `mock.module` lives.
       files: [
         "**/*.test.{ts,tsx}",
         "**/*.property.test.{ts,tsx}",

@@ -107,7 +107,7 @@ export const ProposalMenu = ({
                       <span className="text-muted-foreground text-2xs">
                         {proposal.baseIsCurrent
                           ? t("skillHistory.basedOnCurrent")
-                          : t("skillHistory.outOfDate")}
+                          : t("common.outOfDate")}
                       </span>
                     </span>
                   </Button>
