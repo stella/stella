@@ -7,6 +7,7 @@ import { ChatThreadView } from "@/components/chat-thread-view";
 import { screenStyles } from "@/components/empty-state-screen";
 import { EntityDetailSheet } from "@/components/entity-detail-sheet";
 import { MatterEntities } from "@/components/matter-entities";
+import { MatterName } from "@/components/matter-name";
 import { Pane } from "@/components/pane";
 import type {
   MatterSelection,
@@ -50,7 +51,13 @@ export const MatterPane = ({ matter }: { matter: MatterSelection }) => {
   const { state } = useSession();
 
   return (
-    <Pane title={matter.name}>
+    <Pane
+      title={
+        <MatterName fallback={matter.name} matterId={matter.workspaceId}>
+          {(name) => name}
+        </MatterName>
+      }
+    >
       {state.status === "signed-in" ? (
         <MatterEntities
           // Another matter is another list.

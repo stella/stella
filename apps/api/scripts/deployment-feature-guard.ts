@@ -101,6 +101,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Matter vocabulary uses the normal matter read permission on every deployment",
   ],
   [
+    "/v1/workspaces/matter-numbering",
+    "The matter-number convention is read under the normal matter read permission on every deployment",
+  ],
+  [
     "/v1/workspaces/member-candidates",
     "The organization's people a matter can be shared with are listed under the normal matter read permission on every deployment",
   ],
@@ -168,6 +172,7 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "/v1/chat/threads/:threadId/connectors/:toolCallId",
     "Authenticated chat connector receipts are available on every deployment",
   ],
+  ["/v1/me/role", "A member reads their own role on every deployment"],
   [
     "/v1/me/push-devices",
     "Mobile push device registration is available on every deployment; alerts are sent only where APNs credentials are configured",

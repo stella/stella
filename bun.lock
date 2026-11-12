@@ -396,6 +396,7 @@
         "@stll/folio-fonts": "catalog:",
         "@stll/folio-react": "catalog:",
         "@stll/locales": "workspace:*",
+        "@stll/permissions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/ui": "workspace:*",
         "better-result": "catalog:",

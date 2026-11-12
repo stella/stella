@@ -591,6 +591,13 @@
       "judge": "Kohtunik",
       "mediator": "Lepitaja",
       "other": "Muu"
-    }
+    },
+    "numberConvention": "Eelistatud vorming: {example}",
+    "numberDeparts": "Ei vasta eelistatud vormingule.",
+    "numberHintEmpty": "Määrake asja number, et selle dokumente nummerdama hakata."
+  },
+  "role": {
+    "readFailed": "Teie õigusi ei õnnestunud laadida, seega on muudatused praegu peidetud.",
+    "retry": "Proovi uuesti"
   }
 }

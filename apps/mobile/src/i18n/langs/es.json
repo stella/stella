@@ -591,6 +591,13 @@
       "judge": "Juez",
       "mediator": "Mediador",
       "other": "Otro"
-    }
+    },
+    "numberConvention": "Formato preferido: {example}",
+    "numberDeparts": "No coincide con el formato preferido.",
+    "numberHintEmpty": "Añada un número de asunto para empezar a numerar sus documentos."
+  },
+  "role": {
+    "readFailed": "No se pudieron cargar sus permisos, así que los cambios quedan ocultos por ahora.",
+    "retry": "Reintentar"
   }
 }
