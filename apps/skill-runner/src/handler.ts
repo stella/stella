@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import { skillRunnerInputSchema } from "@stll/api-contract/skill-runner";
@@ -5,7 +6,16 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import { SkillRunnerArchiveError } from "./archive";
+import { checkCredentialIsolation } from "./isolation";
 import { type ArchiveTransport, runSkillCommand } from "./run";
+
+/** The execution environment's process table; the runner is Linux only. */
+const PROC_ROOT = "/proc";
+
+/** A process that is already gone needs no kill. */
+const killProcess = (pid: number) => {
+  Result.try(() => process.kill(pid, "SIGKILL"));
+};
 
 /** Until S3 answers with headers; the body then may not stall longer. */
 const HEADERS_TIMEOUT_MS = 30_000;
@@ -52,7 +62,13 @@ export const handler = async (event: unknown) => {
   if (!parsed.success) {
     throw new SkillRunnerArchiveError({ message: "Invalid skill run input" });
   }
-  const ran = await runSkillCommand(parsed.output, httpsTransport);
+  const isolated = await checkCredentialIsolation(PROC_ROOT);
+  if (isolated.isErr()) {
+    throw isolated.error;
+  }
+  const ran = await runSkillCommand(parsed.output, httpsTransport, {
+    sweep: { procRoot: PROC_ROOT, kill: killProcess },
+  });
   if (ran.isErr()) {
     throw ran.error;
   }

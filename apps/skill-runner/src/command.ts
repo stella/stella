@@ -42,9 +42,15 @@ const capture = (limit: number) => {
   };
 };
 
+/** SIGKILL a whole process group; an error means it has no members left. */
+const killGroup = (group: number) =>
+  Result.try(() => process.kill(-group, "SIGKILL"));
+
 /**
- * Run one command in its own process group, so a timeout ends everything it
- * started. Never through a shell: `argv[0]` is the program.
+ * Run one command in its own process group. Whether it exits or times out,
+ * everything it started in that group is ended before the outcome is
+ * reported, so nothing it left behind can change the workspace while it is
+ * listed and stored. Never through a shell: `argv[0]` is the program.
  */
 export const runCommand = async ({
   argv,
@@ -92,10 +98,7 @@ export const runCommand = async ({
       const group = child.pid;
       // The whole process group, so nothing the command started survives;
       // the child alone when the group is already gone.
-      if (
-        group === undefined ||
-        Result.try(() => process.kill(-group, "SIGKILL")).isErr()
-      ) {
+      if (group === undefined || killGroup(group).isErr()) {
         child.kill("SIGKILL");
       }
     }, timeoutMs);
@@ -110,6 +113,11 @@ export const runCommand = async ({
       });
     });
     child.on("close", (code, signal) => {
+      // A descendant may still run with its own stdio once the command
+      // exits; an empty group is the expected case.
+      if (child.pid !== undefined) {
+        killGroup(child.pid);
+      }
       finish({
         outcome: timedOut
           ? SKILL_RUNNER_OUTCOME.timedOut

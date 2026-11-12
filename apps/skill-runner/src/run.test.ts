@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { createReadStream } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import * as v from "valibot";
 
 import type { SkillRunnerInput } from "@stll/api-contract/skill-runner";
@@ -93,7 +97,7 @@ describe("one skill command", () => {
     ).unwrap();
     expect(result.outcome).toBe("exited");
     expect(result.exitCode).toBe(0);
-    expect(result.changedFiles.map(({ path }) => path)).toEqual([
+    expect(result.changedFiles.map(({ path: file }) => file)).toEqual([
       "out/memo.md",
     ]);
     expect(result.removedFiles).toEqual([]);
@@ -223,6 +227,35 @@ describe("the command process", () => {
       timeoutMs: 1000,
     });
     expect(outcome.outcome).toBe("timed_out");
+  });
+
+  // The descendant holds the write end of a FIFO and none of the command's
+  // pipes; the test's read end sees EOF only once it is dead. Left running,
+  // it would hold the FIFO open past the test's own timeout.
+  test("nothing the command started outlives its exit", async () => {
+    const folder = await mkdtemp(path.join(tmpdir(), "descendant-"));
+    const fifo = path.join(folder, "held");
+    expect(Bun.spawnSync(["mkfifo", fifo]).exitCode).toBe(0);
+    const reader = createReadStream(fifo);
+    const released = new Promise<void>((resolve) => {
+      reader.on("end", resolve);
+    });
+    reader.resume();
+    const outcome = await runCommand({
+      argv: [
+        BUN,
+        "-e",
+        // Exits only once the descendant holds the FIFO.
+        'const held = Bun.spawn(["sh", "-c", "exec 3>\\"$0\\"; echo held; exec sleep 30", process.argv.at(-1)], { stdin: "ignore", stdout: "pipe", stderr: "ignore" }); await held.stdout.getReader().read(); process.exit(0);',
+        fifo,
+      ],
+      cwd: process.cwd(),
+      env: { PATH: process.env["PATH"] ?? "" },
+      timeoutMs: 20_000,
+    });
+    expect(outcome.outcome).toBe("exited");
+    await released;
+    await rm(folder, { recursive: true, force: true });
   });
 
   test("output beyond the cap is dropped and counted", async () => {

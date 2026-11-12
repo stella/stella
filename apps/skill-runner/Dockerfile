@@ -13,4 +13,6 @@ FROM public.ecr.aws/lambda/nodejs:22-arm64@sha256:3f965c1858f13651484a71587f2fa5
 RUN dnf install -y python3 && dnf clean all && rm -rf /var/cache/dnf
 COPY --from=builder /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=builder /app/handler.mjs /var/task/handler.mjs
+COPY --chmod=755 apps/skill-runner/entrypoint.sh /usr/local/bin/skill-runner-entrypoint
+ENTRYPOINT ["/usr/local/bin/skill-runner-entrypoint"]
 CMD ["handler.handler"]

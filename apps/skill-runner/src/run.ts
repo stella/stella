@@ -19,6 +19,11 @@ import {
 } from "./archive";
 import { runCommand } from "./command";
 import { commandEnvironment, lambdaEnvironment } from "./env";
+import {
+  liveProcessIds,
+  type SkillRunnerIsolationError,
+  sweepNewProcesses,
+} from "./isolation";
 
 /** How the runner moves archives; the handler uses HTTPS to presigned URLs. */
 export type ArchiveTransport = {
@@ -61,17 +66,36 @@ const transfer = async <T>(
     catch: (cause) => new SkillRunnerArchiveError({ message, cause }),
   });
 
+type RunError = SkillRunnerArchiveError | SkillRunnerIsolationError;
+
+/**
+ * The process table to sweep after the command. Only in the runner's own
+ * execution environment, where every process that appears during a command
+ * is the command's.
+ */
+export type ProcessSweep = {
+  procRoot: string;
+  kill: (pid: number) => void;
+};
+
 type RunOptions = {
   environment?: Readonly<Record<string, string | undefined>>;
   root?: string;
+  sweep?: ProcessSweep;
 };
 
 const runInFolder = async (
   root: string,
   input: SkillRunnerInput,
   transport: ArchiveTransport,
-  environment: Readonly<Record<string, string | undefined>>,
-): Promise<Result<SkillRunnerResult, SkillRunnerArchiveError>> => {
+  {
+    environment,
+    sweep,
+  }: {
+    environment: Readonly<Record<string, string | undefined>>;
+    sweep: ProcessSweep | undefined;
+  },
+): Promise<Result<SkillRunnerResult, RunError>> => {
   const workspace = path.join(root, "workspace");
   const skillDir = path.join(root, "skills", input.skill.name);
   const places = {
@@ -136,12 +160,30 @@ const runInFolder = async (
   if (before.isErr()) {
     return Result.err(before.error);
   }
+  let baseline: ReadonlySet<number> | undefined;
+  if (sweep !== undefined) {
+    const live = await liveProcessIds(sweep.procRoot);
+    if (live.isErr()) {
+      return Result.err(live.error);
+    }
+    baseline = live.value;
+  }
   const ran = await runCommand({
     argv: input.command.argv,
     cwd: path.join(workspace, input.command.cwd),
     env: commandEnvironment(environment, places, input.egressProxyUrl),
     timeoutMs: input.command.timeoutMs,
   });
+  if (sweep !== undefined && baseline !== undefined) {
+    const swept = await sweepNewProcesses({
+      procRoot: sweep.procRoot,
+      baseline,
+      kill: sweep.kill,
+    });
+    if (swept.isErr()) {
+      return Result.err(swept.error);
+    }
+  }
   const after = await listFolder(workspace, WORKSPACE_LIMITS);
   if (after.isErr()) {
     return Result.err(after.error);
@@ -149,6 +191,15 @@ const runInFolder = async (
   const packed = await packFolder(workspace, after.value);
   if (packed.isErr()) {
     return Result.err(packed.error);
+  }
+  // The next run downloads this archive under the same cap; a workspace it
+  // would refuse is never stored.
+  if (packed.value.byteLength > WORKSPACE_LIMITS.archiveBytes) {
+    return Result.err(
+      new SkillRunnerArchiveError({
+        message: "The workspace is larger than a run may store",
+      }),
+    );
   }
   const stored = await transfer(
     "Workspace could not be stored",
@@ -171,7 +222,7 @@ export const runSkillCommand = async (
   input: SkillRunnerInput,
   transport: ArchiveTransport,
   options: RunOptions = {},
-): Promise<Result<SkillRunnerResult, SkillRunnerArchiveError>> => {
+): Promise<Result<SkillRunnerResult, RunError>> => {
   const root = await transfer(
     "Run folder could not be made",
     async () =>
@@ -180,12 +231,10 @@ export const runSkillCommand = async (
   if (root.isErr()) {
     return Result.err(root.error);
   }
-  const outcome = await runInFolder(
-    root.value,
-    input,
-    transport,
-    options.environment ?? lambdaEnvironment(),
-  );
+  const outcome = await runInFolder(root.value, input, transport, {
+    environment: options.environment ?? lambdaEnvironment(),
+    sweep: options.sweep,
+  });
   await rm(root.value, { recursive: true, force: true });
   return outcome;
 };
