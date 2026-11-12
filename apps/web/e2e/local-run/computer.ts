@@ -292,6 +292,9 @@ export const send = async (page: Page, text: string) => {
   await page.getByRole("button", { name: "Send message" }).click();
 };
 
+/** More collapsed parts than one answer has: a toggle that stays collapsed. */
+const MAX_EXPANDED = 50;
+
 /**
  * Open every collapsed part of the transcript (an answer's steps, then each
  * step's details) and return how many opened.
@@ -300,11 +303,10 @@ export const expandTranscript = async (page: Page) => {
   const collapsed = transcript(page).locator('button[aria-expanded="false"]');
   let opened = 0;
   // Opening a group reveals the rows inside it, so read again after each.
-  for (let count = await collapsed.count(); count > 0;) {
-    // await-in-loop: each click changes what is collapsed.
+  // await-in-loop: each click changes what is collapsed.
+  while ((await collapsed.count()) > 0 && opened < MAX_EXPANDED) {
     await collapsed.first().click();
     opened += 1;
-    count = await collapsed.count();
   }
   return opened;
 };
