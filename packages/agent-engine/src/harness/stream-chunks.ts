@@ -33,6 +33,7 @@ import {
   type HarnessFailure,
   type HarnessQuestionRequest,
   type HarnessToolCall,
+  type HarnessToolResult,
   type HarnessUsage,
 } from "./events";
 import { shownToolInput, shownToolResult } from "./tool-parts";
@@ -121,6 +122,13 @@ const TOOL_RESULT_FIELDS = {
     metadata: { tanstack: { toolResultOutcome: "cancelled" } },
   },
 } as const satisfies Record<ToolResultStatus, object>;
+
+/**
+ * A cancelled call's result content, whatever the harness sent with it: a
+ * call the turn cut off never ran to its end, so its card reads as stopped,
+ * never as failed.
+ */
+const INTERRUPTED_RESULT_CONTENT = JSON.stringify({ status: "interrupted" });
 
 type TextState = { text: string; emitted: number; ended: boolean };
 
@@ -390,7 +398,7 @@ class ChunkMapper {
 
   private completeToolCall(
     toolCall: HarnessToolCall,
-    result: { content: string; status: "succeeded" | "failed" },
+    result: HarnessToolResult,
   ) {
     if (this.opened.has(toolCall.id) && !this.unresolved.has(toolCall.id)) {
       // One result per call: a repeat would persist a second result part.
@@ -400,12 +408,14 @@ class ChunkMapper {
     this.openToolCall(toolCall);
     this.resolveToolCall(
       toolCall.id,
-      shownToolResult(
-        toolCall,
-        result.content,
-        result.status === "failed",
-        this.context.workspaceDir,
-      ),
+      result.status === "cancelled"
+        ? INTERRUPTED_RESULT_CONTENT
+        : shownToolResult(
+            toolCall,
+            result.content,
+            result.status === "failed",
+            this.context.workspaceDir,
+          ),
       result.status,
     );
   }
@@ -530,11 +540,7 @@ class ChunkMapper {
     }
     // Pair every open tool call before the run ends, as the cloud engine does.
     for (const toolCallId of [...this.unresolved]) {
-      this.resolveToolCall(
-        toolCallId,
-        JSON.stringify({ status: "interrupted" }),
-        "cancelled",
-      );
+      this.resolveToolCall(toolCallId, INTERRUPTED_RESULT_CONTENT, "cancelled");
     }
     this.closeSegment(chunk);
     this.terminated = true;

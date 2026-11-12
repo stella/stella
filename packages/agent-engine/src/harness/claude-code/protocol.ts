@@ -243,7 +243,27 @@ export const UserMessageSchema = v.object({
    * (`--replay-user-messages`), once the CLI took it into the conversation.
    */
   isReplay: v.optional(v.boolean()),
+  /**
+   * Why a tool call in this message did not run, by tool use id: a call cut
+   * off by an interrupt or a new message is `cancelled` or `interrupted`,
+   * which is not the tool failing.
+   */
+  tool_result_meta: v.optional(
+    v.array(
+      v.object({
+        id: v.string(),
+        non_execution_kind: v.nullish(v.string()),
+      }),
+    ),
+  ),
 });
+
+/** The kinds of a call the harness did not run that a stop or a new message
+ *  caused. */
+export const CLAUDE_STOPPED_TOOL_KINDS: ReadonlySet<string> = new Set([
+  "cancelled",
+  "interrupted",
+]);
 
 export const ResultMessageSchema = v.object({
   type: v.literal("result"),

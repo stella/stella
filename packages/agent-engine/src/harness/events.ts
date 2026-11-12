@@ -71,7 +71,9 @@ export type HarnessToolCall = {
 
 export type HarnessToolResult = {
   content: string;
-  status: "succeeded" | "failed";
+  /** `cancelled`: the harness never ran the call to its end because the
+   *  turn was stopped or a new message cut it off; not a failure. */
+  status: "succeeded" | "failed" | "cancelled";
 };
 
 /**

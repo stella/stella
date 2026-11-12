@@ -1,6 +1,0 @@
-{
-  "metric": "no-db-await-in-loop-suppressions",
-  "file": "apps/api/src/handlers/sharepoint/imports/create.ts",
-  "delta": 1,
-  "reason": "A SharePoint import copies at most SHAREPOINT_IMPORT_MAX_ITEMS (10) files one after another on purpose: each iteration downloads, scans and stores one document of up to the document size limit, so running them concurrently would hold up to ten documents in memory at once. The loop is bounded by the request schema, not by stored rows."
-}

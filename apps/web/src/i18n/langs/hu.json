@@ -571,6 +571,21 @@
       "showBefore": "A(z) {from}. ¶ előtti szöveg megjelenítése",
       "verifyParagraphs": "Bekezdések ellenőrzése"
     },
+    "staleness": {
+      "failed": "Az állításokat nem sikerült újra ellenőrizni",
+      "finished": "{count, plural, one {# állítás újraellenőrizve} other {# állítás újraellenőrizve}}",
+      "partial": "Újraellenőrizve: {rechecked, number}, sikertelen: {failed, plural, one {#} other {#}}",
+      "reasons": {
+        "factChanged": "Tény módosult",
+        "factHeld": "Tény kihagyva",
+        "factRemoved": "Tény eltávolítva",
+        "newFactRelated": "Új kapcsolódó tény"
+      },
+      "recheckAll": "Összes újraellenőrzése",
+      "recheckLocked": "A többi elavult állítással együtt újraellenőrzés alatt",
+      "runLine": "{count, plural, one {# állítás elavult lehet} other {# állítás elavult lehet}}",
+      "running": "{count, plural, one {# állítás újraellenőrzése…} other {# állítás újraellenőrzése…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Cáfolt",
@@ -2160,6 +2175,7 @@
     "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
+    "stopping": "Leállítás…",
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
     "suggestedFollowupsLabel": "Javasolt követő kérdések",
@@ -2697,6 +2713,7 @@
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
     "organizations": "Szervezetek",
+    "outOfDate": "Elavult",
     "page": "{page}. oldal",
     "paymentRetryNotice": "Fizetési probléma. A hozzáférés megtartásához frissítse a fizetési módját eddig: {date}.",
     "pin": "Rögzítés",
@@ -6102,7 +6119,6 @@
     "comments": "Megjegyzések",
     "commentsEmpty": "Jelöljön ki szöveget a megjegyzéshez.",
     "noRevisions": "Még nincs változat",
-    "outOfDate": "Elavult",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Nincs összefoglaló",
     "proposals": "Módosítási javaslatok",

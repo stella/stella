@@ -151,6 +151,10 @@ export type ChatRouteHandoffStart = {
  * open, so Stop stays available). A stop the server accepted never fails:
  * the page reloads the turn as the server stores it.
  */
+/** Whether a local question's answer went out; one that did not can be
+ *  sent again. */
+export type LocalRunAnswerDelivery = "sent" | "not_sent";
+
 export type ChatStopState =
   | { status: "idle" }
   | { status: "pending"; turnId: SafeId<"chatTurn"> }
@@ -220,7 +224,7 @@ export type ChatRuntime = ChatActivitySession & {
   answerLocalRunQuestion: (
     interruptId: string,
     answers: ChatLocalRunQuestionReply["answers"] | null,
-  ) => Promise<void>;
+  ) => Promise<LocalRunAnswerDelivery>;
   /**
    * Hand a message to the turn running on the member's computer without
    * stopping it; idempotent on `inputId`. See `ChatSteerOutcome`.
@@ -1402,13 +1406,18 @@ export const createChatRuntime = ({
   const answerLocalRunQuestion = async (
     interruptId: string,
     answers: ChatLocalRunQuestionReply["answers"] | null,
-  ): Promise<void> => {
-    if (isStoppedTurn() || answeredLocalRunQuestions.has(interruptId)) {
-      return;
+  ): Promise<LocalRunAnswerDelivery> => {
+    if (isStoppedTurn()) {
+      return "not_sent";
+    }
+    // Already on its way: the one answer stands.
+    if (answeredLocalRunQuestions.has(interruptId)) {
+      return "sent";
     }
     answeredLocalRunQuestions.add(interruptId);
     if (!(await awaitRequestEnd())) {
-      return;
+      answeredLocalRunQuestions.delete(interruptId);
+      return "not_sent";
     }
     const resumed = await Result.tryPromise(
       async () =>
@@ -1427,7 +1436,14 @@ export const createChatRuntime = ({
     if (Result.isError(resumed)) {
       answeredLocalRunQuestions.delete(interruptId);
       captureRuntimeError(resumed.error.cause);
+      return "not_sent";
     }
+    // The client resolves false, not throws, when the request failed.
+    if (!resumed.value) {
+      answeredLocalRunQuestions.delete(interruptId);
+      return "not_sent";
+    }
+    return "sent";
   };
 
   /**

@@ -21,7 +21,7 @@ use super::sidecar_host::{
 use super::tests::{Connection, Gateway, Setup};
 use crate::harness_sidecar::tests::Fixture;
 use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar, SkillFolderRef};
-use crate::runner_protocol::{ApprovalDecision, Harness, RunApproval};
+use crate::runner_protocol::{ApprovalDecision, Harness, HarnessReport, RunApproval};
 
 const WAIT: Duration = Duration::from_secs(10);
 const VERSION: &str = "0.50.0";
@@ -45,7 +45,8 @@ const MODELS: &[&str] = &[
 /// every process it authorizes; Claude Code not installed.
 struct FakeHarnesses {
   root: PathBuf,
-  credentials: Option<HarnessCredentials>,
+  /// What each read of the credentials finds; a test may change it.
+  credentials: Arc<Mutex<Option<HarnessCredentials>>>,
   /// What the host asked to hear when an install ends.
   settled: Arc<Mutex<Option<InstallSettled>>>,
 }
@@ -63,7 +64,7 @@ impl LocalHarnesses for FakeHarnesses {
 
   fn credentials(&self, harness: Harness) -> BoxFuture<'_, Option<HarnessCredentials>> {
     let credentials = (harness == Harness::Codex)
-      .then(|| self.credentials.clone())
+      .then(|| self.credentials.lock().unwrap().clone())
       .flatten();
     Box::pin(async move { credentials })
   }
@@ -187,6 +188,15 @@ impl Place {
   fn host(
     &self,
     credentials: Option<HarnessCredentials>,
+    probe_interval: Duration,
+  ) -> SidecarHarnessHost {
+    self.host_reading(Arc::new(Mutex::new(credentials)), probe_interval)
+  }
+
+  /// A host whose credentials are read from `credentials` each time.
+  fn host_reading(
+    &self,
+    credentials: Arc<Mutex<Option<HarnessCredentials>>>,
     probe_interval: Duration,
   ) -> SidecarHarnessHost {
     SidecarHarnessHost::new(
@@ -680,6 +690,101 @@ fn an_install_that_ends_is_probed_and_reported_without_waiting_for_the_interval(
     runner.stop().await;
   });
   stop_holders(&place);
+}
+
+#[test]
+fn a_ready_harness_stays_ready_through_one_failed_probe_and_the_next_decides() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let _connection = connect(&gateway, &[], "ready").await;
+    let failed = json!({
+      "type": "failed",
+      "reason": "harness_unavailable",
+      "message": "the CLI did not answer in time",
+    });
+    place.probe_answers(&failed);
+    let probes = place.received("harness.probe").len();
+    place.install_settles();
+    until("the failed probe", || {
+      place.received("harness.probe").len() > probes
+    })
+    .await;
+    // One failed probe keeps the harness ready.
+    until("the probe's outcome", || {
+      host.kept_through_failure(Harness::Codex)
+    })
+    .await;
+    assert!(matches!(
+      host.reports().iter().find(|report| codex_report(report)),
+      Some(HarnessReport::Ready(_))
+    ));
+    // The next failed probe decides.
+    place.install_settles();
+    until("the second failed probe", || {
+      matches!(
+        host.reports().iter().find(|report| codex_report(report)),
+        Some(HarnessReport::Unavailable(_))
+      )
+    })
+    .await;
+    runner.stop().await;
+  });
+  stop_holders(&place);
+}
+
+#[test]
+fn a_ready_report_kept_through_a_failed_probe_starts_runs_with_the_fresh_credentials() {
+  let place = Place::new();
+  let grants = Arc::new(Grants::default());
+  let credentials = Arc::new(Mutex::new(Some(chatgpt_credentials(&grants))));
+  let id = run_id();
+  run(async {
+    let host = place.host_reading(Arc::clone(&credentials), Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    // A sign-in since the last probe: the credentials changed.
+    credentials
+      .lock()
+      .unwrap()
+      .as_mut()
+      .unwrap()
+      .settings
+      .environment
+      .insert(
+        "STELLA_CODEX_TOKEN_BROKER".to_owned(),
+        "/broker/signed-in-again".to_owned(),
+      );
+    place.probe_answers(&json!({
+      "type": "failed",
+      "reason": "harness_unavailable",
+      "message": "the CLI did not answer in time",
+    }));
+    place.install_settles();
+    until("the probe's outcome", || {
+      host.kept_through_failure(Harness::Codex)
+    })
+    .await;
+    connection.send(run_start(&id, "gpt-test")).await;
+    connection.receive_type("run.accepted").await;
+    until_finished(&mut connection).await;
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  let start = place.received("run.start").remove(0);
+  assert_eq!(
+    start["launch"]["environment"],
+    json!({ "STELLA_CODEX_TOKEN_BROKER": "/broker/signed-in-again" })
+  );
+}
+
+fn codex_report(report: &HarnessReport) -> bool {
+  serde_json::to_value(report).is_ok_and(|value| value["id"] == "codex")
 }
 
 #[test]
