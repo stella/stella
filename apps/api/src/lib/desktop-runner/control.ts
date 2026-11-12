@@ -283,6 +283,8 @@ const startRun = async (
     runId,
     // A chat's turns share a folder; a run outside a chat keeps its own.
     folderId: input.chat?.threadId ?? runId,
+    // Runs work in the chat's own folder until a chat can link one.
+    linkedFolderId: null,
     harness: input.harness,
     harnessVersion: input.harnessVersion,
     model: input.model,

@@ -155,6 +155,11 @@ wire_values!(RejectReason {
   RunTooLarge => "run_too_large",
   UnknownRun => "unknown_run",
   FolderBusy => "folder_busy",
+  FolderUnlinked => "folder_unlinked",
+  FolderOffline => "folder_offline",
+  FolderMoved => "folder_moved",
+  FolderProtected => "folder_protected",
+  FolderUnreadable => "folder_unreadable",
 });
 
 wire_values!(FolderRestoreOutcome {
@@ -455,6 +460,9 @@ pub(crate) struct RunStart {
   pub(crate) run_id: String,
   /// The folder the run works in; a chat's runs share one.
   pub(crate) folder_id: String,
+  /// A folder the member linked on this computer, worked in instead of the
+  /// chat's own; the chat's folder still keeps its cache.
+  pub(crate) linked_folder_id: Option<FolderId>,
   pub(crate) harness: Harness,
   pub(crate) harness_version: String,
   pub(crate) model: String,
@@ -549,6 +557,8 @@ impl From<FolderId> for String {
 pub(crate) struct FolderRestore {
   pub(crate) restore_id: String,
   pub(crate) folder_id: FolderId,
+  /// The linked folder the run worked in, when it worked in one.
+  pub(crate) linked_folder_id: Option<FolderId>,
   pub(crate) run_id: String,
 }
 

@@ -1919,6 +1919,7 @@
     },
     "localRun": {
       "cloud": "Cloud stella",
+      "errorFolderUnavailable": "Složka propojená s tímto chatem není ve vašem počítači dostupná. Zkontrolujte ji ve stella desktop a pak to odešlete znovu.",
       "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
       "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
       "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",

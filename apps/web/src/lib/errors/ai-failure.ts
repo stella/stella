@@ -33,6 +33,8 @@ export const AI_FAILURE_ERROR_KEYS = {
   [AI_FAILURE_CODES.local_runner_not_reached]: "chat.localRun.errorNotReached",
   [AI_FAILURE_CODES.local_runner_relinked]: "chat.localRun.errorRelinked",
   [AI_FAILURE_CODES.local_runner_restoring]: "chat.localRun.errorRestoring",
+  [AI_FAILURE_CODES.local_runner_folder_unavailable]:
+    "chat.localRun.errorFolderUnavailable",
   [AI_FAILURE_CODES.unknown]: "errors.apiCodes.aiUnknown",
   [AI_FAILURE_CODES.role_not_configured]: "capabilityActions.aiMissing",
   [AI_FAILURE_CODES.own_key_required]: "capabilityActions.aiMissing",

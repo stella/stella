@@ -310,7 +310,7 @@ const RUNS_DIRECTORY: &str = "agent-runs";
 const RETIRED_PACKAGE_CACHE_DIRECTORY: &str = "agent-package-cache";
 
 /// The folders on this computer every run writes to, which a skill folder must
-/// stay out of.
+/// stay out of. A linked folder is the member's own and listed apart.
 pub(crate) fn run_folders_on_this_computer() -> Vec<std::path::PathBuf> {
   dirs::data_dir()
     .map(|data| data.join(crate::config::APP_DATA_DIR_NAME))
@@ -367,6 +367,13 @@ struct ManagedHarnesses {
 impl LocalHarnesses for ManagedHarnesses {
   fn skill_folders(&self) -> Vec<SkillFolderRef> {
     crate::local_skill_folders::SkillFolders::for_this_computer().for_run()
+  }
+
+  fn linked_folder(
+    &self,
+    id: uuid::Uuid,
+  ) -> Result<std::path::PathBuf, crate::local_linked_folders::LinkedFolderRefusal> {
+    crate::local_linked_folders::LinkedFolders::for_this_computer().resolve(id)
   }
 
   fn on_install_settled(&self, settled: InstallSettled) {

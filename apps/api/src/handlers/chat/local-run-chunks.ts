@@ -212,7 +212,8 @@ type LocalRunFailure =
   | typeof AI_FAILURE_CODES.local_runner_turn_too_large
   | typeof AI_FAILURE_CODES.local_runner_not_reached
   | typeof AI_FAILURE_CODES.local_runner_relinked
-  | typeof AI_FAILURE_CODES.local_runner_restoring;
+  | typeof AI_FAILURE_CODES.local_runner_restoring
+  | typeof AI_FAILURE_CODES.local_runner_folder_unavailable;
 
 const FAILURE_MESSAGE = {
   [AI_FAILURE_CODES.local_runner_needs_login]:
@@ -229,6 +230,8 @@ const FAILURE_MESSAGE = {
     "The computer was linked again, so the run of its previous link stopped.",
   [AI_FAILURE_CODES.local_runner_restoring]:
     "The computer is still undoing an earlier turn's file changes.",
+  [AI_FAILURE_CODES.local_runner_folder_unavailable]:
+    "The folder linked to the chat is not available on the computer.",
 } as const satisfies Record<LocalRunFailure, string>;
 
 type StoredOutcome = Extract<
@@ -280,6 +283,13 @@ const LOCAL_RUN_REJECTION = {
   unknown_run: AI_FAILURE_CODES.local_runner_unavailable,
   // The computer is still undoing an earlier turn's file changes.
   folder_busy: AI_FAILURE_CODES.local_runner_restoring,
+  // The linked folder is gone from the computer's list, on a volume that is
+  // not mounted, moved, holds what runs rely on, or cannot be read.
+  folder_unlinked: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_offline: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_moved: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_protected: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_unreadable: AI_FAILURE_CODES.local_runner_folder_unavailable,
 } as const satisfies Record<RejectReason, LocalRunFailure>;
 
 /** A stored chunk as the turn pipeline folds it. */

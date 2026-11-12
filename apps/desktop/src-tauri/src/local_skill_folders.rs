@@ -6,9 +6,10 @@
 //!
 //! A folder is looked at again each time the list is read, because it can
 //! change at any moment: what no longer qualifies stays listed with the reason,
-//! and is left out of runs. A folder any run may write to by default (the temp
-//! directories a sandbox allows, stella's own run folders) does not qualify, and
-//! neither does a network share, whose path the sidecar protocol does not take.
+//! and is left out of runs. A folder any run may write to (the temp directories
+//! a sandbox allows, stella's own run folders, the folders a member linked for
+//! runs) does not qualify, and neither does a network share, whose path the
+//! sidecar protocol does not take.
 
 use std::{
   fs,
@@ -200,12 +201,19 @@ fn plain_path(path: &Path) -> Option<String> {
   )
 }
 
-/// The folders a run can write to: stella's own and the temp directories every
-/// harness sandbox leaves writable. Each is listed as named and as resolved, in
-/// the form a stored folder's path takes.
+/// The folders a run can write to: stella's own, the folders a member linked
+/// for runs to work in, and the temp directories every harness sandbox leaves
+/// writable. Each is listed as named and as resolved, in the form a stored
+/// folder's path takes.
 fn run_writable_folders() -> Vec<PathBuf> {
   crate::desktop_runner::run_folders_on_this_computer()
     .into_iter()
+    .chain(
+      crate::local_linked_folders::LinkedFolders::for_this_computer()
+        .listed()
+        .into_iter()
+        .map(PathBuf::from),
+    )
     .chain([std::env::temp_dir(), PathBuf::from("/tmp")])
     .flat_map(|root| {
       let resolved = fs::canonicalize(&root)
@@ -267,6 +275,12 @@ impl SkillFolders {
       tracing::warn!(target: "stella::local_skills", %error, "the skill folder list could not be saved");
       SkillFolderListError::Storage
     })
+  }
+
+  /// The listed paths, read without touching any folder: what a linked
+  /// folder must stay out of.
+  pub(crate) fn listed(&self) -> Vec<String> {
+    self.stored()
   }
 
   fn run_can_write(&self, folder: &Path) -> bool {

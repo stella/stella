@@ -817,5 +817,26 @@
       "network_folder": "Ten folder znajduje się w udziale sieciowym. Umiejętności muszą być na dysku tego komputera.",
       "path_changed": "Zmienił się folder nadrzędny. Usuń ten folder i dodaj go ponownie."
     }
+  },
+  "localLinkedFolders": {
+    "title": "Połączone foldery",
+    "description": "Foldery na tym komputerze, w których może pracować agent czatu. Czat widzi tylko nazwę folderu; jego ścieżka pozostaje na tym komputerze.",
+    "add": "Połącz folder",
+    "remove": "Odłącz",
+    "removeFolder": "Odłącz {name}",
+    "state": {
+      "offline": "Dysk, na którym jest ten folder, nie jest podłączony.",
+      "moved": "Ten folder został przeniesiony, zmienił nazwę lub został usunięty. Odłącz go i połącz ponownie.",
+      "protected": "Ten folder zawiera własne dane stelli lub folder z umiejętnościami, więc agent nie może w nim pracować.",
+      "unreadable": "Nie udało się odczytać tego folderu."
+    },
+    "notice": {
+      "action_failed": "Nie udało się. Spróbuj ponownie.",
+      "too_many": "Ten komputer ma już tyle połączonych folderów, ile może przechować. Najpierw odłącz jeden.",
+      "not_a_folder": "Wybierz folder.",
+      "network_folder": "Ten folder znajduje się w udziale sieciowym. Połącz folder z dysku tego komputera.",
+      "protected": "Ten folder zawiera własne dane stelli lub folder z umiejętnościami, więc agent nie może w nim pracować.",
+      "unreadable": "Nie udało się odczytać tego folderu."
+    }
   }
 }

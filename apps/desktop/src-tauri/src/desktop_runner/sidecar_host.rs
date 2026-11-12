@@ -24,7 +24,11 @@
 //!   resumes the harness's session. Input is answered with a `RUN_ERROR`
 //!   chunk (`input_unsupported`) on the run's stream; the run goes on.
 //! - A run works in its chat's folder under the app's data, so the next turn
-//!   finds what this one left (`run_folders`).
+//!   finds what this one left (`run_folders`), or in a folder the member
+//!   linked on this computer (`local_linked_folders`). The chat's folder
+//!   keeps the run's cache either way; a linked folder is never removed with
+//!   it. A linked folder that is not available now refuses the run with the
+//!   reason.
 
 use std::{
   collections::{HashMap, HashSet},
@@ -49,6 +53,7 @@ use crate::harness_sidecar::{
   RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore, SidecarRunOutput,
   SidecarRunStart, SidecarSettings, SkillFolderRef,
 };
+use crate::local_linked_folders::LinkedFolderRefusal;
 use crate::runner_protocol::{
   FolderRestore, FolderRestoreOutcome, Harness, HarnessReport,
   HarnessUnavailableReason, JsonObject, MAX_FRAME_BYTES, MissingHarness, RejectReason,
@@ -66,6 +71,9 @@ const INPUT_UNSUPPORTED: &str = "input_unsupported";
 /// How long a run's start waits for its skill folders. A folder can sit on a
 /// mount that hangs, and a start runs on the runner's loop.
 const SKILL_FOLDER_BUDGET: Duration = Duration::from_secs(2);
+/// How long a run's start or a restore waits to learn whether its linked
+/// folder is there; one whose mount does not answer counts as offline.
+const LINKED_FOLDER_BUDGET: Duration = Duration::from_secs(2);
 const OUTPUT_TOO_LARGE: &str = "output_too_large";
 /// Outputs journaled in one write at most.
 const JOURNAL_BATCH: usize = 256;
@@ -109,6 +117,9 @@ pub(crate) trait LocalHarnesses: Send + Sync + 'static {
   fn on_install_settled(&self, settled: InstallSettled);
   /// The skill folders the member listed for this computer, as they stand.
   fn skill_folders(&self) -> Vec<SkillFolderRef>;
+  /// The folder a linked folder's id names on this computer, when a run can
+  /// work there now.
+  fn linked_folder(&self, id: Uuid) -> Result<PathBuf, LinkedFolderRefusal>;
 }
 
 pub(crate) struct HostSettings {
@@ -552,6 +563,41 @@ pub(crate) fn skill_folders_within(
   })
 }
 
+/// The linked folder a run works in, looked at on a thread of its own: a
+/// mount that does not answer in time counts as offline, and the stuck thread
+/// ends when it answers.
+pub(crate) fn linked_folder_within(
+  budget: Duration,
+  harnesses: Arc<dyn LocalHarnesses>,
+  id: Uuid,
+) -> Result<PathBuf, LinkedFolderRefusal> {
+  let (sender, receiver) = std::sync::mpsc::channel();
+  let reader = std::thread::Builder::new()
+    .name("linked-folder".to_owned())
+    .spawn(move || {
+      let _gone = sender.send(harnesses.linked_folder(id));
+    });
+  if let Err(error) = reader {
+    tracing::warn!(target: LOG_TARGET, ?error, "a linked folder could not be looked at");
+    return Err(LinkedFolderRefusal::Unreadable);
+  }
+  receiver.recv_timeout(budget).unwrap_or_else(|_late| {
+    tracing::warn!(target: LOG_TARGET, "a linked folder did not answer in time");
+    Err(LinkedFolderRefusal::Offline)
+  })
+}
+
+/// Why a run cannot work in its linked folder, in the runner protocol's words.
+const fn linked_folder_reject(refusal: LinkedFolderRefusal) -> RejectReason {
+  match refusal {
+    LinkedFolderRefusal::Unlinked => RejectReason::FolderUnlinked,
+    LinkedFolderRefusal::Offline => RejectReason::FolderOffline,
+    LinkedFolderRefusal::Moved => RejectReason::FolderMoved,
+    LinkedFolderRefusal::Protected => RejectReason::FolderProtected,
+    LinkedFolderRefusal::Unreadable => RejectReason::FolderUnreadable,
+  }
+}
+
 /// Probe every harness now, then on the interval or when asked to. Folders
 /// no run has used for too long are removed on the same beat.
 async fn refresh_reports(shared: Arc<Shared>, sidecar: HarnessSidecar) {
@@ -839,13 +885,26 @@ impl HarnessHost for SidecarHarnessHost {
     if installed.version != start.harness_version {
       return Err(RejectReason::HarnessVersionUnavailable);
     }
-    let workspace = self.shared.workspace(folder_id);
+    // Looked at again on every start: the folder may have gone offline or
+    // moved since the member linked it, or come to hold what runs rely on.
+    let linked = start
+      .linked_folder_id
+      .map(|id| {
+        linked_folder_within(
+          LINKED_FOLDER_BUDGET,
+          Arc::clone(&self.shared.harnesses),
+          id.uuid(),
+        )
+        .map_err(linked_folder_reject)
+      })
+      .transpose()?;
+    let chat_folder = self.shared.workspace(folder_id);
     let opened = {
       let restoring = locked(&self.shared.folders);
       if restoring.contains(&folder_id) {
         return Err(RejectReason::FolderBusy);
       }
-      let opened = run_folders::open(&workspace, SystemTime::now());
+      let opened = run_folders::open(&chat_folder, SystemTime::now());
       // Held until the folder is recorded as used, so no restore begins in
       // between.
       drop(restoring);
@@ -855,8 +914,10 @@ impl HarnessHost for SidecarHarnessHost {
       tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "a run's folder could not be made");
       return Err(RejectReason::AtCapacity);
     }
-    // Made with the folder; the one place outside it the run may write.
-    let cache = run_folders::chat_cache(&workspace);
+    // Made with the chat's folder; the one place outside the folder the run
+    // works in that it may write.
+    let cache = run_folders::chat_cache(&chat_folder);
+    let workspace = linked.unwrap_or(chat_folder);
     let credentials = cached.and_then(|cached| cached.credentials);
     let thread_id = start
       .harness_session_id
@@ -985,8 +1046,27 @@ impl HarnessHost for SidecarHarnessHost {
       return;
     };
     let shared = Arc::clone(&self.shared);
-    let workspace = shared.workspace(folder_id);
+    let linked_folder_id = restore.linked_folder_id;
     tokio::spawn(async move {
+      let workspace = match linked_folder_id {
+        None => shared.workspace(folder_id),
+        Some(id) => {
+          let harnesses = Arc::clone(&shared.harnesses);
+          let looked = tokio::task::spawn_blocking(move || {
+            linked_folder_within(LINKED_FOLDER_BUDGET, harnesses, id.uuid())
+          })
+          .await;
+          let Ok(Ok(folder)) = looked else {
+            // Nothing is put back in a folder that is not there as linked.
+            tracing::warn!(target: LOG_TARGET, "a restore's linked folder is not available");
+            locked(&shared.folders).remove(&folder_id);
+            locked(&shared.restores).remove(&restore.restore_id);
+            answer.send(FolderRestoreOutcome::Failed);
+            return;
+          };
+          folder
+        }
+      };
       let restored = sidecar
         .restore_folder(SidecarFolderRestore {
           request_id: Uuid::new_v4().to_string(),

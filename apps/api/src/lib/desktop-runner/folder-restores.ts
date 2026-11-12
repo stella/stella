@@ -433,6 +433,8 @@ export const requestFolderRestore = async (
 export type FolderRestoreToSend = {
   readonly restoreId: string;
   readonly folderId: string;
+  /** The folder linked on the computer the run worked in, if any. */
+  readonly linkedFolderId: string | null;
   readonly runId: string;
 };
 
@@ -583,7 +585,13 @@ export const claimFolderRestores = async (
             });
       return due
         .filter(({ id, state }) => state === "sent" || sent.includes(id))
-        .map(({ id, folderId, runId }) => ({ restoreId: id, folderId, runId }));
+        .map(({ id, folderId, runId }) => ({
+          restoreId: id,
+          folderId,
+          // Runs work in the chat's own folder until a chat can link one.
+          linkedFolderId: null,
+          runId,
+        }));
     },
   );
 

@@ -817,5 +817,26 @@
       "network_folder": "Šis aplankas yra tinklo bendrinimo vietoje. Įgūdžiai turi būti šio kompiuterio diske.",
       "path_changed": "Pasikeitė aukštesnis aplankas. Pašalinkite šį aplanką ir pridėkite jį iš naujo."
     }
+  },
+  "localLinkedFolders": {
+    "title": "Susieti aplankai",
+    "description": "Šio kompiuterio aplankai, kuriuose gali dirbti pokalbio agentas. Pokalbis mato tik aplanko pavadinimą; jo kelias lieka šiame kompiuteryje.",
+    "add": "Susieti aplanką",
+    "remove": "Atsieti",
+    "removeFolder": "Atsieti {name}",
+    "state": {
+      "offline": "Diskas, kuriame yra šis aplankas, neprijungtas.",
+      "moved": "Šis aplankas buvo perkeltas, pervadintas arba ištrintas. Atsiekite jį ir susiekite iš naujo.",
+      "protected": "Šiame aplanke yra pačios stella duomenys arba įgūdžių aplankas, todėl agentas jame dirbti negali.",
+      "unreadable": "Nepavyko perskaityti šio aplanko."
+    },
+    "notice": {
+      "action_failed": "Nepavyko. Bandykite dar kartą.",
+      "too_many": "Šiame kompiuteryje jau yra tiek susietų aplankų, kiek jis gali laikyti. Pirmiausia atsiekite vieną.",
+      "not_a_folder": "Pasirinkite aplanką.",
+      "network_folder": "Šis aplankas yra tinklo bendrinimo vietoje. Susiekite aplanką iš šio kompiuterio disko.",
+      "protected": "Šiame aplanke yra pačios stella duomenys arba įgūdžių aplankas, todėl agentas jame dirbti negali.",
+      "unreadable": "Nepavyko perskaityti šio aplanko."
+    }
   }
 }

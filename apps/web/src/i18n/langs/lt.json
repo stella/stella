@@ -1919,6 +1919,7 @@
     },
     "localRun": {
       "cloud": "stella debesis",
+      "errorFolderUnavailable": "Su šiuo pokalbiu susietas aplankas jūsų kompiuteryje nepasiekiamas. Patikrinkite jį stella desktop, tada išsiųskite tai dar kartą.",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
       "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",

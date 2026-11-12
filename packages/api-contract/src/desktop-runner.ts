@@ -308,7 +308,10 @@ export const DESKTOP_RUNNER_HARNESS_CAPABILITIES = [
 /**
  * Why a desktop refused a run command. `harness_unavailable` matches a harness
  * reported `unavailable`; `run_too_large` is a `run.start` the desktop cannot
- * hand to its harness host whole, which no retry on that computer fixes.
+ * hand to its harness host whole, which no retry on that computer fixes. The
+ * `folder_*` reasons refuse a run in a linked folder: the link is gone from
+ * the computer, its volume is not mounted, the folder moved, it holds what
+ * runs rely on (stella's data or a skill folder), or it cannot be read.
  */
 export const DESKTOP_RUNNER_REJECT_REASONS = [
   "harness_not_installed",
@@ -323,6 +326,11 @@ export const DESKTOP_RUNNER_REJECT_REASONS = [
   "run_too_large",
   "unknown_run",
   "folder_busy",
+  "folder_unlinked",
+  "folder_offline",
+  "folder_moved",
+  "folder_protected",
+  "folder_unreadable",
 ] as const;
 
 export const DESKTOP_RUNNER_APPROVAL_KINDS = [
@@ -775,6 +783,12 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     runId: runIdSchema,
     /** The folder the run works in; a chat's runs share one, so files stay between turns. */
     folderId: v.pipe(v.string(), v.uuid()),
+    /**
+     * A folder the member linked on the computer, which the run works in
+     * instead; the computer alone knows its path. `null` for the chat's own,
+     * which a command queued before the field existed reads as.
+     */
+    linkedFolderId: v.optional(v.nullable(v.pipe(v.string(), v.uuid())), null),
     harness: harnessSchema,
     harnessVersion: desktopVersionSchema,
     model: modelIdSchema,
@@ -855,6 +869,8 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.folderRestore),
     restoreId: v.pipe(v.string(), v.uuid()),
     folderId: v.pipe(v.string(), v.uuid()),
+    /** The linked folder the run worked in; `null` for the chat's own. */
+    linkedFolderId: v.optional(v.nullable(v.pipe(v.string(), v.uuid())), null),
     runId: runIdSchema,
   }),
 ]);

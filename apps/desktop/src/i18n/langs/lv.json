@@ -817,5 +817,26 @@
       "network_folder": "Šī mape atrodas tīkla koplietojumā. Prasmēm jāatrodas šī datora diskā.",
       "path_changed": "Mainījusies augstāka līmeņa mape. Noņemiet šo mapi un pievienojiet to vēlreiz."
     }
+  },
+  "localLinkedFolders": {
+    "title": "Saistītās mapes",
+    "description": "Šī datora mapes, kurās var strādāt tērzēšanas aģents. Tērzēšana redz tikai mapes nosaukumu; tās ceļš paliek šajā datorā.",
+    "add": "Saistīt mapi",
+    "remove": "Atsaistīt",
+    "removeFolder": "Atsaistīt {name}",
+    "state": {
+      "offline": "Disks, kurā atrodas šī mape, nav pievienots.",
+      "moved": "Šī mape ir pārvietota, pārdēvēta vai izdzēsta. Atsaistiet to un saistiet vēlreiz.",
+      "protected": "Šajā mapē ir pašas stella dati vai prasmju mape, tāpēc aģents tajā nevar strādāt.",
+      "unreadable": "Šo mapi neizdevās nolasīt."
+    },
+    "notice": {
+      "action_failed": "Neizdevās. Mēģiniet vēlreiz.",
+      "too_many": "Šajā datorā jau ir tik daudz saistīto mapju, cik tas var glabāt. Vispirms atsaistiet vienu.",
+      "not_a_folder": "Izvēlieties mapi.",
+      "network_folder": "Šī mape atrodas tīkla koplietojumā. Saistiet mapi šī datora diskā.",
+      "protected": "Šajā mapē ir pašas stella dati vai prasmju mape, tāpēc aģents tajā nevar strādāt.",
+      "unreadable": "Šo mapi neizdevās nolasīt."
+    }
   }
 }

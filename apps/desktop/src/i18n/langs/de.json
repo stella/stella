@@ -817,5 +817,26 @@
       "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Skills müssen auf dem eigenen Laufwerk dieses Computers liegen.",
       "path_changed": "Ein übergeordneter Ordner hat sich geändert. Entfernen Sie diesen Ordner und fügen Sie ihn erneut hinzu."
     }
+  },
+  "localLinkedFolders": {
+    "title": "Verknüpfte Ordner",
+    "description": "Ordner auf diesem Computer, in denen der Coding-Agent eines Chats arbeiten kann. Ein Chat sieht nur den Namen eines Ordners; sein Pfad bleibt auf diesem Computer.",
+    "add": "Ordner verknüpfen",
+    "remove": "Trennen",
+    "removeFolder": "{name} trennen",
+    "state": {
+      "offline": "Das Laufwerk mit diesem Ordner ist nicht verbunden.",
+      "moved": "Dieser Ordner wurde verschoben, umbenannt oder gelöscht. Trennen Sie ihn und verknüpfen Sie ihn erneut.",
+      "protected": "Dieser Ordner enthält die eigenen Daten von stella oder einen Skill-Ordner, daher kann der Agent darin nicht arbeiten.",
+      "unreadable": "Dieser Ordner konnte nicht gelesen werden."
+    },
+    "notice": {
+      "action_failed": "Das hat nicht funktioniert. Versuchen Sie es erneut.",
+      "too_many": "Dieser Computer hat bereits so viele verknüpfte Ordner, wie er speichern kann. Trennen Sie zuerst einen.",
+      "not_a_folder": "Wählen Sie einen Ordner.",
+      "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Verknüpfen Sie einen Ordner auf dem eigenen Laufwerk dieses Computers.",
+      "protected": "Dieser Ordner enthält die eigenen Daten von stella oder einen Skill-Ordner, daher kann der Agent darin nicht arbeiten.",
+      "unreadable": "Dieser Ordner konnte nicht gelesen werden."
+    }
   }
 }

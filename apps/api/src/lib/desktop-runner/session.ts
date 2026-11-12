@@ -432,11 +432,12 @@ const deliverRestores = async (state: SessionState, resendSent: boolean) => {
     resendSent,
     limit: RESTORE_PAGE_SIZE,
   });
-  for (const { restoreId, folderId, runId } of due) {
+  for (const { restoreId, folderId, linkedFolderId, runId } of due) {
     const sent = send(state, {
       type: DESKTOP_RUNNER_SERVER_MESSAGE.folderRestore,
       restoreId,
       folderId,
+      linkedFolderId,
       runId,
     });
     if (sent === "closed") {

@@ -817,5 +817,26 @@
       "network_folder": "Ez a mappa hálózati megosztáson van. A készségeknek a számítógép saját lemezén kell lenniük.",
       "path_changed": "Egy szülőmappa megváltozott. Távolítsa el ezt a mappát, majd adja hozzá újra."
     }
+  },
+  "localLinkedFolders": {
+    "title": "Csatolt mappák",
+    "description": "Mappák ezen a számítógépen, amelyekben egy csevegés ügynöke dolgozhat. A csevegés csak a mappa nevét látja; az elérési útja ezen a számítógépen marad.",
+    "add": "Mappa csatolása",
+    "remove": "Leválasztás",
+    "removeFolder": "{name} leválasztása",
+    "state": {
+      "offline": "A meghajtó, amelyen ez a mappa van, nincs csatlakoztatva.",
+      "moved": "Ezt a mappát áthelyezték, átnevezték vagy törölték. Válassza le, majd csatolja újra.",
+      "protected": "Ez a mappa a stella saját adatait vagy egy készségmappát tartalmaz, ezért az ügynök nem dolgozhat benne.",
+      "unreadable": "Ezt a mappát nem sikerült beolvasni."
+    },
+    "notice": {
+      "action_failed": "Ez nem sikerült. Próbálja újra.",
+      "too_many": "Ezen a számítógépen már annyi csatolt mappa van, amennyit tárolni tud. Előbb válasszon le egyet.",
+      "not_a_folder": "Válasszon egy mappát.",
+      "network_folder": "Ez a mappa hálózati megosztáson van. A számítógép saját lemezén lévő mappát csatoljon.",
+      "protected": "Ez a mappa a stella saját adatait vagy egy készségmappát tartalmaz, ezért az ügynök nem dolgozhat benne.",
+      "unreadable": "Ezt a mappát nem sikerült beolvasni."
+    }
   }
 }
