@@ -6,7 +6,10 @@
 
 use std::{
   path::PathBuf,
-  sync::{Arc, Mutex},
+  sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+  },
   time::Duration,
 };
 
@@ -15,8 +18,9 @@ use serde_json::{Value, json};
 
 use super::harness::{HarnessHost, HarnessReports};
 use super::sidecar_host::{
-  HarnessCredentials, HostSettings, InstallSettled, InstalledHarness, LocalHarnesses,
-  SidecarHarnessHost, linked_folder_within, skill_folders_within,
+  HarnessCredentials, HostSettings, InstallSettled, InstalledHarness, LinkedFolderLook,
+  LinkedFolderLooks, LocalHarnesses, SidecarHarnessHost, linked_folder_within,
+  skill_folders_within,
 };
 use super::tests::{Connection, Gateway, Setup};
 use crate::harness_sidecar::tests::Fixture;
@@ -111,6 +115,8 @@ impl LocalHarnesses for FakeHarnesses {
 /// Harnesses whose skill folders answer only once `release` fires.
 struct HungFolders {
   release: Mutex<std::sync::mpsc::Receiver<()>>,
+  /// How many looks at the linked folders began.
+  looks: AtomicUsize,
 }
 
 impl LocalHarnesses for HungFolders {
@@ -133,6 +139,7 @@ impl LocalHarnesses for HungFolders {
   }
 
   fn linked_folder_reports(&self) -> Vec<LinkedFolderReport> {
+    self.looks.fetch_add(1, Ordering::SeqCst);
     let _released = self.release.lock().unwrap().recv();
     Vec::new()
   }
@@ -151,6 +158,7 @@ fn a_skill_folder_read_that_hangs_leaves_the_run_without_skills_in_time() {
   let (release, released) = std::sync::mpsc::channel();
   let harnesses = Arc::new(HungFolders {
     release: Mutex::new(released),
+    looks: AtomicUsize::new(0),
   });
 
   assert!(skill_folders_within(Duration::from_millis(20), harnesses).is_empty());
@@ -237,7 +245,11 @@ impl Place {
     probe_interval: Duration,
     folders_linked: bool,
   ) -> SidecarHarnessHost {
-    self.build_host(Arc::new(Mutex::new(credentials)), probe_interval, folders_linked)
+    self.build_host(
+      Arc::new(Mutex::new(credentials)),
+      probe_interval,
+      folders_linked,
+    )
   }
 
   /// A host whose credentials are read from `credentials` each time.
@@ -546,6 +558,7 @@ fn a_linked_folder_that_hangs_counts_as_offline_in_time() {
   let (release, released) = std::sync::mpsc::channel();
   let harnesses = Arc::new(HungFolders {
     release: Mutex::new(released),
+    looks: AtomicUsize::new(0),
   });
 
   assert_eq!(
@@ -554,6 +567,49 @@ fn a_linked_folder_that_hangs_counts_as_offline_in_time() {
   );
 
   release.send(()).unwrap();
+}
+
+#[test]
+fn a_look_at_the_linked_folders_that_hangs_is_the_only_one_until_it_ends() {
+  let (release, released) = std::sync::mpsc::channel();
+  let hung = Arc::new(HungFolders {
+    release: Mutex::new(released),
+    looks: AtomicUsize::new(0),
+  });
+  let harnesses: Arc<dyn LocalHarnesses> = Arc::<HungFolders>::clone(&hung);
+  run(async move {
+    let mut looks = LinkedFolderLooks::default();
+    let budget = Duration::from_millis(20);
+
+    assert_eq!(
+      looks.look(&harnesses, budget).await,
+      LinkedFolderLook::Pending
+    );
+    // The next beat waits on the same look instead of starting another.
+    assert_eq!(
+      looks.look(&harnesses, budget).await,
+      LinkedFolderLook::Pending
+    );
+    assert_eq!(
+      looks.look(&harnesses, budget).await,
+      LinkedFolderLook::Pending
+    );
+
+    release.send(()).unwrap();
+    assert_eq!(
+      looks.look(&harnesses, WAIT).await,
+      LinkedFolderLook::LateReports(Vec::new())
+    );
+    assert_eq!(hung.looks.load(Ordering::SeqCst), 1);
+
+    // With none in flight, the next look is a new one.
+    release.send(()).unwrap();
+    assert_eq!(
+      looks.look(&harnesses, WAIT).await,
+      LinkedFolderLook::Reports(Vec::new())
+    );
+    assert_eq!(hung.looks.load(Ordering::SeqCst), 2);
+  });
 }
 
 #[test]

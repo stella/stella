@@ -676,25 +676,72 @@ pub(crate) fn linked_folder_within(
   })
 }
 
-/// Look at the linked folders now, then on the interval or when the member
-/// changed the list. A look that does not finish in time keeps the last
-/// reports; its thread ends when the mount answers.
-async fn watch_linked_folders(shared: Arc<Shared>) {
-  loop {
-    let harnesses = Arc::clone(&shared.harnesses);
-    let looked = tokio::time::timeout(
-      LINKED_FOLDER_BUDGET,
-      tokio::task::spawn_blocking(move || harnesses.linked_folder_reports()),
-    )
-    .await;
-    match looked {
-      Ok(Ok(reports)) => shared.store_linked_folders(reports),
+/// What one look at the linked folders came to.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum LinkedFolderLook {
+  /// The reports of a look started now, in time.
+  Reports(Vec<LinkedFolderReport>),
+  /// The reports of a look that did not end in time before and has since:
+  /// the list may have changed meanwhile, so the caller looks again.
+  LateReports(Vec<LinkedFolderReport>),
+  /// The look has not ended in time; it stays the one in flight.
+  Pending,
+  /// The look's thread ended without reports.
+  Failed,
+}
+
+/// The looks at the linked folders, at most one in flight. A look runs on a
+/// blocking thread that no timeout can stop, so a mount that does not answer
+/// holds one thread until it does, and no further look starts meanwhile.
+#[derive(Default)]
+pub(crate) struct LinkedFolderLooks {
+  in_flight: Option<tokio::task::JoinHandle<Vec<LinkedFolderReport>>>,
+}
+
+impl LinkedFolderLooks {
+  /// Wait up to `budget` for the look in flight, or for a new one when none
+  /// is.
+  pub(crate) async fn look(
+    &mut self,
+    harnesses: &Arc<dyn LocalHarnesses>,
+    budget: Duration,
+  ) -> LinkedFolderLook {
+    let late = self.in_flight.is_some();
+    let mut look = self.in_flight.take().unwrap_or_else(|| {
+      let harnesses = Arc::clone(harnesses);
+      tokio::task::spawn_blocking(move || harnesses.linked_folder_reports())
+    });
+    match tokio::time::timeout(budget, &mut look).await {
+      Ok(Ok(reports)) if late => LinkedFolderLook::LateReports(reports),
+      Ok(Ok(reports)) => LinkedFolderLook::Reports(reports),
       Ok(Err(error)) => {
         tracing::warn!(target: LOG_TARGET, ?error, "the linked folders could not be looked at");
+        LinkedFolderLook::Failed
       }
       Err(_late) => {
+        self.in_flight = Some(look);
+        LinkedFolderLook::Pending
+      }
+    }
+  }
+}
+
+/// Look at the linked folders now, then on the interval or when the member
+/// changed the list. A look that does not finish in time keeps the last
+/// reports, and no other look starts until it ends.
+async fn watch_linked_folders(shared: Arc<Shared>) {
+  let mut looks = LinkedFolderLooks::default();
+  loop {
+    match looks.look(&shared.harnesses, LINKED_FOLDER_BUDGET).await {
+      LinkedFolderLook::Reports(reports) => shared.store_linked_folders(reports),
+      LinkedFolderLook::LateReports(reports) => {
+        shared.store_linked_folders(reports);
+        continue;
+      }
+      LinkedFolderLook::Pending => {
         tracing::warn!(target: LOG_TARGET, "the linked folders did not answer in time");
       }
+      LinkedFolderLook::Failed => {}
     }
     tokio::select! {
       () = tokio::time::sleep(LINKED_FOLDER_INTERVAL) => {}
