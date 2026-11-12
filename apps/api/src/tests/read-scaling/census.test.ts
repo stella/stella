@@ -29,6 +29,7 @@ import {
   conflictCheckReadScalingScenario,
 } from "./conflict-checks";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
+import { dataExportReadScalingScenarios } from "./data-exports";
 import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
@@ -74,6 +75,7 @@ import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  ...dataExportReadScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   ...readScalingScenarios,

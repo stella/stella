@@ -83,6 +83,8 @@
         "./capabilities/contacts.sanctions.reviews.update.json",
         "./capabilities/contacts.search.json",
         "./capabilities/contacts.update.json",
+        "./capabilities/data-exports.get.json",
+        "./capabilities/data-exports.list.json",
         "./capabilities/dictation.transcribe.json",
         "./capabilities/document-translations.prepare.json",
         "./capabilities/document-translations.runs.create.json",

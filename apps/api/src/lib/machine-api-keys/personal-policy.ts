@@ -37,6 +37,7 @@ const PERSONAL_WRITE_SCOPES = {
   chat: null,
   organizationSettings: null,
   auditLog: null,
+  dataExport: null,
   agentSkill: null,
   firmMemory: null,
   caseLawResearch: null,

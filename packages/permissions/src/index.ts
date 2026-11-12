@@ -36,6 +36,9 @@ export const statements = {
   chat: ["create", "update", "delete"],
   organizationSettings: ["update"],
   auditLog: ["read"],
+  // A copy of everything the organization stores, for backup and
+  // portability. Management-only: the archive spans every client matter.
+  dataExport: ["create", "read"],
   agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: ["create", "update"],
   // The organization's case-law question columns and the AI runs that fill
@@ -105,6 +108,7 @@ const externalStellaGrants = {
   chat: [],
   organizationSettings: [],
   auditLog: [],
+  dataExport: [],
   agentSkill: [],
   firmMemory: [],
   caseLawResearch: [],
@@ -150,6 +154,7 @@ const memberStellaGrants = {
   chat: ["create", "update", "delete"],
   organizationSettings: [],
   auditLog: [],
+  dataExport: [],
   agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: [],
   // Staff author and run research columns in full, as they do agent skills:
@@ -171,6 +176,7 @@ const managementStellaGrants = {
   rate: ["read", "create", "update", "delete"],
   organizationSettings: ["update"],
   auditLog: ["read"],
+  dataExport: ["create", "read"],
   firmMemory: ["create", "update"],
   conflictCheck: ["run", "review"],
 } satisfies StellaPermissionMap;
