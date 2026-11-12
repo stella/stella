@@ -26,7 +26,8 @@ CREATE TABLE "organization_data_exports" (
 	"completed_at" timestamp with time zone,
 	"expires_at" timestamp with time zone,
 	CONSTRAINT "organization_data_exports_status_check" CHECK ("organization_data_exports"."status" IN ('queued', 'running', 'ready', 'failed', 'expired')),
-	CONSTRAINT "organization_data_exports_version_scope_check" CHECK ("organization_data_exports"."version_scope" IN ('all', 'current'))
+	CONSTRAINT "organization_data_exports_version_scope_check" CHECK ("organization_data_exports"."version_scope" IN ('all', 'current')),
+	CONSTRAINT "organization_data_exports_completed_at_check" CHECK (("organization_data_exports"."status" IN ('queued', 'running')) = ("organization_data_exports"."completed_at" IS NULL))
 );--> statement-breakpoint
 ALTER TABLE "organization_data_exports" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "organization_data_exports" FORCE ROW LEVEL SECURITY;--> statement-breakpoint

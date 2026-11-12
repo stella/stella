@@ -160,6 +160,12 @@ export const organizationDataExports = p.pgTable(
       "organization_data_exports_version_scope_check",
       sql`${table.versionScope} IN (${sqlValues(DATA_EXPORT_VERSION_SCOPE_VALUES)})`,
     ),
+    // An export finishes once: ready, failed and expired carry the time it
+    // finished, and an active export (a resumed one too) carries none.
+    p.check(
+      "organization_data_exports_completed_at_check",
+      sql`(${table.status} IN (${sqlValues(ACTIVE_DATA_EXPORT_STATUSES)})) = (${table.completedAt} IS NULL)`,
+    ),
     ...orgPolicies(),
     // Row-level security is forced, so the table owner needs its own
     // policies: the review reset clears the table by organization, and the
