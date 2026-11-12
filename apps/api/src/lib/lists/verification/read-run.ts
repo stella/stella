@@ -293,7 +293,7 @@ type QualifiedClaimRow = ClaimVerdictColumns & {
 /** Every qualifier of a stored claim, read with its current grade
  *  (`gradeOf`): the grader's, and the ones the facts its verdict rests on
  *  give it as they stand now. */
-const qualifiersOfClaim = (
+export const qualifiersOfClaim = (
   claim: QualifiedClaimRow,
   review: ClaimReview | null,
   standings: FactStandings,
