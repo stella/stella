@@ -24,6 +24,7 @@ export {
   CHAT_SKILL_DOCUMENT,
   SKILL_REF_HREF_PREFIX,
   SKILL_RESOURCE_PATH_PATTERN,
+  SKILL_RESOURCE_REFUSAL_CODE,
   SKILL_SOURCE_UNREACHABLE_CODE,
 } from "./agent-skills";
 export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
@@ -370,6 +371,7 @@ export {
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_THREAD_NOT_FOUND_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
@@ -511,6 +513,8 @@ export {
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
+  USER_EVENT_READ,
+  USER_EVENT_READS,
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export {
@@ -576,6 +580,7 @@ export type {
   RealtimeChannel,
   ResourceChange,
   ResourceRealtimeEvent,
+  UserEventRead,
   UserRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "./realtime-events";

@@ -786,6 +786,8 @@ export const envApiServerSchema = {
   // opts in only after its Microsoft app registration is granted the
   // read-only delegated scopes (see handlers/sharepoint/graph-oauth.ts).
   FEATURE_SHAREPOINT: featureFlagSchema,
+  /** Dark-launch internal conflict-of-interest checks until intake review. */
+  FEATURE_CONFLICT_CHECK: featureFlagSchema,
 
   /**
    * Dark-launch gate for the auth.md `identity_assertion` (ID-JAG)

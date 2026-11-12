@@ -1,4 +1,5 @@
 import { CornerDownLeftIcon, SearchIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 /**
@@ -67,9 +68,9 @@ export const ClipboardWorkflowPreview = ({
     >
       <div className="border-border/50 flex items-center gap-2 border-b px-2.5 py-2">
         <SearchIcon className="text-muted-foreground size-3.5 shrink-0" />
-        <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
+        <TruncatedText className="text-muted-foreground flex-1 text-xs">
           {title}
-        </span>
+        </TruncatedText>
       </div>
       <ul className="flex flex-col gap-0.5 p-1.5">
         {HISTORY.map((snippet, index) => (

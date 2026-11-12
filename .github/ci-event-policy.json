@@ -43,6 +43,7 @@
     "nightly-test.yml/valkey-suites": "main",
     "nightly-test.yml/smoke-suite": "main",
     "nightly-test.yml/migration-exact-base-upgrade": "main",
+    "nightly-test.yml/script-test-declarations": "main",
     "api-test-memory.yml/measure": "main",
     "api-test-memory.yml/refresh": "main",
     "sync-branch-protection.yml/sync": "main",

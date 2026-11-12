@@ -6,6 +6,7 @@ import { assertProperty } from "@stll/property-testing";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { FACT_SCORING } from "@/api/lib/lists/fact-details";
+import { FACT_TIERS } from "@/api/lib/lists/source-kind";
 import { CLAIM_STATES } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimRef,
@@ -35,7 +36,7 @@ const B = factId(2);
 
 const standingArbitrary: fc.Arbitrary<FactStanding> = fc.record({
   scoring: fc.constantFrom(...FACT_SCORING),
-  sourcing: fc.constantFrom("sourced" as const, "unsourced" as const),
+  tier: fc.constantFrom(...FACT_TIERS),
 });
 const gradedArbitrary: fc.Arbitrary<GraderClaimQualifier[]> = fc.uniqueArray(
   fc.record({
@@ -80,31 +81,55 @@ describe("claimQualifiers", () => {
     );
   });
 
-  test("one sourced fact is enough to lift unsourced-only", () => {
+  const FOOTING_QUALIFIERS = ["testimony-only", "unsourced-only"] as const;
+  const footingOf = (resting: readonly FactStanding[]) =>
+    kindsOf({ graded: [], resting }).filter((kind) =>
+      FOOTING_QUALIFIERS.some((footing) => footing === kind),
+    );
+
+  test("a verdict no record backs discloses its footing exactly once", () => {
     assertProperty(
-      "one sourced fact is enough to lift unsourced-only",
+      "a verdict no record backs discloses its footing exactly once",
+      fc.property(fc.array(standingArbitrary, { maxLength: 6 }), (resting) => {
+        const footing = footingOf(resting);
+        const recordBehind = resting.some((fact) => fact.tier === "document");
+        if (resting.length === 0 || recordBehind) {
+          expect(footing).toEqual([]);
+          return;
+        }
+        // Any account among them makes it testimony; only when none is it
+        // knowledge without a source.
+        expect(footing).toEqual([
+          resting.some((fact) => fact.tier === "testimony")
+            ? "testimony-only"
+            : "unsourced-only",
+        ]);
+      }),
+    );
+  });
+
+  test("one document record among the resting facts lifts the disclosure", () => {
+    assertProperty(
+      "one document record among the resting facts lifts the disclosure",
       fc.property(
-        fc.array(standingArbitrary, { maxLength: 6 }),
+        fc.array(standingArbitrary, { minLength: 1, maxLength: 6 }),
         fc.constantFrom(...FACT_SCORING),
         (resting, scoring) => {
-          const unsourced = resting.map((fact) => ({
-            ...fact,
-            sourcing: "unsourced" as const,
-          }));
-          expect(kindsOf({ graded: [], resting: unsourced })).toEqual(
-            expect.arrayContaining(
-              unsourced.length > 0 ? ["unsourced-only"] : [],
-            ),
-          );
           expect(
-            kindsOf({
-              graded: [],
-              resting: [...unsourced, { scoring, sourcing: "sourced" }],
-            }),
-          ).not.toContain("unsourced-only");
+            footingOf([...resting, { scoring, tier: "document" }]),
+          ).toEqual([]);
         },
       ),
     );
+  });
+
+  test("testimony beside an unsourced fact reads as testimony", () => {
+    expect(
+      footingOf([
+        { scoring: "included", tier: "unsourced" },
+        { scoring: "included", tier: "testimony" },
+      ]),
+    ).toEqual(["testimony-only"]);
   });
 
   test("holding any one resting fact marks the verdict, releasing all clears it", () => {
@@ -147,7 +172,7 @@ describe("claimQualifiers", () => {
     expect(
       claimQualifiers({
         graded: [],
-        resting: [{ scoring: "held", sourcing: "unsourced" }],
+        resting: [{ scoring: "held", tier: "unsourced" }],
       }),
     ).toEqual([
       { kind: "unsourced-only", explanation: null, review: "routine" },
@@ -168,21 +193,28 @@ describe("QUALIFIER_REVIEW", () => {
     }
   });
 
-  test("a held footing needs judgement; unsourced knowledge is disclosed, not doubted", () => {
+  test("a held footing needs judgement; testimony and unsourced knowledge are disclosed, not doubted", () => {
     expect(QUALIFIER_REVIEW["rests-on-held"]).toBe("needs-judgement");
+    expect(QUALIFIER_REVIEW["testimony-only"]).toBe("routine");
     expect(QUALIFIER_REVIEW["unsourced-only"]).toBe("routine");
     const read = (resting: FactStanding[]) =>
       claimQualifiers({ graded: [], resting });
+    for (const tier of FACT_TIERS) {
+      expect(
+        qualifiersNeedJudgement(read([{ scoring: "included", tier }])),
+      ).toBe(false);
+      expect(qualifiersNeedJudgement(read([{ scoring: "held", tier }]))).toBe(
+        true,
+      );
+    }
     expect(
-      qualifiersNeedJudgement(
-        read([{ scoring: "included", sourcing: "unsourced" }]),
-      ),
-    ).toBe(false);
-    expect(
-      qualifiersNeedJudgement(
-        read([{ scoring: "held", sourcing: "unsourced" }]),
-      ),
-    ).toBe(true);
+      claimQualifiers({
+        graded: [],
+        resting: [{ scoring: "included", tier: "testimony" }],
+      }),
+    ).toEqual([
+      { kind: "testimony-only", explanation: null, review: "routine" },
+    ]);
   });
 });
 

@@ -1180,6 +1180,11 @@ export const chatDraftMetaOptions = ({
         webSearchEnabled: data.webSearchEnabled,
         model: data.model,
         reasoningEffort: data.reasoningEffort,
+        // Where the first send runs, as the draft's Run on choice stored it.
+        runTarget: data.runTarget,
+        // A draft the server holds no row for starts from the member's last
+        // Run on choice instead.
+        threadExists: data.threadExists,
         // The draft's cache-stable context floor (system prompt + tools), so
         // the hero meter shows the honest baseline instead of 0% before send.
         context: data.context,

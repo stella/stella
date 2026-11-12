@@ -22,6 +22,7 @@ import {
   legalListItems,
   legalListItemSources,
   legalLists,
+  legalListSourceDocuments,
   legalListVerificationRuns,
   workspaces,
 } from "@/api/db/schema";
@@ -59,6 +60,9 @@ const listId = createSafeId<"legalList">();
 const runId = createSafeId<"legalListVerificationRun">();
 const documentId = createSafeId<"entity">();
 const documentVersionId = createSafeId<"entityVersion">();
+/** A second record, never marked as testimony. */
+const ledgerId = createSafeId<"entity">();
+const ledgerVersionId = createSafeId<"entityVersion">();
 const statementId = createSafeId<"entity">();
 
 /** Sourced when pinned and still sourced. */
@@ -167,12 +171,18 @@ beforeAll(async () => {
         name: "Witness statement.docx",
         createdBy: userId,
       },
+      {
+        id: ledgerId,
+        workspaceId,
+        kind: "document" as const,
+        name: "Ledger.xlsx",
+        createdBy: userId,
+      },
     ]);
-    await tx.insert(entityVersions).values({
-      id: documentVersionId,
-      workspaceId,
-      entityId: documentId,
-    });
+    await tx.insert(entityVersions).values([
+      { id: documentVersionId, workspaceId, entityId: documentId },
+      { id: ledgerVersionId, workspaceId, entityId: ledgerId },
+    ]);
     await tx.insert(legalListItems).values(
       onList.map((fact) => ({
         entityId: fact.id,
@@ -306,6 +316,7 @@ beforeAll(async () => {
       payload: {
         kind: "record-conflict",
         resolution: { kind: "governed", factEntityId: marginNote },
+        reason: "The margin note is the later record.",
       },
       actorId: userId,
     });
@@ -400,11 +411,11 @@ test("qualifiers follow the facts as they stand when the run is read", async () 
     ]),
   );
   expect(Object.fromEntries(standings)).toEqual({
-    [bankRecord]: { scoring: "included", sourcing: "sourced" },
-    [diaryNote]: { scoring: "included", sourcing: "unsourced" },
-    [leaveCalendar]: { scoring: "included", sourcing: "sourced" },
-    [marginNote]: { scoring: "held", sourcing: "unsourced" },
-    [removedEmail]: { scoring: "included", sourcing: "sourced" },
+    [bankRecord]: { scoring: "included", tier: "document" },
+    [diaryNote]: { scoring: "included", tier: "unsourced" },
+    [leaveCalendar]: { scoring: "included", tier: "document" },
+    [marginNote]: { scoring: "held", tier: "unsourced" },
+    [removedEmail]: { scoring: "included", tier: "document" },
   });
 
   // Bulk accept reads the same footing: a verdict now resting on a held fact
@@ -449,4 +460,75 @@ test("qualifiers follow the facts as they stand when the run is read", async () 
     [claimIds.governedByHeld]: true,
     [claimIds.unsourcedSupport]: false,
   });
+});
+
+test("a document marked as testimony moves every fact citing it, and the record is suggested over the account", async () => {
+  const read = async () => {
+    const run = await readRun();
+    return {
+      tiers: new Map(
+        run.factStandings.map(({ factEntityId, tier }) => [factEntityId, tier]),
+      ),
+      claims: new Map(run.claims.map((claim) => [claim.id, claim])),
+    };
+  };
+  const before = await read();
+  // Both conflicting facts are unsourced or document records: nothing in
+  // their sources says which should govern.
+  expect(
+    before.claims.get(claimIds.openConflict)?.suggestedGoverningFactId,
+  ).toBeNull();
+
+  await testDb.transaction(async (tx: TestDatabaseTransaction) => {
+    await tx.execute(sql.raw("RESET ROLE"));
+    await tx.insert(legalListSourceDocuments).values({
+      workspaceId,
+      listId,
+      documentEntityId: documentId,
+      sourceKind: "testimony",
+      updatedBy: userId,
+    });
+    // The held margin note gains a source in a record never marked.
+    await tx.insert(legalListItemSources).values({
+      id: createSafeId<"legalListItemSource">(),
+      workspaceId,
+      listId,
+      itemEntityId: marginNote,
+      sourceEntityId: ledgerId,
+      sourceEntityVersionId: ledgerVersionId,
+      locator: { type: "document" },
+      quote: null,
+      createdBy: userId,
+    });
+  });
+
+  const after = await read();
+  expect(Object.fromEntries(after.tiers)).toEqual({
+    [bankRecord]: "testimony",
+    // Its only source is rejected, so the kind of that document is moot.
+    [diaryNote]: "unsourced",
+    [leaveCalendar]: "testimony",
+    [marginNote]: "document",
+    // Off the list: read from the sources the run pinned.
+    [removedEmail]: "testimony",
+  });
+  const kindsOf = (claimId: SafeId<"legalListClaim">) =>
+    after.claims.get(claimId)?.qualifiers.map(({ kind }) => kind);
+  expect(kindsOf(claimIds.offList)).toEqual(["testimony-only"]);
+  expect(kindsOf(claimIds.widened)).toEqual([
+    "scope-mismatch",
+    "testimony-only",
+  ]);
+  // Testimony beside an unsourced fact: no record backs it, and one fact is
+  // a person's account.
+  expect(kindsOf(claimIds.sourcedSupport)).toEqual(["testimony-only"]);
+  // The ledger's record is suggested over the testimony-backed transfer,
+  // and the conflict stays open until someone chooses.
+  const open = after.claims.get(claimIds.openConflict);
+  expect(open?.suggestedGoverningFactId).toBe(marginNote);
+  expect(open?.review).toBeNull();
+  expect(open?.verdict.state).toBe("recordconflict");
+  expect(
+    after.claims.get(claimIds.sourcedSupport)?.suggestedGoverningFactId,
+  ).toBeNull();
 });

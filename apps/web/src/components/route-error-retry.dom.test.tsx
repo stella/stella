@@ -73,7 +73,7 @@ const tryAgain = async (view: ReturnType<typeof testing.render>) => {
   });
   // The button acts once the page has its support reference.
   await testing.waitFor(() => {
-    expect(view.queryByText("—")).toBeNull();
+    expect(view.queryByText("—") === null).toBe(true);
   });
   testing.fireEvent.click(button);
 };

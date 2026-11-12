@@ -18,6 +18,7 @@ import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry"
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type { ClaimReviewEventPayload } from "@/api/lib/lists/verification/contract";
 import {
+  contestedFactIdsOfClaim,
   qualifiersOfClaim,
   readClaimReviews,
   readClaimsForBulkReview,
@@ -50,8 +51,9 @@ const config = {
     "a contested meaning, and it carries no qualifier that asks for " +
     "judgement (a cited fact of a different scope, or one now held out of " +
     "scoring); those need an individual decision and are " +
-    "refused. Claims that already have a status are left as they are. Returns " +
-    "the review of every claim that was marked.",
+    "refused. Claims that already have a status (reviewed, disputed, or " +
+    "needs-evidence) are left as they are. Returns the review of every " +
+    "claim that was marked.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -99,9 +101,10 @@ const createBulkClaimReviews = createSafeHandler(
           runId,
           claimIds,
         });
-        // Claims already decided are left as they are, so only the rest are
+        // Claims with a status are left as they are, so only the rest are
         // held to the routine rule: a conflict someone settled by hand must
-        // not block accepting the routine claims around it.
+        // not block accepting the routine claims around it, and a claim
+        // marked as needing evidence stays open for whoever marked it.
         const toMark = claims.filter((claim) => {
           const record = before.get(claim.id);
           return (
@@ -117,7 +120,7 @@ const createBulkClaimReviews = createSafeHandler(
               ...reviewedView(claim, review),
               qualifiers: qualifiersOfClaim(claim, review, inputs.standings),
             },
-            inputs.contested,
+            contestedFactIdsOfClaim(inputs, review),
           );
         });
         if (attention.length > 0) {
@@ -159,8 +162,7 @@ const createBulkClaimReviews = createSafeHandler(
           reviews: markedIds.map((claimId) => ({
             claimId,
             review: serializeClaimReview(
-              after.get(claimId)?.review ??
-                panic("A marked claim has no review"),
+              after.get(claimId) ?? panic("A marked claim has no review"),
             ),
           })),
         } as const;

@@ -1,7 +1,7 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { alias, QueryBuilder } from "drizzle-orm/pg-core";
+import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
 import {
@@ -18,7 +18,6 @@ import { classifyFailure } from "@stll/errors";
 import {
   chatMessages,
   chatThreads,
-  chatTurns,
   workspaces as workspacesTable,
 } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
@@ -33,13 +32,17 @@ import {
   readChatThreadContexts,
 } from "@/api/handlers/chat/threads/list-context";
 import type { ChatThreadContext } from "@/api/handlers/chat/threads/list-context";
+import {
+  LATEST_ANSWER,
+  UNREAD_BESIDE_LATEST_ANSWER,
+} from "@/api/handlers/chat/threads/reader-state";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
 import type { PublicDecisionBadge } from "@/api/lib/case-law/decision-badges";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
-import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
+import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/chat/artefact-provenance";
 import {
   paginationCursorSchema,
   resourceIdSchema,
@@ -162,42 +165,6 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-/** Turn statuses that leave an answer for the reader to read. */
-const ANSWERED_TURN_STATUSES = [
-  "completed",
-  "failed",
-] as const satisfies readonly ChatTurnStatus[];
-
-/**
- * The thread's latest answer, by one backward step through
- * chat_turns_org_user_thread_created_idx per row; a later turn stopped or
- * interrupted before answering leaves it in place.
- */
-const LATEST_ANSWER = new QueryBuilder()
-  .select({ settledAt: chatTurns.settledAt })
-  .from(chatTurns)
-  .where(
-    and(
-      eq(chatTurns.organizationId, chatThreads.organizationId),
-      eq(chatTurns.userId, chatThreads.userId),
-      eq(chatTurns.threadId, chatThreads.id),
-      sql`${chatTurns.status} IN (${sql.join(
-        ANSWERED_TURN_STATUSES.map((status) => sql`${status}`),
-        sql`, `,
-      )})`,
-    ),
-  )
-  .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
-  .limit(1)
-  .as("latest_answer");
-
-/**
- * Whether the reader has an answer to read; null last_read_at is an explicit
- * "mark unread". Both sides are columns compared in the database at their
- * stored precision.
- */
-const UNREAD = sql<boolean>`coalesce(${chatThreads.lastReadAt} IS NULL OR ${LATEST_ANSWER.settledAt} > ${chatThreads.lastReadAt}::timestamptz, false)`;
-
 const readerStatesOf = ({
   pinnedAt,
   unread,
@@ -222,6 +189,7 @@ const THREAD_LIST_PROJECTION = {
   subjectDecisionId: chatThreads.subjectDecisionId,
   title: chatThreads.title,
   titleSource: chatThreads.titleSource,
+  ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
   updatedAt: chatThreads.updatedAt,
   usedAnonymization: chatThreads.usedAnonymization,
   updatedAtCursor:
@@ -230,9 +198,138 @@ const THREAD_LIST_PROJECTION = {
   workspaceName: workspacesTable.name,
 } as const;
 
+/**
+ * A title search reads at most this many batches of `limit + 1` rows while it
+ * skips threads that matched only by a withdrawn title; a page cut short by
+ * the budget still returns a cursor, so the walk continues on the next page.
+ */
+const TITLE_SEARCH_SCAN_BATCHES_MAX = 4;
+
+type ListCursor = NonNullable<
+  ReturnType<typeof chatThreadListCursorCodec.decode>
+>;
+type ListedRow = { id: SafeId<"chatThread">; updatedAtCursor: string };
+
+type ReadListPageOptions<Row extends ListedRow> = {
+  cursor: ListCursor | null;
+  limit: number;
+  readBatch: (after: ListCursor | null) => Promise<Row[]>;
+  /** Null keeps every row read; a search filter decides per batch. */
+  admitBatch: ((batch: Row[]) => Promise<(row: Row) => boolean>) | null;
+};
+
+/**
+ * One page of rows the filter admits, read in keyset batches of `limit + 1`.
+ * The cursor resumes after the page's last row, or after the last row read
+ * when the batch budget ends the page early.
+ */
+const readListPage = async <Row extends ListedRow>({
+  cursor,
+  limit,
+  readBatch,
+  admitBatch,
+}: ReadListPageOptions<Row>) => {
+  const admitted: Row[] = [];
+  let after = cursor;
+  let scanned: Row | undefined;
+  let exhausted = false;
+  const batchesMax = admitBatch === null ? 1 : TITLE_SEARCH_SCAN_BATCHES_MAX;
+  for (
+    let batchIndex = 0;
+    batchIndex < batchesMax && admitted.length <= limit && !exhausted;
+    batchIndex++
+  ) {
+    const batch = await readBatch(after);
+    exhausted = batch.length <= limit;
+    const admits = admitBatch === null ? () => true : await admitBatch(batch);
+    for (const row of batch) {
+      if (admitted.length > limit) {
+        break;
+      }
+      scanned = row;
+      if (admits(row)) {
+        admitted.push(row);
+      }
+    }
+    if (scanned !== undefined) {
+      after =
+        chatThreadListCursorCodec.decode(
+          encodeChatThreadListCursor({
+            id: scanned.id,
+            updatedAt: scanned.updatedAtCursor,
+          }),
+        ) ?? panic("A listed thread must encode a decodable cursor");
+    }
+  }
+  const page = admitted.slice(0, limit);
+  let resumeAfter: Row | undefined;
+  if (admitted.length > limit) {
+    resumeAfter = page.at(-1);
+  } else if (!exhausted) {
+    resumeAfter = scanned;
+  }
+  return {
+    page,
+    nextCursor:
+      resumeAfter === undefined
+        ? null
+        : encodeChatThreadListCursor({
+            id: resumeAfter.id,
+            updatedAt: resumeAfter.updatedAtCursor,
+          }),
+  };
+};
+
 type GetThreadsDependencies = {
   readDecisionBadges: typeof readPublicDecisionBadges;
   readCopies?: typeof readWithdrawnCopyProjection;
+};
+
+type ListedThreadItem = {
+  item: ChatThreadListItem;
+  workspaceId: string | null;
+  workspaceName: string | null;
+};
+
+type WorkspaceThreadGroup = {
+  workspaceId: string;
+  workspaceName: string;
+  threads: ChatThreadListItem[];
+};
+
+// Global threads stay in page order; matter threads group under their matter,
+// most recently updated matter first. A matter thread whose matter name is
+// unreadable is left out.
+const groupListedThreads = (listed: readonly ListedThreadItem[]) => {
+  const global: ChatThreadListItem[] = [];
+  const groupedWorkspaceThreads = new Map<string, WorkspaceThreadGroup>();
+  for (const { item, workspaceId, workspaceName } of listed) {
+    if (workspaceId === null) {
+      global.push(item);
+      continue;
+    }
+    if (workspaceName === null) {
+      continue;
+    }
+    const existingGroup = groupedWorkspaceThreads.get(workspaceId);
+    if (existingGroup) {
+      existingGroup.threads.push(item);
+      continue;
+    }
+    groupedWorkspaceThreads.set(workspaceId, {
+      workspaceId,
+      workspaceName,
+      threads: [item],
+    });
+  }
+  const workspaces = Array.from(groupedWorkspaceThreads.values()).toSorted(
+    (left, right) => {
+      const leftUpdatedAt = left.threads.at(0)?.updatedAt.getTime() ?? 0;
+      const rightUpdatedAt = right.threads.at(0)?.updatedAt.getTime() ?? 0;
+      return rightUpdatedAt - leftUpdatedAt;
+    },
+  );
+  return { global, workspaces };
 };
 
 const GET_THREADS_DEPENDENCIES = {
@@ -295,20 +392,8 @@ export const createGetThreads = ({
       // data_workspace_ids entry on global threads without materializing an
       // application-side workspace allowlist. The joined status predicate keeps
       // deleting workspaces sealed at the product layer.
-      if (cursor) {
-        const cursorCondition = chatThreadListCursorCodec.keysetAfter({
-          cursor,
-          direction: "descending",
-          idColumn: chatThreads.id,
-        });
-        if (cursorCondition) {
-          conditions.push(cursorCondition);
-        }
-      }
-
-      const { contexts, rows } = yield* Result.await(
+      const { contexts, nextCursor, page } = yield* Result.await(
         safeDb(async (tx) => {
-          const listConditions = [...conditions];
           // A matter pinned to a thread, or whose data it embedded, matches by
           // name too. The lateral probe looks up that thread's own matter ids
           // (bounded like its context preview) by primary key, so no matching
@@ -333,57 +418,80 @@ export const createGetThreads = ({
                   )
                   .limit(1)
                   .as("context_matter_match");
-          if (searchPattern !== null && contextMatterMatch !== null) {
-            const searchCondition = or(
-              ilike(chatThreads.title, searchPattern),
-              ilike(workspacesTable.name, searchPattern),
-              sql`${contextMatterMatch.matched} IS TRUE`,
-            );
-            if (searchCondition) {
-              listConditions.push(searchCondition);
-            }
-          }
+          const matterMatch =
+            searchPattern === null || contextMatterMatch === null
+              ? sql<boolean>`false`
+              : sql<boolean>`coalesce(${ilike(workspacesTable.name, searchPattern)} OR ${contextMatterMatch.matched} IS TRUE, false)`;
+          const searchCondition =
+            searchPattern === null
+              ? undefined
+              : or(ilike(chatThreads.title, searchPattern), matterMatch);
 
-          let listQuery = tx
-            .select({ ...THREAD_LIST_PROJECTION, unread: UNREAD })
-            .from(chatThreads)
-            .leftJoin(
-              workspacesTable,
-              eq(workspacesTable.id, chatThreads.workspaceId),
-            )
-            .leftJoinLateral(LATEST_ANSWER, sql`true`)
-            .$dynamic();
-          if (contextMatterMatch !== null) {
-            listQuery = listQuery.leftJoinLateral(
-              contextMatterMatch,
-              sql`true`,
-            );
-          }
-          const listedRows = await listQuery
-            .where(and(...listConditions))
-            .orderBy(desc(chatThreads.updatedAt), desc(chatThreads.id))
-            .limit(limit + 1);
+          const readBatch = async (after: typeof cursor) => {
+            let listQuery = tx
+              .select({
+                ...THREAD_LIST_PROJECTION,
+                matterMatched: matterMatch,
+                unread: UNREAD_BESIDE_LATEST_ANSWER,
+              })
+              .from(chatThreads)
+              .leftJoin(
+                workspacesTable,
+                eq(workspacesTable.id, chatThreads.workspaceId),
+              )
+              .leftJoinLateral(LATEST_ANSWER, sql`true`)
+              .$dynamic();
+            if (contextMatterMatch !== null) {
+              listQuery = listQuery.leftJoinLateral(
+                contextMatterMatch,
+                sql`true`,
+              );
+            }
+            const keyset =
+              after === null
+                ? undefined
+                : chatThreadListCursorCodec.keysetAfter({
+                    cursor: after,
+                    direction: "descending",
+                    idColumn: chatThreads.id,
+                  });
+            return await listQuery
+              .where(and(...conditions, searchCondition, keyset))
+              .orderBy(desc(chatThreads.updatedAt), desc(chatThreads.id))
+              .limit(limit + 1);
+          };
+
+          // A withdrawn title is masked when listed, so its stored text cannot
+          // be what matched: such a thread stays only when a matter name did.
+          const { nextCursor: listedCursor, page: listedPage } =
+            await readListPage({
+              cursor,
+              limit,
+              readBatch,
+              admitBatch:
+                searchPattern === null
+                  ? null
+                  : async (batch) => {
+                      const projection = await readCopies({ values: batch });
+                      return (row) =>
+                        row.matterMatched ||
+                        projection.threadTitleMarker(row) === null;
+                    },
+            });
 
           // One bounded read for the whole page's context, never one per row.
           const threadContexts = await readChatThreadContexts({
             previewLimit: CHAT_THREAD_CONTEXT_PREVIEW_LIMIT,
-            threadIds: listedRows.slice(0, limit).map((row) => row.id),
+            threadIds: listedPage.map((row) => row.id),
             tx,
           });
-          return { contexts: threadContexts, rows: listedRows };
+          return {
+            contexts: threadContexts,
+            nextCursor: listedCursor,
+            page: listedPage,
+          };
         }),
       );
-
-      const hasMore = rows.length > limit;
-      const page = hasMore ? rows.slice(0, limit) : rows;
-      const lastItem = page.at(-1);
-      const nextCursor =
-        hasMore && lastItem
-          ? encodeChatThreadListCursor({
-              id: lastItem.id,
-              updatedAt: lastItem.updatedAtCursor,
-            })
-          : null;
 
       // After the tenant transaction, not inside it: decisions live in the
       // public corpus, read through its own gated connection.
@@ -395,17 +503,7 @@ export const createGetThreads = ({
       const withdrawal = yield* Result.await(
         Result.tryPromise(async () => readCopies({ values: page })),
       );
-      const global: ChatThreadListItem[] = [];
-
-      const groupedWorkspaceThreads = new Map<
-        string,
-        {
-          workspaceId: string;
-          workspaceName: string;
-          threads: ChatThreadListItem[];
-        }
-      >();
-
+      const listed: ListedThreadItem[] = [];
       for (const thread of page) {
         const origin =
           thread.forkedFromMessageId === null
@@ -428,42 +526,14 @@ export const createGetThreads = ({
           typeof item,
           ChatThreadListItem
         >;
-        if (thread.workspaceId === null) {
-          global.push(slice);
-          continue;
-        }
-
-        if (thread.workspaceName === null) {
-          continue;
-        }
-
-        const existingGroup = groupedWorkspaceThreads.get(thread.workspaceId);
-        if (existingGroup) {
-          existingGroup.threads.push(slice);
-          continue;
-        }
-
-        groupedWorkspaceThreads.set(thread.workspaceId, {
+        listed.push({
+          item: slice,
           workspaceId: thread.workspaceId,
           workspaceName: thread.workspaceName,
-          threads: [slice],
         });
       }
 
-      const workspaceGroups = Array.from(
-        groupedWorkspaceThreads.values(),
-      ).toSorted((left, right) => {
-        const leftUpdatedAt = left.threads.at(0)?.updatedAt.getTime() ?? 0;
-        const rightUpdatedAt = right.threads.at(0)?.updatedAt.getTime() ?? 0;
-
-        return rightUpdatedAt - leftUpdatedAt;
-      });
-
-      return Result.ok({
-        global,
-        nextCursor,
-        workspaces: workspaceGroups,
-      });
+      return Result.ok({ ...groupListedThreads(listed), nextCursor });
     },
   );
 

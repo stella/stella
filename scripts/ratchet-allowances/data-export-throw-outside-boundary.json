@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 5,
+  "reason": "The streaming S3 adapter reports invalid read responses, invalid multipart responses, and multipart size exhaustion through the same rejection contract as SDK operations. Its callers turn read failures into manifest problems and upload failures into durable export attempt state. Credential retries remain at each SDK request boundary."
+}

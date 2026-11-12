@@ -679,9 +679,9 @@ function AuditLogRow({
           })}
         </TableCell>
         <TableCell className="max-w-48 text-xs">
-          <span className="line-clamp-2 wrap-anywhere">
+          <TruncatedText className="wrap-anywhere" lines={2}>
             <bdi>{log.actor}</bdi>
-          </span>
+          </TruncatedText>
           {isAutomation ? (
             <span className="text-muted-foreground block">
               {t("workspaces.overview.activity.filters.automation")}
@@ -779,7 +779,9 @@ export function AuditResourceLabel({
 
   return (
     <div className="min-w-0">
-      <div className="truncate font-medium">{content}</div>
+      <TruncatedText className="font-medium" render={<div />}>
+        {content}
+      </TruncatedText>
       <div className="text-muted-foreground font-mono">
         {resource.kind === "unknown" ? <bdi>{resource.rawKind} · </bdi> : null}
         <span className="sr-only">

@@ -17,6 +17,7 @@ import type {
   VerificationClaim,
   VerificationRun,
 } from "@/features/avt/types";
+import { REVIEW_STATUS_META } from "@/features/avt/types";
 import type { TranslationKey } from "@/i18n/types";
 
 const CONFLICT_STATES: ReadonlySet<ClaimState> = new Set([
@@ -42,6 +43,7 @@ type TriageTarget = {
   state: ClaimState;
   refs: VerificationClaim["refs"];
   qualifiers: VerificationClaim["qualifiers"];
+  recheck: VerificationClaim["recheck"];
 };
 
 /** The server decides the review each qualifier asks for; a qualifier that
@@ -51,11 +53,20 @@ const judgementQualifier = ({ qualifiers }: Pick<TriageTarget, "qualifiers">) =>
   // footing last, so the last one is the one the reviewer must settle first.
   qualifiers.findLast((qualifier) => qualifier.review === "needs-judgement");
 
-/** True when any fact this claim cites carries an interpretation caveat. */
+/**
+ * True when any fact this claim cites carries an interpretation caveat, as
+ * the claim's own grade read it: a re-checked claim by the facts its
+ * re-check read, every other one by the run's pinned facts. The server
+ * holds bulk acceptance to the same reading.
+ */
 export const isContested = (
-  { refs }: Pick<TriageTarget, "refs">,
+  { refs, recheck }: Pick<TriageTarget, "refs" | "recheck">,
   contested: ReadonlySet<FactId>,
-): boolean => refs.some((ref) => contested.has(ref.factEntityId));
+): boolean => {
+  const flagged =
+    recheck === null ? contested : contestedFactIds(recheck.facts);
+  return refs.some((ref) => flagged.has(ref.factEntityId));
+};
 
 /**
  * A claim NEEDS ATTENTION if its verdict is a conflict (contradicted, in
@@ -74,9 +85,12 @@ export const needsAttention = (
     isContested(claim, contested) ||
     judgementQualifier(claim) !== undefined);
 
-/** A claim is SETTLED once a human dispositions it either way. */
-export const isSettled = (review: ClaimReview | null): boolean =>
-  review?.status === "reviewed" || review?.status === "disputed";
+/** A claim is SETTLED once a human dispositions it either way; marking it
+ *  as needing evidence keeps it open. */
+export const isSettled = (review: ClaimReview | null): boolean => {
+  const status = review?.status ?? null;
+  return status !== null && REVIEW_STATUS_META[status].settles;
+};
 
 /**
  * The verdict a reviewer's own decisions lead to. An override stays an
@@ -139,23 +153,32 @@ export const resolveClaimView = (
     // The server read the claim's qualifiers against the verdict it has
     // until it is checked again, so they are kept unchanged.
     qualifiers: claim.qualifiers,
+    // Missing coverage has no conflict to suggest a record for.
+    suggestedGoverningFactId: null,
     text: claim.text,
     anchor: claim.anchor,
     refs: [],
     review: claim.review,
+    recheck: claim.recheck,
   };
 };
 
-export type DispositionTone = "ready" | "manual" | "escalate" | "routine";
+export type DispositionTone =
+  "ready" | "manual" | "escalate" | "gap" | "routine";
 
+/** The badge each tone shows. A gap shows none: its next steps are the
+ *  guide, and its one line says what is missing. */
 const GUIDANCE_KEYS = {
   ready: "avt.guidance.readyToConfirm",
   manual: "avt.guidance.manualJudgement",
   escalate: "avt.guidance.escalate",
+  gap: null,
   routine: "avt.guidance.optional",
-} as const satisfies Record<DispositionTone, TranslationKey>;
+} as const satisfies Record<DispositionTone, TranslationKey | null>;
 
-type DispositionGuideKey = (typeof GUIDANCE_KEYS)[keyof typeof GUIDANCE_KEYS];
+type DispositionGuideKey = NonNullable<
+  (typeof GUIDANCE_KEYS)[keyof typeof GUIDANCE_KEYS]
+>;
 
 const DISPOSITION_COPY = {
   supported: "avt.disposition.supported",
@@ -171,6 +194,7 @@ const DISPOSITION_COPY = {
 const QUALIFIER_ASK = {
   "record-silent": "avt.qualifiers.recordSilent.hint",
   "scope-mismatch": "avt.disposition.scopeMismatch",
+  "testimony-only": "avt.disposition.testimonyOnly",
   "unsourced-only": "avt.disposition.unsourcedOnly",
   "rests-on-held": "avt.disposition.restsOnHeld",
 } as const satisfies Record<
@@ -188,9 +212,21 @@ const hasQualifier = (
   kind: keyof typeof QUALIFIER_ASK,
 ) => qualifiers.some((qualifier) => qualifier.kind === kind);
 
+/** What signing off a supported claim confirms, naming its footing when
+ *  that is testimony or no source at all. */
+const supportedAsk = (claim: Pick<TriageTarget, "qualifiers">) => {
+  if (hasQualifier(claim, "testimony-only")) {
+    return QUALIFIER_ASK["testimony-only"];
+  }
+  if (hasQualifier(claim, "unsourced-only")) {
+    return QUALIFIER_ASK["unsourced-only"];
+  }
+  return DISPOSITION_COPY.supported;
+};
+
 export type DispositionGuidance = {
   tone: DispositionTone;
-  guideKey: DispositionGuideKey;
+  guideKey: DispositionGuideKey | null;
   askKey: DispositionAskKey;
 };
 
@@ -232,22 +268,34 @@ export const dispositionGuidance = (
     };
   }
   if (claim.state === "supported") {
-    // Knowledge without a source is allowed; the sign-off copy discloses it.
+    // A person's account and knowledge without a source are both allowed;
+    // the sign-off copy discloses which the verdict rests on.
     return {
       tone: "ready",
       guideKey: GUIDANCE_KEYS.ready,
-      askKey: hasQualifier(claim, "unsourced-only")
-        ? QUALIFIER_ASK["unsourced-only"]
-        : DISPOSITION_COPY.supported,
+      askKey: supportedAsk(claim),
+    };
+  }
+  if (claim.state === "nocover" && hasQualifier(claim, "record-silent")) {
+    return {
+      tone: "routine",
+      guideKey: GUIDANCE_KEYS.routine,
+      askKey: QUALIFIER_ASK["record-silent"],
+    };
+  }
+  // Missing coverage the record should have is a gap to fill, not a
+  // verdict to sign off: its next steps are adding or linking a fact.
+  if (claim.state === "nocover") {
+    return {
+      tone: "gap",
+      guideKey: GUIDANCE_KEYS.gap,
+      askKey: DISPOSITION_COPY.nocover,
     };
   }
   return {
     tone: "routine",
     guideKey: GUIDANCE_KEYS.routine,
-    askKey:
-      claim.state === "nocover" && hasQualifier(claim, "record-silent")
-        ? QUALIFIER_ASK["record-silent"]
-        : DISPOSITION_COPY[claim.state],
+    askKey: DISPOSITION_COPY[claim.state],
   };
 };
 
@@ -269,6 +317,7 @@ export const confirmLabel = (state: ClaimState, tone: DispositionTone) =>
 
 type ClaimCounts = {
   total: number;
+  needsEvidence: number;
   byState: Record<ClaimState, number>;
   attnTotal: number;
   attnSettled: number;
@@ -292,6 +341,7 @@ export const countClaims = (
   let attnTotal = 0;
   let attnSettled = 0;
   let routineUnsettled = 0;
+  let needsEvidence = 0;
 
   for (const rawClaim of claims) {
     // Count the claim as it is displayed: reopening reclassifies a claim to
@@ -300,10 +350,18 @@ export const countClaims = (
     const claim = resolveClaimView(rawClaim);
     const state = effectiveState(claim, claim.review);
     byState[state] += 1;
+    if (claim.review?.status === "needs-evidence") {
+      needsEvidence += 1;
+    }
     const settled = isSettled(claim.review);
     if (
       needsAttention(
-        { state, refs: claim.refs, qualifiers: claim.qualifiers },
+        {
+          state,
+          refs: claim.refs,
+          qualifiers: claim.qualifiers,
+          recheck: claim.recheck,
+        },
         contested,
       )
     ) {
@@ -318,6 +376,7 @@ export const countClaims = (
 
   return {
     total: claims.length,
+    needsEvidence,
     byState,
     attnTotal,
     attnSettled,
@@ -327,7 +386,8 @@ export const countClaims = (
   };
 };
 
-/** Routine claims nobody has dispositioned yet: what "accept routine" marks. */
+/** Routine claims with no status yet: what "accept routine" marks. A claim
+ *  someone marked as needing evidence is left for them, as the server does. */
 export const routineUnsettledClaimIds = (
   claims: readonly VerificationClaim[],
   contested: ReadonlySet<FactId>,
@@ -341,9 +401,10 @@ export const routineUnsettledClaimIds = (
             state: effectiveState(claim, claim.review),
             refs: claim.refs,
             qualifiers: claim.qualifiers,
+            recheck: claim.recheck,
           },
           contested,
-        ) && !isSettled(claim.review),
+        ) && (claim.review?.status ?? null) === null,
     )
     .map((claim) => claim.id);
 
@@ -357,13 +418,13 @@ type FactStanding = Omit<
 export type ShownFact = EvidenceFact & { standing: FactStanding };
 
 /** Pinned evidence facts by id, for the detail panel's fact cards. */
-export const evidenceFactsById = (
+const evidenceFactsById = (
   run: Pick<VerificationRun, "evidence" | "factStandings">,
 ): ReadonlyMap<FactId, ShownFact> => {
   const standings = new Map(
-    run.factStandings.map(({ factEntityId, scoring, sourcing }) => [
+    run.factStandings.map(({ factEntityId, scoring, tier }) => [
       factEntityId,
-      { scoring, sourcing },
+      { scoring, tier },
     ]),
   );
   return new Map(
@@ -377,4 +438,34 @@ export const evidenceFactsById = (
       },
     ]),
   );
+};
+
+/**
+ * The facts a claim's detail can name: the run's pinned facts, with the
+ * facts its latest re-check read in their place (a fact added after the run
+ * is known only from the re-check).
+ */
+export const claimFactsById = (
+  run: Pick<VerificationRun, "evidence" | "factStandings">,
+  claim: Pick<VerificationClaim, "recheck">,
+): ReadonlyMap<FactId, ShownFact> => {
+  const facts = new Map(evidenceFactsById(run));
+  if (claim.recheck === null) {
+    return facts;
+  }
+  const standings = new Map(
+    run.factStandings.map(({ factEntityId, scoring, tier }) => [
+      factEntityId,
+      { scoring, tier },
+    ]),
+  );
+  for (const fact of claim.recheck.facts) {
+    facts.set(fact.factEntityId, {
+      ...fact,
+      standing:
+        standings.get(fact.factEntityId) ??
+        panic("A re-checked fact has no standing in the run read"),
+    });
+  }
+  return facts;
 };

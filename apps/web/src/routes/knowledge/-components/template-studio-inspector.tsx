@@ -46,6 +46,7 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { SplitButton } from "@stll/ui/split-button";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
@@ -879,7 +880,7 @@ const InsertExistingFieldItem = ({
   if (formats.length <= 1) {
     return (
       <MenuItem onClick={() => onInsert(field.path)}>
-        <span className="min-w-0 truncate">{label}</span>
+        <TruncatedText>{label}</TruncatedText>
         <code className="text-muted-foreground text-3xs ms-auto ps-3">
           {field.path}
         </code>
@@ -889,7 +890,7 @@ const InsertExistingFieldItem = ({
   return (
     <MenuSub>
       <MenuSubTrigger>
-        <span className="min-w-0 truncate">{label}</span>
+        <TruncatedText>{label}</TruncatedText>
         <code className="text-muted-foreground text-3xs ms-auto ps-3">
           {field.path}
         </code>
@@ -902,11 +903,11 @@ const InsertExistingFieldItem = ({
               onInsert(field.path, index === 0 ? undefined : format.key)
             }
           >
-            <span className="min-w-0 truncate">
+            <TruncatedText>
               {index === 0
                 ? t("templates.studio.insertFormatDefault")
                 : format.key}
-            </span>
+            </TruncatedText>
           </MenuItem>
         ))}
       </MenuSubPopup>
@@ -1141,7 +1142,7 @@ const StudioInsertRow = () => {
                       key={recipe.id}
                       onClick={() => actions.insertRecipe(recipe.definition)}
                     >
-                      <span className="min-w-0 truncate">{recipe.name}</span>
+                      <TruncatedText>{recipe.name}</TruncatedText>
                     </MenuItem>
                   ))}
                 </MenuSubPopup>
@@ -1409,9 +1410,14 @@ export const ClauseDriftPopover = ({
       <PopoverPopup className="w-72" padding="md">
         <ul className="mb-2 flex flex-col gap-1">
           {outdated.map((link) => (
-            <li className="truncate text-sm" dir="auto" key={link.id}>
+            <TruncatedText
+              className="text-sm"
+              dir="auto"
+              key={link.id}
+              render={<li />}
+            >
               {link.clause?.title ?? t("clauses.clauseDeleted")}
-            </li>
+            </TruncatedText>
           ))}
         </ul>
         <Button

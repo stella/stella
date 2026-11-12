@@ -334,11 +334,13 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Button` `shape`: `box`, `round`
 - `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
 - `Button` `variant`: `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
+- `ButtonTextRun` `variant`: `link`, `plain`
 - `ColorPicker`, `EntityActionsButton`, `SortableHead`, `TableCell`, `TableHead` `align`: `center`, `end`, `start`
 - `ColorPicker`, `EntityActionsButton` `side`: `bottom`, `left`, `right`, `top`
 - `ColorPickerContent` `presentation`: `inline`, `popover`
 - `ComboboxTrigger` `variant`: `field`, `plain`
 - `CommandItem` `size`: `default`, `row`
+- `ComposerPlaceholder` `stature`: `compact`, `large`
 - `CourtBadge`, `DocumentIdentityBadge` `size`: `default`, `inline`
 - `CourtBadge` `weight`: `dashed`, `outline`, `solid`, `tinted`
 - `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle` `size`: `compact`, `touch`

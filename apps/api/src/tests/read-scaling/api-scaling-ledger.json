@@ -753,10 +753,6 @@
       "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
-      "id": "GET /v1/sharepoint/drive/root",
-      "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
-    },
-    {
       "id": "GET /v1/sharepoint/oauth/callback",
       "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
@@ -1495,6 +1491,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "PATCH /v1/lists/:workspaceId/source-documents",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "PATCH /v1/mcp/connections/:connectionId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1799,6 +1799,14 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/conflict-checks",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/conflict-checks/:checkId/decision",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/contacts/:contactId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1833,6 +1841,10 @@
     {
       "id": "POST /v1/contacts/procuracao-upload",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/data-exports",
+      "reason": "Creates a durable export job under the organization capacity fence; archive work is covered by worker lifecycle tests, pending the write-scaling harness."
     },
     {
       "id": "POST /v1/desktop-edit-handoffs/:handoffId/opened",
@@ -2103,6 +2115,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/lists/:workspaceId/claim-rechecks",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/lists/:workspaceId/claim-reviews",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2152,6 +2168,10 @@
     },
     {
       "id": "POST /v1/lists/:workspaceId/sections",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/source-documents/kinds",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2379,6 +2399,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/search/case-law",
+      "reason": "Writes nothing; the corpus search engine answers it per country with a bounded page. Awaits the write harness like the other search POST routes."
+    },
+    {
       "id": "POST /v1/search/facets",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2412,6 +2436,10 @@
     },
     {
       "id": "POST /v1/sharepoint/connect",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/sharepoint/imports/:workspaceId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2861,6 +2889,10 @@
     {
       "id": "PUT /v1/client-invoices/:clientId",
       "reason": "Creates one invoice and claims selected work within a transaction; awaits the write scaling harness."
+    },
+    {
+      "id": "PUT /v1/conflict-checks/:checkId/matter/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
       "id": "PUT /v1/contacts",

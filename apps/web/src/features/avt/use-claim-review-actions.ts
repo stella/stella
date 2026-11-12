@@ -9,7 +9,7 @@ import {
   predictClaimReview,
   withClaimReviews,
 } from "@/features/avt/claim-review.logic";
-import { verificationRunOptions } from "@/features/avt/queries";
+import { avtKeys, verificationRunOptions } from "@/features/avt/queries";
 import type { SaveState } from "@/features/avt/save-state.logic";
 import { readTargetIds, saveStateOf } from "@/features/avt/save-state.logic";
 import type {
@@ -50,6 +50,7 @@ const QUALIFIER_READ_AFTER = {
   note: "kept",
   reopen: "kept",
   "record-conflict": "reread",
+  "fact-link": "kept",
 } as const satisfies Record<ClaimReviewEvent["kind"], "kept" | "reread">;
 
 type PreviousReviews = {
@@ -74,6 +75,11 @@ export const useClaimReviewActions = (scope: RunScope) => {
     scope.workspaceId,
     scope.runId,
   ).queryKey;
+  // Every recorded action is a new history entry, whichever view lists it.
+  const refreshHistory = async () =>
+    await queryClient.invalidateQueries({
+      queryKey: avtKeys.reviewHistoryOfRun(scope.workspaceId, scope.runId),
+    });
   const mutationKey = claimReviewMutationKey(scope);
   const lists = () =>
     api.lists({ workspaceId: toSafeId<"workspace">(scope.workspaceId) });
@@ -147,6 +153,7 @@ export const useClaimReviewActions = (scope: RunScope) => {
       if (QUALIFIER_READ_AFTER[event.kind] === "reread") {
         await queryClient.invalidateQueries({ queryKey: runKey });
       }
+      await refreshHistory();
     },
     onError: (error, _variables, context) => rollback(error, context),
   });
@@ -173,6 +180,7 @@ export const useClaimReviewActions = (scope: RunScope) => {
     // again, so the server's fold replaces every prediction.
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: runKey });
+      await refreshHistory();
     },
   });
 

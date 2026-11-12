@@ -64,6 +64,7 @@ import {
 import { isExtractionBusy } from "@/features/avt/fact-extraction.logic";
 import { factLabel } from "@/features/avt/fact-label.logic";
 import { FactSource } from "@/features/avt/fact-source";
+import { FactTierLabel, tierIsLabelled } from "@/features/avt/fact-tier";
 import { ConfidencePhrase, SaveIndicator } from "@/features/avt/state-chip";
 import type { EditableFactDetails, ListItem } from "@/features/avt/types";
 import { CONFIDENCE_PHRASE_KEYS, FACT_CONFIDENCES } from "@/features/avt/types";
@@ -516,7 +517,8 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
 };
 
 /**
- * One quiet line: confidence · kind · medium · date · source document. The
+ * One quiet line: footing · confidence · kind · medium · date · source
+ * document. The footing shows only when it is not a document's record; the
  * medium is left out when it only repeats the kind.
  */
 const FactMeta = ({
@@ -531,6 +533,13 @@ const FactMeta = ({
 }) => {
   const details = fact.factDetails;
   const parts: React.ReactElement[] = [];
+  if (fact.sourceTier !== null && tierIsLabelled(fact.sourceTier)) {
+    parts.push(
+      // Add source lives in the row's menu: most facts of a fresh record
+      // have no source, and a repeated action on every row is noise.
+      <FactTierLabel key="tier" onAddSource={null} tier={fact.sourceTier} />,
+    );
+  }
   if (details !== null && details.confidence !== null) {
     parts.push(
       <ConfidencePhrase key="confidence" level={details.confidence} />,
