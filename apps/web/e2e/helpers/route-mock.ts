@@ -24,14 +24,12 @@
  */
 import type { APIResponse, Route } from "@playwright/test";
 import type { StreamChunk } from "@tanstack/ai/client";
-import type { signInSocial, signOut } from "better-auth/api";
-import type { emailOTP } from "better-auth/plugins/email-otp";
-import type { organization } from "better-auth/plugins/organization";
 import * as v from "valibot";
 
 import type { ApiErrorObjectValue } from "@stll/api-contract";
 
 import type { WebRoutes } from "../../src/generated/api-routes.gen";
+import type { AuthEndpointBodies } from "../../src/lib/auth-endpoint-bodies";
 
 type HttpMethod = "delete" | "get" | "patch" | "post" | "put";
 
@@ -120,42 +118,10 @@ export const contractJson = <const Schema extends v.GenericSchema>(
   return reply({ status: 200, json: body, ...(headers ? { headers } : {}) });
 };
 
-/** A record as JSON carries it: every `Date` arrives as its ISO string, and
- *  a property that may be `undefined` may be missing. */
-type Json<Value> = Value extends Date
-  ? string
-  : Value extends readonly (infer Item)[]
-    ? Json<Item>[]
-    : Value extends object
-      ? {
-          [
-            Key in keyof Value as undefined extends Value[Key] ? never : Key
-          ]: Json<Value[Key]>;
-        } & {
-          [
-            Key in keyof Value as undefined extends Value[Key] ? Key : never
-          ]?: Json<Exclude<Value[Key], undefined>>;
-        }
-      : Value;
-
-/** What an auth library endpoint resolves to when called without options:
- *  the body it answers with. */
-type EndpointResult<Endpoint extends (...args: never[]) => Promise<unknown>> =
-  Json<Awaited<ReturnType<Endpoint>>>;
-
 /** The auth library's endpoints the specs answer. They sit outside the API
- *  route tree; each body is read off the library's own endpoint, so a
- *  library upgrade that changes one breaks its mocks here. */
-type AuthResponses = {
-  "email-otp/send-verification-otp": EndpointResult<
-    ReturnType<typeof emailOTP>["endpoints"]["sendVerificationOTP"]
-  >;
-  "organization/list": EndpointResult<
-    ReturnType<typeof organization>["endpoints"]["listOrganizations"]
-  >;
-  "sign-in/social": EndpointResult<ReturnType<typeof signInSocial>>;
-  "sign-out": EndpointResult<typeof signOut>;
-};
+ *  route tree; `src/lib/auth-endpoint-bodies.type-test.ts` binds each body
+ *  to the library's own endpoint result. */
+type AuthResponses = AuthEndpointBodies;
 
 /** The JSON body an auth library endpoint answers with. */
 export type AuthOk<Endpoint extends keyof AuthResponses> =
