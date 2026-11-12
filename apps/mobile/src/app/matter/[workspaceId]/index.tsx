@@ -54,6 +54,17 @@ const AddMenu = ({ workspaceId }: { workspaceId: string }) => {
       <Stack.Toolbar.Button
         onPress={() => {
           router.push({
+            pathname: "/matter/[workspaceId]/tasks",
+            params: { workspaceId },
+          });
+        }}
+      >
+        {barGlyph("list-todo")}
+        <Stack.Toolbar.Label>{t("tasks")}</Stack.Toolbar.Label>
+      </Stack.Toolbar.Button>
+      <Stack.Toolbar.Button
+        onPress={() => {
+          router.push({
             pathname: "/matter/[workspaceId]/info",
             params: { workspaceId },
           });

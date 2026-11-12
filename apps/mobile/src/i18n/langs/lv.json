@@ -138,7 +138,8 @@
       "tomorrow": "Rīt",
       "week": "Šonedēļ",
       "later": "Vēlāk",
-      "none": "Bez termiņa"
+      "none": "Bez termiņa",
+      "closed": "Paveikti vai atcelti"
     },
     "markDone": "Atzīmēt kā izpildītu",
     "reopen": "Atvērt atkārtoti",
@@ -171,7 +172,24 @@
     "saveFailed": "Izmaiņas neizdevās saglabāt. Mēģiniet vēlreiz.",
     "readOnly": "Šis uzdevums ir no pievienota kalendāra, un to šeit nevar mainīt.",
     "untitled": "Uzdevums bez nosaukuma",
-    "loadOneFailed": "Šo uzdevumu neizdevās ielādēt."
+    "loadOneFailed": "Šo uzdevumu neizdevās ielādēt.",
+    "filter": "Filtrs",
+    "whoseTitle": "Piešķirts",
+    "whose": {
+      "mine": "Man",
+      "everyone": "Jebkuram",
+      "unassigned": "Nevienam"
+    },
+    "showTitle": "Rādīt",
+    "show": {
+      "open": "Atvērtos",
+      "overdue": "Nokavētos",
+      "all": "Visus, arī paveiktos"
+    },
+    "emptyFilteredTitle": "Nav uzdevumu",
+    "emptyFilteredDescription": "Šim filtram atbilstošie uzdevumi tiks parādīti šeit.",
+    "loadMore": "Ielādēt vairāk",
+    "loadMoreFailed": "Vairāk uzdevumu neizdevās ielādēt."
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",

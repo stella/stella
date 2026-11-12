@@ -138,7 +138,8 @@
       "tomorrow": "Rytoj",
       "week": "Šią savaitę",
       "later": "Vėliau",
-      "none": "Be termino"
+      "none": "Be termino",
+      "closed": "Atliktos arba atšauktos"
     },
     "markDone": "Pažymėti kaip atliktą",
     "reopen": "Atidaryti iš naujo",
@@ -171,7 +172,24 @@
     "saveFailed": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
     "readOnly": "Ši užduotis gauta iš prijungto kalendoriaus, todėl čia jos keisti negalima.",
     "untitled": "Užduotis be pavadinimo",
-    "loadOneFailed": "Šios užduoties įkelti nepavyko."
+    "loadOneFailed": "Šios užduoties įkelti nepavyko.",
+    "filter": "Filtras",
+    "whoseTitle": "Priskirta",
+    "whose": {
+      "mine": "Man",
+      "everyone": "Bet kam",
+      "unassigned": "Niekam"
+    },
+    "showTitle": "Rodyti",
+    "show": {
+      "open": "Atviros",
+      "overdue": "Pradelstos",
+      "all": "Visos, ir atliktos"
+    },
+    "emptyFilteredTitle": "Užduočių nėra",
+    "emptyFilteredDescription": "Šį filtrą atitinkančios užduotys bus rodomos čia.",
+    "loadMore": "Įkelti daugiau",
+    "loadMoreFailed": "Daugiau užduočių įkelti nepavyko."
   },
   "matters": {
     "emptyTitle": "Bylų dar nėra",

@@ -138,7 +138,8 @@
       "tomorrow": "Holnap",
       "week": "Ezen a héten",
       "later": "Később",
-      "none": "Nincs határidő"
+      "none": "Nincs határidő",
+      "closed": "Kész vagy visszavont"
     },
     "markDone": "Késznek jelölés",
     "reopen": "Újranyitás",
@@ -171,7 +172,24 @@
     "saveFailed": "A módosítást nem sikerült menteni. Próbálja újra.",
     "readOnly": "Ez a feladat egy csatlakoztatott naptárból származik, itt nem módosítható.",
     "untitled": "Névtelen feladat",
-    "loadOneFailed": "Ezt a feladatot nem sikerült betölteni."
+    "loadOneFailed": "Ezt a feladatot nem sikerült betölteni.",
+    "filter": "Szűrő",
+    "whoseTitle": "Kiosztva",
+    "whose": {
+      "mine": "Nekem",
+      "everyone": "Bárkinek",
+      "unassigned": "Senkinek"
+    },
+    "showTitle": "Megjelenítés",
+    "show": {
+      "open": "Nyitott",
+      "overdue": "Lejárt",
+      "all": "Mind, a késztekkel együtt"
+    },
+    "emptyFilteredTitle": "Nincsenek feladatok",
+    "emptyFilteredDescription": "A szűrőnek megfelelő feladatok itt jelennek meg.",
+    "loadMore": "Továbbiak betöltése",
+    "loadMoreFailed": "További feladatokat nem sikerült betölteni."
   },
   "matters": {
     "emptyTitle": "Még nincsenek ügyek",

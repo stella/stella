@@ -138,7 +138,8 @@
       "tomorrow": "Zajtra",
       "week": "Tento týždeň",
       "later": "Neskôr",
-      "none": "Bez termínu"
+      "none": "Bez termínu",
+      "closed": "Hotové alebo zrušené"
     },
     "markDone": "Označiť ako hotové",
     "reopen": "Znova otvoriť",
@@ -171,7 +172,24 @@
     "saveFailed": "Zmenu sa nepodarilo uložiť. Skúste to znova.",
     "readOnly": "Táto úloha pochádza z prepojeného kalendára a tu ju nemožno meniť.",
     "untitled": "Úloha bez názvu",
-    "loadOneFailed": "Túto úlohu sa nepodarilo načítať."
+    "loadOneFailed": "Túto úlohu sa nepodarilo načítať.",
+    "filter": "Filter",
+    "whoseTitle": "Priradené",
+    "whose": {
+      "mine": "Mne",
+      "everyone": "Komukoľvek",
+      "unassigned": "Nikomu"
+    },
+    "showTitle": "Zobraziť",
+    "show": {
+      "open": "Otvorené",
+      "overdue": "Po termíne",
+      "all": "Všetky, aj hotové"
+    },
+    "emptyFilteredTitle": "Žiadne úlohy",
+    "emptyFilteredDescription": "Úlohy zodpovedajúce tomuto filtru sa zobrazia tu.",
+    "loadMore": "Načítať ďalšie",
+    "loadMoreFailed": "Ďalšie úlohy sa nepodarilo načítať."
   },
   "matters": {
     "emptyTitle": "Zatiaľ žiadne spisy",

@@ -14,9 +14,9 @@ import type {
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
-import type { ApiError, Load } from "@/state/api-request";
+import type { ApiError } from "@/state/api-request";
 
-/** The person's own open tasks across their matters, soonest due first. */
+/** Tasks across the person's matters, and each matter's own task routes. */
 const MY_TASKS_PATH = "/v1/tasks";
 
 /** The most the route returns in one page. */
@@ -43,26 +43,138 @@ const createdTaskSchema = v.object({ entityId: v.string() });
 
 export type TaskSummary = v.InferOutput<typeof taskSchema>;
 
-export type TasksLoad = Load<TaskSummary[]>;
+export type TasksPage = {
+  readonly items: readonly TaskSummary[];
+  /** Where the next page starts; null once the list is whole. */
+  readonly nextCursor: string | null;
+};
 
-/** The open tasks assigned to the person, soonest due first, undated last. */
-export const listMyTasks = async ({
+/**
+ * A tasks list as far as it has loaded: its pages so far, where the next
+ * starts, and why the last one did not load, the whole list's failure when
+ * nothing has. `loadedAt` is when its first page came, the day it groups by.
+ */
+export type TasksLoad = {
+  readonly loadedAt: number;
+  readonly tasks: readonly TaskSummary[];
+  readonly nextCursor: string | null;
+  readonly error: ApiError | null;
+};
+
+export const NO_TASKS_LOADED: TasksLoad = {
+  loadedAt: 0,
+  tasks: [],
+  nextCursor: null,
+  error: null,
+};
+
+/** `previous` with the next page appended, or with why it did not load. */
+export const applyTasksPage = (
+  previous: TasksLoad,
+  page: Result<TasksPage, ApiError>,
+  at: number,
+): TasksLoad => {
+  const first = previous.tasks.length === 0;
+  if (Result.isError(page)) {
+    return {
+      ...previous,
+      loadedAt: first ? at : previous.loadedAt,
+      error: page.error,
+    };
+  }
+  return {
+    loadedAt: first ? at : previous.loadedAt,
+    tasks: [...previous.tasks, ...page.value.items],
+    nextCursor: page.value.nextCursor,
+    error: null,
+  };
+};
+
+/** Whose tasks a list shows, as the web's assignee filter offers. */
+export type TaskWhose = "mine" | "everyone" | "unassigned";
+
+/** Which of them: still open, open and past due, or every one. */
+export type TaskShow = "open" | "overdue" | "all";
+
+export const TASK_WHOSE: readonly TaskWhose[] = [
+  "mine",
+  "everyone",
+  "unassigned",
+];
+
+export const TASK_SHOW: readonly TaskShow[] = ["open", "overdue", "all"];
+
+/** A list of tasks: whose, which, and in one matter or across all of them. */
+export type TasksView = {
+  readonly whose: TaskWhose;
+  readonly show: TaskShow;
+  readonly matterId?: string | undefined;
+};
+
+const ASSIGNEE_OF = {
+  mine: "me",
+  everyone: "any",
+  unassigned: "unassigned",
+} as const satisfies Record<TaskWhose, string>;
+
+/**
+ * The task list's query for `view` on `today`: overdue is still open and
+ * due before today; a list of every task keeps done and cancelled ones.
+ */
+export const tasksQuery = (
+  view: TasksView,
+  today: Temporal.PlainDate,
+  cursor: string | null,
+): string => {
+  const query = new URLSearchParams({
+    limit: String(MY_TASKS_PAGE_SIZE),
+    assignee: ASSIGNEE_OF[view.whose],
+  });
+  if (view.matterId !== undefined) {
+    query.set("matterId", view.matterId);
+  }
+  if (view.show === "all") {
+    query.set("openOnly", "false");
+  }
+  if (view.show === "overdue") {
+    query.set("dateTo", today.subtract({ days: 1 }).toString());
+  }
+  if (cursor !== null) {
+    query.set("cursor", cursor);
+  }
+  return query.toString();
+};
+
+/**
+ * One page of the tasks `view` asks for, soonest due first, undated last;
+ * `cursor` continues from the page before.
+ */
+export const listTasks = async ({
+  cursor = null,
   fetch,
   source,
+  today,
+  view,
 }: {
+  readonly cursor?: string | null;
   readonly fetch: Fetch;
   readonly source: AccessTokenSource;
-}): Promise<Result<TaskSummary[], ApiError>> =>
+  readonly today: Temporal.PlainDate;
+  readonly view: TasksView;
+}): Promise<Result<TasksPage, ApiError>> =>
   await Result.gen(async function* () {
     const page = yield* Result.await(
       requestApi({
         fetch,
-        path: `${MY_TASKS_PATH}?limit=${MY_TASKS_PAGE_SIZE}`,
+        path: `${MY_TASKS_PATH}?${tasksQuery(view, today, cursor)}`,
         schema: tasksPageSchema,
         source,
       }),
     );
-    return Result.ok(page.items);
+    return Result.ok({
+      items: page.items,
+      nextCursor: page.nextCursor ?? null,
+    });
   });
 
 /**
@@ -398,9 +510,12 @@ export const isTaskClosed = (status: string): boolean =>
 export const nextTaskStatus = (status: string): TaskStatus =>
   isTaskClosed(status) ? TASK_STATUS.OPEN : TASK_STATUS.DONE;
 
-/** When a task falls due, as the list groups them. */
+/**
+ * When a task falls due, as the list groups them; a finished task is past
+ * falling due.
+ */
 export type TaskDue =
-  "overdue" | "today" | "tomorrow" | "week" | "later" | "none";
+  "overdue" | "today" | "tomorrow" | "week" | "later" | "none" | "closed";
 
 const DUE_ORDER: readonly TaskDue[] = [
   "overdue",
@@ -409,6 +524,7 @@ const DUE_ORDER: readonly TaskDue[] = [
   "week",
   "later",
   "none",
+  "closed",
 ];
 
 /** The calendar day in `timeZone` at the instant `at`, in epoch milliseconds. */
@@ -476,8 +592,8 @@ export const dueOf = (
 
 /**
  * The tasks under when they fall due, in the server's order within each:
- * overdue first, then today, tomorrow, the coming week, later, and undated.
- * Empty groups are left out.
+ * overdue first, then today, tomorrow, the coming week, later, undated, and
+ * last the finished ones. Empty groups are left out.
  */
 export const groupByDue = (
   tasks: readonly TaskSummary[],
@@ -485,7 +601,12 @@ export const groupByDue = (
 ): { due: TaskDue; data: TaskSummary[] }[] => {
   const groups = new Map<TaskDue, TaskSummary[]>();
   for (const task of tasks) {
-    const due = dueOf(task.dueDate, today);
+    const due =
+      task.status !== null &&
+      task.status !== undefined &&
+      isTaskClosed(task.status)
+        ? "closed"
+        : dueOf(task.dueDate, today);
     const group = groups.get(due);
     if (group === undefined) {
       groups.set(due, [task]);

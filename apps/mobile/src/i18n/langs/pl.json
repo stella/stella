@@ -138,7 +138,8 @@
       "tomorrow": "Jutro",
       "week": "W tym tygodniu",
       "later": "Później",
-      "none": "Bez terminu"
+      "none": "Bez terminu",
+      "closed": "Wykonane lub anulowane"
     },
     "markDone": "Oznacz jako wykonane",
     "reopen": "Otwórz ponownie",
@@ -171,7 +172,24 @@
     "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
     "readOnly": "To zadanie pochodzi z połączonego kalendarza i nie można go tu zmienić.",
     "untitled": "Zadanie bez tytułu",
-    "loadOneFailed": "Nie udało się wczytać tego zadania."
+    "loadOneFailed": "Nie udało się wczytać tego zadania.",
+    "filter": "Filtr",
+    "whoseTitle": "Przypisane do",
+    "whose": {
+      "mine": "Mnie",
+      "everyone": "Kogokolwiek",
+      "unassigned": "Nikogo"
+    },
+    "showTitle": "Pokaż",
+    "show": {
+      "open": "Otwarte",
+      "overdue": "Zaległe",
+      "all": "Wszystkie, także wykonane"
+    },
+    "emptyFilteredTitle": "Brak zadań",
+    "emptyFilteredDescription": "Zadania pasujące do tego filtra pojawią się tutaj.",
+    "loadMore": "Wczytaj więcej",
+    "loadMoreFailed": "Nie udało się wczytać kolejnych zadań."
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",

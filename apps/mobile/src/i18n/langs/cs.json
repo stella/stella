@@ -138,7 +138,8 @@
       "tomorrow": "Zítra",
       "week": "Tento týden",
       "later": "Později",
-      "none": "Bez termínu"
+      "none": "Bez termínu",
+      "closed": "Hotové nebo zrušené"
     },
     "markDone": "Označit jako hotové",
     "reopen": "Znovu otevřít",
@@ -171,7 +172,24 @@
     "saveFailed": "Změnu se nepodařilo uložit. Zkuste to znovu.",
     "readOnly": "Tento úkol pochází z propojeného kalendáře a zde jej nelze měnit.",
     "untitled": "Úkol bez názvu",
-    "loadOneFailed": "Úkol se nepodařilo načíst."
+    "loadOneFailed": "Úkol se nepodařilo načíst.",
+    "filter": "Filtr",
+    "whoseTitle": "Přiřazeno",
+    "whose": {
+      "mine": "Mně",
+      "everyone": "Komukoli",
+      "unassigned": "Nikomu"
+    },
+    "showTitle": "Zobrazit",
+    "show": {
+      "open": "Otevřené",
+      "overdue": "Po termínu",
+      "all": "Všechny, i hotové"
+    },
+    "emptyFilteredTitle": "Žádné úkoly",
+    "emptyFilteredDescription": "Úkoly odpovídající tomuto filtru se zobrazí zde.",
+    "loadMore": "Načíst další",
+    "loadMoreFailed": "Další úkoly se nepodařilo načíst."
   },
   "matters": {
     "emptyTitle": "Zatím žádné spisy",

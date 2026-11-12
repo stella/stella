@@ -138,7 +138,8 @@
       "tomorrow": "Tomorrow",
       "week": "This week",
       "later": "Later",
-      "none": "No due date"
+      "none": "No due date",
+      "closed": "Done or cancelled"
     },
     "markDone": "Mark as done",
     "reopen": "Reopen",
@@ -171,7 +172,24 @@
     "saveFailed": "The change could not be saved. Try again.",
     "readOnly": "This task comes from a connected calendar and cannot be changed here.",
     "untitled": "Untitled task",
-    "loadOneFailed": "This task could not be loaded."
+    "loadOneFailed": "This task could not be loaded.",
+    "filter": "Filter",
+    "whoseTitle": "Assigned to",
+    "whose": {
+      "mine": "Me",
+      "everyone": "Anyone",
+      "unassigned": "Nobody"
+    },
+    "showTitle": "Show",
+    "show": {
+      "open": "Open",
+      "overdue": "Overdue",
+      "all": "All, done included"
+    },
+    "emptyFilteredTitle": "No tasks",
+    "emptyFilteredDescription": "Tasks that match this filter will appear here.",
+    "loadMore": "Load more",
+    "loadMoreFailed": "More tasks could not be loaded."
   },
   "matters": {
     "emptyTitle": "No matters yet",

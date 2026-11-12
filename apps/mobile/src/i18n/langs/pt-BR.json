@@ -138,7 +138,8 @@
       "tomorrow": "Amanhã",
       "week": "Esta semana",
       "later": "Mais tarde",
-      "none": "Sem prazo"
+      "none": "Sem prazo",
+      "closed": "Concluídas ou canceladas"
     },
     "markDone": "Marcar como concluída",
     "reopen": "Reabrir",
@@ -171,7 +172,24 @@
     "saveFailed": "Não foi possível salvar a alteração. Tente novamente.",
     "readOnly": "Esta tarefa vem de um calendário conectado e não pode ser alterada aqui.",
     "untitled": "Tarefa sem título",
-    "loadOneFailed": "Não foi possível carregar esta tarefa."
+    "loadOneFailed": "Não foi possível carregar esta tarefa.",
+    "filter": "Filtrar",
+    "whoseTitle": "Atribuídas a",
+    "whose": {
+      "mine": "Mim",
+      "everyone": "Qualquer pessoa",
+      "unassigned": "Ninguém"
+    },
+    "showTitle": "Mostrar",
+    "show": {
+      "open": "Abertas",
+      "overdue": "Atrasadas",
+      "all": "Todas, inclusive concluídas"
+    },
+    "emptyFilteredTitle": "Nenhuma tarefa",
+    "emptyFilteredDescription": "As tarefas que corresponderem a este filtro aparecerão aqui.",
+    "loadMore": "Carregar mais",
+    "loadMoreFailed": "Não foi possível carregar mais tarefas."
   },
   "matters": {
     "emptyTitle": "Ainda não há casos",
