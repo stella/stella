@@ -293,8 +293,13 @@ test("an agent starts on the model it marks as its default, offered first", asyn
             capabilities: ["approvals"],
             approvalModes: ["ask"],
             models: [
-              { id: "gpt-5-codex", label: "GPT-5 Codex" },
-              { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", isDefault: true },
+              { id: "gpt-5-codex", label: "GPT-5 Codex", reasoningEfforts: [] },
+              {
+                id: "gpt-6.1-sol",
+                label: "GPT-6.1 Sol",
+                isDefault: true,
+                reasoningEfforts: [],
+              },
             ],
           },
         ],
@@ -375,6 +380,7 @@ test("a permission pick keeps the where menu open for another choice", async () 
     harness: "claude-code",
     model: "sonnet",
     approvals: "ask",
+    reasoningEffort: null,
   } as const satisfies ChatRunTarget;
   const { chosen } = renderChips(claude, {
     ...READINESS,
@@ -388,7 +394,7 @@ test("a permission pick keeps the where menu open for another choice", async () 
           version: "2.1.309",
           capabilities: ["approvals"],
           approvalModes: ["ask", "auto"],
-          models: [{ id: "sonnet", label: "Sonnet" }],
+          models: [{ id: "sonnet", label: "Sonnet", reasoningEfforts: [] }],
         },
       ],
     })),
