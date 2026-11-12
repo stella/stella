@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { FactSource } from "@/features/avt/fact-source";
@@ -217,15 +218,13 @@ const FactChip = ({ workspaceId, edge, fact, source }: FactChipProps) => {
             </span>
           </>
         )}
-        <BidiText
-          as="span"
-          className={cn(
-            "line-clamp-2 min-w-0 [overflow-wrap:anywhere]",
-            fact.held && "text-muted-foreground",
-          )}
+        <TruncatedText
+          className={cn(fact.held && "text-muted-foreground")}
+          lines={2}
+          render={<BidiText as="span" />}
         >
           {fact.text}
-        </BidiText>
+        </TruncatedText>
       </span>
       {(notes.length > 0 || source !== null) && (
         <span className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1.5">

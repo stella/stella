@@ -18,6 +18,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, FileTextIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { SourceLocatorLabel } from "@/components/workspaces/list-source";
@@ -249,6 +250,7 @@ export const GraphCanvas = ({
           columns.source.x,
           centreY(to),
         )}
+        data-provenance={key}
         fill="none"
         key={`${key}|${JSON.stringify(edge.locator)}`}
         opacity={0.6}
@@ -309,12 +311,13 @@ export const GraphCanvas = ({
                     !lit(key) && "opacity-25",
                   )}
                 >
-                  <BidiText
-                    as="span"
-                    className="line-clamp-2 font-medium [overflow-wrap:anywhere]"
+                  <TruncatedText
+                    className="font-medium"
+                    lines={2}
+                    render={<BidiText as="span" />}
                   >
                     {statement.name}
-                  </BidiText>
+                  </TruncatedText>
                   <span className="text-muted-foreground tabular-nums">
                     {t("avt.graph.claimCount", { count: statement.claimCount })}
                   </span>
@@ -356,12 +359,13 @@ export const GraphCanvas = ({
               borderInlineStartColor: stateHue(claim.state),
             }}
           >
-            <BidiText
-              as="span"
-              className="line-clamp-2 leading-snug [overflow-wrap:anywhere]"
+            <TruncatedText
+              className="leading-snug"
+              lines={2}
+              render={<BidiText as="span" />}
             >
               {claim.text}
-            </BidiText>
+            </TruncatedText>
             {settled && (
               <CheckIcon
                 aria-hidden="true"
@@ -432,9 +436,9 @@ export const GraphCanvas = ({
               className="text-muted-foreground size-3.5 shrink-0"
             />
             <span className="flex min-w-0 flex-col">
-              <BidiText as="span" className="truncate">
+              <TruncatedText render={<BidiText as="span" />}>
                 {source.name}
-              </BidiText>
+              </TruncatedText>
               <span className="text-muted-foreground tabular-nums">
                 {t("avt.graph.factCount", {
                   count: factsPerSource.get(source.id) ?? 0,
@@ -489,25 +493,22 @@ const FactCardText = ({ fact, source }: FactCardTextProps) => {
   ];
   return (
     <>
-      <BidiText
-        as="span"
-        className={cn(
-          "leading-snug [overflow-wrap:anywhere]",
-          details.length === 0 ? "line-clamp-2" : "line-clamp-1",
-          fact.held && "text-muted-foreground",
-        )}
+      <TruncatedText
+        className={cn("leading-snug", fact.held && "text-muted-foreground")}
+        lines={details.length === 0 ? 2 : 1}
+        render={<BidiText as="span" />}
       >
         {fact.text}
-      </BidiText>
+      </TruncatedText>
       {details.length > 0 && (
-        <span className="text-muted-foreground truncate">
+        <TruncatedText className="text-muted-foreground">
           {details.map(({ key, content }, index) => (
             <React.Fragment key={key}>
               {index > 0 && " · "}
               {content}
             </React.Fragment>
           ))}
-        </span>
+        </TruncatedText>
       )}
     </>
   );
@@ -624,9 +625,7 @@ const ColumnLabels = ({
           key={key}
           style={{ insetInlineStart: column.x, width: column.width }}
         >
-          <BidiText as="span" className="truncate">
-            {label}
-          </BidiText>
+          <TruncatedText render={<BidiText as="span" />}>{label}</TruncatedText>
           <span className="shrink-0 tabular-nums opacity-70">{tally}</span>
         </div>
       ))}

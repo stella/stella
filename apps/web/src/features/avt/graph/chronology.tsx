@@ -12,6 +12,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useFactDateText } from "@/features/avt/fact-date";
@@ -262,12 +263,12 @@ const ChronologyItem = ({
                     <span className="shrink-0 font-medium">
                       {t(STATE_META[claim.state].chipKey)}
                     </span>
-                    <BidiText
-                      as="span"
-                      className="text-muted-foreground truncate"
+                    <TruncatedText
+                      className="text-muted-foreground"
+                      render={<BidiText as="span" />}
                     >
                       {claim.text}
-                    </BidiText>
+                    </TruncatedText>
                   </span>
                 </Button>
               </li>

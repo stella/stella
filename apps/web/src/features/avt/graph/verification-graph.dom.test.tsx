@@ -223,7 +223,7 @@ test("sources stay quiet until focused, and one document heads the claims", asyn
     ),
   });
   // No source links at rest; each fact names its source on its card.
-  expect(canvas().querySelectorAll("path:not([data-edge])")).toHaveLength(0);
+  expect(canvas().querySelectorAll("[data-provenance]")).toHaveLength(0);
   expect(node(`fact:${graphFactId(2)}`).textContent).toContain(
     "Ledger export.pdf",
   );
@@ -234,7 +234,7 @@ test("sources stay quiet until focused, and one document heads the claims", asyn
   const source = node(`source:${sourceId(2)}`);
   expect(source.textContent).toContain("1 fact");
   fireEvent.click(source);
-  expect(canvas().querySelectorAll("path:not([data-edge])")).toHaveLength(1);
+  expect(canvas().querySelectorAll("[data-provenance]")).toHaveLength(1);
   expect(dimmed(node(`fact:${graphFactId(2)}`))).toBe(false);
   expect(dimmed(node(`fact:${graphFactId(1)}`))).toBe(true);
 });
