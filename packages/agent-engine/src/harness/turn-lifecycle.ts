@@ -39,7 +39,7 @@ export const respondError = (
  * with nothing else happening, before it ends as stalled. Long, so a slow
  * provider that recovers is never cut off.
  */
-export const RETRY_STALL_MS = 10 * 60_000;
+const RETRY_STALL_MS = 10 * 60_000;
 
 const isTerminal = (event: HarnessEvent) =>
   event.type === "turn.completed" ||
