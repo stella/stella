@@ -18,7 +18,7 @@ import {
 } from "@/components/chat/chat-context-meter";
 import { ChatMockModelBadge } from "@/components/chat/chat-mock-model-badge";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
-import { ChatModelSelector } from "@/components/chat/chat-model-selector";
+import { ChatComposerChips } from "@/components/chat/chat-model-selector";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -216,7 +216,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
           {/* Beside the model it qualifies: while the local mock answers,
               the selected model is not the one replying. */}
           <ChatMockModelBadge />
-          {models && <ChatModelSelector models={models} />}
+          {models && <ChatComposerChips models={models} />}
           {/* The meter renders on every surface: it shows an empty ring
               for a brand-new thread (context null) and fills in once an
               estimate lands. */}

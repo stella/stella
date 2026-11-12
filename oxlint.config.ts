@@ -685,6 +685,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-dom-node-poll-assertion.fixture.tsx", [
     "no-dom-node-poll-assertion/no-dom-node-poll-assertion",
   ]),
+  fixtureRuleOverride("review-decision-map-owner.fixture.ts", [
+    "review-decision-map-owner/review-decision-map-owner",
+  ]),
   fixtureRuleOverride("text-mark-not-in-button.fixture.tsx", [
     "text-mark-not-in-button/text-mark-not-in-button",
   ]),
@@ -2343,6 +2346,7 @@ const config = defineConfig({
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/no-dom-node-poll-assertion.ts",
+    "./.oxlint-plugins/review-decision-map-owner.ts",
     "./.oxlint-plugins/text-mark-not-in-button.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
@@ -4578,6 +4582,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-dom-node-poll-assertion/no-dom-node-poll-assertion": "error",
+      },
+    },
+    {
+      // What a review status means as the shared decision has one owner,
+      // REVIEW_STATUS_DECISION in @stll/api-contract/review-decision.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/review-decision-map-owner.fixture.ts",
+      ],
+      rules: {
+        "review-decision-map-owner/review-decision-map-owner": "error",
       },
     },
     {
