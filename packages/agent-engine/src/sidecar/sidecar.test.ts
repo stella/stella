@@ -25,6 +25,7 @@ import {
   type FakeScenario,
 } from "../../scripts/fake-codex-app-server";
 import { bundledHarnessCompatibility } from "../harness/compatibility";
+import { PROTOCOL_LOG_OFF } from "../protocol-log";
 import {
   HOLDER_ENDPOINT_FILE,
   HOLDER_LOG_FILE,
@@ -155,7 +156,10 @@ const place = (): Place => {
 type HolderProcess = Place & { exited: Promise<number> };
 
 /** The holder as `main.ts`, the way the desktop starts it. */
-const spawnHolder = async (at: Place = place()): Promise<HolderProcess> => {
+const spawnHolder = async (
+  at: Place = place(),
+  environment: Readonly<Record<string, string>> = {},
+): Promise<HolderProcess> => {
   const child = Bun.spawn(
     [process.execPath, MAIN, "--dir", at.dir, "--endpoint", at.endpoint],
     {
@@ -166,6 +170,7 @@ const spawnHolder = async (at: Place = place()): Promise<HolderProcess> => {
         PATH: process.env["PATH"] ?? "",
         FAKE_HARNESS_LOG: at.fakeLog,
         OPENAI_API_KEY: "inherited-key",
+        ...environment,
       },
     },
   );
@@ -358,6 +363,7 @@ const startRun = (
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
     harnessSessionId: null,
+    reasoningEffort: null,
     policy: { network: "open", fs: "workspace", approvals: "ask" },
     mcp: {
       serverName: "stella",
@@ -457,6 +463,31 @@ describe("harness holder over its socket", () => {
     await older.ended;
     expect(older.messages.some(is("hello"))).toBe(false);
     await desktop(holder);
+  });
+
+  test("a newer desktop's hello makes a holder with no runs exit, after the rejection", async () => {
+    const holder = await spawnHolder();
+    const newer = await connect(holder.endpoint);
+    newer.send({ ...helloMessage(holder), protocol: SIDECAR_PROTOCOL + 1 });
+    expect(await newer.waitFor(is("rejected"))).toMatchObject({
+      reason: "protocol_mismatch",
+    });
+    expect(await holder.exited).toBe(0);
+  });
+
+  test("a newer desktop's hello lets a holder finish its runs before it exits", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "interrupt_queued");
+    await client.waitFor(is("run.event", runId));
+    const newer = await connect(holder.endpoint);
+    newer.send({ ...helloMessage(holder), protocol: SIDECAR_PROTOCOL + 1 });
+    await newer.waitFor(is("rejected"));
+    // The run it holds still runs and reaches its desktop.
+    client.send({ type: "run.cancel", runId });
+    const finished = await client.waitFor(is("run.finished", runId));
+    client.send({ type: "ack", runId, seq: finished.seq });
+    expect(await holder.exited).toBe(0);
   });
 
   test("rejects unknown and invalid lines once authenticated", async () => {
@@ -573,8 +604,15 @@ describe("harness holder over its socket", () => {
         type: "ready",
         version: "0.166.0",
         capabilities: ["approvals", "interrupt", "resume", "image_input"],
-        approvalModes: ["ask"],
-        models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
+        approvalModes: ["ask", "auto", "full_auto"],
+        models: [
+          {
+            id: "gpt-test",
+            label: "GPT Test",
+            isDefault: true,
+            reasoningEfforts: ["medium", "high"],
+          },
+        ],
       },
     });
     expect(holder.received().map(({ method }) => method)).not.toContain(
@@ -912,6 +950,52 @@ describe("harness holder over its socket", () => {
     expect(holder.log()).not.toContain(secret);
   });
 
+  test("with the protocol log on, the holder log has each message's structure and none of its content", async () => {
+    const holder = await spawnHolder(place(), {
+      STELLA_AGENT_PROTOCOL_LOG: "redacted",
+    });
+    const { client } = await desktop(holder);
+    const codexRun = runStart(client, holder, "stella_tools");
+    await client.waitFor(is("run.finished", codexRun));
+    const claudeRun = claudeRunStart(client, holder, "stella_tools");
+    await client.waitFor(is("run.finished", claudeRun));
+    const secret = holder.secret();
+    client.send({ type: "shutdown" });
+    expect(await holder.exited).toBe(0);
+    const log = holder.log();
+    expect(log).toContain("the protocol log is on");
+    for (const line of [
+      /protocol sidecar connection=1 in type=run\.start runId=#[0-9a-f]{8} /u,
+      /protocol sidecar connection=1 out type=run\.finished /u,
+      /protocol codex pid=\d+ out method=turn\/start id=\d+ /u,
+      /protocol codex pid=\d+ in method=turn\/completed /u,
+      /protocol claude-code pid=\d+ out type=user /u,
+      /protocol claude-code pid=\d+ in type=result /u,
+    ]) {
+      expect(log).toMatch(line);
+    }
+    // What the member and the model wrote, and where the run's files are.
+    const written = [codexRun, claudeRun]
+      .flatMap((runId) => chunksOf(client, runId))
+      .flatMap((chunk) =>
+        ["delta", "content", "args", "result"].flatMap((key) => {
+          const value: unknown = chunk[key];
+          return typeof value === "string" && value.length >= 6 ? [value] : [];
+        }),
+      );
+    expect(written.length).toBeGreaterThan(0);
+    for (const content of [
+      "Find the lease decision.",
+      "Use the stella MCP server.",
+      RUN_TOKEN,
+      secret,
+      holder.root,
+      ...written,
+    ]) {
+      expect(log).not.toContain(content);
+    }
+  });
+
   test("hands the harness the run's approval mode and the computer's package cache", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
@@ -925,8 +1009,9 @@ describe("harness holder over its socket", () => {
       }),
       holder.received().find(({ method }) => method === "thread/start")?.params,
     );
+    // The run starts at Ask: Codex's untrusted policy.
     expect(threadStart).toMatchObject({
-      approvalPolicy: "on-request",
+      approvalPolicy: "untrusted",
       sandbox: "workspace-write",
     });
     expect(
@@ -946,6 +1031,23 @@ describe("harness holder over its socket", () => {
     expect(JSON.stringify(holder.startups())).toContain(
       '"--permission-mode","auto"',
     );
+  });
+
+  test("hands the harness the run's reasoning effort", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = startRun(
+      client,
+      holder,
+      {
+        harness: "claude-code",
+        executable: fakeClaude(holder.root, "stella_tools"),
+        model: "sonnet",
+      },
+      { reasoningEffort: "high" },
+    );
+    await client.waitFor(is("run.finished", runId));
+    expect(JSON.stringify(holder.startups())).toContain('"--effort","high"');
   });
 
   test("relays an approval with one request id and returns the decision", async () => {
@@ -1325,6 +1427,7 @@ describe("harness holder over its socket", () => {
         return true;
       },
       log: () => {},
+      protocolLog: PROTOCOL_LOG_OFF,
       environment: {
         PATH: process.env["PATH"] ?? "",
         FAKE_HARNESS_LOG: path.join(root, "fake.log"),
@@ -1347,6 +1450,7 @@ describe("harness holder over its socket", () => {
       workspaceDir,
       cacheDir: path.join(root, "agent-package-cache"),
       model: "gpt-test",
+      reasoningEffort: null,
       instructions: "Use the stella MCP server.",
       messages: [{ role: "user", content: "Find the lease decision." }],
       attachments: [],
@@ -1410,6 +1514,7 @@ describe("harness holder over its socket", () => {
           return true;
         },
         log: () => {},
+        protocolLog: PROTOCOL_LOG_OFF,
         environment: {
           PATH: process.env["PATH"] ?? "",
           FAKE_HARNESS_LOG: path.join(root, "fake.log"),
@@ -1434,6 +1539,7 @@ describe("harness holder over its socket", () => {
         workspaceDir,
         cacheDir: path.join(root, "agent-package-cache"),
         model: "gpt-test",
+        reasoningEffort: null,
         instructions: "Use the stella MCP server.",
         messages: [{ role: "user", content: "Write the report." }],
         attachments: [],
@@ -1595,6 +1701,7 @@ describe("holder limits and timers", () => {
       unackedRetentionMs: 60_000,
       processGrantTimeoutMs: 60_000,
       limits: { maxMessages: 1000, maxBytes: 1024 * 1024 },
+      protocolLog: { type: "set", setting: "off" },
       ...overrides,
     });
     const server = Result.isOk(started)

@@ -622,7 +622,10 @@ describe("desktop account update requirement", () => {
       expect(requests).toEqual([]);
       render(
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <DesktopConnectionStatus state={outcome.value} />
+          <DesktopConnectionStatus
+            onSwitchAccount={() => undefined}
+            state={outcome.value}
+          />
         </IntlProvider>,
       );
       expect(

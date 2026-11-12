@@ -21,10 +21,16 @@ import {
 } from "@stll/api-contract";
 import type { ChatSendRequest, ChatTurnIntent } from "@stll/api-contract";
 import {
+  isSameLocalRunQuestionPause,
+  type LocalRunQuestionPause,
+  localRunQuestionPauseOf,
+} from "@stll/api-contract/chat-local-run-question";
+import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   chatLocalRunComputerEventSchema,
+  type ChatLocalRunComputerWait,
+  type ChatLocalRunQuestionReply,
 } from "@stll/api-contract/chat-run-target";
-import type { ChatLocalRunQuestionReply } from "@stll/api-contract/chat-run-target";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -48,11 +54,6 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
-import {
-  isSameLocalRunQuestionPause,
-  type LocalRunQuestionPause,
-  localRunQuestionPauseOf,
-} from "@/components/chat/local-run-question.logic";
 import { createBrowserExtensionTool } from "@/features/chat/browser-control/browser-client-tool";
 import {
   BrowserBridgeUnmountedError,
@@ -146,6 +147,10 @@ export type ChatRouteHandoffStart = {
  * open, so Stop stays available). A stop the server accepted never fails:
  * the page reloads the turn as the server stores it.
  */
+/** Whether a local question's answer went out; one that did not can be
+ *  sent again. */
+export type LocalRunAnswerDelivery = "sent" | "not_sent";
+
 export type ChatStopState =
   | { status: "idle" }
   | { status: "pending"; turnId: SafeId<"chatTurn"> }
@@ -162,10 +167,16 @@ type ChatRuntimeSnapshot = {
   status: ChatClientState;
   stop: ChatStopState;
   turnAbandoned: boolean;
-  /** The turn runs on the member's computer, which went away mid-turn; the
-   *  turn goes on once it reconnects. A rejoin replays the run's events, so
-   *  a reload reads the same. */
-  waitingForComputer: boolean;
+  /** The turn runs on the member's computer and waits on it: for it to pick
+   *  the run up (counted from the send), or to come back after it went away
+   *  mid-turn; `null` while it runs. A rejoin replays the run's events, so a
+   *  reload reads the same. */
+  computerWait: ChatLocalRunComputerWait | null;
+  /** When this page sent the message its running request carries, on the
+   *  `performance.now()` clock: the start every turn's live elapsed time
+   *  counts from, on stella or on the member's computer alike. `null` once
+   *  that request is over, and for a turn this page joined (a reload). */
+  turnSentAt: number | null;
 };
 
 type TanStackClientToolResult = Parameters<
@@ -202,7 +213,7 @@ export type ChatRuntime = ChatActivitySession & {
   answerLocalRunQuestion: (
     interruptId: string,
     answers: ChatLocalRunQuestionReply["answers"] | null,
-  ) => Promise<void>;
+  ) => Promise<LocalRunAnswerDelivery>;
   getSnapshot: () => ChatRuntimeSnapshot;
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
@@ -461,7 +472,8 @@ export const createChatRuntime = ({
     status: "ready",
     stop: { status: "idle" },
     turnAbandoned: false,
-    waitingForComputer: false,
+    computerWait: null,
+    turnSentAt: null,
   };
   /** The server turn the latest request runs; null from a new message until
    *  the server names its turn. */
@@ -490,9 +502,10 @@ export const createChatRuntime = ({
     stoppedTurnId = null;
     settledTurnRefused = false;
     stopBeforeHeaders = "none";
-    if (snapshot.stop.status !== "idle") {
-      setSnapshot({ stop: { status: "idle" } });
-    }
+    setSnapshot({
+      turnSentAt: performance.now(),
+      ...(snapshot.stop.status === "idle" ? {} : { stop: { status: "idle" } }),
+    });
   };
 
   let cancelScheduledEmit: (() => void) | undefined;
@@ -1021,15 +1034,16 @@ export const createChatRuntime = ({
         return;
       }
       setSnapshot({
-        waitingForComputer: parsed.output.status === "waiting",
+        computerWait:
+          parsed.output.status === "connected" ? null : parsed.output,
       });
     },
     onLoadingChange: (isLoading) => {
       setSnapshot({
         isLoading,
         // A wait belongs to the request that reported it.
-        waitingForComputer: false,
-        ...(!isLoading ? { reconnecting: false } : {}),
+        computerWait: null,
+        ...(!isLoading ? { reconnecting: false, turnSentAt: null } : {}),
         ...(isLoading && stopBeforeHeaders === "none" && !isStoppedTurn()
           ? { turnAbandoned: false }
           : {}),
@@ -1349,13 +1363,18 @@ export const createChatRuntime = ({
   const answerLocalRunQuestion = async (
     interruptId: string,
     answers: ChatLocalRunQuestionReply["answers"] | null,
-  ): Promise<void> => {
-    if (isStoppedTurn() || answeredLocalRunQuestions.has(interruptId)) {
-      return;
+  ): Promise<LocalRunAnswerDelivery> => {
+    if (isStoppedTurn()) {
+      return "not_sent";
+    }
+    // Already on its way: the one answer stands.
+    if (answeredLocalRunQuestions.has(interruptId)) {
+      return "sent";
     }
     answeredLocalRunQuestions.add(interruptId);
     if (!(await awaitRequestEnd())) {
-      return;
+      answeredLocalRunQuestions.delete(interruptId);
+      return "not_sent";
     }
     const resumed = await Result.tryPromise(
       async () =>
@@ -1374,7 +1393,14 @@ export const createChatRuntime = ({
     if (Result.isError(resumed)) {
       answeredLocalRunQuestions.delete(interruptId);
       captureRuntimeError(resumed.error.cause);
+      return "not_sent";
     }
+    // The client resolves false, not throws, when the request failed.
+    if (!resumed.value) {
+      answeredLocalRunQuestions.delete(interruptId);
+      return "not_sent";
+    }
+    return "sent";
   };
 
   const answerToolApproval = async (

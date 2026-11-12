@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { parseArgs } from "node:util";
 
-import { harnessEnvironment, sidecarVersion } from "./env";
+import { harnessEnvironment, protocolLogSetting, sidecarVersion } from "./env";
 import {
   HOLDER_HELLO_TIMEOUT_MS,
   HOLDER_IDLE_EXIT_MS,
@@ -19,7 +19,8 @@ import { startHolderServer } from "./holder-server";
  *   stella-agent-sidecar --dir <version folder> --endpoint <socket or pipe>
  *
  * It serves the protocol (`protocol.ts`) on the endpoint and logs to
- * `holder.log` in the folder, and keeps running when the desktop goes away;
+ * `holder.log` in the folder, with the protocol log when the environment
+ * turns it on (`env.ts`), and keeps running when the desktop goes away;
  * see `holder.ts` for when it exits. A second start while a holder answers
  * on the endpoint exits at once.
  */
@@ -43,6 +44,7 @@ const started = await startHolderServer({
   endpoint: values.endpoint,
   sidecarVersion: sidecarVersion(),
   environment: harnessEnvironment(),
+  protocolLog: protocolLogSetting(),
   idleExitMs: HOLDER_IDLE_EXIT_MS,
   helloTimeoutMs: HOLDER_HELLO_TIMEOUT_MS,
   unackedRetentionMs: HOLDER_UNACKED_RETENTION_MS,

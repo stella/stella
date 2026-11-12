@@ -3,8 +3,13 @@ import { homedir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import {
+  DESKTOP_RUNNER_APPROVAL_MODES,
+  knownReasoningEfforts,
+} from "@stll/api-contract/desktop-runner";
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
+import type { ProtocolLog } from "../../protocol-log";
 import {
   type HarnessAdapter,
   type HarnessAuth,
@@ -30,6 +35,7 @@ import {
   startAppServer,
 } from "./app-server-client";
 import {
+  CODEX_CLIENT_INFO,
   CODEX_OPT_OUT_NOTIFICATIONS,
   GetAccountResponseSchema,
   InitializeResponseSchema,
@@ -37,7 +43,7 @@ import {
   ModelListResponseSchema,
   TurnStartResponseSchema,
 } from "./protocol";
-import { CODEX_APPROVAL_MODE, openThread } from "./thread";
+import { openThread } from "./thread";
 import { type CodexCapacityRetry, CodexTurnSession } from "./turn";
 
 /**
@@ -78,8 +84,12 @@ export type CodexHarnessAdapterOptions = {
   gracePeriodMs: number;
   /** How long any request to the harness waits for its answer. */
   requestTimeoutMs: number;
+  /** See `HarnessProcessDeadlines.startupRequestMs`. */
+  startupRequestTimeoutMs?: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /** Where the app server's protocol lines go, redacted. */
+  protocolLog: ProtocolLog;
   /**
    * Called with each new process's id before it is asked anything; a
    * process it does not answer `true` for is ended unused.
@@ -96,9 +106,9 @@ const DEFAULT_CAPACITY_RETRY: CodexCapacityRetry = {
   maxAttempts: 5,
   baseDelayMs: 2000,
   maxDelayMs: 30_000,
+  sleep: Bun.sleep,
 };
 
-const CLIENT_NAME = "stella";
 const MAX_MODEL_PAGES = 20;
 /** `<client name>/<version> (<platform>) ...`, as `initialize` reports it. */
 const USER_AGENT_VERSION = /^[^/\s]+\/(\S+)/u;
@@ -187,9 +197,11 @@ const connect = async ({
 }: ConnectOptions): Promise<Result<Connection, ConnectFailure>> => {
   const started = startAppServer({
     launch: options.launch,
+    protocolLog: options.protocolLog,
     detached: createDetached(options.onBackgroundError),
     deadlines: {
       requestMs: options.requestTimeoutMs,
+      startupRequestMs: options.startupRequestTimeoutMs,
       terminateMs: options.gracePeriodMs,
     },
     cwd,
@@ -219,8 +231,8 @@ const connect = async ({
   }
   const initialized = await client.request("initialize", {
     clientInfo: {
-      name: options.clientName ?? CLIENT_NAME,
-      title: "stella",
+      name: options.clientName ?? CODEX_CLIENT_INFO.name,
+      title: CODEX_CLIENT_INFO.title,
       version: options.clientVersion,
     },
     capabilities: {
@@ -297,8 +309,10 @@ const listModels = async (
           id: model.id,
           displayName: model.displayName,
           isDefault: model.isDefault,
-          reasoningEfforts: model.supportedReasoningEfforts.map(
-            ({ reasoningEffort }) => reasoningEffort,
+          reasoningEfforts: knownReasoningEfforts(
+            model.supportedReasoningEfforts.map(
+              ({ reasoningEffort }) => reasoningEffort,
+            ),
           ),
           inputModalities: model.inputModalities,
         });
@@ -390,7 +404,9 @@ const probe = async (
       auth,
       models,
       capabilities: capabilities(),
-      approvalModes: [CODEX_APPROVAL_MODE],
+      // Every level: `CODEX_LEVEL` in thread.ts maps each, and Codex sandboxes
+      // every command at every level.
+      approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
       // The probe does not read rate limits; a limited turn reports them.
       usageLimit: null,
     });
@@ -412,14 +428,6 @@ const startTurn = async (
   }
   if (!path.isAbsolute(input.workspaceDir)) {
     panic("Codex adapter: the workspace directory must be an absolute path");
-  }
-  if (input.policy.approvals !== CODEX_APPROVAL_MODE) {
-    return Result.err(
-      new HarnessStartError({
-        reason: "start_rejected",
-        message: "The harness runs in one approval mode only.",
-      }),
-    );
   }
   const session = new CodexTurnSession({
     gracePeriodMs: options.gracePeriodMs,
@@ -480,6 +488,11 @@ const startTurn = async (
   const started = await client.request("turn/start", {
     threadId,
     input: turnInputItems(files, prompt.value),
+    // Codex keeps it for later turns of the process, so a capacity
+    // continuation runs at it too; omitted, the harness's own setting holds.
+    ...(input.reasoningEffort === null
+      ? {}
+      : { effort: input.reasoningEffort }),
   });
   const parsed = Result.isOk(started)
     ? v.safeParse(TurnStartResponseSchema, started.value)

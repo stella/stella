@@ -13,8 +13,10 @@ import {
 import { EMPTY_CLAIM_REVIEW } from "@/features/avt/claim-review.logic";
 import type { ClaimReview } from "@/features/avt/types";
 import {
+  confirmLabel,
   contestedFactIds,
   countClaims,
+  dispositionGuidance,
   effectiveState,
   needsAttention,
   resolveClaimView,
@@ -106,13 +108,140 @@ describe("AVT triage", () => {
 
     expect(
       needsAttention(
-        { state: "supported", refs: claim.refs },
+        { state: "supported", refs: claim.refs, qualifiers: [], recheck: null },
         contestedFactIds(facts),
       ),
     ).toBe(true);
     expect(
-      needsAttention({ state: "supported", refs: claim.refs }, NONE_CONTESTED),
+      needsAttention(
+        { state: "supported", refs: claim.refs, qualifiers: [], recheck: null },
+        NONE_CONTESTED,
+      ),
     ).toBe(false);
+  });
+
+  test("a re-checked claim is contested by the facts its re-check read, not the run's", () => {
+    const pinned = contestedFactIds([
+      makeFact(1, { interpretationNote: "Initials may be a draft mark" }),
+    ]);
+    const refs = [{ factEntityId: factId(1), rel: "supports" as const }];
+    const recheck = (interpretationNote: string | null) => ({
+      checkedAt: "2026-11-11T10:00:00.000Z",
+      checkedBy: "0199a3c4-5b6d-7e8f-9a0b-000000009098",
+      modelRef: null,
+      factCount: 1,
+      facts: [makeFact(1, { interpretationNote })],
+      original: { verdict: noCover, refs: [], qualifiers: [] },
+    });
+
+    // The note was cleared before the re-check: its grade no longer rests
+    // on a contested reading, whatever the run pinned.
+    expect(
+      needsAttention(
+        { state: "supported", refs, qualifiers: [], recheck: recheck(null) },
+        pinned,
+      ),
+    ).toBe(false);
+    // A note added since the run counts for the claim that read it.
+    expect(
+      needsAttention(
+        {
+          state: "supported",
+          refs,
+          qualifiers: [],
+          recheck: recheck("Initials may be a draft mark"),
+        },
+        NONE_CONTESTED,
+      ),
+    ).toBe(true);
+  });
+
+  // The server sends a re-checked claim's verdict as the re-check graded it
+  // (`gradeOf`), and run summaries count it the same way; the tiles must not
+  // fall back to the grade the re-check replaced.
+  test("a re-checked claim counts in the tiles under its new grade", () => {
+    const rechecked = makeClaim({
+      suffix: 1,
+      verdict: supported(),
+      refs: [{ factEntityId: factId(1), rel: "supports" }],
+      recheck: {
+        checkedAt: "2026-11-11T10:00:00.000Z",
+        checkedBy: "0199a3c4-5b6d-7e8f-9a0b-000000009098",
+        modelRef: null,
+        factCount: 1,
+        facts: [makeFact(1)],
+        original: { verdict: contradicted(), refs: [], qualifiers: [] },
+      },
+    });
+    const { byState } = countClaims([rechecked], NONE_CONTESTED);
+    expect({
+      supported: byState.supported,
+      contradicted: byState.contradicted,
+    }).toEqual({ supported: 1, contradicted: 0 });
+  });
+
+  // The review each qualifier asks for comes from the server; a clean
+  // verdict on a held footing leaves the routine claims, and the count, the
+  // bulk accept and the claim's own copy agree about it.
+  test("a qualifier that asks for judgement takes a clean verdict out of the routine claims", () => {
+    const held = makeClaim({
+      suffix: 1,
+      verdict: supported(),
+      refs: [{ factEntityId: factId(1), rel: "supports" }],
+      qualifiers: [
+        { kind: "unsourced-only", explanation: null, review: "routine" },
+        { kind: "rests-on-held", explanation: null, review: "needs-judgement" },
+      ],
+    });
+    const unsourced = makeClaim({
+      suffix: 2,
+      verdict: supported(),
+      refs: [{ factEntityId: factId(2), rel: "supports" }],
+      qualifiers: [
+        { kind: "unsourced-only", explanation: null, review: "routine" },
+      ],
+    });
+    const counts = countClaims([held, unsourced], NONE_CONTESTED);
+    expect({
+      attnTotal: counts.attnTotal,
+      routine: counts.routineTotal,
+    }).toEqual({ attnTotal: 1, routine: 1 });
+    expect(routineUnsettledClaimIds([held, unsourced], NONE_CONTESTED)).toEqual(
+      [unsourced.id],
+    );
+    expect(
+      dispositionGuidance(
+        {
+          state: "supported",
+          refs: held.refs,
+          qualifiers: held.qualifiers,
+          recheck: null,
+        },
+        NONE_CONTESTED,
+      ),
+    ).toEqual({
+      tone: "manual",
+      guideKey: "avt.guidance.manualJudgement",
+      askKey: "avt.disposition.restsOnHeld",
+    });
+    // Confirming it is confirming a verdict, not a claim that is ready.
+    expect(confirmLabel("supported", "manual")).toBe("avt.confirm.verdict");
+    expect(confirmLabel("supported", "ready")).toBe("avt.confirm.supported");
+    expect(
+      dispositionGuidance(
+        {
+          state: "supported",
+          refs: unsourced.refs,
+          qualifiers: unsourced.qualifiers,
+          recheck: null,
+        },
+        NONE_CONTESTED,
+      ),
+    ).toEqual({
+      tone: "ready",
+      guideKey: "avt.guidance.readyToConfirm",
+      askKey: "avt.disposition.unsourcedOnly",
+    });
   });
 
   test("set-aside claims never need attention, even on contested facts", () => {
@@ -123,6 +252,8 @@ describe("AVT triage", () => {
         {
           state: "notverifiable",
           refs: [{ factEntityId: factId(1), rel: "supports" }],
+          qualifiers: [],
+          recheck: null,
         },
         contestedFactIds(facts),
       ),

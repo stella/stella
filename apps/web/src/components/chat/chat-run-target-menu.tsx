@@ -20,7 +20,9 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { EFFORT_LABEL_KEY } from "@/components/chat/chat-model-options-menu.logic";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
   type ChatLocalHarnessOption,
@@ -28,8 +30,10 @@ import {
   LOCAL_RUN_PERMISSION_KEYS,
   localRunMaxApprovals,
   localRunTargetFor,
+  type LocalRunTargetState,
   type PermissionAvailability,
   permissionView,
+  reasoningEffortChoices,
   runTargetValue,
   sameRunTarget,
 } from "@/components/chat/chat-run-target-menu.logic";
@@ -61,11 +65,69 @@ const UNAVAILABLE_PERMISSION_KEY = {
   TranslationKey
 >;
 
+/** The radio value of leaving the reasoning effort to the harness. */
+const HARNESS_DEFAULT_EFFORT = "harness-default";
+
 /** How a harness that runs in one mode behaves, said once in its place. */
 const FIXED_PERMISSION_KEY = {
   codex: "chat.localRun.permissionSandboxed",
   "claude-code": "chat.localRun.permissionAskDescription",
 } as const satisfies Record<ChatLocalRunHarness, TranslationKey>;
+
+/**
+ * Why a harness cannot take a turn now, as the Run on menu and the composer
+ * bar both say it; `null` while it can.
+ */
+const useHarnessStateLabel = () => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (option: ChatLocalHarnessOption): string | null => {
+    switch (option.state) {
+      case "ready":
+        return null;
+      case "limit_until":
+        return t("chat.localRun.stateLimitUntil", {
+          time: format.dateTime(
+            new Date(option.resetsAt),
+            MEDIUM_DATE_SHORT_TIME_FORMAT,
+          ),
+        });
+      case "needs_login":
+      case "not_installed":
+      case "unsupported":
+      case "unavailable":
+      case "offline":
+        return t(UNAVAILABLE_LABEL_KEY[option.state]);
+      default:
+        option satisfies never;
+        return panic("Unknown harness state");
+    }
+  };
+};
+
+/**
+ * Why the member's computers cannot take a turn on the chosen target now,
+ * as the composer bar says it; `null` while they can.
+ */
+export const useLocalRunTargetStateLabel = () => {
+  const t = useTranslations();
+  const harnessLabel = useHarnessStateLabel();
+  return (state: LocalRunTargetState): string | null => {
+    switch (state.type) {
+      case "ready":
+        return null;
+      case "harness":
+        return harnessLabel(state.option);
+      case "model_unavailable":
+        return t("chat.localRun.stateModelUnavailable");
+      case "not_allowed":
+        return t("chat.localRun.stateUnavailable");
+      default:
+        state satisfies never;
+        return panic("Unknown local run target state");
+    }
+  };
+};
 
 type ChatRunTargetMenuProps = {
   activeOrganizationId: string;
@@ -77,9 +139,10 @@ type ChatRunTargetMenuProps = {
 
 /**
  * The Run on choice of the Models submenu: stella's own models, or a coding
- * agent on the member's computer with the models it reports, and then how
- * much that agent asks before it acts. Absent entirely until the member's
- * computers are known and the member may run turns there.
+ * agent on the member's computer with the models it reports, then the
+ * reasoning efforts the model offers and how much that agent asks before it
+ * acts. Absent entirely until the member's computers are known and the
+ * member may run turns there.
  */
 export const ChatRunTargetMenu = ({
   activeOrganizationId,
@@ -88,7 +151,7 @@ export const ChatRunTargetMenu = ({
   onSelect,
 }: ChatRunTargetMenuProps) => {
   const t = useTranslations();
-  const format = useFormatter();
+  const stateLabel = useHarnessStateLabel();
   const runnersView = queryView(
     useQuery({
       ...localRunnersOptions(activeOrganizationId),
@@ -115,29 +178,7 @@ export const ChatRunTargetMenu = ({
   };
   const maxApprovals = localRunMaxApprovals(readiness);
   const permissions = permissionView(selected, options, maxApprovals);
-
-  const stateLabel = (option: ChatLocalHarnessOption) => {
-    switch (option.state) {
-      case "ready":
-        return null;
-      case "limit_until":
-        return t("chat.localRun.stateLimitUntil", {
-          time: format.dateTime(
-            new Date(option.resetsAt),
-            MEDIUM_DATE_SHORT_TIME_FORMAT,
-          ),
-        });
-      case "needs_login":
-      case "not_installed":
-      case "unsupported":
-      case "unavailable":
-      case "offline":
-        return t(UNAVAILABLE_LABEL_KEY[option.state]);
-      default:
-        option satisfies never;
-        return panic("Unknown harness state");
-    }
-  };
+  const efforts = reasoningEffortChoices(selected, options);
 
   return (
     <>
@@ -158,9 +199,9 @@ export const ChatRunTargetMenu = ({
             return (
               <MenuItem disabled key={option.harness}>
                 <span className="flex min-w-0 flex-col py-0.5">
-                  <BidiText as="span" className="truncate">
+                  <TruncatedText render={<BidiText as="span" />}>
                     {name}
-                  </BidiText>
+                  </TruncatedText>
                   <span className="text-muted-foreground text-2xs">
                     {stateLabel(option)}
                   </span>
@@ -173,9 +214,9 @@ export const ChatRunTargetMenu = ({
           return (
             <MenuSub key={option.harness}>
               <MenuSubTrigger data-checked={harnessSelected || undefined}>
-                <BidiText as="span" className="truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {name}
-                </BidiText>
+                </TruncatedText>
               </MenuSubTrigger>
               <MenuSubPopup className="w-64">
                 <MenuRadioGroup value={value}>
@@ -192,9 +233,9 @@ export const ChatRunTargetMenu = ({
                         onClick={() => choose(target)}
                         value={runTargetValue(target)}
                       >
-                        <BidiText as="span" className="truncate">
+                        <TruncatedText render={<BidiText as="span" />}>
                           {model.label}
-                        </BidiText>
+                        </TruncatedText>
                       </MenuRadioItem>
                     );
                   })}
@@ -204,6 +245,33 @@ export const ChatRunTargetMenu = ({
           );
         })}
       </MenuRadioGroup>
+      {selected.kind === "local" && efforts !== null && (
+        <>
+          <MenuSeparator />
+          <MenuRadioGroup
+            value={selected.reasoningEffort ?? HARNESS_DEFAULT_EFFORT}
+          >
+            <MenuGroupLabel>
+              {t("chat.modelSelector.effortLabel")}
+            </MenuGroupLabel>
+            <MenuRadioItem
+              onClick={() => choose({ ...selected, reasoningEffort: null })}
+              value={HARNESS_DEFAULT_EFFORT}
+            >
+              {t("chat.modelSelector.effortValues.providerDefault")}
+            </MenuRadioItem>
+            {efforts.map((effort) => (
+              <MenuRadioItem
+                key={effort}
+                onClick={() => choose({ ...selected, reasoningEffort: effort })}
+                value={effort}
+              >
+                {t(EFFORT_LABEL_KEY[effort])}
+              </MenuRadioItem>
+            ))}
+          </MenuRadioGroup>
+        </>
+      )}
       {permissions?.type === "fixed" && (
         <>
           <MenuSeparator />

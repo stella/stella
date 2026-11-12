@@ -11,7 +11,7 @@ use std::{collections::BTreeMap, num::NonZeroU32, time::Duration};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub(crate) const PROTOCOL: u32 = 1;
+pub(crate) const PROTOCOL: u32 = 2;
 /// Largest frame either side sends or accepts, in UTF-8 bytes.
 pub(crate) const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 /// Sequenced messages one run may store; the API refuses more.
@@ -154,6 +154,15 @@ wire_values!(RejectReason {
   AtCapacity => "at_capacity",
   RunTooLarge => "run_too_large",
   UnknownRun => "unknown_run",
+  FolderBusy => "folder_busy",
+});
+
+wire_values!(FolderRestoreOutcome {
+  Restored => "restored",
+  NoCheckpoint => "no_checkpoint",
+  NotNewest => "not_newest",
+  FolderBusy => "folder_busy",
+  Failed => "failed",
 });
 
 wire_values!(HarnessUnavailableReason {
@@ -193,6 +202,17 @@ wire_values!(ApprovalMode {
   Ask => "ask",
   Auto => "auto",
   FullAuto => "full_auto",
+});
+
+// The effort a run asks the model for, weakest first.
+wire_values!(ReasoningEffort {
+  None => "none",
+  Minimal => "minimal",
+  Low => "low",
+  Medium => "medium",
+  High => "high",
+  Xhigh => "xhigh",
+  Max => "max",
 });
 
 /// A run-scoped MCP token. `Debug` never prints it.
@@ -258,9 +278,12 @@ impl std::fmt::Debug for QuestionAnswers {
 pub(crate) type JsonObject = Map<String, Value>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct HarnessModel {
   pub(crate) id: String,
   pub(crate) label: String,
+  /// The efforts a run of this model may ask for; empty when there is no choice.
+  pub(crate) reasoning_efforts: Vec<ReasoningEffort>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -379,6 +402,14 @@ pub(crate) struct RunFinished {
   pub(crate) harness_session_id: Option<String>,
 }
 
+/// How a folder restore ended; it names no file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestored {
+  pub(crate) restore_id: String,
+  pub(crate) outcome: FolderRestoreOutcome,
+}
+
 wire_union!(DesktopMessage tagged "type" {
   Hello(Hello) => "hello",
   HarnessStatus(HarnessStatus) => "harness.status",
@@ -387,6 +418,7 @@ wire_union!(DesktopMessage tagged "type" {
   RunEvent(RunEvent) => "run.event",
   RunApprovalRequest(RunApprovalRequest) => "run.approval_request",
   RunFinished(RunFinished) => "run.finished",
+  FolderRestored(FolderRestored) => "folder.restored",
 });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -440,6 +472,8 @@ pub(crate) struct RunStart {
   pub(crate) harness: Harness,
   pub(crate) harness_version: String,
   pub(crate) model: String,
+  /// An effort the desktop reported for the model; `None` leaves it to the harness.
+  pub(crate) reasoning_effort: Option<ReasoningEffort>,
   pub(crate) harness_session_id: Option<String>,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
@@ -498,6 +532,42 @@ pub(crate) struct Ack {
   pub(crate) seq: NonZeroU32,
 }
 
+/// A chat folder's id. Only a UUID names a folder, so no path rides in it;
+/// anything else fails to parse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub(crate) struct FolderId(uuid::Uuid);
+
+impl FolderId {
+  pub(crate) const fn uuid(self) -> uuid::Uuid {
+    self.0
+  }
+}
+
+impl TryFrom<String> for FolderId {
+  type Error = uuid::Error;
+
+  fn try_from(id: String) -> Result<Self, Self::Error> {
+    uuid::Uuid::parse_str(&id).map(Self)
+  }
+}
+
+impl From<FolderId> for String {
+  fn from(id: FolderId) -> Self {
+    id.0.to_string()
+  }
+}
+
+/// Put a chat's folder back as it was before the run, from the checkpoint the
+/// run took. Sent again on a new socket until it is answered.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestore {
+  pub(crate) restore_id: String,
+  pub(crate) folder_id: FolderId,
+  pub(crate) run_id: String,
+}
+
 wire_union!(ServerMessage tagged "type" {
   Welcome(Welcome) => "welcome",
   UpgradeRequired(UpgradeRequired) => "upgrade_required",
@@ -510,6 +580,7 @@ wire_union!(ServerMessage tagged "type" {
   RunCancel(RunRef) => "run.cancel",
   RunToken(RunTokenRefresh) => "run.token",
   Ack(Ack) => "ack",
+  FolderRestore(FolderRestore) => "folder.restore",
 });
 
 #[cfg(test)]
@@ -625,6 +696,14 @@ mod tests {
         names(RunOutcome::ALL.iter().map(|value| value.wire_name())),
       ),
       (
+        "folderRestoreOutcomes",
+        names(
+          FolderRestoreOutcome::ALL
+            .iter()
+            .map(|value| value.wire_name()),
+        ),
+      ),
+      (
         "networkPolicies",
         names(NetworkPolicy::ALL.iter().map(|value| value.wire_name())),
       ),
@@ -635,6 +714,10 @@ mod tests {
       (
         "approvalModes",
         names(ApprovalMode::ALL.iter().map(|value| value.wire_name())),
+      ),
+      (
+        "reasoningEfforts",
+        names(ReasoningEffort::ALL.iter().map(|value| value.wire_name())),
       ),
       ("harnessStates", names(HarnessReport::TAGS.iter().copied())),
       (

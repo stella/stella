@@ -177,7 +177,7 @@ an outcome with `@stll/ui/toast`, and put a field error next to the field.
   (sorting, numbers, dates side by side). [review]
 - **Nothing scrolls sideways.** Free text (descriptions, scope lists,
   notes) never sits in a `whitespace-nowrap` cell or row. Clamp it
-  (`line-clamp-1`/`-2` with `min-w-0` on the column), and collapse a
+  (`<TruncatedText lines={2}>` with `min-w-0` on the column), and collapse a
   long list into a count that opens a popover ("15 permissions"). The
   trailing actions stay on screen at every width. [review]
 - **Status is a dot plus a label** (`ListItemStatus` with a tone). The

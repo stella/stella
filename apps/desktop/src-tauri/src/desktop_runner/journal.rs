@@ -304,7 +304,8 @@ pub(crate) fn seq_of(message: &DesktopMessage) -> Option<u32> {
     DesktopMessage::Hello(_)
     | DesktopMessage::HarnessStatus(_)
     | DesktopMessage::RunAccepted(_)
-    | DesktopMessage::RunRejected(_) => None,
+    | DesktopMessage::RunRejected(_)
+    | DesktopMessage::FolderRestored(_) => None,
   }
 }
 
@@ -317,7 +318,8 @@ pub(crate) fn run_of(message: &DesktopMessage) -> Option<&str> {
     DesktopMessage::Hello(_)
     | DesktopMessage::HarnessStatus(_)
     | DesktopMessage::RunAccepted(_)
-    | DesktopMessage::RunRejected(_) => None,
+    | DesktopMessage::RunRejected(_)
+    | DesktopMessage::FolderRestored(_) => None,
   }
 }
 
@@ -962,6 +964,14 @@ impl SharedJournal {
   /// The channel newly journaled messages are sent on, until replaced.
   pub(crate) fn set_live(&self, live: mpsc::UnboundedSender<DesktopMessage>) {
     self.state().live = Some(live);
+  }
+
+  /// Send a message that is not journaled (it belongs to no run) to the
+  /// socket, if one is up; without one it is dropped.
+  pub(crate) fn send_unsequenced(&self, message: DesktopMessage) {
+    if let Some(live) = self.state().live.as_ref() {
+      let _sent = live.send(message);
+    }
   }
 
   pub(crate) fn get(&self, run_id: &str) -> Option<RunRecord> {

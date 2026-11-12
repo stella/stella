@@ -169,11 +169,24 @@ export const resolveChatLocalRun = async ({
         "The harness on your computer cannot take a turn right now.",
       );
     case "available": {
-      if (!desktop.harness.models.some(({ id }) => id === runTarget.model)) {
+      const model = desktop.harness.models.find(
+        ({ id }) => id === runTarget.model,
+      );
+      if (model === undefined) {
         return refuse(
           409,
           CHAT_LOCAL_RUN_REFUSAL.modelUnavailable,
           "The harness on your computer does not offer that model.",
+        );
+      }
+      if (
+        runTarget.reasoningEffort !== null &&
+        !model.reasoningEfforts.includes(runTarget.reasoningEffort)
+      ) {
+        return refuse(
+          409,
+          CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable,
+          "The harness on your computer does not offer that reasoning effort for the model.",
         );
       }
       if (!desktop.harness.approvalModes.includes(runTarget.approvals)) {
@@ -190,6 +203,7 @@ export const resolveChatLocalRun = async ({
           harness: runTarget.harness,
           harnessVersion: desktop.harness.version,
           model: runTarget.model,
+          reasoningEffort: runTarget.reasoningEffort,
           approvals: runTarget.approvals,
         },
       };

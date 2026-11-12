@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 
 import {
+  newNotificationRealtimeEvent,
   RESOURCE_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
@@ -26,12 +27,14 @@ import {
 import type {
   announceMcpToolProjectionChange as AnnounceMcpToolProjectionChange,
   broadcast as Broadcast,
+  broadcastToUser as BroadcastToUser,
   registerMcpToolProjectionDelivery as RegisterMcpToolProjectionDelivery,
   revokeWorkspaceSseAccess as RevokeWorkspaceSseAccess,
   SseSessionLivenessReader,
   startSse as StartSse,
   stopSse as StopSse,
   subscribe as Subscribe,
+  subscribeUser as SubscribeUser,
 } from "@/api/lib/sse";
 import {
   createSseBroadcastPublisher,
@@ -51,11 +54,13 @@ beforeEach(async () => {
   ({
     announceMcpToolProjectionChange,
     broadcast,
+    broadcastToUser,
     registerMcpToolProjectionDelivery,
     revokeWorkspaceSseAccess,
     startSse,
     stopSse,
     subscribe,
+    subscribeUser,
   } = await import("@/api/lib/sse"));
   clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
   redisClientsCreatedDuringImport =
@@ -174,11 +179,13 @@ let clearIntervalSpy: Mock<typeof globalThis.clearInterval>;
 
 let announceMcpToolProjectionChange: typeof AnnounceMcpToolProjectionChange;
 let broadcast: typeof Broadcast;
+let broadcastToUser: typeof BroadcastToUser;
 let registerMcpToolProjectionDelivery: typeof RegisterMcpToolProjectionDelivery;
 let revokeWorkspaceSseAccess: typeof RevokeWorkspaceSseAccess;
 let startSse: typeof StartSse;
 let stopSse: typeof StopSse;
 let subscribe: typeof Subscribe;
+let subscribeUser: typeof SubscribeUser;
 
 // Measure the import itself. Bun's --rerun-each retains mock history between
 // iterations, so absolute call counts include lifecycle calls from earlier
@@ -257,7 +264,7 @@ const authorizeAllUserConnections = async ({
   sessionIds,
 }: {
   sessionIds: readonly string[];
-}) => new Set(sessionIds);
+}) => ({ member: true, liveSessionIds: new Set(sessionIds) });
 const holdAllSessions: SseSessionLivenessReader = async (sessions) =>
   await Promise.resolve(new Set(sessions.map((session) => session.sessionId)));
 const startTestSse = (): void => {
@@ -667,6 +674,63 @@ describe("subscribe: streams per session", () => {
       controller.abort();
     }
     otherSession.abort();
+    await settlePendingWork();
+  });
+});
+
+describe("subscribeUser: what each delivery re-checks", () => {
+  test("an app credential's stream holds by membership, a browser session's by its live session", async () => {
+    let member = true;
+    const sessionChecks: (readonly string[])[] = [];
+    startSse(
+      {
+        sessions: holdAllSessions,
+        // A member whose browser sessions have all ended.
+        user: async ({ sessionIds }) => {
+          sessionChecks.push(sessionIds);
+          return await Promise.resolve({ member, liveSessionIds: new Set() });
+        },
+        workspace: authorizeAllWorkspaceConnections,
+      },
+      { createClient: createRedisClientMock, publisher: testPublisher },
+    );
+    stopSse();
+    await settlePendingWork();
+
+    // Both holders share an id, so neither kind can stand in for the other.
+    const holderId = "oauth-client:app";
+    const credential = new AbortController();
+    const credentialReader = subscribeUser({
+      organizationId,
+      holder: { id: holderId, kind: "credential" },
+      signal: credential.signal,
+      userId,
+    }).getReader();
+    const session = new AbortController();
+    const sessionReader = subscribeUser({
+      organizationId,
+      holder: { id: holderId, kind: "session" },
+      signal: session.signal,
+      userId,
+    }).getReader();
+
+    broadcastToUser(userId, organizationId, newNotificationRealtimeEvent());
+
+    const delivered = await credentialReader.read();
+    expect(new TextDecoder().decode(delivered.value)).toContain(
+      newNotificationRealtimeEvent().type,
+    );
+    expect((await sessionReader.read()).done).toBe(true);
+    // Only the browser session's id is asked about as a session.
+    expect(sessionChecks).toEqual([[holderId]]);
+
+    member = false;
+    broadcastToUser(userId, organizationId, newNotificationRealtimeEvent());
+    expect((await credentialReader.read()).done).toBe(true);
+    expect(sessionChecks.at(-1)).toEqual([]);
+
+    credential.abort();
+    session.abort();
     await settlePendingWork();
   });
 });

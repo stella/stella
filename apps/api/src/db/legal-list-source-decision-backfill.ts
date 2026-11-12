@@ -1,4 +1,5 @@
-import { LIST_ITEM_SOURCE_REVIEW_DECISION } from "@/api/lib/lists/review-decision-maps";
+import { REVIEW_STATUS_DECISION } from "@stll/api-contract/review-decision";
+
 import { SQL_NULL, sqlCaseExpression } from "@/api/lib/sql-case-expression";
 
 import type { OnlineRepair } from "./online-migration-connection";
@@ -14,7 +15,7 @@ const PENDING_DECISIONS = `
 
 /** The shared decision for each stored status, from the one map that owns it. */
 const DECISION_SQL = sqlCaseExpression({
-  branches: Object.entries(LIST_ITEM_SOURCE_REVIEW_DECISION).map(
+  branches: Object.entries(REVIEW_STATUS_DECISION.listItemSource).map(
     ([status, decision]) =>
       `WHEN source.verification_status = '${status}' THEN ${decision === null ? SQL_NULL : `'${decision}'`}`,
   ),

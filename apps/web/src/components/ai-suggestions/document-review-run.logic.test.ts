@@ -432,6 +432,12 @@ const decided = (
   applicationStatus: "pending",
   appliedBy: null,
   appliedAt: null,
+  // The mappers here read the row, not its history.
+  decisions: {
+    events: [],
+    truncated: false,
+    current: { decision: null, reason: null, decidedBy: null, decidedAt: null },
+  },
 });
 
 describe("restoring a run as the join every surface reads", () => {

@@ -58,10 +58,6 @@ import getMessages from "../messages/list";
 import getThreads from "../threads/list";
 import { createForkThread } from "./create";
 
-beforeEach(() => {
-  indexChatThreadMock.mockClear();
-});
-
 // Search indexing writes through the root (unscoped) database, which this
 // fixture deliberately does not stand up; the handler takes it as an injectable
 // boundary so the fork's own behaviour is what these tests observe.
@@ -126,6 +122,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
+  indexChatThreadMock.mockClear();
   fakeS3 = startFakeS3();
 });
 
@@ -417,6 +414,23 @@ test("copies the prefix, preserves the title, and projects fork provenance", asy
   const source = await seedThread({
     texts: ["Ask one", "Answer one", "Ask two", "Answer two"],
   });
+  const generationProvenance = {
+    version: 1,
+    slots: {
+      title: {
+        type: "generated",
+        generator: "apps/api/src/handlers/chat/generate-thread-title.ts",
+        decisionIds: [],
+        coverage: "legacy-input",
+      },
+    },
+  } satisfies NonNullable<
+    (typeof chatThreads.$inferSelect)["generationProvenance"]
+  >;
+  await testDb
+    .update(chatThreads)
+    .set({ titleSource: "ai", generationProvenance })
+    .where(eq(chatThreads.id, source.threadId));
   const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   seededThreadIds.push(newThreadId);
 
@@ -457,10 +471,19 @@ test("copies the prefix, preserves the title, and projects fork provenance", asy
     forkedFromMessageId: messageAt(source, 1),
     parentThreadId: source.threadId,
     title: "Termination clause",
-    titleSource: "user",
+    titleSource: "ai",
     webSearchEnabled: true,
     workspaceId: null,
   });
+
+  const storedTitleProof = await testDb
+    .select({ generationProvenance: chatThreads.generationProvenance })
+    .from(chatThreads)
+    .where(eq(chatThreads.id, newThreadId))
+    .limit(1);
+  expect(storedTitleProof.at(0)?.generationProvenance).toEqual(
+    generationProvenance,
+  );
 
   // The source is untouched.
   expect(messageTexts(original)).toEqual([

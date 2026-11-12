@@ -43,6 +43,7 @@ const LOCAL_TARGET = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 } as const satisfies ChatRunTarget;
 
 const READINESS: ChatLocalRunReadiness = {
@@ -59,7 +60,9 @@ const READINESS: ChatLocalRunReadiness = {
           version: "0.50.0",
           capabilities: ["approvals"],
           approvalModes: ["ask"],
-          models: [{ id: "gpt-5-codex", label: "GPT-5 Codex" }],
+          models: [
+            { id: "gpt-5-codex", label: "GPT-5 Codex", reasoningEfforts: [] },
+          ],
         },
       ],
     },
@@ -110,10 +113,12 @@ const renderSelector = (selected: ChatRunTarget) => {
                 scope: "global",
                 threadId: toChatThreadId("thread-local-run"),
               },
+              state: "ready",
               selectedModel: null,
               selectedReasoningEffort: null,
               selectModel: () => undefined,
               runTarget: {
+                type: "choice",
                 selected: target,
                 select: (next) => {
                   chosen.push(next);
@@ -146,6 +151,13 @@ test("a thread on the member's computer names its harness and model, not Auto", 
   renderSelector(LOCAL_TARGET);
   expect(screen.getByRole("button", { name: LOCAL_LABEL })).toBeTruthy();
   expect(screen.queryByRole("button", { name: AUTO_LABEL })).toBeNull();
+});
+
+test("a thread on the member's computer names its reasoning effort once one is chosen", () => {
+  renderSelector({ ...LOCAL_TARGET, reasoningEffort: "high" });
+  expect(
+    screen.getByRole("button", { name: `${LOCAL_LABEL} | High` }),
+  ).toBeTruthy();
 });
 
 test("a thread on the member's computer is not offered stella's models, only the way back", async () => {

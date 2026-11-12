@@ -158,7 +158,7 @@ export const isClaudeSystemSubtype = (
 ): subtype is ClaudeSystemSubtype => CLAUDE_SYSTEM_SUBTYPE_SET.has(subtype);
 
 /** Content blocks the CLI's assistant messages carry, Messages API shaped. */
-const CLAUDE_CONTENT_BLOCK_TYPES = [
+export const CLAUDE_CONTENT_BLOCK_TYPES = [
   "text",
   "thinking",
   "redacted_thinking",
@@ -236,7 +236,27 @@ export const UserMessageSchema = v.object({
     ]),
   }),
   parent_tool_use_id: ParentToolUseId,
+  /**
+   * Why a tool call in this message did not run, by tool use id: a call cut
+   * off by an interrupt or a new message is `cancelled` or `interrupted`,
+   * which is not the tool failing.
+   */
+  tool_result_meta: v.optional(
+    v.array(
+      v.object({
+        id: v.string(),
+        non_execution_kind: v.nullish(v.string()),
+      }),
+    ),
+  ),
 });
+
+/** The kinds of a call the harness did not run that a stop or a new message
+ *  caused. */
+export const CLAUDE_STOPPED_TOOL_KINDS: ReadonlySet<string> = new Set([
+  "cancelled",
+  "interrupted",
+]);
 
 export const ResultMessageSchema = v.object({
   type: v.literal("result"),
@@ -326,6 +346,10 @@ export const CLAUDE_CONTROL_REQUESTS = {
   request_user_dialog: { handling: "refuse" },
 } as const;
 export type ClaudeControlRequestSubtype = keyof typeof CLAUDE_CONTROL_REQUESTS;
+
+/** The control requests Stella sends the CLI. */
+export type ClaudeHostControlRequest =
+  "initialize" | "interrupt" | "get_usage" | "mcp_set_servers";
 
 export const isClaudeControlRequestSubtype = (
   subtype: string,

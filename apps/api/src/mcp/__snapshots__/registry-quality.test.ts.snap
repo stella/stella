@@ -412,7 +412,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before declaring a decision missing. A listed country not yet admitted, without coverage, returns status unavailable and reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -435,6 +435,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "spelling": "alpha-3",
               "admitted": [
                 "AUT",
+                "BRA",
                 "CZE",
                 "EU",
                 "GBR",
@@ -1558,6 +1559,147 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     }
   },
   {
+    "name": "search_guidance",
+    "scope": "stella:search",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Search regulator guidance only retrieves or computes data.",
+      "destructiveHint": "Search regulator guidance does not change state.",
+      "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "annotations": {
+      "title": "Search regulator guidance",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Words to find in the guidance title or text"
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "jurisdiction": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 3,
+          "description": "Jurisdiction code, for example CZE or EU. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "kind": {
+          "enum": [
+            "methodology",
+            "recommendation",
+            "opinion",
+            "faq",
+            "guideline",
+            "position",
+            "statement",
+            "inspection_report",
+            "annual_report",
+            "other"
+          ],
+          "type": "string",
+          "description": "Document kind"
+        },
+        "date_from": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Issued on or after this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "start"
+          }
+        },
+        "date_to": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Issued on or before this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "end"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Max results to return; defaults to 10. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous search_guidance call"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_guidance",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Read regulator guidance only retrieves or computes data.",
+      "destructiveHint": "Read regulator guidance does not change state.",
+      "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "annotations": {
+      "title": "Read regulator guidance",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "document_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Guidance document id, as search_guidance returns it in documentId"
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous read_guidance call, to continue long text"
+        }
+      }
+    }
+  },
+  {
     "name": "resolve_case_law_decision",
     "scope": "stella:law_read",
     "access": "read",
@@ -1710,7 +1852,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Section number, with optional §, e.g. 1729 or § 5a."
+          "description": "Section or article, e.g. 1729, § 5a or čl. 38."
         },
         "as_of": {
           "type": "string",
@@ -6695,7 +6837,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
   },
   {
     "name": "add_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Add matter member changes state or starts stateful work.",
@@ -6733,7 +6875,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
   },
   {
     "name": "remove_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Remove matter member changes state or starts stateful work.",
@@ -7838,7 +7980,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before declaring a decision missing. A listed country not yet admitted, without coverage, returns status unavailable and reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -7861,6 +8003,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "spelling": "alpha-3",
               "admitted": [
                 "AUT",
+                "BRA",
                 "CZE",
                 "EU",
                 "GBR",
@@ -8984,6 +9127,147 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
+    "name": "search_guidance",
+    "scope": "stella:search",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Search regulator guidance only retrieves or computes data.",
+      "destructiveHint": "Search regulator guidance does not change state.",
+      "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "annotations": {
+      "title": "Search regulator guidance",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Words to find in the guidance title or text"
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "jurisdiction": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 3,
+          "description": "Jurisdiction code, for example CZE or EU. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "kind": {
+          "enum": [
+            "methodology",
+            "recommendation",
+            "opinion",
+            "faq",
+            "guideline",
+            "position",
+            "statement",
+            "inspection_report",
+            "annual_report",
+            "other"
+          ],
+          "type": "string",
+          "description": "Document kind"
+        },
+        "date_from": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Issued on or after this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "start"
+          }
+        },
+        "date_to": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Issued on or before this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "end"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Max results to return; defaults to 10. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous search_guidance call"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_guidance",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Read regulator guidance only retrieves or computes data.",
+      "destructiveHint": "Read regulator guidance does not change state.",
+      "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "annotations": {
+      "title": "Read regulator guidance",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "document_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Guidance document id, as search_guidance returns it in documentId"
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous read_guidance call, to continue long text"
+        }
+      }
+    }
+  },
+  {
     "name": "resolve_case_law_decision",
     "scope": "stella:law_read",
     "access": "read",
@@ -9136,7 +9420,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Section number, with optional §, e.g. 1729 or § 5a."
+          "description": "Section or article, e.g. 1729, § 5a or čl. 38."
         },
         "as_of": {
           "type": "string",
@@ -14121,7 +14405,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   },
   {
     "name": "add_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Add matter member changes state or starts stateful work.",
@@ -14159,7 +14443,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   },
   {
     "name": "remove_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Remove matter member changes state or starts stateful work.",
@@ -16000,7 +16284,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before declaring a decision missing. A listed country not yet admitted, without coverage, returns status unavailable and reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -16023,6 +16307,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
               "spelling": "alpha-3",
               "admitted": [
                 "AUT",
+                "BRA",
                 "CZE",
                 "EU",
                 "GBR",
@@ -16836,6 +17121,147 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
+    "name": "search_guidance",
+    "scope": "stella:search_anonymized",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Search regulator guidance only retrieves or computes data.",
+      "destructiveHint": "Search regulator guidance does not change state.",
+      "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "annotations": {
+      "title": "Search regulator guidance",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Words to find in the guidance title or text"
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "jurisdiction": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 3,
+          "description": "Jurisdiction code, for example CZE or EU. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "kind": {
+          "enum": [
+            "methodology",
+            "recommendation",
+            "opinion",
+            "faq",
+            "guideline",
+            "position",
+            "statement",
+            "inspection_report",
+            "annual_report",
+            "other"
+          ],
+          "type": "string",
+          "description": "Document kind"
+        },
+        "date_from": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Issued on or after this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "start"
+          }
+        },
+        "date_to": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Issued on or before this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "end"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Max results to return; defaults to 10. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous search_guidance call"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_guidance",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Read regulator guidance only retrieves or computes data.",
+      "destructiveHint": "Read regulator guidance does not change state.",
+      "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "annotations": {
+      "title": "Read regulator guidance",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "document_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Guidance document id, as search_guidance returns it in documentId"
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous read_guidance call, to continue long text"
+        }
+      }
+    }
+  },
+  {
     "name": "resolve_case_law_decision",
     "scope": "stella:read_anonymized",
     "access": "read",
@@ -16988,7 +17414,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Section number, with optional §, e.g. 1729 or § 5a."
+          "description": "Section or article, e.g. 1729, § 5a or čl. 38."
         },
         "as_of": {
           "type": "string",
@@ -18190,7 +18616,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before declaring a decision missing. A listed country not yet admitted, without coverage, returns status unavailable and reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -18213,6 +18639,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
               "spelling": "alpha-3",
               "admitted": [
                 "AUT",
+                "BRA",
                 "CZE",
                 "EU",
                 "GBR",
@@ -18958,6 +19385,147 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     }
   },
   {
+    "name": "search_guidance",
+    "scope": "stella:search",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Search regulator guidance only retrieves or computes data.",
+      "destructiveHint": "Search regulator guidance does not change state.",
+      "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "annotations": {
+      "title": "Search regulator guidance",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Words to find in the guidance title or text"
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "jurisdiction": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 3,
+          "description": "Jurisdiction code, for example CZE or EU. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "kind": {
+          "enum": [
+            "methodology",
+            "recommendation",
+            "opinion",
+            "faq",
+            "guideline",
+            "position",
+            "statement",
+            "inspection_report",
+            "annual_report",
+            "other"
+          ],
+          "type": "string",
+          "description": "Document kind"
+        },
+        "date_from": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Issued on or after this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "start"
+          }
+        },
+        "date_to": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Issued on or before this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "end"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Max results to return; defaults to 10. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous search_guidance call"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_guidance",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Read regulator guidance only retrieves or computes data.",
+      "destructiveHint": "Read regulator guidance does not change state.",
+      "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "annotations": {
+      "title": "Read regulator guidance",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "document_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Guidance document id, as search_guidance returns it in documentId"
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous read_guidance call, to continue long text"
+        }
+      }
+    }
+  },
+  {
     "name": "resolve_case_law_decision",
     "scope": "stella:law_read",
     "access": "read",
@@ -19110,7 +19678,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Section number, with optional §, e.g. 1729 or § 5a."
+          "description": "Section or article, e.g. 1729, § 5a or čl. 38."
         },
         "as_of": {
           "type": "string",

@@ -4,7 +4,10 @@ import { createDesktopConnectionStore } from "@/features/desktop/desktop-connect
 import type { DesktopLinkApproval } from "@/features/desktop/desktop-connection-store.logic";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";
-import { linkDesktopAccount } from "@/lib/desktop-bridge";
+import {
+  linkDesktopAccount,
+  openDesktopAccountSwitch,
+} from "@/lib/desktop-bridge";
 
 const store = createDesktopConnectionStore({
   link: async (options) =>
@@ -17,6 +20,9 @@ const store = createDesktopConnectionStore({
         handlerId: "use-desktop-account-connection:failure",
       },
     }),
+  requestSwitch: () => {
+    openDesktopAccountSwitch({ apiBaseUrl: externalApiOrigin() });
+  },
 });
 
 export const useDesktopAccountConnection = () => {
@@ -29,6 +35,7 @@ export const useDesktopAccountConnection = () => {
   return {
     connect: async (approval: DesktopLinkApproval) =>
       await store.connect(approval),
+    switchAccount: store.switchAccount,
     state,
   };
 };

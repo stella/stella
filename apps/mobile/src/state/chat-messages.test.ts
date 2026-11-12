@@ -70,6 +70,7 @@ describe("what a thread shows of a stored message", () => {
       text: "First.\n\nSecond.",
       tools: ["search_case_law"],
       files: [{ name: "", mimeType: "" }],
+      drafts: [],
     });
   });
 
@@ -110,6 +111,7 @@ describe("what a thread shows of a stored message", () => {
         { name: "Lease.pdf", mimeType: "application/pdf" },
         { name: "Stamp.png", mimeType: "image/png" },
       ],
+      drafts: [],
     });
   });
 
@@ -136,6 +138,7 @@ describe("what a thread shows of a stored message", () => {
       text: "Summarise this",
       tools: [],
       files: [{ name: "Lease.pdf", mimeType: "application/pdf" }],
+      drafts: [],
     });
   });
 
@@ -247,6 +250,7 @@ describe("reading a thread", () => {
       text: id,
       tools: [],
       files: [],
+      drafts: [],
     });
     expect(
       prependOlderPage(
