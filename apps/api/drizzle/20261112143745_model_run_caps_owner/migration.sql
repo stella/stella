@@ -32,14 +32,19 @@ DROP FUNCTION maintain_list_verification_budget();--> statement-breakpoint
 -- stella-migration-safety: reviewed rename-table-or-column - the list counter becomes the counter of every model run kind; its rows stay in place and the API that reads it ships in the same release
 ALTER TABLE "legal_list_verification_budgets" RENAME TO "model_run_budgets";--> statement-breakpoint
 -- stella-migration-safety: reviewed rename-table-or-column - renames the counter's constraint after its table; the constraint itself is unchanged
+-- squawk-ignore renaming-object
 ALTER TABLE "model_run_budgets" RENAME CONSTRAINT "legal_list_verification_budgets_org_fk" TO "model_run_budgets_org_fk";--> statement-breakpoint
 -- stella-migration-safety: reviewed rename-table-or-column - renames the counter's constraint after its table; the constraint itself is unchanged
+-- squawk-ignore renaming-object
 ALTER TABLE "model_run_budgets" RENAME CONSTRAINT "legal_list_verification_budgets_nonnegative" TO "model_run_budgets_nonnegative";--> statement-breakpoint
 -- stella-migration-safety: reviewed rename-table-or-column - renames the counter's constraint after its table; the constraint itself is unchanged
+-- squawk-ignore renaming-object
 ALTER TABLE "model_run_budgets" RENAME CONSTRAINT "legal_list_verification_budgets_limits" TO "model_run_budgets_limits";--> statement-breakpoint
 -- stella-migration-safety: reviewed alter-policy - renames the policy after its table; its role and expressions are unchanged
+-- squawk-ignore renaming-object
 ALTER POLICY "legal_list_verification_budgets_owner_access" ON "model_run_budgets" RENAME TO "model_run_budgets_owner_access";--> statement-breakpoint
 -- stella-migration-safety: reviewed alter-policy - renames the policy after its table; its role and expressions are unchanged
+-- squawk-ignore renaming-object
 ALTER POLICY "legal_list_verification_budgets_no_delete" ON "model_run_budgets" RENAME TO "model_run_budgets_no_delete";--> statement-breakpoint
 
 ALTER TABLE "model_run_budgets" ALTER COLUMN "starts_day" SET DEFAULT stella_model_run_day(CURRENT_TIMESTAMP);--> statement-breakpoint
@@ -49,13 +54,14 @@ DROP FUNCTION stella_list_verification_day(timestamptz);--> statement-breakpoint
 -- Every existing counter is the list counter. The default is a constant, so
 -- adding the column rewrites no row.
 ALTER TABLE "model_run_budgets" ADD COLUMN "run_kind" text DEFAULT 'list-run' NOT NULL;--> statement-breakpoint
+-- squawk-ignore ban-drop-default
 ALTER TABLE "model_run_budgets" ALTER COLUMN "run_kind" DROP DEFAULT;--> statement-breakpoint
 -- The counter holds one row per organization and kind; every existing row
 -- holds 'list-run', so the check passes as it is added.
 -- squawk-ignore constraint-missing-not-valid
 ALTER TABLE "model_run_budgets" ADD CONSTRAINT "model_run_budgets_run_kind_check" CHECK ("run_kind" IN ('list-run', 'document-review'));--> statement-breakpoint
--- stella-migration-safety: reviewed drop-constraint, add-unique-constraint - the counter key widens from the organization to the organization and kind in one statement, so the table is never without a key; every existing row is unique by organization alone
--- squawk-ignore disallowed-unique-constraint
+-- stella-migration-safety: reviewed drop-constraint, add-unique-constraint - writers: maintain_model_run_budget; the counter key widens from the organization to the organization and kind in one statement on a table of one row per organization, so the table is never without a key and every existing row is unique by organization alone
+-- squawk-ignore constraint-missing-not-valid, adding-serial-primary-key-field
 ALTER TABLE "model_run_budgets" DROP CONSTRAINT "legal_list_verification_budgets_pkey", ADD CONSTRAINT "model_run_budgets_pkey" PRIMARY KEY ("organization_id", "run_kind");--> statement-breakpoint
 
 -- Whether a document review counts against the document review caps: a
