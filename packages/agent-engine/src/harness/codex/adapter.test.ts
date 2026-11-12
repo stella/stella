@@ -247,6 +247,7 @@ describe("Codex adapter over a stdio app-server", () => {
       approvalPolicy: "on-request",
       sandbox: "workspace-write",
       config: {
+        web_search: "live",
         "sandbox_workspace_write.network_access": true,
         "sandbox_workspace_write.writable_roots": [CACHE_DIR],
         "sandbox_workspace_write.exclude_tmpdir_env_var": false,

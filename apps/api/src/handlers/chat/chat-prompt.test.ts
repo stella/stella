@@ -1002,6 +1002,45 @@ describe("chat prompt builders", () => {
     }
   });
 
+  test("a turn on the member's computer gets no cloud tool or setting sentence, and says its web search is its own", () => {
+    const noWeb = {
+      docxEditMode: null,
+      templateAuthoring: false,
+      webResearch: false,
+      folioAgentDocTools: false,
+      subagents: true,
+    } as const;
+    const cloud = buildGlobalPromptParts({
+      toolAvailability: noWeb,
+      userContext: null,
+    }).fullPrompt;
+    const local = buildGlobalPromptParts({
+      promptTarget: "local_run",
+      toolAvailability: noWeb,
+      userContext: null,
+    }).fullPrompt;
+    // The cloud turn is told about the chat's switch and its own tools.
+    expect(cloud).toContain("Web research is not enabled for this thread");
+    expect(cloud).toContain("execute_typescript");
+    for (const cloudOnly of [
+      "Web research is not enabled",
+      "enable web search",
+      "web_search",
+      "fetch_url",
+      "execute_typescript",
+      "`ask-user`",
+      "load-skill",
+      "spawn_subagents",
+    ]) {
+      expect(local).not.toContain(cloudOnly);
+    }
+    expect(local).toContain("search and read the web with your own web tools");
+    expect(local).toContain("stella MCP server");
+    // The rules every turn follows stay.
+    expect(local).toContain("TRUTHFULNESS:");
+    expect(local).toContain("DECISION CITATIONS:");
+  });
+
   test("organization instructions keep a single delimited block", () => {
     const prompt = buildGlobalPromptParts({
       organizationAIInstructions:

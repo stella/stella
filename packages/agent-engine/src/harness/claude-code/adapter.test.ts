@@ -349,7 +349,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
       "--permission-mode",
       "acceptEdits",
       "--allowedTools",
-      "mcp__stella",
+      "mcp__stella,WebSearch",
       "--session-id",
       sessionId ?? "",
       "--model",
@@ -1203,6 +1203,17 @@ describe("Claude Code approval modes", () => {
   };
   const valueOf = (args: readonly string[], flag: string) =>
     args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
+
+  test("the CLI's web tools run at every level: search without asking, fetch under the permission mode", async () => {
+    for (const approvals of ["ask", "auto", "full_auto"] as const) {
+      const args = await argsFor(approvals);
+      const allowed = (valueOf(args, "--allowedTools") ?? "").split(",");
+      expect(allowed).toContain("WebSearch");
+      expect(allowed).not.toContain("WebFetch");
+      expect(args).not.toContain("--disallowedTools");
+      expect(args).not.toContain("--disallowed-tools");
+    }
+  });
 
   test("ask accepts edits in the workspace and asks about the rest, without the sandbox", async () => {
     const args = await argsFor("ask");

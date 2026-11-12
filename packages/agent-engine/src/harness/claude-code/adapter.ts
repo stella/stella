@@ -290,6 +290,9 @@ const FIXED_ENV = {
   ENABLE_CLAUDEAI_MCP_SERVERS: "false",
 } as const;
 
+/** The CLI's own tools that run without asking at every permission level. */
+const UNASKED_NATIVE_TOOLS = ["WebSearch"] as const;
+
 const PROTOCOL_ARGS = [
   "--output-format",
   "stream-json",
@@ -619,9 +622,13 @@ const turnArgs = (
   ...settingsArgs(input, skills, options.platform),
   ...(skills === null ? [] : ["--plugin-dir", skills.dir]),
   ...NETWORK_ARGS[input.policy.network],
-  // The stella MCP server enforces its own approvals for writes.
+  // The stella MCP server enforces its own approvals for writes. Web search
+  // runs at the model provider, which already holds the turn, and changes
+  // nothing on the computer, so it never waits for approval, as Codex's does
+  // not. Fetching a page goes out from the computer and follows the
+  // permission mode like any other tool.
   "--allowedTools",
-  `mcp__${input.mcp.serverName}`,
+  [`mcp__${input.mcp.serverName}`, ...UNASKED_NATIVE_TOOLS].join(","),
   target.type === "fresh" ? "--session-id" : "--resume",
   target.sessionId,
   "--model",

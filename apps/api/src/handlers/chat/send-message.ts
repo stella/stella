@@ -69,6 +69,7 @@ import {
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
+  ChatPromptTarget,
   ChatSafePromptLayers,
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
@@ -2386,6 +2387,14 @@ const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
   resolveCredentialMemberExecutionContext;
 
 /** A turn on the computer gets its files, unless a raw copy would defeat anonymization. */
+/**
+ * A coding agent on the member's computer answers with its own tools, so its
+ * prompt names none of stella's cloud tools or settings.
+ */
+const turnPromptTarget = (
+  localRun: LocalChatRun | undefined,
+): ChatPromptTarget => (localRun === undefined ? "cloud" : "local_run");
+
 const turnCopiesFiles = (
   localRun: LocalChatRun | undefined,
   sendMode: ChatSendMode,
@@ -3201,6 +3210,7 @@ export const createSendMessage = (
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
           copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
+          promptTarget: turnPromptTarget(localRun),
           recordAuditEvent,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
@@ -3845,6 +3855,7 @@ const turnRunModeOf = (
 type PrepareChatContextProps = {
   caseLawDb?: SendMessageDependencies["caseLawDb"];
   copiesFilesToComputer: boolean;
+  promptTarget: ChatPromptTarget;
   recordAuditEvent: AuditRecorder;
   featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
@@ -3950,6 +3961,7 @@ const auditedLocalRunAttachments = async ({
 const prepareChatContext = async ({
   caseLawDb,
   copiesFilesToComputer,
+  promptTarget,
   recordAuditEvent,
   featureAccessSnapshot,
   activeDecision,
@@ -4015,6 +4027,7 @@ const prepareChatContext = async ({
         skillBindingScope,
         threadId,
         toolAvailability,
+        promptTarget,
         browserExtension,
         userContext,
         userId,

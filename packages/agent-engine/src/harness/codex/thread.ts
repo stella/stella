@@ -38,6 +38,8 @@ const NETWORK_ACCESS = {
 export const CODEX_APPROVAL_MODE =
   "ask" satisfies HarnessRunPolicy["approvals"];
 const APPROVAL_POLICY = "on-request";
+/** Codex's `web_search` setting: live search of the web. */
+const WEB_SEARCH_MODE = "live";
 /** A dotted config key carries the name, so it must stay a bare TOML key. */
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
 
@@ -148,6 +150,11 @@ const threadParams = (
     sandbox: SANDBOX_MODE[input.policy.fs],
     developerInstructions: input.instructions,
     config: {
+      // Codex's own web search, live rather than from its cached index: it
+      // is off unless configured, and a member running Codex here gets the
+      // agent's full abilities. The search runs at the model provider, which
+      // already holds the turn.
+      web_search: WEB_SEARCH_MODE,
       "sandbox_workspace_write.network_access":
         NETWORK_ACCESS[input.policy.network],
       // Package caches live outside the workspace; the temp directory and
