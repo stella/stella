@@ -8384,14 +8384,6 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/document-reviews/finding-decision-event.test.ts": {
-      "peakMb": 216,
-      "baselineMb": 216,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-3"
-      }
-    },
     "src/handlers/document-reviews/finding-decisions.postgres.test.ts": {
       "peakMb": 184,
       "baselineMb": 184,
