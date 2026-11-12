@@ -7144,9 +7144,7 @@ const config = defineConfig({
     },
     {
       // Module mocks of workspace modules test a fabricated dependency graph.
-      // Scoped to test files and test helpers, where `mock.module` lives;
-      // existing pairs are grandfathered in
-      // scripts/internal-module-mock-ledger.json.
+      // Scoped to test files and test helpers, where `mock.module` lives.
       files: [
         "**/*.test.{ts,tsx}",
         "**/*.property.test.{ts,tsx}",

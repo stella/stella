@@ -107,8 +107,6 @@ import {
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
-const INTERNAL_MODULE_MOCK_LEDGER_REL =
-  "scripts/internal-module-mock-ledger.json";
 const INSTRUCTION_ENFORCEMENT_LEDGER_REL =
   "scripts/instruction-enforcement-ledger.json";
 
@@ -2631,19 +2629,6 @@ const PER_RULE_SUPPRESSION_METRICS: readonly RatchetMetric[] =
     count: countTrackedRuleSuppressions(rule),
   }));
 
-// Grandfathered `mock.module` targets: one ledger line per
-// "<test file>::<workspace module>" pair. The rule
-// (.oxlint-plugins/no-internal-module-mock.ts) reports an unlisted pair and a
-// listed pair whose mock is gone; this budget is what stops a new pair from
-// being listed instead of fixed.
-const countInternalModuleMockLedgerEntries: FileCounter = (content) => {
-  const parsed: unknown = JSON.parse(content);
-  if (!Array.isArray(parsed)) {
-    panic("internal-module-mock ledger must be a JSON array");
-  }
-  return parsed.length;
-};
-
 // The count scripts/check-instruction-enforcement.ts holds equal to the
 // `[review]` tags in the instruction sources; this metric keeps it falling.
 const countReviewOnlyInstructionRules: FileCounter = (content) => {
@@ -3768,15 +3753,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/api/src/db/schema/**/*.ts"],
     exclude: isExcludedSource,
     count: countWorkspaceOnlyRlsOnOrgTables,
-  },
-  {
-    scope: "file",
-    id: "internal-module-mock-ledger-entries",
-    description:
-      "grandfathered mock.module targets of workspace modules, one per <test file>::<module> pair in scripts/internal-module-mock-ledger.json (each replaces a real dependency with a fabrication the mocked module's contract changes cannot fail)",
-    include: [INTERNAL_MODULE_MOCK_LEDGER_REL],
-    exclude: () => false,
-    count: countInternalModuleMockLedgerEntries,
   },
   {
     scope: "file",
@@ -5721,18 +5697,6 @@ const RESULT_BOUNDARY_FILE_FIXTURE_LINES = [
 ];
 const SELF_TEST_RESULT_BOUNDARY_FILE = `${RESULT_BOUNDARY_FILE_FIXTURE_LINES.join("\n")}\n`;
 
-// Two pairs in one file and one in another: the count is the number of
-// ledger lines, not of files.
-const SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER = `${JSON.stringify(
-  [
-    "apps/api/src/handlers/alpha.test.ts::@/api/lib/s3",
-    "apps/api/src/handlers/alpha.test.ts::@/api/lib/s3-presign",
-    "packages/cli/src/login.test.ts::./browser-open.js",
-  ],
-  null,
-  2,
-)}\n`;
-const EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES = 3;
 const SELF_TEST_INSTRUCTION_ENFORCEMENT_LEDGER = `${JSON.stringify(
   { reviewOnlyRules: 4, excludedSources: [], excludedSections: [] },
   null,
@@ -6424,10 +6388,6 @@ const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
   const failures: string[] = [];
   for (const { id, expected } of [
     {
-      id: "internal-module-mock-ledger-entries",
-      expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
-    },
-    {
       id: "review-only-instruction-rules",
       expected: EXPECTED_REVIEW_ONLY_INSTRUCTION_RULES,
     },
@@ -7112,11 +7072,6 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/lib/case-law/public-subject.ts",
       SELF_TEST_AD_HOC_SUBJECT_GATE,
-    );
-    writeFixture(
-      root,
-      INTERNAL_MODULE_MOCK_LEDGER_REL,
-      SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
     );
     writeFixture(
       root,
