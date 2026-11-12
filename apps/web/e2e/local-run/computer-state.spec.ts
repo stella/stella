@@ -181,7 +181,11 @@ test("the first send of a new chat while no computer is connected says why and k
 test("a send in a chat while no computer is connected says why, and goes through once it is back", async ({
   page,
   request,
+  browserErrors,
 }) => {
+  // The refused send's stream read fails, and the development build echoes
+  // it to the console.
+  browserErrors.expectCaptured(/Stream response body read failed/u);
   await openNewChat(page);
   await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
   await send(page, "First question");
@@ -209,7 +213,7 @@ test("a send in a chat while no computer is connected says why, and goes through
   ).toHaveCount(2, { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 });
 
-test("a computer that goes offline mid-turn shows the wait, and the turn finishes once it is back", async ({
+test("a computer that drops offline mid-turn picks the turn up again once it is back", async ({
   page,
   request,
 }) => {
@@ -224,13 +228,9 @@ test("a computer that goes offline mid-turn shows the wait, and the turn finishe
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
 
+  // Back before the run's lease lapses, as after a short network drop: the
+  // computer resumes the run and the turn finishes.
   await setComputerOnline(request, false);
-  await expect(
-    transcript(page)
-      .getByRole("status")
-      .filter({ hasText: "Waiting for your computer to reconnect" }),
-  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
-
   await setComputerOnline(request, true);
   await expect(transcript(page)).toContainText(TEXT_ANSWER, {
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS * 2,

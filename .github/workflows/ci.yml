@@ -6105,6 +6105,7 @@ jobs:
         if: steps.e2e-stack.outcome == 'success'
         env:
           XDG_DATA_HOME: ${{ github.workspace }}/.stella-dev/data
+          RUST_LOG: info
         run: |
           chmod +x "$RUNNER_TEMP/local-run-stand-in/runner_stand_in"
           bun packages/scripts/src/e2e-local-runner.ts --executable "$RUNNER_TEMP/local-run-stand-in/runner_stand_in"
@@ -6132,7 +6133,7 @@ jobs:
           retention-days: 7
 
       - name: Upload server and computer logs
-        if: failure() && steps.e2e-stack.outcome != 'skipped'
+        if: always() && steps.e2e-stack.outcome != 'skipped'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: server-logs-local-runs
@@ -6141,6 +6142,7 @@ jobs:
             /tmp/web.log
             .stella-dev/local-runner.log
             .stella-dev/local-runner/*.log
+            .stella-dev/data/**/holder.log*
           retention-days: 7
 
       - name: Upload browser test timings
