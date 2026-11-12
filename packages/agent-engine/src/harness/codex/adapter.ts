@@ -81,6 +81,8 @@ export type CodexHarnessAdapterOptions = {
   gracePeriodMs: number;
   /** How long any request to the harness waits for its answer. */
   requestTimeoutMs: number;
+  /** See `HarnessProcessDeadlines.startupRequestMs`. */
+  startupRequestTimeoutMs?: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
   /** Where the app server's protocol lines go, redacted. */
@@ -196,6 +198,7 @@ const connect = async ({
     detached: createDetached(options.onBackgroundError),
     deadlines: {
       requestMs: options.requestTimeoutMs,
+      startupRequestMs: options.startupRequestTimeoutMs,
       terminateMs: options.gracePeriodMs,
     },
     cwd,

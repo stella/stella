@@ -4474,7 +4474,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Erstellen Sie Standpunkt für Standpunkt ein Playbook für die Vertragsprüfung, gestützt auf Ihre bereits unterzeichneten Verträge, ein kurzes Gespräch und marktübliche Standards.",
-          "name": "Playbook erstellen"
+          "name": "Playbook erstellen",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Füge einem meiner bestehenden Playbooks Standpunkte hinzu.",
+              "name": "Playbook erweitern"
+            },
+            "fromContracts": {
+              "body": "Erstelle ein Playbook für Vertraulichkeitsvereinbarungen auf Grundlage meiner bereits unterzeichneten Vereinbarungen.",
+              "name": "Mit früheren Verträgen beginnen"
+            },
+            "fromMarketStandards": {
+              "body": "Erstelle ein Playbook für Lieferantenverträge, ausgehend von marktüblichen Standpunkten.",
+              "name": "Mit Marktstandards beginnen"
+            }
+          }
         }
       },
       "builtInSection": "Integrierte Skills",
@@ -4724,6 +4738,10 @@
       "optionPlaceholder": "Optionswert",
       "optionsLabel": "Optionen",
       "outline": "Gliederung",
+      "pendingPane": {
+        "description": "Beantworten Sie die Fragen im Chat. Sobald Sie das erste Speichern freigeben, öffnet sich das Playbook hier, und Sie können es neben der Unterhaltung bearbeiten.",
+        "title": "Ihr Playbook erscheint hier"
+      },
       "positionOfTotal": "Standpunkt {index} von {total}",
       "positionRemoved": "Standpunkt entfernt",
       "positions": "Standpunkte",
