@@ -182,10 +182,10 @@ describe("Polish decisions sign under their ruling", () => {
   });
 
   test.each([
-    ["SAOS", () => saosBlocks("548531")],
+    ["SAOS", async () => await saosBlocks("548531")],
     [
       "the court's portal",
-      () => ncourtBlocks("pl-ncourt-viii-gc-1117-25.xml.gz"),
+      async () => await ncourtBlocks("pl-ncourt-viii-gc-1117-25.xml.gz"),
     ],
   ])(
     "VIII GC 1117/25 from %s: the judge signs as Sędzia under the ruling and under the reasons",
