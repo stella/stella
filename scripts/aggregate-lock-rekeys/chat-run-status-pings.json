@@ -1,8 +1,0 @@
-[
-  {
-    "file": "apps/api/src/lib/scheduler/tasks/chat-turn-reaper.ts",
-    "from": "94656261c1ac343eaf1027d302de933204cd714883b81565e3bef86b6eccc741",
-    "to": "fdf882c6147e66866bcc39e7674999a42d0f769c3fccc2246567d08693da7ee5",
-    "reason": "The reaper's transaction now runs inside the collector that pings each reaped turn's owner after commit; the transaction boundary and its single acquisition are unchanged."
-  }
-]
