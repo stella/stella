@@ -2289,6 +2289,8 @@
       "replyReadyTitle": "Atbilde gatava"
     },
     "turnStatus": {
+      "answerFailed": "Atbildi neizdevās pabeigt",
+      "answerReady": "Atbilde ir gatava",
       "waitingForApproval": "Gaida apstiprinājumu",
       "waitingForInput": "Gaida ievadi",
       "writing": "Raksta"

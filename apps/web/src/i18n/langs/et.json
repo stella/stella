@@ -2289,6 +2289,8 @@
       "replyReadyTitle": "Vastus on valmis"
     },
     "turnStatus": {
+      "answerFailed": "Vastust ei õnnestunud lõpetada",
+      "answerReady": "Vastus on valmis",
       "waitingForApproval": "Kinnituse ootamine",
       "waitingForInput": "Sisendi ootamine",
       "writing": "Kirjutamine"

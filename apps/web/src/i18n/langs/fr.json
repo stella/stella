@@ -2289,6 +2289,8 @@
       "replyReadyTitle": "Réponse prête"
     },
     "turnStatus": {
+      "answerFailed": "La réponse n’a pas pu être terminée",
+      "answerReady": "Réponse prête",
       "waitingForApproval": "En attente d’approbation",
       "waitingForInput": "En attente de saisie",
       "writing": "Rédaction"

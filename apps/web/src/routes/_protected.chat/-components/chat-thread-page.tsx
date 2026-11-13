@@ -42,6 +42,7 @@ import { ChatLocalRunQuestionContext } from "@/components/chat/chat-local-run-qu
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { ChatTurnAnnouncer } from "@/components/chat/chat-turn-announcer";
 import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
@@ -794,6 +795,14 @@ export const ChatThreadPage = ({
                 </ConversationContent>
                 <ChatTurnNavigator messages={messages} />
               </Conversation>
+              {/* Outside the transcript's log, whose additions it would
+                  otherwise be read among. */}
+              <ChatTurnAnnouncer
+                hasError={error !== undefined}
+                isGenerating={isGenerating}
+                key={`turn-announcer-${threadRef.threadId}`}
+                messages={messages}
+              />
 
               <ChatAnonymizationLayer
                 editor={controller.editor}

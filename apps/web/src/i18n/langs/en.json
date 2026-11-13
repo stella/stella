@@ -2289,6 +2289,8 @@
       "replyReadyTitle": "Reply ready"
     },
     "turnStatus": {
+      "answerFailed": "The answer could not be finished",
+      "answerReady": "Answer ready",
       "waitingForApproval": "Waiting for approval",
       "waitingForInput": "Waiting for input",
       "writing": "Writing"

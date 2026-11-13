@@ -2289,6 +2289,8 @@
       "replyReadyTitle": "الرد جاهز"
     },
     "turnStatus": {
+      "answerFailed": "تعذّر إكمال الإجابة",
+      "answerReady": "الإجابة جاهزة",
       "waitingForApproval": "في انتظار الموافقة",
       "waitingForInput": "في انتظار الإدخال",
       "writing": "جارٍ الكتابة"
