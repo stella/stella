@@ -1853,6 +1853,7 @@
       "restored": "Fájlmódosítások visszavonva"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# háttérfeladat fut} other {# háttérfeladat fut}}",
       "errorFolderUnavailable": "A csevegéshez csatolt mappa nem érhető el a számítógépén. Ellenőrizze a stella desktopban, majd küldje el újra.",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
       "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
@@ -1894,6 +1895,7 @@
       "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább.",
       "stateLimitUntil": "Korlát elérve eddig: {time}",
       "stateModelUnavailable": "A modell már nem érhető el",
       "stateNeedsLogin": "Bejelentkezés szükséges",
@@ -2299,6 +2301,8 @@
       "replyReadyTitle": "Kész a válasz"
     },
     "turnStatus": {
+      "answerFailed": "A választ nem sikerült befejezni",
+      "answerReady": "A válasz elkészült",
       "waitingForApproval": "Jóváhagyásra vár",
       "waitingForInput": "Bevitelre vár",
       "writing": "Írás"

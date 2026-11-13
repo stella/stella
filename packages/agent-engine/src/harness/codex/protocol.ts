@@ -219,6 +219,29 @@ const ItemEnvelopeSchema = v.object({
   item: v.object({ type: v.string(), id: v.optional(v.string()) }),
 });
 
+const RateLimitWindowSchema = v.object({
+  usedPercent: v.number(),
+  /** Unix seconds. */
+  resetsAt: v.nullish(v.number()),
+});
+
+/** One allowance's windows; `limitId` names it (`codex` is the main one). */
+const RateLimitsSchema = v.object({
+  limitId: v.nullish(v.string()),
+  primary: v.nullish(RateLimitWindowSchema),
+  secondary: v.nullish(RateLimitWindowSchema),
+  /** Credits the account can spend once its windows are exhausted. */
+  credits: v.nullish(
+    v.object({ hasCredits: v.boolean(), unlimited: v.boolean() }),
+  ),
+});
+
+/** `account/rateLimits/read`: every allowance, by limit id when Codex says. */
+export const GetAccountRateLimitsResponseSchema = v.object({
+  rateLimits: RateLimitsSchema,
+  rateLimitsByLimitId: v.nullish(v.record(v.string(), RateLimitsSchema)),
+});
+
 /** Notifications this adapter consumes; every other method is ignored. */
 export const CODEX_NOTIFICATIONS = {
   "turn/started": v.object({ threadId: v.string(), turn: TurnSchema }),
@@ -267,17 +290,7 @@ export const CODEX_NOTIFICATIONS = {
     status: v.string(),
     error: v.nullish(v.string()),
   }),
-  "account/rateLimits/updated": v.object({
-    rateLimits: v.object({
-      limitId: v.nullish(v.string()),
-      primary: v.nullish(
-        v.object({ usedPercent: v.number(), resetsAt: v.nullish(v.number()) }),
-      ),
-      secondary: v.nullish(
-        v.object({ usedPercent: v.number(), resetsAt: v.nullish(v.number()) }),
-      ),
-    }),
-  }),
+  "account/rateLimits/updated": v.object({ rateLimits: RateLimitsSchema }),
 } as const;
 export type CodexNotificationMethod = keyof typeof CODEX_NOTIFICATIONS;
 
@@ -285,9 +298,7 @@ export type CodexPlanUpdate = v.InferOutput<
   (typeof CODEX_NOTIFICATIONS)["turn/plan/updated"]
 >;
 
-export type CodexRateLimits = v.InferOutput<
-  (typeof CODEX_NOTIFICATIONS)["account/rateLimits/updated"]
->["rateLimits"];
+export type CodexRateLimits = v.InferOutput<typeof RateLimitsSchema>;
 
 export const isCodexNotificationMethod = (
   method: string,
@@ -374,6 +385,7 @@ export const isCodexServerRequestMethod = (
 export type CodexClientRequestMethod =
   | "initialize"
   | "account/read"
+  | "account/rateLimits/read"
   | "model/list"
   | "skills/extraRoots/set"
   | "skills/list"

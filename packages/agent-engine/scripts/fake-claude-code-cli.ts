@@ -408,6 +408,50 @@ const FAKE_SCENARIOS = {
     assistant("msg-2", [{ type: "text", text: "It stopped." }]),
     result(),
   ],
+  /**
+   * A turn that leaves a dev server and a sub-agent running, where the
+   * sub-agent cannot be stopped at the turn's end.
+   */
+  background_agent_unstoppable: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([
+      ["task-serve", "local_bash"],
+      ["task-agent", "local_agent"],
+    ]),
+    result(),
+    { expect: "stop_task", error: "The task could not be stopped." },
+  ],
+  /**
+   * A turn the CLI opens itself while the completed turn's sub-agent is
+   * still being stopped; the chat's next user message comes before it ends.
+   */
+  background_own_turn_while_stopping: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([
+      ["task-serve", "local_bash"],
+      ["task-watch", "local_bash"],
+      ["task-agent", "local_agent"],
+    ]),
+    result(),
+    assistant("msg-own", [{ type: "text", text: "The agent stopped." }]),
+    { expect: "stop_task", response: {} },
+    { expect: "interrupt", response: {} },
+    { sleep: 300 },
+    result({
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Request was aborted."],
+    }),
+    // The next turn first sets the process to its own mode.
+    { expect: "set_permission_mode", response: {} },
+    { expectUser: true },
+    { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
+    backgroundTasks([]),
+    assistant("msg-2", [{ type: "text", text: "It stopped." }]),
+    result(),
+  ],
   /** A dev server left running that exits while the chat waits. */
   background_command_exits: [
     ...freshTurn(),

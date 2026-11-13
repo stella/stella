@@ -1853,6 +1853,7 @@
       "restored": "Failimuudatused on tagasi võetud"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {Taustal käib # ülesanne} other {Taustal käib # ülesannet}}",
       "errorFolderUnavailable": "Selle vestlusega seotud kaust pole sinu arvutis saadaval. Kontrolli seda stella desktopis ja saada see siis uuesti.",
       "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
       "errorLimitResetsAt": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Uuesti saad proovida alates {time}.",
@@ -1894,6 +1895,7 @@
       "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
       "stateLimitUntil": "Limiit täis kuni {time}",
       "stateModelUnavailable": "Mudel pole enam saadaval",
       "stateNeedsLogin": "Vaja sisse logida",
@@ -2299,6 +2301,8 @@
       "replyReadyTitle": "Vastus on valmis"
     },
     "turnStatus": {
+      "answerFailed": "Vastust ei õnnestunud lõpetada",
+      "answerReady": "Vastus on valmis",
       "waitingForApproval": "Kinnituse ootamine",
       "waitingForInput": "Sisendi ootamine",
       "writing": "Kirjutamine"

@@ -1853,6 +1853,7 @@
       "restored": "Modifications de fichiers annulées"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# tâche en arrière-plan en cours} other {# tâches en arrière-plan en cours} many {# tâches en arrière-plan en cours}}",
       "errorFolderUnavailable": "Le dossier lié à cette conversation n’est pas disponible sur votre ordinateur. Vérifiez-le dans stella desktop, puis renvoyez ceci.",
       "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
       "errorLimitResetsAt": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Vous pourrez réessayer à partir du {time}.",
@@ -1894,6 +1895,7 @@
       "refusalTooLarge": "Cette conversation est trop longue pour être transmise à votre ordinateur. Commencez une nouvelle conversation pour l’y exécuter.",
       "refusalUnavailable": "L’exécution des conversations sur votre ordinateur n’est pas disponible pour votre compte.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation.",
       "stateLimitUntil": "Limite atteinte jusqu’à {time}",
       "stateModelUnavailable": "Modèle plus disponible",
       "stateNeedsLogin": "Connexion requise",
@@ -2299,6 +2301,8 @@
       "replyReadyTitle": "Réponse prête"
     },
     "turnStatus": {
+      "answerFailed": "La réponse n’a pas pu être terminée",
+      "answerReady": "Réponse prête",
       "waitingForApproval": "En attente d’approbation",
       "waitingForInput": "En attente de saisie",
       "writing": "Rédaction"

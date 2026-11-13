@@ -1853,6 +1853,7 @@
       "restored": "تم التراجع عن تغييرات الملفات"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, zero {# مهمة تعمل في الخلفية} one {# مهمة تعمل في الخلفية} two {# مهمتان تعملان في الخلفية} few {# مهام تعمل في الخلفية} many {# مهمة تعمل في الخلفية} other {# مهمة تعمل في الخلفية}}",
       "errorFolderUnavailable": "المجلد المرتبط بهذه الدردشة غير متاح على حاسوبك. تحقق منه في stella desktop، ثم أرسل هذا مرة أخرى.",
       "errorLimitReached": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. حاول مرة أخرى بعد إعادة ضبط الحد.",
       "errorLimitResetsAt": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. يمكنك المحاولة مرة أخرى بعد {time}.",
@@ -1894,6 +1895,7 @@
       "refusalTooLarge": "هذه الدردشة أطول من أن تُنقل إلى حاسوبك. ابدأ دردشة جديدة لتشغيلها هناك.",
       "refusalUnavailable": "تشغيل الدردشات على حاسوبك غير متاح لحسابك.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "تعذّر على وكيل البرمجة على حاسوبك استئناف العمل من حيث توقف، لذا تابع اعتمادًا على رسائل هذه الدردشة.",
       "stateLimitUntil": "تم بلوغ الحد حتى {time}",
       "stateModelUnavailable": "النموذج لم يعد متاحًا",
       "stateNeedsLogin": "يلزم تسجيل الدخول",
@@ -2299,6 +2301,8 @@
       "replyReadyTitle": "الرد جاهز"
     },
     "turnStatus": {
+      "answerFailed": "تعذّر إكمال الإجابة",
+      "answerReady": "الإجابة جاهزة",
       "waitingForApproval": "في انتظار الموافقة",
       "waitingForInput": "في انتظار الإدخال",
       "writing": "جارٍ الكتابة"

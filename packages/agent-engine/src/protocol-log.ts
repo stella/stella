@@ -655,6 +655,15 @@ const CODEX_RATE_LIMIT_WINDOW = object({
   resetsAt: NUMBER,
 });
 
+/** One allowance, as an update or a read reports it. */
+const CODEX_RATE_LIMITS = object({
+  limitId: vocabulary(["codex"]),
+  planType: CODEX_PLAN_TYPES,
+  primary: CODEX_RATE_LIMIT_WINDOW,
+  secondary: CODEX_RATE_LIMIT_WINDOW,
+  credits: SIZE,
+});
+
 const CODEX_IN_TURN = { threadId: IDENTIFIER, turnId: IDENTIFIER } as const;
 const CODEX_ON_ITEM = { ...CODEX_IN_TURN, itemId: IDENTIFIER } as const;
 const CODEX_DELTA = { ...CODEX_ON_ITEM, delta: SIZE } as const;
@@ -732,6 +741,8 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
   },
   initialized: {},
   "account/read": { refreshToken: BOOLEAN },
+  // Sent without params.
+  "account/rateLimits/read": {},
   "model/list": { limit: NUMBER, cursor: SIZE },
   "skills/extraRoots/set": { extraRoots: SIZE },
   "skills/list": { forceReload: BOOLEAN, cwds: SIZE },
@@ -777,15 +788,7 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
   },
   "turn/plan/updated": { ...CODEX_IN_TURN, explanation: SIZE, plan: SIZE },
   "serverRequest/resolved": { threadId: IDENTIFIER, requestId: IDENTIFIER },
-  "account/rateLimits/updated": {
-    rateLimits: object({
-      limitId: vocabulary(["codex"]),
-      planType: CODEX_PLAN_TYPES,
-      primary: CODEX_RATE_LIMIT_WINDOW,
-      secondary: CODEX_RATE_LIMIT_WINDOW,
-      credits: SIZE,
-    }),
-  },
+  "account/rateLimits/updated": { rateLimits: CODEX_RATE_LIMITS },
   "item/commandExecution/requestApproval": {
     ...CODEX_APPROVAL,
     command: SIZE,
@@ -848,6 +851,8 @@ const CODEX_RESULT = object({
     planType: CODEX_PLAN_TYPES,
   }),
   requiresOpenaiAuth: BOOLEAN,
+  rateLimits: CODEX_RATE_LIMITS,
+  rateLimitsByLimitId: SIZE,
   // Stella's answers to approvals, questions and declined requests.
   decision: vocabulary([
     "accept",

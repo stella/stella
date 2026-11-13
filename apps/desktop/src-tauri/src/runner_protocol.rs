@@ -452,6 +452,16 @@ pub(crate) struct RunFinished {
   pub(crate) harness_session_id: Option<String>,
 }
 
+/// How many tasks the harness process a finished run left behind keeps
+/// running in the background; 0 once none. Not sequenced: the latest count
+/// holds, and every live one is sent again after each `welcome`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunBackground {
+  pub(crate) run_id: String,
+  pub(crate) count: u32,
+}
+
 /// How a folder restore ended; it names no file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -470,6 +480,7 @@ wire_union!(DesktopMessage tagged "type" {
   RunFinished(RunFinished) => "run.finished",
   FolderRestored(FolderRestored) => "folder.restored",
   LinkedFoldersStatus(LinkedFoldersStatus) => "linked_folders.status",
+  RunBackground(RunBackground) => "run.background",
 });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

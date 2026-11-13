@@ -268,6 +268,21 @@ export const chatKeys = {
     threadId,
     turnId,
   ],
+  /** Every chat's background count of the reader, for one refresh. */
+  backgroundTaskCounts: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "background-tasks",
+  ],
+  backgroundTasks: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+  ) => [
+    ...chatKeys.backgroundTaskCounts(activeOrganizationId, userId),
+    threadId,
+  ],
   localRunStepOutput: ({
     activeOrganizationId,
     userId,

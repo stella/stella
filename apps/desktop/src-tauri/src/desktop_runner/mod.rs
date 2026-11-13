@@ -182,7 +182,7 @@ impl DesktopRunnerControl {
       };
       let app_version = app.package_info().version.to_string();
       let (host, reports): (Arc<dyn HarnessHost>, Arc<dyn HarnessReports>) =
-        match host_slot.get_or_init(|| sidecar_host(&app)) {
+        match host_slot.get_or_init(|| sidecar_host(&app, Arc::clone(&journal))) {
           Some(host) => (Arc::new(host.clone()), Arc::new(host.clone())),
           None => (
             Arc::new(UnavailableHarnessHost::new(app_version.clone())),
@@ -344,7 +344,10 @@ pub(crate) fn run_folders_on_this_computer() -> Vec<std::path::PathBuf> {
 
 /// The app's harness host: the bundled sidecar, the managed CLIs and the
 /// ChatGPT connection. `None` without a data folder.
-fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
+fn sidecar_host(
+  app: &AppHandle,
+  journal: Arc<SharedJournal>,
+) -> Option<SidecarHarnessHost> {
   let Some(data) = dirs::data_dir() else {
     tracing::warn!("the harness host has no data directory");
     return None;
@@ -374,6 +377,7 @@ fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
       probe_interval: sidecar_host::PROBE_INTERVAL,
     },
     Arc::new(ManagedHarnesses { app: app.clone() }),
+    journal,
   ))
 }
 

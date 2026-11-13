@@ -1853,6 +1853,7 @@
       "restored": "Změny souborů vráceny"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {Na pozadí běží # úloha} few {Na pozadí běží # úlohy} many {Na pozadí běží # úlohy} other {Na pozadí běží # úloh}}",
       "errorFolderUnavailable": "Složka propojená s tímto chatem není ve vašem počítači dostupná. Zkontrolujte ji ve stella desktop a pak to odešlete znovu.",
       "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
       "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
@@ -1894,6 +1895,7 @@
       "refusalTooLarge": "Tato konverzace je příliš dlouhá na předání do vašeho počítače. Pro spuštění tam začněte nový chat.",
       "refusalUnavailable": "Spouštění chatů ve vašem počítači není pro váš účet dostupné.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Programovací agent ve vašem počítači nemohl navázat tam, kde skončil, a tak pokračoval podle zpráv v tomto chatu.",
       "stateLimitUntil": "Limit vyčerpán do {time}",
       "stateModelUnavailable": "Model už není k dispozici",
       "stateNeedsLogin": "Vyžaduje přihlášení",
@@ -2299,6 +2301,8 @@
       "replyReadyTitle": "Odpověď je hotová"
     },
     "turnStatus": {
+      "answerFailed": "Odpověď se nepodařilo dokončit",
+      "answerReady": "Odpověď je hotová",
       "waitingForApproval": "Čekání na schválení",
       "waitingForInput": "Čekání na zadání",
       "writing": "Psaní"

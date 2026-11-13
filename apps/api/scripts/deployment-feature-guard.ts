@@ -141,6 +141,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Undoing a turn's file changes is mounted on every deployment; there is something to undo only once the member's local-agents feature let the turn's run start",
   ],
   [
+    "/v1/chat/threads/:threadId/background-tasks",
+    "A chat's background task count is mounted on every deployment; it is above 0 only once the member's local-agents feature let a run start on their computer",
+  ],
+  [
     "/v1/chat/local-runs",
     "A run's output upload authenticates the run's agent token on every deployment; a run exists only once the member's local-agents feature let it start",
   ],
