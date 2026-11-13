@@ -203,6 +203,9 @@ const sessionSchema = v.object({
 
 type StackSession = { apiUrl: string; webUrl: string; cookie: string };
 
+/** The local API answers these at once; a stack that hangs is not ready. */
+const STACK_REQUEST_TIMEOUT_MS = 10_000;
+
 const stackRequest = async (
   stack: StackSession,
   pathname: string,
@@ -213,6 +216,7 @@ const stackRequest = async (
       await fetch(`${stack.apiUrl}${pathname}`, {
         headers: { cookie: stack.cookie, origin: stack.webUrl },
         method,
+        signal: AbortSignal.timeout(STACK_REQUEST_TIMEOUT_MS),
       }),
   );
   if (Result.isError(response)) {

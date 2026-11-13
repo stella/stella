@@ -1096,6 +1096,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:better-auth/plugins/access"],
   },
   {
+    path: "packages/scripts/src/agent-local-runner.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Reads and sets the stand-in computer's state on the configured local API.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/scripts/src/agent-session.ts",
     class: "operator-configured-infrastructure",
     reason:
