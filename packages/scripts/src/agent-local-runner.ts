@@ -203,33 +203,15 @@ const sessionSchema = v.object({
   }),
 });
 
-type StackSession = { apiUrl: string; webUrl: string; cookie: string };
-
-const stackRequest = async (
-  stack: StackSession,
+/**
+ * A request to the stack's API as the signed-in member, answering its JSON
+ * body (null when empty) or why it failed. `agent-session.ts` owns the
+ * transport.
+ */
+export type StackRequest = (
   pathname: string,
-  method: "GET" | "PUT" = "GET",
-) => {
-  const response = await Result.tryPromise(
-    async () =>
-      await fetch(`${stack.apiUrl}${pathname}`, {
-        headers: { cookie: stack.cookie, origin: stack.webUrl },
-        method,
-        signal: AbortSignal.timeout(10_000),
-      }),
-  );
-  if (Result.isError(response)) {
-    return Result.err(`${method} ${pathname}: ${response.error.message}`);
-  }
-  const text = await response.value.text();
-  if (!response.value.ok) {
-    return Result.err(
-      `${method} ${pathname} -> ${String(response.value.status)}: ${text}`,
-    );
-  }
-  const body: unknown = text === "" ? null : JSON.parse(text);
-  return Result.ok(body);
-};
+  method?: "GET" | "PUT",
+) => Promise<Result<unknown, string>>;
 
 const readinessSchema = v.variant("status", [
   v.object({ status: v.literal("hidden") }),
@@ -257,8 +239,8 @@ const linkSchema = v.object({ desktopId: v.string() });
  * The stand-in's harnesses as the chat sees them once its computer is
  * connected and Codex is ready on it; null until then.
  */
-const readyComputer = async (stack: StackSession, desktopId: string) => {
-  const readiness = await stackRequest(stack, "/v1/chat/local-runners");
+const readyComputer = async (request: StackRequest, desktopId: string) => {
+  const readiness = await request("/v1/chat/local-runners");
   if (Result.isError(readiness)) {
     return Result.err(readiness.error);
   }
@@ -286,6 +268,7 @@ type StartOptions = {
   apiUrl: string;
   webUrl: string;
   cookie: string;
+  request: StackRequest;
 };
 
 /**
@@ -297,13 +280,12 @@ export const startLocalRunner = async ({
   apiUrl,
   webUrl,
   cookie,
+  request,
 }: StartOptions): Promise<Result<void, string>> => {
-  const stack = { apiUrl, webUrl, cookie };
   const state = localRunnerDir(root);
   mkdirSync(path.join(state, "bin"), { recursive: true });
   // The member turns the feature on under Beta Features; this is that toggle.
-  const enrolled = await stackRequest(
-    stack,
+  const enrolled = await request(
     "/v1/organization-settings/feature-enrolments/local-agents",
     "PUT",
   );
@@ -316,7 +298,7 @@ export const startLocalRunner = async ({
     if (Result.isError(built)) {
       return Result.err(built.error);
     }
-    const session = await stackRequest(stack, "/api/auth/get-session");
+    const session = await request("/api/auth/get-session");
     const identity = Result.isOk(session)
       ? v.safeParse(sessionSchema, session.value)
       : null;
@@ -386,7 +368,7 @@ export const startLocalRunner = async ({
       : null;
     const checked =
       link?.success === true
-        ? await readyComputer(stack, link.output.desktopId)
+        ? await readyComputer(request, link.output.desktopId)
         : Result.ok(null);
     if (Result.isError(checked)) {
       lastError = checked.error;

@@ -1510,6 +1510,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODEX_HOME",
   // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
   "FAKE_SKILL_PATH",
+  // Milliseconds between the outputs of the fake Codex's paced scenarios.
+  "FAKE_CODEX_PACE_MS",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",

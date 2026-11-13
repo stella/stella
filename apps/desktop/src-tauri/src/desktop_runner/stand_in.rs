@@ -222,26 +222,19 @@ async fn link(settings: &Settings) -> Result<Linked, String> {
     let body = granted.text().await.unwrap_or_default();
     return Err(format!("grant refused: {status} {body}"));
   }
-  let (protocol_header, protocol) = crate::account::link_protocol_header();
-  let builder = client
-    .post(format!("{}/v1/desktop-registry/redeem-link", settings.api))
-    .header(protocol_header, protocol)
-    .json(&serde_json::json!({
-      "correlationId": correlation,
-      "verifier": verifier,
-      "expectedUserId": settings.user_id,
-      "expectedOrganizationId": settings.organization_id,
-      "deviceJkt": jkt,
-    }));
-  let redeemed = crate::http_client::device_proof_request(
-    builder,
-    &device,
-    None,
-    Some(&correlation),
-  )?
-  .send()
-  .await
-  .map_err(|error| format!("redeem: {error}"))?;
+  let redeemed =
+    crate::account::stand_in_redemption_request(crate::account::StandInRedemption {
+      client: &client,
+      api_base_url: &settings.api,
+      device_key: &device,
+      correlation_id: &correlation,
+      verifier: &verifier,
+      expected_user_id: &settings.user_id,
+      expected_organization_id: &settings.organization_id,
+    })?
+    .send()
+    .await
+    .map_err(|error| format!("redeem: {error}"))?;
   let status = redeemed.status();
   if !status.is_success() {
     let body = redeemed.text().await.unwrap_or_default();
@@ -407,9 +400,9 @@ async fn serve(settings: Settings) -> Result<(), String> {
         start_timeout: Duration::from_secs(30),
         shutdown_grace: Duration::from_secs(10),
         backoff: ReconnectBackoff::DEFAULT,
+        retired_dirs: Vec::new(),
       },
       workspaces: data.join("agent-runs"),
-      package_cache: data.join("agent-package-cache"),
       probe_interval: super::sidecar_host::PROBE_INTERVAL,
     },
     Arc::new(StandInHarnesses {
@@ -479,8 +472,9 @@ async fn serve(settings: Settings) -> Result<(), String> {
 pub(crate) fn main() -> i32 {
   let _logging = tracing_subscriber::fmt()
     .with_env_filter(
-      std::env::var("RUST_LOG")
-        .unwrap_or_else(|_| "stella_desktop_lib=info,warn".into()),
+      tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        tracing_subscriber::EnvFilter::new("stella_desktop_lib=info,warn")
+      }),
     )
     .try_init();
   let settings = match Settings::from_env() {

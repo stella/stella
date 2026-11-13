@@ -153,12 +153,6 @@ fn policy() -> AccountPolicy {
   .expect("the committed desktop account policy must be valid")
 }
 
-/// The link protocol a redemption announces in [`ACCOUNT_PROTOCOL_HEADER`].
-#[cfg(all(feature = "dev-runner-stand-in", unix))]
-pub(crate) fn link_protocol_header() -> (&'static str, String) {
-  (ACCOUNT_PROTOCOL_HEADER, policy().link_protocol.to_string())
-}
-
 pub(crate) fn role_forbidden_error() -> String {
   policy().error_codes.role_forbidden
 }
@@ -1603,6 +1597,40 @@ fn redemption_request(
     options.bearer,
     Some(options.body.correlation_id),
   )
+}
+
+/// A link the development stand-in computer (`desktop_runner/stand_in.rs`)
+/// redeems for a fresh device key, with no credential of its own yet.
+#[cfg(all(feature = "dev-runner-stand-in", unix))]
+pub(crate) struct StandInRedemption<'a> {
+  pub(crate) client: &'a crate::http_client::DesktopHttpClient,
+  pub(crate) api_base_url: &'a str,
+  pub(crate) device_key: &'a crate::device_proof::DeviceKey,
+  pub(crate) correlation_id: &'a str,
+  pub(crate) verifier: &'a str,
+  pub(crate) expected_user_id: &'a str,
+  pub(crate) expected_organization_id: &'a str,
+}
+
+/// The redemption request a linking app sends, for the stand-in computer.
+#[cfg(all(feature = "dev-runner-stand-in", unix))]
+pub(crate) fn stand_in_redemption_request(
+  redemption: StandInRedemption<'_>,
+) -> Result<crate::http_client::DeviceProofRequest, String> {
+  let device_jkt = redemption.device_key.thumbprint()?;
+  redemption_request(RedeemRequestOptions {
+    client: redemption.client,
+    api_base_url: redemption.api_base_url,
+    device_key: redemption.device_key,
+    body: RedeemLinkRequest {
+      correlation_id: redemption.correlation_id,
+      verifier: redemption.verifier,
+      expected_user_id: redemption.expected_user_id,
+      expected_organization_id: redemption.expected_organization_id,
+      device_jkt: &device_jkt,
+    },
+    bearer: None,
+  })
 }
 
 #[derive(Deserialize)]

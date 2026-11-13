@@ -52,6 +52,7 @@ import {
   LOCAL_RUNNER_FLAG,
   printLocalRunner,
   runningLocalRunner,
+  type StackRequest,
   startLocalRunner,
   stopLocalRunner,
 } from "./agent-local-runner";
@@ -424,6 +425,33 @@ const apiRequest = async ({ body, cookie, method, url }: ApiRequestOptions) => {
   return parsed;
 };
 
+type MemberSession = { apiUrl: string; webUrl: string; cookie: string };
+
+/** The stand-in computer's requests to the stack, as the signed-in member. */
+const memberRequest =
+  ({ apiUrl, webUrl, cookie }: MemberSession): StackRequest =>
+  async (pathname, method = "GET") => {
+    const response = await Result.tryPromise(
+      async () =>
+        await fetch(`${apiUrl}${pathname}`, {
+          headers: { cookie, origin: webUrl },
+          method,
+          signal: AbortSignal.timeout(10_000),
+        }),
+    );
+    if (Result.isError(response)) {
+      return Result.err(`${method} ${pathname}: ${response.error.message}`);
+    }
+    const text = await response.value.text();
+    if (!response.value.ok) {
+      return Result.err(
+        `${method} ${pathname} -> ${String(response.value.status)}: ${text}`,
+      );
+    }
+    const body: unknown = text === "" ? null : JSON.parse(text);
+    return Result.ok(body);
+  };
+
 const listsKey = (payload: unknown, id: string) =>
   typeof payload === "object" &&
   payload !== null &&
@@ -580,11 +608,15 @@ const up = async (root: string, args: readonly string[]) => {
   console.log(reused === null ? "Stack ready." : "Reusing the running stack.");
   printStatus(root, runtime);
   if (args.includes(LOCAL_RUNNER_FLAG) && runningLocalRunner(root) === null) {
-    const started = await startLocalRunner({
-      root,
+    const session = {
       apiUrl,
       webUrl: runtime.webUrl ?? fail("The running stack has no web server"),
       cookie: readSessionCookie(root),
+    };
+    const started = await startLocalRunner({
+      root,
+      ...session,
+      request: memberRequest(session),
     });
     if (started.isErr()) {
       fail(started.error);
