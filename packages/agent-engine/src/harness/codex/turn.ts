@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import {
@@ -16,6 +17,7 @@ import {
   harnessContextUsage,
   type HarnessContinuation,
   type HarnessEvent,
+  type HarnessFailure,
   type HarnessQuestion,
   harnessSessionId,
   type HarnessToolCall,
@@ -33,6 +35,7 @@ import type { AppServerClient, AppServerHandlers } from "./app-server-client";
 import {
   classifyTurnFailure,
   isCapacityFailure,
+  isPlanUsageLimit,
   mergeRateLimits,
 } from "./errors";
 import {
@@ -58,6 +61,7 @@ import {
   METHOD_NOT_FOUND,
   TurnStartResponseSchema,
 } from "./protocol";
+import { readRateLimits } from "./rate-limits";
 
 /**
  * One Codex turn: routes the app-server's notifications and requests for the
@@ -250,6 +254,11 @@ export class CodexTurnSession {
   private usage: HarnessUsage | null = null;
   private rateLimits: CodexRateLimits | null = null;
   private lastError: CodexTurnError | null = null;
+  /**
+   * The turn failed and waits on a read of when the plan's limit resets;
+   * whatever else ends the turn meanwhile reports this failure.
+   */
+  private failing: HarnessFailure | null = null;
   private readonly early: EarlyMessage[] = [];
   private readonly toolCalls = new Map<string, HarnessToolCall>();
   private readonly pending = new Map<string, PendingInteraction>();
@@ -316,6 +325,10 @@ export class CodexTurnSession {
       this.violation(message);
     },
     exit: (exit) => {
+      if (this.failing !== null) {
+        this.emit({ type: "turn.failed", failure: this.failing });
+        return;
+      }
       this.lifecycle.exited(exit);
     },
   };
@@ -527,9 +540,42 @@ export class CodexTurnSession {
   }
 
   private failWith(error: CodexTurnError | null) {
+    const failure = classifyTurnFailure({
+      error,
+      rateLimits: this.rateLimits,
+      now: Temporal.Now.instant(),
+    });
+    const client = this.client;
+    // Each turn starts a new process, so a limit the turn hits before Codex
+    // sends its rate limits has no reset time yet: read them.
+    if (
+      failure.type === "usage_limit" &&
+      failure.resetsAt === null &&
+      isPlanUsageLimit(error) &&
+      client !== null
+    ) {
+      this.failing = failure;
+      this.detached(
+        this.failAfterReadingLimits(client, error),
+        "codex-turn.rate-limits",
+      );
+      return;
+    }
+    this.emit({ type: "turn.failed", failure });
+  }
+
+  private async failAfterReadingLimits(
+    client: AppServerClient,
+    error: CodexTurnError | null,
+  ) {
+    const read = await readRateLimits(client);
     this.emit({
       type: "turn.failed",
-      failure: classifyTurnFailure({ error, rateLimits: this.rateLimits }),
+      failure: classifyTurnFailure({
+        error,
+        rateLimits: read ?? this.rateLimits,
+        now: Temporal.Now.instant(),
+      }),
     });
   }
 
@@ -965,6 +1011,11 @@ export class CodexTurnSession {
   }
 
   private async interrupt() {
+    if (this.failing !== null) {
+      // The turn already failed; only its reset time was outstanding.
+      this.emit({ type: "turn.failed", failure: this.failing });
+      return;
+    }
     await this.lifecycle.interrupt(async (client) => {
       await settlesWithin(this.started.promise, this.lifecycle.gracePeriodMs);
       if (this.turnId === null) {

@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { homedir } from "node:os";
 import path from "node:path";
+import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import { knownReasoningEfforts } from "@stll/api-contract/desktop-runner";
@@ -34,6 +35,7 @@ import {
   startAppServer,
 } from "./app-server-client";
 import { CodexProcess } from "./background";
+import { usageLimitResetsAt } from "./errors";
 import {
   CODEX_CLIENT_INFO,
   CODEX_OPT_OUT_NOTIFICATIONS,
@@ -43,6 +45,7 @@ import {
   ModelListResponseSchema,
   TurnStartResponseSchema,
 } from "./protocol";
+import { readRateLimits } from "./rate-limits";
 import {
   CODEX_APPROVAL_MODES,
   isCodexApprovalMode,
@@ -404,6 +407,13 @@ const probe = async (
         }),
       );
     }
+    const resetsAt =
+      auth.type === "signed_out"
+        ? null
+        : usageLimitResetsAt(
+            await readRateLimits(client),
+            Temporal.Now.instant(),
+          );
     return Result.ok({
       version,
       auth,
@@ -411,8 +421,7 @@ const probe = async (
       capabilities: capabilities(),
       // Codex sandboxes every command at each of its levels.
       approvalModes: [...CODEX_APPROVAL_MODES],
-      // The probe does not read rate limits; a limited turn reports them.
-      usageLimit: null,
+      usageLimit: resetsAt === null ? null : { resetsAt },
     });
   })();
   await close(client, options.gracePeriodMs);
