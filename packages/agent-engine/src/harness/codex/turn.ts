@@ -53,8 +53,8 @@ import {
   toolResultForItem,
 } from "./items";
 import {
+  CODEX_AGENT_STATES,
   CODEX_ENDED_AGENT_ACTIVITIES,
-  CODEX_ENDED_AGENT_STATES,
   CODEX_NOTIFICATIONS,
   CODEX_SERVER_REQUESTS,
   CODEX_SPAWN_AGENT_TOOL,
@@ -258,6 +258,13 @@ type CodexTurnSessionOptions = {
   background: HarnessTurnBackground<AppServerClient>;
 };
 
+/** A subagent's current step and the subagent step it runs in, if any. */
+type CodexSubagent = {
+  step: HarnessToolCall;
+  parentCallId: string | null;
+  status: "working" | "ended";
+};
+
 export class CodexTurnSession {
   private readonly started = Promise.withResolvers<undefined>();
   private threadId: string | null = null;
@@ -273,12 +280,11 @@ export class CodexTurnSession {
   private readonly early: EarlyMessage[] = [];
   private readonly toolCalls = new Map<string, HarnessToolCall>();
   /**
-   * The step of each subagent this turn started, by the subagent's thread:
-   * an item of that thread is a step of it.
+   * Each subagent this turn started, by the subagent's thread: its current
+   * step, which an item of that thread is a step of, and whether that step
+   * is still open.
    */
-  private readonly subagentSteps = new Map<string, HarnessToolCall>();
-  /** The subagent threads whose step has not ended. */
-  private readonly runningSubagents = new Set<string>();
+  private readonly subagents = new Map<string, CodexSubagent>();
   private readonly pending = new Map<string, PendingInteraction>();
   private readonly resolved = new Set<string>();
   private readonly answeredByMessage = new Set<string>();
@@ -694,7 +700,7 @@ export class CodexTurnSession {
       return;
     }
     // A subagent works on a thread and in turns of its own.
-    const parentCallId = this.subagentSteps.get(envelope.threadId)?.id ?? null;
+    const parentCallId = this.subagents.get(envelope.threadId)?.step.id ?? null;
     if (parentCallId === null && envelope.turnId !== this.turnId) {
       return;
     }
@@ -839,7 +845,9 @@ export class CodexTurnSession {
    * agent exists. The step ends when an activity, or the state a later
    * subagent call reports, says the agent ended; one still open at the
    * turn's end is closed with the turn. Calls to the other subagent tools
-   * (waiting on an agent, sending it input) are not steps of their own.
+   * (waiting on an agent, sending it input) are not steps of their own,
+   * except the one that reports an ended agent at work again
+   * (`subagentAtWork`).
    */
   private subagent(
     item: Extract<
@@ -866,9 +874,12 @@ export class CodexTurnSession {
           break;
         case "completed":
           for (const threadId of item.receiverThreadIds) {
-            if (!this.subagentSteps.has(threadId)) {
-              this.subagentSteps.set(threadId, toolCall);
-              this.runningSubagents.add(threadId);
+            if (!this.subagents.has(threadId)) {
+              this.subagents.set(threadId, {
+                step: toolCall,
+                parentCallId,
+                status: "working",
+              });
             }
           }
           // A spawn that names no agent has nothing left to wait for.
@@ -900,25 +911,60 @@ export class CodexTurnSession {
       }
     }
     for (const [threadId, { status }] of Object.entries(item.agentsStates)) {
-      this.subagentEnded(
-        threadId,
-        CODEX_ENDED_AGENT_STATES.get(status) ?? null,
-      );
+      const standing = CODEX_AGENT_STATES.get(status);
+      if (standing === "working") {
+        this.subagentAtWork(threadId, item);
+      } else {
+        this.subagentEnded(threadId, standing ?? null);
+      }
     }
   }
 
+  /**
+   * A subagent whose step ended and that a later subagent call reports at
+   * work was given more to do. A step has one result, so the new work is a
+   * step of its own, opened by the call that reported it: what the subagent
+   * does next shows under it, and how that ends reaches chat.
+   */
+  private subagentAtWork(
+    threadId: string,
+    item: Extract<CodexItem, { type: "collabAgentToolCall" }>,
+  ) {
+    const subagent = this.subagents.get(threadId);
+    if (subagent === undefined || subagent.status === "working") {
+      return;
+    }
+    const step = stepOfSubagent(
+      // One call may report several agents: the thread keeps the ids apart.
+      subagentCall({ ...item, id: `${item.id}:${threadId}` }),
+      subagent.parentCallId,
+    );
+    this.toolCalls.set(step.id, step);
+    this.subagents.set(threadId, {
+      step,
+      parentCallId: subagent.parentCallId,
+      status: "working",
+    });
+    this.emit({ type: "tool.started", toolCall: step });
+  }
+
   private subagentEnded(threadId: string, outcome: CodexAgentOutcome | null) {
-    const toolCall = this.subagentSteps.get(threadId);
+    const subagent = this.subagents.get(threadId);
     if (
       outcome === null ||
-      toolCall === undefined ||
-      !this.runningSubagents.delete(threadId)
+      subagent === undefined ||
+      subagent.status === "ended"
     ) {
       return;
     }
+    this.subagents.set(threadId, {
+      step: subagent.step,
+      parentCallId: subagent.parentCallId,
+      status: "ended",
+    });
     this.emit({
       type: "tool.completed",
-      toolCall,
+      toolCall: subagent.step,
       result: subagentResult(outcome),
     });
   }

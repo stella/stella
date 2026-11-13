@@ -522,8 +522,9 @@ const FAKE_SCENARIOS = {
   ],
   /**
    * Subagents and viewed images. One subagent is spawned, runs a command it
-   * asks about and views an image on its own thread, and is reported ended
-   * twice; one fails to spawn; one is still at work when the turn ends. The
+   * asks about and views an image on its own thread, is reported ended
+   * twice, and is then given more work, which fails; one fails to spawn; one
+   * is still at work when the turn ends. The
    * prompt, the subagent's text and reasoning, and its report sit next to
    * the steps stella shows. An item of a thread no spawn named is not the
    * turn's.
@@ -602,6 +603,22 @@ const FAKE_SCENARIOS = {
       agentThreadId: FAKE_SUBAGENT_THREAD_ID,
       agentPath: "/root/worker",
     }),
+    item(
+      "completed",
+      subagentToolCall("call-followup", "followupTask", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "running",
+      }),
+    ),
+    subagentItem(
+      "completed",
+      command("sub-ls", "completed", { aggregatedOutput: "", exitCode: 0 }),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-wait-again", "wait", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "errored",
+      }),
+    ),
     item(
       "completed",
       subagentToolCall("call-spawn-failed", "spawnAgent", "failed", {}),

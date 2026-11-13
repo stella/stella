@@ -241,18 +241,22 @@ export const CODEX_SPAWN_AGENT_TOOL = "spawnAgent";
 export type CodexAgentOutcome = "succeeded" | "failed" | "cancelled";
 
 /**
- * How a subagent ended, by the state a subagent call reports for it. A state
- * not named here (`pendingInit`, `running`, one newer than the pinned
- * protocol) is an agent still at work.
+ * How a subagent stands, by the state a subagent call reports for it: at
+ * work, or how it ended. A state not named here (one newer than the pinned
+ * protocol) says neither.
  */
-export const CODEX_ENDED_AGENT_STATES: ReadonlyMap<string, CodexAgentOutcome> =
-  new Map([
-    ["completed", "succeeded"],
-    ["errored", "failed"],
-    ["notFound", "failed"],
-    ["interrupted", "cancelled"],
-    ["shutdown", "cancelled"],
-  ]);
+export const CODEX_AGENT_STATES: ReadonlyMap<
+  string,
+  "working" | CodexAgentOutcome
+> = new Map([
+  ["pendingInit", "working"],
+  ["running", "working"],
+  ["completed", "succeeded"],
+  ["errored", "failed"],
+  ["notFound", "failed"],
+  ["interrupted", "cancelled"],
+  ["shutdown", "cancelled"],
+]);
 
 /**
  * How a subagent ended, by the kind of activity that reports it; `started`

@@ -1702,6 +1702,7 @@ describe("Codex items as chat parts", () => {
       detail: { kind: "subagent", description: "" },
     };
     const inSubagent = { parentCallId: "call-spawn" };
+    const followupStep = "call-followup:thread-subagent";
     // The spawn call ends at once; the step stays open until the subagent
     // is reported ended, once.
     expect(
@@ -1767,6 +1768,29 @@ describe("Codex items as chat parts", () => {
         name: "harness_native_tool",
         input: subagent,
         status: "succeeded",
+      },
+      // Given more work after it ended, the subagent is a new step, opened
+      // by the call that reports it at work; what it does next and how that
+      // ends belong to that step.
+      {
+        type: "tool.started",
+        id: followupStep,
+        name: "harness_native_tool",
+        input: { ...subagent, tool: "followupTask" },
+      },
+      {
+        type: "tool.completed",
+        id: "sub-ls",
+        name: "command_execution",
+        input: { command: "ls", parentCallId: followupStep },
+        status: "succeeded",
+      },
+      {
+        type: "tool.completed",
+        id: followupStep,
+        name: "harness_native_tool",
+        input: { ...subagent, tool: "followupTask" },
+        status: "failed",
       },
       {
         type: "tool.started",
