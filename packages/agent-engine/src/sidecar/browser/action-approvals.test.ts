@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { createEventQueue } from "../../harness/event-queue";
 import type { HarnessEvent } from "../../harness/events";
 import { createActionApprovals } from "./action-approvals";
@@ -147,4 +149,23 @@ test("a long turn's events pass through in order", async () => {
     }
   }
   expect(seen).toEqual(deltas);
+});
+
+test("ends with the harness's failure after its events were read", async () => {
+  const approvals = createActionApprovals();
+  const failure = new Error("the harness stream broke");
+  async function* failing(): AsyncGenerator<HarnessEvent> {
+    yield { type: "text.delta", messageId: "message-1", delta: "kept" };
+    await Promise.reject(failure);
+  }
+  const seen: string[] = [];
+  const read = async () => {
+    for await (const event of approvals.withEvents(failing())) {
+      if (event.type === "text.delta") {
+        seen.push(event.delta);
+      }
+    }
+  };
+  expect(await rejectionOf(read())).toBe(failure);
+  expect(seen).toEqual(["kept"]);
 });
