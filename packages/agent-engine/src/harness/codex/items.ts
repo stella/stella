@@ -81,6 +81,21 @@ export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
   }
 };
 
+/**
+ * The kinds that only add to what chat shows of a turn: a subagent, how it
+ * ended, an image the agent viewed. Nothing the turn does depends on reading
+ * them, so one the adapter cannot read is shown as an unsupported item and
+ * never ends the turn as a protocol violation.
+ */
+const PRESENTATION_ONLY_ITEMS: ReadonlySet<CodexItemType> = new Set([
+  "collabAgentToolCall",
+  "subAgentActivity",
+  "imageView",
+]);
+
+export const isPresentationOnlyItem = (kind: CodexItemType): boolean =>
+  PRESENTATION_ONLY_ITEMS.has(kind);
+
 type CodexToolItem = Extract<
   CodexItem,
   {

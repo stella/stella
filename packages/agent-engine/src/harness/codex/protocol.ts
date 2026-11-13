@@ -275,11 +275,15 @@ export const isMcpTextBlock = (
 ): block is v.InferOutput<typeof McpContentBlock> =>
   v.is(McpContentBlock, block);
 
-/** The first item fields, read before the kind decides the full schema. */
+/**
+ * The first item fields, read before the kind decides the full schema. The
+ * id is read as it comes: whether an item without a usable one is a
+ * violation is its kind's to say (`CodexTurnSession.readItem`).
+ */
 const ItemEnvelopeSchema = v.object({
   threadId: v.string(),
   turnId: v.string(),
-  item: v.object({ type: v.string(), id: v.optional(v.string()) }),
+  item: v.object({ type: v.string(), id: v.optional(v.unknown()) }),
 });
 
 const RateLimitWindowSchema = v.object({

@@ -24,7 +24,7 @@ import {
   type HarnessToolCall,
   type HarnessUsage,
 } from "../events";
-import { unsupportedItem } from "../tool-parts";
+import { stepOfSubagent, unsupportedItem } from "../tool-parts";
 import {
   type Detached,
   type HarnessTurnBackground,
@@ -116,6 +116,19 @@ const MAX_REASON_CHARS = 2000;
 const ESCAPE = "\u001B";
 
 const requestIdFor = (controlId: string) => `claude-request-${controlId}`;
+
+const SubagentMessageSchema = v.looseObject({
+  parent_tool_use_id: v.pipe(v.string(), v.nonEmpty()),
+});
+
+/**
+ * The call that started the subagent a message belongs to, read before the
+ * message's own schema, or `null` for a message of the main thread.
+ */
+const subagentCallOf = (raw: unknown): string | null => {
+  const parsed = v.safeParse(SubagentMessageSchema, raw);
+  return parsed.success ? parsed.output.parent_tool_use_id : null;
+};
 
 type PendingInteraction =
   | {
@@ -488,14 +501,16 @@ export class ClaudeCodeTurnSession {
    * Something the pinned protocol does not define, shown as a failed
    * activity so the turn visibly did something Stella skipped.
    */
-  private unsupported(kind: string) {
+  private unsupported(kind: string, parentCallId: string | null = null) {
     this.unsupportedItems += 1;
+    const { toolCall, result } = unsupportedItem(
+      `claude-unsupported-${String(this.unsupportedItems)}`,
+      kind,
+    );
     this.emit({
       type: "tool.completed",
-      ...unsupportedItem(
-        `claude-unsupported-${String(this.unsupportedItems)}`,
-        kind,
-      ),
+      toolCall: stepOfSubagent(toolCall, parentCallId),
+      result,
     });
   }
 
@@ -505,6 +520,14 @@ export class ClaudeCodeTurnSession {
       return;
     }
     const handling = claudeMessageHandling(type);
+    const parentCallId = subagentCallOf(raw);
+    if (
+      parentCallId !== null &&
+      (handling === "assistant" || handling === "user" || handling === "stream")
+    ) {
+      this.subagentMessage(handling, raw, parentCallId);
+      return;
+    }
     switch (handling) {
       case "assistant":
         this.assistant(
@@ -576,7 +599,7 @@ export class ClaudeCodeTurnSession {
   private stream(
     parsed: v.InferOutput<typeof StreamEventMessageSchema> | null,
   ) {
-    if (parsed === null || (parsed.parent_tool_use_id ?? null) !== null) {
+    if (parsed === null) {
       return;
     }
     const { event } = parsed;
@@ -654,11 +677,6 @@ export class ClaudeCodeTurnSession {
     if (parsed === null) {
       return;
     }
-    const parentCallId = parsed.parent_tool_use_id ?? null;
-    if (parentCallId !== null) {
-      this.subagentToolUses(parsed.message.content, parentCallId);
-      return;
-    }
     if (parsed.error !== undefined) {
       // The CLI's own text for an API failure; the result reports it typed.
       this.assistantError = parsed.error;
@@ -726,42 +744,107 @@ export class ClaudeCodeTurnSession {
   }
 
   /**
-   * A subagent's message: its tool calls are steps of the call that started
-   * it. What it wrote and thought is not read: that stays on the computer,
-   * with the report the call returns.
+   * A subagent's message: its tool calls and their results are steps of the
+   * call that started it. What it wrote and thought is not read: that stays
+   * on the computer, with the report the call returns.
+   *
+   * These steps only add to what chat shows, so a message or block of a
+   * subagent that does not have its shape is never a protocol violation: it
+   * becomes an unsupported step of the subagent, and the turn goes on.
    */
-  private subagentToolUses(
-    content: readonly { type: string }[],
+  private subagentMessage(
+    handling: "assistant" | "user" | "stream",
+    raw: unknown,
     parentCallId: string,
   ) {
-    for (const raw of content) {
-      if (raw.type !== "tool_use") {
-        continue;
-      }
-      const block = this.parse(ContentBlockSchema, raw, "content block");
-      if (block === null) {
+    switch (handling) {
+      case "stream":
+        // A subagent's text as it is written.
+        return;
+      case "assistant": {
+        const parsed = this.readOfSubagent(AssistantMessageSchema, raw, {
+          kind: "assistant",
+          parentCallId,
+        });
+        if (parsed === null) {
+          return;
+        }
+        for (const block of parsed.message.content) {
+          if (block.type !== "tool_use") {
+            continue;
+          }
+          const use = this.readOfSubagent(ContentBlockSchema, block, {
+            kind: block.type,
+            parentCallId,
+          });
+          if (use?.type === "tool_use") {
+            this.toolUse(use, parentCallId);
+          }
+        }
         return;
       }
-      if (block.type === "tool_use") {
-        this.toolUse(block, parentCallId);
+      case "user": {
+        const parsed = this.readOfSubagent(UserMessageSchema, raw, {
+          kind: "user",
+          parentCallId,
+        });
+        if (parsed !== null) {
+          this.user(parsed, parentCallId);
+        }
+        return;
       }
+      default:
+        handling satisfies never;
+        panic("Unhandled Claude subagent message");
     }
   }
 
-  private user(parsed: v.InferOutput<typeof UserMessageSchema> | null) {
+  /**
+   * What a subagent sent, or `null` when it does not have `schema`'s shape,
+   * which is then shown as an unsupported step of the subagent.
+   */
+  private readOfSubagent<TSchema extends v.GenericSchema>(
+    schema: TSchema,
+    raw: unknown,
+    { kind, parentCallId }: { kind: string; parentCallId: string },
+  ): v.InferOutput<TSchema> | null {
+    const parsed = v.safeParse(schema, raw);
+    if (parsed.success) {
+      return parsed.output;
+    }
+    this.unsupported(kind, parentCallId);
+    return null;
+  }
+
+  /**
+   * A message's tool results. `parentCallId` is the call that started the
+   * subagent whose message this is, or `null` on the main thread.
+   */
+  private user(
+    parsed: v.InferOutput<typeof UserMessageSchema> | null,
+    parentCallId: string | null = null,
+  ) {
     if (parsed === null || typeof parsed.message.content === "string") {
       return;
     }
     // Text blocks here are the CLI's own notes to the model, or the prompt a
-    // subagent was started with; only tool results are output, a subagent's
-    // among them.
+    // subagent was started with; only tool results are output.
     for (const raw of parsed.message.content) {
       if (raw.type !== "tool_result") {
         continue;
       }
-      const block = this.parse(ToolResultBlockSchema, raw, "tool result");
+      const block =
+        parentCallId === null
+          ? this.parse(ToolResultBlockSchema, raw, "tool result")
+          : this.readOfSubagent(ToolResultBlockSchema, raw, {
+              kind: raw.type,
+              parentCallId,
+            });
       if (block === null) {
-        return;
+        if (parentCallId === null) {
+          return;
+        }
+        continue;
       }
       const held = this.toolUses.get(block.tool_use_id);
       const notRun = parsed.tool_result_meta?.find(

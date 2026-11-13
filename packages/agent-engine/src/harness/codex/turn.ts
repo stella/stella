@@ -44,6 +44,7 @@ import {
 } from "./errors";
 import {
   codexItemHandling,
+  isPresentationOnlyItem,
   isToolItem,
   planUpdateStep,
   reasoningText,
@@ -61,6 +62,7 @@ import {
   type CodexAgentOutcome,
   type CodexItem,
   CodexItemSchema,
+  type CodexItemType,
   type CodexNotificationMethod,
   type CodexRateLimits,
   type CodexRequestId,
@@ -704,32 +706,22 @@ export class CodexTurnSession {
     if (parentCallId === null && envelope.turnId !== this.turnId) {
       return;
     }
-    const { type, id } = envelope.item;
+    const { type } = envelope.item;
+    const id =
+      typeof envelope.item.id === "string" ? envelope.item.id : undefined;
     if (parentCallId !== null) {
-      this.subagentItem(method, type, params, parentCallId);
+      this.subagentItem(method, { type, id }, params, parentCallId);
       return;
     }
     if (!isCodexItemType(type)) {
-      // A kind newer than the pinned protocol: shown as a failed activity
-      // once it completes, so the turn visibly did something Stella skipped.
-      if (method === "item/completed") {
-        this.unsupportedItems += 1;
-        const unknown = unsupportedItem(
-          id ?? `codex-unsupported-${String(this.unsupportedItems)}`,
-          type,
-        );
-        this.emit({ type: "tool.completed", ...unknown });
-      }
+      // A kind newer than the pinned protocol.
+      this.unsupportedStep(method, { type, id }, null);
       return;
     }
     if (codexItemHandling(type) === "ignore") {
       return;
     }
-    const item = this.parse(
-      CodexItemSchema,
-      v.parse(v.object({ item: v.unknown() }), params).item,
-      `${method} item`,
-    );
+    const item = this.readItem(method, { type, id }, params, null);
     if (item === null) {
       return;
     }
@@ -788,28 +780,75 @@ export class CodexTurnSession {
   }
 
   /**
+   * Something the harness did that stella cannot show, as a failed step once
+   * it completes, so the turn visibly did it: a kind newer than the pinned
+   * protocol, or an item `readItem` could not read.
+   */
+  private unsupportedStep(
+    method: "item/started" | "item/completed",
+    { type, id }: { type: string; id: string | undefined },
+    parentCallId: string | null,
+  ) {
+    if (method !== "item/completed") {
+      return;
+    }
+    this.unsupportedItems += 1;
+    const { toolCall, result } = unsupportedItem(
+      id ?? `codex-unsupported-${String(this.unsupportedItems)}`,
+      type,
+    );
+    this.emit({
+      type: "tool.completed",
+      toolCall: stepOfSubagent(toolCall, parentCallId),
+      result,
+    });
+  }
+
+  /**
+   * The item of a notification, or `null` when it does not have its kind's
+   * shape. An item the turn itself depends on (its answer, its own tool
+   * calls) is then a protocol violation. An item that only adds to what chat
+   * shows is not: a presentation-only kind, and anything a subagent did on
+   * its own thread, becomes an unsupported step, and the turn goes on.
+   */
+  private readItem(
+    method: "item/started" | "item/completed",
+    { type, id }: { type: CodexItemType; id: string | undefined },
+    params: unknown,
+    parentCallId: string | null,
+  ): CodexItem | null {
+    const raw = v.parse(v.object({ item: v.unknown() }), params).item;
+    if (parentCallId === null && !isPresentationOnlyItem(type)) {
+      return this.parse(CodexItemSchema, raw, `${method} item`);
+    }
+    const parsed = v.safeParse(CodexItemSchema, raw);
+    if (parsed.success) {
+      return parsed.output;
+    }
+    this.unsupportedStep(method, { type, id }, parentCallId);
+    return null;
+  }
+
+  /**
    * An item of a subagent's thread: its tool calls are steps of the call
    * that started it, and a subagent it starts itself is a step of it too.
    * What it wrote and thought is not read: that stays on the computer.
    */
   private subagentItem(
     method: "item/started" | "item/completed",
-    type: string,
+    { type, id }: { type: string; id: string | undefined },
     params: unknown,
     parentCallId: string,
   ) {
     if (!isCodexItemType(type)) {
+      this.unsupportedStep(method, { type, id }, parentCallId);
       return;
     }
     const handling = codexItemHandling(type);
     if (handling !== "tool" && handling !== "subagent") {
       return;
     }
-    const item = this.parse(
-      CodexItemSchema,
-      v.parse(v.object({ item: v.unknown() }), params).item,
-      `${method} item`,
-    );
+    const item = this.readItem(method, { type, id }, params, parentCallId);
     if (item === null) {
       return;
     }
