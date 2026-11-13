@@ -136,10 +136,23 @@ const createRedactor = (scope: SkillPathScope) => {
     return { ...call, input: anything(call.input) };
   };
 
-  const outputMentions = (output: HarnessStepOutput) =>
-    output.type === "command"
-      ? mentions(output.output)
-      : output.files.some(({ path, diff }) => mentions(path) || mentions(diff));
+  const outputMentions = (output: HarnessStepOutput) => {
+    switch (output.type) {
+      case "command":
+        return mentions(output.output);
+      case "diff":
+        return output.files.some(
+          ({ path, diff }) => mentions(path) || mentions(diff),
+        );
+      case "conversation":
+        return output.entries.some(({ text: said }) => mentions(said));
+      case "image":
+        return mentions(output.path);
+      default:
+        output satisfies never;
+        return panic("Unhandled step output");
+    }
+  };
 
   // A step that touched a skill keeps nothing it produced, not even on this
   // computer: a skill's licensed text is the harness's to read, never the

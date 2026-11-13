@@ -2272,11 +2272,15 @@
       "input": "Entrée",
       "interrupted": "Interrompu avant la fin",
       "localOutput": {
+        "conversation": "Conversation du sous-agent",
+        "conversationPrompt": "Tâche",
+        "conversationReport": "Rapport",
         "cut": "Affichage des {kept} premiers sur {total}",
         "diff": "Modifications des fichiers",
         "elsewhere": "Ouvrez-le sur l’ordinateur qui l’a exécuté",
         "empty": "Aucun résultat",
         "failed": "L’application de bureau stella sur cet ordinateur n’a pas pu l’afficher.",
+        "imageTooLarge": "Cette image fait {total}. Les images de plus de {kept} ne sont pas conservées sur cet ordinateur ; elle ne peut donc pas être affichée ici.",
         "notKept": "Rien de cette étape n’est conservé sur cet ordinateur",
         "reading": "Lecture depuis cet ordinateur"
       },

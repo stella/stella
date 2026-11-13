@@ -136,21 +136,39 @@ export const localRunToolView = ({
 };
 
 /** What a step's details show of what it produced on the computer. */
-export type LocalRunStepOutputKind = "command" | "diff";
+export type LocalRunStepOutputKind =
+  "command" | "diff" | "conversation" | "image";
 
 /**
  * Whether a step produced something the member can open on the computer
- * that ran it: a command's output or a change's diff. `null` for any other
- * call, which keeps nothing there.
+ * that ran it: a command's output, a change's diff, a subagent's own
+ * conversation, or the image a step viewed. `null` for any other call, which
+ * keeps nothing there.
  */
-export const localRunStepOutputKind = (
-  name: string,
-): LocalRunStepOutputKind | null => {
-  switch (name) {
+export const localRunStepOutputKind = ({
+  name,
+  input,
+}: {
+  name: string;
+  input: unknown;
+}): LocalRunStepOutputKind | null => {
+  const call = isChatLocalRunToolName(name)
+    ? parseChatLocalRunToolCall(name, input)
+    : null;
+  switch (call?.name) {
     case CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution:
       return "command";
     case CHAT_LOCAL_RUN_TOOL_NAMES.fileChange:
       return "diff";
+    case CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool:
+      switch (call.input.detail?.kind) {
+        case "subagent":
+          return "conversation";
+        case "image":
+          return "image";
+        default:
+          return null;
+      }
     default:
       return null;
   }

@@ -2272,11 +2272,15 @@
       "input": "Ievade",
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "localOutput": {
+        "conversation": "Apakšaģenta saruna",
+        "conversationPrompt": "Uzdevums",
+        "conversationReport": "Ziņojums",
         "cut": "Rāda pirmos {kept} no {total}",
         "diff": "Failu izmaiņas",
         "elsewhere": "Atveriet datorā, kurā tas tika izpildīts",
         "empty": "Nav izvades",
         "failed": "stella darbvirsmas lietotne šajā datorā to nevarēja parādīt.",
+        "imageTooLarge": "Šī attēla izmērs ir {total}. Attēli, kas lielāki par {kept}, šajā datorā netiek saglabāti, tāpēc to šeit nevar parādīt.",
         "notKept": "No šī soļa šajā datorā nekas nav saglabāts",
         "reading": "Notiek lasīšana no šī datora"
       },

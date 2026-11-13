@@ -2272,11 +2272,15 @@
       "input": "Vstup",
       "interrupted": "Přerušeno před dokončením",
       "localOutput": {
+        "conversation": "Konverzace dílčího agenta",
+        "conversationPrompt": "Zadání",
+        "conversationReport": "Zpráva",
         "cut": "Zobrazeno prvních {kept} z {total}",
         "diff": "Změny souborů",
         "elsewhere": "Otevřete na počítači, kde krok běžel",
         "empty": "Žádný výstup",
         "failed": "Desktopová aplikace stella na tomto počítači to nedokázala zobrazit.",
+        "imageTooLarge": "Tento obrázek má {total}. Obrázky větší než {kept} se na tomto počítači neukládají, proto jej zde nelze zobrazit.",
         "notKept": "Z tohoto kroku není na tomto počítači nic uloženo",
         "reading": "Načítání z tohoto počítače"
       },

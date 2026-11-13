@@ -1842,6 +1842,31 @@ describe("Codex items as chat parts", () => {
     ).toMatchObject([
       { type: "text.completed", text: "The lease caps arrears." },
     ]);
+    // What a subagent was told, wrote and reported, and the image a step
+    // viewed, are held for this computer alone: on the step's result, which
+    // the sidecar keeps, never in what the turn reports.
+    const heldOf = (id: string) =>
+      events.flatMap((event) =>
+        event.type === "tool.completed" && event.toolCall.id === id
+          ? [event.result.localOutput]
+          : [],
+      );
+    expect(heldOf("call-spawn")).toEqual([
+      {
+        type: "conversation",
+        entries: [
+          { role: "prompt", text: FAKE_PRIVATE_TEXT.subagentPrompt },
+          { role: "report", text: FAKE_PRIVATE_TEXT.subagentReport },
+          { role: "message", text: FAKE_PRIVATE_TEXT.subagentText },
+        ],
+        droppedBytes: 0,
+      },
+    ]);
+    expect(heldOf("sub-image")).toEqual([
+      { type: "image", path: "/workspace/scans/Lease Page 1.png" },
+    ]);
+    // A spawn that failed started no subagent: it holds no conversation.
+    expect(heldOf("call-spawn-failed")).toEqual([undefined]);
     const stored = storedMessages(await localChunks(events));
     const storedText = JSON.stringify(stored);
     for (const text of [

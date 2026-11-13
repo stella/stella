@@ -7,6 +7,7 @@ import { assertProperty } from "@stll/property-testing";
 import {
   localRunProposedPlan,
   type LocalRunStepCall,
+  localRunStepOutputKind,
   type LocalRunStepStanding,
   localRunSubagentGroups,
   type LocalRunSubagentStatus,
@@ -197,6 +198,36 @@ const groupsOf = (calls: readonly LocalRunStepCall[]) => {
     rowIn: Object.fromEntries(rowIn),
   };
 };
+
+test("a step names what it kept on the computer for the member to open, by what the step is", () => {
+  const kind = (name: string, input: unknown) =>
+    localRunStepOutputKind({ name, input });
+  expect(kind("command_execution", { command: "ls" })).toBe("command");
+  expect(kind("file_change", { changes: [] })).toBe("diff");
+  expect(
+    kind("harness_native_tool", {
+      tool: "Agent",
+      detail: { kind: "subagent", description: "Check the lease" },
+    }),
+  ).toBe("conversation");
+  expect(
+    kind("harness_native_tool", {
+      tool: "Read",
+      detail: { kind: "image", path: "scans/page-1.png" },
+    }),
+  ).toBe("image");
+  // A file that was read, a search and any other call keep nothing to open.
+  expect(
+    kind("harness_native_tool", {
+      tool: "Read",
+      detail: { kind: "read", path: "drafts/lease.md" },
+    }),
+  ).toBeNull();
+  expect(kind("harness_web_search", { query: "lease" })).toBeNull();
+  expect(kind("mcp__docs__search", { query: "lease" })).toBeNull();
+  // An input that is not the step's own names nothing.
+  expect(kind("command_execution", "ls")).toBeNull();
+});
 
 describe("a subagent a coding agent started on the member's computer", () => {
   test("its step names the task and the kind of agent, and an image its file", () => {

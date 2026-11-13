@@ -131,6 +131,10 @@ import {
 } from "@/components/chat/context-notice";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
+import {
+  LocalRunStepOutputDetails,
+  localRunStepOutputKindOf,
+} from "@/components/chat/local-run-step-output";
 import { LocalRunSubagentGroup } from "@/components/chat/local-run-subagent-card";
 import { localRunSubagentGroups } from "@/components/chat/local-run-tool.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
@@ -2438,6 +2442,14 @@ const AssistantMessageParts = ({
           );
           return (
             <LocalRunSubagentGroup
+              conversation={
+                localRunStepOutputKindOf(subagent.part) === null ? null : (
+                  <LocalRunStepOutputDetails
+                    activeOrganizationId={activeOrganizationId}
+                    part={subagent.part}
+                  />
+                )
+              }
               key={subagent.part.id}
               part={subagent.part}
               rows={steps

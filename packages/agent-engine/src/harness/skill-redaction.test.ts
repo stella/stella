@@ -257,6 +257,50 @@ describe("what a turn reports about its skill folders", () => {
     expect(result.localOutput).toBeUndefined();
   });
 
+  test("a subagent's conversation or a viewed image that names a skill is not kept, and any other is", async () => {
+    const subagent: HarnessToolCall = {
+      id: "call-agent",
+      name: "harness_native_tool",
+      input: { tool: "Agent", detail: { kind: "subagent", description: "" } },
+    };
+    const image: HarnessToolCall = {
+      id: "call-image",
+      name: "harness_native_tool",
+      input: { tool: "Read", detail: { kind: "image", path: "scan.png" } },
+    };
+    const done = { content: STATUS_ONLY, status: "succeeded" } as const;
+    const conversation = (report: string) =>
+      ({
+        type: "conversation",
+        entries: [
+          { role: "prompt", text: "Check the lease." },
+          { role: "report", text: report },
+        ],
+        droppedBytes: 0,
+      }) as const;
+    const kept = async (
+      toolCall: HarnessToolCall,
+      localOutput: NonNullable<HarnessToolResult["localOutput"]>,
+    ) =>
+      lastCompleted(
+        await through([completed(toolCall, { ...done, localOutput })]),
+      ).result.localOutput;
+    const plain = conversation("Clause 4 caps arrears.");
+    expect(await kept(subagent, plain)).toEqual(plain);
+    // What it quoted of the skill is not kept, not even on this computer.
+    expect(
+      await kept(
+        subagent,
+        conversation(`${FOLDER}/references/commentary.md: a licensed clause`),
+      ),
+    ).toBeUndefined();
+    const scan = { type: "image", path: "/srv/member/scan.png" } as const;
+    expect(await kept(image, scan)).toEqual(scan);
+    expect(
+      await kept(image, { type: "image", path: `${FOLDER}/assets/figure.png` }),
+    ).toBeUndefined();
+  });
+
   test("a call known to have touched a skill when it started stays status only", async () => {
     const started: HarnessToolCall = {
       id: "call-1",

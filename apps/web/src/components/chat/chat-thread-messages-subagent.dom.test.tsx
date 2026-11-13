@@ -11,6 +11,10 @@ import type {
   ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import type {
+  LocalRunStepImageView,
+  LocalRunStepOutputView,
+} from "@/features/chat/local-run-step-output.logic";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 
@@ -29,6 +33,9 @@ const { default: messages } = await import("@/i18n/langs/en.json");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
+const { chatKeys } = await import("@/features/chat/chat-query-contract");
 const { ChatApprovalContext } =
   await import("@/components/chat/chat-approval-context");
 const { ChatMattersContext } =
@@ -156,24 +163,28 @@ const turnTree = (
           <ChatMattersContext
             value={{ createDocumentMattersView: { type: "empty" } }}
           >
-            <ChatApprovalContext value={testChatApprovalContextValue}>
-              <ChatEditorProvider>
-                <ChatThreadMessages
-                  activitySession={{
-                    reportedUnknownActivityTypes: new Set<string>(),
-                  }}
-                  approvalPendingMessageId={null}
-                  messages={[turnOf(parts)]}
-                  onAskUserSubmit={() => {}}
-                  onCreateDocumentResolve={() => {}}
-                  onOpenCreatedDocument={() => {}}
-                  showToolCalls
-                  streamdownComponents={{
-                    a: ({ children, ...props }) => <a {...props}>{children}</a>,
-                  }}
-                />
-              </ChatEditorProvider>
-            </ChatApprovalContext>
+            <AuthenticatedUserProvider user={MEMBER}>
+              <ChatApprovalContext value={testChatApprovalContextValue}>
+                <ChatEditorProvider>
+                  <ChatThreadMessages
+                    activitySession={{
+                      reportedUnknownActivityTypes: new Set<string>(),
+                    }}
+                    approvalPendingMessageId={null}
+                    messages={[turnOf(parts)]}
+                    onAskUserSubmit={() => {}}
+                    onCreateDocumentResolve={() => {}}
+                    onOpenCreatedDocument={() => {}}
+                    showToolCalls
+                    streamdownComponents={{
+                      a: ({ children, ...props }) => (
+                        <a {...props}>{children}</a>
+                      ),
+                    }}
+                  />
+                </ChatEditorProvider>
+              </ChatApprovalContext>
+            </AuthenticatedUserProvider>
           </ChatMattersContext>
         </FormattingProvider>
       </IntlProvider>
@@ -181,8 +192,51 @@ const turnTree = (
   </ChatThreadTestRouter>
 );
 
-const renderTurn = (parts: readonly object[]) => {
+/** The member whose computer ran the turn. */
+const MEMBER = {
+  activeOrganizationId: testChatApprovalContextValue.activeOrganizationId,
+  id: "user-fixture",
+  email: "member@example.test",
+  image: null,
+  name: "Fixture member",
+  preferredName: null,
+  timezoneId: "UTC",
+  wordEditShortcut: null,
+};
+
+const keptKey = (callId: string) => ({
+  activeOrganizationId: MEMBER.activeOrganizationId,
+  userId: MEMBER.id,
+  callId,
+});
+
+type RenderOptions = {
+  /**
+   * What the computer answers for the subagent's conversation, as a read of
+   * it left the cache; nothing kept unless a test says otherwise. A read
+   * the desktop answered holds, so no test reaches for the computer.
+   */
+  conversation?: LocalRunStepOutputView;
+  /** What the computer answers for the viewed image. */
+  image?: LocalRunStepImageView;
+};
+
+const renderTurn = (
+  parts: readonly object[],
+  {
+    conversation = { status: "not-kept" },
+    image: viewed = { status: "not-kept" },
+  }: RenderOptions = {},
+) => {
   const queryClient = new QueryClient();
+  queryClient.setQueryData(
+    chatKeys.localRunStepOutput(keptKey(SUBAGENT)),
+    conversation,
+  );
+  queryClient.setQueryData(
+    chatKeys.localRunStepImage(keptKey("run_call-image")),
+    viewed,
+  );
   // A connected server's tool decorates its row from the connector list.
   queryClient.setQueryData(
     mcpConnectorsOptions(testChatApprovalContextValue.activeOrganizationId)
@@ -333,5 +387,114 @@ test("a subagent its turn cut off reads as stopped, and a step without its subag
   expect(inGroup.getByText(messages.chat.stopped)).toBeDefined();
   expect(inGroup.queryByText("ls notes")).toBeNull();
   expect(view.getByText("ls notes")).toBeDefined();
+  queryClient.clear();
+});
+
+const conversationOf = (...entries: (readonly [string, string])[]) => {
+  const text = entries
+    .map(([role, said]) => `${JSON.stringify({ role, text: said })}\n`)
+    .join("");
+  const bytes = new TextEncoder().encode(text).length;
+  return {
+    status: "shown",
+    text,
+    keptBytes: bytes,
+    totalBytes: bytes,
+  } as const;
+};
+
+test("opening a finished subagent shows what it was told, wrote and reported, read from the computer", async () => {
+  const { view, queryClient } = renderTurn([subagent(done), read], {
+    conversation: conversationOf(
+      ["prompt", "List every clause on arrears."],
+      // Kept ahead of what it wrote, shown after it.
+      ["report", "Clause 4 caps arrears."],
+      ["message", "<b>Reading</b> the lease."],
+    ),
+  });
+  await view.findByText("Check the lease");
+  const inGroup = within(groupOf(view.container));
+  // Folded, the group has read nothing from the computer.
+  expect(inGroup.queryByText("List every clause on arrears.")).toBeNull();
+  await act(async () => {
+    fireEvent.click(inGroup.getByRole("button", { expanded: false }));
+  });
+  const conversation = within(
+    inGroup.getByRole("region", {
+      name: messages.chat.toolCall.localOutput.conversation,
+    }),
+  );
+  expect(
+    conversation.getAllByRole("listitem").map((item) => item.textContent),
+  ).toEqual([
+    `${messages.chat.toolCall.localOutput.conversationPrompt}List every clause on arrears.`,
+    // A model wrote it: shown as the text it is, never as markup.
+    "<b>Reading</b> the lease.",
+    `${messages.chat.toolCall.localOutput.conversationReport}Clause 4 caps arrears.`,
+  ]);
+  expect(groupOf(view.container).querySelector("b")).toBeNull();
+  // The steps it took still show beside its conversation.
+  expect(inGroup.getByText("drafts/lease.md")).toBeDefined();
+  queryClient.clear();
+});
+
+test("a subagent with nothing kept on this computer says so, and one that took no steps still opens", async () => {
+  const { view, queryClient } = renderTurn([subagent(done)]);
+  await view.findByText("Check the lease");
+  const inGroup = within(groupOf(view.container));
+  await act(async () => {
+    fireEvent.click(inGroup.getByRole("button", { expanded: false }));
+  });
+  expect(
+    inGroup.getByText(messages.chat.toolCall.localOutput.notKept),
+  ).toBeDefined();
+  queryClient.clear();
+});
+
+test("a subagent still at work has no conversation to open yet", async () => {
+  const { view, queryClient } = renderTurn([
+    subagent({ state: "input-complete" }),
+  ]);
+  await view.findByText("Check the lease");
+  // No steps and no settled call: the row is only its header.
+  expect(within(groupOf(view.container)).queryAllByRole("button")).toEqual([]);
+  queryClient.clear();
+});
+
+const PNG_SRC = "data:image/png;base64,iVBORw0KGgo=";
+
+const openImageRow = async (view: ReturnType<typeof render>) => {
+  const row =
+    view.getByText("scans/page-1.png").closest("button") ??
+    panic("the image step has no row to open");
+  await act(async () => {
+    fireEvent.click(row);
+  });
+};
+
+test("opening an image step shows the image read from the computer, named by its file", async () => {
+  const { view, queryClient } = renderTurn([image], {
+    image: { status: "shown", type: "image/png", src: PNG_SRC },
+  });
+  await view.findByText("scans/page-1.png");
+  expect(view.queryByRole("img", { name: "scans/page-1.png" })).toBeNull();
+  await openImageRow(view);
+  expect(
+    view.getByRole("img", { name: "scans/page-1.png" }).getAttribute("src"),
+  ).toBe(PNG_SRC);
+  queryClient.clear();
+});
+
+test("an image the computer does not keep says why instead of showing one", async () => {
+  const { view, queryClient } = renderTurn([image], {
+    image: { status: "too-large", totalBytes: 3 * 1024 * 1024 },
+  });
+  await view.findByText("scans/page-1.png");
+  await openImageRow(view);
+  expect(view.queryByRole("img", { name: "scans/page-1.png" })).toBeNull();
+  // Both sizes are named: the image's, and the most the computer keeps.
+  expect(
+    view.getByText(/^This image is \S+ MB\. Images over \S+ MB are not kept/u),
+  ).toBeDefined();
   queryClient.clear();
 });

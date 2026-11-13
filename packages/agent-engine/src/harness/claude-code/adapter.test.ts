@@ -771,6 +771,26 @@ describe("Claude Code adapter over stream-json stdio", () => {
       type: "turn.completed",
       usage: { context: { usedTokens: 4 + 600 + 1000 + 5 } },
     });
+    // What the subagent was told, wrote and reported, and the image a step
+    // viewed, are held for this computer alone: on the step's result, which
+    // the sidecar keeps, never in what the turn reports.
+    const heldOf = (id: string) =>
+      toolCompletions(events).find(({ toolCall }) => toolCall.id === id)?.result
+        .localOutput;
+    expect(heldOf(FAKE_SUBAGENT_CALL)).toEqual({
+      type: "conversation",
+      entries: [
+        { role: "prompt", text: FAKE_PRIVATE_TEXT.subagentPrompt },
+        { role: "report", text: FAKE_PRIVATE_TEXT.subagentReport },
+        { role: "message", text: FAKE_PRIVATE_TEXT.subagentText },
+      ],
+      droppedBytes: 0,
+    });
+    expect(heldOf("call-sub-image")).toEqual({
+      type: "image",
+      path: "/workspace/scans/Lease Page 1.PNG",
+    });
+    expect(heldOf("call-sub-read")).toBeUndefined();
     const stored = await storedMessages(events, "claude-code");
     const storedText = JSON.stringify(stored);
     for (const text of [

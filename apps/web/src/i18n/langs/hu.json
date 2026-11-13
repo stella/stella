@@ -2272,11 +2272,15 @@
       "input": "Bemenet",
       "interrupted": "Befejezés előtt megszakadt",
       "localOutput": {
+        "conversation": "Az alügynök beszélgetése",
+        "conversationPrompt": "Feladat",
+        "conversationReport": "Jelentés",
         "cut": "Az első {kept} látható, összesen {total}",
         "diff": "Fájlmódosítások",
         "elsewhere": "Nyissa meg azon a számítógépen, amelyen futott",
         "empty": "Nincs kimenet",
         "failed": "A stella asztali alkalmazás ezen a számítógépen nem tudta megjeleníteni.",
+        "imageTooLarge": "Ez a kép {total} méretű. A {kept} méretnél nagyobb képeket ez a számítógép nem őrzi meg, ezért itt nem jeleníthető meg.",
         "notKept": "Ebből a lépésből semmi sincs megőrizve ezen a számítógépen",
         "reading": "Olvasás erről a számítógépről"
       },
