@@ -158,8 +158,8 @@ export const createActionApprovals = () => {
       })();
       const ended = async () => {
         // Observed here so a failure is never unhandled while the queue
-        // drains; the stream awaits `moved` again to end with it.
-        await Result.tryPromise({
+        // drains.
+        const outcome = await Result.tryPromise({
           try: async () => {
             await moved;
           },
@@ -167,12 +167,16 @@ export const createActionApprovals = () => {
         });
         declineAll();
         side.close();
+        return outcome;
       };
       const closed = ended();
       try {
         yield* side.items;
-        await closed;
-        await moved;
+        const harnessEnd = await closed;
+        if (Result.isError(harnessEnd)) {
+          // Awaiting the rejected promise ends the stream with its failure.
+          await moved;
+        }
       } finally {
         declineAll();
         side.close();
