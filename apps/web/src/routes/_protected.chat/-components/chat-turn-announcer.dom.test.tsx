@@ -50,12 +50,18 @@ const approval = (id: string, call = "first"): ChatUIMessage => ({
 
 const DONE = { type: "completed" } as const;
 
-const view = (thread: ChatUIMessage[], isGenerating = false) => (
+/** `turnsStarted`: the turns the page has started on the thread by now. */
+const view = (
+  thread: ChatUIMessage[],
+  isGenerating = false,
+  turnsStarted = 0,
+) => (
   <IntlProvider locale="en" messages={messages} timeZone="UTC">
     <ChatTurnAnnouncer
       hasError={false}
       isGenerating={isGenerating}
       messages={thread}
+      turnsStarted={turnsStarted}
     />
   </IntlProvider>
 );
@@ -81,6 +87,31 @@ test("a thread that opens on a finished turn says nothing until its next turn en
 
   rerender(view([...asked, answer("a2", DONE)]));
   expect(region(container)).toBe(messages.chat.turnStatus.answerReady);
+});
+
+test("a retry that ends on the answer the thread opened on is said", () => {
+  const opened = [question("q1"), answer("a1", DONE)];
+  const { container, rerender } = render(view(opened));
+  expect(region(container)).toBe("");
+
+  // The retry drops the answer and runs; it is the page's first turn here.
+  rerender(view([question("q1")], true, 1));
+  expect(region(container)).toBe("");
+
+  // It ends on an answer of the same id and outcome as the one opened on.
+  rerender(view(opened, false, 1));
+  expect(region(container)).toBe(messages.chat.turnStatus.answerReady);
+});
+
+test("the answer a thread opened on stays unsaid while the page starts no turn", () => {
+  const opened = [question("q1"), answer("a1", DONE)];
+  const { container, rerender } = render(view(opened));
+
+  // A turn the page joined, not one it started, that ends on the same
+  // answer: nothing tells it from what the thread opened on.
+  rerender(view([question("q1")], true));
+  rerender(view([question("q1"), answer("a1", DONE)]));
+  expect(region(container)).toBe("");
 });
 
 test("a stopped turn and a failed one are each said once they end", () => {

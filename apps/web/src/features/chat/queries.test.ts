@@ -1949,6 +1949,8 @@ describe("chat runtime", () => {
       reloadThread: () => {},
     });
 
+    expect(runtime.getSnapshot().turnsStarted).toBe(0);
+
     await runtime.reload();
 
     expect(requests).toHaveLength(1);
@@ -1958,6 +1960,8 @@ describe("chat runtime", () => {
         turnIntent: CHAT_TURN_INTENT.regenerate,
       },
     });
+    // A retry is a turn the page started, which the turn announcer reads.
+    expect(runtime.getSnapshot().turnsStarted).toBe(1);
   });
 
   test("streams reasoning-first chunks through tanstack ChatClient", async () => {
