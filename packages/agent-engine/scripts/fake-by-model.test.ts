@@ -53,7 +53,13 @@ const codex = () => {
     clientVersion: "0.0.1",
     gracePeriodMs: 1000,
     requestTimeoutMs: 10_000,
-    capacityRetry: { maxAttempts: 1, baseDelayMs: 5, maxDelayMs: 5 },
+    // One attempt: a capacity failure is never retried, so nothing sleeps.
+    capacityRetry: {
+      maxAttempts: 1,
+      baseDelayMs: 5,
+      maxDelayMs: 5,
+      sleep: async () => {},
+    },
     onBackgroundError: (error) => {
       throw error;
     },
@@ -66,6 +72,7 @@ const turnInput = (workspaceDir: string, model: string): HarnessTurnInput => ({
   threadId: "stella-thread-1",
   workspaceDir,
   model,
+  reasoningEffort: null,
   instructions: "Use the stella MCP server.",
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
@@ -79,6 +86,7 @@ const turnInput = (workspaceDir: string, model: string): HarnessTurnInput => ({
   continuation: { type: "fresh" },
   cacheDir: path.join(tmpdir(), "stella-agent-package-cache"),
   skillFolders: [],
+  networkHosts: [],
   toolPath: [],
 });
 
