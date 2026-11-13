@@ -119,6 +119,7 @@ import type { DecisionPassageStamper } from "@/api/handlers/chat/decision-passag
 import {
   LOCAL_RUN_OUTPUTS_INSTRUCTIONS,
   type LocalChatRun,
+  reportsSessionNotResumed,
 } from "@/api/handlers/chat/local-run-chunks";
 import {
   createLoopRecoverySystemPrompt,
@@ -211,8 +212,11 @@ import {
   type ChatToolMap,
   chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
-import { createContextNoticeStamp } from "@/api/lib/chat/context-notice";
-import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
+import {
+  type ChatContextNotice,
+  createContextNoticeStamp,
+  SESSION_NOT_RESUMED_NOTICE,
+} from "@/api/lib/chat/context-notice";
 import {
   guardMcpToolSource,
   guardModelMessages,
@@ -888,7 +892,7 @@ export const streamChat = async ({
         : AbortSignal.any([deadlineSignal, run.control.admissionSignal]),
     devModelId: turnModelSelection.modelId,
     onAttemptStarted: contextNotice.beginAttempt,
-    onHistoryTrimmed: contextNotice.record,
+    onContextNotice: contextNotice.record,
     onModelDispatched: (model) => {
       servedTurnModel = {
         provider: model.provider,
@@ -1560,7 +1564,8 @@ export type GuardedChatSurfaces = {
 type RunChatAttemptsProps = {
   /** A model attempt is about to run; only the last one answers. */
   onAttemptStarted: () => void;
-  onHistoryTrimmed: (notice: ChatContextNotice) => void;
+  /** What the answer's context left out, as the attempt learns it. */
+  onContextNotice: (notice: ChatContextNotice) => void;
   onModelDispatched: (model: ResolvedTanStackTextModel) => void;
   abortController: AbortController;
   abortSignal: AbortSignal;
@@ -1598,7 +1603,7 @@ const runChatAttempts = async function* ({
   abortSignal,
   devModelId,
   onAttemptStarted,
-  onHistoryTrimmed,
+  onContextNotice,
   onModelDispatched,
   externalMcpToolSource,
   fallbackModel,
@@ -1629,7 +1634,7 @@ const runChatAttempts = async function* ({
     // The harness on the member's computer answers the turn with the prompt
     // and history the model would have received. No model is dispatched, so
     // nothing falls back to one, and its chunks enter the same pipeline.
-    yield* localRun.stream({
+    for await (const chunk of localRun.stream({
       chatRunId: runId,
       chatTurnId,
       messages: convertMessagesToModelMessages([...surfaces.messages]),
@@ -1638,7 +1643,12 @@ const runChatAttempts = async function* ({
       // The run's own cut, as the provider gets it: a stop on any task, the
       // deadline, a lost owner or admission, a failed production.
       abortSignal: abortController.signal,
-    });
+    })) {
+      if (reportsSessionNotResumed(chunk)) {
+        onContextNotice(SESSION_NOT_RESUMED_NOTICE);
+      }
+      yield chunk;
+    }
     return;
   }
   const primaryState = createChatAttemptState();
@@ -1652,7 +1662,7 @@ const runChatAttempts = async function* ({
     abortSignal,
     compactionFeature: "chat.step_compaction",
     externalMcpToolSource,
-    onHistoryTrimmed,
+    onHistoryTrimmed: onContextNotice,
     feature: "chat.stream",
     model: primaryModel,
     modelId: devModelId,
@@ -1708,7 +1718,7 @@ const runChatAttempts = async function* ({
     abortSignal,
     compactionFeature: "chat.step_compaction_fallback",
     externalMcpToolSource,
-    onHistoryTrimmed,
+    onHistoryTrimmed: onContextNotice,
     feature: "chat.stream_fallback",
     model: fallbackModel,
     modelId: undefined,

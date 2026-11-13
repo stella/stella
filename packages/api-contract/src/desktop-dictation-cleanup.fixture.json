@@ -1,0 +1,12 @@
+{
+  "segments": [
+    { "type": "lineBreak" },
+    { "type": "text", "text": "a tedy", "bold": false },
+    { "type": "lineBreak" },
+    { "type": "text", "text": "se rozhodl odejít za ", "bold": false },
+    { "type": "text", "text": "24", "bold": true },
+    { "type": "text", "text": " dní.", "bold": false },
+    { "type": "paragraphBreak" },
+    { "type": "text", "text": "Hotovo?", "bold": false }
+  ]
+}

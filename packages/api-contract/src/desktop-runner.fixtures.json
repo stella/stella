@@ -117,7 +117,12 @@
       "at_capacity",
       "run_too_large",
       "unknown_run",
-      "folder_busy"
+      "folder_busy",
+      "folder_unlinked",
+      "folder_offline",
+      "folder_moved",
+      "folder_protected",
+      "folder_unreadable"
     ],
     "approvalKinds": ["command", "file_change", "mcp_tool", "tool"],
     "approvalDecisions": ["approve", "approve_for_session", "deny"],
@@ -131,7 +136,7 @@
     ],
     "networkPolicies": ["open"],
     "fsPolicies": ["workspace"],
-    "approvalModes": ["ask", "auto", "full_auto"],
+    "approvalModes": ["plan", "ask", "auto", "full_auto"],
     "reasoningEfforts": [
       "none",
       "minimal",
@@ -149,7 +154,9 @@
       "run.event",
       "run.approval_request",
       "run.finished",
-      "folder.restored"
+      "folder.restored",
+      "linked_folders.status",
+      "run.background"
     ],
     "serverMessageTypes": [
       "welcome",
@@ -171,6 +178,13 @@
       "maxAnswerLength": 16384,
       "maxQuestionIdLength": 256
     },
+    "linkedFolderStates": [
+      "available",
+      "offline",
+      "moved",
+      "protected",
+      "unreadable"
+    ],
     "folderRestoreOutcomes": [
       "restored",
       "no_checkpoint",
@@ -183,6 +197,18 @@
     "desktop": [
       {
         "type": "hello",
+        "linkedFolders": [
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
+            "name": "Smlouva o dílo",
+            "state": "available"
+          },
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d2",
+            "name": "Archive",
+            "state": "offline"
+          }
+        ],
         "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.60",
@@ -197,6 +223,7 @@
               {
                 "id": "model-large",
                 "label": "Large model",
+                "isDefault": true,
                 "reasoningEfforts": ["low", "medium", "high", "xhigh"]
               },
               {
@@ -231,6 +258,7 @@
       },
       {
         "type": "hello",
+        "linkedFolders": [],
         "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.61-beta.1",
@@ -254,11 +282,32 @@
       },
       {
         "type": "hello",
+        "linkedFolders": [],
         "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.60",
         "harnesses": [],
         "activeRuns": []
+      },
+      {
+        "type": "linked_folders.status",
+        "folders": [
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
+            "name": "Smlouva o dílo",
+            "state": "moved"
+          },
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d2",
+            "name": "Archive",
+            "state": "protected"
+          },
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d3",
+            "name": "Exhibits",
+            "state": "unreadable"
+          }
+        ]
       },
       {
         "type": "harness.status",
@@ -314,6 +363,31 @@
         "type": "run.rejected",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "reason": "folder_busy"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_unlinked"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_offline"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_moved"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_protected"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_unreadable"
       },
       {
         "type": "run.rejected",
@@ -498,6 +572,16 @@
         "type": "folder.restored",
         "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
         "outcome": "failed"
+      },
+      {
+        "type": "run.background",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "count": 2
+      },
+      {
+        "type": "run.background",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "count": 0
       }
     ],
     "server": [
@@ -531,8 +615,10 @@
       },
       {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+        "linkedFolderId": null,
         "attachments": [
           {
             "path": "attachments/0192f3a0-6b1c-7d2e-8f30-0000000000f1/smlouva o dílo.pdf",
@@ -584,8 +670,10 @@
       },
       {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+        "linkedFolderId": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
         "attachments": [],
         "harness": "claude-code",
         "harnessVersion": "2.0.30",
@@ -607,7 +695,7 @@
         "policy": {
           "network": "open",
           "fs": "workspace",
-          "approvals": "full_auto"
+          "approvals": "plan"
         },
         "mcp": {
           "serverName": "stella",
@@ -676,6 +764,7 @@
         "type": "folder.restore",
         "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+        "linkedFolderId": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
       }
     ]
@@ -725,6 +814,7 @@
       },
       "parsed": {
         "type": "hello",
+        "linkedFolders": [],
         "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.60",
@@ -805,8 +895,10 @@
       "direction": "server",
       "input": {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+        "linkedFolderId": null,
         "attachments": [],
         "harness": "codex",
         "harnessVersion": "0.48.0",
@@ -855,8 +947,10 @@
       },
       "parsed": {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+        "linkedFolderId": null,
         "attachments": [],
         "harness": "codex",
         "harnessVersion": "0.48.0",
@@ -1129,6 +1223,23 @@
           "type": "folder.restored",
           "outcome": "restored"
         }
+      },
+      {
+        "name": "negative background count",
+        "reason": "invalid",
+        "message": {
+          "type": "run.background",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "count": -1
+        }
+      },
+      {
+        "name": "background count without its run",
+        "reason": "invalid",
+        "message": {
+          "type": "run.background",
+          "count": 1
+        }
       }
     ],
     "server": [
@@ -1193,8 +1304,10 @@
         "name": "restricted network policy",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
           "attachments": [],
           "harness": "codex",
           "harnessVersion": "0.48.0",
@@ -1244,8 +1357,10 @@
         "name": "home filesystem policy",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
           "attachments": [],
           "harness": "codex",
           "harnessVersion": "0.48.0",
@@ -1295,8 +1410,10 @@
         "name": "unknown harness",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
           "attachments": [],
           "harness": "cursor",
           "harnessVersion": "0.48.0",
@@ -1346,8 +1463,10 @@
         "name": "run.start without an MCP binding",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
           "attachments": [],
           "harness": "codex",
           "harnessVersion": "0.48.0",
@@ -1414,8 +1533,10 @@
         "name": "unknown approval mode",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
           "attachments": [],
           "harness": "codex",
           "harnessVersion": "0.48.0",
@@ -1465,6 +1586,7 @@
         "name": "unknown reasoning effort",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "attachments": [],
@@ -1516,8 +1638,10 @@
         "name": "run.start without an approval mode",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
           "attachments": [],
           "harness": "codex",
           "harnessVersion": "0.48.0",
@@ -1563,11 +1687,22 @@
         }
       },
       {
+        "name": "restore of a linked folder that is not a UUID",
+        "message": {
+          "type": "folder.restore",
+          "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+          "linkedFolderId": "../cases/smith",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
+        }
+      },
+      {
         "name": "restore of a folder that is not a UUID",
         "message": {
           "type": "folder.restore",
           "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
           "folderId": "../outside",
+          "linkedFolderId": null,
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
         }
       }
