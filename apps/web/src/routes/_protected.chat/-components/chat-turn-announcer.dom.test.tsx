@@ -114,6 +114,15 @@ test("the answer a thread opened on stays unsaid while the page starts no turn",
   expect(region(container)).toBe("");
 });
 
+test("a thread opened after the page started turns on it is as quiet as any other", () => {
+  const opened = [question("q1"), answer("a1", DONE)];
+  const { container, rerender } = render(view(opened, false, 2));
+  expect(region(container)).toBe("");
+
+  rerender(view(opened, false, 2));
+  expect(region(container)).toBe("");
+});
+
 test("a stopped turn and a failed one are each said once they end", () => {
   const { container, rerender } = render(view([question("q1")], true));
   rerender(

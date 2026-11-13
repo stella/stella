@@ -186,7 +186,8 @@ type ChatRuntimeSnapshot = {
   /** How many turns this page has started on the thread: one for each new
    *  message and each retry, never for a continuation of a turn (an
    *  approval, a tool result) or a turn it joined. It tells an attempt from
-   *  the one before it when both leave the thread on the same message. */
+   *  the one before it when both leave the thread on the same message, and
+   *  never goes back while the page keeps a runtime for the thread. */
   turnsStarted: number;
 };
 
@@ -334,6 +335,9 @@ type CreateChatRuntimeProps = {
   /** When subscribers hear about messages that changed while a response
    *  streams. Defaults to `STREAM_EMIT_INTERVAL_MS` later. */
   scheduleEmit?: ChatEmitScheduler | undefined;
+  /** The turns the page started on the thread in the runtimes this one
+   *  replaces: replacing a runtime is not a turn, so the count goes on. */
+  turnsStarted?: number | undefined;
 };
 
 type ActiveToolResultOperation = {
@@ -464,6 +468,7 @@ export const createChatRuntime = ({
   onFinish,
   reloadThread,
   scheduleEmit = scheduleStreamEmit,
+  turnsStarted = 0,
 }: CreateChatRuntimeProps): ChatRuntime => {
   const observeTurnTimings = createChatTurnTimingObserver();
   observeTurnTimings(initialMessages, performance.now());
@@ -485,7 +490,7 @@ export const createChatRuntime = ({
     turnAbandoned: false,
     computerWait: null,
     turnSentAt: null,
-    turnsStarted: 0,
+    turnsStarted,
   };
   /** The server turn the latest request runs; null from a new message until
    *  the server names its turn. */

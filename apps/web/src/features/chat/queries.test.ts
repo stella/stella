@@ -3709,6 +3709,10 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
     expect(afterRefetch).not.toBe(handoff);
+    // Replacing the runtime is not a turn: the page's count of the turns it
+    // started on the thread goes on, so the turn announcer hears no change.
+    expect(handoff.getSnapshot().turnsStarted).toBe(1);
+    expect(afterRefetch.getSnapshot().turnsStarted).toBe(1);
   });
 
   test("replaces an errored runtime with a stranded tool part", async () => {
