@@ -26,6 +26,7 @@ import {
 import { unsupportedItem } from "../tool-parts";
 import {
   type Detached,
+  type HarnessTurnBackground,
   HarnessTurnLifecycle,
   respondError,
   settlesWithin,
@@ -284,6 +285,8 @@ type ClaudeCodeTurnSessionOptions = {
    * about like any other action.
    */
   sandboxNetworkHosts: ReadonlySet<string>;
+  /** The process's background work at the turn's end. */
+  background: HarnessTurnBackground<ClaudeCliClient>;
 };
 
 /**
@@ -320,11 +323,13 @@ export class ClaudeCodeTurnSession {
     detached,
     stellaServer,
     sandboxNetworkHosts,
+    background,
   }: ClaudeCodeTurnSessionOptions) {
     this.lifecycle = new HarnessTurnLifecycle({
       gracePeriodMs,
       detached,
       name: "claude-turn",
+      background,
     });
     this.stellaServer = stellaServer;
     this.sandboxNetworkHosts = sandboxNetworkHosts;

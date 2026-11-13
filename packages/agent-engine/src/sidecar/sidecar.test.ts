@@ -920,6 +920,98 @@ describe("harness holder over its socket", () => {
     expect(client.messages.at(-1)).toMatchObject({ type: "run.finished" });
   });
 
+  test("keeps a completed turn's process for its background work, and the chat's next run continues in it", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const first = runStart(client, holder, "background_terminal");
+    expect(await client.waitFor(is("run.finished", first))).toMatchObject({
+      outcome: "completed",
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    // Reported ahead of the run's end, so the chat never misses it.
+    expect(
+      client.messages.findIndex(
+        (message) => message.type === "background.tasks",
+      ),
+    ).toBeLessThan(
+      client.messages.findIndex((message) => message.type === "run.finished"),
+    );
+    const second = runStart(client, holder, "background_terminal", {
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    expect(await client.waitFor(is("run.finished", second))).toMatchObject({
+      outcome: "completed",
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    expect(
+      client.messages.filter((message) => message.type === "background.tasks"),
+    ).toEqual([
+      { type: "background.tasks", runId: first, count: 1 },
+      // The next run took the process.
+      { type: "background.tasks", runId: first, count: 0 },
+    ]);
+    expect(holder.startups()).toHaveLength(1);
+    const methods = holder.received().map(({ method }) => method);
+    expect(methods.filter((method) => method === "turn/start")).toHaveLength(2);
+    expect(methods).not.toContain("thread/resume");
+  });
+
+  test("a stop after the turn completed keeps nothing running", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "background_terminal_late_list");
+    // The turn's last chunk is out; its process is not kept yet.
+    await client.waitFor(
+      (message): message is Extract<SidecarMessage, { type: "run.event" }> =>
+        message.type === "run.event" &&
+        message.runId === runId &&
+        message.chunk.type === "RUN_FINISHED",
+    );
+    client.send({ type: "run.interrupt", runId });
+    await client.waitFor(is("run.finished", runId));
+    expect(
+      client.messages.filter((message) => message.type === "background.tasks"),
+    ).toEqual([]);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
+  test("ends a chat's kept process before a run with another session starts", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const first = runStart(client, holder, "background_terminal");
+    await client.waitFor(is("run.finished", first));
+    const second = runStart(client, holder, "stella_tools");
+    expect(await client.waitFor(is("run.finished", second))).toMatchObject({
+      outcome: "completed",
+    });
+    expect(
+      client.messages.filter((message) => message.type === "background.tasks"),
+    ).toEqual([
+      { type: "background.tasks", runId: first, count: 1 },
+      { type: "background.tasks", runId: first, count: 0 },
+    ]);
+    expect(holder.startups()).toHaveLength(2);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
+  test("reports a kept process's background work again to a desktop that reconnects", async () => {
+    const holder = await spawnHolder();
+    const first = await desktop(holder);
+    const runId = runStart(first.client, holder, "background_terminal");
+    await first.client.waitFor(is("run.finished", runId));
+    first.client.close();
+    const { client } = await desktop(holder);
+    expect(await client.waitFor(is("background.tasks", runId))).toEqual({
+      type: "background.tasks",
+      runId,
+      count: 1,
+    });
+  });
+
   test("hands the harness the loopback proxy and a run secret, never the run token", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
