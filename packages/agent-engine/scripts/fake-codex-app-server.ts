@@ -196,7 +196,7 @@ export const FAKE_PRIVATE_TEXT = {
 } as const;
 
 /** The thread and turn the subagent of the subagent scenario works on. */
-export const FAKE_SUBAGENT_THREAD_ID = "thread-subagent";
+const FAKE_SUBAGENT_THREAD_ID = "thread-subagent";
 const FAKE_SUBAGENT_TURN_ID = "turn-subagent";
 
 /** An item of the subagent's own thread. */
