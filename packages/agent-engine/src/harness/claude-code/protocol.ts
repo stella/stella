@@ -349,7 +349,12 @@ export type ClaudeControlRequestSubtype = keyof typeof CLAUDE_CONTROL_REQUESTS;
 
 /** The control requests Stella sends the CLI. */
 export type ClaudeHostControlRequest =
-  "initialize" | "interrupt" | "get_usage" | "mcp_set_servers" | "stop_task";
+  | "initialize"
+  | "interrupt"
+  | "get_usage"
+  | "mcp_set_servers"
+  | "set_permission_mode"
+  | "stop_task";
 
 /**
  * The CLI's whole set of live background tasks, sent whenever it changes; it

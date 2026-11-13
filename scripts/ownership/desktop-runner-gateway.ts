@@ -37,6 +37,11 @@ export default {
           "Reads the member's computers and harness reports for the chat composer.",
       },
       {
+        path: "apps/api/src/handlers/chat/local-folder-approval.ts",
+        reason:
+          "Records the member's OK for turns to work in a folder linked on one of their computers.",
+      },
+      {
         path: "apps/api/src/handlers/chat/turns/local-files-undo.ts",
         reason:
           "Asks the turn's computer to undo the turn's file changes and reads where that undo stands.",

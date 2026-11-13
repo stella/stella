@@ -144,6 +144,8 @@ rebuild_paths=(
   "packages/api-contract/src/desktop-presence.ts"
   "packages/api-contract/src/desktop-runner-answers.ts"
   "packages/api-contract/src/desktop-runner.ts"
+  "packages/api-contract/src/display-name.ts"
+  "packages/api-contract/src/limits.ts"
   "packages/api-contract/src/mcp-chat-tool-policy.gen.ts"
   "packages/api-contract/src/mcp-tool-names.gen.ts"
   "packages/api-contract/src/user-file-url.ts"

@@ -83,6 +83,7 @@ const READINESS: ChatLocalRunReadiness = {
       desktopId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
       connected: true,
       lastSeenAt: "2026-11-03T10:00:00.000Z",
+      linkedFolders: [],
       harnesses: [
         {
           id: "codex",

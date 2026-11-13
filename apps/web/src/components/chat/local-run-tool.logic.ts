@@ -34,6 +34,7 @@ const DETAIL_TITLE_KEYS = {
   search: "chat.toolCall.searchFiles",
   fetch: "chat.tool.fetch_url",
   plan: "chat.toolCall.updatePlan",
+  proposed_plan: "chat.toolCall.proposedPlan",
 } as const satisfies Record<ChatLocalRunToolDetail["kind"], TranslationKey>;
 
 const text = (value: string): LocalRunToolSubtitle | null =>
@@ -64,6 +65,9 @@ const detailSubtitle = (
       return text(detail.url);
     case "plan":
       return text(detail.items.join(", "));
+    case "proposed_plan":
+      // The plan is read whole on its approval card, not in a row.
+      return null;
     default:
       detail satisfies never;
       return panic("Unhandled local run tool detail");
@@ -144,6 +148,27 @@ export const localRunStepOutputKind = (
     default:
       return null;
   }
+};
+
+/**
+ * The plan a coding agent proposed for the member to approve (markdown), or
+ * `null` when the call is not a proposed plan.
+ */
+export const localRunProposedPlan = ({
+  name,
+  input,
+}: {
+  name: string;
+  input: unknown;
+}): string | null => {
+  if (!isChatLocalRunToolName(name)) {
+    return null;
+  }
+  const call = parseChatLocalRunToolCall(name, input);
+  return call?.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
+    call.input.detail?.kind === "proposed_plan"
+    ? call.input.detail.text
+    : null;
 };
 
 /**

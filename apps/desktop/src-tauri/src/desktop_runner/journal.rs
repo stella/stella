@@ -305,7 +305,8 @@ pub(crate) fn seq_of(message: &DesktopMessage) -> Option<u32> {
     | DesktopMessage::HarnessStatus(_)
     | DesktopMessage::RunAccepted(_)
     | DesktopMessage::RunRejected(_)
-    | DesktopMessage::FolderRestored(_) => None,
+    | DesktopMessage::FolderRestored(_)
+    | DesktopMessage::LinkedFoldersStatus(_) => None,
   }
 }
 
@@ -319,7 +320,8 @@ pub(crate) fn run_of(message: &DesktopMessage) -> Option<&str> {
     | DesktopMessage::HarnessStatus(_)
     | DesktopMessage::RunAccepted(_)
     | DesktopMessage::RunRejected(_)
-    | DesktopMessage::FolderRestored(_) => None,
+    | DesktopMessage::FolderRestored(_)
+    | DesktopMessage::LinkedFoldersStatus(_) => None,
   }
 }
 

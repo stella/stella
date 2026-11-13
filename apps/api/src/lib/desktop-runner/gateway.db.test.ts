@@ -661,6 +661,7 @@ const startInput = (
   attachments: [],
   mcp: { serverName: "stella", url: "https://api.example.test/mcp" },
   workspaceIds: [],
+  linkedFolderId: null,
 });
 
 /** Start a run on `desktopId` and return the id the API minted for it. */
@@ -1220,7 +1221,7 @@ describe("approval modes and reasoning efforts", () => {
           state: "ready",
           version: HARNESS_VERSION,
           capabilities: ["approvals"],
-          approvalModes: ["ask", "auto", "full_auto"],
+          approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
           models: [{ id: MODEL, label: "Model", reasoningEfforts: ["high"] }],
         },
       ],
@@ -2737,6 +2738,7 @@ describe("chat turns on a computer", () => {
       model: CHAT_MODEL,
       reasoningEffort: null,
       approvals: "ask",
+      linkedFolderId: null,
     },
   });
 
@@ -4661,6 +4663,8 @@ describe("chat turns on a computer", () => {
       ["run_too_large", "local_runner_turn_too_large"],
       // An undo of the chat's files still runs on the computer: send again.
       ["folder_busy", "local_runner_restoring"],
+      // The chat's linked folder is on a volume that is not mounted.
+      ["folder_offline", "local_runner_folder_unavailable"],
     ] as const) {
       const chatThreadId = await newThread();
       const turn = collect(
@@ -6710,6 +6714,7 @@ describe("undoing a turn's file changes", () => {
       type: "folder.restore",
       restoreId: undo.restoreId,
       folderId: threadId,
+      linkedFolderId: null,
       runId,
     });
     // Asking again answers the same undo; nothing more is sent.

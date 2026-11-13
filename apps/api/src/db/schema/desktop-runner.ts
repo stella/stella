@@ -87,6 +87,20 @@ export const desktopRunners = p.pgTable.withRLS(
     sidecarVersion: p.varchar("sidecar_version", { length: 64 }).notNull(),
     /** Each harness's latest report, as the protocol defines it. */
     harnesses: jsonb("harnesses").notNull(),
+    /**
+     * The folders the member linked on the computer, by id, name and state as
+     * it last reported them; their paths never leave the computer.
+     */
+    linkedFolders: jsonb("linked_folders").notNull().default([]),
+    /**
+     * Linked folders the member let runs work in. A run in a folder not
+     * listed here is refused, so the first run in a newly linked folder asks.
+     */
+    approvedFolderIds: p
+      .uuid("approved_folder_ids")
+      .array()
+      .notNull()
+      .default([]),
     connectedAt: timestamptz("connected_at").notNull(),
     /** Renewed by the socket's heartbeat; routing ignores a stale runner. */
     lastSeenAt: timestamptz("last_seen_at").notNull(),
@@ -132,6 +146,11 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     harnessVersion: p.varchar("harness_version", { length: 64 }).notNull(),
     /** Workspaces the run's MCP token may reach, authorized when assigned. */
     workspaceIds: p.text("workspace_ids").array().notNull(),
+    /**
+     * The folder linked on the computer the run works in; null for the
+     * chat's own. An undo of the run's files restores that folder.
+     */
+    linkedFolderId: p.uuid("linked_folder_id"),
     state: p.text({ enum: DESKTOP_RUNNER_RUN_STATES }).notNull(),
     /** Set with `finished`: how the run ended, as the desktop reported. */
     outcome: p.text({ enum: DESKTOP_RUNNER_STORED_OUTCOMES }),

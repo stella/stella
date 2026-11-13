@@ -162,6 +162,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/chat/link-icons/exact": "crud",
   "GET /v1/chat/local-runners": "crud",
   "GET /v1/chat/local-runs/:runId/step-output-grant": "crud",
+  "PUT /v1/chat/local-runners/:desktopId/folders/:linkId/approval": "crud",
   "GET /v1/chat/mcp-apps/:app": "crud",
   "GET /v1/chat/model-options": "crud",
   "GET /v1/chat/runs/active": "crud",

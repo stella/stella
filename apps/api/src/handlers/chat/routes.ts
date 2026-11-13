@@ -11,6 +11,7 @@ import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
+import approveLocalFolder from "@/api/handlers/chat/local-folder-approval";
 import getLocalRunStepOutputGrant from "@/api/handlers/chat/local-run-step-output-grant";
 import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
@@ -80,6 +81,9 @@ export const chatRoute = routes(
     "/local-runners": { GET: getLocalRunners },
     "/local-runs/:runId/step-output-grant": {
       GET: getLocalRunStepOutputGrant,
+    },
+    "/local-runners/:desktopId/folders/:linkId/approval": {
+      PUT: approveLocalFolder,
     },
     "/skill-availability": { GET: listUnavailableChatSkills },
     "/table-chart": { POST: tableChart },

@@ -30,9 +30,9 @@ import type {
  * turn gives the same tool, and its result is the tool's JSON text, so the
  * web chat's cards, citations and source chips read it as they read a cloud
  * turn. Built-in tools become generic activity built from the fields named
- * here (a command line, file names, a search, a web address, plan titles);
- * other native fields, such as an edit's text or a file's contents, are
- * never forwarded.
+ * here (a command line, file names, a search, a web address, plan titles, a
+ * plan proposed for approval); other native fields, such as an edit's text
+ * or a file's contents, are never forwarded.
  */
 
 type ClaudeMessageHandling =
@@ -167,6 +167,12 @@ const MCP_SEPARATOR = "__";
 /** The built-in tool that asks the user a question mid-turn. */
 export const ASK_USER_QUESTION_TOOL = "AskUserQuestion";
 
+/**
+ * The built-in tool that ends plan mode by proposing a plan. The CLI adds the
+ * plan to the call's input (`plan`) before it asks about the call.
+ */
+export const EXIT_PLAN_MODE_TOOL = "ExitPlanMode";
+
 const toolKind = (name: string): ClaudeToolKind => {
   if (name === "Bash") {
     return "command";
@@ -257,6 +263,12 @@ const nativeDetail = (
       return { kind: "fetch", url: stringField(input, "url") };
     case "TodoWrite":
       return { kind: "plan", items: todoTitles(input) };
+    case EXIT_PLAN_MODE_TOOL: {
+      const plan = optionalStringField(input, "plan");
+      return plan === undefined
+        ? undefined
+        : { kind: "proposed_plan", text: plan };
+    }
     default:
       return undefined;
   }
