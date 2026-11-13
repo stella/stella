@@ -865,6 +865,42 @@ const FAKE_SCENARIOS = {
     assistant("msg-2", [{ type: "text", text: "Drafting the notice." }]),
     result(),
   ],
+  /**
+   * A subagent that plans: its plan is asked about like any other, and
+   * approving it is not the turn's own plan being approved.
+   */
+  subagent_plan: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse(FAKE_SUBAGENT_CALL, "Agent", {
+        description: "Plan the notice",
+        subagent_type: "Plan",
+        prompt: FAKE_PRIVATE_TEXT.subagentPrompt,
+      }),
+    ]),
+    assistant(
+      "msg-sub-plan",
+      [toolUse("call-sub-plan", "ExitPlanMode", {})],
+      inSubagent,
+    ),
+    canUseTool(
+      "call-sub-plan",
+      "ExitPlanMode",
+      { plan: FAKE_PLAN, planFilePath: "/plans/notice.md" },
+      { permission_suggestions: [SET_MODE_SUGGESTION] },
+    ),
+    toolResult(
+      "call-sub-plan",
+      "User has approved your plan.",
+      false,
+      inSubagent,
+    ),
+    toolResult(FAKE_SUBAGENT_CALL, "Done."),
+    assistant("msg-2", [{ type: "text", text: "The subagent has a plan." }]),
+    // Long enough for a mode switch, were one sent, to arrive before the end.
+    { sleep: 200 },
+    result(),
+  ],
   /** A declined plan: the CLI stays in plan mode and the turn ends. */
   plan_declined: [
     ...freshTurn(),

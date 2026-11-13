@@ -1426,6 +1426,53 @@ describe("Claude Code approval modes", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
+  test("a plan a subagent proposes is asked about on its step, and approving it keeps the turn in plan mode", async () => {
+    const asked: HarnessEvent[] = [];
+    const { events, controlRequests } = await run("subagent_plan", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "plan" },
+      },
+      onEvent: async (event, turn) => {
+        if (event.type !== "approval.requested") {
+          return;
+        }
+        asked.push(event);
+        await turn.respond({
+          type: "approval",
+          requestId: event.request.requestId,
+          decision: "approve",
+        });
+      },
+    });
+    expect(asked).toMatchObject([
+      {
+        request: {
+          toolCall: {
+            id: "call-sub-plan",
+            input: {
+              tool: "ExitPlanMode",
+              detail: { kind: "proposed_plan", text: FAKE_PLAN },
+              parentCallId: FAKE_SUBAGENT_CALL,
+            },
+          },
+        },
+      },
+    ]);
+    // The plan's call ran: the fixture reaches the point a main-thread plan
+    // switches the mode at.
+    expect(
+      toolCompletions(events).map(({ toolCall, result }) => [
+        toolCall.id,
+        result.status,
+      ]),
+    ).toEqual([
+      ["call-sub-plan", "succeeded"],
+      [FAKE_SUBAGENT_CALL, "succeeded"],
+    ]);
+    expect(controlRequests("set_permission_mode")).toEqual([]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
   test("a declined plan keeps the CLI in plan mode", async () => {
     const { events, answers, controlRequests } = await run("plan_declined", {
       overrides: {

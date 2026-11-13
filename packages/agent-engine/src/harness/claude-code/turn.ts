@@ -124,7 +124,11 @@ type PendingInteraction =
       input: Readonly<Record<string, unknown>>;
       /** Permission rules the CLI suggests remembering, if approved. */
       suggestions: readonly Readonly<Record<string, unknown>>[];
-      /** The `ExitPlanMode` call this approval answers, else `null`. */
+      /**
+       * The main thread's `ExitPlanMode` call this approval answers, else
+       * `null`. A subagent's plan is its own: approving it does not take the
+       * turn out of plan mode.
+       */
       planToolUseId: string | null;
     }
   | {
@@ -924,7 +928,8 @@ export class ClaudeCodeTurnSession {
       controlId,
       input: parsed.input,
       suggestions,
-      planToolUseId: proposesPlan ? parsed.tool_use_id : null,
+      planToolUseId:
+        proposesPlan && parentCallId === null ? parsed.tool_use_id : null,
     });
     const reason =
       parsed.decision_reason ?? parsed.description ?? parsed.title ?? null;
