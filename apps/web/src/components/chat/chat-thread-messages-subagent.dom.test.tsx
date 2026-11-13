@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
@@ -27,6 +28,7 @@ const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
+const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
 const { ChatApprovalContext } =
   await import("@/components/chat/chat-approval-context");
 const { ChatMattersContext } =
@@ -73,25 +75,36 @@ const turnOf = (parts: readonly object[]): ChatUIMessage => {
 
 const SUBAGENT = "run_call-agent";
 
-const step = (
-  id: string,
-  name: "harness_native_tool" | "command_execution",
-  input: Record<string, unknown>,
-  rest: { state: "complete" | "error" | "input-complete"; output?: unknown },
-) => ({
+/** Where a stored call names the subagent step that made it. */
+const callMetadata = (parentCallId: string | null) =>
+  parentCallId === null
+    ? {}
+    : { metadata: { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: parentCallId } };
+
+type StepOptions = {
+  id: string;
+  name: "harness_native_tool" | "command_execution" | "mcp__docs__search";
+  input: Record<string, unknown>;
+  /** The subagent step that made the call; `null` on the main thread. */
+  parentCallId: string | null;
+  rest: { state: "complete" | "error" | "input-complete"; output?: unknown };
+};
+
+const step = ({ id, name, input, parentCallId, rest }: StepOptions) => ({
   type: "tool-call",
   id,
   name,
   arguments: JSON.stringify(input),
   input,
+  ...callMetadata(parentCallId),
   ...rest,
 });
 
-const subagent = (rest: Parameters<typeof step>[3]) =>
-  step(
-    SUBAGENT,
-    "harness_native_tool",
-    {
+const subagent = (rest: StepOptions["rest"]) =>
+  step({
+    id: SUBAGENT,
+    name: "harness_native_tool",
+    input: {
       tool: "Agent",
       detail: {
         kind: "subagent",
@@ -99,34 +112,38 @@ const subagent = (rest: Parameters<typeof step>[3]) =>
         agentType: "Explore",
       },
     },
+    parentCallId: null,
     rest,
-  );
+  });
 
 const done = { state: "complete", output: { status: "completed" } } as const;
 
-const read = step(
-  "run_call-read",
-  "harness_native_tool",
-  {
-    tool: "Read",
-    detail: { kind: "read", path: "drafts/lease.md" },
-    parentCallId: SUBAGENT,
-  },
-  done,
-);
+const read = step({
+  id: "run_call-read",
+  name: "harness_native_tool",
+  input: { tool: "Read", detail: { kind: "read", path: "drafts/lease.md" } },
+  parentCallId: SUBAGENT,
+  rest: done,
+});
 
-const image = step(
-  "run_call-image",
-  "harness_native_tool",
-  {
-    tool: "Read",
-    detail: { kind: "image", path: "scans/page-1.png" },
-    parentCallId: SUBAGENT,
-  },
-  done,
-);
+const image = step({
+  id: "run_call-image",
+  name: "harness_native_tool",
+  input: { tool: "Read", detail: { kind: "image", path: "scans/page-1.png" } },
+  parentCallId: SUBAGENT,
+  rest: done,
+});
 
-const removal = { command: "rm draft.md", parentCallId: SUBAGENT };
+/** A connected server's tool the subagent called; its input is its own. */
+const connectorCall = step({
+  id: "run_call-docs",
+  name: "mcp__docs__search",
+  input: { query: "arrears cap" },
+  parentCallId: SUBAGENT,
+  rest: done,
+});
+
+const removal = { command: "rm draft.md" };
 
 const turnTree = (
   queryClient: InstanceType<typeof QueryClient>,
@@ -166,6 +183,12 @@ const turnTree = (
 
 const renderTurn = (parts: readonly object[]) => {
   const queryClient = new QueryClient();
+  // A connected server's tool decorates its row from the connector list.
+  queryClient.setQueryData(
+    mcpConnectorsOptions(testChatApprovalContextValue.activeOrganizationId)
+      .queryKey,
+    { canManageCustomConnectors: false, connectors: [], nativeTools: [] },
+  );
   const view = render(turnTree(queryClient, parts));
   return {
     view,
@@ -202,17 +225,23 @@ test("a subagent's steps show inside its group, and one waiting on the member sh
       name: "command_execution",
       arguments: JSON.stringify(removal),
       input: removal,
+      ...callMetadata(SUBAGENT),
       state: "approval-requested",
       approval: { id: "approval-rm", needsApproval: true },
     },
     image,
+    connectorCall,
   ]);
   await view.findByText("Check the lease");
   const inGroup = within(groupOf(view.container));
   expect(inGroup.getByText(messages.chat.toolCall.subagent)).toBeDefined();
   expect(inGroup.getByText("Explore")).toBeDefined();
-  // Every step it took is counted, the one waiting on the member included.
-  expect(inGroup.getByText("3 steps")).toBeDefined();
+  // Every step it took is counted: the one waiting on the member, and the
+  // connected server's tool it called.
+  expect(inGroup.getByText("4 steps")).toBeDefined();
+  // The connected server's tool is a row inside, never loose on the turn.
+  expect(inGroup.getByText("arrears cap")).toBeDefined();
+  expect(view.getAllByText("arrears cap")).toHaveLength(1);
   expect(
     inGroup.getByText(messages.chat.turnStatus.waitingForApproval),
   ).toBeDefined();
@@ -252,12 +281,13 @@ test("a finished subagent folds its steps behind its row, and opens on a click",
 
 test("a group opens while a step of it is under way, folds when it settles, and then stays as the member left it", async () => {
   const lookup = (state: "complete" | "input-complete") =>
-    step(
-      "run_call-lookup",
-      "command_execution",
-      { command: "ls notes", parentCallId: SUBAGENT },
-      state === "complete" ? done : { state },
-    );
+    step({
+      id: "run_call-lookup",
+      name: "command_execution",
+      input: { command: "ls notes" },
+      parentCallId: SUBAGENT,
+      rest: state === "complete" ? done : { state },
+    });
   // The call that started the subagent has ended; a step of it has not
   // arrived yet.
   const { view, queryClient, show } = renderTurn([subagent(done), read]);
@@ -290,12 +320,13 @@ test("a subagent its turn cut off reads as stopped, and a step without its subag
   const { view, queryClient } = renderTurn([
     // As a turn that ended first leaves a call: an error, said interrupted.
     subagent({ state: "error", output: { status: "interrupted" } }),
-    step(
-      "run_call-orphan",
-      "command_execution",
-      { command: "ls notes", parentCallId: "run_call-missing" },
-      done,
-    ),
+    step({
+      id: "run_call-orphan",
+      name: "command_execution",
+      input: { command: "ls notes" },
+      parentCallId: "run_call-missing",
+      rest: done,
+    }),
   ]);
   await view.findByText("Check the lease");
   const inGroup = within(groupOf(view.container));

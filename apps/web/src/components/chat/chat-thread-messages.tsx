@@ -21,6 +21,7 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
+import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
 import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
 import {
   countProcessWork,
@@ -2120,6 +2121,9 @@ const toLocalRunSubagentGroups = (toolCalls: readonly ToolCallRenderEntry[]) =>
       id: part.id,
       name: part.name,
       input: "input" in part ? part.input : undefined,
+      parentCallId: chatLocalRunParentCallId(
+        "metadata" in part ? part.metadata : undefined,
+      ),
       shownAs:
         isApprovalPart(part) || isPendingApprovalPart(part) ? "card" : "row",
     })),

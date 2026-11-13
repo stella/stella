@@ -5,10 +5,12 @@ import { assertProperty } from "@stll/property-testing";
 
 import { CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH } from "./chat-local-run-step-output";
 import {
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   CHAT_LOCAL_RUN_TOOL_NAMES,
   CHAT_LOCAL_RUN_TOOL_STATUSES,
   chatLocalRunApprovalMessage,
+  chatLocalRunParentCallId,
   chatLocalRunShownText,
   parseChatLocalRunToolCall,
   shownChatLocalRunToolResult,
@@ -57,21 +59,10 @@ describe("what a local run's native step shows", () => {
         "prompt",
         "report",
         "messages",
+        // Where a step named its subagent before the link moved beside it.
+        "parentCallId",
       ),
       fc.string(),
-    );
-    // The subagent step a step ran in: none, one that names a step, and ids
-    // that name none (empty, or longer than a chat call id).
-    const parent = fc.option(
-      fc.oneof(
-        fc.string({ minLength: 1, maxLength: 40 }),
-        fc.constant(""),
-        fc.string({
-          minLength: CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH + 1,
-          maxLength: CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH + 40,
-        }),
-      ),
-      { nil: undefined },
     );
     const calls = fc.oneof(
       fc.record({
@@ -125,11 +116,10 @@ describe("what a local run's native step shows", () => {
     );
     assertProperty(
       "a call keeps only its schema's fields, and parsing what it kept gives the same call",
-      fc.property(calls, extra, parent, (call, added, parentCallId) => {
+      fc.property(calls, extra, (call, added) => {
         const parsed = parseChatLocalRunToolCall(call.name, {
           ...call.input,
           ...added,
-          ...(parentCallId === undefined ? {} : { parentCallId }),
         });
         if (parsed === null) {
           throw new Error("a well-formed call did not parse");
@@ -137,20 +127,8 @@ describe("what a local run's native step shows", () => {
         for (const key of Object.keys(added)) {
           expect(Object.keys(parsed.input)).not.toContain(key);
         }
-        // Every kind of step names the subagent step it ran in, whole or
-        // not at all, and loses nothing of its own to an id that names none.
-        const namesStep =
-          parentCallId !== undefined &&
-          parentCallId !== "" &&
-          parentCallId.length <= CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH;
-        expect(parsed.input.parentCallId).toBe(
-          namesStep ? parentCallId : undefined,
-        );
         expect(Object.keys(parsed.input).toSorted()).toEqual(
-          [
-            ...Object.keys(call.input),
-            ...(namesStep ? ["parentCallId"] : []),
-          ].toSorted(),
+          Object.keys(call.input).toSorted(),
         );
         if (
           parsed.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
@@ -198,8 +176,7 @@ describe("what a local run's native step shows", () => {
       name: CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool,
       input: { tool: "Read" },
     });
-    // A subagent's step keeps the few words of its task, never its prompt;
-    // one whose detail does not parse still names the subagent it ran in.
+    // A subagent's step keeps the few words of its task, never its prompt.
     expect(
       parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool, {
         tool: "Agent",
@@ -219,17 +196,41 @@ describe("what a local run's native step shows", () => {
       },
     });
     expect(
-      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool, {
-        tool: "Read",
-        detail: { kind: "read", path: 42 },
-        parentCallId: "toolu_agent",
-      })?.input,
-    ).toEqual({ tool: "Read", parentCallId: "toolu_agent" });
-    expect(
       parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution, {
         output: "Private text",
       }),
     ).toBeNull();
+  });
+
+  test("a call names the subagent step that made it whole or not at all", () => {
+    assertProperty(
+      "a call names the subagent step that made it whole or not at all",
+      fc.property(
+        fc.oneof(
+          fc.string({ minLength: 1, maxLength: 40 }),
+          fc.constant(""),
+          fc.string({
+            minLength: CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH + 1,
+            maxLength: CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH + 40,
+          }),
+          fc.anything(),
+        ),
+        (reported) => {
+          const named = chatLocalRunParentCallId({
+            [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: reported,
+          });
+          const namesStep =
+            typeof reported === "string" &&
+            reported !== "" &&
+            reported.length <= CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH;
+          // An id is never cut: it names its step, or the call names none.
+          expect(named).toBe(namesStep ? reported : null);
+        },
+      ),
+    );
+    for (const metadata of [undefined, null, "call", {}, { parent: "call" }]) {
+      expect(chatLocalRunParentCallId(metadata)).toBeNull();
+    }
   });
 
   test("a native step's result keeps how it ended and never what it produced", () => {

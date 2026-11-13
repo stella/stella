@@ -1714,6 +1714,9 @@ describe("Codex items as chat parts", () => {
                 id: event.toolCall.id,
                 name: event.toolCall.name,
                 input: event.toolCall.input,
+                ...(event.toolCall.parentCallId === undefined
+                  ? {}
+                  : { parentCallId: event.toolCall.parentCallId }),
                 ...(event.type === "tool.completed"
                   ? { status: event.result.status }
                   : {}),
@@ -1732,13 +1735,15 @@ describe("Codex items as chat parts", () => {
         type: "tool.started",
         id: "sub-rm",
         name: "command_execution",
-        input: { command: "rm draft.md", ...inSubagent },
+        input: { command: "rm draft.md" },
+        ...inSubagent,
       },
       {
         type: "tool.completed",
         id: "sub-rm",
         name: "command_execution",
-        input: { command: "rm draft.md", ...inSubagent },
+        input: { command: "rm draft.md" },
+        ...inSubagent,
         status: "succeeded",
       },
       {
@@ -1748,8 +1753,8 @@ describe("Codex items as chat parts", () => {
         input: {
           tool: "view_image",
           detail: { kind: "image", path: "/workspace/scans/Lease Page 1.png" },
-          ...inSubagent,
         },
+        ...inSubagent,
         status: "succeeded",
       },
       {
@@ -1782,7 +1787,8 @@ describe("Codex items as chat parts", () => {
         type: "tool.completed",
         id: "sub-ls",
         name: "command_execution",
-        input: { command: "ls", parentCallId: followupStep },
+        input: { command: "ls" },
+        parentCallId: followupStep,
         status: "succeeded",
       },
       {
@@ -1819,7 +1825,8 @@ describe("Codex items as chat parts", () => {
           kind: "command",
           toolCall: {
             id: "sub-rm",
-            input: { command: "rm draft.md", ...inSubagent },
+            input: { command: "rm draft.md" },
+            ...inSubagent,
           },
         },
       },

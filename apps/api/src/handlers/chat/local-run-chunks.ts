@@ -24,9 +24,11 @@ import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
 import { chatLocalRunCallId } from "@stll/api-contract/chat-local-run-step-output";
 import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   chatLocalRunApprovalMessage,
   chatLocalRunApprovalReason,
+  chatLocalRunParentCallId,
   chatLocalRunShownText,
   type ChatLocalRunToolName,
   chatLocalRunToolStatusContent,
@@ -447,24 +449,20 @@ type LocalRunToolCalls = Map<
 
 type CallId = (id: string) => string;
 
+/** The input chat keeps for a native step, from what the desktop sent. */
+const nativeInput = (name: ChatLocalRunToolName, input: unknown) =>
+  parseChatLocalRunToolCall(name, input)?.input ?? {};
+
 /**
- * The input chat keeps for a native step, from what the desktop sent. The
- * subagent step it names is kept under that step's chat call id, as the
- * step itself is, so the link holds in the stored turn.
+ * The subagent step a call's start names, kept in the call's metadata under
+ * that step's chat call id, as the step itself is kept, so the link holds in
+ * the stored turn. Nothing for a start that names none.
  */
-const nativeInput = (
-  name: ChatLocalRunToolName,
-  input: unknown,
-  callId: CallId,
-) => {
-  const call = parseChatLocalRunToolCall(name, input);
-  if (call === null) {
-    return {};
-  }
-  const { parentCallId } = call.input;
-  return parentCallId === undefined
-    ? call.input
-    : { ...call.input, parentCallId: callId(parentCallId) };
+const subagentLink = (metadata: unknown, callId: CallId) => {
+  const parent = chatLocalRunParentCallId(metadata);
+  return parent === null
+    ? {}
+    : { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: callId(parent) };
 };
 
 /**
@@ -531,7 +529,7 @@ const asToolInputChunk = (
         tanstack: {
           toolCallName: name,
           toolName: name,
-          input: nativeInput(name, reported["input"], callId),
+          input: nativeInput(name, reported["input"]),
           ...reportedModel(chunk.metadata),
         },
       },
@@ -543,9 +541,7 @@ const asToolInputChunk = (
     return null;
   }
   call.argsCarried = true;
-  const args = JSON.stringify(
-    nativeInput(name, parsedArguments(chunk.delta), callId),
-  );
+  const args = JSON.stringify(nativeInput(name, parsedArguments(chunk.delta)));
   return {
     type: EventType.TOOL_CALL_ARGS,
     toolCallId: callId(chunk.toolCallId),
@@ -608,17 +604,11 @@ type ChatInterrupt = Extract<
  * The input an approval names: a native step's shown input, a connector
  * call's arguments, nothing for a call this run never opened.
  */
-const approvalInput = (
-  name: string | null,
-  input: unknown,
-  callId: CallId,
-): unknown => {
+const approvalInput = (name: string | null, input: unknown): unknown => {
   if (name === null) {
     return {};
   }
-  return isChatLocalRunToolName(name)
-    ? nativeInput(name, input, callId)
-    : input;
+  return isChatLocalRunToolName(name) ? nativeInput(name, input) : input;
 };
 
 const APPROVAL_KINDS: ReadonlySet<unknown> = new Set(
@@ -635,7 +625,7 @@ const approvalInterrupt = (
   callId: CallId,
 ): ChatInterrupt => {
   const name = calls.get(toolCallId)?.name ?? null;
-  const input = approvalInput(name, metadata["input"], callId);
+  const input = approvalInput(name, metadata["input"]);
   const reason = chatLocalRunApprovalReason(metadata["reason"]);
   const approvalKind = metadata["approvalKind"];
   const decisions = metadata["decisions"];
@@ -736,8 +726,9 @@ const asChatChunk = (
       });
     }
     // A start is rebuilt from the fields it names: its metadata becomes the
-    // call's, so only the model a harness names and the owner the API names
-    // are carried, and nothing else a desktop adds (an input, an output).
+    // call's, so only the model a harness names, the subagent step it names
+    // and the owner the API names are carried, and nothing else a desktop
+    // adds (an input, an output).
     const model = reportedModel(chunk.metadata);
     return {
       type: EventType.TOOL_CALL_START,
@@ -749,6 +740,7 @@ const asChatChunk = (
       ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
       metadata: {
         ...(model.model === undefined ? {} : { tanstack: model }),
+        ...subagentLink(chunk.metadata, callId),
         [CHAT_TOOL_EXECUTOR_METADATA_KEY]: CHAT_TOOL_EXECUTOR.harness,
       },
     };

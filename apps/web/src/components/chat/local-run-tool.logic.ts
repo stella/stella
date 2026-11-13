@@ -231,6 +231,11 @@ export const localRunSubagentType = (call: LocalRunCall): string | null => {
 /** A turn's tool call as the grouping reads it. */
 export type LocalRunStepCall = LocalRunCall & {
   id: string;
+  /**
+   * The subagent step the call's metadata names (`chatLocalRunParentCallId`),
+   * or `null` for a call on the main thread.
+   */
+  parentCallId: string | null;
   /** How the turn shows the call: a plain row, or a card of its own. */
   shownAs: "row" | "card";
 };
@@ -247,10 +252,10 @@ type LocalRunSubagentGroups = {
 
 /**
  * Which of a turn's calls show under a subagent's step. A subagent's step
- * that shows as a row is a group, and a step naming it (`parentCallId`) is
- * one of its steps: a row among them shows inside the group, a card (an
- * approval) stays on the turn where the member sees it without opening
- * anything. A step whose subagent is not a group (it shows as a card, or the
+ * that shows as a row is a group, and a call naming it (`parentCallId`), a
+ * native step or a connected server's tool alike, is one of its steps: a row
+ * among them shows inside the group, a card (an approval) stays on the turn
+ * where the member sees it without opening anything. A step whose subagent is not a group (it shows as a card, or the
  * turn does not have it) stays on the turn, so no step is ever hidden. A
  * subagent started by a subagent shows in the outermost one's group, with
  * the steps it took.
@@ -260,20 +265,17 @@ export const localRunSubagentGroups = (
 ): LocalRunSubagentGroups => {
   const subagents = new Set<string>();
   const parents = new Map<string, string>();
-  for (const { id, name, input, shownAs } of calls) {
-    const call = nativeCallOf({ name, input });
-    if (call === null) {
-      continue;
+  for (const { id, name, input, parentCallId, shownAs } of calls) {
+    if (parentCallId !== null) {
+      parents.set(id, parentCallId);
     }
+    const call = nativeCallOf({ name, input });
     if (
       shownAs === "row" &&
-      call.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
+      call?.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
       call.input.detail?.kind === "subagent"
     ) {
       subagents.add(id);
-    }
-    if (call.input.parentCallId !== undefined) {
-      parents.set(id, call.input.parentCallId);
     }
   }
   const outermost = (id: string): string | null => {

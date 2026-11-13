@@ -109,22 +109,16 @@ export const nativeToolCall = (
 });
 
 /**
- * `call` as a step of the subagent whose own step is `parentCallId`, or as
- * it is on the main thread (`null`). Only a harness-native step names its
- * subagent: the link is a field of the contract's input, and any other call
- * (an MCP tool, a question) is reported with the input its tool defines, so
- * it stays on the turn itself.
+ * `call` as a call of the subagent whose own step is `parentCallId`, or as
+ * it is on the main thread (`null`). A call of any kind names its subagent
+ * (a native step, an MCP tool, a question): the link sits beside the call,
+ * so its input stays what its tool defines.
  */
 export const stepOfSubagent = (
   call: HarnessToolCall,
   parentCallId: string | null,
 ): HarnessToolCall =>
-  parentCallId === null ||
-  !isChatLocalRunToolName(call.name) ||
-  typeof call.input !== "object" ||
-  call.input === null
-    ? call
-    : { ...call, input: { ...call.input, parentCallId } };
+  parentCallId === null ? call : { ...call, parentCallId };
 
 const withRunRelativePaths = (
   call: ChatLocalRunToolCall,

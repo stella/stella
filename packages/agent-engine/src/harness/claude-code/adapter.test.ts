@@ -24,6 +24,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
+
 import {
   FAKE_APPROVAL_REASON,
   FAKE_CLAUDE_CONTEXT_WINDOW,
@@ -665,12 +667,17 @@ describe("Claude Code adapter over stream-json stdio", () => {
         expect(Result.isOk(approved)).toBe(true);
       },
     });
+    // Every call the subagent made names it beside the call, a connector
+    // call included; no call's input does.
     const inSubagent = { parentCallId: FAKE_SUBAGENT_CALL };
     expect(
       toolCompletions(events).map(({ toolCall, result }) => ({
         id: toolCall.id,
         name: toolCall.name,
         input: toolCall.input,
+        ...(toolCall.parentCallId === undefined
+          ? {}
+          : { parentCallId: toolCall.parentCallId }),
         status: result.status,
       })),
     ).toEqual([
@@ -680,14 +687,15 @@ describe("Claude Code adapter over stream-json stdio", () => {
         input: {
           tool: "Read",
           detail: { kind: "read", path: "/workspace/drafts/lease.md" },
-          ...inSubagent,
         },
+        ...inSubagent,
         status: "succeeded",
       },
       {
         id: "call-sub-rm",
         name: "command_execution",
-        input: { command: "rm draft.md", ...inSubagent },
+        input: { command: "rm draft.md" },
+        ...inSubagent,
         status: "succeeded",
       },
       {
@@ -696,16 +704,15 @@ describe("Claude Code adapter over stream-json stdio", () => {
         input: {
           tool: "Read",
           detail: { kind: "image", path: "/workspace/scans/Lease Page 1.PNG" },
-          ...inSubagent,
         },
+        ...inSubagent,
         status: "succeeded",
       },
-      // A connector call's input is its tool's own, so it names no subagent
-      // and stays on the turn.
       {
         id: "call-sub-docs",
         name: FAKE_MCP_CALL.name,
         input: FAKE_MCP_CALL.input,
+        ...inSubagent,
         status: "succeeded",
       },
       {
@@ -741,7 +748,8 @@ describe("Claude Code adapter over stream-json stdio", () => {
           kind: "command",
           toolCall: {
             id: "call-sub-rm",
-            input: { command: "rm draft.md", ...inSubagent },
+            input: { command: "rm draft.md" },
+            ...inSubagent,
           },
         },
       },
@@ -774,21 +782,34 @@ describe("Claude Code adapter over stream-json stdio", () => {
     ]) {
       expect(storedText).not.toContain(text);
     }
-    // Stored, a step names its file relative to the run's folder and keeps
-    // the subagent it ran in.
+    // Stored, a step names its file relative to the run's folder, and every
+    // call of the subagent, a connector's included, names the subagent in
+    // its metadata, never in its input.
     expect(
       stored
         .flatMap(({ parts }) => parts)
         .flatMap((part) =>
-          part.type === "tool-call" && part.id === "call-sub-image"
-            ? [part.input]
+          part.type === "tool-call" &&
+          (part.id === "call-sub-image" || part.id === "call-sub-docs")
+            ? [
+                {
+                  input: part.input,
+                  subagent: chatLocalRunParentCallId(part.metadata),
+                },
+              ]
             : [],
         ),
     ).toEqual([
       {
-        tool: "Read",
-        detail: { kind: "image", path: "scans/Lease Page 1.PNG" },
-        ...inSubagent,
+        input: {
+          tool: "Read",
+          detail: { kind: "image", path: "scans/Lease Page 1.PNG" },
+        },
+        subagent: FAKE_SUBAGENT_CALL,
+      },
+      {
+        input: FAKE_MCP_CALL.input,
+        subagent: FAKE_SUBAGENT_CALL,
       },
     ]);
   });
@@ -1452,8 +1473,8 @@ describe("Claude Code approval modes", () => {
             input: {
               tool: "ExitPlanMode",
               detail: { kind: "proposed_plan", text: FAKE_PLAN },
-              parentCallId: FAKE_SUBAGENT_CALL,
             },
+            parentCallId: FAKE_SUBAGENT_CALL,
           },
         },
       },
