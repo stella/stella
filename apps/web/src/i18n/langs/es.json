@@ -2269,6 +2269,15 @@
       "field": "Campo",
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
+      "localOutput": {
+        "cut": "Se muestran los primeros {kept} de {total}",
+        "diff": "Cambios en archivos",
+        "elsewhere": "Ábrelo en el ordenador que lo ejecutó",
+        "empty": "Sin salida",
+        "failed": "La aplicación de escritorio de stella en este ordenador no pudo mostrarlo.",
+        "notKept": "No se guardó nada de este paso en este ordenador",
+        "reading": "Leyendo desde este ordenador"
+      },
       "output": "Salida",
       "patternInPath": "{pattern} en {path}",
       "proposedPlan": "Proponiendo un plan",

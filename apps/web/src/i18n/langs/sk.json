@@ -2269,6 +2269,15 @@
       "field": "Pole",
       "input": "Vstup",
       "interrupted": "Prerušené pred dokončením",
+      "localOutput": {
+        "cut": "Zobrazuje sa prvých {kept} z {total}",
+        "diff": "Zmeny súborov",
+        "elsewhere": "Otvorte na počítači, kde krok bežal",
+        "empty": "Žiadny výstup",
+        "failed": "Desktopová aplikácia stella na tomto počítači to nedokázala zobraziť.",
+        "notKept": "Z tohto kroku nie je na tomto počítači nič uložené",
+        "reading": "Načítava sa z tohto počítača"
+      },
       "output": "Výstup",
       "patternInPath": "{pattern} v {path}",
       "proposedPlan": "Návrh plánu",

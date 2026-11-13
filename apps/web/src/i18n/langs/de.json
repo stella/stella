@@ -2269,6 +2269,15 @@
       "field": "Feld",
       "input": "Eingabe",
       "interrupted": "Vor Abschluss unterbrochen",
+      "localOutput": {
+        "cut": "Die ersten {kept} von {total} werden angezeigt",
+        "diff": "Dateiänderungen",
+        "elsewhere": "Auf dem Computer öffnen, auf dem der Schritt lief",
+        "empty": "Keine Ausgabe",
+        "failed": "Die stella-Desktop-App auf diesem Computer konnte dies nicht anzeigen.",
+        "notKept": "Von diesem Schritt ist auf diesem Computer nichts gespeichert",
+        "reading": "Wird von diesem Computer gelesen"
+      },
       "output": "Ausgabe",
       "patternInPath": "{pattern} unter {path}",
       "proposedPlan": "Plan wird vorgeschlagen",

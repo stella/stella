@@ -1505,6 +1505,38 @@ pub async fn open_browser_connection(
   }
 }
 
+/// A bridge request signed with `secret`: an HMAC-SHA256 of
+/// `timestamp\nmethod\nuri`, made within the proof window of `now`.
+pub(crate) struct BridgeRequestProof<'a> {
+  pub(crate) timestamp: &'a str,
+  pub(crate) proof: &'a str,
+  pub(crate) method: &'a str,
+  pub(crate) uri: &'a str,
+  pub(crate) now: i64,
+}
+
+pub(crate) fn valid_request_proof(
+  secret: &[u8],
+  request: &BridgeRequestProof<'_>,
+) -> bool {
+  let Ok(seconds) = request.timestamp.parse::<i64>() else {
+    return false;
+  };
+  if request.now.abs_diff(seconds) > BRIDGE_PROOF_WINDOW_SECONDS.unsigned_abs() {
+    return false;
+  }
+  let Ok(signature) = hex::decode(request.proof) else {
+    return false;
+  };
+  let key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, secret);
+  ring::hmac::verify(
+    &key,
+    format!("{}\n{}\n{}", request.timestamp, request.method, request.uri).as_bytes(),
+    &signature,
+  )
+  .is_ok()
+}
+
 fn valid_bridge_proof(
   connection: &BrowserConnection,
   timestamp: &str,
@@ -1513,23 +1545,16 @@ fn valid_bridge_proof(
   uri: &str,
   now: i64,
 ) -> bool {
-  let Ok(seconds) = timestamp.parse::<i64>() else {
-    return false;
-  };
-  if now.abs_diff(seconds) > BRIDGE_PROOF_WINDOW_SECONDS.unsigned_abs() {
-    return false;
-  }
-  let Ok(signature) = hex::decode(proof) else {
-    return false;
-  };
-  let key =
-    ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes());
-  ring::hmac::verify(
-    &key,
-    format!("{timestamp}\n{method}\n{uri}").as_bytes(),
-    &signature,
+  valid_request_proof(
+    connection.port_secret.as_bytes(),
+    &BridgeRequestProof {
+      timestamp,
+      proof,
+      method,
+      uri,
+      now,
+    },
   )
-  .is_ok()
 }
 
 pub fn authorize_bridge_request(

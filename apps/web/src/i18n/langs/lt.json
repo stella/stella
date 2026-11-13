@@ -2269,6 +2269,15 @@
       "field": "Laukas",
       "input": "Įvestis",
       "interrupted": "Nutraukta nebaigus",
+      "localOutput": {
+        "cut": "Rodomi pirmieji {kept} iš {total}",
+        "diff": "Failų pakeitimai",
+        "elsewhere": "Atidarykite kompiuteryje, kuriame tai buvo vykdoma",
+        "empty": "Išvesties nėra",
+        "failed": "stella darbalaukio programa šiame kompiuteryje negalėjo to parodyti.",
+        "notKept": "Iš šio žingsnio šiame kompiuteryje nieko neišsaugota",
+        "reading": "Skaitoma iš šio kompiuterio"
+      },
       "output": "Išvestis",
       "patternInPath": "{pattern} ({path})",
       "proposedPlan": "Siūlomas planas",

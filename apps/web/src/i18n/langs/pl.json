@@ -2269,6 +2269,15 @@
       "field": "Pole",
       "input": "Dane wejściowe",
       "interrupted": "Przerwano przed ukończeniem",
+      "localOutput": {
+        "cut": "Wyświetlono pierwsze {kept} z {total}",
+        "diff": "Zmiany w plikach",
+        "elsewhere": "Otwórz na komputerze, na którym to uruchomiono",
+        "empty": "Brak wyniku",
+        "failed": "Aplikacja desktopowa stella na tym komputerze nie mogła tego wyświetlić.",
+        "notKept": "Z tego kroku nic nie zostało zachowane na tym komputerze",
+        "reading": "Odczytywanie z tego komputera"
+      },
       "output": "Wynik",
       "patternInPath": "{pattern} w {path}",
       "proposedPlan": "Proponowanie planu",

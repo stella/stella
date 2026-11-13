@@ -51,6 +51,7 @@ use super::harness::{
   NotForwarded, RunOutput, RunSink,
 };
 use super::run_folders;
+use super::step_outputs;
 use crate::harness_sidecar::{
   self, HarnessLaunchSettings, HarnessProbe, HarnessProcess, HarnessSidecar,
   RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore, SidecarRunOutput,
@@ -1106,6 +1107,15 @@ impl HarnessHost for SidecarHarnessHost {
     // Made with the chat's folder; the one place outside the folder the run
     // works in that it may write.
     let cache = run_folders::chat_cache(&chat_folder);
+    // Beside the chat's own folder, where the bridge looks, whatever folder
+    // the run works in: nothing of stella's goes in or beside a linked one.
+    let step_output_dir = run_folders::step_output_store(&chat_folder);
+    // Kept before the harness starts, so every step it keeps can be read.
+    if let Some(key) = &start.output_key
+      && let Err(error) = step_outputs::keep_key(&chat_folder, &start.run_id, &key.0)
+    {
+      tracing::warn!(target: LOG_TARGET, %error, "a run's output key was not kept");
+    }
     let workspace = linked.unwrap_or(chat_folder);
     let credentials = cached.and_then(|cached| cached.credentials);
     let thread_id = start
@@ -1132,6 +1142,7 @@ impl HarnessHost for SidecarHarnessHost {
       launch: credentials.map(|held| held.settings).unwrap_or_default(),
       workspace_dir: workspace.to_string_lossy().into_owned(),
       cache_dir: cache.to_string_lossy().into_owned(),
+      step_output_dir: step_output_dir.to_string_lossy().into_owned(),
       skill_folders: skill_folders_within(
         SKILL_FOLDER_BUDGET,
         Arc::clone(&self.shared.harnesses),

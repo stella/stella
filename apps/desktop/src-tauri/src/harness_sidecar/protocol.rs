@@ -209,6 +209,10 @@ pub(crate) struct SidecarRunStart {
   pub(crate) workspace_dir: String,
   /// The chat's own cache folder, writable in every sandbox.
   pub(crate) cache_dir: String,
+  /// Where the sidecar keeps each step's output (`<runId>/<stepKey>`: a
+  /// `{"bytes":<n>}` header line, then the step's kept bytes): beside the
+  /// chat's own folder, whatever folder `workspace_dir` names.
+  pub(crate) step_output_dir: String,
   pub(crate) model: String,
   pub(crate) reasoning_effort: Option<ReasoningEffort>,
   pub(crate) instructions: String,

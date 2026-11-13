@@ -2269,6 +2269,15 @@
       "field": "Mező",
       "input": "Bemenet",
       "interrupted": "Befejezés előtt megszakadt",
+      "localOutput": {
+        "cut": "Az első {kept} látható, összesen {total}",
+        "diff": "Fájlmódosítások",
+        "elsewhere": "Nyissa meg azon a számítógépen, amelyen futott",
+        "empty": "Nincs kimenet",
+        "failed": "A stella asztali alkalmazás ezen a számítógépen nem tudta megjeleníteni.",
+        "notKept": "Ebből a lépésből semmi sincs megőrizve ezen a számítógépen",
+        "reading": "Olvasás erről a számítógépről"
+      },
       "output": "Kimenet",
       "patternInPath": "{pattern} itt: {path}",
       "proposedPlan": "Terv javaslata",

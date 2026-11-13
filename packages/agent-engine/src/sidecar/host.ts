@@ -47,6 +47,7 @@ import {
   harnessSessionId,
 } from "../harness/events";
 import { readSkillFolderNetworkHosts } from "../harness/skill-network-hosts";
+import type { HarnessStepOutput } from "../harness/step-output";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import type { ProtocolLog } from "../protocol-log";
@@ -76,6 +77,7 @@ import {
   type SidecarRestoreOutcome,
   type SidecarRunStart,
 } from "./protocol";
+import { keepStepOutput } from "./step-outputs";
 
 /**
  * The sidecar's command loop: any number of concurrent runs, one harness
@@ -416,6 +418,34 @@ const stoppedBeforeStart = (): AsyncIterable<HarnessEvent> => {
   queue.push({ type: "turn.interrupted" });
   queue.close();
   return queue.items;
+};
+
+type KeepRunStepOutputOptions = {
+  stepOutputDir: string;
+  workspaceDir: string;
+  runId: string;
+  toolCallId: string;
+  output: HarnessStepOutput | undefined;
+  options: Pick<SidecarHostOptions, "log">;
+};
+
+/**
+ * Keep what a step produced on this computer, for the member to open here.
+ * The run goes on without it: the step's row then says its output is not on
+ * this computer.
+ */
+const keepRunStepOutput = async ({
+  options,
+  output,
+  ...step
+}: KeepRunStepOutputOptions) => {
+  if (output === undefined) {
+    return;
+  }
+  const kept = await keepStepOutput({ ...step, output });
+  if (Result.isError(kept)) {
+    options.log("a step's output was not kept on this computer");
+  }
 };
 
 const failedBeforeStart = (
@@ -1037,6 +1067,7 @@ export class SidecarHost {
       protectedPaths: [
         message.configDir,
         message.cacheDir,
+        message.stepOutputDir,
         ...message.skillFolders.map((folder) => folder.path),
       ],
       signal: run.stopCopying.signal,
@@ -1177,6 +1208,7 @@ export class SidecarHost {
       }
     };
 
+    const { options } = this;
     /**
      * The adapter's events with harness request ids replaced by runner UUIDs.
      * An approval request is announced after the chunks of its event: the
@@ -1227,11 +1259,21 @@ export class SidecarHost {
             outcome.value = HARNESS_FAILURE_OUTCOME[event.failure.type];
             yield event;
             break;
+          case "tool.completed":
+            await keepRunStepOutput({
+              stepOutputDir: message.stepOutputDir,
+              workspaceDir: message.workspaceDir,
+              runId,
+              toolCallId: event.toolCall.id,
+              output: event.result.localOutput,
+              options,
+            });
+            yield event;
+            break;
           case "text.delta":
           case "text.completed":
           case "reasoning.completed":
           case "tool.started":
-          case "tool.completed":
           case "retrying":
             yield event;
             break;

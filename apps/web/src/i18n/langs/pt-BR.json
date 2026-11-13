@@ -2269,6 +2269,15 @@
       "field": "Campo",
       "input": "Entrada",
       "interrupted": "Interrompido antes de concluir",
+      "localOutput": {
+        "cut": "Mostrando os primeiros {kept} de {total}",
+        "diff": "Alterações nos arquivos",
+        "elsewhere": "Abra no computador que executou",
+        "empty": "Sem saída",
+        "failed": "O aplicativo de desktop do stella neste computador não conseguiu mostrar isto.",
+        "notKept": "Nada desta etapa está guardado neste computador",
+        "reading": "Lendo deste computador"
+      },
       "output": "Saída",
       "patternInPath": "{pattern} em {path}",
       "proposedPlan": "Propondo um plano",
