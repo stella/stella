@@ -11,6 +11,7 @@ import {
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
 import { PushRegistration } from "@/components/push-registration";
+import { RoleProvider, useCan } from "@/components/role";
 import { RunBanners } from "@/components/run-banner";
 import { SelectionProvider, useSelection } from "@/components/selection";
 import { TimerActivitySync } from "@/components/timer-activity-sync";
@@ -32,14 +33,16 @@ export const ProtectedScreens = () => {
       <HeaderSearchProvider activeTab={activeTab}>
         <MattersViewProvider>
           <ChangesProvider>
-            <SelectionProvider>
-              <ActiveChatRunsProvider>
-                <TimerActivitySync />
-                <PushRegistration />
-                <Screens />
-                <RunBanners />
-              </ActiveChatRunsProvider>
-            </SelectionProvider>
+            <RoleProvider>
+              <SelectionProvider>
+                <ActiveChatRunsProvider>
+                  <TimerActivitySync />
+                  <PushRegistration />
+                  <Screens />
+                  <RunBanners />
+                </ActiveChatRunsProvider>
+              </SelectionProvider>
+            </RoleProvider>
           </ChangesProvider>
         </MattersViewProvider>
       </HeaderSearchProvider>
@@ -412,18 +415,23 @@ function useShortcuts(
 /** A tab's "+": what it starts, and starting it. */
 type TabAction = { label: string; onPress: () => void };
 
-/** The header's "+" for a tab, if it has one; ⌘N presses it too. */
+/**
+ * The header's "+" for a tab, if it has one and the person's role may add
+ * there, as the web hides its own; ⌘N presses it too.
+ */
 function useTabAction(tab: string): TabAction | undefined {
   const chat = useTranslations("chat");
   const matters = useTranslations("matters");
   const tasks = useTranslations("tasks");
   const router = useRouter();
   const newChat = useNewChat();
+  const canAddTask = useCan({ entity: ["create"] });
+  const canAddMatter = useCan({ workspace: ["create"] });
 
   if (tab === "index") {
     return { label: chat("newChat"), onPress: newChat };
   }
-  if (tab === "tasks") {
+  if (tab === "tasks" && canAddTask) {
     return {
       label: tasks("newTask"),
       onPress: () => {
@@ -431,7 +439,7 @@ function useTabAction(tab: string): TabAction | undefined {
       },
     };
   }
-  if (tab === "matters") {
+  if (tab === "matters" && canAddMatter) {
     return {
       label: matters("newMatter"),
       onPress: () => {

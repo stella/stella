@@ -1366,14 +1366,22 @@ export const buildActiveDraftPrompt = (
   ].join("\n");
 };
 
+/**
+ * The thread's first title, from the message that starts it: its text as
+ * the person wrote it. A reference chip (`<entity-mention>`) has no text of
+ * its own, so it reads as its label, as the web's composer reads it
+ * (`chatDraftHasModelContent`); without that, a request naming two
+ * documents titles the thread without either name.
+ */
 export const extractTitle = (parts: ChatMessage["parts"]) => {
   const raw = parts
     .map((part) => (part.type === "text" ? part.content : ""))
     .join("");
-  const plainText = load(raw, undefined, false)
-    .text()
-    .replaceAll(/\s+/gu, " ")
-    .trim();
+  const $ = load(raw, undefined, false);
+  $("entity-mention").each((_, node) => {
+    $(node).text($(node).attr("data-label") ?? "");
+  });
+  const plainText = $.text().replaceAll(/\s+/gu, " ").trim();
 
   if (plainText.length > TITLE_MAX_LENGTH) {
     return `${plainText.slice(0, TITLE_MAX_LENGTH)}…`;

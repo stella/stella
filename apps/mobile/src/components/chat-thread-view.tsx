@@ -21,6 +21,7 @@ import { ChatMessage } from "@/components/chat-message";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
+import { ThreadMatter } from "@/components/thread-matter";
 import { useChatTurn } from "@/components/use-chat-turn";
 import type { LiveTurn } from "@/components/use-chat-turn";
 import { useMarkChatReadWhileOpen } from "@/components/use-mark-chat-read";
@@ -93,19 +94,23 @@ export const ChatThreadView = ({
   };
 
   return (
-    <Suspense
-      fallback={<ActivityIndicator color={colors.accent} style={styles.fill} />}
-    >
-      <LoadedThread
-        load={load}
-        matterId={matterId}
-        onReload={reload}
-        refreshing={refreshing}
-        shareId={shareId}
-        source={source}
-        threadId={threadId}
-      />
-    </Suspense>
+    <ThreadMatter value={matterId}>
+      <Suspense
+        fallback={
+          <ActivityIndicator color={colors.accent} style={styles.fill} />
+        }
+      >
+        <LoadedThread
+          load={load}
+          matterId={matterId}
+          onReload={reload}
+          refreshing={refreshing}
+          shareId={shareId}
+          source={source}
+          threadId={threadId}
+        />
+      </Suspense>
+    </ThreadMatter>
   );
 };
 
@@ -461,8 +466,8 @@ const LiveTurnView = ({
       {turn.question === undefined ? null : (
         <ChatMessage entry={turn.question} uploading={uploading} />
       )}
-      {answer.text === "" && answer.tools.length === 0 ? null : (
-        <ChatMessage entry={answer} />
+      {answer.blocks.length === 0 ? null : (
+        <ChatMessage entry={answer} live={status === "streaming"} />
       )}
       {status === "streaming" ? (
         <View style={styles.working}>
