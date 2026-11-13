@@ -255,7 +255,18 @@ export const FAKE_PRIVATE_TEXT = {
   written: "Confidential settlement terms.",
   fetchPrompt: "Summarise the termination rules",
   activeForm: "Working through the private plan",
+  subagentPrompt: "Read the lease and list every clause on arrears.",
+  subagentText: "Clause 4 covers arrears.",
+  subagentThinking: "The arrears clause may be void.",
+  subagentReport: "Report: clause 4 caps arrears at 4,200.",
+  imageData: "aW1hZ2UgYnl0ZXM=",
 } as const;
+
+/** The call that starts the subagent in the subagent scenario. */
+export const FAKE_SUBAGENT_CALL = "call-agent";
+
+/** One message of the subagent `FAKE_SUBAGENT_CALL` started. */
+const inSubagent = { parent_tool_use_id: FAKE_SUBAGENT_CALL };
 
 /** A command longer than chat shows. */
 export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
@@ -686,9 +697,112 @@ const FAKE_SCENARIOS = {
       }),
     ]),
     toolResult("call-todo", "Todos updated."),
-    assistant("msg-13", [toolUse("call-task", "Task", { prompt: "Look" })]),
-    toolResult("call-task", "Done."),
+    assistant("msg-13", [toolUse("call-skill", "Skill", { skill: "review" })]),
+    toolResult("call-skill", "Done."),
     result(),
+  ],
+  /**
+   * A subagent: the call that starts it, then its own messages, which name
+   * that call. It reads a file, asks to run a command, views an image and
+   * calls a connector tool; what it was told, wrote, thought and reported
+   * sits next to the steps stella shows.
+   */
+  subagent: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse(FAKE_SUBAGENT_CALL, "Agent", {
+        description: "Check the lease",
+        subagent_type: "Explore",
+        prompt: FAKE_PRIVATE_TEXT.subagentPrompt,
+      }),
+    ]),
+    {
+      emit: {
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: FAKE_PRIVATE_TEXT.subagentPrompt }],
+        },
+        session_id: "s",
+        ...inSubagent,
+      },
+    },
+    {
+      emit: {
+        type: "stream_event",
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: FAKE_PRIVATE_TEXT.subagentText },
+        },
+        session_id: "s",
+        ...inSubagent,
+      },
+    },
+    assistant(
+      "msg-sub-1",
+      [
+        { type: "thinking", thinking: FAKE_PRIVATE_TEXT.subagentThinking },
+        { type: "text", text: FAKE_PRIVATE_TEXT.subagentText },
+        toolUse("call-sub-read", "Read", {
+          file_path: "/workspace/drafts/lease.md",
+        }),
+      ],
+      inSubagent,
+      requestUsage(900_000, 5),
+    ),
+    toolResult("call-sub-read", "1→lease", false, inSubagent),
+    assistant(
+      "msg-sub-2",
+      [toolUse("call-sub-rm", "Bash", { command: "rm draft.md" })],
+      inSubagent,
+    ),
+    canUseTool("call-sub-rm", "Bash", { command: "rm draft.md" }),
+    toolResult("call-sub-rm", "", false, inSubagent),
+    assistant(
+      "msg-sub-3",
+      [
+        toolUse("call-sub-image", "Read", {
+          file_path: "/workspace/scans/Lease Page 1.PNG",
+        }),
+      ],
+      inSubagent,
+    ),
+    toolResult(
+      "call-sub-image",
+      [
+        {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: "image/png",
+            data: FAKE_PRIVATE_TEXT.imageData,
+          },
+        },
+      ],
+      false,
+      inSubagent,
+    ),
+    assistant(
+      "msg-sub-4",
+      [toolUse("call-sub-docs", FAKE_MCP_CALL.name, FAKE_MCP_CALL.input)],
+      inSubagent,
+    ),
+    toolResult("call-sub-docs", "2 results", false, inSubagent),
+    toolResult(FAKE_SUBAGENT_CALL, [
+      { type: "text", text: FAKE_PRIVATE_TEXT.subagentReport },
+    ]),
+    assistant(
+      "msg-2",
+      [{ type: "text", text: "The lease caps arrears." }],
+      {},
+      requestUsage(1000, 5),
+    ),
+    result({
+      modelUsage: {
+        [FAKE_CLAUDE_MODEL]: { contextWindow: FAKE_CLAUDE_CONTEXT_WINDOW },
+      },
+    }),
   ],
   /** Streamed text, reasoning, a connector call, a command, an answer. */
   tool_calls: [
@@ -820,6 +934,42 @@ const FAKE_SCENARIOS = {
     toolResult("call-plan", "User has approved your plan."),
     { expect: "set_permission_mode" },
     assistant("msg-2", [{ type: "text", text: "Drafting the notice." }]),
+    result(),
+  ],
+  /**
+   * A subagent that plans: its plan is asked about like any other, and
+   * approving it is not the turn's own plan being approved.
+   */
+  subagent_plan: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse(FAKE_SUBAGENT_CALL, "Agent", {
+        description: "Plan the notice",
+        subagent_type: "Plan",
+        prompt: FAKE_PRIVATE_TEXT.subagentPrompt,
+      }),
+    ]),
+    assistant(
+      "msg-sub-plan",
+      [toolUse("call-sub-plan", "ExitPlanMode", {})],
+      inSubagent,
+    ),
+    canUseTool(
+      "call-sub-plan",
+      "ExitPlanMode",
+      { plan: FAKE_PLAN, planFilePath: "/plans/notice.md" },
+      { permission_suggestions: [SET_MODE_SUGGESTION] },
+    ),
+    toolResult(
+      "call-sub-plan",
+      "User has approved your plan.",
+      false,
+      inSubagent,
+    ),
+    toolResult(FAKE_SUBAGENT_CALL, "Done."),
+    assistant("msg-2", [{ type: "text", text: "The subagent has a plan." }]),
+    // Long enough for a mode switch, were one sent, to arrive before the end.
+    { sleep: 200 },
     result(),
   ],
   /** A declined plan: the CLI stays in plan mode and the turn ends. */

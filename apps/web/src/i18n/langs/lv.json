@@ -2288,9 +2288,11 @@
       "signInToContinue": "Lai turpinātu, pieslēdzieties",
       "sourceCode": "Pirmkods",
       "statusWaiting": "Gaida",
+      "subagent": "Apakšaģenta palaišana",
       "toggleDetails": "Pārslēgt detaļas",
       "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}",
-      "updatePlan": "Plāna atjaunināšana"
+      "updatePlan": "Plāna atjaunināšana",
+      "viewImage": "Attēla skatīšana"
     },
     "turnNotification": {
       "failedBody": "stellas tērzēšanas atbilde netika pabeigta.",

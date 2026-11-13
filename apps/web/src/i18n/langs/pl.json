@@ -2288,9 +2288,11 @@
       "signInToContinue": "Zaloguj się, aby kontynuować",
       "sourceCode": "Kod źródłowy",
       "statusWaiting": "Oczekuje",
+      "subagent": "Uruchamianie subagenta",
       "toggleDetails": "Przełącz szczegóły",
       "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}",
-      "updatePlan": "Aktualizowanie planu"
+      "updatePlan": "Aktualizowanie planu",
+      "viewImage": "Wyświetlanie obrazu"
     },
     "turnNotification": {
       "failedBody": "Odpowiedź na czacie w stelli nie została ukończona.",

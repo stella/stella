@@ -3,7 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { ASK_USER_TOOL_NAME } from "@stll/api-contract/chat";
 
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
-import { turnAnnouncement } from "@/routes/_protected.chat/-components/chat-turn-announcer.logic";
+import {
+  announcementKey,
+  isOpeningPhase,
+  turnAnnouncement,
+} from "@/routes/_protected.chat/-components/chat-turn-announcer.logic";
 
 type Outcome = NonNullable<
   NonNullable<ChatUIMessage["metadata"]>["turnOutcome"]
@@ -166,5 +170,52 @@ describe("what the thread announces about its turn", () => {
       }),
     ).toBe("second");
     expect(subject({ type: "completed" })).toBe("answer");
+  });
+});
+
+describe("what the thread showed when it opened", () => {
+  const done = turnAnnouncement({
+    messages: [question, answer({ type: "completed" })],
+    isGenerating: false,
+    hasError: false,
+  });
+  if (done === null) {
+    throw new Error("A completed answer has an announcement");
+  }
+  const key = announcementKey(done);
+  const opening = { key, turnsStarted: 0 };
+
+  test("is the same phase about the same message, with no turn started since", () => {
+    expect(isOpeningPhase({ opening, shown: { key, turnsStarted: 0 } })).toBe(
+      true,
+    );
+  });
+
+  test("is not a retry that ends on the answer the thread opened on", () => {
+    // The same key: the retried answer has the id and outcome of the one the
+    // thread opened on, and only the turn the page started tells them apart.
+    expect(isOpeningPhase({ opening, shown: { key, turnsStarted: 1 } })).toBe(
+      false,
+    );
+  });
+
+  test("is not another phase or another message", () => {
+    const failed = announcementKey({
+      announcement: "failed",
+      subject: "answer",
+    });
+    const next = announcementKey({ announcement: "done", subject: "next" });
+    for (const other of [failed, next, null]) {
+      expect(
+        isOpeningPhase({ opening, shown: { key: other, turnsStarted: 0 } }),
+      ).toBe(false);
+    }
+    expect(key).not.toBe(failed);
+    expect(key).not.toBe(next);
+  });
+
+  test("is a quiet thread that stays quiet", () => {
+    const quiet = { key: null, turnsStarted: 0 };
+    expect(isOpeningPhase({ opening: quiet, shown: quiet })).toBe(true);
   });
 });
