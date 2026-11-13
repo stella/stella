@@ -2287,9 +2287,11 @@
       "searchFiles": "Failidest otsimine",
       "sourceCode": "Lähtekood",
       "statusWaiting": "Ootel",
+      "subagent": "Alamagendi käivitamine",
       "toggleDetails": "Üksikasjade lülitamine",
       "unrestoredFields": "Anonüümitud režiimis ei õnnestunud {count, plural, one {# välja} other {# välja}} tegelike väärtustega täita. Kontrollige: {fields}",
-      "updatePlan": "Plaani uuendamine"
+      "updatePlan": "Plaani uuendamine",
+      "viewImage": "Pildi vaatamine"
     },
     "turnNotification": {
       "failedBody": "stella vestluse vastus jäi lõpetamata.",

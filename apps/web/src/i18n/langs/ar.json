@@ -2287,9 +2287,11 @@
       "searchFiles": "البحث في الملفات",
       "sourceCode": "الشيفرة المصدرية",
       "statusWaiting": "في الانتظار",
+      "subagent": "تشغيل وكيل فرعي",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
       "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}",
-      "updatePlan": "تحديث الخطة"
+      "updatePlan": "تحديث الخطة",
+      "viewImage": "عرض صورة"
     },
     "turnNotification": {
       "failedBody": "لم يكتمل رد في دردشة stella.",

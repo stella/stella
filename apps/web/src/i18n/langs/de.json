@@ -2287,9 +2287,11 @@
       "searchFiles": "Dateien werden durchsucht",
       "sourceCode": "Quellcode",
       "statusWaiting": "Wartet",
+      "subagent": "Subagent wird ausgeführt",
       "toggleDetails": "Details ein-/ausblenden",
       "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}",
-      "updatePlan": "Plan wird aktualisiert"
+      "updatePlan": "Plan wird aktualisiert",
+      "viewImage": "Bild wird angesehen"
     },
     "turnNotification": {
       "failedBody": "Eine Chat-Antwort in stella wurde nicht abgeschlossen.",

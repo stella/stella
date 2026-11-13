@@ -38,6 +38,7 @@ import {
   FAKE_RESUMED_SESSION_ID,
   FAKE_SANDBOX_HOST,
   FAKE_SANDBOX_REFUSAL,
+  FAKE_SUBAGENT_CALL,
   FAKE_UNLISTED_DEFAULT,
   type FakeScenarioName,
 } from "../../../scripts/fake-claude-code-cli";
@@ -621,7 +622,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
         },
       },
       // Any other tool shows its name only.
-      { name: "harness_native_tool", input: { tool: "Task" } },
+      { name: "harness_native_tool", input: { tool: "Skill" } },
     ]);
     // Nothing a call carried beyond those fields is stored, in its input or
     // its raw arguments.
@@ -646,6 +647,150 @@ describe("Claude Code adapter over stream-json stdio", () => {
       expect(storedText).not.toContain(returned);
     }
     expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+  });
+
+  test("a subagent is a step, the steps it takes are its steps, and what it was told, wrote and reported stays on the computer", async () => {
+    const approvals: HarnessEvent[] = [];
+    const { events } = await run("subagent", {
+      onEvent: async (event, turn) => {
+        if (event.type !== "approval.requested") {
+          return;
+        }
+        approvals.push(event);
+        const approved = await turn.respond({
+          type: "approval",
+          requestId: event.request.requestId,
+          decision: "approve",
+        });
+        expect(Result.isOk(approved)).toBe(true);
+      },
+    });
+    const inSubagent = { parentCallId: FAKE_SUBAGENT_CALL };
+    expect(
+      toolCompletions(events).map(({ toolCall, result }) => ({
+        id: toolCall.id,
+        name: toolCall.name,
+        input: toolCall.input,
+        status: result.status,
+      })),
+    ).toEqual([
+      {
+        id: "call-sub-read",
+        name: "harness_native_tool",
+        input: {
+          tool: "Read",
+          detail: { kind: "read", path: "/workspace/drafts/lease.md" },
+          ...inSubagent,
+        },
+        status: "succeeded",
+      },
+      {
+        id: "call-sub-rm",
+        name: "command_execution",
+        input: { command: "rm draft.md", ...inSubagent },
+        status: "succeeded",
+      },
+      {
+        id: "call-sub-image",
+        name: "harness_native_tool",
+        input: {
+          tool: "Read",
+          detail: { kind: "image", path: "/workspace/scans/Lease Page 1.PNG" },
+          ...inSubagent,
+        },
+        status: "succeeded",
+      },
+      // A connector call's input is its tool's own, so it names no subagent
+      // and stays on the turn.
+      {
+        id: "call-sub-docs",
+        name: FAKE_MCP_CALL.name,
+        input: FAKE_MCP_CALL.input,
+        status: "succeeded",
+      },
+      {
+        id: FAKE_SUBAGENT_CALL,
+        name: "harness_native_tool",
+        input: {
+          tool: "Agent",
+          detail: {
+            kind: "subagent",
+            description: "Check the lease",
+            agentType: "Explore",
+          },
+        },
+        status: "succeeded",
+      },
+    ]);
+    // The subagent's step opens before any step it takes.
+    expect(
+      events.flatMap((event) =>
+        event.type === "tool.started" ? [event.toolCall.id] : [],
+      ),
+    ).toEqual([
+      FAKE_SUBAGENT_CALL,
+      "call-sub-read",
+      "call-sub-rm",
+      "call-sub-image",
+      "call-sub-docs",
+    ]);
+    // An approval a subagent's step asks for reaches the member on that step.
+    expect(approvals).toMatchObject([
+      {
+        request: {
+          kind: "command",
+          toolCall: {
+            id: "call-sub-rm",
+            input: { command: "rm draft.md", ...inSubagent },
+          },
+        },
+      },
+    ]);
+    // Only the main thread's answer is the turn's text, and its context is
+    // the main thread's own.
+    expect(
+      events.flatMap((event) =>
+        event.type === "text.completed" ||
+        event.type === "text.delta" ||
+        event.type === "reasoning.completed"
+          ? [event]
+          : [],
+      ),
+    ).toMatchObject([
+      { type: "text.completed", text: "The lease caps arrears." },
+    ]);
+    expect(terminal(events)).toMatchObject({
+      type: "turn.completed",
+      usage: { context: { usedTokens: 4 + 600 + 1000 + 5 } },
+    });
+    const stored = await storedMessages(events, "claude-code");
+    const storedText = JSON.stringify(stored);
+    for (const text of [
+      FAKE_PRIVATE_TEXT.subagentPrompt,
+      FAKE_PRIVATE_TEXT.subagentText,
+      FAKE_PRIVATE_TEXT.subagentThinking,
+      FAKE_PRIVATE_TEXT.subagentReport,
+      FAKE_PRIVATE_TEXT.imageData,
+    ]) {
+      expect(storedText).not.toContain(text);
+    }
+    // Stored, a step names its file relative to the run's folder and keeps
+    // the subagent it ran in.
+    expect(
+      stored
+        .flatMap(({ parts }) => parts)
+        .flatMap((part) =>
+          part.type === "tool-call" && part.id === "call-sub-image"
+            ? [part.input]
+            : [],
+        ),
+    ).toEqual([
+      {
+        tool: "Read",
+        detail: { kind: "image", path: "scans/Lease Page 1.PNG" },
+        ...inSubagent,
+      },
+    ]);
   });
 
   test("approvals offer the native decisions and reply with the chosen one", async () => {
@@ -1278,6 +1423,53 @@ describe("Claude Code approval modes", () => {
     expect(
       controlRequests("set_permission_mode").map(({ request }) => request),
     ).toEqual([{ subtype: "set_permission_mode", mode: "acceptEdits" }]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a plan a subagent proposes is asked about on its step, and approving it keeps the turn in plan mode", async () => {
+    const asked: HarnessEvent[] = [];
+    const { events, controlRequests } = await run("subagent_plan", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "plan" },
+      },
+      onEvent: async (event, turn) => {
+        if (event.type !== "approval.requested") {
+          return;
+        }
+        asked.push(event);
+        await turn.respond({
+          type: "approval",
+          requestId: event.request.requestId,
+          decision: "approve",
+        });
+      },
+    });
+    expect(asked).toMatchObject([
+      {
+        request: {
+          toolCall: {
+            id: "call-sub-plan",
+            input: {
+              tool: "ExitPlanMode",
+              detail: { kind: "proposed_plan", text: FAKE_PLAN },
+              parentCallId: FAKE_SUBAGENT_CALL,
+            },
+          },
+        },
+      },
+    ]);
+    // The plan's call ran: the fixture reaches the point a main-thread plan
+    // switches the mode at.
+    expect(
+      toolCompletions(events).map(({ toolCall, result }) => [
+        toolCall.id,
+        result.status,
+      ]),
+    ).toEqual([
+      ["call-sub-plan", "succeeded"],
+      [FAKE_SUBAGENT_CALL, "succeeded"],
+    ]);
+    expect(controlRequests("set_permission_mode")).toEqual([]);
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 

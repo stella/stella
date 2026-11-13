@@ -2287,9 +2287,11 @@
       "searchFiles": "Vyhľadávanie v súboroch",
       "sourceCode": "Zdrojový kód",
       "statusWaiting": "Čaká",
+      "subagent": "Spustenie čiastkového agenta",
       "toggleDetails": "Prepnúť podrobnosti",
       "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}",
-      "updatePlan": "Aktualizácia plánu"
+      "updatePlan": "Aktualizácia plánu",
+      "viewImage": "Prezeranie obrázka"
     },
     "turnNotification": {
       "failedBody": "Odpoveď v chate stelly sa nedokončila.",

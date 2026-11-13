@@ -108,6 +108,24 @@ export const nativeToolCall = (
   ...(localInput === undefined ? {} : { localInput }),
 });
 
+/**
+ * `call` as a step of the subagent whose own step is `parentCallId`, or as
+ * it is on the main thread (`null`). Only a harness-native step names its
+ * subagent: the link is a field of the contract's input, and any other call
+ * (an MCP tool, a question) is reported with the input its tool defines, so
+ * it stays on the turn itself.
+ */
+export const stepOfSubagent = (
+  call: HarnessToolCall,
+  parentCallId: string | null,
+): HarnessToolCall =>
+  parentCallId === null ||
+  !isChatLocalRunToolName(call.name) ||
+  typeof call.input !== "object" ||
+  call.input === null
+    ? call
+    : { ...call, input: { ...call.input, parentCallId } };
+
 const withRunRelativePaths = (
   call: ChatLocalRunToolCall,
   workspaceDir: string,
@@ -118,6 +136,7 @@ const withRunRelativePaths = (
       return {
         ...call,
         input: {
+          ...call.input,
           changes: call.input.changes.map((change) => ({
             ...change,
             path: relative(change.path),
@@ -126,7 +145,7 @@ const withRunRelativePaths = (
       };
     case CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool: {
       const { detail } = call.input;
-      if (detail?.kind === "read") {
+      if (detail?.kind === "read" || detail?.kind === "image") {
         return {
           ...call,
           input: {
