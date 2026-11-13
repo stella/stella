@@ -56,6 +56,21 @@ describe("reading Codex's plan limits", () => {
     expect(read).toEqual({ type: "none" });
   });
 
+  test("a keyed answer without the main allowance is none, whatever its single view says", async () => {
+    const read = await readRateLimits(
+      answering(async () =>
+        Result.ok({
+          rateLimits: {
+            primary: { usedPercent: 100, resetsAt: 1_893_456_000 },
+            secondary: null,
+          },
+          rateLimitsByLimitId: { "codex-other": windows("codex-other", 100) },
+        }),
+      ),
+    );
+    expect(read).toEqual({ type: "none" });
+  });
+
   test("an unexpected answer is a failed read, not an empty one", async () => {
     const read = await readRateLimits(
       answering(async () => Result.ok({ limits: [] })),

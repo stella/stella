@@ -33,7 +33,8 @@ export type CodexRateLimitsRead =
 
 /**
  * The main allowance as Codex reads it now: `codex` by limit id when Codex
- * keys them, else the single view.
+ * keys them (and nothing when the keyed answer has no `codex`), else the
+ * single view.
  */
 export const readRateLimits = async (
   client: AppServerClient,
@@ -60,9 +61,12 @@ export const readRateLimits = async (
     return { type: "failed", reason: "malformed" };
   }
   const { rateLimits, rateLimitsByLimitId } = parsed.output;
-  const limits = mergeRateLimits(
-    null,
-    rateLimitsByLimitId?.["codex"] ?? rateLimits,
-  );
+  // A keyed answer names every allowance, so its single view is the main one
+  // only when the map says so: a map without `codex` has no main allowance.
+  const main =
+    rateLimitsByLimitId === undefined || rateLimitsByLimitId === null
+      ? rateLimits
+      : rateLimitsByLimitId["codex"];
+  const limits = main === undefined ? null : mergeRateLimits(null, main);
   return limits === null ? { type: "none" } : { type: "read", limits };
 };
