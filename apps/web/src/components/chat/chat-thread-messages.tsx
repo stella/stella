@@ -21,6 +21,7 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
+import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
 import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
 import {
   countProcessWork,
@@ -131,7 +132,6 @@ import {
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
 import { LocalRunSubagentGroup } from "@/components/chat/local-run-subagent-card";
-import { localRunSubagentGroups } from "@/components/chat/local-run-tool.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";

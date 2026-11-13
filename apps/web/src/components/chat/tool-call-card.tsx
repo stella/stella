@@ -6,7 +6,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { isChatLocalRunToolName } from "@stll/api-contract/chat-local-run-tool";
+import {
+  isLocalRunInterruptedOutput,
+  localRunStepFailed,
+  localRunToolSubtitleText,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -28,12 +33,9 @@ import {
   getChatToolTitleKey,
   type HarnessChatToolCallPart,
   isRunningToolPart,
+  LOCAL_RUN_DETAIL_TITLE_KEYS,
 } from "@/components/chat/chat-ui-tools";
 import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
-import {
-  localRunToolSubtitleText,
-  localRunToolView,
-} from "@/components/chat/local-run-tool.logic";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
 import {
   advanceToolCallTiming,
@@ -415,22 +417,6 @@ const TOOL_CALL_STATUS_LABEL_KEYS = {
 export type ToolCallAction = { label: string; onClick: () => void };
 
 /**
- * Whether a coding agent's own step reports that it failed: its result is
- * `{ status: "failed" }` (`chat-local-run-tool`), with no error envelope.
- */
-const localRunStepFailed = (name: string, output: unknown): boolean =>
-  isChatLocalRunToolName(name) &&
-  typeof output === "object" &&
-  output !== null &&
-  Reflect.get(output, "status") === "failed";
-
-/** The result a coding agent's run gives a call its turn cut off. */
-const isInterruptedOutput = (output: unknown): boolean =>
-  typeof output === "object" &&
-  output !== null &&
-  Reflect.get(output, "status") === "interrupted";
-
-/**
  * How a call that did not complete reads: interrupted only when it ended
  * with no result at all (its stream died mid call) or with the explicit
  * cancellation result; any other error result, an envelope, a step
@@ -454,7 +440,7 @@ export const toolFailureLabelKey = ({
   if (state !== "error") {
     return undefined;
   }
-  return output === undefined || isInterruptedOutput(output)
+  return output === undefined || isLocalRunInterruptedOutput(output)
     ? "chat.toolCall.interrupted"
     : "chat.toolCall.failed";
 };
@@ -533,12 +519,12 @@ const ToolCallCardComponent = ({
     input: getToolInput(part),
     output: part.output,
   });
-  const localRunTitleKey = localRunTool?.titleKey ?? null;
+  const localRunDetailKind = localRunTool?.detailKind ?? null;
   const label =
     catalogEntry?.brand ??
-    (localRunTitleKey === null
+    (localRunDetailKind === null
       ? t(getChatToolTitleKey(name))
-      : t(localRunTitleKey));
+      : t(LOCAL_RUN_DETAIL_TITLE_KEYS[localRunDetailKind]));
   const subtitle =
     localRunTool === null
       ? getToolSubtitle({

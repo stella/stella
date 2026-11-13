@@ -5,6 +5,10 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES } from "@stll/api-contract/chat-local-run-step-output";
+import {
+  type LocalRunStepOutputKind,
+  localRunStepOutputKind,
+} from "@stll/api-contract/chat-local-run-steps";
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
@@ -15,10 +19,6 @@ import {
   type HarnessChatToolCallPart,
   isRunningToolPart,
 } from "@/components/chat/chat-ui-tools";
-import {
-  type LocalRunStepOutputKind,
-  localRunStepOutputKind,
-} from "@/components/chat/local-run-tool.logic";
 import { CopyControl } from "@/components/copy-control";
 import { localRunStepOutputOptions } from "@/features/chat/local-run-step-output";
 import {

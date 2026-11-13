@@ -12,7 +12,7 @@ import {
   localRunSubagentStatus,
   localRunSubagentType,
   localRunToolView,
-} from "@/components/chat/local-run-tool.logic";
+} from "./chat-local-run-steps";
 
 const view = (name: string, input: unknown, output?: unknown) =>
   localRunToolView({ name, input, output });
@@ -20,7 +20,7 @@ const view = (name: string, input: unknown, output?: unknown) =>
 describe("a step a coding agent took on the member's computer", () => {
   test("a command shows its line, and a failed one its exit code", () => {
     expect(view("command_execution", { command: "rg lease" })).toEqual({
-      titleKey: null,
+      detailKind: null,
       subtitle: { type: "text", text: "rg lease" },
     });
     expect(
@@ -30,7 +30,7 @@ describe("a step a coding agent took on the member's computer", () => {
         { aggregated_output: "1 fail", exit_code: 1, status: "failed" },
       ),
     ).toEqual({
-      titleKey: null,
+      detailKind: null,
       subtitle: { type: "command", command: "bun test", exitCode: 1 },
     });
     // Success needs no code; the status mark says it.
@@ -58,7 +58,7 @@ describe("a step a coding agent took on the member's computer", () => {
         ],
       }),
     ).toEqual({
-      titleKey: null,
+      detailKind: null,
       subtitle: { type: "text", text: "drafts/lease.md, drafts/notice.md" },
     });
   });
@@ -70,7 +70,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "read", path: "drafts/lease.md" },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.readFile",
+      detailKind: "read",
       subtitle: { type: "text", text: "drafts/lease.md" },
     });
     expect(
@@ -79,7 +79,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "search", pattern: "termination", path: "drafts" },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.searchFiles",
+      detailKind: "search",
       subtitle: { type: "search", pattern: "termination", path: "drafts" },
     });
     expect(
@@ -94,7 +94,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "fetch", url: "https://example.test/law" },
       }),
     ).toEqual({
-      titleKey: "chat.tool.fetch_url",
+      detailKind: "fetch",
       subtitle: { type: "text", text: "https://example.test/law" },
     });
     expect(
@@ -103,7 +103,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "plan", items: ["Read the lease", "Draft the notice"] },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.updatePlan",
+      detailKind: "plan",
       subtitle: { type: "text", text: "Read the lease, Draft the notice" },
     });
   });
@@ -115,7 +115,7 @@ describe("a step a coding agent took on the member's computer", () => {
       detail: { kind: "proposed_plan", text: plan },
     };
     expect(view("harness_native_tool", input)).toEqual({
-      titleKey: "chat.toolCall.proposedPlan",
+      detailKind: "proposed_plan",
       subtitle: null,
     });
     expect(localRunProposedPlan({ name: "harness_native_tool", input })).toBe(
@@ -132,7 +132,7 @@ describe("a step a coding agent took on the member's computer", () => {
 
   test("any other native tool shows its name, and a malformed detail its name only", () => {
     expect(view("harness_native_tool", { tool: "Skill" })).toEqual({
-      titleKey: null,
+      detailKind: null,
       subtitle: { type: "text", text: "Skill" },
     });
     expect(
@@ -140,7 +140,7 @@ describe("a step a coding agent took on the member's computer", () => {
         tool: "Read",
         detail: { kind: "read", content: "Private text" },
       }),
-    ).toEqual({ titleKey: null, subtitle: { type: "text", text: "Read" } });
+    ).toEqual({ detailKind: null, subtitle: { type: "text", text: "Read" } });
   });
 
   test("a stella or connector call keeps its own row", () => {
@@ -201,7 +201,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
       },
     };
     expect(view("harness_native_tool", input)).toEqual({
-      titleKey: "chat.toolCall.subagent",
+      detailKind: "subagent",
       subtitle: { type: "text", text: "Check the lease" },
     });
     expect(localRunSubagentType({ name: "harness_native_tool", input })).toBe(
@@ -213,7 +213,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
       detail: { kind: "subagent", description: "" },
     };
     expect(view("harness_native_tool", unnamed)).toEqual({
-      titleKey: "chat.toolCall.subagent",
+      detailKind: "subagent",
       subtitle: null,
     });
     expect(
@@ -231,7 +231,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
         detail: { kind: "image", path: "scans/page-1.png" },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.viewImage",
+      detailKind: "image",
       subtitle: { type: "text", text: "scans/page-1.png" },
     });
   });
