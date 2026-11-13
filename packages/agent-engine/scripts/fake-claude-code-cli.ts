@@ -427,6 +427,8 @@ const FAKE_SCENARIOS = {
       is_error: true,
       errors: ["Request was aborted."],
     }),
+    // The next turn first sets the process to its own mode.
+    { expect: "set_permission_mode", response: {} },
     { expectUser: true },
     { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
     backgroundTasks([]),
