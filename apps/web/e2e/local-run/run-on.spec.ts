@@ -7,9 +7,10 @@ import {
   choosePermission,
   chooseRunOn,
   chosenPermission,
+  expectRunOn,
   messagesReceived,
+  modelsOffered,
   openNewChat,
-  runOnButton,
   send,
   setComputerOnline,
   stopButton,
@@ -63,19 +64,35 @@ for (const agent of ["codex", "claude-code"] as const) {
     await expect(transcript(page)).toContainText(ANSWERS[agent].answer, {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
-    await expect(runOnButton(page)).toHaveAccessibleName(
-      `${AGENTS[agent].name} · ${ANSWERS[agent].model}`,
-    );
+    await expectRunOn(page, {
+      place: "computer",
+      agent,
+      model: ANSWERS[agent].model,
+    });
   });
 }
+
+test("the model chip offers the models of the agent chosen in the where chip, and no other's", async ({
+  page,
+}) => {
+  // `blocking_question` is a scenario of the Codex stand-in alone, `question`
+  // of the Claude Code one.
+  const models = ["blocking_question", "question"];
+  await openNewChat(page);
+  await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
+  expect(await modelsOffered(page, models)).toEqual([true, false]);
+
+  await chooseRunOn(page, {
+    place: "computer",
+    agent: "claude-code",
+    model: "tool_calls",
+  });
+  expect(await modelsOffered(page, models)).toEqual([false, true]);
+});
 
 test("the elapsed time of a computer turn counts up while it runs", async ({
   page,
 }) => {
-  test.fixme(
-    true,
-    "Stays at 0s while the agent has streamed nothing; fixed by #8383 (count a running turn's time from its send).",
-  );
   await page.clock.install();
   await openNewChat(page);
   await chooseRunOn(page, {
@@ -144,13 +161,15 @@ test("new chats start on the last Run on choice, and on Ask whatever permission 
   });
 
   await openNewChat(page);
-  await expect(runOnButton(page)).toHaveAccessibleName(
-    "Claude Code · tool_calls",
-  );
+  await expectRunOn(page, {
+    place: "computer",
+    agent: "claude-code",
+    model: "tool_calls",
+  });
   expect(await chosenPermission(page)).toEqual(["ask"]);
 
-  // Back on stella, the next new chat starts there.
+  // Back in the cloud, the next new chat starts there.
   await chooseRunOn(page, { place: "cloud" });
   await openNewChat(page);
-  await expect(runOnButton(page)).toHaveAccessibleName("Auto");
+  await expectRunOn(page, { place: "cloud" });
 });

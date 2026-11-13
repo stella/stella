@@ -7,7 +7,8 @@ import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets
 import {
   agentLog,
   chooseRunOn,
-  composer,
+  expectComputerState,
+  expectRunOn,
   filesWritten,
   messagesReceived,
   openNewChat,
@@ -38,6 +39,10 @@ const UNDO_NOT_OFFERED =
 
 /** The send's refusal while none of the member's computers is connected. */
 const NO_COMPUTER = "None of your computers is connected.";
+/** The refusal's button that opens stella desktop and sends again. */
+const OPEN_DESKTOP = "Open stella desktop";
+/** What a turn, and that button, say while stella desktop opens. */
+const OPENING_DESKTOP = "Opening stella desktop...";
 
 test.beforeEach(async ({ request }) => {
   await setComputerOnline(request, true);
@@ -185,15 +190,8 @@ test("the first send of a new chat while no computer is connected says why and k
   await expect(page.getByText("Are you there?")).toBeVisible();
 });
 
-test("a send in a chat while no computer is connected says why, and goes through once it is back", async ({
-  page,
-  request,
-  browserErrors,
-}) => {
-  // The browser logs the refused send, and the development build echoes its
-  // failed stream read.
-  browserErrors.expectCaptured(/status of 409 \(Conflict\)/u);
-  browserErrors.expectCaptured(/Stream response body read failed/u);
+/** A chat on the computer with one answered turn. */
+const answeredChat = async (page: Page) => {
   await openNewChat(page);
   await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
   await send(page, "First question");
@@ -201,26 +199,68 @@ test("a send in a chat while no computer is connected says why, and goes through
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
   await expect(page).toHaveURL(THREAD_URL);
+};
+
+const answers = (page: Page) =>
+  transcript(page).getByText(TEXT_ANSWER, { exact: true });
+
+test("a send refused because no computer is connected says why, and Open stella desktop sends it again once one is back", async ({
+  page,
+  request,
+  browserErrors,
+}) => {
+  // The browser logs the refused send.
+  browserErrors.expectCaptured(/status of 409 \(Conflict\)/u);
+  await answeredChat(page);
+  // The page last read the computer as connected, so the send goes out and
+  // the API refuses it.
   await setComputerOnline(request, false);
 
   await send(page, "Second question");
 
-  await expect(page.getByText(NO_COMPUTER)).toBeVisible({
+  await expect(transcript(page).getByText(NO_COMPUTER)).toBeVisible({
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
+  await transcript(page).getByRole("button", { name: OPEN_DESKTOP }).click();
+  // The launch waits for a computer, and says so in the button's place.
+  await expect(
+    transcript(page).getByRole("button", { name: OPENING_DESKTOP }),
+  ).toBeDisabled();
+  await expect(answers(page)).toHaveCount(1);
 
   await setComputerOnline(request, true);
-  // The refused message is offered again, in the transcript or the composer.
-  if (
-    ((await composer(page).textContent()) ?? "").includes("Second question")
-  ) {
-    await page.getByRole("button", { name: "Send message" }).click();
-  } else {
-    await send(page, "Second question");
-  }
+
+  // Sent again without another click.
+  await expect(answers(page)).toHaveCount(2, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+  await expect(transcript(page).getByText(NO_COMPUTER)).toHaveCount(0);
+});
+
+test("a send while the chat shows the computer offline waits for stella desktop, and goes out once the computer is back", async ({
+  page,
+  request,
+}) => {
+  await answeredChat(page);
+  await setComputerOnline(request, false);
+  // The chat as loaded reads the computer again and says it is offline.
+  await page.reload();
+  await expectComputerState(page, "codex", "offline");
+
+  await send(page, "Second question");
+
   await expect(
-    transcript(page).getByText(TEXT_ANSWER, { exact: true }),
-  ).toHaveCount(2, { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
+    transcript(page).getByRole("status").filter({ hasText: OPENING_DESKTOP }),
+  ).toBeVisible();
+  await expectComputerState(page, "codex", "openingDesktop");
+  await expect(answers(page)).toHaveCount(1);
+
+  await setComputerOnline(request, true);
+
+  await expect(answers(page)).toHaveCount(2, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+  await expectRunOn(page, { place: "computer", agent: "codex", model: "text" });
 });
 
 test("a computer that drops offline mid-turn picks the turn up again once it is back", async ({

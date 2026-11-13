@@ -1,4 +1,4 @@
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext, Locator, Page } from "@playwright/test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
@@ -8,6 +8,7 @@ import {
   LOCAL_RUNNER_SWITCHES,
   localRunnerDir,
 } from "@stll/scripts/src/agent-local-runner-files";
+import { escapeRegExp } from "@stll/text-normalize";
 
 import { apiGet } from "../helpers/api";
 import { expect } from "../helpers/test";
@@ -18,8 +19,8 @@ import {
 
 // The stand-in computer the suite drives (started by
 // `packages/scripts/src/e2e-local-runner.ts` or `agent:up -- --local-runner`)
-// and the page objects for choosing where a chat runs. Only `chooseRunOn` and
-// `choosePermission` know how the composer offers that choice.
+// and the page objects for the chat. How the composer offers where a chat
+// runs is known only to the "Where the chat runs" section below.
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 const STATE_DIR = localRunnerDir(REPO_ROOT);
@@ -168,35 +169,53 @@ export const openNewChat = async (page: Page) => {
   });
 };
 
-/**
- * The composer's control that names where the chat runs: "Auto" (or a
- * stella model) on stella, "<agent> · <model>" on the computer, with the
- * computer's state when it cannot take a turn.
- */
-export const runOnButton = (page: Page) =>
-  page.getByRole("button", {
-    name: /^(?:Auto|Codex · |Claude Code · )/u,
+// ── Where the chat runs ────────────────────────────────────────────────
+//
+// The composer offers it as two chips: where (the cloud, or a coding agent on
+// the member's computer, with its permissions) and the model that place
+// offers. Everything that knows how they are laid out is in this section.
+
+/** A menu radio item by its name; a chosen one reads "Selected" first. */
+const radioNamed = (page: Page, name: string) =>
+  page.getByRole("menuitemradio", {
+    name: new RegExp(`^(?:Selected\\s*)?${name}`, "u"),
   });
 
+/** The where chip: "Runs on: Cloud", "Runs on: Your computer, Codex". */
+const whereChip = (page: Page) =>
+  page.getByRole("button", { name: /^Runs on: /u });
+
+/** The model chip, named by the model it shows. */
+const modelChip = (page: Page) =>
+  page.locator('button[data-composer-chip="model"]');
+
+const cloudPlace = (page: Page) => radioNamed(page, "Cloud\\b");
+
+const agentPlace = (page: Page, agent: Agent) =>
+  radioNamed(page, `${escapeRegExp(AGENTS[agent].name)}$`);
+
+/** A model of the chosen agent; its recommended one is listed as the default. */
+const modelChoice = (page: Page, model: string) =>
+  radioNamed(page, `(?:Default \\(recommended\\)\\s*)?${escapeRegExp(model)}$`);
+
 /**
- * Open the Run on menu. A click that lands while the menu that just closed
- * is still leaving can close it again, so it is opened until its first
- * choice shows.
+ * Open a chip's menu. A click that lands while the menu that just closed is
+ * still leaving can close it again, so it is opened until `shown` shows.
  */
-const openRunOnMenu = async (page: Page) => {
-  const cloud = page.getByRole("menuitemradio", { name: "stella cloud" });
+const openChipMenu = async (chip: Locator, shown: Locator) => {
   await expect(async () => {
-    if (!(await cloud.isVisible())) {
-      await runOnButton(page).click();
+    if (!(await shown.isVisible())) {
+      await chip.click();
     }
-    await expect(cloud).toBeVisible({ timeout: 2000 });
+    await expect(shown).toBeVisible({ timeout: 2000 });
   }).toPass({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 };
 
-/**
- * Close the Run on menu and its submenu. Choosing a radio item keeps a menu
- * open, as it does for the member, so each Escape closes one level.
- */
+const openWhereMenu = async (page: Page) => {
+  await openChipMenu(whereChip(page), cloudPlace(page));
+};
+
+/** Close whatever menu is open; a pick that keeps its menu open needs it. */
 const closeMenus = async (page: Page) => {
   const menus = page.getByRole("menu");
   await expect(async () => {
@@ -207,46 +226,104 @@ const closeMenus = async (page: Page) => {
   }).toPass({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 };
 
-/** Choose where the chat runs: on stella, or an agent and model on the computer. */
-export const chooseRunOn = async (page: Page, runOn: RunOn) => {
-  await openRunOnMenu(page);
-  if (runOn.place === "cloud") {
-    await page.getByRole("menuitemradio", { name: "stella cloud" }).click();
-    await closeMenus(page);
-    return;
-  }
-  const agent = AGENTS[runOn.agent].name;
-  await page
-    .getByRole("menuitem", { name: `${agent} on this computer` })
-    .click();
-  await page
-    .getByRole("menuitemradio", { name: runOn.model, exact: true })
-    .click();
-  await closeMenus(page);
-  await expect(runOnButton(page)).toHaveAccessibleName(
-    `${agent} · ${runOn.model}`,
+const WHERE_NAMES = {
+  cloud: "Runs on: Cloud",
+  codex: "Runs on: Your computer, Codex",
+  "claude-code": "Runs on: Your computer, Claude Code",
+} as const satisfies Record<"cloud" | Agent, string>;
+
+/** The model chip's name in the cloud while no model is chosen. */
+const CLOUD_MODEL = "Auto";
+
+/**
+ * The chips name `runOn` as where the chat runs, and nothing about the
+ * computer's state (offline, signed out) beside it.
+ */
+export const expectRunOn = async (page: Page, runOn: RunOn) => {
+  await expect(whereChip(page)).toHaveAccessibleName(
+    WHERE_NAMES[runOn.place === "cloud" ? "cloud" : runOn.agent],
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
+  );
+  await expect(modelChip(page)).toHaveAccessibleName(
+    runOn.place === "cloud" ? CLOUD_MODEL : runOn.model,
   );
 };
 
+/** Why the where chip says the computer cannot take a turn now. */
+export const COMPUTER_STATES = {
+  offline: "Computer offline",
+  openingDesktop: "Opening stella desktop...",
+} as const;
+
+/** The where chip names the computer `agent` runs on as in `state`. */
+export const expectComputerState = async (
+  page: Page,
+  agent: Agent,
+  state: keyof typeof COMPUTER_STATES,
+) => {
+  await expect(whereChip(page)).toHaveAccessibleName(
+    `${WHERE_NAMES[agent]}. ${COMPUTER_STATES[state]}`,
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
+  );
+};
+
+/** Choose where the chat runs: the cloud, or an agent and model on the computer. */
+export const chooseRunOn = async (page: Page, runOn: RunOn) => {
+  await openWhereMenu(page);
+  if (runOn.place === "cloud") {
+    await cloudPlace(page).click();
+    await closeMenus(page);
+    await expectRunOn(page, runOn);
+    return;
+  }
+  // Picking the agent closes the menu and sets the agent's recommended model.
+  await agentPlace(page, runOn.agent).click();
+  await closeMenus(page);
+  await expect(whereChip(page)).toHaveAccessibleName(WHERE_NAMES[runOn.agent]);
+  const model = modelChoice(page, runOn.model);
+  await openChipMenu(modelChip(page), model);
+  await model.click();
+  await closeMenus(page);
+  await expectRunOn(page, runOn);
+};
+
+/**
+ * Whether the model chip offers each of `models` for the place chosen now,
+ * in their order.
+ */
+export const modelsOffered = async (page: Page, models: readonly string[]) => {
+  // The chosen model is always listed, so its row says the list is read.
+  const chosen = page.getByRole("menuitemradio", { checked: true });
+  await openChipMenu(modelChip(page), chosen);
+  const offered: boolean[] = [];
+  for (const model of models) {
+    // await-in-loop: the rows of one open menu, read in order.
+    offered.push((await modelChoice(page, model).count()) > 0);
+  }
+  await closeMenus(page);
+  return offered;
+};
+
 export const PERMISSIONS = {
+  plan: "Plan",
   ask: "Ask",
   auto: "Auto",
   fullAuto: "Full auto",
 } as const;
+type Permission = keyof typeof PERMISSIONS;
 
-/** The permission choices of a computer run, in the open Run on menu. */
-const permissionItem = (page: Page, mode: keyof typeof PERMISSIONS) =>
-  page.getByRole("menuitemradio", {
-    name: new RegExp(`^(?:Selected\\s*)?${PERMISSIONS[mode]}\\b`, "u"),
-  });
+/** A permission of a computer run, in the open where menu. */
+const permissionItem = (page: Page, mode: Permission) =>
+  radioNamed(page, `${PERMISSIONS[mode]}\\b`);
 
 /** Choose how freely the agent may act on the computer. */
-export const choosePermission = async (
-  page: Page,
-  mode: keyof typeof PERMISSIONS,
-) => {
-  await openRunOnMenu(page);
+export const choosePermission = async (page: Page, mode: Permission) => {
+  await openWhereMenu(page);
   await permissionItem(page, mode).click();
+  await expect(permissionItem(page, mode)).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
   await closeMenus(page);
 };
 
@@ -257,7 +334,7 @@ export const choosePermission = async (
 export const widestPermission = async (
   page: Page,
 ): Promise<"fullAuto" | "auto"> => {
-  await openRunOnMenu(page);
+  await openWhereMenu(page);
   await expect(permissionItem(page, "auto")).toBeVisible();
   const fullAuto = permissionItem(page, "fullAuto");
   const offered =
@@ -267,15 +344,17 @@ export const widestPermission = async (
   return offered ? "fullAuto" : "auto";
 };
 
-/** The permission the open Run on menu shows as chosen. */
+/** The permissions the open where menu shows as chosen. */
 export const chosenPermission = async (page: Page) => {
-  await openRunOnMenu(page);
+  await openWhereMenu(page);
   await expect(permissionItem(page, "ask")).toBeVisible();
-  const chosen: string[] = [];
-  for (const mode of ["ask", "auto", "fullAuto"] as const) {
-    // await-in-loop: three menu items, read in order.
+  const chosen: Permission[] = [];
+  for (const mode of ["plan", "ask", "auto", "fullAuto"] as const) {
+    // await-in-loop: the menu's permission rows, read in order.
+    const item = permissionItem(page, mode);
     if (
-      (await permissionItem(page, mode).getAttribute("aria-checked")) === "true"
+      (await item.count()) > 0 &&
+      (await item.getAttribute("aria-checked")) === "true"
     ) {
       chosen.push(mode);
     }

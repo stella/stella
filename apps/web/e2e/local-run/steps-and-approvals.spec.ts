@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import {
@@ -57,6 +59,22 @@ const STEPS = {
   { model: string; shown: readonly string[]; hidden: readonly string[] }
 >;
 
+/**
+ * A step's output and diff stay on the computer that ran it; an opened step
+ * reads them from stella desktop's bridge on the browser's own computer. The
+ * stand-in computer serves no bridge, so nothing answers there, whatever
+ * else runs on the computer the suite runs on.
+ */
+const STEP_OUTPUT_ON_THIS_COMPUTER =
+  /^http:\/\/127\.0\.0\.1:\d+\/v1\/runs\/[^/]+\/steps\/[^/]+\/output$/u;
+const OUTPUT_ELSEWHERE = "Open on the computer that ran it";
+
+const noDesktopOnThisComputer = async (page: Page) => {
+  await page.route(STEP_OUTPUT_ON_THIS_COMPUTER, async (route) => {
+    await route.abort("connectionrefused");
+  });
+};
+
 // `approval_outcome`: asks to run `rm draft.md`, then answers by the decision.
 const APPROVAL = {
   codex: { approved: "Removed draft.md.", denied: "Left it in place." },
@@ -73,9 +91,13 @@ test.beforeEach(async ({ request }) => {
 for (const agent of ["codex", "claude-code"] as const) {
   const { name } = AGENTS[agent];
 
-  test(`${name} steps show what they ran on and never their output or file contents`, async ({
+  test(`${name} steps show what they ran on, and their output and file contents never come through the API`, async ({
     page,
+    browserErrors,
   }) => {
+    // The browser logs each read of a step's output that nothing answered.
+    browserErrors.expectCaptured(/net::ERR_CONNECTION_REFUSED/u);
+    await noDesktopOnThisComputer(page);
     await openNewChat(page);
     await chooseRunOn(page, {
       place: "computer",
@@ -94,6 +116,13 @@ for (const agent of ["codex", "claude-code"] as const) {
         transcript(page).getByText(text, { exact: false }).first(),
       ).toBeVisible();
     }
+    // An opened command or file change says where its output is, once read.
+    await expect(
+      transcript(page).getByText(OUTPUT_ELSEWHERE).first(),
+    ).toBeVisible();
+    await expect(
+      transcript(page).getByText("Reading from this computer"),
+    ).toHaveCount(0);
     // Not shown, and not in the page at all.
     const shown = (await transcript(page).textContent()) ?? "";
     for (const text of STEPS[agent].hidden) {
@@ -106,6 +135,12 @@ for (const agent of ["codex", "claude-code"] as const) {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
     await expandTranscript(page);
+    await expect(
+      transcript(page).getByText(OUTPUT_ELSEWHERE).first(),
+    ).toBeVisible();
+    await expect(
+      transcript(page).getByText("Reading from this computer"),
+    ).toHaveCount(0);
     const reloaded = (await transcript(page).textContent()) ?? "";
     for (const text of STEPS[agent].hidden) {
       expect(reloaded, `chat holds "${text}" after a reload`).not.toContain(
