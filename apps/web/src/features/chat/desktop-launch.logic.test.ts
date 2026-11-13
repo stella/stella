@@ -287,6 +287,7 @@ describe("whether a turn needs the desktop opened", () => {
     connected,
     lastSeenAt: "2026-11-12T10:00:00.000Z",
     harnesses: [],
+    linkedFolders: [],
   });
   const enabled = (
     runners: ReturnType<typeof runner>[],

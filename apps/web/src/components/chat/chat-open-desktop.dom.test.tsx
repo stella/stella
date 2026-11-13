@@ -65,6 +65,7 @@ const CONNECTED: ChatLocalRunReadiness = {
       connected: true,
       lastSeenAt: "2026-11-12T10:00:00.000Z",
       harnesses: [],
+      linkedFolders: [],
     },
   ],
   maxApprovals: "full_auto",
