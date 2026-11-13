@@ -1326,6 +1326,19 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(probed.value.usageLimit).toEqual({ resetsAt: FUTURE_RESET_ISO });
   });
 
+  test("a probe whose limits cannot be read stays ready, its limit unknown", async () => {
+    const harness = harnessFor("probe_limits_unreadable");
+    const probed = await harness.adapter.probe();
+    if (Result.isError(probed)) {
+      throw probed.error;
+    }
+    expect(probed.value.auth.type).toBe("signed_in");
+    expect(probed.value.usageLimit).toBeNull();
+    expect(harness.received().map(({ method }) => method)).toContain(
+      "account/rateLimits/read",
+    );
+  });
+
   test("refuses a CODEX_HOME that is the user's own", () => {
     expect(() =>
       createCodexHarnessAdapter({

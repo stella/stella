@@ -569,11 +569,13 @@ export class CodexTurnSession {
     error: CodexTurnError | null,
   ) {
     const read = await readRateLimits(client);
+    // Without a read, the limits the turn already had stand, and with them
+    // a reset that stays unknown.
     this.emit({
       type: "turn.failed",
       failure: classifyTurnFailure({
         error,
-        rateLimits: read ?? this.rateLimits,
+        rateLimits: read.type === "read" ? read.limits : this.rateLimits,
         now: Temporal.Now.instant(),
       }),
     });

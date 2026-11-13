@@ -1096,6 +1096,17 @@ const FAKE_SCENARIOS = {
       result: rateLimitsRead(planLimits(40)),
     },
   ],
+  /** The limits cannot be read, as for an account without a plan. */
+  probe_limits_unreadable: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      error: {
+        code: -32_600,
+        message: "codex account authentication required to read rate limits",
+      },
+    },
+  ],
   probe_out_of_usage: [
     ...handshake(),
     {
