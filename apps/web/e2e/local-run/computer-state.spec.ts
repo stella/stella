@@ -38,6 +38,8 @@ const UNDO_REQUEST =
 const UNDO_NOT_OFFERED =
   "Undo is not offered: GET .../local-files/undo answers undoable false for the newest turn that wrote a file.";
 
+/** The chat's read of its thread. */
+const THREAD_MESSAGES = /\/v1\/chat\/threads\/[^/]+\/messages(?:\?|$)/u;
 /** The send's refusal while none of the member's computers is connected. */
 const NO_COMPUTER = "None of your computers is connected.";
 /** The refusal's button that opens stella desktop and sends again. */
@@ -177,18 +179,36 @@ test("the first send of a new chat while no computer is connected says why and k
 }) => {
   // The browser logs the refused send, and the development build echoes its
   // failed stream read.
+  test.fail(
+    true,
+    "The reason shows, but the message leaves the transcript once the new chat has read its thread.",
+  );
   browserErrors.expectCaptured(/status of 409 \(Conflict\)/u);
   browserErrors.expectCaptured(/Stream response body read failed/u);
   await openNewChat(page);
   await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
   await setComputerOnline(request, false);
 
+  const threadRead = page.waitForResponse(
+    (response) => THREAD_MESSAGES.test(response.url()),
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
+  );
   await send(page, "Are you there?");
 
   await expect(transcript(page).getByText(NO_COMPUTER)).toBeVisible({
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
-  await expect(transcript(page)).toContainText("Are you there?");
+  // After the new chat has read its thread, so a message shown only until
+  // then does not count as kept.
+  await threadRead;
+  // And after the page has drawn what it read.
+  await page.evaluate(
+    async () =>
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      }),
+  );
+  expect(await transcript(page).textContent()).toContain("Are you there?");
 });
 
 /** A chat on the computer with one answered turn. */
