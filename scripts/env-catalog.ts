@@ -1522,6 +1522,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODEX_HOME",
   // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
   "FAKE_SKILL_PATH",
+  // The fixture page the fake harness CLIs' `browse` scenario opens first.
+  "FAKE_BROWSER_START",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",
