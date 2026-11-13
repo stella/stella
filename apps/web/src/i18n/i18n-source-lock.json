@@ -1839,6 +1839,7 @@
   "chat.toolCall.proposedPlan": "Proposing a plan",
   "chat.toolCall.readFile": "Reading a file",
   "chat.toolCall.searchFiles": "Searching files",
+  "chat.toolCall.signInToContinue": "Sign in to continue",
   "chat.toolCall.sourceCode": "Source code",
   "chat.toolCall.statusWaiting": "Waiting",
   "chat.toolCall.subagent": "Running a subagent",

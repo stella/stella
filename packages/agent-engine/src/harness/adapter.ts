@@ -132,8 +132,13 @@ export type HarnessTurnInput = {
   /** Developer instructions for the harness. */
   instructions: string;
   policy: HarnessRunPolicy;
-  /** Stella workspace access; the only tool surface Stella adds. */
+  /** Stella workspace access. */
   mcp: StellaSandboxMcpBinding;
+  /**
+   * The member's Chrome through the stella extension, served on this
+   * computer; `null` where the holder has no browser bridge.
+   */
+  browser: StellaSandboxMcpBinding | null;
   /**
    * The persisted conversation, ending with the user message that starts
    * this turn. It is the portable context: a conversation may change engine

@@ -118,6 +118,7 @@ const startHost = (at: Place): Host => {
       FAKE_HARNESS_LOG: at.fakeLog,
     },
     processGrantTimeoutMs: 10_000,
+    browser: null,
   });
   let stopped: Promise<void> | null = null;
   const stop = async () => {
