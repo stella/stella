@@ -1,28 +1,26 @@
+import { Result } from "better-result";
+
 import {
   CHAT_LOCAL_RUN_STEP_OUTPUT_GRANT_SECONDS,
   type ChatLocalRunStepOutputGrant,
   chatLocalRunStepOutputGrantMessage,
 } from "@stll/api-contract/chat-local-run-step-output";
 
+import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
+import type { RunOwner } from "@/api/lib/desktop-runner/store";
+import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
+
 /**
  * What a run's steps produced stays on the member's computer
  * (`chat-local-run-step-output`); the API only lets the run's owner read it
- * there. Each run has an output key, derived here from the deployment's
- * secret and the run id, so nothing is stored: `run.start` hands it to the
- * computer, which keeps it beside the run's outputs, and a grant is a key
- * derived from it for one member, organization and expiry. The computer
- * derives the same key from its own linked account and checks each request's
- * signature with it.
+ * there. A grant is a key signed with the run's own output key
+ * (`output-keys.ts`) for one member, organization and expiry. The computer
+ * got that output key in `run.start`, keeps it beside the run's outputs, and
+ * signs the same message from its own linked account to check each request.
  */
-
-const OUTPUT_KEY_SCOPE = "stella.run-output-key.v1";
 
 const hmacHex = (key: string, message: string) =>
   new Bun.CryptoHasher("sha256", key).update(message).digest("hex");
-
-/** The output key of run `runId`, under the deployment's `secret`. */
-export const runOutputKey = (secret: string, runId: string): string =>
-  hmacHex(secret, `${OUTPUT_KEY_SCOPE}\n${runId}`);
 
 type StepOutputGrantOptions = {
   outputKey: string;
@@ -52,4 +50,35 @@ export const stepOutputGrant = ({
     ),
     expiresAt,
   };
+};
+
+type OwnerStepOutputGrantOptions = {
+  control: Pick<DesktopRunnerControl, "readRunOutputKey">;
+  owner: RunOwner;
+  runId: string;
+  /** Unix seconds. */
+  now: number;
+};
+
+/**
+ * A grant for `owner` to read run `runId`'s step outputs, signed with the
+ * key stored with the run; `null` when the run is not theirs or keeps no key.
+ */
+export const ownerStepOutputGrant = async ({
+  control,
+  owner,
+  runId,
+  now,
+}: OwnerStepOutputGrantOptions): Promise<
+  Result<ChatLocalRunStepOutputGrant | null, DatabaseError>
+> => {
+  const outputKey = await control.readRunOutputKey({ owner, runId });
+  if (outputKey.isErr()) {
+    return Result.err(outputKey.error);
+  }
+  return Result.ok(
+    outputKey.value === null
+      ? null
+      : stepOutputGrant({ outputKey: outputKey.value, runId, owner, now }),
+  );
 };

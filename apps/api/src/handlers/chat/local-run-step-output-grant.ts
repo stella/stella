@@ -4,16 +4,12 @@ import * as v from "valibot";
 import type { ChatLocalRunStepOutputGrant } from "@stll/api-contract/chat-local-run-step-output";
 import { Temporal } from "@stll/time";
 
-import { env } from "@/api/env";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
-import {
-  runOutputKey,
-  stepOutputGrant,
-} from "@/api/lib/desktop-runner/step-output-grants";
+import { ownerStepOutputGrant } from "@/api/lib/desktop-runner/step-output-grants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const params = v.object({ runId: v.pipe(v.string(), v.uuid()) });
@@ -34,7 +30,7 @@ const config = {
 } satisfies HandlerConfig;
 
 type GrantDependencies = {
-  control: () => Pick<DesktopRunnerControl, "readRun">;
+  control: () => Pick<DesktopRunnerControl, "readRunOutputKey">;
 };
 
 const answer = (grant: ChatLocalRunStepOutputGrant) => Result.ok(grant);
@@ -50,8 +46,15 @@ const createLocalRunStepOutputGrant = (dependencies?: GrantDependencies) =>
       };
       const control =
         dependencies?.control() ?? getDesktopRunnerControl().control;
-      const run = yield* Result.await(control.readRun({ owner, runId }));
-      if (run === null) {
+      const grant = yield* Result.await(
+        ownerStepOutputGrant({
+          control,
+          owner,
+          runId,
+          now: Math.floor(Temporal.Now.instant().epochMilliseconds / 1000),
+        }),
+      );
+      if (grant === null) {
         return Result.err(
           new HandlerError({
             status: 404,
@@ -60,14 +63,7 @@ const createLocalRunStepOutputGrant = (dependencies?: GrantDependencies) =>
           }),
         );
       }
-      return answer(
-        stepOutputGrant({
-          outputKey: runOutputKey(env.BETTER_AUTH_SECRET, run.runId),
-          runId: run.runId,
-          owner,
-          now: Math.floor(Temporal.Now.instant().epochMilliseconds / 1000),
-        }),
-      );
+      return answer(grant);
     },
   );
 

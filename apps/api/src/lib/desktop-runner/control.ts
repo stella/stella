@@ -30,6 +30,7 @@ import {
   requestFolderRestore,
   type TurnFolderRestore,
 } from "@/api/lib/desktop-runner/folder-restores";
+import { openRunOutputKey } from "@/api/lib/desktop-runner/output-keys";
 import {
   type RunAnswerMessage,
   sealRunAnswer,
@@ -51,6 +52,7 @@ import {
   readOpenRunChatThread,
   readRun,
   readRunOutputFile,
+  readRunOutputKey,
   readStoredRunEvents,
   recordChatReadSeq,
   type RunOwner,
@@ -645,6 +647,30 @@ export const createDesktopRunnerControl = ({
         try: async () => await readRun(db, { owner, runId }),
         catch: toDatabaseError,
       }),
+    /**
+     * The output key of the owner's run, to sign a grant with; `null` for a
+     * run that is not theirs or keeps no key. Never logged or answered.
+     */
+    readRunOutputKey: async ({
+      owner,
+      runId,
+    }: RunOptions): Promise<Result<string | null, DatabaseError>> => {
+      const stored = await Result.tryPromise({
+        try: async () => await readRunOutputKey(db, { owner, runId }),
+        catch: toDatabaseError,
+      });
+      if (stored.isErr()) {
+        return Result.err(stored.error);
+      }
+      if (stored.value === null) {
+        return Result.ok(null);
+      }
+      const opened = await openRunOutputKey(
+        owner.organizationId,
+        stored.value.sealedOutputKey,
+      );
+      return Result.ok(opened.type === "opened" ? opened.outputKey : null);
+    },
     /** The chat thread of the owner's run that is still going. */
     readOpenRunChatThread: async (
       options: RunOptions,

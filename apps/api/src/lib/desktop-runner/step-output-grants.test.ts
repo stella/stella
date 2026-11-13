@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import fixtures from "@stll/api-contract/chat-local-run-step-output.fixtures";
 
-import { runOutputKey, stepOutputGrant } from "./step-output-grants";
+import { mintRunOutputKey } from "./output-keys";
+import { stepOutputGrant } from "./step-output-grants";
 
 describe("a grant to read a run's step outputs", () => {
   test("is the key the computer derives for the same run, member, organization and expiry", () => {
@@ -17,8 +18,8 @@ describe("a grant to read a run's step outputs", () => {
     ).toEqual({ key: grant.grantHmac, expiresAt: grant.expiresAt });
   });
 
-  test("differs for another member, organization or run", () => {
-    const outputKey = runOutputKey("s".repeat(32), fixtures.grant.runId);
+  test("differs for another member, organization or run key", () => {
+    const outputKey = mintRunOutputKey();
     const base = {
       outputKey,
       runId: fixtures.grant.runId,
@@ -34,7 +35,7 @@ describe("a grant to read a run's step outputs", () => {
       }),
       stepOutputGrant({
         ...base,
-        outputKey: runOutputKey("s".repeat(32), Bun.randomUUIDv7()),
+        outputKey: mintRunOutputKey(),
       }),
     ].map(({ key }) => key);
     expect(new Set(keys).size).toBe(keys.length);

@@ -1521,7 +1521,8 @@ type ClearMemberScopedDataOptions = Pick<
 
 /**
  * The member's desktop runners, on the owner connection the runner tables
- * admit; their runs, queued commands, events and folder restores cascade, and an open runner
+ * admit. Their runs are deleted by name, since each keeps its output key;
+ * queued commands, events and folder restores cascade, and an open runner
  * socket closes on its next heartbeat.
  */
 const clearMemberDesktopRunners = async ({
@@ -1531,6 +1532,14 @@ const clearMemberDesktopRunners = async ({
   memberId,
   recordAuditEvent,
 }: ClearMemberScopedDataOptions) => {
+  await tx
+    .delete(desktopRunnerRuns)
+    .where(
+      and(
+        eq(desktopRunnerRuns.organizationId, organizationId),
+        eq(desktopRunnerRuns.userId, userId),
+      ),
+    );
   await tx
     .delete(desktopRunners)
     .where(

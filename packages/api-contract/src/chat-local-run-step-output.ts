@@ -7,8 +7,9 @@ import * as v from "valibot";
  * output from the desktop app's loopback bridge, never through the API.
  *
  * The API's part is a grant: for the member who owns the run, a short-lived
- * key derived from the run's output key, which the API handed the desktop in
- * `run.start` and the desktop keeps beside the run's outputs. The desktop
+ * key derived from the run's output key, a random key of that run alone,
+ * which the API keeps with the run, handed the desktop in `run.start`, and
+ * the desktop keeps beside the run's outputs. The desktop
  * derives the same key from its own linked account, so a grant made for
  * another member, another organization or another run never verifies, and
  * each request is signed with it the way the bridge's other requests are
