@@ -120,6 +120,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "desktop_runners.harnesses",
   // Folders linked on the computer: link ids, folder names and states.
   "desktop_runners.linked_folders",
+  // Background task counts keyed by run id.
+  "desktop_runners.background_tasks",
   "desktop_time_entry_batches.result",
   "desktop_edit_sessions.checkpoint_scan_warnings",
   "document_review_findings.payload",
