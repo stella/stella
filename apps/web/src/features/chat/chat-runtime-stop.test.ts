@@ -659,6 +659,87 @@ describe("the composer's Stop", () => {
 
     expect(server.log).toEqual([]);
     expect(server.cancels).toEqual([]);
+    // The thread is read again, so the unsent message leaves the transcript.
+    expect(page.reloads).toBe(1);
+    expect(await sent).toEqual(Result.ok(undefined));
+  });
+
+  test("a continuation of an accepted turn is not held for stella desktop, and Stop cancels that turn on the server", async () => {
+    const server = installServer([TURN_A], "client-call");
+    spyOn(desktopBridge, "openDesktopUrl").mockImplementation(() => undefined);
+    const local: ChatLocalRunTarget = {
+      kind: "local",
+      harness: "codex",
+      model: "gpt-5-codex",
+      approvals: "ask",
+      reasoningEffort: null,
+    };
+    const page: Page = {
+      errors: [],
+      reloads: 0,
+      runtime: createChatRuntime({
+        activeTurnId: null,
+        context: { getRunTarget: () => local },
+        initialMessages: [],
+        key: { scope: "global", threadId: THREAD_ID },
+        onError: (error) => {
+          page.errors.push(error);
+        },
+        onFinish: () => {},
+        reloadThread: () => {
+          page.reloads += 1;
+        },
+      }),
+    };
+    const sent = send(page, "018f0000-0000-7000-8000-00000000000a");
+    await tick();
+    expect(server.log).toEqual([`chat ${TURN_A}`]);
+    // A launch is under way when the page posts the turn's client result.
+    const connects = Promise.withResolvers<undefined>();
+    const launched = getDesktopLaunch().launch(async () => {
+      await connects.promise;
+      return Result.ok(true);
+    });
+    const continuation = Result.tryPromise(
+      async () =>
+        await page.runtime.addToolResult({
+          output: {
+            destination: "download",
+            fileName: "NDA.docx",
+            success: true,
+          },
+          tool: "create-document",
+          toolCallId: CLIENT_CALL_ID,
+        }),
+    );
+    await tick();
+
+    // Posted at once, not held: the server's turn owns the computer's wait.
+    expect(server.held).toHaveLength(1);
+    expect(page.runtime.getSnapshot().computerWait).toBeNull();
+
+    page.runtime.stop();
+    await tick();
+    expect(server.log).toEqual([
+      `chat ${TURN_A}`,
+      "chat (held)",
+      `cancel ${TURN_A}`,
+    ]);
+
+    server.held[0]?.resolve(
+      Response.json(
+        {
+          code: CHAT_TURN_NOT_OWNED_ERROR_CODE,
+          message: "Chat turn has no durable execution owner",
+        },
+        { status: 409 },
+      ),
+    );
+    server.cancels[0]?.answer.resolve(settled(TURN_A, "cancelled"));
+    connects.resolve(undefined);
+    expect(await launched).toBe("connected");
+    await tick();
+    expect(await continuation).toEqual(Result.ok(undefined));
     expect(await sent).toEqual(Result.ok(undefined));
   });
 });

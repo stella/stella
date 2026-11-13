@@ -1374,27 +1374,34 @@ const OpenDesktopAndResendButton = ({
   const desktop = useDesktopLaunch(activeOrganizationId);
   const opening = desktop.state.type === "opening";
   return (
-    <Button
-      disabled={disabled || opening}
-      onClick={() => {
-        const superseded = holdResend();
-        detached(
-          (async () => {
-            const outcome = await desktop.launch();
-            if (outcome === "connected" && !superseded.aborted) {
-              await onResend();
-            }
-          })(),
-          "chat-thread-messages.open-desktop-and-resend",
-        );
-      }}
-      size="sm"
-      variant="destructive-outline"
-    >
-      {opening
-        ? t("settings.account.desktopCardOpeningTitle")
-        : t("settings.account.desktopOpenApp")}
-    </Button>
+    <>
+      <Button
+        disabled={disabled || opening}
+        onClick={() => {
+          const superseded = holdResend();
+          detached(
+            (async () => {
+              const outcome = await desktop.launch();
+              if (outcome === "connected" && !superseded.aborted) {
+                await onResend();
+              }
+            })(),
+            "chat-thread-messages.open-desktop-and-resend",
+          );
+        }}
+        size="sm"
+        variant="destructive-outline"
+      >
+        {opening
+          ? t("settings.account.desktopCardOpeningTitle")
+          : t("settings.account.desktopOpenApp")}
+      </Button>
+      {/* A button's label is not announced as it changes, so the launch's
+          progress has its own status region, mounted before it changes. */}
+      <span className="sr-only" role="status">
+        {opening ? t("settings.account.desktopCardOpeningTitle") : ""}
+      </span>
+    </>
   );
 };
 

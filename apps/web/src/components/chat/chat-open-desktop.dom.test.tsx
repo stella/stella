@@ -139,6 +139,11 @@ test("the refusal's Open stella desktop opens it once, waits for the computer, t
   const button = view.getByRole("button", {
     name: messages.settings.account.desktopOpenApp,
   });
+  // The launch's progress is announced from a status region that is on the
+  // page before it changes, outside the button.
+  const status = view.getByRole("status");
+  expect(status.textContent).toBe("");
+  expect(button.contains(status)).toBe(false);
 
   await act(async () => {
     fireEvent.click(button);
@@ -151,6 +156,10 @@ test("the refusal's Open stella desktop opens it once, waits for the computer, t
     name: messages.settings.account.desktopCardOpeningTitle,
   });
   expect(opening).toHaveProperty("disabled", true);
+  expect(view.getByRole("status")).toBe(status);
+  expect(status.textContent).toBe(
+    messages.settings.account.desktopCardOpeningTitle,
+  );
   await act(async () => {
     fireEvent.click(opening);
   });

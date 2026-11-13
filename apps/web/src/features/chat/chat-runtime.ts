@@ -869,11 +869,14 @@ export const createChatRuntime = ({
             },
           },
         );
-      // A send for the member's computer while stella desktop opens (the
-      // member's own send or Run on pick started it) waits for the launch,
-      // shown as such, and goes out once it ends.
+      // A new message for the member's computer while stella desktop opens
+      // (the member's own send or Run on pick started it) waits for the
+      // launch, shown as such, and goes out once it ends. A continuation of
+      // a turn the server already accepted (`turnId` names it) is never
+      // held: that turn owns its wait for the computer, and Stop must reach
+      // it through the server.
       const launching =
-        context?.getRunTarget?.().kind === "local"
+        turnId === null && context?.getRunTarget?.().kind === "local"
           ? (getDesktopLaunch().pending()?.outcome ?? null)
           : null;
       if (launching === null) {
@@ -1686,11 +1689,14 @@ export const createChatRuntime = ({
       browserTool.cancel();
       sendTiming.abandoned();
       if (desktopHold !== null) {
-        // The turn still waits for stella desktop and nothing was posted:
-        // it ends here, unsent, whenever a computer connects.
+        // A new message still waits for stella desktop and nothing was
+        // posted: it ends here, unsent, whenever a computer connects. The
+        // thread is read again, so the transcript drops the message the
+        // server never received, as after any other stop.
         desktopHold.abort();
         desktopHold = null;
         setSnapshot({ turnAbandoned: true });
+        reloadThread();
         return;
       }
       const stoppedTurn = turnId;
