@@ -1467,6 +1467,7 @@
   "chat.localFilesUndo.refused.notNewest": "Only the newest turn's file changes can be undone.",
   "chat.localFilesUndo.refused.threadBusy": "This chat is still working. Try again when it finishes.",
   "chat.localFilesUndo.restored": "File changes undone",
+  "chat.localRun.backgroundTasks": "{count, plural, one {# background task running} other {# background tasks running}}",
   "chat.localRun.errorFolderUnavailable": "The folder linked to this chat is not available on your computer. Check it in stella desktop, then send this again.",
   "chat.localRun.errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
   "chat.localRun.errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",

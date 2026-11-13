@@ -1853,6 +1853,7 @@
       "restored": "Modifications de fichiers annulées"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# tâche en arrière-plan en cours} other {# tâches en arrière-plan en cours} many {# tâches en arrière-plan en cours}}",
       "errorFolderUnavailable": "Le dossier lié à cette conversation n’est pas disponible sur votre ordinateur. Vérifiez-le dans stella desktop, puis renvoyez ceci.",
       "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
       "errorLimitResetsAt": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Vous pourrez réessayer à partir du {time}.",

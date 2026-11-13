@@ -1853,6 +1853,7 @@
       "restored": "Failų pakeitimai atšaukti"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {Fone vykdoma # užduotis} few {Fone vykdomos # užduotys} many {Fone vykdoma # užduoties} other {Fone vykdoma # užduočių}}",
       "errorFolderUnavailable": "Su šiuo pokalbiu susietas aplankas jūsų kompiuteryje nepasiekiamas. Patikrinkite jį stella desktop, tada išsiųskite tai dar kartą.",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
       "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",

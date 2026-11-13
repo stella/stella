@@ -37,6 +37,18 @@ export type HarnessTurnBackground<TClient> = {
   stopBackground: (client: TClient) => Promise<void>;
 };
 
+/**
+ * End the harness's background tasks within `ms`. A stop that fails or
+ * outlasts it lets the rest of the ending go on: the process closes and its
+ * tree ends either way.
+ */
+export const stopBackgroundWithin = async (
+  stop: () => Promise<void>,
+  ms: number,
+) => {
+  await settlesWithin(Result.tryPromise(stop), ms);
+};
+
 /** Whether `promise` settles within `ms`. */
 export const settlesWithin = async (promise: Promise<unknown>, ms: number) =>
   Promise.race([promise.then(() => true), Bun.sleep(ms).then(() => false)]);
@@ -289,9 +301,10 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
     if (client === null) {
       return;
     }
-    if (this.background !== null) {
-      await settlesWithin(
-        this.background.stopBackground(client),
+    const background = this.background;
+    if (background !== null) {
+      await stopBackgroundWithin(
+        async () => background.stopBackground(client),
         this.gracePeriodMs,
       );
     }

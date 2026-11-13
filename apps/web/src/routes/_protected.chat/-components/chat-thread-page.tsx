@@ -107,6 +107,7 @@ import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { ChatBackgroundTasks } from "@/routes/_protected.chat/-components/chat-background-tasks";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
@@ -781,6 +782,10 @@ export const ChatThreadPage = ({
                           workspaceId={workspaceId}
                         />
                       </ChatLocalRunQuestionContext>
+                      <ChatBackgroundTasks
+                        generationActive={isGenerating}
+                        threadId={threadRef.threadId}
+                      />
                       <ChatThreadRecap
                         activeOrganizationId={activeOrganizationId}
                         isGenerating={isGenerating}

@@ -22,6 +22,7 @@ import * as v from "valibot";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  DESKTOP_RUNNER_MAX_BACKGROUND_TASKS,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   type DesktopRunnerHarnessReport,
@@ -173,6 +174,32 @@ const storedHarnessReports = (value: unknown): DesktopRunnerHarnessReport[] => {
 
 const linkedFoldersSchema = v.array(desktopRunnerLinkedFolderSchema);
 
+/** Runs of one socket with work in the background, at most; as many as it may hold. */
+const MAX_BACKGROUND_RUNS = MAX_HELD_RUNS;
+
+const backgroundTasksSchema = v.pipe(
+  v.record(
+    v.string(),
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(DESKTOP_RUNNER_MAX_BACKGROUND_TASKS),
+    ),
+  ),
+  v.check(
+    (counts) => Object.keys(counts).length <= MAX_BACKGROUND_RUNS,
+    "Too many runs with background work",
+  ),
+);
+
+const storedBackgroundTasks = (value: unknown): Record<string, number> => {
+  const parsed = v.safeParse(backgroundTasksSchema, value);
+  return parsed.success
+    ? parsed.output
+    : panic("Stored desktop runner background counts no longer validate");
+};
+
 /** Linked folders are validated before they are stored, like reports. */
 const storedLinkedFolders = (value: unknown): DesktopRunnerLinkedFolder[] => {
   const parsed = v.safeParse(linkedFoldersSchema, value);
@@ -220,6 +247,11 @@ type ClaimSessionResult =
       retired: RunHolder[];
       /** The runs the desktop listed that are bound to it, after reconciling. */
       held: HeldRun[];
+      /**
+       * The runner held background counts of an earlier socket, which this
+       * claim cleared: the computer reports the live ones again.
+       */
+      clearedBackgroundTasks: boolean;
     }
   /** The account holds its maximum of installations and none could go. */
   | { type: "too_many_runners" }
@@ -393,6 +425,7 @@ export const claimRunnerSession = async (
         sessionId: runner.sessionId,
         instanceId: runner.instanceId,
         connection: runner.connection,
+        heldBackgroundTasks: sql<boolean>`${runner.backgroundTasks} <> '{}'::jsonb`,
       })
       .from(runner)
       .where(runnerKey(binding))
@@ -425,6 +458,9 @@ export const claimRunnerSession = async (
       sidecarVersion: hello.sidecarVersion,
       harnesses: hello.harnesses,
       linkedFolders: hello.linkedFolders,
+      // What ran in the background before this socket is reported again
+      // after `welcome`; a count the computer no longer holds must not linger.
+      backgroundTasks: {},
       connectedAt: now,
       lastSeenAt: now,
     };
@@ -535,6 +571,7 @@ export const claimRunnerSession = async (
         ...row,
         workspaceIds: row.workspaceIds.map(brandPersistedWorkspaceId),
       })),
+      clearedBackgroundTasks: existing?.heldBackgroundTasks === true,
     };
   });
 
@@ -713,7 +750,8 @@ type ComputerReport =
   | Pick<typeof runner.$inferInsert, "harnesses">
   | (Pick<typeof runner.$inferInsert, "linkedFolders"> & {
       approvedFolderIds: SQL;
-    });
+    })
+  | Pick<typeof runner.$inferInsert, "backgroundTasks">;
 
 /**
  * Store a report of the computer on its runner row while this socket holds
@@ -724,7 +762,7 @@ const writeComputerReport = async (
   { binding, sessionId }: SessionOptions,
   report: ComputerReport,
 ): Promise<boolean> => {
-  // audit: skip - runner socket bookkeeping; the row stores the computer's own harness and linked folder reports
+  // audit: skip - runner socket bookkeeping; the row stores the computer's own harness, linked folder and background work reports
   const updated = await tx
     .update(runner)
     .set(report)
@@ -831,6 +869,59 @@ export const approveLinkedFolder = async (
       metadata: { desktopId },
     });
     return true;
+  });
+
+type BackgroundTasksOptions = SessionOptions & {
+  runId: string;
+  count: number;
+};
+
+/**
+ * Store what a run's computer reports running in the background for the
+ * run's chat, on the runner row of the socket that reports it: a claim of a
+ * newer socket replaces that row's counts, so a replaced socket never writes
+ * after it. `not_current` when the socket was replaced, `unknown_run` for a
+ * run that is not this computer's; either changes nothing. `too_many` when
+ * the socket would hold counts of more runs than it may hold.
+ */
+export const recordBackgroundTasks = async (
+  db: DesktopRunnerDb,
+  { binding, sessionId, runId, count }: BackgroundTasksOptions,
+): Promise<"applied" | "not_current" | "unknown_run" | "too_many"> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const [row] = await tx
+      .select({ backgroundTasks: runner.backgroundTasks })
+      .from(runner)
+      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+      .limit(1);
+    if (row === undefined) {
+      return "not_current";
+    }
+    const [run] = await tx
+      .select({ runId: runs.runId })
+      .from(runs)
+      .where(and(boundTo(binding), eq(runs.runId, runId)))
+      .limit(1);
+    if (run === undefined) {
+      return "unknown_run";
+    }
+    // Keyed by the stored id, the form the read joins on.
+    const others = Object.entries(
+      storedBackgroundTasks(row.backgroundTasks),
+    ).filter(([id]) => id !== run.runId);
+    const backgroundTasks = Object.fromEntries(
+      count === 0 ? others : [...others, [run.runId, count]],
+    );
+    if (Object.keys(backgroundTasks).length > MAX_BACKGROUND_RUNS) {
+      return "too_many";
+    }
+    return (await writeComputerReport(
+      tx,
+      { binding, sessionId },
+      { backgroundTasks },
+    ))
+      ? "applied"
+      : "not_current";
   });
 
 type RunTransitionOptions = {
@@ -2217,6 +2308,48 @@ export const readStoredRunEvents = async (
     )
     .orderBy(asc(desktopRunnerEvents.seq))
     .limit(limit);
+
+/**
+ * What a chat's runs left running in the background on the member's
+ * computers, as each computer last reported it; only a computer whose socket
+ * is connected and was seen since `freshSince` counts. The database sums the
+ * runs, so the read is one row however many runs the chat holds; the total
+ * stops at `DESKTOP_RUNNER_MAX_BACKGROUND_TASKS`.
+ */
+export const readThreadBackgroundTasks = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    threadId,
+    freshSince,
+  }: { owner: RunOwner; threadId: SafeId<"chatThread">; freshSince: Date },
+): Promise<number> => {
+  const [row] = await db
+    .select({
+      count: sql<number>`least(coalesce(sum((${runner.backgroundTasks} ->> ${runs.runId}::text)::integer), 0), ${DESKTOP_RUNNER_MAX_BACKGROUND_TASKS})::int`,
+    })
+    .from(runs)
+    .innerJoin(
+      runner,
+      and(
+        eq(runner.userId, runs.userId),
+        eq(runner.organizationId, runs.organizationId),
+        eq(runner.desktopId, runs.desktopId),
+        eq(runner.deviceJkt, runs.deviceJkt),
+        eq(runner.connection, "connected"),
+        sql`${runner.lastSeenAt} >= ${freshSince}::timestamptz`,
+      ),
+    )
+    .where(
+      and(
+        eq(runs.chatThreadId, threadId),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        sql`${runner.backgroundTasks} ->> ${runs.runId}::text IS NOT NULL`,
+      ),
+    );
+  return row?.count ?? 0;
+};
 
 type MemberRunnersOptions = { owner: RunOwner; limit: number };
 

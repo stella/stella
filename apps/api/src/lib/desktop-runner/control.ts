@@ -57,6 +57,7 @@ import {
   readRunOutputFile,
   readRunOutputKey,
   readStoredRunEvents,
+  readThreadBackgroundTasks,
   recordChatReadSeq,
   type RunOwner,
   type StoredRunEvent,
@@ -585,6 +586,25 @@ const readEvents = async (
   });
 };
 
+type BackgroundTasksOptions = {
+  owner: RunOwner;
+  threadId: SafeId<"chatThread">;
+};
+
+const readBackgroundTasks = async (
+  deps: ControlDeps,
+  { owner, threadId }: BackgroundTasksOptions,
+): Promise<Result<number, DatabaseError>> =>
+  await Result.tryPromise({
+    try: async () =>
+      await readThreadBackgroundTasks(deps.db, {
+        owner,
+        threadId,
+        freshSince: seenSince(deps),
+      }),
+    catch: toDatabaseError,
+  });
+
 /**
  * What the rest of the API uses to run work on a member's computer: pick a
  * computer, queue commands for a run, read what the run produced. Commands are
@@ -774,6 +794,13 @@ export const createDesktopRunnerControl = ({
         })),
       );
     },
+    /**
+     * What the chat's runs left running in the background on the member's
+     * computers, counted only for a computer whose socket is fresh, the
+     * same rule `readMemberRunners` uses.
+     */
+    readBackgroundTasks: async (options: BackgroundTasksOptions) =>
+      await readBackgroundTasks(deps, options),
     /** The harness session a thread's next turn on this computer resumes. */
     readChatRunSession: async (
       options: Parameters<typeof readChatRunSession>[1],

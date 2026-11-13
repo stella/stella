@@ -1853,6 +1853,7 @@
       "restored": "Cambios en archivos deshechos"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# tarea en segundo plano en curso} other {# tareas en segundo plano en curso} many {# tareas en segundo plano en curso}}",
       "errorFolderUnavailable": "La carpeta vinculada a este chat no está disponible en tu ordenador. Revísala en stella desktop y vuelve a enviarlo.",
       "errorLimitReached": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Vuelve a intentarlo cuando se restablezca el límite.",
       "errorLimitResetsAt": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Puedes volver a intentarlo a partir del {time}.",

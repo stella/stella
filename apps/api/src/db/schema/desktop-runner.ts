@@ -101,6 +101,14 @@ export const desktopRunners = p.pgTable.withRLS(
       .array()
       .notNull()
       .default([]),
+    /**
+     * How many tasks the harness process each run left behind keeps running
+     * in the background, by run id, as the computer reported them over its
+     * current socket (`run.background`), while the run's chat waits for its
+     * next turn. A run with none has no entry; a socket's claim starts from
+     * none, and the computer reports the live ones again after `welcome`.
+     */
+    backgroundTasks: jsonb("background_tasks").notNull().default({}),
     connectedAt: timestamptz("connected_at").notNull(),
     /** Renewed by the socket's heartbeat; routing ignores a stale runner. */
     lastSeenAt: timestamptz("last_seen_at").notNull(),

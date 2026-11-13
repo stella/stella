@@ -1853,6 +1853,7 @@
       "restored": "Zmeny súborov vrátené"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {Na pozadí beží # úloha} few {Na pozadí bežia # úlohy} many {Na pozadí beží # úlohy} other {Na pozadí beží # úloh}}",
       "errorFolderUnavailable": "Priečinok prepojený s týmto chatom nie je vo vašom počítači dostupný. Skontrolujte ho v stella desktop a potom to odošlite znova.",
       "errorLimitReached": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Skúste to znova, keď sa limit obnoví.",
       "errorLimitResetsAt": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Znova to môžete skúsiť po {time}.",

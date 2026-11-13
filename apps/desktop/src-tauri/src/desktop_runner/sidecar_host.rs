@@ -50,12 +50,13 @@ use super::harness::{
   EmitError, FolderAnswer, Forwarded, HarnessHost, HarnessReports, JournaledRun,
   NotForwarded, RunOutput, RunSink,
 };
+use super::journal::SharedJournal;
 use super::run_folders;
 use super::step_outputs;
 use crate::harness_sidecar::{
-  self, HarnessLaunchSettings, HarnessProbe, HarnessProcess, HarnessSidecar,
-  RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore, SidecarRunOutput,
-  SidecarRunStart, SidecarSettings, SkillFolderRef,
+  self, BackgroundTasks, HarnessLaunchSettings, HarnessProbe, HarnessProcess,
+  HarnessSidecar, RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore,
+  SidecarRunOutput, SidecarRunStart, SidecarSettings, SkillFolderRef,
 };
 use crate::local_linked_folders::LinkedFolderRefusal;
 use crate::runner_protocol::{
@@ -179,6 +180,9 @@ struct HostRun {
 
 struct Shared {
   settings: HostSettings,
+  /// Where kept harness processes' background counts go, for the runner
+  /// to send while a socket is up and again after each `welcome`.
+  journal: Arc<SharedJournal>,
   harnesses: Arc<dyn LocalHarnesses>,
   /// The supervisor, with the API origin its holder's proxy forwards to.
   sidecar: Mutex<Option<(String, HarnessSidecar)>>,
@@ -241,9 +245,11 @@ impl SidecarHarnessHost {
   pub(crate) fn new(
     settings: HostSettings,
     harnesses: Arc<dyn LocalHarnesses>,
+    journal: Arc<SharedJournal>,
   ) -> Self {
     Self {
       shared: Arc::new(Shared {
+        journal,
         folders: Mutex::new(HashSet::new()),
         restores: Mutex::new(HashSet::new()),
         #[cfg(all(test, unix))]
@@ -601,6 +607,17 @@ async fn journal(
         retry = retry.saturating_mul(2).min(STORAGE_RETRY_CAP);
       }
     }
+  }
+}
+
+/// Hand every background task count a holder reports to the journal, which
+/// the runner sends upstream.
+async fn relay_background(
+  journal: Arc<SharedJournal>,
+  mut reports: mpsc::UnboundedReceiver<BackgroundTasks>,
+) {
+  while let Some(BackgroundTasks { run_id, count }) = reports.recv().await {
+    journal.report_background(run_id, count);
   }
 }
 
@@ -1010,6 +1027,18 @@ impl HarnessHost for SidecarHarnessHost {
       }
       Err(error) => {
         tracing::warn!(target: LOG_TARGET, ?error, "harness processes cannot be granted");
+      }
+    }
+    match sidecar.watch_background() {
+      Ok(reports) => {
+        tokio::spawn(relay_background(Arc::clone(&self.shared.journal), reports));
+      }
+      Err(error) => {
+        tracing::warn!(
+          target: LOG_TARGET,
+          ?error,
+          "background task counts cannot be relayed"
+        );
       }
     }
     tokio::spawn(refresh_reports(Arc::clone(&self.shared), sidecar.clone()));

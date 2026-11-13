@@ -1853,6 +1853,7 @@
       "restored": "Fájlmódosítások visszavonva"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# háttérfeladat fut} other {# háttérfeladat fut}}",
       "errorFolderUnavailable": "A csevegéshez csatolt mappa nem érhető el a számítógépén. Ellenőrizze a stella desktopban, majd küldje el újra.",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
       "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",

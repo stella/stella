@@ -237,7 +237,11 @@ export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {
   runFinished: "run.finished",
   folderRestored: "folder.restored",
   linkedFoldersStatus: "linked_folders.status",
+  runBackground: "run.background",
 } as const;
+
+/** Most background tasks one `run.background` reports. */
+export const DESKTOP_RUNNER_MAX_BACKGROUND_TASKS = 1000;
 
 export const DESKTOP_RUNNER_SERVER_MESSAGE = {
   welcome: "welcome",
@@ -860,6 +864,22 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored),
     restoreId: v.pipe(v.string(), v.uuid()),
     outcome: v.picklist(DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES),
+  }),
+  /**
+   * How many tasks the harness process a finished run left behind keeps
+   * running in the background, while its chat waits for the next turn: on
+   * every change, 0 once they end or the next turn takes the process, and
+   * again after each `welcome`. Not sequenced: the latest count holds.
+   */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.runBackground),
+    runId: runIdSchema,
+    count: v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(0),
+      v.maxValue(DESKTOP_RUNNER_MAX_BACKGROUND_TASKS),
+    ),
   }),
 ]);
 export type DesktopRunnerDesktopMessage = v.InferOutput<
