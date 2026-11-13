@@ -22,6 +22,7 @@ import {
   test,
 } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -1031,6 +1032,20 @@ describe("Codex adapter over a stdio app-server", () => {
         ),
     ).toEqual(["thread/resume", "thread/unarchive", "thread/resume"]);
     expect(events[0]).toMatchObject({ continuation: { type: "resumed" } });
+  });
+
+  test("Codex never offers plan, and a plan turn is refused before Codex starts", async () => {
+    const harness = harnessFor("tool_calls");
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, {
+        policy: { network: "open", fs: "workspace", approvals: "plan" },
+      }),
+    );
+    expect(Result.isError(started) && started.error.reason).toBe(
+      "start_rejected",
+    );
+    // The fake app-server writes its log as it starts: it never started.
+    expect(existsSync(harness.logPath)).toBe(false);
   });
 
   test("a signed-out harness refuses the turn before any session starts", async () => {

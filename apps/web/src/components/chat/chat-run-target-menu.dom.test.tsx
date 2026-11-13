@@ -32,7 +32,7 @@ const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
 
 /**
  * One connected computer: Codex runs in its one mode and offers no effort
- * choice, and Claude Code cannot use its sandbox here.
+ * choice, and Claude Code can plan but cannot use its sandbox here.
  */
 const READINESS: ChatLocalRunReadiness = {
   status: "enabled",
@@ -58,7 +58,7 @@ const READINESS: ChatLocalRunReadiness = {
           state: "ready",
           version: "2.1.309",
           capabilities: ["approvals"],
-          approvalModes: ["ask", "auto"],
+          approvalModes: ["plan", "ask", "auto"],
           models: [
             {
               id: "sonnet",
@@ -185,6 +185,20 @@ test("a local turn offers every permission mode, and the ones this computer cann
   expect(auto.textContent).toContain(
     "Does what it judges safe on its own; asks about the rest.",
   );
+});
+
+test("Plan is offered with what it does, under any limit, and choosing it keeps the harness and model", async () => {
+  const { view, chosen } = renderMenu(LOCAL, {
+    ...READINESS,
+    maxApprovals: "ask",
+  });
+  const plan = await radioItem(view, "Plan");
+  expect(plan.getAttribute("aria-disabled")).not.toBe("true");
+  expect(plan.textContent).toContain(
+    "Reads and plans first; asks before any change until you approve the plan.",
+  );
+  fireEvent.click(plan);
+  expect(chosen).toEqual([{ ...LOCAL, approvals: "plan" }]);
 });
 
 test("a mode above the organization's limit is disabled with that reason, apart from the ones the computer cannot run", async () => {

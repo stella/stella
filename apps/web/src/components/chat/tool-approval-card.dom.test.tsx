@@ -262,3 +262,35 @@ test("a document edit approval says what changes, never a block id", () => {
   expect(text).not.toContain(blockId);
   queryClient.clear();
 });
+
+test("a coding agent's step names what it acts on before it is allowed", () => {
+  const queryClient = new QueryClient();
+  const input = {
+    tool: "Read",
+    detail: { kind: "read", path: "../shared/client-notes.md" },
+  };
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ChatApprovalContext value={testChatApprovalContextValue}>
+          <ToolApprovalCard
+            isAwaitingUser
+            isTurnActive
+            part={{
+              approval: { id: "native-approval", needsApproval: true },
+              arguments: JSON.stringify(input),
+              id: "native-tool-call",
+              input,
+              name: "harness_native_tool",
+              state: "approval-requested",
+              type: "tool-call",
+            }}
+          />
+        </ChatApprovalContext>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  expect(view.getByText("../shared/client-notes.md")).toBeDefined();
+  queryClient.clear();
+});
