@@ -12,6 +12,13 @@
 import type { ModelRate } from "./model-rate";
 
 export const MODEL_RATES = {
+  // models.dev: google:gemini-4-hydrogen
+  "gemini-4-hydrogen": {
+    kind: "flat",
+    inputPerMTok: 150_000,
+    outputPerMTok: 750_000,
+    cachedInputPerMTok: 7500,
+  },
   // models.dev: google:gemini-4-carbon
   "gemini-4-carbon": {
     kind: "flat",
