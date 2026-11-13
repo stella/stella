@@ -436,7 +436,6 @@ const memberRequest =
         await fetch(`${apiUrl}${pathname}`, {
           headers: { cookie, origin: webUrl },
           method,
-          signal: AbortSignal.timeout(10_000),
         }),
     );
     if (Result.isError(response)) {
