@@ -2299,6 +2299,8 @@
       "replyReadyTitle": "Respuesta lista"
     },
     "turnStatus": {
+      "answerFailed": "No se pudo terminar la respuesta",
+      "answerReady": "Respuesta lista",
       "waitingForApproval": "Esperando aprobación",
       "waitingForInput": "Esperando información",
       "writing": "Redactando"

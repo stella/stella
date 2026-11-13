@@ -2299,6 +2299,8 @@
       "replyReadyTitle": "Odpoveď je hotová"
     },
     "turnStatus": {
+      "answerFailed": "Odpoveď sa nepodarilo dokončiť",
+      "answerReady": "Odpoveď je hotová",
       "waitingForApproval": "Čakanie na schválenie",
       "waitingForInput": "Čakanie na zadanie",
       "writing": "Písanie"

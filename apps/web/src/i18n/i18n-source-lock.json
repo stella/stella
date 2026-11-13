@@ -1845,6 +1845,8 @@
   "chat.turnNotification.needsInputTitle": "stella needs your input",
   "chat.turnNotification.replyReadyBody": "stella finished answering in your chat.",
   "chat.turnNotification.replyReadyTitle": "Reply ready",
+  "chat.turnStatus.answerFailed": "The answer could not be finished",
+  "chat.turnStatus.answerReady": "Answer ready",
   "chat.turnStatus.waitingForApproval": "Waiting for approval",
   "chat.turnStatus.waitingForInput": "Waiting for input",
   "chat.turnStatus.writing": "Writing",

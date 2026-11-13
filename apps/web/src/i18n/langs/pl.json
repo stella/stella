@@ -2299,6 +2299,8 @@
       "replyReadyTitle": "Odpowiedź gotowa"
     },
     "turnStatus": {
+      "answerFailed": "Nie udało się dokończyć odpowiedzi",
+      "answerReady": "Odpowiedź gotowa",
       "waitingForApproval": "Oczekiwanie na zatwierdzenie",
       "waitingForInput": "Oczekiwanie na dane",
       "writing": "Pisanie"

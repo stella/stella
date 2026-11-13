@@ -2299,6 +2299,8 @@
       "replyReadyTitle": "Kész a válasz"
     },
     "turnStatus": {
+      "answerFailed": "A választ nem sikerült befejezni",
+      "answerReady": "A válasz elkészült",
       "waitingForApproval": "Jóváhagyásra vár",
       "waitingForInput": "Bevitelre vár",
       "writing": "Írás"
