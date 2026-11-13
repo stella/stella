@@ -1459,24 +1459,57 @@ const DELETE_DESKTOP_RUNNERS_TABLES = [
 ] as const satisfies readonly PgTable[];
 
 /**
- * 16. The person's desktop runners and their runs, in every organization.
- * Runners go first, as a session claim locks a runner before its runs; their
- * runs cascade, and are then deleted by name too, since each keeps its output
- * key. Queued commands, events and folder restores cascade. The user row is
- * soft-deleted, so the `user_id` cascade never fires.
+ * 16. The person's desktop runners and their runs, in every organization,
+ * recorded per organization. Runners go first, as a session claim locks a
+ * runner before its runs; their runs cascade, and are then deleted by name
+ * too, since each keeps its output key. Queued commands, events and folder
+ * restores cascade. The user row is soft-deleted, so the `user_id` cascade
+ * never fires.
  */
 export const deleteDesktopRunners = async (
   tx: Transaction,
   currentUserId: SafeId<"user">,
 ): Promise<void> => {
-  // audit: skip - the account deletion request records this erasure
-  await tx
+  const removed = await tx
     .delete(desktopRunners)
-    .where(eq(desktopRunners.userId, currentUserId));
-  // audit: skip - the account deletion request records this erasure
+    .where(eq(desktopRunners.userId, currentUserId))
+    .returning({ organizationId: desktopRunners.organizationId });
   await tx
     .delete(desktopRunnerRuns)
     .where(eq(desktopRunnerRuns.userId, currentUserId));
+  const runnersByOrganization = new Map<SafeId<"organization">, number>();
+  for (const { organizationId } of removed) {
+    runnersByOrganization.set(
+      organizationId,
+      (runnersByOrganization.get(organizationId) ?? 0) + 1,
+    );
+  }
+  await recordAuditGroups({
+    tx,
+    groups: [...runnersByOrganization].map(([organizationId, runnerCount]) => ({
+      bindings: {
+        organizationId,
+        workspaceId: null,
+        userId: currentUserId,
+        execution: {
+          performer: { type: "user" as const, id: currentUserId },
+          trigger: { type: "system" as const, source: "account_deletion" },
+        },
+      },
+      events: [
+        {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: organizationId,
+          metadata: {
+            change: "member-desktop-runners-cleared",
+            userId: currentUserId,
+            runnerCount,
+          },
+        },
+      ],
+    })),
+  });
 };
 
 const DELETE_PERSONAL_RECORDS_TABLES = [
