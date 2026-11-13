@@ -72,6 +72,7 @@ const turnInput = (workspaceDir: string, model: string): HarnessTurnInput => ({
   threadId: "stella-thread-1",
   workspaceDir,
   model,
+  reasoningEffort: null,
   instructions: "Use the stella MCP server.",
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {

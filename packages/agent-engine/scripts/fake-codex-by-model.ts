@@ -164,7 +164,7 @@ const main = async () => {
     }
     const answer = answers.get(method) ?? skills.answer(method, params);
     peer.write(
-      answer === null || answer === undefined
+      answer === null
         ? {
             id: message.id,
             error: { code: -32_601, message: `stand-in: ${method}` },
