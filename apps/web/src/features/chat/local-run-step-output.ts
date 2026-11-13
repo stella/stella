@@ -191,11 +191,11 @@ export const localRunStepOutputOptions = ({
       LocalRunStepOutputView,
       ReturnType<typeof chatKeys.localRunStepOutput>
     >({
-      queryKey: chatKeys.localRunStepOutput(
+      queryKey: chatKeys.localRunStepOutput({
         activeOrganizationId,
         userId,
         callId,
-      ),
+      }),
       queryFn: streamedQuery({
         streamFn: ({ signal }) => readLocalRunStepOutput({ callId, signal }),
         reducer: foldLocalRunStepOutput,

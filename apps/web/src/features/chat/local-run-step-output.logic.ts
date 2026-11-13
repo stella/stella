@@ -98,13 +98,26 @@ export const diffLineTone = (line: string): DiffLineTone => {
  * A kept diff's lines in order, each with its tone and a key that stays the
  * same while more text arrives after it: where the line starts.
  */
+/** The most diff lines shown one by one, each in its tone. */
+export const DIFF_TONED_LINES = 2000;
+
+/**
+ * A diff's lines to show one by one, each in its tone, and the text past
+ * them, shown as one plain block: a long diff (up to the 1 MiB cap) stays
+ * readable and copyable without one element per line.
+ */
 export const diffLines = (text: string) => {
   const body = text.endsWith("\n") ? text.slice(0, -1) : text;
   const lines: { key: number; line: string; tone: DiffLineTone }[] = [];
   let start = 0;
-  for (const line of body.split("\n")) {
+  while (lines.length < DIFF_TONED_LINES && start <= body.length) {
+    const end = body.indexOf("\n", start);
+    const line = end === -1 ? body.slice(start) : body.slice(start, end);
     lines.push({ key: start, line, tone: diffLineTone(line) });
-    start += line.length + 1;
+    if (end === -1) {
+      return { lines, rest: "" };
+    }
+    start = end + 1;
   }
-  return lines;
+  return { lines, rest: body.slice(start) };
 };

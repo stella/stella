@@ -58,13 +58,20 @@ const Note = ({
   </p>
 );
 
-/** A kept diff, each line in its tone. */
-const DiffText = ({ text }: { text: string }) =>
-  diffLines(text).map(({ key, line, tone }) => (
-    <span className={cn("block", DIFF_TONE_CLASS[tone])} key={key}>
-      {line === "" ? " " : line}
-    </span>
-  ));
+/** A kept diff, each line in its tone up to a bound, the rest as one block. */
+const DiffText = ({ text }: { text: string }) => {
+  const { lines, rest } = diffLines(text);
+  return (
+    <>
+      {lines.map(({ key, line, tone }) => (
+        <span className={cn("block", DIFF_TONE_CLASS[tone])} key={key}>
+          {line === "" ? " " : line}
+        </span>
+      ))}
+      {rest !== "" && <span className="block">{rest}</span>}
+    </>
+  );
+};
 
 /**
  * What a coding agent's step produced on the member's computer, read from

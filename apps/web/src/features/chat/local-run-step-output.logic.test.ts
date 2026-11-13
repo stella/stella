@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES } from "@stll/api-contract/chat-local-run-step-output";
 
 import {
+  DIFF_TONED_LINES,
+  diffLines,
   diffLineTone,
   foldLocalRunStepOutput,
   isLocalRunStepOutputCut,
@@ -74,4 +76,30 @@ test("an output found elsewhere is read again; one the desktop answered holds", 
     );
   }
   expect(localRunStepOutputStaleTime(undefined)).toBe(Number.POSITIVE_INFINITY);
+});
+
+test("a long diff shows its first lines toned and the rest as one block", () => {
+  const short = diffLines("+added\n-removed\n context\n");
+  expect(short.lines.map(({ line }) => line)).toEqual([
+    "+added",
+    "-removed",
+    " context",
+  ]);
+  expect(short.rest).toBe("");
+
+  const long = Array.from(
+    { length: DIFF_TONED_LINES + 3 },
+    (_, index) => `+line ${String(index)}`,
+  ).join("\n");
+  const bounded = diffLines(long);
+  expect(bounded.lines).toHaveLength(DIFF_TONED_LINES);
+  expect(bounded.rest.split("\n")).toEqual([
+    `+line ${String(DIFF_TONED_LINES)}`,
+    `+line ${String(DIFF_TONED_LINES + 1)}`,
+    `+line ${String(DIFF_TONED_LINES + 2)}`,
+  ]);
+  // Nothing is lost between the two.
+  expect(
+    [...bounded.lines.map(({ line }) => line), bounded.rest].join("\n"),
+  ).toBe(long);
 });

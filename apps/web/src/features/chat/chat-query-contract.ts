@@ -268,11 +268,15 @@ export const chatKeys = {
     threadId,
     turnId,
   ],
-  localRunStepOutput: (
-    activeOrganizationId: string,
-    userId: string,
-    callId: string,
-  ) => [
+  localRunStepOutput: ({
+    activeOrganizationId,
+    userId,
+    callId,
+  }: {
+    activeOrganizationId: string;
+    userId: string;
+    callId: string;
+  }) => [
     ...chatKeys.all,
     activeOrganizationId,
     userId,
