@@ -42,7 +42,11 @@ for (const agent of ["codex", "claude-code"] as const) {
     });
     const submit = card.getByRole("button", { name: "Submit answers" });
     await expect(submit).toBeDisabled();
-    await card.getByRole("button", { name: /^Czech/u }).click();
+    const czech = card.getByRole("button", { name: /^Czech/u });
+    await czech.click();
+    // The pick is the card's own state: it has to hold before the answer
+    // can be sent.
+    await expect(czech).toHaveAttribute("aria-pressed", "true");
     await submit.click();
 
     await expect(transcript(page)).toContainText("Using Czech law.", {
