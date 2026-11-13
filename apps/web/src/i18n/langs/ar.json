@@ -1894,6 +1894,7 @@
       "refusalTooLarge": "هذه الدردشة أطول من أن تُنقل إلى حاسوبك. ابدأ دردشة جديدة لتشغيلها هناك.",
       "refusalUnavailable": "تشغيل الدردشات على حاسوبك غير متاح لحسابك.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "تعذّر على وكيل البرمجة على حاسوبك استئناف العمل من حيث توقف، لذا تابع اعتمادًا على رسائل هذه الدردشة.",
       "stateLimitUntil": "تم بلوغ الحد حتى {time}",
       "stateModelUnavailable": "النموذج لم يعد متاحًا",
       "stateNeedsLogin": "يلزم تسجيل الدخول",

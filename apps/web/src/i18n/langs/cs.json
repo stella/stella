@@ -1894,6 +1894,7 @@
       "refusalTooLarge": "Tato konverzace je příliš dlouhá na předání do vašeho počítače. Pro spuštění tam začněte nový chat.",
       "refusalUnavailable": "Spouštění chatů ve vašem počítači není pro váš účet dostupné.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Programovací agent ve vašem počítači nemohl navázat tam, kde skončil, a tak pokračoval podle zpráv v tomto chatu.",
       "stateLimitUntil": "Limit vyčerpán do {time}",
       "stateModelUnavailable": "Model už není k dispozici",
       "stateNeedsLogin": "Vyžaduje přihlášení",

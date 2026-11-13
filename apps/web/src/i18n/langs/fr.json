@@ -1894,6 +1894,7 @@
       "refusalTooLarge": "Cette conversation est trop longue pour être transmise à votre ordinateur. Commencez une nouvelle conversation pour l’y exécuter.",
       "refusalUnavailable": "L’exécution des conversations sur votre ordinateur n’est pas disponible pour votre compte.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation.",
       "stateLimitUntil": "Limite atteinte jusqu’à {time}",
       "stateModelUnavailable": "Modèle plus disponible",
       "stateNeedsLogin": "Connexion requise",

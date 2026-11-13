@@ -1894,6 +1894,7 @@
       "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
       "stateLimitUntil": "Limiit täis kuni {time}",
       "stateModelUnavailable": "Mudel pole enam saadaval",
       "stateNeedsLogin": "Vaja sisse logida",

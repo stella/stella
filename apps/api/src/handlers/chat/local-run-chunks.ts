@@ -5,6 +5,7 @@ import {
   type ModelMessage,
   normalizeStreamChunk,
   type RunAgentResumeItem,
+  type StreamChunk,
 } from "@tanstack/ai";
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
@@ -397,6 +398,22 @@ const LOCAL_RUN_CUSTOM_EVENTS: ReadonlySet<string> = new Set([
   ...AGENT_HARNESSES.map(harnessSessionIdEvent),
   HARNESS_CONTINUATION_EVENT,
 ]);
+
+/** The part of a turn's continuation the chat tells the member about. */
+const SessionNotResumedSchema = v.object({
+  type: v.literal("resume_unavailable"),
+});
+
+/**
+ * The harness could not resume the session it ran the chat's earlier turns
+ * in, so this turn started from the chat's messages instead.
+ */
+export const reportsSessionNotResumed = (
+  chunk: PublicStreamChunk | StreamChunk,
+) =>
+  chunk.type === EventType.CUSTOM &&
+  chunk.name === HARNESS_CONTINUATION_EVENT &&
+  v.is(SessionNotResumedSchema, chunk.value);
 
 /** The chunks a stream processor merges metadata from into the message. */
 const MESSAGE_METADATA_EVENTS: ReadonlySet<string> = new Set([
