@@ -20,6 +20,7 @@ import {
 
 import { chatThreads, chatTurns } from "./chat";
 import {
+  bytea,
   jsonb,
   organization,
   p,
@@ -169,6 +170,16 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     lostReason: p.text("lost_reason", { enum: DESKTOP_RUNNER_LOST_REASONS }),
     /** The harness session a later run on this desktop may resume. */
     harnessSessionId: p.varchar("harness_session_id", { length: 256 }),
+    /**
+     * The run's output key, encrypted for its organization: random per run,
+     * sent to the computer in `run.start`, and what every grant to read the
+     * run's step outputs there is signed with. Absent only for a run
+     * assigned before runs kept one: it gets no grant, and its `run.start`
+     * is cancelled rather than sent again.
+     */
+    outputKeyEncrypted: bytea("output_key_encrypted"),
+    /** The IV of `output_key_encrypted`; set with it. */
+    outputKeyIv: bytea("output_key_iv"),
     /**
      * When `run.start` was first written to one of the computer's sockets;
      * absent while it never was. A run never written ends after the short

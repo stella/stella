@@ -614,10 +614,39 @@ fn a_look_at_the_linked_folders_that_hangs_is_the_only_one_until_it_ends() {
   });
 }
 
+/// Every entry under `dir` by relative path, with each file's bytes.
+fn tree_of(
+  dir: &std::path::Path,
+) -> std::collections::BTreeMap<PathBuf, Option<Vec<u8>>> {
+  let mut tree = std::collections::BTreeMap::new();
+  let mut pending = vec![dir.to_path_buf()];
+  while let Some(at) = pending.pop() {
+    for entry in std::fs::read_dir(&at).unwrap().flatten() {
+      let path = entry.path();
+      let relative = path.strip_prefix(dir).unwrap().to_path_buf();
+      if entry.file_type().unwrap().is_dir() {
+        tree.insert(relative, None);
+        pending.push(path);
+      } else {
+        tree.insert(relative, Some(std::fs::read(&path).unwrap()));
+      }
+    }
+  }
+  tree
+}
+
 #[test]
-fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_beside_the_chat_folder() {
+fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_and_step_outputs_beside_the_chat_folder()
+ {
   let place = Place::new();
   let id = run_id();
+  let output_key = "cd".repeat(32);
+  // The member's own folder, with their work in it.
+  let member = place.fixture.root.join("member");
+  let linked = member.join("Smith v Jones");
+  std::fs::create_dir_all(linked.join("drafts")).unwrap();
+  std::fs::write(linked.join("drafts/lease.md"), "The first draft.\n").unwrap();
+  let before = tree_of(&member);
   run(async {
     let host = place.host(None, Duration::from_secs(3600));
     let setup = setup(&host);
@@ -626,6 +655,7 @@ fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_beside_the_chat_fold
     let mut connection = connect(&gateway, &[], "ready").await;
     let mut start = run_start(&id, "gpt-test");
     start["linkedFolderId"] = json!(LINKED_FOLDER_ID);
+    start["outputKey"] = json!(output_key);
     connection.send(start).await;
     assert_eq!(
       connection.receive().await,
@@ -637,18 +667,38 @@ fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_beside_the_chat_fold
   });
   stop_holders(&place);
   let start = place.received("run.start").remove(0);
-  assert_eq!(
-    start["workspaceDir"],
-    place
-      .fixture
-      .root
-      .join("member/Smith v Jones")
-      .to_str()
-      .unwrap()
-  );
+  assert_eq!(start["workspaceDir"], linked.to_str().unwrap());
   let cache = place.workspaces().join(format!("{id}.cache"));
   assert_eq!(start["cacheDir"], cache.to_str().unwrap());
   assert!(cache.is_dir());
+  // The run's outputs and their key are kept in stella's runs folder, where
+  // the bridge looks, and nothing is written in or beside the member's.
+  let store = place.workspaces().join(format!("{id}.step-outputs"));
+  assert_eq!(start["stepOutputDir"], store.to_str().unwrap());
+  assert_eq!(
+    std::fs::read_to_string(store.join(&id).join("key")).unwrap(),
+    output_key
+  );
+  assert_eq!(tree_of(&member), before);
+  // A step the sidecar keeps where `run.start` named opens through the
+  // bridge for the member's page.
+  let step = "ab".repeat(32);
+  std::fs::write(store.join(&id).join(&step), "{\"bytes\":3}\nok\n").unwrap();
+  run(async {
+    let response = crate::bridge::tests::read_step_at(
+      &place.workspaces(),
+      &output_key,
+      "user-fixture-1",
+      uuid::Uuid::parse_str(&id).unwrap(),
+      &step,
+    )
+    .await;
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+      .await
+      .unwrap();
+    assert_eq!(&body[..], b"ok\n");
+  });
 }
 
 #[test]

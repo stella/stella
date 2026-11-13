@@ -8,7 +8,7 @@ import {
 } from "@tanstack/ai";
 import { ChatClient } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -25,6 +25,10 @@ import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   chatToolExecutor,
 } from "@stll/api-contract/chat";
+import {
+  CHAT_LOCAL_RUN_STEP_OUTPUT_GRANT_SECONDS,
+  chatLocalRunStepOutputGrantMessage,
+} from "@stll/api-contract/chat-local-run-step-output";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
@@ -54,6 +58,7 @@ import {
 import { USER_FILE_URL_PREFIX } from "@stll/api-contract/user-file-url";
 import { compareCodeUnit } from "@stll/collation";
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { createTestState } from "@stll/test-state";
 
 import { user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -72,6 +77,7 @@ import {
   workspaceMembers,
 } from "@/api/db/schema";
 import { createMembershipSafeDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import {
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
@@ -149,6 +155,7 @@ import type {
   MintRunToken,
   RunnerTimers,
 } from "@/api/lib/desktop-runner/session";
+import { ownerStepOutputGrant } from "@/api/lib/desktop-runner/step-output-grants";
 import {
   type DesktopRunnerDb,
   readNewestQueuedCommands,
@@ -165,6 +172,7 @@ import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-pr
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { chatBackgroundTasksScalingScenario } from "@/api/tests/read-scaling/chat-background-tasks";
 import { chatLocalFilesUndoScalingScenario } from "@/api/tests/read-scaling/chat-local-files-undo";
+import { chatLocalRunStepOutputGrantScalingScenario } from "@/api/tests/read-scaling/chat-local-run-step-output-grant";
 import { chatLocalRunnersScalingScenario } from "@/api/tests/read-scaling/chat-local-runners";
 import { desktopRunnerUpgradeScalingScenario } from "@/api/tests/read-scaling/desktop-runner-upgrade";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
@@ -181,6 +189,7 @@ import {
   withQueryLogger,
 } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
 const ids = createTestIds();
 const owner = { userId: ids.userA1, organizationId: ids.orgA };
 const HARNESS_VERSION = "0.50.0";
@@ -340,7 +349,7 @@ let second: Instance;
 let control: DesktopRunnerControl;
 
 // timeout: PGlite builds the full schema before the first test
-beforeAll(async () => {
+testState.beforeAll(async () => {
   db = await getTestDb();
   await setupRlsTestData(db, ids);
   credentials = await createRlsDesktopCredentials(db, ids);
@@ -2658,7 +2667,7 @@ describe("chat turns on a computer", () => {
     desktop: computer.desktop ?? panic("the shared computer is not connected"),
   });
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     // The account already holds the runners the earlier tests paired.
     chatInstance = await startInstance("api-chat", sharedDoorbell, {
       runBell,
@@ -4873,6 +4882,94 @@ describe("chat turns on a computer", () => {
     expect(readScalingViolations({ small, large })).toEqual([]);
   });
 
+  test("the computer gets each run's output key, and a step output grant reads only the owner's one run", async () => {
+    const counted = createDesktopRunnerControl({
+      // SAFETY: PGlite and Bun SQL expose the same Drizzle query APIs.
+      db: asTestRaw<DesktopRunnerDb>(withQueryLogger(db, queryCountLogger)),
+      doorbell: sharedDoorbell,
+      now,
+      timing: TIMING,
+    });
+    const { desktopId, desktop } = shared();
+    const runId = await assignRun(desktopId);
+    const start = await desktop.receive("run.start", ofRun(runId));
+    // The key grants are signed with: the run's own, which no stored command
+    // holds and the run keeps only encrypted.
+    expect(start.outputKey).toMatch(/^[0-9a-f]{64}$/u);
+    expect((await counted.readRunOutputKey({ owner, runId })).unwrap()).toBe(
+      start.outputKey,
+    );
+    const [queued] = await db
+      .select({ payload: desktopRunnerCommands.payload })
+      .from(desktopRunnerCommands)
+      .where(eq(desktopRunnerCommands.runId, runId));
+    expect(JSON.stringify(queued?.payload)).not.toContain(start.outputKey);
+    const [stored] = await db
+      .select({ sealed: desktopRunnerRuns.outputKeyEncrypted })
+      .from(desktopRunnerRuns)
+      .where(eq(desktopRunnerRuns.runId, runId));
+    expect(stored?.sealed?.toString("utf-8")).not.toContain(start.outputKey);
+    desktop.send({ type: "run.accepted", runId });
+    const fixture = { control: counted, owner, runId };
+    const small =
+      await chatLocalRunStepOutputGrantScalingScenario.measure(fixture);
+    for (let index = 0; index < 20; index += 1) {
+      const other = await assignRun(desktopId);
+      await desktop.receive("run.start", ofRun(other));
+      desktop.send({ type: "run.accepted", runId: other });
+      desktop.send(textEvent(other, 1, "Working"));
+      await desktop.receive("ack", ofRun(other));
+    }
+    const large =
+      await chatLocalRunStepOutputGrantScalingScenario.measure(fixture);
+    expect(small.rows).toBe(1);
+    expect(readScalingViolations({ small, large })).toEqual([]);
+    // Each run has its own key, and another member's grant finds no run by
+    // that id.
+    const other = await assignRun(desktopId);
+    const otherStart = await desktop.receive("run.start", ofRun(other));
+    desktop.send({ type: "run.accepted", runId: other });
+    expect(otherStart.outputKey).not.toBe(start.outputKey);
+    expect(
+      (
+        await ownerStepOutputGrant({
+          control: counted,
+          owner: { organizationId: ids.orgB, userId: ids.userB1 },
+          runId,
+          now: 0,
+        })
+      ).unwrap(),
+    ).toBeNull();
+  });
+
+  test("a grant made after the deployment's auth secret rotates still opens the output of a run started before", async () => {
+    const { desktopId, desktop } = shared();
+    const runId = await assignRun(desktopId);
+    const start = await desktop.receive("run.start", ofRun(runId));
+    desktop.send({ type: "run.accepted", runId });
+    testState.setConfig("BETTER_AUTH_SECRET", "rotated-".repeat(8));
+    const grantedAt = 1_900_000_000;
+    const grant = (
+      await ownerStepOutputGrant({ control, owner, runId, now: grantedAt })
+    ).unwrap();
+    // What the computer checks a request against: the message signed with
+    // the key it got in `run.start`.
+    const expiresAt = grantedAt + CHAT_LOCAL_RUN_STEP_OUTPUT_GRANT_SECONDS;
+    expect(grant).toEqual({
+      key: new Bun.CryptoHasher("sha256", start.outputKey)
+        .update(
+          chatLocalRunStepOutputGrantMessage({
+            runId,
+            userId: owner.userId,
+            organizationId: owner.organizationId,
+            expiresAt,
+          }),
+        )
+        .digest("hex"),
+      expiresAt,
+    });
+  });
+
   test("a computer that goes away mid-turn keeps the turn waiting until it returns, and the chat is told both", async () => {
     const chatThreadId = await newThread();
     const desktopId = Bun.randomUUIDv7();
@@ -6509,7 +6606,7 @@ describe("undoing a turn's file changes", () => {
   const MINUTE_MS = 60_000;
   let undoInstance: Instance;
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     // The account already holds the runners the earlier tests paired.
     undoInstance = await startInstance("api-undo", sharedDoorbell, {
       limits: { maxRunnersPerAccount: 1000 },

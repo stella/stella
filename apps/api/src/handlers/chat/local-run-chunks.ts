@@ -20,6 +20,7 @@ import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
 } from "@stll/api-contract/chat";
 import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
+import { chatLocalRunCallId } from "@stll/api-contract/chat-local-run-step-output";
 import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
   CHAT_LOCAL_RUN_TOOL_LIMITS,
@@ -322,22 +323,6 @@ export const approvalDecisionOf = (
     return payload["scope"] === "session" ? "approve_for_session" : "approve";
   }
   return "deny";
-};
-
-/**
- * Call ids the harness mints are unique only within its own run, so every id
- * of a local run is prefixed with the run: stable across the turn's pause and
- * resume, and unique across the thread.
- */
-const MAX_CALL_ID_LENGTH = 256;
-
-const localCallId = (runnerRunId: string, toolCallId: string) => {
-  const prefixed = `${runnerRunId.replaceAll("-", "")}_${toolCallId}`;
-  // A harness id too long for the budget keeps its identity as a digest, so
-  // two long ids never collapse into one call.
-  return prefixed.length <= MAX_CALL_ID_LENGTH
-    ? prefixed
-    : `${runnerRunId.replaceAll("-", "")}_${sha256Hex(toolCallId)}`;
 };
 
 type RewriteContext = {
@@ -694,7 +679,7 @@ const asChatChunk = (
   if (LOCAL_RUN_EVENT_DISPOSITION[chunk.type] === "drop") {
     return null;
   }
-  const callId = (id: string) => localCallId(runnerRunId, id);
+  const callId = (id: string) => chatLocalRunCallId(runnerRunId, id, sha256Hex);
   if (chunk.type === EventType.TOOL_CALL_START) {
     // A call's first start names it for good: the chat keeps the first part
     // of an id, so a start naming another tool is not carried.

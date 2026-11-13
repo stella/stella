@@ -219,6 +219,10 @@ describe("what a turn reports about its skill folders", () => {
     const event = await claudeCall("Bash", { command: "ls" }, "notes.md\n");
     expect(event.toolCall.input).toEqual({ command: "ls" });
     expect(JSON.parse(event.result.content)).toEqual({ status: "completed" });
+    expect(event.result.localOutput).toEqual({
+      type: "command",
+      output: "notes.md\n",
+    });
   });
 
   test("a Codex command reading a skill shows the name and reports only the status", async () => {
@@ -249,6 +253,8 @@ describe("what a turn reports about its skill folders", () => {
       exit_code: 0,
       status: "completed",
     });
+    // What it printed of the skill is not kept, not even on this computer.
+    expect(result.localOutput).toBeUndefined();
   });
 
   test("a call known to have touched a skill when it started stays status only", async () => {

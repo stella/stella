@@ -51,6 +51,11 @@ export default {
         reason:
           "Reads what a chat's runs left running in the background on the member's computers.",
       },
+      {
+        path: "apps/api/src/handlers/chat/local-run-step-output-grant.ts",
+        reason:
+          "Reads the member's own run to grant reading its step outputs on the computer that ran it.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;
