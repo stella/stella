@@ -355,20 +355,24 @@ const toolResults = (chunks: readonly Record<string, unknown>[]) =>
 /**
  * The steps the member is asked about, by approval mode: the agent clicks
  * the search button and a result, and types into a search field and into
- * a note field.
+ * a note field. Plan is read-only and refuses those steps, so this journey
+ * does not apply to it; the browser tools' own tests cover it.
  */
 const ASKED = {
   ask: ["click", "click", "type"],
   auto: ["type"],
   full_auto: [],
-} as const satisfies Record<DesktopRunnerApprovalMode, readonly string[]>;
+} as const satisfies Record<
+  Exclude<DesktopRunnerApprovalMode, "plan">,
+  readonly string[]
+>;
 
 const APPROVAL_STEP_PREFIX = "browser-step-";
 
 /** Claude Code offers full auto only where its sandbox runs. */
 const offersMode = (
   harness: keyof typeof FAKES,
-  approvals: DesktopRunnerApprovalMode,
+  approvals: keyof typeof ASKED,
 ) =>
   approvals !== "full_auto" ||
   harness === "codex" ||
