@@ -687,6 +687,11 @@ impl Runner {
     for message in resend {
       send(socket, &message).await?;
     }
+    // The API forgot every background count at `hello`; the live ones
+    // count again.
+    for message in self.journal.background_reports() {
+      send(socket, &message).await?;
+    }
     Ok(())
   }
 

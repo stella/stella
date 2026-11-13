@@ -159,6 +159,8 @@ import { ownerStepOutputGrant } from "@/api/lib/desktop-runner/step-output-grant
 import {
   type DesktopRunnerDb,
   readNewestQueuedCommands,
+  recordBackgroundTasks,
+  type RunnerBinding,
 } from "@/api/lib/desktop-runner/store";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileKey } from "@/api/lib/file-key";
@@ -168,6 +170,7 @@ import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { isRecord } from "@/api/lib/type-guards";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { chatBackgroundTasksScalingScenario } from "@/api/tests/read-scaling/chat-background-tasks";
 import { chatLocalFilesUndoScalingScenario } from "@/api/tests/read-scaling/chat-local-files-undo";
 import { chatLocalRunStepOutputGrantScalingScenario } from "@/api/tests/read-scaling/chat-local-run-step-output-grant";
 import { chatLocalRunnersScalingScenario } from "@/api/tests/read-scaling/chat-local-runners";
@@ -297,6 +300,7 @@ type InstanceOverrides = {
   timing?: Partial<DesktopRunnerTiming>;
   timers?: RunnerTimers;
   runBell?: DesktopRunnerRunBell;
+  announceBackgroundTasks?: (owner: RunnerBinding) => void;
 };
 
 const startInstance = async (
@@ -318,6 +322,9 @@ const startInstance = async (
     limits: overrides.limits ?? {},
     ...(overrides.timers === undefined ? {} : { timers: overrides.timers }),
     ...(overrides.runBell === undefined ? {} : { runBell: overrides.runBell }),
+    ...(overrides.announceBackgroundTasks === undefined
+      ? {}
+      : { announceBackgroundTasks: overrides.announceBackgroundTasks }),
     isKeyLive,
     isRunnerEnabled,
   });
@@ -864,6 +871,92 @@ describe("run messages", () => {
       reason: DESKTOP_RUNNER_CLOSE.sequenceGap.reason,
     });
     expect((await storedSeqs(runId)).map(({ seq }) => seq)).toEqual([1, 2]);
+  });
+
+  test("a run's background count is stored and announced, and forgotten when its computer says hello again", async () => {
+    const announced: string[] = [];
+    const waiters: (() => void)[] = [];
+    /** The next announcement, whenever it comes. */
+    const nextAnnouncement = async () => {
+      const { promise, resolve } = Promise.withResolvers<undefined>();
+      waiters.push(() => {
+        resolve(undefined);
+      });
+      await promise;
+    };
+    const instance = await startInstance("api-background", sharedDoorbell, {
+      announceBackgroundTasks: ({ desktopId }) => {
+        announced.push(desktopId);
+        waiters.shift()?.();
+      },
+    });
+    const { runId, desktop, desktopId } = await acceptedRun(instance);
+    // The turn ends; what it started keeps running in the background.
+    desktop.send({
+      type: "run.finished",
+      runId,
+      seq: 1,
+      outcome: "completed",
+      harnessSessionId: null,
+    });
+    await desktop.receive("ack", ofRun(runId));
+    const backgroundOf = async () =>
+      (
+        await db
+          .select({ counts: desktopRunners.backgroundTasks })
+          .from(desktopRunners)
+          .where(eq(desktopRunners.desktopId, desktopId))
+      ).at(0)?.counts;
+
+    const stored = nextAnnouncement();
+    desktop.send({ type: "run.background", runId, count: 2 });
+    await stored;
+    expect(await backgroundOf()).toEqual({ [runId]: 2 });
+    expect(announced).toEqual([desktopId]);
+
+    // A run this computer does not hold changes nothing and keeps the
+    // socket; messages are handled in order, so once the next count is
+    // announced the unknown one was handled.
+    desktop.send({
+      type: "run.background",
+      runId: Bun.randomUUIDv7(),
+      count: 5,
+    });
+    const updated = nextAnnouncement();
+    desktop.send({ type: "run.background", runId, count: 3 });
+    await updated;
+    expect(await backgroundOf()).toEqual({ [runId]: 3 });
+    expect(announced).toEqual([desktopId, desktopId]);
+
+    // A socket a newer one replaced writes nothing.
+    const [row] = await db
+      .select({ deviceJkt: desktopRunners.deviceJkt })
+      .from(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
+    const replaced = {
+      binding: {
+        ...owner,
+        desktopId,
+        deviceJkt: row?.deviceJkt ?? "",
+        keyId: "replaced-key",
+      },
+      sessionId: Bun.randomUUIDv7(),
+    };
+    expect(
+      await recordBackgroundTasks(gatewayDb, { ...replaced, runId, count: 5 }),
+    ).toBe("not_current");
+    expect(await backgroundOf()).toEqual({ [runId]: 3 });
+
+    // Closing announces; the next hello forgets the count until reported again.
+    const closedAnnouncement = nextAnnouncement();
+    await desktop.close();
+    await closedAnnouncement;
+    const cleared = nextAnnouncement();
+    const again = await openDesktop(instance, desktopId);
+    await again.hello();
+    await cleared;
+    expect(await backgroundOf()).toEqual({});
+    await again.close();
   });
 
   test("an attached file's link is signed on send and never stored", async () => {
@@ -4731,6 +4824,39 @@ describe("chat turns on a computer", () => {
         .from(desktopRunnerRuns)
         .where(eq(desktopRunnerRuns.chatThreadId, chatThreadId)),
     ).toEqual([]);
+  });
+
+  test("a chat's background count reads the same however many runs the chat holds", async () => {
+    const counted = createDesktopRunnerControl({
+      // SAFETY: PGlite and Bun SQL expose the same Drizzle query APIs.
+      db: asTestRaw<DesktopRunnerDb>(withQueryLogger(db, queryCountLogger)),
+      doorbell: sharedDoorbell,
+      now,
+      timing: TIMING,
+    });
+    const { desktopId, desktop } = shared();
+    const threadId = await newThread();
+    const fixture = { control: counted, owner, threadId };
+    const small = await chatBackgroundTasksScalingScenario.measure(fixture);
+    for (let index = 0; index < 20; index += 1) {
+      const runId = await assignRun(desktopId);
+      await desktop.receive("run.start", ofRun(runId));
+      desktop.send({ type: "run.accepted", runId });
+      desktop.send({ type: "run.background", runId, count: 1 });
+      desktop.send(textEvent(runId, 1, "Working"));
+      await desktop.receive("ack", ofRun(runId));
+      // The chat's own runs, as a chat turn would have started them.
+      await db
+        .update(desktopRunnerRuns)
+        .set({ chatThreadId: threadId })
+        .where(eq(desktopRunnerRuns.runId, runId));
+    }
+    const large = await chatBackgroundTasksScalingScenario.measure(fixture);
+    expect(small.statements).toBeGreaterThan(0);
+    expect(readScalingViolations({ small, large })).toEqual([]);
+    expect(
+      (await counted.readBackgroundTasks({ owner, threadId })).unwrap(),
+    ).toBe(20);
   });
 
   test("the composer's computer list reads the same however much the computers ran", async () => {

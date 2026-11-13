@@ -17,6 +17,7 @@ use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 
 use super::harness::{HarnessHost, HarnessReports};
+use super::journal::SharedJournal;
 use super::sidecar_host::{
   HarnessCredentials, HostSettings, InstallSettled, InstalledHarness, LinkedFolderLook,
   LinkedFolderLooks, LocalHarnesses, SidecarHarnessHost, linked_folder_within,
@@ -279,6 +280,7 @@ impl Place {
         settled: Arc::clone(&self.settled),
         folders_linked,
       }),
+      Arc::new(SharedJournal::default()),
     )
   }
 

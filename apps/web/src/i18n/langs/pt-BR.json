@@ -1853,6 +1853,7 @@
       "restored": "Alterações nos arquivos desfeitas"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# tarefa em segundo plano em execução} other {# tarefas em segundo plano em execução} many {# tarefas em segundo plano em execução}}",
       "errorFolderUnavailable": "A pasta vinculada a este chat não está disponível no seu computador. Verifique-a no stella desktop e envie isto de novo.",
       "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",
       "errorLimitResetsAt": "O agente de programação do seu computador atingiu o limite de uso. Você poderá tentar novamente a partir de {time}.",
@@ -1894,6 +1895,7 @@
       "refusalTooLarge": "Esta conversa é longa demais para ser enviada ao seu computador. Comece um novo chat para executá-la lá.",
       "refusalUnavailable": "Executar chats no seu computador não está disponível para sua conta.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat.",
       "stateLimitUntil": "Limite atingido até {time}",
       "stateModelUnavailable": "Modelo não está mais disponível",
       "stateNeedsLogin": "É preciso entrar",
@@ -2299,6 +2301,8 @@
       "replyReadyTitle": "Resposta pronta"
     },
     "turnStatus": {
+      "answerFailed": "Não foi possível concluir a resposta",
+      "answerReady": "Resposta pronta",
       "waitingForApproval": "Aguardando aprovação",
       "waitingForInput": "Aguardando informações",
       "writing": "Escrevendo"

@@ -1853,6 +1853,7 @@
       "restored": "Zmiany w plikach cofnięte"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# zadanie działa w tle} few {# zadania działają w tle} many {# zadań działa w tle} other {# zadania działa w tle}}",
       "errorFolderUnavailable": "Folder powiązany z tym czatem jest niedostępny na Twoim komputerze. Sprawdź go w stella desktop, a potem wyślij to ponownie.",
       "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
       "errorLimitResetsAt": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Możesz spróbować ponownie po {time}.",
@@ -1894,6 +1895,7 @@
       "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
       "stateLimitUntil": "Limit wyczerpany do {time}",
       "stateModelUnavailable": "Model nie jest już dostępny",
       "stateNeedsLogin": "Wymaga zalogowania",
@@ -2299,6 +2301,8 @@
       "replyReadyTitle": "Odpowiedź gotowa"
     },
     "turnStatus": {
+      "answerFailed": "Nie udało się dokończyć odpowiedzi",
+      "answerReady": "Odpowiedź gotowa",
       "waitingForApproval": "Oczekiwanie na zatwierdzenie",
       "waitingForInput": "Oczekiwanie na dane",
       "writing": "Pisanie"

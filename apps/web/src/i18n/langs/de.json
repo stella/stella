@@ -1853,6 +1853,7 @@
       "restored": "Dateiänderungen rückgängig gemacht"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# Hintergrundaufgabe läuft} other {# Hintergrundaufgaben laufen}}",
       "errorFolderUnavailable": "Der mit diesem Chat verknüpfte Ordner ist auf Ihrem Computer nicht verfügbar. Prüfen Sie ihn in stella desktop und senden Sie dies dann erneut.",
       "errorLimitReached": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Versuchen Sie es erneut, sobald das Limit zurückgesetzt ist.",
       "errorLimitResetsAt": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Sie können es ab {time} erneut versuchen.",
@@ -1894,6 +1895,7 @@
       "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
       "stateLimitUntil": "Limit erreicht bis {time}",
       "stateModelUnavailable": "Modell nicht mehr verfügbar",
       "stateNeedsLogin": "Anmeldung erforderlich",
@@ -2299,6 +2301,8 @@
       "replyReadyTitle": "Antwort fertig"
     },
     "turnStatus": {
+      "answerFailed": "Die Antwort konnte nicht fertiggestellt werden",
+      "answerReady": "Antwort fertig",
       "waitingForApproval": "Warten auf Genehmigung",
       "waitingForInput": "Warten auf Eingabe",
       "writing": "Antwort wird verfasst"

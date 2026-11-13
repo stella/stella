@@ -33,6 +33,7 @@ import submitConnector from "@/api/handlers/chat/submit-connector";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import tableChart from "@/api/handlers/chat/table-chart";
+import readBackgroundTasks from "@/api/handlers/chat/threads/background-tasks";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
 import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
@@ -116,6 +117,7 @@ export const chatRoute = routes(
       GET: readLocalFilesUndo,
       POST: undoLocalFiles,
     },
+    "/threads/:threadId/background-tasks": { GET: readBackgroundTasks },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },
   },

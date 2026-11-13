@@ -1853,6 +1853,7 @@
       "restored": "Failu izmaiņas atsauktas"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, zero {Fonā darbojas # uzdevumu} one {Fonā darbojas # uzdevums} other {Fonā darbojas # uzdevumi}}",
       "errorFolderUnavailable": "Ar šo tērzēšanu saistītā mape jūsu datorā nav pieejama. Pārbaudiet to stella desktop un pēc tam nosūtiet vēlreiz.",
       "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",
       "errorLimitResetsAt": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Vēlreiz mēģināt varēsiet pēc {time}.",
@@ -1894,6 +1895,7 @@
       "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
       "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām.",
       "stateLimitUntil": "Limits sasniegts līdz {time}",
       "stateModelUnavailable": "Modelis vairs nav pieejams",
       "stateNeedsLogin": "Jāpiesakās",
@@ -2299,6 +2301,8 @@
       "replyReadyTitle": "Atbilde gatava"
     },
     "turnStatus": {
+      "answerFailed": "Atbildi neizdevās pabeigt",
+      "answerReady": "Atbilde ir gatava",
       "waitingForApproval": "Gaida apstiprinājumu",
       "waitingForInput": "Gaida ievadi",
       "writing": "Raksta"

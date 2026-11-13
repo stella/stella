@@ -6,6 +6,7 @@ import {
   type Detached,
   type HarnessExit,
   settlesWithin,
+  stopBackgroundWithin,
 } from "./turn-lifecycle";
 
 /**
@@ -114,9 +115,13 @@ export const keepLiveSession = ({
     }
   };
   const end = async () => {
+    // The next turn owns a taken process: only that turn ends it.
+    if (state.taken) {
+      return;
+    }
     state.ending ??= (async () => {
       background.follow(null);
-      await settlesWithin(stopBackground(), gracePeriodMs);
+      await stopBackgroundWithin(stopBackground, gracePeriodMs);
       await closeProcess(process, gracePeriodMs);
     })();
     await state.ending;

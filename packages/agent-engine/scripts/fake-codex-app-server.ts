@@ -62,10 +62,41 @@ type FakeStep =
    */
   | { browse: true };
 
-const TERMINAL_METHODS: ReadonlySet<string> = new Set([
+/** Requests answered at any time, the script's own steps done or not. */
+const ALWAYS_ANSWERED: ReadonlySet<string> = new Set([
   "thread/backgroundTerminals/list",
   "thread/backgroundTerminals/clean",
+  "account/rateLimits/read",
 ]);
+
+/** Unix seconds well after any test runs. */
+export const FAKE_FUTURE_RESET = 1_893_456_000;
+
+/** The plan's allowance as Codex reports it, the main window at `used`. */
+const planLimits = (usedPercent: number, resetsAt = FAKE_FUTURE_RESET) => ({
+  limitId: "codex",
+  limitName: null,
+  primary: { usedPercent, windowDurationMins: 300, resetsAt },
+  secondary: {
+    usedPercent: 40,
+    windowDurationMins: 10_080,
+    resetsAt: resetsAt - 3600,
+  },
+  credits: null,
+  individualLimit: null,
+  planType: "plus",
+  rateLimitReachedType: null,
+});
+
+/** `account/rateLimits/read`, keyed by limit id as current servers do. */
+const rateLimitsRead = (codex: object) => ({
+  rateLimits: codex,
+  rateLimitsByLimitId: {
+    codex,
+    // Another model's allowance never stands for the plan's.
+    "codex-other": { ...planLimits(100), limitId: "codex-other" },
+  },
+});
 
 /** A background terminal as the app-server lists it. */
 const backgroundTerminal = (itemId: string) => ({
@@ -87,6 +118,12 @@ export const FAKE_RESUMED_THREAD_ID = "thread-old";
 const FAKE_TURN_ID = "turn-1";
 /** The server name the holder registers the browser tools under. */
 const FAKE_BROWSER_SERVER = "stella_browser";
+
+const usageLimitError = {
+  message: "You've hit your usage limit.",
+  codexErrorInfo: "usageLimitExceeded",
+  additionalDetails: null,
+};
 
 const signedIn = {
   account: { type: "chatgpt", email: null, planType: "plus" },
@@ -828,26 +865,7 @@ const FAKE_SCENARIOS = {
     ...freshTurn(),
     {
       notify: "account/rateLimits/updated",
-      params: {
-        rateLimits: {
-          limitId: "codex",
-          limitName: null,
-          primary: {
-            usedPercent: 100,
-            windowDurationMins: 300,
-            resetsAt: 1_793_196_000,
-          },
-          secondary: {
-            usedPercent: 40,
-            windowDurationMins: 10_080,
-            resetsAt: 1_793_700_000,
-          },
-          credits: null,
-          individualLimit: null,
-          planType: "plus",
-          rateLimitReachedType: null,
-        },
-      },
+      params: { rateLimits: planLimits(100) },
     },
     {
       notify: "error",
@@ -862,11 +880,28 @@ const FAKE_SCENARIOS = {
         },
       },
     },
-    completed("failed", {
-      message: "You've hit your usage limit.",
-      codexErrorInfo: "usageLimitExceeded",
-      additionalDetails: null,
-    }),
+    completed("failed", usageLimitError),
+  ],
+  /** The first limit of a process: no update came before the failure. */
+  usage_limit_unannounced: [
+    ...freshTurn(),
+    completed("failed", usageLimitError),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(100)),
+    },
+  ],
+  /** As above, and the account has no plan limits to read (an API key). */
+  usage_limit_read_fails: [
+    ...freshTurn(),
+    completed("failed", usageLimitError),
+    {
+      expect: "account/rateLimits/read",
+      error: {
+        code: -32_600,
+        message: "codex account authentication required to read rate limits",
+      },
+    },
   ],
   /** stella's MCP server fails to start after the turn began. */
   stella_mcp_failed: [
@@ -1065,6 +1100,39 @@ const FAKE_SCENARIOS = {
         ],
         nextCursor: null,
       },
+    },
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(40)),
+    },
+  ],
+  /** The limits cannot be read, as for an account without a plan. */
+  probe_limits_unreadable: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      error: {
+        code: -32_600,
+        message: "codex account authentication required to read rate limits",
+      },
+    },
+  ],
+  /** The plan's window is spent, and the account has credits to go on. */
+  probe_out_of_usage_with_credits: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead({
+        ...planLimits(100),
+        credits: { hasCredits: true, unlimited: false, balance: "12.50" },
+      }),
+    },
+  ],
+  probe_out_of_usage: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(100)),
     },
   ],
 } as const satisfies Record<string, readonly FakeStep[]>;
@@ -1266,6 +1334,9 @@ const run = async (
       terminals.splice(0);
       return {};
     }
+    if (method === "account/rateLimits/read") {
+      return rateLimitsRead(planLimits(10));
+    }
     return skills.answer(method, params);
   };
   /** The next request a step scripts; skill discovery answers the rest. */
@@ -1382,15 +1453,15 @@ const run = async (
     }
   }
   // A real server exits once its client closes stdin. Until then it still
-  // lists and cleans its background terminals; anything else stays
-  // unanswered, as the script left it.
+  // answers what it answers at any time; anything else stays unanswered, as
+  // the script left it.
   for (;;) {
     // await-in-loop: one request at a time, in the order they arrived.
     const message = await take("requests");
     if (message === null) {
       break;
     }
-    if (TERMINAL_METHODS.has(message.method ?? "")) {
+    if (ALWAYS_ANSWERED.has(message.method ?? "")) {
       write({
         id: message.id,
         result: unscriptedAnswer(message.method, message["params"]),

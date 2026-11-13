@@ -644,12 +644,12 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
 
 type PersistedChatPart = PersistedChatMessage["parts"][number];
 
-const isApprovalRequestPart = (part: PersistedChatPart): boolean =>
+export const isApprovalRequestPart = (part: PersistedChatPart): boolean =>
   part.type === "tool-call" && part.state === "approval-requested";
 
 /** A part only the user can answer: an approval request, or a user-input
  *  card whose questions have fully arrived. */
-const isUserAnswerablePart = (part: PersistedChatPart): boolean =>
+export const isUserAnswerablePart = (part: PersistedChatPart): boolean =>
   isApprovalRequestPart(part) ||
   (part.type === "tool-call" &&
     part.state === "input-complete" &&

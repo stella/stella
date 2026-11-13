@@ -1853,6 +1853,7 @@
       "restored": "Failų pakeitimai atšaukti"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {Fone vykdoma # užduotis} few {Fone vykdomos # užduotys} many {Fone vykdoma # užduoties} other {Fone vykdoma # užduočių}}",
       "errorFolderUnavailable": "Su šiuo pokalbiu susietas aplankas jūsų kompiuteryje nepasiekiamas. Patikrinkite jį stella desktop, tada išsiųskite tai dar kartą.",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
       "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
@@ -1894,6 +1895,7 @@
       "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis.",
       "stateLimitUntil": "Limitas pasiektas iki {time}",
       "stateModelUnavailable": "Modelis nebepasiekiamas",
       "stateNeedsLogin": "Reikia prisijungti",
@@ -2299,6 +2301,8 @@
       "replyReadyTitle": "Atsakymas paruoštas"
     },
     "turnStatus": {
+      "answerFailed": "Atsakymo nepavyko užbaigti",
+      "answerReady": "Atsakymas paruoštas",
       "waitingForApproval": "Laukiama patvirtinimo",
       "waitingForInput": "Laukiama įvesties",
       "writing": "Rašoma"

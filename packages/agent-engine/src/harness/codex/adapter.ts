@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { homedir } from "node:os";
 import path from "node:path";
+import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import { knownReasoningEfforts } from "@stll/api-contract/desktop-runner";
@@ -20,6 +21,7 @@ import {
   HarnessStartError,
   type HarnessTurn,
   type HarnessTurnInput,
+  type HarnessUsageLimit,
 } from "../adapter";
 import type { HarnessContinuation } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
@@ -34,6 +36,7 @@ import {
   startAppServer,
 } from "./app-server-client";
 import { CodexProcess } from "./background";
+import { usageLimitResetsAt } from "./errors";
 import {
   CODEX_CLIENT_INFO,
   CODEX_OPT_OUT_NOTIFICATIONS,
@@ -43,6 +46,7 @@ import {
   ModelListResponseSchema,
   TurnStartResponseSchema,
 } from "./protocol";
+import { readRateLimits } from "./rate-limits";
 import {
   CODEX_APPROVAL_MODES,
   isCodexApprovalMode,
@@ -356,6 +360,39 @@ const close = async (client: AppServerClient, gracePeriodMs: number) => {
   }
 };
 
+/**
+ * The plan's limit, when Codex reports it exhausted with a known reset and
+ * no credits to continue on.
+ *
+ * A read that failed says nothing about the limits, so it is not taken as
+ * "within the limit" either: it is the probe contract's "cannot say", which
+ * keeps the harness ready, as an API key account (which has no plan limits
+ * to read) must stay. Readiness says a run can start; a run that then meets
+ * the limit fails as a usage limit and reads its reset itself.
+ */
+const probeUsageLimit = async (
+  client: AppServerClient,
+): Promise<HarnessUsageLimit | null> => {
+  const read = await readRateLimits(client);
+  switch (read.type) {
+    case "read": {
+      const { credits } = read.limits;
+      // An account with credits keeps running once its windows are spent.
+      if (credits?.hasCredits === true || credits?.unlimited === true) {
+        return null;
+      }
+      const resetsAt = usageLimitResetsAt(read.limits, Temporal.Now.instant());
+      return resetsAt === null ? null : { resetsAt };
+    }
+    case "none":
+    case "failed":
+      return null;
+    default:
+      read satisfies never;
+      return panic("Unhandled rate limits read");
+  }
+};
+
 /** Account and models as the harness reports them, without a session. */
 const probe = async (
   options: CodexHarnessAdapterOptions,
@@ -404,6 +441,8 @@ const probe = async (
         }),
       );
     }
+    const usageLimit =
+      auth.type === "signed_out" ? null : await probeUsageLimit(client);
     return Result.ok({
       version,
       auth,
@@ -411,8 +450,7 @@ const probe = async (
       capabilities: capabilities(),
       // Codex sandboxes every command at each of its levels.
       approvalModes: [...CODEX_APPROVAL_MODES],
-      // The probe does not read rate limits; a limited turn reports them.
-      usageLimit: null,
+      usageLimit,
     });
   })();
   await close(client, options.gracePeriodMs);
