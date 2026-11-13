@@ -6,6 +6,7 @@ import {
   type ChatLocalRunToolCallInput,
   chatLocalRunToolResultContent,
   chatLocalRunToolStatusContent,
+  isChatLocalRunBrowserAction,
   isChatLocalRunToolName,
   parseChatLocalRunToolCall,
   parseChatLocalRunToolResult,
@@ -90,7 +91,56 @@ export const HARNESS_TOOL_NAMES = {
   permissions: harnessToolName("request_permissions"),
   nativeTool: harnessToolName(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool),
   unsupportedItem: harnessToolName(CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem),
+  browser: harnessToolName(CHAT_LOCAL_RUN_TOOL_NAMES.browser),
 } as const;
+
+/**
+ * The MCP server name a local run's browser tools are registered under
+ * (`sidecar/browser`). Their calls are steps on the member's computer, not
+ * stella or connector tools.
+ */
+export const LOCAL_BROWSER_MCP_SERVER_NAME = "stella_browser";
+
+/**
+ * The call an adapter reports for an MCP tool. A browser step keeps only
+ * its kind and, for `open`, the address the agent chose: the element it
+ * clicked and the text it typed stay on the computer, and so does its
+ * result (`shownToolResult`). Any other call is named by `mcpToolCallName`.
+ */
+export const mcpToolCall = ({
+  id,
+  input,
+  server,
+  stellaServer,
+  tool,
+}: {
+  id: string;
+  input: unknown;
+  server: string;
+  stellaServer: string;
+  tool: string;
+}): HarnessToolCall => {
+  if (server !== LOCAL_BROWSER_MCP_SERVER_NAME) {
+    return { id, name: mcpToolCallName({ server, tool, stellaServer }), input };
+  }
+  if (!isChatLocalRunBrowserAction(tool)) {
+    return unsupportedItem(id, `${server}:${tool}`).toolCall;
+  }
+  if (tool !== "open") {
+    return nativeToolCall(id, {
+      name: HARNESS_TOOL_NAMES.browser,
+      input: { action: tool },
+    });
+  }
+  const url: unknown =
+    typeof input === "object" && input !== null
+      ? Reflect.get(input, "url")
+      : undefined;
+  return nativeToolCall(id, {
+    name: HARNESS_TOOL_NAMES.browser,
+    input: { action: tool, ...(typeof url === "string" ? { url } : {}) },
+  });
+};
 
 /**
  * A harness-native step in the contract's shape (`chat-local-run-tool`),
@@ -108,6 +158,18 @@ export const nativeToolCall = (
   ...(localInput === undefined ? {} : { localInput }),
 });
 
+/**
+ * `call` as a call of the subagent whose own step is `parentCallId`, or as
+ * it is on the main thread (`null`). A call of any kind names its subagent
+ * (a native step, an MCP tool, a question): the link sits beside the call,
+ * so its input stays what its tool defines.
+ */
+export const stepOfSubagent = (
+  call: HarnessToolCall,
+  parentCallId: string | null,
+): HarnessToolCall =>
+  parentCallId === null ? call : { ...call, parentCallId };
+
 const withRunRelativePaths = (
   call: ChatLocalRunToolCall,
   workspaceDir: string,
@@ -118,6 +180,7 @@ const withRunRelativePaths = (
       return {
         ...call,
         input: {
+          ...call.input,
           changes: call.input.changes.map((change) => ({
             ...change,
             path: relative(change.path),
@@ -126,7 +189,7 @@ const withRunRelativePaths = (
       };
     case CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool: {
       const { detail } = call.input;
-      if (detail?.kind === "read") {
+      if (detail?.kind === "read" || detail?.kind === "image") {
         return {
           ...call,
           input: {
@@ -149,6 +212,7 @@ const withRunRelativePaths = (
     case CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution:
     case CHAT_LOCAL_RUN_TOOL_NAMES.webSearch:
     case CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem:
+    case CHAT_LOCAL_RUN_TOOL_NAMES.browser:
       return call;
     default:
       call satisfies never;

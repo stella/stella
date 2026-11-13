@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { browseAsAgent, claudeMcpEndpoints } from "./fake-browser";
 import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
@@ -20,8 +21,16 @@ import {
  */
 
 export type FakeStep =
-  /** Wait for the client's next control request of this subtype; answer it. */
-  | { expect: string; response?: unknown; error?: string }
+  /**
+   * Wait for the client's next control request of this subtype; answer it,
+   * with `respond` reading the request when the answer depends on it.
+   */
+  | {
+      expect: string;
+      response?: unknown;
+      respond?: (request: Record<string, unknown>) => unknown;
+      error?: string;
+    }
   /** Wait for the client's next user message. */
   | { expectUser: true }
   | { emit: object }
@@ -41,7 +50,12 @@ export type FakeStep =
         approved: readonly FakeStep[];
         denied: readonly FakeStep[];
       };
-    };
+    }
+  /**
+   * Browse the fixture library through the browser and stella MCP servers
+   * `mcp_set_servers` registered, and report each call and the answer.
+   */
+  | { browse: true };
 
 /** A scenario that starts differently when the client resumes a session. */
 type FakeScenario =
@@ -49,6 +63,8 @@ type FakeScenario =
   | { resume: readonly FakeStep[]; fresh: readonly FakeStep[] };
 
 export const FAKE_CLAUDE_VERSION = "2.1.309";
+/** The server name the holder registers the browser tools under. */
+const FAKE_BROWSER_SERVER = "stella_browser";
 export const FAKE_RESUMED_SESSION_ID = "4f1d2c3b-5a6e-4b7c-8d9e-0f1a2b3c4d5e";
 
 const SUBSCRIPTION = {
@@ -107,9 +123,18 @@ const initialize = (
   },
 });
 
+/** Every server the client registers is added. */
 const registerStella: FakeStep = {
   expect: "mcp_set_servers",
-  response: { added: [FAKE_STELLA_SERVER], removed: [], errors: {} },
+  respond: (request) => ({
+    added: Object.keys(
+      typeof request["servers"] === "object" && request["servers"] !== null
+        ? request["servers"]
+        : {},
+    ),
+    removed: [],
+    errors: {},
+  }),
 };
 
 const freshTurn = (): FakeStep[] => [
@@ -240,7 +265,18 @@ export const FAKE_PRIVATE_TEXT = {
   written: "Confidential settlement terms.",
   fetchPrompt: "Summarise the termination rules",
   activeForm: "Working through the private plan",
+  subagentPrompt: "Read the lease and list every clause on arrears.",
+  subagentText: "Clause 4 covers arrears.",
+  subagentThinking: "The arrears clause may be void.",
+  subagentReport: "Report: clause 4 caps arrears at 4,200.",
+  imageData: "aW1hZ2UgYnl0ZXM=",
 } as const;
+
+/** The call that starts the subagent in the subagent scenario. */
+export const FAKE_SUBAGENT_CALL = "call-agent";
+
+/** One message of the subagent `FAKE_SUBAGENT_CALL` started. */
+const inSubagent = { parent_tool_use_id: FAKE_SUBAGENT_CALL };
 
 /** A command longer than chat shows. */
 export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
@@ -328,6 +364,8 @@ const devServer: FakeStep[] = [
 ];
 
 export const FAKE_SCENARIOS = {
+  /** The local browser canary: a search, a result, a sign-in, a citation. */
+  browse: [...freshTurn(), { browse: true }, result()],
   /**
    * A turn that leaves a dev server running in the background; the chat's
    * next user message continues in this process, and the server exits
@@ -673,9 +711,112 @@ export const FAKE_SCENARIOS = {
       }),
     ]),
     toolResult("call-todo", "Todos updated."),
-    assistant("msg-13", [toolUse("call-task", "Task", { prompt: "Look" })]),
-    toolResult("call-task", "Done."),
+    assistant("msg-13", [toolUse("call-skill", "Skill", { skill: "review" })]),
+    toolResult("call-skill", "Done."),
     result(),
+  ],
+  /**
+   * A subagent: the call that starts it, then its own messages, which name
+   * that call. It reads a file, asks to run a command, views an image and
+   * calls a connector tool; what it was told, wrote, thought and reported
+   * sits next to the steps stella shows.
+   */
+  subagent: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse(FAKE_SUBAGENT_CALL, "Agent", {
+        description: "Check the lease",
+        subagent_type: "Explore",
+        prompt: FAKE_PRIVATE_TEXT.subagentPrompt,
+      }),
+    ]),
+    {
+      emit: {
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: FAKE_PRIVATE_TEXT.subagentPrompt }],
+        },
+        session_id: "s",
+        ...inSubagent,
+      },
+    },
+    {
+      emit: {
+        type: "stream_event",
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: FAKE_PRIVATE_TEXT.subagentText },
+        },
+        session_id: "s",
+        ...inSubagent,
+      },
+    },
+    assistant(
+      "msg-sub-1",
+      [
+        { type: "thinking", thinking: FAKE_PRIVATE_TEXT.subagentThinking },
+        { type: "text", text: FAKE_PRIVATE_TEXT.subagentText },
+        toolUse("call-sub-read", "Read", {
+          file_path: "/workspace/drafts/lease.md",
+        }),
+      ],
+      inSubagent,
+      requestUsage(900_000, 5),
+    ),
+    toolResult("call-sub-read", "1→lease", false, inSubagent),
+    assistant(
+      "msg-sub-2",
+      [toolUse("call-sub-rm", "Bash", { command: "rm draft.md" })],
+      inSubagent,
+    ),
+    canUseTool("call-sub-rm", "Bash", { command: "rm draft.md" }),
+    toolResult("call-sub-rm", "", false, inSubagent),
+    assistant(
+      "msg-sub-3",
+      [
+        toolUse("call-sub-image", "Read", {
+          file_path: "/workspace/scans/Lease Page 1.PNG",
+        }),
+      ],
+      inSubagent,
+    ),
+    toolResult(
+      "call-sub-image",
+      [
+        {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: "image/png",
+            data: FAKE_PRIVATE_TEXT.imageData,
+          },
+        },
+      ],
+      false,
+      inSubagent,
+    ),
+    assistant(
+      "msg-sub-4",
+      [toolUse("call-sub-docs", FAKE_MCP_CALL.name, FAKE_MCP_CALL.input)],
+      inSubagent,
+    ),
+    toolResult("call-sub-docs", "2 results", false, inSubagent),
+    toolResult(FAKE_SUBAGENT_CALL, [
+      { type: "text", text: FAKE_PRIVATE_TEXT.subagentReport },
+    ]),
+    assistant(
+      "msg-2",
+      [{ type: "text", text: "The lease caps arrears." }],
+      {},
+      requestUsage(1000, 5),
+    ),
+    result({
+      modelUsage: {
+        [FAKE_CLAUDE_MODEL]: { contextWindow: FAKE_CLAUDE_CONTEXT_WINDOW },
+      },
+    }),
   ],
   /** Streamed text, reasoning, a connector call, a command, an answer. */
   tool_calls: [
@@ -834,6 +975,42 @@ export const FAKE_SCENARIOS = {
     toolResult("call-plan", "User has approved your plan."),
     { expect: "set_permission_mode" },
     assistant("msg-2", [{ type: "text", text: "Drafting the notice." }]),
+    result(),
+  ],
+  /**
+   * A subagent that plans: its plan is asked about like any other, and
+   * approving it is not the turn's own plan being approved.
+   */
+  subagent_plan: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse(FAKE_SUBAGENT_CALL, "Agent", {
+        description: "Plan the notice",
+        subagent_type: "Plan",
+        prompt: FAKE_PRIVATE_TEXT.subagentPrompt,
+      }),
+    ]),
+    assistant(
+      "msg-sub-plan",
+      [toolUse("call-sub-plan", "ExitPlanMode", {})],
+      inSubagent,
+    ),
+    canUseTool(
+      "call-sub-plan",
+      "ExitPlanMode",
+      { plan: FAKE_PLAN, planFilePath: "/plans/notice.md" },
+      { permission_suggestions: [SET_MODE_SUGGESTION] },
+    ),
+    toolResult(
+      "call-sub-plan",
+      "User has approved your plan.",
+      false,
+      inSubagent,
+    ),
+    toolResult(FAKE_SUBAGENT_CALL, "Done."),
+    assistant("msg-2", [{ type: "text", text: "The subagent has a plan." }]),
+    // Long enough for a mode switch, were one sent, to arrive before the end.
+    { sleep: 200 },
     result(),
   ],
   /** A declined plan: the CLI stays in plan mode and the turn ends. */
@@ -1255,6 +1432,7 @@ export const run = async (
   });
 
   let cliRequestId = 0;
+  let registeredServers: unknown = undefined;
   /** The client's answer to the last control request a step sent. */
   let lastResponse: { response?: unknown } | null = null;
   const queue = [...steps];
@@ -1268,6 +1446,9 @@ export const run = async (
         log({ unexpected: message.request?.subtype, wanted: step.expect });
         process.exit(97);
       }
+      if (step.expect === "mcp_set_servers") {
+        registeredServers = message.request["servers"];
+      }
       write({
         type: "control_response",
         response:
@@ -1275,7 +1456,8 @@ export const run = async (
             ? {
                 subtype: "success",
                 request_id: message.request_id,
-                response: step.response ?? {},
+                response:
+                  step.respond?.(message.request) ?? step.response ?? {},
               }
             : {
                 subtype: "error",
@@ -1316,6 +1498,63 @@ export const run = async (
       process.stdout.write(`${step.raw}\n`);
     } else if ("sleep" in step) {
       await Bun.sleep(step.sleep);
+    } else if ("browse" in step) {
+      const browsed = await browseAsAgent({
+        browserServer: FAKE_BROWSER_SERVER,
+        endpoints: claudeMcpEndpoints(registeredServers),
+        stellaServer: FAKE_STELLA_SERVER,
+      });
+      // Kept on this computer, for the test to see what the agent read.
+      log({ pageCanaries: browsed.read });
+      for (const call of browsed.steps) {
+        write({
+          type: "assistant",
+          message: {
+            id: `msg-${call.id}`,
+            role: "assistant",
+            content: [
+              {
+                type: "tool_use",
+                id: call.id,
+                name: `mcp__${call.server}__${call.tool}`,
+                input: call.arguments,
+              },
+            ],
+            stop_reason: null,
+          },
+          parent_tool_use_id: null,
+          session_id: "s",
+          uuid: `msg-${call.id}-uuid`,
+        });
+        write({
+          type: "user",
+          message: {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: call.id,
+                content: [{ type: "text", text: call.text }],
+                is_error: call.isError,
+              },
+            ],
+          },
+          parent_tool_use_id: null,
+          session_id: "s",
+        });
+      }
+      write({
+        type: "assistant",
+        message: {
+          id: "msg-browse-answer",
+          role: "assistant",
+          content: [{ type: "text", text: browsed.answer }],
+          stop_reason: null,
+        },
+        parent_tool_use_id: null,
+        session_id: "s",
+        uuid: "msg-browse-answer-uuid",
+      });
     } else {
       process.exit(step.exit);
     }

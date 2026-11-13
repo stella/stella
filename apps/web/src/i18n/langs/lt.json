@@ -2272,11 +2272,15 @@
       "input": "Įvestis",
       "interrupted": "Nutraukta nebaigus",
       "localOutput": {
+        "conversation": "Subagento pokalbis",
+        "conversationPrompt": "Užduotis",
+        "conversationReport": "Ataskaita",
         "cut": "Rodomi pirmieji {kept} iš {total}",
         "diff": "Failų pakeitimai",
         "elsewhere": "Atidarykite kompiuteryje, kuriame tai buvo vykdoma",
         "empty": "Išvesties nėra",
         "failed": "stella darbalaukio programa šiame kompiuteryje negalėjo to parodyti.",
+        "imageTooLarge": "Šio paveikslėlio dydis – {total}. Didesni nei {kept} paveikslėliai šiame kompiuteryje nesaugomi, todėl čia jo parodyti negalima.",
         "notKept": "Iš šio žingsnio šiame kompiuteryje nieko neišsaugota",
         "reading": "Skaitoma iš šio kompiuterio"
       },
@@ -2285,11 +2289,14 @@
       "proposedPlan": "Siūlomas planas",
       "readFile": "Skaitomas failas",
       "searchFiles": "Ieškoma failuose",
+      "signInToContinue": "Prisijunkite, kad tęstumėte",
       "sourceCode": "Pirminis kodas",
       "statusWaiting": "Laukiama",
+      "subagent": "Vykdomas subagentas",
       "toggleDetails": "Perjungti detales",
       "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}",
-      "updatePlan": "Atnaujinamas planas"
+      "updatePlan": "Atnaujinamas planas",
+      "viewImage": "Peržiūrimas paveikslėlis"
     },
     "turnNotification": {
       "failedBody": "stellos pokalbio atsakymas nebuvo baigtas.",

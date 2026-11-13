@@ -21,6 +21,8 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
+import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
+import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
 import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
 import {
   countProcessWork,
@@ -130,6 +132,11 @@ import {
 } from "@/components/chat/context-notice";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
+import {
+  LocalRunStepOutputDetails,
+  localRunStepOutputKindOf,
+} from "@/components/chat/local-run-step-output";
+import { LocalRunSubagentGroup } from "@/components/chat/local-run-subagent-card";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
@@ -2090,6 +2097,42 @@ const getProcessStepTitleKey = (
   return null;
 };
 
+type ToolCallRenderEntry = {
+  entry: AssistantPartRenderEntry;
+  index: number;
+  part: Extract<ChatUIPart, { type: "tool-call" }>;
+};
+
+/** A turn's tool calls that show as steps or cards, with their place in it. */
+const toToolCallRenderEntries = (
+  entries: readonly AssistantPartRenderEntry[],
+): ToolCallRenderEntry[] =>
+  entries.flatMap((entry, index) =>
+    entry.type === "standard" &&
+    entry.part.type === "tool-call" &&
+    isVisibleProcessEntry(entry)
+      ? [{ entry, index, part: entry.part }]
+      : [],
+  );
+
+/**
+ * Which steps of a coding agent's turn show under a subagent's step. A call
+ * with an approval card is a card of its own; every other one is a row.
+ */
+const toLocalRunSubagentGroups = (toolCalls: readonly ToolCallRenderEntry[]) =>
+  localRunSubagentGroups(
+    toolCalls.map(({ part }) => ({
+      id: part.id,
+      name: part.name,
+      input: "input" in part ? part.input : undefined,
+      parentCallId: chatLocalRunParentCallId(
+        "metadata" in part ? part.metadata : undefined,
+      ),
+      shownAs:
+        isApprovalPart(part) || isPendingApprovalPart(part) ? "card" : "row",
+    })),
+  );
+
 // Chunks render entries into runs of consecutive process parts so a
 // multi-step turn packs its reasoning/tool rows tightly instead of
 // spreading them across the message's standard part gap.
@@ -2170,6 +2213,13 @@ const AssistantMessageParts = ({
   const thinkingDisplayState =
     !hasAnswerContent && isTurnActive ? "expanded" : "folded";
   const streamingEntryIndex = isTurnActive ? renderEntries.length - 1 : -1;
+  // A coding agent's subagent shows as one group holding the steps it took.
+  const toolCallEntries = toToolCallRenderEntries(renderEntries);
+  const subagentGroups = toLocalRunSubagentGroups(toolCallEntries);
+  const isShownInSubagent = (entry: AssistantPartRenderEntry) =>
+    entry.type === "standard" &&
+    entry.part.type === "tool-call" &&
+    subagentGroups.rowIn.has(entry.part.id);
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
       return (
@@ -2370,9 +2420,45 @@ const AssistantMessageParts = ({
           return renderEntry(group.item, group.index);
         }
         const visibleEntries = group.items.filter(isVisibleProcessEntry);
-        if (visibleEntries.length === 0) {
+        // A run whose steps all show inside a subagent's group draws nothing
+        // of its own.
+        if (visibleEntries.every(isShownInSubagent)) {
           return null;
         }
+        const renderStep = (entry: AssistantPartRenderEntry, index: number) => {
+          if (isShownInSubagent(entry)) {
+            return null;
+          }
+          const subagent = toolCallEntries.find((call) => call.entry === entry);
+          if (subagent === undefined) {
+            return renderEntry(entry, index);
+          }
+          const stepIds = subagentGroups.stepsOf.get(subagent.part.id);
+          if (stepIds === undefined) {
+            return renderEntry(entry, index);
+          }
+          const steps = toolCallEntries.filter(({ part }) =>
+            stepIds.includes(part.id),
+          );
+          return (
+            <LocalRunSubagentGroup
+              conversation={
+                localRunStepOutputKindOf(subagent.part) === null ? null : (
+                  <LocalRunStepOutputDetails
+                    activeOrganizationId={activeOrganizationId}
+                    part={subagent.part}
+                  />
+                )
+              }
+              key={subagent.part.id}
+              part={subagent.part}
+              rows={steps
+                .filter((step) => isShownInSubagent(step.entry))
+                .map((step) => renderEntry(step.entry, step.index))}
+              steps={steps.map(({ part }) => part)}
+            />
+          );
+        };
         // A run that is still receiving parts at the end of a streaming
         // message relays its current step in the collapsed summary.
         const isLiveGroup =
@@ -2399,7 +2485,7 @@ const AssistantMessageParts = ({
             )}
           >
             {group.items.map((entry, offset) =>
-              renderEntry(entry, group.startIndex + offset),
+              renderStep(entry, group.startIndex + offset),
             )}
           </AssistantProcessGroup>
         );

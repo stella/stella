@@ -2272,11 +2272,15 @@
       "input": "المدخلات",
       "interrupted": "توقّف قبل الاكتمال",
       "localOutput": {
+        "conversation": "محادثة الوكيل الفرعي",
+        "conversationPrompt": "المهمة",
+        "conversationReport": "التقرير",
         "cut": "يُعرض أول {kept} من {total}",
         "diff": "تغييرات الملفات",
         "elsewhere": "افتحه على الحاسوب الذي نفّذه",
         "empty": "لا توجد مخرجات",
         "failed": "تعذّر على تطبيق stella لسطح المكتب على هذا الحاسوب عرض هذا.",
+        "imageTooLarge": "حجم هذه الصورة {total}. لا تُحفظ على هذا الحاسوب الصور التي تتجاوز {kept}، لذا لا يمكن عرضها هنا.",
         "notKept": "لم يُحفظ شيء من هذه الخطوة على هذا الحاسوب",
         "reading": "جارٍ القراءة من هذا الحاسوب"
       },
@@ -2285,11 +2289,14 @@
       "proposedPlan": "اقتراح خطة",
       "readFile": "قراءة ملف",
       "searchFiles": "البحث في الملفات",
+      "signInToContinue": "سجّل الدخول للمتابعة",
       "sourceCode": "الشيفرة المصدرية",
       "statusWaiting": "في الانتظار",
+      "subagent": "تشغيل وكيل فرعي",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
       "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}",
-      "updatePlan": "تحديث الخطة"
+      "updatePlan": "تحديث الخطة",
+      "viewImage": "عرض صورة"
     },
     "turnNotification": {
       "failedBody": "لم يكتمل رد في دردشة stella.",

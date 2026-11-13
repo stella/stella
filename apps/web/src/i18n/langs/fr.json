@@ -2272,11 +2272,15 @@
       "input": "Entrée",
       "interrupted": "Interrompu avant la fin",
       "localOutput": {
+        "conversation": "Conversation du sous-agent",
+        "conversationPrompt": "Tâche",
+        "conversationReport": "Rapport",
         "cut": "Affichage des {kept} premiers sur {total}",
         "diff": "Modifications des fichiers",
         "elsewhere": "Ouvrez-le sur l’ordinateur qui l’a exécuté",
         "empty": "Aucun résultat",
         "failed": "L’application de bureau stella sur cet ordinateur n’a pas pu l’afficher.",
+        "imageTooLarge": "Cette image fait {total}. Les images de plus de {kept} ne sont pas conservées sur cet ordinateur ; elle ne peut donc pas être affichée ici.",
         "notKept": "Rien de cette étape n’est conservé sur cet ordinateur",
         "reading": "Lecture depuis cet ordinateur"
       },
@@ -2285,11 +2289,14 @@
       "proposedPlan": "Proposition d’un plan",
       "readFile": "Lecture d’un fichier",
       "searchFiles": "Recherche dans les fichiers",
+      "signInToContinue": "Connectez-vous pour continuer",
       "sourceCode": "Code source",
       "statusWaiting": "En attente",
+      "subagent": "Exécution d’un sous-agent",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis} many {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}",
-      "updatePlan": "Mise à jour du plan"
+      "updatePlan": "Mise à jour du plan",
+      "viewImage": "Consultation d’une image"
     },
     "turnNotification": {
       "failedBody": "Une réponse dans une conversation stella n’a pas abouti.",

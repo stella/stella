@@ -2272,11 +2272,15 @@
       "input": "Input",
       "interrupted": "Interrupted before finishing",
       "localOutput": {
+        "conversation": "Subagent conversation",
+        "conversationPrompt": "Task given",
+        "conversationReport": "Report",
         "cut": "Showing the first {kept} of {total}",
         "diff": "File changes",
         "elsewhere": "Open on the computer that ran it",
         "empty": "No output",
         "failed": "The stella desktop app on this computer could not show this.",
+        "imageTooLarge": "This image is {total}. Images over {kept} are not kept on this computer, so it cannot be shown here.",
         "notKept": "Nothing from this step is kept on this computer",
         "reading": "Reading from this computer"
       },
@@ -2285,11 +2289,14 @@
       "proposedPlan": "Proposing a plan",
       "readFile": "Reading a file",
       "searchFiles": "Searching files",
+      "signInToContinue": "Sign in to continue",
       "sourceCode": "Source code",
       "statusWaiting": "Waiting",
+      "subagent": "Running a subagent",
       "toggleDetails": "Toggle details",
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}",
-      "updatePlan": "Updating the plan"
+      "updatePlan": "Updating the plan",
+      "viewImage": "Viewing an image"
     },
     "turnNotification": {
       "failedBody": "A chat reply in stella did not finish.",

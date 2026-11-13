@@ -2272,11 +2272,15 @@
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
       "localOutput": {
+        "conversation": "Conversación del subagente",
+        "conversationPrompt": "Tarea",
+        "conversationReport": "Informe",
         "cut": "Se muestran los primeros {kept} de {total}",
         "diff": "Cambios en archivos",
         "elsewhere": "Ábrelo en el ordenador que lo ejecutó",
         "empty": "Sin salida",
         "failed": "La aplicación de escritorio de stella en este ordenador no pudo mostrarlo.",
+        "imageTooLarge": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan en este ordenador, por lo que no se puede mostrar aquí.",
         "notKept": "No se guardó nada de este paso en este ordenador",
         "reading": "Leyendo desde este ordenador"
       },
@@ -2285,11 +2289,14 @@
       "proposedPlan": "Proponiendo un plan",
       "readFile": "Leyendo un archivo",
       "searchFiles": "Buscando en archivos",
+      "signInToContinue": "Inicia sesión para continuar",
       "sourceCode": "Código fuente",
       "statusWaiting": "En espera",
+      "subagent": "Ejecutando un subagente",
       "toggleDetails": "Mostrar detalles",
       "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron} many {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}",
-      "updatePlan": "Actualizando el plan"
+      "updatePlan": "Actualizando el plan",
+      "viewImage": "Viendo una imagen"
     },
     "turnNotification": {
       "failedBody": "Una respuesta del chat en stella no terminó.",

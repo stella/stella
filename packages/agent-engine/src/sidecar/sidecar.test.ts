@@ -16,6 +16,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { parseChatLocalRunConversation } from "@stll/api-contract/chat-local-run-step-output";
+import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
@@ -773,6 +775,16 @@ describe("harness holder over its socket", () => {
     );
     expect(server.headers.Authorization).toMatch(/^Bearer \S{43,}$/u);
     expect(JSON.stringify(holder.received())).not.toContain(RUN_TOKEN);
+    // This holder can register no browser host with Chrome (it has no
+    // home folder), so the harness is offered no browser tools.
+    expect(
+      Object.keys(
+        v.parse(
+          v.record(v.string(), v.unknown()),
+          registered?.request?.servers,
+        ),
+      ),
+    ).toEqual(["stella"]);
   });
 
   test("hands each harness the turn's attached image from its copy; a PDF reaches Claude only", async () => {
@@ -988,6 +1000,57 @@ describe("harness holder over its socket", () => {
     expect(
       readdirSync(member).filter((name) => name.endsWith(".step-outputs")),
     ).toEqual([]);
+  });
+
+  test("keeps a subagent's conversation in the run's own store, and no message to the desktop carries what it was told, wrote or reported", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const stepOutputDir = path.join(holder.root, "runs", "chat.step-outputs");
+    const runId = runStart(client, holder, "subagent", { stepOutputDir });
+    const request = await client.waitFor(is("run.approval_request", runId));
+    client.send({
+      type: "run.approval",
+      runId,
+      requestId: request.requestId,
+      decision: "approve",
+    });
+    await client.waitFor(is("run.finished", runId));
+    const kept = readFileSync(
+      stepOutputPath({ stepOutputDir, runId, toolCallId: "call-spawn" }),
+      "utf-8",
+    );
+    const newline = kept.indexOf("\n");
+    const conversation = kept.slice(newline + 1);
+    expect(JSON.parse(kept.slice(0, newline))).toEqual({
+      bytes: Buffer.byteLength(conversation),
+    });
+    expect(parseChatLocalRunConversation(conversation)).toEqual([
+      { role: "prompt", text: FAKE_PRIVATE_TEXT.subagentPrompt },
+      { role: "report", text: FAKE_PRIVATE_TEXT.subagentReport },
+      { role: "message", text: FAKE_PRIVATE_TEXT.subagentText },
+    ]);
+    // What the API receives is what the desktop receives: none of it, and
+    // nothing the subagent thought, which is not kept either.
+    const sent = JSON.stringify(client.messages);
+    for (const text of [
+      FAKE_PRIVATE_TEXT.subagentPrompt,
+      FAKE_PRIVATE_TEXT.subagentText,
+      FAKE_PRIVATE_TEXT.subagentReport,
+      FAKE_PRIVATE_TEXT.subagentThinking,
+    ]) {
+      expect(sent).not.toContain(text);
+    }
+    expect(kept).not.toContain(FAKE_PRIVATE_TEXT.subagentThinking);
+    // Each call of the subagent names it beside the call, never in its input.
+    expect(chunksOf(client, runId)).toContainEqual(
+      expect.objectContaining({
+        type: "TOOL_CALL_START",
+        toolCallId: "sub-rm",
+        metadata: expect.objectContaining({
+          [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: "call-spawn",
+        }),
+      }),
+    );
   });
 
   test("keeps a completed turn's process for its background work, and the chat's next run continues in it", async () => {
@@ -1647,6 +1710,7 @@ describe("harness holder over its socket", () => {
         FAKE_HARNESS_LOG: path.join(root, "fake.log"),
       },
       processGrantTimeoutMs: WAIT_MS,
+      browser: null,
     });
     cleanups.push(() => {
       rmSync(root, { recursive: true, force: true });
@@ -1735,6 +1799,7 @@ describe("harness holder over its socket", () => {
           FAKE_HARNESS_LOG: path.join(root, "fake.log"),
         },
         processGrantTimeoutMs: WAIT_MS,
+        browser: null,
       });
       cleanups.push(async () => {
         await host.shutdown();
@@ -1916,6 +1981,7 @@ describe("holder limits and timers", () => {
       helloTimeoutMs: 5000,
       unackedRetentionMs: 60_000,
       processGrantTimeoutMs: 60_000,
+      browser: null,
       limits: { maxMessages: 1000, maxBytes: 1024 * 1024 },
       protocolLog: { type: "set", setting: "off" },
       ...overrides,

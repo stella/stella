@@ -7,6 +7,7 @@ import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import { createDetached } from "@stll/errors";
 
 import type { ProtocolLog } from "../protocol-log";
+import type { LocalBrowserMcp } from "./browser/mcp-server";
 import { SidecarHost } from "./host";
 import {
   encodeSidecarMessage,
@@ -90,6 +91,8 @@ export type HolderOptions = {
   limits: HolderRunLimits;
   /** Called once, after every run stopped: the process may exit. */
   exit: () => void;
+  /** The browser tools runs get; `null` without a browser bridge. */
+  browser: LocalBrowserMcp | null;
 };
 
 /** One accepted socket, as the transport sees it. */
@@ -166,6 +169,7 @@ export class Holder {
       protocolLog: options.protocolLog,
       environment: options.environment,
       processGrantTimeoutMs: options.processGrantTimeoutMs,
+      browser: options.browser,
     });
     this.settle();
   }

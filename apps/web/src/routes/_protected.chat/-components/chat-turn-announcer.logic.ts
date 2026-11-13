@@ -31,6 +31,32 @@ type Outcome = NonNullable<
 
 type Announced = { subject: string; announcement: TurnAnnouncement };
 
+/** A phase and what it is about, as one key: the announced node's identity. */
+export const announcementKey = ({ announcement, subject }: Announced) =>
+  `${announcement}:${subject}`;
+
+/**
+ * What the thread shows of its turn (`announcementKey`, `null` for nothing)
+ * and how many turns the page has started on it by then (`turnsStarted` of
+ * the chat runtime).
+ */
+type ShownPhase = { key: string | null; turnsStarted: number };
+
+type OpeningPhaseOptions = {
+  /** What the thread showed when it opened. */
+  opening: ShownPhase;
+  shown: ShownPhase;
+};
+
+/**
+ * Whether the thread shows what it already showed when it opened, which is
+ * not announced. Once the page starts a turn, the same phase about the same
+ * message is news: a retry that leaves the thread on the answer it opened
+ * on, whether it wrote that answer again or never replaced it.
+ */
+export const isOpeningPhase = ({ opening, shown }: OpeningPhaseOptions) =>
+  shown.key === opening.key && shown.turnsStarted === opening.turnsStarted;
+
 /**
  * What the server-owned outcome of answer `answerId` says, if anything. A
  * waiting outcome is about the call it waits on, an ended one about the

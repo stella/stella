@@ -24,9 +24,11 @@ import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
 import { chatLocalRunCallId } from "@stll/api-contract/chat-local-run-step-output";
 import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   chatLocalRunApprovalMessage,
   chatLocalRunApprovalReason,
+  chatLocalRunParentCallId,
   chatLocalRunShownText,
   type ChatLocalRunToolName,
   chatLocalRunToolStatusContent,
@@ -445,9 +447,23 @@ type LocalRunToolCalls = Map<
   { name: string; argsCarried: boolean; endCarried: boolean }
 >;
 
+type CallId = (id: string) => string;
+
 /** The input chat keeps for a native step, from what the desktop sent. */
 const nativeInput = (name: ChatLocalRunToolName, input: unknown) =>
   parseChatLocalRunToolCall(name, input)?.input ?? {};
+
+/**
+ * The subagent step a call's start names, kept in the call's metadata under
+ * that step's chat call id, as the step itself is kept, so the link holds in
+ * the stored turn. Nothing for a start that names none.
+ */
+const subagentLink = (metadata: unknown, callId: CallId) => {
+  const parent = chatLocalRunParentCallId(metadata);
+  return parent === null
+    ? {}
+    : { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: callId(parent) };
+};
 
 /**
  * What TanStack's normaliser keeps of a chunk beyond the AG-UI spec, under
@@ -469,8 +485,6 @@ const parsedArguments = (delta: string): unknown => {
   const parsed = Result.try((): unknown => JSON.parse(delta));
   return parsed.isOk() ? parsed.value : undefined;
 };
-
-type CallId = (id: string) => string;
 
 /**
  * A call's arguments or end. A native step's input is rebuilt from the
@@ -712,8 +726,9 @@ const asChatChunk = (
       });
     }
     // A start is rebuilt from the fields it names: its metadata becomes the
-    // call's, so only the model a harness names and the owner the API names
-    // are carried, and nothing else a desktop adds (an input, an output).
+    // call's, so only the model a harness names, the subagent step it names
+    // and the owner the API names are carried, and nothing else a desktop
+    // adds (an input, an output).
     const model = reportedModel(chunk.metadata);
     return {
       type: EventType.TOOL_CALL_START,
@@ -725,6 +740,7 @@ const asChatChunk = (
       ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
       metadata: {
         ...(model.model === undefined ? {} : { tanstack: model }),
+        ...subagentLink(chunk.metadata, callId),
         [CHAT_TOOL_EXECUTOR_METADATA_KEY]: CHAT_TOOL_EXECUTOR.harness,
       },
     };

@@ -4,6 +4,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { PACKAGE_CACHE_FOLDERS } from "../src/harness/package-cache";
+import { browseAsAgent, codexMcpEndpoints } from "./fake-browser";
 import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
@@ -77,7 +78,12 @@ export type FakeStep =
    * Write `text` to `file` under the working directory, as an agent's edit
    * does on disk, and log the path written.
    */
-  | { writeFile: string; text: string };
+  | { writeFile: string; text: string }
+  /**
+   * Browse the fixture library through the browser and stella MCP servers
+   * `thread/start` configured, and report each call and the answer.
+   */
+  | { browse: true };
 
 /** Requests answered at any time, the script's own steps done or not. */
 const ALWAYS_ANSWERED: ReadonlySet<string> = new Set([
@@ -133,6 +139,8 @@ export const FAKE_OUTDATED_VERSION = "0.150.0";
 export const FAKE_THREAD_ID = "thread-a";
 export const FAKE_RESUMED_THREAD_ID = "thread-old";
 const FAKE_TURN_ID = "turn-1";
+/** The server name the holder registers the browser tools under. */
+const FAKE_BROWSER_SERVER = "stella_browser";
 
 const usageLimitError = {
   message: "You've hit your usage limit.",
@@ -212,7 +220,52 @@ export const FAKE_PRIVATE_TEXT = {
   heredoc: "Tenant owes 4,200 in arrears.",
   diff: "-Rent is due monthly.\n+Rent is due quarterly.",
   explanation: "Working through the private plan",
+  subagentPrompt: "Read the lease and list every clause on arrears.",
+  subagentText: "Clause 4 covers arrears.",
+  subagentThinking: "The arrears clause may be void.",
+  subagentReport: "Report: clause 4 caps arrears at 4,200.",
 } as const;
+
+/** The thread and turn the subagent of the subagent scenario works on. */
+const FAKE_SUBAGENT_THREAD_ID = "thread-subagent";
+const FAKE_SUBAGENT_TURN_ID = "turn-subagent";
+
+/** An item of the subagent's own thread. */
+const subagentItem = (
+  phase: "started" | "completed",
+  body: object,
+): FakeStep => ({
+  notify: `item/${phase}`,
+  params: {
+    threadId: FAKE_SUBAGENT_THREAD_ID,
+    turnId: FAKE_SUBAGENT_TURN_ID,
+    item: body,
+  },
+});
+
+/** A call to one of the tools an agent manages its subagents with. */
+const subagentToolCall = (
+  id: string,
+  tool: string,
+  status: string,
+  agents: Readonly<Record<string, string>>,
+) => ({
+  type: "collabAgentToolCall",
+  id,
+  tool,
+  status,
+  senderThreadId: FAKE_THREAD_ID,
+  receiverThreadIds: Object.keys(agents),
+  prompt: FAKE_PRIVATE_TEXT.subagentPrompt,
+  model: null,
+  reasoningEffort: null,
+  agentsStates: Object.fromEntries(
+    Object.entries(agents).map(([threadId, state]) => [
+      threadId,
+      { status: state, message: FAKE_PRIVATE_TEXT.subagentReport },
+    ]),
+  ),
+});
 
 /** A command longer than chat shows. */
 export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
@@ -446,6 +499,8 @@ export const FAKE_SCENARIOS = {
     ),
     completed(),
   ],
+  /** The local browser canary: a search, a result, a sign-in, a citation. */
+  browse: [...freshTurn(), { browse: true }, completed()],
   /**
    * A turn that leaves a dev server running as a background terminal, then
    * the chat's next turn on the same thread in the same process, during
@@ -596,6 +651,118 @@ export const FAKE_SCENARIOS = {
       },
       error: null,
     }),
+    completed(),
+  ],
+  /**
+   * Subagents and viewed images. One subagent is spawned, runs a command it
+   * asks about and views an image on its own thread, is reported ended
+   * twice, and is then given more work, which fails; one fails to spawn; one
+   * is still at work when the turn ends. The
+   * prompt, the subagent's text and reasoning, and its report sit next to
+   * the steps stella shows. An item of a thread no spawn named is not the
+   * turn's.
+   */
+  subagent: [
+    ...freshTurn(),
+    item(
+      "started",
+      subagentToolCall("call-spawn", "spawnAgent", "inProgress", {}),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn", "spawnAgent", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "pendingInit",
+      }),
+    ),
+    subagentItem(
+      "completed",
+      agentMessage("sub-m-1", FAKE_PRIVATE_TEXT.subagentText),
+    ),
+    subagentItem("completed", {
+      type: "reasoning",
+      id: "sub-r-1",
+      summary: [FAKE_PRIVATE_TEXT.subagentThinking],
+      content: [],
+    }),
+    subagentItem("started", {
+      ...command("sub-rm", "inProgress"),
+      command: "rm draft.md",
+    }),
+    {
+      request: "item/commandExecution/requestApproval",
+      params: {
+        kind: "command",
+        threadId: FAKE_SUBAGENT_THREAD_ID,
+        turnId: FAKE_SUBAGENT_TURN_ID,
+        itemId: "sub-rm",
+        startedAtMs: 1,
+        environmentId: null,
+        reason: null,
+        command: "rm draft.md",
+      },
+    },
+    subagentItem("completed", {
+      ...command("sub-rm", "completed", { aggregatedOutput: "", exitCode: 0 }),
+      command: "rm draft.md",
+    }),
+    subagentItem("completed", {
+      type: "imageView",
+      id: "sub-image",
+      path: "/workspace/scans/Lease Page 1.png",
+    }),
+    {
+      notify: "item/completed",
+      params: {
+        threadId: "thread-of-no-spawn",
+        turnId: "turn-of-no-spawn",
+        item: command("stray", "completed"),
+      },
+    },
+    item("completed", {
+      type: "imageView",
+      id: "call-image",
+      path: "/workspace/scans/cover.png",
+    }),
+    item(
+      "completed",
+      subagentToolCall("call-wait", "wait", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "completed",
+      }),
+    ),
+    item("completed", {
+      type: "subAgentActivity",
+      id: "activity-1",
+      kind: "completed",
+      agentThreadId: FAKE_SUBAGENT_THREAD_ID,
+      agentPath: "/root/worker",
+    }),
+    item(
+      "completed",
+      subagentToolCall("call-followup", "followupTask", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "running",
+      }),
+    ),
+    subagentItem(
+      "completed",
+      command("sub-ls", "completed", { aggregatedOutput: "", exitCode: 0 }),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-wait-again", "wait", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "errored",
+      }),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn-failed", "spawnAgent", "failed", {}),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn-open", "spawnAgent", "completed", {
+        "thread-subagent-open": "running",
+      }),
+    ),
+    item("completed", agentMessage("m-2", "The lease caps arrears.")),
     completed(),
   ],
   /**
@@ -1506,6 +1673,75 @@ const answerUntilClosed = async (
   }
 };
 
+/** Exits when `message` is not the request a step scripted, or is one the
+ *  pinned protocol refuses. */
+const exitUnlessExpected = (
+  message: { method?: string | undefined; [key: string]: unknown },
+  expected: string,
+  log: (entry: object) => void,
+) => {
+  if (message.method !== expected) {
+    log({ unexpected: message.method, wanted: expected });
+    process.exit(97);
+  }
+  if (
+    message.method === "turn/start" &&
+    !v.is(TurnStartParamsSchema, message["params"])
+  ) {
+    log({ refusedInput: "turn/start" });
+    process.exit(96);
+  }
+};
+
+type PlayBrowseOptions = {
+  /** The `thread/start` params, which configure the MCP servers. */
+  threadStart: unknown;
+  write: CodexPeer["write"];
+  log: (entry: object) => void;
+};
+
+/** The `browse` step: each call the agent made, then its answer. */
+const playBrowse = async ({ threadStart, write, log }: PlayBrowseOptions) => {
+  const browsed = await browseAsAgent({
+    browserServer: FAKE_BROWSER_SERVER,
+    endpoints: codexMcpEndpoints(threadStart),
+    stellaServer: FAKE_STELLA_SERVER,
+  });
+  // Kept on this computer, for the test to see what the agent read.
+  log({ pageCanaries: browsed.read });
+  const notifyItem = (phase: "started" | "completed", body: object) => {
+    write({
+      method: `item/${phase}`,
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        item: body,
+      },
+    });
+  };
+  for (const call of browsed.steps) {
+    const mcpCall = {
+      type: "mcpToolCall",
+      id: call.id,
+      server: call.server,
+      tool: call.tool,
+      arguments: call.arguments,
+      error: null,
+    };
+    notifyItem("started", {
+      ...mcpCall,
+      status: "inProgress",
+      result: null,
+    });
+    notifyItem("completed", {
+      ...mcpCall,
+      status: call.isError ? "failed" : "completed",
+      result: { content: [{ type: "text", text: call.text }] },
+    });
+  }
+  notifyItem("completed", agentMessage("m-browse", browsed.answer));
+};
+
 /**
  * Plays `steps` to the client. A caller that answered the start of the
  * conversation itself passes its `peer` and `skills`, and the `models`
@@ -1611,6 +1847,7 @@ export const run = async (
     return "interrupted";
   };
   let serverRequestId = 1000;
+  let threadStart: unknown = undefined;
   /** The client's answer to the last request a step sent. */
   let lastResponse: Awaited<ReturnType<typeof take>> = null;
   const queue = [...steps];
@@ -1620,17 +1857,10 @@ export const run = async (
       if (message === null) {
         return;
       }
-      if (message.method !== step.expect) {
-        log({ unexpected: message.method, wanted: step.expect });
-        process.exit(97);
+      if (message.method === "thread/start") {
+        threadStart = message["params"];
       }
-      if (
-        message.method === "turn/start" &&
-        !v.is(TurnStartParamsSchema, message["params"])
-      ) {
-        log({ refusedInput: "turn/start" });
-        process.exit(96);
-      }
+      exitUnlessExpected(message, step.expect, log);
       write(
         step.error === undefined
           ? { id: message.id, result: step.result ?? {} }
@@ -1678,6 +1908,8 @@ export const run = async (
       }
     } else if ("terminals" in step) {
       terminals.splice(0, terminals.length, ...step.terminals);
+    } else if ("browse" in step) {
+      await playBrowse({ threadStart, write, log });
     } else {
       process.exit(step.exit);
     }

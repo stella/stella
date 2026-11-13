@@ -131,11 +131,21 @@ const streamedEntry = (body: string): ChatEntry => {
 
 /** What a person sees of an answer's blocks; a run's place is not drawn. */
 const drawn = (blocks: readonly AnswerBlock[]) =>
-  blocks.map((block) =>
-    block.type === "text"
-      ? { text: block.markdown }
-      : { steps: block.steps, work: block.work },
-  );
+  blocks.map((block) => {
+    switch (block.type) {
+      case "text":
+        return { text: block.markdown };
+      case "steps":
+        return { steps: block.steps, work: block.work };
+      case "subagent": {
+        const { key: _place, ...subagent } = block;
+        return subagent;
+      }
+      default:
+        block satisfies never;
+        return panic("Unhandled answer block");
+    }
+  });
 
 describe("recorded conversations on the phone", () => {
   test("reads every recording", () => {

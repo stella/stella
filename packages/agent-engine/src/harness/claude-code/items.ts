@@ -14,8 +14,9 @@ import {
 } from "../step-output";
 import {
   HARNESS_TOOL_NAMES,
-  mcpToolCallName,
+  mcpToolCall,
   nativeToolCall,
+  stepOfSubagent,
 } from "../tool-parts";
 import type {
   ClaudeMessageType,
@@ -31,8 +32,9 @@ import type {
  * web chat's cards, citations and source chips read it as they read a cloud
  * turn. Built-in tools become generic activity built from the fields named
  * here (a command line, file names, a search, a web address, plan titles, a
- * plan proposed for approval); other native fields, such as an edit's text
- * or a file's contents, are never forwarded.
+ * plan proposed for approval, a subagent's short description and agent
+ * type); other native fields, such as an edit's text, a file's contents or
+ * a subagent's prompt, are never forwarded.
  */
 
 type ClaudeMessageHandling =
@@ -117,8 +119,8 @@ export const claudeSystemHandling = (
     case "task_progress":
     case "task_notification":
     case "background_tasks_changed":
-      // Sub-agents and background tasks run inside the harness; their own
-      // tool calls are not reported on this turn.
+      // Progress of subagents and background tasks. A subagent's steps
+      // arrive as its own messages, which name the call that started it.
       return "ignore";
     case "hook_started":
     case "hook_progress":
@@ -224,6 +226,45 @@ const optionalStringField = (
   return typeof value === "string" && value !== "" ? value : undefined;
 };
 
+/**
+ * The built-in tool that starts a subagent: `Agent`, which the CLI also
+ * accepts and reports under its earlier name `Task`.
+ */
+const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(["Agent", "Task"]);
+
+/**
+ * What a subagent was told when `use` started it, or `null` when the call
+ * starts none or carries no prompt. It stays on this computer, with the
+ * rest of the subagent's conversation.
+ */
+export const subagentPromptOf = ({
+  name,
+  input,
+}: Pick<ClaudeToolUse, "name" | "input">): string | null =>
+  SUBAGENT_TOOLS.has(name)
+    ? (optionalStringField(input, "prompt") ?? null)
+    : null;
+
+/** Whether `use` starts a subagent. */
+export const startsSubagent = ({ name }: Pick<ClaudeToolUse, "name">) =>
+  SUBAGENT_TOOLS.has(name);
+
+/**
+ * The files `Read` returns as an image instead of text. The CLI decides by
+ * the file's extension, and so does this: the call is shown before its
+ * result exists.
+ */
+const IMAGE_FILE = /\.(?:png|jpe?g|gif|webp)$/iu;
+
+/** The image file a `Read` viewed, or `null` for any other call. */
+const viewedImageOf = ({
+  name,
+  input,
+}: Pick<ClaudeToolUse, "name" | "input">): string | null => {
+  const file = name === "Read" ? stringField(input, "file_path") : "";
+  return IMAGE_FILE.test(file) ? file : null;
+};
+
 /** The titles of a `TodoWrite` list; its statuses and other fields stay. */
 const todoTitles = (input: Readonly<Record<string, unknown>>) => {
   const todos = input["todos"];
@@ -247,9 +288,21 @@ const nativeDetail = (
   name: string,
   input: Readonly<Record<string, unknown>>,
 ): ChatLocalRunToolDetail | undefined => {
+  if (SUBAGENT_TOOLS.has(name)) {
+    // The few words the agent gave the task and the kind of agent it
+    // chose; the prompt stays here.
+    const agentType = optionalStringField(input, "subagent_type");
+    return {
+      kind: "subagent",
+      description: stringField(input, "description"),
+      ...(agentType === undefined ? {} : { agentType }),
+    };
+  }
   switch (name) {
-    case "Read":
-      return { kind: "read", path: stringField(input, "file_path") };
+    case "Read": {
+      const path = stringField(input, "file_path");
+      return { kind: IMAGE_FILE.test(path) ? "image" : "read", path };
+    }
     case "Grep":
     case "Glob": {
       const path = optionalStringField(input, "path");
@@ -362,12 +415,11 @@ const fileDiff = (
   }
 };
 
-/** `stellaServer` is the server name the stella MCP binding is under. */
-export const toolCallForUse = (
-  use: Pick<ClaudeToolUse, "id" | "name" | "input">,
+/** A call as the main thread reports it. */
+const mainThreadCall = (
+  { id, name, input }: Pick<ClaudeToolUse, "id" | "name" | "input">,
   stellaServer: string,
 ): HarnessToolCall => {
-  const { id, name, input } = use;
   const kind = toolKind(name);
   switch (kind) {
     case "command":
@@ -388,11 +440,12 @@ export const toolCallForUse = (
     case "question":
       return { id, name: HARNESS_TOOL_NAMES.question, input };
     case "mcp":
-      return {
+      return mcpToolCall({
         id,
-        name: mcpToolCallName({ ...mcpName(name, stellaServer), stellaServer }),
         input,
-      };
+        ...mcpName(name, stellaServer),
+        stellaServer,
+      });
     case "native": {
       const detail = nativeDetail(name, input);
       return nativeToolCall(
@@ -410,8 +463,20 @@ export const toolCallForUse = (
   }
 };
 
+/**
+ * `stellaServer` is the server name the stella MCP binding is under;
+ * `parentCallId` the call that started the subagent whose step this is, or
+ * `null` on the main thread.
+ */
+export const toolCallForUse = (
+  use: Pick<ClaudeToolUse, "id" | "name" | "input">,
+  stellaServer: string,
+  parentCallId: string | null,
+): HarnessToolCall =>
+  stepOfSubagent(mainThreadCall(use, stellaServer), parentCallId);
+
 /** A tool result's text blocks; images and other blocks are not carried. */
-const resultText = (block: ClaudeToolResult) => {
+export const resultText = (block: ClaudeToolResult) => {
   if (block.content === undefined) {
     return "";
   }
@@ -481,16 +546,23 @@ export const toolResultFor = (
         }),
         status: status(failed),
       };
-    case "native":
-      // What a built-in tool returned (a file it read, the lines a search
-      // matched, a fetched page) stays here; only how it ended is shown.
+    case "native": {
+      // What a built-in tool returned (a file it read, an image, the lines a
+      // search matched, a fetched page, a subagent's report) stays here;
+      // only how it ended is shown.
+      const image = failed ? null : viewedImageOf(use);
       return {
         content: chatLocalRunToolResultContent({
           name: HARNESS_TOOL_NAMES.nativeTool,
           result: { status: outcome },
         }),
         status: status(failed),
+        // The file it viewed, for the member to open on this computer.
+        ...(image === null
+          ? {}
+          : { localOutput: { type: "image", path: image } }),
       };
+    }
     case "question":
     case "mcp":
       return {

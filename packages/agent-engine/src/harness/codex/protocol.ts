@@ -204,19 +204,96 @@ export const CodexItemSchema = v.variant("type", [
     error: v.nullish(v.object({ message: v.string() })),
   }),
   v.object({ type: v.literal("webSearch"), id: v.string(), query: v.string() }),
+  v.object({
+    type: v.literal("imageView"),
+    id: v.string(),
+    /** The image file the harness viewed. */
+    path: v.string(),
+  }),
+  /**
+   * A call to one of the tools an agent manages its subagents with. The
+   * prompt it carries and the message an agent's state reports are no part
+   * of a turn: they are kept on the computer, as the subagent's conversation.
+   */
+  v.object({
+    type: v.literal("collabAgentToolCall"),
+    id: v.string(),
+    /** What the call told the agents it addressed, when it carries any. */
+    prompt: v.nullish(v.string()),
+    /** Open upstream; `CODEX_SPAWN_AGENT_TOOL` is the one shown as a step. */
+    tool: v.string(),
+    status: v.picklist(["inProgress", "completed", "failed", "interrupted"]),
+    /** The agents the call addressed: for a spawn, the one it started. */
+    receiverThreadIds: v.array(v.string()),
+    /** The last known state of those agents, by thread. */
+    agentsStates: v.record(
+      v.string(),
+      v.object({
+        status: v.string(),
+        /** The agent's last message: its report, once it ended. */
+        message: v.nullish(v.string()),
+      }),
+    ),
+  }),
+  /** A point in a subagent's life, named by the subagent's thread. */
+  v.object({
+    type: v.literal("subAgentActivity"),
+    id: v.string(),
+    kind: v.string(),
+    agentThreadId: v.string(),
+  }),
 ]);
 export type CodexItem = v.InferOutput<typeof CodexItemSchema>;
+
+/** The subagent tool that starts an agent on a thread of its own. */
+export const CODEX_SPAWN_AGENT_TOOL = "spawnAgent";
+
+export type CodexAgentOutcome = "succeeded" | "failed" | "cancelled";
+
+/**
+ * How a subagent stands, by the state a subagent call reports for it: at
+ * work, or how it ended. A state not named here (one newer than the pinned
+ * protocol) says neither.
+ */
+export const CODEX_AGENT_STATES: ReadonlyMap<
+  string,
+  "working" | CodexAgentOutcome
+> = new Map([
+  ["pendingInit", "working"],
+  ["running", "working"],
+  ["completed", "succeeded"],
+  ["errored", "failed"],
+  ["notFound", "failed"],
+  ["interrupted", "cancelled"],
+  ["shutdown", "cancelled"],
+]);
+
+/**
+ * How a subagent ended, by the kind of activity that reports it; `started`
+ * and `interacted` are an agent still at work.
+ */
+export const CODEX_ENDED_AGENT_ACTIVITIES: ReadonlyMap<
+  string,
+  CodexAgentOutcome
+> = new Map([
+  ["completed", "succeeded"],
+  ["interrupted", "cancelled"],
+]);
 
 export const isMcpTextBlock = (
   block: unknown,
 ): block is v.InferOutput<typeof McpContentBlock> =>
   v.is(McpContentBlock, block);
 
-/** The first item fields, read before the kind decides the full schema. */
+/**
+ * The first item fields, read before the kind decides the full schema. The
+ * id is read as it comes: whether an item without a usable one is a
+ * violation is its kind's to say (`CodexTurnSession.readItem`).
+ */
 const ItemEnvelopeSchema = v.object({
   threadId: v.string(),
   turnId: v.string(),
-  item: v.object({ type: v.string(), id: v.optional(v.string()) }),
+  item: v.object({ type: v.string(), id: v.optional(v.unknown()) }),
 });
 
 const RateLimitWindowSchema = v.object({

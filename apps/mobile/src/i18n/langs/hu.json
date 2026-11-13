@@ -206,6 +206,27 @@
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
       "web_search": "Keresés az interneten"
     },
+    "localRun": {
+      "title": {
+        "sign_in": "A folytatáshoz jelentkezzen be",
+        "read": "Fájl olvasása",
+        "search": "Keresés a fájlokban",
+        "fetch": "Oldal olvasása",
+        "plan": "A terv frissítése",
+        "proposed_plan": "Terv javaslata",
+        "subagent": "Alügynök futtatása",
+        "image": "Kép megtekintése"
+      },
+      "patternInPath": "{pattern} itt: {path}",
+      "commandExited": "{command} (kilépési kód: {code})",
+      "opensOnComputer": "Nyissa meg azon a számítógépen, amelyen futott",
+      "status": {
+        "needs_approval": "Jóváhagyásra vár",
+        "running": "Folyamatban",
+        "failed": "Sikertelen",
+        "interrupted": "Leállítva"
+      }
+    },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}",
       "documentEdits": "{count, plural, one {# dokumentummódosítás} other {# dokumentummódosítás}}",

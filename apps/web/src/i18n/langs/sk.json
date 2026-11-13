@@ -2272,11 +2272,15 @@
       "input": "Vstup",
       "interrupted": "Prerušené pred dokončením",
       "localOutput": {
+        "conversation": "Konverzácia čiastkového agenta",
+        "conversationPrompt": "Zadanie",
+        "conversationReport": "Správa",
         "cut": "Zobrazuje sa prvých {kept} z {total}",
         "diff": "Zmeny súborov",
         "elsewhere": "Otvorte na počítači, kde krok bežal",
         "empty": "Žiadny výstup",
         "failed": "Desktopová aplikácia stella na tomto počítači to nedokázala zobraziť.",
+        "imageTooLarge": "Tento obrázok má {total}. Obrázky väčšie ako {kept} sa na tomto počítači neukladajú, preto ho tu nemožno zobraziť.",
         "notKept": "Z tohto kroku nie je na tomto počítači nič uložené",
         "reading": "Načítava sa z tohto počítača"
       },
@@ -2285,11 +2289,14 @@
       "proposedPlan": "Návrh plánu",
       "readFile": "Čítanie súboru",
       "searchFiles": "Vyhľadávanie v súboroch",
+      "signInToContinue": "Na pokračovanie sa prihláste",
       "sourceCode": "Zdrojový kód",
       "statusWaiting": "Čaká",
+      "subagent": "Spustenie čiastkového agenta",
       "toggleDetails": "Prepnúť podrobnosti",
       "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}",
-      "updatePlan": "Aktualizácia plánu"
+      "updatePlan": "Aktualizácia plánu",
+      "viewImage": "Prezeranie obrázka"
     },
     "turnNotification": {
       "failedBody": "Odpoveď v chate stelly sa nedokončila.",
