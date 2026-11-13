@@ -212,18 +212,28 @@ export const CodexItemSchema = v.variant("type", [
   }),
   /**
    * A call to one of the tools an agent manages its subagents with. The
-   * prompt it carries is not read: it stays on the computer.
+   * prompt it carries and the message an agent's state reports are no part
+   * of a turn: they are kept on the computer, as the subagent's conversation.
    */
   v.object({
     type: v.literal("collabAgentToolCall"),
     id: v.string(),
+    /** What the call told the agents it addressed, when it carries any. */
+    prompt: v.nullish(v.string()),
     /** Open upstream; `CODEX_SPAWN_AGENT_TOOL` is the one shown as a step. */
     tool: v.string(),
     status: v.picklist(["inProgress", "completed", "failed", "interrupted"]),
     /** The agents the call addressed: for a spawn, the one it started. */
     receiverThreadIds: v.array(v.string()),
     /** The last known state of those agents, by thread. */
-    agentsStates: v.record(v.string(), v.object({ status: v.string() })),
+    agentsStates: v.record(
+      v.string(),
+      v.object({
+        status: v.string(),
+        /** The agent's last message: its report, once it ended. */
+        message: v.nullish(v.string()),
+      }),
+    ),
   }),
   /** A point in a subagent's life, named by the subagent's thread. */
   v.object({

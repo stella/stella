@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
+import fixtures from "@stll/api-contract/chat-local-run-steps.fixtures";
+import {
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
+  chatLocalRunParentCallId,
+} from "@stll/api-contract/chat-local-run-tool";
 import { assertProperty } from "@stll/property-testing";
 
 import { answerBlocks } from "./chat-answer";
@@ -10,11 +16,16 @@ type CallState = "approval-requested" | "complete" | "error" | "input-complete";
 
 const COMPLETED = { status: "completed" };
 
-/** A stored call; one that ended keeps the result it is given, if any. */
+/**
+ * A stored call; one that ended keeps the result it is given, if any. A
+ * call of a subagent names the subagent's step in its metadata, as the API
+ * stores it, never in its input.
+ */
 const call = ({
   id,
   input,
   name,
+  parentCallId,
   state = "complete",
   ...result
 }: {
@@ -22,12 +33,18 @@ const call = ({
   input: unknown;
   name: string;
   output?: unknown;
+  parentCallId?: string;
   state?: CallState;
 }) => ({
   type: "tool-call",
   id,
   name,
   input,
+  ...(parentCallId === undefined
+    ? {}
+    : {
+        metadata: { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: parentCallId },
+      }),
   state,
   ...(state === "complete" || state === "error"
     ? { output: "output" in result ? result.output : COMPLETED }
@@ -48,9 +65,6 @@ const subagent = (
         description: `Task of ${id}`,
         agentType: "Explore",
       },
-      ...(options.parentCallId === undefined
-        ? {}
-        : { parentCallId: options.parentCallId }),
     },
     ...options,
   });
@@ -63,10 +77,8 @@ const command = (
   call({
     id,
     name: "command_execution",
-    input: {
-      command: `run ${id}`,
-      ...(parentCallId === undefined ? {} : { parentCallId }),
-    },
+    input: { command: `run ${id}` },
+    ...(parentCallId === undefined ? {} : { parentCallId }),
     ...options,
   });
 
@@ -79,6 +91,7 @@ const commandStep = (
   titleKind: null,
   subtitle: { type: "text", text: `run ${id}` },
   status,
+  opensOnComputer: false,
 });
 
 describe("a coding agent's steps in an answer on the phone", () => {
@@ -105,6 +118,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
         description: "Task of agent",
         agentType: "Explore",
         status: "done",
+        opensOnComputer: true,
         stepCount: 2,
         steps: [commandStep("first"), commandStep("second")],
       },
@@ -131,6 +145,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
         description: "Task of agent",
         agentType: "Explore",
         status: "needs_approval",
+        opensOnComputer: false,
         // The waiting step is counted, and shown outside the row.
         stepCount: 2,
         steps: [commandStep("ran")],
@@ -211,6 +226,8 @@ describe("a coding agent's steps in an answer on the phone", () => {
         titleKind: "image",
         subtitle: { type: "text", text: "exhibits/scan-12.png" },
         status: "done",
+        // The image stays on the computer: the phone says where it opens.
+        opensOnComputer: true,
       },
       {
         type: "local",
@@ -218,6 +235,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
         titleKind: "search",
         subtitle: { type: "search", pattern: "indemnity", path: "drafts" },
         status: "done",
+        opensOnComputer: false,
       },
       {
         type: "local",
@@ -225,8 +243,68 @@ describe("a coding agent's steps in an answer on the phone", () => {
         titleKind: null,
         subtitle: { type: "text", text: "Skill" },
         status: "done",
+        opensOnComputer: false,
       },
     ]);
+  });
+
+  test("a stored turn groups by the link in a call's metadata, as the web groups it, and never by a step's input", () => {
+    const blocks = answerBlocks(fixtures.parts);
+    const subagents = blocks.flatMap((block) =>
+      block.type === "subagent" ? [block] : [],
+    );
+    // The one function both clients read says which calls are the
+    // subagent's; the phone draws exactly those inside its row.
+    const groups = localRunSubagentGroups(
+      fixtures.parts.map((part) => ({
+        id: part.id,
+        name: part.name,
+        input: part.input,
+        parentCallId: chatLocalRunParentCallId(
+          "metadata" in part ? part.metadata : undefined,
+        ),
+        shownAs: "row",
+      })),
+    );
+    expect(Object.fromEntries(groups.stepsOf)).toEqual({
+      [fixtures.subagentCallId]: fixtures.stepsOfSubagent,
+    });
+    expect(subagents).toMatchObject([
+      {
+        key: `subagent:${fixtures.subagentCallId}`,
+        stepCount: fixtures.stepsOfSubagent.length,
+        steps: [
+          { type: "local", subtitle: { type: "text", text: "rg arrears" } },
+          { type: "tool", label: "unknown" },
+        ],
+      },
+    ]);
+    // A link only in a step's input names nothing: the step stays on the
+    // answer, outside the row.
+    expect(fixtures.onTheTurn).toEqual(["run_call-input-link"]);
+    expect(
+      blocks.flatMap((block) => (block.type === "steps" ? block.steps : [])),
+    ).toMatchObject([
+      { type: "local", subtitle: { type: "text", text: "ls drafts" } },
+    ]);
+  });
+
+  test("a subagent that ended keeps its conversation on the computer, and the row says where it opens", () => {
+    const opens = (parts: Parameters<typeof answerBlocks>[0]) =>
+      answerBlocks(parts).flatMap((block) =>
+        block.type === "subagent" ? [block.opensOnComputer] : [],
+      );
+    expect(opens([subagent("agent")])).toEqual([true]);
+    expect(
+      opens([subagent("agent", { output: { status: "failed" } })]),
+    ).toEqual([true]);
+    // Still at work, or cut off with no result: nothing is kept to open.
+    expect(opens([subagent("agent", { state: "input-complete" })])).toEqual([
+      false,
+    ]);
+    expect(
+      opens([subagent("agent", { state: "error", output: undefined })]),
+    ).toEqual([false]);
   });
 
   test("a subagent with no steps, or whose own call waits on an approval, hides nothing", () => {

@@ -57,6 +57,7 @@ const WEB_LOCAL_RUN_KEYS = {
   },
   patternInPath: ["chat", "toolCall", "patternInPath"],
   commandExited: ["chat", "toolCall", "commandExited"],
+  opensOnComputer: ["chat", "toolCall", "localOutput", "elsewhere"],
   status: {
     needs_approval: ["chat", "turnStatus", "waitingForApproval"],
     running: ["tasks", "statusValues", "in_progress"],

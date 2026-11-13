@@ -219,6 +219,7 @@
       },
       "patternInPath": "{pattern} itt: {path}",
       "commandExited": "{command} (kilépési kód: {code})",
+      "opensOnComputer": "Nyissa meg azon a számítógépen, amelyen futott",
       "status": {
         "needs_approval": "Jóváhagyásra vár",
         "running": "Folyamatban",

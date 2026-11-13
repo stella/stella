@@ -219,6 +219,7 @@
       },
       "patternInPath": "{pattern} في {path}",
       "commandExited": "{command} (رمز الخروج {code})",
+      "opensOnComputer": "افتحه على الحاسوب الذي نفّذه",
       "status": {
         "needs_approval": "في انتظار الموافقة",
         "running": "قيد التنفيذ",

@@ -219,6 +219,7 @@
       },
       "patternInPath": "{pattern} ({path})",
       "commandExited": "{command} (izejas kods {code})",
+      "opensOnComputer": "Atveriet datorā, kurā tas tika izpildīts",
       "status": {
         "needs_approval": "Gaida apstiprinājumu",
         "running": "Izpildē",

@@ -3,7 +3,7 @@ import {
   experimental_streamedQuery as streamedQuery,
   queryOptions,
 } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
@@ -21,6 +21,8 @@ import { chatKeys } from "@/features/chat/chat-query-contract";
 import {
   foldLocalRunStepOutput,
   LOCAL_RUN_STEP_OUTPUT_UNREAD,
+  type LocalRunStepImageView,
+  localRunStepImageView,
   type LocalRunStepOutputEvent,
   localRunStepOutputStaleTime,
   type LocalRunStepOutputView,
@@ -79,19 +81,24 @@ const missingOn = async (response: Response) => {
 
 type ReadStepOutputOptions = { callId: string; signal: AbortSignal };
 
+/** What reading a kept step reports, in order, before it is given a form. */
+type LocalRunStepReadEvent =
+  | Exclude<LocalRunStepOutputEvent, { type: "text" }>
+  | { type: "bytes"; bytes: Uint8Array };
+
 /**
- * Read one step's output from stella desktop on this computer: a grant from
- * the API for the run's owner, then the output itself, straight from the
+ * Read what one step kept from stella desktop on this computer: a grant from
+ * the API for the run's owner, then the bytes themselves, straight from the
  * desktop's loopback bridge in chunks, never past the cap. Only the run and
  * call ids reach the API.
  *
- * @yields Whether the run is elsewhere or kept nothing, else its size and
- *   then its text as it arrives.
+ * @yields Whether the run is elsewhere or kept nothing, else the step's size
+ *   and then its bytes as they arrive.
  */
-async function* readLocalRunStepOutput({
+async function* readLocalRunStep({
   callId,
   signal,
-}: ReadStepOutputOptions): AsyncGenerator<LocalRunStepOutputEvent> {
+}: ReadStepOutputOptions): AsyncGenerator<LocalRunStepReadEvent> {
   const runId = chatLocalRunOfCall(callId);
   if (runId === null) {
     yield { type: "not-kept" };
@@ -140,7 +147,6 @@ async function* readLocalRunStepOutput({
   }
   yield { type: "started", totalBytes };
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
   let received = 0;
   let chunk = await reader.read();
   while (!chunk.done) {
@@ -150,18 +156,67 @@ async function* readLocalRunStepOutput({
       await reader.cancel();
       break;
     }
+    yield { type: "bytes", bytes: chunk.value };
+    chunk = await reader.read();
+  }
+}
+
+/**
+ * One step's kept text (a command's output, a diff, a subagent's
+ * conversation), decoded as it arrives.
+ *
+ * @yields Whether the run is elsewhere or kept nothing, else its size and
+ *   then its text as it arrives.
+ */
+async function* readLocalRunStepOutput(
+  options: ReadStepOutputOptions,
+): AsyncGenerator<LocalRunStepOutputEvent> {
+  const decoder = new TextDecoder();
+  for await (const event of readLocalRunStep(options)) {
+    if (event.type !== "bytes") {
+      yield event;
+      continue;
+    }
     yield {
       type: "text",
-      text: decoder.decode(chunk.value, { stream: true }),
-      bytes: chunk.value.byteLength,
+      text: decoder.decode(event.bytes, { stream: true }),
+      bytes: event.bytes.byteLength,
     };
-    chunk = await reader.read();
   }
   const rest = decoder.decode();
   if (rest !== "") {
     yield { type: "text", text: rest, bytes: 0 };
   }
 }
+
+/**
+ * The image one step viewed, read whole: part of an image shows nothing, so
+ * it is given a form only once every kept byte arrived.
+ */
+const readLocalRunStepImage = async (
+  options: ReadStepOutputOptions,
+): Promise<LocalRunStepImageView> => {
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  for await (const event of readLocalRunStep(options)) {
+    switch (event.type) {
+      case "elsewhere":
+        return { status: "elsewhere" };
+      case "not-kept":
+        return { status: "not-kept" };
+      case "started":
+        totalBytes = event.totalBytes;
+        break;
+      case "bytes":
+        chunks.push(event.bytes);
+        break;
+      default:
+        event satisfies never;
+        return panic("Unhandled step read event");
+    }
+  }
+  return localRunStepImageView({ chunks, totalBytes });
+};
 
 type LocalRunStepOutputKey = {
   activeOrganizationId: string;
@@ -201,6 +256,36 @@ export const localRunStepOutputOptions = ({
         reducer: foldLocalRunStepOutput,
         initialValue: LOCAL_RUN_STEP_OUTPUT_UNREAD,
       }),
+      staleTime: (query) => localRunStepOutputStaleTime(query.state.data),
+      retry: false,
+    }),
+    { type: "independent" },
+  );
+
+/**
+ * The image one step viewed, read whole from this computer. It holds as a
+ * step's text does: for good once the desktop answered, and read again when
+ * the run was found elsewhere.
+ */
+export const localRunStepImageOptions = ({
+  activeOrganizationId,
+  userId,
+  callId,
+}: LocalRunStepOutputKey) =>
+  resourceQueryOptions(
+    queryOptions<
+      LocalRunStepImageView,
+      DefaultError,
+      LocalRunStepImageView,
+      ReturnType<typeof chatKeys.localRunStepImage>
+    >({
+      queryKey: chatKeys.localRunStepImage({
+        activeOrganizationId,
+        userId,
+        callId,
+      }),
+      queryFn: async ({ signal }) =>
+        await readLocalRunStepImage({ callId, signal }),
       staleTime: (query) => localRunStepOutputStaleTime(query.state.data),
       retry: false,
     }),

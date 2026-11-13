@@ -219,6 +219,7 @@
       },
       "patternInPath": "{pattern} ({path})",
       "commandExited": "{command} (išėjimo kodas {code})",
+      "opensOnComputer": "Atidarykite kompiuteryje, kuriame tai buvo vykdoma",
       "status": {
         "needs_approval": "Laukiama patvirtinimo",
         "running": "Vykdoma",

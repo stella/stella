@@ -1715,6 +1715,9 @@ describe("Codex items as chat parts", () => {
                 id: event.toolCall.id,
                 name: event.toolCall.name,
                 input: event.toolCall.input,
+                ...(event.toolCall.parentCallId === undefined
+                  ? {}
+                  : { parentCallId: event.toolCall.parentCallId }),
                 ...(event.type === "tool.completed"
                   ? { status: event.result.status }
                   : {}),
@@ -1733,13 +1736,15 @@ describe("Codex items as chat parts", () => {
         type: "tool.started",
         id: "sub-rm",
         name: "command_execution",
-        input: { command: "rm draft.md", ...inSubagent },
+        input: { command: "rm draft.md" },
+        ...inSubagent,
       },
       {
         type: "tool.completed",
         id: "sub-rm",
         name: "command_execution",
-        input: { command: "rm draft.md", ...inSubagent },
+        input: { command: "rm draft.md" },
+        ...inSubagent,
         status: "succeeded",
       },
       {
@@ -1749,8 +1754,8 @@ describe("Codex items as chat parts", () => {
         input: {
           tool: "view_image",
           detail: { kind: "image", path: "/workspace/scans/Lease Page 1.png" },
-          ...inSubagent,
         },
+        ...inSubagent,
         status: "succeeded",
       },
       {
@@ -1783,7 +1788,8 @@ describe("Codex items as chat parts", () => {
         type: "tool.completed",
         id: "sub-ls",
         name: "command_execution",
-        input: { command: "ls", parentCallId: followupStep },
+        input: { command: "ls" },
+        parentCallId: followupStep,
         status: "succeeded",
       },
       {
@@ -1820,7 +1826,8 @@ describe("Codex items as chat parts", () => {
           kind: "command",
           toolCall: {
             id: "sub-rm",
-            input: { command: "rm draft.md", ...inSubagent },
+            input: { command: "rm draft.md" },
+            ...inSubagent,
           },
         },
       },
@@ -1836,6 +1843,31 @@ describe("Codex items as chat parts", () => {
     ).toMatchObject([
       { type: "text.completed", text: "The lease caps arrears." },
     ]);
+    // What a subagent was told, wrote and reported, and the image a step
+    // viewed, are held for this computer alone: on the step's result, which
+    // the sidecar keeps, never in what the turn reports.
+    const heldOf = (id: string) =>
+      events.flatMap((event) =>
+        event.type === "tool.completed" && event.toolCall.id === id
+          ? [event.result.localOutput]
+          : [],
+      );
+    expect(heldOf("call-spawn")).toEqual([
+      {
+        type: "conversation",
+        entries: [
+          { role: "prompt", text: FAKE_PRIVATE_TEXT.subagentPrompt },
+          { role: "report", text: FAKE_PRIVATE_TEXT.subagentReport },
+          { role: "message", text: FAKE_PRIVATE_TEXT.subagentText },
+        ],
+        droppedBytes: 0,
+      },
+    ]);
+    expect(heldOf("sub-image")).toEqual([
+      { type: "image", path: "/workspace/scans/Lease Page 1.png" },
+    ]);
+    // A spawn that failed started no subagent: it holds no conversation.
+    expect(heldOf("call-spawn-failed")).toEqual([undefined]);
     const stored = storedMessages(await localChunks(events));
     const storedText = JSON.stringify(stored);
     for (const text of [

@@ -219,6 +219,7 @@
       },
       "patternInPath": "{pattern} unter {path}",
       "commandExited": "{command} (Exit-Code {code})",
+      "opensOnComputer": "Auf dem Computer öffnen, auf dem der Schritt lief",
       "status": {
         "needs_approval": "Warten auf Genehmigung",
         "running": "In Bearbeitung",

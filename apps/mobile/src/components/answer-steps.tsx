@@ -136,6 +136,12 @@ export const AnswerSubagent = ({
             {facts.join(" · ")}
           </Text>
         )}
+        {block.opensOnComputer ? (
+          // What it was told, wrote and reported never leaves that computer.
+          <Text style={[styles.detail, { color: colors.muted }]}>
+            {t("localRun.opensOnComputer")}
+          </Text>
+        ) : null}
       </View>
     </>
   );
@@ -236,6 +242,11 @@ const StepList = ({ steps }: { steps: readonly AnswerStep[] }) => {
                 {detail}
               </Text>
             )}
+            {step.type === "local" && step.opensOnComputer ? (
+              <Text style={[styles.detail, { color: colors.muted }]}>
+                {t("localRun.opensOnComputer")}
+              </Text>
+            ) : null}
           </View>
         );
       })}

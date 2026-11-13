@@ -219,6 +219,7 @@
       },
       "patternInPath": "{pattern} v {path}",
       "commandExited": "{command} (návratový kód {code})",
+      "opensOnComputer": "Otevřete na počítači, kde krok běžel",
       "status": {
         "needs_approval": "Čekání na schválení",
         "running": "Rozpracovaný",

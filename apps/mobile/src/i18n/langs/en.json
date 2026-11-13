@@ -219,6 +219,7 @@
       },
       "patternInPath": "{pattern} in {path}",
       "commandExited": "{command} (exit code {code})",
+      "opensOnComputer": "Open on the computer that ran it",
       "status": {
         "needs_approval": "Waiting for approval",
         "running": "In progress",

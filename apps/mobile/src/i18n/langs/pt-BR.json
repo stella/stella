@@ -219,6 +219,7 @@
       },
       "patternInPath": "{pattern} em {path}",
       "commandExited": "{command} (código de saída {code})",
+      "opensOnComputer": "Abra no computador que executou",
       "status": {
         "needs_approval": "Aguardando aprovação",
         "running": "Em andamento",

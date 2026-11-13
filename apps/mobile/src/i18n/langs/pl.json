@@ -219,6 +219,7 @@
       },
       "patternInPath": "{pattern} w {path}",
       "commandExited": "{command} (kod wyjścia {code})",
+      "opensOnComputer": "Otwórz na komputerze, na którym to uruchomiono",
       "status": {
         "needs_approval": "Oczekiwanie na zatwierdzenie",
         "running": "W toku",

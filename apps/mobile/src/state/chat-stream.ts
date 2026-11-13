@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
-import { isChatLocalRunToolName } from "@stll/api-contract/chat-local-run-tool";
+import {
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
+  chatLocalRunParentCallId,
+  isChatLocalRunToolName,
+} from "@stll/api-contract/chat-local-run-tool";
 
 import { SignedOutError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
@@ -92,6 +96,8 @@ const chatEventSchema = v.union([
     type: v.literal("TOOL_CALL_START"),
     toolCallId: v.string(),
     toolCallName: v.string(),
+    // Where a call of a coding agent's subagent names the subagent's step.
+    metadata: v.optional(v.unknown()),
   }),
   v.object({
     type: v.literal("TOOL_CALL_ARGS"),
@@ -154,8 +160,28 @@ type StreamedPart =
        */
       readonly args?: string;
       readonly input?: unknown;
+      /**
+       * The subagent step that made the call, kept as the stored call's
+       * metadata names it, so a live answer groups as the stored one does.
+       * Nothing else of a start's metadata is kept.
+       */
+      readonly metadata?: SubagentLink;
       readonly output?: unknown;
     };
+
+type SubagentLink = {
+  readonly [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: string;
+};
+
+/** A start's subagent link as a part keeps it, or nothing without one. */
+const subagentLinkOf = (
+  metadata: unknown,
+): { readonly metadata?: SubagentLink } => {
+  const parent = chatLocalRunParentCallId(metadata);
+  return parent === null
+    ? {}
+    : { metadata: { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: parent } };
+};
 
 /** An answer as it arrives: its parts in order, and where it stands. */
 export type StreamedAnswer = {
@@ -243,6 +269,7 @@ export const applyChatEvent = (
             id: event.toolCallId,
             name: event.toolCallName,
             state: "input-streaming",
+            ...subagentLinkOf(event.metadata),
           },
         ],
       };
@@ -329,6 +356,9 @@ const endedParts = ({
               name: part.name,
               state: "error",
               ...(part.input === undefined ? {} : { input: part.input }),
+              ...(part.metadata === undefined
+                ? {}
+                : { metadata: part.metadata }),
             }
           : part,
       )

@@ -11,6 +11,7 @@ import {
   isLocalRunInterruptedOutput,
   type LocalRunStepCall,
   localRunStepFailed,
+  localRunStepOutputKind,
   type LocalRunStepStanding,
   localRunSubagentGroups,
   type LocalRunSubagentStatus,
@@ -20,6 +21,7 @@ import {
   type LocalRunToolTitleKind,
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
+import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
 import {
   chatToolLabel,
   countProcessWork,
@@ -34,10 +36,15 @@ import type {
   ProcessSummaryKind,
 } from "@stll/api-contract/chat-tool-activity";
 
-/** A message part as an answer reads it: a tool call also by id and input. */
+/**
+ * A message part as an answer reads it: a tool call also by id and input,
+ * and by its metadata, where a call of a coding agent's subagent names the
+ * subagent's own step (`chatLocalRunParentCallId`).
+ */
 type AnswerPart = ChatActivityPart & {
   readonly id?: unknown;
   readonly input?: unknown;
+  readonly metadata?: unknown;
 };
 
 type StepStatus = "running" | "done" | "failed";
@@ -60,6 +67,12 @@ export type AnswerStep =
       readonly titleKind: LocalRunToolTitleKind | null;
       readonly subtitle: LocalRunToolSubtitle | null;
       readonly status: StepStatus;
+      /**
+       * The step viewed an image, which stays on the computer that ran it:
+       * stella desktop serves it there to a page on that computer only, so
+       * the phone says where it opens instead of opening it.
+       */
+      readonly opensOnComputer: boolean;
     }
   | { readonly type: "reasoning"; readonly text: string };
 
@@ -88,6 +101,11 @@ export type AnswerBlock =
       readonly description: string | null;
       readonly agentType: string | null;
       readonly status: LocalRunSubagentStatus;
+      /**
+       * The subagent ended with a result, so what it was told, wrote and
+       * reported is kept on the computer that ran it, which alone opens it.
+       */
+      readonly opensOnComputer: boolean;
       /** Every step it took, one that waits on an approval included. */
       readonly stepCount: number;
       /**
@@ -115,7 +133,15 @@ const toStep = (part: AnswerPart): AnswerStep => {
   });
   return local === null
     ? { type: "tool", label, status }
-    : { type: "local", label, status, ...local };
+    : {
+        type: "local",
+        label,
+        status,
+        ...local,
+        opensOnComputer:
+          status !== "running" &&
+          localRunStepOutputKind({ name, input: part.input }) === "image",
+      };
 };
 
 /** A call runs until it completes; it failed when it errored or said so. */
@@ -205,6 +231,7 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
       id,
       name: typeof part.name === "string" ? part.name : "",
       input: part.input,
+      parentCallId: chatLocalRunParentCallId(part.metadata),
       // The card under the thread asks about a call that waits on the
       // person; every other call is a row.
       shownAs: part.state === "approval-requested" ? "card" : "row",
@@ -223,15 +250,19 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
       ...call,
       output: undefined,
     })?.subtitle;
+    const ownStanding = stepStanding(own);
     return {
       type: "subagent",
       key: `subagent:${id}`,
       description: description?.type === "text" ? description.text : null,
       agentType: localRunSubagentType(call),
       status: localRunSubagentStatus({
-        own: stepStanding(own),
+        own: ownStanding,
         steps: taken.map(({ part }) => stepStanding(part)),
       }),
+      opensOnComputer:
+        own.output !== undefined &&
+        (ownStanding === "done" || ownStanding === "failed"),
       stepCount: taken.length,
       steps: taken
         .filter((step) => groups.rowIn.has(step.id))

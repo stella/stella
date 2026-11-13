@@ -219,6 +219,7 @@
       },
       "patternInPath": "{pattern} asukohas {path}",
       "commandExited": "{command} (väljumiskood {code})",
+      "opensOnComputer": "Avage arvutis, kus see käivitati",
       "status": {
         "needs_approval": "Kinnituse ootamine",
         "running": "Töös",

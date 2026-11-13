@@ -2272,11 +2272,15 @@
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
       "localOutput": {
+        "conversation": "Conversación del subagente",
+        "conversationPrompt": "Tarea",
+        "conversationReport": "Informe",
         "cut": "Se muestran los primeros {kept} de {total}",
         "diff": "Cambios en archivos",
         "elsewhere": "Ábrelo en el ordenador que lo ejecutó",
         "empty": "Sin salida",
         "failed": "La aplicación de escritorio de stella en este ordenador no pudo mostrarlo.",
+        "imageTooLarge": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan en este ordenador, por lo que no se puede mostrar aquí.",
         "notKept": "No se guardó nada de este paso en este ordenador",
         "reading": "Leyendo desde este ordenador"
       },
