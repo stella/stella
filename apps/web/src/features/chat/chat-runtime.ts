@@ -1482,14 +1482,12 @@ export const createChatRuntime = ({
         return error ? Result.err(toAPIError(error)) : Result.ok(data.steer);
       },
     );
-    if (Result.isOk(sent) && Result.isOk(sent.value)) {
-      if (sent.value.value === "queued") {
-        return await settled;
-      }
-    } else {
-      captureRuntimeError(
-        Result.isError(sent) ? sent.error.cause : sent.value.error,
-      );
+    if (Result.isError(sent)) {
+      captureRuntimeError(sent.error.cause);
+    } else if (Result.isError(sent.value)) {
+      captureRuntimeError(sent.value.error);
+    } else if (sent.value.value === "queued") {
+      return await settled;
     }
     // Only a turn that still runs is one the caller can stop and restart.
     settleSteer(inputId, running() ? "refused" : "unsettled");

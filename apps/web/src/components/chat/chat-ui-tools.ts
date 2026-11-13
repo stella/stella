@@ -375,8 +375,6 @@ const HARNESS_TOOL_TITLE_KEYS = {
   file_change: "chat.tool.file_change",
   harness_web_search: "chat.tool.harness_web_search",
   request_user_input: "chat.tool.request_user_input",
-  // A message the member steered the running turn with; shown as theirs.
-  [CHAT_LOCAL_RUN_STEER_TOOL]: "chat.tool.user_message",
   request_permissions: "chat.tool.request_permissions",
   harness_unsupported_item: "chat.tool.harness_unsupported_item",
 } as const satisfies Record<string, TranslationKey>;
@@ -385,6 +383,9 @@ const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
   ...CHAT_TOOL_TITLE_KEYS,
   ...RETIRED_CHAT_TOOL_TITLE_KEYS,
   ...HARNESS_TOOL_TITLE_KEYS,
+  // A message the member steered the running turn with; shown as theirs. It
+  // is never approved, so it stays out of the approval tool names.
+  [CHAT_LOCAL_RUN_STEER_TOOL]: "chat.tool.user_message",
 } as const;
 
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =

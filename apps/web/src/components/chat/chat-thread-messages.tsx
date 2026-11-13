@@ -206,6 +206,9 @@ type OlderMessagePagingOptions = {
   scrollRef: RefObject<HTMLDivElement | null> | null;
 };
 
+/** A steered message's tool call; its name is the API's, not a registered tool. */
+const isSteerToolName = (name: string) => name === CHAT_LOCAL_RUN_STEER_TOOL;
+
 // Pages older messages in from a top sentinel and keeps the viewport
 // anchored when they are prepended.
 const useOlderMessagePaging = ({
@@ -2210,7 +2213,7 @@ const AssistantMessageParts = ({
       );
     }
 
-    if (part.type === "tool-call" && part.name === CHAT_LOCAL_RUN_STEER_TOOL) {
+    if (part.type === "tool-call" && isSteerToolName(part.name)) {
       return <ChatSteeredMessage arguments={part.arguments} key={part.id} />;
     }
 
