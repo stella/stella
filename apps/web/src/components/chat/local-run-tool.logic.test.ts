@@ -150,6 +150,37 @@ describe("a step a coding agent took on the member's computer", () => {
   });
 });
 
+describe("a browser step on the member's computer", () => {
+  test("an opened page is named by its address, other steps by their kind", () => {
+    expect(
+      view("local_browser", {
+        action: "open",
+        url: "https://fixture-library.test/search",
+      }),
+    ).toEqual({
+      titleKey: null,
+      subtitle: { type: "text", text: "https://fixture-library.test/search" },
+    });
+    expect(view("local_browser", { action: "click" })).toEqual({
+      titleKey: null,
+      subtitle: null,
+    });
+  });
+
+  test("a step that stopped at a sign-in asks the member to sign in", () => {
+    expect(
+      view(
+        "local_browser",
+        { action: "open", url: "https://fixture-library.test/account" },
+        { status: "needs_member" },
+      ),
+    ).toEqual({
+      titleKey: "chat.toolCall.signInToContinue",
+      subtitle: { type: "text", text: "https://fixture-library.test/account" },
+    });
+  });
+});
+
 const subagentStep = (
   id: string,
   extra: Partial<LocalRunStepCall> & { parentCallId?: string } = {},

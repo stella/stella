@@ -239,6 +239,9 @@ const HARNESS_CHAT_TOOL_DISPLAY = {
     category: "computation",
     label: "harness_unsupported_item",
   },
+  // A step in the member's own Chrome, titled as the web chat's browser
+  // step is.
+  local_browser: { category: "research", label: "use-browser" },
 } as const satisfies Record<string, ChatToolDisplay>;
 
 const CHAT_TOOL_DISPLAY = {

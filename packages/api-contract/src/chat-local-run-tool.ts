@@ -34,6 +34,8 @@ export const CHAT_LOCAL_RUN_TOOL_NAMES = {
   webSearch: "harness_web_search",
   nativeTool: "harness_native_tool",
   unsupportedItem: "harness_unsupported_item",
+  /** A step in the member's Chrome, through stella desktop and the extension. */
+  browser: "local_browser",
 } as const;
 export type ChatLocalRunToolName =
   (typeof CHAT_LOCAL_RUN_TOOL_NAMES)[keyof typeof CHAT_LOCAL_RUN_TOOL_NAMES];
@@ -192,6 +194,32 @@ const fileChangesSchema = shownList(
   CHAT_LOCAL_RUN_TOOL_LIMITS.files,
 );
 
+/**
+ * What a coding agent did in the member's Chrome. The page it read, the
+ * element it clicked and the text it typed stay on the computer; only the
+ * kind of step and, for `open`, the address it opened are kept.
+ */
+export const CHAT_LOCAL_RUN_BROWSER_ACTIONS = [
+  "open",
+  "snapshot",
+  "click",
+  "type",
+] as const;
+
+export type ChatLocalRunBrowserAction =
+  (typeof CHAT_LOCAL_RUN_BROWSER_ACTIONS)[number];
+
+const BROWSER_ACTIONS: ReadonlySet<string> = new Set(
+  CHAT_LOCAL_RUN_BROWSER_ACTIONS,
+);
+
+export const isChatLocalRunBrowserAction = (
+  name: string,
+): name is ChatLocalRunBrowserAction => BROWSER_ACTIONS.has(name);
+
+/** A browser step that stopped at a sign-in the member completes. */
+export const CHAT_LOCAL_RUN_NEEDS_MEMBER = "needs_member" as const;
+
 /** A harness-native step: its tool name and the input chat keeps for it. */
 export const chatLocalRunToolCallSchema = v.variant("name", [
   v.object({
@@ -223,6 +251,25 @@ export const chatLocalRunToolCallSchema = v.variant("name", [
     input: stepInput({
       itemType: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.name),
     }),
+  }),
+  v.object({
+    name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.browser),
+    // Only `open` keeps an address: the one the agent chose. Any other
+    // step keeps its kind alone, whatever else it carries.
+    input: v.union([
+      stepInput({
+        action: v.literal("open"),
+        url: v.optional(shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.url)),
+      }),
+      stepInput({
+        action: v.picklist(
+          CHAT_LOCAL_RUN_BROWSER_ACTIONS.filter(
+            (action): action is Exclude<ChatLocalRunBrowserAction, "open"> =>
+              action !== "open",
+          ),
+        ),
+      }),
+    ]),
   }),
 ]);
 export type ChatLocalRunToolCall = v.InferOutput<
@@ -282,6 +329,9 @@ export const CHAT_LOCAL_RUN_TOOL_STATUSES = [
   "interrupted",
 ] as const;
 
+export type ChatLocalRunToolStatus =
+  (typeof CHAT_LOCAL_RUN_TOOL_STATUSES)[number];
+
 const statusSchema = v.picklist(CHAT_LOCAL_RUN_TOOL_STATUSES);
 const statusOnly = v.object({ status: statusSchema });
 
@@ -310,6 +360,15 @@ export const chatLocalRunToolResultSchema = v.variant("name", [
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem),
     result: statusOnly,
+  }),
+  v.object({
+    name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.browser),
+    result: v.object({
+      status: v.picklist([
+        ...CHAT_LOCAL_RUN_TOOL_STATUSES,
+        CHAT_LOCAL_RUN_NEEDS_MEMBER,
+      ]),
+    }),
   }),
 ]);
 export type ChatLocalRunToolResult = v.InferOutput<

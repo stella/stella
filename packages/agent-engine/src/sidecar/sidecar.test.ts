@@ -773,6 +773,16 @@ describe("harness holder over its socket", () => {
     );
     expect(server.headers.Authorization).toMatch(/^Bearer \S{43,}$/u);
     expect(JSON.stringify(holder.received())).not.toContain(RUN_TOKEN);
+    // This holder can register no browser host with Chrome (it has no
+    // home folder), so the harness is offered no browser tools.
+    expect(
+      Object.keys(
+        v.parse(
+          v.record(v.string(), v.unknown()),
+          registered?.request?.servers,
+        ),
+      ),
+    ).toEqual(["stella"]);
   });
 
   test("hands each harness the turn's attached image from its copy; a PDF reaches Claude only", async () => {
@@ -1647,6 +1657,7 @@ describe("harness holder over its socket", () => {
         FAKE_HARNESS_LOG: path.join(root, "fake.log"),
       },
       processGrantTimeoutMs: WAIT_MS,
+      browser: null,
     });
     cleanups.push(() => {
       rmSync(root, { recursive: true, force: true });
@@ -1735,6 +1746,7 @@ describe("harness holder over its socket", () => {
           FAKE_HARNESS_LOG: path.join(root, "fake.log"),
         },
         processGrantTimeoutMs: WAIT_MS,
+        browser: null,
       });
       cleanups.push(async () => {
         await host.shutdown();
@@ -1916,6 +1928,7 @@ describe("holder limits and timers", () => {
       helloTimeoutMs: 5000,
       unackedRetentionMs: 60_000,
       processGrantTimeoutMs: 60_000,
+      browser: null,
       limits: { maxMessages: 1000, maxBytes: 1024 * 1024 },
       protocolLog: { type: "set", setting: "off" },
       ...overrides,

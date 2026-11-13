@@ -14,7 +14,7 @@ import {
 } from "../step-output";
 import {
   HARNESS_TOOL_NAMES,
-  mcpToolCallName,
+  mcpToolCall,
   nativeToolCall,
   stepOfSubagent,
 } from "../tool-parts";
@@ -414,11 +414,12 @@ const mainThreadCall = (
     case "question":
       return { id, name: HARNESS_TOOL_NAMES.question, input };
     case "mcp":
-      return {
+      return mcpToolCall({
         id,
-        name: mcpToolCallName({ ...mcpName(name, stellaServer), stellaServer }),
         input,
-      };
+        ...mcpName(name, stellaServer),
+        stellaServer,
+      });
     case "native": {
       const detail = nativeDetail(name, input);
       return nativeToolCall(

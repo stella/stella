@@ -216,6 +216,7 @@ const turnInput = (
     url: "https://mcp.example.test/mcp",
     token: MCP_TOKEN,
   },
+  browser: null,
   transcript,
   inputFiles: [],
   continuation: { type: "fresh" },
@@ -1351,10 +1352,12 @@ describe("Claude Code approval modes", () => {
   /** The CLI's arguments for one turn in `approvals`. */
   const argsFor = async (
     approvals: HarnessTurnInput["policy"]["approvals"],
+    browser: HarnessTurnInput["browser"] = null,
   ) => {
     const { startups } = await run("tool_calls", {
       overrides: {
         policy: { network: "open", fs: "workspace", approvals },
+        browser,
       },
     });
     return startups()[0]?.args ?? [];
@@ -1369,6 +1372,22 @@ describe("Claude Code approval modes", () => {
     // A stella write before the plan is approved is asked about.
     expect(args).not.toContain("--allowedTools");
     expect(valueOf(await argsFor("ask"), "--allowedTools")).toMatch(/^mcp__/u);
+  });
+
+  test("the browser server is allowed ahead where stella's is, and never in plan", async () => {
+    const browser = {
+      serverName: "stella_browser",
+      url: "http://127.0.0.1:9/browser/run-1",
+      token: "browser-token",
+    };
+    expect(await argsFor("plan", browser)).not.toContain("--allowedTools");
+    for (const approvals of ["ask", "auto"] as const) {
+      expect(
+        valueOf(await argsFor(approvals, browser), "--allowedTools")?.split(
+          ",",
+        ),
+      ).toContain("mcp__stella_browser");
+    }
   });
 
   test("a plan opens with its approval, which shows the plan and offers approve or deny; approving it switches the CLI to Ask's mode once the plan's call has run", async () => {

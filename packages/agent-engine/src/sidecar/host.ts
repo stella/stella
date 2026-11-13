@@ -53,6 +53,11 @@ import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import type { ProtocolLog } from "../protocol-log";
 import { copyAttachments } from "./attachments";
 import {
+  type ActionApprovals,
+  createActionApprovals,
+} from "./browser/action-approvals";
+import type { LocalBrowserMcp } from "./browser/mcp-server";
+import {
   captureCheckpoint,
   checkpointChunk,
   restoreCheckpoint,
@@ -193,6 +198,8 @@ export type SidecarHostOptions = {
    * desktop's `harness.process_granted` before the run or probe fails.
    */
   processGrantTimeoutMs: number;
+  /** The browser tools each run gets; `null` without a browser bridge. */
+  browser: LocalBrowserMcp | null;
 };
 
 /** The inherited environment with the launch's removals and settings applied. */
@@ -240,6 +247,10 @@ type HeldRun = {
   outputSharing: AbortController;
   /** Whether the folder was saved before the harness started; `null` until then. */
   checkpoint: DesktopRunnerCheckpointEvent | null;
+  /** The browser tools' questions to the member about their steps. */
+  readonly approvals: ActionApprovals;
+  /** Cut by a stop, so the run's browser steps end with it, not with the turn. */
+  readonly browserStop: AbortController;
   /**
    * The folder's kept harness process, taken at the start: the turn
    * continues in it, or it ends first. `null` once the adapter has it.
@@ -259,6 +270,8 @@ type LiveFolder = {
   readonly runId: string;
   /** The process's parked MCP endpoint, on the proxy it was parked on. */
   readonly endpoint: string;
+  /** The process's parked browser endpoint; `null` when it had none. */
+  readonly browserEndpoint: string | null;
   readonly proxy: McpProxy;
   /** Ends the session once the idle limit passes. */
   readonly idle: ReturnType<typeof setTimeout>;
@@ -546,6 +559,14 @@ export class SidecarHost {
         return;
       case "run.approval":
         this.withRun(message, (run) => {
+          // A browser tool's question about one of its steps is answered here.
+          const native = run.requests.get(message.requestId);
+          if (
+            native !== undefined &&
+            run.approvals.answer(native, message.decision)
+          ) {
+            return;
+          }
           this.respond(run, message.requestId, (requestId) => ({
             type: "approval",
             requestId,
@@ -761,6 +782,8 @@ export class SidecarHost {
       outputs: null,
       outputSharing: new AbortController(),
       checkpoint: null,
+      approvals: createActionApprovals(),
+      browserStop: new AbortController(),
       live: null,
       launch: null,
     };
@@ -775,6 +798,7 @@ export class SidecarHost {
     this.track(
       this.execute(message, config, run).finally(() => {
         config.proxy.unregister(message.runId);
+        this.options.browser?.unregister(message.runId);
         this.runs.delete(message.runId);
       }),
     );
@@ -874,6 +898,7 @@ export class SidecarHost {
       workspaceDir,
       runId: message.runId,
       endpoint,
+      browserEndpoint: this.options.browser?.park(message.runId) ?? null,
       proxy: config.proxy,
       idle: setTimeout(() => {
         this.options.log("ended a chat's background work at the idle limit");
@@ -892,7 +917,7 @@ export class SidecarHost {
       }
       // The work ended, and the session with it; reported as 0.
       this.forgetLive(entry);
-      entry.proxy.drop(entry.endpoint);
+      this.dropEndpoints(entry);
     });
     this.reportTasks(entry.runId, session.backgroundTasks);
   }
@@ -906,6 +931,14 @@ export class SidecarHost {
     }
   }
 
+  /** A kept process is gone: the endpoints it was configured with go too. */
+  private dropEndpoints(entry: LiveFolder) {
+    entry.proxy.drop(entry.endpoint);
+    if (entry.browserEndpoint !== null) {
+      this.options.browser?.drop(entry.browserEndpoint);
+    }
+  }
+
   /**
    * End a kept process and the work it holds. Until it is gone, a run in its
    * folder waits (`open`), so no new harness writes there beside it.
@@ -914,7 +947,7 @@ export class SidecarHost {
     this.forgetLive(entry);
     const ending = (async () => {
       await entry.session.end();
-      entry.proxy.drop(entry.endpoint);
+      this.dropEndpoints(entry);
     })();
     this.endingLive.set(entry.workspaceDir, ending);
     try {
@@ -941,6 +974,8 @@ export class SidecarHost {
         : RUN_STOP.interrupt;
     run.stopCopying.abort();
     run.outputSharing.abort();
+    run.approvals.declineAll();
+    run.browserStop.abort();
     if (run.turn !== null) {
       this.detached(run.turn.interrupt(), "sidecar.interrupt");
     }
@@ -1145,6 +1180,7 @@ export class SidecarHost {
       instructions: message.instructions,
       policy: message.policy,
       mcp: binding.value,
+      browser: this.browserFor(message, run, taken),
       transcript: transcript.output,
       inputFiles: input.files,
       continuation: continuationOf(message, taken),
@@ -1152,6 +1188,34 @@ export class SidecarHost {
     return Result.isOk(started)
       ? Result.ok(started.value)
       : Result.err(START_FAILURE[started.error.reason](started.error.message));
+  }
+
+  /**
+   * The run's browser tools: the kept process's endpoint when the turn
+   * continues in one (the process is configured with it), else a new one.
+   */
+  private browserFor(
+    message: SidecarRunStart,
+    run: HeldRun,
+    taken: LiveFolder | null,
+  ) {
+    const browser = this.options.browser;
+    if (browser === null) {
+      return null;
+    }
+    const browserRun = {
+      runId: message.runId,
+      threadId: message.threadId,
+      approvals: message.policy.approvals,
+      approve: run.approvals.request,
+      stopped: run.browserStop.signal,
+    };
+    if (taken === null) {
+      return browser.register(browserRun);
+    }
+    return taken.browserEndpoint === null
+      ? null
+      : browser.adopt(taken.browserEndpoint, browserRun);
   }
 
   private async execute(
@@ -1318,7 +1382,7 @@ export class SidecarHost {
       if (run.stop !== RUN_STOP.none) {
         this.detached(opened.value.interrupt(), "sidecar.interrupt");
       }
-      events = opened.value.events;
+      events = run.approvals.withEvents(opened.value.events);
     } else if (run.stop !== RUN_STOP.none) {
       events = stoppedBeforeStart();
     } else {

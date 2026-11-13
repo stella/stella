@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import {
+  CHAT_LOCAL_RUN_NEEDS_MEMBER,
   CHAT_LOCAL_RUN_TOOL_NAMES,
   type ChatLocalRunToolDetail,
   isChatLocalRunToolName,
@@ -20,8 +21,13 @@ export type LocalRunToolSubtitle =
   | { type: "search"; pattern: string; path: string }
   | { type: "command"; command: string; exitCode: number };
 
+/** A browser step stopped at a sign-in the member completes in Chrome. */
+const SIGN_IN_TITLE_KEY =
+  "chat.toolCall.signInToContinue" satisfies TranslationKey;
+
 type LocalRunToolTitleKey =
-  (typeof DETAIL_TITLE_KEYS)[keyof typeof DETAIL_TITLE_KEYS];
+  | (typeof DETAIL_TITLE_KEYS)[keyof typeof DETAIL_TITLE_KEYS]
+  | typeof SIGN_IN_TITLE_KEY;
 
 export type LocalRunToolView = {
   /** A title naming the step's kind, or `null` to keep the tool's title. */
@@ -41,6 +47,12 @@ const DETAIL_TITLE_KEYS = {
 
 const text = (value: string): LocalRunToolSubtitle | null =>
   value === "" ? null : { type: "text", text: value };
+
+/** Whether a browser step's stored result says the member signs in. */
+const needsMember = (output: unknown): boolean =>
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === CHAT_LOCAL_RUN_NEEDS_MEMBER;
 
 /** A failed command's exit code, from the result the harness reported. */
 const exitCodeOf = (output: unknown): number | null => {
@@ -129,6 +141,14 @@ export const localRunToolView = ({
     }
     case CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem:
       return { titleKey: null, subtitle: null };
+    case CHAT_LOCAL_RUN_TOOL_NAMES.browser:
+      return {
+        titleKey: needsMember(output) ? SIGN_IN_TITLE_KEY : null,
+        subtitle:
+          call.input.action === "open" && call.input.url !== undefined
+            ? text(call.input.url)
+            : null,
+      };
     default:
       call satisfies never;
       return panic("Unhandled local run tool call");
@@ -204,6 +224,7 @@ export const localRunToolSubtitleText = (
         command: subtitle.command,
         code: String(subtitle.exitCode),
       });
+
     default:
       subtitle satisfies never;
       return panic("Unhandled local run tool subtitle");
