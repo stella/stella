@@ -9,6 +9,7 @@ import {
   type ChatLocalRunTarget,
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
+import { DESKTOP_RUNNER_LINKED_FOLDER_STATE } from "@stll/api-contract/desktop-runner";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   MenuGroup,
@@ -23,18 +24,24 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { EFFORT_LABEL_KEY } from "@/components/chat/chat-model-options-menu.logic";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
+  CHAT_OWN_FOLDER_VALUE,
+  type ChatLocalFolderOption,
+  chatLocalFolderOptions,
   type ChatLocalHarnessOption,
-  chatLocalHarnessOptions,
+  chatLocalHarnessOptionsFor,
   defaultHarnessModel,
   LOCAL_RUN_PERMISSION_KEYS,
+  type LocalRunFolderProblem,
   localRunMaxApprovals,
   localRunTargetFor,
   type LocalRunTargetState,
   type PermissionAvailability,
   permissionView,
   reasoningEffortChoices,
+  runFolderValue,
   runOnPlaceValue,
   sameRunTarget,
+  withRunFolder,
 } from "@/components/chat/chat-run-target-menu.logic";
 import { localRunnersOptions } from "@/features/chat/queries";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
@@ -56,6 +63,16 @@ const UNAVAILABLE_LABEL_KEY = {
   unavailable: "chat.localRun.stateUnavailable",
   offline: "chat.localRun.stateOffline",
 } as const satisfies Record<UnavailableState, TranslationKey>;
+
+/** Why a linked folder cannot take a turn now. */
+const FOLDER_PROBLEM_KEY = {
+  offline: "chat.localRun.folderStateOffline",
+  moved: "chat.localRun.folderStateMoved",
+  protected: "chat.localRun.folderStateProtected",
+  unreadable: "chat.localRun.folderStateUnreadable",
+  computer_offline: "chat.localRun.stateOffline",
+  unlinked: "chat.localRun.folderStateUnlinked",
+} as const satisfies Record<LocalRunFolderProblem, TranslationKey>;
 
 /** Why a permission mode cannot be chosen, in its description's place. */
 const UNAVAILABLE_PERMISSION_KEY = {
@@ -123,6 +140,10 @@ export const useLocalRunTargetStateLabel = () => {
         return t("chat.localRun.stateModelUnavailable");
       case "not_allowed":
         return t("chat.localRun.stateUnavailable");
+      case "folder":
+        return t(FOLDER_PROBLEM_KEY[state.problem]);
+      case "folder_pending":
+        return t("chat.localRun.folderStatePending");
       default:
         state satisfies never;
         return panic("Unknown local run target state");
@@ -256,8 +277,9 @@ type ChatRunTargetMenuProps = {
 /**
  * The where chip's menu: the cloud, or the member's computer with each
  * coding agent on it and whether it can take a turn (a ready one is picked
- * with its recommended model; one that is not says what to do), and then
- * how much that agent may do before it asks. The model is the model chip's.
+ * with its recommended model; one that is not says what to do), the folder
+ * its turns work in, and then how much that agent may do before it asks.
+ * The model is the model chip's.
  */
 export const ChatRunTargetMenu = ({
   activeOrganizationId,
@@ -277,7 +299,9 @@ export const ChatRunTargetMenu = ({
     runnersView.type === "items" ? runnersView.items : undefined;
   // Until the member's computers are read, no agent is listed; a member who
   // may not run turns on a computer sees only the way back to the cloud.
-  const listed = chatLocalHarnessOptions(readiness);
+  // With a linked folder chosen, the agents listed are the folder's
+  // computer's, which its turns run on.
+  const listed = chatLocalHarnessOptionsFor(readiness, selected);
   const options = listed ?? NO_HARNESS_OPTIONS;
   const choose = (target: ChatRunTarget) => {
     if (!sameRunTarget(target, selected)) {
@@ -354,6 +378,30 @@ export const ChatRunTargetMenu = ({
           );
         })}
       </MenuRadioGroup>
+      {selected.kind === "local" && (
+        <>
+          <MenuSeparator />
+          <MenuRadioGroup value={runFolderValue(selected)}>
+            <MenuGroupLabel>{t("common.folder")}</MenuGroupLabel>
+            <MenuRadioItem
+              onClick={() => choose(withRunFolder(selected, undefined))}
+              value={CHAT_OWN_FOLDER_VALUE}
+            >
+              {t("chat.localRun.folderOwn")}
+            </MenuRadioItem>
+            {chatLocalFolderOptions(readiness).map((option) => (
+              <LinkedFolderItem
+                key={`${option.folder.desktopId}:${option.folder.linkId}`}
+                onChoose={() => choose(withRunFolder(selected, option.folder))}
+                option={option}
+              />
+            ))}
+            <p className="text-muted-foreground text-2xs px-2 pb-1.5 text-pretty">
+              {t("chat.localRun.folderHint")}
+            </p>
+          </MenuRadioGroup>
+        </>
+      )}
       {permissions?.type === "fixed" && (
         <>
           <MenuSeparator />
@@ -434,7 +482,10 @@ export const LocalModelOptions = ({
       </p>
     );
   }
-  const option = chatLocalHarnessOptions(readiness)?.find(
+  // A turn in a linked folder runs on the folder's computer: its models are
+  // that computer's.
+  const options = chatLocalHarnessOptionsFor(readiness, selected);
+  const option = options?.find(
     (candidate) => candidate.harness === selected.harness,
   );
   if (option?.state !== "ready") {
@@ -466,7 +517,7 @@ export const LocalModelOptions = ({
   };
   const efforts = reasoningEffortChoices(
     selected,
-    chatLocalHarnessOptions(readiness) ?? NO_HARNESS_OPTIONS,
+    options ?? NO_HARNESS_OPTIONS,
   );
   const chooseEffort = (target: ChatLocalRunTarget) => {
     if (!sameRunTarget(target, selected)) {
@@ -544,5 +595,38 @@ export const LocalModelOptions = ({
         </>
       )}
     </>
+  );
+};
+
+/**
+ * A folder linked on one of the member's computers, by its name only; one
+ * that cannot take a turn now says why and cannot be chosen.
+ */
+const LinkedFolderItem = ({
+  option,
+  onChoose,
+}: {
+  option: ChatLocalFolderOption;
+  onChoose: () => void;
+}) => {
+  const t = useTranslations();
+  const { state } = option;
+  return (
+    <MenuRadioItem
+      disabled={state !== DESKTOP_RUNNER_LINKED_FOLDER_STATE.available}
+      onClick={onChoose}
+      value={option.folder.linkId}
+    >
+      <span className="flex min-w-0 flex-col py-0.5">
+        <TruncatedText render={<BidiText as="span" />}>
+          {option.folder.name}
+        </TruncatedText>
+        {state === DESKTOP_RUNNER_LINKED_FOLDER_STATE.available ? null : (
+          <span className="text-muted-foreground text-2xs">
+            {t(FOLDER_PROBLEM_KEY[state])}
+          </span>
+        )}
+      </span>
+    </MenuRadioItem>
   );
 };

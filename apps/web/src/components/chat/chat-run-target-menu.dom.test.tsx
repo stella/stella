@@ -49,6 +49,7 @@ const READINESS: ChatLocalRunReadiness = {
       desktopId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
       connected: true,
       lastSeenAt: "2026-11-03T10:00:00.000Z",
+      linkedFolders: [],
       harnesses: [
         {
           id: "codex",
@@ -257,7 +258,7 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
     ),
   ).toBeTruthy();
   expect(view.getByText("Permissions")).toBeTruthy();
-  // The places alone: no permission mode to pick.
+  // The places and the chat's folder alone: no permission mode to pick.
   expect(
     view
       .getAllByRole("menuitemradio")
@@ -266,6 +267,7 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
     `${messages.chat.runOn.cloud}${messages.chat.runOn.cloudDescription}`,
     "Codex",
     "Claude Code",
+    messages.chat.localRun.folderOwn,
   ]);
 });
 
