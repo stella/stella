@@ -1,6 +1,9 @@
+import { FACT_DATE_PRECISIONS } from "@/api/lib/lists/fact-details";
 import {
   CLAIM_ANCHOR_TYPES,
+  CLAIM_ASSERTED_ON_SOURCES,
   CLAIM_CARRY_OUTCOMES,
+  CLAIM_DATE_SOURCES,
   CLAIM_FRAMINGS,
   CLAIM_REVIEW_EVENT_KINDS,
   CLAIM_REVIEW_REASON_RULE,
@@ -26,7 +29,6 @@ import type {
   VerificationScope,
 } from "@/api/lib/lists/verification/contract";
 import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
-import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
 
 import {
   entityFeatureGateChecks,
@@ -37,7 +39,6 @@ import { entityFeaturePolicies } from "../entity-feature-policies";
 import {
   jsonb,
   organization,
-  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -83,6 +84,9 @@ const REASON_ALLOWED_KIND_SQL_VALUES = reviewKindsWhereReason([
   "required",
   "optional",
 ]);
+const ASSERTED_ON_SOURCE_SQL_VALUES = quoted(CLAIM_ASSERTED_ON_SOURCES);
+const DATED_SOURCE_SQL_VALUES = quoted(CLAIM_DATE_SOURCES);
+const DATE_PRECISION_SQL_VALUES = quoted(FACT_DATE_PRECISIONS);
 const NOTE_MAX_SQL = sql.raw(String(VERIFICATION_LIMITS.NOTE_MAX));
 const NOTVERIFIABLE_SQL = sql.raw(`'${CLAIM_STATE.NOTVERIFIABLE}'`);
 const RECORDCONFLICT_SQL = sql.raw(`'${CLAIM_STATE.RECORDCONFLICT}'`);
@@ -93,60 +97,6 @@ const RECORD_SILENT_SQL = sql.raw(
 const PARAGRAPH_NUMBERING_SQL_VALUES = quoted(PARAGRAPH_NUMBERINGS);
 const WHOLE_DOCUMENT_SCOPE_SQL = sql.raw(
   `'${JSON.stringify(WHOLE_DOCUMENT_SCOPE)}'::jsonb`,
-);
-
-const verificationBudgetOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
-  FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_verification_budgets'::regclass)`;
-
-export const legalListVerificationBudgets = p.pgTable.withRLS(
-  "legal_list_verification_budgets",
-  {
-    organizationId: safeOrganizationId("organization_id").primaryKey(),
-    activeRuns: p.integer("active_runs").notNull().default(0),
-    startsDay: p
-      .date("starts_day", { mode: "string" })
-      .notNull()
-      .default(sql`stella_list_verification_day(CURRENT_TIMESTAMP)`),
-    startsToday: p.integer("starts_today").notNull().default(0),
-    activeLimit: p
-      .integer("active_limit")
-      .notNull()
-      .default(DEFAULT_VERIFICATION_RUN_CAPS.active),
-    dailyLimit: p
-      .integer("daily_limit")
-      .notNull()
-      .default(DEFAULT_VERIFICATION_RUN_CAPS.startsPerDay),
-  },
-  (table) => [
-    ...orgPolicies(),
-    p
-      .foreignKey({
-        name: "legal_list_verification_budgets_org_fk",
-        columns: [table.organizationId],
-        foreignColumns: [organization.id],
-      })
-      .onDelete("cascade"),
-    p.pgPolicy("legal_list_verification_budgets_owner_access", {
-      for: "all",
-      to: "public",
-      using: verificationBudgetOwner,
-      withCheck: verificationBudgetOwner,
-    }),
-    p.pgPolicy("legal_list_verification_budgets_no_delete", {
-      as: "restrictive",
-      for: "delete",
-      to: stella,
-      using: sql`false`,
-    }),
-    p.check(
-      "legal_list_verification_budgets_nonnegative",
-      sql`${table.activeRuns} >= 0 AND ${table.startsToday} >= 0`,
-    ),
-    p.check(
-      "legal_list_verification_budgets_limits",
-      sql`${table.activeLimit} BETWEEN 1 AND 100 AND ${table.dailyLimit} BETWEEN 1 AND 1000`,
-    ),
-  ],
 );
 
 /**
@@ -445,6 +395,19 @@ export const legalListClaims = p.pgTable(
     // Caveats the grader gave with the verdict. Qualifiers computed from the
     // facts as they stand now are never stored.
     qualifiers: jsonb().$type<GraderClaimQualifier[]>().notNull().default([]),
+    // The date the claim asserts for what it says (`claim-date.ts`), stored
+    // as its first day like a fact's; null when it gives none. A re-check
+    // records its own reading; the run's stays here.
+    assertedOn: p.date("asserted_on", { mode: "string" }),
+    assertedOnPrecision: p.text("asserted_on_precision", {
+      enum: FACT_DATE_PRECISIONS,
+    }),
+    // Where the date came from, or `none`; `pending` only on claims written
+    // before claims carried dates, until the backfill reads their words.
+    assertedOnSource: p
+      .text("asserted_on_source", { enum: CLAIM_ASSERTED_ON_SOURCES })
+      .notNull()
+      .default("pending"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -468,6 +431,12 @@ export const legalListClaims = p.pgTable(
     p
       .index("legal_list_claims_run_idx")
       .on(table.workspaceId, table.runId, table.position),
+    // The claims the asserted date backfill has yet to read: its batches and
+    // its completion check, which every startup runs, read only these.
+    p
+      .index("legal_list_claims_asserted_on_pending_idx")
+      .on(table.id)
+      .where(sql`${table.assertedOnSource} = 'pending'`),
     p.check(
       "legal_list_claims_type_check",
       sql`${table.type} IN (${CLAIM_TYPE_SQL_VALUES})`,
@@ -509,6 +478,18 @@ export const legalListClaims = p.pgTable(
         AND (${table.state} = ${NOCOVER_SQL}
           OR NOT ${table.qualifiers} @> jsonb_build_array(jsonb_build_object('kind', ${RECORD_SILENT_SQL})))`,
     ),
+    // A date exactly when one was read, stated once: with its precision, as
+    // its first day, so August 2021 has one spelling.
+    p.check(
+      "legal_list_claims_asserted_on_check",
+      sql`${table.assertedOnSource} IN (${ASSERTED_ON_SOURCE_SQL_VALUES})
+        AND (${table.assertedOn} IS NULL) = (${table.assertedOnPrecision} IS NULL)
+        AND (${table.assertedOn} IS NOT NULL) = (${table.assertedOnSource} IN (${DATED_SOURCE_SQL_VALUES}))
+        AND (${table.assertedOnPrecision} IS NULL OR ${table.assertedOnPrecision} IN (${DATE_PRECISION_SQL_VALUES}))
+        AND (${table.assertedOnPrecision} IS NULL OR ${table.assertedOnPrecision} = 'day'
+          OR (extract(day from ${table.assertedOn}) = 1
+            AND (${table.assertedOnPrecision} = 'month' OR extract(month from ${table.assertedOn}) = 1)))`,
+    ),
     p.check(
       "legal_list_claims_anchor_shape_check",
       sql`${table.anchor}->>'type' IN (${CLAIM_ANCHOR_TYPE_SQL_VALUES})`,
@@ -527,6 +508,16 @@ export const legalListClaims = p.pgTable(
           { kind: "owned-by-parent", parent: legalListVerificationRuns },
         ],
       ]),
+    }),
+    // The online backfill of asserted dates reads every workspace's claims
+    // as the table owner.
+    p.pgPolicy("legal_list_claims_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
+        FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_claims'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
+        FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_claims'::regclass)`,
     }),
   ],
 );

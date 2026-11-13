@@ -571,6 +571,21 @@
       "showBefore": "Rādīt tekstu pirms ¶ {from}",
       "verifyParagraphs": "Pārbaudīt rindkopas"
     },
+    "staleness": {
+      "failed": "Apgalvojumus neizdevās pārbaudīt vēlreiz",
+      "finished": "{count, plural, zero {# apgalvojumi pārbaudīti vēlreiz} one {# apgalvojums pārbaudīts vēlreiz} other {# apgalvojumi pārbaudīti vēlreiz}}",
+      "partial": "Pārbaudīti vēlreiz: {rechecked, number}, neizdevās: {failed, plural, zero {#} one {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakts mainīts",
+        "factHeld": "Fakts izslēgts",
+        "factRemoved": "Fakts noņemts",
+        "newFactRelated": "Jauns saistīts fakts"
+      },
+      "recheckAll": "Pārbaudīt visus vēlreiz",
+      "recheckLocked": "Tiek pārbaudīts vēlreiz kopā ar citiem novecojušiem apgalvojumiem",
+      "runLine": "{count, plural, zero {# apgalvojumi var būt novecojuši} one {# apgalvojums var būt novecojis} other {# apgalvojumi var būt novecojuši}}",
+      "running": "{count, plural, zero {Vēlreiz tiek pārbaudīti # apgalvojumi…} one {Vēlreiz tiek pārbaudīts # apgalvojums…} other {Vēlreiz tiek pārbaudīti # apgalvojumi…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Pretrunā",
@@ -628,100 +643,21 @@
       "pickList": "Izvēlieties sarakstu, pret kura faktiem tiek pārbaudīti šīs lietas dokumenti."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Izveidot divvalodu versiju",
-      "creating": "Veido…",
-      "description": "Izveido šī dokumenta kopiju divās kolonnās: pa kreisi oriģinālteksts, pa labi tulkojamā kopija ar atsevišķu numerāciju. Kopija tiek saglabāta šajā lietā kā jauns dokuments.",
-      "sameLanguage": "Izvēlieties divas dažādas valodas.",
-      "sourceLanguage": "Avota valoda",
-      "title": "Divvalodu versija"
-    },
-    "error": {
-      "title": "Neizdevās izveidot divvalodu versiju"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> ir gatavs, jātulko {rowCount, plural, zero {# rindu} one {# rinda} other {# rindas}}.",
-      "title": "Divvalodu versija izveidota"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Aizpilda šī divu kolonnu dokumenta tulkojuma kolonnu. Pārskatiet, kas notiks ar katru rindu un kā tiek atveidoti definētie termini, un pēc tam sāciet tulkošanu.",
-      "prepare": "Sagatavot",
-      "preparing": "Notiek dokumenta lasīšana…",
-      "preparingHint": "Visa dokumenta izlasīšana un katras rindas novērtēšana aizņem līdz divām minūtēm.",
-      "title": "Tulkot divvalodu versiju"
+      "prepare": "Sagatavot"
     },
     "dispositions": {
-      "inline": "Abas valodas",
       "keep": "Atstāt nemainītu"
     },
-    "error": {
-      "prepareTitle": "Neizdevās sagatavot dokumentu",
-      "startTitle": "Neizdevās sākt tulkošanu"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Tulkošanai nav pieejams neviens AI modelis.",
-      "applyFailed": "Tulkojumus neizdevās ierakstīt atpakaļ dokumentā.",
-      "documentChanged": "Dokuments tulkošanas laikā mainījās. Sagatavojiet to vēlreiz.",
-      "documentUnresolved": "Dokuments vai tā fails vairs nav pieejams.",
-      "enqueueFailed": "Tulkošanu neizdevās ievietot rindā.",
-      "internal": "Tulkošana negaidīti apstājās.",
-      "notBilingual": "Šajā dokumentā nav divvalodu tabulas.",
-      "translationFailed": "Neizdevās iztulkot rindu partiju.",
-      "unknown": "Tulkošana negaidīti apstājās."
-    },
-    "glossary": {
-      "add": "Pievienot terminu",
-      "description": "Šie atveidojumi attiecas uz visām rindām. Termins bez tulkojuma ir jāaizpilda vai jānoņem.",
-      "empty": "Definēti termini nav atrasti.",
-      "formsHint": "Citas formas atdaliet ar komatiem.",
-      "formsSource": "Citas termina formas",
-      "formsTarget": "Citas tulkojuma formas",
-      "incomplete": "Aizpildiet trūkstošos tulkojumus vai noņemiet šos terminus.",
-      "origins": {
-        "detected": "Atrasts",
-        "user": "Jūsu"
-      },
-      "term": "Termins",
-      "title": "Definētie termini",
-      "tooManyForms": "Terminam var būt ne vairāk kā {max} citas formas.",
-      "translation": "Tulkojums"
-    },
     "kinds": {
-      "heading": "Virsraksts",
-      "listItem": "Saraksta punkts",
-      "paragraph": "Rindkopa",
-      "table": "Visa tabula"
-    },
-    "origins": {
-      "default": "Nav novērtēts",
-      "model": "AI"
+      "paragraph": "Rindkopa"
     },
     "review": {
-      "droppedRows": "{count, plural, zero {Izlaistas # rindu} one {Izlaista # rinda} other {Izlaistas # rindas}}: tajās nav tulkojama teksta.",
-      "start": "Sākt tulkošanu",
       "starting": "Sāk…"
     },
     "rows": {
-      "description": "Izvēlieties, kas notiks ar katru tulkojuma kolonnas rindu.",
-      "ordinal": "#",
-      "sourceText": "Avota teksts",
-      "title": "Rindas",
-      "whatToDo": "Ko darīt"
-    },
-    "run": {
-      "cancelled": "Tulkošana tika atcelta.",
-      "doneSummary": "{count, plural, zero {Iztulkotas # rindu} one {Iztulkota # rinda} other {Iztulkotas # rindas}}.",
-      "doneTitle": "Tulkošana pabeigta",
-      "failedRows": "{count, plural, zero {Neizdevās iztulkot # rindu} one {Neizdevās iztulkot # rindu} other {Neizdevās iztulkot # rindas}}.",
-      "failedTitle": "Tulkošana apturēta",
-      "hint": "Tulkošana notiek serverī. Lai sekotu norisei, atstājiet šo logu atvērtu.",
-      "moreRows": "{count, plural, zero {vēl # rindu} one {vēl # rinda} other {vēl # rindas}}",
-      "progress": "Iztulkotas {completed} no {total} rindām",
-      "title": "Notiek tulkošana…",
-      "warningsTitle": "Pārbaudāmās rindas"
+      "title": "Rindas"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
       "none": "Citējumi vēl nav reģistrēti.",
       "notInStella": "Lietotnē stella vēl nav",
-      "openAtCitation": "Atvērt citāta vietā",
       "openDecision": "Atvērt nolēmumu",
       "paragraphLabel": "{paragraph}. punkts",
       "paragraphMark": "¶ {paragraph}",
@@ -1918,7 +1853,8 @@
       "restored": "Failu izmaiņas atsauktas"
     },
     "localRun": {
-      "cloud": "stella mākonis",
+      "backgroundTasks": "{count, plural, zero {Fonā darbojas # uzdevumu} one {Fonā darbojas # uzdevums} other {Fonā darbojas # uzdevumi}}",
+      "errorFolderUnavailable": "Ar šo tērzēšanu saistītā mape jūsu datorā nav pieejama. Pārbaudiet to stella desktop un pēc tam nosūtiet vēlreiz.",
       "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",
       "errorLimitResetsAt": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Vēlreiz mēģināt varēsiet pēc {time}.",
       "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
@@ -1927,26 +1863,39 @@
       "errorRestoring": "Jūsu dators vēl atsauc failu izmaiņas. Pēc brīža nosūtiet to vēlreiz.",
       "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
       "filesNotShared": "Faili, kurus neizdevās kopīgot, paliek jūsu datorā: {fileNames}",
-      "onThisComputer": "{harness} šajā datorā",
+      "folderApprovalDescription": "Atļaujiet {harness} strādāt jūsu datora mapē “{folder}”. Tas tajā var lasīt, mainīt un dzēst failus, un pievienotie faili tiek tajā kopēti.",
+      "folderApprove": "Atļaut mapē {folder}",
+      "folderHint": "Sava datora mapes varat saistīt stella desktop iestatījumos.",
+      "folderOwn": "Tērzēšanas pašas mape",
+      "folderStateMoved": "Pārvietota vai izdzēsta",
+      "folderStateOffline": "Disks nav pievienots",
+      "folderStatePending": "Gaida jūsu piekrišanu",
+      "folderStateProtected": "Satur pašas stella datus",
+      "folderStateUnlinked": "Vairs nav saistīta",
+      "folderStateUnreadable": "Nevar nolasīt",
       "permissionAboveLimit": "Jūsu organizācija to neatļauj",
       "permissionAskDescription": "Tērzēšanas mapes failus rediģē pats; par visu citu jautā.",
       "permissionAutoDescription": "To, ko uzskata par drošu, dara pats; par pārējo jautā.",
       "permissionFullAuto": "Pilnībā automātiski",
       "permissionFullAutoDescription": "Par neko tērzēšanas mapē nejautā; pirms kaut ko maina jūsu datorā, vienmēr pajautā.",
+      "permissionPlan": "Plāns",
+      "permissionPlanDescription": "Vispirms lasa un plāno; pirms katras izmaiņas jautā, kamēr neapstiprināsiet plānu.",
       "permissionSandboxed": "Darbojas izolētā vidē; pirms kaut ko maina jūsu datorā, pajautā.",
       "permissionUnavailable": "Šajā datorā nav pieejams",
       "permissions": "Atļaujas",
       "refusalConflictingRunMode": "Šis pieprasījums vienlaikus prasa darboties ar mākoņa aģentu un jūsu datorā. Izvēlieties vienu izvēlnē Palaist.",
+      "refusalFolderNotApproved": "Vispirms atļaujiet programmēšanas aģentam strādāt ar šo tērzēšanu saistītajā mapē.",
+      "refusalFolderUnavailable": "Ar šo tērzēšanu saistītā mape nav pieejama. Pārbaudiet to izvēlnē Palaist vai lietotnē stella desktop.",
       "refusalHarnessUnavailable": "Programmēšanas aģents jūsu datorā šobrīd nevar pieņemt šo pieprasījumu. Pārbaudiet to lietotnē stella desktop.",
       "refusalModelUnavailable": "Programmēšanas aģents jūsu datorā vairs nepiedāvā šo modeli. Izvēlieties citu izvēlnē Palaist.",
-      "refusalNoComputer": "Neviens no jūsu datoriem nav savienots. Atveriet stella desktop un nosūtiet vēlreiz.",
+      "refusalNoComputer": "Neviens no jūsu datoriem nav savienots.",
       "refusalPermissionAboveLimit": "Jūsu organizācija neļauj programmēšanas aģentam jūsu datorā darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
       "refusalPermissionUnavailable": "Programmēšanas aģents jūsu datorā nevar darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
+      "refusalReasoningEffortUnavailable": "Programmēšanas aģents jūsu datorā šim modelim nepiedāvā šo spriešanas līmeni. Izvēlieties citu izvēlnē Spriešanas līmenis.",
       "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
       "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
-      "runOn": "Palaist",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām.",
       "stateLimitUntil": "Limits sasniegts līdz {time}",
       "stateModelUnavailable": "Modelis vairs nav pieejams",
       "stateNeedsLogin": "Jāpiesakās",
@@ -2109,6 +2058,25 @@
     "richContentLoading": "Notiek interaktīvā satura ielāde…",
     "richContentTitle": "Interaktīvs saturs",
     "richContentUnavailable": "Šo saturu nevar droši parādīt.",
+    "runOn": {
+      "checkFailed": "Neizdevās pārbaudīt jūsu datoru",
+      "chipLabel": "Darbojas: {place}",
+      "cloud": "Mākonis",
+      "cloudDescription": "Darbojas mākonī. Pieejams no jebkuras vietas.",
+      "harnessModels": "{harness} modeļi",
+      "hintInstall": "Instalējiet to no stella desktop",
+      "hintOffline": "Atveriet stella desktop savā datorā",
+      "hintSignIn": "Piesakieties stella desktop",
+      "hintUpdate": "Atjauniniet to no stella desktop",
+      "localFolderPlace": "Jūsu dators, {harness}, {folder}",
+      "localFolderSelection": "Jūsu dators · {harness} · {folder}",
+      "localPlace": "Jūsu dators, {harness}",
+      "localSelection": "Jūsu dators · {harness}",
+      "modelDefault": "Noklusējuma (ieteicams)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Jūsu dators",
+      "yourComputerDescription": "Izmanto Codex vai Claude Code jūsu datorā ar jūsu pašu abonementu. Tas var lasīt un mainīt failus šīs tērzēšanas mapē; atļaujas nosaka, ko tas drīkst darīt bez jautāšanas."
+    },
     "selection": {
       "askInNewChat": "Jautāt jaunā tērzēšanā",
       "quoteInReply": "Citēt atbildē",
@@ -2160,6 +2128,7 @@
     "stopFailed": "Neizdevās apturēt atbildi. Mēģiniet vēlreiz.",
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
+    "stopping": "Aptur…",
     "suggestTitle": "Ieteikt nosaukumu",
     "suggestTitleUnavailableAnonymized": "Anonimizētām sarunām nosaukuma ieteikumi nav pieejami.",
     "suggestedFollowupsLabel": "Ieteiktie papildjautājumi",
@@ -2302,15 +2271,32 @@
       "field": "Lauks",
       "input": "Ievade",
       "interrupted": "Pārtraukts pirms pabeigšanas",
+      "localOutput": {
+        "conversation": "Apakšaģenta saruna",
+        "conversationPrompt": "Uzdevums",
+        "conversationReport": "Ziņojums",
+        "cut": "Rāda pirmos {kept} no {total}",
+        "diff": "Failu izmaiņas",
+        "elsewhere": "Atveriet datorā, kurā tas tika izpildīts",
+        "empty": "Nav izvades",
+        "failed": "stella darbvirsmas lietotne šajā datorā to nevarēja parādīt.",
+        "imageTooLarge": "Šī attēla izmērs ir {total}. Attēli, kas lielāki par {kept}, šajā datorā netiek saglabāti, tāpēc to šeit nevar parādīt.",
+        "notKept": "No šī soļa šajā datorā nekas nav saglabāts",
+        "reading": "Notiek lasīšana no šī datora"
+      },
       "output": "Izvade",
       "patternInPath": "{pattern} ({path})",
+      "proposedPlan": "Plāna priekšlikums",
       "readFile": "Faila lasīšana",
       "searchFiles": "Meklēšana failos",
+      "signInToContinue": "Lai turpinātu, pieslēdzieties",
       "sourceCode": "Pirmkods",
       "statusWaiting": "Gaida",
+      "subagent": "Apakšaģenta palaišana",
       "toggleDetails": "Pārslēgt detaļas",
       "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}",
-      "updatePlan": "Plāna atjaunināšana"
+      "updatePlan": "Plāna atjaunināšana",
+      "viewImage": "Attēla skatīšana"
     },
     "turnNotification": {
       "failedBody": "stellas tērzēšanas atbilde netika pabeigta.",
@@ -2321,6 +2307,8 @@
       "replyReadyTitle": "Atbilde gatava"
     },
     "turnStatus": {
+      "answerFailed": "Atbildi neizdevās pabeigt",
+      "answerReady": "Atbilde ir gatava",
       "waitingForApproval": "Gaida apstiprinājumu",
       "waitingForInput": "Gaida ievadi",
       "writing": "Raksta"
@@ -2600,6 +2588,7 @@
     "filter": "Filtrs",
     "filters": "Filtri",
     "find": "Meklēt",
+    "folder": "Mape",
     "formula": "Formula",
     "goBack": "Atpakaļ",
     "goBackToEditing": "Atpakaļ pie rediģēšanas",
@@ -2696,6 +2685,7 @@
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
     "organizations": "Organizācijas",
+    "outOfDate": "Novecojis",
     "page": "{page}. lapa",
     "paymentRetryNotice": "Maksājuma problēma. Lai saglabātu piekļuvi, atjauniniet maksājuma veidu līdz {date}.",
     "pin": "Piespraust",
@@ -3360,6 +3350,8 @@
       "organizationMemberLimitReached": "Šī organizācija ir sasniegusi dalībnieku limitu.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
+      "runActiveLimitReached": "Jūsu organizācija ir sasniegusi vienlaicīgi izpildāmo uzdevumu limitu. Pagaidiet, līdz kāds uzdevums beidzas, un mēģiniet vēlreiz.",
+      "runDailyLimitReached": "Jūsu organizācija ir sasniegusi uzdevumu dienas limitu. Mēģiniet vēlreiz pēc pusnakts (Europe/Prague).",
       "sharepointAccessDenied": "Microsoft liedza piekļuvi šai vietnei, bibliotēkai vai failam.",
       "sharepointFileTooLarge": "Šis fails ir pārāk liels, lai to importētu.",
       "sharepointInvalidCursor": "Saraksts pārlūkošanas laikā mainījās. Atveriet mapi vēlreiz.",
@@ -3375,8 +3367,6 @@
       "validationRequired": "Obligātais lauks ir tukšs.",
       "validationTooLong": "Pārāk garš: izmantojiet ne vairāk kā {limit, number} rakstzīmes.",
       "validationTooShort": "Pārāk īss: izmantojiet vismaz {limit, number} rakstzīmes.",
-      "verificationActiveLimitReached": "Jūsu organizācija ir sasniegusi vienlaicīgu pārbaužu limitu. Pagaidiet, līdz kāda pārbaude beidzas, un mēģiniet vēlreiz.",
-      "verificationDailyLimitReached": "Jūsu organizācija ir sasniegusi pārbaužu dienas limitu. Mēģiniet vēlreiz pēc pusnakts (Europe/Prague).",
       "versionConflict": "Kāds cits to mainīja, kamēr rediģējāt. Pārlādējiet, lai iegūtu pašreizējo versiju."
     },
     "failedToAcceptInvitation": "Neizdevās pieņemt uzaicinājumu",
@@ -4474,7 +4464,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Izveidojiet līgumu pārbaudes ceļvedi pozīciju pa pozīcijai, balstoties uz iepriekš parakstītajiem līgumiem, īsu interviju un tirgū ierastajiem standartiem.",
-          "name": "Izveidot pārbaudes ceļvedi"
+          "name": "Izveidot pārbaudes ceļvedi",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pievieno pozīcijas vienam no maniem esošajiem pārbaudes ceļvežiem.",
+              "name": "Papildināt pārbaudes ceļvedi"
+            },
+            "fromContracts": {
+              "body": "Izveido konfidencialitātes līgumu pārbaudes ceļvedi, balstoties uz maniem iepriekš parakstītajiem līgumiem.",
+              "name": "Sākt ar iepriekšējiem līgumiem"
+            },
+            "fromMarketStandards": {
+              "body": "Izveido piegādes līgumu pārbaudes ceļvedi, sākot ar tirgū ierastajām pozīcijām.",
+              "name": "Sākt ar tirgus standartiem"
+            }
+          }
         }
       },
       "builtInSection": "Iebūvētās prasmes",
@@ -4724,6 +4728,10 @@
       "optionPlaceholder": "Iespējas vērtība",
       "optionsLabel": "Iespējas",
       "outline": "Struktūra",
+      "pendingPane": {
+        "description": "Atbildiet uz jautājumiem tērzēšanā. Kad apstiprināsiet pirmo saglabāšanu, pārbaudes ceļvedis tiks atvērts šeit, un to varēsiet rediģēt līdzās sarunai.",
+        "title": "Jūsu pārbaudes ceļvedis parādīsies šeit"
+      },
       "positionOfTotal": "Pozīcija {index} no {total}",
       "positionRemoved": "Pozīcija noņemta",
       "positions": "Pozīcijas",
@@ -5497,7 +5505,6 @@
       "caseLaw": "Judikatūra",
       "chat": "Tērzēšana",
       "contact": "Kontakts",
-      "folder": "Mape",
       "link": "Saite",
       "matter": "Lieta",
       "message": "Ziņa",
@@ -5828,6 +5835,7 @@
         "case_law_research_column": "judikatūras izpētes kolonna",
         "chat_browser_site_grant": "tērzēšanas vietnes atļauja",
         "chat_file": "sarunas fails",
+        "chat_local_folder_approval": "lokālās mapes atļauja",
         "chat_message": "sarunas ziņojums",
         "chat_thread": "sarunas pavediens",
         "chat_tool_execution": "sarunas rīka izpilde",
@@ -6083,7 +6091,6 @@
     "comments": "Komentāri",
     "commentsEmpty": "Atlasiet tekstu, lai to komentētu.",
     "noRevisions": "Vēl nav versiju",
-    "outOfDate": "Novecojis",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Nav kopsavilkuma",
     "proposals": "Izmaiņu priekšlikumi",

@@ -9,7 +9,7 @@
 
 import { panic } from "better-result";
 
-import type { ReviewDecision } from "@stll/api-contract/review-decision";
+import type { ReadsExactly } from "@stll/api-contract/review-decision";
 import type { SpotTarget } from "@stll/api-contract/spot";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -17,6 +17,7 @@ import type { ConstantMap } from "@/api/lib/constant-map";
 import type {
   FactConfidence,
   FactDatePrecision,
+  PartialDate,
 } from "@/api/lib/lists/fact-details";
 import type { LegalListSourceLocator } from "@/api/lib/lists/types";
 import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
@@ -69,6 +70,33 @@ export const CLAIM_OVERRIDE_STATES = [
   "notverifiable",
 ] as const satisfies readonly ClaimState[];
 export type ClaimOverrideState = (typeof CLAIM_OVERRIDE_STATES)[number];
+
+/**
+ * Where a claim's asserted date came from: its own words (`text`), or the
+ * grader, asked only when the words name no complete date (`grader`).
+ */
+export const CLAIM_DATE_SOURCES = ["text", "grader"] as const;
+type ClaimDateSource = (typeof CLAIM_DATE_SOURCES)[number];
+
+/**
+ * The date a claim asserts for what it says, at the precision its words
+ * give. `none` is an answer, not a gap: the claim names no date, only a
+ * relative one, or dates no single day, month or year covers.
+ */
+export type ClaimAssertedDate =
+  { type: "none" } | ({ type: "dated"; source: ClaimDateSource } & PartialDate);
+
+/**
+ * How a claim row stores its asserted date. `pending` is only on claims
+ * written before claims carried dates, until the online backfill reads
+ * their words.
+ */
+export const CLAIM_ASSERTED_ON_SOURCES = [
+  "pending",
+  "none",
+  ...CLAIM_DATE_SOURCES,
+] as const;
+export type ClaimAssertedOnSource = (typeof CLAIM_ASSERTED_ON_SOURCES)[number];
 
 export const CLAIM_FACT_RELATIONS = [
   "supports",
@@ -222,13 +250,9 @@ export const CLAIM_REVIEW_STATUSES = [
 ] as const;
 export type ClaimReviewStatus = (typeof CLAIM_REVIEW_STATUSES)[number];
 
-/** `needs-evidence` keeps a claim open until the record can answer it, so
- *  it decides nothing either way. */
-export const AVT_CLAIM_REVIEW_DECISION = {
-  reviewed: "accepted",
-  disputed: "rejected",
-  "needs-evidence": null,
-} as const satisfies Record<ClaimReviewStatus, ReviewDecision | null>;
+/** What each status decides is the shared owner's
+ *  (`REVIEW_STATUS_DECISION.claim`). */
+true satisfies ReadsExactly<"claim", ClaimReviewStatus>;
 
 /**
  * Reviewer actions, one row each, never rewritten. The current disposition of
@@ -387,6 +411,9 @@ export type ClaimReviewAction =
        *  the facts the run pinned (`applyFactChanges`). */
       facts: RecheckFactChanges;
       modelRef: string | null;
+      /** The claim's asserted date as this grading read it. Absent on
+       *  re-checks recorded before claims carried dates. */
+      assertedOn?: ClaimAssertedDate;
     };
 
 /**
@@ -411,8 +438,17 @@ type WithReason<Action extends ClaimReviewAction> = Action extends unknown
   ? Action & ReasonFields[(typeof CLAIM_REVIEW_REASON_RULE)[Action["kind"]]]
   : never;
 
+/** A re-check recorded now always states the date it read. */
+type RecordedNow<Action extends ClaimReviewAction> = Action extends {
+  kind: "recheck";
+}
+  ? Action & { assertedOn: ClaimAssertedDate }
+  : Action;
+
 /** One reviewer action as it is recorded now. */
-export type ClaimReviewEventPayload = WithReason<ClaimReviewAction>;
+export type ClaimReviewEventPayload = RecordedNow<
+  WithReason<ClaimReviewAction>
+>;
 
 /**
  * One reviewer action as stored. Events recorded before reasons were

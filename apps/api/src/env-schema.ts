@@ -35,7 +35,6 @@ import {
   DEFAULT_POLAR_API_VERSION,
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
-import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
 import {
   caseLawCanariesEnvSchema,
   caseLawDailyBandsEnvSchema,
@@ -47,6 +46,7 @@ import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
+import { modelRunCapEnvSchema } from "@/api/lib/usage/model-run-caps/config";
 
 type EmailProviderInput = {
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
@@ -109,7 +109,7 @@ const originVerifyValue = v.pipe(
 export const envApiServerSchema = {
   DEPLOY_ENVIRONMENT: envBaseServerSchema.DEPLOY_ENVIRONMENT,
   ...rateLimitBudgetEnvSchema,
-  ...verificationRunCapEnvSchema,
+  ...modelRunCapEnvSchema,
   // Data invariants: each adapter's expected published decisions per day, and
   // case-law queries the corpus must answer. Unset skips that invariant.
   DATA_INVARIANT_CASE_LAW_DAILY_BANDS: caseLawDailyBandsEnvSchema,

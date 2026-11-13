@@ -115,8 +115,8 @@ const EXCLUDED_AUTOFIX = {
     "Mounted handler discovery runs API module initialization under its test preload",
   "playwright-devices":
     "Device descriptors are refreshed explicitly from the installed SDK",
-  "ci-job-classification-digests":
-    "Protected workflow metadata is refreshed outside pull-request autofix",
+  "ci-job-classification-decisions":
+    "Protected workflow metadata is pruned outside pull-request autofix",
   "merge-group-parser":
     "Workflow script blocks are refreshed outside pull-request autofix",
   "failure-tags": "Generated census is excluded by the current owner policy",

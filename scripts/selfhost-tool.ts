@@ -141,8 +141,7 @@ export const materializeSelfhostTemplateForValidation = (text: string) => {
 
 const apiCatalogEntries = () =>
   ENV_CATALOG.filter(
-    ({ documented, owner }) =>
-      documented && owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
+    ({ owner }) => owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
   );
 
 export const isImmutableApplicationImage = (image: string) =>

@@ -12,6 +12,8 @@
 
 import { panic } from "better-result";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 /** A glyph's box in PDF user space: origin bottom left, in points. */
 export type PdfTextBox = {
   x: number;
@@ -153,26 +155,69 @@ export type MarkPlacement =
   | { type: "placed"; boxes: PdfTextBox[]; range: TextRange }
   | { type: "detached"; reason: DetachedReason };
 
-const isWhitespace = (unit: string) => /\s/u.test(unit);
+const isWhitespace = (character: string) => /\s/u.test(character);
 
-/** The page text without whitespace, and where each unit came from. */
+/** ASCII is its own NFKC form; these are its `\s` units. */
+const ASCII_LIMIT = 0x80;
+const isAsciiWhitespace = (code: number) =>
+  code === 0x20 || (code >= 0x09 && code <= 0x0d);
+
+/**
+ * The page text without whitespace and with every character in its
+ * compatibility form, and where each unit came from. PDF.js gives a
+ * selection's ligatures as their letters ("fi") while LibPDF keeps the
+ * glyph's own character ("\uFB01"), so both sides are compared as NFKC.
+ * Each character is normalized on its own so every unit of an expansion
+ * still points back at the one character it came from; ASCII, most of any
+ * page, is taken as it is.
+ */
 const squeeze = (text: string) => {
   const units: string[] = [];
-  const offsets: number[] = [];
-  for (let index = 0; index < text.length; index += 1) {
-    const unit = text.charAt(index);
-    if (!isWhitespace(unit)) {
-      units.push(unit);
-      offsets.push(index);
+  const starts: number[] = [];
+  const ends: number[] = [];
+  /** A page repeats few characters beyond ASCII; each is folded once. */
+  const foldedByPoint = new Map<number, string[]>();
+  let index = 0;
+  while (index < text.length) {
+    const point =
+      text.codePointAt(index) ?? panic("A unit inside the text has no point");
+    if (point < ASCII_LIMIT) {
+      if (!isAsciiWhitespace(point)) {
+        units.push(text.charAt(index));
+        starts.push(index);
+        ends.push(index + 1);
+      }
+      index += 1;
+      continue;
     }
+    const character = String.fromCodePoint(point);
+    const next = index + character.length;
+    let folded = foldedByPoint.get(point);
+    if (folded === undefined) {
+      folded = isWhitespace(character)
+        ? []
+        : normalizeUnicode(character, "NFKC")
+            .split("")
+            .filter((unit) => !isWhitespace(unit));
+      foldedByPoint.set(point, folded);
+    }
+    for (const unit of folded) {
+      units.push(unit);
+      starts.push(index);
+      ends.push(next);
+    }
+    index = next;
   }
-  return { text: units.join(""), offsets };
+  return { text: units.join(""), starts, ends };
 };
 
 /**
  * Where the words occur in the page text with whitespace ignored, the
  * occurrence starting nearest `near` first; ranges into the page text, from
- * the first word's first unit to the last word's last.
+ * the first word's first unit to the last word's last. An occurrence that
+ * starts or ends inside a character's expansion ("ff" in "\uFB03") covers
+ * that whole character, and loses to one that starts and ends on whole
+ * characters wherever it is.
  */
 export const findWordsOnPage = ({
   near,
@@ -188,26 +233,29 @@ export const findWordsOnPage = ({
     return null;
   }
   const page = squeeze(pageText);
-  let best: TextRange | null = null;
+  let best: (TextRange & { whole: boolean }) | null = null;
   for (
     let found = page.text.indexOf(needle);
     found !== -1;
     found = page.text.indexOf(needle, found + 1)
   ) {
+    const last = found + needle.length - 1;
     const start =
-      page.offsets.at(found) ?? panic("A squeezed unit lost its offset");
-    const last =
-      page.offsets.at(found + needle.length - 1) ??
-      panic("A squeezed unit lost its offset");
-    const candidate = { start, end: last + 1 };
+      page.starts.at(found) ?? panic("A squeezed unit lost its offset");
+    const end = page.ends.at(last) ?? panic("A squeezed unit lost its offset");
+    const whole =
+      (found === 0 || page.starts.at(found - 1) !== start) &&
+      page.starts.at(last + 1) !== page.starts.at(last);
     if (
       best === null ||
-      Math.abs(candidate.start - near) < Math.abs(best.start - near)
+      (whole && !best.whole) ||
+      (whole === best.whole &&
+        Math.abs(start - near) < Math.abs(best.start - near))
     ) {
-      best = candidate;
+      best = { start, end, whole };
     }
   }
-  return best;
+  return best === null ? null : { start: best.start, end: best.end };
 };
 
 const boxesFor = (page: PdfPageGlyphText, range: TextRange): PdfTextBox[] =>

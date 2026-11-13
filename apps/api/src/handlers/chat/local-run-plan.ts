@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_FEATURE_ID,
+  DESKTOP_RUNNER_LINKED_FOLDER_STATE,
   type DesktopRunnerApprovalMode,
 } from "@stll/api-contract/desktop-runner";
 
@@ -147,9 +148,12 @@ export const resolveChatLocalRun = async ({
       "Your organization does not let a run on your computer do that much without asking.",
     );
   }
+  const { folder } = runTarget;
+  // A turn in a linked folder runs on the computer the folder is on.
   const picked = await runtime.control.pickDesktop({
     owner,
     harness: runTarget.harness,
+    ...(folder === undefined ? {} : { desktopId: folder.desktopId }),
   });
   if (picked.isErr()) {
     return Result.err(picked.error);
@@ -157,11 +161,17 @@ export const resolveChatLocalRun = async ({
   const desktop = picked.value;
   switch (desktop.type) {
     case "no_computer":
-      return refuse(
-        409,
-        CHAT_LOCAL_RUN_REFUSAL.noComputer,
-        "None of your computers is connected.",
-      );
+      return folder === undefined
+        ? refuse(
+            409,
+            CHAT_LOCAL_RUN_REFUSAL.noComputer,
+            "None of your computers is connected.",
+          )
+        : refuse(
+            409,
+            CHAT_LOCAL_RUN_REFUSAL.folderUnavailable,
+            "The computer the chat's folder is on is not connected.",
+          );
     case "harness_unavailable":
       return refuse(
         409,
@@ -169,11 +179,24 @@ export const resolveChatLocalRun = async ({
         "The harness on your computer cannot take a turn right now.",
       );
     case "available": {
-      if (!desktop.harness.models.some(({ id }) => id === runTarget.model)) {
+      const model = desktop.harness.models.find(
+        ({ id }) => id === runTarget.model,
+      );
+      if (model === undefined) {
         return refuse(
           409,
           CHAT_LOCAL_RUN_REFUSAL.modelUnavailable,
           "The harness on your computer does not offer that model.",
+        );
+      }
+      if (
+        runTarget.reasoningEffort !== null &&
+        !model.reasoningEfforts.includes(runTarget.reasoningEffort)
+      ) {
+        return refuse(
+          409,
+          CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable,
+          "The harness on your computer does not offer that reasoning effort for the model.",
         );
       }
       if (!desktop.harness.approvalModes.includes(runTarget.approvals)) {
@@ -183,6 +206,25 @@ export const resolveChatLocalRun = async ({
           "Your computer cannot run the harness with those permissions.",
         );
       }
+      if (folder !== undefined) {
+        const linked = desktop.linkedFolders.find(
+          ({ id }) => id === folder.linkId,
+        );
+        if (linked?.state !== DESKTOP_RUNNER_LINKED_FOLDER_STATE.available) {
+          return refuse(
+            409,
+            CHAT_LOCAL_RUN_REFUSAL.folderUnavailable,
+            "The chat's folder is not available on your computer.",
+          );
+        }
+        if (!desktop.approvedFolderIds.includes(folder.linkId)) {
+          return refuse(
+            409,
+            CHAT_LOCAL_RUN_REFUSAL.folderNotApproved,
+            "Allow the agent to work in the chat's folder first.",
+          );
+        }
+      }
       const plan: LocalRunPlan = {
         type: "start",
         destination: {
@@ -190,7 +232,9 @@ export const resolveChatLocalRun = async ({
           harness: runTarget.harness,
           harnessVersion: desktop.harness.version,
           model: runTarget.model,
+          reasoningEffort: runTarget.reasoningEffort,
           approvals: runTarget.approvals,
+          linkedFolderId: folder?.linkId ?? null,
         },
       };
       return Result.ok(createLocalChatRun(context, plan));

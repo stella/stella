@@ -2532,7 +2532,9 @@ const createHarness = ({
           }
           if (
             query.startsWith("SELECT 1 FROM public.search_history_entries") ||
-            query.startsWith("SELECT 1 FROM public.chat_run_log_entries")
+            query.startsWith("SELECT 1 FROM public.chat_run_log_entries") ||
+            // No claim written before asserted dates is left to read.
+            query.startsWith("SELECT 1 FROM public.legal_list_claims")
           ) {
             return [];
           }
@@ -2632,6 +2634,11 @@ const createHarness = ({
           }
           if (query.includes("starts_with")) {
             return queryIndexArtifacts(params);
+          }
+          // The graph edge backfill's matter walk: no matter holds a
+          // verification run or a Spot, so there is nothing to derive.
+          if (query.includes('FROM "workspaces" workspace')) {
+            return [];
           }
 
           return queryIndexState(params);

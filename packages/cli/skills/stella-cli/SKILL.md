@@ -135,11 +135,11 @@ requires (request it at `stella auth login --scopes`).
 | legislation | `stella legislation read` | read | paginated; windowed text |
 | legislation | `stella legislation resolve` | law_read |  |
 | legislation | `stella legislation search` | search | paginated |
-| matter | `stella matter add-member` | admin_write |  |
+| matter | `stella matter add-member` | matters_write |  |
 | matter | `stella matter delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter link-contact` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter list` | read | paginated |
-| matter | `stella matter remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
+| matter | `stella matter remove-member` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter save` | matters_write | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization create` | organization_create |  |
 | organization | `stella organization set-jurisdictions` | onboarding | destructive (needs `--yes` off a TTY) |

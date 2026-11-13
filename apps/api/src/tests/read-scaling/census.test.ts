@@ -16,8 +16,10 @@ import {
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
+import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
 import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
+import { chatLocalRunStepOutputGrantScalingScenario } from "./chat-local-run-step-output-grant";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
 import { chatPinnedThreadsScalingScenario } from "./chat-threads";
@@ -45,6 +47,8 @@ import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { memberCandidatesScalingScenario } from "./member-candidates";
+import { memberRoleScalingScenario } from "./member-role";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
@@ -88,6 +92,8 @@ const measuredApiScenarios = [
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
   chatLocalFilesUndoScalingScenario,
+  chatBackgroundTasksScalingScenario,
+  chatLocalRunStepOutputGrantScalingScenario,
   chatActiveRunsScalingScenario,
   chatPinnedThreadsScalingScenario,
   browserSiteGrantsScalingScenario,
@@ -101,10 +107,12 @@ const measuredApiScenarios = [
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
   mobileClientMetadataScalingScenario,
+  memberRoleScalingScenario,
   outlookClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
+  memberCandidatesScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
   ...legislationMatterLinkScalingScenarios,

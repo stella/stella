@@ -1,5 +1,0 @@
-{
-  "metric": "unclassified-realtime-write-capabilities",
-  "delta": 1,
-  "reason": "A claim re-check joins the claim review writes, which are unclassified together: no realtime resource set covers a verification run yet, and the reviewer who re-checks reads the result from the response. The family is classified at once when such a set exists."
-}
