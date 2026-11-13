@@ -272,9 +272,10 @@ test("a chat on a computer that is offline says so on the where chip", async () 
   const offline = `${CODEX_PLACE}. ${messages.chat.localRun.stateOffline}`;
   const places = await openMenu(offline);
   const items = within(places).getAllByRole("menuitem");
+  // Each agent says to open stella desktop, and choosing it does so.
   expect(items.map((item) => item.getAttribute("aria-disabled"))).toEqual([
-    "true",
-    "true",
+    null,
+    null,
   ]);
   expect(items.at(0)?.textContent).toContain(messages.chat.runOn.hintOffline);
 });

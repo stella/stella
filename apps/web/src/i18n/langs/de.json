@@ -1887,7 +1887,7 @@
       "refusalFolderUnavailable": "Der mit diesem Chat verknüpfte Ordner ist nicht verfügbar. Prüfen Sie ihn unter Ausführen auf oder in stella desktop.",
       "refusalHarnessUnavailable": "Der Coding-Agent auf Ihrem Computer kann diese Anfrage gerade nicht übernehmen. Prüfen Sie ihn in stella desktop.",
       "refusalModelUnavailable": "Der Coding-Agent auf Ihrem Computer bietet dieses Modell nicht mehr an. Wählen Sie unter „Ausführen auf“ ein anderes.",
-      "refusalNoComputer": "Keiner Ihrer Computer ist verbunden. Öffnen Sie stella desktop und senden Sie erneut.",
+      "refusalNoComputer": "Keiner Ihrer Computer ist verbunden.",
       "refusalPermissionAboveLimit": "Ihre Organisation erlaubt diese Berechtigungen für den Coding-Agenten auf Ihrem Computer nicht. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalPermissionUnavailable": "Der Coding-Agent auf Ihrem Computer kann mit diesen Berechtigungen nicht laufen. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalReasoningEffortUnavailable": "Der Coding-Agent auf Ihrem Computer bietet diesen Denkaufwand für das Modell nicht an. Wählen Sie unter „Denkaufwand“ einen anderen.",

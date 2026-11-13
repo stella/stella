@@ -1887,7 +1887,7 @@
       "refusalFolderUnavailable": "The folder linked to this chat is not available. Check it under Run on or in stella desktop.",
       "refusalHarnessUnavailable": "The coding agent on your computer cannot take this request right now. Check it in stella desktop.",
       "refusalModelUnavailable": "The coding agent on your computer no longer offers this model. Choose another one under Run on.",
-      "refusalNoComputer": "None of your computers is connected. Open stella desktop, then send again.",
+      "refusalNoComputer": "None of your computers is connected.",
       "refusalPermissionAboveLimit": "Your organization does not allow these permissions for the coding agent on your computer. Choose another option under Permissions.",
       "refusalPermissionUnavailable": "The coding agent on your computer cannot run with these permissions. Choose another option under Permissions.",
       "refusalReasoningEffortUnavailable": "The coding agent on your computer does not offer this reasoning effort for the model. Choose another one under Reasoning effort.",

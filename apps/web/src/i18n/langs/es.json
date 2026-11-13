@@ -1887,7 +1887,7 @@
       "refusalFolderUnavailable": "La carpeta vinculada a este chat no está disponible. Revísala en Ejecutar en o en stella desktop.",
       "refusalHarnessUnavailable": "El agente de programación de tu ordenador no puede atender esta solicitud ahora. Revísalo en stella desktop.",
       "refusalModelUnavailable": "El agente de programación de tu ordenador ya no ofrece este modelo. Elige otro en Ejecutar en.",
-      "refusalNoComputer": "Ninguno de tus ordenadores está conectado. Abre stella desktop y vuelve a enviar.",
+      "refusalNoComputer": "Ninguno de tus ordenadores está conectado.",
       "refusalPermissionAboveLimit": "Tu organización no permite estos permisos para el agente de programación de tu ordenador. Elige otra opción en Permisos.",
       "refusalPermissionUnavailable": "El agente de programación de tu ordenador no puede ejecutarse con estos permisos. Elige otra opción en Permisos.",
       "refusalReasoningEffortUnavailable": "El agente de programación de tu ordenador no ofrece este nivel de razonamiento para el modelo. Elige otro en Nivel de razonamiento.",
