@@ -156,23 +156,65 @@ export const localRunToolView = ({
 };
 
 /** What a step's details show of what it produced on the computer. */
-export type LocalRunStepOutputKind = "command" | "diff";
+export type LocalRunStepOutputKind =
+  "command" | "diff" | "conversation" | "image";
 
 /**
  * Whether a step produced something the member can open on the computer
- * that ran it: a command's output or a change's diff. `null` for any other
- * call, which keeps nothing there.
+ * that ran it: a command's output, a change's diff, a subagent's own
+ * conversation, or the image a step viewed. `null` for any other call, which
+ * keeps nothing there.
  */
-export const localRunStepOutputKind = (
-  name: string,
-): LocalRunStepOutputKind | null => {
-  switch (name) {
+export const localRunStepOutputKind = ({
+  name,
+  input,
+}: {
+  name: string;
+  input: unknown;
+}): LocalRunStepOutputKind | null => {
+  const call = isChatLocalRunToolName(name)
+    ? parseChatLocalRunToolCall(name, input)
+    : null;
+  if (call === null) {
+    return null;
+  }
+  switch (call.name) {
     case CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution:
       return "command";
     case CHAT_LOCAL_RUN_TOOL_NAMES.fileChange:
       return "diff";
-    default:
+    case CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool:
+      return call.input.detail === undefined
+        ? null
+        : detailOutputKind(call.input.detail);
+    case CHAT_LOCAL_RUN_TOOL_NAMES.webSearch:
+    case CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem:
+    case CHAT_LOCAL_RUN_TOOL_NAMES.browser:
       return null;
+    default:
+      call satisfies never;
+      return panic("Unhandled local run tool call");
+  }
+};
+
+/** What a native step of this kind keeps on the computer, if anything. */
+const detailOutputKind = (
+  detail: ChatLocalRunToolDetail,
+): LocalRunStepOutputKind | null => {
+  switch (detail.kind) {
+    case "subagent":
+      return "conversation";
+    case "image":
+      return "image";
+    case "read":
+    case "search":
+    case "fetch":
+    case "plan":
+    case "proposed_plan":
+      return null;
+    default:
+      detail satisfies never;
+      return panic("Unhandled local run tool detail");
   }
 };
 
@@ -252,6 +294,11 @@ export const localRunSubagentType = (call: LocalRunCall): string | null => {
 /** A turn's tool call as the grouping reads it. */
 export type LocalRunStepCall = LocalRunCall & {
   id: string;
+  /**
+   * The subagent step the call's metadata names (`chatLocalRunParentCallId`),
+   * or `null` for a call on the main thread.
+   */
+  parentCallId: string | null;
   /** How the turn shows the call: a plain row, or a card of its own. */
   shownAs: "row" | "card";
 };
@@ -268,10 +315,10 @@ type LocalRunSubagentGroups = {
 
 /**
  * Which of a turn's calls show under a subagent's step. A subagent's step
- * that shows as a row is a group, and a step naming it (`parentCallId`) is
- * one of its steps: a row among them shows inside the group, a card (an
- * approval) stays on the turn where the member sees it without opening
- * anything. A step whose subagent is not a group (it shows as a card, or the
+ * that shows as a row is a group, and a call naming it (`parentCallId`), a
+ * native step or a connected server's tool alike, is one of its steps: a row
+ * among them shows inside the group, a card (an approval) stays on the turn
+ * where the member sees it without opening anything. A step whose subagent is not a group (it shows as a card, or the
  * turn does not have it) stays on the turn, so no step is ever hidden. A
  * subagent started by a subagent shows in the outermost one's group, with
  * the steps it took.
@@ -281,20 +328,17 @@ export const localRunSubagentGroups = (
 ): LocalRunSubagentGroups => {
   const subagents = new Set<string>();
   const parents = new Map<string, string>();
-  for (const { id, name, input, shownAs } of calls) {
-    const call = nativeCallOf({ name, input });
-    if (call === null) {
-      continue;
+  for (const { id, name, input, parentCallId, shownAs } of calls) {
+    if (parentCallId !== null) {
+      parents.set(id, parentCallId);
     }
+    const call = nativeCallOf({ name, input });
     if (
       shownAs === "row" &&
-      call.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
+      call?.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
       call.input.detail?.kind === "subagent"
     ) {
       subagents.add(id);
-    }
-    if (call.input.parentCallId !== undefined) {
-      parents.set(id, call.input.parentCallId);
     }
   }
   const outermost = (id: string): string | null => {

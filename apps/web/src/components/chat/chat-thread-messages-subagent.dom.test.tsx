@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
@@ -10,6 +11,10 @@ import type {
   ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import type {
+  LocalRunStepImageView,
+  LocalRunStepOutputView,
+} from "@/features/chat/local-run-step-output.logic";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 
@@ -27,6 +32,10 @@ const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
+const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
+const { chatKeys } = await import("@/features/chat/chat-query-contract");
 const { ChatApprovalContext } =
   await import("@/components/chat/chat-approval-context");
 const { ChatMattersContext } =
@@ -73,25 +82,36 @@ const turnOf = (parts: readonly object[]): ChatUIMessage => {
 
 const SUBAGENT = "run_call-agent";
 
-const step = (
-  id: string,
-  name: "harness_native_tool" | "command_execution",
-  input: Record<string, unknown>,
-  rest: { state: "complete" | "error" | "input-complete"; output?: unknown },
-) => ({
+/** Where a stored call names the subagent step that made it. */
+const callMetadata = (parentCallId: string | null) =>
+  parentCallId === null
+    ? {}
+    : { metadata: { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: parentCallId } };
+
+type StepOptions = {
+  id: string;
+  name: "harness_native_tool" | "command_execution" | "mcp__docs__search";
+  input: Record<string, unknown>;
+  /** The subagent step that made the call; `null` on the main thread. */
+  parentCallId: string | null;
+  rest: { state: "complete" | "error" | "input-complete"; output?: unknown };
+};
+
+const step = ({ id, name, input, parentCallId, rest }: StepOptions) => ({
   type: "tool-call",
   id,
   name,
   arguments: JSON.stringify(input),
   input,
+  ...callMetadata(parentCallId),
   ...rest,
 });
 
-const subagent = (rest: Parameters<typeof step>[3]) =>
-  step(
-    SUBAGENT,
-    "harness_native_tool",
-    {
+const subagent = (rest: StepOptions["rest"]) =>
+  step({
+    id: SUBAGENT,
+    name: "harness_native_tool",
+    input: {
       tool: "Agent",
       detail: {
         kind: "subagent",
@@ -99,34 +119,38 @@ const subagent = (rest: Parameters<typeof step>[3]) =>
         agentType: "Explore",
       },
     },
+    parentCallId: null,
     rest,
-  );
+  });
 
 const done = { state: "complete", output: { status: "completed" } } as const;
 
-const read = step(
-  "run_call-read",
-  "harness_native_tool",
-  {
-    tool: "Read",
-    detail: { kind: "read", path: "drafts/lease.md" },
-    parentCallId: SUBAGENT,
-  },
-  done,
-);
+const read = step({
+  id: "run_call-read",
+  name: "harness_native_tool",
+  input: { tool: "Read", detail: { kind: "read", path: "drafts/lease.md" } },
+  parentCallId: SUBAGENT,
+  rest: done,
+});
 
-const image = step(
-  "run_call-image",
-  "harness_native_tool",
-  {
-    tool: "Read",
-    detail: { kind: "image", path: "scans/page-1.png" },
-    parentCallId: SUBAGENT,
-  },
-  done,
-);
+const image = step({
+  id: "run_call-image",
+  name: "harness_native_tool",
+  input: { tool: "Read", detail: { kind: "image", path: "scans/page-1.png" } },
+  parentCallId: SUBAGENT,
+  rest: done,
+});
 
-const removal = { command: "rm draft.md", parentCallId: SUBAGENT };
+/** A connected server's tool the subagent called; its input is its own. */
+const connectorCall = step({
+  id: "run_call-docs",
+  name: "mcp__docs__search",
+  input: { query: "arrears cap" },
+  parentCallId: SUBAGENT,
+  rest: done,
+});
+
+const removal = { command: "rm draft.md" };
 
 const turnTree = (
   queryClient: InstanceType<typeof QueryClient>,
@@ -139,24 +163,28 @@ const turnTree = (
           <ChatMattersContext
             value={{ createDocumentMattersView: { type: "empty" } }}
           >
-            <ChatApprovalContext value={testChatApprovalContextValue}>
-              <ChatEditorProvider>
-                <ChatThreadMessages
-                  activitySession={{
-                    reportedUnknownActivityTypes: new Set<string>(),
-                  }}
-                  approvalPendingMessageId={null}
-                  messages={[turnOf(parts)]}
-                  onAskUserSubmit={() => {}}
-                  onCreateDocumentResolve={() => {}}
-                  onOpenCreatedDocument={() => {}}
-                  showToolCalls
-                  streamdownComponents={{
-                    a: ({ children, ...props }) => <a {...props}>{children}</a>,
-                  }}
-                />
-              </ChatEditorProvider>
-            </ChatApprovalContext>
+            <AuthenticatedUserProvider user={MEMBER}>
+              <ChatApprovalContext value={testChatApprovalContextValue}>
+                <ChatEditorProvider>
+                  <ChatThreadMessages
+                    activitySession={{
+                      reportedUnknownActivityTypes: new Set<string>(),
+                    }}
+                    approvalPendingMessageId={null}
+                    messages={[turnOf(parts)]}
+                    onAskUserSubmit={() => {}}
+                    onCreateDocumentResolve={() => {}}
+                    onOpenCreatedDocument={() => {}}
+                    showToolCalls
+                    streamdownComponents={{
+                      a: ({ children, ...props }) => (
+                        <a {...props}>{children}</a>
+                      ),
+                    }}
+                  />
+                </ChatEditorProvider>
+              </ChatApprovalContext>
+            </AuthenticatedUserProvider>
           </ChatMattersContext>
         </FormattingProvider>
       </IntlProvider>
@@ -164,8 +192,57 @@ const turnTree = (
   </ChatThreadTestRouter>
 );
 
-const renderTurn = (parts: readonly object[]) => {
+/** The member whose computer ran the turn. */
+const MEMBER = {
+  activeOrganizationId: testChatApprovalContextValue.activeOrganizationId,
+  id: "user-fixture",
+  email: "member@example.test",
+  image: null,
+  name: "Fixture member",
+  preferredName: null,
+  timezoneId: "UTC",
+  wordEditShortcut: null,
+};
+
+const keptKey = (callId: string) => ({
+  activeOrganizationId: MEMBER.activeOrganizationId,
+  userId: MEMBER.id,
+  callId,
+});
+
+type RenderOptions = {
+  /**
+   * What the computer answers for the subagent's conversation, as a read of
+   * it left the cache; nothing kept unless a test says otherwise. A read
+   * the desktop answered holds, so no test reaches for the computer.
+   */
+  conversation?: LocalRunStepOutputView;
+  /** What the computer answers for the viewed image. */
+  image?: LocalRunStepImageView;
+};
+
+const renderTurn = (
+  parts: readonly object[],
+  {
+    conversation = { status: "not-kept" },
+    image: viewed = { status: "not-kept" },
+  }: RenderOptions = {},
+) => {
   const queryClient = new QueryClient();
+  queryClient.setQueryData(
+    chatKeys.localRunStepOutput(keptKey(SUBAGENT)),
+    conversation,
+  );
+  queryClient.setQueryData(
+    chatKeys.localRunStepImage(keptKey("run_call-image")),
+    viewed,
+  );
+  // A connected server's tool decorates its row from the connector list.
+  queryClient.setQueryData(
+    mcpConnectorsOptions(testChatApprovalContextValue.activeOrganizationId)
+      .queryKey,
+    { canManageCustomConnectors: false, connectors: [], nativeTools: [] },
+  );
   const view = render(turnTree(queryClient, parts));
   return {
     view,
@@ -202,17 +279,23 @@ test("a subagent's steps show inside its group, and one waiting on the member sh
       name: "command_execution",
       arguments: JSON.stringify(removal),
       input: removal,
+      ...callMetadata(SUBAGENT),
       state: "approval-requested",
       approval: { id: "approval-rm", needsApproval: true },
     },
     image,
+    connectorCall,
   ]);
   await view.findByText("Check the lease");
   const inGroup = within(groupOf(view.container));
   expect(inGroup.getByText(messages.chat.toolCall.subagent)).toBeDefined();
   expect(inGroup.getByText("Explore")).toBeDefined();
-  // Every step it took is counted, the one waiting on the member included.
-  expect(inGroup.getByText("3 steps")).toBeDefined();
+  // Every step it took is counted: the one waiting on the member, and the
+  // connected server's tool it called.
+  expect(inGroup.getByText("4 steps")).toBeDefined();
+  // The connected server's tool is a row inside, never loose on the turn.
+  expect(inGroup.getByText("arrears cap")).toBeDefined();
+  expect(view.getAllByText("arrears cap")).toHaveLength(1);
   expect(
     inGroup.getByText(messages.chat.turnStatus.waitingForApproval),
   ).toBeDefined();
@@ -252,12 +335,13 @@ test("a finished subagent folds its steps behind its row, and opens on a click",
 
 test("a group opens while a step of it is under way, folds when it settles, and then stays as the member left it", async () => {
   const lookup = (state: "complete" | "input-complete") =>
-    step(
-      "run_call-lookup",
-      "command_execution",
-      { command: "ls notes", parentCallId: SUBAGENT },
-      state === "complete" ? done : { state },
-    );
+    step({
+      id: "run_call-lookup",
+      name: "command_execution",
+      input: { command: "ls notes" },
+      parentCallId: SUBAGENT,
+      rest: state === "complete" ? done : { state },
+    });
   // The call that started the subagent has ended; a step of it has not
   // arrived yet.
   const { view, queryClient, show } = renderTurn([subagent(done), read]);
@@ -290,17 +374,127 @@ test("a subagent its turn cut off reads as stopped, and a step without its subag
   const { view, queryClient } = renderTurn([
     // As a turn that ended first leaves a call: an error, said interrupted.
     subagent({ state: "error", output: { status: "interrupted" } }),
-    step(
-      "run_call-orphan",
-      "command_execution",
-      { command: "ls notes", parentCallId: "run_call-missing" },
-      done,
-    ),
+    step({
+      id: "run_call-orphan",
+      name: "command_execution",
+      input: { command: "ls notes" },
+      parentCallId: "run_call-missing",
+      rest: done,
+    }),
   ]);
   await view.findByText("Check the lease");
   const inGroup = within(groupOf(view.container));
   expect(inGroup.getByText(messages.chat.stopped)).toBeDefined();
   expect(inGroup.queryByText("ls notes")).toBeNull();
   expect(view.getByText("ls notes")).toBeDefined();
+  queryClient.clear();
+});
+
+const conversationOf = (...entries: (readonly [string, string])[]) => {
+  const text = entries
+    .map(([role, said]) => `${JSON.stringify({ role, text: said })}\n`)
+    .join("");
+  const bytes = new TextEncoder().encode(text).length;
+  return {
+    status: "shown",
+    text,
+    keptBytes: bytes,
+    totalBytes: bytes,
+  } as const;
+};
+
+test("opening a finished subagent shows what it was told, wrote and reported, read from the computer", async () => {
+  const { view, queryClient } = renderTurn([subagent(done), read], {
+    conversation: conversationOf(
+      ["prompt", "List every clause on arrears."],
+      // Kept ahead of what it wrote, shown after it.
+      ["report", "Clause 4 caps arrears."],
+      ["message", "<b>Reading</b> the lease."],
+    ),
+  });
+  await view.findByText("Check the lease");
+  const inGroup = within(groupOf(view.container));
+  // Folded, the group has read nothing from the computer.
+  expect(inGroup.queryByText("List every clause on arrears.")).toBeNull();
+  await act(async () => {
+    fireEvent.click(inGroup.getByRole("button", { expanded: false }));
+  });
+  const conversation = within(
+    inGroup.getByRole("region", {
+      name: messages.chat.toolCall.localOutput.conversation,
+    }),
+  );
+  expect(
+    conversation.getAllByRole("listitem").map((item) => item.textContent),
+  ).toEqual([
+    `${messages.chat.toolCall.localOutput.conversationPrompt}List every clause on arrears.`,
+    // A model wrote it: shown as the text it is, never as markup.
+    "<b>Reading</b> the lease.",
+    `${messages.chat.toolCall.localOutput.conversationReport}Clause 4 caps arrears.`,
+  ]);
+  expect(groupOf(view.container).querySelector("b")).toBeNull();
+  // The steps it took still show beside its conversation.
+  expect(inGroup.getByText("drafts/lease.md")).toBeDefined();
+  queryClient.clear();
+});
+
+test("a subagent with nothing kept on this computer says so, and one that took no steps still opens", async () => {
+  const { view, queryClient } = renderTurn([subagent(done)]);
+  await view.findByText("Check the lease");
+  const inGroup = within(groupOf(view.container));
+  await act(async () => {
+    fireEvent.click(inGroup.getByRole("button", { expanded: false }));
+  });
+  expect(
+    inGroup.getByText(messages.chat.toolCall.localOutput.notKept),
+  ).toBeDefined();
+  queryClient.clear();
+});
+
+test("a subagent still at work has no conversation to open yet", async () => {
+  const { view, queryClient } = renderTurn([
+    subagent({ state: "input-complete" }),
+  ]);
+  await view.findByText("Check the lease");
+  // No steps and no settled call: the row is only its header.
+  expect(within(groupOf(view.container)).queryAllByRole("button")).toEqual([]);
+  queryClient.clear();
+});
+
+const PNG_SRC = "data:image/png;base64,iVBORw0KGgo=";
+
+const openImageRow = async (view: ReturnType<typeof render>) => {
+  const row =
+    view.getByText("scans/page-1.png").closest("button") ??
+    panic("the image step has no row to open");
+  await act(async () => {
+    fireEvent.click(row);
+  });
+};
+
+test("opening an image step shows the image read from the computer, named by its file", async () => {
+  const { view, queryClient } = renderTurn([image], {
+    image: { status: "shown", type: "image/png", src: PNG_SRC },
+  });
+  await view.findByText("scans/page-1.png");
+  expect(view.queryByRole("img", { name: "scans/page-1.png" })).toBeNull();
+  await openImageRow(view);
+  expect(
+    view.getByRole("img", { name: "scans/page-1.png" }).getAttribute("src"),
+  ).toBe(PNG_SRC);
+  queryClient.clear();
+});
+
+test("an image the computer does not keep says why instead of showing one", async () => {
+  const { view, queryClient } = renderTurn([image], {
+    image: { status: "too-large", totalBytes: 3 * 1024 * 1024 },
+  });
+  await view.findByText("scans/page-1.png");
+  await openImageRow(view);
+  expect(view.queryByRole("img", { name: "scans/page-1.png" })).toBeNull();
+  // Both sizes are named: the image's, and the most the computer keeps.
+  expect(
+    view.getByText(/^This image is \S+ MB\. Images over \S+ MB are not kept/u),
+  ).toBeDefined();
   queryClient.clear();
 });

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -6,6 +7,7 @@ import { assertProperty } from "@stll/property-testing";
 import {
   localRunProposedPlan,
   type LocalRunStepCall,
+  localRunStepOutputKind,
   type LocalRunStepStanding,
   localRunSubagentGroups,
   type LocalRunSubagentStatus,
@@ -183,34 +185,41 @@ describe("a browser step on the member's computer", () => {
 
 const subagentStep = (
   id: string,
-  extra: Partial<LocalRunStepCall> & { parentCallId?: string } = {},
-): LocalRunStepCall => {
-  const { parentCallId, ...call } = extra;
-  return {
-    id,
-    name: "harness_native_tool",
-    input: {
-      tool: "Agent",
-      detail: { kind: "subagent", description: "Check the lease" },
-      ...(parentCallId === undefined ? {} : { parentCallId }),
-    },
-    shownAs: "row",
-    ...call,
-  };
-};
+  extra: Partial<LocalRunStepCall> = {},
+): LocalRunStepCall => ({
+  id,
+  name: "harness_native_tool",
+  input: {
+    tool: "Agent",
+    detail: { kind: "subagent", description: "Check the lease" },
+  },
+  parentCallId: null,
+  shownAs: "row",
+  ...extra,
+});
 
 const commandStep = (
   id: string,
-  parentCallId: string | undefined,
+  parentCallId: string | null,
   shownAs: LocalRunStepCall["shownAs"] = "row",
 ): LocalRunStepCall => ({
   id,
   name: "command_execution",
-  input: {
-    command: "ls",
-    ...(parentCallId === undefined ? {} : { parentCallId }),
-  },
+  input: { command: "ls" },
+  parentCallId,
   shownAs,
+});
+
+/** A connected server's tool: its input is the tool's own. */
+const connectorStep = (
+  id: string,
+  parentCallId: string | null,
+): LocalRunStepCall => ({
+  id,
+  name: "mcp__docs__search",
+  input: { query: "lease" },
+  parentCallId,
+  shownAs: "row",
 });
 
 const groupsOf = (calls: readonly LocalRunStepCall[]) => {
@@ -220,6 +229,36 @@ const groupsOf = (calls: readonly LocalRunStepCall[]) => {
     rowIn: Object.fromEntries(rowIn),
   };
 };
+
+test("a step names what it kept on the computer for the member to open, by what the step is", () => {
+  const kind = (name: string, input: unknown) =>
+    localRunStepOutputKind({ name, input });
+  expect(kind("command_execution", { command: "ls" })).toBe("command");
+  expect(kind("file_change", { changes: [] })).toBe("diff");
+  expect(
+    kind("harness_native_tool", {
+      tool: "Agent",
+      detail: { kind: "subagent", description: "Check the lease" },
+    }),
+  ).toBe("conversation");
+  expect(
+    kind("harness_native_tool", {
+      tool: "Read",
+      detail: { kind: "image", path: "scans/page-1.png" },
+    }),
+  ).toBe("image");
+  // A file that was read, a search and any other call keep nothing to open.
+  expect(
+    kind("harness_native_tool", {
+      tool: "Read",
+      detail: { kind: "read", path: "drafts/lease.md" },
+    }),
+  ).toBeNull();
+  expect(kind("harness_web_search", { query: "lease" })).toBeNull();
+  expect(kind("mcp__docs__search", { query: "lease" })).toBeNull();
+  // An input that is not the step's own names nothing.
+  expect(kind("command_execution", "ls")).toBeNull();
+});
 
 describe("a subagent a coding agent started on the member's computer", () => {
   test("its step names the task and the kind of agent, and an image its file", () => {
@@ -270,23 +309,21 @@ describe("a subagent a coding agent started on the member's computer", () => {
   test("the steps it took show inside its group, and one waiting on the member stays on the turn", () => {
     expect(
       groupsOf([
-        commandStep("before", undefined),
+        commandStep("before", null),
         subagentStep("agent"),
         commandStep("read", "agent"),
         commandStep("asks", "agent", "card"),
-        {
-          id: "docs",
-          name: "mcp__docs__search",
-          input: { query: "lease" },
-          shownAs: "row",
-        },
+        // A connected server's tool the subagent called is its step too;
+        // one the main thread called stays on the turn.
+        connectorStep("docs", "agent"),
+        connectorStep("main-docs", null),
         commandStep("after", "agent"),
         subagentStep("idle"),
       ]),
     ).toEqual({
       // Every step counts, the one shown as a card included.
-      stepsOf: { agent: ["read", "asks", "after"], idle: [] },
-      rowIn: { read: "agent", after: "agent" },
+      stepsOf: { agent: ["read", "asks", "docs", "after"], idle: [] },
+      rowIn: { read: "agent", docs: "agent", after: "agent" },
     });
   });
 
@@ -311,7 +348,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
         subagentStep("asks", { shownAs: "card" }),
         commandStep("of-asks", "asks"),
         commandStep("of-missing", "missing"),
-        commandStep("plain", undefined),
+        commandStep("plain", null),
         commandStep("of-plain", "plain"),
       ]),
     ).toEqual({ stepsOf: {}, rowIn: {} });
@@ -322,9 +359,9 @@ describe("a subagent a coding agent started on the member's computer", () => {
     const calls = fc.uniqueArray(
       fc.record({
         id,
-        kind: fc.constantFrom("subagent", "command"),
+        kind: fc.constantFrom("subagent", "command", "connector"),
         parentCallId: fc.option(fc.oneof(id, fc.constant("missing")), {
-          nil: undefined,
+          nil: null,
         }),
         shownAs: fc.constantFrom("row", "card"),
       }),
@@ -333,16 +370,25 @@ describe("a subagent a coding agent started on the member's computer", () => {
     assertProperty(
       "no step is ever hidden: a row shows on the turn or inside a group that shows on the turn",
       fc.property(calls, (generated) => {
-        const turn = generated.map((call) =>
-          call.kind === "subagent"
-            ? subagentStep(call.id, {
+        const turn = generated.map((call) => {
+          switch (call.kind) {
+            case "subagent":
+              return subagentStep(call.id, {
                 shownAs: call.shownAs,
-                ...(call.parentCallId === undefined
-                  ? {}
-                  : { parentCallId: call.parentCallId }),
-              })
-            : commandStep(call.id, call.parentCallId, call.shownAs),
-        );
+                parentCallId: call.parentCallId,
+              });
+            case "command":
+              return commandStep(call.id, call.parentCallId, call.shownAs);
+            case "connector":
+              return {
+                ...connectorStep(call.id, call.parentCallId),
+                shownAs: call.shownAs,
+              };
+            default:
+              call.kind satisfies never;
+              return panic("Unhandled generated call");
+          }
+        });
         const { stepsOf, rowIn } = localRunSubagentGroups(turn);
         for (const [step, subagent] of rowIn) {
           // The group it shows in is drawn on the turn itself, as a row.

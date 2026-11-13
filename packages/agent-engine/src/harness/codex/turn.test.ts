@@ -153,11 +153,21 @@ const eventsOf = async (
 };
 
 /** The steps that say the harness did something stella cannot show. */
+/** Each unsupported step: its input, and the subagent step it names. */
 const unsupportedSteps = (events: readonly HarnessEvent[]) =>
-  events.flatMap((event) =>
+  events.flatMap((event): Record<string, unknown>[] =>
     event.type === "tool.completed" &&
     event.toolCall.name === HARNESS_TOOL_NAMES.unsupportedItem
-      ? [event.toolCall.input]
+      ? [
+          {
+            ...(typeof event.toolCall.input === "object"
+              ? event.toolCall.input
+              : {}),
+            ...(event.toolCall.parentCallId === undefined
+              ? {}
+              : { parentCallId: event.toolCall.parentCallId }),
+          },
+        ]
       : [],
   );
 

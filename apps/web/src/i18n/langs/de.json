@@ -2272,11 +2272,15 @@
       "input": "Eingabe",
       "interrupted": "Vor Abschluss unterbrochen",
       "localOutput": {
+        "conversation": "Unterhaltung des Subagenten",
+        "conversationPrompt": "Aufgabe",
+        "conversationReport": "Bericht",
         "cut": "Die ersten {kept} von {total} werden angezeigt",
         "diff": "Dateiänderungen",
         "elsewhere": "Auf dem Computer öffnen, auf dem der Schritt lief",
         "empty": "Keine Ausgabe",
         "failed": "Die stella-Desktop-App auf diesem Computer konnte dies nicht anzeigen.",
+        "imageTooLarge": "Dieses Bild ist {total} groß. Bilder über {kept} werden auf diesem Computer nicht gespeichert, daher kann es hier nicht angezeigt werden.",
         "notKept": "Von diesem Schritt ist auf diesem Computer nichts gespeichert",
         "reading": "Wird von diesem Computer gelesen"
       },

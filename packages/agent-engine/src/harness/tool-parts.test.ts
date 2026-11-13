@@ -154,37 +154,39 @@ describe("a step a subagent took", () => {
     }),
   );
 
-  test("a step a subagent took shows what the same step shows on the main thread, and names the subagent", () => {
+  test("a step a subagent took shows what the same step shows on the main thread, and names the subagent beside it", () => {
     assertProperty(
-      "a step a subagent took shows what the same step shows on the main thread, and names the subagent",
+      "a step a subagent took shows what the same step shows on the main thread, and names the subagent beside it",
       fc.property(
         steps,
         fc.string({ minLength: 1, maxLength: 64 }),
         (step, parentCallId) => {
           const call = nativeToolCall("step-1", step);
-          const onMainThread = shownToolInput(call, "/workspace");
-          const inSubagent = shownToolInput(
-            stepOfSubagent(call, parentCallId),
-            "/workspace",
-          );
+          const inSubagent = stepOfSubagent(call, parentCallId);
           expect(stepOfSubagent(call, null)).toBe(call);
+          expect(inSubagent.parentCallId).toBe(parentCallId);
           // The same bounded fields: naming a subagent neither adds to a
-          // step nor cuts it differently.
-          expect(inSubagent).toEqual({
-            ...(typeof onMainThread === "object" ? onMainThread : {}),
-            parentCallId,
-          });
+          // step's input nor cuts it differently.
+          expect(shownToolInput(inSubagent, "/workspace")).toEqual(
+            shownToolInput(call, "/workspace"),
+          );
         },
       ),
     );
   });
 
-  test("a call that is not a native step names no subagent", () => {
+  test("a call that is not a native step names its subagent too, its input untouched", () => {
     const call = {
       id: "call-1",
       name: "mcp__docs__search",
       input: { query: "lease" },
     };
-    expect(stepOfSubagent(call, "call-agent")).toBe(call);
+    expect(stepOfSubagent(call, "call-agent")).toEqual({
+      ...call,
+      parentCallId: "call-agent",
+    });
+    expect(
+      shownToolInput(stepOfSubagent(call, "call-agent"), "/workspace"),
+    ).toBe(call.input);
   });
 });

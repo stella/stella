@@ -15,10 +15,11 @@ import { CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH } from "./chat-local-run-step-output"
  * diff, search matches, a fetched page, a subagent's prompt, messages and
  * report, and an image's bytes are never part of the call or its result.
  *
- * A step a subagent took names the subagent's own step (`parentCallId`), so
- * chat shows it under that step. The link is part of the step's input
- * because the input is all of a native step a turn carries and stores: the
- * same schema bounds it in the sidecar, the API and the browser.
+ * A call a subagent made, a native step or a tool of a connected server,
+ * names the subagent's own step, so chat shows it under that step. The link
+ * is part of the call's metadata (`CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY`),
+ * never of its input: a tool's input is the tool's own, and a call of any
+ * kind is linked the same way.
  *
  * The desktop's harness sidecar builds each call and result through these
  * schemas, and the API parses what a desktop sends with them again and keeps
@@ -112,10 +113,17 @@ const shownList = <TItem extends v.GenericSchema>(item: TItem, max: number) =>
   );
 
 /**
- * The id of the subagent step that ran a step: the harness's own id as a
- * desktop sends it, that step's chat call id as the API keeps it. An id is
- * never cut: one that is empty or longer than a chat call id names no step,
- * and the step it is on is kept without it (`parseChatLocalRunToolCall`).
+ * Where a call of a local run names the subagent step that made it: a key of
+ * the call's metadata, beside who ran the call. A desktop sends the
+ * harness's own id of that step on the call's start; the API keeps the
+ * step's chat call id there instead, as it keeps the step itself.
+ */
+export const CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY =
+  "stellaLocalRunParentCall";
+
+/**
+ * The id of the subagent step that made a call. An id is never cut: one that
+ * is empty or longer than a chat call id names no step.
  */
 const parentCallIdSchema = v.pipe(
   v.string(),
@@ -123,9 +131,21 @@ const parentCallIdSchema = v.pipe(
   v.maxLength(CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH),
 );
 
-/** A native step's input: its own fields and the subagent step it ran in. */
-const stepInput = <TEntries extends v.ObjectEntries>(entries: TEntries) =>
-  v.object({ ...entries, parentCallId: v.optional(parentCallIdSchema) });
+/**
+ * The subagent step a call's metadata names, or `null` when it names none
+ * (a call on the main thread, another kind of call, an id that names no
+ * step). The call is kept either way.
+ */
+export const chatLocalRunParentCallId = (metadata: unknown): string | null => {
+  if (typeof metadata !== "object" || metadata === null) {
+    return null;
+  }
+  const parsed = v.safeParse(
+    parentCallIdSchema,
+    Reflect.get(metadata, CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY),
+  );
+  return parsed.success ? parsed.output : null;
+};
 
 export const CHAT_LOCAL_RUN_FILE_CHANGE_KINDS = [
   "add",
@@ -224,23 +244,23 @@ export const CHAT_LOCAL_RUN_NEEDS_MEMBER = "needs_member" as const;
 export const chatLocalRunToolCallSchema = v.variant("name", [
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution),
-    input: stepInput({
+    input: v.object({
       command: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.command),
     }),
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.fileChange),
-    input: stepInput({ changes: fileChangesSchema }),
+    input: v.object({ changes: fileChangesSchema }),
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.webSearch),
-    input: stepInput({
+    input: v.object({
       query: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.query),
     }),
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool),
-    input: stepInput({
+    input: v.object({
       /** The harness's own name for the tool. */
       tool: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.name),
       detail: v.optional(chatLocalRunToolDetailSchema),
@@ -248,7 +268,7 @@ export const chatLocalRunToolCallSchema = v.variant("name", [
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem),
-    input: stepInput({
+    input: v.object({
       itemType: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.name),
     }),
   }),
@@ -257,11 +277,11 @@ export const chatLocalRunToolCallSchema = v.variant("name", [
     // Only `open` keeps an address: the one the agent chose. Any other
     // step keeps its kind alone, whatever else it carries.
     input: v.union([
-      stepInput({
+      v.object({
         action: v.literal("open"),
         url: v.optional(shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.url)),
       }),
-      stepInput({
+      v.object({
         action: v.picklist(
           CHAT_LOCAL_RUN_BROWSER_ACTIONS.filter(
             (action): action is Exclude<ChatLocalRunBrowserAction, "open"> =>
@@ -282,9 +302,7 @@ export type ChatLocalRunToolCallInput = v.InferInput<
 
 /**
  * The call chat keeps for a harness-native step, or `null` when `input` is
- * not one. A step whose `parentCallId` does not parse is kept without it,
- * and a native tool whose detail does not parse keeps its name (and the
- * subagent step it ran in).
+ * not one. A native tool whose detail does not parse keeps its name.
  */
 export const parseChatLocalRunToolCall = (
   name: ChatLocalRunToolName,
@@ -294,25 +312,17 @@ export const parseChatLocalRunToolCall = (
   if (parsed.success) {
     return parsed.output;
   }
-  if (typeof input !== "object" || input === null) {
-    return null;
-  }
-  const { parentCallId: reported, ...own }: Record<string, unknown> = {
-    ...input,
-  };
-  const parent = v.safeParse(parentCallIdSchema, reported);
-  if (reported !== undefined && !parent.success) {
-    return parseChatLocalRunToolCall(name, own);
-  }
-  if (name !== CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool || !("tool" in own)) {
+  if (
+    name !== CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool ||
+    typeof input !== "object" ||
+    input === null ||
+    !("tool" in input)
+  ) {
     return null;
   }
   const named = v.safeParse(chatLocalRunToolCallSchema, {
     name,
-    input: {
-      tool: own["tool"],
-      ...(parent.success ? { parentCallId: parent.output } : {}),
-    },
+    input: { tool: input.tool },
   });
   return named.success ? named.output : null;
 };
