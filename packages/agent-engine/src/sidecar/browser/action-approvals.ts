@@ -160,7 +160,9 @@ export const createActionApprovals = () => {
         // Observed here so a failure is never unhandled while the queue
         // drains; the stream awaits `moved` again to end with it.
         await Result.tryPromise({
-          try: () => moved,
+          try: async () => {
+            await moved;
+          },
           catch: (cause) => ({ cause }),
         });
         declineAll();
