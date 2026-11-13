@@ -712,21 +712,39 @@ type BackgroundTasksOptions = SessionOptions & {
 };
 
 /**
+ * Whether `sessionId` is the computer's socket, under the lock a session
+ * claim takes: a claim cannot replace it until the caller's transaction ends.
+ */
+const holdCurrentSession = async (
+  tx: Transaction,
+  { binding, sessionId }: SessionOptions,
+) => {
+  await withAggregateLock({
+    aggregate: "desktopRunnerCapacity",
+    id: { organizationId: binding.organizationId, userId: binding.userId },
+    tx,
+  });
+  const [current] = await tx
+    .select({ sessionId: runner.sessionId })
+    .from(runner)
+    .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+    .limit(1);
+  return current !== undefined;
+};
+
+/**
  * Store what a run's computer reports running in the background for the
  * run's chat. `not_current` when the socket was replaced, `unknown_run` for
- * a run that is not this computer's; either changes nothing.
+ * a run that is not this computer's; either changes nothing. Serialised with
+ * session claims, so a replaced socket never writes after its successor
+ * cleared the counts.
  */
 export const recordBackgroundTasks = async (
   db: DesktopRunnerDb,
   { binding, sessionId, runId, count }: BackgroundTasksOptions,
 ): Promise<"applied" | "not_current" | "unknown_run"> =>
   await withAggregateTransaction(db, async (tx) => {
-    const [current] = await tx
-      .select({ sessionId: runner.sessionId })
-      .from(runner)
-      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
-      .limit(1);
-    if (current === undefined) {
+    if (!(await holdCurrentSession(tx, { binding, sessionId }))) {
       return "not_current";
     }
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
@@ -740,14 +758,19 @@ export const recordBackgroundTasks = async (
 
 /**
  * Forget what this computer reported running in the background: a new
- * socket's desktop reports every live count again after `welcome`. Whether
+ * socket's desktop reports every live count again after `welcome`. Only
+ * while `sessionId` is still the computer's socket, serialised with session
+ * claims, so a replaced socket never erases its successor's counts. Whether
  * any count was held.
  */
 export const clearBackgroundTasks = async (
   db: DesktopRunnerDb,
-  binding: RunnerBinding,
+  { binding, sessionId }: SessionOptions,
 ): Promise<boolean> =>
   await withAggregateTransaction(db, async (tx) => {
+    if (!(await holdCurrentSession(tx, { binding, sessionId }))) {
+      return false;
+    }
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
     const cleared = await tx
       .update(runs)

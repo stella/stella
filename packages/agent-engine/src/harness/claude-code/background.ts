@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { HarnessLiveSession } from "../adapter";
@@ -162,16 +162,21 @@ export class ClaudeProcess {
     return true;
   }
 
-  /** Ends each of `taskIds`; a task that ended meanwhile is refused. */
-  async stop(client: ClaudeCliClient, taskIds: Iterable<string>) {
-    await Promise.all(
-      [...taskIds].map(async (taskId) => {
-        // A refusal changes nothing: the process tree ends with the process.
-        (await client.request("stop_task", { task_id: taskId })).unwrapOr(
-          undefined,
-        );
-      }),
+  /**
+   * Ends each of `taskIds`; whether the CLI confirmed every stop. A task
+   * that ended meanwhile is refused, which changes nothing when the process
+   * closes anyway: its tree ends with it.
+   */
+  async stop(
+    client: ClaudeCliClient,
+    taskIds: Iterable<string>,
+  ): Promise<boolean> {
+    const stopped = await Promise.all(
+      [...taskIds].map(async (taskId) =>
+        Result.isOk(await client.request("stop_task", { task_id: taskId })),
+      ),
     );
+    return stopped.every(Boolean);
   }
 
   private commands() {
@@ -187,15 +192,25 @@ export class ClaudeProcess {
     if (this.commands() === 0) {
       return null;
     }
-    await settlesWithin(
-      this.stop(
-        client,
-        [...this.tasks].flatMap(([taskId, kind]) =>
-          kind === CLAUDE_BACKGROUND_COMMAND_TASK ? [] : [taskId],
-        ),
+    // Between turns from here on, before the first wait: a turn the CLI
+    // opens itself while its sub-agents stop is tracked and interrupted, and
+    // never reaches the completed turn.
+    this.ownTurnEnded = null;
+    this.route(this.betweenTurns(client));
+    const stopping = this.stop(
+      client,
+      [...this.tasks].flatMap(([taskId, kind]) =>
+        kind === CLAUDE_BACKGROUND_COMMAND_TASK ? [] : [taskId],
       ),
-      this.gracePeriodMs,
     );
+    // A sub-agent that did not stop would go on working unseen: then the
+    // process is not kept, and its shutdown ends everything.
+    if (
+      !(await settlesWithin(stopping, this.gracePeriodMs)) ||
+      !(await stopping)
+    ) {
+      return null;
+    }
     const kept = keepLiveSession({
       harness: "claude-code",
       sessionId,
@@ -207,8 +222,15 @@ export class ClaudeProcess {
     });
     this.kept = kept;
     KEPT.set(kept.session, this);
-    this.ownTurnEnded = null;
-    this.route({
+    return kept.session;
+  }
+
+  /**
+   * The process's messages between stella's turns: a turn the CLI opens
+   * itself is interrupted, and its requests are refused.
+   */
+  private betweenTurns(client: ClaudeCliClient): ClaudeCliHandlers {
+    return {
       message: (type) => {
         this.ownTurn(client, type);
       },
@@ -221,11 +243,13 @@ export class ClaudeProcess {
       controlCancel: () => undefined,
       // A process that breaks the protocol between turns is not kept.
       violation: () => {
-        this.detached(kept.session.end(), "claude-live.violation");
+        const kept = this.kept;
+        if (kept !== null) {
+          this.detached(kept.session.end(), "claude-live.violation");
+        }
       },
       exit: () => undefined,
-    });
-    return kept.session;
+    };
   }
 
   /** A turn the CLI opened itself between stella's turns is interrupted. */

@@ -1856,6 +1856,41 @@ describe("Claude Code background commands after a turn", () => {
     await next.value.dispose();
   });
 
+  test("a sub-agent that cannot be stopped keeps nothing: the process and its work end", async () => {
+    const { turn, logPath } = await completedTurn(
+      "background_agent_unstoppable",
+    );
+    expect(await turn.release()).toBeNull();
+    expect(readFileSync(logPath, "utf-8")).toContain(
+      JSON.stringify({ stoppedTask: "task-serve" }),
+    );
+  });
+
+  test("a turn the CLI opens while its sub-agent stops is interrupted, and the next turn waits for it", async () => {
+    const { adapter, workspaceDir, turn } = await completedTurn(
+      "background_own_turn_while_stopping",
+    );
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    expect(events.filter(({ type }) => type === "turn.failed")).toEqual([]);
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    await next.value.dispose();
+  });
+
   test("a kept process ends by itself once its last background command exits", async () => {
     const { turn } = await completedTurn("background_command_exits");
     const live = await turn.release();

@@ -150,8 +150,10 @@ import type {
   RunnerTimers,
 } from "@/api/lib/desktop-runner/session";
 import {
+  clearBackgroundTasks,
   type DesktopRunnerDb,
   readNewestQueuedCommands,
+  recordBackgroundTasks,
   type RunnerBinding,
 } from "@/api/lib/desktop-runner/store";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -902,6 +904,26 @@ describe("run messages", () => {
     await other.desktop.receive("ack");
     expect(await backgroundOf()).toBe(2);
     expect(announced).toEqual([desktopId]);
+
+    // A socket a newer one replaced neither writes nor clears a count.
+    const [row] = await db
+      .select({ deviceJkt: desktopRunners.deviceJkt })
+      .from(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
+    const replaced = {
+      binding: {
+        ...owner,
+        desktopId,
+        deviceJkt: row?.deviceJkt ?? "",
+        keyId: "replaced-key",
+      },
+      sessionId: Bun.randomUUIDv7(),
+    };
+    expect(
+      await recordBackgroundTasks(gatewayDb, { ...replaced, runId, count: 5 }),
+    ).toBe("not_current");
+    expect(await clearBackgroundTasks(gatewayDb, replaced)).toBe(false);
+    expect(await backgroundOf()).toBe(2);
 
     // Closing announces; the next hello forgets the count until reported again.
     const closedAnnouncement = nextAnnouncement();

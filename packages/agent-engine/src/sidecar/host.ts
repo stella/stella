@@ -445,6 +445,8 @@ export class SidecarHost {
   >();
   /** Kept harness processes by their chat's folder, resolved. */
   private readonly live = new Map<string, LiveFolder>();
+  /** Kept processes being ended, by folder, until each is gone. */
+  private readonly endingLive = new Map<string, Promise<void>>();
   private stopping = false;
   private readonly detached: ReturnType<typeof createDetached>;
 
@@ -874,11 +876,24 @@ export class SidecarHost {
     }
   }
 
-  /** End a kept process and the work it holds. */
+  /**
+   * End a kept process and the work it holds. Until it is gone, a run in its
+   * folder waits (`open`), so no new harness writes there beside it.
+   */
   private async endLive(entry: LiveFolder) {
     this.forgetLive(entry);
-    await entry.session.end();
-    entry.proxy.drop(entry.endpoint);
+    const ending = (async () => {
+      await entry.session.end();
+      entry.proxy.drop(entry.endpoint);
+    })();
+    this.endingLive.set(entry.workspaceDir, ending);
+    try {
+      await ending;
+    } finally {
+      if (this.endingLive.get(entry.workspaceDir) === ending) {
+        this.endingLive.delete(entry.workspaceDir);
+      }
+    }
   }
 
   private reportTasks(runId: string, count: number) {
@@ -952,6 +967,9 @@ export class SidecarHost {
         message: "The run's transcript has a message stella cannot read.",
       });
     }
+    // A kept process of this folder still ending (another origin's, the idle
+    // limit's) goes first: no new harness writes there beside it.
+    await this.endingLive.get(run.workspaceDir);
     const declared = await readSkillFolderNetworkHosts(message.skillFolders);
     for (const skill of declared.unreadable) {
       this.options.log(
@@ -1068,6 +1086,16 @@ export class SidecarHost {
     });
     for (const reason of input.skipped) {
       this.options.log(`an attached file stays a path only: ${reason}`);
+    }
+    // A stop during the reads above ends the run here, before any harness
+    // turn; a kept process stays on the run for `execute` to end.
+    if (isStopped(run)) {
+      return Result.err({
+        type: "harness_exited",
+        message: "The run was stopped before it started.",
+        exitCode: null,
+        signal: null,
+      });
     }
     // From here the adapter owns the kept process: it continues the turn in
     // it, or ends it.

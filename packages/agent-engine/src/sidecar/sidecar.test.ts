@@ -977,6 +977,58 @@ describe("harness holder over its socket", () => {
     ).toContainEqual({ cleaned: ["call-serve"] });
   });
 
+  test("a desktop on another API origin ends the kept processes before a run starts in their folder", async () => {
+    const holder = await spawnHolder();
+    const first = await desktop(holder);
+    const kept = runStart(first.client, holder, "background_terminal");
+    await first.client.waitFor(is("run.finished", kept));
+    first.client.close();
+    const other = "https://other.example.test";
+    const client = await connect(holder.endpoint);
+    client.send({ ...helloMessage(holder), apiOrigin: other });
+    await client.waitFor(is("hello"));
+    const next = runStart(client, holder, "stella_tools", {
+      mcp: {
+        serverName: "stella",
+        url: `${other}/mcp`,
+        token: RUN_TOKEN,
+        expiresAt: "2026-10-28T12:00:00.000Z",
+      },
+    });
+    expect(await client.waitFor(is("run.finished", next))).toMatchObject({
+      outcome: "completed",
+    });
+    // The old origin's process and its work were gone before the new
+    // harness started in the folder.
+    const entries = fakeEntries(holder.fakeLog);
+    const cleaned = entries.findIndex((entry) => "cleaned" in entry);
+    const startups = entries.flatMap((entry, index) =>
+      "startup" in entry ? [index] : [],
+    );
+    expect(startups).toHaveLength(2);
+    expect(cleaned).toBeGreaterThan(-1);
+    expect(cleaned).toBeLessThan(startups[1] ?? -1);
+  });
+
+  test("a stop of a run that would continue a kept process ends that process, and no turn starts", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const first = runStart(client, holder, "background_terminal");
+    await client.waitFor(is("run.finished", first));
+    const second = runStart(client, holder, "background_terminal", {
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    client.send({ type: "run.cancel", runId: second });
+    expect(await client.waitFor(is("run.finished", second))).toMatchObject({
+      outcome: "cancelled",
+    });
+    const methods = holder.received().map(({ method }) => method);
+    expect(methods.filter((method) => method === "turn/start")).toHaveLength(1);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
   test("ends a chat's kept process before a run with another session starts", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);

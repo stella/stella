@@ -750,7 +750,12 @@ const onHello = async (
   state.claimed = true;
   // What ran in the background before this socket is reported again after
   // `welcome`; a count the computer no longer holds must not linger.
-  if (await clearBackgroundTasks(context.db, state.binding)) {
+  if (
+    await clearBackgroundTasks(context.db, {
+      binding: state.binding,
+      sessionId: state.sessionId,
+    })
+  ) {
     context.announceBackgroundTasks(state.binding);
   }
   if (claim.previous !== null) {

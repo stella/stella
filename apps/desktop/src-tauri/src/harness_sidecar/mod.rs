@@ -360,7 +360,7 @@ impl HarnessSidecar {
         restores: HashMap::new(),
         processes: None,
         background: None,
-        background_holders: HashMap::new(),
+        background_counts: HashMap::new(),
       }
       .run(),
     );
@@ -958,9 +958,10 @@ struct Supervisor {
   processes: Option<mpsc::Sender<HarnessProcess>>,
   /// Where background task counts go.
   background: Option<mpsc::Sender<BackgroundTasks>>,
-  /// The holder each count above 0 came from, by run id: a holder that is
-  /// lost takes its kept processes with it.
-  background_holders: HashMap<String, PathBuf>,
+  /// Each count above 0 and the holder it came from, by run id: a watcher
+  /// that comes later hears them, and a holder that is lost takes its kept
+  /// processes with it.
+  background_counts: HashMap<String, (PathBuf, u32)>,
 }
 
 impl Supervisor {
@@ -997,7 +998,7 @@ impl Supervisor {
           }
           Some(Control::Ack(ack)) => self.ack(ack).await,
           Some(Control::WatchProcesses(reports)) => self.processes = Some(reports),
-          Some(Control::WatchBackground(reports)) => self.background = Some(reports),
+          Some(Control::WatchBackground(reports)) => self.watch_background(reports),
           Some(Control::GrantProcess(id)) => self.grant_process(id).await,
         },
         Some(event) = self.events.recv() => self.event(event).await,
@@ -1570,11 +1571,11 @@ impl Supervisor {
       }
       SidecarMessage::BackgroundTasks(tasks) => {
         if tasks.count == 0 {
-          self.background_holders.remove(&tasks.run_id);
+          self.background_counts.remove(&tasks.run_id);
         } else {
           self
-            .background_holders
-            .insert(tasks.run_id.clone(), dir.to_path_buf());
+            .background_counts
+            .insert(tasks.run_id.clone(), (dir.to_path_buf(), tasks.count));
         }
         self.report_background(tasks);
       }
@@ -1698,14 +1699,31 @@ impl Supervisor {
   /// 0 is reported as 0, so no chat keeps showing work that no longer runs.
   fn end_background(&mut self, dir: &Path) {
     let ended: Vec<String> = self
-      .background_holders
+      .background_counts
       .iter()
-      .filter(|(_run_id, holder)| holder.as_path() == dir)
-      .map(|(run_id, _holder)| run_id.clone())
+      .filter(|(_run_id, (holder, _count))| holder.as_path() == dir)
+      .map(|(run_id, _count)| run_id.clone())
       .collect();
     for run_id in ended {
-      self.background_holders.remove(&run_id);
+      self.background_counts.remove(&run_id);
       self.report_background(BackgroundTasks { run_id, count: 0 });
+    }
+  }
+
+  /// A new watcher hears every count above 0 a holder reported before it
+  /// came: a holder reports a count when it changes, and on hello.
+  fn watch_background(&mut self, reports: mpsc::Sender<BackgroundTasks>) {
+    self.background = Some(reports);
+    let held: Vec<BackgroundTasks> = self
+      .background_counts
+      .iter()
+      .map(|(run_id, (_holder, count))| BackgroundTasks {
+        run_id: run_id.clone(),
+        count: *count,
+      })
+      .collect();
+    for tasks in held {
+      self.report_background(tasks);
     }
   }
 

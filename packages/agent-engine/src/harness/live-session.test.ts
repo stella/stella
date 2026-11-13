@@ -127,6 +127,32 @@ describe("a harness process kept for its background work", () => {
     await session.session.ended;
     expect(counts).toEqual([]);
   });
+
+  test("ending a taken session leaves the process to the turn that took it", async () => {
+    const { process, session } = kept(1);
+    expect(session.take()).toBe(true);
+    await session.session.end();
+    expect(process.asked).toEqual([]);
+  });
+
+  test("a stop of its work that fails still closes the process", async () => {
+    const process = fakeProcess();
+    const background = new BackgroundTasks();
+    background.set(1);
+    const session = keepLiveSession({
+      harness: "codex",
+      sessionId: SESSION,
+      process,
+      background,
+      gracePeriodMs: 50,
+      stopBackground: async () => {
+        throw new Error("The harness refused the stop.");
+      },
+      detached: () => undefined,
+    });
+    await session.session.end();
+    expect(process.asked).toEqual(["closeInput"]);
+  });
 });
 
 /** A lifecycle whose adapter keeps the process with `session`, if any. */
@@ -201,6 +227,33 @@ describe("a turn's end", () => {
     });
     expect(await turn.release()).toBeNull();
     expect(process.asked).toEqual(["stopBackground", "closeInput"]);
+  });
+
+  test("a turn whose background stop fails still closes its process and settles", async () => {
+    const process = fakeProcess();
+    const lifecycle = new HarnessTurnLifecycle<ReturnType<typeof fakeProcess>>({
+      gracePeriodMs: 50,
+      detached: () => undefined,
+      name: "test-turn",
+      background: {
+        keep: async () => null,
+        stopBackground: async () => {
+          throw new Error("The harness refused the stop.");
+        },
+      },
+    });
+    lifecycle.attach(process);
+    const turn = lifecycle.turn({
+      respond: () => {
+        throw new Error("no interaction in this test");
+      },
+      interrupt: async () => {
+        await Promise.resolve();
+      },
+    });
+    lifecycle.emit({ type: "turn.interrupted" });
+    expect(await turn.release()).toBeNull();
+    expect(process.asked).toEqual(["closeInput"]);
   });
 
   test("a completed turn with nothing in the background closes as before", async () => {

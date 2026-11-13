@@ -843,6 +843,21 @@ fn a_holder_that_dies_reports_its_background_work_ended() {
 }
 
 #[test]
+fn a_background_count_reported_before_the_watcher_reaches_it() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut waiting = sidecar.start_run(run_start("background-wait")).unwrap();
+    // The holder reported the count before this event, on the same line.
+    let _event = next(&mut waiting).await;
+    let mut counts = sidecar.watch_background().unwrap();
+    let reported = counts.recv().await.unwrap();
+    assert_eq!(reported.count, 2);
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
 fn a_run_start_the_holder_finds_invalid_fails_that_run_and_no_other() {
   let fixture = Fixture::new();
   with_children(async {
@@ -1341,6 +1356,8 @@ fn stand_in_holder() {
 /// - `crash`: an event, then the process exits without cleaning up;
 /// - `background-crash`: an event and a background task count of 2, then
 ///   the process exits without cleaning up;
+/// - `background-wait`: a background task count of 2, then an event, then
+///   nothing until it is cancelled;
 /// - `garbage`: a line that is not JSON.
 ///
 /// A launch with `processGrant` first reports the stand-in's own process id
@@ -1613,6 +1630,11 @@ mod stand_in {
       "crash" => {
         emit(held, run_id, event).await;
         std::process::exit(3);
+      }
+      "background-wait" => {
+        let count = json!({ "type": "background.tasks", "runId": run_id, "count": 2 });
+        write(held, &count.to_string()).await;
+        emit(held, run_id, event).await;
       }
       "background-crash" => {
         emit(held, run_id, event).await;
