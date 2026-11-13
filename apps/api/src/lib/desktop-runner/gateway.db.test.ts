@@ -150,7 +150,6 @@ import type {
   RunnerTimers,
 } from "@/api/lib/desktop-runner/session";
 import {
-  clearBackgroundTasks,
   type DesktopRunnerDb,
   readNewestQueuedCommands,
   recordBackgroundTasks,
@@ -883,30 +882,44 @@ describe("run messages", () => {
       },
     });
     const { runId, desktop, desktopId } = await acceptedRun(instance);
+    // The turn ends; what it started keeps running in the background.
+    desktop.send({
+      type: "run.finished",
+      runId,
+      seq: 1,
+      outcome: "completed",
+      harnessSessionId: null,
+    });
+    await desktop.receive("ack", ofRun(runId));
     const backgroundOf = async () =>
       (
         await db
-          .select({ count: desktopRunnerRuns.backgroundTasks })
-          .from(desktopRunnerRuns)
-          .where(eq(desktopRunnerRuns.runId, runId))
-      ).at(0)?.count;
+          .select({ counts: desktopRunners.backgroundTasks })
+          .from(desktopRunners)
+          .where(eq(desktopRunners.desktopId, desktopId))
+      ).at(0)?.counts;
 
     const stored = nextAnnouncement();
     desktop.send({ type: "run.background", runId, count: 2 });
     await stored;
-    expect(await backgroundOf()).toBe(2);
+    expect(await backgroundOf()).toEqual({ [runId]: 2 });
     expect(announced).toEqual([desktopId]);
 
-    // A run this computer does not hold changes nothing and keeps the socket.
-    const other = await acceptedRun(instance);
-    other.desktop.send({ type: "run.background", runId, count: 5 });
-    // Handled in order: once this is acknowledged, the count was handled.
-    other.desktop.send(textEvent(other.runId, 1, "Hello"));
-    await other.desktop.receive("ack");
-    expect(await backgroundOf()).toBe(2);
-    expect(announced).toEqual([desktopId]);
+    // A run this computer does not hold changes nothing and keeps the
+    // socket; messages are handled in order, so once the next count is
+    // announced the unknown one was handled.
+    desktop.send({
+      type: "run.background",
+      runId: Bun.randomUUIDv7(),
+      count: 5,
+    });
+    const updated = nextAnnouncement();
+    desktop.send({ type: "run.background", runId, count: 3 });
+    await updated;
+    expect(await backgroundOf()).toEqual({ [runId]: 3 });
+    expect(announced).toEqual([desktopId, desktopId]);
 
-    // A socket a newer one replaced neither writes nor clears a count.
+    // A socket a newer one replaced writes nothing.
     const [row] = await db
       .select({ deviceJkt: desktopRunners.deviceJkt })
       .from(desktopRunners)
@@ -923,8 +936,7 @@ describe("run messages", () => {
     expect(
       await recordBackgroundTasks(gatewayDb, { ...replaced, runId, count: 5 }),
     ).toBe("not_current");
-    expect(await clearBackgroundTasks(gatewayDb, replaced)).toBe(false);
-    expect(await backgroundOf()).toBe(2);
+    expect(await backgroundOf()).toEqual({ [runId]: 3 });
 
     // Closing announces; the next hello forgets the count until reported again.
     const closedAnnouncement = nextAnnouncement();
@@ -932,9 +944,10 @@ describe("run messages", () => {
     await closedAnnouncement;
     const cleared = nextAnnouncement();
     const again = await openDesktop(instance, desktopId);
-    await again.hello([{ runId, lastSeq: 0 }]);
+    await again.hello();
     await cleared;
-    expect(await backgroundOf()).toBe(0);
+    expect(await backgroundOf()).toEqual({});
+    await again.close();
   });
 
   test("an attached file's link is signed on send and never stored", async () => {

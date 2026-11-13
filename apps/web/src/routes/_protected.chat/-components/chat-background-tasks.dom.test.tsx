@@ -21,7 +21,7 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { ChatBackgroundTasks } =
-  await import("@/components/chat/chat-background-tasks");
+  await import("@/routes/_protected.chat/-components/chat-background-tasks");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 

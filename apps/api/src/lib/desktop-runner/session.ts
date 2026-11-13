@@ -36,7 +36,6 @@ import {
 } from "@/api/lib/desktop-runner/sealed-answers";
 import {
   claimRunnerSession,
-  clearBackgroundTasks,
   type DesktopRunnerDb,
   markRunStartsSending,
   type PendingCommand,
@@ -750,14 +749,9 @@ const onHello = async (
   }
   // Claimed, so the closing socket's release marks the runner disconnected.
   state.claimed = true;
-  // What ran in the background before this socket is reported again after
-  // `welcome`; a count the computer no longer holds must not linger.
-  if (
-    await clearBackgroundTasks(context.db, {
-      binding: state.binding,
-      sessionId: state.sessionId,
-    })
-  ) {
+  // The claim cleared what ran in the background before this socket; the
+  // computer reports what still runs after `welcome`.
+  if (claim.clearedBackgroundTasks) {
     context.announceBackgroundTasks(state.binding);
   }
   if (claim.previous !== null) {
@@ -806,6 +800,38 @@ const onHello = async (
     }
   }
   await deliverPending(state, { resendSent: true });
+};
+
+/** Store a run's background count and tell the member's clients. */
+const storeBackgroundTasks = async (
+  state: SessionState,
+  message: Extract<DesktopRunnerDesktopMessage, { type: "run.background" }>,
+) => {
+  const { binding, context } = state;
+  const recorded = await recordBackgroundTasks(context.db, {
+    binding,
+    sessionId: state.sessionId,
+    runId: message.runId,
+    count: message.count,
+  });
+  switch (recorded) {
+    case "applied":
+      context.announceBackgroundTasks(binding);
+      return;
+    case "not_current":
+      close(state, DESKTOP_RUNNER_CLOSE.superseded);
+      return;
+    case "unknown_run":
+      // A run the API already forgot, or never routed here: its chat shows
+      // nothing for it.
+      return;
+    case "too_many":
+      close(state, policyViolation("run_limit"));
+      return;
+    default:
+      recorded satisfies never;
+      panic("Unhandled background count outcome");
+  }
 };
 
 const handleMessage = async (
@@ -888,29 +914,9 @@ const handleMessage = async (
         now: now(),
       });
       return;
-    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runBackground: {
-      const recorded = await recordBackgroundTasks(db, {
-        binding,
-        sessionId: state.sessionId,
-        runId: message.runId,
-        count: message.count,
-      });
-      switch (recorded) {
-        case "applied":
-          state.context.announceBackgroundTasks(binding);
-          return;
-        case "not_current":
-          close(state, DESKTOP_RUNNER_CLOSE.superseded);
-          return;
-        case "unknown_run":
-          // A run the API already forgot, or never routed here: its chat
-          // shows nothing for it.
-          return;
-        default:
-          recorded satisfies never;
-          return panic("Unhandled background count outcome");
-      }
-    }
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runBackground:
+      await storeBackgroundTasks(state, message);
+      return;
     default: {
       message satisfies never;
       panic("Unknown desktop runner message");

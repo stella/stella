@@ -11,9 +11,9 @@ type ChatBackgroundTasksFixture = {
 };
 
 /**
- * A chat's background count reads the chat's runs that hold background work
- * on a connected computer, bounded, in one statement: it must not grow with
- * the chat's other runs, their commands or events.
+ * A chat's background count sums, in the database and in one statement,
+ * what the chat's runs hold in the background on a connected computer: it
+ * must not grow with the chat's runs, their commands or events.
  */
 export const chatBackgroundTasksScalingScenario = {
   name: "chat background tasks",

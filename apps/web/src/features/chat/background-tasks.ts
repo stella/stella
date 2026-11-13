@@ -6,6 +6,7 @@ import { chatKeys } from "@/features/chat/chat-query-contract";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type ChatBackgroundTasksThread = {
   activeOrganizationId: string;
@@ -16,21 +17,29 @@ type ChatBackgroundTasksThread = {
 /**
  * What the chat's coding agent left running in the background on the
  * member's computer. Read again when the user stream says a computer's
- * background work changed (`USER_EVENT_READ.CHAT_BACKGROUND_TASKS`).
+ * background work changed (`USER_EVENT_READ.CHAT_BACKGROUND_TASKS`): the
+ * computer reports the count, so no write of this client changes it.
  */
 export const chatBackgroundTasksOptions = ({
   activeOrganizationId,
   userId,
   threadId,
 }: ChatBackgroundTasksThread) =>
-  queryOptions({
-    queryKey: chatKeys.backgroundTasks(activeOrganizationId, userId, threadId),
-    queryFn: async ({ signal }): Promise<ChatBackgroundTasks> => {
-      const thread = api.chat.threads({
-        threadId: toSafeId<"chatThread">(threadId),
-      });
-      return unwrapApiResponse(
-        await thread["background-tasks"].get({ fetch: { signal } }),
-      );
-    },
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: chatKeys.backgroundTasks(
+        activeOrganizationId,
+        userId,
+        threadId,
+      ),
+      queryFn: async ({ signal }): Promise<ChatBackgroundTasks> => {
+        const thread = api.chat.threads({
+          threadId: toSafeId<"chatThread">(threadId),
+        });
+        return unwrapApiResponse(
+          await thread["background-tasks"].get({ fetch: { signal } }),
+        );
+      },
+    }),
+    { type: "independent" },
+  );
