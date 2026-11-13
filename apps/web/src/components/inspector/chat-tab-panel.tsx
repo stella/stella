@@ -613,7 +613,11 @@ export const ChatTabPanel = ({
           startLabelEditingWithSuggestion();
         },
       });
+      // Inside the member's send gesture, before any await: a turn for
+      // their computer opens stella desktop when none is connected. A queued
+      // question sent on mount is no gesture, so it never opens it.
       if (!handledReserved) {
+        composerModels.openDesktopForSend();
         return await handlePromptSubmit({ prompt, files });
       }
 
@@ -621,6 +625,7 @@ export const ChatTabPanel = ({
       if (newThreadMessage === undefined) {
         return CHAT_SEND_SENT;
       }
+      composerModels.openDesktopForSend();
       if (!(await ensureAIAvailable())) {
         return CHAT_SEND_KEPT;
       }
@@ -807,6 +812,7 @@ export const ChatTabPanel = ({
                   editorController.setContent(composerStoredMarkdown(prompt));
                   detached(
                     editorController.submit(async (draft) => {
+                      composerModels.openDesktopForSend();
                       if (!(await ensureAIAvailable())) {
                         return CHAT_SEND_KEPT;
                       }

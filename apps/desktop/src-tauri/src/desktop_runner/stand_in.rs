@@ -41,7 +41,8 @@ use crate::harness_sidecar::{
   ReconnectBackoff, SidecarLaunch, SidecarSettings, SkillFolderRef,
 };
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
-use crate::runner_protocol::Harness;
+use crate::local_linked_folders::LinkedFolderRefusal;
+use crate::runner_protocol::{Harness, LinkedFolderReport};
 
 #[cfg(not(debug_assertions))]
 compile_error!(
@@ -326,6 +327,15 @@ impl LocalHarnesses for StandInHarnesses {
   fn skill_folders(&self) -> Vec<SkillFolderRef> {
     Vec::new()
   }
+
+  /// The stand-in computer has no linked folders.
+  fn linked_folder(&self, _id: uuid::Uuid) -> Result<PathBuf, LinkedFolderRefusal> {
+    Err(LinkedFolderRefusal::Unlinked)
+  }
+
+  fn linked_folder_reports(&self) -> Vec<LinkedFolderReport> {
+    Vec::new()
+  }
 }
 
 /// Settles on SIGTERM or Ctrl-C.
@@ -386,6 +396,7 @@ async fn serve(settings: Settings) -> Result<(), String> {
   let desktop_id = linked.link.desktop_id;
   tracing::info!(target: LOG_TARGET, %desktop_id, "linked");
   let linked = Arc::new(linked);
+  let journal = Arc::new(SharedJournal::default());
   let host = SidecarHarnessHost::new(
     HostSettings {
       sidecar: SidecarSettings {
@@ -410,10 +421,10 @@ async fn serve(settings: Settings) -> Result<(), String> {
       claude_code: settings.claude_code.clone(),
       homes,
     }),
+    Arc::clone(&journal),
   );
   let host_dyn: Arc<dyn HarnessHost> = Arc::new(host.clone());
   let reports: Arc<dyn HarnessReports> = Arc::new(host.clone());
-  let journal = Arc::new(SharedJournal::default());
   let state = Arc::new(watch::channel(RunnerState::Off).0);
   let mut observed = state.subscribe();
   tokio::spawn(async move {

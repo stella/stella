@@ -80,6 +80,30 @@ Chat reads the controlled tab. That tab is either one stella opened through
 `open`, or a tab the user already has open: open the popup on that page and
 choose **Use this tab with stella**, then ask about it in chat.
 
+## stella desktop
+
+Coding agents that run on the member's computer reach the extension through
+stella desktop's native messaging host (`app.stll.browser`), behind the
+optional `nativeMessaging` permission the popup asks for on its own. The same
+control session, origin policy, containment, budgets and execution ledger
+apply as for a stella tab; results go back through the host and never through
+stella's servers. A desktop chat's commands run under their own controller
+id. One controller holds the browser at a time, and only its commands run:
+another controller can list, switch to or act on none of its tabs. A desktop
+chat takes the browser over only with a page it opens, once nothing refused
+the open; the previous holder then loses its controlled tab and its tabs go
+back to the member, and a stella tab's chat is refused until the member
+connects it again or hands it a tab from the popup.
+
+A page that asks for a sign-in (a visible password or one-time-code field,
+input or text area, in any frame, or an identity provider's page) is the
+member's: a desktop command on it gets `needs-member`, with nothing on the
+page read, typed or clicked and no snapshot stored. Every frame is checked
+before any is read, and the page script checks before it reads any field
+or starts watching the page. A click or fill that leads to such a page has
+run: its `needs-member` says the page it led to is the member's. Commands
+from a stella tab still read such a page with its secret fields withheld.
+
 ## Control and stopping
 
 The extension's background worker runs browser commands one at a time, and

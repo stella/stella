@@ -433,6 +433,8 @@ export const requestFolderRestore = async (
 export type FolderRestoreToSend = {
   readonly restoreId: string;
   readonly folderId: string;
+  /** The folder linked on the computer the run worked in, if any. */
+  readonly linkedFolderId: string | null;
   readonly runId: string;
 };
 
@@ -554,8 +556,13 @@ export const claimFolderRestores = async (
           state: restores.state,
           folderId: restores.chatThreadId,
           runId: restores.runId,
+          linkedFolderId: desktopRunnerRuns.linkedFolderId,
         })
         .from(restores)
+        .innerJoin(
+          desktopRunnerRuns,
+          eq(desktopRunnerRuns.runId, restores.runId),
+        )
         .where(
           and(
             ofComputer(binding),
@@ -583,7 +590,12 @@ export const claimFolderRestores = async (
             });
       return due
         .filter(({ id, state }) => state === "sent" || sent.includes(id))
-        .map(({ id, folderId, runId }) => ({ restoreId: id, folderId, runId }));
+        .map(({ id, folderId, linkedFolderId, runId }) => ({
+          restoreId: id,
+          folderId,
+          linkedFolderId,
+          runId,
+        }));
     },
   );
 

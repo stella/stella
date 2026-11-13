@@ -4,6 +4,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { PACKAGE_CACHE_FOLDERS } from "../src/harness/package-cache";
+import { browseAsAgent, codexMcpEndpoints } from "./fake-browser";
 import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
@@ -51,12 +52,70 @@ export type FakeStep =
   | { spawn: readonly string[]; in?: "own_group" | "orphan" }
   | { raw: string }
   | { sleep: number }
+  /**
+   * The thread's background terminals from now on, by item id: commands
+   * left running past the turn, which `thread/backgroundTerminals/list`
+   * reports until they exit or `thread/backgroundTerminals/clean` ends them.
+   */
+  | { terminals: readonly string[] }
   | { exit: number }
+  /**
+   * Browse the fixture library through the browser and stella MCP servers
+   * `thread/start` configured, and report each call and the answer.
+   */
+  | { browse: true }
   /**
    * Send these while watching for `turn/interrupt`: one answers it, ends the
    * turn `interrupted` and the scenario. No later step may expect a request.
    */
   | { untilInterrupted: readonly FakeOutput[] };
+
+/** Requests answered at any time, the script's own steps done or not. */
+const ALWAYS_ANSWERED: ReadonlySet<string> = new Set([
+  "thread/backgroundTerminals/list",
+  "thread/backgroundTerminals/clean",
+  "account/rateLimits/read",
+]);
+
+/** Unix seconds well after any test runs. */
+export const FAKE_FUTURE_RESET = 1_893_456_000;
+
+/** The plan's allowance as Codex reports it, the main window at `used`. */
+const planLimits = (usedPercent: number, resetsAt = FAKE_FUTURE_RESET) => ({
+  limitId: "codex",
+  limitName: null,
+  primary: { usedPercent, windowDurationMins: 300, resetsAt },
+  secondary: {
+    usedPercent: 40,
+    windowDurationMins: 10_080,
+    resetsAt: resetsAt - 3600,
+  },
+  credits: null,
+  individualLimit: null,
+  planType: "plus",
+  rateLimitReachedType: null,
+});
+
+/** `account/rateLimits/read`, keyed by limit id as current servers do. */
+const rateLimitsRead = (codex: object) => ({
+  rateLimits: codex,
+  rateLimitsByLimitId: {
+    codex,
+    // Another model's allowance never stands for the plan's.
+    "codex-other": { ...planLimits(100), limitId: "codex-other" },
+  },
+});
+
+/** A background terminal as the app-server lists it. */
+const backgroundTerminal = (itemId: string) => ({
+  itemId,
+  processId: `process-${itemId}`,
+  command: "bun run dev",
+  cwd: "/workspace",
+  osPid: null,
+  cpuPercent: null,
+  rssKb: null,
+});
 
 const userAgent = (version: string) =>
   `stella/${version} (Mac OS 27.0; arm64) test`;
@@ -65,6 +124,14 @@ export const FAKE_OUTDATED_VERSION = "0.150.0";
 export const FAKE_THREAD_ID = "thread-a";
 export const FAKE_RESUMED_THREAD_ID = "thread-old";
 const FAKE_TURN_ID = "turn-1";
+/** The server name the holder registers the browser tools under. */
+const FAKE_BROWSER_SERVER = "stella_browser";
+
+const usageLimitError = {
+  message: "You've hit your usage limit.",
+  codexErrorInfo: "usageLimitExceeded",
+  additionalDetails: null,
+};
 
 const signedIn = {
   account: { type: "chatgpt", email: null, planType: "plus" },
@@ -138,7 +205,52 @@ export const FAKE_PRIVATE_TEXT = {
   heredoc: "Tenant owes 4,200 in arrears.",
   diff: "-Rent is due monthly.\n+Rent is due quarterly.",
   explanation: "Working through the private plan",
+  subagentPrompt: "Read the lease and list every clause on arrears.",
+  subagentText: "Clause 4 covers arrears.",
+  subagentThinking: "The arrears clause may be void.",
+  subagentReport: "Report: clause 4 caps arrears at 4,200.",
 } as const;
+
+/** The thread and turn the subagent of the subagent scenario works on. */
+const FAKE_SUBAGENT_THREAD_ID = "thread-subagent";
+const FAKE_SUBAGENT_TURN_ID = "turn-subagent";
+
+/** An item of the subagent's own thread. */
+const subagentItem = (
+  phase: "started" | "completed",
+  body: object,
+): FakeStep => ({
+  notify: `item/${phase}`,
+  params: {
+    threadId: FAKE_SUBAGENT_THREAD_ID,
+    turnId: FAKE_SUBAGENT_TURN_ID,
+    item: body,
+  },
+});
+
+/** A call to one of the tools an agent manages its subagents with. */
+const subagentToolCall = (
+  id: string,
+  tool: string,
+  status: string,
+  agents: Readonly<Record<string, string>>,
+) => ({
+  type: "collabAgentToolCall",
+  id,
+  tool,
+  status,
+  senderThreadId: FAKE_THREAD_ID,
+  receiverThreadIds: Object.keys(agents),
+  prompt: FAKE_PRIVATE_TEXT.subagentPrompt,
+  model: null,
+  reasoningEffort: null,
+  agentsStates: Object.fromEntries(
+    Object.entries(agents).map(([threadId, state]) => [
+      threadId,
+      { status: state, message: FAKE_PRIVATE_TEXT.subagentReport },
+    ]),
+  ),
+});
 
 /** A command longer than chat shows. */
 export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
@@ -274,22 +386,12 @@ export const usageLimitTurn = (resetsAt: {
     notify: "account/rateLimits/updated",
     params: {
       rateLimits: {
-        limitId: "codex",
-        limitName: null,
-        primary: {
-          usedPercent: 100,
-          windowDurationMins: 300,
-          resetsAt: resetsAt.primary,
-        },
+        ...planLimits(100, resetsAt.primary),
         secondary: {
           usedPercent: 40,
           windowDurationMins: 10_080,
           resetsAt: resetsAt.secondary,
         },
-        credits: null,
-        individualLimit: null,
-        planType: "plus",
-        rateLimitReachedType: null,
       },
     },
   },
@@ -306,11 +408,7 @@ export const usageLimitTurn = (resetsAt: {
       },
     },
   },
-  completed("failed", {
-    message: "You've hit your usage limit.",
-    codexErrorInfo: "usageLimitExceeded",
-    additionalDetails: null,
-  }),
+  completed("failed", usageLimitError),
 ];
 
 /** Between paced outputs, in milliseconds. */
@@ -335,6 +433,16 @@ const textDelta = (itemId: string, delta: string): FakeOutput => ({
   params: { threadId: FAKE_THREAD_ID, turnId: FAKE_TURN_ID, itemId, delta },
 });
 
+/** A dev server the agent started and left running past its yield. */
+const devServer = (status: string, extra: object = {}) =>
+  command("call-serve", status, { command: "bun run dev", ...extra });
+
+/** The next turn's message, on the same thread. */
+const nextTurnItem = (body: object): FakeStep => ({
+  notify: "item/completed",
+  params: { threadId: FAKE_THREAD_ID, turnId: CONTINUED_TURN_ID, item: body },
+});
+
 export const FAKE_SCENARIOS = {
   /** A streamed answer and nothing else. */
   text: [
@@ -353,6 +461,79 @@ export const FAKE_SCENARIOS = {
       ),
     ),
     completed(),
+  ],
+  /** The local browser canary: a search, a result, a sign-in, a citation. */
+  browse: [...freshTurn(), { browse: true }, completed()],
+  /**
+   * A turn that leaves a dev server running as a background terminal, then
+   * the chat's next turn on the same thread in the same process, during
+   * which the server exits.
+   */
+  background_terminal: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    item("completed", agentMessage("m-serve", "The server runs.")),
+    completed(),
+    { expect: "turn/start", result: { turn: continuedTurn("inProgress") } },
+    { terminals: [] },
+    item("completed", devServer("completed", { exitCode: 0 })),
+    nextTurnItem(agentMessage("m-next", "It stopped.")),
+    {
+      notify: "turn/completed",
+      params: { threadId: FAKE_THREAD_ID, turn: continuedTurn("completed") },
+    },
+  ],
+  /**
+   * A turn that leaves a dev server running and answers the client's list
+   * of background terminals late: a stop can arrive after the turn
+   * completed and before its process is kept.
+   */
+  background_terminal_late_list: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    completed(),
+    { sleep: 1000 },
+    {
+      expect: "thread/backgroundTerminals/list",
+      result: { data: [backgroundTerminal("call-serve")], nextCursor: null },
+    },
+  ],
+  /** A dev server left running, and a list of terminals that fails. */
+  background_terminal_list_fails: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      error: { code: -32_603, message: "Internal error" },
+    },
+  ],
+  /** A dev server left running, and a release without the terminal list. */
+  background_terminal_list_unsupported: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      error: { code: -32_601, message: "Method not found" },
+    },
+  ],
+  /** As above, but the server exits while the chat waits for its next turn. */
+  background_terminal_exits: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      result: { data: [backgroundTerminal("call-serve")], nextCursor: null },
+    },
+    // Once the process is kept, not while it is being listed.
+    { sleep: 200 },
+    { terminals: [] },
+    item("completed", devServer("completed", { exitCode: 0 })),
   ],
   /**
    * The shared stella tool calls through the stella MCP binding, step by
@@ -433,6 +614,118 @@ export const FAKE_SCENARIOS = {
       },
       error: null,
     }),
+    completed(),
+  ],
+  /**
+   * Subagents and viewed images. One subagent is spawned, runs a command it
+   * asks about and views an image on its own thread, is reported ended
+   * twice, and is then given more work, which fails; one fails to spawn; one
+   * is still at work when the turn ends. The
+   * prompt, the subagent's text and reasoning, and its report sit next to
+   * the steps stella shows. An item of a thread no spawn named is not the
+   * turn's.
+   */
+  subagent: [
+    ...freshTurn(),
+    item(
+      "started",
+      subagentToolCall("call-spawn", "spawnAgent", "inProgress", {}),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn", "spawnAgent", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "pendingInit",
+      }),
+    ),
+    subagentItem(
+      "completed",
+      agentMessage("sub-m-1", FAKE_PRIVATE_TEXT.subagentText),
+    ),
+    subagentItem("completed", {
+      type: "reasoning",
+      id: "sub-r-1",
+      summary: [FAKE_PRIVATE_TEXT.subagentThinking],
+      content: [],
+    }),
+    subagentItem("started", {
+      ...command("sub-rm", "inProgress"),
+      command: "rm draft.md",
+    }),
+    {
+      request: "item/commandExecution/requestApproval",
+      params: {
+        kind: "command",
+        threadId: FAKE_SUBAGENT_THREAD_ID,
+        turnId: FAKE_SUBAGENT_TURN_ID,
+        itemId: "sub-rm",
+        startedAtMs: 1,
+        environmentId: null,
+        reason: null,
+        command: "rm draft.md",
+      },
+    },
+    subagentItem("completed", {
+      ...command("sub-rm", "completed", { aggregatedOutput: "", exitCode: 0 }),
+      command: "rm draft.md",
+    }),
+    subagentItem("completed", {
+      type: "imageView",
+      id: "sub-image",
+      path: "/workspace/scans/Lease Page 1.png",
+    }),
+    {
+      notify: "item/completed",
+      params: {
+        threadId: "thread-of-no-spawn",
+        turnId: "turn-of-no-spawn",
+        item: command("stray", "completed"),
+      },
+    },
+    item("completed", {
+      type: "imageView",
+      id: "call-image",
+      path: "/workspace/scans/cover.png",
+    }),
+    item(
+      "completed",
+      subagentToolCall("call-wait", "wait", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "completed",
+      }),
+    ),
+    item("completed", {
+      type: "subAgentActivity",
+      id: "activity-1",
+      kind: "completed",
+      agentThreadId: FAKE_SUBAGENT_THREAD_ID,
+      agentPath: "/root/worker",
+    }),
+    item(
+      "completed",
+      subagentToolCall("call-followup", "followupTask", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "running",
+      }),
+    ),
+    subagentItem(
+      "completed",
+      command("sub-ls", "completed", { aggregatedOutput: "", exitCode: 0 }),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-wait-again", "wait", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "errored",
+      }),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn-failed", "spawnAgent", "failed", {}),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn-open", "spawnAgent", "completed", {
+        "thread-subagent-open": "running",
+      }),
+    ),
+    item("completed", agentMessage("m-2", "The lease caps arrears.")),
     completed(),
   ],
   /**
@@ -812,8 +1105,8 @@ export const FAKE_SCENARIOS = {
     }),
   ],
   usage_limit: usageLimitTurn({
-    primary: 1_793_196_000,
-    secondary: 1_793_700_000,
+    primary: FAKE_FUTURE_RESET,
+    secondary: FAKE_FUTURE_RESET - 3600,
   }),
   /**
    * An answer streamed a word at a time, `FAKE_CODEX_PACE_MS` apart; an
@@ -833,6 +1126,27 @@ export const FAKE_SCENARIOS = {
     },
     item("completed", agentMessage("m-slow", SLOW_TEXT_WORDS.join(""))),
     completed(),
+  ],
+  /** The first limit of a process: no update came before the failure. */
+  usage_limit_unannounced: [
+    ...freshTurn(),
+    completed("failed", usageLimitError),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(100)),
+    },
+  ],
+  /** As above, and the account has no plan limits to read (an API key). */
+  usage_limit_read_fails: [
+    ...freshTurn(),
+    completed("failed", usageLimitError),
+    {
+      expect: "account/rateLimits/read",
+      error: {
+        code: -32_600,
+        message: "codex account authentication required to read rate limits",
+      },
+    },
   ],
   /** stella's MCP server fails to start after the turn began. */
   stella_mcp_failed: [
@@ -1032,6 +1346,39 @@ export const FAKE_SCENARIOS = {
         nextCursor: null,
       },
     },
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(40)),
+    },
+  ],
+  /** The limits cannot be read, as for an account without a plan. */
+  probe_limits_unreadable: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      error: {
+        code: -32_600,
+        message: "codex account authentication required to read rate limits",
+      },
+    },
+  ],
+  /** The plan's window is spent, and the account has credits to go on. */
+  probe_out_of_usage_with_credits: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead({
+        ...planLimits(100),
+        credits: { hasCredits: true, unlimited: false, balance: "12.50" },
+      }),
+    },
+  ],
+  probe_out_of_usage: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(100)),
+    },
   ],
 } as const satisfies Record<string, readonly FakeStep[]>;
 
@@ -1209,6 +1556,127 @@ export const openCodexPeer = (log: (entry: object) => void) =>
   });
 
 type CodexPeer = ReturnType<typeof openCodexPeer>;
+type PeerMessage = Awaited<ReturnType<CodexPeer["take"]>>;
+
+type RunOptions = {
+  peer?: CodexPeer;
+  skills?: ReturnType<typeof skillDiscovery>;
+  models?: object;
+};
+
+/** What `run` plays with: the caller's peer, skills and models, or fresh ones. */
+const runContext = (log: (entry: object) => void, options: RunOptions) => ({
+  peer: options.peer ?? openCodexPeer(log),
+  skills: options.skills ?? skillDiscovery(),
+  models: options.models ?? TURN_MODELS,
+});
+
+/**
+ * Send `outputs` while watching for `interrupt`, the client's next request,
+ * which must be `turn/interrupt` and ends the turn `interrupted`. True when
+ * the stretch ended the scenario: interrupted, or the client closed.
+ */
+const playUntilInterrupted = async ({
+  outputs,
+  interrupt,
+  write,
+  log,
+}: {
+  outputs: readonly FakeOutput[];
+  interrupt: Promise<PeerMessage>;
+  write: CodexPeer["write"];
+  log: (entry: object) => void;
+}): Promise<boolean> => {
+  const watched: { message: PeerMessage | undefined } = {
+    message: undefined,
+  };
+  // Registered before any race below, so it has run when one settles.
+  const settled = interrupt.then((message) => {
+    watched.message = message;
+    return message;
+  });
+  for (const output of outputs) {
+    if (watched.message !== undefined) {
+      break;
+    }
+    if ("sleep" in output) {
+      // await-in-loop: the outputs are paced one after another.
+      await Promise.race([Bun.sleep(output.sleep), settled]);
+    } else {
+      write({ method: output.notify, params: output.params });
+    }
+  }
+  const message = watched.message;
+  if (message === undefined) {
+    return false;
+  }
+  if (message === null) {
+    return true;
+  }
+  if (message.method !== "turn/interrupt") {
+    log({ unexpected: message.method, wanted: "turn/interrupt" });
+    process.exit(97);
+  }
+  write({ id: message.id, result: {} });
+  write({
+    method: "turn/completed",
+    params: { threadId: FAKE_THREAD_ID, turn: turn("interrupted") },
+  });
+  return true;
+};
+
+/**
+ * Browse the fixture library through the browser and stella MCP servers
+ * `thread/start` configured, and report each call and the answer.
+ */
+const playBrowse = async ({
+  threadStart,
+  write,
+  log,
+}: {
+  threadStart: unknown;
+  write: CodexPeer["write"];
+  log: (entry: object) => void;
+}) => {
+  const browsed = await browseAsAgent({
+    browserServer: FAKE_BROWSER_SERVER,
+    endpoints: codexMcpEndpoints(threadStart),
+    stellaServer: FAKE_STELLA_SERVER,
+  });
+  // Kept on this computer, for the test to see what the agent read.
+  log({ pageCanaries: browsed.read });
+  const notifyItem = (phase: "started" | "completed", body: object) => {
+    write({
+      method: `item/${phase}`,
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        item: body,
+      },
+    });
+  };
+  for (const call of browsed.steps) {
+    const mcpCall = {
+      type: "mcpToolCall",
+      id: call.id,
+      server: call.server,
+      tool: call.tool,
+      arguments: call.arguments,
+      error: null,
+    };
+    notifyItem("started", {
+      ...mcpCall,
+      status: "inProgress",
+      result: null,
+    });
+    notifyItem("completed", {
+      ...mcpCall,
+      status: call.isError ? "failed" : "completed",
+      result: { content: [{ type: "text", text: call.text }] },
+    });
+  }
+  notifyItem("completed", agentMessage("m-browse", browsed.answer));
+};
 
 /**
  * Plays `steps` to the client. A caller that answered the start of the
@@ -1218,19 +1686,36 @@ type CodexPeer = ReturnType<typeof openCodexPeer>;
 export const run = async (
   steps: readonly FakeStep[],
   log: (entry: object) => void,
-  options: {
-    peer?: CodexPeer;
-    skills?: ReturnType<typeof skillDiscovery>;
-    models?: object;
-  } = {},
+  options: RunOptions = {},
 ) => {
-  const { reading, take, write } = options.peer ?? openCodexPeer(log);
-
-  const skills = options.skills ?? skillDiscovery();
-  const models = options.models ?? TURN_MODELS;
-  /** Model listing and skill discovery answer whenever they are asked. */
-  const unscriptedAnswer = (method: string | undefined, params: unknown) =>
-    method === "model/list" ? models : skills.answer(method, params);
+  const { peer, skills, models } = runContext(log, options);
+  const { reading, take, write } = peer;
+  /** The thread's background terminals, by item id, as the script set them. */
+  const terminals: string[] = [];
+  /**
+   * Model listing, skill discovery and the background terminals answer
+   * whenever they are asked.
+   */
+  const unscriptedAnswer = (
+    method: string | undefined,
+    params: unknown,
+  ): object | null => {
+    if (method === "model/list") {
+      return models;
+    }
+    if (method === "thread/backgroundTerminals/list") {
+      return { data: terminals.map(backgroundTerminal), nextCursor: null };
+    }
+    if (method === "thread/backgroundTerminals/clean") {
+      log({ cleaned: [...terminals] });
+      terminals.splice(0);
+      return {};
+    }
+    if (method === "account/rateLimits/read") {
+      return rateLimitsRead(planLimits(10));
+    }
+    return skills.answer(method, params);
+  };
   /** The next request a step scripts; skill discovery answers the rest. */
   const nextRequest = async (expected: string) => {
     for (;;) {
@@ -1246,57 +1731,16 @@ export const run = async (
       write({ id: message?.id, result: answer });
     }
   };
-  /**
-   * Send `outputs` while watching for `turn/interrupt`, which ends the turn
-   * `interrupted`; how the stretch ended.
-   */
-  const playUntilInterrupted = async (
-    outputs: readonly FakeOutput[],
-  ): Promise<"played" | "interrupted" | "closed"> => {
-    const interrupt = nextRequest("turn/interrupt");
-    const watched: { message: Awaited<typeof interrupt> | undefined } = {
-      message: undefined,
-    };
-    // Registered before any race below, so it has run when one settles.
-    const settled = interrupt.then((message) => {
-      watched.message = message;
-      return message;
-    });
-    for (const output of outputs) {
-      if (watched.message !== undefined) {
-        break;
-      }
-      if ("sleep" in output) {
-        // await-in-loop: the outputs are paced one after another.
-        await Promise.race([Bun.sleep(output.sleep), settled]);
-      } else {
-        write({ method: output.notify, params: output.params });
-      }
-    }
-    const message = watched.message;
-    if (message === undefined) {
-      return "played";
-    }
-    if (message === null) {
-      return "closed";
-    }
-    if (message.method !== "turn/interrupt") {
-      log({ unexpected: message.method, wanted: "turn/interrupt" });
-      process.exit(97);
-    }
-    write({ id: message.id, result: {} });
-    write({
-      method: "turn/completed",
-      params: { threadId: FAKE_THREAD_ID, turn: turn("interrupted") },
-    });
-    return "interrupted";
-  };
   let serverRequestId = 1000;
+  let threadStart: unknown = undefined;
   for (const step of steps) {
     if ("expect" in step) {
       const message = await nextRequest(step.expect);
       if (message === null) {
         return;
+      }
+      if (message.method === "thread/start") {
+        threadStart = message["params"];
       }
       if (message.method !== step.expect) {
         log({ unexpected: message.method, wanted: step.expect });
@@ -1341,18 +1785,39 @@ export const run = async (
     } else if ("sleep" in step) {
       await Bun.sleep(step.sleep);
     } else if ("untilInterrupted" in step) {
-      const played = await playUntilInterrupted(step.untilInterrupted);
-      if (played === "closed") {
-        return;
-      }
-      if (played === "interrupted") {
+      const ended = await playUntilInterrupted({
+        outputs: step.untilInterrupted,
+        interrupt: nextRequest("turn/interrupt"),
+        write,
+        log,
+      });
+      if (ended) {
         break;
       }
+    } else if ("terminals" in step) {
+      terminals.splice(0, terminals.length, ...step.terminals);
+    } else if ("browse" in step) {
+      await playBrowse({ threadStart, write, log });
     } else {
       process.exit(step.exit);
     }
   }
-  // A real server exits once its client closes stdin.
+  // A real server exits once its client closes stdin. Until then it still
+  // answers what it answers at any time; anything else stays unanswered, as
+  // the script left it.
+  for (;;) {
+    // await-in-loop: one request at a time, in the order they arrived.
+    const message = await take("requests");
+    if (message === null) {
+      break;
+    }
+    if (ALWAYS_ANSWERED.has(message.method ?? "")) {
+      write({
+        id: message.id,
+        result: unscriptedAnswer(message.method, message["params"]),
+      });
+    }
+  }
   await reading;
 };
 

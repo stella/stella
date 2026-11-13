@@ -332,7 +332,7 @@ export const installPgliteSchemaPrerequisites = async (
   await db.execute(
     sql.raw(
       latestMigrationStatementContaining(
-        "CREATE FUNCTION stella_list_verification_day",
+        "CREATE FUNCTION stella_model_run_day",
       ),
     ),
   );
@@ -1737,41 +1737,45 @@ export const installPgliteDecisionCitationStats = async (
   }
 };
 
-/** Install the migration-owned verification counter and Prague day function,
- *  and the triggers that charge fact extraction runs to the same counter. */
-export const installPgliteListVerificationBudgets = async (
+/** Install the migration-owned model run counter function and the triggers
+ *  that charge list verifications, fact extractions and capped document
+ *  reviews to it; the Prague day function is installed before the push. */
+export const installPgliteModelRunBudgets = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
+  // The verification error-code domain the caps migration widened.
+  const runConstraints = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
       "20261005120400_list_verification_run_caps",
       "migration.sql",
     ),
-  ).filter((statement) => {
-    const source = executableSql(statement);
-    if (source.startsWith("CREATE FUNCTION stella_list_verification_day")) {
-      return false;
-    }
-    return [
-      "CREATE FUNCTION",
-      "CREATE TRIGGER",
-      "REVOKE ALL ON FUNCTION",
-      "ALTER TABLE",
-    ].some((prefix) => source.startsWith(prefix));
-  });
-  const generationTriggers = readMigrationStatements(
+  ).filter((statement) =>
+    executableSql(statement).startsWith(
+      "ALTER TABLE legal_list_verification_runs",
+    ),
+  );
+  const counter = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261109190000_list_fact_extraction_runs",
+      "20261112203235_model_run_caps_owner",
       "migration.sql",
     ),
-  ).filter((statement) =>
-    executableSql(statement).startsWith("CREATE TRIGGER"),
-  );
-  for (const statement of [...statements, ...generationTriggers]) {
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION maintain_model_run_budget") ||
+      source.startsWith("REVOKE ALL ON FUNCTION maintain_model_run_budget") ||
+      source.startsWith("CREATE TRIGGER")
+    );
+  });
+  for (const statement of [...runConstraints, ...counter]) {
     await db.execute(sql.raw(statement));
   }
+  // The counter took over the forced list counter's table in place.
+  await db.execute(
+    sql.raw('ALTER TABLE "model_run_budgets" FORCE ROW LEVEL SECURITY'),
+  );
 };
 
 /** Install invoice authorization and guards from the production migration after schema push. */

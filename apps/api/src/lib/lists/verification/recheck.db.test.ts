@@ -24,8 +24,8 @@ import {
   legalListItems,
   legalLists,
   legalListVerificationBlocks,
-  legalListVerificationBudgets,
   legalListVerificationRuns,
+  modelRunBudgets,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -270,8 +270,8 @@ testState.beforeAll(async () => {
       },
     ]);
     await tx
-      .insert(legalListVerificationBudgets)
-      .values({ organizationId })
+      .insert(modelRunBudgets)
+      .values({ organizationId, runKind: "list-run" })
       .onConflictDoNothing();
   });
 });
@@ -642,9 +642,9 @@ test("a grade whose access was withdrawn while grading records nothing", async (
 
 test("an organization at its daily limit is refused before any model call", async () => {
   await testDb
-    .update(legalListVerificationBudgets)
-    .set({ startsToday: sql`${legalListVerificationBudgets.dailyLimit}` })
-    .where(eq(legalListVerificationBudgets.organizationId, organizationId));
+    .update(modelRunBudgets)
+    .set({ startsToday: sql`${modelRunBudgets.dailyLimit}` })
+    .where(eq(modelRunBudgets.organizationId, organizationId));
   const grader = fakeGrader();
   const count = (await recheckEvents(gapClaim)).length;
   try {
@@ -658,9 +658,9 @@ test("an organization at its daily limit is refused before any model call", asyn
     expect(await recheckEvents(gapClaim)).toHaveLength(count);
   } finally {
     await testDb
-      .update(legalListVerificationBudgets)
+      .update(modelRunBudgets)
       .set({ startsToday: 0 })
-      .where(eq(legalListVerificationBudgets.organizationId, organizationId));
+      .where(eq(modelRunBudgets.organizationId, organizationId));
   }
 });
 
@@ -758,9 +758,9 @@ test("each claim reports its own refusal and the rest are still graded", async (
 
 test("an organization at its daily limit is refused before any of several claims is graded", async () => {
   await testDb
-    .update(legalListVerificationBudgets)
-    .set({ startsToday: sql`${legalListVerificationBudgets.dailyLimit}` })
-    .where(eq(legalListVerificationBudgets.organizationId, organizationId));
+    .update(modelRunBudgets)
+    .set({ startsToday: sql`${modelRunBudgets.dailyLimit}` })
+    .where(eq(modelRunBudgets.organizationId, organizationId));
   const grader = graderAnswering(["C1", "C2"]);
   try {
     const outcomes = await recheckMany(
@@ -777,9 +777,9 @@ test("an organization at its daily limit is refused before any of several claims
     expect(grader.requests).toHaveLength(0);
   } finally {
     await testDb
-      .update(legalListVerificationBudgets)
+      .update(modelRunBudgets)
       .set({ startsToday: 0 })
-      .where(eq(legalListVerificationBudgets.organizationId, organizationId));
+      .where(eq(modelRunBudgets.organizationId, organizationId));
   }
 });
 

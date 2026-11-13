@@ -398,6 +398,17 @@ const CLAUDE_CONTROL_REQUEST_FIELDS: Readonly<
   interrupt: {},
   get_usage: { skip_behaviors: BOOLEAN },
   mcp_set_servers: { servers: SIZE },
+  set_permission_mode: {
+    mode: vocabulary([
+      "default",
+      "acceptEdits",
+      "bypassPermissions",
+      "plan",
+      "dontAsk",
+      "auto",
+    ]),
+  },
+  stop_task: { task_id: IDENTIFIER },
 };
 
 const CLAUDE_USAGE_WINDOW = object({ utilization: NUMBER, resets_at: INSTANT });
@@ -644,6 +655,15 @@ const CODEX_RATE_LIMIT_WINDOW = object({
   resetsAt: NUMBER,
 });
 
+/** One allowance, as an update or a read reports it. */
+const CODEX_RATE_LIMITS = object({
+  limitId: vocabulary(["codex"]),
+  planType: CODEX_PLAN_TYPES,
+  primary: CODEX_RATE_LIMIT_WINDOW,
+  secondary: CODEX_RATE_LIMIT_WINDOW,
+  credits: SIZE,
+});
+
 const CODEX_IN_TURN = { threadId: IDENTIFIER, turnId: IDENTIFIER } as const;
 const CODEX_ON_ITEM = { ...CODEX_IN_TURN, itemId: IDENTIFIER } as const;
 const CODEX_DELTA = { ...CODEX_ON_ITEM, delta: SIZE } as const;
@@ -721,6 +741,8 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
   },
   initialized: {},
   "account/read": { refreshToken: BOOLEAN },
+  // Sent without params.
+  "account/rateLimits/read": {},
   "model/list": { limit: NUMBER, cursor: SIZE },
   "skills/extraRoots/set": { extraRoots: SIZE },
   "skills/list": { forceReload: BOOLEAN, cwds: SIZE },
@@ -731,6 +753,13 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
     excludeTurns: BOOLEAN,
   },
   "thread/unarchive": { threadId: IDENTIFIER },
+  "thread/backgroundTerminals/list": {
+    threadId: IDENTIFIER,
+    cursor: IDENTIFIER,
+    data: list({ itemId: IDENTIFIER }),
+    nextCursor: IDENTIFIER,
+  },
+  "thread/backgroundTerminals/clean": { threadId: IDENTIFIER },
   "turn/start": {
     threadId: IDENTIFIER,
     model: OPAQUE,
@@ -759,15 +788,7 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
   },
   "turn/plan/updated": { ...CODEX_IN_TURN, explanation: SIZE, plan: SIZE },
   "serverRequest/resolved": { threadId: IDENTIFIER, requestId: IDENTIFIER },
-  "account/rateLimits/updated": {
-    rateLimits: object({
-      limitId: vocabulary(["codex"]),
-      planType: CODEX_PLAN_TYPES,
-      primary: CODEX_RATE_LIMIT_WINDOW,
-      secondary: CODEX_RATE_LIMIT_WINDOW,
-      credits: SIZE,
-    }),
-  },
+  "account/rateLimits/updated": { rateLimits: CODEX_RATE_LIMITS },
   "item/commandExecution/requestApproval": {
     ...CODEX_APPROVAL,
     command: SIZE,
@@ -830,6 +851,8 @@ const CODEX_RESULT = object({
     planType: CODEX_PLAN_TYPES,
   }),
   requiresOpenaiAuth: BOOLEAN,
+  rateLimits: CODEX_RATE_LIMITS,
+  rateLimitsByLimitId: SIZE,
   // Stella's answers to approvals, questions and declined requests.
   decision: vocabulary([
     "accept",
@@ -910,6 +933,7 @@ const SIDECAR_HOST_FIELDS: Readonly<
     mcp: object({ serverName: OPAQUE, expiresAt: INSTANT, url: SIZE }),
     workspaceDir: SIZE,
     cacheDir: SIZE,
+    stepOutputDir: SIZE,
     instructions: SIZE,
     messages: SIZE,
     attachments: SIZE,
@@ -1025,6 +1049,7 @@ const SIDECAR_FIELDS: Readonly<Record<SidecarMessage["type"], Fields>> = {
     requestId: IDENTIFIER,
     outcome: vocabulary(SIDECAR_RESTORE_OUTCOMES),
   },
+  "background.tasks": { runId: IDENTIFIER, count: NUMBER },
   rejected: {
     reason: vocabulary(SIDECAR_REJECTIONS),
     messageType: vocabulary(Object.values(SIDECAR_HOST_MESSAGE)),

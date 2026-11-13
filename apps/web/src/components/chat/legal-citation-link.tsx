@@ -4,6 +4,7 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
+import type { CitedDecisionParagraph } from "@stll/api-contract/chat-reference-href";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
@@ -21,7 +22,6 @@ import {
 import type { ExternalSourceReference } from "@/components/chat/external-source-store";
 import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
-import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import type { LinkIconSource } from "@/features/chat/components/proxy-chat-link";

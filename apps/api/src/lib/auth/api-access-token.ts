@@ -118,6 +118,21 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/member-candidates/list.ts",
   },
+  // The organization's matter-number convention, so a number typed for a
+  // matter is checked against it as the web's hint does. Only the pattern and
+  // its padding; the organization's settings stay closed.
+  "GET /v1/workspaces/matter-numbering": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/matter-numbering/get.ts",
+  },
+  // The caller's own role, which a browser reads from its auth session: the
+  // app leaves out what the role cannot do (`@stll/permissions/role-grants`).
+  // Every request is still decided by the server.
+  "GET /v1/me/role": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/role/get.ts",
+    uncataloged: "auth_plumbing",
+  },
   // A matter's own settings, as the web's matter info keeps them: its name,
   // number, client and lead, its archive state, a copy of it, and deleting
   // it, each under the matter permission a browser session needs.
@@ -405,6 +420,7 @@ export const API_OAUTH_ROUTES = {
      * which has no handler config to carry one.
      */
     uncataloged?:
+      | "auth_plumbing"
       | "realtime_stream"
       | "upload_mechanics"
       | "search_ui"

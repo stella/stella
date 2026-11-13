@@ -581,7 +581,18 @@
   },
   "dictation": {
     "title": "Diktieren",
-    "description": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird auf diesem Computer umgewandelt und nicht gespeichert.",
+    "description": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird auf diesem Computer umgewandelt und nicht gespeichert. Ist die KI-Überarbeitung aktiviert, wird der umgewandelte Text, nicht der Ton, über stella an den KI-Anbieter Ihrer Organisation gesendet, um Fehler und Formatierung zu korrigieren; stella speichert ihn nicht.",
+    "cleanup": {
+      "title": "Mit KI überarbeiten",
+      "description": "Die Sprache wird weiterhin auf diesem Computer umgewandelt, und der Ton verlässt ihn nie. Ist die Überarbeitung aktiviert, wird der umgewandelte Text über stella an den KI-Anbieter Ihrer Organisation gesendet, um Erkennungsfehler zu korrigieren und gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ anzuwenden. stella speichert ihn nicht."
+    },
+    "language": {
+      "title": "Diktiersprache",
+      "description": "Gesprochenes wird in dieser Sprache erkannt, und die Überarbeitung belässt den Text darin. Automatisch verwendet die Sprachen der Anzeige und Tastaturen dieses Computers.",
+      "automatic": "Automatisch",
+      "automaticWith": "Automatisch ({languages})",
+      "noResults": "Keine Sprachen gefunden"
+    },
     "modelNeeded": "Das Sprachmodell läuft auf diesem Computer.",
     "download": "Herunterladen ({size} MB)",
     "downloading": "Sprachmodell wird geladen: {percent} %",
@@ -592,7 +603,10 @@
       "accessibility": "Erlauben Sie den Zugriff auf die Bedienungshilfen, damit stella in andere Apps schreiben kann.",
       "microphone": "stella kann Ihr Mikrofon nicht hören. Prüfen Sie den Mikrofonzugriff in den Systemeinstellungen.",
       "modelMissing": "Laden Sie zuerst das Sprachmodell herunter.",
-      "transcription": "Die Umwandlung ist fehlgeschlagen. Versuchen Sie es erneut."
+      "transcription": "Die Umwandlung ist fehlgeschlagen. Versuchen Sie es erneut.",
+      "focusChanged": "Sie haben zu einer anderen App gewechselt, bevor der Text fertig war, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
+      "focusUnconfirmed": "stella konnte nicht feststellen, welche App den Fokus hat, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
+      "shortcutHeld": "Lassen Sie die Tasten des Tastenkürzels los, damit getippt werden kann. Es wurde nichts eingegeben; versuchen Sie es erneut."
     }
   },
   "shortcut": {
@@ -816,6 +830,27 @@
       "runs_can_write": "Lokale Ausführungen können in diesen Ordner schreiben, daher kann er keinen Skill enthalten.",
       "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Skills müssen auf dem eigenen Laufwerk dieses Computers liegen.",
       "path_changed": "Ein übergeordneter Ordner hat sich geändert. Entfernen Sie diesen Ordner und fügen Sie ihn erneut hinzu."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Verknüpfte Ordner",
+    "description": "Ordner auf diesem Computer, in denen der Coding-Agent eines Chats arbeiten kann. Ein Chat sieht nur den Namen eines Ordners; sein Pfad bleibt auf diesem Computer.",
+    "add": "Ordner verknüpfen",
+    "remove": "Trennen",
+    "removeFolder": "{name} trennen",
+    "state": {
+      "offline": "Das Laufwerk mit diesem Ordner ist nicht verbunden.",
+      "moved": "Dieser Ordner wurde verschoben, umbenannt oder gelöscht. Trennen Sie ihn und verknüpfen Sie ihn erneut.",
+      "protected": "Dieser Ordner enthält die eigenen Daten von stella oder einen Skill-Ordner, daher kann der Agent darin nicht arbeiten.",
+      "unreadable": "Dieser Ordner konnte nicht gelesen werden."
+    },
+    "notice": {
+      "action_failed": "Das hat nicht funktioniert. Versuchen Sie es erneut.",
+      "too_many": "Dieser Computer hat bereits so viele verknüpfte Ordner, wie er speichern kann. Trennen Sie zuerst einen.",
+      "not_a_folder": "Wählen Sie einen Ordner.",
+      "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Verknüpfen Sie einen Ordner auf dem eigenen Laufwerk dieses Computers.",
+      "protected": "Dieser Ordner enthält die eigenen Daten von stella oder einen Skill-Ordner, daher kann der Agent darin nicht arbeiten.",
+      "unreadable": "Dieser Ordner konnte nicht gelesen werden."
     }
   }
 }
