@@ -68,6 +68,11 @@ export type HarnessToolCall = {
    * reads it, and it is not part of what a turn reports.
    */
   localInput?: unknown;
+  /**
+   * The harness's id of the subagent step that made the call; absent on the
+   * main thread. Reported beside the call, never inside its input.
+   */
+  parentCallId?: string;
 };
 
 export type HarnessToolResult = {

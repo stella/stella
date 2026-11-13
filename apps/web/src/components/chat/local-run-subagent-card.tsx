@@ -3,6 +3,13 @@ import { type ReactNode, useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  type LocalRunStepStanding,
+  type LocalRunSubagentStatus,
+  localRunSubagentStatus,
+  localRunSubagentType,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -15,13 +22,6 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { isRunningToolPart } from "@/components/chat/chat-ui-tools";
-import {
-  type LocalRunStepStanding,
-  type LocalRunSubagentStatus,
-  localRunSubagentStatus,
-  localRunSubagentType,
-  localRunToolView,
-} from "@/components/chat/local-run-tool.logic";
 import {
   SubagentsCallStatusIndicator,
   SubagentsCardHeader,
@@ -106,16 +106,24 @@ type LocalRunSubagentGroupProps = {
   part: StandingPart & { input?: unknown };
   /** Every step the subagent took, the ones shown as cards included. */
   steps: readonly StandingPart[];
-  /** The rows of the steps that show inside; none leaves nothing to open. */
+  /** The rows of the steps that show inside. */
   rows: readonly ReactNode[];
+  /**
+   * The subagent's own conversation (what it was told, wrote and reported),
+   * read from the computer that ran it once the group is open; `null` while
+   * the subagent works. With no rows either, there is nothing to open.
+   */
+  conversation: ReactNode;
 };
 
 /**
  * A subagent a coding agent started on the member's computer: its short
- * description, how many steps it took and its one status, with the steps it
- * took inside. What it was told, wrote and reported stays on that computer.
+ * description, how many steps it took and its one status, with its own
+ * conversation and the steps it took inside. What it was told, wrote and
+ * reported stays on that computer: opening the group reads it from there.
  */
 export const LocalRunSubagentGroup = ({
+  conversation,
   part,
   rows,
   steps,
@@ -169,7 +177,7 @@ export const LocalRunSubagentGroup = ({
       title={t("chat.toolCall.subagent")}
     />
   );
-  if (rows.length === 0) {
+  if (rows.length === 0 && conversation === null) {
     return (
       <SubagentsCardShell>
         <div data-slot="local-run-subagent">{header}</div>
@@ -197,6 +205,8 @@ export const LocalRunSubagentGroup = ({
           </CollapsibleTrigger>
           <CollapsiblePanel>
             <div className="border-border/50 flex flex-col gap-1 border-t px-2.5 py-1.5">
+              {/* Read from the computer only once the member opens it. */}
+              {isOpen && conversation}
               {rows}
             </div>
           </CollapsiblePanel>

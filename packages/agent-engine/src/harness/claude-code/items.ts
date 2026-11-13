@@ -233,11 +233,37 @@ const optionalStringField = (
 const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(["Agent", "Task"]);
 
 /**
+ * What a subagent was told when `use` started it, or `null` when the call
+ * starts none or carries no prompt. It stays on this computer, with the
+ * rest of the subagent's conversation.
+ */
+export const subagentPromptOf = ({
+  name,
+  input,
+}: Pick<ClaudeToolUse, "name" | "input">): string | null =>
+  SUBAGENT_TOOLS.has(name)
+    ? (optionalStringField(input, "prompt") ?? null)
+    : null;
+
+/** Whether `use` starts a subagent. */
+export const startsSubagent = ({ name }: Pick<ClaudeToolUse, "name">) =>
+  SUBAGENT_TOOLS.has(name);
+
+/**
  * The files `Read` returns as an image instead of text. The CLI decides by
  * the file's extension, and so does this: the call is shown before its
  * result exists.
  */
 const IMAGE_FILE = /\.(?:png|jpe?g|gif|webp)$/iu;
+
+/** The image file a `Read` viewed, or `null` for any other call. */
+const viewedImageOf = ({
+  name,
+  input,
+}: Pick<ClaudeToolUse, "name" | "input">): string | null => {
+  const file = name === "Read" ? stringField(input, "file_path") : "";
+  return IMAGE_FILE.test(file) ? file : null;
+};
 
 /** The titles of a `TodoWrite` list; its statuses and other fields stay. */
 const todoTitles = (input: Readonly<Record<string, unknown>>) => {
@@ -450,7 +476,7 @@ export const toolCallForUse = (
   stepOfSubagent(mainThreadCall(use, stellaServer), parentCallId);
 
 /** A tool result's text blocks; images and other blocks are not carried. */
-const resultText = (block: ClaudeToolResult) => {
+export const resultText = (block: ClaudeToolResult) => {
   if (block.content === undefined) {
     return "";
   }
@@ -520,17 +546,23 @@ export const toolResultFor = (
         }),
         status: status(failed),
       };
-    case "native":
+    case "native": {
       // What a built-in tool returned (a file it read, an image, the lines a
       // search matched, a fetched page, a subagent's report) stays here;
       // only how it ended is shown.
+      const image = failed ? null : viewedImageOf(use);
       return {
         content: chatLocalRunToolResultContent({
           name: HARNESS_TOOL_NAMES.nativeTool,
           result: { status: outcome },
         }),
         status: status(failed),
+        // The file it viewed, for the member to open on this computer.
+        ...(image === null
+          ? {}
+          : { localOutput: { type: "image", path: image } }),
       };
+    }
     case "question":
     case "mcp":
       return {

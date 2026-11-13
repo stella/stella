@@ -174,21 +174,25 @@ describe("a Claude Code subagent's messages", () => {
             events.flatMap((event) =>
               event.type === "tool.completed" &&
               event.toolCall.name === HARNESS_TOOL_NAMES.unsupportedItem
-                ? [event.toolCall.input]
+                ? [
+                    {
+                      input: event.toolCall.input,
+                      parentCallId: event.toolCall.parentCallId,
+                    },
+                  ]
                 : [],
             ),
           ).toEqual(
-            messages
-              .flatMap(unreadableIn)
-              .map((itemType) => ({ itemType, parentCallId: SUBAGENT_CALL })),
+            messages.flatMap(unreadableIn).map((itemType) => ({
+              input: { itemType },
+              parentCallId: SUBAGENT_CALL,
+            })),
           );
           // Every step is the subagent's, and nothing it wrote, thought or
           // was returned is the turn's.
           for (const event of events) {
             if (event.type === "tool.started") {
-              expect(event.toolCall.input).toMatchObject({
-                parentCallId: SUBAGENT_CALL,
-              });
+              expect(event.toolCall.parentCallId).toBe(SUBAGENT_CALL);
             }
           }
           expect(JSON.stringify(events)).not.toContain(PRIVATE_TEXT);

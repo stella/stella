@@ -4,29 +4,34 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES } from "@stll/api-contract/chat-local-run-step-output";
+import {
+  CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
+  type ChatLocalRunConversationEntry,
+} from "@stll/api-contract/chat-local-run-step-output";
+import {
+  type LocalRunStepOutputKind,
+  localRunStepOutputKind,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
-import {
-  type ChatToolCallPart,
-  type HarnessChatToolCallPart,
-  isRunningToolPart,
-} from "@/components/chat/chat-ui-tools";
-import {
-  type LocalRunStepOutputKind,
-  localRunStepOutputKind,
-} from "@/components/chat/local-run-tool.logic";
+import { isRunningToolPart } from "@/components/chat/chat-ui-tools";
 import { CopyControl } from "@/components/copy-control";
-import { localRunStepOutputOptions } from "@/features/chat/local-run-step-output";
+import {
+  localRunStepImageOptions,
+  localRunStepOutputOptions,
+} from "@/features/chat/local-run-step-output";
 import {
   diffLines,
   type DiffLineTone,
   isLocalRunStepOutputCut,
+  localRunConversationEntries,
 } from "@/features/chat/local-run-step-output.logic";
 import { useFormatter } from "@/i18n/formatting-context";
+import type { TranslationKey } from "@/i18n/types";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { formatFileSize } from "@/lib/file-size";
@@ -73,10 +78,61 @@ const DiffText = ({ text }: { text: string }) => {
   );
 };
 
+/** The step outputs kept and read as text. */
+type LocalRunStepTextKind = Exclude<LocalRunStepOutputKind, "image">;
+
+const TEXT_KIND_LABEL_KEYS = {
+  command: "chat.toolCall.output",
+  diff: "chat.toolCall.localOutput.diff",
+  conversation: "chat.toolCall.localOutput.conversation",
+} as const satisfies Record<LocalRunStepTextKind, TranslationKey>;
+
+/** Who said a piece of a subagent's conversation; what it wrote is unnamed. */
+const CONVERSATION_ROLE_LABEL_KEYS = {
+  prompt: "chat.toolCall.localOutput.conversationPrompt",
+  message: null,
+  report: "chat.toolCall.localOutput.conversationReport",
+} as const satisfies Record<
+  ChatLocalRunConversationEntry["role"],
+  TranslationKey | null
+>;
+
+/**
+ * A subagent's kept conversation: what it was told, what it wrote, what it
+ * reported. Plain text throughout: it came from a model, so none of it is
+ * rendered as markup.
+ */
+const ConversationText = ({ text }: { text: string }) => {
+  const t = useTranslations();
+  return (
+    <ol className="flex flex-col gap-2 py-1">
+      {localRunConversationEntries(text).map(({ key, role, text: said }) => {
+        const labelKey = CONVERSATION_ROLE_LABEL_KEYS[role];
+        return (
+          <li className="flex flex-col gap-0.5" key={key}>
+            {labelKey !== null && (
+              <span className="text-muted-foreground text-2xs font-medium">
+                {t(labelKey)}
+              </span>
+            )}
+            <p
+              className="text-foreground-muted text-xs leading-5 wrap-break-word whitespace-pre-wrap"
+              dir="auto"
+            >
+              {said}
+            </p>
+          </li>
+        );
+      })}
+    </ol>
+  );
+};
+
 /**
  * What a coding agent's step produced on the member's computer, read from
- * stella desktop there as the row opens: the output or diff as it arrives,
- * how much was left out past the cap, or that it is on another computer.
+ * stella desktop there as the row opens: the output, diff or conversation as
+ * it arrives, how much was left out past the cap, or that it is on another
+ * computer.
  */
 const LocalRunStepOutput = ({
   activeOrganizationId,
@@ -86,7 +142,7 @@ const LocalRunStepOutput = ({
 }: {
   activeOrganizationId: string;
   callId: string;
-  kind: LocalRunStepOutputKind;
+  kind: LocalRunStepTextKind;
   userId: string;
 }) => {
   const t = useTranslations();
@@ -96,10 +152,7 @@ const LocalRunStepOutput = ({
   );
   const view = queryView(query, { isEmpty: () => false });
   useQueryViewError(view, "LocalRunStepOutput:query");
-  const label =
-    kind === "diff"
-      ? t("chat.toolCall.localOutput.diff")
-      : t("chat.toolCall.output");
+  const label = t(TEXT_KIND_LABEL_KEYS[kind]);
   const retry = (
     <Button
       onClick={() => {
@@ -161,6 +214,25 @@ const LocalRunStepOutput = ({
   if (output.text === "" && !reading) {
     return interrupted ?? <Note>{t("chat.toolCall.localOutput.empty")}</Note>;
   }
+  const cut = isLocalRunStepOutputCut(output.totalBytes) && (
+    <Note>
+      {t("chat.toolCall.localOutput.cut", {
+        kept: formatFileSize(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES, format),
+        total: formatFileSize(output.totalBytes, format),
+      })}
+    </Note>
+  );
+  if (kind === "conversation") {
+    return (
+      <section aria-busy={reading} aria-label={label}>
+        <ScrollArea className="max-h-96">
+          <ConversationText text={output.text} />
+        </ScrollArea>
+        {interrupted}
+        {cut}
+      </section>
+    );
+  }
   return (
     <section aria-label={label} className="group/code relative" dir="ltr">
       <div
@@ -183,39 +255,161 @@ const LocalRunStepOutput = ({
         </pre>
       </ScrollArea>
       {interrupted}
-      {isLocalRunStepOutputCut(output.totalBytes) && (
-        <Note>
-          {t("chat.toolCall.localOutput.cut", {
-            kept: formatFileSize(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES, format),
-            total: formatFileSize(output.totalBytes, format),
-          })}
-        </Note>
-      )}
+      {cut}
     </section>
   );
 };
 
 /**
+ * The image a step viewed, read whole from stella desktop on this computer
+ * as the row opens, and shown as the kind its bytes name: never run, never
+ * through the API. An image past what the computer keeps says so.
+ */
+const LocalRunStepImage = ({
+  activeOrganizationId,
+  callId,
+  name,
+  userId,
+}: {
+  activeOrganizationId: string;
+  callId: string;
+  /** The file's name as the step's row shows it. */
+  name: string;
+  userId: string;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const query = useQuery(
+    localRunStepImageOptions({ activeOrganizationId, userId, callId }),
+  );
+  const view = queryView(query, { isEmpty: () => false });
+  useQueryViewError(view, "LocalRunStepImage:query");
+  const retry = (
+    <Button
+      onClick={() => {
+        detached(query.refetch(), "local-run-step-image.retry");
+      }}
+      size="xs"
+      variant="ghost"
+    >
+      {t("common.tryAgain")}
+    </Button>
+  );
+  switch (view.type) {
+    case "pending":
+      return <Note pending>{t("chat.toolCall.localOutput.reading")}</Note>;
+    case "error":
+      return (
+        <Note>
+          {t("chat.toolCall.localOutput.failed")}
+          {retry}
+        </Note>
+      );
+    case "empty":
+      return panic("A step's image read is never empty");
+    case "items":
+      break;
+    default:
+      view satisfies never;
+      return panic("Unhandled step image view");
+  }
+  const image = view.items;
+  switch (image.status) {
+    case "elsewhere":
+      return (
+        <Note>
+          {t("chat.toolCall.localOutput.elsewhere")}
+          {retry}
+        </Note>
+      );
+    case "not-kept":
+    case "not-image":
+      return <Note>{t("chat.toolCall.localOutput.notKept")}</Note>;
+    case "incomplete":
+      return (
+        <Note>
+          {t("chat.toolCall.localOutput.failed")}
+          {retry}
+        </Note>
+      );
+    case "too-large":
+      return (
+        <Note>
+          {t("chat.toolCall.localOutput.imageTooLarge", {
+            kept: formatFileSize(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES, format),
+            total: formatFileSize(image.totalBytes, format),
+          })}
+        </Note>
+      );
+    case "shown":
+      return (
+        <img
+          alt={name}
+          className="border-border/50 max-h-96 max-w-full rounded-sm border object-contain"
+          src={image.src}
+        />
+      );
+    default:
+      image satisfies never;
+      return panic("Unhandled step image status");
+  }
+};
+
+/** A tool call as much as tells what it kept: any call of a turn fits. */
+type StepOutputPart = {
+  id: string;
+  name: string;
+  state: string;
+  input?: unknown;
+  output?: unknown;
+};
+
+/**
+ * What a settled step of a coding agent kept on the member's computer for
+ * them to open, or `null`: any other call, or a step still running.
+ */
+export const localRunStepOutputKindOf = ({
+  input,
+  name,
+  output,
+  state,
+}: StepOutputPart): LocalRunStepOutputKind | null =>
+  output === undefined || isRunningToolPart({ type: "tool-call", name, state })
+    ? null
+    : localRunStepOutputKind({ name, input });
+
+/**
  * A tool row's details for what a coding agent's settled step produced on
- * the member's computer: a command's output or a change's diff. Nothing for
- * any other call, or for a step still running.
+ * the member's computer: a command's output, a change's diff, a subagent's
+ * conversation, or the image a step viewed. Nothing for any other call, or
+ * for a step still running.
  */
 export const LocalRunStepOutputDetails = ({
   activeOrganizationId,
   part,
 }: {
   activeOrganizationId: string;
-  part: ChatToolCallPart | HarnessChatToolCallPart;
+  part: StepOutputPart;
 }) => {
   const user = useMaybeAuthenticatedUser();
-  const kind = localRunStepOutputKind(part.name);
-  if (
-    kind === null ||
-    user === null ||
-    part.output === undefined ||
-    isRunningToolPart(part)
-  ) {
+  const kind = localRunStepOutputKindOf(part);
+  if (kind === null || user === null) {
     return null;
+  }
+  if (kind === "image") {
+    const shown = localRunToolView({
+      name: part.name,
+      input: part.input,
+      output: undefined,
+    })?.subtitle;
+    return (
+      <LocalRunStepImage
+        activeOrganizationId={activeOrganizationId}
+        callId={part.id}
+        name={shown?.type === "text" ? shown.text : ""}
+        userId={user.id}
+      />
+    );
   }
   return (
     <LocalRunStepOutput

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -232,6 +233,195 @@ describe("drawing an answer from its events", () => {
         work: new Map(),
       });
     }
+  });
+
+  test("a coding agent's subagent groups its steps while the answer arrives, as the stored answer does", () => {
+    const subagentInput = {
+      tool: "Agent",
+      detail: { kind: "subagent", description: "Check the lease" },
+    };
+    const stepInput = { command: "rg lease" };
+    // The start of a subagent's call names the subagent's step beside it,
+    // with whatever else a start carries, none of which is kept.
+    const inSubagent = {
+      [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: "agent",
+    };
+    const argumentDeltas = (args: string) => {
+      const middle = Math.floor(args.length / 2);
+      return [args.slice(0, middle), args.slice(middle)];
+    };
+    const stepsOf = (
+      id: string,
+      name: string,
+      input: unknown,
+      metadata?: object,
+    ): readonly unknown[] => [
+      {
+        type: "TOOL_CALL_START",
+        toolCallId: id,
+        toolCallName: name,
+        ...(metadata === undefined ? {} : { metadata }),
+      },
+      // A native step's arguments arrive whole; split, they read the same.
+      ...argumentDeltas(JSON.stringify(input)).map((delta) => ({
+        type: "TOOL_CALL_ARGS",
+        toolCallId: id,
+        delta,
+      })),
+      { type: "TOOL_CALL_END", toolCallId: id },
+    ];
+    const result = (id: string) => ({
+      type: "TOOL_CALL_RESULT",
+      toolCallId: id,
+      content: '{"status":"completed"}',
+    });
+    const answer = reduce(
+      [
+        ...stepsOf("agent", "harness_native_tool", subagentInput),
+        ...stepsOf("step", "command_execution", stepInput, {
+          ...inSubagent,
+          tanstack: { model: "test-model" },
+        }),
+        // A step whose input alone names the subagent is not its step.
+        ...stepsOf("loose", "command_execution", {
+          command: "ls",
+          parentCallId: "agent",
+        }),
+        // Another tool's arguments are not kept.
+        ...stepsOf("other", "list_templates", { query: "lease" }),
+        result("loose"),
+        result("step"),
+        result("agent"),
+      ].flatMap((event) => parseChatEvent(JSON.stringify(event)) ?? []),
+    );
+    expect(answer.parts).toEqual([
+      {
+        type: "tool-call",
+        id: "agent",
+        name: "harness_native_tool",
+        state: "complete",
+        input: subagentInput,
+        output: { status: "completed" },
+      },
+      {
+        type: "tool-call",
+        id: "step",
+        name: "command_execution",
+        state: "complete",
+        input: stepInput,
+        metadata: inSubagent,
+        output: { status: "completed" },
+      },
+      {
+        type: "tool-call",
+        id: "loose",
+        name: "command_execution",
+        state: "complete",
+        input: { command: "ls", parentCallId: "agent" },
+        output: { status: "completed" },
+      },
+      {
+        type: "tool-call",
+        id: "other",
+        name: "list_templates",
+        state: "input-streaming",
+      },
+    ]);
+    expect(answerEntry(answer, "2026-10-20T10:00:00.000Z").blocks).toEqual([
+      {
+        type: "subagent",
+        key: "subagent:agent",
+        description: "Check the lease",
+        agentType: null,
+        status: "done",
+        opensOnComputer: true,
+        stepCount: 1,
+        steps: [
+          {
+            type: "local",
+            label: "command_execution",
+            titleKind: null,
+            subtitle: { type: "text", text: "rg lease" },
+            status: "done",
+            opensOnComputer: false,
+          },
+        ],
+      },
+      {
+        type: "steps",
+        key: "2",
+        steps: [
+          {
+            type: "local",
+            label: "command_execution",
+            titleKind: null,
+            subtitle: { type: "text", text: "ls" },
+            status: "done",
+            opensOnComputer: false,
+          },
+          { type: "tool", label: "list_templates", status: "running" },
+        ],
+        work: new Map([["computation", 1]]),
+      },
+    ]);
+  });
+
+  test("a subagent still open when the run fails or is stopped reads as stopped, and one waiting for the person stays open", () => {
+    const open = (
+      id: string,
+      name: string,
+      input: unknown,
+      parentCallId?: string,
+    ): readonly unknown[] => [
+      {
+        type: "TOOL_CALL_START",
+        toolCallId: id,
+        toolCallName: name,
+        ...(parentCallId === undefined
+          ? {}
+          : {
+              metadata: {
+                [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: parentCallId,
+              },
+            }),
+      },
+      { type: "TOOL_CALL_ARGS", toolCallId: id, delta: JSON.stringify(input) },
+      { type: "TOOL_CALL_END", toolCallId: id },
+    ];
+    const statusAfter = (end: unknown) =>
+      answerEntry(
+        reduce(
+          [
+            ...open("agent", "harness_native_tool", {
+              tool: "Agent",
+              detail: { kind: "subagent", description: "Check the lease" },
+            }),
+            ...open(
+              "step",
+              "command_execution",
+              { command: "rg lease" },
+              "agent",
+            ),
+            end,
+          ].flatMap((event) => parseChatEvent(JSON.stringify(event)) ?? []),
+        ),
+        "2026-10-20T10:00:00.000Z",
+      ).blocks.flatMap((block) =>
+        block.type === "subagent"
+          ? [`${block.status}:${String(block.stepCount)}`]
+          : [],
+      );
+    // Cut off, its step is still its own: the link outlasts the end.
+    expect(
+      statusAfter({ type: "RUN_ERROR", message: "Provider failed" }),
+    ).toEqual(["interrupted:1"]);
+    expect(
+      statusAfter({ type: "RUN_FINISHED", outcome: { type: "cancelled" } }),
+    ).toEqual(["interrupted:1"]);
+    // The stored thread, read next, says what the turn waits for.
+    expect(
+      statusAfter({ type: "RUN_FINISHED", outcome: { type: "interrupt" } }),
+    ).toEqual(["running:1"]);
   });
 
   test("is still streaming until the run says it finished", () => {

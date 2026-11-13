@@ -23,6 +23,7 @@ import {
   type HarnessToolCall,
   type HarnessUsage,
 } from "../events";
+import { SubagentConversation } from "../step-output";
 import {
   HARNESS_TOOL_NAMES,
   stepOfSubagent,
@@ -260,12 +261,30 @@ type CodexTurnSessionOptions = {
   background: HarnessTurnBackground<AppServerClient>;
 };
 
-/** A subagent's current step and the subagent step it runs in, if any. */
+/** A subagent's completed message, as much of it as its conversation keeps. */
+const SubagentMessageNotificationSchema = v.object({
+  threadId: v.string(),
+  item: v.object({ text: v.string() }),
+});
+
+/**
+ * A subagent's current step and the subagent step it runs in, if any, with
+ * its conversation while that step is open: what it was told, what it wrote
+ * and the last message its state reported. The conversation never leaves
+ * this computer: the step's result keeps it for the member to open here.
+ */
 type CodexSubagent = {
   step: HarnessToolCall;
   parentCallId: string | null;
-  status: "working" | "ended";
-};
+} & (
+  | {
+      status: "working";
+      prompt: string | null;
+      written: SubagentConversation;
+      report: string | null;
+    }
+  | { status: "ended" }
+);
 
 export class CodexTurnSession {
   private readonly started = Promise.withResolvers<undefined>();
@@ -832,7 +851,9 @@ export class CodexTurnSession {
   /**
    * An item of a subagent's thread: its tool calls are steps of the call
    * that started it, and a subagent it starts itself is a step of it too.
-   * What it wrote and thought is not read: that stays on the computer.
+   * What it wrote is held for its step to keep on this computer
+   * (`subagentWrote`); none of it is the turn's, and what it thought is not
+   * read.
    */
   private subagentItem(
     method: "item/started" | "item/completed",
@@ -845,6 +866,10 @@ export class CodexTurnSession {
       return;
     }
     const handling = codexItemHandling(type);
+    if (type === "agentMessage" && method === "item/completed") {
+      this.subagentWrote(params);
+      return;
+    }
     if (handling !== "tool" && handling !== "subagent") {
       return;
     }
@@ -876,6 +901,22 @@ export class CodexTurnSession {
             result: toolResultForItem(item),
           },
     );
+  }
+
+  /**
+   * What a subagent wrote, held for its step to keep on this computer. A
+   * message that does not have its shape is left out of the kept
+   * conversation: it is no step, so nothing is shown for it.
+   */
+  private subagentWrote(params: unknown) {
+    const written = v.safeParse(SubagentMessageNotificationSchema, params);
+    if (!written.success) {
+      return;
+    }
+    const subagent = this.subagents.get(written.output.threadId);
+    if (subagent?.status === "working") {
+      subagent.written.add(written.output.item.text);
+    }
   }
 
   /**
@@ -918,6 +959,9 @@ export class CodexTurnSession {
                 step: toolCall,
                 parentCallId,
                 status: "working",
+                prompt: item.prompt ?? null,
+                written: new SubagentConversation(),
+                report: null,
               });
             }
           }
@@ -949,13 +993,23 @@ export class CodexTurnSession {
           panic("Unhandled Codex subagent call status");
       }
     }
-    for (const [threadId, { status }] of Object.entries(item.agentsStates)) {
+    for (const [threadId, { status, message }] of Object.entries(
+      item.agentsStates,
+    )) {
       const standing = CODEX_AGENT_STATES.get(status);
       if (standing === "working") {
         this.subagentAtWork(threadId, item);
-      } else {
-        this.subagentEnded(threadId, standing ?? null);
+        continue;
       }
+      const subagent = this.subagents.get(threadId);
+      if (
+        subagent?.status === "working" &&
+        message !== undefined &&
+        message !== null
+      ) {
+        this.subagents.set(threadId, { ...subagent, report: message });
+      }
+      this.subagentEnded(threadId, standing ?? null);
     }
   }
 
@@ -983,6 +1037,9 @@ export class CodexTurnSession {
       step,
       parentCallId: subagent.parentCallId,
       status: "working",
+      prompt: item.prompt ?? null,
+      written: new SubagentConversation(),
+      report: null,
     });
     this.emit({ type: "tool.started", toolCall: step });
   }
@@ -1004,7 +1061,13 @@ export class CodexTurnSession {
     this.emit({
       type: "tool.completed",
       toolCall: subagent.step,
-      result: subagentResult(outcome),
+      result: {
+        ...subagentResult(outcome),
+        localOutput: subagent.written.ended({
+          prompt: subagent.prompt,
+          report: subagent.report,
+        }),
+      },
     });
   }
 

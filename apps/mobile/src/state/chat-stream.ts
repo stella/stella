@@ -2,6 +2,11 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import {
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
+  chatLocalRunParentCallId,
+  isChatLocalRunToolName,
+} from "@stll/api-contract/chat-local-run-tool";
 
 import { SignedOutError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
@@ -73,8 +78,8 @@ export const createSseParser = () => {
 
 /**
  * The AG-UI events an answer is drawn from. Everything else the run sends
- * (tool arguments, snapshots, custom progress) passes as `ignored`, so an
- * event this build has never seen does not end the stream.
+ * (snapshots, custom progress) passes as `ignored`, so an event this build
+ * has never seen does not end the stream.
  */
 const chatEventSchema = v.union([
   v.object({
@@ -91,7 +96,15 @@ const chatEventSchema = v.union([
     type: v.literal("TOOL_CALL_START"),
     toolCallId: v.string(),
     toolCallName: v.string(),
+    // Where a call of a coding agent's subagent names the subagent's step.
+    metadata: v.optional(v.unknown()),
   }),
+  v.object({
+    type: v.literal("TOOL_CALL_ARGS"),
+    toolCallId: v.string(),
+    delta: v.string(),
+  }),
+  v.object({ type: v.literal("TOOL_CALL_END"), toolCallId: v.string() }),
   v.object({
     type: v.literal("TOOL_CALL_RESULT"),
     toolCallId: v.string(),
@@ -140,8 +153,35 @@ type StreamedPart =
       readonly id: string;
       readonly name: string;
       readonly state: "input-streaming" | "complete" | "error";
+      /**
+       * What a step a coding agent took on the person's computer was
+       * given: its arguments as they arrive, then, once whole, read as the
+       * input a stored call keeps. No other call's arguments are kept.
+       */
+      readonly args?: string;
+      readonly input?: unknown;
+      /**
+       * The subagent step that made the call, kept as the stored call's
+       * metadata names it, so a live answer groups as the stored one does.
+       * Nothing else of a start's metadata is kept.
+       */
+      readonly metadata?: SubagentLink;
       readonly output?: unknown;
     };
+
+type SubagentLink = {
+  readonly [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: string;
+};
+
+/** A start's subagent link as a part keeps it, or nothing without one. */
+const subagentLinkOf = (
+  metadata: unknown,
+): { readonly metadata?: SubagentLink } => {
+  const parent = chatLocalRunParentCallId(metadata);
+  return parent === null
+    ? {}
+    : { metadata: { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: parent } };
+};
 
 /** An answer as it arrives: its parts in order, and where it stands. */
 export type StreamedAnswer = {
@@ -171,7 +211,10 @@ const appendDelta = (
     : [...parts, { type, content: delta }];
 };
 
-/** A tool result's content: the JSON it carries, or the text as it came. */
+/**
+ * A tool result's content, or a call's whole arguments: the JSON it
+ * carries, or the text as it came.
+ */
 const resultOutput = (content: string | undefined): unknown => {
   if (content === undefined) {
     return undefined;
@@ -226,8 +269,37 @@ export const applyChatEvent = (
             id: event.toolCallId,
             name: event.toolCallName,
             state: "input-streaming",
+            ...subagentLinkOf(event.metadata),
           },
         ],
+      };
+    }
+    case "TOOL_CALL_ARGS": {
+      return {
+        ...answer,
+        parts: answer.parts.map((part): StreamedPart =>
+          part.type === "tool-call" &&
+          part.id === event.toolCallId &&
+          isChatLocalRunToolName(part.name)
+            ? { ...part, args: `${part.args ?? ""}${event.delta}` }
+            : part,
+        ),
+      };
+    }
+    case "TOOL_CALL_END": {
+      return {
+        ...answer,
+        parts: answer.parts.map((part): StreamedPart => {
+          if (
+            part.type !== "tool-call" ||
+            part.id !== event.toolCallId ||
+            part.args === undefined
+          ) {
+            return part;
+          }
+          const { args, ...call } = part;
+          return { ...call, input: resultOutput(args) };
+        }),
       };
     }
     case "TOOL_CALL_RESULT": {
@@ -264,6 +336,34 @@ function finishedStatus(outcome: string | undefined): AnswerStatus {
   return "finished";
 }
 
+/**
+ * The answer's parts as they stand once it ended. A call still open when
+ * the run failed or was stopped never finished: it is cut off, errored with
+ * no result as the stored message keeps it, so its step and the subagent it
+ * belongs to do not read as still under way. A turn that waits for the
+ * person keeps its open call: the stored thread, read next, says what for.
+ */
+const endedParts = ({
+  parts,
+  status,
+}: StreamedAnswer): readonly StreamedPart[] =>
+  status === "failed" || status === "stopped"
+    ? parts.map((part): StreamedPart =>
+        part.type === "tool-call" && part.state === "input-streaming"
+          ? {
+              type: "tool-call",
+              id: part.id,
+              name: part.name,
+              state: "error",
+              ...(part.input === undefined ? {} : { input: part.input }),
+              ...(part.metadata === undefined
+                ? {}
+                : { metadata: part.metadata }),
+            }
+          : part,
+      )
+    : parts;
+
 /** The answer drawn as a thread entry, so it renders like a stored one. */
 export const answerEntry = (
   answer: StreamedAnswer,
@@ -273,7 +373,7 @@ export const answerEntry = (
   role: "assistant",
   createdAt,
   text: messageText(answer.parts),
-  blocks: answerBlocks(answer.parts),
+  blocks: answerBlocks(endedParts(answer)),
   files: [],
   // The stored answer names its drafts once the thread is read again.
   drafts: [],

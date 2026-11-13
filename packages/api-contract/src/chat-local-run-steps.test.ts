@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -6,13 +7,16 @@ import { assertProperty } from "@stll/property-testing";
 import {
   localRunProposedPlan,
   type LocalRunStepCall,
+  localRunStepOutputKind,
   type LocalRunStepStanding,
   localRunSubagentGroups,
   type LocalRunSubagentStatus,
   localRunSubagentStatus,
   localRunSubagentType,
   localRunToolView,
-} from "@/components/chat/local-run-tool.logic";
+} from "./chat-local-run-steps";
+import fixtures from "./chat-local-run-steps.fixtures.json";
+import { chatLocalRunParentCallId } from "./chat-local-run-tool";
 
 const view = (name: string, input: unknown, output?: unknown) =>
   localRunToolView({ name, input, output });
@@ -20,7 +24,7 @@ const view = (name: string, input: unknown, output?: unknown) =>
 describe("a step a coding agent took on the member's computer", () => {
   test("a command shows its line, and a failed one its exit code", () => {
     expect(view("command_execution", { command: "rg lease" })).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: { type: "text", text: "rg lease" },
     });
     expect(
@@ -30,7 +34,7 @@ describe("a step a coding agent took on the member's computer", () => {
         { aggregated_output: "1 fail", exit_code: 1, status: "failed" },
       ),
     ).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: { type: "command", command: "bun test", exitCode: 1 },
     });
     // Success needs no code; the status mark says it.
@@ -58,7 +62,7 @@ describe("a step a coding agent took on the member's computer", () => {
         ],
       }),
     ).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: { type: "text", text: "drafts/lease.md, drafts/notice.md" },
     });
   });
@@ -70,7 +74,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "read", path: "drafts/lease.md" },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.readFile",
+      titleKind: "read",
       subtitle: { type: "text", text: "drafts/lease.md" },
     });
     expect(
@@ -79,7 +83,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "search", pattern: "termination", path: "drafts" },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.searchFiles",
+      titleKind: "search",
       subtitle: { type: "search", pattern: "termination", path: "drafts" },
     });
     expect(
@@ -94,7 +98,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "fetch", url: "https://example.test/law" },
       }),
     ).toEqual({
-      titleKey: "chat.tool.fetch_url",
+      titleKind: "fetch",
       subtitle: { type: "text", text: "https://example.test/law" },
     });
     expect(
@@ -103,7 +107,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "plan", items: ["Read the lease", "Draft the notice"] },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.updatePlan",
+      titleKind: "plan",
       subtitle: { type: "text", text: "Read the lease, Draft the notice" },
     });
   });
@@ -115,7 +119,7 @@ describe("a step a coding agent took on the member's computer", () => {
       detail: { kind: "proposed_plan", text: plan },
     };
     expect(view("harness_native_tool", input)).toEqual({
-      titleKey: "chat.toolCall.proposedPlan",
+      titleKind: "proposed_plan",
       subtitle: null,
     });
     expect(localRunProposedPlan({ name: "harness_native_tool", input })).toBe(
@@ -132,7 +136,7 @@ describe("a step a coding agent took on the member's computer", () => {
 
   test("any other native tool shows its name, and a malformed detail its name only", () => {
     expect(view("harness_native_tool", { tool: "Skill" })).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: { type: "text", text: "Skill" },
     });
     expect(
@@ -140,7 +144,7 @@ describe("a step a coding agent took on the member's computer", () => {
         tool: "Read",
         detail: { kind: "read", content: "Private text" },
       }),
-    ).toEqual({ titleKey: null, subtitle: { type: "text", text: "Read" } });
+    ).toEqual({ titleKind: null, subtitle: { type: "text", text: "Read" } });
   });
 
   test("a stella or connector call keeps its own row", () => {
@@ -158,11 +162,11 @@ describe("a browser step on the member's computer", () => {
         url: "https://fixture-library.test/search",
       }),
     ).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: { type: "text", text: "https://fixture-library.test/search" },
     });
     expect(view("local_browser", { action: "click" })).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: null,
     });
   });
@@ -175,7 +179,7 @@ describe("a browser step on the member's computer", () => {
         { status: "needs_member" },
       ),
     ).toEqual({
-      titleKey: "chat.toolCall.signInToContinue",
+      titleKind: "sign_in",
       subtitle: { type: "text", text: "https://fixture-library.test/account" },
     });
   });
@@ -183,34 +187,41 @@ describe("a browser step on the member's computer", () => {
 
 const subagentStep = (
   id: string,
-  extra: Partial<LocalRunStepCall> & { parentCallId?: string } = {},
-): LocalRunStepCall => {
-  const { parentCallId, ...call } = extra;
-  return {
-    id,
-    name: "harness_native_tool",
-    input: {
-      tool: "Agent",
-      detail: { kind: "subagent", description: "Check the lease" },
-      ...(parentCallId === undefined ? {} : { parentCallId }),
-    },
-    shownAs: "row",
-    ...call,
-  };
-};
+  extra: Partial<LocalRunStepCall> = {},
+): LocalRunStepCall => ({
+  id,
+  name: "harness_native_tool",
+  input: {
+    tool: "Agent",
+    detail: { kind: "subagent", description: "Check the lease" },
+  },
+  parentCallId: null,
+  shownAs: "row",
+  ...extra,
+});
 
 const commandStep = (
   id: string,
-  parentCallId: string | undefined,
+  parentCallId: string | null,
   shownAs: LocalRunStepCall["shownAs"] = "row",
 ): LocalRunStepCall => ({
   id,
   name: "command_execution",
-  input: {
-    command: "ls",
-    ...(parentCallId === undefined ? {} : { parentCallId }),
-  },
+  input: { command: "ls" },
+  parentCallId,
   shownAs,
+});
+
+/** A connected server's tool: its input is the tool's own. */
+const connectorStep = (
+  id: string,
+  parentCallId: string | null,
+): LocalRunStepCall => ({
+  id,
+  name: "mcp__docs__search",
+  input: { query: "lease" },
+  parentCallId,
+  shownAs: "row",
 });
 
 const groupsOf = (calls: readonly LocalRunStepCall[]) => {
@@ -220,6 +231,36 @@ const groupsOf = (calls: readonly LocalRunStepCall[]) => {
     rowIn: Object.fromEntries(rowIn),
   };
 };
+
+test("a step names what it kept on the computer for the member to open, by what the step is", () => {
+  const kind = (name: string, input: unknown) =>
+    localRunStepOutputKind({ name, input });
+  expect(kind("command_execution", { command: "ls" })).toBe("command");
+  expect(kind("file_change", { changes: [] })).toBe("diff");
+  expect(
+    kind("harness_native_tool", {
+      tool: "Agent",
+      detail: { kind: "subagent", description: "Check the lease" },
+    }),
+  ).toBe("conversation");
+  expect(
+    kind("harness_native_tool", {
+      tool: "Read",
+      detail: { kind: "image", path: "scans/page-1.png" },
+    }),
+  ).toBe("image");
+  // A file that was read, a search and any other call keep nothing to open.
+  expect(
+    kind("harness_native_tool", {
+      tool: "Read",
+      detail: { kind: "read", path: "drafts/lease.md" },
+    }),
+  ).toBeNull();
+  expect(kind("harness_web_search", { query: "lease" })).toBeNull();
+  expect(kind("mcp__docs__search", { query: "lease" })).toBeNull();
+  // An input that is not the step's own names nothing.
+  expect(kind("command_execution", "ls")).toBeNull();
+});
 
 describe("a subagent a coding agent started on the member's computer", () => {
   test("its step names the task and the kind of agent, and an image its file", () => {
@@ -232,7 +273,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
       },
     };
     expect(view("harness_native_tool", input)).toEqual({
-      titleKey: "chat.toolCall.subagent",
+      titleKind: "subagent",
       subtitle: { type: "text", text: "Check the lease" },
     });
     expect(localRunSubagentType({ name: "harness_native_tool", input })).toBe(
@@ -244,7 +285,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
       detail: { kind: "subagent", description: "" },
     };
     expect(view("harness_native_tool", unnamed)).toEqual({
-      titleKey: "chat.toolCall.subagent",
+      titleKind: "subagent",
       subtitle: null,
     });
     expect(
@@ -262,7 +303,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
         detail: { kind: "image", path: "scans/page-1.png" },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.viewImage",
+      titleKind: "image",
       subtitle: { type: "text", text: "scans/page-1.png" },
     });
   });
@@ -270,24 +311,43 @@ describe("a subagent a coding agent started on the member's computer", () => {
   test("the steps it took show inside its group, and one waiting on the member stays on the turn", () => {
     expect(
       groupsOf([
-        commandStep("before", undefined),
+        commandStep("before", null),
         subagentStep("agent"),
         commandStep("read", "agent"),
         commandStep("asks", "agent", "card"),
-        {
-          id: "docs",
-          name: "mcp__docs__search",
-          input: { query: "lease" },
-          shownAs: "row",
-        },
+        // A connected server's tool the subagent called is its step too;
+        // one the main thread called stays on the turn.
+        connectorStep("docs", "agent"),
+        connectorStep("main-docs", null),
         commandStep("after", "agent"),
         subagentStep("idle"),
       ]),
     ).toEqual({
       // Every step counts, the one shown as a card included.
-      stepsOf: { agent: ["read", "asks", "after"], idle: [] },
-      rowIn: { read: "agent", after: "agent" },
+      stepsOf: { agent: ["read", "asks", "docs", "after"], idle: [] },
+      rowIn: { read: "agent", docs: "agent", after: "agent" },
     });
+  });
+
+  test("a stored turn groups by the link in each call's metadata, never by a step's input", () => {
+    // The fixture the web's and the phone's tests draw too.
+    const { stepsOf, rowIn } = localRunSubagentGroups(
+      fixtures.parts.map((part) => ({
+        id: part.id,
+        name: part.name,
+        input: part.input,
+        parentCallId: chatLocalRunParentCallId(
+          "metadata" in part ? part.metadata : undefined,
+        ),
+        shownAs: "row",
+      })),
+    );
+    expect(Object.fromEntries(stepsOf)).toEqual({
+      [fixtures.subagentCallId]: fixtures.stepsOfSubagent,
+    });
+    for (const step of fixtures.onTheTurn) {
+      expect(rowIn.has(step)).toBe(false);
+    }
   });
 
   test("a subagent started by a subagent shows in the outermost one's group with the steps it took", () => {
@@ -311,7 +371,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
         subagentStep("asks", { shownAs: "card" }),
         commandStep("of-asks", "asks"),
         commandStep("of-missing", "missing"),
-        commandStep("plain", undefined),
+        commandStep("plain", null),
         commandStep("of-plain", "plain"),
       ]),
     ).toEqual({ stepsOf: {}, rowIn: {} });
@@ -322,9 +382,9 @@ describe("a subagent a coding agent started on the member's computer", () => {
     const calls = fc.uniqueArray(
       fc.record({
         id,
-        kind: fc.constantFrom("subagent", "command"),
+        kind: fc.constantFrom("subagent", "command", "connector"),
         parentCallId: fc.option(fc.oneof(id, fc.constant("missing")), {
-          nil: undefined,
+          nil: null,
         }),
         shownAs: fc.constantFrom("row", "card"),
       }),
@@ -333,16 +393,25 @@ describe("a subagent a coding agent started on the member's computer", () => {
     assertProperty(
       "no step is ever hidden: a row shows on the turn or inside a group that shows on the turn",
       fc.property(calls, (generated) => {
-        const turn = generated.map((call) =>
-          call.kind === "subagent"
-            ? subagentStep(call.id, {
+        const turn = generated.map((call) => {
+          switch (call.kind) {
+            case "subagent":
+              return subagentStep(call.id, {
                 shownAs: call.shownAs,
-                ...(call.parentCallId === undefined
-                  ? {}
-                  : { parentCallId: call.parentCallId }),
-              })
-            : commandStep(call.id, call.parentCallId, call.shownAs),
-        );
+                parentCallId: call.parentCallId,
+              });
+            case "command":
+              return commandStep(call.id, call.parentCallId, call.shownAs);
+            case "connector":
+              return {
+                ...connectorStep(call.id, call.parentCallId),
+                shownAs: call.shownAs,
+              };
+            default:
+              call.kind satisfies never;
+              return panic("Unhandled generated call");
+          }
+        });
         const { stepsOf, rowIn } = localRunSubagentGroups(turn);
         for (const [step, subagent] of rowIn) {
           // The group it shows in is drawn on the turn itself, as a row.

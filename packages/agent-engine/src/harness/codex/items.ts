@@ -324,6 +324,8 @@ export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
           result: { status: "completed" },
         }),
         status: "succeeded",
+        // The file it viewed, for the member to open on this computer.
+        localOutput: { type: "image", path: item.path },
       };
     default:
       item satisfies never;

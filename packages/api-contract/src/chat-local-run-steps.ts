@@ -6,15 +6,17 @@ import {
   type ChatLocalRunToolDetail,
   isChatLocalRunToolName,
   parseChatLocalRunToolCall,
-} from "@stll/api-contract/chat-local-run-tool";
-
-import type { TranslationKey } from "@/i18n/types";
+} from "./chat-local-run-tool";
 
 /**
- * What a tool-call row shows for a step a coding agent took on the member's
- * computer: the API stores only the contract's fields
- * (`@stll/api-contract/chat-local-run-tool`), so the row names the command,
- * the file names, the search or the plan, and nothing it read or wrote.
+ * How every client shows the steps a coding agent took on the member's
+ * computer: what a step's row names, which steps show under a subagent's
+ * step, and a subagent's one status. The web and the phone both read this,
+ * so a turn groups and reads the same on each.
+ *
+ * The API stores only the contract's fields (`./chat-local-run-tool`), so a
+ * row names the command, the file names, the search or the plan, and nothing
+ * it read or wrote.
  */
 export type LocalRunToolSubtitle =
   | { type: "text"; text: string }
@@ -22,28 +24,21 @@ export type LocalRunToolSubtitle =
   | { type: "command"; command: string; exitCode: number };
 
 /** A browser step stopped at a sign-in the member completes in Chrome. */
-const SIGN_IN_TITLE_KEY =
-  "chat.toolCall.signInToContinue" satisfies TranslationKey;
+export const LOCAL_RUN_SIGN_IN_TITLE = "sign_in";
 
-type LocalRunToolTitleKey =
-  | (typeof DETAIL_TITLE_KEYS)[keyof typeof DETAIL_TITLE_KEYS]
-  | typeof SIGN_IN_TITLE_KEY;
+/**
+ * What a row's title names in place of its tool: the kind of step, or that
+ * a browser step waits for the member to sign in. Each client reads it in
+ * its own catalogue.
+ */
+export type LocalRunToolTitleKind =
+  ChatLocalRunToolDetail["kind"] | typeof LOCAL_RUN_SIGN_IN_TITLE;
 
 export type LocalRunToolView = {
-  /** A title naming the step's kind, or `null` to keep the tool's title. */
-  titleKey: LocalRunToolTitleKey | null;
+  /** What the title names, or `null` to keep the tool's own title. */
+  titleKind: LocalRunToolTitleKind | null;
   subtitle: LocalRunToolSubtitle | null;
 };
-
-const DETAIL_TITLE_KEYS = {
-  read: "chat.toolCall.readFile",
-  search: "chat.toolCall.searchFiles",
-  fetch: "chat.tool.fetch_url",
-  plan: "chat.toolCall.updatePlan",
-  proposed_plan: "chat.toolCall.proposedPlan",
-  subagent: "chat.toolCall.subagent",
-  image: "chat.toolCall.viewImage",
-} as const satisfies Record<ChatLocalRunToolDetail["kind"], TranslationKey>;
 
 const text = (value: string): LocalRunToolSubtitle | null =>
   value === "" ? null : { type: "text", text: value };
@@ -116,7 +111,7 @@ export const localRunToolView = ({
     case CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution: {
       const exitCode = exitCodeOf(output);
       return {
-        titleKey: null,
+        titleKind: null,
         subtitle:
           exitCode === null || call.input.command === ""
             ? text(call.input.command)
@@ -125,25 +120,25 @@ export const localRunToolView = ({
     }
     case CHAT_LOCAL_RUN_TOOL_NAMES.fileChange:
       return {
-        titleKey: null,
+        titleKind: null,
         subtitle: text(call.input.changes.map(({ path }) => path).join(", ")),
       };
     case CHAT_LOCAL_RUN_TOOL_NAMES.webSearch:
-      return { titleKey: null, subtitle: text(call.input.query) };
+      return { titleKind: null, subtitle: text(call.input.query) };
     case CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool: {
       const { detail, tool } = call.input;
       return detail === undefined
-        ? { titleKey: null, subtitle: text(tool) }
+        ? { titleKind: null, subtitle: text(tool) }
         : {
-            titleKey: DETAIL_TITLE_KEYS[detail.kind],
+            titleKind: detail.kind,
             subtitle: detailSubtitle(detail),
           };
     }
     case CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem:
-      return { titleKey: null, subtitle: null };
+      return { titleKind: null, subtitle: null };
     case CHAT_LOCAL_RUN_TOOL_NAMES.browser:
       return {
-        titleKey: needsMember(output) ? SIGN_IN_TITLE_KEY : null,
+        titleKind: needsMember(output) ? LOCAL_RUN_SIGN_IN_TITLE : null,
         subtitle:
           call.input.action === "open" && call.input.url !== undefined
             ? text(call.input.url)
@@ -155,24 +150,82 @@ export const localRunToolView = ({
   }
 };
 
+/**
+ * Whether a coding agent's own step reports that it failed: its result is
+ * `{ status: "failed" }` (`./chat-local-run-tool`), with no error envelope.
+ */
+export const localRunStepFailed = (name: string, output: unknown): boolean =>
+  isChatLocalRunToolName(name) &&
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === "failed";
+
+/** The result a coding agent's run gives a call its turn cut off. */
+export const isLocalRunInterruptedOutput = (output: unknown): boolean =>
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === "interrupted";
+
 /** What a step's details show of what it produced on the computer. */
-export type LocalRunStepOutputKind = "command" | "diff";
+export type LocalRunStepOutputKind =
+  "command" | "diff" | "conversation" | "image";
 
 /**
  * Whether a step produced something the member can open on the computer
- * that ran it: a command's output or a change's diff. `null` for any other
- * call, which keeps nothing there.
+ * that ran it: a command's output, a change's diff, a subagent's own
+ * conversation, or the image a step viewed. `null` for any other call, which
+ * keeps nothing there.
  */
-export const localRunStepOutputKind = (
-  name: string,
-): LocalRunStepOutputKind | null => {
-  switch (name) {
+export const localRunStepOutputKind = ({
+  name,
+  input,
+}: {
+  name: string;
+  input: unknown;
+}): LocalRunStepOutputKind | null => {
+  const call = isChatLocalRunToolName(name)
+    ? parseChatLocalRunToolCall(name, input)
+    : null;
+  if (call === null) {
+    return null;
+  }
+  switch (call.name) {
     case CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution:
       return "command";
     case CHAT_LOCAL_RUN_TOOL_NAMES.fileChange:
       return "diff";
-    default:
+    case CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool:
+      return call.input.detail === undefined
+        ? null
+        : detailOutputKind(call.input.detail);
+    case CHAT_LOCAL_RUN_TOOL_NAMES.webSearch:
+    case CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem:
+    case CHAT_LOCAL_RUN_TOOL_NAMES.browser:
       return null;
+    default:
+      call satisfies never;
+      return panic("Unhandled local run tool call");
+  }
+};
+
+/** What a native step of this kind keeps on the computer, if anything. */
+const detailOutputKind = (
+  detail: ChatLocalRunToolDetail,
+): LocalRunStepOutputKind | null => {
+  switch (detail.kind) {
+    case "subagent":
+      return "conversation";
+    case "image":
+      return "image";
+    case "read":
+    case "search":
+    case "fetch":
+    case "plan":
+    case "proposed_plan":
+      return null;
+    default:
+      detail satisfies never;
+      return panic("Unhandled local run tool detail");
   }
 };
 
@@ -252,6 +305,11 @@ export const localRunSubagentType = (call: LocalRunCall): string | null => {
 /** A turn's tool call as the grouping reads it. */
 export type LocalRunStepCall = LocalRunCall & {
   id: string;
+  /**
+   * The subagent step the call's metadata names (`chatLocalRunParentCallId`),
+   * or `null` for a call on the main thread.
+   */
+  parentCallId: string | null;
   /** How the turn shows the call: a plain row, or a card of its own. */
   shownAs: "row" | "card";
 };
@@ -268,10 +326,10 @@ type LocalRunSubagentGroups = {
 
 /**
  * Which of a turn's calls show under a subagent's step. A subagent's step
- * that shows as a row is a group, and a step naming it (`parentCallId`) is
- * one of its steps: a row among them shows inside the group, a card (an
- * approval) stays on the turn where the member sees it without opening
- * anything. A step whose subagent is not a group (it shows as a card, or the
+ * that shows as a row is a group, and a call naming it (`parentCallId`), a
+ * native step or a connected server's tool alike, is one of its steps: a row
+ * among them shows inside the group, a card (an approval) stays on the turn
+ * where the member sees it without opening anything. A step whose subagent is not a group (it shows as a card, or the
  * turn does not have it) stays on the turn, so no step is ever hidden. A
  * subagent started by a subagent shows in the outermost one's group, with
  * the steps it took.
@@ -281,20 +339,17 @@ export const localRunSubagentGroups = (
 ): LocalRunSubagentGroups => {
   const subagents = new Set<string>();
   const parents = new Map<string, string>();
-  for (const { id, name, input, shownAs } of calls) {
-    const call = nativeCallOf({ name, input });
-    if (call === null) {
-      continue;
+  for (const { id, name, input, parentCallId, shownAs } of calls) {
+    if (parentCallId !== null) {
+      parents.set(id, parentCallId);
     }
+    const call = nativeCallOf({ name, input });
     if (
       shownAs === "row" &&
-      call.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
+      call?.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
       call.input.detail?.kind === "subagent"
     ) {
       subagents.add(id);
-    }
-    if (call.input.parentCallId !== undefined) {
-      parents.set(id, call.input.parentCallId);
     }
   }
   const outermost = (id: string): string | null => {

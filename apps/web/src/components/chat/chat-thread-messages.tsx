@@ -21,6 +21,8 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
+import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
+import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
 import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
 import {
   countProcessWork,
@@ -130,8 +132,11 @@ import {
 } from "@/components/chat/context-notice";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
+import {
+  LocalRunStepOutputDetails,
+  localRunStepOutputKindOf,
+} from "@/components/chat/local-run-step-output";
 import { LocalRunSubagentGroup } from "@/components/chat/local-run-subagent-card";
-import { localRunSubagentGroups } from "@/components/chat/local-run-tool.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
@@ -2120,6 +2125,9 @@ const toLocalRunSubagentGroups = (toolCalls: readonly ToolCallRenderEntry[]) =>
       id: part.id,
       name: part.name,
       input: "input" in part ? part.input : undefined,
+      parentCallId: chatLocalRunParentCallId(
+        "metadata" in part ? part.metadata : undefined,
+      ),
       shownAs:
         isApprovalPart(part) || isPendingApprovalPart(part) ? "card" : "row",
     })),
@@ -2434,6 +2442,14 @@ const AssistantMessageParts = ({
           );
           return (
             <LocalRunSubagentGroup
+              conversation={
+                localRunStepOutputKindOf(subagent.part) === null ? null : (
+                  <LocalRunStepOutputDetails
+                    activeOrganizationId={activeOrganizationId}
+                    part={subagent.part}
+                  />
+                )
+              }
               key={subagent.part.id}
               part={subagent.part}
               rows={steps

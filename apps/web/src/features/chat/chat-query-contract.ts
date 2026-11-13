@@ -298,6 +298,12 @@ export const chatKeys = {
     "local-run-step-output",
     callId,
   ],
+  /** An image a step viewed, read whole: another read than its text. */
+  localRunStepImage: (key: {
+    activeOrganizationId: string;
+    userId: string;
+    callId: string;
+  }) => [...chatKeys.localRunStepOutput(key), "image"],
   browserSiteGrants: (activeOrganizationId: string, userId: string) => [
     ...chatKeys.all,
     activeOrganizationId,

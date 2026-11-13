@@ -30,6 +30,10 @@ import {
   chatLocalRunStepOutputGrantMessage,
 } from "@stll/api-contract/chat-local-run-step-output";
 import {
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
+  chatLocalRunParentCallId,
+} from "@stll/api-contract/chat-local-run-tool";
+import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
@@ -5879,10 +5883,11 @@ describe("chat turns on a computer", () => {
     ]);
   });
 
-  test("a subagent's steps name the subagent under its chat call id, on a stored step and on an approval, and a parent a desktop made up names nothing", async () => {
+  test("a subagent's calls name the subagent under its chat call id in their metadata, a connector's call included, and a parent a desktop made up names nothing", async () => {
     const secret = "Private settlement terms";
     const requestId = Bun.randomUUIDv7();
     const NATIVE_TOOL = "harness_native_tool";
+    const CONNECTOR_TOOL = "mcp__docs__search";
     const inSubagent = { parentCallId: "item_agent" };
     const subagent = {
       id: "item_agent",
@@ -5902,18 +5907,27 @@ describe("chat turns on a computer", () => {
       input: {
         tool: "Read",
         detail: { kind: "image", path: "/workspace/scans/page-1.png" },
-        ...inSubagent,
       },
+      ...inSubagent,
     };
     const search = {
       id: "item_search",
       name: "harness_web_search",
-      input: { query: "lease arrears", ...inSubagent },
+      input: { query: "lease arrears" },
+      ...inSubagent,
+    };
+    // A connector's call keeps the input its tool defines.
+    const connector = {
+      id: "item_docs",
+      name: CONNECTOR_TOOL,
+      input: { query: "arrears cap" },
+      ...inSubagent,
     };
     const command = {
       id: "item_rm",
       name: COMMAND_EXECUTION,
-      input: { command: "rm draft.md", ...inSubagent },
+      input: { command: "rm draft.md" },
+      ...inSubagent,
     };
     const done = {
       content: JSON.stringify({ status: "completed" }),
@@ -5931,6 +5945,7 @@ describe("chat turns on a computer", () => {
         { type: "tool.started", toolCall: subagent },
         { type: "tool.completed", toolCall: image, result: done },
         { type: "tool.completed", toolCall: search, result: done },
+        { type: "tool.completed", toolCall: connector, result: done },
         {
           type: "approval.requested",
           request: {
@@ -5942,26 +5957,33 @@ describe("chat turns on a computer", () => {
           },
         },
       ]);
-      // A desktop that puts the subagent's prompt and report on its step,
-      // and a made-up parent on the search.
-      const forged = (toolCallId: unknown, input: unknown) => {
-        if (!isRecord(input)) {
-          return input;
-        }
-        if (toolCallId === subagent.id && isRecord(input["detail"])) {
-          return {
-            ...input,
-            report: secret,
-            detail: { ...input["detail"], prompt: secret },
-          };
-        }
-        return toolCallId === search.id
-          ? { ...input, parentCallId: madeUp }
+      // A desktop that puts the subagent's prompt and report on its step
+      // and beside every call's start, and a made-up parent on the search.
+      const forged = (toolCallId: unknown, input: unknown) =>
+        toolCallId === subagent.id &&
+        isRecord(input) &&
+        isRecord(input["detail"])
+          ? {
+              ...input,
+              report: secret,
+              detail: { ...input["detail"], prompt: secret },
+            }
           : input;
-      };
       return sent.map((chunk) => {
         if (!isRecord(chunk)) {
           return chunk;
+        }
+        if (chunk["type"] === EventType.TOOL_CALL_START) {
+          return {
+            ...chunk,
+            metadata: {
+              ...(isRecord(chunk["metadata"]) ? chunk["metadata"] : {}),
+              prompt: secret,
+              ...(chunk["toolCallId"] === search.id
+                ? { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: madeUp }
+                : {}),
+            },
+          };
         }
         if (
           chunk["type"] === EventType.TOOL_CALL_ARGS &&
@@ -5998,34 +6020,65 @@ describe("chat turns on a computer", () => {
     expect(JSON.stringify(turn.emitted)).not.toContain(madeUp);
 
     const stored = persistTurn(turn.finish, "harness").unwrap();
-    const calls = stored.reloaded.parts.flatMap(
-      (part): { id: string; name: string; input: unknown }[] =>
-        part.type === "tool-call"
-          ? [{ id: part.id, name: part.name, input: part.input }]
-          : [],
+    expect(JSON.stringify(stored.reloaded)).not.toContain(secret);
+    type StoredCall = {
+      id: string;
+      name: string;
+      input: unknown;
+      /** The subagent step the call's metadata names. */
+      subagent: string | null;
+    };
+    const calls = stored.reloaded.parts.flatMap((part): StoredCall[] =>
+      part.type === "tool-call"
+        ? [
+            {
+              id: part.id,
+              name: part.name,
+              input: part.input,
+              subagent: chatLocalRunParentCallId(part.metadata),
+            },
+          ]
+        : [],
     );
-    const subagentCallId = calls.find(
-      ({ input }) => isRecord(input) && input["tool"] === "Agent",
-    )?.id;
+    const subagentCallId =
+      calls.find(({ input }) => isRecord(input) && input["tool"] === "Agent")
+        ?.id ?? panic("the stored turn has no subagent step");
     // The fixture reaches the rewrite: chat keeps the step under another id
     // than the harness gave it.
     expect(subagentCallId).toEndWith(`_${subagent.id}`);
     expect(subagentCallId).not.toBe(subagent.id);
-    const chatParent = { parentCallId: subagentCallId };
-    expect(calls.map(({ name, input }) => ({ name, input }))).toEqual([
-      { name: NATIVE_TOOL, input: subagent.input },
+    expect(
+      calls.map(({ name, input, subagent: madeBy }) => ({
+        name,
+        input,
+        subagent: madeBy,
+      })),
+    ).toEqual([
+      { name: NATIVE_TOOL, input: subagent.input, subagent: null },
       {
         name: NATIVE_TOOL,
         input: {
           tool: "Read",
           detail: { kind: "image", path: "scans/page-1.png" },
-          ...chatParent,
         },
+        subagent: subagentCallId,
       },
-      { name: "harness_web_search", input: { query: "lease arrears" } },
+      {
+        name: "harness_web_search",
+        input: { query: "lease arrears" },
+        subagent: null,
+      },
+      {
+        name: CONNECTOR_TOOL,
+        input: connector.input,
+        subagent: subagentCallId,
+      },
+      // The call the turn paused on names its subagent like any other, so
+      // its approval card does too.
       {
         name: COMMAND_EXECUTION,
-        input: { command: "rm draft.md", ...chatParent },
+        input: { command: "rm draft.md" },
+        subagent: subagentCallId,
       },
     ]);
     const pause = turn.emitted.findLast(
@@ -6045,7 +6098,7 @@ describe("chat turns on a computer", () => {
         metadata: {
           kind: "approval",
           toolName: COMMAND_EXECUTION,
-          input: { command: "rm draft.md", ...chatParent },
+          input: { command: "rm draft.md" },
         },
       },
     ]);

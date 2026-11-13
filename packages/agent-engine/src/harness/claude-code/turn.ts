@@ -22,8 +22,10 @@ import {
   type HarnessQuestion,
   type HarnessSessionId,
   type HarnessToolCall,
+  type HarnessToolResult,
   type HarnessUsage,
 } from "../events";
+import { SubagentConversation } from "../step-output";
 import { stepOfSubagent, unsupportedItem } from "../tool-parts";
 import {
   type Detached,
@@ -40,6 +42,9 @@ import {
   claudeMessageHandling,
   claudeSystemHandling,
   EXIT_PLAN_MODE_TOOL,
+  resultText,
+  startsSubagent,
+  subagentPromptOf,
   toolCallForUse,
   toolResultFor,
 } from "./items";
@@ -52,6 +57,7 @@ import {
   CLAUDE_STOPPED_TOOL_KINDS,
   type ClaudeControlRequestSubtype,
   type ClaudeResultMessage,
+  type ClaudeToolResult,
   type ClaudeToolUse,
   ContentBlockSchema,
   isClaudeContentBlockType,
@@ -346,6 +352,12 @@ export class ClaudeCodeTurnSession {
   private readonly rejectedResets: Temporal.Instant[] = [];
   private readonly early: EarlyMessage[] = [];
   private readonly toolUses = new Map<string, HeldToolUse>();
+  /**
+   * What each subagent at work has written, by the call that started it,
+   * held until that call's result ends the subagent. It never leaves this
+   * computer: the call's result keeps it for the member to open here.
+   */
+  private readonly conversations = new Map<string, SubagentConversation>();
   private readonly pending = new Map<string, PendingInteraction>();
   private readonly resolved = new Set<string>();
   /** Approved `ExitPlanMode` calls whose result has not arrived yet. */
@@ -736,6 +748,9 @@ export class ClaudeCodeTurnSession {
   private toolUse(block: ClaudeToolUse, parentCallId: string | null) {
     const toolCall = toolCallForUse(block, this.stellaServer, parentCallId);
     this.toolUses.set(block.id, { use: block, toolCall, parentCallId });
+    if (startsSubagent(block)) {
+      this.conversations.set(block.id, new SubagentConversation());
+    }
     // A proposed plan opens with its approval: the CLI adds the plan
     // to the call's input only when it asks about the call.
     if (block.name !== EXIT_PLAN_MODE_TOOL) {
@@ -745,8 +760,9 @@ export class ClaudeCodeTurnSession {
 
   /**
    * A subagent's message: its tool calls and their results are steps of the
-   * call that started it. What it wrote and thought is not read: that stays
-   * on the computer, with the report the call returns.
+   * call that started it. What it wrote is held for that call's result to
+   * keep on this computer, with what it was told and the report the call
+   * returns; none of it is the turn's, and what it thought is not read.
    *
    * These steps only add to what chat shows, so a message or block of a
    * subagent that does not have its shape is never a protocol violation: it
@@ -770,6 +786,15 @@ export class ClaudeCodeTurnSession {
           return;
         }
         for (const block of parsed.message.content) {
+          if (block.type === "text") {
+            // A text block that does not have its shape is left out of the
+            // kept conversation; it is no step, so nothing is shown for it.
+            const written = v.safeParse(ContentBlockSchema, block);
+            if (written.success && written.output.type === "text") {
+              this.conversations.get(parentCallId)?.add(written.output.text);
+            }
+            continue;
+          }
           if (block.type !== "tool_use") {
             continue;
           }
@@ -859,7 +884,11 @@ export class ClaudeCodeTurnSession {
       // is released with it.
       if (held !== undefined) {
         this.toolUses.delete(block.tool_use_id);
-        const result = toolResultFor(held.use, block);
+        const result = this.withConversation(
+          block,
+          held,
+          toolResultFor(held.use, block),
+        );
         this.emit({
           type: "tool.completed",
           toolCall: held.toolCall,
@@ -871,6 +900,30 @@ export class ClaudeCodeTurnSession {
         this.leavePlanMode(block.is_error === true || stopped);
       }
     }
+  }
+
+  /**
+   * `result` with the conversation of the subagent `held` started, for the
+   * sidecar to keep on this computer: what it was told, what it wrote, and
+   * the report this result returns. Any other call's result is unchanged.
+   */
+  private withConversation(
+    block: ClaudeToolResult,
+    held: HeldToolUse,
+    result: HarnessToolResult,
+  ): HarnessToolResult {
+    const conversation = this.conversations.get(block.tool_use_id);
+    if (conversation === undefined) {
+      return result;
+    }
+    this.conversations.delete(block.tool_use_id);
+    return {
+      ...result,
+      localOutput: conversation.ended({
+        prompt: subagentPromptOf(held.use),
+        report: resultText(block),
+      }),
+    };
   }
 
   private result(parsed: ClaudeResultMessage | null) {

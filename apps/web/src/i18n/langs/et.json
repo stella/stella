@@ -2272,11 +2272,15 @@
       "input": "Sisend",
       "interrupted": "Katkes enne lõpetamist",
       "localOutput": {
+        "conversation": "Alamagendi vestlus",
+        "conversationPrompt": "Ülesanne",
+        "conversationReport": "Aruanne",
         "cut": "Kuvatakse esimesed {kept} (kokku {total})",
         "diff": "Failimuudatused",
         "elsewhere": "Avage arvutis, kus see käivitati",
         "empty": "Väljund puudub",
         "failed": "stella töölauarakendus selles arvutis ei suutnud seda kuvada.",
+        "imageTooLarge": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte selles arvutis ei salvestata, seega ei saa seda siin kuvada.",
         "notKept": "Sellest sammust pole selles arvutis midagi salvestatud",
         "reading": "Loetakse sellest arvutist"
       },
