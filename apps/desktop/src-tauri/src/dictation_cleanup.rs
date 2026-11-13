@@ -1,7 +1,9 @@
 //! Optional AI cleanup of a dictation. Only the text this computer
 //! transcribed goes through stella to the linked organization's AI provider,
 //! never the audio, and only while the server enables dictation for that same
-//! account. The answer is a list of typed segments; any failure, timeout, or
+//! account. With it goes the kind of app the text is for and, when the
+//! speaker shares them, the window title and the text before the cursor
+//! (`dictation_context`), which set the register and are never typed. The answer is a list of typed segments; any failure, timeout, or
 //! malformed or implausible answer leaves the raw transcript, so cleanup never
 //! blocks or loses a dictation. Neither the transcript nor the answer is
 //! logged or stored.
@@ -18,6 +20,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::{
   account::{self, AccountRequest, AccountState},
+  dictation_context::CleanupContext,
   dictation_format::{self, AppClass, Segment, Stroke},
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
@@ -40,6 +43,11 @@ struct Contract {
   max_locale_length: usize,
   max_languages: usize,
   max_segments: usize,
+  max_window_title_length: usize,
+  max_text_before_cursor_length: usize,
+  /// `dictation_context::AppKind` names the same kinds; a test binds them.
+  #[cfg(test)]
+  app_kinds: Vec<String>,
   min_answer_text_percent: usize,
   min_break_allowance: usize,
   transcript_characters_per_break: usize,
@@ -88,6 +96,26 @@ fn phrases() -> &'static Phrases {
   })
 }
 
+/// How much of the window title and of the text before the cursor cleanup
+/// may get, in characters.
+pub struct ContextLimits {
+  pub window_title: usize,
+  pub text_before_cursor: usize,
+}
+
+pub fn context_limits() -> ContextLimits {
+  let contract = contract();
+  ContextLimits {
+    window_title: contract.max_window_title_length,
+    text_before_cursor: contract.max_text_before_cursor_length,
+  }
+}
+
+#[cfg(test)]
+pub fn contract_app_kinds() -> &'static [String] {
+  &contract().app_kinds
+}
+
 /// Every segment's text is at most a transcript long, and JSON spends at
 /// most six bytes on a character; the field names fit in the rest.
 fn max_response_bytes() -> usize {
@@ -103,6 +131,9 @@ struct CleanupRequest<'a> {
   /// The languages the speaker uses, so cleanup keeps the text in them.
   #[serde(skip_serializing_if = "<[_]>::is_empty")]
   languages: &'a [&'a str],
+  /// Where the text goes: the kind of app, and the window title and the
+  /// text before the cursor when the speaker shares them.
+  context: &'a CleanupContext,
 }
 
 #[derive(Deserialize)]
@@ -337,6 +368,15 @@ pub fn strokes(
   }
 }
 
+/// The dictation as text, for clipboard history: what `strokes` types, with
+/// breaks as newlines and bold as plain text.
+pub fn typed_text(transcript: &str, cleaned: Option<&[Segment]>) -> String {
+  match cleaned {
+    Some(segments) if !segments.is_empty() => dictation_format::plain_text(segments),
+    _ => transcript.trim().to_string(),
+  }
+}
+
 /// A language tag the contract admits, or none.
 fn locale_hint(locale: &str) -> Option<&str> {
   let mut parts = locale.split('-');
@@ -372,6 +412,7 @@ async fn send(
   transcript: &str,
   locale: Option<&str>,
   languages: &[&str],
+  context: &CleanupContext,
 ) -> Result<Vec<Segment>, String> {
   let languages = &languages[..languages.len().min(contract().max_languages)];
   let request = crate::http_client::device_proof_request(
@@ -381,6 +422,7 @@ async fn send(
         transcript,
         locale,
         languages,
+        context,
       }),
     &account.device_key,
     Some(&account.credential.key),
@@ -433,6 +475,7 @@ async fn request(
   app: &AppHandle,
   transcript: &str,
   languages: &[&str],
+  context: &CleanupContext,
 ) -> Result<Vec<Segment>, String> {
   let account = dictation_account(app).await?;
   let segments = send(
@@ -440,6 +483,7 @@ async fn request(
     transcript,
     locale_hint(crate::i18n::active_locale()),
     languages,
+    context,
   )
   .await;
   drop(account);
@@ -465,16 +509,19 @@ pub(crate) fn bounded<T>(
 }
 
 /// The cleaned segments, or `None` whenever the raw transcript should be
-/// typed instead. Blocks the dictation thread for at most [`TIMEOUT`].
+/// typed instead. Blocks the dictation thread for at most [`TIMEOUT`]. The
+/// plausibility check measures the answer against the transcript alone, so
+/// nothing from `context` can be typed.
 pub fn clean_up(
   app: &AppHandle,
   transcript: &str,
   languages: &[&str],
+  context: &CleanupContext,
 ) -> Option<Vec<Segment>> {
   if transcript.chars().count() > contract().max_transcript_length {
     return None;
   }
-  match bounded(TIMEOUT, request(app, transcript, languages)) {
+  match bounded(TIMEOUT, request(app, transcript, languages, context)) {
     Some(Ok(segments)) => Some(segments),
     Some(Err(error)) => {
       tracing::info!(%error, "dictation cleanup skipped; typing the transcript");
@@ -673,6 +720,31 @@ mod tests {
   }
 
   #[test]
+  fn clipboard_history_keeps_what_was_dictated_cleaned_or_raw() {
+    let segments = vec![
+      plain("Lhůta je "),
+      Segment::Text {
+        text: "24".to_string(),
+        bold: true,
+      },
+      plain(" dní."),
+      Segment::LineBreak,
+      plain("Konec."),
+    ];
+    assert_eq!(
+      typed_text("lhůta je tučně 24 dní", Some(&segments)),
+      "Lhůta je 24 dní.\nKonec."
+    );
+    // Without a cleaned answer the raw transcript is kept, as it is typed.
+    for cleaned in [None, Some(&[][..])] {
+      assert_eq!(
+        typed_text(" nový řádek a tedy ", cleaned),
+        "nový řádek a tedy"
+      );
+    }
+  }
+
+  #[test]
   fn a_cleaned_answer_is_typed_through_the_format_plan() {
     let segments = parse_segments(FIXTURE.as_bytes()).unwrap();
     assert_eq!(
@@ -743,6 +815,10 @@ mod tests {
               "transcript": "tučně 42",
               "locale": "cs",
               "languages": ["cs", "en"],
+              "context": {
+                "appKind": "document",
+                "windowTitle": "Kupní smlouva.docx",
+              },
             });
           if signed && authorized && only_text {
             (StatusCode::OK, FIXTURE.to_string())
@@ -756,9 +832,14 @@ mod tests {
       axum::serve(listener, router).await.unwrap();
     });
 
+    let context = CleanupContext {
+      app_kind: crate::dictation_context::AppKind::Document,
+      window_title: Some("Kupní smlouva.docx".to_string()),
+      text_before_cursor: None,
+    };
     let good = AccountRequest::fixture(linked(base.clone(), "stella_dr_good")).await;
     assert_eq!(
-      send(&good, "tučně 42", Some("cs"), &["cs", "en"])
+      send(&good, "tučně 42", Some("cs"), &["cs", "en"], &context)
         .await
         .unwrap(),
       parse_segments(FIXTURE.as_bytes()).unwrap()
@@ -766,7 +847,7 @@ mod tests {
     drop(good);
     let bad = AccountRequest::fixture(linked(base, "stella_dr_bad")).await;
     assert!(
-      send(&bad, "tučně 42", Some("cs"), &["cs", "en"])
+      send(&bad, "tučně 42", Some("cs"), &["cs", "en"], &context)
         .await
         .is_err()
     );

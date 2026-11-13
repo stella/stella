@@ -59,6 +59,7 @@ import {
   ClipboardIcon,
   ClockIcon,
   CopyPlusIcon,
+  DictateIcon,
   EllipsisVerticalIcon,
   FileTextIcon,
   FolderInputIcon,
@@ -165,6 +166,7 @@ import {
   formatClipboardAge,
   hasClipboardPrimaryModifier,
   isClipboardCopyShortcut,
+  isClipboardDictation,
   isClipboardNameInput,
   isClipboardSearchConfirm,
   MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
@@ -668,9 +670,11 @@ const ClipboardCard = ({
     : undefined;
   const link = clipboardItemLink(item);
   const untitledName = clipboardUntitledName(item, {
+    dictation: t("dictation"),
     image: t("image"),
     text: t("unnamedClip"),
   });
+  const dictation = isClipboardDictation(item);
   let metadataIcon: ReactNode = (
     <FileTextIcon aria-hidden="true" className="text-muted-foreground size-6" />
   );
@@ -682,6 +686,15 @@ const ClipboardCard = ({
   if (link) {
     metadataIcon = (
       <LinkIcon aria-hidden="true" className="text-muted-foreground size-6" />
+    );
+  }
+  // A dictation reads as one even when its text is a link.
+  if (dictation) {
+    metadataIcon = (
+      <DictateIcon
+        aria-hidden="true"
+        className="text-muted-foreground size-6"
+      />
     );
   }
   if (groupName) {
@@ -712,6 +725,9 @@ const ClipboardCard = ({
   }
   if (link) {
     metadataTitle = t("link");
+  }
+  if (dictation) {
+    metadataTitle = t("dictation");
   }
 
   const beginNameEdit = () => {

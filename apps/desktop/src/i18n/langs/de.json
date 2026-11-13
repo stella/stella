@@ -296,6 +296,7 @@
     "errorReadHistory": "Der Zwischenablageverlauf konnte nicht geladen werden.",
     "errorUpdateHistory": "Der Zwischenablageverlauf konnte nicht aktualisiert werden.",
     "formattedText": "Formatierter Text",
+    "dictation": "Diktat",
     "image": "Bild",
     "imageCleanupPending": "Einige gelöschte Bilddaten konnten nicht entfernt werden. Die Bereinigung wird automatisch wiederholt.",
     "imageDimensions": "{width} × {height} px",
@@ -587,9 +588,20 @@
     "descriptionCloud": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird von stella AI umgewandelt und von stella nicht gespeichert.",
     "cleanup": {
       "title": "Mit KI überarbeiten",
-      "description": "Die Sprache wird weiterhin auf diesem Computer umgewandelt, und der Ton verlässt ihn nie. Ist die Überarbeitung aktiviert, wird der umgewandelte Text über stella an den KI-Anbieter Ihrer Organisation gesendet, um Erkennungsfehler zu korrigieren und gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ anzuwenden. stella speichert ihn nicht.",
-      "descriptionCloud": "Ist die Überarbeitung aktiviert, korrigiert stella AI außerdem Erkennungsfehler im umgewandelten Text und wendet gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ an."
+      "description": "Die Sprache wird weiterhin auf diesem Computer umgewandelt, und der Ton verlässt ihn nie. Ist die Überarbeitung aktiviert, wird der umgewandelte Text über stella an den KI-Anbieter Ihrer Organisation gesendet, um Erkennungsfehler zu korrigieren und gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ anzuwenden. stella speichert ihn nicht. Die Überarbeitung erfährt außerdem, in welche Art von App Sie diktieren, etwa E-Mail oder Chat, damit der Text dazu passt.",
+      "descriptionCloud": "Ist die Überarbeitung aktiviert, korrigiert stella AI außerdem Erkennungsfehler im umgewandelten Text und wendet gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ an. Die Überarbeitung erfährt außerdem, in welche Art von App Sie diktieren, etwa E-Mail oder Chat, damit der Text dazu passt."
     },
+    "context": {
+      "windowTitle": {
+        "title": "Fenstertitel mit der KI-Überarbeitung teilen",
+        "description": "Die Überarbeitung erhält auch den Titel des Fensters, in das Sie diktieren, um etwa einen Vertrag von einem internen Vermerk zu unterscheiden. Fenstertitel können Namen von Mandanten oder Akten enthalten. Der Titel wird über stella an den KI-Anbieter Ihrer Organisation gesendet, und stella speichert ihn nicht."
+      },
+      "textBeforeCursor": {
+        "title": "Text vor dem Cursor mit der KI-Überarbeitung teilen",
+        "description": "Die Überarbeitung erhält auch bis zu {limit, number} Zeichen vor dem Cursor, damit das Diktat an Ihren Text anschließt. Dabei wird ein Teil des Dokuments, in dem Sie gerade arbeiten, über stella an den KI-Anbieter Ihrer Organisation gesendet, und stella speichert ihn nicht."
+      }
+    },
+    "keptInHistory": "Jedes Diktat wird außerdem im Zwischenablageverlauf auf diesem Computer gespeichert.",
     "destination": {
       "title": "Umwandeln mit",
       "local": "Diesem Computer",
@@ -622,7 +634,8 @@
       "focusUnconfirmed": "stella konnte nicht feststellen, welche App den Fokus hat, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
       "shortcutHeld": "Lassen Sie die Tasten des Tastenkürzels los, damit getippt werden kann. Es wurde nichts eingegeben; versuchen Sie es erneut.",
       "cloudTranscription": "stella AI konnte dieses Diktat nicht umwandeln, und das Sprachmodell ist nicht auf diesem Computer. Versuchen Sie es erneut, oder wählen Sie bei „Umwandeln mit“ die Option „Diesem Computer“ und laden Sie das Modell herunter."
-    }
+    },
+    "failureKeptInHistory": "Der Text ist im Zwischenablageverlauf."
   },
   "shortcut": {
     "title": "Tastenkürzel für die Zwischenablage",
