@@ -19,7 +19,8 @@ import { fakeHarnessLog } from "./fake-harness-peer";
  * chat's model menu. It answers the handshake and `model/list` itself, one
  * model per scenario, then plays the scenario a thread's model names. A
  * `slow_<scenario>` model plays it with `FAKE_CODEX_PACE_MS` before each
- * output. `usage_limit` resets an hour from now. The local stack's stand-in
+ * output; only `slow_text` answers an interrupt while it is paced, the other
+ * slow scenarios play on to their end. `usage_limit` resets an hour from now. The local stack's stand-in
  * computer installs it as Codex (`bun run agent:up -- --local-runner`).
  *
  * Usage: `bun scripts/fake-codex-by-model.ts [codex arguments]`.

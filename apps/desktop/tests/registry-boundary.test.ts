@@ -103,7 +103,9 @@ const accountBearerOwners = {
   "desktop_runner/stand_in.rs": "let device = DeviceKey::from_pkcs8(&pkcs8)?;",
 } as const;
 
-const assertBearerOwner = (file: string, source: string) => {
+const assertBearerOwner = (entry: string, source: string) => {
+  // A recursive listing separates folders as the platform does.
+  const file = entry.replaceAll("\\", "/");
   const compactSource = source.replace(/\s+/gu, "");
   if (
     !compactSource.includes(".bearer_auth(") &&

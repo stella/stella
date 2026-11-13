@@ -504,9 +504,20 @@ async fn serve(settings: Settings) -> Result<(), String> {
       Next::Continue => {}
       Next::Relink => {
         tracing::info!(target: LOG_TARGET, %desktop_id, "linking this computer again");
-        linked = Arc::new(link(&settings, Some(desktop_id)).await?);
-        std::fs::remove_file(&relink)
-          .map_err(|error| format!("{}: {error}", relink.display()))?;
+        // A failed relink ends the stand-in: its holder and runs go with it.
+        let relinked = match link(&settings, Some(desktop_id)).await {
+          Ok(relinked) => std::fs::remove_file(&relink)
+            .map(|()| relinked)
+            .map_err(|error| format!("{}: {error}", relink.display())),
+          Err(error) => Err(error),
+        };
+        match relinked {
+          Ok(relinked) => linked = Arc::new(relinked),
+          Err(error) => {
+            host.stop_holders().await;
+            return Err(error);
+          }
+        }
       }
     }
   }

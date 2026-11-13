@@ -579,7 +579,8 @@ const up = async (root: string, args: readonly string[]) => {
   );
   console.log(reused === null ? "Stack ready." : "Reusing the running stack.");
   printStatus(root, runtime);
-  if (args.includes(LOCAL_RUNNER_FLAG) && runningLocalRunner(root) === null) {
+  // Also with one running: it is reused, and still has to be ready.
+  if (args.includes(LOCAL_RUNNER_FLAG)) {
     const started = await startLocalRunner({
       root,
       apiUrl,

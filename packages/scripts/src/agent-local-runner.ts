@@ -167,6 +167,9 @@ const build = async (root: string): Promise<Result<string, string>> => {
   return Result.ok(executable);
 };
 
+/** `text` as one word of a POSIX shell command, whatever it holds. */
+const shellQuoted = (text: string) => `'${text.replaceAll("'", `'\\''`)}'`;
+
 /**
  * A shell script the host runs as the installed CLI. The harness launch
  * passes on only the environment it chooses, so the stand-in's settings are
@@ -179,7 +182,7 @@ const writeWrapper = (options: {
 }) => {
   const pace = process.env["FAKE_CODEX_PACE_MS"];
   const settings = [
-    `FAKE_HARNESS_LOG='${options.log}'`,
+    `FAKE_HARNESS_LOG=${shellQuoted(options.log)}`,
     ...(pace !== undefined && /^\d+$/u.test(pace)
       ? [`FAKE_CODEX_PACE_MS=${pace}`]
       : []),
@@ -189,7 +192,7 @@ const writeWrapper = (options: {
     [
       "#!/bin/sh",
       "# Written by agent:up --local-runner; the stand-in for an installed CLI.",
-      `${settings.join(" ")} exec '${process.execPath}' '${options.script}' "$@"`,
+      `${settings.join(" ")} exec ${shellQuoted(process.execPath)} ${shellQuoted(options.script)} "$@"`,
       "",
     ].join("\n"),
   );
@@ -262,8 +265,11 @@ const linkSchema = v.object({ desktopId: v.string() });
 
 /**
  * The stand-in's harnesses as the chat sees them once its computer is
- * connected and Codex is ready on it; null until then.
+ * connected and both CLIs are ready on it; null until then.
  */
+/** The CLIs the stand-in installs, by the ids the chat lists them under. */
+const STAND_IN_HARNESSES = ["codex", "claude-code"] as const;
+
 const readyComputer = async (stack: StackSession, desktopId: string) => {
   const readiness = await stackRequest(stack, "/v1/chat/local-runners");
   if (Result.isError(readiness)) {
@@ -279,12 +285,16 @@ const readyComputer = async (stack: StackSession, desktopId: string) => {
   const computer = parsed.output.runners.find(
     (runner) => runner.desktopId === desktopId && runner.connected,
   );
+  if (computer === undefined) {
+    return Result.ok(null);
+  }
+  const ready = new Set(
+    computer.harnesses.flatMap(({ id, state }) =>
+      state === "ready" ? [id] : [],
+    ),
+  );
   return Result.ok(
-    computer?.harnesses.some(
-      ({ id, state }) => id === "codex" && state === "ready",
-    ) === true
-      ? computer.harnesses
-      : null,
+    STAND_IN_HARNESSES.every((id) => ready.has(id)) ? computer.harnesses : null,
   );
 };
 
@@ -382,7 +392,7 @@ export const startLocalRunner = async ({
   }
   const record = runningLocalRunner(root);
   const startedAt = Temporal.Now.instant().epochMilliseconds;
-  console.log("==> Waiting for the stand-in computer to report Codex...");
+  console.log("==> Waiting for the stand-in computer to report its CLIs...");
   let lastError = "";
   while (
     Temporal.Now.instant().epochMilliseconds - startedAt <
