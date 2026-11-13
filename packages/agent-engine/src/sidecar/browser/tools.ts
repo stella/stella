@@ -290,6 +290,8 @@ const BROWSER_GATE = {
   run: "run",
   /** The member is asked first. */
   ask: "ask",
+  /** The step does not run, and nobody is asked. */
+  refuse: "refuse",
 } as const;
 
 type BrowserGate = (typeof BROWSER_GATE)[keyof typeof BROWSER_GATE];
@@ -297,14 +299,22 @@ type BrowserGate = (typeof BROWSER_GATE)[keyof typeof BROWSER_GATE];
 type StepGates = Record<"click" | "search" | "type", BrowserGate>;
 
 /**
- * When a click or a typing step asks the member, by the run's approval
- * mode. Opening, reading and typing into a search field never ask; a
+ * When a click or a typing step asks the member, or is refused, by the
+ * run's approval mode. Plan is read-only: it opens and reads, and refuses
+ * every click and typing step without asking. Opening, reading and typing
+ * into a search field never ask; a
  * sign-in page still goes to the member at every level. One gate for
  * every harness: the server asks, whatever the harness itself was told to
  * allow. A mode added to the contract fails here until its rule is set.
  */
 const stepGates = (approvals: DesktopRunnerApprovalMode): StepGates => {
   switch (approvals) {
+    case "plan":
+      return {
+        click: BROWSER_GATE.refuse,
+        search: BROWSER_GATE.refuse,
+        type: BROWSER_GATE.refuse,
+      };
     case "ask":
       return {
         click: BROWSER_GATE.ask,
@@ -406,6 +416,17 @@ const declinedResult = (): LocalBrowserToolResult =>
     true,
   );
 
+const readOnlyResult = (): LocalBrowserToolResult =>
+  textResult(
+    {
+      status: "failed",
+      code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+      message: "Plan mode is read-only: clicking and typing are not available.",
+      hint: "Open and read pages to plan; propose clicks and typing in the plan for the member to approve.",
+    },
+    true,
+  );
+
 /** One chat's browser tools. */
 export const createLocalBrowserSession = () => {
   let seen: PageSeen | null = null;
@@ -497,11 +518,15 @@ export const createLocalBrowserSession = () => {
         return next.result;
       }
       const step = next.command;
+      const gate = browserStepGate(approvals, step);
+      if (gate === BROWSER_GATE.refuse) {
+        return readOnlyResult();
+      }
       let ticket: ApprovalTicket | null = null;
       if (
+        gate === BROWSER_GATE.ask &&
         (step.action === BROWSER_CONTROL_ACTION.click ||
-          step.action === BROWSER_CONTROL_ACTION.fill) &&
-        browserStepGate(approvals, step) === BROWSER_GATE.ask
+          step.action === BROWSER_CONTROL_ACTION.fill)
       ) {
         ticket = await approve({
           action:

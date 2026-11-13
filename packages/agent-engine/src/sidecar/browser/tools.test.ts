@@ -314,6 +314,50 @@ describe("browser steps by the run's approval mode", () => {
     asked: readonly ("click" | "type")[];
   }[];
 
+  test("plan opens and reads, and refuses clicks and typing without asking", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1"), page("r-2"), page("r-3")], {
+      approvals: "plan",
+    });
+    await session.call("snapshot", {}, browser.context);
+    const opened = await session.call(
+      "open",
+      { url: "https://fixture-library.test/search" },
+      browser.context,
+    );
+    expect(opened.isError).toBe(false);
+    await session.call("snapshot", {}, browser.context);
+    const refused = [
+      await session.call("type", SEARCH, browser.context),
+      await session.call(
+        "type",
+        { ref: "e:0:1.0", text: "x" },
+        browser.context,
+      ),
+      await session.call("click", LINK, browser.context),
+    ];
+    expect(browser.asked).toEqual([]);
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+      "open",
+      "snapshot",
+    ]);
+    for (const result of refused) {
+      expect(result.isError).toBe(true);
+      expect(parsed(result)).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+        message: expect.stringContaining("Plan mode is read-only"),
+      });
+      expect(
+        shownChatLocalRunToolResult(
+          CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+          result.content.at(0)?.text ?? "",
+          true,
+        ),
+      ).toBe(JSON.stringify({ status: "failed" }));
+    }
+  });
+
   for (const { approvals, asked, field } of CASES) {
     test(`${approvals}: a ${field} field asks before ${asked.join(", ") || "nothing"}`, async () => {
       const browser = await steps(approvals, field);
