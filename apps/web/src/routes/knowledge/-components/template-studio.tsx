@@ -1826,6 +1826,7 @@ export const TemplateStudioPage = ({
           <Suspense fallback={null}>
             <DocxEditor
               ref={editorRef}
+              accessibleName={name}
               autoOpenReviewSidebar={false}
               className="h-full"
               documentBuffer={docBuffer}

@@ -87,6 +87,7 @@ test("numeric zoom transitions to fit-width and refits when the editor viewport 
         timeZone="UTC"
       >
         <DocxEditor
+          accessibleName="Test document"
           document={document}
           initialZoom={initialZoom}
           ref={editorRef}
@@ -191,6 +192,7 @@ test("a narrow real editor starts with a collapsed outline, fits the page, and o
         timeZone="UTC"
       >
         <DocxEditor
+          accessibleName="Test document"
           document={document}
           initialZoom="fit-width"
           ref={editorRef}
