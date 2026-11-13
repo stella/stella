@@ -20,6 +20,7 @@ import {
   DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS,
   DESKTOP_RUNNER_LIMITS,
+  DESKTOP_RUNNER_LINKED_FOLDER_STATES,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   type DESKTOP_RUNNER_MESSAGE_ROLES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
@@ -141,6 +142,7 @@ describe("desktop runner fixtures", () => {
       serverMessageTypes: Object.values(DESKTOP_RUNNER_SERVER_MESSAGE),
       answerLimits: DESKTOP_RUNNER_ANSWER_LIMITS,
       folderRestoreOutcomes: [...DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES],
+      linkedFolderStates: [...DESKTOP_RUNNER_LINKED_FOLDER_STATES],
     });
   });
 
@@ -223,6 +225,18 @@ describe("desktop runner fixtures", () => {
         folderRestoreOutcomes: desktop.flatMap((message) =>
           message.type === "folder.restored" ? [message.outcome] : [],
         ),
+        linkedFolderStates: [
+          ...desktop.flatMap((message) =>
+            message.type === "hello"
+              ? message.linkedFolders.map(({ state }) => state)
+              : [],
+          ),
+          ...desktop.flatMap((message) =>
+            message.type === "linked_folders.status"
+              ? message.folders.map(({ state }) => state)
+              : [],
+          ),
+        ],
         networkPolicies: starts.map(({ policy }) => policy.network),
         fsPolicies: starts.map(({ policy }) => policy.fs),
         approvalModes: [

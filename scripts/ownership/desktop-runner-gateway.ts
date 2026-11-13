@@ -42,9 +42,24 @@ export default {
           "Queues a message for the open run of the member's running chat turn through the control.",
       },
       {
+        path: "apps/api/src/handlers/chat/local-folder-approval.ts",
+        reason:
+          "Records the member's OK for turns to work in a folder linked on one of their computers.",
+      },
+      {
         path: "apps/api/src/handlers/chat/turns/local-files-undo.ts",
         reason:
           "Asks the turn's computer to undo the turn's file changes and reads where that undo stands.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/threads/background-tasks.ts",
+        reason:
+          "Reads what a chat's runs left running in the background on the member's computers.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/local-run-step-output-grant.ts",
+        reason:
+          "Reads the member's own run to grant reading its step outputs on the computer that ran it.",
       },
     ],
   },

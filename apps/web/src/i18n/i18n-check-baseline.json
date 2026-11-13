@@ -381,6 +381,12 @@
     "chat.pastedText.fromPromptFallback": [
       "de"
     ],
+    "chat.runOn.cloud": [
+      "cs",
+      "de",
+      "fr",
+      "sk"
+    ],
     "chat.suggestionSeverity.style": [
       "fr"
     ],
@@ -429,6 +435,9 @@
     ],
     "common.filter": [
       "et"
+    ],
+    "common.folder": [
+      "pl"
     ],
     "common.formula": [
       "lv"
@@ -765,9 +774,6 @@
     ],
     "search.kinds.contact": [
       "fr"
-    ],
-    "search.kinds.folder": [
-      "pl"
     ],
     "search.kinds.link": [
       "de",

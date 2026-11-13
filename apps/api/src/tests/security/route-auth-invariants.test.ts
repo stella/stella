@@ -18,6 +18,7 @@ import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRunnerRoute } from "@/api/handlers/desktop-runner/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { devPublicRoute } from "@/api/handlers/dev/routes";
+import { desktopDictationRoute } from "@/api/handlers/dictation/routes";
 import { pdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
 import {
   feedbackPublicRoute,
@@ -127,6 +128,7 @@ const ROOT_ROUTE_TABLES: Readonly<Record<string, readonly RouteEntry[]>> = {
   authMetadataRoute,
   authUiRoute,
   conflictChecksRoute,
+  desktopDictationRoute,
   desktopFeatureAccessRoute,
   desktopPresenceRoute,
   desktopRunnerRoute,

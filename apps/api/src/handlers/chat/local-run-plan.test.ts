@@ -101,7 +101,7 @@ const pickingControl = (picked: PickedDesktop) => {
   return { control, picks };
 };
 
-const READY: PickedDesktop = {
+const READY: Extract<PickedDesktop, { type: "available" }> = {
   type: "available",
   desktopId: Bun.randomUUIDv7(),
   harness: {
@@ -115,6 +115,8 @@ const READY: PickedDesktop = {
       { id: MODEL, label: "GPT-5 Codex", reasoningEfforts: ["low", "high"] },
     ],
   },
+  linkedFolders: [],
+  approvedFolderIds: [],
 };
 
 const resolve = async ({
@@ -159,6 +161,66 @@ const refusalCodeOf = (
   expect(HandlerError.is(resolved.error)).toBe(true);
   return HandlerError.is(resolved.error) ? resolved.error.code : null;
 };
+
+describe("a turn in a folder linked on the member's computer", () => {
+  const LINK_ID = "0192f3a0-6b1c-7d2e-8f30-0000000000d1";
+  const FOLDER = {
+    desktopId: READY.desktopId,
+    linkId: LINK_ID,
+    name: "Smith v Jones",
+  };
+  const IN_FOLDER: ChatRunTarget = {
+    kind: "local",
+    harness: "codex",
+    model: MODEL,
+    approvals: "ask",
+    reasoningEffort: null,
+    folder: FOLDER,
+  };
+  const computerWith = (
+    state: "available" | "offline",
+    approved: boolean,
+  ): PickedDesktop => ({
+    ...READY,
+    linkedFolders: [{ id: LINK_ID, name: FOLDER.name, state }],
+    approvedFolderIds: approved ? [LINK_ID] : [],
+  });
+
+  test("is routed only to the folder's computer and carries the link", async () => {
+    const { resolved, picks } = await resolve({
+      runTarget: IN_FOLDER,
+      picked: computerWith("available", true),
+    });
+    expect(resolved.isOk() && resolved.value !== undefined).toBe(true);
+    expect(picks).toEqual([
+      expect.objectContaining({ harness: "codex", desktopId: READY.desktopId }),
+    ]);
+  });
+
+  test("is refused until the member allows the folder, and while it is not available", async () => {
+    const pending = await resolve({
+      runTarget: IN_FOLDER,
+      picked: computerWith("available", false),
+    });
+    expect(refusalCodeOf(pending.resolved)).toBe(
+      CHAT_LOCAL_RUN_REFUSAL.folderNotApproved,
+    );
+    const offline = await resolve({
+      runTarget: IN_FOLDER,
+      picked: computerWith("offline", true),
+    });
+    expect(refusalCodeOf(offline.resolved)).toBe(
+      CHAT_LOCAL_RUN_REFUSAL.folderUnavailable,
+    );
+    const away = await resolve({
+      runTarget: IN_FOLDER,
+      picked: { type: "no_computer" },
+    });
+    expect(refusalCodeOf(away.resolved)).toBe(
+      CHAT_LOCAL_RUN_REFUSAL.folderUnavailable,
+    );
+  });
+});
 
 describe("routing a chat turn to the member's computer", () => {
   test("a turn without a local target stays on stella's own path", async () => {

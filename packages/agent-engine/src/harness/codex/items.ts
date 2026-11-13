@@ -3,12 +3,10 @@ import { panic } from "better-result";
 import { chatLocalRunToolResultContent } from "@stll/api-contract/chat-local-run-tool";
 
 import type { HarnessToolCall, HarnessToolResult } from "../events";
+import { type HarnessStepOutput, wholeFileDiff } from "../step-output";
+import { HARNESS_TOOL_NAMES, mcpToolCall, nativeToolCall } from "../tool-parts";
 import {
-  HARNESS_TOOL_NAMES,
-  mcpToolCallName,
-  nativeToolCall,
-} from "../tool-parts";
-import {
+  type CodexAgentOutcome,
   type CodexItem,
   type CodexItemType,
   type CodexPlanUpdate,
@@ -24,7 +22,7 @@ import {
  * here; the native item itself is never forwarded.
  */
 
-type CodexItemHandling = "text" | "reasoning" | "tool" | "ignore";
+type CodexItemHandling = "text" | "reasoning" | "tool" | "subagent" | "ignore";
 
 /** What stella shows for each pinned item kind. */
 export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
@@ -37,7 +35,12 @@ export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
     case "fileChange":
     case "mcpToolCall":
     case "webSearch":
+    case "imageView":
       return "tool";
+    case "collabAgentToolCall":
+    case "subAgentActivity":
+      // A subagent the agent started, and how it ended (`subagentCall`).
+      return "subagent";
     // Each kind below is dropped on purpose.
     case "userMessage":
       // The user's own message is already the last transcript entry.
@@ -54,14 +57,6 @@ export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
       return "ignore";
     case "dynamicToolCall":
       // stella registers no dynamic tools and declines `item/tool/call`.
-      return "ignore";
-    case "collabAgentToolCall":
-    case "subAgentActivity":
-      // Sub-agents run inside the harness and their own tool calls are not
-      // reported on this turn, so a summary would show nothing to open.
-      return "ignore";
-    case "imageView":
-      // A local image the harness viewed; its path means nothing in chat.
       return "ignore";
     case "sleep":
       // Harness scheduling, not activity.
@@ -82,9 +77,31 @@ export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
   }
 };
 
+/**
+ * The kinds that only add to what chat shows of a turn: a subagent, how it
+ * ended, an image the agent viewed. Nothing the turn does depends on reading
+ * them, so one the adapter cannot read is shown as an unsupported item and
+ * never ends the turn as a protocol violation.
+ */
+const PRESENTATION_ONLY_ITEMS: ReadonlySet<CodexItemType> = new Set([
+  "collabAgentToolCall",
+  "subAgentActivity",
+  "imageView",
+]);
+
+export const isPresentationOnlyItem = (kind: CodexItemType): boolean =>
+  PRESENTATION_ONLY_ITEMS.has(kind);
+
 type CodexToolItem = Extract<
   CodexItem,
-  { type: "commandExecution" | "fileChange" | "mcpToolCall" | "webSearch" }
+  {
+    type:
+      | "commandExecution"
+      | "fileChange"
+      | "mcpToolCall"
+      | "webSearch"
+      | "imageView";
+  }
 >;
 
 export const isToolItem = (item: CodexItem): item is CodexToolItem =>
@@ -100,6 +117,33 @@ const EXEC_STATUS = {
 
 const fileChanges = (item: Extract<CodexItem, { type: "fileChange" }>) =>
   item.changes.map(({ path, kind }) => ({ path, kind: kind.type }));
+
+/**
+ * What a step produced, kept on the computer: a command's output once it ran,
+ * and each changed file's diff. Codex reports an added or deleted file's text,
+ * which reads as its added or removed lines.
+ */
+const localOutputOf = (
+  item: Extract<CodexItem, { type: "commandExecution" | "fileChange" }>,
+): { localOutput: HarnessStepOutput } | Record<string, never> => {
+  if (item.type === "commandExecution") {
+    return typeof item.aggregatedOutput === "string"
+      ? { localOutput: { type: "command", output: item.aggregatedOutput } }
+      : {};
+  }
+  const files = item.changes.flatMap(({ path, kind, diff }) => {
+    if (diff === null || diff === undefined) {
+      return [];
+    }
+    return [
+      {
+        path,
+        diff: kind.type === "update" ? diff : wholeFileDiff(diff, kind.type),
+      },
+    ];
+  });
+  return files.length === 0 ? {} : { localOutput: { type: "diff", files } };
+};
 
 /** `stellaServer` is the server name the stella MCP binding is under. */
 export const toolCallForItem = (
@@ -118,25 +162,59 @@ export const toolCallForItem = (
         input: { changes: fileChanges(item) },
       });
     case "mcpToolCall":
-      return {
+      return mcpToolCall({
         id: item.id,
-        name: mcpToolCallName({
-          server: item.server,
-          tool: item.tool,
-          stellaServer,
-        }),
         input: item.arguments ?? {},
-      };
+        server: item.server,
+        stellaServer,
+        tool: item.tool,
+      });
     case "webSearch":
       return nativeToolCall(item.id, {
         name: HARNESS_TOOL_NAMES.webSearch,
         input: { query: item.query },
+      });
+    case "imageView":
+      // The file's name; the image itself stays here.
+      return nativeToolCall(item.id, {
+        name: HARNESS_TOOL_NAMES.nativeTool,
+        input: {
+          tool: IMAGE_VIEW_TOOL,
+          detail: { kind: "image", path: item.path },
+        },
       });
     default:
       item satisfies never;
       return panic("Unhandled Codex tool item");
   }
 };
+
+/** Codex's own name for the tool that views a local image. */
+const IMAGE_VIEW_TOOL = "view_image";
+
+/**
+ * The step of a subagent a spawn call started. Codex reports the prompt and
+ * the model it asked for, and neither a description nor a kind of agent, so
+ * the step names nothing beyond being a subagent; the prompt stays here.
+ */
+export const subagentCall = (
+  item: Extract<CodexItem, { type: "collabAgentToolCall" }>,
+): HarnessToolCall =>
+  nativeToolCall(item.id, {
+    name: HARNESS_TOOL_NAMES.nativeTool,
+    input: { tool: item.tool, detail: { kind: "subagent", description: "" } },
+  });
+
+/** How a subagent's step ended; what the subagent reported stays here. */
+export const subagentResult = (
+  outcome: CodexAgentOutcome,
+): HarnessToolResult => ({
+  content: chatLocalRunToolResultContent({
+    name: HARNESS_TOOL_NAMES.nativeTool,
+    result: { status: outcome === "failed" ? "failed" : "completed" },
+  }),
+  status: outcome,
+});
 
 /**
  * Codex's own name for the tool that updates its plan, as a Claude
@@ -215,6 +293,7 @@ export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
           },
         }),
         status: status(item.status === "failed" || item.status === "declined"),
+        ...localOutputOf(item),
       };
     case "fileChange":
       return {
@@ -226,6 +305,7 @@ export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
           },
         }),
         status: status(item.status === "failed" || item.status === "declined"),
+        ...localOutputOf(item),
       };
     case "mcpToolCall":
       return mcpResult(item);
@@ -236,6 +316,16 @@ export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
           result: { status: "completed" },
         }),
         status: "succeeded",
+      };
+    case "imageView":
+      return {
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.nativeTool,
+          result: { status: "completed" },
+        }),
+        status: "succeeded",
+        // The file it viewed, for the member to open on this computer.
+        localOutput: { type: "image", path: item.path },
       };
     default:
       item satisfies never;

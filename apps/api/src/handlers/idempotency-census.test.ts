@@ -1061,6 +1061,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PUT /v1/chat/local-runners/:desktopId/folders/:linkId/approval": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PUT /v1/clause-categories": {
     type: "non-replay",
     reason: "authorization-in-handler",

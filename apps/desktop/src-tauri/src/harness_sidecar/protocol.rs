@@ -18,7 +18,7 @@ use crate::runner_protocol::{
   RunPolicy, RunRef, RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 5;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 6;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.
@@ -209,6 +209,10 @@ pub(crate) struct SidecarRunStart {
   pub(crate) workspace_dir: String,
   /// The chat's own cache folder, writable in every sandbox.
   pub(crate) cache_dir: String,
+  /// Where the sidecar keeps each step's output (`<runId>/<stepKey>`: a
+  /// `{"bytes":<n>}` header line, then the step's kept bytes): beside the
+  /// chat's own folder, whatever folder `workspace_dir` names.
+  pub(crate) step_output_dir: String,
   pub(crate) model: String,
   pub(crate) reasoning_effort: Option<ReasoningEffort>,
   pub(crate) instructions: String,
@@ -426,6 +430,16 @@ pub(crate) struct FolderRestored {
   pub(crate) outcome: RestoreOutcome,
 }
 
+/// How many tasks the harness process a finished run's completed turn kept
+/// runs in the background, while its chat waits for the next turn; 0 once
+/// there are none. The latest count per run is what holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BackgroundTasks {
+  pub(crate) run_id: String,
+  pub(crate) count: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Rejected {
@@ -452,6 +466,8 @@ pub(crate) enum SidecarMessage {
   RunFinished(SidecarRunFinished),
   #[serde(rename = "folder.restored")]
   FolderRestored(FolderRestored),
+  #[serde(rename = "background.tasks")]
+  BackgroundTasks(BackgroundTasks),
   #[serde(rename = "rejected")]
   Rejected(Rejected),
 }
@@ -466,6 +482,7 @@ impl SidecarMessage {
     "run.approval_request",
     "run.finished",
     "folder.restored",
+    "background.tasks",
     "rejected",
   ];
 }

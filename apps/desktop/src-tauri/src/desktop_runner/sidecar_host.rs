@@ -24,7 +24,14 @@
 //!   to the harness and answers with a `stella.run-input` chunk on the run's
 //!   stream, saying whether the harness took it.
 //! - A run works in its chat's folder under the app's data, so the next turn
-//!   finds what this one left (`run_folders`).
+//!   finds what this one left (`run_folders`), or in a folder the member
+//!   linked on this computer (`local_linked_folders`). The chat's folder
+//!   keeps the run's cache either way; a linked folder is never removed with
+//!   it. A linked folder that is not available now refuses the run with the
+//!   reason.
+//! - The linked folders are looked at on an interval and whenever the member
+//!   links or unlinks one; a change is announced like a report's, and the
+//!   runner sends the list as `linked_folders.status`.
 
 use std::{
   collections::{HashMap, HashSet},
@@ -43,17 +50,20 @@ use super::harness::{
   EmitError, FolderAnswer, Forwarded, HarnessHost, HarnessReports, JournaledRun,
   NotForwarded, RunOutput, RunSink,
 };
+use super::journal::SharedJournal;
 use super::run_folders;
+use super::step_outputs;
 use crate::harness_sidecar::{
-  self, HarnessLaunchSettings, HarnessProbe, HarnessProcess, HarnessSidecar,
-  RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore, SidecarRunOutput,
-  SidecarRunStart, SidecarSettings, SkillFolderRef,
+  self, BackgroundTasks, HarnessLaunchSettings, HarnessProbe, HarnessProcess,
+  HarnessSidecar, RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore,
+  SidecarRunOutput, SidecarRunStart, SidecarSettings, SkillFolderRef,
 };
+use crate::local_linked_folders::LinkedFolderRefusal;
 use crate::runner_protocol::{
   FolderRestore, FolderRestoreOutcome, Harness, HarnessReport,
-  HarnessUnavailableReason, JsonObject, MAX_FRAME_BYTES, MissingHarness, RejectReason,
-  RunAnswer, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
-  UnavailableHarness,
+  HarnessUnavailableReason, JsonObject, LinkedFolderReport, MAX_FRAME_BYTES,
+  MissingHarness, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
+  RunTokenRefresh, UnavailableHarness,
 };
 
 const LOG_TARGET: &str = "desktop_runner::host";
@@ -68,6 +78,12 @@ const STORAGE_RETRY_FIRST: Duration = Duration::from_millis(250);
 /// How long a run's start waits for its skill folders. A folder can sit on a
 /// mount that hangs, and a start runs on the runner's loop.
 const SKILL_FOLDER_BUDGET: Duration = Duration::from_secs(2);
+/// How long a run's start or a restore waits to learn whether its linked
+/// folder is there; one whose mount does not answer counts as offline.
+const LINKED_FOLDER_BUDGET: Duration = Duration::from_secs(2);
+/// How often the linked folders are looked at without a reason to: a volume
+/// is mounted or ejected with no event the app hears.
+const LINKED_FOLDER_INTERVAL: Duration = Duration::from_secs(30);
 const OUTPUT_TOO_LARGE: &str = "output_too_large";
 /// Outputs journaled in one write at most.
 const JOURNAL_BATCH: usize = 256;
@@ -111,6 +127,11 @@ pub(crate) trait LocalHarnesses: Send + Sync + 'static {
   fn on_install_settled(&self, settled: InstallSettled);
   /// The skill folders the member listed for this computer, as they stand.
   fn skill_folders(&self) -> Vec<SkillFolderRef>;
+  /// The folder a linked folder's id names on this computer, when a run can
+  /// work there now.
+  fn linked_folder(&self, id: Uuid) -> Result<PathBuf, LinkedFolderRefusal>;
+  /// Every linked folder and how it stands now, without its path.
+  fn linked_folder_reports(&self) -> Vec<LinkedFolderReport>;
 }
 
 pub(crate) struct HostSettings {
@@ -158,10 +179,17 @@ struct HostRun {
 
 struct Shared {
   settings: HostSettings,
+  /// Where kept harness processes' background counts go, for the runner
+  /// to send while a socket is up and again after each `welcome`.
+  journal: Arc<SharedJournal>,
   harnesses: Arc<dyn LocalHarnesses>,
   /// The supervisor, with the API origin its holder's proxy forwards to.
   sidecar: Mutex<Option<(String, HarnessSidecar)>>,
   cache: Mutex<Vec<(Harness, Cached)>>,
+  /// The linked folders as last looked at.
+  linked_folders: Mutex<Vec<LinkedFolderReport>>,
+  /// Asks for the linked folders to be looked at again now.
+  linked_folders_changed: Notify,
   changes: watch::Sender<u64>,
   refresh: Notify,
   runs: Mutex<HashMap<String, HostRun>>,
@@ -216,9 +244,11 @@ impl SidecarHarnessHost {
   pub(crate) fn new(
     settings: HostSettings,
     harnesses: Arc<dyn LocalHarnesses>,
+    journal: Arc<SharedJournal>,
   ) -> Self {
     Self {
       shared: Arc::new(Shared {
+        journal,
         folders: Mutex::new(HashSet::new()),
         restores: Mutex::new(HashSet::new()),
         #[cfg(all(test, unix))]
@@ -227,6 +257,8 @@ impl SidecarHarnessHost {
         harnesses,
         sidecar: Mutex::new(None),
         cache: Mutex::new(Vec::new()),
+        linked_folders: Mutex::new(Vec::new()),
+        linked_folders_changed: Notify::new(),
         changes: watch::channel(0).0,
         refresh: Notify::new(),
         runs: Mutex::new(HashMap::new()),
@@ -302,6 +334,19 @@ impl Shared {
         .changes
         .send_modify(|version| *version = version.wrapping_add(1));
     }
+  }
+
+  /// Store the linked folders as looked at; announce them when they changed.
+  fn store_linked_folders(&self, reports: Vec<LinkedFolderReport>) {
+    let mut held = locked(&self.linked_folders);
+    if *held == reports {
+      return;
+    }
+    *held = reports;
+    drop(held);
+    self
+      .changes
+      .send_modify(|version| *version = version.wrapping_add(1));
   }
 
   fn workspace(&self, folder_id: Uuid) -> PathBuf {
@@ -564,6 +609,17 @@ async fn journal(
   }
 }
 
+/// Hand every background task count a holder reports to the journal, which
+/// the runner sends upstream.
+async fn relay_background(
+  journal: Arc<SharedJournal>,
+  mut reports: mpsc::UnboundedReceiver<BackgroundTasks>,
+) {
+  while let Some(BackgroundTasks { run_id, count }) = reports.recv().await {
+    journal.report_background(run_id, count);
+  }
+}
+
 /// Grant every harness process a holder reports for a run or probe whose
 /// launch has a credential.
 async fn grant_processes(
@@ -611,6 +667,115 @@ pub(crate) fn skill_folders_within(
     tracing::warn!(target: LOG_TARGET, "the skill folders did not answer in time");
     Vec::new()
   })
+}
+
+/// The linked folder a run works in, looked at on a thread of its own: a
+/// mount that does not answer in time counts as offline, and the stuck thread
+/// ends when it answers.
+pub(crate) fn linked_folder_within(
+  budget: Duration,
+  harnesses: Arc<dyn LocalHarnesses>,
+  id: Uuid,
+) -> Result<PathBuf, LinkedFolderRefusal> {
+  let (sender, receiver) = std::sync::mpsc::channel();
+  let reader = std::thread::Builder::new()
+    .name("linked-folder".to_owned())
+    .spawn(move || {
+      let _gone = sender.send(harnesses.linked_folder(id));
+    });
+  if let Err(error) = reader {
+    tracing::warn!(target: LOG_TARGET, ?error, "a linked folder could not be looked at");
+    return Err(LinkedFolderRefusal::Unreadable);
+  }
+  receiver.recv_timeout(budget).unwrap_or_else(|_late| {
+    tracing::warn!(target: LOG_TARGET, "a linked folder did not answer in time");
+    Err(LinkedFolderRefusal::Offline)
+  })
+}
+
+/// What one look at the linked folders came to.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum LinkedFolderLook {
+  /// The reports of a look started now, in time.
+  Reports(Vec<LinkedFolderReport>),
+  /// The reports of a look that did not end in time before and has since:
+  /// the list may have changed meanwhile, so the caller looks again.
+  LateReports(Vec<LinkedFolderReport>),
+  /// The look has not ended in time; it stays the one in flight.
+  Pending,
+  /// The look's thread ended without reports.
+  Failed,
+}
+
+/// The looks at the linked folders, at most one in flight. A look runs on a
+/// blocking thread that no timeout can stop, so a mount that does not answer
+/// holds one thread until it does, and no further look starts meanwhile.
+#[derive(Default)]
+pub(crate) struct LinkedFolderLooks {
+  in_flight: Option<tokio::task::JoinHandle<Vec<LinkedFolderReport>>>,
+}
+
+impl LinkedFolderLooks {
+  /// Wait up to `budget` for the look in flight, or for a new one when none
+  /// is.
+  pub(crate) async fn look(
+    &mut self,
+    harnesses: &Arc<dyn LocalHarnesses>,
+    budget: Duration,
+  ) -> LinkedFolderLook {
+    let late = self.in_flight.is_some();
+    let mut look = self.in_flight.take().unwrap_or_else(|| {
+      let harnesses = Arc::clone(harnesses);
+      tokio::task::spawn_blocking(move || harnesses.linked_folder_reports())
+    });
+    match tokio::time::timeout(budget, &mut look).await {
+      Ok(Ok(reports)) if late => LinkedFolderLook::LateReports(reports),
+      Ok(Ok(reports)) => LinkedFolderLook::Reports(reports),
+      Ok(Err(error)) => {
+        tracing::warn!(target: LOG_TARGET, ?error, "the linked folders could not be looked at");
+        LinkedFolderLook::Failed
+      }
+      Err(_late) => {
+        self.in_flight = Some(look);
+        LinkedFolderLook::Pending
+      }
+    }
+  }
+}
+
+/// Look at the linked folders now, then on the interval or when the member
+/// changed the list. A look that does not finish in time keeps the last
+/// reports, and no other look starts until it ends.
+async fn watch_linked_folders(shared: Arc<Shared>) {
+  let mut looks = LinkedFolderLooks::default();
+  loop {
+    match looks.look(&shared.harnesses, LINKED_FOLDER_BUDGET).await {
+      LinkedFolderLook::Reports(reports) => shared.store_linked_folders(reports),
+      LinkedFolderLook::LateReports(reports) => {
+        shared.store_linked_folders(reports);
+        continue;
+      }
+      LinkedFolderLook::Pending => {
+        tracing::warn!(target: LOG_TARGET, "the linked folders did not answer in time");
+      }
+      LinkedFolderLook::Failed => {}
+    }
+    tokio::select! {
+      () = tokio::time::sleep(LINKED_FOLDER_INTERVAL) => {}
+      () = shared.linked_folders_changed.notified() => {}
+    }
+  }
+}
+
+/// Why a run cannot work in its linked folder, in the runner protocol's words.
+const fn linked_folder_reject(refusal: LinkedFolderRefusal) -> RejectReason {
+  match refusal {
+    LinkedFolderRefusal::Unlinked => RejectReason::FolderUnlinked,
+    LinkedFolderRefusal::Offline => RejectReason::FolderOffline,
+    LinkedFolderRefusal::Moved => RejectReason::FolderMoved,
+    LinkedFolderRefusal::Protected => RejectReason::FolderProtected,
+    LinkedFolderRefusal::Unreadable => RejectReason::FolderUnreadable,
+  }
 }
 
 /// Probe every harness now, then on the interval or when asked to, and
@@ -863,7 +1028,20 @@ impl HarnessHost for SidecarHarnessHost {
         tracing::warn!(target: LOG_TARGET, ?error, "harness processes cannot be granted");
       }
     }
+    match sidecar.watch_background() {
+      Ok(reports) => {
+        tokio::spawn(relay_background(Arc::clone(&self.shared.journal), reports));
+      }
+      Err(error) => {
+        tracing::warn!(
+          target: LOG_TARGET,
+          ?error,
+          "background task counts cannot be relayed"
+        );
+      }
+    }
     tokio::spawn(refresh_reports(Arc::clone(&self.shared), sidecar.clone()));
+    tokio::spawn(watch_linked_folders(Arc::clone(&self.shared)));
     // A CLI installed or updated after the app started, or a sign-in or
     // sign-out, is reported without waiting for the next periodic probe.
     let shared = Arc::clone(&self.shared);
@@ -925,13 +1103,26 @@ impl HarnessHost for SidecarHarnessHost {
     if installed.version != start.harness_version {
       return Err(RejectReason::HarnessVersionUnavailable);
     }
-    let workspace = self.shared.workspace(folder_id);
+    // Looked at again on every start: the folder may have gone offline or
+    // moved since the member linked it, or come to hold what runs rely on.
+    let linked = start
+      .linked_folder_id
+      .map(|id| {
+        linked_folder_within(
+          LINKED_FOLDER_BUDGET,
+          Arc::clone(&self.shared.harnesses),
+          id.uuid(),
+        )
+        .map_err(linked_folder_reject)
+      })
+      .transpose()?;
+    let chat_folder = self.shared.workspace(folder_id);
     let opened = {
       let restoring = locked(&self.shared.folders);
       if restoring.contains(&folder_id) {
         return Err(RejectReason::FolderBusy);
       }
-      let opened = run_folders::open(&workspace, SystemTime::now());
+      let opened = run_folders::open(&chat_folder, SystemTime::now());
       // Held until the folder is recorded as used, so no restore begins in
       // between.
       drop(restoring);
@@ -941,8 +1132,19 @@ impl HarnessHost for SidecarHarnessHost {
       tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "a run's folder could not be made");
       return Err(RejectReason::AtCapacity);
     }
-    // Made with the folder; the one place outside it the run may write.
-    let cache = run_folders::chat_cache(&workspace);
+    // Made with the chat's folder; the one place outside the folder the run
+    // works in that it may write.
+    let cache = run_folders::chat_cache(&chat_folder);
+    // Beside the chat's own folder, where the bridge looks, whatever folder
+    // the run works in: nothing of stella's goes in or beside a linked one.
+    let step_output_dir = run_folders::step_output_store(&chat_folder);
+    // Kept before the harness starts, so every step it keeps can be read.
+    if let Some(key) = &start.output_key
+      && let Err(error) = step_outputs::keep_key(&chat_folder, &start.run_id, &key.0)
+    {
+      tracing::warn!(target: LOG_TARGET, %error, "a run's output key was not kept");
+    }
+    let workspace = linked.unwrap_or(chat_folder);
     let credentials = cached.and_then(|cached| cached.credentials);
     let thread_id = start
       .harness_session_id
@@ -968,6 +1170,7 @@ impl HarnessHost for SidecarHarnessHost {
       launch: credentials.map(|held| held.settings).unwrap_or_default(),
       workspace_dir: workspace.to_string_lossy().into_owned(),
       cache_dir: cache.to_string_lossy().into_owned(),
+      step_output_dir: step_output_dir.to_string_lossy().into_owned(),
       skill_folders: skill_folders_within(
         SKILL_FOLDER_BUDGET,
         Arc::clone(&self.shared.harnesses),
@@ -1055,8 +1258,27 @@ impl HarnessHost for SidecarHarnessHost {
       return;
     };
     let shared = Arc::clone(&self.shared);
-    let workspace = shared.workspace(folder_id);
+    let linked_folder_id = restore.linked_folder_id;
     tokio::spawn(async move {
+      let workspace = match linked_folder_id {
+        None => shared.workspace(folder_id),
+        Some(id) => {
+          let harnesses = Arc::clone(&shared.harnesses);
+          let looked = tokio::task::spawn_blocking(move || {
+            linked_folder_within(LINKED_FOLDER_BUDGET, harnesses, id.uuid())
+          })
+          .await;
+          let Ok(Ok(folder)) = looked else {
+            // Nothing is put back in a folder that is not there as linked.
+            tracing::warn!(target: LOG_TARGET, "a restore's linked folder is not available");
+            locked(&shared.folders).remove(&folder_id);
+            locked(&shared.restores).remove(&restore.restore_id);
+            answer.send(FolderRestoreOutcome::Failed);
+            return;
+          };
+          folder
+        }
+      };
       let restored = sidecar
         .restore_folder(SidecarFolderRestore {
           request_id: Uuid::new_v4().to_string(),
@@ -1111,5 +1333,16 @@ impl HarnessReports for SidecarHarnessHost {
 
   fn changes(&self) -> Option<watch::Receiver<u64>> {
     Some(self.shared.changes.subscribe())
+  }
+
+  fn linked_folders(&self) -> Vec<LinkedFolderReport> {
+    locked(&self.shared.linked_folders).clone()
+  }
+}
+
+impl SidecarHarnessHost {
+  /// The member linked or unlinked a folder: look at the list again now.
+  pub(crate) fn linked_folders_changed(&self) {
+    self.shared.linked_folders_changed.notify_one();
   }
 }

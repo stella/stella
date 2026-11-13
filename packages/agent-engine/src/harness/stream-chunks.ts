@@ -15,6 +15,7 @@ import {
 import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   chatLocalRunApprovalReason,
 } from "@stll/api-contract/chat-local-run-tool";
 import {
@@ -359,6 +360,16 @@ class ChunkMapper {
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
         toolName: toolCall.name,
+        // The subagent step that made the call, beside it: the API keeps
+        // the link under that step's chat call id.
+        ...(toolCall.parentCallId === undefined
+          ? {}
+          : {
+              metadata: {
+                [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]:
+                  toolCall.parentCallId,
+              },
+            }),
       },
       {
         type: EventType.TOOL_CALL_ARGS,

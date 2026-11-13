@@ -197,6 +197,7 @@ export type KillSwitchId = keyof typeof KILL_SWITCHES;
  */
 export const ACTION_KIND_KILL_SWITCH = {
   "dictation.transcribe": "dictation",
+  "dictation.cleanup": "dictation",
   "chat.send": "chat",
   "chat.generate-thread-title": "chat",
   "chat.improve-prompt": "chat",

@@ -110,6 +110,7 @@ import submitChatConnector from "@/api/handlers/chat/submit-connector";
 import submitChatSecret from "@/api/handlers/chat/submit-secret";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
+import { createReadBackgroundTasks } from "@/api/handlers/chat/threads/background-tasks";
 import deleteChatThread from "@/api/handlers/chat/threads/delete";
 import listChatThreads from "@/api/handlers/chat/threads/list";
 import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
@@ -793,6 +794,7 @@ const undoControl = () =>
   });
 const readLocalFilesUndo = createReadLocalFilesUndo({ control: undoControl });
 const undoLocalFiles = createUndoLocalFiles({ control: undoControl });
+const readBackgroundTasks = createReadBackgroundTasks({ control: undoControl });
 
 const folderRestoresOfTurn = async (turnId: SafeId<"chatTurn">) =>
   await testDb
@@ -2966,6 +2968,23 @@ const isolationCases: IsolationCase[] = [
         read: { undoable: false, undo: null },
         undo: { status: "refused", undo: null, reason: "no_checkpoint" },
       }),
+  },
+  {
+    // A chat of another member reads as missing; its own member reads that
+    // nothing of it runs in the background on a computer.
+    name: "chat thread background tasks",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readBackgroundTasks, workspaceA, {
+        params: { threadId: chatTurnThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readBackgroundTasks, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) => expect(result).toEqual({ count: 0 }),
   },
   {
     name: "chat message send",

@@ -356,7 +356,24 @@ export type ClaudeControlRequestSubtype = keyof typeof CLAUDE_CONTROL_REQUESTS;
 
 /** The control requests Stella sends the CLI. */
 export type ClaudeHostControlRequest =
-  "initialize" | "interrupt" | "get_usage" | "mcp_set_servers";
+  | "initialize"
+  | "interrupt"
+  | "get_usage"
+  | "mcp_set_servers"
+  | "set_permission_mode"
+  | "stop_task";
+
+/**
+ * The CLI's whole set of live background tasks, sent whenever it changes; it
+ * replaces the set held before. Per process: a new process starts empty.
+ */
+export const BackgroundTasksChangedSchema = v.object({
+  subtype: v.literal("background_tasks_changed"),
+  tasks: v.array(v.object({ task_id: v.string(), task_type: v.string() })),
+});
+
+/** A background shell command (the Bash tool's `run_in_background`). */
+export const CLAUDE_BACKGROUND_COMMAND_TASK = "local_bash";
 
 export const isClaudeControlRequestSubtype = (
   subtype: string,

@@ -11,6 +11,8 @@ import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
+import approveLocalFolder from "@/api/handlers/chat/local-folder-approval";
+import getLocalRunStepOutputGrant from "@/api/handlers/chat/local-run-step-output-grant";
 import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
@@ -31,6 +33,7 @@ import submitConnector from "@/api/handlers/chat/submit-connector";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import tableChart from "@/api/handlers/chat/table-chart";
+import readBackgroundTasks from "@/api/handlers/chat/threads/background-tasks";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
 import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
@@ -78,6 +81,12 @@ export const chatRoute = routes(
     "/decision-threads/:decisionId": { GET: getDecisionChatThread },
     "/model-options": { GET: getModelOptions },
     "/local-runners": { GET: getLocalRunners },
+    "/local-runs/:runId/step-output-grant": {
+      GET: getLocalRunStepOutputGrant,
+    },
+    "/local-runners/:desktopId/folders/:linkId/approval": {
+      PUT: approveLocalFolder,
+    },
     "/skill-availability": { GET: listUnavailableChatSkills },
     "/table-chart": { POST: tableChart },
     "/improve-prompt": { POST: improvePrompt },
@@ -110,6 +119,7 @@ export const chatRoute = routes(
       GET: readLocalFilesUndo,
       POST: undoLocalFiles,
     },
+    "/threads/:threadId/background-tasks": { GET: readBackgroundTasks },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },
   },

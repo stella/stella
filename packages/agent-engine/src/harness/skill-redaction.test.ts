@@ -35,6 +35,7 @@ const through = async (
     respond: async () => Result.ok(),
     steer: async () => Result.ok(),
     interrupt: async () => undefined,
+    release: async () => null,
     dispose: async () => undefined,
   };
   const seen: HarnessEvent[] = [];
@@ -66,7 +67,7 @@ const claudeCall = async (
   lastCompleted(
     await through([
       completed(
-        toolCallForUse({ id: "call-1", name, input }, "stella"),
+        toolCallForUse({ id: "call-1", name, input }, "stella", null),
         toolResultFor(
           { name, input },
           { type: "tool_result", tool_use_id: "call-1", content },
@@ -219,6 +220,10 @@ describe("what a turn reports about its skill folders", () => {
     const event = await claudeCall("Bash", { command: "ls" }, "notes.md\n");
     expect(event.toolCall.input).toEqual({ command: "ls" });
     expect(JSON.parse(event.result.content)).toEqual({ status: "completed" });
+    expect(event.result.localOutput).toEqual({
+      type: "command",
+      output: "notes.md\n",
+    });
   });
 
   test("a Codex command reading a skill shows the name and reports only the status", async () => {
@@ -249,6 +254,93 @@ describe("what a turn reports about its skill folders", () => {
       exit_code: 0,
       status: "completed",
     });
+    // What it printed of the skill is not kept, not even on this computer.
+    expect(result.localOutput).toBeUndefined();
+  });
+
+  test("a subagent's conversation or a viewed image that names a skill is not kept, and any other is", async () => {
+    const subagent: HarnessToolCall = {
+      id: "call-agent",
+      name: "harness_native_tool",
+      input: { tool: "Agent", detail: { kind: "subagent", description: "" } },
+    };
+    const image: HarnessToolCall = {
+      id: "call-image",
+      name: "harness_native_tool",
+      input: { tool: "Read", detail: { kind: "image", path: "scan.png" } },
+    };
+    const done = { content: STATUS_ONLY, status: "succeeded" } as const;
+    const conversation = (report: string) =>
+      ({
+        type: "conversation",
+        entries: [
+          { role: "prompt", text: "Check the lease." },
+          { role: "report", text: report },
+        ],
+        droppedBytes: 0,
+      }) as const;
+    const kept = async (
+      toolCall: HarnessToolCall,
+      localOutput: NonNullable<HarnessToolResult["localOutput"]>,
+    ) =>
+      lastCompleted(
+        await through([completed(toolCall, { ...done, localOutput })]),
+      ).result.localOutput;
+    const plain = conversation("Clause 4 caps arrears.");
+    expect(await kept(subagent, plain)).toEqual(plain);
+    // What it quoted of the skill is not kept, not even on this computer.
+    expect(
+      await kept(
+        subagent,
+        conversation(`${FOLDER}/references/commentary.md: a licensed clause`),
+      ),
+    ).toBeUndefined();
+    const scan = { type: "image", path: "/srv/member/scan.png" } as const;
+    expect(await kept(image, scan)).toEqual(scan);
+    expect(
+      await kept(image, { type: "image", path: `${FOLDER}/assets/figure.png` }),
+    ).toBeUndefined();
+  });
+
+  test("a subagent whose step read a skill keeps no conversation, though what it reported names no path", async () => {
+    const outer: HarnessToolCall = {
+      id: "call-outer",
+      name: "harness_native_tool",
+      input: { tool: "Agent", detail: { kind: "subagent", description: "" } },
+    };
+    const inner: HarnessToolCall = {
+      ...outer,
+      id: "call-inner",
+      parentCallId: outer.id,
+    };
+    const read: HarnessToolCall = {
+      id: "call-read",
+      name: "Bash",
+      input: { command: `cat ${FOLDER}/SKILL.md` },
+      parentCallId: inner.id,
+    };
+    const done = { content: STATUS_ONLY, status: "succeeded" } as const;
+    const quoting = {
+      type: "conversation",
+      entries: [
+        { role: "report", text: "The licensed clause, word for word." },
+      ],
+      droppedBytes: 0,
+    } as const;
+    const events = await through([
+      { type: "tool.started", toolCall: outer },
+      { type: "tool.started", toolCall: inner },
+      completed(read, { content: "Licensed text.", status: "succeeded" }),
+      completed(inner, { ...done, localOutput: quoting }),
+      completed(outer, { ...done, localOutput: quoting }),
+    ]);
+    // Neither the subagent that read it nor the one that started that
+    // subagent keeps what it wrote.
+    expect(
+      events.flatMap((event) =>
+        event.type === "tool.completed" ? [event.result.localOutput] : [],
+      ),
+    ).toEqual([undefined, undefined, undefined]);
   });
 
   test("a call known to have touched a skill when it started stays status only", async () => {
@@ -424,6 +516,7 @@ describe("what a turn reports about its skill folders", () => {
       respond: async () => Result.ok(),
       steer: async () => Result.ok(),
       interrupt: async () => undefined,
+      release: async () => null,
       dispose: async () => undefined,
     };
     expect(redactingSkillPaths(turn, { folders: [], plugin: null })).toBe(turn);
