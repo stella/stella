@@ -136,7 +136,7 @@
     ],
     "networkPolicies": ["open"],
     "fsPolicies": ["workspace"],
-    "approvalModes": ["ask", "auto", "full_auto"],
+    "approvalModes": ["plan", "ask", "auto", "full_auto"],
     "reasoningEfforts": [
       "none",
       "minimal",
@@ -693,7 +693,7 @@
         "policy": {
           "network": "open",
           "fs": "workspace",
-          "approvals": "full_auto"
+          "approvals": "plan"
         },
         "mcp": {
           "serverName": "stella",

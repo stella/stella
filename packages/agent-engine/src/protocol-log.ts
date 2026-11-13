@@ -398,6 +398,16 @@ const CLAUDE_CONTROL_REQUEST_FIELDS: Readonly<
   interrupt: {},
   get_usage: { skip_behaviors: BOOLEAN },
   mcp_set_servers: { servers: SIZE },
+  set_permission_mode: {
+    mode: vocabulary([
+      "default",
+      "acceptEdits",
+      "bypassPermissions",
+      "plan",
+      "dontAsk",
+      "auto",
+    ]),
+  },
   stop_task: { task_id: IDENTIFIER },
 };
 

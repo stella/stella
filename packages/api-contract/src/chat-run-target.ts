@@ -84,6 +84,19 @@ export const chatLocalRunTargetSchema = v.strictObject({
 export type ChatLocalRunTarget = v.InferOutput<typeof chatLocalRunTargetSchema>;
 
 /**
+ * The modes an organization can set as the most a local run may do without
+ * asking. Plan is not one: an approved plan continues as Ask, so every
+ * ceiling allows it.
+ */
+export const CHAT_LOCAL_RUN_APPROVAL_CEILINGS = [
+  "ask",
+  "auto",
+  "full_auto",
+] as const satisfies readonly DesktopRunnerApprovalMode[];
+export type ChatLocalRunApprovalCeiling =
+  (typeof CHAT_LOCAL_RUN_APPROVAL_CEILINGS)[number];
+
+/**
  * How a harness's own web search runs at a permission level: without
  * asking, after the member approves the search, or not at all.
  */
@@ -104,11 +117,15 @@ export type ChatLocalRunWebSearch =
  */
 export const CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS = {
   codex: {
+    // Codex never runs in plan.
+    plan: CHAT_LOCAL_RUN_WEB_SEARCH.off,
     ask: CHAT_LOCAL_RUN_WEB_SEARCH.off,
     auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
     full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
   },
   "claude-code": {
+    // Plan allows nothing ahead, a search included.
+    plan: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
     ask: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
     auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
     full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
@@ -124,12 +141,13 @@ export const CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS = {
  * nothing for an organization that never chose one.
  */
 export const CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS =
-  "full_auto" satisfies DesktopRunnerApprovalMode;
+  "full_auto" satisfies ChatLocalRunApprovalCeiling;
 
 /**
  * Whether `mode` asks at least as much as `ceiling` allows. The modes are
- * ordered by how much a run does on its own, `ask < auto < full_auto`, which
- * is the order `DESKTOP_RUNNER_APPROVAL_MODES` lists them in.
+ * ordered by how much a run does on its own,
+ * `plan < ask < auto < full_auto`, which is the order
+ * `DESKTOP_RUNNER_APPROVAL_MODES` lists them in.
  */
 export const isApprovalModeWithin = (
   mode: DesktopRunnerApprovalMode,
@@ -244,7 +262,7 @@ export type ChatLocalRunReadiness =
   | {
       status: "enabled";
       runners: ChatLocalRunnerReadiness[];
-      maxApprovals: DesktopRunnerApprovalMode;
+      maxApprovals: ChatLocalRunApprovalCeiling;
     };
 
 export const CHAT_LOCAL_HARNESS_STATE = DESKTOP_RUNNER_HARNESS_STATE;

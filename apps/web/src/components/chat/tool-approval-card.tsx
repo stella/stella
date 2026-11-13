@@ -39,9 +39,11 @@ import {
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { MessageResponse } from "@/components/ai-elements/message";
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
@@ -62,6 +64,7 @@ import type {
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
 import {
+  localRunProposedPlan,
   localRunToolSubtitleText,
   localRunToolView,
 } from "@/components/chat/local-run-tool.logic";
@@ -544,6 +547,17 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
   return null;
 };
 
+/**
+ * The card's title. A step a coding agent asks about on the member's computer
+ * is named by its kind, as its row names it.
+ */
+const approvalTitleKey = (name: ApprovalToolName, part: ApprovalToolPart) =>
+  localRunToolView({
+    name,
+    input: getApprovalPartInput(part),
+    output: part.output,
+  })?.titleKey ?? getChatToolTitleKey(name);
+
 export const ToolApprovalCard = ({
   action,
   activeFileName,
@@ -586,7 +600,7 @@ export const ToolApprovalCard = ({
     showsExternalInput,
   } = getToolApprovalState({
     blockedApprovalTools,
-    defaultLabel: t(getChatToolTitleKey(name)),
+    defaultLabel: t(approvalTitleKey(name, part)),
     name,
     part,
     isTurnActive,
@@ -874,8 +888,10 @@ const ToolApprovalSummary = ({
 
   const name = getApprovalToolName(part);
   const input = getApprovalPartInput(part);
+  const proposedPlan = localRunProposedPlan({ name, input });
   return (
     <>
+      {proposedPlan !== null && <LocalRunPlanSummary plan={proposedPlan} />}
       {part.name === "update-entity-fields" && part.input !== undefined && (
         <UpdateSummary input={part.input} />
       )}
@@ -954,6 +970,20 @@ const LocalRunToolSummary = ({
     </div>
   );
 };
+
+/**
+ * The plan a coding agent proposes before it acts, read whole so the member
+ * knows what approving it lets the agent do.
+ */
+const LocalRunPlanSummary = ({ plan }: { plan: string }) => (
+  <div className="border-border/50 border-t">
+    <ScrollArea axis="vertical" className="max-h-96">
+      <div className="px-3 py-2 text-sm">
+        <MessageResponse mode="static">{plan}</MessageResponse>
+      </div>
+    </ScrollArea>
+  </div>
+);
 
 type SummaryMatter = { color: string | null; id: string; name: string };
 

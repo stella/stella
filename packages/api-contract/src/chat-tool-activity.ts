@@ -221,6 +221,9 @@ const HARNESS_CHAT_TOOL_DISPLAY = {
   command_execution: { category: "computation", label: "command_execution" },
   file_change: { category: "computation", label: "file_change" },
   harness_web_search: { category: "computation", label: "harness_web_search" },
+  // A step of the agent's own (a read, a search, a proposed plan): its row and
+  // approval card name its kind from the step's detail, not from this label.
+  harness_native_tool: { category: "computation", label: "unknown" },
   // `CHAT_LOCAL_RUN_QUESTION_TOOL`, spelled out: a key computed from a
   // constant reads as a widening literal, and the web's approval grant set,
   // typed by these names, would then infer as a set of any string.

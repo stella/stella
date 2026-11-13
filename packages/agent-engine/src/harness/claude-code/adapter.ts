@@ -188,15 +188,18 @@ const isCapability = (value: string): value is HarnessCapability =>
   Object.hasOwn(CLAUDE_CODE_CAPABILITIES, value);
 
 /**
- * The CLI's permission mode per approval mode. In `acceptEdits`, edits inside
- * the working directory go ahead and anything else, including a path outside
- * it, is asked about through the permission prompt; in `auto`, the CLI's own
- * review approves what it judges safe and asks about the rest. Full auto adds
- * the CLI's OS sandbox to `acceptEdits` (see `sandboxSettings`). A mode that
- * skips permission checks is never used: it would also approve a command's
- * request to leave the sandbox.
+ * The CLI's permission mode per approval mode. In `plan`, nothing that
+ * changes files runs without asking: the agent reads and researches, then
+ * calls `ExitPlanMode` with its plan, which is asked about like any call. In
+ * `acceptEdits`, edits inside the working directory go ahead and anything
+ * else, including a path outside it, is asked about through the permission
+ * prompt; in `auto`, the CLI's own review approves what it judges safe and
+ * asks about the rest. Full auto adds the CLI's OS sandbox to `acceptEdits`
+ * (see `sandboxSettings`). A mode that skips permission checks is never
+ * used: it would also approve a command's request to leave the sandbox.
  */
 const PERMISSION_MODE = {
+  plan: "plan",
   ask: "acceptEdits",
   auto: "auto",
   full_auto: "acceptEdits",
@@ -242,6 +245,14 @@ const sandboxSettings = (
     },
   },
 });
+
+/**
+ * The CLI mode a plan-level turn continues in once its plan is approved:
+ * Ask's. The CLI on its own would return to `default`, which also asks about
+ * edits; the mode the thread used before Plan is not known here, and Ask is
+ * the mode every harness supports.
+ */
+const APPROVED_PLAN_MODE = PERMISSION_MODE.ask;
 
 /** The CLI's refusal when the sandbox it was told to require cannot start. */
 const SANDBOX_REFUSAL = "Sandbox required but unavailable";
@@ -309,17 +320,22 @@ const WEB_SEARCH_TOOL = "WebSearch";
  * the approval request, which carries its query. Fetching a page follows the
  * permission mode like any other tool.
  */
-const allowedTools = (
+const allowedToolsArgs = (
   serverName: string,
   approvals: HarnessRunPolicy["approvals"],
-): string => {
+): string[] => {
+  if (approvals === "plan") {
+    return [];
+  }
   const searchesUnasked =
     CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS["claude-code"][approvals] ===
     CHAT_LOCAL_RUN_WEB_SEARCH.unasked;
   return [
-    `mcp__${serverName}`,
-    ...(searchesUnasked ? [WEB_SEARCH_TOOL] : []),
-  ].join(",");
+    "--allowedTools",
+    [`mcp__${serverName}`, ...(searchesUnasked ? [WEB_SEARCH_TOOL] : [])].join(
+      ",",
+    ),
+  ];
 };
 
 const PROTOCOL_ARGS = [
@@ -652,8 +668,11 @@ const turnArgs = (
   ...settingsArgs(input, skills, options.platform),
   ...(skills === null ? [] : ["--plugin-dir", skills.dir]),
   ...NETWORK_ARGS[input.policy.network],
-  "--allowedTools",
-  allowedTools(input.mcp.serverName, input.policy.approvals),
+  // The stella MCP server enforces its own approvals for destructive
+  // calls. In plan nothing is allowed ahead: every call is asked about until
+  // the member approves the plan, so nothing lands before it (the turn stays
+  // this way after approval: asks more, not less).
+  ...allowedToolsArgs(input.mcp.serverName, input.policy.approvals),
   target.type === "fresh" ? "--session-id" : "--resume",
   target.sessionId,
   "--model",
@@ -687,6 +706,8 @@ const turnSession = (
     sandboxNetworkHosts: new Set(
       input.policy.approvals === "full_auto" ? input.networkHosts : [],
     ),
+    approvedPlanMode:
+      input.policy.approvals === "plan" ? APPROVED_PLAN_MODE : null,
     background: cli.turnBackground(sessionId),
   });
   cli.route(session.handlers);
@@ -956,6 +977,20 @@ const continueTurn = async (
     });
   }
   const client = cli.client;
+  // A kept process may have left the mode it started in (an approved plan
+  // switches to Ask's mode): every turn starts in its own mode, or in a
+  // fresh process when the CLI will not switch.
+  const reset = await client.request("set_permission_mode", {
+    mode: PERMISSION_MODE[input.policy.approvals],
+  });
+  if (Result.isError(reset)) {
+    await settlesWithin(cli.stopAll(client), options.gracePeriodMs);
+    await client.kill();
+    return startTurn(options, {
+      ...input,
+      continuation: { type: "resume", sessionId: live.sessionId },
+    });
+  }
   const session = turnSession(options, input, cli, live.sessionId);
   session.attach(client);
   const prompt = buildTurnPrompt({
