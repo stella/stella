@@ -3,6 +3,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type {
   ChatLocalRunReadiness,
+  ChatLocalRunTarget,
   ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
@@ -17,7 +18,8 @@ const { IntlProvider } = await import("use-intl");
 const { Menu, MenuPopup, MenuTrigger } = await import("@stll/ui/menu");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { localRunnersOptions } = await import("@/features/chat/queries");
-const { ChatRunTargetMenu } = await import("./chat-run-target-menu");
+const { ChatRunTargetMenu, LocalModelOptions } =
+  await import("./chat-run-target-menu");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
 afterEach(cleanup);
@@ -70,7 +72,7 @@ const READINESS: ChatLocalRunReadiness = {
   maxApprovals: "full_auto",
 };
 
-const LOCAL: ChatRunTarget = {
+const LOCAL: ChatLocalRunTarget = {
   kind: "local",
   harness: "claude-code",
   model: "sonnet",
@@ -119,6 +121,40 @@ const renderMenu = (
     view,
     chosen,
     rerender: (target: ChatRunTarget) => view.rerender(tree(target)),
+  };
+};
+
+/** The model chip's menu for a chat on the member's computer. */
+const renderModels = (selected: ChatLocalRunTarget) => {
+  const client = new QueryClient();
+  client.setQueryData(localRunnersOptions(ORGANIZATION_ID).queryKey, READINESS);
+  const chosen: ChatRunTarget[] = [];
+  const tree = (target: ChatLocalRunTarget) => (
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <Menu open>
+            <MenuTrigger />
+            <MenuPopup>
+              <LocalModelOptions
+                activeOrganizationId={ORGANIZATION_ID}
+                enabled={false}
+                onSelect={(next) => {
+                  chosen.push(next);
+                }}
+                selected={target}
+              />
+            </MenuPopup>
+          </Menu>
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>
+  );
+  const view = render(tree(selected));
+  return {
+    view,
+    chosen,
+    rerender: (target: ChatLocalRunTarget) => view.rerender(tree(target)),
   };
 };
 
@@ -175,10 +211,24 @@ test("choosing a permission mode keeps the harness and model, and the stored cho
   );
 });
 
-test("the model's reasoning efforts are offered beside the harness default, and a choice keeps the model and permissions", async () => {
-  const { view, chosen, rerender } = renderMenu(LOCAL);
+test("the model chip offers the model's reasoning efforts beside the harness default, and a choice keeps the model and permissions", async () => {
+  const { view, chosen, rerender } = renderModels(LOCAL);
   expect(await waitFor(() => view.getByText("Reasoning effort"))).toBeTruthy();
-  const harnessDefault = await radioItem(view, "Default");
+  // The effort's own Default, not the recommended model above it.
+  const effortDefault = async () =>
+    await waitFor(() => {
+      const item = view
+        .getAllByRole("menuitemradio")
+        .find(
+          (candidate) =>
+            candidate.textContent.replace(/^Selected/u, "") === "Default",
+        );
+      if (item === undefined) {
+        throw new Error("no Default effort");
+      }
+      return item;
+    });
+  const harnessDefault = await effortDefault();
   expect(harnessDefault.getAttribute("aria-checked")).toBe("true");
   expect(view.queryByText("Medium")).toBeNull();
   fireEvent.click(await radioItem(view, "High"));
@@ -187,7 +237,7 @@ test("the model's reasoning efforts are offered beside the harness default, and 
   expect((await radioItem(view, "High")).getAttribute("aria-checked")).toBe(
     "true",
   );
-  fireEvent.click(await radioItem(view, "Default"));
+  fireEvent.click(await effortDefault());
   expect(chosen.at(-1)).toEqual(LOCAL);
 });
 
@@ -199,29 +249,51 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
     ),
   ).toBeTruthy();
   expect(view.getByText("Permissions")).toBeTruthy();
+  // The places alone: no permission mode to pick.
   expect(
     view
       .getAllByRole("menuitemradio")
       .map((item) => item.textContent.replace(/^Selected/u, "")),
-  ).toEqual(["stella cloud"]);
+  ).toEqual([
+    `${messages.chat.runOn.cloud}${messages.chat.runOn.cloudDescription}`,
+    "Codex",
+    "Claude Code",
+  ]);
 });
 
 test("a cloud turn has no permission choice", async () => {
   const { view } = renderMenu({ kind: "cloud" });
-  await waitFor(() => view.getByText("Run on"));
+  await waitFor(() => view.getByText(messages.chat.runOn.yourComputer));
   expect(view.queryByText("Permissions")).toBeNull();
 });
 
-test("the run-on group opens with its label, the cloud choice and a ready computer", async () => {
+test("the places open with the cloud, the member's computer and its ready agents", async () => {
   const { view, chosen } = renderMenu(CODEX);
-  expect(await waitFor(() => view.getByText("Run on"))).toBeTruthy();
-  expect(view.getByText("Codex on this computer")).toBeTruthy();
+  expect(
+    await waitFor(() => view.getByText(messages.chat.runOn.yourComputer)),
+  ).toBeTruthy();
+  expect(view.getByText("Codex")).toBeTruthy();
   const cloud = view
     .getAllByRole("menuitemradio")
-    .find((item) => item.textContent.includes("stella cloud"));
+    .find((item) => item.textContent.includes(messages.chat.runOn.cloud));
   expect(cloud).toBeDefined();
   if (cloud !== undefined) {
     fireEvent.click(cloud);
   }
   expect(chosen).toEqual([{ kind: "cloud" }]);
+});
+
+test("picking another agent starts it on its recommended model, and the chosen agent keeps its own", async () => {
+  const { view, chosen } = renderMenu(CODEX);
+  const claude = await waitFor(() => {
+    const item = view
+      .getAllByRole("menuitemradio")
+      .find((candidate) => candidate.textContent.endsWith("Claude Code"));
+    if (item === undefined) {
+      throw new Error("no Claude Code choice");
+    }
+    return item;
+  });
+  fireEvent.click(claude);
+  expect(chosen).toEqual([LOCAL]);
 });

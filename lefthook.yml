@@ -101,8 +101,9 @@ pre-push:
     lockfiles:
       run: bun run check:standalone-lockfiles
     # One git diff, then nothing unless the pushed commits touch a job
-    # classification input. It refreshes digests that only need a mechanical
-    # update (commit them and push again) and fails on any job that still
-    # needs review. CI rechecks at the workflow revision.
+    # classification input. It removes the decisions of jobs that are not
+    # privileged or no longer exist (commit the removal and push again) and
+    # fails on any privileged job that still needs review. CI rechecks at
+    # the workflow revision.
     job-classification:
       run: bun scripts/check-ci-job-classification.ts --pre-push

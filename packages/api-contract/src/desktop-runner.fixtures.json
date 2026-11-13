@@ -198,6 +198,7 @@
               {
                 "id": "model-large",
                 "label": "Large model",
+                "isDefault": true,
                 "reasoningEfforts": ["low", "medium", "high", "xhigh"]
               },
               {

@@ -739,6 +739,14 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     expiresAt: "2026-12-04T00:00:00.000Z",
     reason: "no-llms-txt",
   },
+  {
+    checkedAt: "2026-11-12T00:00:00.000Z",
+    dependency: "js-yaml",
+    explanation:
+      "https://nodeca.github.io/js-yaml/llms.txt and https://raw.githubusercontent.com/nodeca/js-yaml/HEAD/llms.txt return 404. Use the README at https://github.com/nodeca/js-yaml directly; the landing app declares the package only so Starlight's bundled routes resolve the major they are written against, and imports nothing from it.",
+    expiresAt: "2026-12-12T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
   ...["@dnd-kit/core", "@dnd-kit/sortable"].map(
     (dependency) =>
       ({

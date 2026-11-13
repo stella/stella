@@ -1,31 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ReviewDecision } from "@stll/api-contract/review-decision";
-
 import { toSafeId } from "@/api/lib/branded-types";
 import {
-  AVT_CLAIM_REVIEW_DECISION,
   CLAIM_REVIEW_EVENT_KINDS,
   CLAIM_REVIEW_REASON_RULE,
   type ClaimReviewAction,
   type ClaimReviewEventKind,
-  type ClaimReviewStatus,
   reviewReasonOf,
   type StoredClaimReviewEventPayload,
 } from "@/api/lib/lists/verification/contract";
-
-AVT_CLAIM_REVIEW_DECISION satisfies Record<
-  ClaimReviewStatus,
-  ReviewDecision | null
->;
-
-test("claim review statuses translate to shared decisions", () => {
-  expect(AVT_CLAIM_REVIEW_DECISION).toEqual({
-    reviewed: "accepted",
-    disputed: "rejected",
-    "needs-evidence": null,
-  });
-});
 
 /** One stored action of every kind, with no reason. */
 const STORED = {

@@ -5,6 +5,10 @@ import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import {
+  CHAT_LOCAL_RUN_WEB_SEARCH,
+  CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
+} from "@stll/api-contract/chat-run-target";
+import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   type DesktopRunnerApprovalMode,
   knownReasoningEfforts,
@@ -294,6 +298,29 @@ const FIXED_ENV = {
   // Connectors from the claude.ai account are not part of a stella turn.
   ENABLE_CLAUDEAI_MCP_SERVERS: "false",
 } as const;
+
+/** The CLI's web search tool, pre-allowed where the level runs it unasked. */
+const WEB_SEARCH_TOOL = "WebSearch";
+
+/**
+ * The tools that run without the CLI asking. The stella MCP server enforces
+ * its own approvals for writes. Web search follows the permission level:
+ * pre-allowed where the level runs it without asking; at Ask it goes through
+ * the approval request, which carries its query. Fetching a page follows the
+ * permission mode like any other tool.
+ */
+const allowedTools = (
+  serverName: string,
+  approvals: HarnessRunPolicy["approvals"],
+): string => {
+  const searchesUnasked =
+    CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS["claude-code"][approvals] ===
+    CHAT_LOCAL_RUN_WEB_SEARCH.unasked;
+  return [
+    `mcp__${serverName}`,
+    ...(searchesUnasked ? [WEB_SEARCH_TOOL] : []),
+  ].join(",");
+};
 
 const PROTOCOL_ARGS = [
   "--output-format",
@@ -625,9 +652,8 @@ const turnArgs = (
   ...settingsArgs(input, skills, options.platform),
   ...(skills === null ? [] : ["--plugin-dir", skills.dir]),
   ...NETWORK_ARGS[input.policy.network],
-  // The stella MCP server enforces its own approvals for writes.
   "--allowedTools",
-  `mcp__${input.mcp.serverName}`,
+  allowedTools(input.mcp.serverName, input.policy.approvals),
   target.type === "fresh" ? "--session-id" : "--resume",
   target.sessionId,
   "--model",

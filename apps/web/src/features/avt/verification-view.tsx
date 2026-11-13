@@ -52,7 +52,6 @@ import {
 } from "@/features/avt/state-chip";
 import type {
   ClaimState,
-  FactId,
   VerificationClaim,
   VerificationRun,
 } from "@/features/avt/types";
@@ -67,7 +66,6 @@ import {
   isConflictState,
   isContested,
   isSettled,
-  needsAttention,
   resolveClaimView,
   routineUnsettledClaimIds,
 } from "@/features/avt/verdict";
@@ -158,8 +156,8 @@ export const VerificationView = ({
   const contested = contestedFactIds(run.evidence.facts);
   const presentation = selectClaimPresentation(run.blocks, claims);
   const readingOrder = presentation.readingOrder;
-  const counts = countClaims(run.claims, contested);
-  const routineIds = routineUnsettledClaimIds(run.claims, contested);
+  const counts = countClaims(run.claims);
+  const routineIds = routineUnsettledClaimIds(run.claims);
   const bulkRecheck = useBulkRecheck({ workspaceId, runId: run.id });
 
   const [selected, setSelected] = React.useState(readingOrder.at(0) ?? null);
@@ -176,7 +174,7 @@ export const VerificationView = ({
   const view = hasOriginal ? documentView : "reading";
 
   const matches = (claim: VerificationClaim, value: VerdictFilter) =>
-    claimMatchesFilter(claim, value, contested);
+    claimMatchesFilter(claim, value);
 
   const selectedClaim = selected === null ? undefined : claimById.get(selected);
 
@@ -753,7 +751,6 @@ const ReadingDocument = ({
 const claimMatchesFilter = (
   claim: VerificationClaim,
   filter: VerdictFilter,
-  contested: ReadonlySet<FactId>,
 ): boolean => {
   const state = effectiveState(claim, claim.review);
   switch (filter) {
@@ -764,17 +761,7 @@ const claimMatchesFilter = (
       return isConflictState(state);
     }
     case "needsreview": {
-      return (
-        needsAttention(
-          {
-            state,
-            refs: claim.refs,
-            qualifiers: claim.qualifiers,
-            recheck: claim.recheck,
-          },
-          contested,
-        ) && !isSettled(claim.review)
-      );
+      return claim.needsAttention && !isSettled(claim.review);
     }
     case "reviewed": {
       return isSettled(claim.review);

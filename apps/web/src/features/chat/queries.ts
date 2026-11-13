@@ -31,6 +31,7 @@ import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
 
 import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
@@ -1097,12 +1098,20 @@ const fetchChatLocalRunners = async (signal: AbortSignal) =>
  * Models submenu opens, like the model options, and kept briefly: a computer
  * signing in or reaching a limit shows on the next open.
  */
+/**
+ * The member's computers and what each can run. They report themselves to
+ * the API over their own sockets; no stella mutation changes them, so the
+ * read declares itself independent of resource writes.
+ */
 export const localRunnersOptions = (activeOrganizationId: string) =>
-  queryOptions({
-    queryKey: chatKeys.localRunners(activeOrganizationId),
-    staleTime: 30_000,
-    queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: chatKeys.localRunners(activeOrganizationId),
+      staleTime: 30_000,
+      queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
+    }),
+    { type: "independent" },
+  );
 
 export const groupedChatThreadsOptions = ({
   activeOrganizationId,
