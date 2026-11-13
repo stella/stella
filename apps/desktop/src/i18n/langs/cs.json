@@ -831,5 +831,26 @@
       "network_folder": "Tato složka je na síťovém úložišti. Dovednosti musí být na vlastním disku tohoto počítače.",
       "path_changed": "Některá nadřazená složka se změnila. Odeberte ji a přidejte znovu."
     }
+  },
+  "localLinkedFolders": {
+    "title": "Propojené složky",
+    "description": "Složky v tomto počítači, ve kterých může pracovat agent chatu. Chat vidí jen název složky; její cesta zůstává v tomto počítači.",
+    "add": "Propojit složku",
+    "remove": "Odpojit",
+    "removeFolder": "Odpojit {name}",
+    "state": {
+      "offline": "Disk, na kterém tato složka je, není připojený.",
+      "moved": "Tato složka byla přesunuta, přejmenována nebo smazána. Odpojte ji a propojte znovu.",
+      "protected": "Tato složka obsahuje vlastní data stelly nebo složku s dovednostmi, takže v ní agent pracovat nemůže.",
+      "unreadable": "Tuto složku se nepodařilo přečíst."
+    },
+    "notice": {
+      "action_failed": "Nepodařilo se to. Zkuste to znovu.",
+      "too_many": "Tento počítač už má tolik propojených složek, kolik jich udrží. Nejdřív jednu odpojte.",
+      "not_a_folder": "Vyberte složku.",
+      "network_folder": "Tato složka je na síťovém úložišti. Propojte složku na vlastním disku tohoto počítače.",
+      "protected": "Tato složka obsahuje vlastní data stelly nebo složku s dovednostmi, takže v ní agent pracovat nemůže.",
+      "unreadable": "Tuto složku se nepodařilo přečíst."
+    }
   }
 }

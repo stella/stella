@@ -31,6 +31,7 @@ export const invokeCapability = async <TResult>(
 export type AppOnlyWriteId =
   | "chat.browser-site-grants.create"
   | "chat.browser-site-grants.delete"
+  | "chat.local-runners.folder-approval.update"
   | "chat.mcp-apps.call"
   | "chat.threads.model.update"
   | "files.document-properties.update"
