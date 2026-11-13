@@ -322,9 +322,9 @@
       "fix": "#1730",
       "behaviour": "A turn's steps stay in one folded list across the tool results between them.",
       "status": "active",
-      "file": "../web/src/components/chat/chat-thread-messages.tsx",
-      "search": "  if (part.type === \"tool-result\") {\n    return true;\n  }\n  return (\n    part.type === \"tool-call\" &&",
-      "replace": "  return (\n    part.type === \"tool-call\" &&",
+      "file": "../../packages/api-contract/src/chat-tool-activity.ts",
+      "search": "  if (part.type === \"thinking\" || part.type === \"tool-result\") {",
+      "replace": "  if (part.type === \"thinking\") {",
       "scenario": {
         "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
         "test": "approval-after-tool-result shows what the server stored, live and in a second tab"
