@@ -2,6 +2,10 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
+  matchesMatterReferencePattern,
+  renderMatterReference,
+} from "@stll/api-contract/matter-reference";
+import {
   CONTACT_TYPES,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract/workspace-contacts";
@@ -312,3 +316,69 @@ export const removeMatterParty = async ({
     );
     return Result.ok(undefined);
   });
+
+const matterNumberingSchema = v.object({
+  matterNumberPattern: v.pipe(v.string(), v.minLength(1)),
+  matterNumberPadding: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+
+/** The organization's matter-number convention: its pattern and padding. */
+export type MatterNumbering = {
+  readonly pattern: string;
+  readonly padding: number;
+};
+
+/**
+ * The convention new matter numbers follow, which the number field's hint
+ * checks a typed number against, as the web's does.
+ */
+export const readMatterNumbering = async ({
+  fetch,
+  source,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+}): Promise<Result<MatterNumbering, ApiError>> =>
+  await Result.gen(async function* () {
+    const read = yield* Result.await(
+      requestApi({
+        fetch,
+        path: "/v1/workspaces/matter-numbering",
+        schema: matterNumberingSchema,
+        source,
+      }),
+    );
+    return Result.ok({
+      pattern: read.matterNumberPattern,
+      padding: read.matterNumberPadding,
+    });
+  });
+
+/**
+ * What the number hint says of `typed`: the convention's example, and
+ * whether the typed number departs from it. An empty field departs from
+ * nothing.
+ */
+export const matterNumberHint = (
+  typed: string,
+  numbering: MatterNumbering,
+  { now, timeZone }: { readonly now: Date; readonly timeZone: string },
+): { readonly example: string; readonly departs: boolean } => {
+  const trimmed = typed.trim();
+  return {
+    example: renderMatterReference({
+      now,
+      padding: numbering.padding,
+      pattern: numbering.pattern,
+      seq: 1,
+      timeZone,
+    }),
+    departs:
+      trimmed !== "" &&
+      !matchesMatterReferencePattern(
+        trimmed,
+        numbering.pattern,
+        numbering.padding,
+      ),
+  };
+};

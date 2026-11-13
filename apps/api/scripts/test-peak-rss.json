@@ -20296,22 +20296,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/lists/verification/run-caps.db.test.ts": {
-      "peakMb": 184,
-      "baselineMb": 184,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-1"
-      }
-    },
-    "src/lib/lists/verification/run-caps.test.ts": {
-      "peakMb": 179,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
-      }
-    },
     "src/lib/lists/verification/run-persistence.db.test.ts": {
       "peakMb": 731,
       "baselineMb": 216,
@@ -27574,6 +27558,22 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-1"
+      }
+    },
+    "src/lib/usage/model-run-caps/caps.db.test.ts": {
+      "peakMb": 184,
+      "baselineMb": 184,
+      "source": {
+        "runId": "42807986206",
+        "job": "measure-1"
+      }
+    },
+    "src/lib/usage/model-run-caps/caps.test.ts": {
+      "peakMb": 179,
+      "baselineMb": 179,
+      "source": {
+        "runId": "42807986206",
+        "job": "measure-2"
       }
     }
   }

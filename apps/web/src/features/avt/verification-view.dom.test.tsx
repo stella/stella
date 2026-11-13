@@ -16,6 +16,7 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
@@ -2651,7 +2652,7 @@ test("a re-check refused as a whole stops, says so, and offers the claims again"
     Response.json(
       {
         error: "This organization has reached its daily verification limit.",
-        code: "verification_daily_limit_reached",
+        code: MODEL_RUN_CAP_CODES.daily,
       },
       { status: 429 },
     ),
