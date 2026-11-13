@@ -6,7 +6,7 @@ import {
   TURN_ANNOUNCEMENT_KEYS,
   turnAnnouncement,
   type TurnAnnouncementInput,
-} from "@/components/chat/chat-turn-announcer.logic";
+} from "@/routes/_protected.chat/-components/chat-turn-announcer.logic";
 
 /**
  * One polite live region for the thread's turn: it says when the turn needs
@@ -25,9 +25,11 @@ export const ChatTurnAnnouncer = (props: TurnAnnouncementInput) => {
   const [opening] = useState(key);
   return (
     <div aria-atomic="true" aria-live="polite" className="sr-only">
-      {current === null || key === opening
-        ? ""
-        : t(TURN_ANNOUNCEMENT_KEYS[current.announcement])}
+      {current === null || key === opening ? null : (
+        // Keyed by its subject: the same words about something new (a second
+        // approval) replace the node, which is the change a live region reads.
+        <span key={key}>{t(TURN_ANNOUNCEMENT_KEYS[current.announcement])}</span>
+      )}
     </div>
   );
 };

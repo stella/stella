@@ -9,7 +9,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { ChatTurnAnnouncer } =
-  await import("@/components/chat/chat-turn-announcer");
+  await import("@/routes/_protected.chat/-components/chat-turn-announcer");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
 afterEach(cleanup);
@@ -60,13 +60,15 @@ const view = (thread: ChatUIMessage[], isGenerating = false) => (
   </IntlProvider>
 );
 
-const region = (container: HTMLElement) => {
+const liveRegion = (container: HTMLElement) => {
   const live = container.querySelector('[aria-live="polite"]');
   if (live === null) {
     throw new Error("The announcer rendered no live region");
   }
-  return live.textContent;
+  return live;
 };
+
+const region = (container: HTMLElement) => liveRegion(container).textContent;
 
 test("a thread that opens on a finished turn says nothing until its next turn ends", () => {
   const opened = [question("q1"), answer("a1", DONE)];
@@ -115,4 +117,21 @@ test("a thread that opens on a pending approval is quiet, and the next approval 
   // The same answer asks again, for its next call, after the first approval.
   rerender(view([question("q1"), approval("a1", "second")], true));
   expect(region(container)).toBe(messages.chat.turnStatus.waitingForApproval);
+});
+
+test("an approval that follows another directly replaces the announced node", () => {
+  const { container, rerender } = render(view([question("q1")], true));
+  rerender(view([question("q1"), approval("a1")], true));
+  const first = liveRegion(container).firstChild;
+  expect(first?.textContent).toBe(messages.chat.turnStatus.waitingForApproval);
+
+  // Same words, another call: only a new node tells a screen reader.
+  rerender(view([question("q1"), approval("a1", "second")], true));
+  const second = liveRegion(container).firstChild;
+  expect(second?.textContent).toBe(messages.chat.turnStatus.waitingForApproval);
+  expect(second).not.toBe(first);
+
+  // A redraw about the same call leaves the node alone, so it is said once.
+  rerender(view([question("q1"), approval("a1", "second")], true));
+  expect(liveRegion(container).firstChild).toBe(second);
 });

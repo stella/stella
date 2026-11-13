@@ -42,7 +42,6 @@ import { ChatLocalRunQuestionContext } from "@/components/chat/chat-local-run-qu
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
-import { ChatTurnAnnouncer } from "@/components/chat/chat-turn-announcer";
 import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
@@ -112,6 +111,7 @@ import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
+import { ChatTurnAnnouncer } from "@/routes/_protected.chat/-components/chat-turn-announcer";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
 
 // The composer block publishes its live height on this element, the

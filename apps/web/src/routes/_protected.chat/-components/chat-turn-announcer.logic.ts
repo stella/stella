@@ -71,8 +71,12 @@ export type TurnAnnouncementInput = {
 const waitingCalls = (
   messages: readonly PersistedChatMessage[],
   messageId: string,
-) =>
-  (messages.findLast(({ id }) => id === messageId)?.parts ?? [])
+) => {
+  const message = messages.findLast(({ id }) => id === messageId);
+  if (message === undefined) {
+    return panic("The awaited message is not in the thread", { messageId });
+  }
+  return message.parts
     .flatMap((part) =>
       part.type === "tool-call" &&
       (part.state === "approval-requested" || part.state === "input-complete")
@@ -80,6 +84,7 @@ const waitingCalls = (
         : [],
     )
     .join(" ");
+};
 
 /**
  * The newest turn's phase worth announcing, with what it is about: the calls

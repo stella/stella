@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { ASK_USER_TOOL_NAME } from "@stll/api-contract/chat";
 
-import { turnAnnouncement } from "@/components/chat/chat-turn-announcer.logic";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
+import { turnAnnouncement } from "@/routes/_protected.chat/-components/chat-turn-announcer.logic";
 
 type Outcome = NonNullable<
   NonNullable<ChatUIMessage["metadata"]>["turnOutcome"]
@@ -39,7 +39,7 @@ const announced = (
 
 describe("what the thread announces about its turn", () => {
   test("each way a turn ends", () => {
-    const cases: [Outcome, string | null][] = [
+    const cases: [Outcome, ReturnType<typeof announced>][] = [
       [{ type: "completed" }, "done"],
       [{ type: "cancelled", reason: "user-stop" }, "stopped"],
       // The member's next message took over; nothing ended for them.
