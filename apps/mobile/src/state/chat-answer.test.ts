@@ -302,7 +302,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
       ),
     });
     assertProperty(
-      "mobile-local-run-steps-shown-once",
+      "every step shows exactly once, and one waiting on an approval never inside a subagent's row",
       fc.property(
         fc
           .uniqueArray(fc.constantFrom(...ids), { minLength: 1 })

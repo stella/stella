@@ -240,14 +240,18 @@ describe("drawing an answer from its events", () => {
       detail: { kind: "subagent", description: "Check the lease" },
     };
     const stepInput = { command: "rg lease", parentCallId: "agent" };
+    const argumentDeltas = (args: string) => {
+      const middle = Math.floor(args.length / 2);
+      return [args.slice(0, middle), args.slice(middle)];
+    };
     const stepsOf = (
       id: string,
       name: string,
       input: unknown,
     ): readonly unknown[] => [
       { type: "TOOL_CALL_START", toolCallId: id, toolCallName: name },
-      // A native step's arguments arrive whole; a split is read the same.
-      ...[...JSON.stringify(input)].map((delta) => ({
+      // A native step's arguments arrive whole; split, they read the same.
+      ...argumentDeltas(JSON.stringify(input)).map((delta) => ({
         type: "TOOL_CALL_ARGS",
         toolCallId: id,
         delta,
