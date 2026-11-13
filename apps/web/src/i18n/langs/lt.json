@@ -1894,6 +1894,7 @@
       "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis.",
       "stateLimitUntil": "Limitas pasiektas iki {time}",
       "stateModelUnavailable": "Modelis nebepasiekiamas",
       "stateNeedsLogin": "Reikia prisijungti",

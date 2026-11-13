@@ -1894,6 +1894,7 @@
       "refusalTooLarge": "Esta conversa é longa demais para ser enviada ao seu computador. Comece um novo chat para executá-la lá.",
       "refusalUnavailable": "Executar chats no seu computador não está disponível para sua conta.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat.",
       "stateLimitUntil": "Limite atingido até {time}",
       "stateModelUnavailable": "Modelo não está mais disponível",
       "stateNeedsLogin": "É preciso entrar",

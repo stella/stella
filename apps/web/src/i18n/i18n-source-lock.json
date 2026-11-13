@@ -1508,6 +1508,7 @@
   "chat.localRun.refusalTooLarge": "This conversation is too long to hand to your computer. Start a new chat to run it there.",
   "chat.localRun.refusalUnavailable": "Running chats on your computer is not available for your account.",
   "chat.localRun.selectionStateLabel": "{selection} · {state}",
+  "chat.localRun.sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat.",
   "chat.localRun.stateLimitUntil": "Limit reached until {time}",
   "chat.localRun.stateModelUnavailable": "Model no longer available",
   "chat.localRun.stateNeedsLogin": "Sign-in needed",
