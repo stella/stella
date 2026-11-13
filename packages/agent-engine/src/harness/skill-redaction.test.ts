@@ -34,6 +34,7 @@ const through = async (
     })(),
     respond: async () => Result.ok(),
     interrupt: async () => undefined,
+    release: async () => null,
     dispose: async () => undefined,
   };
   const seen: HarnessEvent[] = [];
@@ -428,6 +429,7 @@ describe("what a turn reports about its skill folders", () => {
       })(),
       respond: async () => Result.ok(),
       interrupt: async () => undefined,
+      release: async () => null,
       dispose: async () => undefined,
     };
     expect(redactingSkillPaths(turn, { folders: [], plugin: null })).toBe(turn);

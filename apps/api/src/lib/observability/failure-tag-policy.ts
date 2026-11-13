@@ -101,6 +101,7 @@ export const TAGGED_FAILURE_REASON = {
   CitationStorageFieldError: "tagged_failure",
   ClaudeCliRequestError: "tagged_failure",
   ClientDocumentUnsupportedError: "tagged_failure",
+  CodexTerminalListError: "tagged_failure",
   ComparisonAppError: "tagged_failure",
   CompatibilityCheckError: "tagged_failure",
   CompletionApprovalError: "tagged_failure",

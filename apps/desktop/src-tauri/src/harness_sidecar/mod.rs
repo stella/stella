@@ -1549,6 +1549,15 @@ impl Supervisor {
           }
         }
       }
+      SidecarMessage::BackgroundTasks(tasks) => {
+        // The chat learns the count once the runner relays it; until then it
+        // stays on this computer.
+        tracing::debug!(
+          target: LOG_TARGET,
+          count = tasks.count,
+          "a kept harness process reported its background tasks"
+        );
+      }
       SidecarMessage::Rejected(rejected) => {
         tracing::warn!(
           target: LOG_TARGET,

@@ -38,6 +38,9 @@ import {
  *   when no desktop collected it within the API's abandoned-run window.
  * - It exits on `shutdown` (cancelling every run), once drained (no run held
  *   after `drain`), or after `idleExitMs` with no run held and no desktop.
+ *   A harness process kept for a chat's background work holds no run: it
+ *   ends when the holder exits, so nothing outlives the app by more than
+ *   the idle exit.
  */
 
 /** No run held and no desktop connected for this long ends the holder. */
@@ -292,6 +295,9 @@ export class Holder {
     for (const point of hello.resume) {
       this.resume(peer, point.runId, point.afterSeq, "hello");
     }
+    // The new desktop learns what kept processes hold, as a resumed run's
+    // process is reported again.
+    this.host.reportBackground();
   }
 
   private command(peer: Peer, line: string) {

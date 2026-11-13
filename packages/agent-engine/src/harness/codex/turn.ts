@@ -24,6 +24,7 @@ import {
 import { HARNESS_TOOL_NAMES, unsupportedItem } from "../tool-parts";
 import {
   type Detached,
+  type HarnessTurnBackground,
   HarnessTurnLifecycle,
   respondError,
   settlesWithin,
@@ -238,6 +239,8 @@ type CodexTurnSessionOptions = {
   /** The server name the turn registered the stella MCP binding under. */
   stellaServer: string;
   capacityRetry: CodexCapacityRetry;
+  /** The process's background work at the turn's end. */
+  background: HarnessTurnBackground<AppServerClient>;
 };
 
 export class CodexTurnSession {
@@ -269,11 +272,13 @@ export class CodexTurnSession {
     detached,
     stellaServer,
     capacityRetry,
+    background,
   }: CodexTurnSessionOptions) {
     this.lifecycle = new HarnessTurnLifecycle({
       gracePeriodMs,
       detached,
       name: "codex-turn",
+      background,
     });
     this.stellaServer = stellaServer;
     this.capacityRetry = capacityRetry;

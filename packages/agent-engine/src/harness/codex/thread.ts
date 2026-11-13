@@ -258,7 +258,7 @@ export const openThread = async (
     return disabledSkills;
   }
   const params = threadParams(input, disabledSkills.value);
-  if (input.continuation.type === "fresh") {
+  if (input.continuation.type !== "resume") {
     return startThread(client, params, { type: "fresh" });
   }
   const threadId = input.continuation.sessionId;
