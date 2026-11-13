@@ -155,22 +155,45 @@ export const localRunStepOutputKind = ({
   const call = isChatLocalRunToolName(name)
     ? parseChatLocalRunToolCall(name, input)
     : null;
-  switch (call?.name) {
+  if (call === null) {
+    return null;
+  }
+  switch (call.name) {
     case CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution:
       return "command";
     case CHAT_LOCAL_RUN_TOOL_NAMES.fileChange:
       return "diff";
     case CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool:
-      switch (call.input.detail?.kind) {
-        case "subagent":
-          return "conversation";
-        case "image":
-          return "image";
-        default:
-          return null;
-      }
-    default:
+      return call.input.detail === undefined
+        ? null
+        : detailOutputKind(call.input.detail);
+    case CHAT_LOCAL_RUN_TOOL_NAMES.webSearch:
+    case CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem:
       return null;
+    default:
+      call satisfies never;
+      return panic("Unhandled local run tool call");
+  }
+};
+
+/** What a native step of this kind keeps on the computer, if anything. */
+const detailOutputKind = (
+  detail: ChatLocalRunToolDetail,
+): LocalRunStepOutputKind | null => {
+  switch (detail.kind) {
+    case "subagent":
+      return "conversation";
+    case "image":
+      return "image";
+    case "read":
+    case "search":
+    case "fetch":
+    case "plan":
+    case "proposed_plan":
+      return null;
+    default:
+      detail satisfies never;
+      return panic("Unhandled local run tool detail");
   }
 };
 
