@@ -129,8 +129,8 @@ describe("what the thread announces about its turn", () => {
     } as const;
     const beside = {
       type: "tool-call",
-      id: "search",
-      name: "search_documents",
+      id: "beside",
+      name: "delete_document",
       arguments: "{}",
     } as const;
     const subject = (parts: ChatUIMessage["parts"]) =>
