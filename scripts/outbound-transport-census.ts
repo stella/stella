@@ -1100,7 +1100,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Reads and sets the stand-in computer's state on the configured local API.",
-    transports: ["global:fetch"],
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "packages/scripts/src/agent-session.ts",

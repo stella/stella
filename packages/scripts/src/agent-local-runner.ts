@@ -27,6 +27,8 @@ import {
 import path from "node:path";
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyTextWithIdleDeadline } from "@stll/fetch/body-reader";
 import { Temporal } from "@stll/time";
 
 import {
@@ -205,28 +207,32 @@ type StackSession = { apiUrl: string; webUrl: string; cookie: string };
 
 /** The local API answers these at once; a stack that hangs is not ready. */
 const STACK_REQUEST_TIMEOUT_MS = 10_000;
+/** Far above the readiness and settings bodies these requests read. */
+const STACK_RESPONSE_MAX_BYTES = 1024 * 1024;
 
 const stackRequest = async (
   stack: StackSession,
   pathname: string,
   method: "GET" | "PUT" = "GET",
 ) => {
-  const response = await Result.tryPromise(
-    async () =>
-      await fetch(`${stack.apiUrl}${pathname}`, {
-        headers: { cookie: stack.cookie, origin: stack.webUrl },
-        method,
-        signal: AbortSignal.timeout(STACK_REQUEST_TIMEOUT_MS),
-      }),
-  );
-  if (Result.isError(response)) {
-    return Result.err(`${method} ${pathname}: ${response.error.message}`);
+  const answered = await Result.tryPromise(async () => {
+    const response = await fetchWithTimeout(`${stack.apiUrl}${pathname}`, {
+      headers: { cookie: stack.cookie, origin: stack.webUrl },
+      method,
+      timeout: { type: "headers", ms: STACK_REQUEST_TIMEOUT_MS },
+    });
+    const text = await readBodyTextWithIdleDeadline(response, {
+      idleMs: STACK_REQUEST_TIMEOUT_MS,
+      maxBytes: STACK_RESPONSE_MAX_BYTES,
+    });
+    return { ok: response.ok, status: response.status, text };
+  });
+  if (Result.isError(answered)) {
+    return Result.err(`${method} ${pathname}: ${answered.error.message}`);
   }
-  const text = await response.value.text();
-  if (!response.value.ok) {
-    return Result.err(
-      `${method} ${pathname} -> ${String(response.value.status)}: ${text}`,
-    );
+  const { ok, status, text } = answered.value;
+  if (!ok) {
+    return Result.err(`${method} ${pathname} -> ${String(status)}: ${text}`);
   }
   const body: unknown = text === "" ? null : JSON.parse(text);
   return Result.ok(body);
