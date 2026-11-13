@@ -339,6 +339,33 @@ const stoppedBeforeStart = (): AsyncIterable<HarnessEvent> => {
   return queue.items;
 };
 
+type KeepRunStepOutputOptions = {
+  workspaceDir: string;
+  runId: string;
+  toolCallId: string;
+  output: HarnessStepOutput | undefined;
+  options: Pick<SidecarHostOptions, "log">;
+};
+
+/**
+ * Keep what a step produced on this computer, for the member to open here.
+ * The run goes on without it: the step's row then says its output is not on
+ * this computer.
+ */
+const keepRunStepOutput = async ({
+  options,
+  output,
+  ...step
+}: KeepRunStepOutputOptions) => {
+  if (output === undefined) {
+    return;
+  }
+  const kept = await keepStepOutput({ ...step, output });
+  if (Result.isError(kept)) {
+    options.log("a step's output was not kept on this computer");
+  }
+};
+
 const failedBeforeStart = (
   failure: HarnessFailure,
 ): AsyncIterable<HarnessEvent> => {
@@ -954,29 +981,7 @@ export class SidecarHost {
       }
     };
 
-    /**
-     * Keep what a step produced on this computer, for the member to open
-     * here. The run goes on without it: the step's row then says its output
-     * is not on this computer.
-     */
-    const keepOutputOf = async (
-      toolCallId: string,
-      localOutput: HarnessStepOutput | undefined,
-    ) => {
-      if (localOutput === undefined) {
-        return;
-      }
-      const kept = await keepStepOutput({
-        workspaceDir: message.workspaceDir,
-        runId,
-        toolCallId,
-        output: localOutput,
-      });
-      if (Result.isError(kept)) {
-        this.options.log("a step's output was not kept on this computer");
-      }
-    };
-
+    const { options } = this;
     /**
      * The adapter's events with harness request ids replaced by runner UUIDs.
      * An approval request is announced after the chunks of its event: the
@@ -1028,7 +1033,13 @@ export class SidecarHost {
             yield event;
             break;
           case "tool.completed":
-            await keepOutputOf(event.toolCall.id, event.result.localOutput);
+            await keepRunStepOutput({
+              workspaceDir: message.workspaceDir,
+              runId,
+              toolCallId: event.toolCall.id,
+              output: event.result.localOutput,
+              options,
+            });
             yield event;
             break;
           case "text.delta":
