@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
+import { once } from "node:events";
 import {
   existsSync,
   mkdirSync,
@@ -9,6 +10,7 @@ import {
   rmSync,
   statSync,
 } from "node:fs";
+import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -246,8 +248,9 @@ describe("the browser bridge and its native host", () => {
       { description: "the command to reach the extension" },
     );
     stop.abort();
+    // The page may have acted before the stop reached it.
     expect(readLocalBrowserResult(await pending)).toMatchObject({
-      code: BROWSER_CONTROL_ERROR_CODE.cancelled,
+      code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     });
     await waitFor(
       () =>
@@ -261,6 +264,53 @@ describe("the browser bridge and its native host", () => {
       turnId: "run-1",
       type: "cancel",
     });
+  });
+});
+
+describe("stopping the browser bridge", () => {
+  test("a run stopped before its command is sent sends nothing", async () => {
+    const { bridge } = await startBridge();
+    const chrome = startChrome(bridge, {
+      answer: (request) =>
+        request["type"] === "hello" ? extension(request) : undefined,
+    });
+    await ready(bridge);
+    const stop = new AbortController();
+    stop.abort();
+    expect(
+      readLocalBrowserResult(
+        await bridge.request(snapshotRequest, stop.signal),
+      ),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.cancelled });
+    expect(chrome.received.map(({ type }) => type)).toEqual(["hello"]);
+  });
+
+  test("a connection that never presented the secret does not keep it open", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "stella-bridge-"));
+    cleanups.push(() => {
+      rmSync(dir, { force: true, recursive: true });
+    });
+    const started = await startBrowserBridge({
+      dir,
+      endpoint: path.join(dir, "sb.sock"),
+      log: () => undefined,
+      timeoutMs: 5000,
+    });
+    const bridge = Result.isOk(started)
+      ? started.value
+      : panic(`the bridge did not start: ${started.error.message}`);
+    const silent = net.createConnection({ path: bridge.endpoint });
+    cleanups.push(() => {
+      silent.destroy();
+    });
+    const { promise: closed, resolve } = Promise.withResolvers<true>();
+    silent.once("close", () => {
+      resolve(true);
+    });
+    await once(silent, "connect");
+    await bridge.stop();
+    expect(await closed).toBe(true);
+    expect(existsSync(bridge.secretFile)).toBe(false);
   });
 });
 

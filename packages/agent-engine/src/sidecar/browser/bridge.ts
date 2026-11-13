@@ -176,6 +176,12 @@ const awaitResult = async ({
   signal,
   timeoutMs,
 }: AwaitResultOptions): Promise<BrowserControlResult> => {
+  if (signal.aborted) {
+    return browserBridgeError(
+      BROWSER_CONTROL_ERROR_CODE.cancelled,
+      "The run stopped before the command was sent to Chrome.",
+    );
+  }
   const { promise, resolve } = Promise.withResolvers<BrowserControlResult>();
   const settle = (result: BrowserControlResult) => {
     clearTimeout(timer);
@@ -192,19 +198,17 @@ const awaitResult = async ({
       ),
     );
   }, timeoutMs);
+  // Once the command was sent the page may have acted on it before the
+  // stop arrived: only the extension knows, and this does not wait for it.
   const onAbort = () => {
     cancel();
     settle(
       browserBridgeError(
-        BROWSER_CONTROL_ERROR_CODE.cancelled,
-        "The run stopped before Chrome reported back.",
+        BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+        "The run stopped before Chrome reported back. Take a snapshot before retrying.",
       ),
     );
   };
-  if (signal.aborted) {
-    onAbort();
-    return await promise;
-  }
   signal.addEventListener("abort", onAbort, { once: true });
   pending.set(requestId, settle);
   dispatch();
@@ -252,6 +256,19 @@ const writeSecretFile = (
   return Result.ok(undefined);
 };
 
+const write = (socket: net.Socket, message: BrowserDesktopRequest) => {
+  socket.write(`${JSON.stringify(message)}\n`);
+};
+
+const hostStatus = (host: Host | null): BrowserBridgeStatus => {
+  if (host === null) {
+    return { type: "absent" };
+  }
+  return host.status === "ready" && host.protocolVersion !== null
+    ? { protocolVersion: host.protocolVersion, type: "ready" }
+    : { type: "waiting" };
+};
+
 export const startBrowserBridge = async ({
   dir,
   endpoint,
@@ -279,6 +296,8 @@ export const startBrowserBridge = async ({
   }
 
   let host: Host | null = null;
+  /** Every accepted connection, authenticated or not, until it closes. */
+  const sockets = new Set<net.Socket>();
   /** Each command's settle, by request id, until its result arrives. */
   const pending = new Map<string, (result: BrowserControlResult) => void>();
 
@@ -287,10 +306,6 @@ export const startBrowserBridge = async ({
       pending.delete(requestId);
       settle(result);
     }
-  };
-
-  const write = (socket: net.Socket, message: BrowserDesktopRequest) => {
-    socket.write(`${JSON.stringify(message)}\n`);
   };
 
   const onHostLine = (connected: Host, line: string) => {
@@ -338,6 +353,7 @@ export const startBrowserBridge = async ({
   };
 
   server.on("connection", (socket) => {
+    sockets.add(socket);
     const connected: Host = {
       protocolVersion: null,
       socket,
@@ -356,6 +372,7 @@ export const startBrowserBridge = async ({
     });
     socket.on("close", () => {
       clearTimeout(authTimer);
+      sockets.delete(socket);
       if (host === connected) {
         host = null;
         failAll(
@@ -368,14 +385,7 @@ export const startBrowserBridge = async ({
     });
   });
 
-  const status = (): BrowserBridgeStatus => {
-    if (host === null) {
-      return { type: "absent" };
-    }
-    return host.status === "ready" && host.protocolVersion !== null
-      ? { protocolVersion: host.protocolVersion, type: "ready" }
-      : { type: "waiting" };
-  };
+  const status = () => hostStatus(host);
 
   const cancel = ({ controllerId, turnId }: BrowserBridgeCancel) => {
     if (host?.status !== "ready") {
@@ -459,7 +469,10 @@ export const startBrowserBridge = async ({
           "stella desktop stopped before Chrome reported back.",
         ),
       );
-      host?.socket.destroy();
+      // Unauthenticated ones too: the server closes once none is left.
+      for (const socket of sockets) {
+        socket.destroy();
+      }
       host = null;
       await closeServer(server, [endpoint, secretFile]);
     },
