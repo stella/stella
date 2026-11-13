@@ -1215,6 +1215,23 @@ describe("Claude Code approval modes", () => {
   const valueOf = (args: readonly string[], flag: string) =>
     args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
 
+  test("web search asks at Ask and runs unasked above it; fetching a page follows the permission mode", async () => {
+    const allowedAt = async (
+      approvals: HarnessTurnInput["policy"]["approvals"],
+    ) => {
+      const args = await argsFor(approvals);
+      expect(args).not.toContain("--disallowedTools");
+      expect(args).not.toContain("--disallowed-tools");
+      return (valueOf(args, "--allowedTools") ?? "").split(",");
+    };
+    const ask = await allowedAt("ask");
+    expect(ask).toEqual(["mcp__stella"]);
+    for (const approvals of ["auto", "full_auto"] as const) {
+      const allowed = await allowedAt(approvals);
+      expect(allowed).toEqual(["mcp__stella", "WebSearch"]);
+    }
+  });
+
   test("ask accepts edits in the workspace and asks about the rest, without the sandbox", async () => {
     const args = await argsFor("ask");
     expect(valueOf(args, "--permission-mode")).toBe("acceptEdits");

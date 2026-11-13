@@ -65,6 +65,41 @@ export const chatLocalRunTargetSchema = v.strictObject({
 export type ChatLocalRunTarget = v.InferOutput<typeof chatLocalRunTargetSchema>;
 
 /**
+ * How a harness's own web search runs at a permission level: without
+ * asking, after the member approves the search, or not at all.
+ */
+export const CHAT_LOCAL_RUN_WEB_SEARCH = {
+  unasked: "unasked",
+  asks: "asks",
+  off: "off",
+} as const;
+export type ChatLocalRunWebSearch =
+  (typeof CHAT_LOCAL_RUN_WEB_SEARCH)[keyof typeof CHAT_LOCAL_RUN_WEB_SEARCH];
+
+/**
+ * Web search follows the permission level. At Ask the member approves each
+ * search, with its query in the request. Claude Code asks like it does for any
+ * other tool; Codex searches at the model provider and cannot pause a search
+ * for approval, so its search is off at Ask. The adapters configure each
+ * harness from this table and the turn's prompt tells the agent the same.
+ */
+export const CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS = {
+  codex: {
+    ask: CHAT_LOCAL_RUN_WEB_SEARCH.off,
+    auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+    full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+  },
+  "claude-code": {
+    ask: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
+    auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+    full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+  },
+} as const satisfies Record<
+  ChatLocalRunHarness,
+  Record<DesktopRunnerApprovalMode, ChatLocalRunWebSearch>
+>;
+
+/**
  * The most an organization lets a local run do without asking. Until an
  * administrator lowers it every mode is allowed, so a new setting changes
  * nothing for an organization that never chose one.

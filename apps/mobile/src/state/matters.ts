@@ -34,19 +34,27 @@ export type MatterSummary = v.InferOutput<typeof matterSchema>;
 
 export type MattersLoad = Load<MatterSummary[]>;
 
-/** The person's matters, most recently active first. */
+/**
+ * The person's matters, most recently active first: the active ones, or with
+ * `status` the archived ones, as the web's archived filter lists them.
+ */
 export const listMatters = async ({
   fetch,
   source,
+  status,
 }: {
   readonly fetch: Fetch;
   readonly source: AccessTokenSource;
+  readonly status?: "archived";
 }): Promise<Result<MatterSummary[], ApiError>> =>
   await Result.gen(async function* () {
     const { workspaces } = yield* Result.await(
       requestApi({
         fetch,
-        path: MATTERS_PATH,
+        path:
+          status === undefined
+            ? MATTERS_PATH
+            : `${MATTERS_PATH}?${new URLSearchParams({ status }).toString()}`,
         schema: mattersResponseSchema,
         source,
       }),

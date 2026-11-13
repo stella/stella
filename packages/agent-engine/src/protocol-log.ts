@@ -2,7 +2,10 @@ import { EventType } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
-import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import {
+  AGENT_HARNESSES,
+  harnessSessionIdEvent,
+} from "@stll/api-contract/agent-harness";
 import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
@@ -34,10 +37,7 @@ import {
   type CodexNotificationMethod,
   type CodexServerRequestMethod,
 } from "./harness/codex/protocol";
-import {
-  HARNESS_CONTINUATION_EVENT,
-  harnessSessionIdEvent,
-} from "./harness/stream-chunks";
+import { HARNESS_CONTINUATION_EVENT } from "./harness/stream-chunks";
 import {
   SIDECAR_HOLDER_MODES,
   SIDECAR_HOST_MESSAGE,

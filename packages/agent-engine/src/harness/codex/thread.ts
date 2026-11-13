@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import path from "node:path";
 import * as v from "valibot";
 
+import { CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS } from "@stll/api-contract/chat-run-target";
+
 import {
   type HarnessRunPolicy,
   HarnessStartError,
@@ -27,17 +29,51 @@ import { SkillsListResponseSchema, ThreadResponseSchema } from "./protocol";
 const SANDBOX_MODE = {
   workspace: "workspace-write",
 } as const satisfies Record<HarnessRunPolicy["fs"], string>;
-const NETWORK_ACCESS = {
-  open: true,
-} as const satisfies Record<HarnessRunPolicy["network"], boolean>;
 /**
- * Codex runs every command inside its sandbox and asks before acting outside
- * it; stella relays the question. That is its one approval mode: `never`
- * would turn those questions into silent refusals, so Codex offers no other.
+ * Whether the run's network policy lets the sandbox reach the network; a
+ * level may still turn it off (`CODEX_LEVEL`).
  */
-export const CODEX_APPROVAL_MODE =
-  "ask" satisfies HarnessRunPolicy["approvals"];
-const APPROVAL_POLICY = "on-request";
+const NETWORK_ACCESS: Readonly<Record<HarnessRunPolicy["network"], boolean>> = {
+  open: true,
+};
+/**
+ * Codex's settings per approval mode, strictly ordered: each level allows
+ * everything the one below it does and more, so a ceiling at a level never
+ * yields a higher level's settings. Commands always run inside the workspace
+ * sandbox, and leaving it is always asked about; stella relays the question.
+ * `never` is not used: it would turn those questions into silent refusals.
+ *
+ * Codex has no policy that applies file changes without asking while asking
+ * before commands: `untrusted` asks before both, `on-request` before neither.
+ * Auto keeps the command gate, so it asks before file changes too.
+ * - `ask`: `untrusted`, no network in the sandbox. Asks before file changes
+ *   and before any command Codex does not know to be read-only; a command
+ *   that needs the network asks to leave the sandbox.
+ * - `auto`: `untrusted`, network on. Asks before file changes and before any
+ *   command Codex does not know to be read-only.
+ * - `full_auto`: `on-request`, network on. File changes inside the workspace
+ *   and commands inside the sandbox run without asking.
+ */
+const CODEX_LEVEL = {
+  ask: { approvalPolicy: "untrusted", networkAccess: false },
+  auto: { approvalPolicy: "untrusted", networkAccess: true },
+  full_auto: { approvalPolicy: "on-request", networkAccess: true },
+} as const satisfies Record<
+  HarnessRunPolicy["approvals"],
+  { approvalPolicy: "untrusted" | "on-request"; networkAccess: boolean }
+>;
+/**
+ * Codex's `web_search` setting for each way its search runs: live search of
+ * the web, or none. Codex cannot pause a search for approval, so the
+ * contract's table never asks it to.
+ */
+const WEB_SEARCH_MODE = {
+  unasked: "live",
+  off: "disabled",
+} as const satisfies Record<
+  (typeof CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS)["codex"][HarnessRunPolicy["approvals"]],
+  string
+>;
 /** A dotted config key carries the name, so it must stay a bare TOML key. */
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
 
@@ -144,12 +180,20 @@ const threadParams = (
   return {
     model: input.model,
     cwd: input.workspaceDir,
-    approvalPolicy: APPROVAL_POLICY,
+    approvalPolicy: CODEX_LEVEL[input.policy.approvals].approvalPolicy,
     sandbox: SANDBOX_MODE[input.policy.fs],
     developerInstructions: input.instructions,
     config: {
+      // Codex's own web search follows the permission level: live rather
+      // than from its cached index where the level runs it without asking,
+      // and off where a search would need the member's approval.
+      web_search:
+        WEB_SEARCH_MODE[
+          CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS.codex[input.policy.approvals]
+        ],
       "sandbox_workspace_write.network_access":
-        NETWORK_ACCESS[input.policy.network],
+        NETWORK_ACCESS[input.policy.network] &&
+        CODEX_LEVEL[input.policy.approvals].networkAccess,
       // Package caches live outside the workspace; the temp directory and
       // `/tmp` stay writable, as tools that make scratch files expect.
       "sandbox_workspace_write.writable_roots": [input.cacheDir],
