@@ -56,6 +56,12 @@ const toolCallParamsSchema = v.object({
   name: v.string(),
 });
 
+const CANCELLED_NOTIFICATION = "notifications/cancelled";
+
+const cancelledParamsSchema = v.object({
+  requestId: v.union([v.string(), v.number()]),
+});
+
 /** The run an endpoint serves. */
 type BrowserMcpRun = {
   runId: string;
@@ -64,14 +70,31 @@ type BrowserMcpRun = {
   approvals: DesktopRunnerApprovalMode;
   /** Asks the run's member to allow one browser step. */
   approve: ApproveAction;
+  /** Cut when the run is stopped: its browser steps end at once. */
+  stopped: AbortSignal;
+};
+
+/** A run calling through an endpoint. */
+type Serving = {
+  run: BrowserMcpRun;
+  /** Cut once the run calls through the endpoint no more. */
+  ended: AbortController;
+  /** Each `tools/call` in flight, by its request id, for the harness to cancel. */
+  calls: Map<string | number, AbortController>;
 };
 
 type Endpoint = {
   /** Fixed length: a presented value of another length is refused early. */
   secret: Buffer;
   /** `null` while parked: no run calls through it. */
-  run: BrowserMcpRun | null;
+  serving: Serving | null;
 };
+
+const serve = (run: BrowserMcpRun): Serving => ({
+  run,
+  ended: new AbortController(),
+  calls: new Map(),
+});
 
 export type LocalBrowserMcp = {
   /** `http://127.0.0.1:<port>`, for logs and tests. */
@@ -138,6 +161,41 @@ const readBody = async (request: Request): Promise<Body> => {
     : { type: "unreadable" };
 };
 
+/** The harness gave up on a call without closing its request. */
+const cancelCall = ({ calls }: Serving, params: unknown) => {
+  const cancelled = v.safeParse(cancelledParamsSchema, params);
+  if (cancelled.success) {
+    calls.get(cancelled.output.requestId)?.abort();
+  }
+};
+
+type CallInFlight = {
+  serving: Serving;
+  id: string | number;
+  /** Aborts when the harness closes the call's request. */
+  requestSignal: AbortSignal;
+};
+
+/**
+ * Runs one `tools/call` under a signal that ends with its request, its
+ * cancellation, the run's stop or the run's end, whichever comes first: a
+ * question it asked is withdrawn and nothing more is sent to Chrome for it.
+ */
+const whileCalling = async <T>(
+  { id, requestSignal, serving: { calls, ended, run } }: CallInFlight,
+  call: (signal: AbortSignal) => Promise<T>,
+): Promise<T> => {
+  const cancel = new AbortController();
+  calls.set(id, cancel);
+  return await call(
+    AbortSignal.any([requestSignal, cancel.signal, run.stopped, ended.signal]),
+  ).finally(() => {
+    if (calls.get(id) === cancel) {
+      calls.delete(id);
+    }
+  });
+};
+
 /**
  * The endpoints by key (the id of the run that registered each) and the key
  * each run calls through: its own, or the one it adopted.
@@ -148,35 +206,37 @@ const createEndpoints = () => {
   return {
     get: (key: string) => endpoints.get(key),
     add: (run: BrowserMcpRun, secret: Buffer) => {
-      endpoints.set(run.runId, { run, secret });
+      endpoints.set(run.runId, { serving: serve(run), secret });
       runs.set(run.runId, run.runId);
     },
     /**
      * The run calls through its endpoint no more, which then serves no run:
-     * the endpoint's key and the run, or `null` when it held none.
+     * the endpoint's key and the run, or `null` when it held none. Every
+     * call the run still has open ends with it.
      */
     detach: (runId: string) => {
       const key = runs.get(runId);
       runs.delete(runId);
       const endpoint = key === undefined ? undefined : endpoints.get(key);
-      const held = endpoint?.run ?? null;
-      if (key === undefined || endpoint === undefined || held === null) {
+      const serving = endpoint?.serving ?? null;
+      if (key === undefined || endpoint === undefined || serving === null) {
         return null;
       }
-      endpoint.run = null;
-      return { held, key };
+      endpoint.serving = null;
+      serving.ended.abort();
+      return { held: serving.run, key };
     },
     /** A parked endpoint serves `run`; `null` when it is not parked. */
     attach: (key: string, run: BrowserMcpRun) => {
       const endpoint = endpoints.get(key);
       if (
         endpoint === undefined ||
-        endpoint.run !== null ||
+        endpoint.serving !== null ||
         runs.has(run.runId)
       ) {
         return null;
       }
-      endpoint.run = run;
+      endpoint.serving = serve(run);
       runs.set(run.runId, key);
       return endpoint;
     },
@@ -185,12 +245,33 @@ const createEndpoints = () => {
     },
     /** Whether a run of `threadId` still calls through any endpoint. */
     servesThread: (threadId: string) =>
-      [...endpoints.values()].some((other) => other.run?.threadId === threadId),
+      [...endpoints.values()].some(
+        (other) => other.serving?.run.threadId === threadId,
+      ),
     clear: () => {
+      for (const { serving } of endpoints.values()) {
+        serving?.ended.abort();
+      }
       endpoints.clear();
       runs.clear();
     },
   };
+};
+
+type LocalBrowserSession = ReturnType<typeof createLocalBrowserSession>;
+
+/** A chat's page state, kept while any run of the chat is held. */
+const sessionFor = (
+  sessions: Map<string, LocalBrowserSession>,
+  threadId: string,
+) => {
+  const existing = sessions.get(threadId);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const created = createLocalBrowserSession();
+  sessions.set(threadId, created);
+  return created;
 };
 
 export const startLocalBrowserMcp = ({
@@ -202,30 +283,20 @@ export const startLocalBrowserMcp = ({
   version: string;
 }): LocalBrowserMcp => {
   const endpoints = createEndpoints();
-  /** Each chat's page state; kept while any run of the chat is held. */
-  const sessions = new Map<
-    string,
-    ReturnType<typeof createLocalBrowserSession>
-  >();
+  const sessions = new Map<string, LocalBrowserSession>();
   const listener = { host: "" };
 
-  const sessionFor = (threadId: string) => {
-    const existing = sessions.get(threadId);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const created = createLocalBrowserSession();
-    sessions.set(threadId, created);
-    return created;
-  };
-
   const answer = async (
-    held: BrowserMcpRun,
+    serving: Serving,
     message: v.InferOutput<typeof rpcRequestSchema>,
-    signal: AbortSignal,
+    requestSignal: AbortSignal,
   ): Promise<Response> => {
     const { id, method } = message;
+    const held = serving.run;
     if (id === undefined) {
+      if (method === CANCELLED_NOTIFICATION) {
+        cancelCall(serving, message.params);
+      }
       // A notification, or an answer to a request this server never sends.
       return new Response(null, { status: 202 });
     }
@@ -267,25 +338,26 @@ export const startLocalBrowserMcp = ({
             "Unknown tool: call open, snapshot, click or type.",
           );
         }
-        const result = await sessionFor(held.threadId).call(
-          params.output.name,
-          params.output.arguments,
-          {
-            approvals: held.approvals,
-            approve: held.approve,
-            signal,
-            send: async (command, observedTab) =>
-              await bridge.request(
-                {
-                  command,
-                  controllerId: held.threadId,
-                  observedTab,
-                  toolCallId: crypto.randomUUID(),
-                  turnId: held.runId,
-                },
-                signal,
-              ),
-          },
+        const { arguments: input, name } = params.output;
+        const result = await whileCalling(
+          { id, requestSignal, serving },
+          async (signal) =>
+            await sessionFor(sessions, held.threadId).call(name, input, {
+              approvals: held.approvals,
+              approve: held.approve,
+              signal,
+              send: async (command, observedTab) =>
+                await bridge.request(
+                  {
+                    command,
+                    controllerId: held.threadId,
+                    observedTab,
+                    toolCallId: crypto.randomUUID(),
+                    turnId: held.runId,
+                  },
+                  signal,
+                ),
+            }),
         );
         return rpcResult(id, result);
       }
@@ -317,8 +389,8 @@ export const startLocalBrowserMcp = ({
         : null;
       const endpoint = key === null ? undefined : endpoints.get(key);
       // A parked endpoint serves no run.
-      const held = endpoint?.run ?? null;
-      if (endpoint === undefined || held === null) {
+      const serving = endpoint?.serving ?? null;
+      if (endpoint === undefined || serving === null) {
         return refusal(404);
       }
       if (!presentsSecret(request, endpoint)) {
@@ -328,6 +400,11 @@ export const startLocalBrowserMcp = ({
         return new Response(null, { headers: { allow: "POST" }, status: 405 });
       }
       const body = await readBody(request);
+      // The run may have ended, and another adopted the endpoint, while the
+      // body arrived.
+      if (endpoint.serving !== serving) {
+        return refusal(404);
+      }
       if (body.type === "unreadable") {
         return rpcError(null, JSON_RPC_ERROR.parse, "The body is not JSON.");
       }
@@ -339,7 +416,7 @@ export const startLocalBrowserMcp = ({
           "Expected one JSON-RPC 2.0 message.",
         );
       }
-      return await answer(held, message.output, request.signal);
+      return await answer(serving, message.output, request.signal);
     },
   });
   const port =
@@ -394,7 +471,7 @@ export const startLocalBrowserMcp = ({
     },
     drop: (key) => {
       // Only a parked endpoint: one a run adopted goes with that run.
-      if (endpoints.get(key)?.run === null) {
+      if (endpoints.get(key)?.serving === null) {
         endpoints.remove(key);
       }
     },

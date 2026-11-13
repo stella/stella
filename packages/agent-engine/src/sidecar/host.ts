@@ -249,6 +249,8 @@ type HeldRun = {
   checkpoint: DesktopRunnerCheckpointEvent | null;
   /** The browser tools' questions to the member about their steps. */
   readonly approvals: ActionApprovals;
+  /** Cut by a stop, so the run's browser steps end with it, not with the turn. */
+  readonly browserStop: AbortController;
   /**
    * The folder's kept harness process, taken at the start: the turn
    * continues in it, or it ends first. `null` once the adapter has it.
@@ -779,6 +781,7 @@ export class SidecarHost {
       outputSharing: new AbortController(),
       checkpoint: null,
       approvals: createActionApprovals(),
+      browserStop: new AbortController(),
       live: null,
       launch: null,
     };
@@ -957,6 +960,7 @@ export class SidecarHost {
     run.stopCopying.abort();
     run.outputSharing.abort();
     run.approvals.declineAll();
+    run.browserStop.abort();
     if (run.turn !== null) {
       this.detached(run.turn.interrupt(), "sidecar.interrupt");
     }
@@ -1176,6 +1180,7 @@ export class SidecarHost {
       threadId: message.threadId,
       approvals: message.policy.approvals,
       approve: run.approvals.request,
+      stopped: run.browserStop.signal,
     };
     if (taken === null) {
       return browser.register(browserRun);
