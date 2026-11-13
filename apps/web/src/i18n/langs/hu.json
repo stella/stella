@@ -2288,9 +2288,11 @@
       "signInToContinue": "A folytatáshoz jelentkezzen be",
       "sourceCode": "Forráskód",
       "statusWaiting": "Várakozik",
+      "subagent": "Alügynök futtatása",
       "toggleDetails": "Részletek megjelenítése",
       "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}",
-      "updatePlan": "A terv frissítése"
+      "updatePlan": "A terv frissítése",
+      "viewImage": "Kép megtekintése"
     },
     "turnNotification": {
       "failedBody": "Egy stella-csevegés válasza nem fejeződött be.",

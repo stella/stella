@@ -1,15 +1,24 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH } from "./chat-local-run-step-output";
+
 /**
  * A step a coding agent took itself on the member's computer (a command, a
  * file it read or changed, a search, a plan), as a chat turn keeps it. Only
  * what the step was about leaves the computer: a command line, file names, a
- * search query or web address, the titles of a plan, and a plan the agent
- * proposes for the member to approve, in its own words. Its result says
- * only how it ended: a status, a command's exit code, the files a change
- * touched. A command's output, a file's contents, a diff, search matches and
- * a fetched page are never part of the call or its result.
+ * search query or web address, the titles of a plan, a plan the agent
+ * proposes for the member to approve, in its own words, the short description
+ * and agent type of a subagent it started, and the name of an image it
+ * viewed. Its result says only how it ended: a status, a command's exit
+ * code, the files a change touched. A command's output, a file's contents, a
+ * diff, search matches, a fetched page, a subagent's prompt, messages and
+ * report, and an image's bytes are never part of the call or its result.
+ *
+ * A step a subagent took names the subagent's own step (`parentCallId`), so
+ * chat shows it under that step. The link is part of the step's input
+ * because the input is all of a native step a turn carries and stores: the
+ * same schema bounds it in the sidecar, the API and the browser.
  *
  * The desktop's harness sidecar builds each call and result through these
  * schemas, and the API parses what a desktop sends with them again and keeps
@@ -53,6 +62,8 @@ export const CHAT_LOCAL_RUN_TOOL_LIMITS = {
   name: 128,
   /** A harness's reason for an approval, and the approval's whole message. */
   approval: 300,
+  /** What a subagent was started for, in the agent's few words. */
+  description: 200,
 } as const;
 
 const ELLIPSIS = "…";
@@ -100,6 +111,22 @@ const shownList = <TItem extends v.GenericSchema>(item: TItem, max: number) =>
     v.transform((items) => items.slice(0, max)),
   );
 
+/**
+ * The id of the subagent step that ran a step: the harness's own id as a
+ * desktop sends it, that step's chat call id as the API keeps it. An id is
+ * never cut: one that is empty or longer than a chat call id names no step,
+ * and the step it is on is kept without it (`parseChatLocalRunToolCall`).
+ */
+const parentCallIdSchema = v.pipe(
+  v.string(),
+  v.nonEmpty(),
+  v.maxLength(CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH),
+);
+
+/** A native step's input: its own fields and the subagent step it ran in. */
+const stepInput = <TEntries extends v.ObjectEntries>(entries: TEntries) =>
+  v.object({ ...entries, parentCallId: v.optional(parentCallIdSchema) });
+
 export const CHAT_LOCAL_RUN_FILE_CHANGE_KINDS = [
   "add",
   "delete",
@@ -109,8 +136,10 @@ export const CHAT_LOCAL_RUN_FILE_CHANGE_KINDS = [
 /**
  * What a native step other than a command, a file change or a web search
  * was about, for the kinds chat can name: a file it read, a search over
- * files, a web address it fetched, the titles of its plan, and the plan it
- * proposes before it acts (markdown, asked about as an approval).
+ * files, a web address it fetched, the titles of its plan, the plan it
+ * proposes before it acts (markdown, asked about as an approval), a subagent
+ * it started (the few words it gave for the task and the kind of agent,
+ * never the prompt), and an image it viewed (the file's name).
  */
 export const chatLocalRunToolDetailSchema = v.variant("kind", [
   v.object({
@@ -141,6 +170,15 @@ export const chatLocalRunToolDetailSchema = v.variant("kind", [
         boundedText(text, CHAT_LOCAL_RUN_TOOL_LIMITS.proposedPlan),
       ),
     ),
+  }),
+  v.object({
+    kind: v.literal("subagent"),
+    description: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.description),
+    agentType: v.optional(shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.name)),
+  }),
+  v.object({
+    kind: v.literal("image"),
+    path: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.path),
   }),
 ]);
 export type ChatLocalRunToolDetail = v.InferOutput<
@@ -186,23 +224,23 @@ export const CHAT_LOCAL_RUN_NEEDS_MEMBER = "needs_member" as const;
 export const chatLocalRunToolCallSchema = v.variant("name", [
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution),
-    input: v.object({
+    input: stepInput({
       command: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.command),
     }),
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.fileChange),
-    input: v.object({ changes: fileChangesSchema }),
+    input: stepInput({ changes: fileChangesSchema }),
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.webSearch),
-    input: v.object({
+    input: stepInput({
       query: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.query),
     }),
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool),
-    input: v.object({
+    input: stepInput({
       /** The harness's own name for the tool. */
       tool: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.name),
       detail: v.optional(chatLocalRunToolDetailSchema),
@@ -210,7 +248,7 @@ export const chatLocalRunToolCallSchema = v.variant("name", [
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem),
-    input: v.object({
+    input: stepInput({
       itemType: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.name),
     }),
   }),
@@ -219,11 +257,11 @@ export const chatLocalRunToolCallSchema = v.variant("name", [
     // Only `open` keeps an address: the one the agent chose. Any other
     // step keeps its kind alone, whatever else it carries.
     input: v.union([
-      v.object({
+      stepInput({
         action: v.literal("open"),
         url: v.optional(shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.url)),
       }),
-      v.object({
+      stepInput({
         action: v.picklist(
           CHAT_LOCAL_RUN_BROWSER_ACTIONS.filter(
             (action): action is Exclude<ChatLocalRunBrowserAction, "open"> =>
@@ -244,7 +282,9 @@ export type ChatLocalRunToolCallInput = v.InferInput<
 
 /**
  * The call chat keeps for a harness-native step, or `null` when `input` is
- * not one. A native tool whose detail does not parse keeps its name.
+ * not one. A step whose `parentCallId` does not parse is kept without it,
+ * and a native tool whose detail does not parse keeps its name (and the
+ * subagent step it ran in).
  */
 export const parseChatLocalRunToolCall = (
   name: ChatLocalRunToolName,
@@ -254,17 +294,25 @@ export const parseChatLocalRunToolCall = (
   if (parsed.success) {
     return parsed.output;
   }
-  if (
-    name !== CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool ||
-    typeof input !== "object" ||
-    input === null ||
-    !("tool" in input)
-  ) {
+  if (typeof input !== "object" || input === null) {
+    return null;
+  }
+  const { parentCallId: reported, ...own }: Record<string, unknown> = {
+    ...input,
+  };
+  const parent = v.safeParse(parentCallIdSchema, reported);
+  if (reported !== undefined && !parent.success) {
+    return parseChatLocalRunToolCall(name, own);
+  }
+  if (name !== CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool || !("tool" in own)) {
     return null;
   }
   const named = v.safeParse(chatLocalRunToolCallSchema, {
     name,
-    input: { tool: input.tool },
+    input: {
+      tool: own["tool"],
+      ...(parent.success ? { parentCallId: parent.output } : {}),
+    },
   });
   return named.success ? named.output : null;
 };

@@ -2288,9 +2288,11 @@
       "signInToContinue": "Prisijunkite, kad tęstumėte",
       "sourceCode": "Pirminis kodas",
       "statusWaiting": "Laukiama",
+      "subagent": "Vykdomas subagentas",
       "toggleDetails": "Perjungti detales",
       "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}",
-      "updatePlan": "Atnaujinamas planas"
+      "updatePlan": "Atnaujinamas planas",
+      "viewImage": "Peržiūrimas paveikslėlis"
     },
     "turnNotification": {
       "failedBody": "stellos pokalbio atsakymas nebuvo baigtas.",

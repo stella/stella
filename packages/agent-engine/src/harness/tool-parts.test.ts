@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract/chat-tool-policy";
 import { MCP_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract/mcp-chat-tool-policy";
 import { STELLA_MCP_TOOL_NAMES } from "@stll/api-contract/mcp-tool-names";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   HARNESS_TOOL_NAMES,
   mcpToolCallName,
+  nativeToolCall,
+  shownToolInput,
+  stepOfSubagent,
   unsupportedItem,
 } from "./tool-parts";
 
@@ -109,5 +114,77 @@ describe("harness activity names", () => {
     expect(toolCall.input).toEqual({ itemType: "x".repeat(128) });
     expect(result.status).toBe("failed");
     expect(JSON.parse(result.content)).toEqual({ status: "failed" });
+  });
+});
+
+describe("a step a subagent took", () => {
+  const text = fc.string({ unit: "binary", maxLength: 1500 });
+  const steps = fc.oneof(
+    fc.record({
+      name: fc.constant(HARNESS_TOOL_NAMES.commandExecution),
+      input: fc.record({ command: text }),
+    }),
+    fc.record({
+      name: fc.constant(HARNESS_TOOL_NAMES.fileChange),
+      input: fc.record({
+        changes: fc.array(
+          fc.record({ path: text, kind: fc.constantFrom("add", "update") }),
+          { maxLength: 60 },
+        ),
+      }),
+    }),
+    fc.record({
+      name: fc.constant(HARNESS_TOOL_NAMES.webSearch),
+      input: fc.record({ query: text }),
+    }),
+    fc.record({
+      name: fc.constant(HARNESS_TOOL_NAMES.nativeTool),
+      input: fc.record({
+        tool: text,
+        detail: fc.oneof(
+          fc.record({ kind: fc.constant("read"), path: text }),
+          fc.record({ kind: fc.constant("image"), path: text }),
+          fc.record({ kind: fc.constant("subagent"), description: text }),
+        ),
+      }),
+    }),
+    fc.record({
+      name: fc.constant(HARNESS_TOOL_NAMES.unsupportedItem),
+      input: fc.record({ itemType: text }),
+    }),
+  );
+
+  test("a step a subagent took shows what the same step shows on the main thread, and names the subagent", () => {
+    assertProperty(
+      "a step a subagent took shows what the same step shows on the main thread, and names the subagent",
+      fc.property(
+        steps,
+        fc.string({ minLength: 1, maxLength: 64 }),
+        (step, parentCallId) => {
+          const call = nativeToolCall("step-1", step);
+          const onMainThread = shownToolInput(call, "/workspace");
+          const inSubagent = shownToolInput(
+            stepOfSubagent(call, parentCallId),
+            "/workspace",
+          );
+          expect(stepOfSubagent(call, null)).toBe(call);
+          // The same bounded fields: naming a subagent neither adds to a
+          // step nor cuts it differently.
+          expect(inSubagent).toEqual({
+            ...(typeof onMainThread === "object" ? onMainThread : {}),
+            parentCallId,
+          });
+        },
+      ),
+    );
+  });
+
+  test("a call that is not a native step names no subagent", () => {
+    const call = {
+      id: "call-1",
+      name: "mcp__docs__search",
+      input: { query: "lease" },
+    };
+    expect(stepOfSubagent(call, "call-agent")).toBe(call);
   });
 });

@@ -287,6 +287,7 @@ export const ChatThreadPage = ({
     turnAbandoned,
     computerWait,
     turnSentAt,
+    turnsStarted,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -807,6 +808,7 @@ export const ChatThreadPage = ({
                 isGenerating={isGenerating}
                 key={`turn-announcer-${threadRef.threadId}`}
                 messages={messages}
+                turnsStarted={turnsStarted}
               />
 
               <ChatAnonymizationLayer

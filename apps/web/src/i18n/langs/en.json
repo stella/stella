@@ -2288,9 +2288,11 @@
       "signInToContinue": "Sign in to continue",
       "sourceCode": "Source code",
       "statusWaiting": "Waiting",
+      "subagent": "Running a subagent",
       "toggleDetails": "Toggle details",
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}",
-      "updatePlan": "Updating the plan"
+      "updatePlan": "Updating the plan",
+      "viewImage": "Viewing an image"
     },
     "turnNotification": {
       "failedBody": "A chat reply in stella did not finish.",

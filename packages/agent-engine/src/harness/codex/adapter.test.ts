@@ -1682,6 +1682,185 @@ describe("Codex items as chat parts", () => {
     expect(terminal(events)).toEqual({ type: "turn.completed", usage: null });
   });
 
+  test("a subagent is a step that ends with the subagent, the steps it takes are its steps, and what it was told, wrote and reported stays on the computer", async () => {
+    const approvals: HarnessEvent[] = [];
+    const { events } = await run("subagent", {
+      onEvent: async (event, turn) => {
+        if (event.type !== "approval.requested") {
+          return;
+        }
+        approvals.push(event);
+        const approved = await turn.respond({
+          type: "approval",
+          requestId: event.request.requestId,
+          decision: "approve",
+        });
+        expect(Result.isOk(approved)).toBe(true);
+      },
+    });
+    const subagent = {
+      tool: "spawnAgent",
+      detail: { kind: "subagent", description: "" },
+    };
+    const inSubagent = { parentCallId: "call-spawn" };
+    const followupStep = "call-followup:thread-subagent";
+    // The spawn call ends at once; the step stays open until the subagent
+    // is reported ended, once.
+    expect(
+      events.flatMap((event) =>
+        event.type === "tool.started" || event.type === "tool.completed"
+          ? [
+              {
+                type: event.type,
+                id: event.toolCall.id,
+                name: event.toolCall.name,
+                input: event.toolCall.input,
+                ...(event.type === "tool.completed"
+                  ? { status: event.result.status }
+                  : {}),
+              },
+            ]
+          : [],
+      ),
+    ).toEqual([
+      {
+        type: "tool.started",
+        id: "call-spawn",
+        name: "harness_native_tool",
+        input: subagent,
+      },
+      {
+        type: "tool.started",
+        id: "sub-rm",
+        name: "command_execution",
+        input: { command: "rm draft.md", ...inSubagent },
+      },
+      {
+        type: "tool.completed",
+        id: "sub-rm",
+        name: "command_execution",
+        input: { command: "rm draft.md", ...inSubagent },
+        status: "succeeded",
+      },
+      {
+        type: "tool.completed",
+        id: "sub-image",
+        name: "harness_native_tool",
+        input: {
+          tool: "view_image",
+          detail: { kind: "image", path: "/workspace/scans/Lease Page 1.png" },
+          ...inSubagent,
+        },
+        status: "succeeded",
+      },
+      {
+        type: "tool.completed",
+        id: "call-image",
+        name: "harness_native_tool",
+        input: {
+          tool: "view_image",
+          detail: { kind: "image", path: "/workspace/scans/cover.png" },
+        },
+        status: "succeeded",
+      },
+      {
+        type: "tool.completed",
+        id: "call-spawn",
+        name: "harness_native_tool",
+        input: subagent,
+        status: "succeeded",
+      },
+      // Given more work after it ended, the subagent is a new step, opened
+      // by the call that reports it at work; what it does next and how that
+      // ends belong to that step.
+      {
+        type: "tool.started",
+        id: followupStep,
+        name: "harness_native_tool",
+        input: { ...subagent, tool: "followupTask" },
+      },
+      {
+        type: "tool.completed",
+        id: "sub-ls",
+        name: "command_execution",
+        input: { command: "ls", parentCallId: followupStep },
+        status: "succeeded",
+      },
+      {
+        type: "tool.completed",
+        id: followupStep,
+        name: "harness_native_tool",
+        input: { ...subagent, tool: "followupTask" },
+        status: "failed",
+      },
+      {
+        type: "tool.started",
+        id: "call-spawn-failed",
+        name: "harness_native_tool",
+        input: subagent,
+      },
+      {
+        type: "tool.completed",
+        id: "call-spawn-failed",
+        name: "harness_native_tool",
+        input: subagent,
+        status: "failed",
+      },
+      {
+        type: "tool.started",
+        id: "call-spawn-open",
+        name: "harness_native_tool",
+        input: subagent,
+      },
+    ]);
+    // An approval a subagent's step asks for reaches the member on that step.
+    expect(approvals).toMatchObject([
+      {
+        request: {
+          kind: "command",
+          toolCall: {
+            id: "sub-rm",
+            input: { command: "rm draft.md", ...inSubagent },
+          },
+        },
+      },
+    ]);
+    expect(
+      events.flatMap((event) =>
+        event.type === "text.completed" ||
+        event.type === "text.delta" ||
+        event.type === "reasoning.completed"
+          ? [event]
+          : [],
+      ),
+    ).toMatchObject([
+      { type: "text.completed", text: "The lease caps arrears." },
+    ]);
+    const stored = storedMessages(await localChunks(events));
+    const storedText = JSON.stringify(stored);
+    for (const text of [
+      FAKE_PRIVATE_TEXT.subagentPrompt,
+      FAKE_PRIVATE_TEXT.subagentText,
+      FAKE_PRIVATE_TEXT.subagentThinking,
+      FAKE_PRIVATE_TEXT.subagentReport,
+    ]) {
+      expect(storedText).not.toContain(text);
+    }
+    // A subagent still at work when the turn ends is closed with the turn.
+    const parts = stored.flatMap(({ parts: kept }) => kept);
+    expect(
+      parts.flatMap((part) =>
+        part.type === "tool-call" && part.id.startsWith("call-spawn")
+          ? [{ id: part.id, output: part.output }]
+          : [],
+      ),
+    ).toEqual([
+      { id: "call-spawn", output: { status: "completed" } },
+      { id: "call-spawn-failed", output: { status: "failed" } },
+      { id: "call-spawn-open", output: { status: "interrupted" } },
+    ]);
+  });
+
   test("a failed stella call stores its error envelope as a failed result", async () => {
     const { events } = await run("harness_items");
     const parts = storedMessages(await localChunks(events)).flatMap(

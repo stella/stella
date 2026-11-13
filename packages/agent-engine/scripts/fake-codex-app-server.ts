@@ -189,7 +189,52 @@ export const FAKE_PRIVATE_TEXT = {
   heredoc: "Tenant owes 4,200 in arrears.",
   diff: "-Rent is due monthly.\n+Rent is due quarterly.",
   explanation: "Working through the private plan",
+  subagentPrompt: "Read the lease and list every clause on arrears.",
+  subagentText: "Clause 4 covers arrears.",
+  subagentThinking: "The arrears clause may be void.",
+  subagentReport: "Report: clause 4 caps arrears at 4,200.",
 } as const;
+
+/** The thread and turn the subagent of the subagent scenario works on. */
+const FAKE_SUBAGENT_THREAD_ID = "thread-subagent";
+const FAKE_SUBAGENT_TURN_ID = "turn-subagent";
+
+/** An item of the subagent's own thread. */
+const subagentItem = (
+  phase: "started" | "completed",
+  body: object,
+): FakeStep => ({
+  notify: `item/${phase}`,
+  params: {
+    threadId: FAKE_SUBAGENT_THREAD_ID,
+    turnId: FAKE_SUBAGENT_TURN_ID,
+    item: body,
+  },
+});
+
+/** A call to one of the tools an agent manages its subagents with. */
+const subagentToolCall = (
+  id: string,
+  tool: string,
+  status: string,
+  agents: Readonly<Record<string, string>>,
+) => ({
+  type: "collabAgentToolCall",
+  id,
+  tool,
+  status,
+  senderThreadId: FAKE_THREAD_ID,
+  receiverThreadIds: Object.keys(agents),
+  prompt: FAKE_PRIVATE_TEXT.subagentPrompt,
+  model: null,
+  reasoningEffort: null,
+  agentsStates: Object.fromEntries(
+    Object.entries(agents).map(([threadId, state]) => [
+      threadId,
+      { status: state, message: FAKE_PRIVATE_TEXT.subagentReport },
+    ]),
+  ),
+});
 
 /** A command longer than chat shows. */
 export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
@@ -473,6 +518,118 @@ const FAKE_SCENARIOS = {
       },
       error: null,
     }),
+    completed(),
+  ],
+  /**
+   * Subagents and viewed images. One subagent is spawned, runs a command it
+   * asks about and views an image on its own thread, is reported ended
+   * twice, and is then given more work, which fails; one fails to spawn; one
+   * is still at work when the turn ends. The
+   * prompt, the subagent's text and reasoning, and its report sit next to
+   * the steps stella shows. An item of a thread no spawn named is not the
+   * turn's.
+   */
+  subagent: [
+    ...freshTurn(),
+    item(
+      "started",
+      subagentToolCall("call-spawn", "spawnAgent", "inProgress", {}),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn", "spawnAgent", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "pendingInit",
+      }),
+    ),
+    subagentItem(
+      "completed",
+      agentMessage("sub-m-1", FAKE_PRIVATE_TEXT.subagentText),
+    ),
+    subagentItem("completed", {
+      type: "reasoning",
+      id: "sub-r-1",
+      summary: [FAKE_PRIVATE_TEXT.subagentThinking],
+      content: [],
+    }),
+    subagentItem("started", {
+      ...command("sub-rm", "inProgress"),
+      command: "rm draft.md",
+    }),
+    {
+      request: "item/commandExecution/requestApproval",
+      params: {
+        kind: "command",
+        threadId: FAKE_SUBAGENT_THREAD_ID,
+        turnId: FAKE_SUBAGENT_TURN_ID,
+        itemId: "sub-rm",
+        startedAtMs: 1,
+        environmentId: null,
+        reason: null,
+        command: "rm draft.md",
+      },
+    },
+    subagentItem("completed", {
+      ...command("sub-rm", "completed", { aggregatedOutput: "", exitCode: 0 }),
+      command: "rm draft.md",
+    }),
+    subagentItem("completed", {
+      type: "imageView",
+      id: "sub-image",
+      path: "/workspace/scans/Lease Page 1.png",
+    }),
+    {
+      notify: "item/completed",
+      params: {
+        threadId: "thread-of-no-spawn",
+        turnId: "turn-of-no-spawn",
+        item: command("stray", "completed"),
+      },
+    },
+    item("completed", {
+      type: "imageView",
+      id: "call-image",
+      path: "/workspace/scans/cover.png",
+    }),
+    item(
+      "completed",
+      subagentToolCall("call-wait", "wait", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "completed",
+      }),
+    ),
+    item("completed", {
+      type: "subAgentActivity",
+      id: "activity-1",
+      kind: "completed",
+      agentThreadId: FAKE_SUBAGENT_THREAD_ID,
+      agentPath: "/root/worker",
+    }),
+    item(
+      "completed",
+      subagentToolCall("call-followup", "followupTask", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "running",
+      }),
+    ),
+    subagentItem(
+      "completed",
+      command("sub-ls", "completed", { aggregatedOutput: "", exitCode: 0 }),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-wait-again", "wait", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "errored",
+      }),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn-failed", "spawnAgent", "failed", {}),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn-open", "spawnAgent", "completed", {
+        "thread-subagent-open": "running",
+      }),
+    ),
+    item("completed", agentMessage("m-2", "The lease caps arrears.")),
     completed(),
   ],
   /**
