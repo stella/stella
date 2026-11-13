@@ -206,6 +206,25 @@
       "use_connector_secret": "Zugangsdaten des Connectors verwenden",
       "web_search": "Web wird durchsucht"
     },
+    "localRun": {
+      "title": {
+        "read": "Datei wird gelesen",
+        "search": "Dateien werden durchsucht",
+        "fetch": "Seite lesen",
+        "plan": "Plan wird aktualisiert",
+        "proposed_plan": "Plan wird vorgeschlagen",
+        "subagent": "Subagent wird ausgeführt",
+        "image": "Bild wird angesehen"
+      },
+      "patternInPath": "{pattern} unter {path}",
+      "commandExited": "{command} (Exit-Code {code})",
+      "status": {
+        "needs_approval": "Warten auf Genehmigung",
+        "running": "In Bearbeitung",
+        "failed": "Fehlgeschlagen",
+        "interrupted": "Gestoppt"
+      }
+    },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",
       "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",

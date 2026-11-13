@@ -31,7 +31,13 @@ import {
   type LocalRunQuestionPause,
   toggleLocalRunOption,
 } from "@stll/api-contract/chat-local-run-question";
+import {
+  localRunProposedPlan,
+  localRunToolSubtitleText,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
 import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
+import { chatToolLabel } from "@stll/api-contract/chat-tool-activity";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import {
   getCompleteConnectorInputRows,
@@ -452,12 +458,42 @@ const ApprovalRow = ({
     input: approval.input,
     requestLabel: t("inputRequest"),
   };
+  // A step a coding agent asks about on the person's computer reads as its
+  // row does: its kind, and the command, file or search it is about.
+  const local = localRunToolView({
+    name: approval.toolName,
+    input: approval.input,
+    output: undefined,
+  });
+  const localAbout =
+    local === null
+      ? null
+      : (localRunProposedPlan({
+          name: approval.toolName,
+          input: approval.input,
+        }) ??
+        localRunToolSubtitleText(local.subtitle, {
+          patternInPath: (values) => t("localRun.patternInPath", values),
+          commandExited: (values) => t("localRun.commandExited", values),
+        }));
+  const title = (() => {
+    if (local === null) {
+      return humanizeIdentifier(approval.toolName);
+    }
+    return local.detailKind === null
+      ? t(`tool.${chatToolLabel(approval.toolName)}`)
+      : t(`localRun.title.${local.detailKind}`);
+  })();
   // A credential-backed call sends exactly these arguments once approved, so
   // the phone shows every one in full, as the web does.
-  const rows =
-    approval.toolName === USE_CONNECTOR_SECRET_TOOL_NAME
+  const rows = (() => {
+    if (local !== null) {
+      return [];
+    }
+    return approval.toolName === USE_CONNECTOR_SECRET_TOOL_NAME
       ? getCompleteConnectorInputRows(rowOptions)
       : getReadableInputRows(rowOptions);
+  })();
   const held = busy || granting !== undefined;
 
   const grant = async (scope: ChatToolGrantScope) => {
@@ -486,8 +522,11 @@ const ApprovalRow = ({
     <View className="gap-2">
       <View className="gap-0.5">
         <Text variant="label">{t("approvalTitle")}</Text>
-        <Text variant="caption">{humanizeIdentifier(approval.toolName)}</Text>
+        <Text variant="caption">{title}</Text>
       </View>
+      {localAbout === null || localAbout === "" ? null : (
+        <Text selectable>{localAbout}</Text>
+      )}
       {rows.map((row) => (
         <View className="gap-0.5" key={row.key}>
           <Text variant="caption">{row.label}</Text>

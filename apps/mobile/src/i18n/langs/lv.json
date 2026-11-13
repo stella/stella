@@ -206,6 +206,25 @@
       "use_connector_secret": "Izmanto savienotāja piekļuves informāciju",
       "web_search": "Meklēšana tīmeklī"
     },
+    "localRun": {
+      "title": {
+        "read": "Faila lasīšana",
+        "search": "Meklēšana failos",
+        "fetch": "Lapas lasīšana",
+        "plan": "Plāna atjaunināšana",
+        "proposed_plan": "Plāna priekšlikums",
+        "subagent": "Apakšaģenta palaišana",
+        "image": "Attēla skatīšana"
+      },
+      "patternInPath": "{pattern} ({path})",
+      "commandExited": "{command} (izejas kods {code})",
+      "status": {
+        "needs_approval": "Gaida apstiprinājumu",
+        "running": "Izpildē",
+        "failed": "Neizdevās",
+        "interrupted": "Apturēts"
+      }
+    },
     "processSummary": {
       "sourcesChecked": "{count, plural, zero {# pārbaudītu avotu} one {# pārbaudīts avots} other {# pārbaudīti avoti}}",
       "documentEdits": "{count, plural, zero {# dokumenta labojumu} one {# dokumenta labojums} other {# dokumenta labojumi}}",

@@ -206,6 +206,25 @@
       "use_connector_secret": "Using connector credential",
       "web_search": "Searching the web"
     },
+    "localRun": {
+      "title": {
+        "read": "Reading a file",
+        "search": "Searching files",
+        "fetch": "Reading page",
+        "plan": "Updating the plan",
+        "proposed_plan": "Proposing a plan",
+        "subagent": "Running a subagent",
+        "image": "Viewing an image"
+      },
+      "patternInPath": "{pattern} in {path}",
+      "commandExited": "{command} (exit code {code})",
+      "status": {
+        "needs_approval": "Waiting for approval",
+        "running": "In progress",
+        "failed": "Failed",
+        "interrupted": "Stopped"
+      }
+    },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}",
       "documentEdits": "{count, plural, one {# document edit} other {# document edits}}",

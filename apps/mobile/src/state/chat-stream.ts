@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { isChatLocalRunToolName } from "@stll/api-contract/chat-local-run-tool";
 
 import { SignedOutError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
@@ -73,8 +74,8 @@ export const createSseParser = () => {
 
 /**
  * The AG-UI events an answer is drawn from. Everything else the run sends
- * (tool arguments, snapshots, custom progress) passes as `ignored`, so an
- * event this build has never seen does not end the stream.
+ * (snapshots, custom progress) passes as `ignored`, so an event this build
+ * has never seen does not end the stream.
  */
 const chatEventSchema = v.union([
   v.object({
@@ -92,6 +93,12 @@ const chatEventSchema = v.union([
     toolCallId: v.string(),
     toolCallName: v.string(),
   }),
+  v.object({
+    type: v.literal("TOOL_CALL_ARGS"),
+    toolCallId: v.string(),
+    delta: v.string(),
+  }),
+  v.object({ type: v.literal("TOOL_CALL_END"), toolCallId: v.string() }),
   v.object({
     type: v.literal("TOOL_CALL_RESULT"),
     toolCallId: v.string(),
@@ -140,6 +147,13 @@ type StreamedPart =
       readonly id: string;
       readonly name: string;
       readonly state: "input-streaming" | "complete" | "error";
+      /**
+       * What a step a coding agent took on the person's computer was
+       * given: its arguments as they arrive, then, once whole, read as the
+       * input a stored call keeps. No other call's arguments are kept.
+       */
+      readonly args?: string;
+      readonly input?: unknown;
       readonly output?: unknown;
     };
 
@@ -171,7 +185,10 @@ const appendDelta = (
     : [...parts, { type, content: delta }];
 };
 
-/** A tool result's content: the JSON it carries, or the text as it came. */
+/**
+ * A tool result's content, or a call's whole arguments: the JSON it
+ * carries, or the text as it came.
+ */
 const resultOutput = (content: string | undefined): unknown => {
   if (content === undefined) {
     return undefined;
@@ -228,6 +245,34 @@ export const applyChatEvent = (
             state: "input-streaming",
           },
         ],
+      };
+    }
+    case "TOOL_CALL_ARGS": {
+      return {
+        ...answer,
+        parts: answer.parts.map((part): StreamedPart =>
+          part.type === "tool-call" &&
+          part.id === event.toolCallId &&
+          isChatLocalRunToolName(part.name)
+            ? { ...part, args: `${part.args ?? ""}${event.delta}` }
+            : part,
+        ),
+      };
+    }
+    case "TOOL_CALL_END": {
+      return {
+        ...answer,
+        parts: answer.parts.map((part): StreamedPart => {
+          if (
+            part.type !== "tool-call" ||
+            part.id !== event.toolCallId ||
+            part.args === undefined
+          ) {
+            return part;
+          }
+          const { args, ...call } = part;
+          return { ...call, input: resultOutput(args) };
+        }),
       };
     }
     case "TOOL_CALL_RESULT": {

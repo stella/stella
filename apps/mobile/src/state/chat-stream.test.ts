@@ -234,6 +234,92 @@ describe("drawing an answer from its events", () => {
     }
   });
 
+  test("a coding agent's subagent groups its steps while the answer arrives, as the stored answer does", () => {
+    const subagentInput = {
+      tool: "Agent",
+      detail: { kind: "subagent", description: "Check the lease" },
+    };
+    const stepInput = { command: "rg lease", parentCallId: "agent" };
+    const stepsOf = (
+      id: string,
+      name: string,
+      input: unknown,
+    ): readonly unknown[] => [
+      { type: "TOOL_CALL_START", toolCallId: id, toolCallName: name },
+      // A native step's arguments arrive whole; a split is read the same.
+      ...[...JSON.stringify(input)].map((delta) => ({
+        type: "TOOL_CALL_ARGS",
+        toolCallId: id,
+        delta,
+      })),
+      { type: "TOOL_CALL_END", toolCallId: id },
+    ];
+    const result = (id: string) => ({
+      type: "TOOL_CALL_RESULT",
+      toolCallId: id,
+      content: '{"status":"completed"}',
+    });
+    const answer = reduce(
+      [
+        ...stepsOf("agent", "harness_native_tool", subagentInput),
+        ...stepsOf("step", "command_execution", stepInput),
+        // Another tool's arguments are not kept.
+        ...stepsOf("other", "list_templates", { query: "lease" }),
+        result("step"),
+        result("agent"),
+      ].flatMap((event) => parseChatEvent(JSON.stringify(event)) ?? []),
+    );
+    expect(answer.parts).toEqual([
+      {
+        type: "tool-call",
+        id: "agent",
+        name: "harness_native_tool",
+        state: "complete",
+        input: subagentInput,
+        output: { status: "completed" },
+      },
+      {
+        type: "tool-call",
+        id: "step",
+        name: "command_execution",
+        state: "complete",
+        input: stepInput,
+        output: { status: "completed" },
+      },
+      {
+        type: "tool-call",
+        id: "other",
+        name: "list_templates",
+        state: "input-streaming",
+      },
+    ]);
+    expect(answerEntry(answer, "2026-10-20T10:00:00.000Z").blocks).toEqual([
+      {
+        type: "subagent",
+        key: "subagent:agent",
+        description: "Check the lease",
+        agentType: null,
+        status: "done",
+        stepCount: 1,
+        steps: [
+          {
+            type: "local",
+            label: "command_execution",
+            detailKind: null,
+            subtitle: { type: "text", text: "rg lease" },
+            status: "done",
+          },
+        ],
+      },
+      {
+        type: "steps",
+        key: "2",
+        steps: [{ type: "tool", label: "list_templates", status: "running" }],
+        work: new Map(),
+      },
+    ]);
+  });
+
   test("is still streaming until the run says it finished", () => {
     expect(reduce(events.slice(0, -1)).status).toBe("streaming");
   });

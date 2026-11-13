@@ -206,6 +206,25 @@
       "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
       "web_search": "Ieškoma internete"
     },
+    "localRun": {
+      "title": {
+        "read": "Skaitomas failas",
+        "search": "Ieškoma failuose",
+        "fetch": "Skaitomas puslapis",
+        "plan": "Atnaujinamas planas",
+        "proposed_plan": "Siūlomas planas",
+        "subagent": "Vykdomas subagentas",
+        "image": "Peržiūrimas paveikslėlis"
+      },
+      "patternInPath": "{pattern} ({path})",
+      "commandExited": "{command} (išėjimo kodas {code})",
+      "status": {
+        "needs_approval": "Laukiama patvirtinimo",
+        "running": "Vykdoma",
+        "failed": "Nepavyko",
+        "interrupted": "Sustabdyta"
+      }
+    },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}",
       "documentEdits": "{count, plural, one {# dokumento pakeitimas} few {# dokumento pakeitimai} many {# dokumento pakeitimo} other {# dokumento pakeitimų}}",

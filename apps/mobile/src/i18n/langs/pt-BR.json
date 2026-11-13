@@ -206,6 +206,25 @@
       "use_connector_secret": "Usando a credencial do conector",
       "web_search": "Pesquisando na web"
     },
+    "localRun": {
+      "title": {
+        "read": "Lendo um arquivo",
+        "search": "Pesquisando nos arquivos",
+        "fetch": "Lendo página",
+        "plan": "Atualizando o plano",
+        "proposed_plan": "Propondo um plano",
+        "subagent": "Executando um subagente",
+        "image": "Visualizando uma imagem"
+      },
+      "patternInPath": "{pattern} em {path}",
+      "commandExited": "{command} (código de saída {code})",
+      "status": {
+        "needs_approval": "Aguardando aprovação",
+        "running": "Em andamento",
+        "failed": "Falhou",
+        "interrupted": "Interrompido"
+      }
+    },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas} many {# fontes consultadas}}",
       "documentEdits": "{count, plural, one {# edição do documento} other {# edições do documento} many {# edições do documento}}",

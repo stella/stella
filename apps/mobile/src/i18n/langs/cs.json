@@ -206,6 +206,25 @@
       "use_connector_secret": "Použití přístupového údaje konektoru",
       "web_search": "Vyhledávání na webu"
     },
+    "localRun": {
+      "title": {
+        "read": "Čtení souboru",
+        "search": "Hledání v souborech",
+        "fetch": "Čtení stránky",
+        "plan": "Aktualizace plánu",
+        "proposed_plan": "Návrh plánu",
+        "subagent": "Spuštění dílčího agenta",
+        "image": "Prohlížení obrázku"
+      },
+      "patternInPath": "{pattern} v {path}",
+      "commandExited": "{command} (návratový kód {code})",
+      "status": {
+        "needs_approval": "Čekání na schválení",
+        "running": "Rozpracovaný",
+        "failed": "Selhalo",
+        "interrupted": "Zastaveno"
+      }
+    },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# prověřený zdroj} few {# prověřené zdroje} other {# prověřených zdrojů} many {# prověřeného zdroje}}",
       "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu} many {# úpravy dokumentu}}",

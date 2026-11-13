@@ -206,6 +206,25 @@
       "use_connector_secret": "Używanie danych dostępowych łącznika",
       "web_search": "Wyszukiwanie w sieci"
     },
+    "localRun": {
+      "title": {
+        "read": "Czytanie pliku",
+        "search": "Przeszukiwanie plików",
+        "fetch": "Czytanie strony",
+        "plan": "Aktualizowanie planu",
+        "proposed_plan": "Proponowanie planu",
+        "subagent": "Uruchamianie subagenta",
+        "image": "Wyświetlanie obrazu"
+      },
+      "patternInPath": "{pattern} w {path}",
+      "commandExited": "{command} (kod wyjścia {code})",
+      "status": {
+        "needs_approval": "Oczekiwanie na zatwierdzenie",
+        "running": "W toku",
+        "failed": "Niepowodzenie",
+        "interrupted": "Zatrzymano"
+      }
+    },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}",
       "documentEdits": "{count, plural, one {# edycja dokumentu} few {# edycje dokumentu} many {# edycji dokumentu} other {# edycji dokumentu}}",

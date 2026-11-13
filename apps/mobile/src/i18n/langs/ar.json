@@ -206,6 +206,25 @@
       "use_connector_secret": "استخدام بيانات اعتماد الموصل",
       "web_search": "البحث على الويب"
     },
+    "localRun": {
+      "title": {
+        "read": "قراءة ملف",
+        "search": "البحث في الملفات",
+        "fetch": "قراءة الصفحة",
+        "plan": "تحديث الخطة",
+        "proposed_plan": "اقتراح خطة",
+        "subagent": "تشغيل وكيل فرعي",
+        "image": "عرض صورة"
+      },
+      "patternInPath": "{pattern} في {path}",
+      "commandExited": "{command} (رمز الخروج {code})",
+      "status": {
+        "needs_approval": "في انتظار الموافقة",
+        "running": "قيد التنفيذ",
+        "failed": "فشل",
+        "interrupted": "متوقف"
+      }
+    },
     "processSummary": {
       "sourcesChecked": "{count, plural, zero {# مصادر تمت مراجعتها} one {مصدر واحد تمت مراجعته} two {مصدران تمت مراجعتهما} few {# مصادر تمت مراجعتها} many {# مصدرًا تمت مراجعته} other {# مصدر تمت مراجعته}}",
       "documentEdits": "{count, plural, zero {# تعديلات على المستند} one {تعديل واحد على المستند} two {تعديلان على المستند} few {# تعديلات على المستند} many {# تعديلًا على المستند} other {# تعديل على المستند}}",
