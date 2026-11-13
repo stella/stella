@@ -72,7 +72,12 @@ export const useDesktopLaunch = (
 ): UseDesktopLaunchResult => {
   const queryClient = useQueryClient();
   const desktop = getDesktopLaunch();
-  const state = useSyncExternalStore(desktop.subscribe, desktop.state);
+  // A server render has no launch under way: the page starts idle.
+  const state = useSyncExternalStore(
+    desktop.subscribe,
+    desktop.state,
+    desktop.state,
+  );
   const launch = useLatestCallback(
     async () =>
       await desktop.launch(
