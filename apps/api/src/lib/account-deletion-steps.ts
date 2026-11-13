@@ -1460,9 +1460,10 @@ const DELETE_DESKTOP_RUNNERS_TABLES = [
 
 /**
  * 16. The person's desktop runners and their runs, in every organization.
- * Each run keeps its output key, so the runs are deleted by name; queued
- * commands, events and folder restores cascade. The user row is soft-deleted,
- * so the `user_id` cascade never fires.
+ * Runners go first, as a session claim locks a runner before its runs; their
+ * runs cascade, and are then deleted by name too, since each keeps its output
+ * key. Queued commands, events and folder restores cascade. The user row is
+ * soft-deleted, so the `user_id` cascade never fires.
  */
 export const deleteDesktopRunners = async (
   tx: Transaction,
@@ -1470,12 +1471,12 @@ export const deleteDesktopRunners = async (
 ): Promise<void> => {
   // audit: skip - the account deletion request records this erasure
   await tx
-    .delete(desktopRunnerRuns)
-    .where(eq(desktopRunnerRuns.userId, currentUserId));
-  // audit: skip - the account deletion request records this erasure
-  await tx
     .delete(desktopRunners)
     .where(eq(desktopRunners.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(desktopRunnerRuns)
+    .where(eq(desktopRunnerRuns.userId, currentUserId));
 };
 
 const DELETE_PERSONAL_RECORDS_TABLES = [

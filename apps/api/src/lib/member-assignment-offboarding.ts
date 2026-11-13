@@ -1521,8 +1521,10 @@ type ClearMemberScopedDataOptions = Pick<
 
 /**
  * The member's desktop runners, on the owner connection the runner tables
- * admit. Their runs are deleted by name, since each keeps its output key;
- * queued commands, events and folder restores cascade, and an open runner
+ * admit. Runners go first, as a session claim locks a runner before its
+ * runs, so the two never wait on each other; their runs cascade, and the
+ * runs are then deleted by name too, since each keeps its output key.
+ * Queued commands, events and folder restores cascade, and an open runner
  * socket closes on its next heartbeat.
  */
 const clearMemberDesktopRunners = async ({
@@ -1533,19 +1535,19 @@ const clearMemberDesktopRunners = async ({
   recordAuditEvent,
 }: ClearMemberScopedDataOptions) => {
   await tx
-    .delete(desktopRunnerRuns)
-    .where(
-      and(
-        eq(desktopRunnerRuns.organizationId, organizationId),
-        eq(desktopRunnerRuns.userId, userId),
-      ),
-    );
-  await tx
     .delete(desktopRunners)
     .where(
       and(
         eq(desktopRunners.organizationId, organizationId),
         eq(desktopRunners.userId, userId),
+      ),
+    );
+  await tx
+    .delete(desktopRunnerRuns)
+    .where(
+      and(
+        eq(desktopRunnerRuns.organizationId, organizationId),
+        eq(desktopRunnerRuns.userId, userId),
       ),
     );
   await recordAuditEvent(tx, {
