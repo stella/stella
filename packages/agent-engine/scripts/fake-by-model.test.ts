@@ -9,6 +9,7 @@ import type { HarnessTurn, HarnessTurnInput } from "../src/harness/adapter";
 import { createClaudeCodeHarnessAdapter } from "../src/harness/claude-code/adapter";
 import { createCodexHarnessAdapter } from "../src/harness/codex/adapter";
 import type { HarnessEvent } from "../src/harness/events";
+import { PROTOCOL_LOG_OFF } from "../src/protocol-log";
 import {
   CLAUDE_BY_MODEL_SCENARIOS,
   scenarioForArgs,
@@ -42,6 +43,7 @@ const codex = () => {
   const { home, workspaceDir, log } = folder();
   const adapter = createCodexHarnessAdapter({
     launch: { executable: process.execPath, args: [CODEX_BY_MODEL] },
+    protocolLog: PROTOCOL_LOG_OFF,
     codexHome: home,
     environment: {
       FAKE_HARNESS_LOG: log,
@@ -71,6 +73,7 @@ const turnInput = (workspaceDir: string, model: string): HarnessTurnInput => ({
     url: "https://mcp.example.test/mcp",
     token: "run-token",
   },
+  browser: null,
   transcript: [{ role: "user", content: "Which leases are there?" }],
   inputFiles: [],
   continuation: { type: "fresh" },
@@ -178,6 +181,7 @@ describe("Claude Code by model", () => {
     const { home, log } = folder();
     const adapter = createClaudeCodeHarnessAdapter({
       launch: { executable: process.execPath, args: [CLAUDE_BY_MODEL] },
+      protocolLog: PROTOCOL_LOG_OFF,
       claudeConfigDir: home,
       environment: { FAKE_HARNESS_LOG: log, PATH: process.env["PATH"] ?? "" },
       gracePeriodMs: 1000,
