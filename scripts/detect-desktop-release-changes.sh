@@ -138,6 +138,7 @@ rebuild_paths=(
   "packages/api-contract/src/api-version.ts"
   "packages/api-contract/src/browser-control.ts"
   "packages/api-contract/src/chat-local-run-question.ts"
+  "packages/api-contract/src/chat-local-run-step-output.ts"
   "packages/api-contract/src/chat-local-run-tool.ts"
   "packages/api-contract/src/chat-run-target.ts"
   "packages/api-contract/src/chat-tool-policy.ts"

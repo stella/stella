@@ -178,6 +178,11 @@ export const CodexItemSchema = v.variant("type", [
       v.object({
         path: v.string(),
         kind: v.object({ type: v.picklist(["add", "delete", "update"]) }),
+        /**
+         * The file's text for an add or a delete, a unified diff for an
+         * update. It stays on the computer (`HarnessStepOutput`).
+         */
+        diff: v.nullish(v.string()),
       }),
     ),
     status: v.picklist(["inProgress", "completed", "failed", "declined"]),

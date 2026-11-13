@@ -47,6 +47,8 @@ import {
   correspondenceFilers,
   desktopEditHandoffs,
   desktopEditSessions,
+  desktopRunnerRuns,
+  desktopRunners,
   entities,
   feedbackReports,
   fileChatThreads,
@@ -1451,6 +1453,65 @@ export const deletePushDevices = async (
     .where(eq(timerActivityDevices.userId, currentUserId));
 };
 
+const DELETE_DESKTOP_RUNNERS_TABLES = [
+  desktopRunners,
+  desktopRunnerRuns,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 16. The person's desktop runners and their runs, in every organization,
+ * recorded per organization. Runners go first, as a session claim locks a
+ * runner before its runs; their runs cascade, and are then deleted by name
+ * too, since each keeps its output key. Queued commands, events and folder
+ * restores cascade. The user row is soft-deleted, so the `user_id` cascade
+ * never fires.
+ */
+export const deleteDesktopRunners = async (
+  tx: Transaction,
+  currentUserId: SafeId<"user">,
+): Promise<void> => {
+  const removed = await tx
+    .delete(desktopRunners)
+    .where(eq(desktopRunners.userId, currentUserId))
+    .returning({ organizationId: desktopRunners.organizationId });
+  await tx
+    .delete(desktopRunnerRuns)
+    .where(eq(desktopRunnerRuns.userId, currentUserId));
+  const runnersByOrganization = new Map<SafeId<"organization">, number>();
+  for (const { organizationId } of removed) {
+    runnersByOrganization.set(
+      organizationId,
+      (runnersByOrganization.get(organizationId) ?? 0) + 1,
+    );
+  }
+  await recordAuditGroups({
+    tx,
+    groups: [...runnersByOrganization].map(([organizationId, runnerCount]) => ({
+      bindings: {
+        organizationId,
+        workspaceId: null,
+        userId: currentUserId,
+        execution: {
+          performer: { type: "user" as const, id: currentUserId },
+          trigger: { type: "system" as const, source: "account_deletion" },
+        },
+      },
+      events: [
+        {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: organizationId,
+          metadata: {
+            change: "member-desktop-runners-cleared",
+            userId: currentUserId,
+            runnerCount,
+          },
+        },
+      ],
+    })),
+  });
+};
+
 const DELETE_PERSONAL_RECORDS_TABLES = [
   legalReaderAnnotations,
   savedTimeNarratives,
@@ -1462,7 +1523,7 @@ const DELETE_PERSONAL_RECORDS_TABLES = [
 ] as const satisfies readonly PgTable[];
 
 /**
- * 16. Personal records the account export returns: private reader notes,
+ * 17. Personal records the account export returns: private reader notes,
  * saved narratives and searches, billing-draft and template preferences, and
  * the professional-use acceptance. Shared reader notes stay with the
  * organization. Filed feedback stays with the maintainers without its
@@ -1608,6 +1669,7 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...DELETE_BILLING_RATES_TABLES,
   ...DELETE_SEARCH_HISTORY_TABLES,
   ...DELETE_PUSH_DEVICES_TABLES,
+  ...DELETE_DESKTOP_RUNNERS_TABLES,
   ...DELETE_PERSONAL_RECORDS_TABLES,
 ] as const satisfies readonly PgTable[];
 
@@ -1628,4 +1690,6 @@ type AccountDeletionNonFkOwnership = {
 export const ACCOUNT_DELETION_NON_FK_OWNERSHIP = [
   { table: agentRegistration, userColumn: agentRegistration.boundUserId },
   { table: agentDelegation, userColumn: agentDelegation.userId },
+  // A run's owner is bound through its runner, whose `user_id` holds the FK.
+  { table: desktopRunnerRuns, userColumn: desktopRunnerRuns.userId },
 ] as const satisfies readonly AccountDeletionNonFkOwnership[];

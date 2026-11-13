@@ -560,6 +560,11 @@ export const ChatThreadPage = ({
           });
         },
       });
+      // Inside the member's send gesture, before any await: a turn for
+      // their computer opens stella desktop when none is connected.
+      if (!handledReserved || newThreadMessages.length > 0) {
+        composerModels.openDesktopForSend();
+      }
       if (handledReserved) {
         const newThreadMessage = newThreadMessages.at(0);
         if (newThreadMessage === undefined) {
@@ -835,6 +840,7 @@ export const ChatThreadPage = ({
                     controller.setContent(composerStoredMarkdown(prompt));
                     detached(
                       controller.submit(async (draft) => {
+                        composerModels.openDesktopForSend();
                         if (!(await ensureAIAvailable())) {
                           return CHAT_SEND_KEPT;
                         }

@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import path from "node:path";
 
 import {
   CHAT_LOCAL_RUN_TOOL_NAMES,
@@ -22,9 +21,9 @@ import {
   STELLA_MCP_TOOL_NAMES,
   type StellaMcpToolName,
 } from "@stll/api-contract/mcp-tool-names";
-import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 import type { HarnessToolCall, HarnessToolResult } from "./events";
+import { runRelativePath } from "./step-output";
 
 /**
  * How a local harness's tool activity is named in chat, shared by every
@@ -159,23 +158,11 @@ export const nativeToolCall = (
   ...(localInput === undefined ? {} : { localInput }),
 });
 
-/**
- * `file` relative to the run's folder, with `/` between its parts, when it is
- * inside the folder; else as given.
- */
-const runRelative = (file: string, workspaceDir: string) => {
-  if (!path.isAbsolute(file) || !isPathInside(workspaceDir, file)) {
-    return file;
-  }
-  const relative = repoRelativePath(workspaceDir, file);
-  return relative === "" ? "." : relative;
-};
-
 const withRunRelativePaths = (
   call: ChatLocalRunToolCall,
   workspaceDir: string,
 ): ChatLocalRunToolCall => {
-  const relative = (file: string) => runRelative(file, workspaceDir);
+  const relative = (file: string) => runRelativePath(file, workspaceDir);
   switch (call.name) {
     case CHAT_LOCAL_RUN_TOOL_NAMES.fileChange:
       return {
@@ -246,7 +233,7 @@ export const shownToolResult = (
     ...shown.result,
     changes: shown.result.changes.map((change) => ({
       ...change,
-      path: runRelative(change.path, workspaceDir),
+      path: runRelativePath(change.path, workspaceDir),
     })),
   });
 };

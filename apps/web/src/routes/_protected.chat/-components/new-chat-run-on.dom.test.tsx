@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { EventType } from "@tanstack/ai";
 import { plugin } from "bun";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -55,6 +55,9 @@ const { workspacesNavigationOptions } =
 const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
 const { Route: ChatIndexRoute } = await import("../index");
+const desktopBridge = await import("@/lib/desktop-bridge");
+const { DESKTOP_PING_URL } =
+  await import("@/features/chat/desktop-launch.logic");
 
 const user = {
   activeOrganizationId: "00000000-0000-7000-8000-00000000ffff",
@@ -165,7 +168,8 @@ const serve = ({
   webSearchAvailable = false,
   holdTurns = false,
 }: {
-  readiness?: ChatLocalRunReadiness;
+  /** The member's computers as the API reads them at each read. */
+  readiness?: ChatLocalRunReadiness | (() => ChatLocalRunReadiness);
   webSearchAvailable?: boolean;
   /** Keep each turn's stream open after it starts until `finishTurns`. */
   holdTurns?: boolean;
@@ -239,7 +243,9 @@ const serve = ({
         return Response.json(body);
       }
       if (pathname.endsWith("/chat/local-runners")) {
-        return Response.json(readiness);
+        return Response.json(
+          typeof readiness === "function" ? readiness() : readiness,
+        );
       }
       if (pathname.endsWith("/chat") && request.method === "POST") {
         const body: unknown = await request.json();
@@ -371,6 +377,7 @@ afterEach(() => {
   useChatRunOnPreferenceStore.setState({ byOrganization: {} });
   useChatWebSearchPreferenceStore.setState({ enabledPreference: false });
   globalThis.fetch = previousFetch;
+  mock.restore();
 });
 afterAll(async () => {
   await unregisterDomEnvironment();
@@ -554,20 +561,30 @@ test("a new chat opens on the member's last Run on choice, and its first send go
   expect(server.unexpected).toEqual([]);
 });
 
-test("a new chat whose remembered computer is offline says so in the bar and does not move to stella cloud", async () => {
+test("a new chat whose remembered computer is offline says so in the bar, opens stella desktop on the send, and does not move to stella cloud", async () => {
   rememberRunTarget(user.activeOrganizationId, CODEX);
-  const server = serve({ readiness: OFFLINE });
+  // Opening stella desktop is what connects the computer, as on a real
+  // machine.
+  let opened = false;
+  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(() => {
+    opened = true;
+  });
+  const server = serve({ readiness: () => (opened ? READINESS : OFFLINE) });
   const client = createClient();
   const { ui } = await openNewChat(client);
 
   const offline = `${CODEX_LABEL}. ${messages.chat.localRun.stateOffline}`;
   expect(await ui.findByRole("button", { name: offline })).toBeTruthy();
   expect(ui.queryByRole("button", { name: AUTO_LABEL })).toBeNull();
-  // A send goes to the computer, which the API refuses with its reason, and
-  // never to stella's models in its place.
+  // The remembered choice is no gesture: nothing opened before the send.
+  expect(open).not.toHaveBeenCalled();
+  // The send opens stella desktop once and goes to the computer once it
+  // connects, never to stella's models in its place.
   expect(await sendFirstTurn(server, ui)).toMatchObject({
     forwardedProps: { runTarget: CODEX },
   });
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(open).toHaveBeenCalledWith(DESKTOP_PING_URL);
   expect(server.unexpected).toEqual([]);
 });
 

@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { chatLocalRunToolResultContent } from "@stll/api-contract/chat-local-run-tool";
 
 import type { HarnessToolCall, HarnessToolResult } from "../events";
+import { type HarnessStepOutput, wholeFileDiff } from "../step-output";
 import { HARNESS_TOOL_NAMES, mcpToolCall, nativeToolCall } from "../tool-parts";
 import {
   type CodexItem,
@@ -96,6 +97,33 @@ const EXEC_STATUS = {
 
 const fileChanges = (item: Extract<CodexItem, { type: "fileChange" }>) =>
   item.changes.map(({ path, kind }) => ({ path, kind: kind.type }));
+
+/**
+ * What a step produced, kept on the computer: a command's output once it ran,
+ * and each changed file's diff. Codex reports an added or deleted file's text,
+ * which reads as its added or removed lines.
+ */
+const localOutputOf = (
+  item: Extract<CodexItem, { type: "commandExecution" | "fileChange" }>,
+): { localOutput: HarnessStepOutput } | Record<string, never> => {
+  if (item.type === "commandExecution") {
+    return typeof item.aggregatedOutput === "string"
+      ? { localOutput: { type: "command", output: item.aggregatedOutput } }
+      : {};
+  }
+  const files = item.changes.flatMap(({ path, kind, diff }) => {
+    if (diff === null || diff === undefined) {
+      return [];
+    }
+    return [
+      {
+        path,
+        diff: kind.type === "update" ? diff : wholeFileDiff(diff, kind.type),
+      },
+    ];
+  });
+  return files.length === 0 ? {} : { localOutput: { type: "diff", files } };
+};
 
 /** `stellaServer` is the server name the stella MCP binding is under. */
 export const toolCallForItem = (
@@ -209,6 +237,7 @@ export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
           },
         }),
         status: status(item.status === "failed" || item.status === "declined"),
+        ...localOutputOf(item),
       };
     case "fileChange":
       return {
@@ -220,6 +249,7 @@ export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
           },
         }),
         status: status(item.status === "failed" || item.status === "declined"),
+        ...localOutputOf(item),
       };
     case "mcpToolCall":
       return mcpResult(item);

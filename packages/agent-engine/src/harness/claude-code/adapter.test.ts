@@ -452,10 +452,12 @@ describe("Claude Code adapter over stream-json stdio", () => {
           name: "command_execution",
           input: { command: "ls" },
         },
-        // The command's output stays on the computer.
+        // The command's output stays on the computer: kept for the member to
+        // open there, never in what the turn reports.
         result: {
           content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
+          localOutput: { type: "command", output: "notes.md\n" },
         },
       },
       { type: "text.delta", messageId: "msg-3:0", delta: "Found" },
@@ -1847,10 +1849,12 @@ describe("Claude Code skill folders", () => {
       }),
       expect.objectContaining({
         toolCall: expect.objectContaining({ input: { command: "ls" } }),
-        // The command's output stays on the computer.
+        // The command's output stays on the computer; a step on the skill
+        // keeps none, even there.
         result: {
           content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
+          localOutput: { type: "command", output: "notes.md\n" },
         },
       }),
     ]);

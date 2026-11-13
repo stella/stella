@@ -210,6 +210,8 @@
     "./chat-local-run-question": "./src/chat-local-run-question.ts",
     "./ai-errors": "./src/ai-errors.ts",
     "./chat-local-run-tool": "./src/chat-local-run-tool.ts",
+    "./chat-local-run-step-output": "./src/chat-local-run-step-output.ts",
+    "./chat-local-run-step-output.fixtures": "./src/chat-local-run-step-output.fixtures.json",
     "./agent-harness": "./src/agent-harness.ts",
     "./document-ocr-availability": "./src/document-ocr-availability.ts",
     "./mcp-app-messages": "./src/mcp-app-messages.json",
