@@ -186,6 +186,42 @@ describe("a subagent's conversation kept on the computer", () => {
     });
   });
 
+  test("what it was told and what it reported each fit whatever their length, so neither is the line the cap cuts", () => {
+    // Longer than a step keeps, ending in a character of several bytes.
+    const long = `${"z".repeat(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES)}\u00E9\u{1F4C4}`;
+    const output = new SubagentConversation().ended({
+      prompt: long,
+      report: long,
+    });
+    const bytes = (text: string) => new TextEncoder().encode(text).length;
+    const [told, reported] = output.entries;
+    expect(output.entries.map(({ role }) => role)).toEqual([
+      "prompt",
+      "report",
+    ]);
+    for (const entry of [told, reported]) {
+      const text = entry?.text ?? "";
+      expect(long.startsWith(text)).toBe(true);
+      expect(bytes(text)).toBeLessThanOrEqual(
+        CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES / 4,
+      );
+      expect(bytes(text)).toBeGreaterThan(0);
+    }
+    // What was left out is counted, and both entries read back from the
+    // kept file.
+    expect(output.droppedBytes).toBe(
+      2 * bytes(long) - bytes(told?.text ?? "") - bytes(reported?.text ?? ""),
+    );
+    const { kept } = keptStepText(
+      output.entries.map((entry) => `${JSON.stringify(entry)}\n`).join(""),
+    );
+    expect(
+      parseChatLocalRunConversation(new TextDecoder().decode(kept)).map(
+        ({ role }) => role,
+      ),
+    ).toEqual(["prompt", "report"]);
+  });
+
   test("is kept under its own run: the same step of another run is another file", () => {
     const stepOutputDir = "/data/runs/chat.step-outputs";
     const first = stepOutputPath({
@@ -253,6 +289,19 @@ describe("an image a step viewed, kept on the computer", () => {
     });
   });
 
+  // A named pipe has no counterpart to make on Windows.
+  test.skipIf(process.platform === "win32")(
+    "a pipe named like an image is not waited on, and keeps nothing",
+    async () => {
+      await inFolder(async (folder) => {
+        const pipe = path.join(folder, "pipe.png");
+        expect(Bun.spawnSync(["mkfifo", pipe]).exitCode).toBe(0);
+        // Nothing ever writes to it: an open that waited would never return.
+        expect(await keptStepImage("pipe.png", folder)).toBeNull();
+      });
+    },
+  );
+
   test("a step that viewed no image writes no file, and one that did keeps the image's own bytes", async () => {
     await inFolder(async (folder) => {
       const stepOutputDir = path.join(folder, "chat.step-outputs");
@@ -286,6 +335,14 @@ describe("an image a step viewed, kept on the computer", () => {
           existsSync(stepOutputPath({ stepOutputDir, runId, toolCallId })),
         ).toBe(false);
       }
+      // A step reported again with nothing to keep leaves no earlier image.
+      writeFileSync(path.join(folder, "page.png"), "no longer an image");
+      expect((await keep("call-image", "page.png")).isOk()).toBe(true);
+      expect(
+        existsSync(
+          stepOutputPath({ stepOutputDir, runId, toolCallId: "call-image" }),
+        ),
+      ).toBe(false);
     });
   });
 });

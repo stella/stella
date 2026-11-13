@@ -97,6 +97,8 @@ const createRedactor = (scope: SkillPathScope) => {
   const rules = rulesFor(scope);
   /** Calls known to have touched a skill, by id, for their later events. */
   const touched = new Set<string>();
+  /** The subagent step each call of a subagent ran in, by the call's id. */
+  const parents = new Map<string, string>();
 
   const text = (value: string) => {
     let current = value;
@@ -126,12 +128,30 @@ const createRedactor = (scope: SkillPathScope) => {
   const changes = (value: unknown) =>
     JSON.stringify(anything(value)) !== JSON.stringify(value);
 
+  /**
+   * `id` touched a skill, and so did every subagent it ran in: what a
+   * subagent wrote or reported may quote what its step read, with no path
+   * beside it to tell.
+   */
+  const touch = (id: string) => {
+    touched.add(id);
+    let parent = parents.get(id);
+    // A subagent is marked once: ids a harness made name each other end here.
+    while (parent !== undefined && !touched.has(parent)) {
+      touched.add(parent);
+      parent = parents.get(parent);
+    }
+  };
+
   const toolCall = ({
     localInput,
     ...call
   }: HarnessToolCall): HarnessToolCall => {
+    if (call.parentCallId !== undefined) {
+      parents.set(call.id, call.parentCallId);
+    }
     if (changes(call.input) || changes(localInput)) {
-      touched.add(call.id);
+      touch(call.id);
     }
     return { ...call, input: anything(call.input) };
   };
@@ -162,6 +182,8 @@ const createRedactor = (scope: SkillPathScope) => {
     outcome: HarnessToolResult,
   ): HarnessToolResult => {
     if (touched.has(id) || mentions(outcome.content)) {
+      // What it returned names a skill: the subagents it ran in may quote it.
+      touch(id);
       return {
         content: JSON.stringify({
           status: outcome.status === "failed" ? "failed" : "completed",
@@ -169,10 +191,14 @@ const createRedactor = (scope: SkillPathScope) => {
         status: outcome.status,
       };
     }
-    return outcome.localOutput !== undefined &&
-      outputMentions(outcome.localOutput)
-      ? { content: outcome.content, status: outcome.status }
-      : outcome;
+    if (
+      outcome.localOutput === undefined ||
+      !outputMentions(outcome.localOutput)
+    ) {
+      return outcome;
+    }
+    touch(id);
+    return { content: outcome.content, status: outcome.status };
   };
 
   return (event: HarnessEvent): HarnessEvent => {

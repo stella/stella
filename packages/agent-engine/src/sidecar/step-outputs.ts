@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
-import { mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { mkdir, open, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -9,7 +10,11 @@ import {
 } from "@stll/api-contract/chat-local-run-step-output";
 import { sha256Hex } from "@stll/sha256/node";
 
-import { type HarnessStepOutput, stepOutputText } from "../harness/step-output";
+import {
+  type HarnessStepOutput,
+  stepOutputText,
+  utf8Prefix,
+} from "../harness/step-output";
 
 /**
  * Where a run's steps leave what they produced, in the store the desktop
@@ -43,21 +48,6 @@ export const stepOutputPath = ({
     sha256Hex(chatLocalRunCallId(runId, toolCallId, sha256Hex)),
   );
 
-const isContinuationByte = (byte: number | undefined) =>
-  byte !== undefined && byte >= 0x80 && byte < 0xc0;
-
-/** At most `max` bytes of UTF-8 `bytes`, never half of a character. */
-const utf8Prefix = (bytes: Uint8Array, max: number) => {
-  if (bytes.length <= max) {
-    return bytes;
-  }
-  let end = max;
-  while (end > 0 && isContinuationByte(bytes[end])) {
-    end -= 1;
-  }
-  return bytes.subarray(0, end);
-};
-
 /** What is kept of a step: how many bytes it produced, and those kept. */
 type KeptStepOutput = { totalBytes: number; kept: Uint8Array };
 
@@ -88,14 +78,20 @@ export const keptStepImage = async (
   file: string,
   workspaceDir: string,
 ): Promise<KeptStepOutput | null> => {
-  const resolved = path.resolve(workspaceDir, file);
-  // Checked before it is opened: opening a pipe would wait for its writer.
-  if (!(await stat(resolved)).isFile()) {
-    return null;
-  }
-  const handle = await open(resolved, "r");
+  // Opened without waiting: a pipe put where the file was would otherwise
+  // hold the run until something wrote to it. What was opened is then
+  // checked itself, so nothing but a regular file is ever read. Reading is
+  // the access mode of no flag at all, so this one alone opens for reading.
+  const handle = await open(
+    path.resolve(workspaceDir, file),
+    constants.O_NONBLOCK,
+  );
   try {
-    const { size } = await handle.stat();
+    const opened = await handle.stat();
+    if (!opened.isFile()) {
+      return null;
+    }
+    const { size } = opened;
     if (size > CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES) {
       return { totalBytes: size, kept: new Uint8Array() };
     }
@@ -171,7 +167,8 @@ type KeepStepOutputOptions = {
  * Keep one step's output for the member to open on this computer. Written
  * whole under a temporary name and moved into place, so a reader never sees
  * half of it; a step reported twice keeps its last report. A step with
- * nothing to keep (a viewed file that is no image) writes nothing.
+ * nothing to keep (a viewed file that is no image) keeps no file, an earlier
+ * report's included.
  */
 export const keepStepOutput = async ({
   stepOutputDir,
@@ -186,6 +183,7 @@ export const keepStepOutput = async ({
     try: async () => {
       const kept = await keptStepOutput(output, workspaceDir);
       if (kept === null) {
+        await rm(file, { force: true });
         return;
       }
       await mkdir(path.dirname(file), {

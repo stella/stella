@@ -35,11 +35,15 @@ export type LocalRunStepOutputView =
 /**
  * How long a read output stays fresh: for good once the desktop answered (a
  * finished step's output never changes), not at all when the run was found
- * elsewhere, since stella desktop may have started since.
+ * elsewhere, since stella desktop may have started since, or when the read
+ * was cut short.
  */
 export const localRunStepOutputStaleTime = (
   output: LocalRunStepOutputView | LocalRunStepImageView | undefined,
-): number => (output?.status === "elsewhere" ? 0 : Number.POSITIVE_INFINITY);
+): number =>
+  output?.status === "elsewhere" || output?.status === "incomplete"
+    ? 0
+    : Number.POSITIVE_INFINITY;
 
 export const LOCAL_RUN_STEP_OUTPUT_UNREAD: LocalRunStepOutputView = {
   status: "shown",
@@ -87,13 +91,16 @@ export const isLocalRunStepOutputCut = (totalBytes: number) =>
 /**
  * An image a step viewed, as its row shows it. `too-large`: the image is
  * more than the computer keeps for a step, so none of it is there.
- * `not-image`: what the computer handed over does not begin as an image
- * stella shows. `shown`: the image, as the kind its own bytes name.
+ * `incomplete`: the read ended before every kept byte arrived, so there is
+ * no image to show yet. `not-image`: what the computer handed over does not
+ * begin as an image stella shows. `shown`: the image, as the kind its own
+ * bytes name.
  */
 export type LocalRunStepImageView =
   | { status: "elsewhere" }
   | { status: "not-kept" }
   | { status: "too-large"; totalBytes: number }
+  | { status: "incomplete" }
   | { status: "not-image" }
   | { status: "shown"; src: string; type: ChatLocalRunImageType };
 
@@ -131,6 +138,10 @@ export const localRunStepImageView = ({
   // The desktop never sends more than the cap; nothing past it is shown.
   if (length > CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES) {
     return { status: "not-image" };
+  }
+  // Part of an image is not the image: a read cut short shows nothing.
+  if (length !== totalBytes) {
+    return { status: "incomplete" };
   }
   const bytes = new Uint8Array(length);
   let offset = 0;

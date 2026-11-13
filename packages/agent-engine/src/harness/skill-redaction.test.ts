@@ -301,6 +301,47 @@ describe("what a turn reports about its skill folders", () => {
     ).toBeUndefined();
   });
 
+  test("a subagent whose step read a skill keeps no conversation, though what it reported names no path", async () => {
+    const outer: HarnessToolCall = {
+      id: "call-outer",
+      name: "harness_native_tool",
+      input: { tool: "Agent", detail: { kind: "subagent", description: "" } },
+    };
+    const inner: HarnessToolCall = {
+      ...outer,
+      id: "call-inner",
+      parentCallId: outer.id,
+    };
+    const read: HarnessToolCall = {
+      id: "call-read",
+      name: "Bash",
+      input: { command: `cat ${FOLDER}/SKILL.md` },
+      parentCallId: inner.id,
+    };
+    const done = { content: STATUS_ONLY, status: "succeeded" } as const;
+    const quoting = {
+      type: "conversation",
+      entries: [
+        { role: "report", text: "The licensed clause, word for word." },
+      ],
+      droppedBytes: 0,
+    } as const;
+    const events = await through([
+      { type: "tool.started", toolCall: outer },
+      { type: "tool.started", toolCall: inner },
+      completed(read, { content: "Licensed text.", status: "succeeded" }),
+      completed(inner, { ...done, localOutput: quoting }),
+      completed(outer, { ...done, localOutput: quoting }),
+    ]);
+    // Neither the subagent that read it nor the one that started that
+    // subagent keeps what it wrote.
+    expect(
+      events.flatMap((event) =>
+        event.type === "tool.completed" ? [event.result.localOutput] : [],
+      ),
+    ).toEqual([undefined, undefined, undefined]);
+  });
+
   test("a call known to have touched a skill when it started stays status only", async () => {
     const started: HarnessToolCall = {
       id: "call-1",

@@ -227,6 +227,16 @@ describe("an image a step viewed, as its row shows it", () => {
     ).toEqual({ status: "not-image" });
   });
 
+  test("a read cut short shows no image and is read again", () => {
+    const whole = new Uint8Array([...PNG, 1, 2, 3, 4]);
+    const view = localRunStepImageView({
+      chunks: [whole.subarray(0, PNG.length + 1)],
+      totalBytes: whole.length,
+    });
+    expect(view).toEqual({ status: "incomplete" });
+    expect(localRunStepOutputStaleTime(view)).toBe(0);
+  });
+
   test("an image found elsewhere is read again; one the desktop answered holds", () => {
     expect(localRunStepOutputStaleTime({ status: "elsewhere" })).toBe(0);
     expect(

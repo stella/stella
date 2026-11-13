@@ -66,7 +66,39 @@ export const runRelativePath = (file: string, workspaceDir: string) => {
   return relative === "" ? "." : relative;
 };
 
+const isContinuationByte = (byte: number | undefined) =>
+  byte !== undefined && byte >= 0x80 && byte < 0xc0;
+
+/** At most `max` bytes of UTF-8 `bytes`, never half of a character. */
+export const utf8Prefix = (bytes: Uint8Array, max: number) => {
+  if (bytes.length <= max) {
+    return bytes;
+  }
+  let end = max;
+  while (end > 0 && isContinuationByte(bytes[end])) {
+    end -= 1;
+  }
+  return bytes.subarray(0, end);
+};
+
 const utf8Length = (text: string) => new TextEncoder().encode(text).length;
+
+/**
+ * The most of what a subagent was told, and of what it reported, that its
+ * conversation keeps: a share of what a step keeps, so both always fit and
+ * neither is the line the cap cuts.
+ */
+const CONVERSATION_END_MAX_BYTES = CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES / 4;
+
+/** `text` within `max` bytes, whole characters, and how much was left out. */
+const boundedText = (text: string, max: number) => {
+  const bytes = new TextEncoder().encode(text);
+  const kept = utf8Prefix(bytes, max);
+  return {
+    text: kept.length === bytes.length ? text : new TextDecoder().decode(kept),
+    droppedBytes: bytes.length - kept.length,
+  };
+};
 
 /**
  * What a subagent was told, wrote and reported, held while it works so its
@@ -95,8 +127,9 @@ export class SubagentConversation {
 
   /**
    * The conversation as its step keeps it: the prompt and the report first,
-   * so the kept text's cap cuts what was written in between, never what the
-   * subagent was asked or what it answered.
+   * each within its share of the cap, so the kept text's cap cuts what was
+   * written in between, never what the subagent was asked or what it
+   * answered.
    */
   ended({
     prompt,
@@ -105,22 +138,24 @@ export class SubagentConversation {
     prompt: string | null;
     report: string | null;
   }): HarnessConversation {
+    const told = boundedText(prompt ?? "", CONVERSATION_END_MAX_BYTES);
+    const reported = boundedText(report ?? "", CONVERSATION_END_MAX_BYTES);
     const said = (
       role: "prompt" | "report",
-      text: string | null,
-    ): ChatLocalRunConversationEntry[] =>
-      text === null || text === "" ? [] : [{ role, text }];
+      text: string,
+    ): ChatLocalRunConversationEntry[] => (text === "" ? [] : [{ role, text }]);
     const written = this.messages.map(
       (text): ChatLocalRunConversationEntry => ({ role: "message", text }),
     );
     return {
       type: "conversation",
       entries: [
-        ...said("prompt", prompt),
-        ...said("report", report),
+        ...said("prompt", told.text),
+        ...said("report", reported.text),
         ...written,
       ],
-      droppedBytes: this.droppedBytes,
+      droppedBytes:
+        this.droppedBytes + told.droppedBytes + reported.droppedBytes,
     };
   }
 }

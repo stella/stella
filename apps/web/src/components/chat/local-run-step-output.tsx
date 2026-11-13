@@ -325,6 +325,13 @@ const LocalRunStepImage = ({
     case "not-kept":
     case "not-image":
       return <Note>{t("chat.toolCall.localOutput.notKept")}</Note>;
+    case "incomplete":
+      return (
+        <Note>
+          {t("chat.toolCall.localOutput.failed")}
+          {retry}
+        </Note>
+      );
     case "too-large":
       return (
         <Note>
