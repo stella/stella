@@ -8,9 +8,10 @@ import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
+  CHAT_LOCAL_RUN_STEP_MAX_BYTES,
   CHAT_LOCAL_RUN_STEP_OUTPUT_HEADERS,
-  CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
   chatLocalRunOfCall,
+  type ChatLocalRunStepKind,
   chatLocalRunStepOutputBridgePath,
 } from "@stll/api-contract/chat-local-run-step-output";
 import { FetchBoundaryError } from "@stll/errors";
@@ -80,6 +81,10 @@ const missingOn = async (response: Response) => {
 };
 
 type ReadStepOutputOptions = { callId: string; signal: AbortSignal };
+type ReadStepOptions = ReadStepOutputOptions & {
+  /** What the step is read as: no more than this kind's cap is taken. */
+  kind: ChatLocalRunStepKind;
+};
 
 /** What reading a kept step reports, in order, before it is given a form. */
 type LocalRunStepReadEvent =
@@ -89,8 +94,8 @@ type LocalRunStepReadEvent =
 /**
  * Read what one step kept from stella desktop on this computer: a grant from
  * the API for the run's owner, then the bytes themselves, straight from the
- * desktop's loopback bridge in chunks, never past the cap. Only the run and
- * call ids reach the API.
+ * desktop's loopback bridge in chunks, never past the cap of the kind it is
+ * read as. Only the run and call ids reach the API.
  *
  * @yields Whether the run is elsewhere or kept nothing, else the step's size
  *   and then its bytes as they arrive.
@@ -98,7 +103,8 @@ type LocalRunStepReadEvent =
 async function* readLocalRunStep({
   callId,
   signal,
-}: ReadStepOutputOptions): AsyncGenerator<LocalRunStepReadEvent> {
+  kind,
+}: ReadStepOptions): AsyncGenerator<LocalRunStepReadEvent> {
   const runId = chatLocalRunOfCall(callId);
   if (runId === null) {
     yield { type: "not-kept" };
@@ -151,8 +157,9 @@ async function* readLocalRunStep({
   let chunk = await reader.read();
   while (!chunk.done) {
     received += chunk.value.byteLength;
-    if (received > CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES) {
-      // The desktop never sends more; a page never shows more either.
+    if (received > CHAT_LOCAL_RUN_STEP_MAX_BYTES[kind]) {
+      // The computer never keeps more of this kind; a page never shows more
+      // either, though the desktop serves any kept step up to the largest.
       await reader.cancel();
       break;
     }
@@ -172,7 +179,7 @@ async function* readLocalRunStepOutput(
   options: ReadStepOutputOptions,
 ): AsyncGenerator<LocalRunStepOutputEvent> {
   const decoder = new TextDecoder();
-  for await (const event of readLocalRunStep(options)) {
+  for await (const event of readLocalRunStep({ ...options, kind: "text" })) {
     if (event.type !== "bytes") {
       yield event;
       continue;
@@ -198,7 +205,7 @@ const readLocalRunStepImage = async (
 ): Promise<LocalRunStepImageView> => {
   const chunks: Uint8Array[] = [];
   let totalBytes = 0;
-  for await (const event of readLocalRunStep(options)) {
+  for await (const event of readLocalRunStep({ ...options, kind: "image" })) {
     switch (event.type) {
       case "elsewhere":
         return { status: "elsewhere" };
