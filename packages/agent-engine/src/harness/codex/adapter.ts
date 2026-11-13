@@ -361,7 +361,8 @@ const close = async (client: AppServerClient, gracePeriodMs: number) => {
 };
 
 /**
- * The plan's limit, when Codex reports it exhausted with a known reset.
+ * The plan's limit, when Codex reports it exhausted with a known reset and
+ * no credits to continue on.
  *
  * A read that failed says nothing about the limits, so it is not taken as
  * "within the limit" either: it is the probe contract's "cannot say", which
@@ -375,6 +376,11 @@ const probeUsageLimit = async (
   const read = await readRateLimits(client);
   switch (read.type) {
     case "read": {
+      const { credits } = read.limits;
+      // An account with credits keeps running once its windows are spent.
+      if (credits?.hasCredits === true || credits?.unlimited === true) {
+        return null;
+      }
       const resetsAt = usageLimitResetsAt(read.limits, Temporal.Now.instant());
       return resetsAt === null ? null : { resetsAt };
     }

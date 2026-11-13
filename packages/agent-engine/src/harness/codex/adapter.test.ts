@@ -1326,6 +1326,16 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(probed.value.usageLimit).toEqual({ resetsAt: FUTURE_RESET_ISO });
   });
 
+  test("a probe of a spent plan with credits left stays ready", async () => {
+    const probed = await harnessFor(
+      "probe_out_of_usage_with_credits",
+    ).adapter.probe();
+    if (Result.isError(probed)) {
+      throw probed.error;
+    }
+    expect(probed.value.usageLimit).toBeNull();
+  });
+
   test("a probe whose limits cannot be read stays ready, its limit unknown", async () => {
     const harness = harnessFor("probe_limits_unreadable");
     const probed = await harness.adapter.probe();

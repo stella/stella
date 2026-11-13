@@ -225,6 +225,10 @@ const RateLimitsSchema = v.object({
   limitId: v.nullish(v.string()),
   primary: v.nullish(RateLimitWindowSchema),
   secondary: v.nullish(RateLimitWindowSchema),
+  /** Credits the account can spend once its windows are exhausted. */
+  credits: v.nullish(
+    v.object({ hasCredits: v.boolean(), unlimited: v.boolean() }),
+  ),
 });
 
 /** `account/rateLimits/read`: every allowance, by limit id when Codex says. */

@@ -1107,6 +1107,17 @@ const FAKE_SCENARIOS = {
       },
     },
   ],
+  /** The plan's window is spent, and the account has credits to go on. */
+  probe_out_of_usage_with_credits: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead({
+        ...planLimits(100),
+        credits: { hasCredits: true, unlimited: false, balance: "12.50" },
+      }),
+    },
+  ],
   probe_out_of_usage: [
     ...handshake(),
     {

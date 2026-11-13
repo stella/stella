@@ -36,6 +36,7 @@ export const mergeRateLimits = (
     primary: update.primary === undefined ? previous.primary : update.primary,
     secondary:
       update.secondary === undefined ? previous.secondary : update.secondary,
+    credits: update.credits === undefined ? previous.credits : update.credits,
   };
 };
 
