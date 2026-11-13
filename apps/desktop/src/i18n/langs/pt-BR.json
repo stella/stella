@@ -82,6 +82,7 @@
     "pdfSignCertificate": "Certificado de assinatura",
     "pdfSignDocument": "Documento",
     "pdfSignDownloadDriver": "Baixar driver",
+    "pdfSignDriverMissing": "Um cartão em um leitor precisa do driver {vendor}, que não está instalado. Instale-o para assinar com esse cartão.",
     "pdfSignDriverNeedsUpdate": "O driver {vendor} instalado não funciona no processador deste Mac. Instale a versão atual para assinar com esse cartão.",
     "pdfSignErrorCode": "Código do erro: {code}",
     "pdfSignErrors": {
@@ -827,6 +828,18 @@
       "runs_can_write": "As execuções locais podem gravar nesta pasta, então ela não pode conter uma habilidade.",
       "network_folder": "Esta pasta está em um compartilhamento de rede. As habilidades precisam estar no disco deste computador.",
       "path_changed": "Uma pasta superior mudou. Remova esta pasta e adicione-a de novo."
+    }
+  },
+  "signingDriver": {
+    "title": "Driver de cartão inteligente",
+    "description": "Se o stella desktop não encontrar sozinho o driver do seu cartão inteligente ou token, escolha o módulo PKCS #11 dele. Ele só é carregado para assinar PDFs, em um processo separado.",
+    "choose": "Escolher módulo",
+    "remove": "Remover",
+    "notice": {
+      "action_failed": "Não funcionou. Tente de novo.",
+      "missing": "Este arquivo não existe mais.",
+      "needs_update": "Este módulo não funciona no processador deste Mac. Instale a versão atual do driver.",
+      "not_a_library": "Este arquivo não é um módulo PKCS #11."
     }
   }
 }

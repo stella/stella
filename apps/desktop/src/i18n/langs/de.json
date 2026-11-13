@@ -82,6 +82,7 @@
     "pdfSignCertificate": "Signaturzertifikat",
     "pdfSignDocument": "Dokument",
     "pdfSignDownloadDriver": "Treiber herunterladen",
+    "pdfSignDriverMissing": "Eine Karte im Kartenleser braucht den {vendor}-Treiber, der nicht installiert ist. Installieren Sie ihn, um mit dieser Karte zu signieren.",
     "pdfSignDriverNeedsUpdate": "Der installierte {vendor}-Treiber läuft nicht auf dem Prozessor dieses Macs. Installieren Sie die aktuelle Version, um mit dieser Karte zu signieren.",
     "pdfSignErrorCode": "Fehlercode: {code}",
     "pdfSignErrors": {
@@ -827,6 +828,18 @@
       "runs_can_write": "Lokale Ausführungen können in diesen Ordner schreiben, daher kann er keinen Skill enthalten.",
       "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Skills müssen auf dem eigenen Laufwerk dieses Computers liegen.",
       "path_changed": "Ein übergeordneter Ordner hat sich geändert. Entfernen Sie diesen Ordner und fügen Sie ihn erneut hinzu."
+    }
+  },
+  "signingDriver": {
+    "title": "Chipkartentreiber",
+    "description": "Findet stella desktop den Treiber Ihrer Chipkarte oder Ihres Tokens nicht selbst, wählen Sie sein PKCS #11-Modul aus. Es wird nur zum Signieren von PDFs geladen, in einem eigenen Prozess.",
+    "choose": "Modul auswählen",
+    "remove": "Entfernen",
+    "notice": {
+      "action_failed": "Das hat nicht funktioniert. Versuchen Sie es erneut.",
+      "missing": "Diese Datei ist nicht mehr vorhanden.",
+      "needs_update": "Dieses Modul läuft nicht auf dem Prozessor dieses Macs. Installieren Sie die aktuelle Version des Treibers.",
+      "not_a_library": "Diese Datei ist kein PKCS #11-Modul."
     }
   }
 }

@@ -27,7 +27,8 @@ pub const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "op")]
 pub enum Request {
-  /// Every certificate on every token the modules can see. Never logs in.
+  /// Every certificate on every token the modules can see, and the card in
+  /// every reader. Never logs in.
   List { modules: Vec<PathBuf> },
   /// Sign a SHA-256 digest with the private key paired with the
   /// certificate whose SHA-256 this is, on whichever of the module's tokens
@@ -107,6 +108,7 @@ impl<'de> Deserialize<'de> for Pin {
 pub enum Response {
   Listed {
     modules: Vec<ModuleListing>,
+    readers: ReaderScan,
   },
   Signed {
     signature_hex: String,
@@ -155,10 +157,38 @@ pub enum ModuleOutcome {
   },
 }
 
+/// The cards in the computer's readers, read through PC/SC.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(
+  rename_all = "camelCase",
+  rename_all_fields = "camelCase",
+  tag = "type"
+)]
+pub enum ReaderScan {
+  Read {
+    cards: Vec<ReaderCard>,
+  },
+  /// PC/SC could not be asked; the module listing stands without it.
+  Unavailable {
+    detail: String,
+  },
+}
+
+/// A reader holding a card, and the card's ATR.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReaderCard {
+  pub reader: String,
+  pub atr_hex: String,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenListing {
   pub slot: u64,
+  /// `CKA_SLOT_DESCRIPTION`: most modules name the PC/SC reader here, which
+  /// is how a reader's card is matched to the token a module made of it.
+  pub slot_description: String,
   pub label: String,
   pub pin_entry: PinEntry,
   pub pin_retries: PinRetries,
@@ -382,18 +412,22 @@ mod tests {
   #[test]
   fn reads_a_listing() {
     let response = decode_response(
-      br#"{"status":"listed","modules":[
+      br#"{"status":"listed","readers":{"type":"read","cards":[{"reader":"Reader 0","atrHex":"3b00"}]},"modules":[
         {"module":"/a.dylib","outcome":{"type":"unusable","detail":"no such file"}},
         {"module":"/b.dylib","outcome":{"type":"loaded","tokens":[
-          {"slot":3,"label":"Card","pinEntry":"pinPad","pinRetries":"finalTry",
+          {"slot":3,"slotDescription":"Reader 0","label":"Card","pinEntry":"pinPad","pinRetries":"finalTry",
            "certificates":[{"derHex":"3000","label":"Signing","key":"behindLogin"}]}
         ]}}
       ]}"#,
     )
     .unwrap();
-    let Response::Listed { modules } = response else {
+    let Response::Listed { modules, readers } = response else {
       panic!("not a listing");
     };
+    assert!(matches!(
+      readers,
+      ReaderScan::Read { cards } if cards[0].reader == "Reader 0" && cards[0].atr_hex == "3b00"
+    ));
     assert!(matches!(modules[0].outcome, ModuleOutcome::Unusable { .. }));
     let ModuleOutcome::Loaded { tokens } = &modules[1].outcome else {
       panic!("not loaded");

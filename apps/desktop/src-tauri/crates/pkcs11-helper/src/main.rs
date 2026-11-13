@@ -11,6 +11,7 @@
 
 mod context_sign;
 mod failure;
+mod readers;
 mod token;
 
 use std::io::{Read, Write};

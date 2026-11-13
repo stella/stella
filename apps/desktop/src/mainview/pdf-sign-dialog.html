@@ -513,8 +513,9 @@
         updateSignEnabled();
       };
 
-      // A driver that cannot run here is named with a way to its update,
-      // whatever else the dialog says.
+      // A driver that cannot run here, or a card whose driver is missing, is
+      // named with a way to the driver's download, whatever else the dialog
+      // says.
       const respondToNotice = (driverId) =>
         window.__TAURI_INTERNALS__
           ? window.__TAURI_INTERNALS__.invoke("pdf_sign_open_driver_download", {
@@ -528,7 +529,11 @@
           const text = document.createElement("p");
           text.className = "notice-text";
           text.dir = "auto";
-          text.textContent = (strings.pdfSignDriverNeedsUpdate || "").replace(
+          const sentence =
+            notice.kind === "missing"
+              ? strings.pdfSignDriverMissing
+              : strings.pdfSignDriverNeedsUpdate;
+          text.textContent = (sentence || "").replace(
             "{vendor}",
             notice.vendor,
           );

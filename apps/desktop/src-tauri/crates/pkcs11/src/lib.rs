@@ -8,9 +8,11 @@
 //!
 //! - [`protocol`]: the one request a helper answers and its response.
 //! - [`drivers`]: the modules the desktop looks for, and where.
+//! - [`atr`]: which driver a card in a reader needs, by its ATR.
 //! - [`macho`]: whether a module can load into this process at all.
 //! - [`digest_info`]: what an RSA token signs for a SHA-256 digest.
 
+pub mod atr;
 pub mod digest_info;
 pub mod drivers;
 pub mod macho;

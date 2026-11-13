@@ -82,6 +82,7 @@
     "pdfSignCertificate": "Certyfikat podpisu",
     "pdfSignDocument": "Dokument",
     "pdfSignDownloadDriver": "Pobierz sterownik",
+    "pdfSignDriverMissing": "Karta w czytniku wymaga sterownika {vendor}, który nie jest zainstalowany. Zainstaluj go, aby podpisywać tą kartą.",
     "pdfSignDriverNeedsUpdate": "Zainstalowany sterownik {vendor} nie działa na procesorze tego Maca. Zainstaluj jego aktualną wersję, aby podpisywać tą kartą.",
     "pdfSignErrorCode": "Kod błędu: {code}",
     "pdfSignErrors": {
@@ -827,6 +828,18 @@
       "runs_can_write": "Lokalne uruchomienia mogą zapisywać w tym folderze, więc nie może on zawierać umiejętności.",
       "network_folder": "Ten folder znajduje się w udziale sieciowym. Umiejętności muszą być na dysku tego komputera.",
       "path_changed": "Zmienił się folder nadrzędny. Usuń ten folder i dodaj go ponownie."
+    }
+  },
+  "signingDriver": {
+    "title": "Sterownik karty inteligentnej",
+    "description": "Jeśli stella desktop nie znajdzie sama sterownika Twojej karty inteligentnej lub tokenu, wybierz jego moduł PKCS #11. Jest on wczytywany tylko do podpisywania plików PDF, w osobnym procesie.",
+    "choose": "Wybierz moduł",
+    "remove": "Usuń",
+    "notice": {
+      "action_failed": "Nie udało się. Spróbuj ponownie.",
+      "missing": "Ten plik już nie istnieje.",
+      "needs_update": "Ten moduł nie działa na procesorze tego Maca. Zainstaluj aktualną wersję sterownika.",
+      "not_a_library": "Ten plik nie jest modułem PKCS #11."
     }
   }
 }

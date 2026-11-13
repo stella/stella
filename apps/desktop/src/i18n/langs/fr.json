@@ -82,6 +82,7 @@
     "pdfSignCertificate": "Certificat de signature",
     "pdfSignDocument": "Document",
     "pdfSignDownloadDriver": "Télécharger le pilote",
+    "pdfSignDriverMissing": "Une carte dans un lecteur a besoin du pilote {vendor}, qui n’est pas installé. Installez-le pour signer avec cette carte.",
     "pdfSignDriverNeedsUpdate": "Le pilote {vendor} installé ne fonctionne pas avec le processeur de ce Mac. Installez sa version actuelle pour signer avec cette carte.",
     "pdfSignErrorCode": "Code d’erreur : {code}",
     "pdfSignErrors": {
@@ -827,6 +828,18 @@
       "runs_can_write": "Les exécutions locales peuvent écrire dans ce dossier, il ne peut donc pas contenir de compétence.",
       "network_folder": "Ce dossier se trouve sur un partage réseau. Les compétences doivent être sur le disque de cet ordinateur.",
       "path_changed": "Un dossier parent a changé. Retirez ce dossier et ajoutez-le de nouveau."
+    }
+  },
+  "signingDriver": {
+    "title": "Pilote de carte à puce",
+    "description": "Si stella desktop ne trouve pas seul le pilote de votre carte à puce ou de votre jeton, choisissez son module PKCS #11. Il n’est chargé que pour signer des PDF, dans un processus distinct.",
+    "choose": "Choisir le module",
+    "remove": "Retirer",
+    "notice": {
+      "action_failed": "Cela n'a pas fonctionné. Réessayez.",
+      "missing": "Ce fichier n’existe plus.",
+      "needs_update": "Ce module ne fonctionne pas avec le processeur de ce Mac. Installez la version actuelle du pilote.",
+      "not_a_library": "Ce fichier n’est pas un module PKCS #11."
     }
   }
 }

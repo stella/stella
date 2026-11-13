@@ -82,6 +82,7 @@
     "pdfSignCertificate": "Parakstīšanas sertifikāts",
     "pdfSignDocument": "Dokuments",
     "pdfSignDownloadDriver": "Lejupielādēt draiveri",
+    "pdfSignDriverMissing": "Lasītājā esošajai kartei vajag {vendor} draiveri, kas nav instalēts. Lai parakstītu ar šo karti, instalējiet to.",
     "pdfSignDriverNeedsUpdate": "Instalētais {vendor} draiveris nedarbojas šī Mac procesorā. Lai parakstītu ar šo karti, instalējiet tā jaunāko versiju.",
     "pdfSignErrorCode": "Kļūdas kods: {code}",
     "pdfSignErrors": {
@@ -827,6 +828,18 @@
       "runs_can_write": "Lokālās izpildes var rakstīt šajā mapē, tāpēc tajā nevar būt prasme.",
       "network_folder": "Šī mape atrodas tīkla koplietojumā. Prasmēm jāatrodas šī datora diskā.",
       "path_changed": "Mainījusies augstāka līmeņa mape. Noņemiet šo mapi un pievienojiet to vēlreiz."
+    }
+  },
+  "signingDriver": {
+    "title": "Viedkartes draiveris",
+    "description": "Ja stella desktop pati neatrod jūsu viedkartes vai marķiera draiveri, izvēlieties tā PKCS #11 moduli. Tas tiek ielādēts tikai PDF parakstīšanai, atsevišķā procesā.",
+    "choose": "Izvēlēties moduli",
+    "remove": "Noņemt",
+    "notice": {
+      "action_failed": "Neizdevās. Mēģiniet vēlreiz.",
+      "missing": "Šī faila vairs nav.",
+      "needs_update": "Šis modulis nedarbojas šī Mac procesorā. Instalējiet draivera jaunāko versiju.",
+      "not_a_library": "Šis fails nav PKCS #11 modulis."
     }
   }
 }

@@ -82,6 +82,7 @@
     "pdfSignCertificate": "Pasirašymo sertifikatas",
     "pdfSignDocument": "Dokumentas",
     "pdfSignDownloadDriver": "Atsisiųsti tvarkyklę",
+    "pdfSignDriverMissing": "Skaitytuve esančiai kortelei reikia „{vendor}“ tvarkyklės, kuri neįdiegta. Norėdami pasirašyti šia kortele, ją įdiekite.",
     "pdfSignDriverNeedsUpdate": "Įdiegta „{vendor}“ tvarkyklė neveikia šio „Mac“ procesoriuje. Norėdami pasirašyti šia kortele, įdiekite naujausią jos versiją.",
     "pdfSignErrorCode": "Klaidos kodas: {code}",
     "pdfSignErrors": {
@@ -827,6 +828,18 @@
       "runs_can_write": "Vietiniai vykdymai gali rašyti į šį aplanką, todėl jame negali būti įgūdžio.",
       "network_folder": "Šis aplankas yra tinklo bendrinimo vietoje. Įgūdžiai turi būti šio kompiuterio diske.",
       "path_changed": "Pasikeitė aukštesnis aplankas. Pašalinkite šį aplanką ir pridėkite jį iš naujo."
+    }
+  },
+  "signingDriver": {
+    "title": "Lustinės kortelės tvarkyklė",
+    "description": "Jei stella desktop pati neranda jūsų lustinės kortelės ar žetono tvarkyklės, pasirinkite jos PKCS #11 modulį. Jis įkeliamas tik PDF pasirašymui, atskirame procese.",
+    "choose": "Pasirinkti modulį",
+    "remove": "Pašalinti",
+    "notice": {
+      "action_failed": "Nepavyko. Bandykite dar kartą.",
+      "missing": "Šio failo nebėra.",
+      "needs_update": "Šis modulis neveikia šio „Mac“ procesoriuje. Įdiekite naujausią tvarkyklės versiją.",
+      "not_a_library": "Šis failas nėra PKCS #11 modulis."
     }
   }
 }

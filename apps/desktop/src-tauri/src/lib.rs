@@ -76,6 +76,7 @@ mod marker_file;
 mod onboarding;
 mod pdf_signing;
 mod permissions;
+mod pkcs11_module_setting;
 mod pkcs11_signing;
 mod presence;
 mod registry;

@@ -37,5 +37,9 @@ stella-desktop-pkcs11 = { path = "../pkcs11", version = "0.0.1" }
 stella-desktop-signing-core = { path = "../signing-core", version = "0.0.1" }
 zeroize = "1"
 
+# The helper ships on macOS only, where PC/SC is a system framework.
+[target.'cfg(target_os = "macos")'.dependencies]
+pcsc = "2"
+
 [dev-dependencies]
 ring = "0.17"
