@@ -131,10 +131,16 @@ export const LocalRunSubagentGroup = ({
     own: localRunStepStanding(part),
     steps: steps.map(localRunStepStanding),
   });
-  // Open while the subagent works, so its steps are seen as they arrive.
-  const [isOpen, setIsOpen] = useState(
-    status === "running" || status === "needs_approval",
-  );
+  // Open while the subagent works, so its steps are seen as they arrive, and
+  // folded once it settles; from the member's first click on, as they left it.
+  const [chosen, setChosen] = useState<"open" | "closed" | null>(null);
+  const isOpen =
+    chosen === null
+      ? status === "running" || status === "needs_approval"
+      : chosen === "open";
+  const setIsOpen = (open: boolean) => {
+    setChosen(open ? "open" : "closed");
+  };
   const header = (
     <SubagentsCardHeader
       sizeLabel={

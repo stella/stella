@@ -128,43 +128,53 @@ const image = step(
 
 const removal = { command: "rm draft.md", parentCallId: SUBAGENT };
 
+const turnTree = (
+  queryClient: InstanceType<typeof QueryClient>,
+  parts: readonly object[],
+) => (
+  <ChatThreadTestRouter>
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <ChatMattersContext
+            value={{ createDocumentMattersView: { type: "empty" } }}
+          >
+            <ChatApprovalContext value={testChatApprovalContextValue}>
+              <ChatEditorProvider>
+                <ChatThreadMessages
+                  activitySession={{
+                    reportedUnknownActivityTypes: new Set<string>(),
+                  }}
+                  approvalPendingMessageId={null}
+                  messages={[turnOf(parts)]}
+                  onAskUserSubmit={() => {}}
+                  onCreateDocumentResolve={() => {}}
+                  onOpenCreatedDocument={() => {}}
+                  showToolCalls
+                  streamdownComponents={{
+                    a: ({ children, ...props }) => <a {...props}>{children}</a>,
+                  }}
+                />
+              </ChatEditorProvider>
+            </ChatApprovalContext>
+          </ChatMattersContext>
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>
+  </ChatThreadTestRouter>
+);
+
 const renderTurn = (parts: readonly object[]) => {
   const queryClient = new QueryClient();
-  const view = render(
-    <ChatThreadTestRouter>
-      <QueryClientProvider client={queryClient}>
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <FormattingProvider locale="en" timeZone="UTC">
-            <ChatMattersContext
-              value={{ createDocumentMattersView: { type: "empty" } }}
-            >
-              <ChatApprovalContext value={testChatApprovalContextValue}>
-                <ChatEditorProvider>
-                  <ChatThreadMessages
-                    activitySession={{
-                      reportedUnknownActivityTypes: new Set<string>(),
-                    }}
-                    approvalPendingMessageId={null}
-                    messages={[turnOf(parts)]}
-                    onAskUserSubmit={() => {}}
-                    onCreateDocumentResolve={() => {}}
-                    onOpenCreatedDocument={() => {}}
-                    showToolCalls
-                    streamdownComponents={{
-                      a: ({ children, ...props }) => (
-                        <a {...props}>{children}</a>
-                      ),
-                    }}
-                  />
-                </ChatEditorProvider>
-              </ChatApprovalContext>
-            </ChatMattersContext>
-          </FormattingProvider>
-        </IntlProvider>
-      </QueryClientProvider>
-    </ChatThreadTestRouter>,
-  );
-  return { view, queryClient };
+  const view = render(turnTree(queryClient, parts));
+  return {
+    view,
+    queryClient,
+    /** The same turn, as it stands after more of it arrived. */
+    show: (next: readonly object[]) => {
+      view.rerender(turnTree(queryClient, next));
+    },
+  };
 };
 
 /** The turn's one subagent group. */
@@ -237,6 +247,42 @@ test("a finished subagent folds its steps behind its row, and opens on a click",
   });
   expect(inGroup.getByRole("button", { expanded: true })).toBe(toggle);
   expect(inGroup.getByText("drafts/lease.md")).toBeDefined();
+  queryClient.clear();
+});
+
+test("a group opens while a step of it is under way, folds when it settles, and then stays as the member left it", async () => {
+  const lookup = (state: "complete" | "input-complete") =>
+    step(
+      "run_call-lookup",
+      "command_execution",
+      { command: "ls notes", parentCallId: SUBAGENT },
+      state === "complete" ? done : { state },
+    );
+  // The call that started the subagent has ended; a step of it has not
+  // arrived yet.
+  const { view, queryClient, show } = renderTurn([subagent(done), read]);
+  await view.findByText("Check the lease");
+  // The group's own control comes before the controls of the rows inside.
+  const toggle = () =>
+    within(groupOf(view.container)).getAllByRole("button").at(0) ??
+    panic("the group has no control to open it");
+  expect(toggle().getAttribute("aria-expanded")).toBe("false");
+  await act(async () => {
+    show([subagent(done), read, lookup("input-complete")]);
+  });
+  expect(toggle().getAttribute("aria-expanded")).toBe("true");
+  await act(async () => {
+    show([subagent(done), read, lookup("complete")]);
+  });
+  expect(toggle().getAttribute("aria-expanded")).toBe("false");
+  await act(async () => {
+    fireEvent.click(toggle());
+  });
+  expect(toggle().getAttribute("aria-expanded")).toBe("true");
+  await act(async () => {
+    show([subagent(done), read, lookup("complete"), image]);
+  });
+  expect(toggle().getAttribute("aria-expanded")).toBe("true");
   queryClient.clear();
 });
 
