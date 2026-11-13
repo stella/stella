@@ -60,7 +60,7 @@ export const REVIEW_RESET_KEPT_TABLES = {
     "Account-owned creation replay receipts; retaining them prevents duplicate organizations after a content reset.",
   organization_professional_use_acceptances:
     "The organization's professional-use acceptance; written once, never reviewer content.",
-  legal_list_verification_budgets: "Usage ledger: verification budget.",
+  model_run_budgets: "Usage ledger: model run caps.",
   organization_file_objects:
     "Storage accounting, settled by the cleanup workers as objects are erased.",
   organization_file_usage:

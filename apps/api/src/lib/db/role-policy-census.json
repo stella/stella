@@ -8281,66 +8281,6 @@
   },
   {
     "schema": "public",
-    "table": "legal_list_verification_budgets",
-    "policy": "legal_list_verification_budgets_no_delete",
-    "command": "DELETE",
-    "roles": ["stella"],
-    "permissive": "RESTRICTIVE",
-    "using": "false",
-    "withCheck": null
-  },
-  {
-    "schema": "public",
-    "table": "legal_list_verification_budgets",
-    "policy": "legal_list_verification_budgets_owner_access",
-    "command": "ALL",
-    "roles": ["public"],
-    "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('legal_list_verification_budgets'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('legal_list_verification_budgets'::regclass)::oid)))"
-  },
-  {
-    "schema": "public",
-    "table": "legal_list_verification_budgets",
-    "policy": "organization_delete",
-    "command": "DELETE",
-    "roles": ["stella"],
-    "permissive": "PERMISSIVE",
-    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
-    "withCheck": null
-  },
-  {
-    "schema": "public",
-    "table": "legal_list_verification_budgets",
-    "policy": "organization_insert",
-    "command": "INSERT",
-    "roles": ["stella"],
-    "permissive": "PERMISSIVE",
-    "using": null,
-    "withCheck": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))"
-  },
-  {
-    "schema": "public",
-    "table": "legal_list_verification_budgets",
-    "policy": "organization_select",
-    "command": "SELECT",
-    "roles": ["stella"],
-    "permissive": "PERMISSIVE",
-    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
-    "withCheck": null
-  },
-  {
-    "schema": "public",
-    "table": "legal_list_verification_budgets",
-    "policy": "organization_update",
-    "command": "UPDATE",
-    "roles": ["stella"],
-    "permissive": "PERMISSIVE",
-    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
-    "withCheck": null
-  },
-  {
-    "schema": "public",
     "table": "legal_list_verification_read_receipts",
     "policy": "entity_feature_gate_maintenance",
     "command": "ALL",
@@ -9418,6 +9358,66 @@
     "permissive": "PERMISSIVE",
     "using": "(organization_id = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
     "withCheck": "(organization_id = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))"
+  },
+  {
+    "schema": "public",
+    "table": "model_run_budgets",
+    "policy": "model_run_budgets_no_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "RESTRICTIVE",
+    "using": "false",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "model_run_budgets",
+    "policy": "model_run_budgets_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('model_run_budgets'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('model_run_budgets'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "model_run_budgets",
+    "policy": "organization_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "model_run_budgets",
+    "policy": "organization_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))"
+  },
+  {
+    "schema": "public",
+    "table": "model_run_budgets",
+    "policy": "organization_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "model_run_budgets",
+    "policy": "organization_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
+    "withCheck": null
   },
   {
     "schema": "public",

@@ -208,6 +208,7 @@ describe("period identity coverage", () => {
       "handlers/chat/get-thread-recap.ts",
       "handlers/chat/suggest-thread-title.ts",
       "handlers/desktop-time-entries/billing-drafts.ts",
+      "handlers/dictation/cleanup.ts",
       "handlers/document-reviews/parties.ts",
       "handlers/templates/prefill.ts",
     ]);

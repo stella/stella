@@ -30,7 +30,8 @@ export type ChatAuditResourceType =
   | typeof AUDIT_RESOURCE_TYPE.CHAT_FILE
   | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION
   | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT
-  | typeof AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT;
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL;
 
 export type NonChatAuditResourceType = Exclude<
   AuditResourceType,
@@ -73,10 +74,12 @@ const CHAT_CHANGE_FIELDS = {
     CHAT_MESSAGE_CHANGE_FIELDS,
   ),
   [AUDIT_RESOURCE_TYPE.CHAT_FILE]: new Set<string>(),
-  // Tool executions and grants describe themselves in `metadata` only.
+  // Tool executions, grants and folder approvals describe themselves in
+  // `metadata` only.
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: new Set<string>(),
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: new Set<string>(),
   [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: new Set<string>(),
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: new Set<string>(),
 } as const satisfies Record<ChatAuditResourceType, ReadonlySet<string>>;
 
 type AuditDiff = { old: unknown; new: unknown };
@@ -100,6 +103,7 @@ export type ChatAuditChanges = {
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: Record<string, never>;
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: Record<string, never>;
   [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: Record<string, never>;
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: Record<string, never>;
 };
 
 const isChatResourceType = (
@@ -249,6 +253,7 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CLAUSE]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CLAUSE_CATEGORY]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CLAUSE_TEMPLATE_LINK]: UNGATED_AUDIT_DETAILS,

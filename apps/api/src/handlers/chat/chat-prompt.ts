@@ -26,6 +26,7 @@ import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
 } from "@stll/api-contract/chat-docx-suggestions";
+import type { ChatLocalRunWebSearch } from "@stll/api-contract/chat-run-target";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import type {
   ReaderAnnotationColor,
@@ -457,6 +458,34 @@ const ASK_USER_BOUNDARY =
 
 const ASK_USER_BOUNDARY_WITH_SKILLS = `${ASK_USER_BOUNDARY} EXCEPTION: \`load-skill\` may immediately precede \`ask-user\` in the same turn so the clarifying questions can be informed by the skill's methodology.`;
 
+// Rules every chat turn follows, wherever it runs.
+const TRUTHFULNESS_RULE =
+  "TRUTHFULNESS: Never guess, infer, or fabricate document content — retrieve via tools first. Only claim an action occurred when its tool returned success for that action; surface skips, no-ops, and errors plainly.";
+
+const TOOL_FAILURE_RECOVERY_RULE =
+  "TOOL FAILURE RECOVERY: A failed tool call is not a failed user turn. Read the tool error, then continue autonomously: correct the input, choose an available alternative, or complete the task without that tool. Mention the failure only when it materially limits the answer. Ask the user to retry only when no useful path remains. If the error names a server-side defect, never repeat the identical call — the server refuses re-execution for the rest of the turn; use another tool or state the limitation.";
+
+const FRESH_DATA_RULE =
+  "FRESH DATA: Answer questions about what currently exists in a matter (which matters, documents, tasks, contacts, or fields there are) from a fresh tool call, never from memory or an earlier turn — matter data changes between turns.";
+
+const LEGAL_REFERENCE_RULE =
+  "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.";
+
+const USER_FACING_LANGUAGE_RULE =
+  "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.";
+
+const DOCX_REVIEW_TAGS_RULE = `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`;
+
+const CITATIONS_RULE =
+  "CITATIONS: When a tool returns a stable URL (a stella decision is cited by DECISION CITATIONS instead), cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. For legal corpus results, use the returned url as the primary citation: it opens the held statute, provision or decision in stella. Use source_url only as a secondary publisher source link; when the corpus does not hold the item, use the returned external url. Never invent URLs.";
+
+const MATTER_MENTIONS_RULE =
+  "MATTER MENTIONS: When you name a matter, document, task, or contact from tool results, link it with the ref the tool returned: [Human name](#stella-entity-ref=ent_N) for entities, [Matter name](#stella-workspace-ref=mat_N) for matters, copying the ref verbatim from the tool output (entityRef, matterRef, or list item ids). Never invent a ref — a citation with an unknown ref renders as plain text and is flagged. If you cannot cite a ref for an item, you did not read it from a tool this turn, so do not present it as existing (see FRESH DATA).";
+
+const DECISION_CITATIONS_RULE = `DECISION CITATIONS: When you name a case-law decision that a stella case-law tool returned this turn, link it with the decisionId the tool gave: [court and docket](${CHAT_DECISION_HREF_TEMPLATE}), copying decisionId verbatim. Prefer the decisionId link for an in-app decision citation; when a URL is needed, use the returned primary url. The source_url is only a secondary publisher source. A statement about what courts hold, require, or usually do is a claim about decisions: cite at least one returned decision that supports it, or say that the corpus returned none and present the statement as unsupported.`;
+
+const PEOPLE_MENTIONS_RULE = `PEOPLE MENTIONS: When you name a person a tool returned with a userId (a task assignee, a matter member, a person field), link the name with that userId: [Person's name](${CHAT_USER_HREF_TEMPLATE}), copying userId verbatim. This applies to every person you name, including in lists and "assigned to" lines. A person without a userId stays plain text; never build a link from a name, handle, or email.`;
+
 type BuildCoreRuleSectionsOptions = {
   skillCatalogStatus: "available" | "empty";
   toolAvailability: ChatToolAvailability;
@@ -491,10 +520,10 @@ const buildCoreRuleSections = ({
     ? ASK_USER_BOUNDARY_WITH_SKILLS
     : ASK_USER_BOUNDARY,
   "REPEATED-QUESTION GUARD: When the user answers a question (even tersely — 'Yes', 'Czechia', 'all parties'), treat the answer as the answer and advance to the next step. Do not re-ask the same question with cosmetic rewording or restate it as confirmation. If their answer leaves a required fact still missing, ask ONLY for that missing fact, never the one they already answered.",
-  "TRUTHFULNESS: Never guess, infer, or fabricate document content — retrieve via tools first. Only claim an action occurred when its tool returned success for that action; surface skips, no-ops, and errors plainly.",
-  "TOOL FAILURE RECOVERY: A failed tool call is not a failed user turn. Read the tool error, then continue autonomously: correct the input, choose an available alternative, or complete the task without that tool. Mention the failure only when it materially limits the answer. Ask the user to retry only when no useful path remains. If the error names a server-side defect, never repeat the identical call — the server refuses re-execution for the rest of the turn; use another tool or state the limitation.",
+  TRUTHFULNESS_RULE,
+  TOOL_FAILURE_RECOVERY_RULE,
   "WRITES: Creating, updating, or deleting matter data happens through direct write tools, discoverable the same way as the read surface. Every write is gated — the user approves each call before it runs — so never state or imply a change was made until that tool returns success; a pending approval is not a completed action. Library, template, contact and organization writes need no matter; a write that works inside a matter says so when the user has none yet. Then offer to create one: ask with `ask-user` for its name and client, create it only once they agree, and retry the original write in the new matter. If their role cannot create matters, say who can instead.",
-  "FRESH DATA: Answer questions about what currently exists in a matter (which matters, documents, tasks, contacts, or fields there are) from a fresh tool call, never from memory or an earlier turn — matter data changes between turns.",
+  FRESH_DATA_RULE,
   getExternalFactSourcingRule({
     skillCatalogStatus,
     webResearch,
@@ -506,15 +535,82 @@ const buildCoreRuleSections = ({
         `SKILL-REF LINKS: A markdown link of the form \`[name](${SKILL_REF_HREF_PREFIX}slug)\` in the user's message is an explicit request to use that skill. Its instructions are preloaded under REQUESTED SKILLS: apply them and follow POST-LOAD-SKILL. Call \`load-skill\` only for a referenced skill that section tells you to load. Do not echo the link or narrate the load.`,
       ]
     : []),
-  `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`,
-  "CITATIONS: When a tool returns a stable URL (a stella decision is cited by DECISION CITATIONS instead), cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. For legal corpus results, use the returned url as the primary citation: it opens the held statute, provision or decision in stella. Use source_url only as a secondary publisher source link; when the corpus does not hold the item, use the returned external url. Never invent URLs.",
-  "MATTER MENTIONS: When you name a matter, document, task, or contact from tool results, link it with the ref the tool returned: [Human name](#stella-entity-ref=ent_N) for entities, [Matter name](#stella-workspace-ref=mat_N) for matters, copying the ref verbatim from the tool output (entityRef, matterRef, or list item ids). Never invent a ref — a citation with an unknown ref renders as plain text and is flagged. If you cannot cite a ref for an item, you did not read it from a tool this turn, so do not present it as existing (see FRESH DATA).",
-  `DECISION CITATIONS: When you name a case-law decision that a stella case-law tool returned this turn, link it with the decisionId the tool gave: [court and docket](${CHAT_DECISION_HREF_TEMPLATE}), copying decisionId verbatim. Prefer the decisionId link for an in-app decision citation; when a URL is needed, use the returned primary url. The source_url is only a secondary publisher source. A statement about what courts hold, require, or usually do is a claim about decisions: cite at least one returned decision that supports it, or say that the corpus returned none and present the statement as unsupported.`,
-  `PEOPLE MENTIONS: When you name a person a tool returned with a userId (a task assignee, a matter member, a person field), link the name with that userId: [Person's name](${CHAT_USER_HREF_TEMPLATE}), copying userId verbatim. This applies to every person you name, including in lists and "assigned to" lines. A person without a userId stays plain text; never build a link from a name, handle, or email.`,
-  "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.",
+  DOCX_REVIEW_TAGS_RULE,
+  CITATIONS_RULE,
+  MATTER_MENTIONS_RULE,
+  DECISION_CITATIONS_RULE,
+  PEOPLE_MENTIONS_RULE,
+  LEGAL_REFERENCE_RULE,
   CORPUS_ONLY_CASE_LAW_SECTION,
-  "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.",
+  USER_FACING_LANGUAGE_RULE,
   ...(subagents ? [SUBAGENT_DELEGATION_SECTION] : []),
+];
+
+/**
+ * Where the turn's model runs: stella's cloud models with stella's own tools,
+ * or a coding agent on the member's computer (Codex, Claude Code) with its
+ * own tools and stella's tools over MCP.
+ */
+export type ChatPromptTarget =
+  | { type: "cloud" }
+  | {
+      type: "local_run";
+      /** How the agent's own web search runs at the turn's permission level. */
+      webSearch: ChatLocalRunWebSearch;
+    };
+
+export const CLOUD_PROMPT_TARGET = {
+  type: "cloud",
+} as const satisfies ChatPromptTarget;
+
+const LOCAL_RUN_IDENTITY =
+  "You are a coding agent on the member's computer, working inside stella, a legal workspace. Answer directly; skip greetings and persona.";
+
+/**
+ * What the agent is told about its own web search, which follows the
+ * permission level: it must not claim it cannot search when a search only
+ * waits for approval, nor search where it cannot.
+ */
+const LOCAL_RUN_WEB_SEARCH = {
+  unasked: "You can search and read the web with your own web tools.",
+  asks: "You can search and read the web with your own web tools; at the current permission setting each web search waits for the member's approval, which shows them your query.",
+  off: "Your own web search is off at the current permission setting, because a search there cannot wait for the member's approval. You can still reach the web, for example by fetching a page you have the address of with a command. When a search would help, say that a higher permission setting turns web search on.",
+} as const satisfies Record<ChatLocalRunWebSearch, string>;
+
+const localRunCapabilities = (webSearch: ChatLocalRunWebSearch) =>
+  `WHAT YOU CAN DO: You run with your own tools on the member's computer. You can read and change the files in your working folder and run commands. ${LOCAL_RUN_WEB_SEARCH[webSearch]} stella's own tools (matters, documents, tasks, contacts, case law and legislation) reach you from the stella MCP server; use them for anything in the member's stella workspace. Your permission setting decides what you do without asking; when you ask for approval, stella shows the request to the member.`;
+
+const LOCAL_RUN_WRITES =
+  "WRITES: Changes to stella data (matters, documents, tasks, contacts) go through the stella MCP server's write tools, and the member approves each one before it runs. Never state or imply a change was made until its tool returns success; a pending approval is not a completed action.";
+
+const LOCAL_RUN_EXTERNAL_FACT_SOURCING =
+  "EXTERNAL-FACT SOURCING: Ground factual answers in a source. Use stella's case-law and legislation tools for law they hold, and the web for everything else, reading the pages when snippets are short or contradict. Answer from your own knowledge only when no source helps, and say so plainly.";
+
+/**
+ * The rules for a turn that a coding agent answers on the member's computer:
+ * the rules every turn follows, and what that agent can do there. Nothing
+ * here names stella's cloud tools or settings (code mode, `ask-user`, the
+ * chat's web-search switch, skill loading or subagents): the agent has none
+ * of them, and its own web search follows the permission level.
+ */
+const buildLocalRunCoreRuleSections = (
+  webSearch: ChatLocalRunWebSearch,
+): readonly string[] => [
+  LOCAL_RUN_IDENTITY,
+  localRunCapabilities(webSearch),
+  TRUTHFULNESS_RULE,
+  TOOL_FAILURE_RECOVERY_RULE,
+  LOCAL_RUN_WRITES,
+  FRESH_DATA_RULE,
+  LOCAL_RUN_EXTERNAL_FACT_SOURCING,
+  DOCX_REVIEW_TAGS_RULE,
+  CITATIONS_RULE,
+  MATTER_MENTIONS_RULE,
+  DECISION_CITATIONS_RULE,
+  PEOPLE_MENTIONS_RULE,
+  LEGAL_REFERENCE_RULE,
+  CORPUS_ONLY_CASE_LAW_SECTION,
+  USER_FACING_LANGUAGE_RULE,
 ];
 
 export type UserContext = IncomingUserContext;
@@ -742,6 +838,8 @@ type BuildChatSystemPromptProps = {
    * is absent from the registered `ChatToolMap`.
    */
   toolAvailability: ChatToolAvailability;
+  /** Cloud unless a coding agent on the member's computer answers the turn. */
+  promptTarget?: ChatPromptTarget | undefined;
   userContext: IncomingUserContext | undefined;
   workspaceId: SafeId<"workspace"> | null;
   organizationId?: SafeId<"organization"> | undefined;
@@ -983,6 +1081,7 @@ export const buildChatSystemPromptParts = async ({
   skillBindingScope,
   threadId,
   toolAvailability,
+  promptTarget = CLOUD_PROMPT_TARGET,
   userContext,
   userId,
   workspaceId,
@@ -1024,6 +1123,7 @@ export const buildChatSystemPromptParts = async ({
       activeSkillContext === null ? [] : activeSkillContext.documentedChatReads;
     const sharedPromptProps = {
       featureAccessContext,
+      promptTarget,
       documentedChatReads,
       organizationAIInstructions,
       practiceJurisdictions,
@@ -1266,14 +1366,22 @@ export const buildActiveDraftPrompt = (
   ].join("\n");
 };
 
+/**
+ * The thread's first title, from the message that starts it: its text as
+ * the person wrote it. A reference chip (`<entity-mention>`) has no text of
+ * its own, so it reads as its label, as the web's composer reads it
+ * (`chatDraftHasModelContent`); without that, a request naming two
+ * documents titles the thread without either name.
+ */
 export const extractTitle = (parts: ChatMessage["parts"]) => {
   const raw = parts
     .map((part) => (part.type === "text" ? part.content : ""))
     .join("");
-  const plainText = load(raw, undefined, false)
-    .text()
-    .replaceAll(/\s+/gu, " ")
-    .trim();
+  const $ = load(raw, undefined, false);
+  $("entity-mention").each((_, node) => {
+    $(node).text($(node).attr("data-label") ?? "");
+  });
+  const plainText = $.text().replaceAll(/\s+/gu, " ").trim();
 
   if (plainText.length > TITLE_MAX_LENGTH) {
     return `${plainText.slice(0, TITLE_MAX_LENGTH)}…`;
@@ -1284,6 +1392,7 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
 
 type BuildGlobalPromptProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
+  promptTarget?: ChatPromptTarget | undefined;
   /** The active skill's documented reads; none without a skill. */
   documentedChatReads?: readonly RegistryReadToolName[] | undefined;
   organizationAIInstructions?: string | undefined;
@@ -1293,27 +1402,15 @@ type BuildGlobalPromptProps = {
   userContext: UserContext | null;
 };
 
-export const buildGlobalPrompt = ({
-  featureAccessContext,
-  documentedChatReads = [],
-  organizationAIInstructions = "",
-  practiceJurisdictions = [],
-  skillMetadata = [],
-  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
-  userContext,
-}: BuildGlobalPromptProps) =>
-  buildGlobalPromptParts({
-    featureAccessContext,
-    documentedChatReads,
-    organizationAIInstructions,
-    practiceJurisdictions,
-    skillMetadata,
-    toolAvailability,
-    userContext,
-  }).fullPrompt;
+// The text is the parts' full prompt, from the same props: a wrapper that
+// listed them again could drop one (the prompt target once fell back to the
+// cloud here).
+export const buildGlobalPrompt = (props: BuildGlobalPromptProps) =>
+  buildGlobalPromptParts(props).fullPrompt;
 
 export const buildGlobalPromptParts = ({
   featureAccessContext,
+  promptTarget = CLOUD_PROMPT_TARGET,
   documentedChatReads = [],
   organizationAIInstructions = "",
   practiceJurisdictions = [],
@@ -1323,6 +1420,7 @@ export const buildGlobalPromptParts = ({
 }: BuildGlobalPromptProps): ChatPromptParts =>
   buildPromptParts({
     featureAccessContext,
+    promptTarget,
     documentedChatReads,
     organizationAIInstructions,
     practiceJurisdictions,
@@ -1377,6 +1475,7 @@ export const estimateChatContextPromptTokens = ({
 
 type BuildWorkspacePromptProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
+  promptTarget?: ChatPromptTarget | undefined;
   documentedChatReads: readonly RegistryReadToolName[];
   organizationAIInstructions?: string | undefined;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
@@ -1390,6 +1489,7 @@ type BuildWorkspacePromptProps = {
 
 const buildWorkspacePromptPartsFromDb = async ({
   featureAccessContext,
+  promptTarget,
   documentedChatReads,
   organizationAIInstructions = "",
   practiceJurisdictions = [],
@@ -1411,6 +1511,7 @@ const buildWorkspacePromptPartsFromDb = async ({
     return Result.ok(
       buildWorkspacePromptParts({
         featureAccessContext,
+        promptTarget,
         documentedChatReads,
         entityCount: workspacePromptData.entityCount,
         extractedProperties: workspacePromptData.extractedProperties,
@@ -1548,6 +1649,7 @@ const buildWorkspaceContextSections = ({
 
 type BuildWorkspacePromptTextProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
+  promptTarget?: ChatPromptTarget | undefined;
   /** The active skill's documented reads; none without a skill. */
   documentedChatReads?: readonly RegistryReadToolName[] | undefined;
   entityCount: number;
@@ -1562,37 +1664,14 @@ type BuildWorkspacePromptTextProps = {
   workspaceName: string;
 };
 
-export const buildWorkspacePromptText = ({
-  featureAccessContext,
-  documentedChatReads = [],
-  entityCount,
-  extractedProperties = [],
-  organizationAIInstructions = "",
-  practiceJurisdictions = [],
-  refRegistry,
-  skillMetadata = [],
-  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
-  userContext,
-  workspaceId,
-  workspaceName,
-}: BuildWorkspacePromptTextProps) =>
-  buildWorkspacePromptParts({
-    featureAccessContext,
-    documentedChatReads,
-    entityCount,
-    extractedProperties,
-    organizationAIInstructions,
-    practiceJurisdictions,
-    refRegistry,
-    skillMetadata,
-    toolAvailability,
-    userContext,
-    workspaceId,
-    workspaceName,
-  }).fullPrompt;
+// See `buildGlobalPrompt`: the props pass through whole.
+export const buildWorkspacePromptText = (
+  props: BuildWorkspacePromptTextProps,
+) => buildWorkspacePromptParts(props).fullPrompt;
 
 export const buildWorkspacePromptParts = ({
   featureAccessContext,
+  promptTarget = CLOUD_PROMPT_TARGET,
   documentedChatReads = [],
   entityCount,
   extractedProperties = [],
@@ -1607,6 +1686,7 @@ export const buildWorkspacePromptParts = ({
 }: BuildWorkspacePromptTextProps): ChatPromptParts =>
   buildPromptParts({
     featureAccessContext,
+    promptTarget,
     documentedChatReads,
     organizationAIInstructions,
     practiceJurisdictions,
@@ -3237,6 +3317,7 @@ export const buildActiveFileSection = ({
 
 type BuildPromptProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
+  promptTarget?: ChatPromptTarget | undefined;
   documentedChatReads: readonly RegistryReadToolName[];
   organizationAIInstructions?: string | undefined;
   practiceJurisdictions: readonly PracticeJurisdiction[];
@@ -3248,6 +3329,7 @@ type BuildPromptProps = {
 
 const buildPromptParts = ({
   featureAccessContext,
+  promptTarget = CLOUD_PROMPT_TARGET,
   documentedChatReads,
   organizationAIInstructions,
   practiceJurisdictions,
@@ -3269,15 +3351,23 @@ const buildPromptParts = ({
   // and stays in the cache-stable prefix: it is constant for a thread while
   // the skill is active, and a different prefix must derive a different
   // prompt-cache key.
+  // A coding agent on the member's computer gets neither the code-mode
+  // section nor the skill catalog: it has no code mode, and the chat's skills
+  // reach it as its own skills.
   const cacheStablePrefix = brandChatCacheStablePrefix(
-    joinPromptSections([
-      ...buildCoreRuleSections({
-        skillCatalogStatus: skillMetadata.length > 0 ? "available" : "empty",
-        toolAvailability,
-      }),
-      buildSkillCatalogSection(builtInSkillMetadata),
-      chatCodeModeSystemPrompt(documentedChatReads, featureAccessContext),
-    ]),
+    joinPromptSections(
+      promptTarget.type === "local_run"
+        ? buildLocalRunCoreRuleSections(promptTarget.webSearch)
+        : [
+            ...buildCoreRuleSections({
+              skillCatalogStatus:
+                skillMetadata.length > 0 ? "available" : "empty",
+              toolAvailability,
+            }),
+            buildSkillCatalogSection(builtInSkillMetadata),
+            chatCodeModeSystemPrompt(documentedChatReads, featureAccessContext),
+          ],
+    ),
   );
   // Safe half: scaffold + jurisdiction labels. Both are
   // server-defined catalogs with no third-party PII. The jurisdictions are the
@@ -3307,7 +3397,13 @@ const buildPromptParts = ({
       buildOrganizationAIInstructionsPrompt(organizationAIInstructions ?? ""),
     ),
     // Team skills and the user's own (`listAvailableChatSkillMetadata`).
-    chatUserPromptSection(buildSkillCatalogSection(installedSkillMetadata)),
+    ...(promptTarget.type === "local_run"
+      ? []
+      : [
+          chatUserPromptSection(
+            buildSkillCatalogSection(installedSkillMetadata),
+          ),
+        ]),
     ...requestContextSections.map(chatVolatilePromptSection),
   ];
   const userContextBlock = buildUserContextBlock(userContext);

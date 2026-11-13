@@ -57,12 +57,13 @@ const LiveTurnStatus = ({
     unitDisplay: "narrow",
   });
 
+  // Not a live region: it redraws every second and with every step. The
+  // thread's `ChatTurnAnnouncer` says when the turn needs the member or ends.
   return (
     <p
       className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums"
       data-chat-copy-exclude
       data-turn-live-status
-      role="status"
     >
       <Loader size="sm" variant="decorative" />
       <span>

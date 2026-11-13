@@ -1882,7 +1882,9 @@
         "$TURBO_ROOT$/apps/web/src/routes/auth/route.tsx",
         "$TURBO_ROOT$/apps/web/src/components/workspace-primary-nav.ts",
         "$TURBO_ROOT$/apps/web/src/components/sidebar-user-menu.tsx",
+        // The phone draws the web's recorded chats and its step titles.
         "$TURBO_ROOT$/apps/web/src/components/chat/__fixtures__/recorded-conversations/**",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
         "$TURBO_ROOT$/packages/ui/src/**"
       ]
     },
@@ -1935,10 +1937,14 @@
         "$TURBO_ROOT$/packages/agent-engine/src/sidecar/protocol.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-link.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-policy.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-dictation-cleanup.fixture.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-dictation-cleanup.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-dictation-cleanup.plausibility.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-feature-access.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-request.fixture.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-runner.fixtures.json",
+        "$TURBO_ROOT$/packages/api-contract/src/chat-local-run-step-output.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-edit-file-types.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-registry.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts"

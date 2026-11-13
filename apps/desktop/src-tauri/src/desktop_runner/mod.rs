@@ -21,6 +21,7 @@ mod sidecar_host;
 )]
 mod sidecar_host_tests;
 mod state;
+pub(crate) mod step_outputs;
 #[cfg(test)]
 mod tests;
 
@@ -181,7 +182,7 @@ impl DesktopRunnerControl {
       };
       let app_version = app.package_info().version.to_string();
       let (host, reports): (Arc<dyn HarnessHost>, Arc<dyn HarnessReports>) =
-        match host_slot.get_or_init(|| sidecar_host(&app)) {
+        match host_slot.get_or_init(|| sidecar_host(&app, Arc::clone(&journal))) {
           Some(host) => (Arc::new(host.clone()), Arc::new(host.clone())),
           None => (
             Arc::new(UnavailableHarnessHost::new(app_version.clone())),
@@ -211,6 +212,14 @@ impl DesktopRunnerControl {
   fn stop(&self) {
     if let Ok(mut tasks) = self.tasks.lock() {
       tasks.stop();
+    }
+  }
+
+  /// The member linked or unlinked a folder; the host, once there is one,
+  /// reports the list again.
+  pub(crate) fn linked_folders_changed(&self) {
+    if let Some(Some(host)) = self.host.get() {
+      host.linked_folders_changed();
     }
   }
 }
@@ -309,8 +318,18 @@ const RUNS_DIRECTORY: &str = "agent-runs";
 /// an earlier version, whose runs may still use it, is left.
 const RETIRED_PACKAGE_CACHE_DIRECTORY: &str = "agent-package-cache";
 
+/// Where the runs' folders are, with what sits beside each (its checkpoints,
+/// its step outputs, its cache); `None` without a data folder.
+pub(crate) fn run_folders_directory() -> Option<std::path::PathBuf> {
+  dirs::data_dir().map(|data| {
+    data
+      .join(crate::config::APP_DATA_DIR_NAME)
+      .join(RUNS_DIRECTORY)
+  })
+}
+
 /// The folders on this computer every run writes to, which a skill folder must
-/// stay out of.
+/// stay out of. A linked folder is the member's own and listed apart.
 pub(crate) fn run_folders_on_this_computer() -> Vec<std::path::PathBuf> {
   dirs::data_dir()
     .map(|data| data.join(crate::config::APP_DATA_DIR_NAME))
@@ -325,7 +344,10 @@ pub(crate) fn run_folders_on_this_computer() -> Vec<std::path::PathBuf> {
 
 /// The app's harness host: the bundled sidecar, the managed CLIs and the
 /// ChatGPT connection. `None` without a data folder.
-fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
+fn sidecar_host(
+  app: &AppHandle,
+  journal: Arc<SharedJournal>,
+) -> Option<SidecarHarnessHost> {
   let Some(data) = dirs::data_dir() else {
     tracing::warn!("the harness host has no data directory");
     return None;
@@ -355,6 +377,7 @@ fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
       probe_interval: sidecar_host::PROBE_INTERVAL,
     },
     Arc::new(ManagedHarnesses { app: app.clone() }),
+    journal,
   ))
 }
 
@@ -379,6 +402,17 @@ struct ManagedHarnesses {
 impl LocalHarnesses for ManagedHarnesses {
   fn skill_folders(&self) -> Vec<SkillFolderRef> {
     crate::local_skill_folders::SkillFolders::for_this_computer().for_run()
+  }
+
+  fn linked_folder(
+    &self,
+    id: uuid::Uuid,
+  ) -> Result<std::path::PathBuf, crate::local_linked_folders::LinkedFolderRefusal> {
+    crate::local_linked_folders::LinkedFolders::for_this_computer().resolve(id)
+  }
+
+  fn linked_folder_reports(&self) -> Vec<crate::runner_protocol::LinkedFolderReport> {
+    crate::local_linked_folders::LinkedFolders::for_this_computer().reports()
   }
 
   fn on_install_settled(&self, settled: InstallSettled) {

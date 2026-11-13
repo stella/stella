@@ -16,7 +16,9 @@ import {
   duplicateMatter,
   listMatterParties,
   matterChangeBody,
+  matterNumberHint,
   readMatter,
+  readMatterNumbering,
   removeMatterMember,
   removeMatterParty,
   unarchiveMatter,
@@ -293,5 +295,43 @@ describe("members and parties", () => {
         },
       },
     ]);
+  });
+});
+
+describe("the matter-number convention", () => {
+  const NUMBERING = { pattern: "{YYYY}/{SEQ}", padding: 3 };
+  // Noon UTC on 2 March 2026: the same calendar year in the zone used here.
+  const AT = {
+    now: new Date("2026-03-02T12:00:00Z"),
+    timeZone: "Europe/Prague",
+  };
+
+  test("reads only the pattern and padding, from its own route", async () => {
+    const { calls, request } = server(() =>
+      Response.json({
+        matterNumberPattern: "{YYYY}/{SEQ}",
+        matterNumberPadding: 3,
+      }),
+    );
+    const read = await readMatterNumbering(request);
+    expect(read.isOk() ? read.value : read.error).toEqual(NUMBERING);
+    expect(calls.map(({ route }) => route)).toEqual([
+      "GET /v1/workspaces/matter-numbering",
+    ]);
+  });
+
+  test("shows the first number the convention gives, and flags a number that departs from it", () => {
+    expect(matterNumberHint("2026/014", NUMBERING, AT)).toEqual({
+      example: "2026/001",
+      departs: false,
+    });
+    // Padding is a minimum: a longer counter still follows the convention.
+    expect(matterNumberHint("  2026/1234 ", NUMBERING, AT).departs).toBe(false);
+    expect(matterNumberHint("2026/14", NUMBERING, AT).departs).toBe(true);
+    expect(matterNumberHint("LEASE-7", NUMBERING, AT).departs).toBe(true);
+  });
+
+  test("an empty number departs from nothing", () => {
+    expect(matterNumberHint("   ", NUMBERING, AT).departs).toBe(false);
   });
 });

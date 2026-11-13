@@ -85,5 +85,17 @@
   },
   "connectStellaInstead": {
     "message": "Ühenda stella hoopis siin"
+  },
+  "allowDesktop": {
+    "message": "Kasuta koos stella desktopiga"
+  },
+  "desktopConnected": {
+    "message": "stella desktop on ühendatud"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop ei tööta"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Uuendage stella desktopi ja seda laiendust"
   }
 }
