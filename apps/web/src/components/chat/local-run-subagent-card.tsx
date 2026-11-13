@@ -3,6 +3,13 @@ import { type ReactNode, useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  type LocalRunStepStanding,
+  type LocalRunSubagentStatus,
+  localRunSubagentStatus,
+  localRunSubagentType,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -15,13 +22,6 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { isRunningToolPart } from "@/components/chat/chat-ui-tools";
-import {
-  type LocalRunStepStanding,
-  type LocalRunSubagentStatus,
-  localRunSubagentStatus,
-  localRunSubagentType,
-  localRunToolView,
-} from "@/components/chat/local-run-tool.logic";
 import {
   SubagentsCallStatusIndicator,
   SubagentsCardHeader,

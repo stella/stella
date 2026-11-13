@@ -206,6 +206,27 @@
       "use_connector_secret": "Konnektori mandaadi kasutamine",
       "web_search": "Veebist otsimine"
     },
+    "localRun": {
+      "title": {
+        "sign_in": "Jätkamiseks logige sisse",
+        "read": "Faili lugemine",
+        "search": "Failidest otsimine",
+        "fetch": "Lehe lugemine",
+        "plan": "Plaani uuendamine",
+        "proposed_plan": "Plaani ettepanek",
+        "subagent": "Alamagendi käivitamine",
+        "image": "Pildi vaatamine"
+      },
+      "patternInPath": "{pattern} asukohas {path}",
+      "commandExited": "{command} (väljumiskood {code})",
+      "opensOnComputer": "Avage arvutis, kus see käivitati",
+      "status": {
+        "needs_approval": "Kinnituse ootamine",
+        "running": "Töös",
+        "failed": "Ebaõnnestus",
+        "interrupted": "Peatatud"
+      }
+    },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}",
       "documentEdits": "{count, plural, one {# dokumendi muudatus} other {# dokumendi muudatust}}",

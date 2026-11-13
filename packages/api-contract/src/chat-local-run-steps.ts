@@ -6,15 +6,17 @@ import {
   type ChatLocalRunToolDetail,
   isChatLocalRunToolName,
   parseChatLocalRunToolCall,
-} from "@stll/api-contract/chat-local-run-tool";
-
-import type { TranslationKey } from "@/i18n/types";
+} from "./chat-local-run-tool";
 
 /**
- * What a tool-call row shows for a step a coding agent took on the member's
- * computer: the API stores only the contract's fields
- * (`@stll/api-contract/chat-local-run-tool`), so the row names the command,
- * the file names, the search or the plan, and nothing it read or wrote.
+ * How every client shows the steps a coding agent took on the member's
+ * computer: what a step's row names, which steps show under a subagent's
+ * step, and a subagent's one status. The web and the phone both read this,
+ * so a turn groups and reads the same on each.
+ *
+ * The API stores only the contract's fields (`./chat-local-run-tool`), so a
+ * row names the command, the file names, the search or the plan, and nothing
+ * it read or wrote.
  */
 export type LocalRunToolSubtitle =
   | { type: "text"; text: string }
@@ -22,28 +24,21 @@ export type LocalRunToolSubtitle =
   | { type: "command"; command: string; exitCode: number };
 
 /** A browser step stopped at a sign-in the member completes in Chrome. */
-const SIGN_IN_TITLE_KEY =
-  "chat.toolCall.signInToContinue" satisfies TranslationKey;
+export const LOCAL_RUN_SIGN_IN_TITLE = "sign_in";
 
-type LocalRunToolTitleKey =
-  | (typeof DETAIL_TITLE_KEYS)[keyof typeof DETAIL_TITLE_KEYS]
-  | typeof SIGN_IN_TITLE_KEY;
+/**
+ * What a row's title names in place of its tool: the kind of step, or that
+ * a browser step waits for the member to sign in. Each client reads it in
+ * its own catalogue.
+ */
+export type LocalRunToolTitleKind =
+  ChatLocalRunToolDetail["kind"] | typeof LOCAL_RUN_SIGN_IN_TITLE;
 
 export type LocalRunToolView = {
-  /** A title naming the step's kind, or `null` to keep the tool's title. */
-  titleKey: LocalRunToolTitleKey | null;
+  /** What the title names, or `null` to keep the tool's own title. */
+  titleKind: LocalRunToolTitleKind | null;
   subtitle: LocalRunToolSubtitle | null;
 };
-
-const DETAIL_TITLE_KEYS = {
-  read: "chat.toolCall.readFile",
-  search: "chat.toolCall.searchFiles",
-  fetch: "chat.tool.fetch_url",
-  plan: "chat.toolCall.updatePlan",
-  proposed_plan: "chat.toolCall.proposedPlan",
-  subagent: "chat.toolCall.subagent",
-  image: "chat.toolCall.viewImage",
-} as const satisfies Record<ChatLocalRunToolDetail["kind"], TranslationKey>;
 
 const text = (value: string): LocalRunToolSubtitle | null =>
   value === "" ? null : { type: "text", text: value };
@@ -116,7 +111,7 @@ export const localRunToolView = ({
     case CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution: {
       const exitCode = exitCodeOf(output);
       return {
-        titleKey: null,
+        titleKind: null,
         subtitle:
           exitCode === null || call.input.command === ""
             ? text(call.input.command)
@@ -125,25 +120,25 @@ export const localRunToolView = ({
     }
     case CHAT_LOCAL_RUN_TOOL_NAMES.fileChange:
       return {
-        titleKey: null,
+        titleKind: null,
         subtitle: text(call.input.changes.map(({ path }) => path).join(", ")),
       };
     case CHAT_LOCAL_RUN_TOOL_NAMES.webSearch:
-      return { titleKey: null, subtitle: text(call.input.query) };
+      return { titleKind: null, subtitle: text(call.input.query) };
     case CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool: {
       const { detail, tool } = call.input;
       return detail === undefined
-        ? { titleKey: null, subtitle: text(tool) }
+        ? { titleKind: null, subtitle: text(tool) }
         : {
-            titleKey: DETAIL_TITLE_KEYS[detail.kind],
+            titleKind: detail.kind,
             subtitle: detailSubtitle(detail),
           };
     }
     case CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem:
-      return { titleKey: null, subtitle: null };
+      return { titleKind: null, subtitle: null };
     case CHAT_LOCAL_RUN_TOOL_NAMES.browser:
       return {
-        titleKey: needsMember(output) ? SIGN_IN_TITLE_KEY : null,
+        titleKind: needsMember(output) ? LOCAL_RUN_SIGN_IN_TITLE : null,
         subtitle:
           call.input.action === "open" && call.input.url !== undefined
             ? text(call.input.url)
@@ -154,6 +149,22 @@ export const localRunToolView = ({
       return panic("Unhandled local run tool call");
   }
 };
+
+/**
+ * Whether a coding agent's own step reports that it failed: its result is
+ * `{ status: "failed" }` (`./chat-local-run-tool`), with no error envelope.
+ */
+export const localRunStepFailed = (name: string, output: unknown): boolean =>
+  isChatLocalRunToolName(name) &&
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === "failed";
+
+/** The result a coding agent's run gives a call its turn cut off. */
+export const isLocalRunInterruptedOutput = (output: unknown): boolean =>
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === "interrupted";
 
 /** What a step's details show of what it produced on the computer. */
 export type LocalRunStepOutputKind =

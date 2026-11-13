@@ -14,6 +14,11 @@ import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 import { browserSiteGrantHost } from "@stll/api-contract/browser-site-grants";
 import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import {
+  localRunProposedPlan,
+  localRunToolSubtitleText,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
+import {
   requiresPerCallChatApproval,
   USE_CONNECTOR_SECRET_TOOL_NAME,
 } from "@stll/api-contract/chat-secret";
@@ -55,6 +60,7 @@ import {
   isNonPersistentGrantChatToolName,
   isRegistryWriteSummaryToolName,
   isSuggestChangesApplyOutput,
+  LOCAL_RUN_TITLE_KEYS,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
@@ -63,11 +69,6 @@ import type {
   PendingApprovalToolPart,
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
-import {
-  localRunProposedPlan,
-  localRunToolSubtitleText,
-  localRunToolView,
-} from "@/components/chat/local-run-tool.logic";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import {
   describeProposedDocxEdits,
@@ -551,12 +552,17 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
  * The card's title. A step a coding agent asks about on the member's computer
  * is named by its kind, as its row names it.
  */
-const approvalTitleKey = (name: ApprovalToolName, part: ApprovalToolPart) =>
-  localRunToolView({
-    name,
-    input: getApprovalPartInput(part),
-    output: part.output,
-  })?.titleKey ?? getChatToolTitleKey(name);
+const approvalTitleKey = (name: ApprovalToolName, part: ApprovalToolPart) => {
+  const titleKind =
+    localRunToolView({
+      name,
+      input: getApprovalPartInput(part),
+      output: part.output,
+    })?.titleKind ?? null;
+  return titleKind === null
+    ? getChatToolTitleKey(name)
+    : LOCAL_RUN_TITLE_KEYS[titleKind];
+};
 
 export const ToolApprovalCard = ({
   action,

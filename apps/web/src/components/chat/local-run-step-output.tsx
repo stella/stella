@@ -8,17 +8,17 @@ import {
   CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
   type ChatLocalRunConversationEntry,
 } from "@stll/api-contract/chat-local-run-step-output";
+import {
+  type LocalRunStepOutputKind,
+  localRunStepOutputKind,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import { isRunningToolPart } from "@/components/chat/chat-ui-tools";
-import {
-  type LocalRunStepOutputKind,
-  localRunStepOutputKind,
-  localRunToolView,
-} from "@/components/chat/local-run-tool.logic";
 import { CopyControl } from "@/components/copy-control";
 import {
   localRunStepImageOptions,

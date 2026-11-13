@@ -14,7 +14,9 @@ import {
   localRunSubagentStatus,
   localRunSubagentType,
   localRunToolView,
-} from "@/components/chat/local-run-tool.logic";
+} from "./chat-local-run-steps";
+import fixtures from "./chat-local-run-steps.fixtures.json";
+import { chatLocalRunParentCallId } from "./chat-local-run-tool";
 
 const view = (name: string, input: unknown, output?: unknown) =>
   localRunToolView({ name, input, output });
@@ -22,7 +24,7 @@ const view = (name: string, input: unknown, output?: unknown) =>
 describe("a step a coding agent took on the member's computer", () => {
   test("a command shows its line, and a failed one its exit code", () => {
     expect(view("command_execution", { command: "rg lease" })).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: { type: "text", text: "rg lease" },
     });
     expect(
@@ -32,7 +34,7 @@ describe("a step a coding agent took on the member's computer", () => {
         { aggregated_output: "1 fail", exit_code: 1, status: "failed" },
       ),
     ).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: { type: "command", command: "bun test", exitCode: 1 },
     });
     // Success needs no code; the status mark says it.
@@ -60,7 +62,7 @@ describe("a step a coding agent took on the member's computer", () => {
         ],
       }),
     ).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: { type: "text", text: "drafts/lease.md, drafts/notice.md" },
     });
   });
@@ -72,7 +74,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "read", path: "drafts/lease.md" },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.readFile",
+      titleKind: "read",
       subtitle: { type: "text", text: "drafts/lease.md" },
     });
     expect(
@@ -81,7 +83,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "search", pattern: "termination", path: "drafts" },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.searchFiles",
+      titleKind: "search",
       subtitle: { type: "search", pattern: "termination", path: "drafts" },
     });
     expect(
@@ -96,7 +98,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "fetch", url: "https://example.test/law" },
       }),
     ).toEqual({
-      titleKey: "chat.tool.fetch_url",
+      titleKind: "fetch",
       subtitle: { type: "text", text: "https://example.test/law" },
     });
     expect(
@@ -105,7 +107,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "plan", items: ["Read the lease", "Draft the notice"] },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.updatePlan",
+      titleKind: "plan",
       subtitle: { type: "text", text: "Read the lease, Draft the notice" },
     });
   });
@@ -117,7 +119,7 @@ describe("a step a coding agent took on the member's computer", () => {
       detail: { kind: "proposed_plan", text: plan },
     };
     expect(view("harness_native_tool", input)).toEqual({
-      titleKey: "chat.toolCall.proposedPlan",
+      titleKind: "proposed_plan",
       subtitle: null,
     });
     expect(localRunProposedPlan({ name: "harness_native_tool", input })).toBe(
@@ -134,7 +136,7 @@ describe("a step a coding agent took on the member's computer", () => {
 
   test("any other native tool shows its name, and a malformed detail its name only", () => {
     expect(view("harness_native_tool", { tool: "Skill" })).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: { type: "text", text: "Skill" },
     });
     expect(
@@ -142,7 +144,7 @@ describe("a step a coding agent took on the member's computer", () => {
         tool: "Read",
         detail: { kind: "read", content: "Private text" },
       }),
-    ).toEqual({ titleKey: null, subtitle: { type: "text", text: "Read" } });
+    ).toEqual({ titleKind: null, subtitle: { type: "text", text: "Read" } });
   });
 
   test("a stella or connector call keeps its own row", () => {
@@ -160,11 +162,11 @@ describe("a browser step on the member's computer", () => {
         url: "https://fixture-library.test/search",
       }),
     ).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: { type: "text", text: "https://fixture-library.test/search" },
     });
     expect(view("local_browser", { action: "click" })).toEqual({
-      titleKey: null,
+      titleKind: null,
       subtitle: null,
     });
   });
@@ -177,7 +179,7 @@ describe("a browser step on the member's computer", () => {
         { status: "needs_member" },
       ),
     ).toEqual({
-      titleKey: "chat.toolCall.signInToContinue",
+      titleKind: "sign_in",
       subtitle: { type: "text", text: "https://fixture-library.test/account" },
     });
   });
@@ -271,7 +273,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
       },
     };
     expect(view("harness_native_tool", input)).toEqual({
-      titleKey: "chat.toolCall.subagent",
+      titleKind: "subagent",
       subtitle: { type: "text", text: "Check the lease" },
     });
     expect(localRunSubagentType({ name: "harness_native_tool", input })).toBe(
@@ -283,7 +285,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
       detail: { kind: "subagent", description: "" },
     };
     expect(view("harness_native_tool", unnamed)).toEqual({
-      titleKey: "chat.toolCall.subagent",
+      titleKind: "subagent",
       subtitle: null,
     });
     expect(
@@ -301,7 +303,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
         detail: { kind: "image", path: "scans/page-1.png" },
       }),
     ).toEqual({
-      titleKey: "chat.toolCall.viewImage",
+      titleKind: "image",
       subtitle: { type: "text", text: "scans/page-1.png" },
     });
   });
@@ -325,6 +327,27 @@ describe("a subagent a coding agent started on the member's computer", () => {
       stepsOf: { agent: ["read", "asks", "docs", "after"], idle: [] },
       rowIn: { read: "agent", docs: "agent", after: "agent" },
     });
+  });
+
+  test("a stored turn groups by the link in each call's metadata, never by a step's input", () => {
+    // The fixture the web's and the phone's tests draw too.
+    const { stepsOf, rowIn } = localRunSubagentGroups(
+      fixtures.parts.map((part) => ({
+        id: part.id,
+        name: part.name,
+        input: part.input,
+        parentCallId: chatLocalRunParentCallId(
+          "metadata" in part ? part.metadata : undefined,
+        ),
+        shownAs: "row",
+      })),
+    );
+    expect(Object.fromEntries(stepsOf)).toEqual({
+      [fixtures.subagentCallId]: fixtures.stepsOfSubagent,
+    });
+    for (const step of fixtures.onTheTurn) {
+      expect(rowIn.has(step)).toBe(false);
+    }
   });
 
   test("a subagent started by a subagent shows in the outermost one's group with the steps it took", () => {

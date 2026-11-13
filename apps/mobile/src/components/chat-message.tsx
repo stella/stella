@@ -1,12 +1,13 @@
 import { use } from "react";
 
+import { panic } from "better-result";
 import { Pressable, Share, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { MOBILE_REDIRECT_SCHEMES } from "@stll/api-contract/mobile-client";
 import { Text } from "@stll/ui/text";
 
-import { AnswerSteps } from "@/components/answer-steps";
+import { AnswerSteps, AnswerSubagent } from "@/components/answer-steps";
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import { MarkdownView } from "@/components/markdown-view";
 import { ThreadMatter } from "@/components/thread-matter";
@@ -56,17 +57,30 @@ export const ChatMessage = ({
   const last = entry.blocks.at(-1);
   return (
     <View className="gap-2.5 py-1">
-      {entry.blocks.map((block) =>
-        block.type === "text" ? (
-          <MarkdownView key={`text:${block.key}`} markdown={block.markdown} />
-        ) : (
-          <AnswerSteps
-            block={block}
-            key={`steps:${block.key}`}
-            live={live && block === last}
-          />
-        ),
-      )}
+      {entry.blocks.map((block) => {
+        switch (block.type) {
+          case "text":
+            return (
+              <MarkdownView
+                key={`text:${block.key}`}
+                markdown={block.markdown}
+              />
+            );
+          case "steps":
+            return (
+              <AnswerSteps
+                block={block}
+                key={`steps:${block.key}`}
+                live={live && block === last}
+              />
+            );
+          case "subagent":
+            return <AnswerSubagent block={block} key={block.key} />;
+          default:
+            block satisfies never;
+            return panic("Unhandled answer block");
+        }
+      })}
       {live || entry.text === "" ? null : <ShareAnswer text={entry.text} />}
     </View>
   );

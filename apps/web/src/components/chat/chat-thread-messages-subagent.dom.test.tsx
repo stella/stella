@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import fixtures from "@stll/api-contract/chat-local-run-steps.fixtures";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -496,5 +497,24 @@ test("an image the computer does not keep says why instead of showing one", asyn
   expect(
     view.getByText(/^This image is \S+ MB\. Images over \S+ MB are not kept/u),
   ).toBeDefined();
+  queryClient.clear();
+});
+
+test("a stored turn groups by the link in each call's metadata, as the phone groups it, and never by a step's input", async () => {
+  // The fixture the contract's and the phone's tests read too.
+  const { view, queryClient } = renderTurn(fixtures.parts);
+  await view.findByText("Check the lease");
+  const inGroup = within(groupOf(view.container));
+  expect(
+    inGroup.getByText(`${String(fixtures.stepsOfSubagent.length)} steps`),
+  ).toBeDefined();
+  await act(async () => {
+    fireEvent.click(inGroup.getByRole("button", { expanded: false }));
+  });
+  expect(inGroup.getByText("rg arrears")).toBeDefined();
+  expect(inGroup.getByText("arrears cap")).toBeDefined();
+  // A link only in a step's input names nothing: the step is on the turn.
+  expect(inGroup.queryByText("ls drafts")).toBeNull();
+  expect(view.getByText("ls drafts")).toBeDefined();
   queryClient.clear();
 });
