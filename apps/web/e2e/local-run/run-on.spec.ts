@@ -80,14 +80,17 @@ test("the model chip offers the models of the agent chosen in the where chip, an
   const models = ["blocking_question", "question"];
   await openNewChat(page);
   await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
-  expect(await modelsOffered(page, models)).toEqual([true, false]);
+  expect(await modelsOffered(page, "codex", models)).toEqual([true, false]);
 
   await chooseRunOn(page, {
     place: "computer",
     agent: "claude-code",
     model: "tool_calls",
   });
-  expect(await modelsOffered(page, models)).toEqual([false, true]);
+  expect(await modelsOffered(page, "claude-code", models)).toEqual([
+    false,
+    true,
+  ]);
 });
 
 test("the elapsed time of a computer turn counts up while it runs", async ({
@@ -107,7 +110,8 @@ test("the elapsed time of a computer turn counts up while it runs", async ({
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
   await page.clock.runFor(5000);
-  await expect(status).toHaveText(/\b(?:[5-9]|\d{2,})s\b/u);
+  // The phase and the count are separate nodes, read as one text.
+  await expect(status).toHaveText(/\D(?:[5-9]|\d{2,})s$/u);
   await stopButton(page).click();
 });
 

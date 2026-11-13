@@ -291,10 +291,16 @@ export const chooseRunOn = async (page: Page, runOn: RunOn) => {
  * Whether the model chip offers each of `models` for the place chosen now,
  * in their order.
  */
-export const modelsOffered = async (page: Page, models: readonly string[]) => {
-  // The chosen model is always listed, so its row says the list is read.
-  const chosen = page.getByRole("menuitemradio", { checked: true });
-  await openChipMenu(modelChip(page), chosen);
+export const modelsOffered = async (
+  page: Page,
+  agent: Agent,
+  models: readonly string[],
+) => {
+  // The list is headed by its agent once the computer's models are read.
+  const heading = page
+    .getByRole("menu")
+    .getByText(`${AGENTS[agent].name} models`, { exact: true });
+  await openChipMenu(modelChip(page), heading);
   const offered: boolean[] = [];
   for (const model of models) {
     // await-in-loop: the rows of one open menu, read in order.
@@ -379,8 +385,10 @@ const MAX_EXPANDED = 50;
  * step's details) and return how many opened.
  */
 export const expandTranscript = async (page: Page) => {
+  // Disclosures only: a menu's trigger is collapsed too, and opening it
+  // covers the transcript.
   const collapsed = transcript(page)
-    .locator('button[aria-expanded="false"]')
+    .locator('button[aria-expanded="false"]:not([aria-haspopup])')
     .filter({ visible: true });
   let opened = 0;
   // Opening a group reveals the rows inside it, so read again after each.
