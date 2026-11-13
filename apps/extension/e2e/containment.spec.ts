@@ -516,12 +516,16 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
         { saved: true, source: ELSEWHERE_ORIGIN },
         { saved: false, source: FIXTURE_ORIGIN },
       ]);
-    // The toolbar icon counts the stopped downloads.
-    expect(
-      await harness.worker.evaluate(
-        async () => await chrome.action.getBadgeText({}),
-      ),
-    ).toBe("4");
+    // The toolbar icon counts the stopped downloads. The count is recorded
+    // after the download settles, so it is polled.
+    await expect
+      .poll(
+        async () =>
+          await harness.worker.evaluate(
+            async () => await chrome.action.getBadgeText({}),
+          ),
+      )
+      .toBe("4");
 
     // A document served without an attachment header that Chrome would
     // save instead of render leaves no file either. (The tab's rules block
@@ -686,11 +690,14 @@ test("downloads are traced to the tab that navigated to them", async () => {
           url: `${PAYLOAD_ORIGIN}/untyped.bin`,
         },
       ]);
-    expect(
-      await harness.worker.evaluate(
-        async () => await chrome.action.getBadgeText({}),
-      ),
-    ).toBe("3");
+    await expect
+      .poll(
+        async () =>
+          await harness.worker.evaluate(
+            async () => await chrome.action.getBadgeText({}),
+          ),
+      )
+      .toBe("3");
 
     // In the user's own tab, a frame on another host loads a file from a
     // third host with no referrer: it is traced to the user's tab and saved,
