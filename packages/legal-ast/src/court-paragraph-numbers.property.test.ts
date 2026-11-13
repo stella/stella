@@ -1226,3 +1226,24 @@ test("two titled halves of a part are not a count of its paragraphs", () => {
   const blocks = blocksOf(layout);
   expect(extractCourtParagraphNumbers(blocks).blocks).toEqual(blocks);
 });
+
+test("a form's numbered section titles keep their numbers as text", () => {
+  // A justification form: each numbered line titles a section, its rows
+  // numbered "1.1.", "1.2." and its text under it, through to the signature.
+  const layout: Layout = [
+    { text: "I. uznaje oskarżonego za winnego.", role: "holding" },
+    { text: "1. USTALENIE FAKTÓW" },
+    { text: "1.1. Fakty uznane za udowodnione" },
+    { text: "1.2. Fakty uznane za nieudowodnione" },
+    { text: "2. OCENA DOWODÓW" },
+    { text: "2.1. Dowody będące podstawą ustalenia faktów" },
+    { text: "3. PODSTAWA PRAWNA WYROKU" },
+    ...unnumbered(8, 0),
+    { text: "4. INNE ZAGADNIENIA" },
+    ...unnumbered(3, 1),
+    { text: "5. KOSZTY PROCESU" },
+    { text: "6. PODPIS" },
+  ];
+  const blocks = blocksOf(layout);
+  expect(extractCourtParagraphNumbers(blocks).blocks).toEqual(blocks);
+});

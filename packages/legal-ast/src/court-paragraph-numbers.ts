@@ -762,6 +762,27 @@ const corroboratedReadings = (
   });
 };
 
+/**
+ * Whether a run's printed numbers title the sections of a form rather than
+ * count the court's paragraphs: most of the numbered lines end without a
+ * sentence's close ("1. USTALENIE FAKTÓW", "2. OCENA DOWODÓW"), with the
+ * section's rows and text under each. A section number is the court's text,
+ * and the run's span alone does not prove it is a paragraph's.
+ */
+const titlesSections = (
+  blocks: readonly Block[],
+  printed: readonly Candidate[],
+): boolean =>
+  printed.filter((candidate) => {
+    const block = blocks[candidate.blockIndex];
+    return (
+      block?.type === "paragraph" &&
+      !SENTENCE_END_RE.test(block.plainText.trimEnd())
+    );
+  }).length *
+    2 >
+  printed.length;
+
 type ProvenRunOptions = {
   readonly blocks: readonly Block[];
   readonly body: Body;
@@ -847,7 +868,8 @@ const provenRun = ({
         position === 0 ||
         candidate.number === (accepted[position - 1]?.number ?? 0) + 1,
     ) &&
-    tail <= Math.min(limits.maxTail, widestGap);
+    tail <= Math.min(limits.maxTail, widestGap) &&
+    !titlesSections(blocks, best.accepted);
   return spansScope ? accepted : null;
 };
 
