@@ -32,6 +32,7 @@ import {
   requestFolderRestore,
   type TurnFolderRestore,
 } from "@/api/lib/desktop-runner/folder-restores";
+import { openRunOutputKey } from "@/api/lib/desktop-runner/output-keys";
 import {
   type RunAnswerMessage,
   sealRunAnswer,
@@ -54,6 +55,7 @@ import {
   readOpenRunChatThread,
   readRun,
   readRunOutputFile,
+  readRunOutputKey,
   readStoredRunEvents,
   recordChatReadSeq,
   type RunOwner,
@@ -181,6 +183,8 @@ const TOKEN_SHAPE = "t".repeat(DESKTOP_RUNNER_MAX_TOKEN_LENGTH);
 const ATTACHMENT_LINK_SHAPE = `https://${"l".repeat(
   DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH - "https://".length,
 )}`;
+/** A run's output key, derived when the command is sent. */
+const OUTPUT_KEY_SHAPE = "0".repeat(64);
 
 /** Whether `message`, as sent, fits one frame. */
 const fitsOneFrame = (message: unknown) =>
@@ -346,6 +350,7 @@ const startRun = async (
       token: TOKEN_SHAPE,
       expiresAt: deps.now().toISOString(),
     },
+    outputKey: OUTPUT_KEY_SHAPE,
   });
   if (!checked.success) {
     return Result.err(invalid(message.type, checked.issues));
@@ -688,6 +693,30 @@ export const createDesktopRunnerControl = ({
         try: async () => await readRun(db, { owner, runId }),
         catch: toDatabaseError,
       }),
+    /**
+     * The output key of the owner's run, to sign a grant with; `null` for a
+     * run that is not theirs or keeps no key. Never logged or answered.
+     */
+    readRunOutputKey: async ({
+      owner,
+      runId,
+    }: RunOptions): Promise<Result<string | null, DatabaseError>> => {
+      const stored = await Result.tryPromise({
+        try: async () => await readRunOutputKey(db, { owner, runId }),
+        catch: toDatabaseError,
+      });
+      if (stored.isErr()) {
+        return Result.err(stored.error);
+      }
+      if (stored.value === null) {
+        return Result.ok(null);
+      }
+      const opened = await openRunOutputKey(
+        owner.organizationId,
+        stored.value.sealedOutputKey,
+      );
+      return Result.ok(opened.type === "opened" ? opened.outputKey : null);
+    },
     /** The chat thread of the owner's run that is still going. */
     readOpenRunChatThread: async (
       options: RunOptions,

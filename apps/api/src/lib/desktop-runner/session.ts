@@ -30,6 +30,7 @@ import {
   claimFolderRestores,
   settleFolderRestore,
 } from "@/api/lib/desktop-runner/folder-restores";
+import { openRunOutputKey } from "@/api/lib/desktop-runner/output-keys";
 import {
   openRunAnswer,
   storedRunAnswerSchema,
@@ -340,7 +341,7 @@ type Composed =
 
 /**
  * A stored command as the message to send: a `run.start` with a fresh
- * token, a `run.answer` with its answers opened.
+ * token and its run's output key, a `run.answer` with its answers opened.
  */
 const compose = async (
   state: SessionState,
@@ -351,6 +352,14 @@ const compose = async (
     const stored = v.safeParse(runStartPayloadSchema, command.payload);
     if (!stored.success) {
       return { type: "unreadable", reason: "its MCP server does not read" };
+    }
+    // The socket is bound to the organization of every run it holds.
+    const outputKey = await openRunOutputKey(
+      state.binding.organizationId,
+      command.sealedOutputKey,
+    );
+    if (outputKey.type === "unreadable") {
+      return { type: "unreadable", reason: "its run has no output key" };
     }
     const token = await mint(state, command.runId, command.workspaceIds);
     const attachments = await Promise.all(
@@ -367,6 +376,7 @@ const compose = async (
       ...stored.output,
       attachments,
       mcp: { ...stored.output.mcp, ...token },
+      outputKey: outputKey.outputKey,
     };
   }
   if (command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer) {

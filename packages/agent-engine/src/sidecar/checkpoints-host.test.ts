@@ -160,6 +160,7 @@ const runStart = (at: Place): SidecarRunStart => ({
   launch: PLAIN_LAUNCH,
   workspaceDir: at.workspaceDir,
   cacheDir: path.join(at.root, "agent-package-cache"),
+  stepOutputDir: path.join(at.root, "runs", "chat.step-outputs"),
   model: "gpt-test",
   reasoningEffort: null,
   instructions: "Use the stella MCP server.",

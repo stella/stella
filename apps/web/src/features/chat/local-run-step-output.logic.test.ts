@@ -1,0 +1,105 @@
+import { describe, expect, test } from "bun:test";
+
+import { CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES } from "@stll/api-contract/chat-local-run-step-output";
+
+import {
+  DIFF_TONED_LINES,
+  diffLines,
+  diffLineTone,
+  foldLocalRunStepOutput,
+  isLocalRunStepOutputCut,
+  LOCAL_RUN_STEP_OUTPUT_UNREAD,
+  type LocalRunStepOutputEvent,
+  localRunStepOutputStaleTime,
+} from "./local-run-step-output.logic";
+
+const fold = (events: LocalRunStepOutputEvent[]) => {
+  let view = LOCAL_RUN_STEP_OUTPUT_UNREAD;
+  for (const event of events) {
+    view = foldLocalRunStepOutput(view, event);
+  }
+  return view;
+};
+
+describe("a step's output as its row shows it", () => {
+  test("text arrives in order after the size, and counts the bytes kept", () => {
+    expect(
+      fold([
+        { type: "started", totalBytes: 9 },
+        { type: "text", text: "zsh: ", bytes: 5 },
+        { type: "text", text: "nope", bytes: 4 },
+      ]),
+    ).toEqual({
+      status: "shown",
+      text: "zsh: nope",
+      keptBytes: 9,
+      totalBytes: 9,
+    });
+  });
+
+  test("a run on another computer or a step with nothing kept says so", () => {
+    expect(fold([{ type: "elsewhere" }])).toEqual({ status: "elsewhere" });
+    expect(fold([{ type: "not-kept" }])).toEqual({ status: "not-kept" });
+  });
+
+  test("only output past the cap reads as cut", () => {
+    expect(isLocalRunStepOutputCut(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES)).toBe(
+      false,
+    );
+    expect(
+      isLocalRunStepOutputCut(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES + 1),
+    ).toBe(true);
+  });
+
+  test("a diff's file headers read as headers, not as changed lines", () => {
+    expect(
+      [
+        "--- notes.md",
+        "+++ notes.md",
+        "@@",
+        "-Rent is due monthly.",
+        "+Rent is due quarterly.",
+        " unchanged",
+      ].map(diffLineTone),
+    ).toEqual(["file", "file", "hunk", "removed", "added", "context"]);
+  });
+});
+
+test("an output found elsewhere is read again; one the desktop answered holds", () => {
+  expect(localRunStepOutputStaleTime({ status: "elsewhere" })).toBe(0);
+  for (const answered of [
+    { status: "not-kept" },
+    { status: "shown", text: "ok", keptBytes: 2, totalBytes: 2 },
+  ] as const) {
+    expect(localRunStepOutputStaleTime(answered)).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+  }
+  expect(localRunStepOutputStaleTime(undefined)).toBe(Number.POSITIVE_INFINITY);
+});
+
+test("a long diff shows its first lines toned and the rest as one block", () => {
+  const short = diffLines("+added\n-removed\n context\n");
+  expect(short.lines.map(({ line }) => line)).toEqual([
+    "+added",
+    "-removed",
+    " context",
+  ]);
+  expect(short.rest).toBe("");
+
+  const long = Array.from(
+    { length: DIFF_TONED_LINES + 3 },
+    (_, index) => `+line ${String(index)}`,
+  ).join("\n");
+  const bounded = diffLines(long);
+  expect(bounded.lines).toHaveLength(DIFF_TONED_LINES);
+  expect(bounded.rest.split("\n")).toEqual([
+    `+line ${String(DIFF_TONED_LINES)}`,
+    `+line ${String(DIFF_TONED_LINES + 1)}`,
+    `+line ${String(DIFF_TONED_LINES + 2)}`,
+  ]);
+  // Nothing is lost between the two.
+  expect(
+    [...bounded.lines.map(({ line }) => line), bounded.rest].join("\n"),
+  ).toBe(long);
+});

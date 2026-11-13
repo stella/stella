@@ -46,6 +46,11 @@ export default {
         reason:
           "Asks the turn's computer to undo the turn's file changes and reads where that undo stands.",
       },
+      {
+        path: "apps/api/src/handlers/chat/local-run-step-output-grant.ts",
+        reason:
+          "Reads the member's own run to grant reading its step outputs on the computer that ran it.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

@@ -321,6 +321,13 @@ export const sidecarHostMessageSchema = v.variant("type", [
     workspaceDir: absolutePathSchema,
     /** The chat's own cache folder, writable in every sandbox. */
     cacheDir: absolutePathSchema,
+    /**
+     * Where the run's steps leave what they produced (`step-outputs.ts`):
+     * beside the chat's own folder in the desktop's runs folder, whatever
+     * folder `workspaceDir` names. Never in or beside a folder the member
+     * linked; outside the harness's reach.
+     */
+    stepOutputDir: absolutePathSchema,
     model: modelIdSchema,
     /** The effort the turn asks the model for; `null` leaves it to the harness. */
     reasoningEffort: v.nullable(v.picklist(DESKTOP_RUNNER_REASONING_EFFORTS)),
