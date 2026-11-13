@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import {
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   chatLocalRunShownText,
@@ -62,19 +64,24 @@ export const createActionApprovals = () => {
       });
     };
     const { promise, resolve } = Promise.withResolvers<ApprovalDecision>();
-    pending.set(requestId, resolve);
+    // The question's end goes into the stream as it is settled, not when
+    // this call resumes: a stream that is ending still carries it.
+    const settle = (decision: ApprovalDecision) => {
+      asked.signal.removeEventListener("abort", withdraw);
+      side.push({ type: "interaction.resolved", requestId });
+      if (decision === APPROVAL_DECISION.deny) {
+        complete(asked.signal.aborted ? "interrupted" : "declined");
+      }
+      resolve(decision);
+    };
     // The agent's call ended (a harness timeout, a stop): the question is
     // withdrawn, never answered later for an action that cannot run.
     const withdraw = () => {
       if (pending.delete(requestId)) {
-        resolve(APPROVAL_DECISION.deny);
+        settle(APPROVAL_DECISION.deny);
       }
     };
-    if (asked.signal.aborted) {
-      withdraw();
-    } else {
-      asked.signal.addEventListener("abort", withdraw, { once: true });
-    }
+    pending.set(requestId, settle);
     side.push({
       type: "approval.requested",
       request: {
@@ -91,11 +98,12 @@ export const createActionApprovals = () => {
         ],
       },
     });
-    const decision = await promise;
-    asked.signal.removeEventListener("abort", withdraw);
-    side.push({ type: "interaction.resolved", requestId });
-    if (decision === APPROVAL_DECISION.deny) {
-      complete(asked.signal.aborted ? "interrupted" : "declined");
+    if (asked.signal.aborted) {
+      withdraw();
+    } else {
+      asked.signal.addEventListener("abort", withdraw, { once: true });
+    }
+    if ((await promise) === APPROVAL_DECISION.deny) {
       return { decision: APPROVAL_DECISION.deny, finish: () => undefined };
     }
     let finished = false;
@@ -112,9 +120,9 @@ export const createActionApprovals = () => {
 
   /** Settles every open question as declined: the run is ending. */
   const declineAll = () => {
-    for (const [requestId, resolve] of pending) {
+    for (const [requestId, settle] of pending) {
       pending.delete(requestId);
-      resolve(APPROVAL_DECISION.deny);
+      settle(APPROVAL_DECISION.deny);
     }
   };
 
@@ -125,50 +133,44 @@ export const createActionApprovals = () => {
      * when it is not one of these, so the harness's own approvals go on.
      */
     answer: (requestId: string, decision: ApprovalDecision): boolean => {
-      const resolve = pending.get(requestId);
-      if (resolve === undefined) {
+      const settle = pending.get(requestId);
+      if (settle === undefined) {
         return false;
       }
       pending.delete(requestId);
-      resolve(decision);
+      settle(decision);
       return true;
     },
     declineAll,
     /**
      * The harness's events with these questions' events beside them, in
-     * the order they happen; ends with the harness's, declining whatever is
-     * still open.
+     * the order they happen; ends with the harness's, after whatever is
+     * still open was declined and reported. The harness's events are moved
+     * into the questions' queue, so a turn of any length holds one reader.
      */
     async *withEvents(
       harness: AsyncIterable<HarnessEvent>,
     ): AsyncGenerator<HarnessEvent> {
-      const primary = harness[Symbol.asyncIterator]();
-      const secondary = side.items[Symbol.asyncIterator]();
-      let nextPrimary = primary.next();
-      let nextSecondary = secondary.next();
-      try {
-        for (;;) {
-          // await-in-loop: one event at a time, from whichever source has one.
-          const first = await Promise.race([
-            nextPrimary.then((step) => ({ from: "harness", step }) as const),
-            nextSecondary.then(
-              (step) => ({ from: "approvals", step }) as const,
-            ),
-          ]);
-          if (first.from === "harness") {
-            if (first.step.done === true) {
-              return;
-            }
-            yield first.step.value;
-            nextPrimary = primary.next();
-          } else if (first.step.done !== true) {
-            yield first.step.value;
-            nextSecondary = secondary.next();
-          } else {
-            // The questions end only with the run: wait on the harness.
-            nextSecondary =
-              Promise.withResolvers<IteratorResult<HarnessEvent>>().promise;
+      const moved = Result.tryPromise({
+        try: async () => {
+          for await (const event of harness) {
+            side.push(event);
           }
+        },
+        catch: (cause) => ({ cause }),
+      });
+      const ended = async () => {
+        const outcome = await moved;
+        declineAll();
+        side.close();
+        return outcome;
+      };
+      const outcome = ended();
+      try {
+        yield* side.items;
+        const harnessEnd = await outcome;
+        if (Result.isError(harnessEnd)) {
+          throw harnessEnd.error.cause;
         }
       } finally {
         declineAll();

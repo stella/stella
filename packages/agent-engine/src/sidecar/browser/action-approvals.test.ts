@@ -107,3 +107,44 @@ test("a question still open when the run ends is declined", async () => {
   approvals.declineAll();
   expect((await decided).decision).toBe(APPROVAL_DECISION.deny);
 });
+
+test("a run that ends with a question open reports it withdrawn before the stream ends", async () => {
+  const approvals = createActionApprovals();
+  const harness = createEventQueue<HarnessEvent>();
+  const stream = approvals.withEvents(harness.items)[Symbol.asyncIterator]();
+
+  const decided = approvals.request(asking());
+  const asked = await stream.next();
+  const requestId =
+    asked.value?.type === "approval.requested"
+      ? asked.value.request.requestId
+      : "";
+  harness.close();
+  expect((await stream.next()).value).toEqual({
+    type: "interaction.resolved",
+    requestId,
+  });
+  expect((await stream.next()).value).toMatchObject({
+    type: "tool.completed",
+    result: { content: JSON.stringify({ status: "declined" }) },
+  });
+  expect((await stream.next()).done).toBe(true);
+  expect((await decided).decision).toBe(APPROVAL_DECISION.deny);
+});
+
+test("a long turn's events pass through in order", async () => {
+  const approvals = createActionApprovals();
+  const harness = createEventQueue<HarnessEvent>();
+  const deltas = Array.from({ length: 2000 }, (_, index) => String(index));
+  for (const delta of deltas) {
+    harness.push({ type: "text.delta", messageId: "message-1", delta });
+  }
+  harness.close();
+  const seen: string[] = [];
+  for await (const event of approvals.withEvents(harness.items)) {
+    if (event.type === "text.delta") {
+      seen.push(event.delta);
+    }
+  }
+  expect(seen).toEqual(deltas);
+});
