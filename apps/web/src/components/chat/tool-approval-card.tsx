@@ -61,6 +61,10 @@ import type {
   PendingApprovalToolPart,
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
+import {
+  localRunToolSubtitleText,
+  localRunToolView,
+} from "@/components/chat/local-run-tool.logic";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import {
   describeProposedDocxEdits,
@@ -914,7 +918,40 @@ const ToolApprovalSummary = ({
       {isRegistryWriteSummaryToolName(name) && input !== undefined && (
         <RegistryWriteSummary input={input} toolName={name} />
       )}
+      <LocalRunToolSummary input={input} name={name} />
     </>
+  );
+};
+
+/**
+ * What a coding agent on the member's computer asks to do, as its step row
+ * names it (a command, file names, a web search's query), so the member
+ * approves the step itself rather than a tool name. Nothing for any other
+ * tool.
+ */
+const LocalRunToolSummary = ({
+  input,
+  name,
+}: {
+  input: unknown;
+  name: string;
+}) => {
+  const t = useTranslations();
+  const view = localRunToolView({ name, input, output: undefined });
+  const subtitle =
+    view === null
+      ? null
+      : localRunToolSubtitleText(view.subtitle, {
+          patternInPath: (values) => t("chat.toolCall.patternInPath", values),
+          commandExited: (values) => t("chat.toolCall.commandExited", values),
+        });
+  if (subtitle === null || subtitle === "") {
+    return null;
+  }
+  return (
+    <div className="border-border/50 border-t px-3 py-2">
+      <p className="text-xs wrap-break-word">{subtitle}</p>
+    </div>
   );
 };
 

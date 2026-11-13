@@ -22,6 +22,14 @@ import {
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
+import {
+  countProcessWork,
+  groupProcessParts,
+  isProcessPart,
+  isVisibleProcessStep,
+  PROCESS_SUMMARY_KINDS,
+} from "@stll/api-contract/chat-tool-activity";
+import type { ProcessSummaryKind } from "@stll/api-contract/chat-tool-activity";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -53,8 +61,6 @@ import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import { AttachmentChip } from "@/components/chat/attachment-chip";
 import type { AttachmentChipOpen } from "@/components/chat/attachment-chip";
-import { countProcessWork } from "@/components/chat/chat-activity.logic";
-import type { ProcessSummaryKind } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
@@ -107,7 +113,6 @@ import {
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
   isPendingApprovalPart,
-  isUserInputChatToolName,
   savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
@@ -2009,31 +2014,18 @@ const toAssistantPartRenderEntries = (
   return entries;
 };
 
-// "Process" parts are the low-emphasis progress rows of a turn: reasoning
-// trace disclosures and tool-step lines. Tool-result parts are invisible
-// transport companions, so they stay inside a process run without becoming
-// visible steps or splitting the run. Interactive tool cards (ask-user,
-// create-document, approvals, subagent runs) read as answer content, so
-// they stay outside the folded process disclosure; an approval-gated call
-// is one of them from its first input byte, before the request arrives.
+// "Process" parts are the low-emphasis progress rows of a turn
+// (`isProcessPart`, shared with the phone). On the web an approval card
+// reads as answer content too, so it stays outside the folded process
+// disclosure; an approval-gated call is one from its first input byte,
+// before the request arrives.
 const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type === "rich") {
     return false;
   }
   const { part } = entry;
-  if (part.type === "thinking") {
-    return true;
-  }
-  if (part.type === "tool-result") {
-    return true;
-  }
   return (
-    part.type === "tool-call" &&
-    !isUserInputChatToolName(part.name) &&
-    part.name !== "create-document" &&
-    part.name !== "spawn_subagents" &&
-    !isApprovalPart(part) &&
-    !isPendingApprovalPart(part)
+    isProcessPart(part) && !isApprovalPart(part) && !isPendingApprovalPart(part)
   );
 };
 
@@ -2067,31 +2059,10 @@ const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
     return isVisibleProcessEntry(entry);
   });
 
-const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
-  if (entry.type !== "standard") {
-    return true;
-  }
-  const { part } = entry;
-  if (part.type === "thinking") {
-    return part.content.trim().length > 0;
-  }
-  if (part.type === "tool-result") {
-    return false;
-  }
-  if (part.type !== "tool-call") {
-    return true;
-  }
-  if (
-    part.state === "error" &&
-    (part.name === "load-skill" || part.name === "read-skill-resource")
-  ) {
-    return false;
-  }
-  return !(
-    (part.name === "web_search" || part.name === "fetch_url") &&
-    part.state === "complete"
-  );
-};
+const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean =>
+  entry.type !== "standard" ||
+  // Finished searches and fetches show in the sources tray instead.
+  isVisibleProcessStep(entry.part, { searchesShownApart: true });
 
 type ProcessStepTitleKey =
   ReturnType<typeof getChatToolTitleKey> | "chat.reasoning";
@@ -2112,35 +2083,12 @@ const getProcessStepTitleKey = (
   return null;
 };
 
-type AssistantPartRenderGroup =
-  | {
-      kind: "process";
-      startIndex: number;
-      entries: AssistantPartRenderEntry[];
-    }
-  | { kind: "standard"; index: number; entry: AssistantPartRenderEntry };
-
 // Chunks render entries into runs of consecutive process parts so a
 // multi-step turn packs its reasoning/tool rows tightly instead of
 // spreading them across the message's standard part gap.
 const toAssistantPartRenderGroups = (
   entries: readonly AssistantPartRenderEntry[],
-): AssistantPartRenderGroup[] => {
-  const groups: AssistantPartRenderGroup[] = [];
-  for (const [index, entry] of entries.entries()) {
-    if (!isProcessRenderEntry(entry)) {
-      groups.push({ kind: "standard", index, entry });
-      continue;
-    }
-    const previous = groups.at(-1);
-    if (previous?.kind === "process") {
-      previous.entries.push(entry);
-      continue;
-    }
-    groups.push({ kind: "process", startIndex: index, entries: [entry] });
-  }
-  return groups;
-};
+) => groupProcessParts(entries, isProcessRenderEntry);
 
 /**
  * Renders the body of an assistant message. Splitting this out of
@@ -2412,9 +2360,9 @@ const AssistantMessageParts = ({
       <ContextNotice metadata={message.metadata} />
       {renderGroups.map((group) => {
         if (group.kind === "standard") {
-          return renderEntry(group.entry, group.index);
+          return renderEntry(group.item, group.index);
         }
-        const visibleEntries = group.entries.filter(isVisibleProcessEntry);
+        const visibleEntries = group.items.filter(isVisibleProcessEntry);
         if (visibleEntries.length === 0) {
           return null;
         }
@@ -2423,7 +2371,7 @@ const AssistantMessageParts = ({
         const isLiveGroup =
           isGenerating &&
           isLatestAssistantMessage &&
-          group.startIndex + group.entries.length === renderEntries.length;
+          group.startIndex + group.items.length === renderEntries.length;
         const lastVisibleEntry = visibleEntries.at(-1);
         return (
           <AssistantProcessGroup
@@ -2440,10 +2388,10 @@ const AssistantMessageParts = ({
             // Counted over every entry: completed web searches and fetches
             // render in the sources tray, not as steps, but are still work.
             workCounts={countProcessWork(
-              group.entries.map((entry) => entry.part),
+              group.items.map((entry) => entry.part),
             )}
           >
-            {group.entries.map((entry, offset) =>
+            {group.items.map((entry, offset) =>
               renderEntry(entry, group.startIndex + offset),
             )}
           </AssistantProcessGroup>
@@ -2470,16 +2418,14 @@ type AssistantProcessGroupProps = {
   workCounts: ReadonlyMap<ProcessSummaryKind, number>;
 };
 
-/** The phrase each kind of work is counted in, in the order they read. */
-const PROCESS_SUMMARY_PHRASES = [
-  { key: "chat.processSummary.sourcesChecked", kind: "research" },
-  { key: "chat.processSummary.documentEdits", kind: "artifact" },
-  { key: "chat.processSummary.changesSaved", kind: "mutation" },
-  { key: "chat.processSummary.analyses", kind: "computation" },
-] as const satisfies readonly {
-  key: TranslationKey;
-  kind: ProcessSummaryKind;
-}[];
+/** The phrase each kind of work is counted in; `PROCESS_SUMMARY_KINDS`
+ *  orders them. */
+const PROCESS_SUMMARY_KEYS = {
+  research: "chat.processSummary.sourcesChecked",
+  artifact: "chat.processSummary.documentEdits",
+  mutation: "chat.processSummary.changesSaved",
+  computation: "chat.processSummary.analyses",
+} as const satisfies Record<ProcessSummaryKind, TranslationKey>;
 
 const LIVE_STEP_MIN_DWELL_MS = 1500;
 
@@ -2530,9 +2476,9 @@ const AssistantProcessGroup = ({
   // Settled, the summary says what was done ("3 sources checked · 1 document
   // edit"); a run of reasoning alone, or of steps that did not land, falls
   // back to the step count.
-  const workSummary = PROCESS_SUMMARY_PHRASES.flatMap(({ key, kind }) => {
+  const workSummary = PROCESS_SUMMARY_KINDS.flatMap((kind) => {
     const count = workCounts.get(kind) ?? 0;
-    return count > 0 ? [t(key, { count })] : [];
+    return count > 0 ? [t(PROCESS_SUMMARY_KEYS[kind], { count })] : [];
   }).join(" · ");
   const label =
     shownStepKey !== null

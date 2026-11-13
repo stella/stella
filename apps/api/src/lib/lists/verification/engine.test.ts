@@ -37,8 +37,8 @@ import {
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import { wholeDocumentPassages } from "@/api/lib/lists/verification/paragraph-scope";
 import { RECHECKS_PER_REQUEST_MAX } from "@/api/lib/lists/verification/recheck";
-import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -976,7 +976,8 @@ test("model dispatch requires proofs bound to the requester and organization", a
 
 test("each model request rechecks its run budget before dispatch", async () => {
   let checks = 0;
-  const capError = new ListVerificationRunCapError({
+  const capError = new ModelRunCapError({
+    kind: "list-run",
     reason: "active",
     message: "Verification limit reached",
     hint: "Wait for an active run.",

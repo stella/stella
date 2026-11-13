@@ -247,6 +247,9 @@ describe("Codex adapter over a stdio app-server", () => {
       approvalPolicy: "untrusted",
       sandbox: "workspace-write",
       config: {
+        // At Ask Codex cannot pause a search for approval, so its web
+        // search is off.
+        web_search: "disabled",
         "sandbox_workspace_write.network_access": false,
         "sandbox_workspace_write.writable_roots": [CACHE_DIR],
         "sandbox_workspace_write.exclude_tmpdir_env_var": false,
@@ -272,12 +275,12 @@ describe("Codex adapter over a stdio app-server", () => {
   });
 
   test.each([
-    ["ask", "untrusted", false],
-    ["auto", "untrusted", true],
-    ["full_auto", "on-request", true],
+    ["ask", "untrusted", false, "disabled"],
+    ["auto", "untrusted", true, "live"],
+    ["full_auto", "on-request", true, "live"],
   ] as const)(
-    "at %s it runs in the workspace sandbox with Codex's %s policy (network %s), asks before leaving it, and writes caches to the package cache",
-    async (approvals, approvalPolicy, networkAccess) => {
+    "at %s it runs in the workspace sandbox with Codex's %s policy (network %s, web search %s), asks before leaving it, and writes caches to the package cache",
+    async (approvals, approvalPolicy, networkAccess, webSearch) => {
       const { received, startup } = await run("tool_calls", {
         overrides: {
           policy: { network: "open", fs: "workspace", approvals },
@@ -290,6 +293,7 @@ describe("Codex adapter over a stdio app-server", () => {
         approvalPolicy,
         sandbox: "workspace-write",
         config: {
+          web_search: webSearch,
           "sandbox_workspace_write.network_access": networkAccess,
           "sandbox_workspace_write.writable_roots": [CACHE_DIR],
           "sandbox_workspace_write.exclude_tmpdir_env_var": false,
