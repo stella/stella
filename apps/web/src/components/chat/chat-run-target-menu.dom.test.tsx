@@ -194,7 +194,7 @@ test("Plan is offered with what it does, under any limit, and choosing it keeps 
   const plan = await radioItem(view, "Plan");
   expect(plan.getAttribute("aria-disabled")).not.toBe("true");
   expect(plan.textContent).toContain(
-    "Reads and plans first; changes nothing until you approve the plan.",
+    "Reads and plans first; asks before any change until you approve the plan.",
   );
   fireEvent.click(plan);
   expect(chosen).toEqual([{ ...LOCAL, approvals: "plan" }]);
