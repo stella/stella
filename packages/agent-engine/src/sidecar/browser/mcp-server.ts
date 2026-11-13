@@ -56,33 +56,57 @@ const toolCallParamsSchema = v.object({
   name: v.string(),
 });
 
-type HeldRun = {
-  secret: Buffer;
+/** The run an endpoint serves. */
+type BrowserMcpRun = {
+  runId: string;
   threadId: string;
+  /** The run's approval mode: which browser steps wait for the member. */
   approvals: DesktopRunnerApprovalMode;
+  /** Asks the run's member to allow one browser step. */
   approve: ApproveAction;
+};
+
+type Endpoint = {
+  /** Fixed length: a presented value of another length is refused early. */
+  secret: Buffer;
+  /** `null` while parked: no run calls through it. */
+  run: BrowserMcpRun | null;
 };
 
 export type LocalBrowserMcp = {
   /** `http://127.0.0.1:<port>`, for logs and tests. */
   readonly origin: string;
   /** The binding a run's harness configuration receives. */
-  register: (run: {
-    runId: string;
-    threadId: string;
-    /** The run's approval mode: which browser steps wait for the member. */
-    approvals: DesktopRunnerApprovalMode;
-    /** Asks the run's member to allow one browser step. */
-    approve: ApproveAction;
-  }) => StellaSandboxMcpBinding;
-  /** Ends the run's access and stops its command in the extension. */
+  register: (run: BrowserMcpRun) => StellaSandboxMcpBinding;
+  /**
+   * Ends the run's access and stops its command in the extension; its
+   * endpoint goes, unless `park` kept it.
+   */
   unregister: (runId: string) => void;
+  /**
+   * The run ended but its harness process stays for the chat's next turn:
+   * the endpoint, which that process is configured with, stays and refuses
+   * every request until a run adopts it. The endpoint's key, or `null` when
+   * the run held none.
+   */
+  park: (runId: string) => string | null;
+  /**
+   * A run continuing in the process a parked endpoint belongs to: the
+   * endpoint serves this run, with its address and secret kept. `null`
+   * when the endpoint is not parked.
+   */
+  adopt: (
+    endpoint: string,
+    run: BrowserMcpRun,
+  ) => StellaSandboxMcpBinding | null;
+  /** The parked endpoint's process is gone: the endpoint goes too. */
+  drop: (endpoint: string) => void;
   stop: () => Promise<void>;
 };
 
 const BEARER = /^Bearer (\S+)$/u;
 
-const presentsSecret = (request: Request, held: HeldRun) => {
+const presentsSecret = (request: Request, held: Endpoint) => {
   const bearer = BEARER.exec(request.headers.get("authorization") ?? "")?.[1];
   if (bearer === undefined) {
     return false;
@@ -114,6 +138,61 @@ const readBody = async (request: Request): Promise<Body> => {
     : { type: "unreadable" };
 };
 
+/**
+ * The endpoints by key (the id of the run that registered each) and the key
+ * each run calls through: its own, or the one it adopted.
+ */
+const createEndpoints = () => {
+  const endpoints = new Map<string, Endpoint>();
+  const runs = new Map<string, string>();
+  return {
+    get: (key: string) => endpoints.get(key),
+    add: (run: BrowserMcpRun, secret: Buffer) => {
+      endpoints.set(run.runId, { run, secret });
+      runs.set(run.runId, run.runId);
+    },
+    /**
+     * The run calls through its endpoint no more, which then serves no run:
+     * the endpoint's key and the run, or `null` when it held none.
+     */
+    detach: (runId: string) => {
+      const key = runs.get(runId);
+      runs.delete(runId);
+      const endpoint = key === undefined ? undefined : endpoints.get(key);
+      const held = endpoint?.run ?? null;
+      if (key === undefined || endpoint === undefined || held === null) {
+        return null;
+      }
+      endpoint.run = null;
+      return { held, key };
+    },
+    /** A parked endpoint serves `run`; `null` when it is not parked. */
+    attach: (key: string, run: BrowserMcpRun) => {
+      const endpoint = endpoints.get(key);
+      if (
+        endpoint === undefined ||
+        endpoint.run !== null ||
+        runs.has(run.runId)
+      ) {
+        return null;
+      }
+      endpoint.run = run;
+      runs.set(run.runId, key);
+      return endpoint;
+    },
+    remove: (key: string) => {
+      endpoints.delete(key);
+    },
+    /** Whether a run of `threadId` still calls through any endpoint. */
+    servesThread: (threadId: string) =>
+      [...endpoints.values()].some((other) => other.run?.threadId === threadId),
+    clear: () => {
+      endpoints.clear();
+      runs.clear();
+    },
+  };
+};
+
 export const startLocalBrowserMcp = ({
   bridge,
   version,
@@ -122,7 +201,7 @@ export const startLocalBrowserMcp = ({
   /** The sidecar's version, reported as the server's. */
   version: string;
 }): LocalBrowserMcp => {
-  const runs = new Map<string, HeldRun>();
+  const endpoints = createEndpoints();
   /** Each chat's page state; kept while any run of the chat is held. */
   const sessions = new Map<
     string,
@@ -141,8 +220,7 @@ export const startLocalBrowserMcp = ({
   };
 
   const answer = async (
-    runId: string,
-    held: HeldRun,
+    held: BrowserMcpRun,
     message: v.InferOutput<typeof rpcRequestSchema>,
     signal: AbortSignal,
   ): Promise<Response> => {
@@ -203,7 +281,7 @@ export const startLocalBrowserMcp = ({
                   controllerId: held.threadId,
                   observedTab,
                   toolCallId: crypto.randomUUID(),
-                  turnId: runId,
+                  turnId: held.runId,
                 },
                 signal,
               ),
@@ -234,14 +312,16 @@ export const startLocalBrowserMcp = ({
         return refusal(403);
       }
       const { pathname } = new URL(request.url);
-      const runId = pathname.startsWith(ROUTE_PREFIX)
+      const key = pathname.startsWith(ROUTE_PREFIX)
         ? decodeURIComponent(pathname.slice(ROUTE_PREFIX.length))
         : null;
-      const held = runId === null ? undefined : runs.get(runId);
-      if (runId === null || held === undefined) {
+      const endpoint = key === null ? undefined : endpoints.get(key);
+      // A parked endpoint serves no run.
+      const held = endpoint?.run ?? null;
+      if (endpoint === undefined || held === null) {
         return refusal(404);
       }
-      if (!presentsSecret(request, held)) {
+      if (!presentsSecret(request, endpoint)) {
         return refusal(401);
       }
       if (request.method !== "POST") {
@@ -259,7 +339,7 @@ export const startLocalBrowserMcp = ({
           "Expected one JSON-RPC 2.0 message.",
         );
       }
-      return await answer(runId, held, message.output, request.signal);
+      return await answer(held, message.output, request.signal);
     },
   });
   const port =
@@ -267,39 +347,59 @@ export const startLocalBrowserMcp = ({
   listener.host = `127.0.0.1:${port}`;
   const origin = `http://${listener.host}`;
 
+  const binding = (key: string, secret: string): StellaSandboxMcpBinding => ({
+    serverName: LOCAL_BROWSER_MCP_SERVER_NAME,
+    url: `${origin}${ROUTE_PREFIX}${encodeURIComponent(key)}`,
+    token: secret,
+  });
+
+  /**
+   * The run's access ends: its command in the extension stops, its chat's
+   * page state goes with the chat's last run, and its endpoint serves no
+   * run. The endpoint's key, or `null` when the run held none.
+   */
+  const endEndpointRun = (runId: string): string | null => {
+    const ended = endpoints.detach(runId);
+    if (ended === null) {
+      return null;
+    }
+    bridge.cancel({ controllerId: ended.held.threadId, turnId: runId });
+    if (!endpoints.servesThread(ended.held.threadId)) {
+      sessions.delete(ended.held.threadId);
+    }
+    return ended.key;
+  };
+
   return {
     origin,
-    register: ({ approvals, approve, runId, threadId }) => {
+    register: (run) => {
       const secret = Buffer.from(
         crypto.getRandomValues(new Uint8Array(SECRET_BYTES)),
       ).toString("base64url");
-      runs.set(runId, {
-        approvals,
-        approve,
-        secret: Buffer.from(secret),
-        threadId,
-      });
-      return {
-        serverName: LOCAL_BROWSER_MCP_SERVER_NAME,
-        url: `${origin}${ROUTE_PREFIX}${encodeURIComponent(runId)}`,
-        token: secret,
-      };
+      endpoints.add(run, Buffer.from(secret));
+      return binding(run.runId, secret);
     },
     unregister: (runId) => {
-      const held = runs.get(runId);
-      runs.delete(runId);
-      if (held === undefined) {
-        return;
+      const key = endEndpointRun(runId);
+      if (key !== null) {
+        endpoints.remove(key);
       }
-      bridge.cancel({ controllerId: held.threadId, turnId: runId });
-      if (
-        ![...runs.values()].some(({ threadId }) => threadId === held.threadId)
-      ) {
-        sessions.delete(held.threadId);
+    },
+    park: (runId) => endEndpointRun(runId),
+    adopt: (key, run) => {
+      const endpoint = endpoints.attach(key, run);
+      return endpoint === null
+        ? null
+        : binding(key, endpoint.secret.toString());
+    },
+    drop: (key) => {
+      // Only a parked endpoint: one a run adopted goes with that run.
+      if (endpoints.get(key)?.run === null) {
+        endpoints.remove(key);
       }
     },
     stop: async () => {
-      runs.clear();
+      endpoints.clear();
       sessions.clear();
       await server.stop(true);
     },

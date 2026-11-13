@@ -32,7 +32,7 @@ const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
 
 /**
  * One connected computer: Codex runs in its one mode and offers no effort
- * choice, and Claude Code cannot use its sandbox here.
+ * choice, and Claude Code can plan but cannot use its sandbox here.
  */
 const READINESS: ChatLocalRunReadiness = {
   status: "enabled",
@@ -41,6 +41,7 @@ const READINESS: ChatLocalRunReadiness = {
       desktopId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
       connected: true,
       lastSeenAt: "2026-11-03T10:00:00.000Z",
+      linkedFolders: [],
       harnesses: [
         {
           id: "codex",
@@ -57,7 +58,7 @@ const READINESS: ChatLocalRunReadiness = {
           state: "ready",
           version: "2.1.309",
           capabilities: ["approvals"],
-          approvalModes: ["ask", "auto"],
+          approvalModes: ["plan", "ask", "auto"],
           models: [
             {
               id: "sonnet",
@@ -186,6 +187,20 @@ test("a local turn offers every permission mode, and the ones this computer cann
   );
 });
 
+test("Plan is offered with what it does, under any limit, and choosing it keeps the harness and model", async () => {
+  const { view, chosen } = renderMenu(LOCAL, {
+    ...READINESS,
+    maxApprovals: "ask",
+  });
+  const plan = await radioItem(view, "Plan");
+  expect(plan.getAttribute("aria-disabled")).not.toBe("true");
+  expect(plan.textContent).toContain(
+    "Reads and plans first; asks before any change until you approve the plan.",
+  );
+  fireEvent.click(plan);
+  expect(chosen).toEqual([{ ...LOCAL, approvals: "plan" }]);
+});
+
 test("a mode above the organization's limit is disabled with that reason, apart from the ones the computer cannot run", async () => {
   const { view, chosen } = renderMenu(LOCAL, {
     ...READINESS,
@@ -249,7 +264,7 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
     ),
   ).toBeTruthy();
   expect(view.getByText("Permissions")).toBeTruthy();
-  // The places alone: no permission mode to pick.
+  // The places and the chat's folder alone: no permission mode to pick.
   expect(
     view
       .getAllByRole("menuitemradio")
@@ -258,6 +273,7 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
     `${messages.chat.runOn.cloud}${messages.chat.runOn.cloudDescription}`,
     "Codex",
     "Claude Code",
+    messages.chat.localRun.folderOwn,
   ]);
 });
 

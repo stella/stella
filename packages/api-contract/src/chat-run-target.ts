@@ -9,7 +9,9 @@ import {
   DESKTOP_RUNNER_REASONING_EFFORTS,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
+  type DesktopRunnerLinkedFolder,
 } from "./desktop-runner";
+import { displayNameSchema } from "./display-name";
 import { USER_FILE_URL_PREFIX } from "./user-file-url";
 
 /**
@@ -40,6 +42,18 @@ export const isChatLocalRunHarness = (
 /** Matches the runner protocol's model id bound. */
 const localModelSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
 
+/**
+ * A folder the member linked on one of their computers, which the chat's
+ * turns work in instead of the chat's own folder: the computer, the link's id
+ * there and the folder's name. Its path never leaves the computer.
+ */
+export const chatLocalRunFolderSchema = v.strictObject({
+  desktopId: v.pipe(v.string(), v.uuid()),
+  linkId: v.pipe(v.string(), v.uuid()),
+  name: displayNameSchema({ maxLength: 255 }),
+});
+export type ChatLocalRunFolder = v.InferOutput<typeof chatLocalRunFolderSchema>;
+
 export const chatLocalRunTargetSchema = v.strictObject({
   kind: v.literal("local"),
   harness: v.picklist(CHAT_LOCAL_RUN_HARNESSES),
@@ -53,6 +67,11 @@ export const chatLocalRunTargetSchema = v.strictObject({
     DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   ),
   /**
+   * The linked folder the turns work in; absent for the chat's own folder.
+   * Turns then run only on that computer.
+   */
+  folder: v.optional(chatLocalRunFolderSchema),
+  /**
    * The reasoning effort each turn asks the model for; `null`, or omitted,
    * leaves it to the harness. Only an effort the computer reports for the
    * model is accepted.
@@ -63,6 +82,19 @@ export const chatLocalRunTargetSchema = v.strictObject({
   ),
 });
 export type ChatLocalRunTarget = v.InferOutput<typeof chatLocalRunTargetSchema>;
+
+/**
+ * The modes an organization can set as the most a local run may do without
+ * asking. Plan is not one: an approved plan continues as Ask, so every
+ * ceiling allows it.
+ */
+export const CHAT_LOCAL_RUN_APPROVAL_CEILINGS = [
+  "ask",
+  "auto",
+  "full_auto",
+] as const satisfies readonly DesktopRunnerApprovalMode[];
+export type ChatLocalRunApprovalCeiling =
+  (typeof CHAT_LOCAL_RUN_APPROVAL_CEILINGS)[number];
 
 /**
  * How a harness's own web search runs at a permission level: without
@@ -85,11 +117,15 @@ export type ChatLocalRunWebSearch =
  */
 export const CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS = {
   codex: {
+    // Codex never runs in plan.
+    plan: CHAT_LOCAL_RUN_WEB_SEARCH.off,
     ask: CHAT_LOCAL_RUN_WEB_SEARCH.off,
     auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
     full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
   },
   "claude-code": {
+    // Plan allows nothing ahead, a search included.
+    plan: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
     ask: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
     auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
     full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
@@ -105,12 +141,13 @@ export const CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS = {
  * nothing for an organization that never chose one.
  */
 export const CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS =
-  "full_auto" satisfies DesktopRunnerApprovalMode;
+  "full_auto" satisfies ChatLocalRunApprovalCeiling;
 
 /**
  * Whether `mode` asks at least as much as `ceiling` allows. The modes are
- * ordered by how much a run does on its own, `ask < auto < full_auto`, which
- * is the order `DESKTOP_RUNNER_APPROVAL_MODES` lists them in.
+ * ordered by how much a run does on its own,
+ * `plan < ask < auto < full_auto`, which is the order
+ * `DESKTOP_RUNNER_APPROVAL_MODES` lists them in.
  */
 export const isApprovalModeWithin = (
   mode: DesktopRunnerApprovalMode,
@@ -175,6 +212,14 @@ export const CHAT_LOCAL_RUN_REFUSAL = {
   tooLarge: "local_run_too_large",
   /** A turn cannot both run in the agent sandbox and on a computer. */
   conflictingRunMode: "local_run_conflicting_run_mode",
+  /**
+   * The chat's linked folder is not available: its computer is not
+   * connected, no longer lists it, or reports it offline, moved, protected
+   * or unreadable.
+   */
+  folderUnavailable: "local_run_folder_unavailable",
+  /** The member has not yet let runs work in the chat's linked folder. */
+  folderNotApproved: "local_run_folder_not_approved",
 } as const;
 export type ChatLocalRunRefusal =
   (typeof CHAT_LOCAL_RUN_REFUSAL)[keyof typeof CHAT_LOCAL_RUN_REFUSAL];
@@ -184,6 +229,19 @@ export type ChatLocalHarnessReadiness = DesktopRunnerHarnessReport & {
   id: ChatLocalRunHarness;
 };
 
+/**
+ * Whether the member let runs work in a linked folder: `pending` until the
+ * first turn there is allowed, which the composer asks for.
+ */
+export const CHAT_LOCAL_FOLDER_APPROVALS = ["approved", "pending"] as const;
+export type ChatLocalFolderApproval =
+  (typeof CHAT_LOCAL_FOLDER_APPROVALS)[number];
+
+/** A folder linked on one of the member's computers, as it last reported it. */
+export type ChatLocalLinkedFolderReadiness = DesktopRunnerLinkedFolder & {
+  approval: ChatLocalFolderApproval;
+};
+
 /** One of the member's computers that has held a runner socket. */
 export type ChatLocalRunnerReadiness = {
   desktopId: string;
@@ -191,6 +249,7 @@ export type ChatLocalRunnerReadiness = {
   connected: boolean;
   lastSeenAt: string;
   harnesses: ChatLocalHarnessReadiness[];
+  linkedFolders: ChatLocalLinkedFolderReadiness[];
 };
 
 /**
@@ -203,7 +262,7 @@ export type ChatLocalRunReadiness =
   | {
       status: "enabled";
       runners: ChatLocalRunnerReadiness[];
-      maxApprovals: DesktopRunnerApprovalMode;
+      maxApprovals: ChatLocalRunApprovalCeiling;
     };
 
 export const CHAT_LOCAL_HARNESS_STATE = DESKTOP_RUNNER_HARNESS_STATE;

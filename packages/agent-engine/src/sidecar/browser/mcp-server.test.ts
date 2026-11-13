@@ -194,6 +194,40 @@ describe("the local browser MCP endpoint", () => {
     expect(cancels).toEqual([{ controllerId: "thread-1", turnId: "run-1" }]);
     expect((await rpc(first, ping)).status).toBe(404);
   });
+
+  test("a kept process's endpoint is parked between turns and serves the run that adopts it", async () => {
+    const { cancels, mcp, requests } = start();
+    const run = { approvals: "auto", approve, threadId: "thread-1" } as const;
+    const first = mcp.register({ ...run, runId: "run-1" });
+    const ping = { id: 1, jsonrpc: "2.0", method: "ping" };
+
+    const parked = mcp.park("run-1");
+    expect(parked).not.toBeNull();
+    expect(cancels).toEqual([{ controllerId: "thread-1", turnId: "run-1" }]);
+    // Parked, it serves no run; the process keeps its address and secret.
+    expect((await rpc(first, ping)).status).toBe(404);
+    mcp.unregister("run-1");
+
+    const adopted = mcp.adopt(parked ?? "", { ...run, runId: "run-2" });
+    expect(adopted).toEqual(first);
+    // Only a parked endpoint is adopted.
+    expect(mcp.adopt(parked ?? "", { ...run, runId: "run-3" })).toBeNull();
+    const call = {
+      id: 2,
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { name: "open", arguments: { url: "https://example.com/" } },
+    };
+    expect((await rpc(first, call)).status).toBe(200);
+    expect(requests.at(-1)).toMatchObject({ turnId: "run-2" });
+
+    // An adopted endpoint goes with its run, not with a drop.
+    mcp.drop(parked ?? "");
+    expect((await rpc(first, ping)).status).toBe(200);
+    mcp.park("run-2");
+    mcp.drop(parked ?? "");
+    expect(mcp.adopt(parked ?? "", { ...run, runId: "run-4" })).toBeNull();
+  });
 });
 
 describe("registering the host with Chrome", () => {

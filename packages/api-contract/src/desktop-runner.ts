@@ -235,6 +235,7 @@ export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {
   runApprovalRequest: "run.approval_request",
   runFinished: "run.finished",
   folderRestored: "folder.restored",
+  linkedFoldersStatus: "linked_folders.status",
 } as const;
 
 export const DESKTOP_RUNNER_SERVER_MESSAGE = {
@@ -308,7 +309,10 @@ export const DESKTOP_RUNNER_HARNESS_CAPABILITIES = [
 /**
  * Why a desktop refused a run command. `harness_unavailable` matches a harness
  * reported `unavailable`; `run_too_large` is a `run.start` the desktop cannot
- * hand to its harness host whole, which no retry on that computer fixes.
+ * hand to its harness host whole, which no retry on that computer fixes. The
+ * `folder_*` reasons refuse a run in a linked folder: the link is gone from
+ * the computer, its volume is not mounted, the folder moved, it holds what
+ * runs rely on (stella's data or a skill folder), or it cannot be read.
  */
 export const DESKTOP_RUNNER_REJECT_REASONS = [
   "harness_not_installed",
@@ -323,7 +327,40 @@ export const DESKTOP_RUNNER_REJECT_REASONS = [
   "run_too_large",
   "unknown_run",
   "folder_busy",
+  "folder_unlinked",
+  "folder_offline",
+  "folder_moved",
+  "folder_protected",
+  "folder_unreadable",
 ] as const;
+
+/**
+ * How a folder the member linked on a computer stands, as the computer last
+ * looked: `offline` when its volume is not mounted, `moved` when it is gone
+ * from its volume or its path leads elsewhere, `protected` when it holds or
+ * sits in what runs rely on, `unreadable` when it cannot be read.
+ */
+export const DESKTOP_RUNNER_LINKED_FOLDER_STATES = [
+  "available",
+  "offline",
+  "moved",
+  "protected",
+  "unreadable",
+] as const;
+export type DesktopRunnerLinkedFolderState =
+  (typeof DESKTOP_RUNNER_LINKED_FOLDER_STATES)[number];
+export const DESKTOP_RUNNER_LINKED_FOLDER_STATE = {
+  available: "available",
+  offline: "offline",
+  moved: "moved",
+  protected: "protected",
+  unreadable: "unreadable",
+} as const satisfies Record<
+  DesktopRunnerLinkedFolderState,
+  DesktopRunnerLinkedFolderState
+>;
+/** Linked folders one computer reports at most. */
+export const DESKTOP_RUNNER_MAX_LINKED_FOLDERS = 64;
 
 export const DESKTOP_RUNNER_APPROVAL_KINDS = [
   "command",
@@ -355,7 +392,12 @@ export const DESKTOP_RUNNER_NETWORK_POLICIES = ["open"] as const;
 export const DESKTOP_RUNNER_FS_POLICIES = ["workspace"] as const;
 
 /**
- * How much a local run asks before it acts, chosen per thread.
+ * How much a local run asks before it acts, chosen per thread, listed from
+ * the mode that does least on its own.
+ * - `plan`: nothing that changes files runs without asking. The agent reads
+ *   and researches, then proposes a plan and waits; once the member approves
+ *   the plan the run continues as in `ask`, and a declined plan leaves it
+ *   planning. Only a harness that can pause on a plan offers it.
  * - `ask`: edits inside the run workspace go ahead; commands and anything
  *   else are asked about.
  * - `auto`: the harness decides what is safe to do on its own and asks
@@ -366,6 +408,7 @@ export const DESKTOP_RUNNER_FS_POLICIES = ["workspace"] as const;
  *   harness does not offer it.
  */
 export const DESKTOP_RUNNER_APPROVAL_MODES = [
+  "plan",
   "ask",
   "auto",
   "full_auto",
@@ -707,6 +750,28 @@ export type DesktopRunnerCheckpointEvent = v.InferOutput<
   typeof desktopRunnerCheckpointEventSchema
 >;
 
+/**
+ * A folder linked on the computer, by its id and name: its path never leaves
+ * the computer.
+ */
+export const desktopRunnerLinkedFolderSchema = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
+  state: v.picklist(DESKTOP_RUNNER_LINKED_FOLDER_STATES),
+});
+export type DesktopRunnerLinkedFolder = v.InferOutput<
+  typeof desktopRunnerLinkedFolderSchema
+>;
+
+const linkedFoldersSchema = v.pipe(
+  v.array(desktopRunnerLinkedFolderSchema),
+  v.maxLength(DESKTOP_RUNNER_MAX_LINKED_FOLDERS),
+  v.check(
+    (folders) => listsOnce(folders.map(({ id }) => id)),
+    "Each linked folder is listed once",
+  ),
+);
+
 export const desktopRunnerDesktopMessageSchema = v.variant("type", [
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.hello),
@@ -730,10 +795,17 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
         "Each run is listed once",
       ),
     ),
+    /** The folders linked on the computer; none from a desktop before them. */
+    linkedFolders: v.optional(linkedFoldersSchema, []),
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.harnessStatus),
     harness: harnessReportSchema,
+  }),
+  /** Every linked folder, sent when the list or a folder's state changed. */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.linkedFoldersStatus),
+    folders: linkedFoldersSchema,
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.runAccepted),
@@ -826,6 +898,12 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     runId: runIdSchema,
     /** The folder the run works in; a chat's runs share one, so files stay between turns. */
     folderId: v.pipe(v.string(), v.uuid()),
+    /**
+     * A folder the member linked on the computer, which the run works in
+     * instead; the computer alone knows its path. `null` for the chat's own,
+     * which a command queued before the field existed reads as.
+     */
+    linkedFolderId: v.optional(v.nullable(v.pipe(v.string(), v.uuid())), null),
     harness: harnessSchema,
     harnessVersion: desktopVersionSchema,
     model: modelIdSchema,
@@ -913,6 +991,8 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.folderRestore),
     restoreId: v.pipe(v.string(), v.uuid()),
     folderId: v.pipe(v.string(), v.uuid()),
+    /** The linked folder the run worked in; `null` for the chat's own. */
+    linkedFolderId: v.optional(v.nullable(v.pipe(v.string(), v.uuid())), null),
     runId: runIdSchema,
   }),
 ]);

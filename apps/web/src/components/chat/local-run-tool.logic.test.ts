@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { localRunToolView } from "@/components/chat/local-run-tool.logic";
+import {
+  localRunProposedPlan,
+  localRunToolView,
+} from "@/components/chat/local-run-tool.logic";
 
 const view = (name: string, input: unknown, output?: unknown) =>
   localRunToolView({ name, input, output });
@@ -94,6 +97,28 @@ describe("a step a coding agent took on the member's computer", () => {
       titleKey: "chat.toolCall.updatePlan",
       subtitle: { type: "text", text: "Read the lease, Draft the notice" },
     });
+  });
+
+  test("a proposed plan is named in its row and read whole from its call", () => {
+    const plan = "## Plan\n\n1. Read the lease.\n2. Draft the notice.";
+    const input = {
+      tool: "ExitPlanMode",
+      detail: { kind: "proposed_plan", text: plan },
+    };
+    expect(view("harness_native_tool", input)).toEqual({
+      titleKey: "chat.toolCall.proposedPlan",
+      subtitle: null,
+    });
+    expect(localRunProposedPlan({ name: "harness_native_tool", input })).toBe(
+      plan,
+    );
+    expect(
+      localRunProposedPlan({
+        name: "harness_native_tool",
+        input: { tool: "TodoWrite", detail: { kind: "plan", items: [] } },
+      }),
+    ).toBeNull();
+    expect(localRunProposedPlan({ name: "mcp__docs__plan", input })).toBeNull();
   });
 
   test("any other native tool shows its name, and a malformed detail its name only", () => {

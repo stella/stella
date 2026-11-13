@@ -436,6 +436,9 @@
     "common.filter": [
       "et"
     ],
+    "common.folder": [
+      "pl"
+    ],
     "common.formula": [
       "lv"
     ],
@@ -771,9 +774,6 @@
     ],
     "search.kinds.contact": [
       "fr"
-    ],
-    "search.kinds.folder": [
-      "pl"
     ],
     "search.kinds.link": [
       "de",

@@ -5,7 +5,8 @@ import * as v from "valibot";
  * A step a coding agent took itself on the member's computer (a command, a
  * file it read or changed, a search, a plan), as a chat turn keeps it. Only
  * what the step was about leaves the computer: a command line, file names, a
- * search query or web address, and the titles of a plan. Its result says
+ * search query or web address, the titles of a plan, and a plan the agent
+ * proposes for the member to approve, in its own words. Its result says
  * only how it ended: a status, a command's exit code, the files a change
  * touched. A command's output, a file's contents, a diff, search matches and
  * a fetched page are never part of the call or its result.
@@ -47,6 +48,8 @@ export const CHAT_LOCAL_RUN_TOOL_LIMITS = {
   url: 2048,
   planItems: 50,
   planItem: 200,
+  /** A plan the agent proposes, whole: the member approves what it says. */
+  proposedPlan: 20_000,
   name: 128,
   /** A harness's reason for an approval, and the approval's whole message. */
   approval: 300,
@@ -54,6 +57,16 @@ export const CHAT_LOCAL_RUN_TOOL_LIMITS = {
 
 const ELLIPSIS = "…";
 const LINE_BREAK = /\r\n|[\n\r\u2028\u2029]/u;
+
+/** The start of `text`, within `limit` once an ellipsis ends it. */
+const cutWithEllipsis = (text: string, limit: number): string => {
+  let kept = text.slice(0, Math.min(text.length, limit - ELLIPSIS.length));
+  // Never half of a surrogate pair.
+  if (/[\uD800-\uDBFF]$/u.test(kept)) {
+    kept = kept.slice(0, -1);
+  }
+  return `${kept}${ELLIPSIS}`;
+};
 
 /**
  * `text` as a call shows it: its first line, within `limit`, ending in an
@@ -65,16 +78,15 @@ export const chatLocalRunShownText = (text: string, limit: number): string => {
   const trimmed = text.trimStart();
   const [first = ""] = trimmed.split(LINE_BREAK, 1);
   const cut = first.length < trimmed.length;
-  if (!cut && first.length <= limit) {
-    return first;
-  }
-  let kept = first.slice(0, Math.min(first.length, limit - ELLIPSIS.length));
-  // Never half of a surrogate pair.
-  if (/[\uD800-\uDBFF]$/u.test(kept)) {
-    kept = kept.slice(0, -1);
-  }
-  return `${kept}${ELLIPSIS}`;
+  return !cut && first.length <= limit ? first : cutWithEllipsis(first, limit);
 };
+
+/**
+ * `text` within `limit`, every line kept, ending in an ellipsis when
+ * anything was left out.
+ */
+const boundedText = (text: string, limit: number): string =>
+  text.length <= limit ? text : cutWithEllipsis(text, limit);
 
 const shownText = (limit: number) =>
   v.pipe(
@@ -97,7 +109,8 @@ export const CHAT_LOCAL_RUN_FILE_CHANGE_KINDS = [
 /**
  * What a native step other than a command, a file change or a web search
  * was about, for the kinds chat can name: a file it read, a search over
- * files, a web address it fetched, and the titles of its plan.
+ * files, a web address it fetched, the titles of its plan, and the plan it
+ * proposes before it acts (markdown, asked about as an approval).
  */
 export const chatLocalRunToolDetailSchema = v.variant("kind", [
   v.object({
@@ -118,6 +131,15 @@ export const chatLocalRunToolDetailSchema = v.variant("kind", [
     items: shownList(
       shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.planItem),
       CHAT_LOCAL_RUN_TOOL_LIMITS.planItems,
+    ),
+  }),
+  v.object({
+    kind: v.literal("proposed_plan"),
+    text: v.pipe(
+      v.string(),
+      v.transform((text) =>
+        boundedText(text, CHAT_LOCAL_RUN_TOOL_LIMITS.proposedPlan),
+      ),
     ),
   }),
 ]);

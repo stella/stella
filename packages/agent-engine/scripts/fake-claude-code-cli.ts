@@ -261,6 +261,35 @@ export const FAKE_PERMISSION_SUGGESTION = {
   destination: "localSettings",
 };
 
+/** The plan the plan scenarios propose, as the CLI adds it to the call. */
+export const FAKE_PLAN = "## Plan\n\n1. Read the lease.\n2. Draft the notice.";
+
+/** What the CLI suggests remembering when it asks about a plan in plan mode. */
+const SET_MODE_SUGGESTION = {
+  type: "setMode",
+  mode: "acceptEdits",
+  destination: "session",
+};
+
+/** A plan longer than chat shows (20,000 UTF-16 code units). */
+export const FAKE_LONG_PLAN = `## Plan\n\n${"1. Read the lease.\n".repeat(1200)}`;
+
+/** The plan call as the CLI asks about it: the model's input plus the plan. */
+const proposePlan = (
+  toolUseId: string,
+  plan: string | null = FAKE_PLAN,
+): FakeStep[] => [
+  assistant("msg-plan", [toolUse(toolUseId, "ExitPlanMode", {})]),
+  canUseTool(
+    toolUseId,
+    "ExitPlanMode",
+    plan === null
+      ? { planFilePath: "/plans/lease.md" }
+      : { plan, planFilePath: "/plans/lease.md" },
+    { permission_suggestions: [SET_MODE_SUGGESTION] },
+  ),
+];
+
 /** The host a sandboxed command reaches in the sandbox scenarios. */
 export const FAKE_SANDBOX_HOST = "registry.example.test";
 
@@ -273,7 +302,128 @@ export const FAKE_SANDBOX_REFUSAL =
 
 const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
 
+/** The CLI's whole set of live background tasks, as task id and kind. */
+const backgroundTasks = (
+  tasks: readonly (readonly [string, string])[],
+): FakeStep => ({
+  emit: {
+    type: "system",
+    subtype: "background_tasks_changed",
+    tasks: tasks.map(([taskId, taskType]) => ({
+      task_id: taskId,
+      task_type: taskType,
+      description: "bun run dev",
+    })),
+    uuid: "tasks-uuid",
+    session_id: "s",
+  },
+});
+
+/** A dev server the agent runs with the Bash tool in the background. */
+const devServer: FakeStep[] = [
+  assistant("msg-serve", [
+    toolUse("call-serve", "Bash", {
+      command: "bun run dev",
+      run_in_background: true,
+    }),
+  ]),
+  toolResult("call-serve", "Command running in background with ID: task-serve"),
+];
+
 const FAKE_SCENARIOS = {
+  /**
+   * A turn that leaves a dev server running in the background; the chat's
+   * next user message continues in this process, and the server exits
+   * during that turn.
+   */
+  background_command: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([["task-serve", "local_bash"]]),
+    assistant("msg-1", [{ type: "text", text: "The server runs." }]),
+    result(),
+    // The next turn first sets the process to its own mode.
+    { expect: "set_permission_mode", response: {} },
+    { expectUser: true },
+    { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
+    backgroundTasks([]),
+    assistant("msg-2", [{ type: "text", text: "It stopped." }]),
+    result(),
+  ],
+  /**
+   * A turn that leaves a dev server and a sub-agent running in the
+   * background. The sub-agent is stopped at the turn's end, and the turn
+   * the CLI then opens itself to report it is interrupted.
+   */
+  background_own_turn: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([
+      ["task-serve", "local_bash"],
+      ["task-watch", "local_bash"],
+      ["task-agent", "local_agent"],
+    ]),
+    result(),
+    { expect: "stop_task", response: {} },
+    // Once the process is kept, not while it is being kept.
+    { sleep: 200 },
+    assistant("msg-own", [{ type: "text", text: "The watcher exited." }]),
+    { expect: "interrupt", response: {} },
+    // Only once the interrupt came: the client sees it as its signal.
+    backgroundTasks([["task-serve", "local_bash"]]),
+    result({
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Request was aborted."],
+    }),
+  ],
+  /**
+   * A turn the CLI opens itself between stella's turns that takes a while to
+   * end once interrupted; the chat's next user message comes meanwhile.
+   */
+  background_own_turn_late: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([
+      ["task-serve", "local_bash"],
+      ["task-watch", "local_bash"],
+    ]),
+    result(),
+    { sleep: 200 },
+    assistant("msg-own", [{ type: "text", text: "The watcher exited." }]),
+    { expect: "interrupt", response: {} },
+    // The client's signal that the interrupt went out; the result is late.
+    backgroundTasks([["task-serve", "local_bash"]]),
+    { sleep: 300 },
+    result({
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Request was aborted."],
+    }),
+    // The next turn first sets the process to its own mode.
+    { expect: "set_permission_mode", response: {} },
+    { expectUser: true },
+    { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
+    backgroundTasks([]),
+    assistant("msg-2", [{ type: "text", text: "It stopped." }]),
+    result(),
+  ],
+  /** A dev server left running that exits while the chat waits. */
+  background_command_exits: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([["task-serve", "local_bash"]]),
+    result(),
+    { sleep: 200 },
+    backgroundTasks([]),
+  ],
+  /** A dev server left running until the client ends it. */
+  background_command_kept: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([["task-serve", "local_bash"]]),
+    result(),
+  ],
   /**
    * The shared stella tool calls through the stella MCP binding, step by
    * step: one assistant message per call of a step (the CLI writes one per
@@ -607,6 +757,39 @@ const FAKE_SCENARIOS = {
     ),
     toolResult("call-out", "File created."),
     assistant("msg-3", [{ type: "text", text: "Left the draft in place." }]),
+    result(),
+  ],
+  /** An approved plan, then the turn continues in its approved mode. */
+  plan_approved: [
+    ...freshTurn(),
+    ...proposePlan("call-plan"),
+    toolResult("call-plan", "User has approved your plan."),
+    { expect: "set_permission_mode" },
+    assistant("msg-2", [{ type: "text", text: "Drafting the notice." }]),
+    result(),
+  ],
+  /** A declined plan: the CLI stays in plan mode and the turn ends. */
+  plan_declined: [
+    ...freshTurn(),
+    ...proposePlan("call-plan"),
+    toolResult("call-plan", "The user denied this action.", true),
+    assistant("msg-2", [{ type: "text", text: "Waiting for a new plan." }]),
+    result(),
+  ],
+  /** A plan call without a plan: refused without asking. */
+  plan_missing: [
+    ...freshTurn(),
+    ...proposePlan("call-plan", null),
+    toolResult("call-plan", "No plan was given.", true),
+    assistant("msg-2", [{ type: "text", text: "Writing the plan out." }]),
+    result(),
+  ],
+  /** A plan too long to show: refused without asking, the CLI stays in plan mode. */
+  plan_too_long: [
+    ...freshTurn(),
+    ...proposePlan("call-plan", FAKE_LONG_PLAN),
+    toolResult("call-plan", "The plan is too long.", true),
+    assistant("msg-2", [{ type: "text", text: "Shortening the plan." }]),
     result(),
   ],
   /** An approval without suggested rules offers no session-wide decision. */
@@ -1049,7 +1232,27 @@ const run = async (
       process.exit(step.exit);
     }
   }
-  // The CLI exits once its client closes stdin.
+  // The CLI exits once its client closes stdin. Until then it still stops
+  // the background tasks it is asked to; anything else stays unanswered, as
+  // the script left it.
+  for (;;) {
+    // await-in-loop: one request at a time, in the order they arrived.
+    const message = await take("requests");
+    if (message === null) {
+      break;
+    }
+    if (message.request?.subtype === "stop_task") {
+      log({ stoppedTask: message.request["task_id"] });
+      write({
+        type: "control_response",
+        response: {
+          subtype: "success",
+          request_id: message.request_id,
+          response: {},
+        },
+      });
+    }
+  }
   await reading;
 };
 

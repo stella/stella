@@ -152,6 +152,7 @@ export const ANALYSIS_FAILURE_CODE_BY_KIND = {
   local_runner_not_reached: "provider_unavailable",
   local_runner_relinked: "provider_unavailable",
   local_runner_restoring: "provider_unavailable",
+  local_runner_folder_unavailable: "provider_unavailable",
   unknown: "failed",
 } as const satisfies Record<AIErrorKind, AnalysisFailureCode>;
 
@@ -176,6 +177,7 @@ const ANALYSIS_INCOMPLETE_REASON_BY_KIND = {
   local_runner_not_reached: null,
   local_runner_relinked: null,
   local_runner_restoring: null,
+  local_runner_folder_unavailable: null,
   unknown: null,
 } as const satisfies Record<
   AIErrorKind,

@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import "@/api/tests/setup-env";
 
-import { DESKTOP_RUNNER_APPROVAL_MODES } from "@stll/api-contract/desktop-runner";
+import { CHAT_LOCAL_RUN_APPROVAL_CEILINGS } from "@stll/api-contract/chat-run-target";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs, organizationSettings } from "@/api/db/schema";
@@ -121,12 +121,13 @@ describe("the organization's ceiling on local run approvals", () => {
         ),
       ).toBe(false);
     }
-    for (const mode of DESKTOP_RUNNER_APPROVAL_MODES) {
+    for (const mode of CHAT_LOCAL_RUN_APPROVAL_CEILINGS) {
       expect(
         v.is(updateLocalRunApprovalCeiling.config.body, { maxApprovals: mode }),
       ).toBe(true);
     }
-    for (const maxApprovals of ["bypass", "", null]) {
+    // Plan is not a ceiling: every ceiling allows it.
+    for (const maxApprovals of ["plan", "bypass", "", null]) {
       expect(
         v.is(updateLocalRunApprovalCeiling.config.body, { maxApprovals }),
       ).toBe(false);
