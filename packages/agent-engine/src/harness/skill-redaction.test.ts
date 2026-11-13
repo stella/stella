@@ -66,7 +66,7 @@ const claudeCall = async (
   lastCompleted(
     await through([
       completed(
-        toolCallForUse({ id: "call-1", name, input }, "stella"),
+        toolCallForUse({ id: "call-1", name, input }, "stella", null),
         toolResultFor(
           { name, input },
           { type: "tool_result", tool_use_id: "call-1", content },

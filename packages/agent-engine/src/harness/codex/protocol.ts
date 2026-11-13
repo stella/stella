@@ -204,8 +204,67 @@ export const CodexItemSchema = v.variant("type", [
     error: v.nullish(v.object({ message: v.string() })),
   }),
   v.object({ type: v.literal("webSearch"), id: v.string(), query: v.string() }),
+  v.object({
+    type: v.literal("imageView"),
+    id: v.string(),
+    /** The image file the harness viewed. */
+    path: v.string(),
+  }),
+  /**
+   * A call to one of the tools an agent manages its subagents with. The
+   * prompt it carries is not read: it stays on the computer.
+   */
+  v.object({
+    type: v.literal("collabAgentToolCall"),
+    id: v.string(),
+    /** Open upstream; `CODEX_SPAWN_AGENT_TOOL` is the one shown as a step. */
+    tool: v.string(),
+    status: v.picklist(["inProgress", "completed", "failed", "interrupted"]),
+    /** The agents the call addressed: for a spawn, the one it started. */
+    receiverThreadIds: v.array(v.string()),
+    /** The last known state of those agents, by thread. */
+    agentsStates: v.record(v.string(), v.object({ status: v.string() })),
+  }),
+  /** A point in a subagent's life, named by the subagent's thread. */
+  v.object({
+    type: v.literal("subAgentActivity"),
+    id: v.string(),
+    kind: v.string(),
+    agentThreadId: v.string(),
+  }),
 ]);
 export type CodexItem = v.InferOutput<typeof CodexItemSchema>;
+
+/** The subagent tool that starts an agent on a thread of its own. */
+export const CODEX_SPAWN_AGENT_TOOL = "spawnAgent";
+
+export type CodexAgentOutcome = "succeeded" | "failed" | "cancelled";
+
+/**
+ * How a subagent ended, by the state a subagent call reports for it. A state
+ * not named here (`pendingInit`, `running`, one newer than the pinned
+ * protocol) is an agent still at work.
+ */
+export const CODEX_ENDED_AGENT_STATES: ReadonlyMap<string, CodexAgentOutcome> =
+  new Map([
+    ["completed", "succeeded"],
+    ["errored", "failed"],
+    ["notFound", "failed"],
+    ["interrupted", "cancelled"],
+    ["shutdown", "cancelled"],
+  ]);
+
+/**
+ * How a subagent ended, by the kind of activity that reports it; `started`
+ * and `interacted` are an agent still at work.
+ */
+export const CODEX_ENDED_AGENT_ACTIVITIES: ReadonlyMap<
+  string,
+  CodexAgentOutcome
+> = new Map([
+  ["completed", "succeeded"],
+  ["interrupted", "cancelled"],
+]);
 
 export const isMcpTextBlock = (
   block: unknown,

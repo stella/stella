@@ -80,7 +80,8 @@ import {
  * tool's permission prompt, answered by allowing the call with the answers
  * in its input; a proposed plan is the `ExitPlanMode` tool's permission
  * prompt, whose input the CLI fills with the plan; a subagent's messages
- * carry the tool call that started it and are not this turn's output.
+ * carry the tool call that started it, and of them only its tool calls are
+ * this turn's output, as steps of that call.
  */
 
 /** Native permission replies, as the runner protocol's decisions. */
@@ -148,6 +149,8 @@ type EarlyMessage =
 type HeldToolUse = {
   use: Pick<ClaudeToolUse, "name" | "input">;
   toolCall: HarnessToolCall;
+  /** The call that started the subagent this call belongs to, else `null`. */
+  parentCallId: string | null;
 };
 
 /**
@@ -644,7 +647,12 @@ export class ClaudeCodeTurnSession {
   private assistant(
     parsed: v.InferOutput<typeof AssistantMessageSchema> | null,
   ) {
-    if (parsed === null || (parsed.parent_tool_use_id ?? null) !== null) {
+    if (parsed === null) {
+      return;
+    }
+    const parentCallId = parsed.parent_tool_use_id ?? null;
+    if (parentCallId !== null) {
+      this.subagentToolUses(parsed.message.content, parentCallId);
       return;
     }
     if (parsed.error !== undefined) {
@@ -690,16 +698,9 @@ export class ClaudeCodeTurnSession {
           }
           break;
         }
-        case "tool_use": {
-          const toolCall = toolCallForUse(block, this.stellaServer);
-          this.toolUses.set(block.id, { use: block, toolCall });
-          // A proposed plan opens with its approval: the CLI adds the plan
-          // to the call's input only when it asks about the call.
-          if (block.name !== EXIT_PLAN_MODE_TOOL) {
-            this.emit({ type: "tool.started", toolCall });
-          }
+        case "tool_use":
+          this.toolUse(block, null);
           break;
-        }
         case "redacted_thinking":
           // Encrypted reasoning carries no text to show.
           break;
@@ -710,16 +711,46 @@ export class ClaudeCodeTurnSession {
     }
   }
 
+  private toolUse(block: ClaudeToolUse, parentCallId: string | null) {
+    const toolCall = toolCallForUse(block, this.stellaServer, parentCallId);
+    this.toolUses.set(block.id, { use: block, toolCall, parentCallId });
+    // A proposed plan opens with its approval: the CLI adds the plan
+    // to the call's input only when it asks about the call.
+    if (block.name !== EXIT_PLAN_MODE_TOOL) {
+      this.emit({ type: "tool.started", toolCall });
+    }
+  }
+
+  /**
+   * A subagent's message: its tool calls are steps of the call that started
+   * it. What it wrote and thought is not read: that stays on the computer,
+   * with the report the call returns.
+   */
+  private subagentToolUses(
+    content: readonly { type: string }[],
+    parentCallId: string,
+  ) {
+    for (const raw of content) {
+      if (raw.type !== "tool_use") {
+        continue;
+      }
+      const block = this.parse(ContentBlockSchema, raw, "content block");
+      if (block === null) {
+        return;
+      }
+      if (block.type === "tool_use") {
+        this.toolUse(block, parentCallId);
+      }
+    }
+  }
+
   private user(parsed: v.InferOutput<typeof UserMessageSchema> | null) {
-    if (
-      parsed === null ||
-      (parsed.parent_tool_use_id ?? null) !== null ||
-      typeof parsed.message.content === "string"
-    ) {
+    if (parsed === null || typeof parsed.message.content === "string") {
       return;
     }
-    // Text blocks here are the CLI's own notes to the model; only tool
-    // results are output.
+    // Text blocks here are the CLI's own notes to the model, or the prompt a
+    // subagent was started with; only tool results are output, a subagent's
+    // among them.
     for (const raw of parsed.message.content) {
       if (raw.type !== "tool_result") {
         continue;
@@ -737,7 +768,7 @@ export class ClaudeCodeTurnSession {
         notRun !== undefined &&
         notRun !== null &&
         CLAUDE_STOPPED_TOOL_KINDS.has(notRun);
-      // A result always follows its call on the main thread, once: the call
+      // A result always follows its call on its own thread, once: the call
       // is released with it.
       if (held !== undefined) {
         this.toolUses.delete(block.tool_use_id);
@@ -843,13 +874,19 @@ export class ClaudeCodeTurnSession {
     const proposesPlan = parsed.tool_name === EXIT_PLAN_MODE_TOOL;
     // A proposed plan's call is built from this input, which carries the
     // plan the member approves.
+    const parentCallId = held?.parentCallId ?? null;
     const toolCall =
       held === undefined || proposesPlan
-        ? toolCallForUse({ id: parsed.tool_use_id, ...use }, this.stellaServer)
+        ? toolCallForUse(
+            { id: parsed.tool_use_id, ...use },
+            this.stellaServer,
+            parentCallId,
+          )
         : held.toolCall;
     this.toolUses.set(parsed.tool_use_id, {
       use: held?.use ?? use,
       toolCall,
+      parentCallId,
     });
     if (parsed.tool_name === ASK_USER_QUESTION_TOOL) {
       this.question(controlId, toolCall, parsed.input);

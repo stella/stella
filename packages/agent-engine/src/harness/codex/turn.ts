@@ -23,7 +23,11 @@ import {
   type HarnessToolCall,
   type HarnessUsage,
 } from "../events";
-import { HARNESS_TOOL_NAMES, unsupportedItem } from "../tool-parts";
+import {
+  HARNESS_TOOL_NAMES,
+  stepOfSubagent,
+  unsupportedItem,
+} from "../tool-parts";
 import {
   type Detached,
   type HarnessTurnBackground,
@@ -43,12 +47,19 @@ import {
   isToolItem,
   planUpdateStep,
   reasoningText,
+  subagentCall,
+  subagentResult,
   toolCallForItem,
   toolResultForItem,
 } from "./items";
 import {
+  CODEX_ENDED_AGENT_ACTIVITIES,
+  CODEX_ENDED_AGENT_STATES,
   CODEX_NOTIFICATIONS,
   CODEX_SERVER_REQUESTS,
+  CODEX_SPAWN_AGENT_TOOL,
+  type CodexAgentOutcome,
+  type CodexItem,
   CodexItemSchema,
   type CodexNotificationMethod,
   type CodexRateLimits,
@@ -261,6 +272,13 @@ export class CodexTurnSession {
   private failing: HarnessFailure | null = null;
   private readonly early: EarlyMessage[] = [];
   private readonly toolCalls = new Map<string, HarnessToolCall>();
+  /**
+   * The step of each subagent this turn started, by the subagent's thread:
+   * an item of that thread is a step of it.
+   */
+  private readonly subagentSteps = new Map<string, HarnessToolCall>();
+  /** The subagent threads whose step has not ended. */
+  private readonly runningSubagents = new Set<string>();
   private readonly pending = new Map<string, PendingInteraction>();
   private readonly resolved = new Set<string>();
   private readonly answeredByMessage = new Set<string>();
@@ -672,10 +690,19 @@ export class CodexTurnSession {
     params: unknown,
   ) {
     const envelope = this.parse(CODEX_NOTIFICATIONS[method], params, method);
-    if (envelope === null || envelope.turnId !== this.turnId) {
+    if (envelope === null) {
+      return;
+    }
+    // A subagent works on a thread and in turns of its own.
+    const parentCallId = this.subagentSteps.get(envelope.threadId)?.id ?? null;
+    if (parentCallId === null && envelope.turnId !== this.turnId) {
       return;
     }
     const { type, id } = envelope.item;
+    if (parentCallId !== null) {
+      this.subagentItem(method, type, params, parentCallId);
+      return;
+    }
     if (!isCodexItemType(type)) {
       // A kind newer than the pinned protocol: shown as a failed activity
       // once it completes, so the turn visibly did something Stella skipped.
@@ -698,6 +725,13 @@ export class CodexTurnSession {
       `${method} item`,
     );
     if (item === null) {
+      return;
+    }
+    if (
+      item.type === "collabAgentToolCall" ||
+      item.type === "subAgentActivity"
+    ) {
+      this.subagent(item, null);
       return;
     }
     if (method === "item/started") {
@@ -730,7 +764,8 @@ export class CodexTurnSession {
       case "commandExecution":
       case "fileChange":
       case "mcpToolCall":
-      case "webSearch": {
+      case "webSearch":
+      case "imageView": {
         const toolCall = toolCallForItem(item, this.stellaServer);
         this.toolCalls.set(toolCall.id, toolCall);
         this.emit({
@@ -744,6 +779,148 @@ export class CodexTurnSession {
         item satisfies never;
         panic("Unhandled Codex item");
     }
+  }
+
+  /**
+   * An item of a subagent's thread: its tool calls are steps of the call
+   * that started it, and a subagent it starts itself is a step of it too.
+   * What it wrote and thought is not read: that stays on the computer.
+   */
+  private subagentItem(
+    method: "item/started" | "item/completed",
+    type: string,
+    params: unknown,
+    parentCallId: string,
+  ) {
+    if (!isCodexItemType(type)) {
+      return;
+    }
+    const handling = codexItemHandling(type);
+    if (handling !== "tool" && handling !== "subagent") {
+      return;
+    }
+    const item = this.parse(
+      CodexItemSchema,
+      v.parse(v.object({ item: v.unknown() }), params).item,
+      `${method} item`,
+    );
+    if (item === null) {
+      return;
+    }
+    if (
+      item.type === "collabAgentToolCall" ||
+      item.type === "subAgentActivity"
+    ) {
+      this.subagent(item, parentCallId);
+      return;
+    }
+    if (!isToolItem(item)) {
+      return;
+    }
+    const toolCall = stepOfSubagent(
+      toolCallForItem(item, this.stellaServer),
+      parentCallId,
+    );
+    this.toolCalls.set(toolCall.id, toolCall);
+    this.emit(
+      method === "item/started"
+        ? { type: "tool.started", toolCall }
+        : {
+            type: "tool.completed",
+            toolCall,
+            result: toolResultForItem(item),
+          },
+    );
+  }
+
+  /**
+   * A subagent's step opens with the call that spawns it and stays open
+   * while the subagent works: the spawn call itself completes as soon as the
+   * agent exists. The step ends when an activity, or the state a later
+   * subagent call reports, says the agent ended; one still open at the
+   * turn's end is closed with the turn. Calls to the other subagent tools
+   * (waiting on an agent, sending it input) are not steps of their own.
+   */
+  private subagent(
+    item: Extract<
+      CodexItem,
+      { type: "collabAgentToolCall" | "subAgentActivity" }
+    >,
+    parentCallId: string | null,
+  ) {
+    if (item.type === "subAgentActivity") {
+      this.subagentEnded(
+        item.agentThreadId,
+        CODEX_ENDED_AGENT_ACTIVITIES.get(item.kind) ?? null,
+      );
+      return;
+    }
+    if (item.tool === CODEX_SPAWN_AGENT_TOOL) {
+      const toolCall = stepOfSubagent(subagentCall(item), parentCallId);
+      if (!this.toolCalls.has(toolCall.id)) {
+        this.toolCalls.set(toolCall.id, toolCall);
+        this.emit({ type: "tool.started", toolCall });
+      }
+      switch (item.status) {
+        case "inProgress":
+          break;
+        case "completed":
+          for (const threadId of item.receiverThreadIds) {
+            if (!this.subagentSteps.has(threadId)) {
+              this.subagentSteps.set(threadId, toolCall);
+              this.runningSubagents.add(threadId);
+            }
+          }
+          // A spawn that names no agent has nothing left to wait for.
+          if (item.receiverThreadIds.length === 0) {
+            this.emit({
+              type: "tool.completed",
+              toolCall,
+              result: subagentResult("succeeded"),
+            });
+          }
+          break;
+        case "failed":
+          this.emit({
+            type: "tool.completed",
+            toolCall,
+            result: subagentResult("failed"),
+          });
+          break;
+        case "interrupted":
+          this.emit({
+            type: "tool.completed",
+            toolCall,
+            result: subagentResult("cancelled"),
+          });
+          break;
+        default:
+          item.status satisfies never;
+          panic("Unhandled Codex subagent call status");
+      }
+    }
+    for (const [threadId, { status }] of Object.entries(item.agentsStates)) {
+      this.subagentEnded(
+        threadId,
+        CODEX_ENDED_AGENT_STATES.get(status) ?? null,
+      );
+    }
+  }
+
+  private subagentEnded(threadId: string, outcome: CodexAgentOutcome | null) {
+    const toolCall = this.subagentSteps.get(threadId);
+    if (
+      outcome === null ||
+      toolCall === undefined ||
+      !this.runningSubagents.delete(threadId)
+    ) {
+      return;
+    }
+    this.emit({
+      type: "tool.completed",
+      toolCall,
+      result: subagentResult(outcome),
+    });
   }
 
   /** Async questions do not block; the user answers with the next message. */
