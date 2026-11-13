@@ -2386,16 +2386,17 @@ describe("outbound frames", () => {
   test("a command that would not fit one frame is refused before it is queued", async () => {
     const { desktopId, runId, desktop } = await acceptedRun(first);
     const huge = "x".repeat(DESKTOP_RUNNER_MAX_FRAME_BYTES);
-    expect(
-      (
-        await control.sendInput({
-          owner,
-          runId,
-          inputId: Bun.randomUUIDv7(),
-          message: { role: "user", content: huge },
-        })
-      ).unwrap(),
-    ).toEqual({ type: "too_large" });
+    // A message for the running turn is refused well before a frame fills:
+    // the contract caps its text.
+    const input = await control.sendInput({
+      owner,
+      runId,
+      inputId: Bun.randomUUIDv7(),
+      message: { role: "user", content: huge },
+    });
+    expect(Result.isError(input) && input.error._tag).toBe(
+      "DesktopRunnerCommandInvalid",
+    );
     expect(
       (
         await control.startRun({

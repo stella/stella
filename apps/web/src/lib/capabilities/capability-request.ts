@@ -34,6 +34,7 @@ export type AppOnlyWriteId =
   | "chat.local-runners.folder-approval.update"
   | "chat.mcp-apps.call"
   | "chat.threads.model.update"
+  | "chat.turns.steer"
   | "files.document-properties.update"
   | "files.email-attachment.save"
   | "folio-collaboration.join"

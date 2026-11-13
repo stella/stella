@@ -82,6 +82,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatTimingSurface } from "@/lib/analytics/types";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import {
   CHAT_EDIT_APPLY_MODE,
   DOCX_EDIT_REPRESENTATION,
@@ -1519,20 +1520,21 @@ export const createChatRuntime = ({
       return "unsettled";
     }
     // A cloud turn takes nothing mid-turn: it is stopped and started again.
-    if (context?.getRunTarget?.()?.kind !== "local") {
+    if (context?.getRunTarget?.().kind !== "local") {
       return "refused";
     }
     const settled = new Promise<ChatSteerOutcome>((resolve) => {
       pendingSteers.set(inputId, resolve);
     });
     const sent = await Result.tryPromise(
-      async (): Promise<Result<ChatLocalRunSteerOutcome, APIError>> => {
-        const { data, error } = await api.chat
-          .threads({ threadId: toSafeId<"chatThread">(key.threadId) })
-          .turns({ turnId: steeredTurn })
-          .steer.post({ inputId, text });
-        return error ? Result.err(toAPIError(error)) : Result.ok(data.steer);
-      },
+      async (): Promise<Result<ChatLocalRunSteerOutcome, APIError>> =>
+        await invokeAppOnlyWrite("chat.turns.steer", async () => {
+          const { data, error } = await api.chat
+            .threads({ threadId: toSafeId<"chatThread">(key.threadId) })
+            .turns({ turnId: steeredTurn })
+            .steer.post({ inputId, text });
+          return error ? Result.err(toAPIError(error)) : Result.ok(data.steer);
+        }),
     );
     if (Result.isError(sent)) {
       captureRuntimeError(sent.error.cause);
