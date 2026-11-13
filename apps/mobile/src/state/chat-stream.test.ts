@@ -324,6 +324,47 @@ describe("drawing an answer from its events", () => {
     ]);
   });
 
+  test("a subagent still open when the run fails or is stopped reads as stopped, and one waiting for the person stays open", () => {
+    const open = (
+      id: string,
+      name: string,
+      input: unknown,
+    ): readonly unknown[] => [
+      { type: "TOOL_CALL_START", toolCallId: id, toolCallName: name },
+      { type: "TOOL_CALL_ARGS", toolCallId: id, delta: JSON.stringify(input) },
+      { type: "TOOL_CALL_END", toolCallId: id },
+    ];
+    const statusAfter = (end: unknown) =>
+      answerEntry(
+        reduce(
+          [
+            ...open("agent", "harness_native_tool", {
+              tool: "Agent",
+              detail: { kind: "subagent", description: "Check the lease" },
+            }),
+            ...open("step", "command_execution", {
+              command: "rg lease",
+              parentCallId: "agent",
+            }),
+            end,
+          ].flatMap((event) => parseChatEvent(JSON.stringify(event)) ?? []),
+        ),
+        "2026-10-20T10:00:00.000Z",
+      ).blocks.flatMap((block) =>
+        block.type === "subagent" ? [block.status] : [],
+      );
+    expect(
+      statusAfter({ type: "RUN_ERROR", message: "Provider failed" }),
+    ).toEqual(["interrupted"]);
+    expect(
+      statusAfter({ type: "RUN_FINISHED", outcome: { type: "cancelled" } }),
+    ).toEqual(["interrupted"]);
+    // The stored thread, read next, says what the turn waits for.
+    expect(
+      statusAfter({ type: "RUN_FINISHED", outcome: { type: "interrupt" } }),
+    ).toEqual(["running"]);
+  });
+
   test("is still streaming until the run says it finished", () => {
     expect(reduce(events.slice(0, -1)).status).toBe("streaming");
   });

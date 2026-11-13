@@ -309,6 +309,31 @@ function finishedStatus(outcome: string | undefined): AnswerStatus {
   return "finished";
 }
 
+/**
+ * The answer's parts as they stand once it ended. A call still open when
+ * the run failed or was stopped never finished: it is cut off, errored with
+ * no result as the stored message keeps it, so its step and the subagent it
+ * belongs to do not read as still under way. A turn that waits for the
+ * person keeps its open call: the stored thread, read next, says what for.
+ */
+const endedParts = ({
+  parts,
+  status,
+}: StreamedAnswer): readonly StreamedPart[] =>
+  status === "failed" || status === "stopped"
+    ? parts.map((part): StreamedPart =>
+        part.type === "tool-call" && part.state === "input-streaming"
+          ? {
+              type: "tool-call",
+              id: part.id,
+              name: part.name,
+              state: "error",
+              ...(part.input === undefined ? {} : { input: part.input }),
+            }
+          : part,
+      )
+    : parts;
+
 /** The answer drawn as a thread entry, so it renders like a stored one. */
 export const answerEntry = (
   answer: StreamedAnswer,
@@ -318,7 +343,7 @@ export const answerEntry = (
   role: "assistant",
   createdAt,
   text: messageText(answer.parts),
-  blocks: answerBlocks(answer.parts),
+  blocks: answerBlocks(endedParts(answer)),
   files: [],
   // The stored answer names its drafts once the thread is read again.
   drafts: [],

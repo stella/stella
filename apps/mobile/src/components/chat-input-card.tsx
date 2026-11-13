@@ -485,9 +485,11 @@ const ApprovalRow = ({
       : t(`localRun.title.${local.detailKind}`);
   })();
   // A credential-backed call sends exactly these arguments once approved, so
-  // the phone shows every one in full, as the web does.
+  // the phone shows every one in full, as the web does. A coding agent's
+  // step that names what it is about needs no rows; one that names nothing
+  // (a subagent without a description) still shows what it was given.
   const rows = (() => {
-    if (local !== null) {
+    if (local !== null && localAbout !== null && localAbout !== "") {
       return [];
     }
     return approval.toolName === USE_CONNECTOR_SECRET_TOOL_NAME
