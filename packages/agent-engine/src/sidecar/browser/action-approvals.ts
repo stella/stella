@@ -151,27 +151,26 @@ export const createActionApprovals = () => {
     async *withEvents(
       harness: AsyncIterable<HarnessEvent>,
     ): AsyncGenerator<HarnessEvent> {
-      const moved = Result.tryPromise({
-        try: async () => {
-          for await (const event of harness) {
-            side.push(event);
-          }
-        },
-        catch: (cause) => ({ cause }),
-      });
+      const moved = (async () => {
+        for await (const event of harness) {
+          side.push(event);
+        }
+      })();
       const ended = async () => {
-        const outcome = await moved;
+        // Observed here so a failure is never unhandled while the queue
+        // drains; the stream awaits `moved` again to end with it.
+        await Result.tryPromise({
+          try: () => moved,
+          catch: (cause) => ({ cause }),
+        });
         declineAll();
         side.close();
-        return outcome;
       };
-      const outcome = ended();
+      const closed = ended();
       try {
         yield* side.items;
-        const harnessEnd = await outcome;
-        if (Result.isError(harnessEnd)) {
-          throw harnessEnd.error.cause;
-        }
+        await closed;
+        await moved;
       } finally {
         declineAll();
         side.close();
