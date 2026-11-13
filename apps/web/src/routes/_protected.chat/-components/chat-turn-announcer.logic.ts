@@ -3,6 +3,8 @@ import { panic } from "better-result";
 import {
   getAwaitedAssistantMessageId,
   getCurrentApprovalPendingMessageId,
+  isApprovalRequestPart,
+  isUserAnswerablePart,
   type PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import type { TranslationKey } from "@/i18n/types";
@@ -27,16 +29,31 @@ type Outcome = NonNullable<
   NonNullable<PersistedChatMessage["metadata"]>["turnOutcome"]
 >;
 
-/** What a finished turn's server-owned outcome says, if anything. */
-const outcomeAnnouncement = (outcome: Outcome): TurnAnnouncement | null => {
+type Announced = { subject: string; announcement: TurnAnnouncement };
+
+/**
+ * What the server-owned outcome of answer `answerId` says, if anything. A
+ * waiting outcome is about the call it waits on, an ended one about the
+ * answer.
+ */
+const outcomeAnnouncement = (
+  answerId: string,
+  outcome: Outcome,
+): Announced | null => {
   switch (outcome.type) {
     case "awaiting-user":
       switch (outcome.interaction.type) {
         case "approval":
-          return "needs-approval";
+          return {
+            subject: outcome.interaction.toolCallId,
+            announcement: "needs-approval",
+          };
         case "ask-user":
         case "harness-question":
-          return "has-question";
+          return {
+            subject: outcome.interaction.toolCallId,
+            announcement: "has-question",
+          };
         // The page answers a client tool itself; the member is not asked.
         case "client-tool":
           return null;
@@ -46,13 +63,15 @@ const outcomeAnnouncement = (outcome: Outcome): TurnAnnouncement | null => {
           });
       }
     case "completed":
-      return "done";
+      return { subject: answerId, announcement: "done" };
     case "cancelled":
       // A superseded turn gave way to the member's next message.
-      return outcome.reason === "user-stop" ? "stopped" : null;
+      return outcome.reason === "user-stop"
+        ? { subject: answerId, announcement: "stopped" }
+        : null;
     case "failed":
     case "interrupted":
-      return "failed";
+      return { subject: answerId, announcement: "failed" };
     default:
       return panic("Unhandled turn outcome", {
         outcome: outcome satisfies never,
@@ -67,10 +86,15 @@ export type TurnAnnouncementInput = {
   hasError: boolean;
 };
 
-/** The calls of `messageId` still waiting on the member, as one id. */
+/**
+ * The calls of `messageId` that `isWaiting` accepts, as one id. Only calls
+ * waiting on the member count: a tool that runs beside them changes nothing
+ * the member was told.
+ */
 const waitingCalls = (
   messages: readonly PersistedChatMessage[],
   messageId: string,
+  isWaiting: (part: PersistedChatMessage["parts"][number]) => boolean,
 ) => {
   const message = messages.findLast(({ id }) => id === messageId);
   if (message === undefined) {
@@ -78,10 +102,7 @@ const waitingCalls = (
   }
   return message.parts
     .flatMap((part) =>
-      part.type === "tool-call" &&
-      (part.state === "approval-requested" || part.state === "input-complete")
-        ? [part.id]
-        : [],
+      part.type === "tool-call" && isWaiting(part) ? [part.id] : [],
     )
     .join(" ");
 };
@@ -96,21 +117,18 @@ export const turnAnnouncement = ({
   messages,
   isGenerating,
   hasError,
-}: TurnAnnouncementInput): {
-  subject: string;
-  announcement: TurnAnnouncement;
-} | null => {
+}: TurnAnnouncementInput): Announced | null => {
   const approval = getCurrentApprovalPendingMessageId(messages);
   if (approval !== null) {
     return {
-      subject: waitingCalls(messages, approval),
+      subject: waitingCalls(messages, approval, isApprovalRequestPart),
       announcement: "needs-approval",
     };
   }
   const awaited = getAwaitedAssistantMessageId(messages);
   if (awaited !== null) {
     return {
-      subject: waitingCalls(messages, awaited),
+      subject: waitingCalls(messages, awaited, isUserAnswerablePart),
       announcement: "has-question",
     };
   }
@@ -125,9 +143,7 @@ export const turnAnnouncement = ({
     return { subject: last.id, announcement: "failed" };
   }
   const outcome = last.role === "assistant" ? last.metadata?.turnOutcome : null;
-  const announcement =
-    outcome === null || outcome === undefined
-      ? null
-      : outcomeAnnouncement(outcome);
-  return announcement === null ? null : { subject: last.id, announcement };
+  return outcome === null || outcome === undefined
+    ? null
+    : outcomeAnnouncement(last.id, outcome);
 };

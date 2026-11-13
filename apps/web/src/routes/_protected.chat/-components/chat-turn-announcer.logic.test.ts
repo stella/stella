@@ -118,4 +118,53 @@ describe("what the thread announces about its turn", () => {
     expect(announced([question, answer(undefined)])).toBeNull();
     expect(announced([])).toBeNull();
   });
+
+  test("a waiting phase is about the calls that wait on the member only", () => {
+    const pending = {
+      type: "tool-call",
+      id: "approve",
+      name: "delete_document",
+      arguments: "{}",
+      state: "approval-requested",
+    } as const;
+    const beside = {
+      type: "tool-call",
+      id: "search",
+      name: "search_documents",
+      arguments: "{}",
+    } as const;
+    const subject = (parts: ChatUIMessage["parts"]) =>
+      turnAnnouncement({
+        messages: [question, answer(undefined, parts)],
+        isGenerating: true,
+        hasError: false,
+      })?.subject;
+    // A tool that runs beside the approval, then ends, changes nothing said.
+    expect(subject([pending, { ...beside, state: "input-complete" }])).toBe(
+      "approve",
+    );
+    expect(subject([pending])).toBe("approve");
+  });
+
+  test("a waiting outcome is about its call, an ended one about its answer", () => {
+    const subject = (outcome: Outcome) =>
+      turnAnnouncement({
+        messages: [question, answer(outcome)],
+        isGenerating: false,
+        hasError: false,
+      })?.subject;
+    expect(
+      subject({
+        type: "awaiting-user",
+        interaction: { type: "harness-question", toolCallId: "first" },
+      }),
+    ).toBe("first");
+    expect(
+      subject({
+        type: "awaiting-user",
+        interaction: { type: "harness-question", toolCallId: "second" },
+      }),
+    ).toBe("second");
+    expect(subject({ type: "completed" })).toBe("answer");
+  });
 });
