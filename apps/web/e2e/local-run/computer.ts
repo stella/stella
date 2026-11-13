@@ -400,5 +400,15 @@ export const expandTranscript = async (page: Page) => {
   return opened;
 };
 
+/**
+ * `count` turns of the chat have finished: each says how long it worked once
+ * the server has settled it, which the last words of its answer do not.
+ */
+export const expectTurnsFinished = async (page: Page, count: number) => {
+  await expect(transcript(page).getByText(/^Worked for/u)).toHaveCount(count, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+};
+
 export const stopButton = (page: Page) =>
   page.getByRole("button", { name: "Stop", exact: true });

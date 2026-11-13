@@ -9,6 +9,7 @@ import {
   chooseRunOn,
   expectComputerState,
   expectRunOn,
+  expectTurnsFinished,
   filesWritten,
   messagesReceived,
   openNewChat,
@@ -65,6 +66,7 @@ const writeNotes = async (page: Page) => {
   await expect(transcript(page)).toContainText(WROTE_ANSWER, {
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
+  await expectTurnsFinished(page, 1);
   const written = filesWritten(log);
   expect(written).toHaveLength(1);
   const [file = ""] = written;
@@ -72,17 +74,15 @@ const writeNotes = async (page: Page) => {
   return file;
 };
 
-const answerActions = (page: Page, answer: string) =>
-  transcript(page)
-    .locator("[data-chat-message-id]")
-    .filter({ hasText: answer })
-    .getByRole("button", { name: "Actions" });
+/** The actions of the chat's first answer, the one that wrote the notes. */
+const notesAnswerActions = (page: Page) =>
+  transcript(page).getByRole("button", { name: "Actions" }).first();
 
 const undoItem = (page: Page) =>
   page.getByRole("menuitem", { name: "Undo file changes" });
 
 const askToUndo = async (page: Page) => {
-  await answerActions(page, WROTE_ANSWER).click();
+  await notesAnswerActions(page).click();
   await undoItem(page).click();
   const dialog = page.getByRole("alertdialog", {
     name: "Undo this turn's file changes?",
@@ -95,7 +95,7 @@ test("the answer of a turn that just wrote files offers to undo them", async ({
 }) => {
   test.fail(true, UNDO_NOT_OFFERED);
   await writeNotes(page);
-  await answerActions(page, WROTE_ANSWER).click();
+  await notesAnswerActions(page).click();
   await expect(undoItem(page)).toBeVisible();
 });
 
@@ -137,7 +137,7 @@ test("undo removes what the newest turn wrote, and the next turn is told", async
   await expect(marker).toBeVisible({
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
-  await answerActions(page, WROTE_ANSWER).click();
+  await notesAnswerActions(page).click();
   await expect(page.getByRole("menu")).toBeVisible();
   await expect(undoItem(page)).toHaveCount(0);
   await page.keyboard.press("Escape");
@@ -173,21 +173,22 @@ test("undo is refused while the computer is offline, and the file stays", async 
 test("the first send of a new chat while no computer is connected says why and keeps the message", async ({
   page,
   request,
+  browserErrors,
 }) => {
-  test.fail(
-    true,
-    "The API refuses the send (409 local_run_no_computer), but the new chat shows neither the reason nor the message.",
-  );
+  // The browser logs the refused send, and the development build echoes its
+  // failed stream read.
+  browserErrors.expectCaptured(/status of 409 \(Conflict\)/u);
+  browserErrors.expectCaptured(/Stream response body read failed/u);
   await openNewChat(page);
   await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
   await setComputerOnline(request, false);
 
   await send(page, "Are you there?");
 
-  await expect(page.getByText(NO_COMPUTER)).toBeVisible({
+  await expect(transcript(page).getByText(NO_COMPUTER)).toBeVisible({
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
-  await expect(page.getByText("Are you there?")).toBeVisible();
+  await expect(transcript(page)).toContainText("Are you there?");
 });
 
 /** A chat on the computer with one answered turn. */
@@ -199,6 +200,7 @@ const answeredChat = async (page: Page) => {
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
   await expect(page).toHaveURL(THREAD_URL);
+  await expectTurnsFinished(page, 1);
 };
 
 const answers = (page: Page) =>

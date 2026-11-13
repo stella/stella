@@ -8,6 +8,7 @@ import {
   AGENTS,
   chooseRunOn,
   expandTranscript,
+  expectTurnsFinished,
   openNewChat,
   send,
   setComputerOnline,
@@ -106,9 +107,7 @@ for (const agent of ["codex", "claude-code"] as const) {
     });
     await send(page, "Draft the notice");
 
-    await expect(transcript(page).getByText(/^Worked for/u)).toBeVisible({
-      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
-    });
+    await expectTurnsFinished(page, 1);
     expect(await expandTranscript(page)).toBeGreaterThan(0);
     for (const text of STEPS[agent].shown) {
       // await-in-loop: each named step part, checked in turn.
@@ -131,9 +130,8 @@ for (const agent of ["codex", "claude-code"] as const) {
 
     // The same after a reload, from what the server kept.
     await page.reload();
-    await expect(transcript(page)).toContainText(STEPS[agent].shown[0], {
-      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
-    });
+    await expectTurnsFinished(page, 1);
+    await expect(transcript(page)).toContainText(STEPS[agent].shown[0]);
     await expandTranscript(page);
     await expect(
       transcript(page).getByText(OUTPUT_ELSEWHERE).first(),

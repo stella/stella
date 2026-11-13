@@ -8,6 +8,7 @@ import {
   chooseRunOn,
   chosenPermission,
   expectRunOn,
+  expectTurnsFinished,
   messagesReceived,
   modelsOffered,
   openNewChat,
@@ -60,6 +61,7 @@ for (const agent of ["codex", "claude-code"] as const) {
     ).toBe(true);
 
     // The chat keeps its place and its answer from the server.
+    await expectTurnsFinished(page, 1);
     await page.reload();
     await expect(transcript(page)).toContainText(ANSWERS[agent].answer, {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
@@ -163,6 +165,7 @@ test("new chats start on the last Run on choice, and on Ask whatever permission 
   await expect(transcript(page)).toContainText(ANSWERS["claude-code"].answer, {
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
+  await expectTurnsFinished(page, 1);
 
   await openNewChat(page);
   await expectRunOn(page, {
