@@ -614,7 +614,7 @@ async fn journal(
 /// the runner sends upstream.
 async fn relay_background(
   journal: Arc<SharedJournal>,
-  mut reports: mpsc::Receiver<BackgroundTasks>,
+  mut reports: mpsc::UnboundedReceiver<BackgroundTasks>,
 ) {
   while let Some(BackgroundTasks { run_id, count }) = reports.recv().await {
     journal.report_background(run_id, count);

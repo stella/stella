@@ -312,7 +312,7 @@ enum Control {
   },
   Ack(Ack),
   WatchProcesses(mpsc::Sender<HarnessProcess>),
-  WatchBackground(mpsc::Sender<BackgroundTasks>),
+  WatchBackground(mpsc::UnboundedSender<BackgroundTasks>),
   GrantProcess(String),
   #[cfg_attr(
     not(all(test, unix)),
@@ -378,11 +378,13 @@ impl HarnessSidecar {
   }
 
   /// What each kept harness process runs in the background, from now on; a
-  /// later call replaces the earlier watcher.
+  /// later call replaces the earlier watcher. Unbounded: the watcher keeps
+  /// only the latest count of a run, so a dropped report (a 0 above all)
+  /// would leave it showing work that ended.
   pub(crate) fn watch_background(
     &self,
-  ) -> Result<mpsc::Receiver<BackgroundTasks>, SidecarUnavailable> {
-    let (reports, receiver) = mpsc::channel(PROCESS_QUEUE);
+  ) -> Result<mpsc::UnboundedReceiver<BackgroundTasks>, SidecarUnavailable> {
+    let (reports, receiver) = mpsc::unbounded_channel();
     self.control(Control::WatchBackground(reports))?;
     Ok(receiver)
   }
@@ -957,7 +959,7 @@ struct Supervisor {
   /// Where reported harness processes go.
   processes: Option<mpsc::Sender<HarnessProcess>>,
   /// Where background task counts go.
-  background: Option<mpsc::Sender<BackgroundTasks>>,
+  background: Option<mpsc::UnboundedSender<BackgroundTasks>>,
   /// Each count above 0 and the holder it came from, by run id: a watcher
   /// that comes later hears them, and a holder that is lost takes its kept
   /// processes with it.
@@ -1712,7 +1714,7 @@ impl Supervisor {
 
   /// A new watcher hears every count above 0 a holder reported before it
   /// came: a holder reports a count when it changes, and on hello.
-  fn watch_background(&mut self, reports: mpsc::Sender<BackgroundTasks>) {
+  fn watch_background(&mut self, reports: mpsc::UnboundedSender<BackgroundTasks>) {
     self.background = Some(reports);
     let held: Vec<BackgroundTasks> = self
       .background_counts
@@ -1731,7 +1733,7 @@ impl Supervisor {
     let watched = self
       .background
       .as_ref()
-      .is_some_and(|reports| reports.try_send(tasks).is_ok());
+      .is_some_and(|reports| reports.send(tasks).is_ok());
     if !watched {
       tracing::warn!(target: LOG_TARGET, "a background task count had no watcher");
     }
