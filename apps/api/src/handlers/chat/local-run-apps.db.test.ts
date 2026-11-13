@@ -220,6 +220,7 @@ const readTurn = async ({
         model: "claude-test",
         reasoningEffort: null,
         approvals: "ask",
+        linkedFolderId: null,
       },
     },
   ).withResourceOrigin(origin);

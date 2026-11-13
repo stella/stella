@@ -15,7 +15,7 @@ export const PRODUCTION_STELLA_ORIGINS = [
 ] as const;
 
 /** The Chrome Web Store id of the stella extension. */
-const BROWSER_EXTENSION_ID = "hdjfdkknlahegaifklbelmafmpooakmi" as const;
+export const BROWSER_EXTENSION_ID = "hdjfdkknlahegaifklbelmafmpooakmi" as const;
 
 export const BROWSER_EXTENSION_STORE_URL =
   `https://chromewebstore.google.com/detail/${BROWSER_EXTENSION_ID}` as const;

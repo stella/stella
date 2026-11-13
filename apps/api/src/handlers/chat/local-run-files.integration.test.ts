@@ -209,6 +209,7 @@ const localRunFor = ({
         model: "gpt-test",
         reasoningEffort: null,
         approvals: "ask",
+        linkedFolderId: null,
       },
     },
   );
