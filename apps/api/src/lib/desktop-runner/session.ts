@@ -44,6 +44,7 @@ import {
   readPendingCommands,
   recordBackgroundTasks,
   recordHarnessStatus,
+  recordLinkedFolders,
   recordRunAccepted,
   recordRunRejected,
   releaseRunnerSession,
@@ -436,11 +437,12 @@ const deliverRestores = async (state: SessionState, resendSent: boolean) => {
     resendSent,
     limit: RESTORE_PAGE_SIZE,
   });
-  for (const { restoreId, folderId, runId } of due) {
+  for (const { restoreId, folderId, linkedFolderId, runId } of due) {
     const sent = send(state, {
       type: DESKTOP_RUNNER_SERVER_MESSAGE.folderRestore,
       restoreId,
       folderId,
+      linkedFolderId,
       runId,
     });
     if (sent === "closed") {
@@ -829,6 +831,17 @@ const handleMessage = async (
         binding,
         sessionId: state.sessionId,
         report: message.harness,
+      });
+      if (!current) {
+        close(state, DESKTOP_RUNNER_CLOSE.superseded);
+      }
+      return;
+    }
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.linkedFoldersStatus: {
+      const current = await recordLinkedFolders(db, {
+        binding,
+        sessionId: state.sessionId,
+        folders: message.folders,
       });
       if (!current) {
         close(state, DESKTOP_RUNNER_CLOSE.superseded);

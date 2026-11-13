@@ -335,6 +335,7 @@ const installNativeBoundary = async (
         // No install status either, read the same as the refusal with local agents off.
         harness_get_status: () => null,
         local_skill_folders_get: () => null,
+        local_linked_folders_get: () => null,
         account_get_state: () => accountSnapshot,
         open_stella_account: () => {
           connectCount += 1;

@@ -831,5 +831,26 @@
       "network_folder": "This folder is on a network share. Skills must be on this computer's own disk.",
       "path_changed": "A folder on the way to this one has changed. Remove it and add it again."
     }
+  },
+  "localLinkedFolders": {
+    "title": "Linked folders",
+    "description": "Folders on this computer that a chat's coding agent can work in. A chat sees only a folder's name; its path stays on this computer.",
+    "add": "Link folder",
+    "remove": "Unlink",
+    "removeFolder": "Unlink {name}",
+    "state": {
+      "offline": "The drive this folder is on is not connected.",
+      "moved": "This folder was moved, renamed or deleted. Unlink it and link it again.",
+      "protected": "This folder holds stella's own data or a skill folder, so the agent cannot work in it.",
+      "unreadable": "This folder could not be read."
+    },
+    "notice": {
+      "action_failed": "That did not work. Try again.",
+      "too_many": "This computer already has as many linked folders as it can keep. Unlink one first.",
+      "not_a_folder": "Choose a folder.",
+      "network_folder": "This folder is on a network share. Link a folder on this computer's own disk.",
+      "protected": "This folder holds stella's own data or a skill folder, so the agent cannot work in it.",
+      "unreadable": "This folder could not be read."
+    }
   }
 }

@@ -831,5 +831,26 @@
       "network_folder": "Tento priečinok je na sieťovom úložisku. Zručnosti musia byť na vlastnom disku tohto počítača.",
       "path_changed": "Niektorý nadradený priečinok sa zmenil. Odstráňte ho a pridajte znova."
     }
+  },
+  "localLinkedFolders": {
+    "title": "Prepojené priečinky",
+    "description": "Priečinky v tomto počítači, v ktorých môže pracovať agent chatu. Chat vidí len názov priečinka; jeho cesta zostáva v tomto počítači.",
+    "add": "Prepojiť priečinok",
+    "remove": "Odpojiť",
+    "removeFolder": "Odpojiť {name}",
+    "state": {
+      "offline": "Disk, na ktorom je tento priečinok, nie je pripojený.",
+      "moved": "Tento priečinok bol presunutý, premenovaný alebo odstránený. Odpojte ho a prepojte znova.",
+      "protected": "Tento priečinok obsahuje vlastné údaje stelly alebo priečinok so zručnosťami, takže v ňom agent nemôže pracovať.",
+      "unreadable": "Tento priečinok sa nepodarilo prečítať."
+    },
+    "notice": {
+      "action_failed": "Nepodarilo sa to. Skúste to znova.",
+      "too_many": "Tento počítač už má toľko prepojených priečinkov, koľko ich udrží. Najprv jeden odpojte.",
+      "not_a_folder": "Vyberte priečinok.",
+      "network_folder": "Tento priečinok je na sieťovom úložisku. Prepojte priečinok na vlastnom disku tohto počítača.",
+      "protected": "Tento priečinok obsahuje vlastné údaje stelly alebo priečinok so zručnosťami, takže v ňom agent nemôže pracovať.",
+      "unreadable": "Tento priečinok sa nepodarilo prečítať."
+    }
   }
 }

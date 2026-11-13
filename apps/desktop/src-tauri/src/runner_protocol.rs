@@ -11,7 +11,7 @@ use std::{collections::BTreeMap, num::NonZeroU32, time::Duration};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub(crate) const PROTOCOL: u32 = 3;
+pub(crate) const PROTOCOL: u32 = 2;
 /// Largest frame either side sends or accepts, in UTF-8 bytes.
 pub(crate) const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 /// Sequenced messages one run may store; the API refuses more.
@@ -155,6 +155,21 @@ wire_values!(RejectReason {
   RunTooLarge => "run_too_large",
   UnknownRun => "unknown_run",
   FolderBusy => "folder_busy",
+  FolderUnlinked => "folder_unlinked",
+  FolderOffline => "folder_offline",
+  FolderMoved => "folder_moved",
+  FolderProtected => "folder_protected",
+  FolderUnreadable => "folder_unreadable",
+});
+
+// How a folder linked on the computer stands, as `hello` and
+// `linked_folders.status` report it.
+wire_values!(LinkedFolderState {
+  Available => "available",
+  Offline => "offline",
+  Moved => "moved",
+  Protected => "protected",
+  Unreadable => "unreadable",
 });
 
 wire_values!(FolderRestoreOutcome {
@@ -359,6 +374,23 @@ pub(crate) struct Hello {
   pub(crate) sidecar_version: String,
   pub(crate) harnesses: Vec<HarnessReport>,
   pub(crate) active_runs: Vec<ActiveRun>,
+  #[serde(default)]
+  pub(crate) linked_folders: Vec<LinkedFolderReport>,
+}
+
+/// A folder the member linked on this computer, as the API knows it: its id
+/// and name, never its path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct LinkedFolderReport {
+  pub(crate) id: FolderId,
+  pub(crate) name: String,
+  pub(crate) state: LinkedFolderState,
+}
+
+/// Every linked folder, sent whenever the list or a folder's state changed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct LinkedFoldersStatus {
+  pub(crate) folders: Vec<LinkedFolderReport>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -433,6 +465,7 @@ wire_union!(DesktopMessage tagged "type" {
   RunApprovalRequest(RunApprovalRequest) => "run.approval_request",
   RunFinished(RunFinished) => "run.finished",
   FolderRestored(FolderRestored) => "folder.restored",
+  LinkedFoldersStatus(LinkedFoldersStatus) => "linked_folders.status",
   RunBackground(RunBackground) => "run.background",
 });
 
@@ -484,6 +517,9 @@ pub(crate) struct RunStart {
   pub(crate) run_id: String,
   /// The folder the run works in; a chat's runs share one.
   pub(crate) folder_id: String,
+  /// A folder the member linked on this computer, worked in instead of the
+  /// chat's own; the chat's folder still keeps its cache.
+  pub(crate) linked_folder_id: Option<FolderId>,
   pub(crate) harness: Harness,
   pub(crate) harness_version: String,
   pub(crate) model: String,
@@ -580,6 +616,8 @@ impl From<FolderId> for String {
 pub(crate) struct FolderRestore {
   pub(crate) restore_id: String,
   pub(crate) folder_id: FolderId,
+  /// The linked folder the run worked in, when it worked in one.
+  pub(crate) linked_folder_id: Option<FolderId>,
   pub(crate) run_id: String,
 }
 
@@ -717,6 +755,10 @@ mod tests {
             .iter()
             .map(|value| value.wire_name()),
         ),
+      ),
+      (
+        "linkedFolderStates",
+        names(LinkedFolderState::ALL.iter().map(|value| value.wire_name())),
       ),
       (
         "networkPolicies",

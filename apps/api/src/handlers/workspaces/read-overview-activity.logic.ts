@@ -181,6 +181,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   chat_tool_execution: null,
   chat_tool_grant: null,
   chat_browser_site_grant: null,
+  chat_local_folder_approval: null,
   clause: null,
   clause_category: null,
   clause_template_link: null,

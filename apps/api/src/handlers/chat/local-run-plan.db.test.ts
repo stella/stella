@@ -86,6 +86,8 @@ const SANDBOXING: PickedDesktop = {
     approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
     models: [{ id: MODEL, label: "Sonnet", reasoningEfforts: [] }],
   },
+  linkedFolders: [],
+  approvedFolderIds: [],
 };
 
 const snapshot = () =>

@@ -6,7 +6,10 @@
 
 use std::{
   path::PathBuf,
-  sync::{Arc, Mutex},
+  sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+  },
   time::Duration,
 };
 
@@ -15,16 +18,24 @@ use serde_json::{Value, json};
 
 use super::harness::{HarnessHost, HarnessReports};
 use super::sidecar_host::{
-  HarnessCredentials, HostSettings, InstallSettled, InstalledHarness, LocalHarnesses,
-  SidecarHarnessHost, skill_folders_within,
+  HarnessCredentials, HostSettings, InstallSettled, InstalledHarness, LinkedFolderLook,
+  LinkedFolderLooks, LocalHarnesses, SidecarHarnessHost, linked_folder_within,
+  skill_folders_within,
 };
 use super::tests::{Connection, Gateway, Setup};
 use crate::harness_sidecar::tests::Fixture;
 use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar, SkillFolderRef};
-use crate::runner_protocol::{ApprovalDecision, Harness, HarnessReport, RunApproval};
+use crate::local_linked_folders::LinkedFolderRefusal;
+use crate::runner_protocol::{
+  ApprovalDecision, Harness, HarnessReport, LinkedFolderReport, RunApproval,
+};
 
 const WAIT: Duration = Duration::from_secs(10);
 const VERSION: &str = "0.50.0";
+/// A folder the member linked, which the fakes find in their root.
+const LINKED_FOLDER_ID: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000d1";
+/// A linked folder whose volume is not mounted.
+const OFFLINE_FOLDER_ID: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000d2";
 /// The approval request id the stand-in holder asks with.
 const REQUEST_ID: &str = "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f";
 /// The stand-in's scenarios, each a model the probe reports.
@@ -47,6 +58,9 @@ struct FakeHarnesses {
   credentials: Arc<Mutex<Option<HarnessCredentials>>>,
   /// What the host asked to hear when an install ends.
   settled: Arc<Mutex<Option<InstallSettled>>>,
+  /// Whether the member linked any folder; a report of them reaches the API
+  /// on its own, between the messages other tests wait for.
+  folders_linked: bool,
 }
 
 impl LocalHarnesses for FakeHarnesses {
@@ -77,11 +91,32 @@ impl LocalHarnesses for FakeHarnesses {
       path: self.root.join("skills/fixture-skill").display().to_string(),
     }]
   }
+
+  fn linked_folder(&self, id: uuid::Uuid) -> Result<PathBuf, LinkedFolderRefusal> {
+    match id.to_string().as_str() {
+      LINKED_FOLDER_ID => Ok(self.root.join("member/Smith v Jones")),
+      OFFLINE_FOLDER_ID => Err(LinkedFolderRefusal::Offline),
+      _ => Err(LinkedFolderRefusal::Unlinked),
+    }
+  }
+
+  fn linked_folder_reports(&self) -> Vec<LinkedFolderReport> {
+    if !self.folders_linked {
+      return Vec::new();
+    }
+    serde_json::from_value(json!([
+      { "id": LINKED_FOLDER_ID, "name": "Smith v Jones", "state": "available" },
+      { "id": OFFLINE_FOLDER_ID, "name": "Archive", "state": "offline" },
+    ]))
+    .unwrap()
+  }
 }
 
 /// Harnesses whose skill folders answer only once `release` fires.
 struct HungFolders {
   release: Mutex<std::sync::mpsc::Receiver<()>>,
+  /// How many looks at the linked folders began.
+  looks: AtomicUsize,
 }
 
 impl LocalHarnesses for HungFolders {
@@ -98,6 +133,17 @@ impl LocalHarnesses for HungFolders {
 
   fn on_install_settled(&self, _settled: InstallSettled) {}
 
+  fn linked_folder(&self, _id: uuid::Uuid) -> Result<PathBuf, LinkedFolderRefusal> {
+    let _released = self.release.lock().unwrap().recv();
+    Ok(PathBuf::from("/late"))
+  }
+
+  fn linked_folder_reports(&self) -> Vec<LinkedFolderReport> {
+    self.looks.fetch_add(1, Ordering::SeqCst);
+    let _released = self.release.lock().unwrap().recv();
+    Vec::new()
+  }
+
   fn skill_folders(&self) -> Vec<SkillFolderRef> {
     let _released = self.release.lock().unwrap().recv();
     vec![SkillFolderRef {
@@ -112,6 +158,7 @@ fn a_skill_folder_read_that_hangs_leaves_the_run_without_skills_in_time() {
   let (release, released) = std::sync::mpsc::channel();
   let harnesses = Arc::new(HungFolders {
     release: Mutex::new(released),
+    looks: AtomicUsize::new(0),
   });
 
   assert!(skill_folders_within(Duration::from_millis(20), harnesses).is_empty());
@@ -188,7 +235,21 @@ impl Place {
     credentials: Option<HarnessCredentials>,
     probe_interval: Duration,
   ) -> SidecarHarnessHost {
-    self.host_reading(Arc::new(Mutex::new(credentials)), probe_interval)
+    self.host_with(credentials, probe_interval, false)
+  }
+
+  /// A host that reports a linked folder when `folders_linked`.
+  fn host_with(
+    &self,
+    credentials: Option<HarnessCredentials>,
+    probe_interval: Duration,
+    folders_linked: bool,
+  ) -> SidecarHarnessHost {
+    self.build_host(
+      Arc::new(Mutex::new(credentials)),
+      probe_interval,
+      folders_linked,
+    )
   }
 
   /// A host whose credentials are read from `credentials` each time.
@@ -196,6 +257,15 @@ impl Place {
     &self,
     credentials: Arc<Mutex<Option<HarnessCredentials>>>,
     probe_interval: Duration,
+  ) -> SidecarHarnessHost {
+    self.build_host(credentials, probe_interval, false)
+  }
+
+  fn build_host(
+    &self,
+    credentials: Arc<Mutex<Option<HarnessCredentials>>>,
+    probe_interval: Duration,
+    folders_linked: bool,
   ) -> SidecarHarnessHost {
     SidecarHarnessHost::new(
       HostSettings {
@@ -207,6 +277,7 @@ impl Place {
         root: self.fixture.root.clone(),
         credentials,
         settled: Arc::clone(&self.settled),
+        folders_linked,
       }),
       Arc::new(SharedJournal::default()),
     )
@@ -459,6 +530,127 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
 }
 
 #[test]
+fn the_linked_folders_reach_the_api_by_name_and_state_only() {
+  let place = Place::new();
+  run(async {
+    let host = place.host_with(None, Duration::from_secs(3600), true);
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let _connection = connect(&gateway, &[], "ready").await;
+    until("the host looked at the linked folders", || {
+      host.linked_folders().len() == 2
+    })
+    .await;
+    assert_eq!(
+      serde_json::to_value(host.linked_folders()).unwrap(),
+      json!([
+        { "id": LINKED_FOLDER_ID, "name": "Smith v Jones", "state": "available" },
+        { "id": OFFLINE_FOLDER_ID, "name": "Archive", "state": "offline" },
+      ])
+    );
+    runner.stop().await;
+  });
+  stop_holders(&place);
+}
+
+#[test]
+fn a_linked_folder_that_hangs_counts_as_offline_in_time() {
+  let (release, released) = std::sync::mpsc::channel();
+  let harnesses = Arc::new(HungFolders {
+    release: Mutex::new(released),
+    looks: AtomicUsize::new(0),
+  });
+
+  assert_eq!(
+    linked_folder_within(Duration::from_millis(20), harnesses, uuid::Uuid::new_v4()),
+    Err(LinkedFolderRefusal::Offline)
+  );
+
+  release.send(()).unwrap();
+}
+
+#[test]
+fn a_look_at_the_linked_folders_that_hangs_is_the_only_one_until_it_ends() {
+  let (release, released) = std::sync::mpsc::channel();
+  let hung = Arc::new(HungFolders {
+    release: Mutex::new(released),
+    looks: AtomicUsize::new(0),
+  });
+  let harnesses: Arc<dyn LocalHarnesses> = Arc::<HungFolders>::clone(&hung);
+  run(async move {
+    let mut looks = LinkedFolderLooks::default();
+    let budget = Duration::from_millis(20);
+
+    assert_eq!(
+      looks.look(&harnesses, budget).await,
+      LinkedFolderLook::Pending
+    );
+    // The next beat waits on the same look instead of starting another.
+    assert_eq!(
+      looks.look(&harnesses, budget).await,
+      LinkedFolderLook::Pending
+    );
+    assert_eq!(
+      looks.look(&harnesses, budget).await,
+      LinkedFolderLook::Pending
+    );
+
+    release.send(()).unwrap();
+    assert_eq!(
+      looks.look(&harnesses, WAIT).await,
+      LinkedFolderLook::LateReports(Vec::new())
+    );
+    assert_eq!(hung.looks.load(Ordering::SeqCst), 1);
+
+    // With none in flight, the next look is a new one.
+    release.send(()).unwrap();
+    assert_eq!(
+      looks.look(&harnesses, WAIT).await,
+      LinkedFolderLook::Reports(Vec::new())
+    );
+    assert_eq!(hung.looks.load(Ordering::SeqCst), 2);
+  });
+}
+
+#[test]
+fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_beside_the_chat_folder() {
+  let place = Place::new();
+  let id = run_id();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    let mut start = run_start(&id, "gpt-test");
+    start["linkedFolderId"] = json!(LINKED_FOLDER_ID);
+    connection.send(start).await;
+    assert_eq!(
+      connection.receive().await,
+      json!({"type": "run.accepted", "runId": id})
+    );
+    let messages = until_finished(&mut connection).await;
+    assert_eq!(messages.last().unwrap()["outcome"], "completed");
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  let start = place.received("run.start").remove(0);
+  assert_eq!(
+    start["workspaceDir"],
+    place
+      .fixture
+      .root
+      .join("member/Smith v Jones")
+      .to_str()
+      .unwrap()
+  );
+  let cache = place.workspaces().join(format!("{id}.cache"));
+  assert_eq!(start["cacheDir"], cache.to_str().unwrap());
+  assert!(cache.is_dir());
+}
+
+#[test]
 fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
   let place = Place::new();
   run(async {
@@ -473,6 +665,10 @@ fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
     claude["harness"] = json!("claude-code");
     let mut unsandboxed = run_start(&run_id(), "gpt-test");
     unsandboxed["policy"]["approvals"] = json!("full_auto");
+    let mut offline = run_start(&run_id(), "gpt-test");
+    offline["linkedFolderId"] = json!(OFFLINE_FOLDER_ID);
+    let mut unlinked = run_start(&run_id(), "gpt-test");
+    unlinked["linkedFolderId"] = json!(run_id());
     let mut unoffered_effort = run_start(&run_id(), "gpt-test");
     unoffered_effort["reasoningEffort"] = json!("max");
     let cases = [
@@ -481,6 +677,8 @@ fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
       (older, "harness_version_unavailable"),
       (claude, "harness_not_installed"),
       (unsandboxed, "policy_unsupported"),
+      (offline, "folder_offline"),
+      (unlinked, "folder_unlinked"),
     ];
     for (start, reason) in cases {
       connection.send(start.clone()).await;

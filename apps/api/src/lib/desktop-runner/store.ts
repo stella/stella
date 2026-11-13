@@ -27,6 +27,8 @@ import {
   type DesktopRunnerHarnessReport,
   desktopRunnerHarnessReportSchema,
   type DesktopRunnerLimits,
+  type DesktopRunnerLinkedFolder,
+  desktopRunnerLinkedFolderSchema,
   type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 
@@ -42,6 +44,11 @@ import {
   desktopRunners,
   userFiles,
 } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  type AuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import {
@@ -157,6 +164,24 @@ const storedHarnessReports = (value: unknown): DesktopRunnerHarnessReport[] => {
     ? parsed.output
     : panic("A stored desktop runner harness report no longer validates");
 };
+
+const linkedFoldersSchema = v.array(desktopRunnerLinkedFolderSchema);
+
+/** Linked folders are validated before they are stored, like reports. */
+const storedLinkedFolders = (value: unknown): DesktopRunnerLinkedFolder[] => {
+  const parsed = v.safeParse(linkedFoldersSchema, value);
+  return parsed.success
+    ? parsed.output
+    : panic("A stored desktop runner linked folder no longer validates");
+};
+
+/**
+ * The approvals a computer's linked folders keep: only of folders it still
+ * reports. A folder unlinked and linked again has a new id and is asked
+ * about again.
+ */
+const keptFolderApprovals = (folders: readonly DesktopRunnerLinkedFolder[]) =>
+  sql`ARRAY(SELECT approved FROM unnest(${runner.approvedFolderIds}) AS approved WHERE approved::text IN (SELECT jsonb_array_elements(${JSON.stringify(folders)}::text::jsonb) ->> 'id'))::uuid[]`;
 
 type HelloMessage = Extract<
   DesktopRunnerDesktopMessage,
@@ -393,6 +418,7 @@ export const claimRunnerSession = async (
       appVersion: hello.appVersion,
       sidecarVersion: hello.sidecarVersion,
       harnesses: hello.harnesses,
+      linkedFolders: hello.linkedFolders,
       connectedAt: now,
       lastSeenAt: now,
     };
@@ -676,6 +702,31 @@ export const renewRunnerSession = async (
     };
   });
 
+/** One report the computer makes about itself over its socket. */
+type ComputerReport =
+  | Pick<typeof runner.$inferInsert, "harnesses">
+  | (Pick<typeof runner.$inferInsert, "linkedFolders"> & {
+      approvedFolderIds: SQL;
+    });
+
+/**
+ * Store a report of the computer on its runner row while this socket holds
+ * it; `false` when the socket is not current.
+ */
+const writeComputerReport = async (
+  tx: Transaction,
+  { binding, sessionId }: SessionOptions,
+  report: ComputerReport,
+): Promise<boolean> => {
+  // audit: skip - runner socket bookkeeping; the row stores the computer's own harness and linked folder reports
+  const updated = await tx
+    .update(runner)
+    .set(report)
+    .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+    .returning({ desktopId: runner.desktopId });
+  return updated.length > 0;
+};
+
 type HarnessStatusOptions = SessionOptions & {
   report: DesktopRunnerHarnessReport;
 };
@@ -686,11 +737,10 @@ export const recordHarnessStatus = async (
   { binding, sessionId, report }: HarnessStatusOptions,
 ): Promise<boolean> =>
   await withAggregateTransaction(db, async (tx) => {
-    const current = and(runnerKey(binding), eq(runner.sessionId, sessionId));
     const [row] = await tx
       .select({ harnesses: runner.harnesses })
       .from(runner)
-      .where(current)
+      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
       .limit(1);
     if (row === undefined) {
       return false;
@@ -701,8 +751,79 @@ export const recordHarnessStatus = async (
       ),
       report,
     ];
-    // audit: skip - runner socket bookkeeping; the run's caller audits the work
-    await tx.update(runner).set({ harnesses }).where(current);
+    return await writeComputerReport(tx, { binding, sessionId }, { harnesses });
+  });
+
+type LinkedFoldersOptions = SessionOptions & {
+  folders: readonly DesktopRunnerLinkedFolder[];
+};
+
+/**
+ * Replace the computer's linked folders, dropping approvals of folders it no
+ * longer reports; returns `false` when the socket is not current.
+ */
+export const recordLinkedFolders = async (
+  db: DesktopRunnerDb,
+  { binding, sessionId, folders }: LinkedFoldersOptions,
+): Promise<boolean> =>
+  await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await writeComputerReport(
+        tx,
+        { binding, sessionId },
+        {
+          linkedFolders: [...folders],
+          approvedFolderIds: keptFolderApprovals(folders),
+        },
+      ),
+  );
+
+type ApproveLinkedFolderOptions = {
+  owner: RunOwner;
+  desktopId: string;
+  linkId: string;
+  /** Records the approval's audit event, in the approval's transaction. */
+  recordAuditEvent: AuditRecorder;
+};
+
+/**
+ * Record the member's OK for runs to work in a folder linked on one of their
+ * computers, on every device key of that installation that reports it, with
+ * its audit event in the same transaction: an approval whose audit event
+ * cannot be written is not kept. `false` when none of them reports the
+ * folder; nothing is then recorded.
+ */
+export const approveLinkedFolder = async (
+  db: DesktopRunnerDb,
+  { owner, desktopId, linkId, recordAuditEvent }: ApproveLinkedFolderOptions,
+): Promise<boolean> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const updated = await tx
+      .update(runner)
+      .set({
+        approvedFolderIds: sql`CASE WHEN ${linkId}::uuid = ANY(${runner.approvedFolderIds}) THEN ${runner.approvedFolderIds} ELSE array_append(${runner.approvedFolderIds}, ${linkId}::uuid) END`,
+      })
+      .where(
+        and(
+          eq(runner.userId, owner.userId),
+          eq(runner.organizationId, owner.organizationId),
+          eq(runner.desktopId, desktopId),
+          ne(runner.connection, "retired"),
+          sql`${runner.linkedFolders} @> ${JSON.stringify([{ id: linkId }])}::text::jsonb`,
+        ),
+      )
+      .returning({ desktopId: runner.desktopId });
+    if (updated.length === 0) {
+      return false;
+    }
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL,
+      resourceId: linkId,
+      workspaceId: null,
+      metadata: { desktopId },
+    });
     return true;
   });
 
@@ -1590,6 +1711,9 @@ export type ConnectedRunner = {
   readonly instanceId: string;
   readonly lastSeenAt: Date;
   readonly harnesses: readonly DesktopRunnerHarnessReport[];
+  readonly linkedFolders: readonly DesktopRunnerLinkedFolder[];
+  /** Linked folders the member let runs work in. */
+  readonly approvedFolderIds: readonly string[];
 };
 
 /** A member's connected runners seen since `seenSince`, most recent first. */
@@ -1605,6 +1729,8 @@ export const readConnectedRunners = async (
       instanceId: runner.instanceId,
       lastSeenAt: runner.lastSeenAt,
       harnesses: runner.harnesses,
+      linkedFolders: runner.linkedFolders,
+      approvedFolderIds: runner.approvedFolderIds,
     })
     .from(runner)
     .where(
@@ -1620,6 +1746,7 @@ export const readConnectedRunners = async (
   return rows.map((row) => ({
     ...row,
     harnesses: storedHarnessReports(row.harnesses),
+    linkedFolders: storedLinkedFolders(row.linkedFolders),
   }));
 };
 
@@ -1647,6 +1774,8 @@ type InsertRunOptions = {
   reasoningEffort: DesktopRunnerReasoningEffort | null;
   approvals: DesktopRunnerApprovalMode;
   workspaceIds: readonly SafeId<"workspace">[];
+  /** The folder linked on the computer the run works in, if any. */
+  linkedFolderId: string | null;
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
   /**
@@ -1676,7 +1805,12 @@ export type InsertedRun =
   | { type: "reasoning_effort_unavailable" }
   | { type: "approvals_unavailable" }
   /** The chat's folder is being restored on its computer. */
-  | { type: "folder_busy" };
+  | { type: "folder_busy" }
+  /**
+   * The linked folder is not reported available by the computer, or the
+   * member has not let runs work in it.
+   */
+  | { type: "folder_unavailable" };
 
 /**
  * Bind a new run to a connected runner and queue its `run.start`, both or
@@ -1703,6 +1837,8 @@ export const insertAssignedRun = async (
         sessionId: runner.sessionId,
         instanceId: runner.instanceId,
         harnesses: runner.harnesses,
+        linkedFolders: runner.linkedFolders,
+        approvedFolderIds: runner.approvedFolderIds,
       })
       .from(runner)
       .where(
@@ -1739,6 +1875,16 @@ export const insertAssignedRun = async (
     if (!report.approvalModes.includes(options.approvals)) {
       return { type: "approvals_unavailable" };
     }
+    const { linkedFolderId } = options;
+    if (
+      linkedFolderId !== null &&
+      (!target.approvedFolderIds.includes(linkedFolderId) ||
+        storedLinkedFolders(target.linkedFolders).find(
+          ({ id }) => id === linkedFolderId,
+        )?.state !== "available")
+    ) {
+      return { type: "folder_unavailable" };
+    }
     // A restore of the chat's folder that its computer may still act on: the
     // run would work in files about to change. The computer refuses such a
     // run too, for a restore asked while this one is stored.
@@ -1768,6 +1914,7 @@ export const insertAssignedRun = async (
       harness,
       harnessVersion,
       workspaceIds: [...options.workspaceIds],
+      linkedFolderId,
       chatThreadId: options.chat?.threadId ?? null,
       chatTurnId: options.chat?.turnId ?? null,
       state: "assigned",
@@ -2139,6 +2286,9 @@ export type MemberRunner = {
   readonly connected: boolean;
   readonly lastSeenAt: Date;
   readonly harnesses: readonly DesktopRunnerHarnessReport[];
+  readonly linkedFolders: readonly DesktopRunnerLinkedFolder[];
+  /** Linked folders the member let runs work in. */
+  readonly approvedFolderIds: readonly string[];
 };
 
 /**
@@ -2156,6 +2306,8 @@ export const readMemberRunners = async (
       connection: runner.connection,
       lastSeenAt: runner.lastSeenAt,
       harnesses: runner.harnesses,
+      linkedFolders: runner.linkedFolders,
+      approvedFolderIds: runner.approvedFolderIds,
     })
     .from(runner)
     .where(
@@ -2185,6 +2337,8 @@ export const readMemberRunners = async (
     connected: row.connection === "connected",
     lastSeenAt: row.lastSeenAt,
     harnesses: storedHarnessReports(row.harnesses),
+    linkedFolders: storedLinkedFolders(row.linkedFolders),
+    approvedFolderIds: row.approvedFolderIds,
   }));
 };
 
@@ -2194,6 +2348,12 @@ type ChatRunSessionOptions = {
   chat: ChatRunBinding;
   desktopId: string;
   harness: AgentHarness;
+  /**
+   * The linked folder the turn works in, `null` for the chat's own: a
+   * harness keeps its sessions per working folder, so a session from
+   * another folder is not resumed.
+   */
+  linkedFolderId: string | null;
 };
 
 /**
@@ -2214,7 +2374,7 @@ type ChatRunSessionOptions = {
  */
 export const readChatRunSession = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { owner, chat, desktopId, harness }: ChatRunSessionOptions,
+  { owner, chat, desktopId, harness, linkedFolderId }: ChatRunSessionOptions,
 ): Promise<string | null> => {
   // The run that last wrote the session: a later one resumed it or replaced
   // it, whatever state it ended in. A run records its session id once the
@@ -2237,6 +2397,7 @@ export const readChatRunSession = async (
         eq(runs.harness, harness),
         eq(runs.userId, owner.userId),
         eq(runs.organizationId, owner.organizationId),
+        sql`${runs.linkedFolderId} IS NOT DISTINCT FROM ${linkedFolderId}::uuid`,
         or(
           isNotNull(runs.harnessSessionId),
           and(
