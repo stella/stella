@@ -57,19 +57,19 @@ permissions: {}
 
 # One run per pull request and one for main: a new push supersedes it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.ref || format('pr-{0}', github.event.pull_request.number) }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  local-runs:
-    name: Chats on the member's computer
+  # The stand-in computer: the desktop crate's runner built as an example. It
+  # has its own job because the crate needs the webview development
+  # libraries, which the job that runs the browser must not install.
+  stand-in:
+    name: Build the stand-in computer
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 40
     permissions:
       contents: read
-      packages: read
-    env:
-      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -106,7 +106,43 @@ jobs:
 
       - name: Build the stand-in computer
         timeout-minutes: 25
-        run: cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --example runner_stand_in --features dev-runner-stand-in --frozen
+        run: |
+          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --example runner_stand_in --features dev-runner-stand-in --frozen
+          ldd apps/desktop/src-tauri/target/debug/examples/runner_stand_in
+
+      - name: Upload the stand-in computer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: local-run-stand-in
+          path: apps/desktop/src-tauri/target/debug/examples/runner_stand_in
+          retention-days: 1
+          if-no-files-found: error
+
+  local-runs:
+    name: Chats on the member's computer
+    needs: stand-in
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the stand-in computer
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name local-run-stand-in
+          --path "$RUNNER_TEMP/local-run-stand-in"
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
@@ -166,7 +202,9 @@ jobs:
         env:
           XDG_DATA_HOME: ${{ github.workspace }}/.stella-dev/data
           RUST_LOG: info
-        run: bun packages/scripts/src/e2e-local-runner.ts --executable apps/desktop/src-tauri/target/debug/examples/runner_stand_in
+        run: |
+          chmod +x "$RUNNER_TEMP/local-run-stand-in/runner_stand_in"
+          bun packages/scripts/src/e2e-local-runner.ts --executable "$RUNNER_TEMP/local-run-stand-in/runner_stand_in"
 
       - name: Login to GitHub Container Registry for browser images
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
