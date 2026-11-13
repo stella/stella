@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -14,6 +15,8 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
+
+import { repoRelativePath } from "@stll/portable-path";
 
 import {
   FAKE_CLAUDE_VERSION,
@@ -362,6 +365,7 @@ const startRun = (
     launch: PLAIN_LAUNCH,
     workspaceDir,
     cacheDir: path.join(at.root, "agent-package-cache"),
+    stepOutputDir: path.join(at.root, "runs", "chat.step-outputs"),
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
     harnessSessionId: null,
@@ -377,6 +381,18 @@ const startRun = (
   });
   return runId;
 };
+
+/** Every entry under `dir` by relative path, with each file's text. */
+const treeOf = (dir: string) =>
+  Object.fromEntries(
+    readdirSync(dir, { recursive: true, withFileTypes: true }).map((entry) => {
+      const at = path.join(entry.parentPath, entry.name);
+      return [
+        repoRelativePath(dir, at),
+        entry.isFile() ? readFileSync(at, "utf-8") : entry.isDirectory(),
+      ] as const;
+    }),
+  );
 
 const runStart = (
   client: Client,
@@ -922,15 +938,29 @@ describe("harness holder over its socket", () => {
     expect(client.messages.at(-1)).toMatchObject({ type: "run.finished" });
   });
 
-  test("keeps a step's output and diff on this computer, and no message to the desktop carries them", async () => {
+  test("keeps a step's output and diff in the store run.start names, never in or beside the linked folder the run works in, and no message to the desktop carries them", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
-    const runId = runStart(client, holder, "native_tools");
+    // The member's own folder, linked to the chat, with their work in it.
+    const member = path.join(holder.root, "member");
+    const linked = path.join(member, "Smith v Jones");
+    mkdirSync(path.join(linked, "drafts"), { recursive: true });
+    writeFileSync(
+      path.join(linked, "drafts", "lease.md"),
+      "The first draft.\n",
+    );
+    writeFileSync(path.join(linked, "notes.txt"), "Call the landlord.\n");
+    const linkedBefore = treeOf(linked);
+    // Stella's own place for the chat, apart from the member's folder.
+    const stepOutputDir = path.join(holder.root, "runs", "chat.step-outputs");
+    const runId = runStart(client, holder, "native_tools", {
+      workspaceDir: linked,
+      stepOutputDir,
+    });
     await client.waitFor(is("run.finished", runId));
-    const workspaceDir = path.join(holder.root, "workspace");
     const kept = (toolCallId: string) =>
       readFileSync(
-        stepOutputPath({ workspaceDir, runId, toolCallId }),
+        stepOutputPath({ stepOutputDir, runId, toolCallId }),
         "utf-8",
       );
     expect(kept("call-heredoc")).toBe(`{"bytes":22}\nzsh: permission denied`);
@@ -953,6 +983,11 @@ describe("harness holder over its socket", () => {
     const sent = JSON.stringify(client.messages);
     expect(sent).not.toContain("permission denied");
     expect(sent).not.toContain("Rent is due");
+    // The member's folder is as they left it; no store sits beside it.
+    expect(treeOf(linked)).toEqual(linkedBefore);
+    expect(
+      readdirSync(member).filter((name) => name.endsWith(".step-outputs")),
+    ).toEqual([]);
   });
 
   test("keeps a completed turn's process for its background work, and the chat's next run continues in it", async () => {
@@ -1576,6 +1611,7 @@ describe("harness holder over its socket", () => {
       launch: PLAIN_LAUNCH,
       workspaceDir,
       cacheDir: path.join(root, "agent-package-cache"),
+      stepOutputDir: path.join(root, "runs", "chat.step-outputs"),
       model: "gpt-test",
       reasoningEffort: null,
       instructions: "Use the stella MCP server.",
@@ -1665,6 +1701,7 @@ describe("harness holder over its socket", () => {
         launch: PLAIN_LAUNCH,
         workspaceDir,
         cacheDir: path.join(root, "agent-package-cache"),
+        stepOutputDir: path.join(root, "runs", "chat.step-outputs"),
         model: "gpt-test",
         reasoningEffort: null,
         instructions: "Use the stella MCP server.",

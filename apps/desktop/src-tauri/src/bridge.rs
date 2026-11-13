@@ -489,7 +489,7 @@ pub async fn start_bridge(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
   use super::*;
   use axum::body::Body;
   use axum::http::Request;
@@ -701,15 +701,23 @@ mod tests {
     run: uuid::Uuid,
     step_key: &str,
   ) -> axum::response::Response {
+    read_step_at(&place.root, &place.output_key, signer, run, step_key).await
+  }
+
+  /// One step, asked for by a page of the account linked here
+  /// (`user-fixture-1`) with a grant `signer` made from `output_key`, from a
+  /// bridge serving the run folders in `run_folders`.
+  pub(crate) async fn read_step_at(
+    run_folders: &std::path::Path,
+    output_key: &str,
+    signer: &str,
+    run: uuid::Uuid,
+    step_key: &str,
+  ) -> axum::response::Response {
     let uri = format!("/v1/runs/{run}/steps/{step_key}/output");
     let now = chrono::Utc::now().timestamp();
     let expires_at = now + 120;
-    let key = grant_key(
-      &place.output_key,
-      &run.to_string(),
-      &identity(signer),
-      expires_at,
-    );
+    let key = grant_key(output_key, &run.to_string(), &identity(signer), expires_at);
     let timestamp = now.to_string();
     let signing = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, key.as_bytes());
     let proof = hex::encode(
@@ -720,7 +728,7 @@ mod tests {
       account: Arc::new(Mutex::new(crate::account::AccountStore::Memory(Some(
         linked("user-fixture-1"),
       )))),
-      run_folders: Some(place.root.clone()),
+      run_folders: Some(run_folders.to_path_buf()),
       ..test_state()
     };
     build_router(state)

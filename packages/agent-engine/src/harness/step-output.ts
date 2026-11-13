@@ -5,9 +5,9 @@ import { isPathInside, repoRelativePath } from "@stll/portable-path";
 /**
  * What a native step produced that the member may open on this computer: a
  * command's output, or the diff of each file a change wrote. It stays here:
- * the sidecar keeps it beside the run's folder (`sidecar/step-outputs.ts`)
- * and the desktop serves it to a page on this computer. It is never part of
- * what a turn reports.
+ * the sidecar keeps it in the store `run.start` names
+ * (`sidecar/step-outputs.ts`) and the desktop serves it to a page on this
+ * computer. It is never part of what a turn reports.
  */
 export type HarnessStepOutput =
   | { type: "command"; output: string }

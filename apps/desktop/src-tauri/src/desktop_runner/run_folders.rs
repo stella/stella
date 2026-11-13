@@ -6,9 +6,10 @@
 //! harness would see it, and rather than read from the folder's own modified
 //! time, which a change deeper in the folder does not move. The checkpoints the
 //! sidecar saves of a folder sit beside it too ([`checkpoint_store`]) and go
-//! with it, and so do what its runs' steps produced ([`step_output_store`])
-//! and the chat's cache ([`chat_cache`]): the one place a run may write
-//! outside its folder, so nothing a run writes is shared with another chat.
+//! with it, and so do what its runs' steps produced ([`step_output_store`],
+//! kept here even for a run in a folder the member linked) and the chat's
+//! cache ([`chat_cache`]): the one place a run may write outside its folder,
+//! so nothing a run writes is shared with another chat.
 
 use std::{
   collections::HashSet,
@@ -20,7 +21,7 @@ use std::{
 
 use uuid::Uuid;
 
-use crate::harness_sidecar::{CHECKPOINT_STORE_SUFFIX, STEP_OUTPUT_STORE_SUFFIX};
+use crate::harness_sidecar::CHECKPOINT_STORE_SUFFIX;
 
 const LOG_TARGET: &str = "desktop_runner::host";
 const KEPT_FOR_SECONDS: u64 = 30 * 24 * 60 * 60;
@@ -37,11 +38,16 @@ pub(super) fn checkpoint_store(dir: &Path) -> PathBuf {
   PathBuf::from(name)
 }
 
-/// Beside a folder, what its runs' steps produced (a command's output, a
-/// change's diff) and each run's output key: the folder's name with the suffix
-/// the sidecar protocol names. Outside the folder, so the harness never reads
-/// it back.
-pub(crate) fn step_output_store(dir: &Path) -> PathBuf {
+/// Beside a chat's folder, what its runs' steps produced (a command's output,
+/// a change's diff) and each run's output key: `<runId>/key`, which the
+/// desktop writes, and `<runId>/<stepKey>`, which the sidecar writes where
+/// `run.start` names (`stepOutputDir`).
+pub(super) const STEP_OUTPUT_STORE_SUFFIX: &str = ".step-outputs";
+
+/// A chat folder's step output store: the folder's name with
+/// [`STEP_OUTPUT_STORE_SUFFIX`]. Outside the folder, so the harness never
+/// reads it back, and always beside the chat's own folder, never a linked one.
+pub(super) fn step_output_store(dir: &Path) -> PathBuf {
   let mut name = OsString::from(dir.as_os_str());
   name.push(STEP_OUTPUT_STORE_SUFFIX);
   PathBuf::from(name)

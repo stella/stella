@@ -150,15 +150,6 @@ export type SidecarHolderMode = (typeof SIDECAR_HOLDER_MODES)[number];
  */
 export const SIDECAR_CHECKPOINT_STORE_SUFFIX = ".checkpoints";
 
-/**
- * Beside a run's folder, under the folder's name with this suffix, what the
- * runs' steps produced (`step-outputs.ts`): one folder per run holding the
- * run's output key, which the desktop writes, and one file per step, which
- * the sidecar writes. The desktop serves them to a page on this computer and
- * removes them with the folder.
- */
-export const SIDECAR_STEP_OUTPUT_STORE_SUFFIX = ".step-outputs";
-
 /** Runs one `hello` may resume or list. */
 export const SIDECAR_MAX_HELD_RUNS = 1000;
 
@@ -330,6 +321,13 @@ export const sidecarHostMessageSchema = v.variant("type", [
     workspaceDir: absolutePathSchema,
     /** The chat's own cache folder, writable in every sandbox. */
     cacheDir: absolutePathSchema,
+    /**
+     * Where the run's steps leave what they produced (`step-outputs.ts`):
+     * beside the chat's own folder in the desktop's runs folder, whatever
+     * folder `workspaceDir` names. Never in or beside a folder the member
+     * linked; outside the harness's reach.
+     */
+    stepOutputDir: absolutePathSchema,
     model: modelIdSchema,
     /** The effort the turn asks the model for; `null` leaves it to the harness. */
     reasoningEffort: v.nullable(v.picklist(DESKTOP_RUNNER_REASONING_EFFORTS)),

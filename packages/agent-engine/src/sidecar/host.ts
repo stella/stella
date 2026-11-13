@@ -421,6 +421,7 @@ const stoppedBeforeStart = (): AsyncIterable<HarnessEvent> => {
 };
 
 type KeepRunStepOutputOptions = {
+  stepOutputDir: string;
   workspaceDir: string;
   runId: string;
   toolCallId: string;
@@ -1066,6 +1067,7 @@ export class SidecarHost {
       protectedPaths: [
         message.configDir,
         message.cacheDir,
+        message.stepOutputDir,
         ...message.skillFolders.map((folder) => folder.path),
       ],
       signal: run.stopCopying.signal,
@@ -1259,6 +1261,7 @@ export class SidecarHost {
             break;
           case "tool.completed":
             await keepRunStepOutput({
+              stepOutputDir: message.stepOutputDir,
               workspaceDir: message.workspaceDir,
               runId,
               toolCallId: event.toolCall.id,

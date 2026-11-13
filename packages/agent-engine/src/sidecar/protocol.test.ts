@@ -15,7 +15,6 @@ import {
   SIDECAR_PROTOCOL,
   SIDECAR_REJECTIONS,
   SIDECAR_RESTORE_OUTCOMES,
-  SIDECAR_STEP_OUTPUT_STORE_SUFFIX,
   sidecarHostMessageSchema,
   sidecarMessageSchema,
 } from "./protocol";
@@ -40,7 +39,6 @@ describe("sidecar protocol fixtures", () => {
       holderModes: [...SIDECAR_HOLDER_MODES],
       restoreOutcomes: [...SIDECAR_RESTORE_OUTCOMES],
       checkpointStoreSuffix: SIDECAR_CHECKPOINT_STORE_SUFFIX,
-      stepOutputStoreSuffix: SIDECAR_STEP_OUTPUT_STORE_SUFFIX,
     });
   });
 

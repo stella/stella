@@ -9,41 +9,33 @@ import {
 import { sha256Hex } from "@stll/sha256/node";
 
 import { type HarnessStepOutput, stepOutputText } from "../harness/step-output";
-import { SIDECAR_STEP_OUTPUT_STORE_SUFFIX } from "./protocol";
 
 /**
- * Where a run's steps leave what they produced, beside the run's folder and
- * out of the harness's reach: `<folder>.step-outputs/<runId>/<stepKey>`,
- * `stepKey` being the SHA-256 hex of the step's chat call id. A file is its
- * header line, `{"bytes":<n>}` with how many UTF-8 bytes the step produced,
- * then at most `CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES` of them. The desktop
- * reads the same layout to serve a step to a page on this computer.
+ * Where a run's steps leave what they produced, in the store the desktop
+ * names in `run.start` (`stepOutputDir`), out of the harness's reach and
+ * never derived from the folder the run works in, which may be one the
+ * member linked: `<stepOutputDir>/<runId>/<stepKey>`, `stepKey` being the
+ * SHA-256 hex of the step's chat call id. A file is its header line,
+ * `{"bytes":<n>}` with how many UTF-8 bytes the step produced, then at most
+ * `CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES` of them. The desktop reads the same
+ * layout to serve a step to a page on this computer.
  */
 
 const PRIVATE_FILE_MODE = 0o600;
 const PRIVATE_FOLDER_MODE = 0o700;
 
-/** `<folder>.step-outputs`, beside the run's folder. */
-const stepOutputStoreOf = (workspaceDir: string) => {
-  const folder = path.resolve(workspaceDir);
-  return path.join(
-    path.dirname(folder),
-    `${path.basename(folder)}${SIDECAR_STEP_OUTPUT_STORE_SUFFIX}`,
-  );
-};
-
 /** The file one step of a run is kept in. */
 export const stepOutputPath = ({
-  workspaceDir,
+  stepOutputDir,
   runId,
   toolCallId,
 }: {
-  workspaceDir: string;
+  stepOutputDir: string;
   runId: string;
   toolCallId: string;
 }) =>
   path.join(
-    stepOutputStoreOf(workspaceDir),
+    path.resolve(stepOutputDir),
     runId,
     sha256Hex(chatLocalRunCallId(runId, toolCallId, sha256Hex)),
   );
@@ -77,6 +69,9 @@ export const stepOutputFile = (text: string) => {
 };
 
 type KeepStepOutputOptions = {
+  /** The run's store, from `run.start`. */
+  stepOutputDir: string;
+  /** The folder the run works in; the step's paths are read against it. */
   workspaceDir: string;
   runId: string;
   toolCallId: string;
@@ -89,12 +84,13 @@ type KeepStepOutputOptions = {
  * half of it; a step reported twice keeps its last report.
  */
 export const keepStepOutput = async ({
+  stepOutputDir,
   workspaceDir,
   runId,
   toolCallId,
   output,
 }: KeepStepOutputOptions) => {
-  const file = stepOutputPath({ workspaceDir, runId, toolCallId });
+  const file = stepOutputPath({ stepOutputDir, runId, toolCallId });
   const temporary = `${file}.${crypto.randomUUID()}.partial`;
   return await Result.tryPromise({
     try: async () => {
