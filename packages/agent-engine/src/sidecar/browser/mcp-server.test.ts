@@ -30,6 +30,8 @@ const approve = async () => ({
   finish: () => undefined,
 });
 
+const NEVER_STOPPED = new AbortController().signal;
+
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).toReversed()) {
@@ -67,8 +69,7 @@ const fakeBridge = () => {
   return { bridge, cancels, requests };
 };
 
-const start = () => {
-  const fake = fakeBridge();
+const start = (fake = fakeBridge()) => {
   const mcp = startLocalBrowserMcp({ bridge: fake.bridge, version: "1.4.0" });
   cleanups.push(async () => {
     await mcp.stop();
@@ -98,6 +99,7 @@ describe("the local browser MCP endpoint", () => {
     const binding = mcp.register({
       approvals: "auto",
       approve,
+      stopped: NEVER_STOPPED,
       runId: "run-1",
       threadId: "thread-1",
     });
@@ -171,12 +173,14 @@ describe("the local browser MCP endpoint", () => {
     const first = mcp.register({
       approvals: "auto",
       approve,
+      stopped: NEVER_STOPPED,
       runId: "run-1",
       threadId: "thread-1",
     });
     const second = mcp.register({
       approvals: "auto",
       approve,
+      stopped: NEVER_STOPPED,
       runId: "run-2",
       threadId: "thread-2",
     });
@@ -197,7 +201,12 @@ describe("the local browser MCP endpoint", () => {
 
   test("a kept process's endpoint is parked between turns and serves the run that adopts it", async () => {
     const { cancels, mcp, requests } = start();
-    const run = { approvals: "auto", approve, threadId: "thread-1" } as const;
+    const run = {
+      approvals: "auto",
+      approve,
+      stopped: NEVER_STOPPED,
+      threadId: "thread-1",
+    } as const;
     const first = mcp.register({ ...run, runId: "run-1" });
     const ping = { id: 1, jsonrpc: "2.0", method: "ping" };
 
@@ -227,6 +236,113 @@ describe("the local browser MCP endpoint", () => {
     mcp.park("run-2");
     mcp.drop(parked ?? "");
     expect(mcp.adopt(parked ?? "", { ...run, runId: "run-4" })).toBeNull();
+  });
+});
+
+/** A bridge whose command reports back only once its call is cut. */
+const holdingBridge = () => {
+  const fake = fakeBridge();
+  const { promise: sent, resolve: markSent } = Promise.withResolvers<true>();
+  const { promise: cut, resolve: markCut } = Promise.withResolvers<true>();
+  return {
+    ...fake,
+    bridge: {
+      ...fake.bridge,
+      request: async (_request, signal) => {
+        markSent(true);
+        signal.addEventListener("abort", () => {
+          markCut(true);
+        });
+        await cut;
+        return localBrowserResult({
+          code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+          message: "The run stopped before Chrome reported back.",
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          status: "error",
+        });
+      },
+    } satisfies BrowserBridge,
+    cut,
+    sent,
+  };
+};
+
+describe("a browser call in flight", () => {
+  const OPEN = {
+    id: 7,
+    jsonrpc: "2.0",
+    method: "tools/call",
+    params: { name: "open", arguments: { url: "https://example.com/" } },
+  };
+
+  test.each([
+    [
+      "the harness cancels it",
+      async ({ binding }: { binding: { url: string; token: string } }) => {
+        const cancelled = await rpc(binding, {
+          jsonrpc: "2.0",
+          method: "notifications/cancelled",
+          params: { requestId: OPEN.id },
+        });
+        expect(cancelled.status).toBe(202);
+      },
+    ],
+    [
+      "the run is stopped",
+      ({ stop }: { stop: AbortController }) => {
+        stop.abort();
+      },
+    ],
+    [
+      "the run ends",
+      ({ mcp }: { mcp: ReturnType<typeof start>["mcp"] }) => {
+        mcp.unregister("run-1");
+      },
+    ],
+  ] as const)("is cut when %s", async (_name, end) => {
+    const holding = holdingBridge();
+    const { mcp } = start(holding);
+    const stop = new AbortController();
+    const binding = mcp.register({
+      approvals: "auto",
+      approve,
+      runId: "run-1",
+      stopped: stop.signal,
+      threadId: "thread-1",
+    });
+    const answered = rpc(binding, OPEN);
+    await holding.sent;
+    await end({ binding, mcp, stop });
+    expect(await holding.cut).toBe(true);
+    expect((await answered).status).toBe(200);
+  });
+
+  test("another call's cancellation leaves it running", async () => {
+    const holding = holdingBridge();
+    const { mcp } = start(holding);
+    const stop = new AbortController();
+    const binding = mcp.register({
+      approvals: "auto",
+      approve,
+      runId: "run-1",
+      stopped: stop.signal,
+      threadId: "thread-1",
+    });
+    const answered = rpc(binding, OPEN);
+    await holding.sent;
+    await rpc(binding, {
+      jsonrpc: "2.0",
+      method: "notifications/cancelled",
+      params: { requestId: OPEN.id + 1 },
+    });
+    const state = await Promise.race([
+      holding.cut,
+      // The cancellation was answered, so a cut would have happened by now.
+      Promise.resolve("running" as const),
+    ]);
+    expect(state).toBe("running");
+    stop.abort();
+    expect((await answered).status).toBe(200);
   });
 });
 
