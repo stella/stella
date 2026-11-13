@@ -445,9 +445,27 @@ type LocalRunToolCalls = Map<
   { name: string; argsCarried: boolean; endCarried: boolean }
 >;
 
-/** The input chat keeps for a native step, from what the desktop sent. */
-const nativeInput = (name: ChatLocalRunToolName, input: unknown) =>
-  parseChatLocalRunToolCall(name, input)?.input ?? {};
+type CallId = (id: string) => string;
+
+/**
+ * The input chat keeps for a native step, from what the desktop sent. The
+ * subagent step it names is kept under that step's chat call id, as the
+ * step itself is, so the link holds in the stored turn.
+ */
+const nativeInput = (
+  name: ChatLocalRunToolName,
+  input: unknown,
+  callId: CallId,
+) => {
+  const call = parseChatLocalRunToolCall(name, input);
+  if (call === null) {
+    return {};
+  }
+  const { parentCallId } = call.input;
+  return parentCallId === undefined
+    ? call.input
+    : { ...call.input, parentCallId: callId(parentCallId) };
+};
 
 /**
  * What TanStack's normaliser keeps of a chunk beyond the AG-UI spec, under
@@ -469,8 +487,6 @@ const parsedArguments = (delta: string): unknown => {
   const parsed = Result.try((): unknown => JSON.parse(delta));
   return parsed.isOk() ? parsed.value : undefined;
 };
-
-type CallId = (id: string) => string;
 
 /**
  * A call's arguments or end. A native step's input is rebuilt from the
@@ -515,7 +531,7 @@ const asToolInputChunk = (
         tanstack: {
           toolCallName: name,
           toolName: name,
-          input: nativeInput(name, reported["input"]),
+          input: nativeInput(name, reported["input"], callId),
           ...reportedModel(chunk.metadata),
         },
       },
@@ -527,7 +543,9 @@ const asToolInputChunk = (
     return null;
   }
   call.argsCarried = true;
-  const args = JSON.stringify(nativeInput(name, parsedArguments(chunk.delta)));
+  const args = JSON.stringify(
+    nativeInput(name, parsedArguments(chunk.delta), callId),
+  );
   return {
     type: EventType.TOOL_CALL_ARGS,
     toolCallId: callId(chunk.toolCallId),
@@ -590,11 +608,17 @@ type ChatInterrupt = Extract<
  * The input an approval names: a native step's shown input, a connector
  * call's arguments, nothing for a call this run never opened.
  */
-const approvalInput = (name: string | null, input: unknown): unknown => {
+const approvalInput = (
+  name: string | null,
+  input: unknown,
+  callId: CallId,
+): unknown => {
   if (name === null) {
     return {};
   }
-  return isChatLocalRunToolName(name) ? nativeInput(name, input) : input;
+  return isChatLocalRunToolName(name)
+    ? nativeInput(name, input, callId)
+    : input;
 };
 
 const APPROVAL_KINDS: ReadonlySet<unknown> = new Set(
@@ -611,7 +635,7 @@ const approvalInterrupt = (
   callId: CallId,
 ): ChatInterrupt => {
   const name = calls.get(toolCallId)?.name ?? null;
-  const input = approvalInput(name, metadata["input"]);
+  const input = approvalInput(name, metadata["input"], callId);
   const reason = chatLocalRunApprovalReason(metadata["reason"]);
   const approvalKind = metadata["approvalKind"];
   const decisions = metadata["decisions"];

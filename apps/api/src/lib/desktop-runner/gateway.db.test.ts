@@ -5753,6 +5753,178 @@ describe("chat turns on a computer", () => {
     ]);
   });
 
+  test("a subagent's steps name the subagent under its chat call id, on a stored step and on an approval, and a parent a desktop made up names nothing", async () => {
+    const secret = "Private settlement terms";
+    const requestId = Bun.randomUUIDv7();
+    const NATIVE_TOOL = "harness_native_tool";
+    const inSubagent = { parentCallId: "item_agent" };
+    const subagent = {
+      id: "item_agent",
+      name: NATIVE_TOOL,
+      input: {
+        tool: "Agent",
+        detail: {
+          kind: "subagent",
+          description: "Check the lease",
+          agentType: "Explore",
+        },
+      },
+    };
+    const image = {
+      id: "item_image",
+      name: NATIVE_TOOL,
+      input: {
+        tool: "Read",
+        detail: { kind: "image", path: "/workspace/scans/page-1.png" },
+        ...inSubagent,
+      },
+    };
+    const search = {
+      id: "item_search",
+      name: "harness_web_search",
+      input: { query: "lease arrears", ...inSubagent },
+    };
+    const command = {
+      id: "item_rm",
+      name: COMMAND_EXECUTION,
+      input: { command: "rm draft.md", ...inSubagent },
+    };
+    const done = {
+      content: JSON.stringify({ status: "completed" }),
+      status: "succeeded",
+    } as const;
+    // An id longer than any chat call id: it names no step.
+    const madeUp = "x".repeat(300);
+    const { turn } = await servedNativeTurn(async (runId) => {
+      const sent = await harnessChunks(runId, [
+        {
+          type: "session.started",
+          sessionId: harnessSessionId("claude-session-subagent"),
+          continuation: { type: "fresh" },
+        },
+        { type: "tool.started", toolCall: subagent },
+        { type: "tool.completed", toolCall: image, result: done },
+        { type: "tool.completed", toolCall: search, result: done },
+        {
+          type: "approval.requested",
+          request: {
+            requestId,
+            kind: "command",
+            toolCall: command,
+            reason: null,
+            options: [{ id: "allow", decision: "approve" }],
+          },
+        },
+      ]);
+      // A desktop that puts the subagent's prompt and report on its step,
+      // and a made-up parent on the search.
+      const forged = (toolCallId: unknown, input: unknown) => {
+        if (!isRecord(input)) {
+          return input;
+        }
+        if (toolCallId === subagent.id && isRecord(input["detail"])) {
+          return {
+            ...input,
+            report: secret,
+            detail: { ...input["detail"], prompt: secret },
+          };
+        }
+        return toolCallId === search.id
+          ? { ...input, parentCallId: madeUp }
+          : input;
+      };
+      return sent.map((chunk) => {
+        if (!isRecord(chunk)) {
+          return chunk;
+        }
+        if (
+          chunk["type"] === EventType.TOOL_CALL_ARGS &&
+          typeof chunk["delta"] === "string"
+        ) {
+          return {
+            ...chunk,
+            delta: JSON.stringify(
+              forged(chunk["toolCallId"], JSON.parse(chunk["delta"])),
+            ),
+          };
+        }
+        if (
+          chunk["type"] === EventType.TOOL_CALL_END &&
+          isRecord(chunk["metadata"]) &&
+          isRecord(chunk["metadata"]["tanstack"])
+        ) {
+          const tanstack = chunk["metadata"]["tanstack"];
+          return {
+            ...chunk,
+            metadata: {
+              tanstack: {
+                ...tanstack,
+                input: forged(chunk["toolCallId"], tanstack["input"]),
+              },
+            },
+          };
+        }
+        return chunk;
+      });
+    });
+    expect(turn.finish.outcome).toMatchObject({ type: "awaiting-user" });
+    expect(JSON.stringify(turn.emitted)).not.toContain(secret);
+    expect(JSON.stringify(turn.emitted)).not.toContain(madeUp);
+
+    const stored = persistTurn(turn.finish, "harness").unwrap();
+    const calls = stored.reloaded.parts.flatMap(
+      (part): { id: string; name: string; input: unknown }[] =>
+        part.type === "tool-call"
+          ? [{ id: part.id, name: part.name, input: part.input }]
+          : [],
+    );
+    const subagentCallId = calls.find(
+      ({ input }) => isRecord(input) && input["tool"] === "Agent",
+    )?.id;
+    // The fixture reaches the rewrite: chat keeps the step under another id
+    // than the harness gave it.
+    expect(subagentCallId).toEndWith(`_${subagent.id}`);
+    expect(subagentCallId).not.toBe(subagent.id);
+    const chatParent = { parentCallId: subagentCallId };
+    expect(calls.map(({ name, input }) => ({ name, input }))).toEqual([
+      { name: NATIVE_TOOL, input: subagent.input },
+      {
+        name: NATIVE_TOOL,
+        input: {
+          tool: "Read",
+          detail: { kind: "image", path: "scans/page-1.png" },
+          ...chatParent,
+        },
+      },
+      { name: "harness_web_search", input: { query: "lease arrears" } },
+      {
+        name: COMMAND_EXECUTION,
+        input: { command: "rm draft.md", ...chatParent },
+      },
+    ]);
+    const pause = turn.emitted.findLast(
+      (chunk) =>
+        chunk.type === EventType.RUN_FINISHED &&
+        chunk.outcome?.type === "interrupt",
+    );
+    if (
+      pause?.type !== EventType.RUN_FINISHED ||
+      pause.outcome?.type !== "interrupt"
+    ) {
+      panic("the served turn did not pause");
+    }
+    expect(pause.outcome.interrupts).toMatchObject([
+      {
+        id: requestId,
+        metadata: {
+          kind: "approval",
+          toolName: COMMAND_EXECUTION,
+          input: { command: "rm draft.md", ...chatParent },
+        },
+      },
+    ]);
+  });
+
   test("a second start of a call naming another tool is not carried, so the call keeps its first name and only its contract's fields", async () => {
     const secret = "Private settlement terms";
     const { turn: served } = await servedNativeTurn(async (runId) => {
