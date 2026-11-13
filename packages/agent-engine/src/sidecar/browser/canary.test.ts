@@ -26,6 +26,7 @@ import {
 } from "../../../scripts/fake-browser";
 import {
   SIDECAR_PROTOCOL,
+  type sidecarHostMessageSchema,
   type SidecarMessage,
   sidecarMessageSchema,
 } from "../protocol";
@@ -123,12 +124,15 @@ const startApi = () => {
 
 type Desktop = { lines: string[]; messages: SidecarMessage[] };
 
+/** A message as the schema reads it, so a field it gains fails the build here. */
+type HostMessage = v.InferInput<typeof sidecarHostMessageSchema>;
+
 /** Connect to the holder and authenticate as the desktop. */
 const connectDesktop = async (
   endpoint: string,
   secret: string,
   apiOrigin: string,
-): Promise<Desktop & { send: (message: object) => void }> => {
+): Promise<Desktop & { send: (message: HostMessage) => void }> => {
   const socket = net.createConnection({ path: endpoint });
   cleanups.push(() => {
     socket.destroy();
@@ -157,7 +161,7 @@ const connectDesktop = async (
       }
     }
   });
-  const send = (message: object) => {
+  const send = (message: HostMessage) => {
     socket.write(`${JSON.stringify(message)}\n`);
   };
   send({
@@ -280,6 +284,7 @@ const browse = async (
     launch: PLAIN_LAUNCH,
     workspaceDir,
     cacheDir: path.join(root, "agent-package-cache"),
+    stepOutputDir: path.join(root, "runs", "chat.step-outputs"),
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the notice period decision." }],
     harnessSessionId: null,
