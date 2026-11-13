@@ -58,8 +58,6 @@ export type MergeGroupJob =
   | "e2e-production-shard"
   | "stack-redaction-browsers"
   | "e2e-vite-canary"
-  | "e2e-local-runs"
-  | "local-run-stand-in"
   | "e2e-landing"
   | "marketing-screenshots"
   | "marketing-screenshots-cancel"
@@ -113,8 +111,6 @@ export const MERGE_GROUP_PR_COVERAGE = {
   "e2e-production-shard": runs("e2e_production_required"),
   "stack-redaction-browsers": runs("stack_redaction_browsers_required"),
   "e2e-vite-canary": runs("e2e_core_required"),
-  "e2e-local-runs": runs("e2e_core_required"),
-  "local-run-stand-in": runs("e2e_core_required"),
   "e2e-landing": runs("e2e_landing_required"),
   "marketing-screenshots": runs("marketing_screenshots_required"),
   "marketing-screenshots-cancel": {

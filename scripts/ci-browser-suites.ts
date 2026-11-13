@@ -42,7 +42,6 @@ export type BrowserSuitePrPath =
       kind: "scope";
       output:
         | "desktop_browser_required"
-        | "e2e_core_required"
         | "e2e_landing_required"
         | "route_smoke_required";
     }
@@ -173,13 +172,6 @@ export const BROWSER_SUITES = [
     package: "@stll/web",
     script: "test:e2e:collab",
     pr: { kind: "armed-proof" },
-  },
-  {
-    id: "local-run",
-    job: "e2e-local-runs",
-    package: "@stll/web",
-    script: "test:e2e:local-run",
-    pr: { kind: "scope", output: "e2e_core_required" },
   },
   {
     id: "stack-redaction",

@@ -222,6 +222,7 @@
     "ci.yml/ci-result": "pr-fast",
     "security-txt-guard.yml/check": "pr-fast",
     "api-served-mcp.yml/journeys": "pr-fast",
+    "local-run-e2e.yml/local-runs": "pr-fast",
     "dependency-audit.yml/audit": "main",
     "dependency-audit.yml/remediate": "main",
     "dependency-audit.yml/cargo-advisories": "main",
@@ -266,6 +267,10 @@
       "cancelInProgress": false
     },
     "main-heavy.yml": {
+      "role": "analysis",
+      "cancelInProgress": true
+    },
+    "local-run-e2e.yml": {
       "role": "analysis",
       "cancelInProgress": true
     },

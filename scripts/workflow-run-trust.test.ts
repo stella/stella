@@ -286,8 +286,6 @@ const FEATURE_DISPATCH_PRIVILEGE_ALLOWANCES = {
     "Runs an operator-selected production-mode browser shard.",
   "ci.yml: privileged job 'e2e-vite-canary' can run from a feature ref":
     "Runs the Vite compatibility canary for an operator-selected revision.",
-  "ci.yml: privileged job 'e2e-local-runs' can run from a feature ref":
-    "Runs the local run browser suite for an operator-selected revision.",
   "ci.yml: privileged job 'marketing-screenshots' can run from a feature ref":
     "Runs screenshot validation for an operator-selected revision.",
   "ci.yml: privileged job 'route-smoke' can run from a feature ref":

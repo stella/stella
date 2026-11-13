@@ -1,0 +1,214 @@
+name: Local run browser suite
+
+defaults:
+  run:
+    shell: bash
+
+# Chats that run on the member's computer, end to end: the web app and API
+# with the desktop crate's runner as a stand-in computer (its own runner,
+# journal and harness host, the agent engine sidecar from source) and scripted
+# stand-ins for Codex and Claude Code. Not part of ci-result. Pull requests run
+# it when they change what the suite exercises: the agent engine, the desktop
+# runner and its sidecar host, the local run contract, the API's and the chat's
+# local run code, the stand-in's scripts or the suite itself. This list is the
+# one place that names that surface.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/local-run-e2e.yml
+      - .github/actions/setup-e2e-stack/**
+      - .github/actions/setup-playwright/**
+      - .github/actions/flaky-test-quarantine/**
+      - apps/web/e2e/local-run/**
+      - apps/web/e2e/playwright.local-run.config.ts
+      - apps/web/e2e/helpers/**
+      - packages/agent-engine/**
+      - packages/scripts/src/agent-local-runner*.ts
+      - packages/scripts/src/e2e-local-runner.ts
+      - apps/desktop/src-tauri/Cargo.toml
+      - apps/desktop/src-tauri/Cargo.lock
+      - apps/desktop/src-tauri/examples/runner_stand_in.rs
+      - apps/desktop/src-tauri/src/desktop_runner/**
+      - apps/desktop/src-tauri/src/harness_sidecar/**
+      - apps/desktop/src-tauri/src/runner_protocol.rs
+      - packages/api-contract/src/chat-run-target.ts
+      - packages/api-contract/src/chat-local-run*.ts
+      - packages/api-contract/src/desktop-runner*.ts
+      - apps/api/src/handlers/chat/local-run*.ts
+      - apps/api/src/handlers/chat/turns/**
+      - apps/api/src/lib/chat/local-run*.ts
+      - apps/api/src/lib/chat/run-target.ts
+      - apps/api/src/lib/desktop-runner/**
+      - apps/web/src/components/chat/chat-run-target-menu*
+      - apps/web/src/components/chat/chat-model-selector.tsx
+      - apps/web/src/components/chat/chat-local-run-*
+      - apps/web/src/components/chat/local-run-*
+      - apps/web/src/components/chat/local-files-undo*
+      - apps/web/src/components/chat/use-effective-run-target.ts
+      - apps/web/src/features/chat/chat-local-run-*
+      - apps/web/src/features/chat/desktop-launch*
+      - apps/web/src/features/chat/use-desktop-launch.ts
+      - apps/web/src/features/chat/local-run-*
+      - apps/web/src/features/chat/run-on-preference-store.ts
+  push:
+    branches: [main]
+
+permissions: {}
+
+# One run per pull request and one for main: a new push supersedes it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.ref || format('pr-{0}', github.event.pull_request.number) }}
+  cancel-in-progress: true
+
+jobs:
+  local-runs:
+    name: Chats on the member's computer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      packages: read
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install desktop build libraries
+        timeout-minutes: 5
+        run: |
+          bash scripts/retry.sh sudo apt-get update -qq
+          bash scripts/retry.sh sudo apt-get install -y -qq --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+
+      - name: Restore the stand-in computer build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            apps/desktop/src-tauri/target
+          key: local-run-stand-in-${{ runner.os }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}-${{ hashFiles('apps/desktop/src-tauri/src/**', 'apps/desktop/src-tauri/examples/**', 'apps/desktop/src-tauri/build.rs') }}
+          restore-keys: |
+            local-run-stand-in-${{ runner.os }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}-
+
+      - name: Fetch Rust dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+
+      - name: Build the stand-in computer
+        timeout-minutes: 25
+        run: cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --example runner_stand_in --features dev-runner-stand-in --frozen
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cp apps/api/.env.example apps/api/.env
+          cp apps/web/.env.example apps/web/.env
+
+      - name: Prepare generated sources
+        env:
+          STELLA_VERIFY: prepare
+        run: bun scripts/ci-generated-sources.ts prepare
+
+      - name: Start docker stack and API server
+        id: e2e-stack
+        uses: ./.github/actions/setup-e2e-stack
+        with:
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Start web dev server
+        if: steps.e2e-stack.outcome == 'success'
+        run: |
+          cd apps/web
+          nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
+          echo $! > /tmp/web.pid
+
+      - name: Wait for web dev server
+        if: steps.e2e-stack.outcome == 'success'
+        run: |
+          for i in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "Web up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Web never came up"
+          tail -200 /tmp/web.log || true
+          exit 1
+
+      # Its run folders stay under the workspace, which the browser container
+      # mounts, so the tests can read what a run left on the computer.
+      - name: Start the stand-in computer
+        timeout-minutes: 5
+        if: steps.e2e-stack.outcome == 'success'
+        env:
+          XDG_DATA_HOME: ${{ github.workspace }}/.stella-dev/data
+          RUST_LOG: info
+        run: bun packages/scripts/src/e2e-local-runner.ts --executable apps/desktop/src-tauri/target/debug/examples/runner_stand_in
+
+      - name: Login to GitHub Container Registry for browser images
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Playwright Chromium
+        timeout-minutes: 4
+        if: steps.e2e-stack.outcome == 'success'
+        uses: ./.github/actions/setup-playwright
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
+      - name: Run local run browser suite
+        timeout-minutes: 25
+        if: steps.e2e-stack.outcome == 'success'
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:local-run
+
+      - name: Upload Playwright report
+        if: always() && steps.e2e-stack.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-local-runs
+          path: apps/web/e2e/test-results/local-run/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload server and computer logs
+        if: always() && steps.e2e-stack.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: server-logs-local-runs
+          path: |
+            /tmp/api.log
+            /tmp/web.log
+            .stella-dev/local-runner.log
+            .stella-dev/local-runner/*.log
+            .stella-dev/data/**/holder.log*
+          if-no-files-found: ignore
+          retention-days: 7

@@ -42,8 +42,6 @@ export const PILOT_DEFERRED = [
   "e2e-production-shard",
   "stack-redaction-browsers",
   "e2e-vite-canary",
-  "e2e-local-runs",
-  "local-run-stand-in",
   "e2e-landing",
   "marketing-screenshots",
   "marketing-screenshots-cancel",
