@@ -84,19 +84,50 @@ export const utf8Prefix = (bytes: Uint8Array, max: number) => {
 const utf8Length = (text: string) => new TextEncoder().encode(text).length;
 
 /**
- * The most of what a subagent was told, and of what it reported, that its
- * conversation keeps: a share of what a step keeps, so both always fit and
- * neither is the line the cap cuts.
+ * The most of the kept conversation that what a subagent was told may take,
+ * and what it reported: a share of what a step keeps each, as the line the
+ * file holds for it, so both always fit and neither is the line the cap cuts.
  */
 const CONVERSATION_END_MAX_BYTES = CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES / 4;
 
-/** `text` within `max` bytes, whole characters, and how much was left out. */
-const boundedText = (text: string, max: number) => {
-  const bytes = new TextEncoder().encode(text);
-  const kept = utf8Prefix(bytes, max);
+type ConversationEnd = {
+  entries: ChatLocalRunConversationEntry[];
+  droppedBytes: number;
+};
+
+/**
+ * What a subagent was told or reported as its conversation keeps it: the
+ * longest start of `text` whose kept line fits its share, and how much was
+ * left out. The line is measured as kept, since escaping a quote or a
+ * control character makes it longer than the text.
+ */
+const conversationEnd = (
+  role: "prompt" | "report",
+  text: string,
+): ConversationEnd => {
+  if (text === "") {
+    return { entries: [], droppedBytes: 0 };
+  }
+  const fits = (candidate: string) =>
+    utf8Length(chatLocalRunConversationText([{ role, text: candidate }])) <=
+    CONVERSATION_END_MAX_BYTES;
+  // Every UTF-16 unit is at least a byte of its line: nothing longer fits.
+  let low = 0;
+  let high = Math.min(text.length, CONVERSATION_END_MAX_BYTES);
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (fits(text.slice(0, middle))) {
+      low = middle;
+    } else {
+      high = middle - 1;
+    }
+  }
+  // Never half of a surrogate pair.
+  const end = /[\uD800-\uDBFF]$/u.test(text.slice(0, low)) ? low - 1 : low;
+  const kept = text.slice(0, end);
   return {
-    text: kept.length === bytes.length ? text : new TextDecoder().decode(kept),
-    droppedBytes: bytes.length - kept.length,
+    entries: kept === "" ? [] : [{ role, text: kept }],
+    droppedBytes: utf8Length(text) - utf8Length(kept),
   };
 };
 
@@ -138,22 +169,14 @@ export class SubagentConversation {
     prompt: string | null;
     report: string | null;
   }): HarnessConversation {
-    const told = boundedText(prompt ?? "", CONVERSATION_END_MAX_BYTES);
-    const reported = boundedText(report ?? "", CONVERSATION_END_MAX_BYTES);
-    const said = (
-      role: "prompt" | "report",
-      text: string,
-    ): ChatLocalRunConversationEntry[] => (text === "" ? [] : [{ role, text }]);
+    const told = conversationEnd("prompt", prompt ?? "");
+    const reported = conversationEnd("report", report ?? "");
     const written = this.messages.map(
       (text): ChatLocalRunConversationEntry => ({ role: "message", text }),
     );
     return {
       type: "conversation",
-      entries: [
-        ...said("prompt", told.text),
-        ...said("report", reported.text),
-        ...written,
-      ],
+      entries: [...told.entries, ...reported.entries, ...written],
       droppedBytes:
         this.droppedBytes + told.droppedBytes + reported.droppedBytes,
     };

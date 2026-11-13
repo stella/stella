@@ -186,40 +186,51 @@ describe("a subagent's conversation kept on the computer", () => {
     });
   });
 
-  test("what it was told and what it reported each fit whatever their length, so neither is the line the cap cuts", () => {
-    // Longer than a step keeps, ending in a character of several bytes.
-    const long = `${"z".repeat(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES)}\u00E9\u{1F4C4}`;
-    const output = new SubagentConversation().ended({
-      prompt: long,
-      report: long,
-    });
+  test("what it was told and what it reported each fit whatever their length and characters, so neither is the line the cap cuts", () => {
     const bytes = (text: string) => new TextEncoder().encode(text).length;
-    const [told, reported] = output.entries;
-    expect(output.entries.map(({ role }) => role)).toEqual([
-      "prompt",
-      "report",
-    ]);
-    for (const entry of [told, reported]) {
-      const text = entry?.text ?? "";
-      expect(long.startsWith(text)).toBe(true);
-      expect(bytes(text)).toBeLessThanOrEqual(
-        CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES / 4,
+    const line = (entry: object) => `${JSON.stringify(entry)}\n`;
+    for (const long of [
+      // Longer than a step keeps, ending in characters of several bytes.
+      `${"z".repeat(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES)}\u00E9\u{1F4C4}`,
+      // Quotes and control characters: each is several bytes once escaped.
+      '"\u0000'.repeat(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES / 4),
+      // Characters outside the basic plane only: a cut must not halve one.
+      "\u{1F4C4}".repeat(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES / 8),
+    ]) {
+      const output = new SubagentConversation().ended({
+        prompt: long,
+        report: long,
+      });
+      const [told, reported] = output.entries;
+      expect(output.entries.map(({ role }) => role)).toEqual([
+        "prompt",
+        "report",
+      ]);
+      for (const entry of [told, reported]) {
+        const text = entry?.text ?? "";
+        expect(text).not.toBe("");
+        expect(long.startsWith(text)).toBe(true);
+        // The kept line, not only its text, is within the entry's share.
+        expect(bytes(line(entry ?? {}))).toBeLessThanOrEqual(
+          CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES / 4,
+        );
+        expect(
+          new TextDecoder("utf-8", { fatal: true }).decode(
+            new TextEncoder().encode(text),
+          ),
+        ).toBe(text);
+        expect(/[\uD800-\uDBFF]$/u.test(text)).toBe(false);
+      }
+      // What was left out is counted, and both entries read back from the
+      // kept file.
+      expect(output.droppedBytes).toBe(
+        2 * bytes(long) - bytes(told?.text ?? "") - bytes(reported?.text ?? ""),
       );
-      expect(bytes(text)).toBeGreaterThan(0);
+      const { kept } = keptStepText(output.entries.map(line).join(""));
+      expect(
+        parseChatLocalRunConversation(new TextDecoder().decode(kept)),
+      ).toEqual([...output.entries]);
     }
-    // What was left out is counted, and both entries read back from the
-    // kept file.
-    expect(output.droppedBytes).toBe(
-      2 * bytes(long) - bytes(told?.text ?? "") - bytes(reported?.text ?? ""),
-    );
-    const { kept } = keptStepText(
-      output.entries.map((entry) => `${JSON.stringify(entry)}\n`).join(""),
-    );
-    expect(
-      parseChatLocalRunConversation(new TextDecoder().decode(kept)).map(
-        ({ role }) => role,
-      ),
-    ).toEqual(["prompt", "report"]);
   });
 
   test("is kept under its own run: the same step of another run is another file", () => {
