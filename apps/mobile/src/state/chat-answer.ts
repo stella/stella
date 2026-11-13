@@ -16,8 +16,8 @@ import {
   type LocalRunSubagentStatus,
   localRunSubagentStatus,
   localRunSubagentType,
-  type LocalRunToolDetailKind,
   type LocalRunToolSubtitle,
+  type LocalRunToolTitleKind,
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import {
@@ -57,7 +57,7 @@ export type AnswerStep =
       readonly type: "local";
       readonly label: ChatToolLabel;
       /** The kind the title names, or null to keep the tool's own title. */
-      readonly detailKind: LocalRunToolDetailKind | null;
+      readonly titleKind: LocalRunToolTitleKind | null;
       readonly subtitle: LocalRunToolSubtitle | null;
       readonly status: StepStatus;
     }

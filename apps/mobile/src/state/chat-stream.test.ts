@@ -309,7 +309,7 @@ describe("drawing an answer from its events", () => {
           {
             type: "local",
             label: "command_execution",
-            detailKind: null,
+            titleKind: null,
             subtitle: { type: "text", text: "rg lease" },
             status: "done",
           },

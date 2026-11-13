@@ -20,7 +20,7 @@ const view = (name: string, input: unknown, output?: unknown) =>
 describe("a step a coding agent took on the member's computer", () => {
   test("a command shows its line, and a failed one its exit code", () => {
     expect(view("command_execution", { command: "rg lease" })).toEqual({
-      detailKind: null,
+      titleKind: null,
       subtitle: { type: "text", text: "rg lease" },
     });
     expect(
@@ -30,7 +30,7 @@ describe("a step a coding agent took on the member's computer", () => {
         { aggregated_output: "1 fail", exit_code: 1, status: "failed" },
       ),
     ).toEqual({
-      detailKind: null,
+      titleKind: null,
       subtitle: { type: "command", command: "bun test", exitCode: 1 },
     });
     // Success needs no code; the status mark says it.
@@ -58,7 +58,7 @@ describe("a step a coding agent took on the member's computer", () => {
         ],
       }),
     ).toEqual({
-      detailKind: null,
+      titleKind: null,
       subtitle: { type: "text", text: "drafts/lease.md, drafts/notice.md" },
     });
   });
@@ -70,7 +70,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "read", path: "drafts/lease.md" },
       }),
     ).toEqual({
-      detailKind: "read",
+      titleKind: "read",
       subtitle: { type: "text", text: "drafts/lease.md" },
     });
     expect(
@@ -79,7 +79,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "search", pattern: "termination", path: "drafts" },
       }),
     ).toEqual({
-      detailKind: "search",
+      titleKind: "search",
       subtitle: { type: "search", pattern: "termination", path: "drafts" },
     });
     expect(
@@ -94,7 +94,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "fetch", url: "https://example.test/law" },
       }),
     ).toEqual({
-      detailKind: "fetch",
+      titleKind: "fetch",
       subtitle: { type: "text", text: "https://example.test/law" },
     });
     expect(
@@ -103,7 +103,7 @@ describe("a step a coding agent took on the member's computer", () => {
         detail: { kind: "plan", items: ["Read the lease", "Draft the notice"] },
       }),
     ).toEqual({
-      detailKind: "plan",
+      titleKind: "plan",
       subtitle: { type: "text", text: "Read the lease, Draft the notice" },
     });
   });
@@ -115,7 +115,7 @@ describe("a step a coding agent took on the member's computer", () => {
       detail: { kind: "proposed_plan", text: plan },
     };
     expect(view("harness_native_tool", input)).toEqual({
-      detailKind: "proposed_plan",
+      titleKind: "proposed_plan",
       subtitle: null,
     });
     expect(localRunProposedPlan({ name: "harness_native_tool", input })).toBe(
@@ -132,7 +132,7 @@ describe("a step a coding agent took on the member's computer", () => {
 
   test("any other native tool shows its name, and a malformed detail its name only", () => {
     expect(view("harness_native_tool", { tool: "Skill" })).toEqual({
-      detailKind: null,
+      titleKind: null,
       subtitle: { type: "text", text: "Skill" },
     });
     expect(
@@ -140,13 +140,44 @@ describe("a step a coding agent took on the member's computer", () => {
         tool: "Read",
         detail: { kind: "read", content: "Private text" },
       }),
-    ).toEqual({ detailKind: null, subtitle: { type: "text", text: "Read" } });
+    ).toEqual({ titleKind: null, subtitle: { type: "text", text: "Read" } });
   });
 
   test("a stella or connector call keeps its own row", () => {
     expect(view("search_case_law", { query: "lease" })).toBeNull();
     expect(view("mcp__docs__search", { query: "lease" })).toBeNull();
     expect(view("command_execution", { output: "not a command" })).toBeNull();
+  });
+});
+
+describe("a browser step on the member's computer", () => {
+  test("an opened page is named by its address, other steps by their kind", () => {
+    expect(
+      view("local_browser", {
+        action: "open",
+        url: "https://fixture-library.test/search",
+      }),
+    ).toEqual({
+      titleKind: null,
+      subtitle: { type: "text", text: "https://fixture-library.test/search" },
+    });
+    expect(view("local_browser", { action: "click" })).toEqual({
+      titleKind: null,
+      subtitle: null,
+    });
+  });
+
+  test("a step that stopped at a sign-in asks the member to sign in", () => {
+    expect(
+      view(
+        "local_browser",
+        { action: "open", url: "https://fixture-library.test/account" },
+        { status: "needs_member" },
+      ),
+    ).toEqual({
+      titleKind: "sign_in",
+      subtitle: { type: "text", text: "https://fixture-library.test/account" },
+    });
   });
 });
 
@@ -201,7 +232,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
       },
     };
     expect(view("harness_native_tool", input)).toEqual({
-      detailKind: "subagent",
+      titleKind: "subagent",
       subtitle: { type: "text", text: "Check the lease" },
     });
     expect(localRunSubagentType({ name: "harness_native_tool", input })).toBe(
@@ -213,7 +244,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
       detail: { kind: "subagent", description: "" },
     };
     expect(view("harness_native_tool", unnamed)).toEqual({
-      detailKind: "subagent",
+      titleKind: "subagent",
       subtitle: null,
     });
     expect(
@@ -231,7 +262,7 @@ describe("a subagent a coding agent started on the member's computer", () => {
         detail: { kind: "image", path: "scans/page-1.png" },
       }),
     ).toEqual({
-      detailKind: "image",
+      titleKind: "image",
       subtitle: { type: "text", text: "scans/page-1.png" },
     });
   });

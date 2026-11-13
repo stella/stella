@@ -208,6 +208,7 @@
     },
     "localRun": {
       "title": {
+        "sign_in": "Pro pokračování se přihlaste",
         "read": "Čtení souboru",
         "search": "Hledání v souborech",
         "fetch": "Čtení stránky",

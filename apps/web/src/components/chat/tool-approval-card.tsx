@@ -60,7 +60,7 @@ import {
   isNonPersistentGrantChatToolName,
   isRegistryWriteSummaryToolName,
   isSuggestChangesApplyOutput,
-  LOCAL_RUN_DETAIL_TITLE_KEYS,
+  LOCAL_RUN_TITLE_KEYS,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
@@ -553,15 +553,15 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
  * is named by its kind, as its row names it.
  */
 const approvalTitleKey = (name: ApprovalToolName, part: ApprovalToolPart) => {
-  const detailKind =
+  const titleKind =
     localRunToolView({
       name,
       input: getApprovalPartInput(part),
       output: part.output,
-    })?.detailKind ?? null;
-  return detailKind === null
+    })?.titleKind ?? null;
+  return titleKind === null
     ? getChatToolTitleKey(name)
-    : LOCAL_RUN_DETAIL_TITLE_KEYS[detailKind];
+    : LOCAL_RUN_TITLE_KEYS[titleKind];
 };
 
 export const ToolApprovalCard = ({

@@ -93,6 +93,8 @@ const WEB_SEARCH_MODE = {
 >;
 /** A dotted config key carries the name, so it must stay a bare TOML key. */
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
+/** How long a browser tool call may wait, the member's approval included. */
+const BROWSER_TOOL_TIMEOUT_SECONDS = 3600;
 
 /** The skills Codex installs with itself; none comes from a member's files. */
 const SYSTEM_SKILL_SCOPE = "system";
@@ -188,7 +190,10 @@ const threadParams = (
   input: HarnessTurnInput,
   disabledSkills: readonly string[],
 ) => {
-  if (!MCP_SERVER_NAME.test(input.mcp.serverName)) {
+  if (
+    !MCP_SERVER_NAME.test(input.mcp.serverName) ||
+    (input.browser !== null && !MCP_SERVER_NAME.test(input.browser.serverName))
+  ) {
     panic("Codex adapter: the MCP server name must be a bare TOML key");
   }
   if (!path.isAbsolute(input.cacheDir)) {
@@ -236,6 +241,19 @@ const threadParams = (
         // The stella MCP server enforces its own approvals for writes.
         default_tools_approval_mode: "approve",
       },
+      // The extension holds the browser to its own policy: the origin
+      // policy, containment, budgets and the sign-in handoff.
+      ...(input.browser === null
+        ? {}
+        : {
+            [`mcp_servers.${input.browser.serverName}`]: {
+              url: input.browser.url,
+              http_headers: { Authorization: `Bearer ${input.browser.token}` },
+              default_tools_approval_mode: "approve",
+              // A step the member must allow waits for the member's answer.
+              tool_timeout_sec: BROWSER_TOOL_TIMEOUT_SECONDS,
+            },
+          }),
     },
   };
 };

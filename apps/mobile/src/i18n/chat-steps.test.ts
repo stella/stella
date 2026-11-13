@@ -46,6 +46,7 @@ const WEB_TITLE_KEYS: Readonly<Record<string, readonly string[]>> = {
  */
 const WEB_LOCAL_RUN_KEYS = {
   title: {
+    sign_in: ["chat", "toolCall", "signInToContinue"],
     read: ["chat", "toolCall", "readFile"],
     search: ["chat", "toolCall", "searchFiles"],
     fetch: ["chat", "tool", "fetch_url"],

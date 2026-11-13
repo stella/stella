@@ -480,9 +480,9 @@ const ApprovalRow = ({
     if (local === null) {
       return humanizeIdentifier(approval.toolName);
     }
-    return local.detailKind === null
+    return local.titleKind === null
       ? t(`tool.${chatToolLabel(approval.toolName)}`)
-      : t(`localRun.title.${local.detailKind}`);
+      : t(`localRun.title.${local.titleKind}`);
   })();
   // A credential-backed call sends exactly these arguments once approved, so
   // the phone shows every one in full, as the web does. A coding agent's

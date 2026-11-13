@@ -11,7 +11,7 @@ import {
   isBrowserResolvedChatToolCall,
   isChatPastedTextPart,
 } from "@stll/api-contract/chat";
-import type { LocalRunToolDetailKind } from "@stll/api-contract/chat-local-run-steps";
+import type { LocalRunToolTitleKind } from "@stll/api-contract/chat-local-run-steps";
 import {
   chatToolLabel,
   isKnownChatToolName,
@@ -457,8 +457,9 @@ export const isToolApprovalGrant = (
   isApprovalToolName(value) ||
   value.startsWith(MCP_CONNECTOR_APPROVAL_GRANT_PREFIX);
 
-/** The title of a coding agent's own step, by the kind its detail names. */
-export const LOCAL_RUN_DETAIL_TITLE_KEYS = {
+/** The title of a coding agent's own step, by what the step's row names. */
+export const LOCAL_RUN_TITLE_KEYS = {
+  sign_in: "chat.toolCall.signInToContinue",
   read: "chat.toolCall.readFile",
   search: "chat.toolCall.searchFiles",
   fetch: "chat.tool.fetch_url",
@@ -466,7 +467,7 @@ export const LOCAL_RUN_DETAIL_TITLE_KEYS = {
   proposed_plan: "chat.toolCall.proposedPlan",
   subagent: "chat.toolCall.subagent",
   image: "chat.toolCall.viewImage",
-} as const satisfies Record<LocalRunToolDetailKind, TranslationKey>;
+} as const satisfies Record<LocalRunToolTitleKind, TranslationKey>;
 
 export const getChatToolTitleKey = (toolName: string): ChatToolTitleKey => {
   const label = chatToolLabel(toolName);

@@ -4,11 +4,7 @@ import { chatLocalRunToolResultContent } from "@stll/api-contract/chat-local-run
 
 import type { HarnessToolCall, HarnessToolResult } from "../events";
 import { type HarnessStepOutput, wholeFileDiff } from "../step-output";
-import {
-  HARNESS_TOOL_NAMES,
-  mcpToolCallName,
-  nativeToolCall,
-} from "../tool-parts";
+import { HARNESS_TOOL_NAMES, mcpToolCall, nativeToolCall } from "../tool-parts";
 import {
   type CodexAgentOutcome,
   type CodexItem,
@@ -166,15 +162,13 @@ export const toolCallForItem = (
         input: { changes: fileChanges(item) },
       });
     case "mcpToolCall":
-      return {
+      return mcpToolCall({
         id: item.id,
-        name: mcpToolCallName({
-          server: item.server,
-          tool: item.tool,
-          stellaServer,
-        }),
         input: item.arguments ?? {},
-      };
+        server: item.server,
+        stellaServer,
+        tool: item.tool,
+      });
     case "webSearch":
       return nativeToolCall(item.id, {
         name: HARNESS_TOOL_NAMES.webSearch,

@@ -33,7 +33,7 @@ import {
   getChatToolTitleKey,
   type HarnessChatToolCallPart,
   isRunningToolPart,
-  LOCAL_RUN_DETAIL_TITLE_KEYS,
+  LOCAL_RUN_TITLE_KEYS,
 } from "@/components/chat/chat-ui-tools";
 import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
@@ -519,12 +519,12 @@ const ToolCallCardComponent = ({
     input: getToolInput(part),
     output: part.output,
   });
-  const localRunDetailKind = localRunTool?.detailKind ?? null;
+  const localRunTitleKind = localRunTool?.titleKind ?? null;
   const label =
     catalogEntry?.brand ??
-    (localRunDetailKind === null
+    (localRunTitleKind === null
       ? t(getChatToolTitleKey(name))
-      : t(LOCAL_RUN_DETAIL_TITLE_KEYS[localRunDetailKind]));
+      : t(LOCAL_RUN_TITLE_KEYS[localRunTitleKind]));
   const subtitle =
     localRunTool === null
       ? getToolSubtitle({

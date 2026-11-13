@@ -6,6 +6,7 @@ import {
   type ChatLocalRunToolCallInput,
   chatLocalRunToolResultContent,
   chatLocalRunToolStatusContent,
+  isChatLocalRunBrowserAction,
   isChatLocalRunToolName,
   parseChatLocalRunToolCall,
   parseChatLocalRunToolResult,
@@ -90,7 +91,56 @@ export const HARNESS_TOOL_NAMES = {
   permissions: harnessToolName("request_permissions"),
   nativeTool: harnessToolName(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool),
   unsupportedItem: harnessToolName(CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem),
+  browser: harnessToolName(CHAT_LOCAL_RUN_TOOL_NAMES.browser),
 } as const;
+
+/**
+ * The MCP server name a local run's browser tools are registered under
+ * (`sidecar/browser`). Their calls are steps on the member's computer, not
+ * stella or connector tools.
+ */
+export const LOCAL_BROWSER_MCP_SERVER_NAME = "stella_browser";
+
+/**
+ * The call an adapter reports for an MCP tool. A browser step keeps only
+ * its kind and, for `open`, the address the agent chose: the element it
+ * clicked and the text it typed stay on the computer, and so does its
+ * result (`shownToolResult`). Any other call is named by `mcpToolCallName`.
+ */
+export const mcpToolCall = ({
+  id,
+  input,
+  server,
+  stellaServer,
+  tool,
+}: {
+  id: string;
+  input: unknown;
+  server: string;
+  stellaServer: string;
+  tool: string;
+}): HarnessToolCall => {
+  if (server !== LOCAL_BROWSER_MCP_SERVER_NAME) {
+    return { id, name: mcpToolCallName({ server, tool, stellaServer }), input };
+  }
+  if (!isChatLocalRunBrowserAction(tool)) {
+    return unsupportedItem(id, `${server}:${tool}`).toolCall;
+  }
+  if (tool !== "open") {
+    return nativeToolCall(id, {
+      name: HARNESS_TOOL_NAMES.browser,
+      input: { action: tool },
+    });
+  }
+  const url: unknown =
+    typeof input === "object" && input !== null
+      ? Reflect.get(input, "url")
+      : undefined;
+  return nativeToolCall(id, {
+    name: HARNESS_TOOL_NAMES.browser,
+    input: { action: tool, ...(typeof url === "string" ? { url } : {}) },
+  });
+};
 
 /**
  * A harness-native step in the contract's shape (`chat-local-run-tool`),
@@ -168,6 +218,7 @@ const withRunRelativePaths = (
     case CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution:
     case CHAT_LOCAL_RUN_TOOL_NAMES.webSearch:
     case CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem:
+    case CHAT_LOCAL_RUN_TOOL_NAMES.browser:
       return call;
     default:
       call satisfies never;

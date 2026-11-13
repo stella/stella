@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import {
+  CHAT_LOCAL_RUN_NEEDS_MEMBER,
   CHAT_LOCAL_RUN_TOOL_NAMES,
   type ChatLocalRunToolDetail,
   isChatLocalRunToolName,
@@ -22,17 +23,31 @@ export type LocalRunToolSubtitle =
   | { type: "search"; pattern: string; path: string }
   | { type: "command"; command: string; exitCode: number };
 
-/** The kind of step a row's title names, each client in its own catalogue. */
-export type LocalRunToolDetailKind = ChatLocalRunToolDetail["kind"];
+/** A browser step stopped at a sign-in the member completes in Chrome. */
+export const LOCAL_RUN_SIGN_IN_TITLE = "sign_in";
+
+/**
+ * What a row's title names in place of its tool: the kind of step, or that
+ * a browser step waits for the member to sign in. Each client reads it in
+ * its own catalogue.
+ */
+export type LocalRunToolTitleKind =
+  ChatLocalRunToolDetail["kind"] | typeof LOCAL_RUN_SIGN_IN_TITLE;
 
 export type LocalRunToolView = {
-  /** The kind the title names, or `null` to keep the tool's own title. */
-  detailKind: LocalRunToolDetailKind | null;
+  /** What the title names, or `null` to keep the tool's own title. */
+  titleKind: LocalRunToolTitleKind | null;
   subtitle: LocalRunToolSubtitle | null;
 };
 
 const text = (value: string): LocalRunToolSubtitle | null =>
   value === "" ? null : { type: "text", text: value };
+
+/** Whether a browser step's stored result says the member signs in. */
+const needsMember = (output: unknown): boolean =>
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === CHAT_LOCAL_RUN_NEEDS_MEMBER;
 
 /** A failed command's exit code, from the result the harness reported. */
 const exitCodeOf = (output: unknown): number | null => {
@@ -96,7 +111,7 @@ export const localRunToolView = ({
     case CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution: {
       const exitCode = exitCodeOf(output);
       return {
-        detailKind: null,
+        titleKind: null,
         subtitle:
           exitCode === null || call.input.command === ""
             ? text(call.input.command)
@@ -105,22 +120,30 @@ export const localRunToolView = ({
     }
     case CHAT_LOCAL_RUN_TOOL_NAMES.fileChange:
       return {
-        detailKind: null,
+        titleKind: null,
         subtitle: text(call.input.changes.map(({ path }) => path).join(", ")),
       };
     case CHAT_LOCAL_RUN_TOOL_NAMES.webSearch:
-      return { detailKind: null, subtitle: text(call.input.query) };
+      return { titleKind: null, subtitle: text(call.input.query) };
     case CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool: {
       const { detail, tool } = call.input;
       return detail === undefined
-        ? { detailKind: null, subtitle: text(tool) }
+        ? { titleKind: null, subtitle: text(tool) }
         : {
-            detailKind: detail.kind,
+            titleKind: detail.kind,
             subtitle: detailSubtitle(detail),
           };
     }
     case CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem:
-      return { detailKind: null, subtitle: null };
+      return { titleKind: null, subtitle: null };
+    case CHAT_LOCAL_RUN_TOOL_NAMES.browser:
+      return {
+        titleKind: needsMember(output) ? LOCAL_RUN_SIGN_IN_TITLE : null,
+        subtitle:
+          call.input.action === "open" && call.input.url !== undefined
+            ? text(call.input.url)
+            : null,
+      };
     default:
       call satisfies never;
       return panic("Unhandled local run tool call");
@@ -212,6 +235,7 @@ export const localRunToolSubtitleText = (
         command: subtitle.command,
         code: String(subtitle.exitCode),
       });
+
     default:
       subtitle satisfies never;
       return panic("Unhandled local run tool subtitle");

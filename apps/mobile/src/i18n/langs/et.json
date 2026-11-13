@@ -208,6 +208,7 @@
     },
     "localRun": {
       "title": {
+        "sign_in": "Jätkamiseks logige sisse",
         "read": "Faili lugemine",
         "search": "Failidest otsimine",
         "fetch": "Lehe lugemine",

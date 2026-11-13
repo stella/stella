@@ -76,7 +76,7 @@ const commandStep = (
 ): AnswerStep => ({
   type: "local",
   label: "command_execution",
-  detailKind: null,
+  titleKind: null,
   subtitle: { type: "text", text: `run ${id}` },
   status,
 });
@@ -208,21 +208,21 @@ describe("a coding agent's steps in an answer on the phone", () => {
       {
         type: "local",
         label: "unknown",
-        detailKind: "image",
+        titleKind: "image",
         subtitle: { type: "text", text: "exhibits/scan-12.png" },
         status: "done",
       },
       {
         type: "local",
         label: "unknown",
-        detailKind: "search",
+        titleKind: "search",
         subtitle: { type: "search", pattern: "indemnity", path: "drafts" },
         status: "done",
       },
       {
         type: "local",
         label: "unknown",
-        detailKind: null,
+        titleKind: null,
         subtitle: { type: "text", text: "Skill" },
         status: "done",
       },
@@ -242,10 +242,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
         type: "steps",
         // The subagent's approval is asked under the thread; its step and
         // the step naming it stay in the answer's own steps.
-        steps: [
-          { type: "local", detailKind: "subagent" },
-          commandStep("child"),
-        ],
+        steps: [{ type: "local", titleKind: "subagent" }, commandStep("child")],
       },
     ]);
   });

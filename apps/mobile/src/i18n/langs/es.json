@@ -208,6 +208,7 @@
     },
     "localRun": {
       "title": {
+        "sign_in": "Inicia sesión para continuar",
         "read": "Leyendo un archivo",
         "search": "Buscando en archivos",
         "fetch": "Leyendo página",

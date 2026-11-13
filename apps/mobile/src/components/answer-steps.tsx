@@ -179,9 +179,9 @@ const useStepTitle = () => {
       case "tool":
         return t(`tool.${step.label}`);
       case "local":
-        return step.detailKind === null
+        return step.titleKind === null
           ? t(`tool.${step.label}`)
-          : t(`localRun.title.${step.detailKind}`);
+          : t(`localRun.title.${step.titleKind}`);
       default:
         step satisfies never;
         return panic("Unhandled answer step");

@@ -208,6 +208,7 @@
     },
     "localRun": {
       "title": {
+        "sign_in": "Sign in to continue",
         "read": "Reading a file",
         "search": "Searching files",
         "fetch": "Reading page",

@@ -208,6 +208,7 @@
     },
     "localRun": {
       "title": {
+        "sign_in": "Zum Fortfahren anmelden",
         "read": "Datei wird gelesen",
         "search": "Dateien werden durchsucht",
         "fetch": "Seite lesen",

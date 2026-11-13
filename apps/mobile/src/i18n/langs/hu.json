@@ -208,6 +208,7 @@
     },
     "localRun": {
       "title": {
+        "sign_in": "A folytatáshoz jelentkezzen be",
         "read": "Fájl olvasása",
         "search": "Keresés a fájlokban",
         "fetch": "Oldal olvasása",
