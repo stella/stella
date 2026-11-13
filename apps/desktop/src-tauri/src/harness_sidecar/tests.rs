@@ -22,7 +22,8 @@ use tokio::sync::{Mutex, mpsc};
 use super::protocol::{ProbeFailure, ProbedModel};
 use super::*;
 use crate::runner_protocol::{
-  FsPolicy, HarnessCapability, McpBinding, McpToken, NetworkPolicy, RunPolicy,
+  FsPolicy, HarnessCapability, McpBinding, McpToken, NetworkPolicy, ReasoningEffort,
+  RunPolicy,
 };
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -213,7 +214,9 @@ fn run_start(model: &str) -> SidecarRunStart {
     workspace_dir: "/data/runs/1".to_owned(),
     cache_dir: "/data/agent-package-cache".to_owned(),
     unreadable_paths: vec!["/data/runs".to_owned(), "/data".to_owned()],
+    step_output_dir: "/data/runs/1.step-outputs".to_owned(),
     model: model.to_owned(),
+    reasoning_effort: None,
     instructions: String::new(),
     messages: vec![
       json!({ "role": "user", "content": "Find the lease decision." })
@@ -822,6 +825,41 @@ fn a_holder_that_dies_fails_its_runs_and_the_next_run_starts_a_new_one() {
 }
 
 #[test]
+fn a_holder_that_dies_reports_its_background_work_ended() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut counts = sidecar.watch_background().unwrap();
+    let mut crashed = sidecar.start_run(run_start("background-crash")).unwrap();
+    let _delivered = deliveries(&mut crashed).await;
+    let reported = counts.recv().await.unwrap();
+    assert_eq!(reported.count, 2);
+    // The holder's kept processes went with it: nothing keeps showing them.
+    let ended = counts.recv().await.unwrap();
+    assert_eq!(
+      (ended.run_id.as_str(), ended.count),
+      (reported.run_id.as_str(), 0)
+    );
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
+fn a_background_count_reported_before_the_watcher_reaches_it() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut waiting = sidecar.start_run(run_start("background-wait")).unwrap();
+    // The holder reported the count before this event, on the same line.
+    let _event = next(&mut waiting).await;
+    let mut counts = sidecar.watch_background().unwrap();
+    let reported = counts.recv().await.unwrap();
+    assert_eq!(reported.count, 2);
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
 fn a_run_start_the_holder_finds_invalid_fails_that_run_and_no_other() {
   let fixture = Fixture::new();
   with_children(async {
@@ -1152,11 +1190,17 @@ fn probe_outcomes_become_runner_reports() {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
         is_default: true,
+        reasoning_efforts: vec![
+          ReasoningEffort::High,
+          ReasoningEffort::Low,
+          ReasoningEffort::High,
+        ],
       },
       ProbedModel {
         id: "gpt-test".to_owned(),
         label: "Again".to_owned(),
         is_default: false,
+        reasoning_efforts: Vec::new(),
       },
     ],
   };
@@ -1170,6 +1214,8 @@ fn probe_outcomes_become_runner_reports() {
       models: vec![HarnessModel {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
+        is_default: true,
+        reasoning_efforts: vec![ReasoningEffort::Low, ReasoningEffort::High],
       }],
     })
   );
@@ -1310,6 +1356,10 @@ fn stand_in_holder() {
 /// - `flood`: 300 events at once;
 /// - `flood-later`: an event, then 300 more on the first approval;
 /// - `crash`: an event, then the process exits without cleaning up;
+/// - `background-crash`: an event and a background task count of 2, then
+///   the process exits without cleaning up;
+/// - `background-wait`: a background task count of 2, then an event, then
+///   nothing until it is cancelled;
 /// - `garbage`: a line that is not JSON.
 ///
 /// A launch with `processGrant` first reports the stand-in's own process id
@@ -1581,6 +1631,17 @@ mod stand_in {
       }
       "crash" => {
         emit(held, run_id, event).await;
+        std::process::exit(3);
+      }
+      "background-wait" => {
+        let count = json!({ "type": "background.tasks", "runId": run_id, "count": 2 });
+        write(held, &count.to_string()).await;
+        emit(held, run_id, event).await;
+      }
+      "background-crash" => {
+        emit(held, run_id, event).await;
+        let count = json!({ "type": "background.tasks", "runId": run_id, "count": 2 });
+        write(held, &count.to_string()).await;
         std::process::exit(3);
       }
       _ => {

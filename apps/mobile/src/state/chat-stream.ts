@@ -2,6 +2,11 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import {
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
+  chatLocalRunParentCallId,
+  isChatLocalRunToolName,
+} from "@stll/api-contract/chat-local-run-tool";
 
 import { SignedOutError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
@@ -13,9 +18,11 @@ import {
   withAccessToken,
 } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
+import { answerBlocks, messageText } from "@/state/chat-answer";
 import { attachmentParts } from "@/state/chat-attachments";
 import type { ReadyFile } from "@/state/chat-attachments";
 import type { ChatEntry } from "@/state/chat-messages";
+import type { LocalRunTarget } from "@/state/chat-pending-input";
 
 /** One server-sent event: the id it carried, if any, and its data lines joined. */
 type SseEvent = {
@@ -71,8 +78,8 @@ export const createSseParser = () => {
 
 /**
  * The AG-UI events an answer is drawn from. Everything else the run sends
- * (tool arguments and results, snapshots, custom progress) passes as
- * `ignored`, so an event this build has never seen does not end the stream.
+ * (snapshots, custom progress) passes as `ignored`, so an event this build
+ * has never seen does not end the stream.
  */
 const chatEventSchema = v.union([
   v.object({
@@ -80,7 +87,32 @@ const chatEventSchema = v.union([
     messageId: v.string(),
   }),
   v.object({ type: v.literal("TEXT_MESSAGE_CONTENT"), delta: v.string() }),
-  v.object({ type: v.literal("TOOL_CALL_START"), toolCallName: v.string() }),
+  v.object({ type: v.literal("REASONING_MESSAGE_START") }),
+  v.object({
+    type: v.literal("REASONING_MESSAGE_CONTENT"),
+    delta: v.string(),
+  }),
+  v.object({
+    type: v.literal("TOOL_CALL_START"),
+    toolCallId: v.string(),
+    toolCallName: v.string(),
+    // Where a call of a coding agent's subagent names the subagent's step.
+    metadata: v.optional(v.unknown()),
+  }),
+  v.object({
+    type: v.literal("TOOL_CALL_ARGS"),
+    toolCallId: v.string(),
+    delta: v.string(),
+  }),
+  v.object({ type: v.literal("TOOL_CALL_END"), toolCallId: v.string() }),
+  v.object({
+    type: v.literal("TOOL_CALL_RESULT"),
+    toolCallId: v.string(),
+    content: v.optional(v.string()),
+    // `output-error` for a call that failed or was cancelled, which the
+    // stored message keeps as an errored call.
+    state: v.optional(v.string()),
+  }),
   v.object({
     type: v.literal("RUN_FINISHED"),
     outcome: v.optional(v.looseObject({ type: v.string() })),
@@ -102,30 +134,100 @@ export const parseChatEvent = (data: string): ChatEvent | undefined => {
 
 /**
  * How an answer ended: still arriving, done, stopped by the person, waiting
- * for input only the web app can give (an approval or a question), or failed.
+ * for the person's input (an approval or a question; the stored thread says
+ * which), or failed.
  */
 export type AnswerStatus =
   "streaming" | "finished" | "stopped" | "needs-input" | "failed";
 
-/** An answer as it arrives: its text segments, the tools it used, and where it stands. */
+/**
+ * A part of an answer as it arrives, in the shape of a stored message's
+ * part, so both draw through `answerBlocks`: text, reasoning, and tool
+ * calls, each complete once its result came back, or errored when the
+ * result says the call failed or was cancelled.
+ */
+type StreamedPart =
+  | { readonly type: "text" | "thinking"; readonly content: string }
+  | {
+      readonly type: "tool-call";
+      readonly id: string;
+      readonly name: string;
+      readonly state: "input-streaming" | "complete" | "error";
+      /**
+       * What a step a coding agent took on the person's computer was
+       * given: its arguments as they arrive, then, once whole, read as the
+       * input a stored call keeps. No other call's arguments are kept.
+       */
+      readonly args?: string;
+      readonly input?: unknown;
+      /**
+       * The subagent step that made the call, kept as the stored call's
+       * metadata names it, so a live answer groups as the stored one does.
+       * Nothing else of a start's metadata is kept.
+       */
+      readonly metadata?: SubagentLink;
+      readonly output?: unknown;
+    };
+
+type SubagentLink = {
+  readonly [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: string;
+};
+
+/** A start's subagent link as a part keeps it, or nothing without one. */
+const subagentLinkOf = (
+  metadata: unknown,
+): { readonly metadata?: SubagentLink } => {
+  const parent = chatLocalRunParentCallId(metadata);
+  return parent === null
+    ? {}
+    : { metadata: { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: parent } };
+};
+
+/** An answer as it arrives: its parts in order, and where it stands. */
 export type StreamedAnswer = {
   readonly messageId: string | undefined;
-  readonly segments: readonly string[];
-  readonly tools: readonly string[];
+  readonly parts: readonly StreamedPart[];
   readonly status: AnswerStatus;
 };
 
 export const EMPTY_ANSWER: StreamedAnswer = {
   messageId: undefined,
-  segments: [],
-  tools: [],
+  parts: [],
   status: "streaming",
 };
 
 /**
- * One event applied to the answer. Each text segment starts its own
- * message event, with the tools the model ran between them; the segments
- * join the way a stored message's text parts do.
+ * The parts with `delta` added to the last one of `type`'s kind, or to a
+ * new one when another kind of part came since.
+ */
+const appendDelta = (
+  parts: readonly StreamedPart[],
+  type: "text" | "thinking",
+  delta: string,
+): StreamedPart[] => {
+  const last = parts.at(-1);
+  return last?.type === type
+    ? [...parts.slice(0, -1), { type, content: `${last.content}${delta}` }]
+    : [...parts, { type, content: delta }];
+};
+
+/**
+ * A tool result's content, or a call's whole arguments: the JSON it
+ * carries, or the text as it came.
+ */
+const resultOutput = (content: string | undefined): unknown => {
+  if (content === undefined) {
+    return undefined;
+  }
+  const parsed = Result.try(() => JSON.parse(content) as unknown);
+  return Result.isOk(parsed) ? parsed.value : content;
+};
+
+/**
+ * One event applied to the answer. Each text and each stretch of reasoning
+ * grows as it streams; a tool call runs from its start until its result
+ * comes back. The parts stay in the order they arrived, as a stored
+ * message keeps them.
  */
 export const applyChatEvent = (
   answer: StreamedAnswer,
@@ -136,17 +238,83 @@ export const applyChatEvent = (
       return {
         ...answer,
         messageId: answer.messageId ?? event.messageId,
-        segments: [...answer.segments, ""],
+        parts: [...answer.parts, { type: "text", content: "" }],
       };
     }
     case "TEXT_MESSAGE_CONTENT": {
-      const segments =
-        answer.segments.length === 0 ? [""] : [...answer.segments];
-      segments[segments.length - 1] = `${segments.at(-1) ?? ""}${event.delta}`;
-      return { ...answer, segments };
+      return {
+        ...answer,
+        parts: appendDelta(answer.parts, "text", event.delta),
+      };
+    }
+    case "REASONING_MESSAGE_START": {
+      return {
+        ...answer,
+        parts: [...answer.parts, { type: "thinking", content: "" }],
+      };
+    }
+    case "REASONING_MESSAGE_CONTENT": {
+      return {
+        ...answer,
+        parts: appendDelta(answer.parts, "thinking", event.delta),
+      };
     }
     case "TOOL_CALL_START": {
-      return { ...answer, tools: [...answer.tools, event.toolCallName] };
+      return {
+        ...answer,
+        parts: [
+          ...answer.parts,
+          {
+            type: "tool-call",
+            id: event.toolCallId,
+            name: event.toolCallName,
+            state: "input-streaming",
+            ...subagentLinkOf(event.metadata),
+          },
+        ],
+      };
+    }
+    case "TOOL_CALL_ARGS": {
+      return {
+        ...answer,
+        parts: answer.parts.map((part): StreamedPart =>
+          part.type === "tool-call" &&
+          part.id === event.toolCallId &&
+          isChatLocalRunToolName(part.name)
+            ? { ...part, args: `${part.args ?? ""}${event.delta}` }
+            : part,
+        ),
+      };
+    }
+    case "TOOL_CALL_END": {
+      return {
+        ...answer,
+        parts: answer.parts.map((part): StreamedPart => {
+          if (
+            part.type !== "tool-call" ||
+            part.id !== event.toolCallId ||
+            part.args === undefined
+          ) {
+            return part;
+          }
+          const { args, ...call } = part;
+          return { ...call, input: resultOutput(args) };
+        }),
+      };
+    }
+    case "TOOL_CALL_RESULT": {
+      return {
+        ...answer,
+        parts: answer.parts.map((part): StreamedPart =>
+          part.type === "tool-call" && part.id === event.toolCallId
+            ? {
+                ...part,
+                state: event.state === "output-error" ? "error" : "complete",
+                output: resultOutput(event.content),
+              }
+            : part,
+        ),
+      };
     }
     case "RUN_FINISHED": {
       return { ...answer, status: finishedStatus(event.outcome?.type) };
@@ -168,6 +336,34 @@ function finishedStatus(outcome: string | undefined): AnswerStatus {
   return "finished";
 }
 
+/**
+ * The answer's parts as they stand once it ended. A call still open when
+ * the run failed or was stopped never finished: it is cut off, errored with
+ * no result as the stored message keeps it, so its step and the subagent it
+ * belongs to do not read as still under way. A turn that waits for the
+ * person keeps its open call: the stored thread, read next, says what for.
+ */
+const endedParts = ({
+  parts,
+  status,
+}: StreamedAnswer): readonly StreamedPart[] =>
+  status === "failed" || status === "stopped"
+    ? parts.map((part): StreamedPart =>
+        part.type === "tool-call" && part.state === "input-streaming"
+          ? {
+              type: "tool-call",
+              id: part.id,
+              name: part.name,
+              state: "error",
+              ...(part.input === undefined ? {} : { input: part.input }),
+              ...(part.metadata === undefined
+                ? {}
+                : { metadata: part.metadata }),
+            }
+          : part,
+      )
+    : parts;
+
 /** The answer drawn as a thread entry, so it renders like a stored one. */
 export const answerEntry = (
   answer: StreamedAnswer,
@@ -176,12 +372,11 @@ export const answerEntry = (
   id: answer.messageId ?? "streaming-answer",
   role: "assistant",
   createdAt,
-  text: answer.segments
-    .map((segment) => segment.trim())
-    .filter((segment) => segment !== "")
-    .join("\n\n"),
-  tools: answer.tools,
+  text: messageText(answer.parts),
+  blocks: answerBlocks(endedParts(answer)),
   files: [],
+  // The stored answer names its drafts once the thread is read again.
+  drafts: [],
 });
 
 /**
@@ -213,10 +408,7 @@ export const chatSendBody = ({
   readonly threadId: string;
 }) => {
   const forwarded = {
-    threadId,
-    runId,
-    ...(matterId === undefined ? {} : { workspaceId: matterId }),
-    sendMode: anonymized ? "anonymized" : "rawOverride",
+    ...turnScope({ anonymized, matterId, runId, threadId }),
     message: {
       id: messageId,
       role: "user",
@@ -236,6 +428,80 @@ export const chatSendBody = ({
     forwardedProps: forwarded,
     data: forwarded,
   };
+};
+
+/**
+ * What every request about a thread's turn names: the thread, the new run,
+ * the thread's matter, and how its text is sent.
+ */
+const turnScope = ({
+  anonymized,
+  matterId,
+  runId,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly matterId: string | undefined;
+  readonly runId: string;
+  readonly threadId: string;
+}) => ({
+  threadId,
+  runId,
+  ...(matterId === undefined ? {} : { workspaceId: matterId }),
+  sendMode: anonymized ? "anonymized" : "rawOverride",
+});
+
+/**
+ * A continuation: the answer to what a paused turn waits for, which resumes
+ * it in a new run. The paused assistant message goes back with the calls the
+ * answer settles, the paused run is named as the parent, and each interrupt
+ * gets its resume item, at the top level and again in the forwarded props,
+ * as the web sends one. A turn a coding agent on the person's computer runs
+ * names the thread's local run target, so the server hands the answer to the
+ * computer that paused.
+ */
+export const chatContinueBody = ({
+  anonymized,
+  continuation: { messageId, parentRunId, parts, resume },
+  matterId,
+  runId,
+  runTarget,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly continuation: ChatContinuation;
+  readonly matterId: string | undefined;
+  readonly runId: string;
+  readonly runTarget: LocalRunTarget | undefined;
+  readonly threadId: string;
+}) => {
+  const forwarded = {
+    ...turnScope({ anonymized, matterId, runId, threadId }),
+    ...(runTarget === undefined ? {} : { runTarget }),
+    message: { id: messageId, role: "assistant", parts },
+    parentRunId,
+    resume,
+  };
+  return {
+    threadId,
+    runId,
+    state: {},
+    messages: [{ id: messageId, role: "assistant" }],
+    tools: [],
+    context: [],
+    forwardedProps: forwarded,
+    data: forwarded,
+    parentRunId,
+    resume,
+  };
+};
+
+/** The paused message an answer continues, and what the answer carries. */
+type ChatContinuation = {
+  readonly messageId: string;
+  readonly parentRunId: string;
+  readonly parts: readonly unknown[];
+  readonly resume: readonly unknown[];
 };
 
 /**
@@ -458,6 +724,55 @@ export const sendChatMessage = async ({
         messageId,
         runId,
         text,
+        threadId,
+      }),
+    ),
+    fetch,
+    method: "POST",
+    onEvent,
+    onTurn,
+    path: "/v1/chat",
+    signal,
+    source,
+  });
+
+/**
+ * Answers what a paused turn waits for and streams the answer's run, as a
+ * send does: the server names the new turn before any event.
+ */
+export const continueChatTurn = async ({
+  anonymized,
+  continuation,
+  fetch,
+  matterId,
+  onEvent,
+  onTurn,
+  runId,
+  runTarget,
+  signal,
+  source,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly continuation: ChatContinuation;
+  readonly fetch: StreamFetch;
+  readonly matterId: string | undefined;
+  readonly onEvent: (event: ChatEvent) => void;
+  readonly onTurn: (turnId: string) => void;
+  readonly runId: string;
+  readonly runTarget: LocalRunTarget | undefined;
+  readonly signal: AbortSignal;
+  readonly source: AccessTokenSource;
+  readonly threadId: string;
+}): Promise<Result<StreamEnd, StreamBreak>> =>
+  await readChatStream({
+    body: JSON.stringify(
+      chatContinueBody({
+        anonymized,
+        continuation,
+        matterId,
+        runId,
+        runTarget,
         threadId,
       }),
     ),

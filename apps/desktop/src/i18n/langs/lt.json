@@ -581,7 +581,18 @@
   },
   "dictation": {
     "title": "Diktavimas",
-    "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma.",
+    "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma. Įjungus DI taisymą, perrašytas tekstas (ne garsas) per stella siunčiamas jūsų organizacijos DI teikėjui, kad būtų ištaisytos klaidos ir formatavimas; stella jo nesaugo.",
+    "cleanup": {
+      "title": "Taisyti su DI",
+      "description": "Kalba ir toliau paverčiama tekstu šiame kompiuteryje, o garsas niekada jo nepalieka. Įjungus taisymą, gautas tekstas per stella siunčiamas jūsų organizacijos DI teikėjui, kuris ištaiso atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“. stella jo nesaugo."
+    },
+    "language": {
+      "title": "Diktavimo kalba",
+      "description": "Diktavimas atpažįstamas šia kalba, o taisant tekstas paliekamas šia kalba. Automatiškai naudojamos šio kompiuterio rodymo ir klaviatūrų kalbos.",
+      "automatic": "Automatiškai",
+      "automaticWith": "Automatiškai ({languages})",
+      "noResults": "Kalbų nerasta"
+    },
     "modelNeeded": "Kalbos modelis veikia šiame kompiuteryje.",
     "download": "Atsisiųsti ({size} MB)",
     "downloading": "Atsisiunčiamas kalbos modelis: {percent} %",
@@ -592,7 +603,10 @@
       "accessibility": "Leiskite prieigą prie pritaikymo neįgaliesiems funkcijų, kad „stella“ galėtų rašyti kitose programose.",
       "microphone": "„stella“ negirdi mikrofono. Patikrinkite prieigą prie mikrofono sistemos nustatymuose.",
       "modelMissing": "Pirmiausia atsisiųskite kalbos modelį.",
-      "transcription": "Perrašyti nepavyko. Bandykite dar kartą."
+      "transcription": "Perrašyti nepavyko. Bandykite dar kartą.",
+      "focusChanged": "Perjungėte į kitą programą, kol tekstas dar nebuvo paruoštas, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
+      "focusUnconfirmed": "stella negalėjo patvirtinti, kuri programa yra aktyvi, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
+      "shortcutHeld": "Atleiskite sparčiųjų klavišų mygtukus, kad būtų galima įvesti tekstą. Nieko nebuvo įvesta; bandykite dar kartą."
     }
   },
   "shortcut": {
@@ -816,6 +830,27 @@
       "runs_can_write": "Vietiniai vykdymai gali rašyti į šį aplanką, todėl jame negali būti įgūdžio.",
       "network_folder": "Šis aplankas yra tinklo bendrinimo vietoje. Įgūdžiai turi būti šio kompiuterio diske.",
       "path_changed": "Pasikeitė aukštesnis aplankas. Pašalinkite šį aplanką ir pridėkite jį iš naujo."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Susieti aplankai",
+    "description": "Šio kompiuterio aplankai, kuriuose gali dirbti pokalbio agentas. Pokalbis mato tik aplanko pavadinimą; jo kelias lieka šiame kompiuteryje.",
+    "add": "Susieti aplanką",
+    "remove": "Atsieti",
+    "removeFolder": "Atsieti {name}",
+    "state": {
+      "offline": "Diskas, kuriame yra šis aplankas, neprijungtas.",
+      "moved": "Šis aplankas buvo perkeltas, pervadintas arba ištrintas. Atsiekite jį ir susiekite iš naujo.",
+      "protected": "Šiame aplanke yra pačios stella duomenys arba įgūdžių aplankas, todėl agentas jame dirbti negali.",
+      "unreadable": "Nepavyko perskaityti šio aplanko."
+    },
+    "notice": {
+      "action_failed": "Nepavyko. Bandykite dar kartą.",
+      "too_many": "Šiame kompiuteryje jau yra tiek susietų aplankų, kiek jis gali laikyti. Pirmiausia atsiekite vieną.",
+      "not_a_folder": "Pasirinkite aplanką.",
+      "network_folder": "Šis aplankas yra tinklo bendrinimo vietoje. Susiekite aplanką iš šio kompiuterio disko.",
+      "protected": "Šiame aplanke yra pačios stella duomenys arba įgūdžių aplankas, todėl agentas jame dirbti negali.",
+      "unreadable": "Nepavyko perskaityti šio aplanko."
     }
   }
 }

@@ -4,123 +4,116 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## legal_list_verification_budgets · `legalListVerificationBudgets` · lists-verification.ts:94 · rls
-
-```text
-legal_list_verification_budgets.organization_id  safeOrganizationId  pk,fk,not null    lists-verification.ts:97
-legal_list_verification_budgets.active_runs      integer             default,not null  lists-verification.ts:98
-legal_list_verification_budgets.starts_day       date                default,not null  lists-verification.ts:99
-legal_list_verification_budgets.starts_today     integer             default,not null  lists-verification.ts:103
-legal_list_verification_budgets.active_limit     integer             default,not null  lists-verification.ts:104
-legal_list_verification_budgets.daily_limit      integer             default,not null  lists-verification.ts:108
-```
-
-## legal_list_verification_runs · `legalListVerificationRuns` · lists-verification.ts:152 · rls
+## legal_list_verification_runs · `legalListVerificationRuns` · lists-verification.ts:109 · rls
 
 One immutable verification of a document against a matter's anchor facts.
 
 ```text
-legal_list_verification_runs.{...entityFeatureGateColumns()}  spread                                lists-verification.ts:155
-legal_list_verification_runs.id                               pUuid               pk,not null       lists-verification.ts:156
-legal_list_verification_runs.organization_id                  safeOrganizationId  fk,not null       lists-verification.ts:159  The worker rebuilds its tenant scope from the row, so the organization is recorded rather than looked up.
-legal_list_verification_runs.workspace_id                     safeWorkspaceId     fk,not null       lists-verification.ts:162
-legal_list_verification_runs.entity_id                        safeUuid            fk,not null       lists-verification.ts:166  Version and field pins survive edits; the document owns the run lifecycle.
-legal_list_verification_runs.file_field_id                    safeUuid            not null          lists-verification.ts:167
-legal_list_verification_runs.entity_version_id                safeUuid            not null          lists-verification.ts:168
-legal_list_verification_runs.content_sha256                   varchar             not null          lists-verification.ts:169
-legal_list_verification_runs.evidence                         jsonb               not null          lists-verification.ts:170
-legal_list_verification_runs.status                           text                default,not null  lists-verification.ts:171
-legal_list_verification_runs.error_code                       text                null              lists-verification.ts:175
-legal_list_verification_runs.requested_by                     text                fk,null           lists-verification.ts:176
-legal_list_verification_runs.pipeline_version                 integer             default,not null  lists-verification.ts:181  Bumped when the engine changes shape, so an old run is never read as if today's engine had produced it.
-legal_list_verification_runs.model_ref                        varchar             null              lists-verification.ts:182
-legal_list_verification_runs.created_at                       timestamptz         default,not null  lists-verification.ts:183
-legal_list_verification_runs.started_at                       timestamptz         null              lists-verification.ts:184
-legal_list_verification_runs.finished_at                      timestamptz         null              lists-verification.ts:185
+legal_list_verification_runs.{...entityFeatureGateColumns()}  spread                                lists-verification.ts:112
+legal_list_verification_runs.id                               pUuid               pk,not null       lists-verification.ts:113
+legal_list_verification_runs.organization_id                  safeOrganizationId  fk,not null       lists-verification.ts:116  The worker rebuilds its tenant scope from the row, so the organization is recorded rather than looked up.
+legal_list_verification_runs.workspace_id                     safeWorkspaceId     fk,not null       lists-verification.ts:119
+legal_list_verification_runs.entity_id                        safeUuid            fk,not null       lists-verification.ts:123  Version and field pins survive edits; the document owns the run lifecycle.
+legal_list_verification_runs.file_field_id                    safeUuid            not null          lists-verification.ts:124
+legal_list_verification_runs.entity_version_id                safeUuid            not null          lists-verification.ts:125
+legal_list_verification_runs.content_sha256                   varchar             not null          lists-verification.ts:126
+legal_list_verification_runs.evidence                         jsonb               not null          lists-verification.ts:127
+legal_list_verification_runs.scope                            jsonb               default,not null  lists-verification.ts:130  What the run checks: the whole document, or a paragraph range resolved when the run started (contract.ts `VerificationScope`).
+legal_list_verification_runs.status                           text                default,not null  lists-verification.ts:134
+legal_list_verification_runs.error_code                       text                null              lists-verification.ts:138
+legal_list_verification_runs.requested_by                     text                fk,null           lists-verification.ts:139
+legal_list_verification_runs.pipeline_version                 integer             default,not null  lists-verification.ts:144  Bumped when the engine changes shape, so an old run is never read as if today's engine had produced it.
+legal_list_verification_runs.model_ref                        varchar             null              lists-verification.ts:145
+legal_list_verification_runs.created_at                       timestamptz         default,not null  lists-verification.ts:146
+legal_list_verification_runs.started_at                       timestamptz         null              lists-verification.ts:147
+legal_list_verification_runs.finished_at                      timestamptz         null              lists-verification.ts:148
 ```
 
-## legal_list_verification_read_receipts · `legalListVerificationReadReceipts` · lists-verification.ts:271
+## legal_list_verification_read_receipts · `legalListVerificationReadReceipts` · lists-verification.ts:255
 
 One durable receipt per reader/run; the audit log retains the daily events.
 
 ```text
-legal_list_verification_read_receipts.{...entityFeatureGateColumns()}  spread                           lists-verification.ts:274
-legal_list_verification_read_receipts.organization_id                  safeOrganizationId  fk,not null  lists-verification.ts:275
-legal_list_verification_read_receipts.workspace_id                     safeWorkspaceId     fk,not null  lists-verification.ts:276
-legal_list_verification_read_receipts.run_id                           safeUuid            fk,not null  lists-verification.ts:277
-legal_list_verification_read_receipts.user_id                          text                fk,not null  lists-verification.ts:278
-legal_list_verification_read_receipts.audited_day                      date                not null     lists-verification.ts:282
+legal_list_verification_read_receipts.{...entityFeatureGateColumns()}  spread                           lists-verification.ts:258
+legal_list_verification_read_receipts.organization_id                  safeOrganizationId  fk,not null  lists-verification.ts:259
+legal_list_verification_read_receipts.workspace_id                     safeWorkspaceId     fk,not null  lists-verification.ts:260
+legal_list_verification_read_receipts.run_id                           safeUuid            fk,not null  lists-verification.ts:261
+legal_list_verification_read_receipts.user_id                          text                fk,not null  lists-verification.ts:262
+legal_list_verification_read_receipts.audited_day                      date                not null     lists-verification.ts:266
 ```
 
-## legal_list_verification_blocks · `legalListVerificationBlocks` · lists-verification.ts:330
+## legal_list_verification_blocks · `legalListVerificationBlocks` · lists-verification.ts:314
 
 Exact source text read by the engine, pinned with the run.
 
 ```text
-legal_list_verification_blocks.{...entityFeatureGateColumns()}              spread                        lists-verification.ts:333
-legal_list_verification_blocks.{...entityFeatureOrganizationGateColumns()}  spread                        lists-verification.ts:334
-legal_list_verification_blocks.run_id                                       safeUuid         fk,not null  lists-verification.ts:335
-legal_list_verification_blocks.workspace_id                                 safeWorkspaceId  fk,not null  lists-verification.ts:336
-legal_list_verification_blocks.ordinal                                      smallint         not null     lists-verification.ts:337
-legal_list_verification_blocks.block_id                                     text             not null     lists-verification.ts:338
-legal_list_verification_blocks.kind                                         text             not null     lists-verification.ts:339
-legal_list_verification_blocks.page_number                                  integer          null         lists-verification.ts:340
-legal_list_verification_blocks.text                                         text             not null     lists-verification.ts:341
+legal_list_verification_blocks.{...entityFeatureGateColumns()}              spread                        lists-verification.ts:317
+legal_list_verification_blocks.{...entityFeatureOrganizationGateColumns()}  spread                        lists-verification.ts:318
+legal_list_verification_blocks.run_id                                       safeUuid         fk,not null  lists-verification.ts:319
+legal_list_verification_blocks.workspace_id                                 safeWorkspaceId  fk,not null  lists-verification.ts:320
+legal_list_verification_blocks.ordinal                                      smallint         not null     lists-verification.ts:321
+legal_list_verification_blocks.block_id                                     text             not null     lists-verification.ts:322
+legal_list_verification_blocks.kind                                         text             not null     lists-verification.ts:323
+legal_list_verification_blocks.page_number                                  integer          null         lists-verification.ts:324
+legal_list_verification_blocks.text                                         text             not null     lists-verification.ts:325
 ```
 
-## legal_list_claims · `legalListClaims` · lists-verification.ts:389
+## legal_list_claims · `legalListClaims` · lists-verification.ts:373 · rls
 
 One claim the engine found in the run's document, with its verdict.
 
 ```text
-legal_list_claims.{...entityFeatureGateColumns()}              spread                             lists-verification.ts:392
-legal_list_claims.{...entityFeatureOrganizationGateColumns()}  spread                             lists-verification.ts:393
-legal_list_claims.id                                           pUuid            pk,not null       lists-verification.ts:394
-legal_list_claims.workspace_id                                 safeWorkspaceId  fk,not null       lists-verification.ts:395
-legal_list_claims.run_id                                       safeUuid         fk,not null       lists-verification.ts:396
-legal_list_claims.position                                     integer          not null          lists-verification.ts:399  Reading order in the document; also the engine's upsert key, so a re-delivered job converges on the rows it already wrote.
-legal_list_claims.type                                         text             not null          lists-verification.ts:400
-legal_list_claims.framing                                      text             default,not null  lists-verification.ts:401
-legal_list_claims.state                                        text             not null          lists-verification.ts:405
-legal_list_claims.score                                        smallint         null              lists-verification.ts:406
-legal_list_claims.text                                         varchar          not null          lists-verification.ts:407
-legal_list_claims.anchor                                       jsonb            not null          lists-verification.ts:408
-legal_list_claims.refs                                         jsonb            default,not null  lists-verification.ts:409
-legal_list_claims.record_conflict                              jsonb            null              lists-verification.ts:410
-legal_list_claims.qualifiers                                   jsonb            default,not null  lists-verification.ts:413  Caveats the grader gave with the verdict.
-legal_list_claims.created_at                                   timestamptz      default,not null  lists-verification.ts:414
+legal_list_claims.{...entityFeatureGateColumns()}              spread                             lists-verification.ts:376
+legal_list_claims.{...entityFeatureOrganizationGateColumns()}  spread                             lists-verification.ts:377
+legal_list_claims.id                                           pUuid            pk,not null       lists-verification.ts:378
+legal_list_claims.workspace_id                                 safeWorkspaceId  fk,not null       lists-verification.ts:379
+legal_list_claims.run_id                                       safeUuid         fk,not null       lists-verification.ts:380
+legal_list_claims.position                                     integer          not null          lists-verification.ts:383  Reading order in the document; also the engine's upsert key, so a re-delivered job converges on the rows it already wrote.
+legal_list_claims.type                                         text             not null          lists-verification.ts:384
+legal_list_claims.framing                                      text             default,not null  lists-verification.ts:385
+legal_list_claims.state                                        text             not null          lists-verification.ts:389
+legal_list_claims.score                                        smallint         null              lists-verification.ts:390
+legal_list_claims.text                                         varchar          not null          lists-verification.ts:391
+legal_list_claims.anchor                                       jsonb            not null          lists-verification.ts:392
+legal_list_claims.refs                                         jsonb            default,not null  lists-verification.ts:393
+legal_list_claims.record_conflict                              jsonb            null              lists-verification.ts:394
+legal_list_claims.qualifiers                                   jsonb            default,not null  lists-verification.ts:397  Caveats the grader gave with the verdict.
+legal_list_claims.asserted_on                                  date             null              lists-verification.ts:401  The date the claim asserts for what it says (`claim-date.ts`), stored as its first day like a fact's; null when it gives none.
+legal_list_claims.asserted_on_precision                        text             null              lists-verification.ts:402
+legal_list_claims.asserted_on_source                           text             default,not null  lists-verification.ts:407  Where the date came from, or `none`; `pending` only on claims written before claims carried dates, until the backfill reads their words.
+legal_list_claims.created_at                                   timestamptz      default,not null  lists-verification.ts:411
 ```
 
-## legal_list_claim_review_events · `legalListClaimReviewEvents` · lists-verification.ts:505 · rls
+## legal_list_claim_review_events · `legalListClaimReviewEvents` · lists-verification.ts:530 · rls
 
 Reviewer actions on a claim, append-only.
 
 ```text
-legal_list_claim_review_events.{...entityFeatureGateColumns()}              spread                             lists-verification.ts:508
-legal_list_claim_review_events.{...entityFeatureOrganizationGateColumns()}  spread                             lists-verification.ts:509
-legal_list_claim_review_events.id                                           pUuid            pk,not null       lists-verification.ts:510
-legal_list_claim_review_events.workspace_id                                 safeWorkspaceId  fk,not null       lists-verification.ts:511
-legal_list_claim_review_events.run_id                                       safeUuid         fk,not null       lists-verification.ts:512
-legal_list_claim_review_events.claim_id                                     safeUuid         fk,not null       lists-verification.ts:513
-legal_list_claim_review_events.kind                                         text             not null          lists-verification.ts:514
-legal_list_claim_review_events.payload                                      jsonb            not null          lists-verification.ts:518  Typed as written now, so a writer cannot leave out a required reason.
-legal_list_claim_review_events.actor_id                                     text             fk,null           lists-verification.ts:519
-legal_list_claim_review_events.created_at                                   timestamptz      default,not null  lists-verification.ts:527  The insert's own clock, not the transaction's start: events are folded in this order, and a reviewer whose transaction began earlier but took the claim's lock…
-legal_list_claim_review_events.carried_from_run_id                          safeUuid         null              lists-verification.ts:532  A decision carried from the previous run of the document: the run and the event it copies.
-legal_list_claim_review_events.carried_from_event_id                        safeUuid         null              lists-verification.ts:535
+legal_list_claim_review_events.{...entityFeatureGateColumns()}              spread                             lists-verification.ts:533
+legal_list_claim_review_events.{...entityFeatureOrganizationGateColumns()}  spread                             lists-verification.ts:534
+legal_list_claim_review_events.id                                           pUuid            pk,not null       lists-verification.ts:535
+legal_list_claim_review_events.workspace_id                                 safeWorkspaceId  fk,not null       lists-verification.ts:536
+legal_list_claim_review_events.run_id                                       safeUuid         fk,not null       lists-verification.ts:537
+legal_list_claim_review_events.claim_id                                     safeUuid         fk,not null       lists-verification.ts:538
+legal_list_claim_review_events.kind                                         text             not null          lists-verification.ts:539
+legal_list_claim_review_events.payload                                      jsonb            not null          lists-verification.ts:543  Typed as written now, so a writer cannot leave out a required reason.
+legal_list_claim_review_events.actor_id                                     text             fk,null           lists-verification.ts:544
+legal_list_claim_review_events.created_at                                   timestamptz      default,not null  lists-verification.ts:552  The insert's own clock, not the transaction's start: events are folded in this order, and a reviewer whose transaction began earlier but took the claim's lock…
+legal_list_claim_review_events.carried_from_run_id                          safeUuid         null              lists-verification.ts:557  A decision carried from the previous run of the document: the run and the event it copies.
+legal_list_claim_review_events.carried_from_event_id                        safeUuid         null              lists-verification.ts:560
 ```
 
-## legal_list_claim_carry_outcomes · `legalListClaimCarryOutcomes` · lists-verification.ts:628
+## legal_list_claim_carry_outcomes · `legalListClaimCarryOutcomes` · lists-verification.ts:653
 
 What became of each reviewed claim of the previous run of a document when the next run completed (`lib/lists/verification/carry-over.ts`): carried to a matchin…
 
 ```text
-legal_list_claim_carry_outcomes.{...entityFeatureGateColumns()}              spread                        lists-verification.ts:631
-legal_list_claim_carry_outcomes.{...entityFeatureOrganizationGateColumns()}  spread                        lists-verification.ts:632
-legal_list_claim_carry_outcomes.workspace_id                                 safeWorkspaceId  fk,not null  lists-verification.ts:633
-legal_list_claim_carry_outcomes.run_id                                       safeUuid         fk,not null  lists-verification.ts:635  The run the decisions were carried to.
-legal_list_claim_carry_outcomes.source_run_id                                safeUuid         fk,not null  lists-verification.ts:636
-legal_list_claim_carry_outcomes.source_claim_id                              safeUuid         fk,not null  lists-verification.ts:638
-legal_list_claim_carry_outcomes.outcome                                      text             not null     lists-verification.ts:639
-legal_list_claim_carry_outcomes.target_claim_id                              safeUuid         fk,null      lists-verification.ts:641  The matching claim of this run; null when nothing matched.
+legal_list_claim_carry_outcomes.{...entityFeatureGateColumns()}              spread                        lists-verification.ts:656
+legal_list_claim_carry_outcomes.{...entityFeatureOrganizationGateColumns()}  spread                        lists-verification.ts:657
+legal_list_claim_carry_outcomes.workspace_id                                 safeWorkspaceId  fk,not null  lists-verification.ts:658
+legal_list_claim_carry_outcomes.run_id                                       safeUuid         fk,not null  lists-verification.ts:660  The run the decisions were carried to.
+legal_list_claim_carry_outcomes.source_run_id                                safeUuid         fk,not null  lists-verification.ts:661
+legal_list_claim_carry_outcomes.source_claim_id                              safeUuid         fk,not null  lists-verification.ts:663
+legal_list_claim_carry_outcomes.outcome                                      text             not null     lists-verification.ts:664
+legal_list_claim_carry_outcomes.target_claim_id                              safeUuid         fk,null      lists-verification.ts:666  The matching claim of this run; null when nothing matched.
 ```

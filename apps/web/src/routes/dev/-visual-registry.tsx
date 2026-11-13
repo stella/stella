@@ -168,6 +168,13 @@ const visualLoaders = {
       return { default: ChatLinkIconsPlayground };
     },
   },
+  "chat-follow-ups": {
+    load: async () => {
+      const { ChatFollowUpsPlayground } =
+        await import("./-components/chat-follow-ups-playground");
+      return { default: ChatFollowUpsPlayground };
+    },
+  },
   "ask-user": {
     load: async () => {
       const { AskUserPlayground } =

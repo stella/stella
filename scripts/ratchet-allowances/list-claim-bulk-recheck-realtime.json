@@ -1,0 +1,5 @@
+{
+  "metric": "unclassified-realtime-write-capabilities",
+  "delta": 1,
+  "reason": "The bulk claim re-check joins the single re-check and the claim review writes, which are unclassified together: no realtime resource set covers a verification run yet, and the reviewer who re-checks reads the result from the response and the run read that follows it. The family is classified at once when such a set exists."
+}

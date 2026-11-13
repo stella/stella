@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -15,12 +16,17 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { parseChatLocalRunConversation } from "@stll/api-contract/chat-local-run-step-output";
+import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   FAKE_CLAUDE_VERSION,
   type FakeScenarioName,
 } from "../../scripts/fake-claude-code-cli";
 import {
   FAKE_OUTDATED_VERSION,
+  FAKE_PRIVATE_TEXT,
   FAKE_THREAD_ID,
   type FakeScenario,
 } from "../../scripts/fake-codex-app-server";
@@ -41,6 +47,7 @@ import {
   sidecarMessageSchema,
   type SidecarRunMessage,
 } from "./protocol";
+import { stepOutputPath } from "./step-outputs";
 
 /**
  * The holder as the desktop runs it: a process serving the protocol on a
@@ -361,9 +368,11 @@ const startRun = (
     launch: PLAIN_LAUNCH,
     workspaceDir,
     cacheDir: path.join(at.root, "agent-package-cache"),
+    stepOutputDir: path.join(at.root, "runs", "chat.step-outputs"),
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
     harnessSessionId: null,
+    reasoningEffort: null,
     policy: { network: "open", fs: "workspace", approvals: "ask" },
     mcp: {
       serverName: "stella",
@@ -375,6 +384,18 @@ const startRun = (
   });
   return runId;
 };
+
+/** Every entry under `dir` by relative path, with each file's text. */
+const treeOf = (dir: string) =>
+  Object.fromEntries(
+    readdirSync(dir, { recursive: true, withFileTypes: true }).map((entry) => {
+      const at = path.join(entry.parentPath, entry.name);
+      return [
+        repoRelativePath(dir, at),
+        entry.isFile() ? readFileSync(at, "utf-8") : entry.isDirectory(),
+      ] as const;
+    }),
+  );
 
 const runStart = (
   client: Client,
@@ -463,6 +484,31 @@ describe("harness holder over its socket", () => {
     await older.ended;
     expect(older.messages.some(is("hello"))).toBe(false);
     await desktop(holder);
+  });
+
+  test("a newer desktop's hello makes a holder with no runs exit, after the rejection", async () => {
+    const holder = await spawnHolder();
+    const newer = await connect(holder.endpoint);
+    newer.send({ ...helloMessage(holder), protocol: SIDECAR_PROTOCOL + 1 });
+    expect(await newer.waitFor(is("rejected"))).toMatchObject({
+      reason: "protocol_mismatch",
+    });
+    expect(await holder.exited).toBe(0);
+  });
+
+  test("a newer desktop's hello lets a holder finish its runs before it exits", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "interrupt_queued");
+    await client.waitFor(is("run.event", runId));
+    const newer = await connect(holder.endpoint);
+    newer.send({ ...helloMessage(holder), protocol: SIDECAR_PROTOCOL + 1 });
+    await newer.waitFor(is("rejected"));
+    // The run it holds still runs and reaches its desktop.
+    client.send({ type: "run.cancel", runId });
+    const finished = await client.waitFor(is("run.finished", runId));
+    client.send({ type: "ack", runId, seq: finished.seq });
+    expect(await holder.exited).toBe(0);
   });
 
   test("rejects unknown and invalid lines once authenticated", async () => {
@@ -579,8 +625,15 @@ describe("harness holder over its socket", () => {
         type: "ready",
         version: "0.166.0",
         capabilities: ["approvals", "interrupt", "resume", "image_input"],
-        approvalModes: ["ask"],
-        models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
+        approvalModes: ["ask", "auto", "full_auto"],
+        models: [
+          {
+            id: "gpt-test",
+            label: "GPT Test",
+            isDefault: true,
+            reasoningEfforts: ["medium", "high"],
+          },
+        ],
       },
     });
     expect(holder.received().map(({ method }) => method)).not.toContain(
@@ -723,6 +776,16 @@ describe("harness holder over its socket", () => {
     );
     expect(server.headers.Authorization).toMatch(/^Bearer \S{43,}$/u);
     expect(JSON.stringify(holder.received())).not.toContain(RUN_TOKEN);
+    // This holder can register no browser host with Chrome (it has no
+    // home folder), so the harness is offered no browser tools.
+    expect(
+      Object.keys(
+        v.parse(
+          v.record(v.string(), v.unknown()),
+          registered?.request?.servers,
+        ),
+      ),
+    ).toEqual(["stella"]);
   });
 
   test("hands each harness the turn's attached image from its copy; a PDF reaches Claude only", async () => {
@@ -888,6 +951,253 @@ describe("harness holder over its socket", () => {
     expect(client.messages.at(-1)).toMatchObject({ type: "run.finished" });
   });
 
+  test("keeps a step's output and diff in the store run.start names, never in or beside the linked folder the run works in, and no message to the desktop carries them", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    // The member's own folder, linked to the chat, with their work in it.
+    const member = path.join(holder.root, "member");
+    const linked = path.join(member, "Smith v Jones");
+    mkdirSync(path.join(linked, "drafts"), { recursive: true });
+    writeFileSync(
+      path.join(linked, "drafts", "lease.md"),
+      "The first draft.\n",
+    );
+    writeFileSync(path.join(linked, "notes.txt"), "Call the landlord.\n");
+    const linkedBefore = treeOf(linked);
+    // Stella's own place for the chat, apart from the member's folder.
+    const stepOutputDir = path.join(holder.root, "runs", "chat.step-outputs");
+    const runId = runStart(client, holder, "native_tools", {
+      workspaceDir: linked,
+      stepOutputDir,
+    });
+    await client.waitFor(is("run.finished", runId));
+    const kept = (toolCallId: string) =>
+      readFileSync(
+        stepOutputPath({ stepOutputDir, runId, toolCallId }),
+        "utf-8",
+      );
+    expect(kept("call-heredoc")).toBe(`{"bytes":22}\nzsh: permission denied`);
+    expect(kept("call-long")).toBe(`{"bytes":2}\nok`);
+    // An update keeps its diff; an added file's text reads as added lines.
+    const diff = [
+      "--- /workspace/drafts/lease.md",
+      "+++ /workspace/drafts/lease.md",
+      FAKE_PRIVATE_TEXT.diff,
+      "--- /workspace/drafts/notice.md",
+      "+++ /workspace/drafts/notice.md",
+      "+-Rent is due monthly.",
+      "++Rent is due quarterly.",
+      "",
+    ].join("\n");
+    expect(kept("call-edit")).toBe(
+      `{"bytes":${String(Buffer.byteLength(diff))}}\n${diff}`,
+    );
+    // What the API receives is what the desktop receives: none of it.
+    const sent = JSON.stringify(client.messages);
+    expect(sent).not.toContain("permission denied");
+    expect(sent).not.toContain("Rent is due");
+    // The member's folder is as they left it; no store sits beside it.
+    expect(treeOf(linked)).toEqual(linkedBefore);
+    expect(
+      readdirSync(member).filter((name) => name.endsWith(".step-outputs")),
+    ).toEqual([]);
+  });
+
+  test("keeps a subagent's conversation in the run's own store, and no message to the desktop carries what it was told, wrote or reported", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const stepOutputDir = path.join(holder.root, "runs", "chat.step-outputs");
+    const runId = runStart(client, holder, "subagent", { stepOutputDir });
+    const request = await client.waitFor(is("run.approval_request", runId));
+    client.send({
+      type: "run.approval",
+      runId,
+      requestId: request.requestId,
+      decision: "approve",
+    });
+    await client.waitFor(is("run.finished", runId));
+    const kept = readFileSync(
+      stepOutputPath({ stepOutputDir, runId, toolCallId: "call-spawn" }),
+      "utf-8",
+    );
+    const newline = kept.indexOf("\n");
+    const conversation = kept.slice(newline + 1);
+    expect(JSON.parse(kept.slice(0, newline))).toEqual({
+      bytes: Buffer.byteLength(conversation),
+    });
+    expect(parseChatLocalRunConversation(conversation)).toEqual([
+      { role: "prompt", text: FAKE_PRIVATE_TEXT.subagentPrompt },
+      { role: "report", text: FAKE_PRIVATE_TEXT.subagentReport },
+      { role: "message", text: FAKE_PRIVATE_TEXT.subagentText },
+    ]);
+    // What the API receives is what the desktop receives: none of it, and
+    // nothing the subagent thought, which is not kept either.
+    const sent = JSON.stringify(client.messages);
+    for (const text of [
+      FAKE_PRIVATE_TEXT.subagentPrompt,
+      FAKE_PRIVATE_TEXT.subagentText,
+      FAKE_PRIVATE_TEXT.subagentReport,
+      FAKE_PRIVATE_TEXT.subagentThinking,
+    ]) {
+      expect(sent).not.toContain(text);
+    }
+    expect(kept).not.toContain(FAKE_PRIVATE_TEXT.subagentThinking);
+    // Each call of the subagent names it beside the call, never in its input.
+    expect(chunksOf(client, runId)).toContainEqual(
+      expect.objectContaining({
+        type: "TOOL_CALL_START",
+        toolCallId: "sub-rm",
+        metadata: expect.objectContaining({
+          [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: "call-spawn",
+        }),
+      }),
+    );
+  });
+
+  test("keeps a completed turn's process for its background work, and the chat's next run continues in it", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const first = runStart(client, holder, "background_terminal");
+    expect(await client.waitFor(is("run.finished", first))).toMatchObject({
+      outcome: "completed",
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    // Reported ahead of the run's end, so the chat never misses it.
+    expect(
+      client.messages.findIndex(
+        (message) => message.type === "background.tasks",
+      ),
+    ).toBeLessThan(
+      client.messages.findIndex((message) => message.type === "run.finished"),
+    );
+    const second = runStart(client, holder, "background_terminal", {
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    expect(await client.waitFor(is("run.finished", second))).toMatchObject({
+      outcome: "completed",
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    expect(
+      client.messages.filter((message) => message.type === "background.tasks"),
+    ).toEqual([
+      { type: "background.tasks", runId: first, count: 1 },
+      // The next run took the process.
+      { type: "background.tasks", runId: first, count: 0 },
+    ]);
+    expect(holder.startups()).toHaveLength(1);
+    const methods = holder.received().map(({ method }) => method);
+    expect(methods.filter((method) => method === "turn/start")).toHaveLength(2);
+    expect(methods).not.toContain("thread/resume");
+  });
+
+  test("a stop after the turn completed keeps nothing running", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "background_terminal_late_list");
+    // The turn's last chunk is out; its process is not kept yet.
+    await client.waitFor(
+      (message): message is Extract<SidecarMessage, { type: "run.event" }> =>
+        message.type === "run.event" &&
+        message.runId === runId &&
+        message.chunk.type === "RUN_FINISHED",
+    );
+    client.send({ type: "run.interrupt", runId });
+    await client.waitFor(is("run.finished", runId));
+    expect(
+      client.messages.filter((message) => message.type === "background.tasks"),
+    ).toEqual([]);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
+  test("a desktop on another API origin ends the kept processes before a run starts in their folder", async () => {
+    const holder = await spawnHolder();
+    const first = await desktop(holder);
+    const kept = runStart(first.client, holder, "background_terminal");
+    await first.client.waitFor(is("run.finished", kept));
+    first.client.close();
+    const other = "https://other.example.test";
+    const client = await connect(holder.endpoint);
+    client.send({ ...helloMessage(holder), apiOrigin: other });
+    await client.waitFor(is("hello"));
+    const next = runStart(client, holder, "stella_tools", {
+      mcp: {
+        serverName: "stella",
+        url: `${other}/mcp`,
+        token: RUN_TOKEN,
+        expiresAt: "2026-10-28T12:00:00.000Z",
+      },
+    });
+    expect(await client.waitFor(is("run.finished", next))).toMatchObject({
+      outcome: "completed",
+    });
+    // The old origin's process and its work were gone before the new
+    // harness started in the folder.
+    const entries = fakeEntries(holder.fakeLog);
+    const cleaned = entries.findIndex((entry) => "cleaned" in entry);
+    const startups = entries.flatMap((entry, index) =>
+      "startup" in entry ? [index] : [],
+    );
+    expect(startups).toHaveLength(2);
+    expect(cleaned).toBeGreaterThan(-1);
+    expect(cleaned).toBeLessThan(startups[1] ?? -1);
+  });
+
+  test("a stop of a run that would continue a kept process ends that process, and no turn starts", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const first = runStart(client, holder, "background_terminal");
+    await client.waitFor(is("run.finished", first));
+    const second = runStart(client, holder, "background_terminal", {
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    client.send({ type: "run.cancel", runId: second });
+    expect(await client.waitFor(is("run.finished", second))).toMatchObject({
+      outcome: "cancelled",
+    });
+    const methods = holder.received().map(({ method }) => method);
+    expect(methods.filter((method) => method === "turn/start")).toHaveLength(1);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
+  test("ends a chat's kept process before a run with another session starts", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const first = runStart(client, holder, "background_terminal");
+    await client.waitFor(is("run.finished", first));
+    const second = runStart(client, holder, "stella_tools");
+    expect(await client.waitFor(is("run.finished", second))).toMatchObject({
+      outcome: "completed",
+    });
+    expect(
+      client.messages.filter((message) => message.type === "background.tasks"),
+    ).toEqual([
+      { type: "background.tasks", runId: first, count: 1 },
+      { type: "background.tasks", runId: first, count: 0 },
+    ]);
+    expect(holder.startups()).toHaveLength(2);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
+  test("reports a kept process's background work again to a desktop that reconnects", async () => {
+    const holder = await spawnHolder();
+    const first = await desktop(holder);
+    const runId = runStart(first.client, holder, "background_terminal");
+    await first.client.waitFor(is("run.finished", runId));
+    first.client.close();
+    const { client } = await desktop(holder);
+    expect(await client.waitFor(is("background.tasks", runId))).toEqual({
+      type: "background.tasks",
+      runId,
+      count: 1,
+    });
+  });
+
   test("hands the harness the loopback proxy and a run secret, never the run token", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
@@ -977,8 +1287,9 @@ describe("harness holder over its socket", () => {
       }),
       holder.received().find(({ method }) => method === "thread/start")?.params,
     );
+    // The run starts at Ask: Codex's untrusted policy.
     expect(threadStart).toMatchObject({
-      approvalPolicy: "on-request",
+      approvalPolicy: "untrusted",
       sandbox: "workspace-write",
     });
     expect(
@@ -998,6 +1309,23 @@ describe("harness holder over its socket", () => {
     expect(JSON.stringify(holder.startups())).toContain(
       '"--permission-mode","auto"',
     );
+  });
+
+  test("hands the harness the run's reasoning effort", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = startRun(
+      client,
+      holder,
+      {
+        harness: "claude-code",
+        executable: fakeClaude(holder.root, "stella_tools"),
+        model: "sonnet",
+      },
+      { reasoningEffort: "high" },
+    );
+    await client.waitFor(is("run.finished", runId));
+    expect(JSON.stringify(holder.startups())).toContain('"--effort","high"');
   });
 
   test("relays an approval with one request id and returns the decision", async () => {
@@ -1383,6 +1711,7 @@ describe("harness holder over its socket", () => {
         FAKE_HARNESS_LOG: path.join(root, "fake.log"),
       },
       processGrantTimeoutMs: WAIT_MS,
+      browser: null,
     });
     cleanups.push(() => {
       rmSync(root, { recursive: true, force: true });
@@ -1399,7 +1728,9 @@ describe("harness holder over its socket", () => {
       launch: PLAIN_LAUNCH,
       workspaceDir,
       cacheDir: path.join(root, "agent-package-cache"),
+      stepOutputDir: path.join(root, "runs", "chat.step-outputs"),
       model: "gpt-test",
+      reasoningEffort: null,
       instructions: "Use the stella MCP server.",
       messages: [{ role: "user", content: "Find the lease decision." }],
       attachments: [],
@@ -1470,6 +1801,7 @@ describe("harness holder over its socket", () => {
           FAKE_HARNESS_LOG: path.join(root, "fake.log"),
         },
         processGrantTimeoutMs: WAIT_MS,
+        browser: null,
       });
       cleanups.push(async () => {
         await host.shutdown();
@@ -1488,7 +1820,9 @@ describe("harness holder over its socket", () => {
         launch: PLAIN_LAUNCH,
         workspaceDir,
         cacheDir: path.join(root, "agent-package-cache"),
+        stepOutputDir: path.join(root, "runs", "chat.step-outputs"),
         model: "gpt-test",
+        reasoningEffort: null,
         instructions: "Use the stella MCP server.",
         messages: [{ role: "user", content: "Write the report." }],
         attachments: [],
@@ -1650,6 +1984,7 @@ describe("holder limits and timers", () => {
       helloTimeoutMs: 5000,
       unackedRetentionMs: 60_000,
       processGrantTimeoutMs: 60_000,
+      browser: null,
       limits: { maxMessages: 1000, maxBytes: 1024 * 1024 },
       protocolLog: { type: "set", setting: "off" },
       ...overrides,

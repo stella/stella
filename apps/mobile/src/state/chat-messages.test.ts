@@ -49,15 +49,35 @@ const sourceFor = (fetch: Fetch) => {
 const CREATED_AT = "2026-10-20T10:00:00.000Z";
 
 describe("what a thread shows of a stored message", () => {
-  test("joins its text parts and names the tools it called", () => {
+  test("joins its text parts and sums up the steps before them by their titles", () => {
     expect(
       toChatEntry({
         id: "m1",
         role: "assistant",
         createdAt: CREATED_AT,
         parts: [
-          { type: "thinking", content: "private reasoning" },
-          { type: "tool-call", name: "search_case_law", arguments: "{}" },
+          { type: "thinking", content: "Check the register first." },
+          {
+            type: "tool-call",
+            name: "discover_tools",
+            arguments: "{}",
+            state: "complete",
+            output: { tools: [] },
+          },
+          {
+            type: "tool-call",
+            name: "execute_typescript",
+            arguments: "{}",
+            state: "complete",
+            output: { success: true, result: [] },
+          },
+          { type: "tool-result", toolCallId: "c2", content: "{}" },
+          {
+            type: "tool-call",
+            name: "load-skill",
+            arguments: "{}",
+            state: "error",
+          },
           { type: "text", content: "First.  " },
           { type: "text", content: "Second." },
           { type: "image", source: { type: "url", value: "x" } },
@@ -68,9 +88,54 @@ describe("what a thread shows of a stored message", () => {
       role: "assistant",
       createdAt: CREATED_AT,
       text: "First.\n\nSecond.",
-      tools: ["search_case_law"],
+      blocks: [
+        {
+          type: "steps",
+          key: "0",
+          // A skill that failed to load is not news to the reader.
+          steps: [
+            { type: "reasoning", text: "Check the register first." },
+            { type: "tool", label: "discover_tools", status: "done" },
+            { type: "tool", label: "execute_typescript", status: "done" },
+          ],
+          work: new Map([
+            ["research", 1],
+            ["computation", 1],
+          ]),
+        },
+        { type: "text", key: "5", markdown: "First.\n\nSecond." },
+      ],
       files: [{ name: "", mimeType: "" }],
+      drafts: [],
     });
+  });
+
+  test("keeps a finished web search as a step, having no sources tray", () => {
+    expect(
+      toChatEntry({
+        id: "m4",
+        role: "assistant",
+        createdAt: CREATED_AT,
+        parts: [
+          {
+            type: "tool-call",
+            name: "web_search",
+            arguments: "{}",
+            state: "complete",
+            output: { results: [] },
+          },
+          { type: "text", content: "Found it." },
+        ],
+      })?.blocks,
+    ).toEqual([
+      {
+        type: "steps",
+        key: "0",
+        steps: [{ type: "tool", label: "web_search", status: "done" }],
+        work: new Map([["research", 1]]),
+      },
+      { type: "text", key: "1", markdown: "Found it." },
+    ]);
   });
 
   test("names the files the person attached, and shows a message of files alone", () => {
@@ -105,11 +170,12 @@ describe("what a thread shows of a stored message", () => {
       role: "user",
       createdAt: CREATED_AT,
       text: "",
-      tools: [],
+      blocks: [],
       files: [
         { name: "Lease.pdf", mimeType: "application/pdf" },
         { name: "Stamp.png", mimeType: "image/png" },
       ],
+      drafts: [],
     });
   });
 
@@ -134,8 +200,9 @@ describe("what a thread shows of a stored message", () => {
       role: "user",
       createdAt: CREATED_AT,
       text: "Summarise this",
-      tools: [],
+      blocks: [],
       files: [{ name: "Lease.pdf", mimeType: "application/pdf" }],
+      drafts: [],
     });
   });
 
@@ -245,8 +312,9 @@ describe("reading a thread", () => {
       role: "user",
       createdAt: CREATED_AT,
       text: id,
-      tools: [],
+      blocks: [],
       files: [],
+      drafts: [],
     });
     expect(
       prependOlderPage(

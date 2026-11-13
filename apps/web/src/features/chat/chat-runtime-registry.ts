@@ -605,6 +605,16 @@ export const acquireChatRuntime = ({
   // idle, diverged seed — before registering the replacement; the `set`
   // at the end replaces the exact-key entry atomically.
   trackChatRuntimeRebuildChurn(threadIdentity);
+  // Read before the superseded entries go: the replacement counts on from
+  // the turns the page already started on the thread, on any surface.
+  const turnsStarted = Math.max(
+    0,
+    ...Array.from(chatRuntimeRegistry.values(), (entry) =>
+      entry.threadIdentity === threadIdentity
+        ? entry.runtime.getSnapshot().turnsStarted
+        : 0,
+    ),
+  );
   for (const [staleKey, entry] of chatRuntimeRegistry) {
     if (
       staleKey !== registryKey &&
@@ -659,6 +669,7 @@ export const acquireChatRuntime = ({
       refreshPersistedThread();
     },
     reloadThread: refreshPersistedThread,
+    turnsStarted,
   });
   if (context !== undefined) {
     storedThreadReaders.set(

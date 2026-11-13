@@ -487,6 +487,36 @@ describe("local harness chunks", () => {
     );
   });
 
+  test("a call the harness reports it did not run because of a stop is stored cancelled, not failed", async () => {
+    const chunks = await localChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("native-5"),
+        continuation: { type: "resumed" },
+      },
+      { type: "tool.started", toolCall: commandCall },
+      {
+        type: "tool.completed",
+        toolCall: commandCall,
+        // What the adapter built from the harness's error flag.
+        result: {
+          content: JSON.stringify({ status: "failed" }),
+          status: "cancelled",
+        },
+      },
+      { type: "turn.interrupted" },
+    ]);
+    expect(fold(chunks).flatMap(({ parts }) => parts)).toContainEqual(
+      expect.objectContaining({
+        type: "tool-result",
+        toolCallId: commandCall.id,
+        content: JSON.stringify({ status: "interrupted" }),
+        state: "error",
+        outcome: "cancelled",
+      }),
+    );
+  });
+
   test("each failure kind ends the run with its own error code", async () => {
     const failures = {
       auth_required: { type: "auth_required", message: "Sign in again." },
@@ -517,6 +547,14 @@ describe("local harness chunks", () => {
       sandbox_unavailable: {
         type: "sandbox_unavailable",
         message: "The sandbox could not start.",
+      },
+      retry_stalled: {
+        type: "retry_stalled",
+        message: "The harness kept retrying the provider without progress.",
+      },
+      tools_unavailable: {
+        type: "tools_unavailable",
+        message: "The harness could not connect to the stella MCP server.",
       },
     } as const satisfies {
       [Type in HarnessFailure["type"]]: Extract<HarnessFailure, { type: Type }>;

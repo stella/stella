@@ -14,6 +14,7 @@
     "apps/web/src/components/chat/attachment-chip.tsx": 3,
     "apps/web/src/components/chat/chat-image-attachment.tsx": 1,
     "apps/web/src/components/chat/chat-thread-messages.tsx": 3,
+    "apps/web/src/components/chat/local-run-subagent-card.tsx": 1,
     "apps/web/src/components/chat/needs-matter-card.tsx": 1,
     "apps/web/src/components/chat/prompt-suggestions.tsx": 1,
     "apps/web/src/components/chat/tool-approval-card.tsx": 1,
