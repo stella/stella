@@ -80,6 +80,7 @@ const turnInput = (workspaceDir: string, model: string): HarnessTurnInput => ({
     url: "https://mcp.example.test/mcp",
     token: "run-token",
   },
+  browser: null,
   transcript: [{ role: "user", content: "Which leases are there?" }],
   inputFiles: [],
   continuation: { type: "fresh" },
