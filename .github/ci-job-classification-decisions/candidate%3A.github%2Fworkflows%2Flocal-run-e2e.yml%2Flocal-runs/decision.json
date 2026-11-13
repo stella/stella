@@ -1,5 +1,4 @@
 {
   "kind": "ordinary",
-  "qualifier": "Runs the browser suite for chats on the member's computer on pull requests and main with read-only repository and package tokens and image pull credentials; no publication or deployment.",
-  "reviewedDigest": "decision"
+  "qualifier": "Runs the browser suite for chats on the member's computer on pull requests and main with read-only repository and package tokens and image pull credentials; no publication or deployment."
 }
