@@ -55,6 +55,7 @@ on:
       - Dated waiver healing
       - Flaky-test quarantine
       - Dependency Malware Nightly
+      - Local run browser suite
       - Main heavy suites
       - Main PR-depth checks
       - Mobile Release Plan
