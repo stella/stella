@@ -285,7 +285,128 @@ export const FAKE_SANDBOX_REFUSAL =
 
 const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
 
+/** The CLI's whole set of live background tasks, as task id and kind. */
+const backgroundTasks = (
+  tasks: readonly (readonly [string, string])[],
+): FakeStep => ({
+  emit: {
+    type: "system",
+    subtype: "background_tasks_changed",
+    tasks: tasks.map(([taskId, taskType]) => ({
+      task_id: taskId,
+      task_type: taskType,
+      description: "bun run dev",
+    })),
+    uuid: "tasks-uuid",
+    session_id: "s",
+  },
+});
+
+/** A dev server the agent runs with the Bash tool in the background. */
+const devServer: FakeStep[] = [
+  assistant("msg-serve", [
+    toolUse("call-serve", "Bash", {
+      command: "bun run dev",
+      run_in_background: true,
+    }),
+  ]),
+  toolResult("call-serve", "Command running in background with ID: task-serve"),
+];
+
 const FAKE_SCENARIOS = {
+  /**
+   * A turn that leaves a dev server running in the background; the chat's
+   * next user message continues in this process, and the server exits
+   * during that turn.
+   */
+  background_command: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([["task-serve", "local_bash"]]),
+    assistant("msg-1", [{ type: "text", text: "The server runs." }]),
+    result(),
+    // The next turn first sets the process to its own mode.
+    { expect: "set_permission_mode", response: {} },
+    { expectUser: true },
+    { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
+    backgroundTasks([]),
+    assistant("msg-2", [{ type: "text", text: "It stopped." }]),
+    result(),
+  ],
+  /**
+   * A turn that leaves a dev server and a sub-agent running in the
+   * background. The sub-agent is stopped at the turn's end, and the turn
+   * the CLI then opens itself to report it is interrupted.
+   */
+  background_own_turn: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([
+      ["task-serve", "local_bash"],
+      ["task-watch", "local_bash"],
+      ["task-agent", "local_agent"],
+    ]),
+    result(),
+    { expect: "stop_task", response: {} },
+    // Once the process is kept, not while it is being kept.
+    { sleep: 200 },
+    assistant("msg-own", [{ type: "text", text: "The watcher exited." }]),
+    { expect: "interrupt", response: {} },
+    // Only once the interrupt came: the client sees it as its signal.
+    backgroundTasks([["task-serve", "local_bash"]]),
+    result({
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Request was aborted."],
+    }),
+  ],
+  /**
+   * A turn the CLI opens itself between stella's turns that takes a while to
+   * end once interrupted; the chat's next user message comes meanwhile.
+   */
+  background_own_turn_late: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([
+      ["task-serve", "local_bash"],
+      ["task-watch", "local_bash"],
+    ]),
+    result(),
+    { sleep: 200 },
+    assistant("msg-own", [{ type: "text", text: "The watcher exited." }]),
+    { expect: "interrupt", response: {} },
+    // The client's signal that the interrupt went out; the result is late.
+    backgroundTasks([["task-serve", "local_bash"]]),
+    { sleep: 300 },
+    result({
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Request was aborted."],
+    }),
+    // The next turn first sets the process to its own mode.
+    { expect: "set_permission_mode", response: {} },
+    { expectUser: true },
+    { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
+    backgroundTasks([]),
+    assistant("msg-2", [{ type: "text", text: "It stopped." }]),
+    result(),
+  ],
+  /** A dev server left running that exits while the chat waits. */
+  background_command_exits: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([["task-serve", "local_bash"]]),
+    result(),
+    { sleep: 200 },
+    backgroundTasks([]),
+  ],
+  /** A dev server left running until the client ends it. */
+  background_command_kept: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([["task-serve", "local_bash"]]),
+    result(),
+  ],
   /**
    * The shared stella tool calls through the stella MCP binding, step by
    * step: one assistant message per call of a step (the CLI writes one per
@@ -1093,7 +1214,27 @@ const run = async (
       process.exit(step.exit);
     }
   }
-  // The CLI exits once its client closes stdin.
+  // The CLI exits once its client closes stdin. Until then it still stops
+  // the background tasks it is asked to; anything else stays unanswered, as
+  // the script left it.
+  for (;;) {
+    // await-in-loop: one request at a time, in the order they arrived.
+    const message = await take("requests");
+    if (message === null) {
+      break;
+    }
+    if (message.request?.subtype === "stop_task") {
+      log({ stoppedTask: message.request["task_id"] });
+      write({
+        type: "control_response",
+        response: {
+          subtype: "success",
+          request_id: message.request_id,
+          response: {},
+        },
+      });
+    }
+  }
   await reading;
 };
 

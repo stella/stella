@@ -376,7 +376,29 @@ export type CodexClientRequestMethod =
   | "thread/resume"
   | "thread/unarchive"
   | "turn/start"
-  | "turn/interrupt";
+  | "turn/interrupt"
+  | "thread/backgroundTerminals/list"
+  | "thread/backgroundTerminals/clean";
+
+/**
+ * A page of the thread's background terminals: commands the agent left
+ * running (`exec_command` past its yield), which the app-server keeps for the
+ * thread until they exit or are cleaned. Experimental protocol.
+ */
+export const BackgroundTerminalsListResponseSchema = v.object({
+  data: v.array(v.object({ itemId: v.string() })),
+  nextCursor: v.nullable(v.string()),
+});
+
+/** The item a completed item notification names. */
+export const ItemCompletedSchema = v.object({
+  item: v.object({ id: v.optional(v.string()) }),
+});
+
+/** The item a started item notification names, with its kind. */
+export const ItemStartedSchema = v.object({
+  item: v.object({ type: v.string(), id: v.optional(v.string()) }),
+});
 
 /** The notifications Stella sends the server. */
 export type CodexClientNotificationMethod = "initialized";

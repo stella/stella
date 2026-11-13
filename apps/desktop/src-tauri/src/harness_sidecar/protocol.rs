@@ -18,7 +18,7 @@ use crate::runner_protocol::{
   RunRef, RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 4;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 5;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.
@@ -421,6 +421,16 @@ pub(crate) struct FolderRestored {
   pub(crate) outcome: RestoreOutcome,
 }
 
+/// How many tasks the harness process a finished run's completed turn kept
+/// runs in the background, while its chat waits for the next turn; 0 once
+/// there are none. The latest count per run is what holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BackgroundTasks {
+  pub(crate) run_id: String,
+  pub(crate) count: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Rejected {
@@ -447,6 +457,8 @@ pub(crate) enum SidecarMessage {
   RunFinished(SidecarRunFinished),
   #[serde(rename = "folder.restored")]
   FolderRestored(FolderRestored),
+  #[serde(rename = "background.tasks")]
+  BackgroundTasks(BackgroundTasks),
   #[serde(rename = "rejected")]
   Rejected(Rejected),
 }
@@ -461,6 +473,7 @@ impl SidecarMessage {
     "run.approval_request",
     "run.finished",
     "folder.restored",
+    "background.tasks",
     "rejected",
   ];
 }

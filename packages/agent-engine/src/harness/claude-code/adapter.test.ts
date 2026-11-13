@@ -1882,3 +1882,140 @@ describe("Claude Code skill folders", () => {
     await started.value.dispose();
   });
 });
+
+describe("Claude Code background commands after a turn", () => {
+  const completedTurn = async (scenario: FakeScenarioName) => {
+    const harness = harnessFor(scenario);
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of started.value.events) {
+      events.push(event);
+    }
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    return { ...harness, turn: started.value };
+  };
+
+  test("keep the process, and the next user message continues in it, in its own mode", async () => {
+    const { adapter, workspaceDir, startups, received, turn, controlRequests } =
+      await completedTurn("background_command");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    expect(live.harness).toBe("claude-code");
+    expect(live.backgroundTasks).toBe(1);
+
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    expect(events[0]).toEqual({
+      type: "session.started",
+      sessionId: live.sessionId,
+      continuation: { type: "resumed" },
+    });
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    // The server exited during the turn: nothing is kept any more.
+    expect(await next.value.release()).toBeNull();
+    expect(startups()).toHaveLength(1);
+    const users = received().filter(({ type }) => type === "user");
+    expect(users).toHaveLength(2);
+    expect(JSON.stringify(users[1])).toContain(live.sessionId);
+    // A kept process may have left its mode (an approved plan): the next
+    // turn sets its own before its message.
+    expect(
+      controlRequests("set_permission_mode").map(({ request }) => request),
+    ).toEqual([{ subtype: "set_permission_mode", mode: "acceptEdits" }]);
+  });
+
+  test("a sub-agent is stopped at the turn's end and a turn the CLI opens itself is interrupted", async () => {
+    const { turn, controlRequests } = await completedTurn(
+      "background_own_turn",
+    );
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    expect(controlRequests("stop_task").map(({ request }) => request)).toEqual([
+      { subtype: "stop_task", task_id: "task-agent" },
+    ]);
+    expect(live.backgroundTasks).toBe(2);
+    const { promise: oneLeft, resolve } = Promise.withResolvers<number>();
+    live.watch(resolve);
+    // The CLI lists one command fewer only once it was interrupted.
+    expect(await oneLeft).toBe(1);
+    expect(controlRequests("interrupt")).toHaveLength(1);
+    await live.end();
+    expect(controlRequests("stop_task").map(({ request }) => request)).toEqual([
+      { subtype: "stop_task", task_id: "task-agent" },
+      { subtype: "stop_task", task_id: "task-serve" },
+    ]);
+  });
+
+  test("the next turn waits for a turn the CLI opened itself to end, so its result is not the next turn's", async () => {
+    const { adapter, workspaceDir, turn } = await completedTurn(
+      "background_own_turn_late",
+    );
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const { promise: interrupted, resolve } = Promise.withResolvers<number>();
+    live.watch(resolve);
+    // The own turn was interrupted and has not ended yet.
+    expect(await interrupted).toBe(1);
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    expect(events.filter(({ type }) => type === "turn.failed")).toEqual([]);
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "text.completed" }),
+    );
+    await next.value.dispose();
+  });
+
+  test("a kept process ends by itself once its last background command exits", async () => {
+    const { turn } = await completedTurn("background_command_exits");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const counts: number[] = [];
+    live.watch((count) => {
+      counts.push(count);
+    });
+    await live.ended;
+    expect(counts).toEqual([0]);
+  });
+
+  test("disposing a turn that kept its process ends its background work", async () => {
+    const { turn, logPath } = await completedTurn("background_command_kept");
+    await turn.dispose();
+    expect(readFileSync(logPath, "utf-8")).toContain(
+      JSON.stringify({ stoppedTask: "task-serve" }),
+    );
+  });
+});
