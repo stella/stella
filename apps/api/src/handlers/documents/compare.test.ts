@@ -491,11 +491,11 @@ describe("documents.compare", () => {
 
       const redlineBuffer = copyToArrayBuffer(persisted.buffer);
       const accepting = await FolioDocxReviewer.fromBuffer(redlineBuffer);
-      expect(accepting.acceptAll()).toBeGreaterThan(0);
+      expect(accepting.acceptAll().resolved).toBeGreaterThan(0);
       expect(await bodyText(await accepting.toBuffer())).toBe(targetText);
 
       const rejecting = await FolioDocxReviewer.fromBuffer(redlineBuffer);
-      expect(rejecting.rejectAll()).toBeGreaterThan(0);
+      expect(rejecting.rejectAll().resolved).toBeGreaterThan(0);
       expect(await bodyText(await rejecting.toBuffer())).toBe(baseText);
     },
   );
