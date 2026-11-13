@@ -40,6 +40,7 @@ import { createDetached } from "@stll/errors";
 
 import {
   FAKE_CONTEXT_WINDOW,
+  FAKE_FUTURE_RESET,
   FAKE_LONG_COMMAND,
   FAKE_MCP_CALL,
   FAKE_PRIVATE_TEXT,
@@ -230,6 +231,8 @@ const run = async (
 };
 
 const terminal = (events: readonly HarnessEvent[]) => events.at(-1);
+
+const FUTURE_RESET_ISO = new Date(FAKE_FUTURE_RESET * 1000).toISOString();
 
 describe("Codex adapter over a stdio app-server", () => {
   test("runs with the stella-owned CODEX_HOME in the workspace and sends the MCP bearer only over stdio", async () => {
@@ -1085,7 +1088,42 @@ describe("Codex adapter over a stdio app-server", () => {
       failure: {
         type: "usage_limit",
         message: "You've hit your usage limit.",
-        resetsAt: "2026-10-28T14:00:00.000Z",
+        resetsAt: FUTURE_RESET_ISO,
+      },
+    });
+    // The update before the failure timed the reset; nothing more is read.
+    expect(
+      limited
+        .received()
+        .filter(({ method }) => method === "account/rateLimits/read"),
+    ).toEqual([]);
+  });
+
+  test("a limit hit before Codex sent its limits reads them for the reset time", async () => {
+    const limited = await run("usage_limit_unannounced");
+    expect(terminal(limited.events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "usage_limit",
+        message: "You've hit your usage limit.",
+        resetsAt: FUTURE_RESET_ISO,
+      },
+    });
+    const reads = limited
+      .received()
+      .filter(({ method }) => method === "account/rateLimits/read");
+    expect(reads).toHaveLength(1);
+    expect(reads.at(0)?.params).toBeUndefined();
+  });
+
+  test("a limit whose limits cannot be read still fails as a usage limit, its reset unknown", async () => {
+    const limited = await run("usage_limit_read_fails");
+    expect(terminal(limited.events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "usage_limit",
+        message: "You've hit your usage limit.",
+        resetsAt: null,
       },
     });
   });
@@ -1263,9 +1301,11 @@ describe("Codex adapter over a stdio app-server", () => {
       ],
       capabilities: ["approvals", "interrupt", "resume", "image_input"],
       approvalModes: ["ask", "auto", "full_auto"],
+      // The plan's main window is at 40 %.
       usageLimit: null,
     });
     const methods = harness.received().map(({ method }) => method);
+    expect(methods).toContain("account/rateLimits/read");
     expect(methods).not.toContain("thread/start");
     expect(methods).not.toContain("turn/start");
     expect(
@@ -1276,6 +1316,37 @@ describe("Codex adapter over a stdio app-server", () => {
     ).toEqual({
       cursor: "page-2",
     });
+  });
+
+  test("a probe of a Codex out of usage reports when its plan's limit resets", async () => {
+    const probed = await harnessFor("probe_out_of_usage").adapter.probe();
+    if (Result.isError(probed)) {
+      throw probed.error;
+    }
+    expect(probed.value.usageLimit).toEqual({ resetsAt: FUTURE_RESET_ISO });
+  });
+
+  test("a probe of a spent plan with credits left stays ready", async () => {
+    const probed = await harnessFor(
+      "probe_out_of_usage_with_credits",
+    ).adapter.probe();
+    if (Result.isError(probed)) {
+      throw probed.error;
+    }
+    expect(probed.value.usageLimit).toBeNull();
+  });
+
+  test("a probe whose limits cannot be read stays ready, its limit unknown", async () => {
+    const harness = harnessFor("probe_limits_unreadable");
+    const probed = await harness.adapter.probe();
+    if (Result.isError(probed)) {
+      throw probed.error;
+    }
+    expect(probed.value.auth.type).toBe("signed_in");
+    expect(probed.value.usageLimit).toBeNull();
+    expect(harness.received().map(({ method }) => method)).toContain(
+      "account/rateLimits/read",
+    );
   });
 
   test("refuses a CODEX_HOME that is the user's own", () => {
@@ -1763,6 +1834,7 @@ const codex = Bun.which("codex");
 const CLIENT_METHODS = [
   "initialize",
   "account/read",
+  "account/rateLimits/read",
   "model/list",
   "thread/start",
   "thread/resume",
