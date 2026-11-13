@@ -38,6 +38,9 @@ import {
  *   when no desktop collected it within the API's abandoned-run window.
  * - It exits on `shutdown` (cancelling every run), once drained (no run held
  *   after `drain`), or after `idleExitMs` with no run held and no desktop.
+ *   A harness process kept for a chat's background work holds no run: it
+ *   ends when the holder exits, so nothing outlives the app by more than
+ *   the idle exit.
  */
 
 /** No run held and no desktop connected for this long ends the holder. */
@@ -246,6 +249,15 @@ export class Holder {
     };
     if (preamble.protocol !== SIDECAR_PROTOCOL) {
       refuse("protocol_mismatch");
+      // A newer desktop holds the secret and speaks a later protocol: it
+      // replaced the one this holder served and starts its own holder. This
+      // one finishes the runs it holds and exits, rather than staying until
+      // the idle timer.
+      if (preamble.protocol > SIDECAR_PROTOCOL && this.mode !== "draining") {
+        this.mode = "draining";
+        this.options.log("a newer desktop connected: draining");
+        this.settle();
+      }
       return;
     }
     const parsed = parseSidecarHostLine(line);
@@ -283,6 +295,9 @@ export class Holder {
     for (const point of hello.resume) {
       this.resume(peer, point.runId, point.afterSeq, "hello");
     }
+    // The new desktop learns what kept processes hold, as a resumed run's
+    // process is reported again.
+    this.host.reportBackground();
   }
 
   private command(peer: Peer, line: string) {

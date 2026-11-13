@@ -178,6 +178,11 @@ export const CodexItemSchema = v.variant("type", [
       v.object({
         path: v.string(),
         kind: v.object({ type: v.picklist(["add", "delete", "update"]) }),
+        /**
+         * The file's text for an add or a delete, a unified diff for an
+         * update. It stays on the computer (`HarnessStepOutput`).
+         */
+        diff: v.nullish(v.string()),
       }),
     ),
     status: v.picklist(["inProgress", "completed", "failed", "declined"]),
@@ -212,6 +217,29 @@ const ItemEnvelopeSchema = v.object({
   threadId: v.string(),
   turnId: v.string(),
   item: v.object({ type: v.string(), id: v.optional(v.string()) }),
+});
+
+const RateLimitWindowSchema = v.object({
+  usedPercent: v.number(),
+  /** Unix seconds. */
+  resetsAt: v.nullish(v.number()),
+});
+
+/** One allowance's windows; `limitId` names it (`codex` is the main one). */
+const RateLimitsSchema = v.object({
+  limitId: v.nullish(v.string()),
+  primary: v.nullish(RateLimitWindowSchema),
+  secondary: v.nullish(RateLimitWindowSchema),
+  /** Credits the account can spend once its windows are exhausted. */
+  credits: v.nullish(
+    v.object({ hasCredits: v.boolean(), unlimited: v.boolean() }),
+  ),
+});
+
+/** `account/rateLimits/read`: every allowance, by limit id when Codex says. */
+export const GetAccountRateLimitsResponseSchema = v.object({
+  rateLimits: RateLimitsSchema,
+  rateLimitsByLimitId: v.nullish(v.record(v.string(), RateLimitsSchema)),
 });
 
 /** Notifications this adapter consumes; every other method is ignored. */
@@ -256,17 +284,13 @@ export const CODEX_NOTIFICATIONS = {
     threadId: v.string(),
     requestId: RequestId,
   }),
-  "account/rateLimits/updated": v.object({
-    rateLimits: v.object({
-      limitId: v.nullish(v.string()),
-      primary: v.nullish(
-        v.object({ usedPercent: v.number(), resetsAt: v.nullish(v.number()) }),
-      ),
-      secondary: v.nullish(
-        v.object({ usedPercent: v.number(), resetsAt: v.nullish(v.number()) }),
-      ),
-    }),
+  /** An MCP server's startup changed state; stella's must not fail. */
+  "mcpServer/startupStatus/updated": v.object({
+    name: v.string(),
+    status: v.string(),
+    error: v.nullish(v.string()),
   }),
+  "account/rateLimits/updated": v.object({ rateLimits: RateLimitsSchema }),
 } as const;
 export type CodexNotificationMethod = keyof typeof CODEX_NOTIFICATIONS;
 
@@ -274,9 +298,7 @@ export type CodexPlanUpdate = v.InferOutput<
   (typeof CODEX_NOTIFICATIONS)["turn/plan/updated"]
 >;
 
-export type CodexRateLimits = v.InferOutput<
-  (typeof CODEX_NOTIFICATIONS)["account/rateLimits/updated"]
->["rateLimits"];
+export type CodexRateLimits = v.InferOutput<typeof RateLimitsSchema>;
 
 export const isCodexNotificationMethod = (
   method: string,
@@ -363,6 +385,7 @@ export const isCodexServerRequestMethod = (
 export type CodexClientRequestMethod =
   | "initialize"
   | "account/read"
+  | "account/rateLimits/read"
   | "model/list"
   | "skills/extraRoots/set"
   | "skills/list"
@@ -370,7 +393,29 @@ export type CodexClientRequestMethod =
   | "thread/resume"
   | "thread/unarchive"
   | "turn/start"
-  | "turn/interrupt";
+  | "turn/interrupt"
+  | "thread/backgroundTerminals/list"
+  | "thread/backgroundTerminals/clean";
+
+/**
+ * A page of the thread's background terminals: commands the agent left
+ * running (`exec_command` past its yield), which the app-server keeps for the
+ * thread until they exit or are cleaned. Experimental protocol.
+ */
+export const BackgroundTerminalsListResponseSchema = v.object({
+  data: v.array(v.object({ itemId: v.string() })),
+  nextCursor: v.nullable(v.string()),
+});
+
+/** The item a completed item notification names. */
+export const ItemCompletedSchema = v.object({
+  item: v.object({ id: v.optional(v.string()) }),
+});
+
+/** The item a started item notification names, with its kind. */
+export const ItemStartedSchema = v.object({
+  item: v.object({ type: v.string(), id: v.optional(v.string()) }),
+});
 
 /** The notifications Stella sends the server. */
 export type CodexClientNotificationMethod = "initialized";

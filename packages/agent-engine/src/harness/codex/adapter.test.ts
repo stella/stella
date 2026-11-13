@@ -40,6 +40,7 @@ import { createDetached } from "@stll/errors";
 
 import {
   FAKE_CONTEXT_WINDOW,
+  FAKE_FUTURE_RESET,
   FAKE_LONG_COMMAND,
   FAKE_MCP_CALL,
   FAKE_PRIVATE_TEXT,
@@ -164,6 +165,7 @@ const turnInput = (
   threadId: "stella-thread-1",
   workspaceDir,
   model: "gpt-test",
+  reasoningEffort: null,
   instructions: "Use the stella MCP server.",
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
@@ -230,6 +232,8 @@ const run = async (
 
 const terminal = (events: readonly HarnessEvent[]) => events.at(-1);
 
+const FUTURE_RESET_ISO = new Date(FAKE_FUTURE_RESET * 1000).toISOString();
+
 describe("Codex adapter over a stdio app-server", () => {
   test("runs with the stella-owned CODEX_HOME in the workspace and sends the MCP bearer only over stdio", async () => {
     const { events, received, startup, codexHome, workspaceDir } =
@@ -244,10 +248,13 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(threadStart?.params).toMatchObject({
       model: "gpt-test",
       cwd: workspaceDir,
-      approvalPolicy: "on-request",
+      approvalPolicy: "untrusted",
       sandbox: "workspace-write",
       config: {
-        "sandbox_workspace_write.network_access": true,
+        // At Ask Codex cannot pause a search for approval, so its web
+        // search is off.
+        web_search: "disabled",
+        "sandbox_workspace_write.network_access": false,
         "sandbox_workspace_write.writable_roots": [CACHE_DIR],
         "sandbox_workspace_write.exclude_tmpdir_env_var": false,
         "sandbox_workspace_write.exclude_slash_tmp": false,
@@ -271,21 +278,77 @@ describe("Codex adapter over a stdio app-server", () => {
     });
   });
 
-  test("its one approval mode runs in the workspace sandbox, asks before leaving it, and writes caches to the package cache", async () => {
-    const { received, startup } = await run("tool_calls");
-    const threadStart = received().find(
-      ({ method }) => method === "thread/start",
-    );
-    expect(threadStart?.params).toMatchObject({
-      approvalPolicy: "on-request",
-      sandbox: "workspace-write",
-      config: {
-        "sandbox_workspace_write.writable_roots": [CACHE_DIR],
-        "sandbox_workspace_write.exclude_tmpdir_env_var": false,
-        "sandbox_workspace_write.exclude_slash_tmp": false,
-      },
+  test.each([
+    ["ask", "untrusted", false, "disabled"],
+    ["auto", "untrusted", true, "live"],
+    ["full_auto", "on-request", true, "live"],
+  ] as const)(
+    "at %s it runs in the workspace sandbox with Codex's %s policy (network %s, web search %s), asks before leaving it, and writes caches to the package cache",
+    async (approvals, approvalPolicy, networkAccess, webSearch) => {
+      const { received, startup } = await run("tool_calls", {
+        overrides: {
+          policy: { network: "open", fs: "workspace", approvals },
+        },
+      });
+      const threadStart = received().find(
+        ({ method }) => method === "thread/start",
+      );
+      expect(threadStart?.params).toMatchObject({
+        approvalPolicy,
+        sandbox: "workspace-write",
+        config: {
+          web_search: webSearch,
+          "sandbox_workspace_write.network_access": networkAccess,
+          "sandbox_workspace_write.writable_roots": [CACHE_DIR],
+          "sandbox_workspace_write.exclude_tmpdir_env_var": false,
+          "sandbox_workspace_write.exclude_slash_tmp": false,
+        },
+      });
+      expect(startup().packageCache).toEqual(
+        packageCacheEnvironment(CACHE_DIR),
+      );
+    },
+  );
+
+  test("the levels are strictly ordered: each starts Codex differently, and Auto keeps the command gate", async () => {
+    const settingsAt = async (
+      approvals: HarnessTurnInput["policy"]["approvals"],
+    ) => {
+      const { received } = await run("tool_calls", {
+        overrides: {
+          policy: { network: "open", fs: "workspace", approvals },
+        },
+      });
+      const fields = (value: unknown): Record<string, unknown> =>
+        typeof value === "object" && value !== null
+          ? Object.fromEntries(Object.entries(value))
+          : {};
+      const params = fields(
+        received().find(({ method }) => method === "thread/start")?.params,
+      );
+      return JSON.stringify([
+        params["approvalPolicy"],
+        fields(params["config"])["sandbox_workspace_write.network_access"],
+      ]);
+    };
+    const ask = await settingsAt("ask");
+    const auto = await settingsAt("auto");
+    const fullAuto = await settingsAt("full_auto");
+    expect(new Set([ask, auto, fullAuto]).size).toBe(3);
+    // A ceiling at Auto never starts Codex with Full auto's policy.
+    expect(auto).toBe(JSON.stringify(["untrusted", true]));
+  });
+
+  test("asks the model for the run's reasoning effort on turn/start, and for none when the run leaves it to the harness", async () => {
+    const turnStart = (
+      received: readonly { method?: string; params?: unknown }[],
+    ) => received.find(({ method }) => method === "turn/start")?.params;
+    const chosen = await run("tool_calls", {
+      overrides: { reasoningEffort: "high" },
     });
-    expect(startup().packageCache).toEqual(packageCacheEnvironment(CACHE_DIR));
+    expect(turnStart(chosen.received())).toMatchObject({ effort: "high" });
+    const left = await run("tool_calls");
+    expect(turnStart(left.received())).not.toHaveProperty("effort");
   });
 
   test("a managed tool comes first on the server's PATH and the inherited PATH stays", async () => {
@@ -516,21 +579,6 @@ describe("Codex adapter over a stdio app-server", () => {
       );
       expect(paramsOf(received(), "thread/start")).toBeUndefined();
     });
-  });
-
-  test("an approval mode it does not offer refuses the turn before the harness starts", async () => {
-    for (const approvals of ["auto", "full_auto"] as const) {
-      const harness = harnessFor("tool_calls");
-      const started = await harness.adapter.startTurn(
-        turnInput(harness.workspaceDir, {
-          policy: { network: "open", fs: "workspace", approvals },
-        }),
-      );
-      expect(Result.isError(started) && started.error.reason).toBe(
-        "start_rejected",
-      );
-      expect(existsSync(harness.logPath)).toBe(false);
-    }
   });
 
   test("a local turn persists the same message as the cloud translator for the same native turn", async () => {
@@ -980,9 +1028,27 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(
       received()
         .map(({ method }) => method)
-        .filter((m) => m?.startsWith("thread/")),
+        .filter(
+          (m) =>
+            m?.startsWith("thread/") === true &&
+            !m.startsWith("thread/backgroundTerminals/"),
+        ),
     ).toEqual(["thread/resume", "thread/unarchive", "thread/resume"]);
     expect(events[0]).toMatchObject({ continuation: { type: "resumed" } });
+  });
+
+  test("Codex never offers plan, and a plan turn is refused before Codex starts", async () => {
+    const harness = harnessFor("tool_calls");
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, {
+        policy: { network: "open", fs: "workspace", approvals: "plan" },
+      }),
+    );
+    expect(Result.isError(started) && started.error.reason).toBe(
+      "start_rejected",
+    );
+    // The fake app-server writes its log as it starts: it never started.
+    expect(existsSync(harness.logPath)).toBe(false);
   });
 
   test("a signed-out harness refuses the turn before any session starts", async () => {
@@ -1022,9 +1088,57 @@ describe("Codex adapter over a stdio app-server", () => {
       failure: {
         type: "usage_limit",
         message: "You've hit your usage limit.",
-        resetsAt: "2026-10-28T14:00:00.000Z",
+        resetsAt: FUTURE_RESET_ISO,
       },
     });
+    // The update before the failure timed the reset; nothing more is read.
+    expect(
+      limited
+        .received()
+        .filter(({ method }) => method === "account/rateLimits/read"),
+    ).toEqual([]);
+  });
+
+  test("a limit hit before Codex sent its limits reads them for the reset time", async () => {
+    const limited = await run("usage_limit_unannounced");
+    expect(terminal(limited.events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "usage_limit",
+        message: "You've hit your usage limit.",
+        resetsAt: FUTURE_RESET_ISO,
+      },
+    });
+    const reads = limited
+      .received()
+      .filter(({ method }) => method === "account/rateLimits/read");
+    expect(reads).toHaveLength(1);
+    expect(reads.at(0)?.params).toBeUndefined();
+  });
+
+  test("a limit whose limits cannot be read still fails as a usage limit, its reset unknown", async () => {
+    const limited = await run("usage_limit_read_fails");
+    expect(terminal(limited.events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "usage_limit",
+        message: "You've hit your usage limit.",
+        resetsAt: null,
+      },
+    });
+  });
+
+  test("stella's MCP server failing to start fails the turn; a member's own does not", async () => {
+    const failed = await run("stella_mcp_failed");
+    expect(terminal(failed.events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "tools_unavailable",
+        message: "The harness could not connect to the stella MCP server.",
+      },
+    });
+    const theirs = await run("other_mcp_failed");
+    expect(terminal(theirs.events)?.type).toBe("turn.completed");
   });
 
   /** Runs a scenario whose continuations record their delays. */
@@ -1167,7 +1281,7 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
-  test("a probe reports version, account, visible models and capabilities without a session", async () => {
+  test("a probe reports version, account, visible models with the efforts stella knows, and capabilities without a session", async () => {
     const harness = harnessFor("probe");
     const probed = await harness.adapter.probe();
     if (Result.isError(probed)) {
@@ -1181,15 +1295,17 @@ describe("Codex adapter over a stdio app-server", () => {
           id: "gpt-test",
           displayName: "GPT Test",
           isDefault: true,
-          reasoningEfforts: ["medium"],
+          reasoningEfforts: ["medium", "high"],
           inputModalities: ["text", "image"],
         },
       ],
       capabilities: ["approvals", "interrupt", "resume", "image_input"],
-      approvalModes: ["ask"],
+      approvalModes: ["ask", "auto", "full_auto"],
+      // The plan's main window is at 40 %.
       usageLimit: null,
     });
     const methods = harness.received().map(({ method }) => method);
+    expect(methods).toContain("account/rateLimits/read");
     expect(methods).not.toContain("thread/start");
     expect(methods).not.toContain("turn/start");
     expect(
@@ -1200,6 +1316,37 @@ describe("Codex adapter over a stdio app-server", () => {
     ).toEqual({
       cursor: "page-2",
     });
+  });
+
+  test("a probe of a Codex out of usage reports when its plan's limit resets", async () => {
+    const probed = await harnessFor("probe_out_of_usage").adapter.probe();
+    if (Result.isError(probed)) {
+      throw probed.error;
+    }
+    expect(probed.value.usageLimit).toEqual({ resetsAt: FUTURE_RESET_ISO });
+  });
+
+  test("a probe of a spent plan with credits left stays ready", async () => {
+    const probed = await harnessFor(
+      "probe_out_of_usage_with_credits",
+    ).adapter.probe();
+    if (Result.isError(probed)) {
+      throw probed.error;
+    }
+    expect(probed.value.usageLimit).toBeNull();
+  });
+
+  test("a probe whose limits cannot be read stays ready, its limit unknown", async () => {
+    const harness = harnessFor("probe_limits_unreadable");
+    const probed = await harness.adapter.probe();
+    if (Result.isError(probed)) {
+      throw probed.error;
+    }
+    expect(probed.value.auth.type).toBe("signed_in");
+    expect(probed.value.usageLimit).toBeNull();
+    expect(harness.received().map(({ method }) => method)).toContain(
+      "account/rateLimits/read",
+    );
   });
 
   test("refuses a CODEX_HOME that is the user's own", () => {
@@ -1555,6 +1702,124 @@ describe("Codex items as chat parts", () => {
   });
 });
 
+describe("Codex background terminals after a turn", () => {
+  const completedTurn = async (scenario: FakeScenario) => {
+    const started = await start(scenario);
+    const collected = collect(started.turn);
+    await collected.done;
+    expect(terminal(collected.events)).toMatchObject({
+      type: "turn.completed",
+    });
+    return started;
+  };
+
+  test("keep the process, and the chat's next turn runs on the same thread in it", async () => {
+    const { adapter, workspaceDir, received, logPath, turn } =
+      await completedTurn("background_terminal");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    expect(live.harness).toBe("codex");
+    expect(live.sessionId).toBe(harnessSessionId(FAKE_THREAD_ID));
+    expect(live.backgroundTasks).toBe(1);
+
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const collected = collect(next.value);
+    await collected.done;
+    expect(collected.events[0]).toEqual({
+      type: "session.started",
+      sessionId: harnessSessionId(FAKE_THREAD_ID),
+      continuation: { type: "resumed" },
+    });
+    expect(terminal(collected.events)).toMatchObject({
+      type: "turn.completed",
+    });
+    // Its server exited during the turn: nothing is kept any more.
+    expect(await next.value.release()).toBeNull();
+
+    const startups = readFileSync(logPath, "utf-8")
+      .split("\n")
+      .filter((line) => line.includes('"startup"'));
+    expect(startups).toHaveLength(1);
+    const methods = received().map(({ method }) => method);
+    expect(methods.filter((method) => method === "initialize")).toHaveLength(1);
+    expect(methods).not.toContain("thread/resume");
+    const turnStarts = received().filter(
+      ({ method }) => method === "turn/start",
+    );
+    expect(turnStarts).toHaveLength(2);
+    expect(turnStarts[1]?.params).toMatchObject({ threadId: FAKE_THREAD_ID });
+    expect(methods).toContain("thread/backgroundTerminals/clean");
+  });
+
+  test("a kept process ends by itself once its last background command exits", async () => {
+    const { turn, received } = await completedTurn("background_terminal_exits");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const counts: number[] = [];
+    live.watch((count) => {
+      counts.push(count);
+    });
+    await live.ended;
+    expect(counts).toEqual([0]);
+    expect(live.backgroundTasks).toBe(0);
+    expect(received().map(({ method }) => method)).toContain(
+      "thread/backgroundTerminals/clean",
+    );
+  });
+
+  test("ending a kept process cleans its terminals before it closes", async () => {
+    const { turn, logPath } = await completedTurn("background_terminal");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    await live.end();
+    expect(readFileSync(logPath, "utf-8")).toContain(
+      JSON.stringify({ cleaned: ["call-serve"] }),
+    );
+  });
+
+  test("a failed terminal list is reported and keeps the commands the turn left running", async () => {
+    const { turn } = await completedTurn("background_terminal_list_fails");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    // Not read as an empty inventory: the started command still counts.
+    expect(live.backgroundTasks).toBe(1);
+    expect(backgroundErrors.splice(0)).toEqual([
+      expect.objectContaining({
+        _tag: "CodexTerminalListError",
+        reason: "failed",
+      }),
+    ]);
+    await live.end();
+  });
+
+  test("a release without the terminal list keeps nothing past the turn", async () => {
+    const { turn } = await completedTurn(
+      "background_terminal_list_unsupported",
+    );
+    expect(await turn.release()).toBeNull();
+  });
+
+  test("a turn without background work closes its process as before", async () => {
+    const { turn } = await completedTurn("tool_calls");
+    expect(await turn.release()).toBeNull();
+  });
+});
+
 /**
  * Checks against a real `codex` CLI when one is installed. Nothing here
  * signs in or sends a prompt: the handshake is `initialize` only, and the
@@ -1569,12 +1834,19 @@ const codex = Bun.which("codex");
 const CLIENT_METHODS = [
   "initialize",
   "account/read",
+  "account/rateLimits/read",
   "model/list",
   "thread/start",
   "thread/resume",
   "thread/unarchive",
   "turn/start",
   "turn/interrupt",
+] as const;
+
+/** Experimental client methods the adapter calls; `initialize` opts in. */
+const EXPERIMENTAL_CLIENT_METHODS = [
+  "thread/backgroundTerminals/list",
+  "thread/backgroundTerminals/clean",
 ] as const;
 
 const OneOfMethods = v.object({
@@ -1707,6 +1979,22 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
     const clientMethods = new Set(await methodsIn(out, "ClientRequest.json"));
     for (const method of CLIENT_METHODS) {
       expect(clientMethods.has(method)).toBe(true);
+    }
+    const experimentalOut = path.join(root, "experimental-schema");
+    const experimental = Bun.spawnSync([
+      codex ?? "",
+      "app-server",
+      "generate-json-schema",
+      "--experimental",
+      "--out",
+      experimentalOut,
+    ]);
+    expect(experimental.exitCode).toBe(0);
+    const experimentalMethods = new Set(
+      await methodsIn(experimentalOut, "ClientRequest.json"),
+    );
+    for (const method of EXPERIMENTAL_CLIENT_METHODS) {
+      expect(experimentalMethods.has(method)).toBe(true);
     }
 
     const itemTypes = v

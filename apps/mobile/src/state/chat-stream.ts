@@ -13,6 +13,7 @@ import {
   withAccessToken,
 } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
+import { answerBlocks, messageText } from "@/state/chat-answer";
 import { attachmentParts } from "@/state/chat-attachments";
 import type { ReadyFile } from "@/state/chat-attachments";
 import type { ChatEntry } from "@/state/chat-messages";
@@ -72,8 +73,8 @@ export const createSseParser = () => {
 
 /**
  * The AG-UI events an answer is drawn from. Everything else the run sends
- * (tool arguments and results, snapshots, custom progress) passes as
- * `ignored`, so an event this build has never seen does not end the stream.
+ * (tool arguments, snapshots, custom progress) passes as `ignored`, so an
+ * event this build has never seen does not end the stream.
  */
 const chatEventSchema = v.union([
   v.object({
@@ -81,7 +82,24 @@ const chatEventSchema = v.union([
     messageId: v.string(),
   }),
   v.object({ type: v.literal("TEXT_MESSAGE_CONTENT"), delta: v.string() }),
-  v.object({ type: v.literal("TOOL_CALL_START"), toolCallName: v.string() }),
+  v.object({ type: v.literal("REASONING_MESSAGE_START") }),
+  v.object({
+    type: v.literal("REASONING_MESSAGE_CONTENT"),
+    delta: v.string(),
+  }),
+  v.object({
+    type: v.literal("TOOL_CALL_START"),
+    toolCallId: v.string(),
+    toolCallName: v.string(),
+  }),
+  v.object({
+    type: v.literal("TOOL_CALL_RESULT"),
+    toolCallId: v.string(),
+    content: v.optional(v.string()),
+    // `output-error` for a call that failed or was cancelled, which the
+    // stored message keeps as an errored call.
+    state: v.optional(v.string()),
+  }),
   v.object({
     type: v.literal("RUN_FINISHED"),
     outcome: v.optional(v.looseObject({ type: v.string() })),
@@ -109,25 +127,64 @@ export const parseChatEvent = (data: string): ChatEvent | undefined => {
 export type AnswerStatus =
   "streaming" | "finished" | "stopped" | "needs-input" | "failed";
 
-/** An answer as it arrives: its text segments, the tools it used, and where it stands. */
+/**
+ * A part of an answer as it arrives, in the shape of a stored message's
+ * part, so both draw through `answerBlocks`: text, reasoning, and tool
+ * calls, each complete once its result came back, or errored when the
+ * result says the call failed or was cancelled.
+ */
+type StreamedPart =
+  | { readonly type: "text" | "thinking"; readonly content: string }
+  | {
+      readonly type: "tool-call";
+      readonly id: string;
+      readonly name: string;
+      readonly state: "input-streaming" | "complete" | "error";
+      readonly output?: unknown;
+    };
+
+/** An answer as it arrives: its parts in order, and where it stands. */
 export type StreamedAnswer = {
   readonly messageId: string | undefined;
-  readonly segments: readonly string[];
-  readonly tools: readonly string[];
+  readonly parts: readonly StreamedPart[];
   readonly status: AnswerStatus;
 };
 
 export const EMPTY_ANSWER: StreamedAnswer = {
   messageId: undefined,
-  segments: [],
-  tools: [],
+  parts: [],
   status: "streaming",
 };
 
 /**
- * One event applied to the answer. Each text segment starts its own
- * message event, with the tools the model ran between them; the segments
- * join the way a stored message's text parts do.
+ * The parts with `delta` added to the last one of `type`'s kind, or to a
+ * new one when another kind of part came since.
+ */
+const appendDelta = (
+  parts: readonly StreamedPart[],
+  type: "text" | "thinking",
+  delta: string,
+): StreamedPart[] => {
+  const last = parts.at(-1);
+  return last?.type === type
+    ? [...parts.slice(0, -1), { type, content: `${last.content}${delta}` }]
+    : [...parts, { type, content: delta }];
+};
+
+/** A tool result's content: the JSON it carries, or the text as it came. */
+const resultOutput = (content: string | undefined): unknown => {
+  if (content === undefined) {
+    return undefined;
+  }
+  const parsed = Result.try(() => JSON.parse(content) as unknown);
+  return Result.isOk(parsed) ? parsed.value : content;
+};
+
+/**
+ * One event applied to the answer. Each text and each stretch of reasoning
+ * grows as it streams; a tool call runs from its start until its result
+ * comes back. The parts stay in the order they arrived, as a stored
+ * message keeps them.
  */
 export const applyChatEvent = (
   answer: StreamedAnswer,
@@ -138,17 +195,54 @@ export const applyChatEvent = (
       return {
         ...answer,
         messageId: answer.messageId ?? event.messageId,
-        segments: [...answer.segments, ""],
+        parts: [...answer.parts, { type: "text", content: "" }],
       };
     }
     case "TEXT_MESSAGE_CONTENT": {
-      const segments =
-        answer.segments.length === 0 ? [""] : [...answer.segments];
-      segments[segments.length - 1] = `${segments.at(-1) ?? ""}${event.delta}`;
-      return { ...answer, segments };
+      return {
+        ...answer,
+        parts: appendDelta(answer.parts, "text", event.delta),
+      };
+    }
+    case "REASONING_MESSAGE_START": {
+      return {
+        ...answer,
+        parts: [...answer.parts, { type: "thinking", content: "" }],
+      };
+    }
+    case "REASONING_MESSAGE_CONTENT": {
+      return {
+        ...answer,
+        parts: appendDelta(answer.parts, "thinking", event.delta),
+      };
     }
     case "TOOL_CALL_START": {
-      return { ...answer, tools: [...answer.tools, event.toolCallName] };
+      return {
+        ...answer,
+        parts: [
+          ...answer.parts,
+          {
+            type: "tool-call",
+            id: event.toolCallId,
+            name: event.toolCallName,
+            state: "input-streaming",
+          },
+        ],
+      };
+    }
+    case "TOOL_CALL_RESULT": {
+      return {
+        ...answer,
+        parts: answer.parts.map((part): StreamedPart =>
+          part.type === "tool-call" && part.id === event.toolCallId
+            ? {
+                ...part,
+                state: event.state === "output-error" ? "error" : "complete",
+                output: resultOutput(event.content),
+              }
+            : part,
+        ),
+      };
     }
     case "RUN_FINISHED": {
       return { ...answer, status: finishedStatus(event.outcome?.type) };
@@ -178,12 +272,11 @@ export const answerEntry = (
   id: answer.messageId ?? "streaming-answer",
   role: "assistant",
   createdAt,
-  text: answer.segments
-    .map((segment) => segment.trim())
-    .filter((segment) => segment !== "")
-    .join("\n\n"),
-  tools: answer.tools,
+  text: messageText(answer.parts),
+  blocks: answerBlocks(answer.parts),
   files: [],
+  // The stored answer names its drafts once the thread is read again.
+  drafts: [],
 });
 
 /**

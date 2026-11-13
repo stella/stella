@@ -30,8 +30,10 @@ import {
   FAKE_CLAUDE_VERSION,
   FAKE_ESCAPE_COMMAND,
   FAKE_LONG_COMMAND,
+  FAKE_LONG_PLAN,
   FAKE_MCP_CALL,
   FAKE_PERMISSION_SUGGESTION,
+  FAKE_PLAN,
   FAKE_PRIVATE_TEXT,
   FAKE_RESUMED_SESSION_ID,
   FAKE_SANDBOX_HOST,
@@ -205,6 +207,7 @@ const turnInput = (
   threadId: "stella-thread-1",
   workspaceDir,
   model: "sonnet",
+  reasoningEffort: null,
   instructions: INSTRUCTIONS,
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
@@ -319,6 +322,14 @@ const codexEvents = async (scenario: FakeCodexScenario) => {
 };
 
 describe("Claude Code adapter over stream-json stdio", () => {
+  test("asks the model for the run's reasoning effort, after the model it applies to", async () => {
+    const { startups } = await run("tool_calls", {
+      overrides: { reasoningEffort: "max" },
+    });
+    const args = startups()[0]?.args ?? [];
+    expect(args.slice(-4)).toEqual(["--model", "sonnet", "--effort", "max"]);
+  });
+
   test("runs in the workspace with the stella config dir, without billing overrides, and sends secrets only over stdio", async () => {
     const { events, startups, received, claudeConfigDir, workspaceDir } =
       await run("tool_calls");
@@ -440,10 +451,12 @@ describe("Claude Code adapter over stream-json stdio", () => {
           name: "command_execution",
           input: { command: "ls" },
         },
-        // The command's output stays on the computer.
+        // The command's output stays on the computer: kept for the member to
+        // open there, never in what the turn reports.
         result: {
           content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
+          localOutput: { type: "command", output: "notes.md\n" },
         },
       },
       { type: "text.delta", messageId: "msg-3:0", delta: "Found" },
@@ -1081,7 +1094,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
         },
       ],
       capabilities: ["approvals", "interrupt", "resume", "image_input"],
-      approvalModes: ["ask", "auto", "full_auto"],
+      approvalModes: ["plan", "ask", "auto", "full_auto"],
       // The exhausted model-specific window does not count.
       usageLimit: { resetsAt: "2099-10-28T14:00:00Z" },
     });
@@ -1203,6 +1216,156 @@ describe("Claude Code approval modes", () => {
   };
   const valueOf = (args: readonly string[], flag: string) =>
     args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
+
+  test("plan starts the CLI in plan mode, without the sandbox, and allows no stella call ahead", async () => {
+    const args = await argsFor("plan");
+    expect(valueOf(args, "--permission-mode")).toBe("plan");
+    expect(args).not.toContain("--settings");
+    // A stella write before the plan is approved is asked about.
+    expect(args).not.toContain("--allowedTools");
+    expect(valueOf(await argsFor("ask"), "--allowedTools")).toMatch(/^mcp__/u);
+  });
+
+  test("a plan opens with its approval, which shows the plan and offers approve or deny; approving it switches the CLI to Ask's mode once the plan's call has run", async () => {
+    const seen: string[] = [];
+    const { events, answers, controlRequests } = await run("plan_approved", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "plan" },
+      },
+      onEvent: async (event, turn) => {
+        seen.push(event.type);
+        if (event.type !== "approval.requested") {
+          return;
+        }
+        expect(event.request).toMatchObject({
+          kind: "tool",
+          toolCall: {
+            id: "call-plan",
+            name: "harness_native_tool",
+            input: {
+              tool: "ExitPlanMode",
+              detail: { kind: "proposed_plan", text: FAKE_PLAN },
+            },
+          },
+        });
+        // The CLI's suggestion to switch modes is never offered.
+        expect(event.request.options.map(({ decision }) => decision)).toEqual([
+          "approve",
+          "deny",
+        ]);
+        await turn.respond({
+          type: "approval",
+          requestId: event.request.requestId,
+          decision: "approve",
+        });
+      },
+    });
+    // No call opens before the approval that carries the plan.
+    expect(seen.indexOf("approval.requested")).toBeLessThan(
+      seen.indexOf("tool.completed"),
+    );
+    expect(seen).not.toContain("tool.started");
+    expect(answers()).toEqual([
+      {
+        subtype: "success",
+        request_id: "cli-1",
+        response: {
+          behavior: "allow",
+          updatedInput: { plan: FAKE_PLAN, planFilePath: "/plans/lease.md" },
+        },
+      },
+    ]);
+    expect(
+      controlRequests("set_permission_mode").map(({ request }) => request),
+    ).toEqual([{ subtype: "set_permission_mode", mode: "acceptEdits" }]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a declined plan keeps the CLI in plan mode", async () => {
+    const { events, answers, controlRequests } = await run("plan_declined", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "plan" },
+      },
+      onEvent: async (event, turn) => {
+        if (event.type === "approval.requested") {
+          await turn.respond({
+            type: "approval",
+            requestId: event.request.requestId,
+            decision: "deny",
+          });
+        }
+      },
+    });
+    expect(answers()).toEqual([
+      {
+        subtype: "success",
+        request_id: "cli-1",
+        response: { behavior: "deny", message: "The user denied this action." },
+      },
+    ]);
+    expect(controlRequests("set_permission_mode")).toEqual([]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a plan call without a plan is never put to the member", async () => {
+    const { events, answers, controlRequests } = await run("plan_missing", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "plan" },
+      },
+    });
+    expect(events.map(({ type }) => type)).not.toContain("approval.requested");
+    expect(answers()).toEqual([
+      {
+        subtype: "success",
+        request_id: "cli-1",
+        response: {
+          behavior: "deny",
+          message: expect.stringContaining("No plan was given"),
+        },
+      },
+    ]);
+    expect(controlRequests("set_permission_mode")).toEqual([]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a plan too long to show in full is never put to the member: the CLI is told to shorten it", async () => {
+    expect(FAKE_LONG_PLAN.length).toBeGreaterThan(20_000);
+    const { events, answers, controlRequests } = await run("plan_too_long", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "plan" },
+      },
+    });
+    expect(events.map(({ type }) => type)).not.toContain("approval.requested");
+    expect(answers()).toEqual([
+      {
+        subtype: "success",
+        request_id: "cli-1",
+        response: {
+          behavior: "deny",
+          message: expect.stringContaining("too long for the user to review"),
+        },
+      },
+    ]);
+    expect(controlRequests("set_permission_mode")).toEqual([]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("web search asks at Ask and runs unasked above it; fetching a page follows the permission mode", async () => {
+    const allowedAt = async (
+      approvals: HarnessTurnInput["policy"]["approvals"],
+    ) => {
+      const args = await argsFor(approvals);
+      expect(args).not.toContain("--disallowedTools");
+      expect(args).not.toContain("--disallowed-tools");
+      return (valueOf(args, "--allowedTools") ?? "").split(",");
+    };
+    const ask = await allowedAt("ask");
+    expect(ask).toEqual(["mcp__stella"]);
+    for (const approvals of ["auto", "full_auto"] as const) {
+      const allowed = await allowedAt(approvals);
+      expect(allowed).toEqual(["mcp__stella", "WebSearch"]);
+    }
+  });
 
   test("ask accepts edits in the workspace and asks about the rest, without the sandbox", async () => {
     const args = await argsFor("ask");
@@ -1340,6 +1503,7 @@ describe("Claude Code approval modes", () => {
       const harness = harnessFor("probe", { platform });
       const probed = await harness.adapter.probe();
       expect(Result.isOk(probed) && probed.value.approvalModes).toEqual([
+        "plan",
         "ask",
         "auto",
       ]);
@@ -1666,10 +1830,12 @@ describe("Claude Code skill folders", () => {
       }),
       expect.objectContaining({
         toolCall: expect.objectContaining({ input: { command: "ls" } }),
-        // The command's output stays on the computer.
+        // The command's output stays on the computer; a step on the skill
+        // keeps none, even there.
         result: {
           content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
+          localOutput: { type: "command", output: "notes.md\n" },
         },
       }),
     ]);
@@ -1718,5 +1884,177 @@ describe("Claude Code skill folders", () => {
       // Drained.
     }
     await started.value.dispose();
+  });
+});
+
+describe("Claude Code background commands after a turn", () => {
+  const completedTurn = async (scenario: FakeScenarioName) => {
+    const harness = harnessFor(scenario);
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of started.value.events) {
+      events.push(event);
+    }
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    return { ...harness, turn: started.value };
+  };
+
+  test("keep the process, and the next user message continues in it, in its own mode", async () => {
+    const { adapter, workspaceDir, startups, received, turn, controlRequests } =
+      await completedTurn("background_command");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    expect(live.harness).toBe("claude-code");
+    expect(live.backgroundTasks).toBe(1);
+
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    expect(events[0]).toEqual({
+      type: "session.started",
+      sessionId: live.sessionId,
+      continuation: { type: "resumed" },
+    });
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    // The server exited during the turn: nothing is kept any more.
+    expect(await next.value.release()).toBeNull();
+    expect(startups()).toHaveLength(1);
+    const users = received().filter(({ type }) => type === "user");
+    expect(users).toHaveLength(2);
+    expect(JSON.stringify(users[1])).toContain(live.sessionId);
+    // A kept process may have left its mode (an approved plan): the next
+    // turn sets its own before its message.
+    expect(
+      controlRequests("set_permission_mode").map(({ request }) => request),
+    ).toEqual([{ subtype: "set_permission_mode", mode: "acceptEdits" }]);
+  });
+
+  test("a sub-agent is stopped at the turn's end and a turn the CLI opens itself is interrupted", async () => {
+    const { turn, controlRequests } = await completedTurn(
+      "background_own_turn",
+    );
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    expect(controlRequests("stop_task").map(({ request }) => request)).toEqual([
+      { subtype: "stop_task", task_id: "task-agent" },
+    ]);
+    expect(live.backgroundTasks).toBe(2);
+    const { promise: oneLeft, resolve } = Promise.withResolvers<number>();
+    live.watch(resolve);
+    // The CLI lists one command fewer only once it was interrupted.
+    expect(await oneLeft).toBe(1);
+    expect(controlRequests("interrupt")).toHaveLength(1);
+    await live.end();
+    expect(controlRequests("stop_task").map(({ request }) => request)).toEqual([
+      { subtype: "stop_task", task_id: "task-agent" },
+      { subtype: "stop_task", task_id: "task-serve" },
+    ]);
+  });
+
+  test("the next turn waits for a turn the CLI opened itself to end, so its result is not the next turn's", async () => {
+    const { adapter, workspaceDir, turn } = await completedTurn(
+      "background_own_turn_late",
+    );
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const { promise: interrupted, resolve } = Promise.withResolvers<number>();
+    live.watch(resolve);
+    // The own turn was interrupted and has not ended yet.
+    expect(await interrupted).toBe(1);
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    expect(events.filter(({ type }) => type === "turn.failed")).toEqual([]);
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "text.completed" }),
+    );
+    await next.value.dispose();
+  });
+
+  test("a sub-agent that cannot be stopped keeps nothing: the process and its work end", async () => {
+    const { turn, logPath } = await completedTurn(
+      "background_agent_unstoppable",
+    );
+    expect(await turn.release()).toBeNull();
+    expect(readFileSync(logPath, "utf-8")).toContain(
+      JSON.stringify({ stoppedTask: "task-serve" }),
+    );
+  });
+
+  test("a turn the CLI opens while its sub-agent stops is interrupted, and the next turn waits for it", async () => {
+    const { adapter, workspaceDir, turn } = await completedTurn(
+      "background_own_turn_while_stopping",
+    );
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    expect(events.filter(({ type }) => type === "turn.failed")).toEqual([]);
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    await next.value.dispose();
+  });
+
+  test("a kept process ends by itself once its last background command exits", async () => {
+    const { turn } = await completedTurn("background_command_exits");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const counts: number[] = [];
+    live.watch((count) => {
+      counts.push(count);
+    });
+    await live.ended;
+    expect(counts).toEqual([0]);
+  });
+
+  test("disposing a turn that kept its process ends its background work", async () => {
+    const { turn, logPath } = await completedTurn("background_command_kept");
+    await turn.dispose();
+    expect(readFileSync(logPath, "utf-8")).toContain(
+      JSON.stringify({ stoppedTask: "task-serve" }),
+    );
   });
 });

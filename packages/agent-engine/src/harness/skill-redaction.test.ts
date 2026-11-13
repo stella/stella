@@ -11,6 +11,7 @@ import {
   type HarnessApprovalRequest,
   type HarnessEvent,
   type HarnessToolCall,
+  type HarnessToolResult,
 } from "./events";
 import { redactingSkillPaths, type SkillPathScope } from "./skill-redaction";
 import { HARNESS_TOOL_NAMES, shownToolInput } from "./tool-parts";
@@ -33,6 +34,7 @@ const through = async (
     })(),
     respond: async () => Result.ok(),
     interrupt: async () => undefined,
+    release: async () => null,
     dispose: async () => undefined,
   };
   const seen: HarnessEvent[] = [];
@@ -44,7 +46,7 @@ const through = async (
 
 const completed = (
   toolCall: HarnessToolCall,
-  result: { content: string; status: "succeeded" | "failed" },
+  result: HarnessToolResult,
 ): HarnessEvent => ({ type: "tool.completed", toolCall, result });
 
 const lastCompleted = (events: readonly HarnessEvent[]) => {
@@ -217,6 +219,10 @@ describe("what a turn reports about its skill folders", () => {
     const event = await claudeCall("Bash", { command: "ls" }, "notes.md\n");
     expect(event.toolCall.input).toEqual({ command: "ls" });
     expect(JSON.parse(event.result.content)).toEqual({ status: "completed" });
+    expect(event.result.localOutput).toEqual({
+      type: "command",
+      output: "notes.md\n",
+    });
   });
 
   test("a Codex command reading a skill shows the name and reports only the status", async () => {
@@ -247,6 +253,8 @@ describe("what a turn reports about its skill folders", () => {
       exit_code: 0,
       status: "completed",
     });
+    // What it printed of the skill is not kept, not even on this computer.
+    expect(result.localOutput).toBeUndefined();
   });
 
   test("a call known to have touched a skill when it started stays status only", async () => {
@@ -421,6 +429,7 @@ describe("what a turn reports about its skill folders", () => {
       })(),
       respond: async () => Result.ok(),
       interrupt: async () => undefined,
+      release: async () => null,
       dispose: async () => undefined,
     };
     expect(redactingSkillPaths(turn, { folders: [], plugin: null })).toBe(turn);

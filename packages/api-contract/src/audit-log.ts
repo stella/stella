@@ -40,6 +40,8 @@ export const AUDIT_RESOURCE_TYPE = {
   CHAT_TOOL_GRANT: "chat_tool_grant",
   /** A standing approval for chat's browser actions on one website. */
   CHAT_BROWSER_SITE_GRANT: "chat_browser_site_grant",
+  /** The member's OK for chat turns to work in a folder linked on a computer. */
+  CHAT_LOCAL_FOLDER_APPROVAL: "chat_local_folder_approval",
   CLAUSE: "clause",
   CLAUSE_CATEGORY: "clause_category",
   CLAUSE_TEMPLATE_LINK: "clause_template_link",

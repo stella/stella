@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { isChatLocalRunToolName } from "@stll/api-contract/chat-local-run-tool";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -25,8 +26,10 @@ import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import {
   type ChatToolCallPart,
   getChatToolTitleKey,
+  type HarnessChatToolCallPart,
   isRunningToolPart,
 } from "@/components/chat/chat-ui-tools";
+import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
 import {
   localRunToolSubtitleText,
   localRunToolView,
@@ -53,7 +56,8 @@ import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 
-type ToolPart = ChatToolCallPart;
+/** A stella or connector tool's call, or a coding agent's own step. */
+type ToolPart = ChatToolCallPart | HarnessChatToolCallPart;
 
 const getToolInput = (part: ToolPart): unknown => {
   if (!("input" in part)) {
@@ -410,14 +414,49 @@ const TOOL_CALL_STATUS_LABEL_KEYS = {
  *  what the call saved. */
 export type ToolCallAction = { label: string; onClick: () => void };
 
-export const toolFailureLabelKey = (
-  rawErrorDetails: ReturnType<typeof getToolOutputError>,
-  state: ToolPart["state"],
-) => {
-  if (rawErrorDetails !== undefined) {
+/**
+ * Whether a coding agent's own step reports that it failed: its result is
+ * `{ status: "failed" }` (`chat-local-run-tool`), with no error envelope.
+ */
+const localRunStepFailed = (name: string, output: unknown): boolean =>
+  isChatLocalRunToolName(name) &&
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === "failed";
+
+/** The result a coding agent's run gives a call its turn cut off. */
+const isInterruptedOutput = (output: unknown): boolean =>
+  typeof output === "object" &&
+  output !== null &&
+  Reflect.get(output, "status") === "interrupted";
+
+/**
+ * How a call that did not complete reads: interrupted only when it ended
+ * with no result at all (its stream died mid call) or with the explicit
+ * cancellation result; any other error result, an envelope, a step
+ * reporting `failed` or a connector's plain-text error, reads as failed.
+ */
+export const toolFailureLabelKey = ({
+  name,
+  output,
+  state,
+}: {
+  name: string;
+  output: unknown;
+  state: ToolPart["state"];
+}) => {
+  if (
+    getToolOutputError(output) !== undefined ||
+    localRunStepFailed(name, output)
+  ) {
     return "chat.toolCall.failed";
   }
-  return state === "error" ? "chat.toolCall.interrupted" : undefined;
+  if (state !== "error") {
+    return undefined;
+  }
+  return output === undefined || isInterruptedOutput(output)
+    ? "chat.toolCall.interrupted"
+    : "chat.toolCall.failed";
 };
 
 // Static marks make a running glyph impossible outside the turn owner.
@@ -549,14 +588,27 @@ const ToolCallCardComponent = ({
   // never produced an `output.error`) still reads as failed via a generic
   // interrupted label.
   const rawErrorDetails = getToolOutputError(part.output);
-  const failureLabelKey = toolFailureLabelKey(rawErrorDetails, part.state);
+  const failureLabelKey = toolFailureLabelKey({
+    name,
+    output: part.output,
+    state: part.state,
+  });
   const errorMessage =
     failureLabelKey === undefined ? undefined : t(failureLabelKey);
-  const hasError = errorMessage !== undefined;
-  const status = hasError ? "failed" : TOOL_CALL_SETTLED_STATUS[part.state];
+  // A call its turn cut off (a stop, a new message) never finished; that is
+  // not the tool failing, so it reads as stopped, without the failure tint.
+  const stopped = failureLabelKey === "chat.toolCall.interrupted";
+  const hasError = errorMessage !== undefined && !stopped;
+  const status = (() => {
+    if (hasError) {
+      return "failed";
+    }
+    return stopped ? "pending" : TOOL_CALL_SETTLED_STATUS[part.state];
+  })();
   // A running call waits on nothing; the turn's live status names the work.
   const settledStatusLabel =
-    status === "failed" ? errorMessage : t(TOOL_CALL_STATUS_LABEL_KEYS[status]);
+    errorMessage ??
+    (status === "failed" ? undefined : t(TOOL_CALL_STATUS_LABEL_KEYS[status]));
   const statusLabel = isLoading ? undefined : settledStatusLabel;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
@@ -680,58 +732,57 @@ const ToolCallCardComponent = ({
           />
         )}
       </Tooltip>
-      {expanded &&
-        (showMcpExactCall ||
-          codeToolSource !== undefined ||
-          showCodeToolOutput ||
-          toolInput !== undefined ||
-          hasOutput) && (
-          <div className="space-y-1 ps-2 pt-1 pb-2">
-            {showMcpExactCall && (
+      {expanded && canExpand && (
+        <div className="space-y-1 ps-2 pt-1 pb-2">
+          {showMcpExactCall && (
+            <ToolCallCodeBlock
+              code={JSON.stringify({ input: toolInput, tool: name }, null, 2)}
+              label={t("chat.toolCall.exactCall")}
+              language="json"
+              tone="call"
+            />
+          )}
+          {!showMcpExactCall &&
+            codeToolSource === undefined &&
+            toolInput !== undefined && (
               <ToolCallCodeBlock
-                code={JSON.stringify({ input: toolInput, tool: name }, null, 2)}
-                label={t("chat.toolCall.exactCall")}
+                code={JSON.stringify(toolInput, null, 2)}
+                label={t("chat.toolCall.input")}
                 language="json"
                 tone="call"
               />
             )}
-            {!showMcpExactCall &&
-              codeToolSource === undefined &&
-              toolInput !== undefined && (
-                <ToolCallCodeBlock
-                  code={JSON.stringify(toolInput, null, 2)}
-                  label={t("chat.toolCall.input")}
-                  language="json"
-                  tone="call"
-                />
-              )}
-            {codeToolSource !== undefined && (
-              <ToolCallCodeBlock
-                code={codeToolSource}
-                label={t("chat.toolCall.sourceCode")}
-                language="typescript"
-                lineNumbers
-                tone="call"
-              />
-            )}
-            {codeToolLogs.length > 0 && (
-              <ToolCallCodeBlock
-                code={codeToolLogs.join("\n")}
-                label={t("chat.toolCall.consoleLogs")}
-                language="text"
-                tone="result"
-              />
-            )}
-            {hasOutput && "output" in part && (
-              <ToolCallCodeBlock
-                code={JSON.stringify(part.output, null, 2)}
-                label={t("chat.toolCall.output")}
-                language="json"
-                tone="result"
-              />
-            )}
-          </div>
-        )}
+          {codeToolSource !== undefined && (
+            <ToolCallCodeBlock
+              code={codeToolSource}
+              label={t("chat.toolCall.sourceCode")}
+              language="typescript"
+              lineNumbers
+              tone="call"
+            />
+          )}
+          {codeToolLogs.length > 0 && (
+            <ToolCallCodeBlock
+              code={codeToolLogs.join("\n")}
+              label={t("chat.toolCall.consoleLogs")}
+              language="text"
+              tone="result"
+            />
+          )}
+          {hasOutput && "output" in part && (
+            <ToolCallCodeBlock
+              code={JSON.stringify(part.output, null, 2)}
+              label={t("chat.toolCall.output")}
+              language="json"
+              tone="result"
+            />
+          )}
+          <LocalRunStepOutputDetails
+            activeOrganizationId={activeOrganizationId}
+            part={part}
+          />
+        </div>
+      )}
       {hasError && errorMessage && (
         <ToolCallFailureDetails
           errorMessage={errorMessage}

@@ -825,7 +825,9 @@ describe("protocol log redaction", () => {
           },
           workspaceDir: "/srv/matters/lease-review",
           cacheDir: "/opt/stella/cache",
+          stepOutputDir: "/opt/stella/runs/lease-review.step-outputs",
           model: "gpt-5.1-codex",
+          reasoningEffort: "high",
           instructions,
           messages: [{ role: "user", content: instructions }],
           attachments: [],
@@ -846,6 +848,7 @@ describe("protocol log redaction", () => {
       expect(line).toContain("launch.processGrant=true");
       expect(line).toContain("launch.environment=obj:1");
       expect(line).toMatch(new RegExp(` model=${OPAQUE} `, "u"));
+      expect(line).toContain("reasoningEffort=high");
       expect(line).toContain("mcp.expiresAt=2026-11-11T12:00:00Z");
       expect(line).toContain("messages=arr:1");
       for (const content of [

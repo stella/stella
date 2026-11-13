@@ -207,7 +207,9 @@ const localRunFor = ({
         harness: "codex",
         harnessVersion: "1.0.0",
         model: "gpt-test",
+        reasoningEffort: null,
         approvals: "ask",
+        linkedFolderId: null,
       },
     },
   );

@@ -78,13 +78,8 @@ const scenarioSteps = (scenario: FakeScenario): readonly FakeStep[] => {
   if (scenario !== "usage_limit") {
     return FAKE_SCENARIOS[scenario];
   }
-  const now = Temporal.Now.instant();
-  const seconds = (instant: Temporal.Instant) =>
-    Math.floor(instant.epochMilliseconds / 1000);
-  return usageLimitTurn({
-    primary: seconds(now.add(LIMIT_RESETS_IN)),
-    secondary: seconds(now.add({ hours: 24 * 7 })),
-  });
+  const resetsAt = Temporal.Now.instant().add(LIMIT_RESETS_IN);
+  return usageLimitTurn(Math.floor(resetsAt.epochMilliseconds / 1000));
 };
 
 /**

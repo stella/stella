@@ -7,6 +7,7 @@ import type {
   HarnessToolCall,
   HarnessToolResult,
 } from "./events";
+import type { HarnessStepOutput } from "./step-output";
 
 /**
  * What a turn sends to stella about its skill folders. A tool call's input and
@@ -135,15 +136,31 @@ const createRedactor = (scope: SkillPathScope) => {
     return { ...call, input: anything(call.input) };
   };
 
-  const result = (id: string, outcome: HarnessToolResult): HarnessToolResult =>
-    touched.has(id) || mentions(outcome.content)
-      ? {
-          content: JSON.stringify({
-            status: outcome.status === "failed" ? "failed" : "completed",
-          }),
-          status: outcome.status,
-        }
+  const outputMentions = (output: HarnessStepOutput) =>
+    output.type === "command"
+      ? mentions(output.output)
+      : output.files.some(({ path, diff }) => mentions(path) || mentions(diff));
+
+  // A step that touched a skill keeps nothing it produced, not even on this
+  // computer: a skill's licensed text is the harness's to read, never the
+  // member's to open.
+  const result = (
+    id: string,
+    outcome: HarnessToolResult,
+  ): HarnessToolResult => {
+    if (touched.has(id) || mentions(outcome.content)) {
+      return {
+        content: JSON.stringify({
+          status: outcome.status === "failed" ? "failed" : "completed",
+        }),
+        status: outcome.status,
+      };
+    }
+    return outcome.localOutput !== undefined &&
+      outputMentions(outcome.localOutput)
+      ? { content: outcome.content, status: outcome.status }
       : outcome;
+  };
 
   return (event: HarnessEvent): HarnessEvent => {
     switch (event.type) {
@@ -238,6 +255,7 @@ export const redactingSkillPaths = (
     events: events(),
     respond: turn.respond,
     interrupt: turn.interrupt,
+    release: turn.release,
     dispose: turn.dispose,
   };
 };

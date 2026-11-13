@@ -51,6 +51,12 @@ export type FakeStep =
   | { spawn: readonly string[]; in?: "own_group" | "orphan" }
   | { raw: string }
   | { sleep: number }
+  /**
+   * The thread's background terminals from now on, by item id: commands
+   * left running past the turn, which `thread/backgroundTerminals/list`
+   * reports until they exit or `thread/backgroundTerminals/clean` ends them.
+   */
+  | { terminals: readonly string[] }
   | { exit: number }
   /**
    * Send these while watching for `turn/interrupt`: one answers it, ends the
@@ -73,6 +79,53 @@ export type FakeStep =
    */
   | { writeFile: string; text: string };
 
+/** Requests answered at any time, the script's own steps done or not. */
+const ALWAYS_ANSWERED: ReadonlySet<string> = new Set([
+  "thread/backgroundTerminals/list",
+  "thread/backgroundTerminals/clean",
+  "account/rateLimits/read",
+]);
+
+/** Unix seconds well after any test runs. */
+export const FAKE_FUTURE_RESET = 1_893_456_000;
+
+/** The plan's allowance as Codex reports it, the main window at `used`. */
+const planLimits = (usedPercent: number, resetsAt = FAKE_FUTURE_RESET) => ({
+  limitId: "codex",
+  limitName: null,
+  primary: { usedPercent, windowDurationMins: 300, resetsAt },
+  secondary: {
+    usedPercent: 40,
+    windowDurationMins: 10_080,
+    resetsAt: resetsAt - 3600,
+  },
+  credits: null,
+  individualLimit: null,
+  planType: "plus",
+  rateLimitReachedType: null,
+});
+
+/** `account/rateLimits/read`, keyed by limit id as current servers do. */
+const rateLimitsRead = (codex: object) => ({
+  rateLimits: codex,
+  rateLimitsByLimitId: {
+    codex,
+    // Another model's allowance never stands for the plan's.
+    "codex-other": { ...planLimits(100), limitId: "codex-other" },
+  },
+});
+
+/** A background terminal as the app-server lists it. */
+const backgroundTerminal = (itemId: string) => ({
+  itemId,
+  processId: `process-${itemId}`,
+  command: "bun run dev",
+  cwd: "/workspace",
+  osPid: null,
+  cpuPercent: null,
+  rssKb: null,
+});
+
 const userAgent = (version: string) =>
   `stella/${version} (Mac OS 27.0; arm64) test`;
 /** A version older than the bundled compatibility policy supports. */
@@ -80,6 +133,12 @@ export const FAKE_OUTDATED_VERSION = "0.150.0";
 export const FAKE_THREAD_ID = "thread-a";
 export const FAKE_RESUMED_THREAD_ID = "thread-old";
 const FAKE_TURN_ID = "turn-1";
+
+const usageLimitError = {
+  message: "You've hit your usage limit.",
+  codexErrorInfo: "usageLimitExceeded",
+  additionalDetails: null,
+};
 
 const signedIn = {
   account: { type: "chatgpt", email: null, planType: "plus" },
@@ -310,36 +369,15 @@ const tokenUsage = (usage: {
 const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
 
 /**
- * A turn out of its plan's limit: the rate limits Codex reports (each window
- * resetting at a Unix time in seconds), a retry, then the failure.
+ * A turn out of its plan's limit: the rate limits Codex reports (the main
+ * window resetting at `resetsAt`, a Unix time in seconds), a retry, then the
+ * failure.
  */
-export const usageLimitTurn = (resetsAt: {
-  primary: number;
-  secondary: number;
-}): FakeStep[] => [
+export const usageLimitTurn = (resetsAt = FAKE_FUTURE_RESET): FakeStep[] => [
   ...freshTurn(),
   {
     notify: "account/rateLimits/updated",
-    params: {
-      rateLimits: {
-        limitId: "codex",
-        limitName: null,
-        primary: {
-          usedPercent: 100,
-          windowDurationMins: 300,
-          resetsAt: resetsAt.primary,
-        },
-        secondary: {
-          usedPercent: 40,
-          windowDurationMins: 10_080,
-          resetsAt: resetsAt.secondary,
-        },
-        credits: null,
-        individualLimit: null,
-        planType: "plus",
-        rateLimitReachedType: null,
-      },
-    },
+    params: { rateLimits: planLimits(100, resetsAt) },
   },
   {
     notify: "error",
@@ -354,11 +392,7 @@ export const usageLimitTurn = (resetsAt: {
       },
     },
   },
-  completed("failed", {
-    message: "You've hit your usage limit.",
-    codexErrorInfo: "usageLimitExceeded",
-    additionalDetails: null,
-  }),
+  completed("failed", usageLimitError),
 ];
 
 /** Between paced outputs, in milliseconds. */
@@ -383,6 +417,16 @@ const textDelta = (itemId: string, delta: string): FakeOutput => ({
   params: { threadId: FAKE_THREAD_ID, turnId: FAKE_TURN_ID, itemId, delta },
 });
 
+/** A dev server the agent started and left running past its yield. */
+const devServer = (status: string, extra: object = {}) =>
+  command("call-serve", status, { command: "bun run dev", ...extra });
+
+/** The next turn's message, on the same thread. */
+const nextTurnItem = (body: object): FakeStep => ({
+  notify: "item/completed",
+  params: { threadId: FAKE_THREAD_ID, turnId: CONTINUED_TURN_ID, item: body },
+});
+
 export const FAKE_SCENARIOS = {
   /** A streamed answer and nothing else. */
   text: [
@@ -401,6 +445,77 @@ export const FAKE_SCENARIOS = {
       ),
     ),
     completed(),
+  ],
+  /**
+   * A turn that leaves a dev server running as a background terminal, then
+   * the chat's next turn on the same thread in the same process, during
+   * which the server exits.
+   */
+  background_terminal: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    item("completed", agentMessage("m-serve", "The server runs.")),
+    completed(),
+    { expect: "turn/start", result: { turn: continuedTurn("inProgress") } },
+    { terminals: [] },
+    item("completed", devServer("completed", { exitCode: 0 })),
+    nextTurnItem(agentMessage("m-next", "It stopped.")),
+    {
+      notify: "turn/completed",
+      params: { threadId: FAKE_THREAD_ID, turn: continuedTurn("completed") },
+    },
+  ],
+  /**
+   * A turn that leaves a dev server running and answers the client's list
+   * of background terminals late: a stop can arrive after the turn
+   * completed and before its process is kept.
+   */
+  background_terminal_late_list: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    completed(),
+    { sleep: 1000 },
+    {
+      expect: "thread/backgroundTerminals/list",
+      result: { data: [backgroundTerminal("call-serve")], nextCursor: null },
+    },
+  ],
+  /** A dev server left running, and a list of terminals that fails. */
+  background_terminal_list_fails: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      error: { code: -32_603, message: "Internal error" },
+    },
+  ],
+  /** A dev server left running, and a release without the terminal list. */
+  background_terminal_list_unsupported: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      error: { code: -32_601, message: "Method not found" },
+    },
+  ],
+  /** As above, but the server exits while the chat waits for its next turn. */
+  background_terminal_exits: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      result: { data: [backgroundTerminal("call-serve")], nextCursor: null },
+    },
+    // Once the process is kept, not while it is being listed.
+    { sleep: 200 },
+    { terminals: [] },
+    item("completed", devServer("completed", { exitCode: 0 })),
   ],
   /**
    * The shared stella tool calls through the stella MCP binding, step by
@@ -889,10 +1004,7 @@ export const FAKE_SCENARIOS = {
       additionalDetails: null,
     }),
   ],
-  usage_limit: usageLimitTurn({
-    primary: 1_793_196_000,
-    secondary: 1_793_700_000,
-  }),
+  usage_limit: usageLimitTurn(),
   /**
    * An answer streamed a word at a time, `FAKE_CODEX_PACE_MS` apart; an
    * interrupt ends it where it got to.
@@ -910,6 +1022,57 @@ export const FAKE_SCENARIOS = {
       ]),
     },
     item("completed", agentMessage("m-slow", SLOW_TEXT_WORDS.join(""))),
+    completed(),
+  ],
+  /** The first limit of a process: no update came before the failure. */
+  usage_limit_unannounced: [
+    ...freshTurn(),
+    completed("failed", usageLimitError),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(100)),
+    },
+  ],
+  /** As above, and the account has no plan limits to read (an API key). */
+  usage_limit_read_fails: [
+    ...freshTurn(),
+    completed("failed", usageLimitError),
+    {
+      expect: "account/rateLimits/read",
+      error: {
+        code: -32_600,
+        message: "codex account authentication required to read rate limits",
+      },
+    },
+  ],
+  /** stella's MCP server fails to start after the turn began. */
+  stella_mcp_failed: [
+    ...freshTurn(),
+    {
+      notify: "mcpServer/startupStatus/updated",
+      params: {
+        name: "stella",
+        status: "failed",
+        error: "connection refused",
+        failureReason: null,
+        threadId: FAKE_THREAD_ID,
+      },
+    },
+    { sleep: 5000 },
+  ],
+  /** A member's own MCP server fails; the turn runs on. */
+  other_mcp_failed: [
+    ...freshTurn(),
+    {
+      notify: "mcpServer/startupStatus/updated",
+      params: {
+        name: "their-notes",
+        status: "failed",
+        error: "connection refused",
+        failureReason: null,
+        threadId: FAKE_THREAD_ID,
+      },
+    },
     completed(),
   ],
   /** A message completes, then the model is at capacity before the next. */
@@ -1050,7 +1213,9 @@ export const FAKE_SCENARIOS = {
             hidden: false,
             isDefault: true,
             supportedReasoningEfforts: [
+              { reasoningEffort: "high", description: "" },
               { reasoningEffort: "medium", description: "" },
+              { reasoningEffort: "turbo", description: "" },
             ],
             defaultReasoningEffort: "medium",
             inputModalities: ["text", "image"],
@@ -1077,6 +1242,39 @@ export const FAKE_SCENARIOS = {
         ],
         nextCursor: null,
       },
+    },
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(40)),
+    },
+  ],
+  /** The limits cannot be read, as for an account without a plan. */
+  probe_limits_unreadable: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      error: {
+        code: -32_600,
+        message: "codex account authentication required to read rate limits",
+      },
+    },
+  ],
+  /** The plan's window is spent, and the account has credits to go on. */
+  probe_out_of_usage_with_credits: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead({
+        ...planLimits(100),
+        credits: { hasCredits: true, unlimited: false, balance: "12.50" },
+      }),
+    },
+  ],
+  probe_out_of_usage: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(100)),
     },
   ],
 } as const satisfies Record<string, readonly FakeStep[]>;
@@ -1285,6 +1483,30 @@ export const openCodexPeer = (log: (entry: object) => void) =>
 type CodexPeer = ReturnType<typeof openCodexPeer>;
 
 /**
+ * A real server exits once its client closes stdin. Until then it still
+ * answers what it answers at any time; anything else stays unanswered, as
+ * the script left it.
+ */
+const answerUntilClosed = async (
+  { take, write }: Pick<CodexPeer, "take" | "write">,
+  answer: (method: string | undefined, params: unknown) => object | null,
+) => {
+  for (;;) {
+    // await-in-loop: one request at a time, in the order they arrived.
+    const message = await take("requests");
+    if (message === null) {
+      return;
+    }
+    if (ALWAYS_ANSWERED.has(message.method ?? "")) {
+      write({
+        id: message.id,
+        result: answer(message.method, message["params"]),
+      });
+    }
+  }
+};
+
+/**
  * Plays `steps` to the client. A caller that answered the start of the
  * conversation itself passes its `peer` and `skills`, and the `models`
  * `model/list` answers with from then on.
@@ -1302,9 +1524,32 @@ export const run = async (
 
   const skills = options.skills ?? skillDiscovery();
   const models = options.models ?? TURN_MODELS;
-  /** Model listing and skill discovery answer whenever they are asked. */
-  const unscriptedAnswer = (method: string | undefined, params: unknown) =>
-    method === "model/list" ? models : skills.answer(method, params);
+  /** The thread's background terminals, by item id, as the script set them. */
+  const terminals: string[] = [];
+  /**
+   * Model listing, skill discovery and the background terminals answer
+   * whenever they are asked.
+   */
+  const unscriptedAnswer = (
+    method: string | undefined,
+    params: unknown,
+  ): object | null => {
+    if (method === "model/list") {
+      return models;
+    }
+    if (method === "thread/backgroundTerminals/list") {
+      return { data: terminals.map(backgroundTerminal), nextCursor: null };
+    }
+    if (method === "thread/backgroundTerminals/clean") {
+      log({ cleaned: [...terminals] });
+      terminals.splice(0);
+      return {};
+    }
+    if (method === "account/rateLimits/read") {
+      return rateLimitsRead(planLimits(10));
+    }
+    return skills.answer(method, params);
+  };
   /** The next request a step scripts; skill discovery answers the rest. */
   const nextRequest = async (expected: string) => {
     for (;;) {
@@ -1431,11 +1676,13 @@ export const run = async (
       if (played === "interrupted") {
         break;
       }
+    } else if ("terminals" in step) {
+      terminals.splice(0, terminals.length, ...step.terminals);
     } else {
       process.exit(step.exit);
     }
   }
-  // A real server exits once its client closes stdin.
+  await answerUntilClosed({ take, write }, unscriptedAnswer);
   await reading;
 };
 

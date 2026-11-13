@@ -169,6 +169,7 @@ const ChatThreadDomPage = ({
           value={{
             pause: session.localRunQuestion,
             answer: session.answerLocalRunQuestion,
+            threadRef,
           }}
         >
           {renderComposer?.(session)}

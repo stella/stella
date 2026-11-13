@@ -8,6 +8,11 @@ import type { DESKTOP_RUNNER_APPROVAL_KINDS } from "@stll/api-contract/desktop-r
 
 import type { HarnessToolCall, HarnessToolResult } from "../events";
 import {
+  type HarnessFileDiff,
+  replacementDiff,
+  wholeFileDiff,
+} from "../step-output";
+import {
   HARNESS_TOOL_NAMES,
   mcpToolCallName,
   nativeToolCall,
@@ -25,9 +30,9 @@ import type {
  * turn gives the same tool, and its result is the tool's JSON text, so the
  * web chat's cards, citations and source chips read it as they read a cloud
  * turn. Built-in tools become generic activity built from the fields named
- * here (a command line, file names, a search, a web address, plan titles);
- * other native fields, such as an edit's text or a file's contents, are
- * never forwarded.
+ * here (a command line, file names, a search, a web address, plan titles, a
+ * plan proposed for approval); other native fields, such as an edit's text
+ * or a file's contents, are never forwarded.
  */
 
 type ClaudeMessageHandling =
@@ -162,6 +167,12 @@ const MCP_SEPARATOR = "__";
 /** The built-in tool that asks the user a question mid-turn. */
 export const ASK_USER_QUESTION_TOOL = "AskUserQuestion";
 
+/**
+ * The built-in tool that ends plan mode by proposing a plan. The CLI adds the
+ * plan to the call's input (`plan`) before it asks about the call.
+ */
+export const EXIT_PLAN_MODE_TOOL = "ExitPlanMode";
+
 const toolKind = (name: string): ClaudeToolKind => {
   if (name === "Bash") {
     return "command";
@@ -252,6 +263,12 @@ const nativeDetail = (
       return { kind: "fetch", url: stringField(input, "url") };
     case "TodoWrite":
       return { kind: "plan", items: todoTitles(input) };
+    case EXIT_PLAN_MODE_TOOL: {
+      const plan = optionalStringField(input, "plan");
+      return plan === undefined
+        ? undefined
+        : { kind: "proposed_plan", text: plan };
+    }
     default:
       return undefined;
   }
@@ -284,6 +301,66 @@ const fileChanges = (
 ) => [
   { path: stringField(input, FILE_TOOL_PATHS[name]), kind: "update" as const },
 ];
+
+const textOf = (value: unknown) => (typeof value === "string" ? value : "");
+
+/** The `old_string`/`new_string` pairs of an `Edit` or a `MultiEdit`. */
+const replacements = (
+  name: keyof typeof FILE_TOOL_PATHS,
+  input: Readonly<Record<string, unknown>>,
+) => {
+  if (name === "Edit") {
+    return [
+      replacementDiff(
+        stringField(input, "old_string"),
+        stringField(input, "new_string"),
+      ),
+    ];
+  }
+  const edits = input["edits"];
+  return Array.isArray(edits)
+    ? edits.flatMap((edit: unknown) =>
+        typeof edit === "object" && edit !== null
+          ? [
+              replacementDiff(
+                textOf(Reflect.get(edit, "old_string")),
+                textOf(Reflect.get(edit, "new_string")),
+              ),
+            ]
+          : [],
+      )
+    : [];
+};
+
+/**
+ * The diff of a file a tool wrote, built from the tool's input: Claude
+ * reports none of its own. A write is the file's whole text as added lines,
+ * an edit each replacement as its removed and added lines.
+ */
+const fileDiff = (
+  name: keyof typeof FILE_TOOL_PATHS,
+  input: Readonly<Record<string, unknown>>,
+): HarnessFileDiff => {
+  const path = stringField(input, FILE_TOOL_PATHS[name]);
+  switch (name) {
+    case "Write":
+      return {
+        path,
+        diff: wholeFileDiff(stringField(input, "content"), "add"),
+      };
+    case "NotebookEdit":
+      return {
+        path,
+        diff: wholeFileDiff(stringField(input, "new_source"), "add"),
+      };
+    case "Edit":
+    case "MultiEdit":
+      return { path, diff: replacements(name, input).join("\n") };
+    default:
+      name satisfies never;
+      return panic("Unhandled Claude file tool");
+  }
+};
 
 /** `stellaServer` is the server name the stella MCP binding is under. */
 export const toolCallForUse = (
@@ -372,6 +449,7 @@ export const toolResultFor = (
           result: { status: outcome },
         }),
         status: status(failed),
+        localOutput: { type: "command", output: text },
       };
     case "file_change":
       return {
@@ -385,6 +463,15 @@ export const toolResultFor = (
           },
         }),
         status: status(failed),
+        // A refused or failed write changed nothing to show.
+        ...(failed || !isFileTool(use.name)
+          ? {}
+          : {
+              localOutput: {
+                type: "diff",
+                files: [fileDiff(use.name, use.input)],
+              },
+            }),
       };
     case "web_search":
       return {

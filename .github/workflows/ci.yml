@@ -1871,8 +1871,8 @@ jobs:
           GH_RETRY_SCRIPT: ${{ github.workspace }}/scripts/gh-retry.sh
           GH_TOKEN: ${{ github.token }}
         # Remove the tooling checkout so later source checks see only the
-        # candidate tree. A digest that only needs a mechanical refresh is
-        # rewritten by the autofix generator; this check (the script's
+        # candidate tree. A decision for a job that is not privileged is
+        # removed by the script's write mode; this check (the script's
         # default mode) stays fail-closed. It runs git, so it cannot load the
         # offline network preload that `--check` commands must use.
         run: |

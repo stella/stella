@@ -571,6 +571,21 @@
       "showBefore": "A(z) {from}. ¶ előtti szöveg megjelenítése",
       "verifyParagraphs": "Bekezdések ellenőrzése"
     },
+    "staleness": {
+      "failed": "Az állításokat nem sikerült újra ellenőrizni",
+      "finished": "{count, plural, one {# állítás újraellenőrizve} other {# állítás újraellenőrizve}}",
+      "partial": "Újraellenőrizve: {rechecked, number}, sikertelen: {failed, plural, one {#} other {#}}",
+      "reasons": {
+        "factChanged": "Tény módosult",
+        "factHeld": "Tény kihagyva",
+        "factRemoved": "Tény eltávolítva",
+        "newFactRelated": "Új kapcsolódó tény"
+      },
+      "recheckAll": "Összes újraellenőrzése",
+      "recheckLocked": "A többi elavult állítással együtt újraellenőrzés alatt",
+      "runLine": "{count, plural, one {# állítás elavult lehet} other {# állítás elavult lehet}}",
+      "running": "{count, plural, one {# állítás újraellenőrzése…} other {# állítás újraellenőrzése…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Cáfolt",
@@ -628,100 +643,21 @@
       "pickList": "Válassza ki azt a listát, amelynek tényeihez az ügy iratait viszonyítja a rendszer."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Kétnyelvű változat létrehozása",
-      "creating": "Létrehozás…",
-      "description": "Két oszlopos másolatot készít a dokumentumról: balra az eredeti szöveg, jobbra a fordítandó másolat, külön számozással. A másolat új dokumentumként kerül ebbe az ügybe.",
-      "sameLanguage": "Válasszon két különböző nyelvet.",
-      "sourceLanguage": "Forrásnyelv",
-      "title": "Kétnyelvű változat"
-    },
-    "error": {
-      "title": "A kétnyelvű változat létrehozása nem sikerült"
-    },
-    "success": {
-      "description": "A(z) <bdi>{fileName}</bdi> készen áll, {rowCount, plural, one {# sor} other {# sor}} vár fordításra.",
-      "title": "Kétnyelvű változat létrehozva"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Kitölti a kétoszlopos dokumentum fordítási oszlopát. Nézze át, mi történik az egyes sorokkal és hogyan jelennek meg a meghatározott kifejezések, majd indítsa el a fordítást.",
-      "prepare": "Előkészítés",
-      "preparing": "Dokumentum beolvasása…",
-      "preparingHint": "A teljes dokumentum beolvasása és minden sor értékelése akár két percig is tart.",
-      "title": "Kétnyelvű változat fordítása"
+      "prepare": "Előkészítés"
     },
     "dispositions": {
-      "inline": "Mindkét nyelv",
       "keep": "Változatlanul hagyás"
     },
-    "error": {
-      "prepareTitle": "A dokumentum előkészítése nem sikerült",
-      "startTitle": "A fordítás indítása nem sikerült"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Nem érhető el AI-modell a fordításhoz.",
-      "applyFailed": "A fordításokat nem sikerült visszaírni a dokumentumba.",
-      "documentChanged": "A dokumentum megváltozott a fordítás közben. Készítse elő újra.",
-      "documentUnresolved": "A dokumentum vagy a fájlja már nem érhető el.",
-      "enqueueFailed": "A fordítást nem sikerült sorba állítani.",
-      "internal": "A fordítás váratlanul leállt.",
-      "notBilingual": "Ez a dokumentum nem tartalmaz kétnyelvű táblázatot.",
-      "translationFailed": "Egy sorköteget nem sikerült lefordítani.",
-      "unknown": "A fordítás váratlanul leállt."
-    },
-    "glossary": {
-      "add": "Kifejezés hozzáadása",
-      "description": "Ezek a megfeleltetések minden sorra érvényesek. A fordítás nélküli kifejezést ki kell tölteni vagy el kell távolítani.",
-      "empty": "Nem találhatók meghatározott kifejezések.",
-      "formsHint": "A további alakokat vesszővel válassza el.",
-      "formsSource": "A kifejezés további alakjai",
-      "formsTarget": "A fordítás további alakjai",
-      "incomplete": "Töltse ki a hiányzó fordításokat, vagy távolítsa el ezeket a kifejezéseket.",
-      "origins": {
-        "detected": "Megtalált",
-        "user": "Saját"
-      },
-      "term": "Kifejezés",
-      "title": "Meghatározott kifejezések",
-      "tooManyForms": "Egy kifejezés legfeljebb {max} további alakot tartalmazhat.",
-      "translation": "Fordítás"
-    },
     "kinds": {
-      "heading": "Címsor",
-      "listItem": "Listaelem",
-      "paragraph": "Bekezdés",
-      "table": "Teljes táblázat"
-    },
-    "origins": {
-      "default": "Nem értékelt",
-      "model": "AI"
+      "paragraph": "Bekezdés"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# sor kimaradt} other {# sor kimaradt}}: nem tartalmaznak lefordítható szöveget.",
-      "start": "Fordítás indítása",
       "starting": "Indítás…"
     },
     "rows": {
-      "description": "Válassza ki, mi történjen a fordítási oszlop egyes soraival.",
-      "ordinal": "#",
-      "sourceText": "Forrásszöveg",
-      "title": "Sorok",
-      "whatToDo": "Mi történjen"
-    },
-    "run": {
-      "cancelled": "A fordítást megszakították.",
-      "doneSummary": "{count, plural, one {# sor} other {# sor}} lefordítva.",
-      "doneTitle": "A fordítás elkészült",
-      "failedRows": "{count, plural, one {# sort nem sikerült lefordítani} other {# sort nem sikerült lefordítani}}.",
-      "failedTitle": "A fordítás leállt",
-      "hint": "A fordítás a kiszolgálón fut. A követéséhez hagyja nyitva ezt az ablakot.",
-      "moreRows": "{count, plural, one {még # sor} other {még # sor}}",
-      "progress": "{total} sorból {completed} lefordítva",
-      "title": "A fordítás folyamatban…",
-      "warningsTitle": "Ellenőrzendő sorok"
+      "title": "Sorok"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# elutasító} other {# elutasító}}",
       "none": "Még nincs rögzített hivatkozás.",
       "notInStella": "Még nincs a stellában",
-      "openAtCitation": "Megnyitás a hivatkozásnál",
       "openDecision": "Határozat megnyitása",
       "paragraphLabel": "{paragraph}. pont",
       "paragraphMark": "¶ {paragraph}",
@@ -1918,7 +1853,8 @@
       "restored": "Fájlmódosítások visszavonva"
     },
     "localRun": {
-      "cloud": "stella-felhő",
+      "backgroundTasks": "{count, plural, one {# háttérfeladat fut} other {# háttérfeladat fut}}",
+      "errorFolderUnavailable": "A csevegéshez csatolt mappa nem érhető el a számítógépén. Ellenőrizze a stella desktopban, majd küldje el újra.",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
       "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
       "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
@@ -1927,26 +1863,39 @@
       "errorRestoring": "A számítógépe még visszavonja a fájlmódosításokat. Néhány pillanat múlva küldje el újra.",
       "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "filesNotShared": "A meg nem osztható fájlok a számítógépén maradnak: {fileNames}",
-      "onThisComputer": "{harness} ezen a számítógépen",
+      "folderApprovalDescription": "Engedélyezze, hogy a(z) {harness} a számítógépén lévő „{folder}” mappában dolgozzon. Ott fájlokat olvashat, módosíthat és törölhet, a csatolt fájlok pedig oda másolódnak.",
+      "folderApprove": "Engedélyezés itt: {folder}",
+      "folderHint": "A számítógépe mappáit a stella desktop beállításaiban csatolhatja.",
+      "folderOwn": "A csevegés saját mappája",
+      "folderStateMoved": "Áthelyezve vagy törölve",
+      "folderStateOffline": "A meghajtó nincs csatlakoztatva",
+      "folderStatePending": "Az Ön jóváhagyására vár",
+      "folderStateProtected": "A stella saját adatait tartalmazza",
+      "folderStateUnlinked": "Már nincs csatolva",
+      "folderStateUnreadable": "Nem olvasható",
       "permissionAboveLimit": "A szervezete nem engedélyezi",
       "permissionAskDescription": "A csevegés mappájában lévő fájlokat magától szerkeszti; minden más előtt rákérdez.",
       "permissionAutoDescription": "Amit biztonságosnak ítél, magától elvégzi; a többire rákérdez.",
       "permissionFullAuto": "Teljesen automatikus",
       "permissionFullAutoDescription": "A csevegés mappáján belül semmire sem kérdez rá; mielőtt bármit módosítana a számítógépén, mindig rákérdez.",
+      "permissionPlan": "Terv",
+      "permissionPlanDescription": "Először olvas és tervez; minden módosítás előtt rákérdez, amíg jóvá nem hagyja a tervet.",
       "permissionSandboxed": "Elkülönített környezetben fut; mielőtt bármit módosítana a számítógépén, rákérdez.",
       "permissionUnavailable": "Ezen a számítógépen nem érhető el",
       "permissions": "Engedélyek",
       "refusalConflictingRunMode": "Ez a kérés egyszerre futna a felhőbeli ügynökkel és a számítógépén. Válasszon egyet a Futtatás itt menüben.",
+      "refusalFolderNotApproved": "Előbb engedélyezze, hogy a kódoló ügynök a csevegéshez csatolt mappában dolgozzon.",
+      "refusalFolderUnavailable": "A csevegéshez csatolt mappa nem érhető el. Ellenőrizze a Futtatás itt menüben vagy a stella desktopban.",
       "refusalHarnessUnavailable": "A számítógépén futó kódoló ügynök most nem tudja fogadni ezt a kérést. Ellenőrizze a stella desktopban.",
       "refusalModelUnavailable": "A számítógépén futó kódoló ügynök már nem kínálja ezt a modellt. Válasszon másikat a Futtatás itt menüben.",
-      "refusalNoComputer": "Egyik számítógépe sem csatlakozik. Nyissa meg a stella desktopot, majd küldje el újra.",
+      "refusalNoComputer": "Egyik számítógépe sem csatlakozik.",
       "refusalPermissionAboveLimit": "A szervezete nem adja meg ezeket az engedélyeket a számítógépén futó kódoló ügynöknek. Válasszon másik lehetőséget az Engedélyek menüben.",
       "refusalPermissionUnavailable": "A számítógépén futó kódoló ügynök nem futhat ezekkel az engedélyekkel. Válasszon másik lehetőséget az Engedélyek menüben.",
+      "refusalReasoningEffortUnavailable": "A számítógépén futó kódoló ügynök nem kínálja ezt a gondolkodási szintet a modellhez. Válasszon másikat a Gondolkodási szint menüben.",
       "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
-      "runOn": "Futtatás itt",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább.",
       "stateLimitUntil": "Korlát elérve eddig: {time}",
       "stateModelUnavailable": "A modell már nem érhető el",
       "stateNeedsLogin": "Bejelentkezés szükséges",
@@ -1966,7 +1915,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# csevegés vár Önre} other {# csevegés vár Önre}}",
-      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}"
+      "waitsOn": {
+        "approval": "Az Ön jóváhagyására vár",
+        "askUser": "Kérdést tesz fel Önnek",
+        "clientTool": "Folytatódik, amikor megnyitja ezt a csevegést",
+        "harnessQuestion": "Az Ön számítógépén futó ügynöknek kérdése van"
+      },
+      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}",
+      "workingNow": "Folyamatban"
     },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mcpReconnect": {
@@ -2102,6 +2058,25 @@
     "richContentLoading": "Interaktív tartalom betöltése…",
     "richContentTitle": "Interaktív tartalom",
     "richContentUnavailable": "Ez a tartalom nem jeleníthető meg biztonságosan.",
+    "runOn": {
+      "checkFailed": "Nem sikerült ellenőrizni a számítógépét",
+      "chipLabel": "Futás helye: {place}",
+      "cloud": "Felhő",
+      "cloudDescription": "A felhőben fut. Bárhonnan elérhető.",
+      "harnessModels": "{harness}-modellek",
+      "hintInstall": "Telepítse a stella desktopból",
+      "hintOffline": "Nyissa meg a stella desktopot a számítógépén",
+      "hintSignIn": "Jelentkezzen be a stella desktopban",
+      "hintUpdate": "Frissítse a stella desktopból",
+      "localFolderPlace": "Az Ön számítógépe, {harness}, {folder}",
+      "localFolderSelection": "Az Ön számítógépe · {harness} · {folder}",
+      "localPlace": "Az Ön számítógépe, {harness}",
+      "localSelection": "Az Ön számítógépe · {harness}",
+      "modelDefault": "Alapértelmezett (ajánlott)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Az Ön számítógépe",
+      "yourComputerDescription": "A Codexet vagy a Claude Code-ot használja az Ön számítógépén, a saját előfizetésével. Olvashatja és módosíthatja a csevegés mappájában lévő fájlokat; az engedélyek határozzák meg, mit tehet rákérdezés nélkül."
+    },
     "selection": {
       "askInNewChat": "Kérdés új csevegésben",
       "quoteInReply": "Idézés a válaszban",
@@ -2153,6 +2128,7 @@
     "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
+    "stopping": "Leállítás…",
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
     "suggestedFollowupsLabel": "Javasolt követő kérdések",
@@ -2295,8 +2271,18 @@
       "field": "Mező",
       "input": "Bemenet",
       "interrupted": "Befejezés előtt megszakadt",
+      "localOutput": {
+        "cut": "Az első {kept} látható, összesen {total}",
+        "diff": "Fájlmódosítások",
+        "elsewhere": "Nyissa meg azon a számítógépen, amelyen futott",
+        "empty": "Nincs kimenet",
+        "failed": "A stella asztali alkalmazás ezen a számítógépen nem tudta megjeleníteni.",
+        "notKept": "Ebből a lépésből semmi sincs megőrizve ezen a számítógépen",
+        "reading": "Olvasás erről a számítógépről"
+      },
       "output": "Kimenet",
       "patternInPath": "{pattern} itt: {path}",
+      "proposedPlan": "Terv javaslata",
       "readFile": "Fájl olvasása",
       "searchFiles": "Keresés a fájlokban",
       "sourceCode": "Forráskód",
@@ -2314,6 +2300,8 @@
       "replyReadyTitle": "Kész a válasz"
     },
     "turnStatus": {
+      "answerFailed": "A választ nem sikerült befejezni",
+      "answerReady": "A válasz elkészült",
       "waitingForApproval": "Jóváhagyásra vár",
       "waitingForInput": "Bevitelre vár",
       "writing": "Írás"
@@ -2593,6 +2581,7 @@
     "filter": "Szűrő",
     "filters": "Szűrők",
     "find": "Keresés",
+    "folder": "Mappa",
     "formula": "Képlet",
     "goBack": "Vissza",
     "goBackToEditing": "Vissza a szerkesztéshez",
@@ -2689,6 +2678,7 @@
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
     "organizations": "Szervezetek",
+    "outOfDate": "Elavult",
     "page": "{page}. oldal",
     "paymentRetryNotice": "Fizetési probléma. A hozzáférés megtartásához frissítse a fizetési módját eddig: {date}.",
     "pin": "Rögzítés",
@@ -3353,6 +3343,8 @@
       "organizationMemberLimitReached": "Ez a szervezet elérte a tagok korlátját.",
       "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
+      "runActiveLimitReached": "A szervezet elérte az egyidejűleg futó feladatok korlátját. Várja meg, amíg az egyik befejeződik, majd próbálja újra.",
+      "runDailyLimitReached": "A szervezet elérte a feladatok napi korlátját. Próbálja újra éjfél után (Europe/Prague).",
       "sharepointAccessDenied": "A Microsoft megtagadta a hozzáférést ehhez a webhelyhez, dokumentumtárhoz vagy fájlhoz.",
       "sharepointFileTooLarge": "Ez a fájl túl nagy az importáláshoz.",
       "sharepointInvalidCursor": "A lista megváltozott a böngészés közben. Nyissa meg újra a mappát.",
@@ -3368,8 +3360,6 @@
       "validationRequired": "Egy kötelező mező üres.",
       "validationTooLong": "Túl hosszú: legfeljebb {limit, number} karakter lehet.",
       "validationTooShort": "Túl rövid: legalább {limit, number} karakter kell.",
-      "verificationActiveLimitReached": "A szervezet elérte az egyidejű ellenőrzések számának korlátját. Várja meg egy ellenőrzés befejezését, majd próbálja újra.",
-      "verificationDailyLimitReached": "A szervezet elérte az ellenőrzések napi korlátját. Próbálja újra éjfél után (Europe/Prague).",
       "versionConflict": "Valaki más módosította, miközben szerkesztette. Töltse újra az aktuális verzióért."
     },
     "failedToAcceptInvitation": "Nem sikerült elfogadni a meghívót",
@@ -4467,7 +4457,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Hozzon létre szerződés-felülvizsgálati playbookot álláspontról álláspontra, a korábban aláírt szerződései, egy rövid interjú és a szokásos piaci standardok alapján.",
-          "name": "Playbook létrehozása"
+          "name": "Playbook létrehozása",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Adj hozzá álláspontokat az egyik meglévő playbookomhoz.",
+              "name": "Playbook bővítése"
+            },
+            "fromContracts": {
+              "body": "Készíts playbookot titoktartási megállapodásokhoz a korábban aláírt megállapodásaim alapján.",
+              "name": "Kiindulás korábbi szerződésekből"
+            },
+            "fromMarketStandards": {
+              "body": "Készíts playbookot beszállítói szerződésekhez a szokásos piaci álláspontokból kiindulva.",
+              "name": "Kiindulás a piaci standardokból"
+            }
+          }
         }
       },
       "builtInSection": "Beépített készségek",
@@ -4717,6 +4721,10 @@
       "optionPlaceholder": "Lehetőség értéke",
       "optionsLabel": "Lehetőségek",
       "outline": "Vázlat",
+      "pendingPane": {
+        "description": "Válaszoljon a kérdésekre a csevegésben. Miután jóváhagyta az első mentést, a playbook itt nyílik meg, és a beszélgetés mellett szerkesztheti.",
+        "title": "A playbook itt fog megjelenni"
+      },
       "positionOfTotal": "{index}. álláspont, összesen {total}",
       "positionRemoved": "Álláspont eltávolítva",
       "positions": "Álláspontok",
@@ -5490,7 +5498,6 @@
       "caseLaw": "Ítélkezési gyakorlat",
       "chat": "Csevegés",
       "contact": "Kapcsolat",
-      "folder": "Mappa",
       "link": "Hivatkozás",
       "matter": "Ügy",
       "message": "Üzenet",
@@ -5821,6 +5828,7 @@
         "case_law_research_column": "jogesetkutatási oszlop",
         "chat_browser_site_grant": "csevegés webhely-engedélye",
         "chat_file": "beszélgetés fájlja",
+        "chat_local_folder_approval": "helyi mappa jóváhagyása",
         "chat_message": "beszélgetés üzenete",
         "chat_thread": "beszélgetésszál",
         "chat_tool_execution": "beszélgetési eszköz futtatása",
@@ -6076,7 +6084,6 @@
     "comments": "Megjegyzések",
     "commentsEmpty": "Jelöljön ki szöveget a megjegyzéshez.",
     "noRevisions": "Még nincs változat",
-    "outOfDate": "Elavult",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Nincs összefoglaló",
     "proposals": "Módosítási javaslatok",

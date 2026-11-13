@@ -541,6 +541,38 @@ const isValidScopeObject = (scope: ts.Expression | undefined): boolean => {
   return ts.isObjectLiteralExpression(value) && isScopeObject(value);
 };
 
+/**
+ * The contracts named by a reader's `keptCurrentBy`: writes of this client
+ * that update the reader's cache in place, so their commit leaves it fresh.
+ * A literal, non-empty list of distinct contract names; undefined when the
+ * list is not one.
+ */
+const keptCurrentByNames = (
+  config: ts.Expression,
+): readonly string[] | undefined => {
+  const list = objectProperty(config, "keptCurrentBy");
+  if (!list) {
+    return undefined;
+  }
+  const value = unwrap(list);
+  if (
+    !ts.isArrayLiteralExpression(value) ||
+    value.elements.length === 0 ||
+    value.elements.some(ts.isSpreadElement)
+  ) {
+    return undefined;
+  }
+  const names = value.elements.map((element) => {
+    const item = unwrap(element);
+    return ts.isStringLiteral(item) ? item.text : undefined;
+  });
+  const literal = names.filter((name): name is string => name !== undefined);
+  return literal.length === names.length &&
+    new Set(literal).size === literal.length
+    ? literal
+    : undefined;
+};
+
 const isValidHelperConfig = (
   module: ModuleIndex,
   config: ts.Expression | undefined,
@@ -558,8 +590,14 @@ const isValidHelperConfig = (
       value.text === "independent"
     );
   }
+  const keptCurrent = hasExactProperties(config, [
+    "resources",
+    "scope",
+    "keptCurrentBy",
+  ]);
   return (
-    hasExactProperties(config, ["resources", "scope"]) &&
+    (hasExactProperties(config, ["resources", "scope"]) ||
+      (keptCurrent && keptCurrentByNames(config) !== undefined)) &&
     isValidResourceList(module, config, names) &&
     isValidScopeObject(objectProperty(config, "scope"))
   );
@@ -1894,9 +1932,20 @@ const coveredReaderIds = (
   return validReaderIds;
 };
 
+/** Whether a reader names a write it is kept current by that no contract
+ *  registers. */
+const namesUnknownContract = (
+  config: ts.Expression | undefined,
+  contracts: ReadonlySet<string>,
+): boolean => {
+  const kept = config === undefined ? undefined : keptCurrentByNames(config);
+  return kept?.some((name) => !contracts.has(name)) === true;
+};
+
 const invalidReaderHelperFindings = (
   modules: ReadonlyMap<string, ModuleIndex>,
   names: ReadonlySet<string>,
+  contracts: ReadonlySet<string>,
 ): Finding[] => {
   const findings: Finding[] = [];
   for (const module of modules.values()) {
@@ -1904,7 +1953,8 @@ const invalidReaderHelperFindings = (
       if (
         ts.isCallExpression(node) &&
         canonicalCall(module, node, READER_HELPER) &&
-        !isValidHelperConfig(module, node.arguments.at(1), names)
+        (!isValidHelperConfig(module, node.arguments.at(1), names) ||
+          namesUnknownContract(node.arguments.at(1), contracts))
       ) {
         const { line, character } = module.source.getLineAndCharacterOfPosition(
           node.getStart(module.source),
@@ -1913,7 +1963,7 @@ const invalidReaderHelperFindings = (
           id: `${module.file}:${READER_HELPER}:${line + 1}:${character + 1}:reader-helper`,
           file: module.file,
           reason:
-            "resourceQueryOptions requires valid resources and scope metadata or an explicit independent declaration.",
+            "resourceQueryOptions requires valid resources and scope metadata (optionally the registered writes that keep it current in place) or an explicit independent declaration.",
           disposition: "invalid-declaration",
         });
       }
@@ -2078,7 +2128,9 @@ export const inspectMutationQueryInvalidation = (
       });
     }
   }
-  findings.push(...invalidReaderHelperFindings(indexed, names));
+  findings.push(
+    ...invalidReaderHelperFindings(indexed, names, new Set(contracts.keys())),
+  );
   return findings.toSorted((left, right) => compareCodeUnit(left.id, right.id));
 };
 
