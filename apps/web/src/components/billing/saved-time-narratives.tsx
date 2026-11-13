@@ -31,6 +31,7 @@ import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -185,7 +186,7 @@ export const SavedTimeNarratives = ({
                   type="button"
                   variant="ghost"
                 >
-                  <bdi className="truncate">{item.name}</bdi>
+                  <TruncatedText render={<bdi />}>{item.name}</TruncatedText>
                 </Button>
                 <Button
                   aria-label={t("common.deleteConfirmDescription", {

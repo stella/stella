@@ -9,7 +9,8 @@ use tokio::sync::watch;
 
 use super::journal::{Recorded, SharedJournal};
 use crate::runner_protocol::{
-  ApprovalKind, Harness, HarnessReport, JsonObject, MissingHarness, RejectReason,
+  ApprovalKind, DesktopMessage, FolderRestore, FolderRestoreOutcome, FolderRestored,
+  Harness, HarnessReport, JsonObject, LinkedFolderReport, MissingHarness, RejectReason,
   RunAnswer, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
 };
 
@@ -21,6 +22,33 @@ pub(crate) struct NotForwarded;
 
 /// Whether the host took a run command.
 pub(crate) type Forwarded = Result<(), NotForwarded>;
+
+/// Where the outcome of one folder restore goes: to the socket, if one is up.
+/// An answer that never arrives is asked for again: the API sends the restore
+/// again on the next socket, and a restore that was done answers `restored`
+/// again without touching the folder.
+pub(crate) struct FolderAnswer {
+  restore_id: String,
+  journal: Arc<SharedJournal>,
+}
+
+impl FolderAnswer {
+  pub(crate) fn new(restore_id: String, journal: Arc<SharedJournal>) -> Self {
+    Self {
+      restore_id,
+      journal,
+    }
+  }
+
+  pub(crate) fn send(self, outcome: FolderRestoreOutcome) {
+    self
+      .journal
+      .send_unsequenced(DesktopMessage::FolderRestored(FolderRestored {
+        restore_id: self.restore_id,
+        outcome,
+      }));
+  }
+}
 
 /// Runs the commands the API sends. Every call returns promptly; a host does
 /// its work on its own tasks and reports through the sink it was handed.
@@ -45,6 +73,11 @@ pub(crate) trait HarnessHost: Send + Sync + 'static {
   /// A newer MCP token for the run; an older one never follows it. One the
   /// host did not take is not counted as the newest, so it can come again.
   fn token(&self, refresh: RunTokenRefresh) -> Forwarded;
+  /// Put a chat's folder back as the run's checkpoint saved it, and answer
+  /// through `answer` once done. A host that cannot restore answers `failed`.
+  fn restore_folder(&self, _restore: FolderRestore, answer: FolderAnswer) {
+    answer.send(FolderRestoreOutcome::Failed);
+  }
   /// The runner is about to connect for the account whose API is at
   /// `api_base_url`; called before every connection attempt.
   fn connecting(&self, _api_base_url: &str) {}
@@ -71,6 +104,16 @@ pub(crate) trait HarnessReports: Send + Sync + 'static {
   /// changed ones as `harness.status`. `None` when reports never change.
   fn changes(&self) -> Option<watch::Receiver<u64>> {
     None
+  }
+  /// The folders linked on this computer as last looked at; the runner sends
+  /// them in `hello` and, once they change, as `linked_folders.status`.
+  fn linked_folders(&self) -> Vec<LinkedFolderReport> {
+    Vec::new()
+  }
+  /// Every installed harness has been probed, so the reports say what it
+  /// can do rather than that it is being checked.
+  fn settled(&self) -> bool {
+    true
   }
 }
 

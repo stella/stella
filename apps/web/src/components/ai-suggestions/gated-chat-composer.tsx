@@ -17,6 +17,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CircleUserRoundIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useFileChatPlaceholder } from "@/components/ai-suggestions/file-chat-placeholder";
 import type { FileChatPlaceholderSource } from "@/components/ai-suggestions/file-chat-placeholder";
@@ -38,7 +39,7 @@ export const GatedChatComposer = (props: FileChatPlaceholderSource) => {
           className="items-center gap-2 ps-3 pe-1.5"
           data-slot="gated-chat-sign-in"
         >
-          <span className="text-foreground-muted min-w-0 flex-1 truncate text-sm">
+          <TruncatedText className="text-foreground-muted flex-1 text-sm">
             {sourceLabel === undefined ? (
               t("chat.signInToChat")
             ) : (
@@ -49,7 +50,7 @@ export const GatedChatComposer = (props: FileChatPlaceholderSource) => {
                 </BidiText>
               </>
             )}
-          </span>
+          </TruncatedText>
           <Button
             className="shrink-0"
             onClick={() => {

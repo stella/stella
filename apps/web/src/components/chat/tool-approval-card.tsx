@@ -1,7 +1,7 @@
 import { useRef, useState, useSyncExternalStore } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -11,11 +11,23 @@ import {
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
+import { browserSiteGrantHost } from "@stll/api-contract/browser-site-grants";
 import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
+import {
+  localRunProposedPlan,
+  localRunToolSubtitleText,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
 import {
   requiresPerCallChatApproval,
   USE_CONNECTOR_SECRET_TOOL_NAME,
 } from "@stll/api-contract/chat-secret";
+import {
+  formatReadableInputValue,
+  getCompleteConnectorInputRows,
+  getReadableInputRows,
+  humanizeIdentifier,
+} from "@stll/api-contract/chat-tool-input-rows";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -32,8 +44,11 @@ import {
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { MessageResponse } from "@/components/ai-elements/message";
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
@@ -45,6 +60,7 @@ import {
   isNonPersistentGrantChatToolName,
   isRegistryWriteSummaryToolName,
   isSuggestChangesApplyOutput,
+  LOCAL_RUN_TITLE_KEYS,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
@@ -63,11 +79,7 @@ import {
   buildRegistryWriteSummaryRows,
   findCachedReaderAnnotationRows,
   findReaderAnnotationMark,
-  formatReadableInputValue,
-  getCompleteConnectorInputRows,
-  getReadableInputRows,
   getReaderAnnotationEditTargetId,
-  humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
 import {
@@ -80,20 +92,26 @@ import { readerAnnotationKeys } from "@/components/legal-reader/annotations/read
 import { useProxiedIconSrc } from "@/components/proxied-icon";
 import {
   BROWSER_APPROVAL_MODE,
+  browserCommandSite,
+  currentBrowserAutoApproval,
+  recordBrowserSiteGrantApproval,
   setBrowserApprovalMode,
   useBrowserApprovalMode,
-  useBrowserCommandAutoApproved,
+  useBrowserAutoApproval,
+  useBrowserObservedPage,
 } from "@/features/chat/browser-control/browser-approval-mode";
 import {
   type BrowserApprovalDetail,
   getBrowserApprovalDetails,
 } from "@/features/chat/browser-control/browser-approval-summary";
+import { useBrowserSiteGrants } from "@/features/chat/browser-control/browser-site-grants";
 import { useMountEffect } from "@/hooks/use-effect";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -183,9 +201,12 @@ const SuggestChangesSummary = ({
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
       {activeFileName && (
-        <div className="text-foreground-strong-muted truncate font-medium">
+        <TruncatedText
+          className="text-foreground-strong-muted font-medium"
+          render={<div />}
+        >
           {activeFileName}
-        </div>
+        </TruncatedText>
       )}
       <div className="text-muted-foreground">
         {t("docxEditSummary", { count: operations.length })}
@@ -196,11 +217,13 @@ const SuggestChangesSummary = ({
           // oxlint-disable-next-line react/no-array-index-key -- previewEdits is a read-only summary of an immutable AI tool-call input; never edited/reordered by the user.
           key={index}
         >
-          <span className="text-foreground-strong-muted truncate">
+          <TruncatedText className="text-foreground-strong-muted">
             {edit.summary}
-          </span>
+          </TruncatedText>
           {edit.text !== null && (
-            <span className="text-muted-foreground truncate">{edit.text}</span>
+            <TruncatedText className="text-muted-foreground">
+              {edit.text}
+            </TruncatedText>
           )}
         </div>
       ))}
@@ -238,12 +261,19 @@ const CreateWorkspaceDocumentSummary = ({
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
-      <div className="text-foreground-strong-muted truncate font-medium">
+      <TruncatedText
+        className="text-foreground-strong-muted font-medium"
+        render={<div />}
+      >
         {fileName}
-      </div>
-      <div className="text-muted-foreground line-clamp-4 whitespace-pre-wrap">
+      </TruncatedText>
+      <TruncatedText
+        className="text-muted-foreground whitespace-pre-wrap"
+        lines={4}
+        render={<div />}
+      >
         {markdownPreview}
-      </div>
+      </TruncatedText>
     </div>
   );
 };
@@ -407,12 +437,131 @@ export const PendingToolApprovalCard = ({
   );
 };
 
+/**
+ * How a browser command card relates to website approvals: the website its
+ * command acts on or moves to (by exact origin), whether the reads mode or a
+ * website approval may answer it, and the user's stored approvals. Like a
+ * stored tool grant, a website approval the API did not confirm (`unconfirmed`)
+ * answers nothing.
+ */
+const useBrowserCardApproval = ({
+  browserCommand,
+  unconfirmed,
+}: {
+  browserCommand: BrowserControlCommand | null;
+  unconfirmed: boolean;
+}) => {
+  const sites = useBrowserSiteGrants(browserCommand !== null);
+  const autoApproval = useBrowserAutoApproval({
+    command: browserCommand,
+    grantedOrigins: sites.grantedOrigins,
+  });
+  const observedPage = useBrowserObservedPage();
+  const site =
+    browserCommand === null
+      ? null
+      : browserCommandSite({ command: browserCommand, observedPage });
+  const siteGrantOrigin =
+    autoApproval.type === "site-grant" && !unconfirmed
+      ? autoApproval.origin
+      : null;
+  return {
+    /**
+     * Whether the API still allows the site, read with a request of its own.
+     * The card decides again once that read is back, on the approval state
+     * of that moment: a re-paired controller, a failed command or a moved
+     * tab in the meantime makes it ask. The site is kept with the call, and
+     * its result is checked against it once the command ran.
+     */
+    confirmSiteGrant: async (toolCallId: string): Promise<boolean> => {
+      if (siteGrantOrigin === null || browserCommand === null) {
+        return false;
+      }
+      const fresh = await sites.readFresh();
+      if (fresh === null) {
+        return false;
+      }
+      const now = currentBrowserAutoApproval({
+        command: browserCommand,
+        grantedOrigins: fresh,
+      });
+      return (
+        now.type === "site-grant" &&
+        now.origin === siteGrantOrigin &&
+        recordBrowserSiteGrantApproval(toolCallId, now.origin)
+      );
+    },
+    isReadsAutoApproval: autoApproval.type === "reads-mode",
+    /** The site the card offers to always allow: known, and not yet allowed. */
+    offeredSite:
+      site !== null && sites.canGrant && !sites.grantedOrigins.has(site)
+        ? site
+        : null,
+    site,
+    siteGrantOrigin,
+    sites,
+  };
+};
+
+/**
+ * Allows this call and stores a website approval for `site`. The call is
+ * allowed either way; a failed save only means the next call asks again.
+ */
+const AlwaysAllowSiteButton = ({
+  allow,
+  approve,
+  site,
+}: {
+  allow: (origin: string) => Promise<void>;
+  /** Answers the card; false when it was already answered. */
+  approve: () => boolean;
+  site: string;
+}) => {
+  const t = useTranslations();
+  const allowSite = async () => {
+    const stored = await Result.tryPromise(async () => await allow(site));
+    if (stored.isErr()) {
+      notifyUserError(stored.error, t("chat.approval.browser.allowSiteFailed"));
+    }
+  };
+  return (
+    <Button
+      onClick={() => {
+        if (approve()) {
+          detached(allowSite(), "tool-approval-card.allow-browser-site");
+        }
+      }}
+      size="xs"
+      title={browserSiteGrantHost(site)}
+      variant="outline"
+    >
+      {t("chat.approval.browser.alwaysAllowSite")}
+    </Button>
+  );
+};
+
 const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
   useMountEffect(() => {
     respond();
   });
 
   return null;
+};
+
+/**
+ * The card's title. A step a coding agent asks about on the member's computer
+ * is named by its kind, as its row names it.
+ */
+const approvalTitleKey = (name: ApprovalToolName, part: ApprovalToolPart) => {
+  const titleKind =
+    localRunToolView({
+      name,
+      input: getApprovalPartInput(part),
+      output: part.output,
+    })?.titleKind ?? null;
+  return titleKind === null
+    ? getChatToolTitleKey(name)
+    : LOCAL_RUN_TITLE_KEYS[titleKind];
 };
 
 export const ToolApprovalCard = ({
@@ -457,7 +606,7 @@ export const ToolApprovalCard = ({
     showsExternalInput,
   } = getToolApprovalState({
     blockedApprovalTools,
-    defaultLabel: t(getChatToolTitleKey(name)),
+    defaultLabel: t(approvalTitleKey(name, part)),
     name,
     part,
     isTurnActive,
@@ -468,7 +617,7 @@ export const ToolApprovalCard = ({
     ? getToolOutputError(part.output)
     : undefined;
   const failureLabelKey = isFailed
-    ? toolFailureLabelKey(rawErrorDetails, part.state)
+    ? toolFailureLabelKey({ name, output: part.output, state: part.state })
     : undefined;
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
@@ -477,10 +626,12 @@ export const ToolApprovalCard = ({
     name === BROWSER_CONTROL_TOOL_NAME
       ? parseBrowserControlCommand(getApprovalPartInput(part))
       : null;
-  const isBrowserCommandAutoApproved =
-    useBrowserCommandAutoApproved(browserCommand);
-  // A stored grant answers a card only once the API confirms it still holds;
-  // opted-in browser page reads need no grant.
+  const browserApproval = useBrowserCardApproval({
+    browserCommand,
+    unconfirmed: approvalId === unconfirmedGrantApprovalId,
+  });
+  // A stored grant or website approval answers a card only once the API
+  // confirms it still holds; opted-in browser page reads need no grant.
   const isGrantAutoApproval =
     approvalId !== unconfirmedGrantApprovalId &&
     hasAutomaticApproval({
@@ -489,10 +640,16 @@ export const ToolApprovalCard = ({
       conversationApprovedTools,
       name,
     });
+  const confirmAutoApproval =
+    browserApproval.siteGrantOrigin === null
+      ? async () => await confirmStoredApprovalGrant(name)
+      : async () => await browserApproval.confirmSiteGrant(part.id);
   const shouldAutoApprove =
     !isBlocked &&
     !requiresPerCallChatApproval(name) &&
-    (isGrantAutoApproval || isBrowserCommandAutoApproved);
+    (isGrantAutoApproval ||
+      browserApproval.isReadsAutoApproval ||
+      browserApproval.siteGrantOrigin !== null);
   const automaticResponse =
     approvalId === null
       ? null
@@ -502,9 +659,11 @@ export const ToolApprovalCard = ({
             setResponded(true);
             if (isBlocked) {
               onDeny(approvalId);
-            } else if (isGrantAutoApproval && !isBrowserCommandAutoApproved) {
-              const answerIfGrantHeld = async () => {
-                if (await confirmStoredApprovalGrant(name)) {
+            } else if (browserApproval.isReadsAutoApproval) {
+              onApprove(approvalId, name);
+            } else if (shouldAutoApprove) {
+              const answerIfConfirmed = async () => {
+                if (await confirmAutoApproval()) {
                   await onApprove(approvalId, name);
                   return;
                 }
@@ -512,11 +671,9 @@ export const ToolApprovalCard = ({
                 setResponded(false);
               };
               detached(
-                answerIfGrantHeld(),
+                answerIfConfirmed(),
                 "tool-approval-card.confirm-stored-grant",
               );
-            } else if (shouldAutoApprove) {
-              onApprove(approvalId, name);
             }
           },
           // A card the user already answered is not answered again.
@@ -599,6 +756,7 @@ export const ToolApprovalCard = ({
 
       <ToolApprovalSummary
         activeFileName={activeFileName}
+        browserSite={browserApproval.site}
         externalInput={showsExternalInput ? externalInput : undefined}
         isAwaitingDecision={isAwaitingDecision}
         part={part}
@@ -636,6 +794,19 @@ export const ToolApprovalCard = ({
           >
             {t("chat.approval.allowOnce")}
           </Button>
+          {browserApproval.offeredSite !== null && (
+            <AlwaysAllowSiteButton
+              allow={browserApproval.sites.allow}
+              approve={() => {
+                if (!beginManualResponse(approvalId)) {
+                  return false;
+                }
+                onApprove(approvalId, name);
+                return true;
+              }}
+              site={browserApproval.offeredSite}
+            />
+          )}
           {browserCommand !== null &&
             isReadOnlyBrowserCommand(browserCommand) &&
             browserApprovalMode === BROWSER_APPROVAL_MODE.askEveryTime && (
@@ -704,12 +875,14 @@ export const ToolApprovalCard = ({
 
 const ToolApprovalSummary = ({
   activeFileName,
+  browserSite,
   externalInput,
   isAwaitingDecision,
   part,
   providerName,
 }: {
   activeFileName: string | undefined;
+  browserSite: string | null;
   externalInput: unknown;
   isAwaitingDecision: boolean;
   part: ApprovalToolPart;
@@ -721,8 +894,10 @@ const ToolApprovalSummary = ({
 
   const name = getApprovalToolName(part);
   const input = getApprovalPartInput(part);
+  const proposedPlan = localRunProposedPlan({ name, input });
   return (
     <>
+      {proposedPlan !== null && <LocalRunPlanSummary plan={proposedPlan} />}
       {part.name === "update-entity-fields" && part.input !== undefined && (
         <UpdateSummary input={part.input} />
       )}
@@ -751,6 +926,7 @@ const ToolApprovalSummary = ({
         <BrowserControlInputSummary
           input={input}
           isAwaitingDecision={isAwaitingDecision}
+          site={browserSite}
         />
       )}
       {externalInput !== undefined && (
@@ -764,9 +940,56 @@ const ToolApprovalSummary = ({
       {isRegistryWriteSummaryToolName(name) && input !== undefined && (
         <RegistryWriteSummary input={input} toolName={name} />
       )}
+      <LocalRunToolSummary input={input} name={name} />
     </>
   );
 };
+
+/**
+ * What a coding agent on the member's computer asks to do, as its step row
+ * names it (a command, file names, a web search's query), so the member
+ * approves the step itself rather than a tool name. Nothing for any other
+ * tool.
+ */
+const LocalRunToolSummary = ({
+  input,
+  name,
+}: {
+  input: unknown;
+  name: string;
+}) => {
+  const t = useTranslations();
+  const view = localRunToolView({ name, input, output: undefined });
+  const subtitle =
+    view === null
+      ? null
+      : localRunToolSubtitleText(view.subtitle, {
+          patternInPath: (values) => t("chat.toolCall.patternInPath", values),
+          commandExited: (values) => t("chat.toolCall.commandExited", values),
+        });
+  if (subtitle === null || subtitle === "") {
+    return null;
+  }
+  return (
+    <div className="border-border/50 border-t px-3 py-2">
+      <p className="text-xs wrap-break-word">{subtitle}</p>
+    </div>
+  );
+};
+
+/**
+ * The plan a coding agent proposes before it acts, read whole so the member
+ * knows what approving it lets the agent do.
+ */
+const LocalRunPlanSummary = ({ plan }: { plan: string }) => (
+  <div className="border-border/50 border-t">
+    <ScrollArea axis="vertical" className="max-h-96">
+      <div className="px-3 py-2 text-sm">
+        <MessageResponse mode="static">{plan}</MessageResponse>
+      </div>
+    </ScrollArea>
+  </div>
+);
 
 type SummaryMatter = { color: string | null; id: string; name: string };
 
@@ -935,7 +1158,7 @@ const RegistryWriteSummaryRow = ({
           className="size-3.5 shrink-0"
           matter={{ color: matter.color, id: matter.id }}
         />
-        <span className="truncate">{matter.name}</span>
+        <TruncatedText>{matter.name}</TruncatedText>
       </span>
     ) : (
       value
@@ -1128,9 +1351,12 @@ const BrowserApprovalModeNotice = ({ onReset }: { onReset: () => void }) => {
 const BrowserControlInputSummary = ({
   input,
   isAwaitingDecision,
+  site,
 }: {
   input: unknown;
   isAwaitingDecision: boolean;
+  /** The website the command acts on or moves to, by origin. */
+  site: string | null;
 }) => {
   const t = useTranslations();
   const command = parseBrowserControlCommand(input);
@@ -1157,15 +1383,25 @@ const BrowserControlInputSummary = ({
         return panic("Unhandled browser approval detail");
     }
   };
+  const details = getBrowserApprovalDetails(command);
+  // A read or going back names no address of its own; while it asks, the
+  // card names the website the tab is on, the one "always allow" covers.
+  const pageSite =
+    isAwaitingDecision &&
+    site !== null &&
+    !details.some(({ type }) => type === "website")
+      ? [{ label: t("common.website"), value: browserSiteGrantHost(site) }]
+      : [];
   const rows = [
     {
       label: t("common.action"),
       value: t(browserActionTranslationKey(command)),
     },
-    ...getBrowserApprovalDetails(command).map((detail) => ({
+    ...details.map((detail) => ({
       label: labelForDetail(detail),
       value: detail.value,
     })),
+    ...pageSite,
   ];
 
   return (

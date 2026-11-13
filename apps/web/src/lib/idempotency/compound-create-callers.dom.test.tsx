@@ -105,6 +105,8 @@ const createClient = () => {
     matterNumberingEnabled: true,
     practiceJurisdictions: [],
     promptCachingEnabled: true,
+    aiInstructions: "",
+    aiInstructionsMaxLength: 3000,
     managedAIResidency: "eu",
     memoryExtractionEnabled: false,
     localRunMaxApprovalMode: "full_auto",
@@ -167,6 +169,7 @@ const ComposerSubmitButton = ({
       type="button"
       onClick={() =>
         submit.mutate({
+          workspaceId,
           issue: true,
           body: {
             invoiceDate: "2026-10-27",

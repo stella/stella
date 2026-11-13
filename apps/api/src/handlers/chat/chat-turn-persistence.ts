@@ -90,6 +90,14 @@ const AI_ERROR_RETRYABLE = {
   local_runner_unavailable: true,
   // The same conversation never fits; only a shorter one does.
   local_runner_turn_too_large: false,
+  // Sending again once the computer is connected can help.
+  local_runner_not_reached: true,
+  // The relinked computer takes the turn when it is sent again.
+  local_runner_relinked: true,
+  // The undo finishes in a moment; the turn runs when sent again.
+  local_runner_restoring: true,
+  // The turn runs when sent again once the linked folder is back.
+  local_runner_folder_unavailable: true,
   loop_detected: false,
   deadline_exceeded: true,
   model_unavailable: false,
@@ -114,6 +122,10 @@ export const AI_ERROR_FAILURE_CODE = {
   local_runner_limit_reached: "provider-error",
   local_runner_unavailable: "provider-error",
   local_runner_turn_too_large: "provider-error",
+  local_runner_not_reached: "provider-error",
+  local_runner_relinked: "provider-error",
+  local_runner_restoring: "provider-error",
+  local_runner_folder_unavailable: "provider-error",
   loop_detected: "provider-error",
   deadline_exceeded: "provider-error",
   model_unavailable: "provider-error",

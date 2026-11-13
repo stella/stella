@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
+import { readCorpusSubCursors } from "@/api/lib/legal-search/case-law-multi-country";
 import {
   CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
@@ -19,7 +20,6 @@ import {
 import { encodeCursor } from "@/api/lib/search/cursor";
 import {
   type CompatCorpusCursors,
-  type CorpusSubCursors,
   EMPTY_CORPUS_CURSORS,
   readCompatDecision,
   readCompatStatute,
@@ -107,21 +107,6 @@ export const COMPAT_SEARCH_CURSOR_MAX_LENGTH = encodeCompatSearchCursor({
   corpus: maximumCorpusCursors,
 }).length;
 
-const readSubCursors = (value: unknown): CorpusSubCursors | null => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return null;
-  }
-  const cursors: Record<string, string | null> = {};
-  const entries: [string, unknown][] = Object.entries(value);
-  for (const [country, cursor] of entries) {
-    if (cursor !== null && typeof cursor !== "string") {
-      return null;
-    }
-    cursors[country] = cursor;
-  }
-  return cursors;
-};
-
 /** The position a cursor names, or null when it is not one this pair issued. */
 export const decodeCompatSearchCursor = (
   cursor: string | undefined,
@@ -137,8 +122,8 @@ export const decodeCompatSearchCursor = (
   if (matter !== null && typeof matter !== "string") {
     return null;
   }
-  const decisionCursors = readSubCursors(decisions);
-  const statuteCursors = readSubCursors(statutes);
+  const decisionCursors = readCorpusSubCursors(decisions);
+  const statuteCursors = readCorpusSubCursors(statutes);
   if (decisionCursors === null || statuteCursors === null) {
     return null;
   }

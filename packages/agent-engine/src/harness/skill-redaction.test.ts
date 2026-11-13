@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_LOCAL_RUN_TOOL_LIMITS } from "@stll/api-contract/chat-local-run-tool";
+
 import type { HarnessTurn } from "./adapter";
 import { toolCallForUse, toolResultFor } from "./claude-code/items";
 import { toolCallForItem, toolResultForItem } from "./codex/items";
@@ -9,8 +11,10 @@ import {
   type HarnessApprovalRequest,
   type HarnessEvent,
   type HarnessToolCall,
+  type HarnessToolResult,
 } from "./events";
 import { redactingSkillPaths, type SkillPathScope } from "./skill-redaction";
+import { HARNESS_TOOL_NAMES, shownToolInput } from "./tool-parts";
 
 const FOLDER = "/srv/member/skills/fixture-skill";
 const PLUGIN = "/data/harness-home/claude-code/stella-skill-plugins/abc";
@@ -30,6 +34,7 @@ const through = async (
     })(),
     respond: async () => Result.ok(),
     interrupt: async () => undefined,
+    release: async () => null,
     dispose: async () => undefined,
   };
   const seen: HarnessEvent[] = [];
@@ -41,7 +46,7 @@ const through = async (
 
 const completed = (
   toolCall: HarnessToolCall,
-  result: { content: string; status: "succeeded" | "failed" },
+  result: HarnessToolResult,
 ): HarnessEvent => ({ type: "tool.completed", toolCall, result });
 
 const lastCompleted = (events: readonly HarnessEvent[]) => {
@@ -61,7 +66,7 @@ const claudeCall = async (
   lastCompleted(
     await through([
       completed(
-        toolCallForUse({ id: "call-1", name, input }, "stella"),
+        toolCallForUse({ id: "call-1", name, input }, "stella", null),
         toolResultFor(
           { name, input },
           { type: "tool_result", tool_use_id: "call-1", content },
@@ -90,19 +95,51 @@ describe("what a turn reports about its skill folders", () => {
     expect(event.toolCall).toEqual({
       id: "call-1",
       name: "harness_native_tool",
-      input: { tool: "Read" },
+      input: {
+        tool: "Read",
+        detail: {
+          kind: "read",
+          path: "<skill:fixture-skill>/references/commentary.md",
+        },
+      },
     });
     expect(event.result).toEqual({ content: STATUS_ONLY, status: "succeeded" });
     expect(JSON.stringify(event)).not.toContain(FOLDER);
   });
 
   test("a Claude Grep over a skill folder reports only the status", async () => {
-    const { result } = await claudeCall(
+    const { result, toolCall } = await claudeCall(
       "Grep",
       { pattern: "clause", path: FOLDER },
       "a licensed clause",
     );
+    expect(toolCall.input).toEqual({
+      tool: "Grep",
+      detail: {
+        kind: "search",
+        pattern: "clause",
+        path: "<skill:fixture-skill>",
+      },
+    });
     expect(result.content).toBe(STATUS_ONLY);
+  });
+
+  test("a skill path past a long command's cut is named before the cut, never shown in part", async () => {
+    const event = await claudeCall(
+      "Bash",
+      { command: `echo ${"x".repeat(280)} && cat ${FOLDER}/SKILL.md` },
+      "Licensed text.",
+    );
+    const shown = JSON.stringify(
+      shownToolInput(event.toolCall, "/data/runs/1"),
+    );
+    // The cut falls inside where the folder's path stood.
+    expect(`echo ${"x".repeat(280)} && cat ${FOLDER}`.length).toBeGreaterThan(
+      CHAT_LOCAL_RUN_TOOL_LIMITS.command,
+    );
+    expect(shown).toContain("…");
+    expect(shown).not.toContain("/srv");
+    expect(event.result.content).toBe(STATUS_ONLY);
   });
 
   test("a Claude read through the plugin's own link does the same", async () => {
@@ -111,7 +148,10 @@ describe("what a turn reports about its skill folders", () => {
       { file_path: `${PLUGIN}/skills/fixture-skill/SKILL.md` },
       "Licensed commentary.",
     );
-    expect(toolCall.input).toEqual({ tool: "Read" });
+    expect(toolCall.input).toEqual({
+      tool: "Read",
+      detail: { kind: "read", path: "<skill:fixture-skill>/SKILL.md" },
+    });
     expect(result.content).toBe(STATUS_ONLY);
   });
 
@@ -175,12 +215,13 @@ describe("what a turn reports about its skill folders", () => {
     ]);
   });
 
-  test("a Claude Bash that never names a skill stays as it was", async () => {
+  test("a Claude Bash that never names a skill keeps its command, and its output stays here", async () => {
     const event = await claudeCall("Bash", { command: "ls" }, "notes.md\n");
     expect(event.toolCall.input).toEqual({ command: "ls" });
-    expect(JSON.parse(event.result.content)).toEqual({
-      aggregated_output: "notes.md\n",
-      status: "completed",
+    expect(JSON.parse(event.result.content)).toEqual({ status: "completed" });
+    expect(event.result.localOutput).toEqual({
+      type: "command",
+      output: "notes.md\n",
     });
   });
 
@@ -208,7 +249,97 @@ describe("what a turn reports about its skill folders", () => {
       ]),
     );
     expect(toolCall.input).toEqual({ command: "grep -r clause /srv/member" });
-    expect(result.content).toBe(STATUS_ONLY);
+    expect(JSON.parse(result.content)).toEqual({
+      exit_code: 0,
+      status: "completed",
+    });
+    // What it printed of the skill is not kept, not even on this computer.
+    expect(result.localOutput).toBeUndefined();
+  });
+
+  test("a subagent's conversation or a viewed image that names a skill is not kept, and any other is", async () => {
+    const subagent: HarnessToolCall = {
+      id: "call-agent",
+      name: "harness_native_tool",
+      input: { tool: "Agent", detail: { kind: "subagent", description: "" } },
+    };
+    const image: HarnessToolCall = {
+      id: "call-image",
+      name: "harness_native_tool",
+      input: { tool: "Read", detail: { kind: "image", path: "scan.png" } },
+    };
+    const done = { content: STATUS_ONLY, status: "succeeded" } as const;
+    const conversation = (report: string) =>
+      ({
+        type: "conversation",
+        entries: [
+          { role: "prompt", text: "Check the lease." },
+          { role: "report", text: report },
+        ],
+        droppedBytes: 0,
+      }) as const;
+    const kept = async (
+      toolCall: HarnessToolCall,
+      localOutput: NonNullable<HarnessToolResult["localOutput"]>,
+    ) =>
+      lastCompleted(
+        await through([completed(toolCall, { ...done, localOutput })]),
+      ).result.localOutput;
+    const plain = conversation("Clause 4 caps arrears.");
+    expect(await kept(subagent, plain)).toEqual(plain);
+    // What it quoted of the skill is not kept, not even on this computer.
+    expect(
+      await kept(
+        subagent,
+        conversation(`${FOLDER}/references/commentary.md: a licensed clause`),
+      ),
+    ).toBeUndefined();
+    const scan = { type: "image", path: "/srv/member/scan.png" } as const;
+    expect(await kept(image, scan)).toEqual(scan);
+    expect(
+      await kept(image, { type: "image", path: `${FOLDER}/assets/figure.png` }),
+    ).toBeUndefined();
+  });
+
+  test("a subagent whose step read a skill keeps no conversation, though what it reported names no path", async () => {
+    const outer: HarnessToolCall = {
+      id: "call-outer",
+      name: "harness_native_tool",
+      input: { tool: "Agent", detail: { kind: "subagent", description: "" } },
+    };
+    const inner: HarnessToolCall = {
+      ...outer,
+      id: "call-inner",
+      parentCallId: outer.id,
+    };
+    const read: HarnessToolCall = {
+      id: "call-read",
+      name: "Bash",
+      input: { command: `cat ${FOLDER}/SKILL.md` },
+      parentCallId: inner.id,
+    };
+    const done = { content: STATUS_ONLY, status: "succeeded" } as const;
+    const quoting = {
+      type: "conversation",
+      entries: [
+        { role: "report", text: "The licensed clause, word for word." },
+      ],
+      droppedBytes: 0,
+    } as const;
+    const events = await through([
+      { type: "tool.started", toolCall: outer },
+      { type: "tool.started", toolCall: inner },
+      completed(read, { content: "Licensed text.", status: "succeeded" }),
+      completed(inner, { ...done, localOutput: quoting }),
+      completed(outer, { ...done, localOutput: quoting }),
+    ]);
+    // Neither the subagent that read it nor the one that started that
+    // subagent keeps what it wrote.
+    expect(
+      events.flatMap((event) =>
+        event.type === "tool.completed" ? [event.result.localOutput] : [],
+      ),
+    ).toEqual([undefined, undefined, undefined]);
   });
 
   test("a call known to have touched a skill when it started stays status only", async () => {
@@ -250,9 +381,10 @@ describe("what a turn reports about its skill folders", () => {
     const request: HarnessApprovalRequest = {
       requestId: "r-1",
       kind: "command",
+      // An adapter asks about the call it built, named as chat keeps it.
       toolCall: {
         id: "call-1",
-        name: "Bash",
+        name: HARNESS_TOOL_NAMES.commandExecution,
         input: { command: `bun ${FOLDER}/scripts/run.ts` },
       },
       reason: `Runs a script in ${FOLDER}`,
@@ -274,8 +406,11 @@ describe("what a turn reports about its skill folders", () => {
       { file_path: `${FOLDER}-old/notes.md` },
       "Not a skill.",
     );
-    expect(toolCall.input).toEqual({ tool: "Read" });
-    expect(result.content).toBe("Not a skill.");
+    expect(toolCall.input).toEqual({
+      tool: "Read",
+      detail: { kind: "read", path: `${FOLDER}-old/notes.md` },
+    });
+    expect(result.content).toBe(STATUS_ONLY);
   });
 
   test("a path with a space, as a shell writes it, counts too", async () => {
@@ -379,6 +514,7 @@ describe("what a turn reports about its skill folders", () => {
       })(),
       respond: async () => Result.ok(),
       interrupt: async () => undefined,
+      release: async () => null,
       dispose: async () => undefined,
     };
     expect(redactingSkillPaths(turn, { folders: [], plugin: null })).toBe(turn);

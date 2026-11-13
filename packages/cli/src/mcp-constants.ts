@@ -5,7 +5,7 @@ import { panic } from "better-result";
 import {
   MCP_ERROR_CODES,
   type McpErrorCode,
-  VERIFICATION_RUN_CAP_CODES,
+  MODEL_RUN_CAP_CODES,
 } from "./generated/mcp-contract.js";
 
 export { MCP_HTTP_PATH } from "./generated/mcp-contract.js";
@@ -111,8 +111,8 @@ const MCP_ERROR_CODE_EXIT_MAP = {
   usage_limited: EXIT_CODES.usageLimited,
   conflict: EXIT_CODES.conflict,
   rate_limited: EXIT_CODES.server,
-  [VERIFICATION_RUN_CAP_CODES.active]: EXIT_CODES.server,
-  [VERIFICATION_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
+  [MODEL_RUN_CAP_CODES.active]: EXIT_CODES.server,
+  [MODEL_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
   upstream_unavailable: EXIT_CODES.server,
   public_read_timeout: EXIT_CODES.server,
   search_index_unavailable: EXIT_CODES.server,

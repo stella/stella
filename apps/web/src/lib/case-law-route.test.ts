@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { pickCaseLawDecisionHit } from "@stll/api-contract/case-law-decision-route";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
   decodeCaseLawDecisionRef,
-  pickCaseLawDecisionHit,
   resolveCaseLawRouteCountry,
 } from "@/lib/case-law-route";
 

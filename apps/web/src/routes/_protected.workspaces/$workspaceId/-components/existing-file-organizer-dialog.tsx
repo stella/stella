@@ -32,6 +32,7 @@ import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -867,9 +868,9 @@ const UserInstructionsSection = ({
               {t("workspaces.importOrganizer.instructionsTitle")}
             </span>
             {!expanded && (
-              <span className="text-muted-foreground truncate text-xs">
+              <TruncatedText className="text-muted-foreground text-xs">
                 {summary}
-              </span>
+              </TruncatedText>
             )}
           </span>
         </Button>
@@ -1245,9 +1246,9 @@ const OrganizerFolderNode = ({
             onClick={() => setIsEditing(true)}
             variant="plain"
           >
-            <span className="hover:bg-muted/40 block truncate rounded-sm px-1 font-medium">
+            <TruncatedText className="hover:bg-muted/40 rounded-sm px-1 font-medium">
               {folder.name}
-            </span>
+            </TruncatedText>
           </Button>
         )}
         <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
@@ -1351,9 +1352,12 @@ const OrganizerFileNode = ({
           value={row.suggestedName}
         />
         {secondaryParts.length > 0 && (
-          <p className="text-muted-foreground truncate ps-3 text-xs">
+          <TruncatedText
+            className="text-muted-foreground ps-3 text-xs"
+            render={<p />}
+          >
             {secondaryParts.join(" · ")}
-          </p>
+          </TruncatedText>
         )}
       </div>
     </li>
@@ -1472,7 +1476,9 @@ const DeleteFoldersSection = ({
                 }
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{folder.folderPath}</p>
+                <TruncatedText className="font-medium" render={<p />}>
+                  {folder.folderPath}
+                </TruncatedText>
                 <p className="text-muted-foreground text-xs">{folder.reason}</p>
               </div>
             </li>

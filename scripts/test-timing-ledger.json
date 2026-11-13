@@ -2850,7 +2850,7 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/corpus-index-projection-margin-stop.db.test.ts::<module>::beforeAll timeout",
+    "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/corpus-index-projection-long-commit-window.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -3286,11 +3286,6 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/search/index-entity-stamps.db.test.ts::<module>::setDefaultTimeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/api/src/lib/search/index-global-case-law.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -3896,7 +3891,7 @@
   },
   {
     "id": "no-unreasoned-timeout::packages/scripts/src/ci-job-classification.test.ts::<module>::test timeout",
-    "count": 18,
+    "count": 16,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
