@@ -35,6 +35,8 @@ const DETAIL_TITLE_KEYS = {
   fetch: "chat.tool.fetch_url",
   plan: "chat.toolCall.updatePlan",
   proposed_plan: "chat.toolCall.proposedPlan",
+  subagent: "chat.toolCall.subagent",
+  image: "chat.toolCall.viewImage",
 } as const satisfies Record<ChatLocalRunToolDetail["kind"], TranslationKey>;
 
 const text = (value: string): LocalRunToolSubtitle | null =>
@@ -68,6 +70,10 @@ const detailSubtitle = (
     case "proposed_plan":
       // The plan is read whole on its approval card, not in a row.
       return null;
+    case "subagent":
+      return text(detail.description);
+    case "image":
+      return text(detail.path);
     default:
       detail satisfies never;
       return panic("Unhandled local run tool detail");
@@ -201,5 +207,165 @@ export const localRunToolSubtitleText = (
     default:
       subtitle satisfies never;
       return panic("Unhandled local run tool subtitle");
+  }
+};
+
+type LocalRunCall = { name: string; input: unknown };
+
+const nativeCallOf = ({ name, input }: LocalRunCall) =>
+  isChatLocalRunToolName(name) ? parseChatLocalRunToolCall(name, input) : null;
+
+/**
+ * What a subagent's own step names beyond its description: the kind of
+ * agent the coding agent chose, or `null` when the call is not a subagent's
+ * step or its harness names none.
+ */
+export const localRunSubagentType = (call: LocalRunCall): string | null => {
+  const native = nativeCallOf(call);
+  return native?.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
+    native.input.detail?.kind === "subagent"
+    ? (native.input.detail.agentType ?? null)
+    : null;
+};
+
+/** A turn's tool call as the grouping reads it. */
+export type LocalRunStepCall = LocalRunCall & {
+  id: string;
+  /** How the turn shows the call: a plain row, or a card of its own. */
+  shownAs: "row" | "card";
+};
+
+type LocalRunSubagentGroups = {
+  /**
+   * Every step each subagent took, in the turn's order, by the id of the
+   * subagent's own step. A subagent that took none has an empty list.
+   */
+  stepsOf: ReadonlyMap<string, readonly string[]>;
+  /** The subagent a step's row shows inside, by the step's id. */
+  rowIn: ReadonlyMap<string, string>;
+};
+
+/**
+ * Which of a turn's calls show under a subagent's step. A subagent's step
+ * that shows as a row is a group, and a step naming it (`parentCallId`) is
+ * one of its steps: a row among them shows inside the group, a card (an
+ * approval) stays on the turn where the member sees it without opening
+ * anything. A step whose subagent is not a group (it shows as a card, or the
+ * turn does not have it) stays on the turn, so no step is ever hidden. A
+ * subagent started by a subagent shows in the outermost one's group, with
+ * the steps it took.
+ */
+export const localRunSubagentGroups = (
+  calls: readonly LocalRunStepCall[],
+): LocalRunSubagentGroups => {
+  const subagents = new Set<string>();
+  const parents = new Map<string, string>();
+  for (const { id, name, input, shownAs } of calls) {
+    const call = nativeCallOf({ name, input });
+    if (call === null) {
+      continue;
+    }
+    if (
+      shownAs === "row" &&
+      call.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
+      call.input.detail?.kind === "subagent"
+    ) {
+      subagents.add(id);
+    }
+    if (call.input.parentCallId !== undefined) {
+      parents.set(id, call.input.parentCallId);
+    }
+  }
+  const outermost = (id: string): string | null => {
+    const seen = new Set([id]);
+    let subagent: string | null = null;
+    let parent = parents.get(id);
+    // `seen` ends the walk over ids a desktop made name each other.
+    while (parent !== undefined && subagents.has(parent) && !seen.has(parent)) {
+      seen.add(parent);
+      subagent = parent;
+      parent = parents.get(parent);
+    }
+    return subagent;
+  };
+  const stepsOf = new Map<string, string[]>();
+  const rowIn = new Map<string, string>();
+  const inner = new Set<string>();
+  for (const { id, shownAs } of calls) {
+    const subagent = outermost(id);
+    if (subagent === null) {
+      continue;
+    }
+    inner.add(id);
+    const steps = stepsOf.get(subagent);
+    if (steps === undefined) {
+      stepsOf.set(subagent, [id]);
+    } else {
+      steps.push(id);
+    }
+    if (shownAs === "row") {
+      rowIn.set(id, subagent);
+    }
+  }
+  for (const id of subagents) {
+    // A subagent inside another's group is a row there, not a group.
+    if (inner.has(id)) {
+      stepsOf.delete(id);
+    } else if (!stepsOf.has(id)) {
+      stepsOf.set(id, []);
+    }
+  }
+  for (const [id, subagent] of rowIn) {
+    // Only ids made to name each other leave a row without its group.
+    if (!stepsOf.has(subagent)) {
+      rowIn.delete(id);
+    }
+  }
+  return { stepsOf, rowIn };
+};
+
+/** How a subagent's group reads, as one status. */
+export type LocalRunSubagentStatus =
+  "needs_approval" | "running" | "failed" | "interrupted" | "done";
+
+/** How one step stands: the subagent's own, or one it took. */
+export type LocalRunStepStanding =
+  "awaiting_approval" | "running" | "failed" | "interrupted" | "done";
+
+/**
+ * A subagent's one status, from its own step and the steps it took. A step
+ * waiting on the member comes first, since the subagent cannot go on without
+ * them; then work still under way, its own or a step's (a harness may end
+ * the call that started a subagent before the subagent ends). Once nothing
+ * is under way it reads as its own step ended: a step of it that failed is
+ * the subagent's to work around, not the subagent failing.
+ */
+export const localRunSubagentStatus = ({
+  own,
+  steps,
+}: {
+  own: LocalRunStepStanding;
+  steps: readonly LocalRunStepStanding[];
+}): LocalRunSubagentStatus => {
+  const all = [own, ...steps];
+  if (all.includes("awaiting_approval")) {
+    return "needs_approval";
+  }
+  if (all.includes("running")) {
+    return "running";
+  }
+  switch (own) {
+    case "failed":
+      return "failed";
+    case "interrupted":
+      return "interrupted";
+    case "done":
+      return "done";
+    case "awaiting_approval":
+    case "running":
+      return panic("A subagent with open work was read as settled");
+    default:
+      own satisfies never;
+      return panic("Unhandled local run step standing");
   }
 };

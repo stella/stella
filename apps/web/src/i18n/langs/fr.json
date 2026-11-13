@@ -2286,9 +2286,11 @@
       "searchFiles": "Recherche dans les fichiers",
       "sourceCode": "Code source",
       "statusWaiting": "En attente",
+      "subagent": "Exécution d’un sous-agent",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis} many {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}",
-      "updatePlan": "Mise à jour du plan"
+      "updatePlan": "Mise à jour du plan",
+      "viewImage": "Consultation d’une image"
     },
     "turnNotification": {
       "failedBody": "Une réponse dans une conversation stella n’a pas abouti.",

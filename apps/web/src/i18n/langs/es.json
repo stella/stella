@@ -2286,9 +2286,11 @@
       "searchFiles": "Buscando en archivos",
       "sourceCode": "Código fuente",
       "statusWaiting": "En espera",
+      "subagent": "Ejecutando un subagente",
       "toggleDetails": "Mostrar detalles",
       "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron} many {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}",
-      "updatePlan": "Actualizando el plan"
+      "updatePlan": "Actualizando el plan",
+      "viewImage": "Viendo una imagen"
     },
     "turnNotification": {
       "failedBody": "Una respuesta del chat en stella no terminó.",

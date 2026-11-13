@@ -2286,9 +2286,11 @@
       "searchFiles": "Pesquisando nos arquivos",
       "sourceCode": "Código-fonte",
       "statusWaiting": "Aguardando",
+      "subagent": "Executando um subagente",
       "toggleDetails": "Alternar detalhes",
       "unrestoredFields": "{count, plural, one {# campo não pôde ser preenchido} other {# campos não puderam ser preenchidos} many {# campos não puderam ser preenchidos}} com valores reais no modo anonimizado. Revise: {fields}",
-      "updatePlan": "Atualizando o plano"
+      "updatePlan": "Atualizando o plano",
+      "viewImage": "Visualizando uma imagem"
     },
     "turnNotification": {
       "failedBody": "Uma resposta do chat na stella não foi concluída.",
