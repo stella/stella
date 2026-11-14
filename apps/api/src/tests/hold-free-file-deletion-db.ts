@@ -7,10 +7,12 @@ import { asTestRaw } from "./helpers/test-tool-set";
 // no requested key belongs to an organization, so no legal hold applies.
 // Awaiting the chain reads the settled empty result; any builder step
 // (`from`, `where`, `innerJoin`, ...) continues the same chain.
-const noRows = (): Promise<never[]> =>
+// Typed as `unknown`: the chain is a query-builder stand-in that happens to be
+// awaitable, not a promise a caller should treat as one.
+const noRows = (): unknown =>
   new Proxy(Promise.resolve<never[]>([]), {
     get: (rows, key) =>
-      key === "then" ? rows.then.bind(rows) : () => noRows(),
+      key === "then" ? rows.then.bind(rows) : (): unknown => noRows(),
   });
 
 /**
