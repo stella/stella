@@ -1,9 +1,10 @@
-import { createContext, type ReactNode, use } from "react";
+import { type ContextType, createContext, type ReactNode, use } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import {
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE,
   chatLocalRunStepContentCap,
@@ -36,11 +37,11 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatFileSize } from "@/lib/file-size";
-import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { queryView } from "@/lib/query-view.logic";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -158,33 +159,41 @@ type StepContentProps = {
   userId: string;
 };
 
+type ForkSource = NonNullable<ContextType<typeof LocalRunForkSourceContext>>;
+
 /** Asks for the thread's fork again, which completes its copy of the steps. */
-const CopyToForkButton = ({
+const CopyToFork = ({
   activeOrganizationId,
+  source,
   threadId,
   userId,
-}: Pick<StepContentProps, "activeOrganizationId" | "threadId" | "userId">) => {
+}: Pick<StepContentProps, "activeOrganizationId" | "threadId" | "userId"> & {
+  source: ForkSource;
+}) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const source = use(LocalRunForkSourceContext);
-  const copy = useIdempotentMutation({
-    idempotencyScope: `chat.${threadId}.fork-step-content`,
-    mutationFn: async (fork: NonNullable<typeof source>) =>
+  const sourceThreadId = toSafeId<"chatThread">(source.threadId);
+  const copy = useCapabilityMutation({
+    capability: "chat.fork.create",
+    target: resourceRef({
+      type: RESOURCE_TYPE.CHAT_THREAD,
+      id: sourceThreadId,
+    }),
+    mutationFn: async (_variables, request) =>
       unwrapApiResponse(
-        await api.chat
-          .threads({ threadId: toSafeId<"chatThread">(fork.threadId) })
-          .fork.post(
-            {
-              newThreadId: threadId,
-              upToMessageId: toSafeId<"chatMessage">(fork.messageId),
-            },
-            {
-              query:
-                fork.workspaceId === null
-                  ? {}
-                  : { workspaceId: toSafeId<"workspace">(fork.workspaceId) },
-            },
-          ),
+        await api.chat.threads({ threadId: sourceThreadId }).fork.post(
+          {
+            newThreadId: threadId,
+            upToMessageId: toSafeId<"chatMessage">(source.messageId),
+          },
+          {
+            ...request,
+            query:
+              source.workspaceId === null
+                ? {}
+                : { workspaceId: toSafeId<"workspace">(source.workspaceId) },
+          },
+        ),
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -203,14 +212,11 @@ const CopyToForkButton = ({
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
-  if (source === null) {
-    return null;
-  }
   return (
     <Button
       disabled={copy.isPending}
       onClick={() => {
-        copy.mutate(source);
+        copy.mutate();
       }}
       size="xs"
       variant="ghost"
@@ -218,6 +224,14 @@ const CopyToForkButton = ({
       {t("chat.toolCall.localOutput.copyToFork")}
     </Button>
   );
+};
+
+/** The copy action, where the fork's source is known. */
+const CopyToForkButton = (
+  props: Pick<StepContentProps, "activeOrganizationId" | "threadId" | "userId">,
+) => {
+  const source = use(LocalRunForkSourceContext);
+  return source === null ? null : <CopyToFork {...props} source={source} />;
 };
 
 /** A stored text step: the output, diff or conversation, as it is read. */
@@ -339,15 +353,16 @@ const LocalRunStepContent = ({
   const output = view.items;
   // A read cut off after it began keeps what arrived, but never reads as
   // the whole content.
-  const interrupted = view.refetchError !== undefined && (
-    <Note>
-      {t("common.loadFailed")}
-      {retry}
-    </Note>
-  );
+  const interrupted =
+    view.refetchError === undefined ? null : (
+      <Note>
+        {t("common.loadFailed")}
+        {retry}
+      </Note>
+    );
   switch (output.status) {
     case "unread":
-      return interrupted || <Note pending>{t("common.loading")}</Note>;
+      return interrupted ?? <Note pending>{t("common.loading")}</Note>;
     case "text":
       return (
         <>

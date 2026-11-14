@@ -49,7 +49,7 @@ const windowsOf = (text: string, limit: number, totalBytes: number) => {
 describe("a step's content as its row shows it", () => {
   test("windows read in order rejoin to the stored text, however small", () => {
     assertProperty(
-      "web step content windows rejoin to the stored text",
+      "windows read in order rejoin to the stored text, however small",
       fc.property(
         // A window as short as one byte up to the whole text.
         fc.string({ unit: "grapheme" }).chain((text) =>
