@@ -16,17 +16,17 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 /**
  * S3 lifetime of the issued URL. Short enough that an intercepted
- * URL has a tight window for abuse; long enough that a slow
- * client on a hotel uplink can still finish a 50 MB PUT. The
- * matching `tmp/` bucket-level lifecycle is 24h — plenty of margin
- * either way.
+ * URL has a tight window for abuse. S3 checks it when a PUT starts,
+ * so a slow client still finishes a maximum-size PUT that began in
+ * time. The matching `tmp/` bucket-level lifecycle is 24h — plenty
+ * of margin either way.
  */
 export const PRESIGN_URL_EXPIRY_SECONDS = 5 * 60;
 
 /**
  * Maximum time a `scanning` claim can sit before the next finalize
  * caller is allowed to steal it. Covers the worst-case sync scan
- * (50 MB DOCX through YARA + zip-bomb guard) with headroom. Tuned
+ * (a maximum-size DOCX through YARA + zip-bomb guard). Tuned
  * down once async scanning lands in phase 6.
  */
 export const FINALIZE_CLAIM_TIMEOUT_MS = 60_000;

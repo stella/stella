@@ -413,6 +413,7 @@ type ResolvedFile = {
   fileId: string;
   mimeType: string;
   pdfFileId: string | null;
+  sizeBytes: number;
 };
 
 /** The pinned file, or why it can no longer be read as pinned. Read under
@@ -448,6 +449,7 @@ const resolvePinnedFile = async (
     fileId: row.content.id,
     mimeType: row.content.mimeType,
     pdfFileId: row.content.pdfFileId,
+    sizeBytes: row.content.sizeBytes,
   });
 };
 
@@ -561,6 +563,54 @@ type ExecuteRunArgs = {
   execution?: VerificationExecutionBoundaries;
 };
 
+/** The passages a run checks with the document blocks they come from (which
+ *  number the claims' paragraphs), or the code it fails with when the pinned
+ *  file yields none. */
+const readRunPassages = async ({
+  actor,
+  file,
+  scope,
+  readDocument,
+  signal,
+}: {
+  actor: RunActor;
+  file: ResolvedFile;
+  scope: Parameters<typeof runPassages>[1];
+  readDocument: typeof readVerificationDocument;
+  signal: AbortSignal;
+}): Promise<
+  Result<
+    {
+      blocks: readonly VerificationBlock[];
+      passages: NonNullable<ReturnType<typeof runPassages>>;
+    },
+    VerificationRunErrorCode
+  >
+> => {
+  const document = await readDocument({
+    organizationId: actor.organizationId,
+    workspaceId: actor.workspaceId,
+    file,
+    signal,
+    // A run may wait out its own timeout for the document byte budget.
+    admissionWaitMs: STANDARD_DOCUMENT_RUN_LIMITS.runTimeoutMs,
+  });
+  if (document.type === "unsupported-format") {
+    return Result.err("unsupported_format");
+  }
+  if (document.type === "no-text") {
+    return Result.err("no_text");
+  }
+  // Still waiting on the document byte budget when the run timed out.
+  if (document.type === "busy") {
+    return Result.err("extraction_failed");
+  }
+  const passages = runPassages(document.blocks, scope);
+  return passages === null || passages.length === 0
+    ? Result.err("extraction_failed")
+    : Result.ok({ blocks: document.blocks, passages });
+};
+
 /** The code a run fails with when a model call fails: a cap or revoked
  *  access says so, anything else is the phase's own failure. */
 const modelCallFailure = (
@@ -593,23 +643,17 @@ const executeRun = async ({
     return "access_revoked";
   }
   const abortSignal = deadline();
-  const readDocument = execution.readDocument ?? readVerificationDocument;
-  const document = await readDocument({
-    organizationId: actor.organizationId,
-    workspaceId: actor.workspaceId,
+  const read = await readRunPassages({
+    actor,
     file: file.value,
+    scope: run.scope,
+    readDocument: execution.readDocument ?? readVerificationDocument,
     signal: abortSignal,
   });
-  if (document.type === "unsupported-format") {
-    return "unsupported_format";
+  if (Result.isError(read)) {
+    return read.error;
   }
-  if (document.type === "no-text") {
-    return "no_text";
-  }
-  const passages = runPassages(document.blocks, run.scope);
-  if (passages === null || passages.length === 0) {
-    return "extraction_failed";
-  }
+  const { blocks, passages } = read.value;
 
   const configResult = await Result.tryPromise({
     try: async () => {
@@ -735,7 +779,7 @@ const executeRun = async ({
     return "grading_failed";
   }
 
-  const rows = claimRows(actor, claims, graded.value, document.blocks);
+  const rows = claimRows(actor, claims, graded.value, blocks);
   await actor.writeDb(async (tx) => {
     const access = await resolveListVerificationRunAccess({
       tx,

@@ -9,6 +9,7 @@
  * own `LIMITS` so server call sites keep one lookup table.
  */
 
+import { UPLOAD_DOCUMENT_MAX_BYTES } from "./document-version-upload";
 import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "./legal-reader-annotations";
 
 /** Bun's 128 MiB default ingress ceiling, shared with request schemas. */
@@ -188,8 +189,26 @@ export const UPLOAD_FILE_MIN_BYTES = 1;
  * Largest document a presigned upload may declare. The browser refuses a
  * larger file before reading it, and a folder drop sends it down the
  * single-file path where the user sees that refusal for the file alone.
+ * Defined beside the upload transport, which the published CLI copies.
  */
-export const UPLOAD_DOCUMENT_MAX_BYTES = 50 * 1024 * 1024;
+export { UPLOAD_DOCUMENT_MAX_BYTES };
+
+/**
+ * What a multipart request may carry besides its file: the boundaries, the
+ * part headers and the scalar fields beside it.
+ */
+export const MULTIPART_ENVELOPE_MAX_BYTES = 1024 * 1024;
+
+/**
+ * Largest document one multipart request through the API may carry. The
+ * server refuses a body above `HTTP_REQUEST_BODY_MAX_BYTES` before any route
+ * runs, and the form is read into memory whole, so this is that ceiling less
+ * the envelope. A larger document goes through a presigned upload.
+ */
+export const MULTIPART_DOCUMENT_MAX_BYTES = Math.min(
+  UPLOAD_DOCUMENT_MAX_BYTES,
+  HTTP_REQUEST_BODY_MAX_BYTES - MULTIPART_ENVELOPE_MAX_BYTES,
+);
 
 /**
  * Largest file uploaded into an existing skill as one resource. Its text must

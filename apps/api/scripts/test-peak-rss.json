@@ -20336,6 +20336,14 @@
         "job": "measure-1"
       }
     },
+    "src/lib/load/document-bytes-admission.test.ts": {
+      "peakMb": 179,
+      "baselineMb": 179,
+      "source": {
+        "runId": "42807986206",
+        "job": "measure-2"
+      }
+    },
     "src/lib/load/request-latency-budget.test.ts": {
       "peakMb": 179,
       "baselineMb": 179,
@@ -23686,14 +23694,6 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-1"
-      }
-    },
-    "src/lib/uploads/finalize-admission.test.ts": {
-      "peakMb": 179,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
       }
     },
     "src/lib/uploads/promote-tmp-object.test.ts": {
