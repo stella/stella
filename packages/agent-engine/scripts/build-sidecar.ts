@@ -84,6 +84,8 @@ const compile = async (triple: CompiledTriple, version: string) => {
     sourcemap: "none",
     define: {
       "process.env.STELLA_SIDECAR_VERSION": JSON.stringify(version),
+      // Release builds have no stella browser test hooks (`src/sidecar/env.ts`).
+      "process.env.STELLA_BROWSER_TEST_HOOKS": JSON.stringify("0"),
     },
     compile: {
       target: BUN_TARGETS[triple],

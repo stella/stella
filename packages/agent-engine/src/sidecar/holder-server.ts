@@ -331,11 +331,15 @@ export const startHolderServer = async (
     });
   };
   const protocolLog = openProtocolLog(protocolLogSetting, log);
+  // The browser starts before the holder it serves; it asks the holder for
+  // the account once a run calls.
+  const account: { holder: Holder | null } = { holder: null };
   const started =
     browserOptions === null
       ? null
       : await startHolderBrowser({
           ...browserOptions,
+          accountOrigin: () => account.holder?.accountOrigin() ?? null,
           dir,
           endpoint,
           log,
@@ -356,21 +360,31 @@ export const startHolderServer = async (
       for (const socket of sockets) {
         end(socket);
       }
-      browser?.stop().catch((error: unknown) => {
-        log(
-          `the browser bridge did not stop cleanly: ${error instanceof Error ? error.name : "unknown"}`,
+      // The holder exits once its browser has: a stella browser it started
+      // is closed, not left running.
+      const browserStopped = (async () => {
+        if (browser === null) {
+          return null;
+        }
+        const stopped = await Result.tryPromise(
+          async () => await browser.stop(),
         );
-      });
+        if (Result.isError(stopped)) {
+          log(`the browser bridge did not stop cleanly: ${stopped.error.name}`);
+        }
+        return null;
+      })();
       server.close(() => {
         rmSync(path.join(dir, HOLDER_SECRET_FILE), { force: true });
         rmSync(path.join(dir, HOLDER_ENDPOINT_FILE), { force: true });
         if (!IS_WINDOWS) {
           rmSync(endpoint, { force: true });
         }
-        resolve(null);
+        resolve(browserStopped);
       });
     },
   });
+  account.holder = holder;
   server.on("connection", (socket) => {
     sockets.add(socket);
     connections += 1;

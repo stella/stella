@@ -15,6 +15,7 @@ import {
   type BrowserDownloadOutcome,
   receiveBrowserDownload,
 } from "./downloads";
+import type { HostRouter } from "./host-router";
 import {
   type ApproveAction,
   createLocalBrowserSession,
@@ -93,6 +94,8 @@ type Serving = {
 };
 
 type Endpoint = {
+  /** The chat whose harness process the endpoint belongs to. */
+  threadId: string;
   /** Fixed length: a presented value of another length is refused early. */
   secret: Buffer;
   /** `null` while parked: no run calls through it. */
@@ -207,15 +210,21 @@ const whileCalling = async <T>(
 
 /**
  * The endpoints by key (the id of the run that registered each) and the key
- * each run calls through: its own, or the one it adopted.
+ * each run calls through: its own, or the one it adopted. `chatGone` hears
+ * of a chat once no endpoint of it is left: its harness process is gone,
+ * and so are its tabs, where the browser owns them.
  */
-const createEndpoints = () => {
+const createEndpoints = (chatGone: (threadId: string) => void) => {
   const endpoints = new Map<string, Endpoint>();
   const runs = new Map<string, string>();
   return {
     get: (key: string) => endpoints.get(key),
     add: (run: BrowserMcpRun, secret: Buffer) => {
-      endpoints.set(run.runId, { serving: serve(run), secret });
+      endpoints.set(run.runId, {
+        secret,
+        serving: serve(run),
+        threadId: run.threadId,
+      });
       runs.set(run.runId, run.runId);
     },
     /**
@@ -250,7 +259,16 @@ const createEndpoints = () => {
       return endpoint;
     },
     remove: (key: string) => {
+      const removed = endpoints.get(key);
       endpoints.delete(key);
+      if (
+        removed !== undefined &&
+        ![...endpoints.values()].some(
+          ({ threadId }) => threadId === removed.threadId,
+        )
+      ) {
+        chatGone(removed.threadId);
+      }
     },
     /** Whether a run of `threadId` still calls through any endpoint. */
     servesThread: (threadId: string) =>
@@ -351,21 +369,36 @@ const sessionFor = (
   return created;
 };
 
-export const startLocalBrowserMcp = ({
-  bridge,
-  home,
-  version,
-}: {
-  bridge: BrowserBridge;
-  /** The member's home folder: Chrome's downloads are taken only from under it. */
-  home: string;
+type LocalBrowserMcpOptions = {
+  /** The browser each chat's commands go to (`host-router.ts`). */
+  browser: HostRouter;
+  /**
+   * Where downloads come from: the extension's reports, saved from under
+   * the member's home folder, where Chrome puts them. `null` without the
+   * extension: no download arrives then.
+   */
+  downloads: {
+    home: string;
+    onDownload: BrowserBridge["onDownload"];
+  } | null;
   /** The sidecar's version, reported as the server's. */
   version: string;
-}): LocalBrowserMcp => {
-  const endpoints = createEndpoints();
+};
+
+export const startLocalBrowserMcp = ({
+  browser,
+  downloads: downloadSource,
+  version,
+}: LocalBrowserMcpOptions): LocalBrowserMcp => {
+  const endpoints = createEndpoints(browser.releaseChat);
   const sessions = new Map<string, LocalBrowserSession>();
-  const downloads = createDownloadInbox(endpoints.runOf, home);
-  bridge.onDownload(downloads.arrive);
+  const downloads =
+    downloadSource === null
+      ? null
+      : createDownloadInbox(endpoints.runOf, downloadSource.home);
+  if (downloadSource !== null && downloads !== null) {
+    downloadSource.onDownload(downloads.arrive);
+  }
   const listener = { host: "" };
 
   const answer = async (
@@ -425,12 +458,14 @@ export const startLocalBrowserMcp = ({
           { id, requestSignal, serving },
           async (signal) =>
             await sessionFor(sessions, held.threadId).call(name, input, {
+              acts: browser.actsFor(held.threadId),
               approvals: held.approvals,
               approve: held.approve,
-              downloads: async () => await downloads.take(held),
+              downloads: async () =>
+                downloads === null ? [] : await downloads.take(held),
               signal,
               send: async (command, observedTab) =>
-                await bridge.request(
+                await browser.request(
                   {
                     command,
                     controllerId: held.threadId,
@@ -523,7 +558,7 @@ export const startLocalBrowserMcp = ({
     if (ended === null) {
       return null;
     }
-    bridge.cancel({ controllerId: ended.held.threadId, turnId: runId });
+    browser.cancel({ controllerId: ended.held.threadId, turnId: runId });
     if (!endpoints.servesThread(ended.held.threadId)) {
       sessions.delete(ended.held.threadId);
     }
@@ -561,7 +596,7 @@ export const startLocalBrowserMcp = ({
     stop: async () => {
       endpoints.clear();
       sessions.clear();
-      downloads.clear();
+      downloads?.clear();
       await server.stop(true);
     },
   };

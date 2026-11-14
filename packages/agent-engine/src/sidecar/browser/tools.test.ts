@@ -159,6 +159,7 @@ const recorder = (
   const asked: AskedStep[] = [];
   const finished: string[] = [];
   const context = {
+    acts: true,
     approvals,
     approve: async ({
       signal: _signal,
@@ -193,6 +194,35 @@ describe("the local browser tools", () => {
   test("list exactly the actions chat knows", () => {
     expect(localBrowserToolList().map(({ name }) => name)).toEqual([
       ...CHAT_LOCAL_RUN_BROWSER_ACTIONS,
+    ]);
+  });
+
+  test("in a browser that only reads, steps that change a page are refused before anyone is asked", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1"), page("r-2")], { approvals: "ask" });
+    const reading = { ...browser.context, acts: false };
+    await session.call("snapshot", {}, reading);
+    for (const [tool, input] of [
+      ["click", { ref: "L1" }],
+      ["type", { ref: "L1", text: "notice period" }],
+      ["press_key", { key: "Enter", ref: "L1" }],
+      ["select", { option: "All", ref: "L1" }],
+    ] as const) {
+      const refused = await session.call(tool, input, reading);
+      expect(refused.isError).toBe(true);
+      expect(parsed(refused)).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+        hint: expect.stringContaining("open"),
+        refused: "not_available_on_this_browser",
+        status: "error",
+      });
+    }
+    expect(browser.asked).toEqual([]);
+    // Reading still reaches the browser.
+    await session.call("snapshot", {}, reading);
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+      "snapshot",
     ]);
   });
 

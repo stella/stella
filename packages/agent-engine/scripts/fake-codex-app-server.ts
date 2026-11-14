@@ -1709,6 +1709,9 @@ const playBrowse = async ({ threadStart, write, log }: PlayBrowseOptions) => {
   });
   // Kept on this computer, for the test to see what the agent read.
   log({ pageCanaries: browsed.read });
+  if (browsed.notes !== undefined) {
+    log({ readScenario: browsed.notes });
+  }
   const notifyItem = (phase: "started" | "completed", body: object) => {
     write({
       method: `item/${phase}`,

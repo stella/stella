@@ -22,6 +22,7 @@ import {
 } from "@stll/api-contract/browser-control";
 
 import type { BrowserBridge, BrowserBridgeDownload } from "./bridge";
+import { createHostRouter, extensionHost } from "./host-router";
 import { localBrowserResult } from "./local-result";
 import { startLocalBrowserMcp } from "./mcp-server";
 import { installNativeHost } from "./native-host-manifest";
@@ -85,8 +86,11 @@ const fakeBridge = () => {
 
 const start = (fake = fakeBridge(), home = "/unused-home") => {
   const mcp = startLocalBrowserMcp({
-    bridge: fake.bridge,
-    home,
+    browser: createHostRouter({
+      extension: extensionHost(fake.bridge),
+      stellaBrowser: null,
+    }),
+    downloads: { home, onDownload: fake.bridge.onDownload },
     version: "1.4.0",
   });
   cleanups.push(async () => {

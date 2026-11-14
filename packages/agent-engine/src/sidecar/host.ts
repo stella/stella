@@ -530,6 +530,11 @@ export class SidecarHost {
     return true;
   }
 
+  /** The API origin `configure` took last; null before any desktop connected. */
+  accountOrigin(): string | null {
+    return this.config?.apiOrigin ?? null;
+  }
+
   /** Whether the run is still going: its `run.finished` is not sent yet. */
   holds(runId: string) {
     return this.runs.has(runId);

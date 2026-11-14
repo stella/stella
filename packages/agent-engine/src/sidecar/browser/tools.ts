@@ -38,11 +38,12 @@ import {
 
 /**
  * The browser tools a coding agent on the member's computer gets
- * (`CHAT_LOCAL_RUN_BROWSER_ACTIONS`), in the member's Chrome through the
- * stella extension. Each chat keeps the page it last read here, on the
- * computer: a step on an element names it by the ref that read returned,
- * and the extension refuses it unless the tab still shows that exact
- * document. `switch_tab` takes only a tab that read listed.
+ * (`CHAT_LOCAL_RUN_BROWSER_ACTIONS`), in a browser on that computer: the
+ * member's Chrome through the stella extension, or the stella browser
+ * (`host-router.ts` picks). Each chat keeps the page it last read here, on
+ * the computer: a step on an element names it by the ref that read
+ * returned, and the browser refuses it unless the tab still shows that
+ * exact document. `switch_tab` takes only a tab that read listed.
  *
  * Results are page content and stay on the computer: they go to the agent
  * as MCP results and nowhere else. A chat turn keeps only the kind of step
@@ -126,7 +127,7 @@ const UNTRUSTED_AND_CITING =
 /** `tools/list` as the agent sees it; each schema mirrors `INPUT_SCHEMAS`. */
 const TOOL_DEFINITIONS = {
   open: {
-    description: `Open a public HTTPS page in the member's Chrome, in the tab this chat uses (a new tab the first time), and read it. With newTab true it opens in a new tab of this chat instead, which the tools then work in; the chat keeps at most ${String(BROWSER_CONTROL_LIMITS.tabs)} tabs. Returns the page as snapshot does. A page that asks for a sign-in returns needs_member: ask the member to sign in in Chrome, then call snapshot. ${DOWNLOADS_NOTE}`,
+    description: `Open a public HTTPS page in the browser this chat uses, in the chat's tab (a new tab the first time), and read it. With newTab true it opens in a new tab of this chat instead, which the tools then work in; the chat keeps at most ${String(BROWSER_CONTROL_LIMITS.tabs)} tabs. Returns the page as snapshot does. A page that asks for a sign-in returns needs_member: ask the member to sign in in the browser window that shows it, then call snapshot. ${DOWNLOADS_NOTE}`,
     inputSchema: {
       type: "object",
       properties: {
@@ -145,7 +146,7 @@ const TOOL_DEFINITIONS = {
     },
   },
   snapshot: {
-    description: `Read the page in this chat's Chrome tab, one window of up to ${String(BROWSER_CONTROL_LIMITS.pageTextChars)} characters of its visible text at a time (hidden text is left out). The text has one block per line; a heading's line starts with one # per level, and a link's words are followed by [L<n>]. It also returns the address, the title, the page's facts for citing (canonical link, language, citation meta entries) and its elements: the links marked in the text (L<n>, with their full address) and other controls (E<n>; an element in an embedded frame reads L<frame>.<n>). Use an id as ref for click, type, press_key and select. An element keeps its id while the page stays loaded, but those tools take only ids the latest read listed. When the chat has more than one tab, tabs lists them; switch_tab moves to another. Without a cursor it reads from the section in view, which is where a link to a section lands, or else from the top. Pass window.next or window.previous as cursor to read on. In a long document, go to the part you need with find or a link to its section rather than paging from the top. Reading never asks the member and is not counted as a browser step. Lists under downloads any file the tab downloaded since the last result; a download still running shows up in a later one. ${UNTRUSTED_AND_CITING}`,
+    description: `Read the page in this chat's browser tab, one window of up to ${String(BROWSER_CONTROL_LIMITS.pageTextChars)} characters of its visible text at a time (hidden text is left out). The text has one block per line; a heading's line starts with one # per level, and a link's words are followed by [L<n>]. It also returns the address, the title, the page's facts for citing (canonical link, language, citation meta entries) and its elements: the links marked in the text (L<n>, with their full address) and other controls (E<n>; an element in an embedded frame reads L<frame>.<n>). Use an id as ref for click, type, press_key and select. An element keeps its id while the page stays loaded, but those tools take only ids the latest read listed. When the chat has more than one tab, tabs lists them; switch_tab moves to another. Without a cursor it reads from the section in view, which is where a link to a section lands, or else from the top. Pass window.next or window.previous as cursor to read on. In a long document, go to the part you need with find or a link to its section rather than paging from the top. Reading never asks the member and is not counted as a browser step. Lists under downloads any file the tab downloaded since the last result; a download still running shows up in a later one. ${UNTRUSTED_AND_CITING}`,
     inputSchema: {
       type: "object",
       properties: {
@@ -285,7 +286,7 @@ const ERROR_HINTS: Partial<Record<BrowserControlErrorCode, string>> = {
 };
 
 const SIGN_IN_HINT =
-  "Ask the member to sign in in Chrome themselves, then call snapshot. Do not fill in sign-in or verification fields.";
+  "Ask the member to sign in themselves, in the browser window that shows the page, then call snapshot. Do not fill in sign-in or verification fields.";
 
 const textResult = (
   value: unknown,
@@ -603,7 +604,7 @@ const stepGates = (approvals: DesktopRunnerApprovalMode): StepGates => {
   }
 };
 
-/** What happens to a step before it reaches Chrome. */
+/** What happens to a step before it reaches the browser. */
 type StepDecision =
   | { type: typeof BROWSER_GATE.run }
   | { type: typeof BROWSER_GATE.refuse }
@@ -683,7 +684,7 @@ const browserStepDecision = (
   }
 };
 
-/** Reaches the extension for one call: its run, and its stop. */
+/** Reaches the chat's browser for one call: its run, and its stop. */
 type LocalBrowserSend = (
   command: BrowserControlCommand,
   observedTab: BrowserObservedTab | null,
@@ -734,6 +735,11 @@ const unknownTab = (): BuiltCommand => ({
 
 type LocalBrowserCallContext = {
   send: LocalBrowserSend;
+  /**
+   * Whether the chat's browser runs steps that change a page; the stella
+   * browser only reads so far.
+   */
+  acts: boolean;
   /** The run's approval mode: which steps wait for the member. */
   approvals: DesktopRunnerApprovalMode;
   approve: ApproveAction;
@@ -745,6 +751,38 @@ type LocalBrowserCallContext = {
   /** Aborts when the agent's call ends. */
   signal: AbortSignal;
 };
+
+/**
+ * The steps that change a page or move between the chat's pages: refused
+ * without asking anyone where the chat's browser cannot run them.
+ */
+const CHANGES_PAGE = {
+  [BROWSER_CONTROL_ACTION.open]: false,
+  [BROWSER_CONTROL_ACTION.snapshot]: false,
+  [BROWSER_CONTROL_ACTION.find]: false,
+  [BROWSER_CONTROL_ACTION.click]: true,
+  [BROWSER_CONTROL_ACTION.fill]: true,
+  [BROWSER_CONTROL_ACTION.pressKey]: true,
+  [BROWSER_CONTROL_ACTION.select]: true,
+  [BROWSER_CONTROL_ACTION.goBack]: true,
+  [BROWSER_CONTROL_ACTION.switchTab]: true,
+} as const satisfies Record<BrowserControlCommand["action"], boolean>;
+
+/** Why a step was refused before it reached a browser that only reads. */
+const NOT_AVAILABLE_HERE = "not_available_on_this_browser";
+
+const notAvailableResult = (): LocalBrowserToolResult =>
+  textResult(
+    {
+      status: "error",
+      code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+      refused: NOT_AVAILABLE_HERE,
+      message:
+        "This chat's pages are in the stella browser, which can open and read pages (open, snapshot, find) but cannot click, type, press keys, choose options, go back or switch tabs yet.",
+      hint: "Use open with the address you need instead: a search results page's own address, or a link's href from the latest read. Ask the member to do steps that need clicking or typing.",
+    },
+    true,
+  );
 
 const declinedResult = (): LocalBrowserToolResult =>
   textResult(
@@ -940,13 +978,24 @@ export const createLocalBrowserSession = () => {
     call: async (
       tool: ChatLocalRunBrowserAction,
       input: unknown,
-      { approvals, approve, downloads, send, signal }: LocalBrowserCallContext,
+      {
+        acts,
+        approvals,
+        approve,
+        downloads,
+        send,
+        signal,
+      }: LocalBrowserCallContext,
     ): Promise<LocalBrowserToolResult> => {
       const next = command(tool, input);
       if (next.type === "refused") {
         return next.result;
       }
       const step = next.command;
+      // Refused before anyone is asked: the step could not run here.
+      if (!acts && CHANGES_PAGE[step.action]) {
+        return notAvailableResult();
+      }
       const decision = browserStepDecision(approvals, step);
       if (decision.type === BROWSER_GATE.refuse) {
         return readOnlyResult();
