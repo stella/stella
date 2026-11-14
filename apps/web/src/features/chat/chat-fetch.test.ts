@@ -1,5 +1,7 @@
 import { Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
+
+import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 
 import { chatFetchClient } from "./chat-fetch";
 import { findChatRequestError } from "./chat-request-error";
@@ -103,4 +105,101 @@ describe("chat transport failures", () => {
       }
     },
   );
+});
+
+describe("chat stream deadlines", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  /** A request the server never answers; it fails when its signal aborts. */
+  const neverAnswered = () => {
+    globalThis.fetch = Object.assign(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const { promise, reject } = Promise.withResolvers<Response>();
+        const signal = init?.signal;
+        const fail = () => {
+          reject(signal?.reason);
+        };
+        if (signal?.aborted === true) {
+          fail();
+        }
+        signal?.addEventListener("abort", fail);
+        return await promise;
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+  };
+
+  /** A stream the server opened and then says nothing on. */
+  const silentStream = () => {
+    const released: unknown[] = [];
+    globalThis.fetch = Object.assign(
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            cancel(reason: unknown) {
+              released.push(reason);
+            },
+          }),
+          { headers: { "Content-Type": "text/event-stream" } },
+        ),
+      { preconnect: originalFetch.preconnect },
+    );
+    return released;
+  };
+
+  test("headers that never arrive time the request out", async () => {
+    jest.useFakeTimers();
+    neverAnswered();
+    const outcome = Result.tryPromise({
+      try: async () => await chatFetchClient("https://example.test/v1/chat/"),
+      catch: (error) => error,
+    });
+    // Far past any wait for headers: the request has no stream to be alive.
+    jest.advanceTimersByTime(24 * 60 * 60 * 1000);
+    const failed = await outcome;
+    expect(failed.isErr()).toBe(true);
+    if (failed.isErr()) {
+      expect(findChatRequestError(failed.error)?.kind).toBe("timed_out");
+    }
+  });
+
+  test("a stop ends a stream at once, however recently it spoke", async () => {
+    jest.useFakeTimers();
+    const released = silentStream();
+    const stop = new AbortController();
+    const response = await chatFetchClient("https://example.test/v1/chat/", {
+      signal: stop.signal,
+    });
+    const reader = response.body?.getReader();
+    const read = Result.tryPromise({
+      try: async () => await reader?.read(),
+      catch: (error) => error,
+    });
+    const reason = new DOMException("Stopped by the member", "AbortError");
+    stop.abort(reason);
+    const ended = await read;
+    expect(ended.isErr() ? ended.error : undefined).toBe(reason);
+    expect(released).toEqual([reason]);
+    // Nothing is left counting down on a stream the member closed.
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test("a stream silent past the bound fails as timed out and is released", async () => {
+    jest.useFakeTimers();
+    const released = silentStream();
+    const response = await chatFetchClient("https://example.test/v1/chat/");
+    const reader = response.body?.getReader();
+    const read = Result.tryPromise({
+      try: async () => await reader?.read(),
+      catch: (error) => error,
+    });
+    jest.advanceTimersByTime(SSE_SILENCE_BOUND_MS);
+    const ended = await read;
+    expect(ended.isErr() ? ended.error : undefined).toMatchObject({
+      name: "TimeoutError",
+    });
+    expect(released).toHaveLength(1);
+  });
 });

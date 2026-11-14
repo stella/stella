@@ -1946,13 +1946,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/web/src/features/chat/chat-fetch.ts",
-    "function": "module/chatFetchClient/assign[0]",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
     "function": "module/AddSkillForm/resolveLatestCommit",
     "kind": "numeric-timeout",
