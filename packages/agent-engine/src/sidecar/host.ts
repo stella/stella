@@ -1268,6 +1268,7 @@ export class SidecarHost {
       approvals: message.policy.approvals,
       approve: run.approvals.request,
       stopped: run.browserStop.signal,
+      workspaceDir: message.workspaceDir,
     };
     if (taken === null) {
       return browser.register(browserRun);

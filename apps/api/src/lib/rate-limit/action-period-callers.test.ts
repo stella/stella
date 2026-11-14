@@ -195,6 +195,7 @@ describe("period identity coverage", () => {
       "handlers/search/routes.ts",
       "handlers/search/routes.ts",
       "handlers/skills/drafts/generate.ts",
+      "handlers/skills/from-chat/draft.ts",
       "handlers/skills/proposals/from-comments/create.ts",
       "handlers/skills/resources/rewrite.ts",
       "handlers/templates/fields/suggest.ts",
@@ -209,6 +210,7 @@ describe("period identity coverage", () => {
       "handlers/chat/suggest-thread-title.ts",
       "handlers/desktop-time-entries/billing-drafts.ts",
       "handlers/dictation/cleanup.ts",
+      "handlers/dictation/desktop-transcription.ts",
       "handlers/document-reviews/parties.ts",
       "handlers/templates/prefill.ts",
     ]);

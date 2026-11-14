@@ -1,10 +1,9 @@
 import { matchError, Result } from "better-result";
 
-import type { AIErrorKind } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
-import { classifyAIError, providerStatusCode } from "@/api/lib/ai-error";
+import { aiFailureCanClearOnRetry } from "@/api/lib/ai-error";
 import type {
   DocumentTooLargeError,
   WorkflowIntegrationError,
@@ -96,45 +95,6 @@ export const computeWorkflowRunLockTtlSec = (
   );
 };
 
-// Whether the same request could succeed a moment later. A retry resends every
-// document in the batch, so it is wasted on a failure only a person can fix.
-const AI_FAILURE_CAN_CLEAR_ON_RETRY = {
-  quota_exhausted: true,
-  provider_billing: false,
-  provider_credentials_rejected: false,
-  model_unavailable: false,
-  provider_unavailable: true,
-  provider_stream_incomplete: true,
-  output_incomplete: true,
-  output_moderated: true,
-  output_invalid: true,
-  deadline_exceeded: true,
-  loop_detected: true,
-  empty_completion: true,
-  local_runner_needs_login: false,
-  local_runner_limit_reached: false,
-  local_runner_unavailable: true,
-  local_runner_turn_too_large: false,
-  turn_too_large: false,
-  local_runner_not_reached: true,
-  local_runner_relinked: true,
-  local_runner_restoring: true,
-  local_runner_folder_unavailable: false,
-  unknown: true,
-} as const satisfies Record<AIErrorKind, boolean>;
-
-// The provider refused this request as built, for example because it overflows
-// the model's context window. No failure kind names these.
-const REJECTED_REQUEST_STATUSES: ReadonlySet<number> = new Set([400, 413]);
-
-const canClearOnRetry = (error: WorkflowIntegrationError): boolean => {
-  const status = providerStatusCode(error);
-  if (status !== null && REJECTED_REQUEST_STATUSES.has(status)) {
-    return false;
-  }
-  return AI_FAILURE_CAN_CLEAR_ON_RETRY[classifyAIError(error)];
-};
-
 const shouldRetryWorkflowBatchError = ({
   attempt,
   error,
@@ -145,7 +105,7 @@ const shouldRetryWorkflowBatchError = ({
   }
 
   return matchError(error, {
-    WorkflowIntegrationError: canClearOnRetry,
+    WorkflowIntegrationError: aiFailureCanClearOnRetry,
     WorkflowValidationError: () => false,
     DocumentTooLargeError: () => false,
   });

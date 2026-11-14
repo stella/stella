@@ -225,6 +225,7 @@ const fileChangesSchema = shownList(
 export const CHAT_LOCAL_RUN_BROWSER_ACTIONS = [
   "open",
   "snapshot",
+  "find",
   "click",
   "type",
 ] as const;

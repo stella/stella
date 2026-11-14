@@ -1209,6 +1209,17 @@ const countRawUserAvatarPrimitive: FileCounter = (content, { file }) =>
     required: /@stll\/ui\/(?:components\/)?avatar/u,
   });
 
+// A tolerated browser error hides a console error a spec may or may not
+// emit. Each call carries its reason and what removes it; this keeps the
+// number of them from growing unseen.
+const countToleratedBrowserErrors: FileCounter = (content, { file }) =>
+  countCodeMatches({
+    content,
+    file,
+    pattern: /\bbrowserErrors\s*\.\s*tolerate\s*\(/gu,
+    required: /tolerate/u,
+  });
+
 const countShadowedUserNameHelpers: FileCounter = (content, { file }) =>
   countCodeMatches({
     content,
@@ -3446,6 +3457,16 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "e2e-tolerated-browser-errors",
+    description:
+      "browserErrors.tolerate(...) calls in web browser specs: console errors a spec may emit without failing; gated per file, and a new one needs a justified allowance",
+    include: ["apps/web/e2e/**/*.{ts,tsx}"],
+    exclude: () => false,
+    perFile: true,
+    count: countToleratedBrowserErrors,
+  },
+  {
+    scope: "file",
     id: "raw-user-avatar-primitive",
     description:
       "imports of @stll/ui/avatar outside the shared owner and explicit non-user exceptions",
@@ -5126,6 +5147,17 @@ const SELF_TEST_UNDECLARED_API_CLIENT_WRITES = `${UNDECLARED_API_CLIENT_WRITE_FI
 // writes, reads and unrelated `delete` calls are excluded.
 const EXPECTED_UNDECLARED_API_CLIENT_WRITES = 3;
 const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
+const TOLERATED_BROWSER_ERROR_FIXTURE_LINES = [
+  'browserErrors.tolerate({ pattern: /a/u, reason: "r", removedBy: "x" });',
+  "browserErrors",
+  '  .tolerate({ pattern: /b/u, reason: "r", removedBy: "x" });',
+  "browserErrors.expectCaptured(/c/u);",
+  "// browserErrors.tolerate({ pattern: /d/u }) must not count.",
+];
+const SELF_TEST_TOLERATED_BROWSER_ERRORS = `${TOLERATED_BROWSER_ERROR_FIXTURE_LINES.join("\n")}\n`;
+// The plain call and the one split across lines; the required declaration
+// and the comment are excluded.
+const EXPECTED_TOLERATED_BROWSER_ERRORS = 2;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
 
@@ -6931,6 +6963,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/web/e2e/specs/tolerated-browser-errors.spec.ts",
+      SELF_TEST_TOLERATED_BROWSER_ERRORS,
+    );
+    writeFixture(
+      root,
       "apps/web/src/undeclared-api-client-writes.ts",
       SELF_TEST_UNDECLARED_API_CLIENT_WRITES,
     );
@@ -7346,6 +7383,7 @@ const runSelfTest = (): number => {
           EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO,
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
+      ["e2e-tolerated-browser-errors", EXPECTED_TOLERATED_BROWSER_ERRORS],
       ["undeclared-api-client-writes", EXPECTED_UNDECLARED_API_CLIENT_WRITES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [

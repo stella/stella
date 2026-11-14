@@ -252,10 +252,10 @@ are omitted here. Input union keys are required unless marked `?`.
   - source: type="versions": document_id:string, base_version_id:string, target_version_ids:string[]; type="previous": document_id:string, target_version_id:string; type="uploads": base_upload_id:string, target_upload_id:string. Example: `--input '{"source":{"type":"versions","document_id":"00000000-0000-4000-8000-000000000000","base_version_id":"00000000-0000-4000-8000-000000000000","target_version_ids":["00000000-0000-4000-8000-000000000000"]}}'`
 - `stella document comparison prepare`
   - `--base.name` — File name to show the user, including the .docx suffix. (string)
-  - `--base.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--base.size` — Exact byte length of the file, at most 200 MB. (int 1..209715200)
   - `--base.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
   - `--target.name` — File name to show the user, including the .docx suffix. (string)
-  - `--target.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--target.size` — Exact byte length of the file, at most 200 MB. (int 1..209715200)
   - `--target.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
 - `stella document comparison prepare-from-links`
   - `--base.url` — HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form. (string)

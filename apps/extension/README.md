@@ -225,12 +225,19 @@ that holds one, such as a new field a "show password" button put in the old
 one's place, is withheld or shown as `[hidden]`.
 
 Snapshots leave out text and controls a reader of the page cannot see: hidden
-from assistive technology (`aria-hidden`), transparent, invisible, clipped
-away, collapsed to a pixel, off the page, or in zero-size or transparent type.
+from assistive technology (`aria-hidden`, except a short paragraph or margin
+number), transparent, invisible, clipped away, collapsed to a pixel, off the
+page, or in zero-size or transparent type.
 
-Snapshots read every frame and open shadow root, return interactive elements
-with their link destinations, and page the visible text; long pages are read in
-slices through `snapshot` with `textOffset`.
+A snapshot returns a window of the visible text, one block per line, with
+headings marked and each link's words followed by its id (`[L3]`), the
+window's links and controls, the page's own controls, and the page's
+canonical link and standard meta entries. Without a cursor it starts at the
+section in view, else at the top; `next` and `previous` cursors move on from
+there, and `find` searches the same text or lists the headings. Frames are
+read in order after the top document. The reading rules live in
+`src/lib/page-script.ts` (in the page) and `src/lib/page-window.ts` (cursors
+and frames).
 
 Each browser command is approved in stella chat. The user may choose, per web
 session, to auto-approve page reads; every other command always asks.

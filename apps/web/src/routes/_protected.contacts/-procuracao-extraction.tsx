@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Hex } from "@stll/sha256/browser";
 import { Button } from "@stll/ui/button";
@@ -21,6 +22,7 @@ import { contactsKeys } from "@/lib/contacts/queries";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { validateUploadFileSize } from "@/lib/files/upload-file-validation";
 import { customFieldId } from "@/routes/_protected.contacts/-import-candidate";
 import type {
   ImportCandidate,
@@ -32,9 +34,6 @@ import {
   useImportReview,
 } from "@/routes/_protected.contacts/-import-review";
 import type { ImportReview } from "@/routes/_protected.contacts/-import-review";
-
-const EXTRACTION_SOURCE_MAX_BYTES = 50 * 1024 * 1024;
-const EXTRACTION_UPLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 
 /** A procuração states Brazilian tax ids, so the batch is checksum-checked. */
 const PROCURACAO_TAX_ID_SCHEME = "br_cpf_cnpj" as const;
@@ -152,8 +151,9 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
       notifyUserProblem(t("contacts.extractProcuracao.invalidFileType"));
       return;
     }
-    if (file.size > EXTRACTION_SOURCE_MAX_BYTES) {
-      notifyUserProblem(t("contacts.extractProcuracao.fileTooLarge"));
+    const size = validateUploadFileSize(file.size);
+    if (Result.isError(size)) {
+      notifyUserProblem(size.error.message);
       return;
     }
 
@@ -176,7 +176,7 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
           method: "PUT",
           headers: presignResponse.data.headers,
           body: file,
-          timeoutMs: EXTRACTION_UPLOAD_TIMEOUT_MS,
+          timeoutMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
         });
         if (!putResponse.ok) {
           throw new ClientOperationError({
