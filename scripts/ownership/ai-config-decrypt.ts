@@ -37,11 +37,6 @@ export default {
           "The settings update handler decrypts the current value before merging an edit.",
       },
       {
-        path: "apps/api/src/handlers/organization-settings/verification-decision-model/update.ts",
-        reason:
-          "The verification switch reads which decision model the organization configured, to refuse turning it on without one.",
-      },
-      {
         path: "apps/api/src/lib/ai-config-loader.test.ts",
         reason:
           "Confidentiality tests exercise every runtime loader and classified failure.",

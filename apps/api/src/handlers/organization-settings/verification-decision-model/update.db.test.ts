@@ -7,6 +7,7 @@ import "@/api/tests/setup-env";
 
 import { createTestState } from "@stll/test-state";
 
+import { user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs, organizationSettings } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -59,6 +60,12 @@ testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  // Feature access admits only a verified address; the shared fixture's
+  // users have none, and the handler would answer as if it did not exist.
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
   // The switch belongs to Anchor Verification, which the organization has.
   testState.setConfig("FEATURE_LEGAL_LISTS", true);
   testState.setConfig(

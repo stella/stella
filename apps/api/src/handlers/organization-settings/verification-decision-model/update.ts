@@ -3,9 +3,7 @@ import * as v from "valibot";
 
 import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
 
-import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
-import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
@@ -24,7 +22,9 @@ const config = {
     "citations and qualifiers; the decision model's verdict replaces its " +
     "verdict only when it is confident enough. Turning it on is refused " +
     "with verification_decision_model_unavailable when the organization " +
-    "has no decision model it can use; a save that raced another " +
+    "has no decision model it can use, and with the AI access refusal when " +
+    "the administrator may not use AI or the organization has neither its " +
+    "own key nor instance models; a save that raced another " +
     "administrator's is refused with version_conflict. Changes are audited.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
@@ -35,28 +35,21 @@ const config = {
 
 const updateVerificationDecisionModelRoute = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, body, recordAuditEvent }) {
+  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
     const organizationId = session.activeOrganizationId;
-    const row = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.organizationSettings.findFirst({
-          where: { organizationId: { eq: organizationId } },
-          columns: { aiConfigEncrypted: true, aiConfigIv: true },
-        }),
-      ),
-    );
-    let orgAIConfig: OrgAIConfig | null = null;
-    if (row?.aiConfigEncrypted || row?.aiConfigIv) {
-      const decrypted = await decryptAIConfig(
-        organizationId,
-        row.aiConfigEncrypted,
-        row.aiConfigIv,
-      );
-      if (decrypted.isErr()) {
-        return Result.err(storedAIConfigUnreadableError());
-      }
-      orgAIConfig = decrypted.value;
-    }
+    // Only turning it on needs the organization's AI configuration, read
+    // through the shared loader: an administrator the organization does not
+    // admit to AI work, or an organization without instance models and
+    // without its own key, is refused there. Turning it off never is.
+    const loaded = body.enabled
+      ? yield* Result.await(
+          safeDb(
+            async (tx) =>
+              await loadOrgAIConfig(tx, { organizationId, userId: user.id }),
+          ),
+        )
+      : Result.ok(null);
+    const orgAIConfig = yield* loaded;
     const outcome = yield* Result.await(
       safeDb(
         async (tx) =>
