@@ -619,10 +619,16 @@ const holdSplitRow = async (splitId: string) =>
       await sql`SELECT split_id FROM splits WHERE split_id = ${splitId} FOR UPDATE`,
   );
 
+const lockWaiterRowsSchema = v.array(v.object({ query: v.string() }));
+
+/** The statement text of every metastore session waiting on a lock. */
 const lockWaiters = async () =>
-  (
-    await metastore()`SELECT query FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`
-  ).map(({ query }: { query: string }) => query.replaceAll(/\s+/gu, " "));
+  v
+    .parse(
+      lockWaiterRowsSchema,
+      await metastore()`SELECT query FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+    )
+    .map(({ query }) => query.replaceAll(/\s+/gu, " "));
 
 const waitForLockWaiter = async (statement: RegExp) =>
   await waitForExternalState({
