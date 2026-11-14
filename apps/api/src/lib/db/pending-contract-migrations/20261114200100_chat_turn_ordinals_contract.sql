@@ -1,4 +1,4 @@
--- requires: 20261114180000_chat_turn_ordinals
+-- requires: 20261114200000_chat_turn_ordinals
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 

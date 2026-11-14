@@ -96,7 +96,7 @@ const STORED_KEYS_ORGANIZATION_SCOPE_MIGRATION_PATH = nodePath.join(
 );
 const CHAT_TURN_ORDINALS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261114180000_chat_turn_ordinals",
+  "20261114200000_chat_turn_ordinals",
   "migration.sql",
 );
 const SEARCH_HISTORY_COUNTRY_MIGRATION_PATH = nodePath.join(

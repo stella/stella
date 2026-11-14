@@ -25,7 +25,7 @@ export const PENDING_CONTRACT_MIGRATIONS_DIR = import.meta.dir;
 
 export const PENDING_CONTRACT_MIGRATIONS = [
   {
-    name: "20261114180100_chat_turn_ordinals_contract",
+    name: "20261114200100_chat_turn_ordinals_contract",
     expiresAt: "2026-11-28",
     relations: ["chat_turns"],
   },

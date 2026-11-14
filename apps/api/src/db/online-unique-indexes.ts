@@ -229,7 +229,7 @@ export const IMPORT_PROVENANCE_UNIQUE_INDEXES = [
 /** A thread's turns by position, unnumbered ones first on a forward scan. */
 export const CHAT_TURN_ORDINAL_UNIQUE_INDEXES = [
   {
-    introducedBy: "20261114180000_chat_turn_ordinals",
+    introducedBy: "20261114200000_chat_turn_ordinals",
     createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "chat_turns_thread_ordinal_uidx" ON public."chat_turns" USING btree ("thread_id", "ordinal" NULLS FIRST)',
     definitionBody:

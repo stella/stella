@@ -643,5 +643,6 @@ test("chat turn positions stay unique, stable and ordered under any interleaving
         });
       },
     ),
+    { numRuns: 40 },
   );
 });

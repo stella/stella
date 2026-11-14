@@ -153,7 +153,7 @@ test("the turn position migration defines its trigger and writes no chat row", (
   const source = readFileSync(
     path.resolve(
       import.meta.dir,
-      "../../../drizzle/20261114180000_chat_turn_ordinals/migration.sql",
+      "../../../drizzle/20261114200000_chat_turn_ordinals/migration.sql",
     ),
     "utf-8",
   );

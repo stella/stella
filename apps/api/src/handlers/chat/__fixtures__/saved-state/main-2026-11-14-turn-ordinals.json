@@ -1,7 +1,7 @@
 {
   "release": null,
   "sourceCommit": "fa94e0d700e8c1685a67c5c069967c4d77b7088c",
-  "newestMigration": "20261114180000_chat_turn_ordinals",
+  "newestMigration": "20261114200000_chat_turn_ordinals",
   "shape": "adds chat_turns.ordinal (a turn's position in its thread) and chat_threads.last_turn_ordinal",
   "actors": {
     "organizationId": "nOIgNqU02cF16BoNiFGy1eQx1wC4HegW",

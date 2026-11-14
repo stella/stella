@@ -11,7 +11,7 @@ import { chatTurns } from "@/api/db/schema";
  * a transaction that started first can take the thread's lock second.
  *
  * Compatibility, until the pending contract step
- * `20261114180100_chat_turn_ordinals_contract` ships: a turn stored before
+ * `20261114200100_chat_turn_ordinals_contract` ships: a turn stored before
  * the column has no ordinal until the `chat-turn-ordinals` repair numbers
  * it. Such turns are older than every numbered one, so they sort after them
  * here, among themselves in the stored order the repair numbers them in.

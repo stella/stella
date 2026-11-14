@@ -48,7 +48,7 @@ export const createChatTurnOrdinalBackfill = ({
   createPendingRowBackfill(
     {
       name: "chat-turn-ordinals",
-      introducedBy: "20261114180000_chat_turn_ordinals",
+      introducedBy: "20261114200000_chat_turn_ordinals",
       tableName: "chat_turns",
       pending: UNNUMBERED,
       reason: "chat turns stored before positions await their position",
