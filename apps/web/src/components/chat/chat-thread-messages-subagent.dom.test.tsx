@@ -440,7 +440,7 @@ test("opening a finished subagent shows what it was told, wrote and reported, re
   // The entries themselves, not the lists a formatted entry may hold.
   const [prompt, message, report] = [
     ...(region.querySelector("ol")?.children ?? []),
-  ].map((item) => item.textContent ?? "");
+  ].map((item) => item.textContent);
   expect(prompt).toBe(
     `${messages.chat.toolCall.localOutput.conversationPrompt}List every clause on arrears.`,
   );
