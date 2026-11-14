@@ -2265,6 +2265,10 @@
       "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {
+      "browserClick": "Kliknúť na „{target}“ na stránke {url}",
+      "browserPressKey": "Stlačiť kláves {key} v „{target}“ na stránke {url}",
+      "browserSelect": "Vybrať „{option}“ v „{target}“ na stránke {url}",
+      "browserType": "Zadať text do „{target}“ na stránke {url}",
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov} many {# znaku}}",
       "commandExited": "{command} (návratový kód {code})",
       "consoleLogs": "Výstup konzoly",

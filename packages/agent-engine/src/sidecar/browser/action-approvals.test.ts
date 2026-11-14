@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
 
+import {
+  CHAT_LOCAL_RUN_TOOL_NAMES,
+  parseChatLocalRunToolCall,
+} from "@stll/api-contract/chat-local-run-tool";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createEventQueue } from "../../harness/event-queue";
@@ -78,6 +82,64 @@ test("a denied step is reported declined at once", async () => {
     result: { content: JSON.stringify({ status: "declined" }) },
   });
   harness.close();
+});
+
+test("a key press and an option name the key and the option, and chat keeps the question", async () => {
+  const signal = new AbortController().signal;
+  const element = {
+    name: "Court",
+    role: "select",
+    signal,
+    url: "https://fixture-library.test/search",
+  };
+  for (const { request, reason, asked } of [
+    {
+      request: { ...element, action: "press_key", key: "Enter" },
+      reason:
+        'Press Enter in the select "Court" on https://fixture-library.test/search',
+      asked: { key: "Enter" },
+    },
+    {
+      request: { ...element, action: "select", option: "Supreme Court" },
+      reason:
+        'Choose "Supreme Court" in the select "Court" on https://fixture-library.test/search',
+      asked: { option: "Supreme Court" },
+    },
+  ] as const satisfies readonly {
+    request: BrowserApprovalRequest;
+    reason: string;
+    asked: object;
+  }[]) {
+    const approvals = createActionApprovals();
+    const harness = createEventQueue<HarnessEvent>();
+    const stream = approvals.withEvents(harness.items)[Symbol.asyncIterator]();
+    const decided = approvals.request(request);
+    const event = (await stream.next()).value;
+    if (event?.type !== "approval.requested") {
+      throw new Error("Expected an approval request");
+    }
+    expect(event.request.reason).toBe(reason);
+    const kept = {
+      action: request.action,
+      asked: {
+        name: "Court",
+        role: "select",
+        url: "https://fixture-library.test/search",
+        ...asked,
+      },
+    };
+    expect(event.request.toolCall.input).toEqual(kept);
+    // What the desktop sends is what chat keeps.
+    expect(
+      parseChatLocalRunToolCall(
+        CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+        event.request.toolCall.input,
+      ),
+    ).toEqual({ name: CHAT_LOCAL_RUN_TOOL_NAMES.browser, input: kept });
+    approvals.declineAll();
+    await decided;
+    harness.close();
+  }
 });
 
 test("the question is withdrawn when the agent's call ends", async () => {

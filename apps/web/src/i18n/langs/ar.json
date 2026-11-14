@@ -2265,6 +2265,10 @@
       "web_search": "البحث على الويب"
     },
     "toolCall": {
+      "browserClick": "النقر على «{target}» في {url}",
+      "browserPressKey": "الضغط على المفتاح {key} في «{target}» في {url}",
+      "browserSelect": "تحديد «{option}» في «{target}» في {url}",
+      "browserType": "إدخال نص في «{target}» في {url}",
       "characterCount": "{count, plural, zero {# حرف} one {# حرف} two {# حرفين} few {# أحرف} many {# حرفاً} other {# حرف}}",
       "commandExited": "{command} (رمز الخروج {code})",
       "consoleLogs": "مخرجات وحدة التحكم",

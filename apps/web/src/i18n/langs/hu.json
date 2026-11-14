@@ -2265,6 +2265,10 @@
       "web_search": "Keresés az interneten"
     },
     "toolCall": {
+      "browserClick": "Kattintás erre: „{target}” ({url})",
+      "browserPressKey": "{key} billentyű lenyomása itt: „{target}” ({url})",
+      "browserSelect": "„{option}” kiválasztása itt: „{target}” ({url})",
+      "browserType": "Szöveg beírása ide: „{target}” ({url})",
       "characterCount": "{count, plural, one {# karakter} other {# karakter}}",
       "commandExited": "{command} (kilépési kód: {code})",
       "consoleLogs": "Konzolkimenet",

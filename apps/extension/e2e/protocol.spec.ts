@@ -270,6 +270,29 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
       }),
     );
     expect(snapshot.text).toContain("Submitted: notice period");
+    // An option is chosen by its visible label as well as by its value; a
+    // select without it is refused with the options it has.
+    snapshot = successful(
+      await send({
+        action: "select",
+        page: page(),
+        target: targetOf(elementNamed(snapshot.elements, "Court")),
+        value: "supreme  court",
+      }),
+    );
+    expect(elementNamed(snapshot.elements, "Court").value).toBe("supreme");
+    expect(
+      await send({
+        action: "select",
+        page: page(),
+        target: targetOf(elementNamed(snapshot.elements, "Court")),
+        value: "Family court",
+      }),
+    ).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      message:
+        'The select has no option with this label or value. Its options: "Any court", "Supreme Court"',
+    });
     expect(
       snapshot.elements.some(({ name }) => name === "Archive (disabled)"),
     ).toBe(false);

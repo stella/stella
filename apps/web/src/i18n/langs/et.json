@@ -2265,6 +2265,10 @@
       "web_search": "Veebist otsimine"
     },
     "toolCall": {
+      "browserClick": "Klõpsa elemendil „{target}“ lehel {url}",
+      "browserPressKey": "Vajuta klahvi {key} elemendis „{target}“ lehel {url}",
+      "browserSelect": "Vali „{option}“ elemendis „{target}“ lehel {url}",
+      "browserType": "Sisesta tekst väljale „{target}“ lehel {url}",
       "characterCount": "{count, plural, one {# märk} other {# märki}}",
       "commandExited": "{command} (väljumiskood {code})",
       "consoleLogs": "Konsooli väljund",

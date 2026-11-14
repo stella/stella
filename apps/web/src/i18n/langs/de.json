@@ -2265,6 +2265,10 @@
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {
+      "browserClick": "„{target}“ auf {url} anklicken",
+      "browserPressKey": "Taste {key} in „{target}“ auf {url} drücken",
+      "browserSelect": "„{option}“ in „{target}“ auf {url} auswählen",
+      "browserType": "Text in „{target}“ auf {url} eingeben",
       "characterCount": "{count, plural, one {# Zeichen} other {# Zeichen}}",
       "commandExited": "{command} (Exit-Code {code})",
       "consoleLogs": "Konsolenausgabe",

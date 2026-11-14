@@ -2265,6 +2265,10 @@
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
+      "browserClick": "Spustelėti „{target}“ puslapyje {url}",
+      "browserPressKey": "Paspausti klavišą {key} elemente „{target}“ puslapyje {url}",
+      "browserSelect": "Pasirinkti „{option}“ elemente „{target}“ puslapyje {url}",
+      "browserType": "Įvesti tekstą į „{target}“ puslapyje {url}",
       "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
       "commandExited": "{command} (išėjimo kodas {code})",
       "consoleLogs": "Konsolės išvestis",

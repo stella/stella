@@ -169,6 +169,18 @@ export const pageScript = (pageOperation: PageOperation) => {
   const { limits, metadataType, shadowSegment } = pageOperation;
   const SKIPPED_TAGS = new Set(["NOSCRIPT", "SCRIPT", "STYLE", "TEMPLATE"]);
   const normalize = (value: string) => value.replaceAll(/\s+/gu, " ").trim();
+  // A select's option by its value, or else by its visible label, case and
+  // spacing ignored.
+  const optionNamed = (
+    options: readonly HTMLOptionElement[],
+    named: string,
+  ) => {
+    const label = (text: string) => normalize(text).toLowerCase();
+    return (
+      options.find((option) => option.value === named) ??
+      options.find((option) => label(option.label) === label(named))
+    );
+  };
   // A computed style is live: one per element serves the whole run.
   const styles = new Map<Element, CSSStyleDeclaration>();
   const styleOf = (element: Element) => {
@@ -2927,7 +2939,18 @@ export const pageScript = (pageOperation: PageOperation) => {
     if (isSensitiveTarget) {
       return sensitiveFieldRefusal;
     }
-    Reflect.set(HTMLSelectElement.prototype, "value", action.value, target);
+    const options = [...target.options].filter((option) => !option.disabled);
+    const chosen = optionNamed(options, action.value);
+    if (chosen === undefined) {
+      return {
+        code: errorCode.executionFailed,
+        error: `The select has no option with this label or value. Its options: ${options
+          .map((option) => JSON.stringify(normalize(option.label)))
+          .join(", ")}`,
+        ok: false,
+      };
+    }
+    target.selectedIndex = chosen.index;
     target.dispatchEvent(new Event("input", { bubbles: true }));
     target.dispatchEvent(new Event("change", { bubbles: true }));
     return { ok: true };
