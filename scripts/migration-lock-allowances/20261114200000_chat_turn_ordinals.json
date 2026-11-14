@@ -1,0 +1,4 @@
+{
+  "add-column": "Two nullable integer columns without a default, one on chat_threads and one on chat_turns: catalog-only changes that rewrite no rows, under 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "The insert trigger on chat_turns is a catalog-only creation that reads no rows; SHARE ROW EXCLUSIVE is held only for the statement, under 1s lock_timeout."
+}

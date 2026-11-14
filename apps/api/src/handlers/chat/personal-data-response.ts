@@ -147,6 +147,9 @@ const UNEXPORTED_CHAT_THREAD_COLUMNS = [
   // thread, not authored content.
   "lastReadAt",
   "pinnedAt",
+  // Counter of the turn positions the thread has given out; internal order
+  // bookkeeping.
+  "lastTurnOrdinal",
 ] as const satisfies readonly (keyof ChatThreadRow)[];
 
 // Totality guard, bidirectional: every schema column must be exported or

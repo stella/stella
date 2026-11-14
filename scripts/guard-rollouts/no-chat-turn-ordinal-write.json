@@ -1,0 +1,20 @@
+{
+  "id": "no-chat-turn-ordinal-write",
+  "rules": ["no-chat-turn-ordinal-write/no-chat-turn-ordinal-write"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-21T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-chat-turn-ordinal-write/no-chat-turn-ordinal-write",
+    "apps",
+    "packages",
+    "scripts"
+  ]
+}
