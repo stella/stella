@@ -18,7 +18,7 @@ use crate::runner_protocol::{
   RunRef, RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 5;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 6;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.
@@ -209,6 +209,10 @@ pub(crate) struct SidecarRunStart {
   pub(crate) workspace_dir: String,
   /// The chat's own cache folder, writable in every sandbox.
   pub(crate) cache_dir: String,
+  /// What the run's sandboxed commands may not read, apart from the paths
+  /// the run itself is handed: every chat's folder, the app's own data and
+  /// the member's credential stores.
+  pub(crate) unreadable_paths: Vec<String>,
   /// Where the sidecar keeps each step's output (`<runId>/<stepKey>`: a
   /// `{"bytes":<n>}` header line, then the step's kept bytes): beside the
   /// chat's own folder, whatever folder `workspace_dir` names.
