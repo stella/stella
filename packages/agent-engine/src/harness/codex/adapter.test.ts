@@ -181,6 +181,7 @@ const turnInput = (
   skillFolders: [],
   networkHosts: [],
   toolPath: [],
+  unreadablePaths: [],
   ...overrides,
 });
 

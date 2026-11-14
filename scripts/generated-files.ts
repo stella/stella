@@ -375,6 +375,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/observability/data-invariants/config-schema.ts",
     "apps/api/src/lib/proofs/checked-transaction.ts",
     "apps/api/src/lib/properties/*",
+    "apps/api/src/lib/queue/*",
     "apps/api/src/lib/rate-limit/*",
     "apps/api/src/lib/s3/credential-guard.ts",
     "apps/api/src/lib/s3/credentials.ts",
@@ -2709,6 +2710,11 @@ export const GUARD_A_EXCLUSIONS = [
     reason: "Manual SQL export",
   },
   { glob: "**/eu-ecj-fulltext-*.html", reason: "Upstream fixture" },
+  {
+    glob: "apps/api/src/lib/files/pdf-signing/trust/eu-qualified-tsa-*",
+    reason:
+      "Refreshed by hand from the EU trusted lists over the network (apps/api/src/scripts/update-qualified-tsa-trust.ts); CI cannot regenerate it offline",
+  },
   {
     glob: "packages/sanctions/src/fixtures/un.xml",
     reason: "Upstream fixture",

@@ -3757,10 +3757,22 @@ describe("acquireChatRuntime reconcile", () => {
       type: "tool-call",
     });
 
+    // The server accepted the turn before it failed, so the stored thread
+    // holds the message the page sent.
     const reconciled = acquireChatRuntime({
       activeOrganizationId,
       context: { allowMissingThread: true },
-      data: newerThreadData(),
+      data: buildThreadData({
+        lastActivityAt: "2026-07-08T10:00:00.000Z",
+        messages: [
+          createMessage("22222222-2222-4222-8222-2222222222e1"),
+          {
+            id: assistantMessageId,
+            role: "assistant",
+            parts: [{ type: "text", content: "Ahoj!" }],
+          },
+        ],
+      }),
       key: threadRef,
       queryClient,
     });

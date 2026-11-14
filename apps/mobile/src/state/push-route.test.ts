@@ -19,6 +19,26 @@ describe("where a tapped notification leads", () => {
     });
   });
 
+  test("a chat whose agent limit reset opens that chat, within its matter when it has one", () => {
+    const chat = (workspaceId: string | null) =>
+      routeForPush({
+        stella: {
+          entityId: "thread-1",
+          entityType: "chat_thread",
+          kind: "local_run_limit_reset",
+          workspaceId,
+        },
+      });
+    expect(chat("w1")).toEqual({
+      params: { matterId: "w1", threadId: "thread-1" },
+      pathname: "/thread/[threadId]",
+    });
+    expect(chat(null)).toEqual({
+      params: { threadId: "thread-1" },
+      pathname: "/thread/[threadId]",
+    });
+  });
+
   test("anything else in a matter opens the matter", () => {
     expect(
       routeForPush({

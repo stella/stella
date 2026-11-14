@@ -12,6 +12,7 @@
 mod client;
 mod harness;
 mod journal;
+mod read_limits;
 mod run_folders;
 mod sidecar_host;
 #[cfg(all(test, unix))]
@@ -20,6 +21,12 @@ mod sidecar_host;
   reason = "tests construct local file fixtures"
 )]
 mod sidecar_host_tests;
+#[cfg(all(feature = "dev-runner-stand-in", unix))]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the development stand-in keeps its link and folders under the checkout's .stella-dev"
+)]
+pub(crate) mod stand_in;
 mod state;
 pub(crate) mod step_outputs;
 #[cfg(test)]
@@ -374,6 +381,7 @@ fn sidecar_host(
         retired_dirs: vec![data.join(RETIRED_PACKAGE_CACHE_DIRECTORY)],
       },
       workspaces: data.join(RUNS_DIRECTORY),
+      unreadable: read_limits::unreadable_paths(&data, dirs::home_dir().as_deref()),
       probe_interval: sidecar_host::PROBE_INTERVAL,
     },
     Arc::new(ManagedHarnesses { app: app.clone() }),
