@@ -549,6 +549,30 @@ const runPassages = (
     : passages;
 };
 
+/** The claims a run grades: each extracted fact with its passage, keyed by
+ *  its position among the extracted claims. */
+const gradingInputs = (
+  claims: readonly ExtractedClaim[],
+  passages: NonNullable<ReturnType<typeof runPassages>>,
+) =>
+  claims.flatMap((claim, position) =>
+    claim.type === "fact"
+      ? [
+          {
+            key: String(position),
+            text: claim.text,
+            context: passageContext(
+              passages.at(claim.blockIndex) ??
+                panic("An extracted claim names a block outside the run"),
+              claim.anchor,
+            ),
+            // A new run's claims have no reviewer yet.
+            linkedFactIds: [],
+          },
+        ]
+      : [],
+  );
+
 /** Trusted process-local I/O boundaries; never sourced from queued data. */
 type VerificationExecutionBoundaries = {
   readDocument?: typeof readVerificationDocument;
@@ -723,23 +747,7 @@ const executeRun = async ({
   }
   const claims = extracted.value;
   const graded = await gradeClaims({
-    claims: claims.flatMap((claim, position) =>
-      claim.type === "fact"
-        ? [
-            {
-              key: String(position),
-              text: claim.text,
-              context: passageContext(
-                passages.at(claim.blockIndex) ??
-                  panic("An extracted claim names a block outside the run"),
-                claim.anchor,
-              ),
-              // A new run's claims have no reviewer yet.
-              linkedFactIds: [],
-            },
-          ]
-        : [],
-    ),
+    claims: gradingInputs(claims, passages),
     facts: run.evidence.facts,
     deps,
     verdictDecider: await runVerdictDecider(actor, config.value, execution),
