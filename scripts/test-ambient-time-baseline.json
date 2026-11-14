@@ -2019,11 +2019,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/search/index-entity.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/search/index-global-ranking.db.test.ts": {
     "count": 2,
     "owner": "api",
@@ -2191,11 +2186,6 @@
   },
   "apps/api/src/lib/views/template-properties.db.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/work-obligations/transitions.test.ts": {
-    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
