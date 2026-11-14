@@ -345,6 +345,35 @@ describe("the local browser tools", () => {
     expect(browser.sent).toHaveLength(3);
   });
 
+  test("click takes only ids the latest read listed", async () => {
+    const session = createLocalBrowserSession();
+    const without = page("r-2");
+    const browser = recorder([
+      page("r-1"),
+      without.status === "success"
+        ? {
+            ...without,
+            snapshot: {
+              ...without.snapshot,
+              elements: without.snapshot.elements.filter(
+                ({ id }) => id !== "L1",
+              ),
+            },
+          }
+        : without,
+    ]);
+    await session.call("snapshot", {}, browser.context);
+    await session.call("snapshot", { cursor: NEXT_CURSOR }, browser.context);
+    const refused = await session.call("click", { ref: "L1" }, browser.context);
+    expect(parsed(refused)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.elementNotFound,
+    });
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+      "snapshot",
+    ]);
+  });
+
   test("find keeps the page click and type address", async () => {
     const session = createLocalBrowserSession();
     const browser = recorder([page("r-1"), found(), page("r-2")]);

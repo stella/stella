@@ -89,7 +89,7 @@ const INPUT_SCHEMAS = {
 const REF_PROPERTY = {
   type: "string",
   description:
-    "An element's ref from this chat's latest page read (open, snapshot, click or type): L<n> for a link marked in the text, E<n> for another control.",
+    "An element id from this chat's latest page read (open, snapshot, click or type): L<n> for a link marked in the text, E<n> for another control. Ids the latest read did not list are refused.",
 } as const;
 
 const CURSOR_PROPERTY = {
@@ -118,7 +118,7 @@ const TOOL_DEFINITIONS = {
     },
   },
   snapshot: {
-    description: `Read the page in this chat's Chrome tab, one window of up to ${String(BROWSER_CONTROL_LIMITS.pageTextChars)} characters of its visible text at a time (hidden text is left out). The text has one block per line; a heading's line starts with one # per level, and a link's words are followed by [L<n>]. It also returns the address, the title, the page's facts for citing (canonical link, language, standard meta entries) and its elements: the links marked in the text (L<n>, with their full address) and other controls (E<n>); use either as ref for click and type. Without a cursor it reads from the section in view, which is where a link to a section lands, or else from the top. Pass window.next or window.previous as cursor to read on. In a long document, go to the part you need with find or a link to its section rather than paging from the top. Reading never asks the member and is not counted as a browser step. ${UNTRUSTED_AND_CITING}`,
+    description: `Read the page in this chat's Chrome tab, one window of up to ${String(BROWSER_CONTROL_LIMITS.pageTextChars)} characters of its visible text at a time (hidden text is left out). The text has one block per line; a heading's line starts with one # per level, and a link's words are followed by [L<n>]. It also returns the address, the title, the page's facts for citing (canonical link, language, citation meta entries) and its elements: the links marked in the text (L<n>, with their full address) and other controls (E<n>; an element in an embedded frame reads L<frame>.<n>). Use an id as ref for click and type. An element keeps its id while the page stays loaded, but click and type take only ids the latest read listed. Without a cursor it reads from the section in view, which is where a link to a section lands, or else from the top. Pass window.next or window.previous as cursor to read on. In a long document, go to the part you need with find or a link to its section rather than paging from the top. Reading never asks the member and is not counted as a browser step. ${UNTRUSTED_AND_CITING}`,
     inputSchema: {
       type: "object",
       properties: {
@@ -131,7 +131,7 @@ const TOOL_DEFINITIONS = {
     },
   },
   find: {
-    description: `Search the page this chat last read for plain text (case and accents ignored, any spacing between words; no patterns), or with headings true list its headings (narrowed to those containing query, when given). Returns up to ${String(BROWSER_CONTROL_LIMITS.findMatches)} matches with a snippet each, or up to ${String(BROWSER_CONTROL_LIMITS.headings)} headings with their level, and for text the total number of matches. Each result has a cursor: pass it to snapshot to read from the start of its block. Pass more as after for the next results. It searches the same visible text snapshot reads. Finding never asks the member and is not counted as a browser step. ${UNTRUSTED_AND_CITING}`,
+    description: `Search the page this chat last read for plain text (case and accents ignored, any spacing between words; no patterns), or with headings true list its headings (narrowed to those containing query, when given). Returns up to ${String(BROWSER_CONTROL_LIMITS.findMatches)} matches with a snippet each, or up to ${String(BROWSER_CONTROL_LIMITS.headings)} headings with their level, and for text the total number of matches. Each result has a cursor: pass it to snapshot to read from the start of its block. Pass more as after for the next results. It searches the text snapshot returns, block by block: hidden text never matches, and text the page draws only with CSS (list numbers, symbols) matches only together with words of the page's own text. Finding never asks the member and is not counted as a browser step. ${UNTRUSTED_AND_CITING}`,
     inputSchema: {
       type: "object",
       properties: {

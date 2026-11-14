@@ -23,18 +23,11 @@ import {
 
 /**
  * The page script against a real page in Chromium, without the extension:
- * the reader's structure, its cost on a long document, and paging that
- * neither skips nor repeats a block.
+ * the reader's structure, what it keeps out, how much of the page one call
+ * touches, and paging that neither skips nor repeats a block.
  */
 
 const ORIGIN = "https://reader.test";
-
-/**
- * Real elapsed time: the bounds below are on the page script's own work in
- * a real browser, which a test clock cannot stand in for.
- */
-// oxlint-disable-next-line no-ambient-time-in-tests/no-ambient-time-in-tests -- measures real page work against a stated bound
-const wallClock = () => performance.now();
 
 const base = {
   identityProviderHosts: IDENTITY_PROVIDER_HOSTS,
@@ -50,11 +43,35 @@ const readRequest = (
   direction: ReadRequest["direction"] = "forward",
 ): ReadRequest => ({
   direction,
-  firstLinkNumber: 1,
   maxChars: BROWSER_CONTROL_LIMITS.pageTextChars,
   maxControls: BROWSER_CONTROL_LIMITS.elements,
   maxLinks: BROWSER_CONTROL_LIMITS.elements,
   position,
+});
+
+const FROM_START = { type: "start" } as const;
+
+const textFind = (
+  query: string,
+  after: FindRequest["after"] = FROM_START,
+): FindRequest => ({
+  after,
+  countLimit: BROWSER_CONTROL_LIMITS.findCountLimit,
+  maxResults: BROWSER_CONTROL_LIMITS.findMatches,
+  query,
+  snippetChars: BROWSER_CONTROL_LIMITS.findSnippetChars,
+  type: "text",
+});
+
+const headingsFind = (
+  query = "",
+  after: FindRequest["after"] = FROM_START,
+): FindRequest => ({
+  after,
+  headingChars: BROWSER_CONTROL_LIMITS.headingChars,
+  maxResults: BROWSER_CONTROL_LIMITS.headings,
+  query,
+  type: "headings",
 });
 
 const serve = async (page: Page, html: string, path: string) => {
@@ -68,44 +85,87 @@ const serve = async (page: Page, html: string, path: string) => {
   await page.goto(`${ORIGIN}${path}`);
 };
 
-/** Runs one read in the page, as the extension injects it, and times it. */
+/**
+ * Counts every computed-style and layout read the page makes: how much of
+ * the page one call touched, which stays the same on any machine.
+ */
+const countLayoutReads = async (page: Page) => {
+  await page.evaluate(() => {
+    const counts = { calls: 0 };
+    Reflect.set(window, "stellaLayoutReads", counts);
+    const computedStyle = window.getComputedStyle.bind(window);
+    window.getComputedStyle = (element, pseudo) => {
+      counts.calls += 1;
+      return computedStyle(element, pseudo);
+    };
+    for (const method of ["getBoundingClientRect", "getClientRects"] as const) {
+      const original = Element.prototype[method];
+      Object.defineProperty(Element.prototype, method, {
+        configurable: true,
+        value(this: Element) {
+          counts.calls += 1;
+          return Reflect.apply(original, this, []);
+        },
+      });
+    }
+  });
+};
+
+const layoutReadsSince = async (page: Page, run: () => Promise<unknown>) => {
+  await page.evaluate(() => {
+    Reflect.set(Reflect.get(window, "stellaLayoutReads"), "calls", 0);
+  });
+  await run();
+  return await page.evaluate((): number => {
+    const calls: unknown = Reflect.get(
+      Reflect.get(window, "stellaLayoutReads"),
+      "calls",
+    );
+    return typeof calls === "number" ? calls : -1;
+  });
+};
+
+/** Runs one read in the page, as the extension injects it. */
 const read = async (page: Page, request: ReadRequest | undefined) => {
   const operation: PageOperation = {
     ...base,
     facts: true,
+    idPrefix: "",
     kind: "snapshot",
     pageControls: BROWSER_CONTROL_LIMITS.elements,
     purpose: SNAPSHOT_PURPOSE.read,
     purposes: SNAPSHOT_PURPOSE,
     ...(request === undefined ? {} : { read: request }),
   };
-  const started = wallClock();
   const result: unknown = await page.evaluate(pageScript, operation);
-  const elapsed = wallClock() - started;
-  return { elapsed, result };
+  return result;
 };
 
 const readWindow = async (page: Page, request: ReadRequest) => {
-  const { elapsed, result } = await read(page, request);
-  const parsed = v.parse(frameReadSchema, result);
+  const parsed = v.parse(frameReadSchema, await read(page, request));
   const { window } = parsed;
   if (window === undefined) {
     throw new TypeError("The read returned no window.");
   }
-  return { elapsed, page: parsed, window };
+  return { page: parsed, window };
 };
 
 const find = async (page: Page, request: FindRequest) => {
   const operation: PageOperation = { ...base, find: request, kind: "find" };
-  const started = wallClock();
   const result: unknown = await page.evaluate(pageScript, operation);
-  return {
-    elapsed: wallClock() - started,
-    found: v.parse(frameFoundSchema, result).found,
-  };
+  return v.parse(frameFoundSchema, result).found;
 };
 
-const withoutLinkMarks = (line: string) => line.replaceAll(/ ?\[L\d+\]/gu, "");
+const textMatches = async (page: Page, query: string) => {
+  const found = await find(page, textFind(query));
+  if (found.type !== "text") {
+    throw new TypeError("Expected text matches.");
+  }
+  return found;
+};
+
+const withoutLinkMarks = (line: string) =>
+  line.replaceAll(/ ?\[L[\d.]+\]/gu, "");
 
 test("keeps block structure, headings, markers and links", async ({ page }) => {
   await serve(
@@ -114,6 +174,7 @@ test("keeps block structure, headings, markers and links", async ({ page }) => {
 <link rel="canonical" href="${ORIGIN}/works/structure">
 <meta name="citation_title" content="Structure fixture">
 <meta name="author" content="Example Author">
+<meta name="description" content="Text the page never shows">
 <meta name="viewport" content="width=device-width">
 <style>
   .sub { font-weight: 700; }
@@ -128,6 +189,7 @@ test("keeps block structure, headings, markers and links", async ({ page }) => {
 <ul><li>Bullet item</li></ul>
 <div class="counted">Counted by CSS</div>
 <table><tr><td>Case</td><td>Outcome</td></tr></table>
+<h2><div>Wrapped heading</div></h2>
 <p aria-hidden="true">Hidden instructions for readers</p>
 <p style="display:none">Not shown at all</p>
 <p>Name <span style="font-size:0">secret words</span>visible</p>
@@ -139,8 +201,7 @@ test("keeps block structure, headings, markers and links", async ({ page }) => {
     page,
     readRequest({ type: "start" }),
   );
-  const lines = window.text.split("\n");
-  expect(lines).toEqual([
+  expect(window.text.split("\n")).toEqual([
     "# Commentary on the notice rules",
     "#### § Scope of the rule",
     "12 The notice period runs from Vertragsschluss, not from dispatch.^3",
@@ -151,15 +212,18 @@ test("keeps block structure, headings, markers and links", async ({ page }) => {
     "- Bullet item",
     "Counted by CSS",
     "Case | Outcome",
+    "## Wrapped heading",
     "Name visible",
     "Search",
   ]);
+  // A link is named by its visible words; its aria-label or title, a
+  // short label of the same link, is kept beside them.
   expect(
-    window.links.map(({ alternateName, href, name, number }) => ({
+    window.links.map(({ alternateName, href, id, name }) => ({
       alternateName,
       href,
+      id,
       name,
-      number,
     })),
   ).toEqual([
     {
@@ -168,8 +232,8 @@ test("keeps block structure, headings, markers and links", async ({ page }) => {
         type: BROWSER_CONTROL_TARGET_METADATA.present,
         value: `${ORIGIN}/works/other#part-2`,
       },
+      id: "L1",
       name: "the other work",
-      number: 1,
     },
     {
       alternateName: "t",
@@ -177,8 +241,8 @@ test("keeps block structure, headings, markers and links", async ({ page }) => {
         type: BROWSER_CONTROL_TARGET_METADATA.present,
         value: `${ORIGIN}/works/structure#top`,
       },
+      id: "L2",
       name: "top",
-      number: 2,
     },
   ]);
   expect(window.hasBefore).toBe(false);
@@ -189,6 +253,7 @@ test("keeps block structure, headings, markers and links", async ({ page }) => {
     { name: "Search", role: "button" },
   ]);
   expect(frame.pageControls).toEqual([]);
+  // Only what identifies the work: no description the page never shows.
   expect(frame.facts).toEqual({
     canonicalUrl: `${ORIGIN}/works/structure`,
     language: "en",
@@ -198,26 +263,180 @@ test("keeps block structure, headings, markers and links", async ({ page }) => {
     ],
   });
 
-  const { found: headings } = await find(page, {
-    after: { type: "start" },
-    headingChars: BROWSER_CONTROL_LIMITS.headingChars,
-    maxResults: BROWSER_CONTROL_LIMITS.headings,
-    query: "",
-    type: "headings",
-  });
-  expect(headings).toMatchObject({
+  // The outline lists each heading once, as the text shows it.
+  expect(await find(page, headingsFind())).toMatchObject({
     headings: [
       { level: 1, text: "Commentary on the notice rules" },
-      { level: 4, text: "Scope of the rule" },
+      { level: 4, text: "§ Scope of the rule" },
+      { level: 2, text: "Wrapped heading" },
     ],
     type: "headings",
   });
+
+  // Find searches the printed text: markers, words split by inline tags,
+  // and nothing hidden.
+  expect(await textMatches(page, "12 the notice")).toMatchObject({ total: 1 });
+  expect(await textMatches(page, "vertragsschluss")).toMatchObject({
+    total: 1,
+  });
+  expect(await textMatches(page, "secret words")).toMatchObject({ total: 0 });
+  expect(await textMatches(page, "hidden instructions")).toMatchObject({
+    total: 0,
+  });
 });
 
-/** One window read, anywhere in the long document, takes less than this. */
-const READ_BOUND_MS = 1500;
-/** One find over the whole long document takes less than this. */
-const FIND_BOUND_MS = 3000;
+test("keeps generated and hidden text out of reads and finds", async ({
+  page,
+}) => {
+  await serve(
+    page,
+    `<!doctype html><html lang="en"><head><title>Hidden</title>
+<style>
+  .size::after { content: " HIDDEN-SIZE"; font-size: 0; }
+  .color::after { content: " HIDDEN-COLOR"; color: transparent; }
+  .shown::after { content: " HIDDEN-VISIBILITY"; visibility: hidden; }
+  .faded::after { content: " HIDDEN-OPACITY"; opacity: 0; }
+  .away::after { content: " HIDDEN-AWAY"; position: absolute; left: -9999px; }
+  .clipped::after { content: " HIDDEN-CLIP"; position: relative; clip-path: circle(0); }
+  .marker::after { content: " HIDDEN-MARKER"; }
+  .long::before { content: "ABCDEFGHIJKLMNOPQRSTUVWXYZ "; }
+  .icon::before { content: "\\e001"; }
+</style></head><body>
+<p class="size">Size</p>
+<p class="color">Colour</p>
+<p class="shown">Visibility</p>
+<p class="faded">Opacity</p>
+<p class="away">Away</p>
+<p class="clipped">Clipped</p>
+<p><span aria-hidden="true" class="marker">7</span> Marked paragraph</p>
+<p class="long">Long generated</p>
+<p><span class="icon"></span>Icon text</p>
+<p>ign<span style="display:none">XYZ</span>ore this</p>
+<shadow-note></shadow-note>
+<script>
+  customElements.define("shadow-note", class extends HTMLElement {
+    connectedCallback() {
+      this.attachShadow({ mode: "open" }).innerHTML = "<p>Shadow words here</p>";
+    }
+  });
+</script>
+</body></html>`,
+    "/works/hidden",
+  );
+  const { window } = await readWindow(page, readRequest({ type: "start" }));
+  const lines = window.text.split("\n");
+  expect(lines.slice(0, 10)).toEqual([
+    "Size",
+    "Colour",
+    "Visibility",
+    "Opacity",
+    "Away",
+    "Clipped",
+    "7 Marked paragraph",
+    "ABCDEFGHIJKLMNOPLong generated",
+    "Icon text",
+    "ignore this",
+  ]);
+  expect(window.text).not.toContain("HIDDEN");
+  expect(window.text).toContain("Shadow words here");
+
+  for (const query of ["hidden", "ignxyzore", "xyz"]) {
+    expect(await textMatches(page, query)).toMatchObject({
+      matches: [],
+      total: 0,
+    });
+  }
+  // What the reader prints is what find matches, shadow text included.
+  const shadow = await textMatches(page, "SHADOW   words");
+  expect(shadow.total).toBe(1);
+  expect(shadow.matches.at(0)?.snippet).toContain("Shadow words here");
+  expect(await textMatches(page, "ignore this")).toMatchObject({ total: 1 });
+  expect(await textMatches(page, "7 marked")).toMatchObject({ total: 1 });
+});
+
+test("a link to a section inside hidden content starts no read there", async ({
+  page,
+}) => {
+  const html = `<!doctype html><html lang="en"><head><title>Anchors</title></head><body>
+<div style="opacity: 0; position: absolute; top: 0"><p id="faded">INJECTED-FADED</p><p>INJECTED-AFTER</p></div>
+<div aria-hidden="true"><p id="unheard">INJECTED-ARIA</p></div>
+<p id="shown">Visible section</p>
+<p>Visible text after it</p>
+</body></html>`;
+  await page.route(`${ORIGIN}/**`, async (route) => {
+    await route.fulfill({
+      body: html,
+      contentType: "text/html; charset=utf-8",
+    });
+  });
+  for (const fragment of ["faded", "unheard"]) {
+    await page.goto(`${ORIGIN}/works/anchors#${fragment}`);
+    const { window } = await readWindow(
+      page,
+      readRequest({ type: "viewport" }),
+    );
+    expect(window.text).not.toContain("INJECTED");
+    expect(window.text).toContain("Visible section");
+  }
+  await page.goto(`${ORIGIN}/works/anchors#shown`);
+  const { window } = await readWindow(page, readRequest({ type: "viewport" }));
+  expect(window.text.split("\n").at(0)).toBe("Visible section");
+});
+
+/** One block far longer than a window, sentences numbered to place a cut. */
+const LONG_BLOCK = Array.from(
+  { length: 6000 },
+  (_, index) => `Sentence ${String(index + 1)} of the long block.`,
+).join(" ");
+
+test("reads a block longer than a window forward and backward without a gap", async ({
+  page,
+}) => {
+  await serve(
+    page,
+    `<!doctype html><html lang="en"><head><title>Long block</title></head><body>
+<h1>Long block</h1><p>${LONG_BLOCK}</p><p>After the block.</p>
+</body></html>`,
+    "/works/block",
+  );
+  const windows = [
+    (await readWindow(page, readRequest({ type: "start" }))).window,
+  ];
+  for (let step = 0; step < 3; step += 1) {
+    const last = windows.at(-1);
+    if (last === undefined || !last.hasAfter) {
+      break;
+    }
+    windows.push((await readWindow(page, readRequest(last.end))).window);
+  }
+  const [first, second, third] = windows;
+  if (first === undefined || second === undefined || third === undefined) {
+    throw new TypeError("Expected three windows.");
+  }
+  // Forward: cut at spaces, every word once.
+  const firstPart = first.text.split("\n").at(1) ?? "";
+  expect(
+    `${firstPart} ${second.text} ${third.text.split("\n").at(0) ?? ""}`,
+  ).toBe(
+    LONG_BLOCK.slice(
+      0,
+      LONG_BLOCK.indexOf(third.text.split("\n").at(0) ?? "") +
+        (third.text.split("\n").at(0) ?? "").length,
+    ),
+  );
+  // Backward from the third window: the words right before it.
+  const back = (await readWindow(page, readRequest(third.start, "backward")))
+    .window;
+  const thirdOffset = LONG_BLOCK.indexOf(third.text.split("\n").at(0) ?? "");
+  expect(back.text.length).toBeGreaterThan(1000);
+  expect(
+    LONG_BLOCK.slice(0, thirdOffset).trimEnd().endsWith(back.text.trimEnd()),
+  ).toBe(true);
+  expect(back.hasBefore).toBe(true);
+  expect(back.hasAfter).toBe(true);
+  expect(back.start).toMatchObject({ type: "node" });
+});
+
 const SECTIONS = 1000;
 const PARAGRAPHS = 10;
 const FILLER =
@@ -273,7 +492,14 @@ const longDocument = () => {
 </body></html>`;
 };
 
-test("reads, pages and finds through a long document within bounds", async ({
+/**
+ * Style and layout reads one window may make per line it returns: a line
+ * here is one paragraph of six elements, each read for its own style, its
+ * boxes and its `::before` and `::after`.
+ */
+const LAYOUT_READS_PER_LINE = 60;
+
+test("reads, pages and finds through a long document, touching only what it reads", async ({
   page,
 }) => {
   const html = longDocument();
@@ -284,24 +510,37 @@ test("reads, pages and finds through a long document within bounds", async ({
   }));
   expect(size.elements).toBeGreaterThanOrEqual(60_000);
   expect(size.chars).toBeGreaterThanOrEqual(4_000_000);
+  await countLayoutReads(page);
 
   // The default read starts at the section the address points to.
-  const first = await readWindow(page, readRequest({ type: "viewport" }));
-  const firstLines = first.window.text.split("\n").map(withoutLinkMarks);
+  const windows: Awaited<ReturnType<typeof readWindow>>["window"][] = [];
+  const reads: number[] = [];
+  reads.push(
+    await layoutReadsSince(page, async () => {
+      await test.step("read the window at the section in view", async () => {
+        windows.push(
+          (await readWindow(page, readRequest({ type: "viewport" }))).window,
+        );
+      });
+    }),
+  );
+  const first = windows[0];
+  if (first === undefined) {
+    throw new TypeError("No first window.");
+  }
+  const firstLines = first.text.split("\n").map(withoutLinkMarks);
   expect(firstLines.at(0)).toBe(headingLine(500));
-  expect(first.window.text.length).toBeLessThanOrEqual(
+  expect(first.text.length).toBeLessThanOrEqual(
     BROWSER_CONTROL_LIMITS.pageTextChars,
   );
-  expect(first.window.hasBefore).toBe(true);
-  expect(first.window.fromPercent).toBeGreaterThan(40);
-  expect(first.window.fromPercent).toBeLessThan(60);
+  expect(first.hasBefore).toBe(true);
+  expect(first.fromPercent).toBeGreaterThan(40);
+  expect(first.fromPercent).toBeLessThan(60);
   // Each link the text marks is listed with its address.
-  const marked = [...first.window.text.matchAll(/\[L(\d+)\]/gu)].map(
-    ([, number]) => Number(number),
-  );
+  const marked = [...first.text.matchAll(/\[(L\d+)\]/gu)].map(([, id]) => id);
   expect(marked.length).toBeGreaterThan(0);
-  expect(first.window.links.map(({ number }) => number)).toEqual(marked);
-  expect(first.window.links.at(0)).toMatchObject({
+  expect(first.links.map(({ id }) => id)).toEqual(marked);
+  expect(first.links.at(0)).toMatchObject({
     href: {
       type: BROWSER_CONTROL_TARGET_METADATA.present,
       value: `${ORIGIN}/works/long#s-501`,
@@ -312,107 +551,125 @@ test("reads, pages and finds through a long document within bounds", async ({
   // Paging forward returns consecutive blocks: no gap, no repeat.
   const startIndex = EXPECTED_LINES.indexOf(headingLine(500));
   const collected = [...firstLines];
-  let position: ReaderPosition = first.window.end;
-  const forwardTimes: number[] = [first.elapsed];
-  const windows = [first.window];
+  let position: ReaderPosition = first.end;
   for (let step = 0; step < 4; step += 1) {
-    const next = await readWindow(page, readRequest(position));
-    forwardTimes.push(next.elapsed);
-    windows.push(next.window);
-    collected.push(...next.window.text.split("\n").map(withoutLinkMarks));
-    position = next.window.end;
+    const from = position;
+    const name = `read the next window (${String(step + 1)})`;
+    reads.push(
+      await layoutReadsSince(page, async () => {
+        await test.step(name, async () => {
+          windows.push((await readWindow(page, readRequest(from))).window);
+        });
+      }),
+    );
+    const next = windows.at(-1);
+    if (next === undefined) {
+      throw new TypeError("No window.");
+    }
+    collected.push(...next.text.split("\n").map(withoutLinkMarks));
+    position = next.end;
   }
   expect(collected).toEqual(
     EXPECTED_LINES.slice(startIndex, startIndex + collected.length),
   );
+
+  // A link keeps its id whatever window shows it again.
+  const again = (await readWindow(page, readRequest(first.start))).window;
+  expect(again.links.map(({ href, id }) => [id, href])).toEqual(
+    first.links.map(({ href, id }) => [id, href]),
+  );
+  const firstIds = new Set(first.links.map(({ id }) => id));
+  expect(windows[1]?.links.some(({ id }) => firstIds.has(id))).toBe(false);
 
   // Reading back from a window's start returns the blocks right before it.
   const third = windows[2];
   if (third === undefined) {
     throw new TypeError("No third window.");
   }
-  const back = await readWindow(page, readRequest(third.start, "backward"));
-  const backLines = back.window.text.split("\n").map(withoutLinkMarks);
+  const back = (await readWindow(page, readRequest(third.start, "backward")))
+    .window;
+  const backLines = back.text.split("\n").map(withoutLinkMarks);
   const thirdStart = EXPECTED_LINES.indexOf(
     withoutLinkMarks(third.text.split("\n").at(0) ?? ""),
   );
   expect(backLines).toEqual(
     EXPECTED_LINES.slice(thirdStart - backLines.length, thirdStart),
   );
-  expect(back.window.hasAfter).toBe(true);
+  expect(back.hasAfter).toBe(true);
 
-  // Find: case and diacritics ignored, any spacing, hidden text never found.
-  const unique = await find(page, {
-    after: { type: "start" },
-    countLimit: BROWSER_CONTROL_LIMITS.findCountLimit,
-    maxResults: BROWSER_CONTROL_LIMITS.findMatches,
-    query: "zustandigkeitsprufung   DES",
-    snippetChars: BROWSER_CONTROL_LIMITS.findSnippetChars,
-    type: "text",
-  });
-  if (unique.found.type !== "text") {
-    throw new TypeError("Expected text matches.");
+  // A window touches what it reads, not the page.
+  for (const [index, window] of windows.entries()) {
+    const lines = window.text.split("\n").length;
+    expect(reads[index]).toBeLessThan(LAYOUT_READS_PER_LINE * lines);
+    expect(reads[index]).toBeLessThan(size.elements / 10);
   }
-  expect(unique.found.total).toBe(1);
-  expect(unique.found.matches.at(0)?.snippet).toContain(
+
+  // Find: case and diacritics ignored, any spacing, hidden text never
+  // found; it reads the blocks the query's words are in, not the page.
+  const found: Awaited<ReturnType<typeof textMatches>>[] = [];
+  const uniqueReads = await layoutReadsSince(page, async () => {
+    await test.step("find one phrase in the whole document", async () => {
+      found.push(await textMatches(page, "zustandigkeitsprufung   DES"));
+    });
+  });
+  const unique = found[0];
+  if (unique === undefined) {
+    throw new TypeError("No find result.");
+  }
+  expect(unique.total).toBe(1);
+  expect(uniqueReads).toBeLessThan(LAYOUT_READS_PER_LINE * 10);
+  expect(unique.matches.at(0)?.snippet).toContain(
     "Zuständigkeitsprüfung des Gerichts",
   );
-  const matchPosition = unique.found.matches.at(0)?.position;
+  const matchPosition = unique.matches.at(0)?.position;
   if (matchPosition === undefined) {
     throw new TypeError("No match position.");
   }
-  const atMatch = await readWindow(page, readRequest(matchPosition));
-  expect(withoutLinkMarks(atMatch.window.text.split("\n").at(0) ?? "")).toBe(
+  const atMatch = (await readWindow(page, readRequest(matchPosition))).window;
+  expect(withoutLinkMarks(atMatch.text.split("\n").at(0) ?? "")).toBe(
     paragraphLine(700, 4),
   );
 
-  const hidden = await find(page, {
-    after: { type: "start" },
-    countLimit: BROWSER_CONTROL_LIMITS.findCountLimit,
-    maxResults: BROWSER_CONTROL_LIMITS.findMatches,
-    query: "HIDDEN-500",
-    snippetChars: BROWSER_CONTROL_LIMITS.findSnippetChars,
-    type: "text",
+  expect(await textMatches(page, "HIDDEN-500")).toMatchObject({
+    matches: [],
+    total: 0,
   });
-  expect(hidden.found).toMatchObject({ matches: [], total: 0 });
 
-  const common = await find(page, {
-    after: { type: "start" },
-    countLimit: BROWSER_CONTROL_LIMITS.findCountLimit,
-    maxResults: BROWSER_CONTROL_LIMITS.findMatches,
-    query: "vertrag",
-    snippetChars: BROWSER_CONTROL_LIMITS.findSnippetChars,
-    type: "text",
-  });
-  expect(common.found).toMatchObject({
+  const common = await test.step("find a word on every paragraph", async () =>
+    await textMatches(page, "vertrag"));
+  expect(common).toMatchObject({
     total: BROWSER_CONTROL_LIMITS.findCountLimit,
     totalCapped: true,
-    type: "text",
   });
+  // The next page of results goes on after the last one returned.
+  const resumed = await find(
+    page,
+    textFind("vertrag", common.last ?? { type: "start" }),
+  );
+  if (resumed.type !== "text") {
+    throw new TypeError("Expected text matches.");
+  }
+  // Section 1's ten paragraphs filled the first page; the next starts in
+  // section 2, whose first paragraph links to section 3.
+  expect(common.matches.at(-1)?.snippet).toContain(
+    "see section 2 and the Vertrag",
+  );
+  expect(resumed.matches.at(0)?.snippet).toContain(
+    "see section 3 and the Vertrag",
+  );
 
   // The outline pages through every heading, in order.
-  const outline = await find(page, {
-    after: { type: "start" },
-    headingChars: BROWSER_CONTROL_LIMITS.headingChars,
-    maxResults: BROWSER_CONTROL_LIMITS.headings,
-    query: "",
-    type: "headings",
-  });
-  if (outline.found.type !== "headings" || outline.found.more === undefined) {
+  const outline = await test.step("list the first page of headings", async () =>
+    await find(page, headingsFind()));
+  if (outline.type !== "headings" || outline.more === undefined) {
     throw new TypeError("Expected a first page of headings.");
   }
-  const outlineNext = await find(page, {
-    after: outline.found.more,
-    headingChars: BROWSER_CONTROL_LIMITS.headingChars,
-    maxResults: BROWSER_CONTROL_LIMITS.headings,
-    query: "",
-    type: "headings",
-  });
-  if (outlineNext.found.type !== "headings") {
+  const outlineNext = await find(page, headingsFind("", outline.more));
+  if (outlineNext.type !== "headings") {
     throw new TypeError("Expected headings.");
   }
   expect(
-    [...outline.found.headings, ...outlineNext.found.headings].map(
+    [...outline.headings, ...outlineNext.headings].map(
       ({ level, text }) => `${"#".repeat(level)} ${text}`,
     ),
   ).toEqual(
@@ -420,29 +677,14 @@ test("reads, pages and finds through a long document within bounds", async ({
       headingLine(index + 1),
     ),
   );
-  const filtered = await find(page, {
-    after: { type: "start" },
-    headingChars: BROWSER_CONTROL_LIMITS.headingChars,
-    maxResults: BROWSER_CONTROL_LIMITS.headings,
-    query: "section 77:",
-    type: "headings",
-  });
-  expect(filtered.found).toMatchObject({
+  expect(await find(page, headingsFind("section 77:"))).toMatchObject({
     headings: [{ level: 4, text: "Section 77: scope and effect" }],
   });
 
-  // The stated bounds: one window and one whole-document find.
-  const slowestRead = Math.max(...forwardTimes, back.elapsed);
   test.info().annotations.push({
-    description: `${String(size.elements)} elements, ${String(size.chars)} chars; window reads ${forwardTimes
-      .map((time) => `${time.toFixed(0)} ms`)
-      .join(
-        ", ",
-      )}; backward read ${back.elapsed.toFixed(0)} ms; find over the whole document ${unique.elapsed.toFixed(0)} ms; capped find ${common.elapsed.toFixed(0)} ms; first outline page ${outline.elapsed.toFixed(0)} ms`,
-    type: "reader timings",
+    description: `${String(size.elements)} elements, ${String(size.chars)} chars; style and layout reads per window ${reads.join(", ")}; per whole-document find of one phrase ${String(uniqueReads)}. Step durations are in the report.`,
+    type: "reader cost",
   });
-  expect(slowestRead).toBeLessThan(READ_BOUND_MS);
-  expect(unique.elapsed).toBeLessThan(FIND_BOUND_MS);
 });
 
 test("a position into changed content is refused, not read elsewhere", async ({
@@ -464,12 +706,14 @@ test("a position into changed content is refused, not read elsewhere", async ({
       section.remove();
     }
   });
-  const { result } = await read(page, readRequest(end));
-  expect(result).toEqual({ refused: "stale-cursor" });
+  expect(await read(page, readRequest(end))).toEqual({
+    refused: "stale-cursor",
+  });
   // The same document unchanged still reads from the position.
   await page.reload();
   const again = await readWindow(page, readRequest({ type: "viewport" }));
   expect(again.window.end).toEqual(end);
-  const { result: resumed } = await read(page, readRequest(end));
-  expect(resumed).toMatchObject({ window: { hasBefore: true } });
+  expect(await read(page, readRequest(end))).toMatchObject({
+    window: { hasBefore: true },
+  });
 });

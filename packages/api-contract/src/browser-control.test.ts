@@ -20,6 +20,8 @@ import {
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
   parseElementReference,
+  supersedeBrowserControlResult,
+  SUPERSEDED_BROWSER_FIND_NOTE,
 } from "./browser-control";
 
 const PAGE = {
@@ -333,6 +335,58 @@ describe("browser control result contract", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  test("takes element ids with a frame's id, and nothing else", () => {
+    const [link] = success.snapshot.elements;
+    const withId = (id: string) =>
+      parseBrowserControlResult({
+        ...success,
+        snapshot: { ...success.snapshot, elements: [{ ...link, id }] },
+      });
+    for (const id of ["L1", "L16384", "E4.12", "L1234567"]) {
+      expect(withId(id)).not.toBeNull();
+    }
+    for (const id of ["L0", "e:0:1", "L4.", "X1", "L12345678"]) {
+      expect(withId(id)).toBeNull();
+    }
+  });
+
+  test("a superseded find keeps its page and where it would go on", () => {
+    const found = {
+      found: {
+        contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+        headings: Array.from(
+          { length: BROWSER_CONTROL_LIMITS.headings },
+          (_, index) => ({
+            cursor: CURSOR,
+            level: 2,
+            text: `Heading ${String(index)} ${"x".repeat(200)}`,
+          }),
+        ),
+        more: CURSOR,
+        tabId: 7,
+        title: "Example",
+        type: "headings",
+        url: "https://example.com/",
+      },
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "found",
+    } satisfies BrowserControlResult;
+    const projected = supersedeBrowserControlResult(found);
+    expect(projected).toEqual({
+      note: SUPERSEDED_BROWSER_FIND_NOTE,
+      page: {
+        contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+        more: CURSOR,
+        tabId: 7,
+        title: "Example",
+        url: "https://example.com/",
+      },
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "superseded",
+    });
+    expect(JSON.stringify(projected).length).toBeLessThan(1000);
   });
 
   test("accepts find results bounded like a page", () => {

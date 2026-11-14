@@ -365,11 +365,13 @@ export type BrowserControlElementCommand = Extract<
 >;
 
 /**
- * An element's short id within one read: `L<n>` for a link, which the
- * window's text marks as `[L<n>]` right after the link's words, and `E<n>`
- * for any other control. Numbered in reading order.
+ * An element's short id: `L<n>` for a link, which the window's text marks
+ * as `[L<n>]` right after the link's words, and `E<n>` for any other
+ * control; an element in a subframe carries the frame's id, `L4.12`. An
+ * element keeps its id for as long as its document stays loaded, whatever
+ * window lists it.
  */
-export const BROWSER_ELEMENT_ID_PATTERN = /^[EL][1-9]\d{0,3}$/u;
+export const BROWSER_ELEMENT_ID_PATTERN = /^[EL](?:\d{1,10}\.)?[1-9]\d{0,6}$/u;
 
 const browserControlElementSchema = v.strictObject({
   /** A link's aria-label or title, kept when its visible text names it and they differ. */
@@ -433,8 +435,9 @@ const browserControlWindowSchema = v.strictObject({
 
 /**
  * What the page states about itself in standard markup, for citing: its
- * canonical link, its language and standard `<meta>` entries (description,
- * author, dates, citation and Dublin Core fields). Untrusted like its text.
+ * canonical link, its language and the `<meta>` entries that identify a
+ * work (citation and Dublin Core fields, author, publisher, dates, Open
+ * Graph title, site name and address). Untrusted like its text.
  */
 const browserControlPageFactsSchema = v.strictObject({
   canonicalUrl: v.optional(urlSchema),
@@ -502,9 +505,11 @@ const foundPageEntries = {
 };
 
 /**
- * What a `find` found in the visible text the reader returns (hidden text
- * is never searched), in document order. Each cursor reads from the start
- * of the block a match or heading is in.
+ * What a `find` found in the text the reader returns, block by block, in
+ * document order: hidden text never matches, and text a page draws only
+ * with CSS (a list number, a symbol) matches together with words of the
+ * page's own text. Each cursor reads from the start of the block a match
+ * or heading is in.
  */
 const browserControlFoundSchema = v.variant("type", [
   v.strictObject({
@@ -652,7 +657,9 @@ const browserControlSupersededSchema = v.strictObject({
   page: v.strictObject({
     contentTrust: v.literal(BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent),
     /** Reads the superseded window again while its document is still shown. */
-    cursor: cursorSchema,
+    cursor: v.optional(cursorSchema),
+    /** For a superseded `find`: its results after those it returned. */
+    more: v.optional(cursorSchema),
     tabId: tabIdSchema,
     title: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.titleChars)),
     url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
@@ -660,6 +667,10 @@ const browserControlSupersededSchema = v.strictObject({
   protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
   status: v.literal("superseded"),
 });
+
+/** Read in place of `find` results a later page read or find replaced. */
+export const SUPERSEDED_BROWSER_FIND_NOTE =
+  "Superseded by a later page read: these find results are no longer in context. Call `find` again, or pass `more` as `after` for the results after them.";
 
 /**
  * Every output chat keeps for a `use-browser` call: what the extension
@@ -684,6 +695,22 @@ export type BrowserControlRetainedResult = v.InferOutput<
 export const supersedeBrowserControlResult = (
   output: unknown,
 ): BrowserControlRetainedResult | null => {
+  const found = v.safeParse(browserControlFoundResultSchema, output);
+  if (found.success) {
+    const { contentTrust, more, tabId, title, url } = found.output.found;
+    return {
+      note: SUPERSEDED_BROWSER_FIND_NOTE,
+      page: {
+        contentTrust,
+        ...(more === undefined ? {} : { more }),
+        tabId,
+        title,
+        url,
+      },
+      protocolVersion: found.output.protocolVersion,
+      status: "superseded",
+    };
+  }
   const result = v.safeParse(browserControlSuccessSchema, output);
   if (!result.success) {
     return null;

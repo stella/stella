@@ -32,8 +32,7 @@ export const SNAPSHOT_PURPOSE = {
   signInCheck: "sign-in-check",
 } as const;
 
-export type SnapshotPurpose =
-  (typeof SNAPSHOT_PURPOSE)[keyof typeof SNAPSHOT_PURPOSE];
+type SnapshotPurpose = (typeof SNAPSHOT_PURPOSE)[keyof typeof SNAPSHOT_PURPOSE];
 
 /**
  * A place in the reading order of a frame's document. `node` is an element
@@ -43,7 +42,7 @@ export type SnapshotPurpose =
  * read (a block longer than one window). `fingerprint` must still match the
  * node, or the document changed and the position is refused.
  */
-export type ReaderNodePosition = {
+type ReaderNodePosition = {
   fingerprint: string;
   path: string;
   phase: "close" | "open";
@@ -55,12 +54,14 @@ export type ReaderNodePosition = {
 export type ReaderPosition =
   { type: "end" } | { type: "start" } | ReaderNodePosition;
 
-/** Where `find` resumes: just after the match or heading at this place. */
-export type ScanPosition =
+/**
+ * Where `find` resumes: in the block element at this place, after its
+ * first `offset` matches (0 for a heading, which resumes after it).
+ */
+type ScanPosition =
   | { type: "start" }
   | {
       fingerprint: string;
-      /** Characters into the text node; 0 for an element. */
       offset: number;
       path: string;
       text: number;
@@ -70,8 +71,6 @@ export type ScanPosition =
 export type ReadRequest = {
   /** Forward reads from `position`; backward reads the blocks right before it. */
   direction: "backward" | "forward";
-  /** The number the window's first link gets: `[L<n>]`. */
-  firstLinkNumber: number;
   maxChars: number;
   maxControls: number;
   maxLinks: number;
@@ -130,8 +129,10 @@ export type PageOperation =
     }
   | { kind: "locate" }
   | (ReadOnlyOperationBase & {
-      /** The page's canonical link, language and standard meta entries. */
+      /** The page's canonical link, language and citation meta entries. */
       facts: boolean;
+      /** Put between an element id's letter and number: `4.` in frame 4. */
+      idPrefix: string;
       kind: "snapshot";
       /** Up to this many of the page's own controls outside the window; 0 for none. */
       pageControls: number;
@@ -384,16 +385,27 @@ export const pageScript = (pageOperation: PageOperation) => {
       });
     }
   };
+  // A computed CSS length or number, read with the CSS parser: pixels for a
+  // length, the value itself for a plain number. NaN for anything else
+  // (`auto`, a keyword, a percentage).
+  const cssNumber = (text: string): number => {
+    try {
+      const value = CSSNumericValue.parse(text.trim());
+      return value instanceof CSSUnitValue &&
+        (value.unit === "px" || value.unit === "number")
+        ? value.value
+        : Number.NaN;
+    } catch {
+      return Number.NaN;
+    }
+  };
   // A rect(...) clip or a clip-path that leaves nothing to see.
   const clippedAway = (style: CSSStyleDeclaration) => {
-    // Computed as `rect(top, right, bottom, left)`; `auto` edges parse
-    // to NaN and never count as collapsed.
+    // Computed as `rect(top, right, bottom, left)`; `auto` edges read as
+    // NaN and never count as collapsed.
     const clip = style.getPropertyValue("clip");
     const edges = clip.startsWith("rect(")
-      ? clip
-          .slice("rect(".length, -1)
-          .split(",")
-          .map((edge) => Number.parseFloat(edge))
+      ? clip.slice("rect(".length, -1).split(",").map(cssNumber)
       : [];
     const [
       top = Number.NaN,
@@ -420,7 +432,7 @@ export const pageScript = (pageOperation: PageOperation) => {
     if (style.display === "contents") {
       return false;
     }
-    if (Number.parseFloat(style.opacity) === 0 || clippedAway(style)) {
+    if (cssNumber(style.opacity) === 0 || clippedAway(style)) {
       return true;
     }
     const rect = element.getBoundingClientRect();
@@ -438,16 +450,14 @@ export const pageScript = (pageOperation: PageOperation) => {
   // Text inside a visible box that still does not show: zero-size or
   // transparent glyphs, or text indented off the page.
   const TRANSPARENT_COLORS = new Set(["rgba(0, 0, 0, 0)", "transparent"]);
-  const concealsText = (element: Element) => {
-    const style = styleOf(element);
-    return (
-      style.fontSize === "0px" ||
-      Number.parseFloat(style.textIndent) <= -999 ||
-      (TRANSPARENT_COLORS.has(style.color) &&
-        style.backgroundClip !== "text" &&
-        style.getPropertyValue("-webkit-background-clip") !== "text")
-    );
-  };
+  const styleConcealsText = (style: CSSStyleDeclaration) =>
+    style.fontSize === "0px" ||
+    cssNumber(style.textIndent) <= -999 ||
+    (TRANSPARENT_COLORS.has(style.color) &&
+      style.backgroundClip !== "text" &&
+      style.getPropertyValue("-webkit-background-clip") !== "text");
+  const concealsText = (element: Element) =>
+    styleConcealsText(styleOf(element));
   const concealedCache = new Map<Element, boolean>();
   const concealedInTree = (element: Element): boolean => {
     const cached = concealedCache.get(element);
@@ -741,8 +751,11 @@ export const pageScript = (pageOperation: PageOperation) => {
         container = container.shadowRoot;
         continue;
       }
-      const next = container.children.item(Number(segment));
-      if (!next) {
+      // The child whose index the segment names, as `pathFor` wrote it.
+      const next: Element | undefined = [...container.children].find(
+        (_child, index) => String(index) === segment,
+      );
+      if (next === undefined) {
         return null;
       }
       container = next;
@@ -884,7 +897,58 @@ export const pageScript = (pageOperation: PageOperation) => {
       "[role='textbox']",
     ].join(",");
     const textOf = (node: Node) => node.textContent ?? "";
-    const elementView = (element: Element) => {
+
+    // Element ids. A link or control keeps the number it was first given
+    // for the life of its document, whatever window shows it, so an id an
+    // agent read always names the same element. The numbers live in the
+    // extension's isolated world, which the page can neither see nor
+    // change; the host prefixes a subframe's with the frame's id.
+    const ID_KEY = "stellaElementIds";
+    type IdRegistry = {
+      controls: WeakMap<Element, number>;
+      links: WeakMap<Element, number>;
+      next: { control: number; link: number };
+    };
+    const isIdRegistry = (value: unknown): value is IdRegistry =>
+      typeof value === "object" &&
+      value !== null &&
+      "controls" in value &&
+      value.controls instanceof WeakMap &&
+      "links" in value &&
+      value.links instanceof WeakMap &&
+      "next" in value &&
+      typeof value.next === "object" &&
+      value.next !== null &&
+      "control" in value.next &&
+      typeof value.next.control === "number" &&
+      "link" in value.next &&
+      typeof value.next.link === "number";
+    const storedIds: unknown = Reflect.get(globalThis, ID_KEY);
+    const ids: IdRegistry = isIdRegistry(storedIds)
+      ? storedIds
+      : {
+          controls: new WeakMap(),
+          links: new WeakMap(),
+          next: { control: 1, link: 1 },
+        };
+    Reflect.set(globalThis, ID_KEY, ids);
+    const idPrefix = operation.kind === "snapshot" ? operation.idPrefix : "";
+    const idOf = (element: Element, kind: "control" | "link") => {
+      const numbers = kind === "link" ? ids.links : ids.controls;
+      let number = numbers.get(element);
+      if (number === undefined) {
+        if (kind === "link") {
+          number = ids.next.link;
+          ids.next.link = number + 1;
+        } else {
+          number = ids.next.control;
+          ids.next.control = number + 1;
+        }
+        numbers.set(element, number);
+      }
+      return `${kind === "link" ? "L" : "E"}${idPrefix}${String(number)}`;
+    };
+    const elementView = (element: Element, kind: "control" | "link") => {
       const path = pathFor(element);
       if (path === null) {
         return null;
@@ -895,6 +959,7 @@ export const pageScript = (pageOperation: PageOperation) => {
         ...(alternateName === undefined ? {} : { alternateName }),
         context: metadataFor(contextFor(element)),
         href: metadataFor(hrefFor(element)),
+        id: idOf(element, kind),
         name: nameFor(element),
         path,
         role: roleFor(element),
@@ -980,8 +1045,6 @@ export const pageScript = (pageOperation: PageOperation) => {
       "TEXTAREA",
       "VIDEO",
     ]);
-    const UNREAD_SELECTOR =
-      "audio, canvas, embed, iframe, noscript, object, script, select, style, template, textarea, video";
     // A margin or paragraph number: short, a number or a roman numeral,
     // perhaps in brackets.
     const MARKER_TEXT = /^[([]?(?:\d{1,4}[a-z]?|[clivx]{1,6})[).:\]]?$/iu;
@@ -989,9 +1052,11 @@ export const pageScript = (pageOperation: PageOperation) => {
     const HEADING_MIN_LETTERS = 3;
     // Stands for a link's marker until the window numbers its links; the
     // page's own text never carries it.
-    const LINK_MARK = "";
-    /** Characters a marker takes at most: ` [L300]`. */
-    const LINK_MARK_COST = 7;
+    const LINK_MARK = String.fromCodePoint(0xe0_00);
+    /** Characters a marker takes at most: ` [L1234567.1234567]`. */
+    const LINK_MARK_COST = 20;
+    /** `::before` or `::after` text kept: enough for "§ " and list labels. */
+    const GENERATED_TEXT_CHARS = 16;
     /** Places a probe of the surroundings looks at before it gives up. */
     const PROBE_LIMIT = 5000;
 
@@ -1076,37 +1141,55 @@ export const pageScript = (pageOperation: PageOperation) => {
       | { element: Element; kind: "link"; place: Place }
       | { kind: "text"; parent: Element | null; place: Place; value: string };
 
-    // `::before` and `::after` text the page prints from plain strings;
-    // counters and attributes are left out, since their values cannot be
-    // read back.
+    // Whether a pseudo-element's own style hides what it draws: the same
+    // rules the page's elements are held to. Its box cannot be measured,
+    // so one taken out of the flow (absolute or fixed) counts as hidden.
+    const pseudoConcealed = (style: CSSStyleDeclaration) =>
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      style.visibility === "collapse" ||
+      style.position === "absolute" ||
+      style.position === "fixed" ||
+      cssNumber(style.opacity) === 0 ||
+      clippedAway(style) ||
+      styleConcealsText(style);
+    const generatedOf = new WeakMap<Element, Map<string, string>>();
+    // `::before` and `::after` text the page prints from plain strings,
+    // short as markers and labels are: counters and attributes are left
+    // out (their values cannot be read back), and so are icon-font code
+    // points and text the pseudo-element's own style hides. Nothing is
+    // generated inside a number hidden from assistive technology.
     const generatedText = (
       element: Element,
       pseudo: "::after" | "::before",
     ) => {
+      const known = generatedOf.get(element)?.get(pseudo);
+      if (known !== undefined) {
+        return known;
+      }
       const style = window.getComputedStyle(element, pseudo);
       const { content } = style;
-      if (
-        style.display === "none" ||
-        !/^(?:\s*"(?:[^"\\]|\\.)*")+\s*$/su.test(content)
-      ) {
-        return "";
-      }
-      return [...content.matchAll(/"((?:[^"\\]|\\.)*)"/gsu)]
-        .map(([, quoted = ""]) =>
-          quoted.replaceAll(
-            /\\([\da-f]{1,6})\s?|\\(.)/gisu,
-            (_escape: string, hex?: string, literal?: string) => {
-              if (hex === undefined) {
-                return literal ?? "";
-              }
-              const code = Number.parseInt(hex, 16);
-              return code > 0 && code <= 0x10_ff_ff
-                ? String.fromCodePoint(code)
-                : "";
-            },
-          ),
-        )
-        .join("");
+      const text =
+        element.closest("[aria-hidden='true']") !== null ||
+        !/^(?:\s*"(?:[^"\\]|\\.)*")+\s*$/su.test(content) ||
+        pseudoConcealed(style)
+          ? ""
+          : [...content.matchAll(/"((?:[^"\\]|\\.)*)"/gsu)]
+              .map(([, quoted = ""]) =>
+                // A code point escape is a control or private character
+                // in a computed value: it reads as a space.
+                quoted.replaceAll(
+                  /\\[\da-f]{1,6}\s?|\\(.)/gisu,
+                  (_escape: string, literal?: string) => literal ?? " ",
+                ),
+              )
+              .join("")
+              .replaceAll(/\p{Co}/gu, "")
+              .slice(0, GENERATED_TEXT_CHARS);
+      const forElement = generatedOf.get(element) ?? new Map<string, string>();
+      forElement.set(pseudo, text);
+      generatedOf.set(element, forElement);
+      return text;
     };
     const ROMAN_DIGITS = [
       [1000, "m"],
@@ -1290,7 +1373,7 @@ export const pageScript = (pageOperation: PageOperation) => {
     /**
      * Walks from `start` in `direction` and hands `visit` each block's
      * items in document order with the breaks around it (null where the
-     * walk began). Stops when `visit` returns false.
+     * walk began). Stops when `visit` returns false, or after `end`.
      */
     const walkBlocks = (
       start: Place | null,
@@ -1300,15 +1383,23 @@ export const pageScript = (pageOperation: PageOperation) => {
         low: Break | null,
         high: Break | null,
       ) => boolean,
+      end?: Place,
     ) => {
       let gathered: Item[] = [];
       let edge: Break | null = null;
-      for (
-        let place = start;
-        place !== null;
-        place =
-          direction === "forward" ? nextPlace(place) : previousPlace(place)
-      ) {
+      const step = (place: Place): Place | null => {
+        if (
+          end !== undefined &&
+          place.node === end.node &&
+          place.phase === end.phase
+        ) {
+          return null;
+        }
+        return direction === "forward"
+          ? nextPlace(place)
+          : previousPlace(place);
+      };
+      for (let place = start; place !== null; place = step(place)) {
         const atPlace = itemsAt(place);
         const items = direction === "forward" ? atPlace : atPlace.toReversed();
         for (const item of items) {
@@ -1392,10 +1483,18 @@ export const pageScript = (pageOperation: PageOperation) => {
     // is 3 to 160 characters with at least 3 letters and is printed bold
     // (weight 600 or more: level 4) or larger than the page's base size
     // (1.2 times: level 3, 1.5 times: level 2).
+    const ARIA_LEVELS = new Map([
+      ["1", 1],
+      ["2", 2],
+      ["3", 3],
+      ["4", 4],
+      ["5", 5],
+      ["6", 6],
+    ]);
     const baseFontSize = { value: 0 };
     const pageFontSize = () => {
       if (baseFontSize.value === 0) {
-        const size = Number.parseFloat(styleOf(root).fontSize);
+        const size = cssNumber(styleOf(root).fontSize);
         baseFontSize.value = Number.isFinite(size) && size > 0 ? size : 16;
       }
       return baseFontSize.value;
@@ -1409,11 +1508,7 @@ export const pageScript = (pageOperation: PageOperation) => {
       if (level !== undefined) {
         return level;
       }
-      const aria = Number.parseInt(
-        heading.getAttribute("aria-level") ?? "",
-        10,
-      );
-      return aria >= 1 && aria <= 6 ? aria : 2;
+      return ARIA_LEVELS.get(heading.getAttribute("aria-level") ?? "") ?? 2;
     };
     const headingLevelOf = (element: Element): number => {
       if (
@@ -1422,7 +1517,9 @@ export const pageScript = (pageOperation: PageOperation) => {
       ) {
         return taggedHeadingLevel(element);
       }
+      // Inside a tagged heading the heading is the tagged one.
       if (
+        (element.parentElement?.closest(HEADING_SELECTOR) ?? null) !== null ||
         !BLOCK_TAGS.has(element.tagName) ||
         element.querySelector(`${BLOCK_SELECTOR}, br`) !== null
       ) {
@@ -1444,7 +1541,7 @@ export const pageScript = (pageOperation: PageOperation) => {
           ? element.children.item(0)
           : null;
       const style = styleOf(wrapper ?? element);
-      const size = Number.parseFloat(style.fontSize);
+      const size = cssNumber(style.fontSize);
       const base = pageFontSize();
       if (size >= base * 1.5) {
         return 2;
@@ -1452,7 +1549,7 @@ export const pageScript = (pageOperation: PageOperation) => {
       if (size >= base * 1.2) {
         return 3;
       }
-      return Number.parseInt(style.fontWeight, 10) >= 600 ? 4 : 0;
+      return cssNumber(style.fontWeight) >= 600 ? 4 : 0;
     };
     // A block is the element's own when the walk opened and closed it
     // around nothing but the block.
@@ -1556,7 +1653,11 @@ export const pageScript = (pageOperation: PageOperation) => {
         text !== null && sample.length < FINGERPRINT_BLOCK_CHARS;
         text = walker.nextNode()
       ) {
-        sample += textOf(text);
+        // Indentation between tags says nothing about the content.
+        const value = textOf(text);
+        if (value.trim() !== "") {
+          sample += value;
+        }
       }
       return sample.slice(0, FINGERPRINT_BLOCK_CHARS);
     };
@@ -1609,6 +1710,28 @@ export const pageScript = (pageOperation: PageOperation) => {
         ? null
         : { ...address, offset, type: "node" as const };
     };
+    // Whether every element around `node`, up to the document's body, is
+    // one the reader reads.
+    const ancestorsReadable = (node: Node) => {
+      for (
+        let parent = node.parentElement;
+        parent !== null;
+        parent = parent.parentElement
+      ) {
+        if (!readable(parent)) {
+          return false;
+        }
+        if (parent === root) {
+          return true;
+        }
+      }
+      return node === root;
+    };
+    // The one rule for where a read may start, whatever chose the place (a
+    // cursor, the address's fragment, the point in view): inside the body,
+    // and nowhere the page hides.
+    const startAllowed = (node: Node) =>
+      root.contains(node) && ancestorsReadable(node);
     const addressed = (address: {
       fingerprint: string;
       path: string;
@@ -1622,25 +1745,11 @@ export const pageScript = (pageOperation: PageOperation) => {
       if (
         node === null ||
         (address.text >= 0 && !(node instanceof Text)) ||
-        fingerprintOf(node) !== address.fingerprint ||
-        !root.contains(node)
+        fingerprintOf(node) !== address.fingerprint
       ) {
         return null;
       }
-      // A place inside what the page hides now is not read from.
-      for (
-        let parent = node.parentElement;
-        parent !== null;
-        parent = parent.parentElement
-      ) {
-        if (!readable(parent)) {
-          return null;
-        }
-        if (parent === root) {
-          break;
-        }
-      }
-      return node;
+      return startAllowed(node) ? node : null;
     };
     const placeOf = (
       position:
@@ -1713,7 +1822,7 @@ export const pageScript = (pageOperation: PageOperation) => {
       const target =
         document.querySelector(`#${CSS.escape(id)}`) ??
         document.querySelector(`[name="${CSS.escape(id)}"]`);
-      if (target === null || !root.contains(target)) {
+      if (target === null || !startAllowed(target)) {
         return null;
       }
       return Math.abs(target.getBoundingClientRect().top) <= window.innerHeight
@@ -1755,8 +1864,7 @@ export const pageScript = (pageOperation: PageOperation) => {
         if (!scrolledInto(element)) {
           break;
         }
-        const address = nodeAddress(node);
-        if (address !== null && addressed(address) !== null) {
+        if (startAllowed(node)) {
           return blockStartOf({ node, phase: "open" });
         }
       }
@@ -2020,10 +2128,8 @@ export const pageScript = (pageOperation: PageOperation) => {
         request.direction === "backward" && position.type !== "viewport"
           ? readBackward(start, skip, request.maxChars)
           : readForward(start, skip, request.maxChars);
-      const links: (NonNullable<ReturnType<typeof elementView>> & {
-        number: number;
-      })[] = [];
-      const linkCount = { leftOut: false, next: request.firstLinkNumber };
+      const links: NonNullable<ReturnType<typeof elementView>>[] = [];
+      const linkCount = { leftOut: false };
       const lines = span.blocks.map((block) => {
         let index = 0;
         return lineOf(block.text, block.level).replaceAll(
@@ -2034,16 +2140,14 @@ export const pageScript = (pageOperation: PageOperation) => {
             const view =
               element === undefined || links.length >= request.maxLinks
                 ? null
-                : elementView(element);
+                : elementView(element, "link");
             if (view === null) {
               linkCount.leftOut = true;
               return "";
             }
-            const number = linkCount.next;
-            linkCount.next += 1;
-            links.push({ ...view, number });
+            links.push(view);
             const spaced = offset === 0 || line.charAt(offset - 1) === " ";
-            return `${spaced ? "" : " "}[L${String(number)}]`;
+            return `${spaced ? "" : " "}[${view.id}]`;
           },
         );
       });
@@ -2051,7 +2155,7 @@ export const pageScript = (pageOperation: PageOperation) => {
       const controls = windowControls
         .slice(0, request.maxControls)
         .flatMap((element) => {
-          const view = elementView(element);
+          const view = elementView(element, "control");
           return view === null ? [] : [view];
         });
       const lastBlock = span.blocks.at(-1);
@@ -2107,7 +2211,7 @@ export const pageScript = (pageOperation: PageOperation) => {
           !isDisabled(element) &&
           !concealedInTree(element)
         ) {
-          const view = elementView(element);
+          const view = elementView(element, "control");
           if (view !== null) {
             controls.push(view);
           }
@@ -2115,8 +2219,11 @@ export const pageScript = (pageOperation: PageOperation) => {
       }
       return { controls, leftOut: false };
     };
+    // Meta entries that identify a work for citing (title, author, dates,
+    // publisher, address); descriptions and keywords are text the page
+    // never shows, so they stay out.
     const CITATION_META =
-      /^(?:article:(?:author|modified_time|published_time|section)|author|citation_\w+|copyright|date|dc\.[\w.]+|dcterms\.[\w.]+|description|keywords|last-modified|og:(?:description|site_name|title|type|updated_time|url)|publisher)$/iu;
+      /^(?:article:(?:author|modified_time|published_time)|author|citation_\w+|date|dc\.[\w.]+|dcterms\.[\w.]+|last-modified|og:(?:site_name|title|updated_time|url)|publisher)$/iu;
     const factsOf = () => {
       const canonical = document.querySelector("link[rel~='canonical'][href]");
       const canonicalUrl =
@@ -2153,32 +2260,49 @@ export const pageScript = (pageOperation: PageOperation) => {
 
     // ---- Find ---------------------------------------------------------
     //
-    // Matching ignores case and diacritics and lets any run of spaces match
-    // any run of spaces. Folding keeps one code unit for one, so an offset
-    // in the folded text is the same offset in the page's.
+    // Find searches the text the reader returns, block by block, and
+    // nothing else: hidden text never matches, and a match never runs
+    // across two blocks. Matching ignores case and diacritics and lets any
+    // run of spaces match any run of spaces. The page's own text (and its
+    // open shadow roots) only says which blocks to read: a block is a
+    // candidate when the query's longest word occurs in it, so text a page
+    // draws only with CSS is found together with words of its own text.
+    //
+    // Folding keeps one code unit for one: lower case, and a letter's base
+    // letter where it has one of the same length.
+    const BASE_LETTERS = new Map([
+      ["đ", "d"],
+      ["ħ", "h"],
+      ["ı", "i"],
+      ["ŀ", "l"],
+      ["ł", "l"],
+      ["ø", "o"],
+      ["ŧ", "t"],
+    ]);
     const foldedChars = new Map<string, string>();
     const foldChar = (char: string) => {
       const cached = foldedChars.get(char);
       if (cached !== undefined) {
         return cached;
       }
+      const lower = char.toLowerCase();
       // oxlint-disable-next-line no-direct-unicode-normalize/no-direct-unicode-normalize -- the page script runs serialized inside the page and cannot import @stll/text-normalize; it needs the base letter of one character, length kept.
-      const base = char.normalize("NFD").replaceAll(/\p{M}/gu, "");
-      const folded = base.length === char.length ? base : char;
+      const base = lower.normalize("NFD").replaceAll(/\p{M}/gu, "");
+      const candidate = BASE_LETTERS.get(base) ?? base;
+      // Only a fold of the same length that lower-casing leaves alone:
+      // anything else would move every offset after it.
+      const folded =
+        candidate.length === char.length &&
+        candidate.toLowerCase() === candidate
+          ? candidate
+          : String.fromCodePoint(0xff_fd).repeat(char.length);
       foldedChars.set(char, folded);
       return folded;
     };
-    const fold = (text: string) => {
-      const lower = text.toLowerCase();
-      const sameLength =
-        lower.length === text.length
-          ? lower
-          : text.replaceAll(/[\s\S]/gu, (char) => {
-              const low = char.toLowerCase();
-              return low.length === char.length ? low : char;
-            });
-      return sameLength.replaceAll(/[^\p{ASCII}]/gu, foldChar);
-    };
+    // Each non-ASCII character is folded once and cached; ASCII is lower-
+    // cased by the engine, which keeps its length.
+    const fold = (text: string) =>
+      text.replaceAll(/[^\p{ASCII}]/gu, foldChar).toLowerCase();
     const wordsOf = (query: string) =>
       fold(query)
         .split(/\s+/u)
@@ -2219,39 +2343,103 @@ export const pageScript = (pageOperation: PageOperation) => {
       }
       return null;
     };
-    const shownParents = new Map<Element, boolean>();
-    // Whether text in this element is text the reader returns.
-    const shownText = (node: Text) => {
-      const parent = node.parentElement;
-      if (parent === null) {
-        return false;
+    // The reader's blocks inside `element`, as a window would print them.
+    const blocksWithin = (element: Element): Block[] => {
+      if (!readable(element) || !ancestorsReadable(element)) {
+        return [];
       }
-      const cached = shownParents.get(parent);
-      if (cached !== undefined) {
-        return cached;
-      }
-      const shown =
-        parent.closest(UNREAD_SELECTOR) === null &&
-        visible(parent) &&
-        !concealsText(parent) &&
-        !isSensitiveField(parent) &&
-        !concealedInTree(parent);
-      shownParents.set(parent, shown);
-      return shown;
+      const blocks: Block[] = [];
+      walkBlocks(
+        { node: element, phase: "open" },
+        "forward",
+        (items) => {
+          const block = buildBlock(items);
+          if (block.first !== null && block.text !== "") {
+            blocks.push(block);
+          }
+          return true;
+        },
+        { node: element, phase: "close" },
+      );
+      return blocks;
     };
-    const blocksOf = new Map<Element, Element>();
-    const blockOf = (node: Text) => {
-      const parent = node.parentElement;
-      if (parent === null) {
-        return root;
+    // Whether `later` comes after `earlier` in the document.
+    const follows = (earlier: Node, later: Node) => {
+      const position = earlier.compareDocumentPosition(later);
+      return (
+        position === Node.DOCUMENT_POSITION_FOLLOWING ||
+        position ===
+          Node.DOCUMENT_POSITION_FOLLOWING + Node.DOCUMENT_POSITION_CONTAINED_BY
+      );
+    };
+    const blockElementOf = (node: Node): Element => {
+      const element = node instanceof Element ? node : node.parentElement;
+      return element?.closest(BLOCK_SELECTOR) ?? root;
+    };
+    // The element in the document a shadow root's text is read with: its
+    // outermost host.
+    const outermostHost = (shadowRoot: ShadowRoot): Element => {
+      let host = shadowRoot.host;
+      for (
+        let rootNode = host.getRootNode();
+        rootNode instanceof ShadowRoot;
+        rootNode = host.getRootNode()
+      ) {
+        host = rootNode.host;
       }
-      const known = blocksOf.get(parent);
-      if (known !== undefined) {
-        return known;
+      return host;
+    };
+    // The block elements whose text holds `word`, in document order, none
+    // inside another.
+    const candidateBlocks = (word: string): Element[] => {
+      const found = new Set<Element>();
+      const folded = fold(textOf(root));
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let node = walker.nextNode();
+      let nodeStart = 0;
+      for (
+        let index = folded.indexOf(word);
+        index !== -1 && node !== null;
+        index = folded.indexOf(word, index + word.length)
+      ) {
+        while (node !== null && index >= nodeStart + textOf(node).length) {
+          nodeStart += textOf(node).length;
+          node = walker.nextNode();
+        }
+        // Script and style text is never read, so it names no block.
+        const parent = node?.parentElement ?? null;
+        if (
+          node !== null &&
+          (parent === null ||
+            !(
+              SKIPPED_TAGS.has(parent.tagName) ||
+              UNREAD_TAGS.has(parent.tagName)
+            ))
+        ) {
+          found.add(blockElementOf(node));
+        }
       }
-      const block = parent.closest(BLOCK_SELECTOR) ?? root;
-      blocksOf.set(parent, block);
-      return block;
+      for (const shadowRoot of openShadowRoots) {
+        if (fold(textOf(shadowRoot)).includes(word)) {
+          const host = outermostHost(shadowRoot);
+          if (root.contains(host)) {
+            found.add(blockElementOf(host));
+          }
+        }
+      }
+      const ordered = [...found].toSorted((left, right) => {
+        if (left === right) {
+          return 0;
+        }
+        return follows(left, right) ? -1 : 1;
+      });
+      const outermost: Element[] = [];
+      for (const element of ordered) {
+        if (!outermost.some((kept) => kept.contains(element))) {
+          outermost.push(element);
+        }
+      }
+      return outermost;
     };
     const scanStart = (
       after:
@@ -2264,32 +2452,11 @@ export const pageScript = (pageOperation: PageOperation) => {
           }
         | { type: "start" },
     ) => (after.type === "start" ? { node: null } : { node: addressed(after) });
-    // The words of the block a match is in, around the match.
-    const snippetOf = (
-      place: Place,
-      words: readonly string[],
-      occurrence: number,
+    const snippetAround = (
+      text: string,
+      [start, end]: [number, number],
       limit: number,
     ) => {
-      const found = { text: "" };
-      walkBlocks(place, "forward", (items) => {
-        const block = buildBlock(items);
-        if (block.text === "") {
-          return true;
-        }
-        found.text = cleanText(block.text);
-        return false;
-      });
-      const { text } = found;
-      const folded = fold(text);
-      let match = matchFrom(folded, words, 0);
-      for (let index = 0; index < occurrence && match !== null; index += 1) {
-        match = matchFrom(folded, words, match[1]);
-      }
-      if (match === null) {
-        return text.slice(0, limit);
-      }
-      const [start, end] = match;
       const from = Math.max(
         0,
         start - Math.max(0, Math.floor((limit - (end - start)) / 2)),
@@ -2298,111 +2465,83 @@ export const pageScript = (pageOperation: PageOperation) => {
     };
     const findText = (request: Extract<FindRequest, { type: "text" }>) => {
       const words = wordsOf(request.query);
-      if (request.countLimit <= 0 || words.length === 0) {
+      const longest = words.toSorted(
+        (left, right) => right.length - left.length,
+      )[0];
+      if (request.countLimit <= 0 || longest === undefined) {
         return { matches: [], total: 0, totalCapped: false };
       }
       const after = scanStart(request.after);
       if (after.node === null && request.after.type === "node") {
         return null;
       }
-      const folded = fold(textOf(root));
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-      const nodes: Text[] = [];
-      const starts: number[] = [];
-      const cursor = { pointer: 0, reached: 0 };
-      const pull = () => {
-        const next = walker.nextNode();
-        if (!(next instanceof Text)) {
-          return false;
-        }
-        nodes.push(next);
-        starts.push(cursor.reached);
-        cursor.reached += next.data.length;
-        return true;
-      };
-      let from = 0;
-      if (after.node !== null && request.after.type === "node") {
-        while (nodes.at(-1) !== after.node) {
-          if (!pull()) {
-            return null;
-          }
-        }
-        cursor.pointer = nodes.length - 1;
-        from = (starts.at(-1) ?? 0) + request.after.offset + 1;
-      }
-      // The text node holding `index`, and where in it: indexes only grow.
-      const locate = (index: number) => {
-        for (;;) {
-          const node = nodes[cursor.pointer];
-          const start = starts[cursor.pointer];
-          if (node !== undefined && start !== undefined) {
-            if (index < start + node.data.length) {
-              return index >= start ? { node, offset: index - start } : null;
-            }
-            cursor.pointer += 1;
+      const resumeAt = after.node instanceof Element ? after.node : null;
+      // A find resumes in the block it stopped in, past what it returned.
+      const blocks = [
+        ...(resumeAt === null ? [] : [resumeAt]),
+        ...candidateBlocks(longest).filter(
+          (element) =>
+            resumeAt === null ||
+            (!resumeAt.contains(element) && follows(resumeAt, element)),
+        ),
+      ];
+      const matches: {
+        position: NonNullable<ReturnType<typeof positionOf>>;
+        snippet: string;
+      }[] = [];
+      const counted = { capped: false, total: 0 };
+      let last: { element: Element; seen: number } | null = null;
+      for (const element of blocks) {
+        let seen = 0;
+        const skip =
+          element === resumeAt && request.after.type === "node"
+            ? request.after.offset
+            : 0;
+        for (const block of blocksWithin(element)) {
+          const text = cleanText(block.text);
+          const folded = fold(text);
+          const place = block.first;
+          if (place === null) {
             continue;
           }
-          if (!pull()) {
-            return null;
+          for (
+            let match = matchFrom(folded, words, 0);
+            match !== null;
+            match = matchFrom(folded, words, match[1])
+          ) {
+            seen += 1;
+            if (seen <= skip) {
+              continue;
+            }
+            if (counted.total >= request.countLimit) {
+              counted.capped = true;
+              break;
+            }
+            counted.total += 1;
+            const position = positionOf(place, 0);
+            if (matches.length < request.maxResults && position !== null) {
+              matches.push({
+                position,
+                snippet: snippetAround(text, match, request.snippetChars),
+              });
+              last = { element, seen };
+            }
+          }
+          if (counted.capped) {
+            break;
           }
         }
-      };
-      const hits: { node: Text; offset: number }[] = [];
-      let total = 0;
-      let totalCapped = false;
-      for (
-        let match = matchFrom(folded, words, from);
-        match !== null;
-        match = matchFrom(folded, words, match[1])
-      ) {
-        const head = locate(match[0]);
-        const tail = locate(match[1] - 1);
-        if (
-          head === null ||
-          tail === null ||
-          !shownText(head.node) ||
-          !shownText(tail.node) ||
-          blockOf(head.node) !== blockOf(tail.node)
-        ) {
-          continue;
-        }
-        if (total >= request.countLimit) {
-          totalCapped = true;
+        if (counted.capped) {
           break;
         }
-        total += 1;
-        if (hits.length < request.maxResults) {
-          hits.push(head);
-        }
       }
-      const seenInBlock = new Map<Node, number>();
-      const matches = hits.flatMap(({ node }) => {
-        const place = blockStartOf({ node, phase: "open" });
-        const position = positionOf(place, 0);
-        const occurrence = seenInBlock.get(place.node) ?? 0;
-        seenInBlock.set(place.node, occurrence + 1);
-        return position === null
-          ? []
-          : [
-              {
-                position,
-                snippet: snippetOf(
-                  place,
-                  words,
-                  occurrence,
-                  request.snippetChars,
-                ),
-              },
-            ];
-      });
-      const last = hits.at(-1);
       const lastPosition =
-        last === undefined ? null : scanPositionOf(last.node, last.offset);
+        last === null ? null : scanPositionOf(last.element, last.seen);
       return {
         ...(lastPosition === null ? {} : { last: lastPosition }),
         matches,
-        total,
-        totalCapped,
+        total: counted.total,
+        totalCapped: counted.capped,
       };
     };
     const findHeadings = (
@@ -2428,36 +2567,30 @@ export const pageScript = (pageOperation: PageOperation) => {
         position: NonNullable<ReturnType<typeof positionOf>>;
         text: string;
       }[] = [];
-      let last: Element | null = null;
+      // A heading's own content is never a heading of its own.
+      let last: Node | null = after.node;
       for (
         let node = walker.nextNode();
         node !== null;
         node = walker.nextNode()
       ) {
-        if (!(node instanceof Element)) {
+        if (!(node instanceof Element) || last?.contains(node) === true) {
           continue;
         }
         const level = headingLevelOf(node);
-        if (
-          level === 0 ||
-          !visible(node) ||
-          concealsText(node) ||
-          concealedInTree(node)
-        ) {
+        if (level === 0) {
           continue;
         }
-        const text = collectText(node, request.headingChars).slice(
-          0,
-          request.headingChars,
-        );
+        const text = blocksWithin(node)
+          .map((block) => cleanText(block.text))
+          .join(" ")
+          .slice(0, request.headingChars);
+        const position = positionOf({ node, phase: "open" }, 0);
         if (
           text === "" ||
+          position === null ||
           (words.length > 0 && matchFrom(fold(text), words, 0) === null)
         ) {
-          continue;
-        }
-        const position = positionOf({ node, phase: "open" }, 0);
-        if (position === null) {
           continue;
         }
         if (headings.length >= request.maxResults) {

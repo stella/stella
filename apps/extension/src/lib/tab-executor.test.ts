@@ -1413,8 +1413,13 @@ describe("chat's tabs", () => {
   });
 
   test("switches to a tab chat's page opened and reads it", async () => {
-    const { handlers, log, session, tabs } = installChatTabs({
+    const { handlers, log, probe, session, tabs } = installChatTabs({
       opened: [RESULTS_TAB_ID, 6],
+    });
+    // The document Chrome's frame list names, and the one the read runs in.
+    probe.frames.set(RESULTS_TAB_ID, {
+      documentId: "document-results",
+      errorOccurred: false,
     });
     // A tab showing a page chat may not operate is not offered.
     tabs.set(6, {

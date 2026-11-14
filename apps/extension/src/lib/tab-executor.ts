@@ -35,7 +35,7 @@ import {
   frameFoundSchema,
   type FrameOutcome,
   frameReadSchema,
-  type FrameRefusal,
+  type PageReadFailure,
   type ReaderFrame,
   readPageWindow,
 } from "./page-window";
@@ -709,9 +709,13 @@ const frameOutcome = <T extends { origin: string; url: string }>(
   if (refusal.success) {
     return { reason: refusal.output.refused, type: "refused" };
   }
+  // No answer: a subframe Chrome could not reach.
+  if (result === undefined) {
+    return { type: "skipped" };
+  }
   const parsed = v.safeParse(schema, result);
   if (!parsed.success) {
-    return { type: "skipped" };
+    return { type: "invalid" };
   }
   if (
     frame.frameId !== TOP_FRAME_ID &&
@@ -731,10 +735,7 @@ const STALE_CURSOR_MESSAGE =
 
 /** A read that could not start, or a frame that refused it. */
 const readRefusal = (
-  outcome:
-    | { reason: FrameRefusal; type: "refused" }
-    | { type: "invalid-cursor" }
-    | { type: "stale-cursor" },
+  outcome: PageReadFailure,
   requiredOrigin: ReadSnapshotOptions["requiredOrigin"],
 ): BrowserControlResult => {
   if (outcome.type === "invalid-cursor") {
@@ -747,6 +748,12 @@ const readRefusal = (
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
       STALE_CURSOR_MESSAGE,
+    );
+  }
+  if (outcome.type === "unreadable-page") {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      "The page returned a read outside the protocol bounds.",
     );
   }
   switch (outcome.reason) {
@@ -866,6 +873,7 @@ const readSnapshot = async ({
         await runInFrame(tabId, frame, {
           ...readOperationBase(signIn, requiredOrigin?.origin),
           facts: request.facts,
+          idPrefix: request.idPrefix,
           kind: "snapshot",
           pageControls: request.pageControls,
           purpose: SNAPSHOT_PURPOSE.read,
@@ -1016,6 +1024,7 @@ const readTopPage = async (
     await runInFrame(tabId, frame, {
       ...readOperationBase(signIn, undefined),
       facts: false,
+      idPrefix: "",
       kind: "snapshot",
       pageControls: 0,
       purpose: SNAPSHOT_PURPOSE.read,
@@ -1029,6 +1038,7 @@ const readTopPage = async (
     case "refused":
       return readRefusal(outcome, undefined);
     case "skipped":
+    case "invalid":
       return browserControlError(
         BROWSER_CONTROL_ERROR_CODE.executionFailed,
         "The page could not be read.",
@@ -1652,6 +1662,7 @@ const tabAsksForSignIn = async (tabId: number): Promise<boolean> => {
     {
       ...readOperationBase(SIGN_IN_POLICY.handToMember, undefined),
       facts: false,
+      idPrefix: "",
       kind: "snapshot",
       pageControls: 0,
       purpose: SNAPSHOT_PURPOSE.signInCheck,

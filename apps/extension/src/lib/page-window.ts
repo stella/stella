@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import {
   BROWSER_CONTROL_LIMITS,
+  BROWSER_ELEMENT_ID_PATTERN,
   BROWSER_FIND_TYPE,
   type BrowserControlElement,
   type BrowserControlFound,
@@ -99,7 +100,7 @@ const encodeCursor = (payload: CursorPayload): string =>
     .replaceAll("=", "")}`;
 
 /** The cursor `encodeCursor` made, or null for anything else. */
-export const decodeCursor = (cursor: string): CursorPayload | null => {
+export const decodeReaderCursor = (cursor: string): CursorPayload | null => {
   if (
     !cursor.startsWith(CURSOR_PREFIX) ||
     cursor.length > BROWSER_CONTROL_LIMITS.cursorChars
@@ -158,6 +159,8 @@ const pageElementEntries = {
   ),
   context: browserControlTargetContextSchema,
   href: browserControlTargetHrefSchema,
+  /** Stable for the life of the frame's document (see `page-script`). */
+  id: v.pipe(v.string(), v.regex(BROWSER_ELEMENT_ID_PATTERN)),
   name: v.string(),
   path: v.pipe(v.string(), v.regex(PATH_PATTERN)),
   role: v.string(),
@@ -183,12 +186,8 @@ const frameWindowSchema = v.strictObject({
   fromPercent: percentSchema,
   hasAfter: v.boolean(),
   hasBefore: v.boolean(),
-  links: v.array(
-    v.strictObject({
-      ...pageElementEntries,
-      number: v.pipe(v.number(), v.integer(), v.minValue(1)),
-    }),
-  ),
+  /** The window's links, each marked in the text with its id. */
+  links: v.array(pageElementSchema),
   linksLeftOut: v.boolean(),
   /** Where this window's first block starts. */
   start: readerPositionSchema,
@@ -257,19 +256,38 @@ export type FrameOutcome<T> =
   | { result: T; type: "read" }
   | { reason: FrameRefusal; type: "refused" }
   /** Outside the frames stella may read, or gone: passed over. */
-  | { type: "skipped" };
+  | { type: "skipped" }
+  /** The frame answered with something that is not a read. */
+  | { type: "invalid" };
 
 // ---- A window -------------------------------------------------------------
 
 /** Below this many characters left, a window does not open another frame. */
 const MIN_FRAME_CHARS = 500;
 
+/**
+ * Element slots kept for the page's own controls (a search field, its
+ * buttons), so a window full of links does not push them out.
+ */
+const PAGE_CONTROL_SLOTS = 20;
+
 type ReadFrame = (
   frame: ReaderFrame,
-  request: { facts: boolean; pageControls: number; read?: ReadRequest },
+  request: {
+    facts: boolean;
+    idPrefix: string;
+    pageControls: number;
+    read?: ReadRequest;
+  },
 ) => Promise<FrameOutcome<FrameRead>>;
 
-export type PageWindow = Pick<
+/** A subframe's element ids carry its frame id: `L4.12`. */
+const idPrefixOf = ({ frameId }: ReaderFrame) =>
+  frameId === TOP_FRAME_ID ? "" : `${String(frameId)}.`;
+
+const TOP_FRAME_ID = 0;
+
+type PageWindow = Pick<
   BrowserControlSnapshot,
   "elements" | "elementsLeftOut" | "facts" | "text" | "window"
 > & {
@@ -279,11 +297,16 @@ export type PageWindow = Pick<
   top: FrameRead;
 };
 
-export type PageWindowOutcome =
+/** A read that could not start, or that a frame refused. */
+export type PageReadFailure =
   | { type: "invalid-cursor" }
   | { reason: FrameRefusal; type: "refused" }
   | { type: "stale-cursor" }
-  | { type: "window"; window: PageWindow };
+  /** The top document answered with something that is not a read. */
+  | { type: "unreadable-page" };
+
+type PageWindowOutcome =
+  PageReadFailure | { type: "window"; window: PageWindow };
 
 type WindowRead = {
   frame: ReaderFrame;
@@ -291,8 +314,8 @@ type WindowRead = {
 };
 
 /**
- * The frame a cursor of kind `kind` addresses, by its document: `null`
- * index for no cursor, which starts at the top frame.
+ * The frame a cursor of kind `kind` addresses, by its document: index 0
+ * and no position for no cursor, which starts at the top frame.
  */
 const cursorFrame = <K extends CursorPayload["k"]>(
   cursor: string | undefined,
@@ -305,7 +328,7 @@ const cursorFrame = <K extends CursorPayload["k"]>(
   if (cursor === undefined) {
     return { decoded: null, index: 0 };
   }
-  const payload = decodeCursor(cursor);
+  const payload = decodeReaderCursor(cursor);
   const decoded = payload === null ? null : cursorOfKind(payload, kind);
   if (decoded === null) {
     return { type: "invalid-cursor" };
@@ -337,8 +360,26 @@ type FramePages = {
 };
 
 /**
+ * A frame that cannot be read where a window starts: at a frame's edge
+ * (its start going forward, its end going backward) the window moves on to
+ * the next frame that can be; inside a frame the cursor is stale. The top
+ * frame answering with something that is not a read fails the read.
+ */
+const unreadAt = (
+  outcome: { type: "invalid" } | { type: "skipped" },
+  frame: ReaderFrame,
+  atEdge: boolean,
+): "move-on" | PageReadFailure => {
+  if (frame.frameId === TOP_FRAME_ID && outcome.type === "invalid") {
+    return { type: "unreadable-page" };
+  }
+  return atEdge ? "move-on" : { type: "stale-cursor" };
+};
+
+/**
  * Reads the window's text from `startIndex` on: a forward window goes on
- * into the next frames while it has room, a backward one stays put.
+ * into the next frames while it has room; a backward one reads one frame,
+ * the first readable one at or before `startIndex`.
  */
 const readFrames = async ({
   direction,
@@ -352,42 +393,54 @@ const readFrames = async ({
   position: ReadRequest["position"];
   readFrame: ReadFrame;
   startIndex: number;
-}): Promise<FramePages | { reason: FrameRefusal; type: "refused" } | null> => {
+}): Promise<FramePages | PageReadFailure> => {
   const pages: FramePages["pages"] = [];
   const reads: WindowRead[] = [];
   const room = {
     chars: BROWSER_CONTROL_LIMITS.pageTextChars,
-    linkNumber: 1,
-    links: BROWSER_CONTROL_LIMITS.elements,
+    links: BROWSER_CONTROL_LIMITS.elements - PAGE_CONTROL_SLOTS,
   };
-  for (let index = startIndex; index < frames.length; index += 1) {
+  const step = direction === "forward" ? 1 : -1;
+  let first = true;
+  for (
+    let index = startIndex;
+    index >= 0 && index < frames.length;
+    index += step
+  ) {
     const frame = frames[index];
     if (frame === undefined) {
       break;
     }
-    const first = index === startIndex;
+    const framePosition: ReadRequest["position"] = first
+      ? position
+      : { type: direction === "forward" ? "start" : "end" };
     const outcome = await readFrame(frame, {
       facts: index === 0,
+      idPrefix: idPrefixOf(frame),
       pageControls: index === 0 ? BROWSER_CONTROL_LIMITS.elements : 0,
       read: {
-        direction: first ? direction : "forward",
-        firstLinkNumber: room.linkNumber,
+        direction,
         maxChars: room.chars,
         maxControls: BROWSER_CONTROL_LIMITS.elements,
         maxLinks: room.links,
-        position: first ? position : { type: "start" },
+        position: framePosition,
       },
     });
     if (outcome.type === "refused") {
       return outcome;
     }
-    if (outcome.type === "skipped") {
-      // The cursor's own frame is not readable any more.
-      if (first) {
-        return null;
+    if (outcome.type === "skipped" || outcome.type === "invalid") {
+      const atEdge =
+        framePosition.type === "viewport" ||
+        framePosition.type === (direction === "forward" ? "start" : "end");
+      const unread = unreadAt(outcome, frame, atEdge);
+      if (unread !== "move-on") {
+        return unread;
       }
+      first = false;
       continue;
     }
+    first = false;
     pages.push({ frame, read: outcome.result });
     const { window } = outcome.result;
     if (window === undefined) {
@@ -395,7 +448,6 @@ const readFrames = async ({
     }
     reads.push({ frame, window });
     room.chars -= window.text.length + 1;
-    room.linkNumber += window.links.length;
     room.links -= window.links.length;
     if (window.hasAfter || direction === "backward") {
       break;
@@ -428,7 +480,8 @@ const windowCursors = ({
   const firstIndex = frames.indexOf(firstRead.frame);
   const lastIndex = frames.indexOf(lastRead.frame);
   // A forward window that ran out of room before the next frame, or a
-  // backward one, goes on at the start of the frame after it.
+  // backward one, goes on at the start of the frame after it; a frame
+  // that turns out unreadable there is passed over.
   let frameAfter: ReaderFrame | undefined;
   if (direction === "backward") {
     frameAfter = frames.at(lastIndex + 1);
@@ -477,22 +530,9 @@ export const readPageWindow = async ({
     return start;
   }
   if (topFrame === undefined) {
-    return { type: "stale-cursor" };
+    return { type: "unreadable-page" };
   }
   const direction = start.decoded?.w ?? "forward";
-  const topPages: FramePages["pages"] = [];
-  if (start.index > 0) {
-    const top = await readFrame(topFrame, {
-      facts: true,
-      pageControls: BROWSER_CONTROL_LIMITS.elements,
-    });
-    if (top.type === "refused") {
-      return top;
-    }
-    if (top.type === "read") {
-      topPages.push({ frame: topFrame, read: top.result });
-    }
-  }
   const read = await readFrames({
     direction,
     frames,
@@ -500,18 +540,31 @@ export const readPageWindow = async ({
     readFrame,
     startIndex: start.index,
   });
-  if (read === null) {
-    return { type: "stale-cursor" };
-  }
   if ("type" in read) {
     return read;
   }
-  const pages = [...topPages, ...read.pages];
-  const top = pages.find(({ frame }) => frame.frameId === topFrame.frameId);
+  const pages = [...read.pages];
+  // The top document's address, title, facts and controls, when the
+  // window did not read it.
+  if (!pages.some(({ frame }) => frame === topFrame)) {
+    const top = await readFrame(topFrame, {
+      facts: true,
+      idPrefix: idPrefixOf(topFrame),
+      pageControls: BROWSER_CONTROL_LIMITS.elements,
+    });
+    if (top.type === "refused") {
+      return top;
+    }
+    if (top.type !== "read") {
+      return { type: "unreadable-page" };
+    }
+    pages.unshift({ frame: topFrame, read: top.result });
+  }
+  const top = pages.find(({ frame }) => frame === topFrame);
   const firstRead = read.reads.at(0);
   const lastRead = read.reads.at(-1);
   if (top === undefined || firstRead === undefined || lastRead === undefined) {
-    return { type: "stale-cursor" };
+    return { type: "unreadable-page" };
   }
   return {
     type: "window",
@@ -540,14 +593,13 @@ export const readPageWindow = async ({
 const elementOf = (
   frame: ReaderFrame,
   element: PageElement,
-  id: string,
 ): BrowserControlElement => ({
   ...(element.alternateName === undefined
     ? {}
     : { alternateName: element.alternateName }),
   context: element.context,
   href: element.href,
-  id,
+  id: element.id,
   name: element.name,
   ref: formatElementReference({ frameId: frame.frameId, path: element.path }),
   role: element.role,
@@ -555,9 +607,9 @@ const elementOf = (
 });
 
 /**
- * The window's links, numbered as the text marks them; then its other
- * controls; then the top page's own controls: at most the element limit,
- * each ref once.
+ * The window's links, then its other controls, then the top page's own
+ * controls, each element once: at most the element limit, with some
+ * slots kept for the page's own controls.
  */
 const windowElements = (
   reads: readonly WindowRead[],
@@ -565,41 +617,34 @@ const windowElements = (
 ): Pick<PageWindow, "elements" | "elementsLeftOut"> => {
   const elements: BrowserControlElement[] = [];
   const refs = new Set<string>();
+  const reserved = Math.min(PAGE_CONTROL_SLOTS, top.read.pageControls.length);
   let leftOut = top.read.pageControlsLeftOut;
-  const add = (frame: ReaderFrame, element: PageElement, id: string) => {
-    const listed = elementOf(frame, element, id);
+  const add = (frame: ReaderFrame, element: PageElement, limit: number) => {
+    const listed = elementOf(frame, element);
     if (refs.has(listed.ref)) {
       return;
     }
-    if (elements.length >= BROWSER_CONTROL_LIMITS.elements) {
+    if (elements.length >= limit) {
       leftOut = true;
       return;
     }
     refs.add(listed.ref);
     elements.push(listed);
   };
+  const windowLimit = BROWSER_CONTROL_LIMITS.elements - reserved;
   for (const { frame, window } of reads) {
     leftOut ||= window.linksLeftOut || window.controlsLeftOut;
     for (const link of window.links) {
-      const { number, ...element } = link;
-      add(frame, element, `L${String(number)}`);
+      add(frame, link, windowLimit);
     }
   }
-  let controlNumber = 1;
-  const addControl = (frame: ReaderFrame, element: PageElement) => {
-    const before = elements.length;
-    add(frame, element, `E${String(controlNumber)}`);
-    if (elements.length > before) {
-      controlNumber += 1;
-    }
-  };
   for (const { frame, window } of reads) {
     for (const control of window.controls) {
-      addControl(frame, control);
+      add(frame, control, windowLimit);
     }
   }
   for (const control of top.read.pageControls) {
-    addControl(top.frame, control);
+    add(top.frame, control, BROWSER_CONTROL_LIMITS.elements);
   }
   return { elements, elementsLeftOut: leftOut };
 };
@@ -628,7 +673,7 @@ type FindSearch =
   | { query?: string | undefined; type: typeof BROWSER_FIND_TYPE.headings };
 
 /** What `find` found, without the page it names; the host adds that. */
-export type PageFound =
+type PageFound =
   | Omit<
       Extract<BrowserControlFound, { type: "headings" }>,
       "contentTrust" | "tabId" | "title" | "url"
@@ -638,11 +683,8 @@ export type PageFound =
       "contentTrust" | "tabId" | "title" | "url"
     >;
 
-export type PageFindOutcome =
-  | { found: PageFound; top: FrameFound | null; type: "found" }
-  | { type: "invalid-cursor" }
-  | { reason: FrameRefusal; type: "refused" }
-  | { type: "stale-cursor" };
+type PageFindOutcome =
+  PageReadFailure | { found: PageFound; top: FrameFound | null; type: "found" };
 
 /**
  * What a find has gathered so far across frames. `resume` is where a later
@@ -665,6 +707,12 @@ const addFound = (
   frameAfter: ReaderFrame | undefined,
 ): boolean => {
   if (found.type === BROWSER_FIND_TYPE.text) {
+    // The count was full before this frame: it was only asked whether
+    // any match is left.
+    if (progress.total >= BROWSER_CONTROL_LIMITS.findCountLimit) {
+      progress.capped = found.total > 0;
+      return true;
+    }
     for (const match of found.matches) {
       progress.matches.push({
         cursor: readCursor(frame, "forward", match.position),
@@ -704,24 +752,31 @@ const frameFindRequest = (
   search: FindSearch,
   after: FindRequest["after"],
   progress: FindProgress,
-): FindRequest =>
-  search.type === BROWSER_FIND_TYPE.text
-    ? {
-        after,
-        countLimit: BROWSER_CONTROL_LIMITS.findCountLimit - progress.total,
-        maxResults:
-          BROWSER_CONTROL_LIMITS.findMatches - progress.matches.length,
-        query: search.query,
-        snippetChars: BROWSER_CONTROL_LIMITS.findSnippetChars,
-        type: BROWSER_FIND_TYPE.text,
-      }
-    : {
-        after,
-        headingChars: BROWSER_CONTROL_LIMITS.headingChars,
-        maxResults: BROWSER_CONTROL_LIMITS.headings - progress.headings.length,
-        query: search.query ?? "",
-        type: BROWSER_FIND_TYPE.headings,
-      };
+): FindRequest => {
+  if (search.type === BROWSER_FIND_TYPE.headings) {
+    return {
+      after,
+      headingChars: BROWSER_CONTROL_LIMITS.headingChars,
+      maxResults: BROWSER_CONTROL_LIMITS.headings - progress.headings.length,
+      query: search.query ?? "",
+      type: BROWSER_FIND_TYPE.headings,
+    };
+  }
+  const left = BROWSER_CONTROL_LIMITS.findCountLimit - progress.total;
+  return {
+    after,
+    // With the count full, one more match is all a frame is asked for: it
+    // says whether the count was capped.
+    countLimit: Math.max(left, 1),
+    maxResults:
+      left > 0
+        ? BROWSER_CONTROL_LIMITS.findMatches - progress.matches.length
+        : 0,
+    query: search.query,
+    snippetChars: BROWSER_CONTROL_LIMITS.findSnippetChars,
+    type: BROWSER_FIND_TYPE.text,
+  };
+};
 
 /**
  * Searches the frames in reading order, from the start or after a previous
@@ -756,17 +811,21 @@ export const findInPage = async ({
     if (frame === undefined) {
       break;
     }
-    const resumed = index === start.index ? start.decoded : null;
+    const from =
+      index === start.index && start.decoded !== null
+        ? start.decoded.p
+        : ({ type: "start" } as const);
     const outcome = await findFrame(
       frame,
-      frameFindRequest(search, resumed?.p ?? { type: "start" }, progress),
+      frameFindRequest(search, from, progress),
     );
     if (outcome.type === "refused") {
       return outcome;
     }
-    if (outcome.type === "skipped") {
-      if (resumed !== null) {
-        return { type: "stale-cursor" };
+    if (outcome.type === "skipped" || outcome.type === "invalid") {
+      const unread = unreadAt(outcome, frame, from.type === "start");
+      if (unread !== "move-on") {
+        return unread;
       }
       continue;
     }
