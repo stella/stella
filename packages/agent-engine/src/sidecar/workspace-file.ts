@@ -1,4 +1,5 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
+import { dlopen, FFIType } from "bun:ffi";
 import { lstatSync } from "node:fs";
 import {
   constants,
@@ -40,27 +41,26 @@ const platformFlag = (
 ) => (name in constants ? constants[name] : 0);
 
 /**
- * Read-only is the zero flag, so this is read-only without following a link
- * at the last segment. Non-blocking too: a pipe swapped in for the file
- * would otherwise hold the read open for as long as no one writes to it.
- * Distinct bits, so their sum is their union.
+ * Read-only is the zero flag, so this is read-only. Non-blocking too: a pipe
+ * swapped in for the file would otherwise hold the read open for as long as
+ * no one writes to it. Distinct bits, so their sum is their union.
  */
-export const NO_FOLLOW_READ_FLAGS =
-  platformFlag("O_NOFOLLOW") + platformFlag("O_NONBLOCK");
+const READ_FLAGS = platformFlag("O_NONBLOCK");
+
+/** `READ_FLAGS`, not following a link at the last segment. */
+export const NO_FOLLOW_READ_FLAGS = READ_FLAGS + platformFlag("O_NOFOLLOW");
 
 /** A new file only: whatever is already there, a link included, refuses. */
 const CREATE_FLAGS =
-  constants.O_WRONLY +
-  platformFlag("O_CREAT") +
-  platformFlag("O_EXCL") +
-  platformFlag("O_NOFOLLOW");
+  constants.O_WRONLY + platformFlag("O_CREAT") + platformFlag("O_EXCL");
 
 const FOLDER_FLAGS = platformFlag("O_DIRECTORY") + platformFlag("O_NOFOLLOW");
 
 /**
- * macOS: the open fails when any segment of the path is a link
- * (`O_NOFOLLOW_ANY` in `sys/fcntl.h`), checked by the kernel during the
- * open, so no swap between a check and the open can redirect it.
+ * macOS: the open fails with ELOOP when any segment of the path is a link,
+ * the last one included (`O_NOFOLLOW_ANY` in `sys/fcntl.h`), checked by the
+ * kernel during the open, so no swap between a check and the open can
+ * redirect it. The kernel answers EINVAL when `O_NOFOLLOW` is set with it.
  */
 const DARWIN_NOFOLLOW_ANY = 0x20_00_00_00;
 
@@ -69,8 +69,38 @@ type WorkspaceOpen = "create" | "read";
 
 const OPEN_FLAGS = {
   create: CREATE_FLAGS,
-  read: NO_FOLLOW_READ_FLAGS,
+  read: READ_FLAGS,
 } as const satisfies Record<WorkspaceOpen, number>;
+
+/**
+ * How an open in a run's folder refuses a link on the way, per platform.
+ * `no_follow_any` (macOS) and `folder_walk` (Linux) refuse it at the open
+ * itself. `checked_first` (every other platform, Windows among them) has
+ * no such means: the folders on the way are checked just before the open,
+ * so a link swapped in between the check and the open is not refused.
+ */
+type LinkGuard = "checked_first" | "folder_walk" | "no_follow_any";
+
+export const linkGuardOf = (platform: NodeJS.Platform): LinkGuard => {
+  if (platform === "darwin") {
+    return "no_follow_any";
+  }
+  return platform === "linux" ? "folder_walk" : "checked_first";
+};
+
+/**
+ * The flags of an open in a run's folder: `purpose`'s, plus the one that
+ * refuses a link. `O_NOFOLLOW` covers the last segment only; macOS takes
+ * its no-link-at-any-segment flag alone, never both.
+ */
+export const workspaceOpenFlags = (
+  purpose: WorkspaceOpen,
+  guard: LinkGuard,
+): number =>
+  OPEN_FLAGS[purpose] +
+  (guard === "no_follow_any"
+    ? DARWIN_NOFOLLOW_ANY
+    : platformFlag("O_NOFOLLOW"));
 
 /** Why an open in a run's folder was refused. */
 type WorkspaceOpenRefusal = "exists" | "link" | "missing" | "unreadable";
@@ -189,11 +219,10 @@ const parentsAreFolders = (
 
 /**
  * Opens `relativePath` (`/`-separated) inside the run's folder, refusing a
- * link at any segment at the moment of the open: on macOS by the kernel's
- * no-link flag, on Linux by reaching each folder through the one opened
- * before it. Elsewhere (Windows) the folders on the way are checked first,
- * as no other means exists there. `create` makes a new file and never
- * replaces one.
+ * link at any segment below it as `linkGuardOf` names for this platform.
+ * The run's folder itself is resolved once first, so links above it (a
+ * system temp folder reached through one, say) do not count. `create`
+ * makes a new file and never replaces one.
  */
 export const openInWorkspace = async (
   workspaceDir: string,
@@ -206,31 +235,38 @@ export const openInWorkspace = async (
   if (segments === null || Result.isError(root)) {
     return Result.err({ reason: "unreadable" });
   }
-  const flags = OPEN_FLAGS[purpose];
-  const name = segments.at(-1) ?? "";
+  const guard = linkGuardOf(process.platform);
+  const flags = workspaceOpenFlags(purpose, guard);
   const parents = segments.slice(0, -1);
-  if (process.platform === "darwin") {
-    return await tryOpen(
-      path.join(root.value, ...segments),
-      flags + DARWIN_NOFOLLOW_ANY,
-      mode,
-    );
-  }
-  if (process.platform === "linux") {
-    const parent = await openParentLinux(root.value, parents);
-    if (Result.isError(parent)) {
-      return parent;
+  switch (guard) {
+    case "no_follow_any": {
+      return await tryOpen(path.join(root.value, ...segments), flags, mode);
     }
-    try {
-      return await tryOpen(procPath(parent.value, name), flags, mode);
-    } finally {
-      await parent.value.close();
+    case "folder_walk": {
+      const parent = await openParentLinux(root.value, parents);
+      if (Result.isError(parent)) {
+        return parent;
+      }
+      try {
+        return await tryOpen(
+          procPath(parent.value, segments.at(-1) ?? ""),
+          flags,
+          mode,
+        );
+      } finally {
+        await parent.value.close();
+      }
     }
+    case "checked_first": {
+      const unsafe = parentsAreFolders(root.value, parents);
+      return unsafe === null
+        ? await tryOpen(path.join(root.value, ...segments), flags, mode)
+        : Result.err({ reason: unsafe });
+    }
+    default:
+      guard satisfies never;
+      return panic("Unhandled link guard");
   }
-  const unsafe = parentsAreFolders(root.value, parents);
-  return unsafe === null
-    ? await tryOpen(path.join(root.value, ...segments), flags, mode)
-    : Result.err({ reason: unsafe });
 };
 
 /**
@@ -281,12 +317,72 @@ const removalOf = (
   removed: Result<WorkspaceRemoval, unknown>,
 ): WorkspaceRemoval => (Result.isOk(removed) ? removed.value : "unreachable");
 
+/** `AT_FDCWD` and `AT_SYMLINK_NOFOLLOW_ANY` in macOS's `sys/fcntl.h`. */
+const DARWIN_AT_FDCWD = -2;
+const DARWIN_AT_SYMLINK_NOFOLLOW_ANY = 0x08_00;
+
+/**
+ * macOS `unlinkat(2)` that fails when any segment of the path is a link,
+ * checked by the kernel during the removal; `null` when it cannot be
+ * loaded, and then nothing is removed.
+ */
+const darwinUnlinkNoLinks = (() => {
+  const loaded: { unlink?: ((target: string) => boolean) | null } = {};
+  return () => {
+    if (loaded.unlink === undefined) {
+      const opened = Result.try(() =>
+        dlopen("/usr/lib/libSystem.B.dylib", {
+          unlinkat: {
+            args: [FFIType.i32, FFIType.ptr, FFIType.i32],
+            returns: FFIType.i32,
+          },
+        }),
+      );
+      loaded.unlink = Result.isOk(opened)
+        ? (target) =>
+            !target.includes("\0") &&
+            opened.value.symbols.unlinkat(
+              DARWIN_AT_FDCWD,
+              Buffer.from(`${target}\0`),
+              DARWIN_AT_SYMLINK_NOFOLLOW_ANY,
+            ) === 0
+        : null;
+    }
+    return loaded.unlink;
+  };
+})();
+
+/**
+ * Removes the file at `target` below the resolved run's folder, once it was
+ * judged the file to remove: on macOS refusing a link at any segment during
+ * the removal itself, elsewhere (`checked_first`) right after the check.
+ */
+const unlinkJudged = async (
+  target: string,
+  guard: "checked_first" | "no_follow_any",
+): Promise<WorkspaceRemoval> => {
+  switch (guard) {
+    case "no_follow_any": {
+      return darwinUnlinkNoLinks()?.(target) === true
+        ? "removed"
+        : "unreachable";
+    }
+    case "checked_first": {
+      await unlink(target);
+      return "removed";
+    }
+    default:
+      guard satisfies never;
+      return panic("Unhandled link guard");
+  }
+};
+
 /**
  * Removes the file at `relativePath` only while it is still the file
  * `identity` names, reached the way `openInWorkspace` reaches it. On Linux
- * the removal goes through the open parent folder; elsewhere the check
- * opens the path refusing every link and the removal follows at once, so a
- * link swapped in can only make it keep the file.
+ * the removal goes through the open parent folder; on macOS the check opens
+ * the path refusing every link and the removal refuses every link again;
+ * elsewhere (`checked_first`) the removal follows the check.
  */
 export const removeWorkspaceFile = async (
   workspaceDir: string,
@@ -300,7 +396,8 @@ export const removeWorkspaceFile = async (
   }
   const same = (stat: WorkspaceFileIdentity) =>
     stat.dev === identity.dev && stat.ino === identity.ino;
-  if (process.platform === "linux") {
+  const guard = linkGuardOf(process.platform);
+  if (guard === "folder_walk") {
     const parent = await openParentLinux(root.value, segments.slice(0, -1));
     if (Result.isError(parent)) {
       return "unreachable";
@@ -335,8 +432,7 @@ export const removeWorkspaceFile = async (
       } finally {
         await checked.value.close();
       }
-      await unlink(path.join(root.value, ...segments));
-      return "removed";
+      return await unlinkJudged(path.join(root.value, ...segments), guard);
     }),
   );
 };
