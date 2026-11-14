@@ -1,5 +1,0 @@
-{
-  "metric": "no-network-await-in-loop-suppressions",
-  "delta": 1,
-  "reason": "A stored step's text is read in windows: each window starts at the nextStart the previous answer names, so the reads cannot run in parallel."
-}

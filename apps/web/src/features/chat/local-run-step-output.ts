@@ -45,9 +45,10 @@ async function* readLocalRunStepContent({
 }: ReadStepOptions): AsyncGenerator<ChatLocalRunStepContent> {
   const step = api.chat.threads({ threadId })["local-run-steps"]({ callId });
   let start = 0;
+  // One window at a time: each starts where the one before ended, which
+  // only that answer says.
   for (;;) {
     const content = unwrapApiResponse(
-      // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- each window starts where the one before ended, which only its answer says.
       await step.content.get({ query: { start }, fetch: { signal } }),
     );
     yield content;
