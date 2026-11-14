@@ -33,6 +33,7 @@ import type { ReasoningEffort, TemperaturePolicy } from "@stll/ai-catalog";
 export type CatalogEntry = { provider: string; modelId: string };
 
 const GEMINI_TEMPERATURE_OMISSION_CUTOFF = "2026-07-21";
+const OPENAI_TEMPERATURE_OMISSION_CUTOFF = "2026-04-23";
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 type ResolveTemperaturePolicyOptions = {
@@ -49,6 +50,10 @@ type ResolveTemperaturePolicyOptions = {
  * request policy must be stricter than the upstream acceptance bit.
  *
  * https://ai.google.dev/gemini-api/docs/latest-model
+ *
+ * OpenAI's models from GPT-5.5 on reject a sampling override on a reasoning
+ * request. models.dev reports the parameter as accepted without saying for
+ * which reasoning effort, so their policy stays at omission as well.
  */
 export const resolveTemperaturePolicy = ({
   modelId,
@@ -63,16 +68,23 @@ export const resolveTemperaturePolicy = ({
   const isGoogleModel =
     provider === "google" ||
     (provider === "openrouter" && modelId.startsWith("google/gemini-"));
-  if (!isGoogleModel) {
+  const isOpenAiModel =
+    provider === "openai" ||
+    (provider === "openrouter" && modelId.startsWith("openai/"));
+  if (!isGoogleModel && !isOpenAiModel) {
     return "emit";
   }
+  const cutoff = isGoogleModel
+    ? GEMINI_TEMPERATURE_OMISSION_CUTOFF
+    : OPENAI_TEMPERATURE_OMISSION_CUTOFF;
   if (releaseDate === null || !ISO_DATE_PATTERN.test(releaseDate)) {
     return panic(
-      `${provider}/${modelId}: Google model lacks a valid release_date; ` +
-        "cannot apply the reviewed temperature policy cutoff",
+      `${provider}/${modelId}: ${isGoogleModel ? "Google" : "OpenAI"} model ` +
+        "lacks a valid release_date; cannot apply the reviewed temperature " +
+        "policy cutoff",
     );
   }
-  return releaseDate >= GEMINI_TEMPERATURE_OMISSION_CUTOFF ? "omit" : "emit";
+  return releaseDate >= cutoff ? "omit" : "emit";
 };
 
 /** Upstream capability metadata for one model, from models.dev. */
