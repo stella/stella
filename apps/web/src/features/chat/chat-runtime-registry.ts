@@ -1,7 +1,14 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
-import { isChatTurnInFlight } from "@/components/chat/chat-ui-tools";
+import { localRunQuestionPauseOf } from "@stll/api-contract/chat-local-run-question";
+import { chatResumeSnapshotSchema } from "@stll/chat/resume-contract";
+
+import {
+  isChatTurnInFlight,
+  openMemberWaitKeys,
+} from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { getChatRuntimeContextKind } from "@/features/chat/chat-query-contract";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -74,13 +81,14 @@ const chatThreadIdentity = ({
  * server-authoritative messages.
  *
  * The sole exception is an authoritative refresh the runtime is kept
- * across: one that confirms the pending approval it already holds, or one
- * that does not hold the message it could not send. That acknowledgement
- * advances every alias of the runtime to the refreshed thread's seed, so
- * resolving the approval (or sending the message again) cannot rebuild from
- * that now-stale transcript before the turn's own refetch lands. Updating
- * the seed from stream progress itself would break the normal divergence
- * detection above.
+ * across (see `acknowledgesRefresh`): one that confirms what it already has
+ * open for the member (an approval, a question; see `openMemberWaitKeys`),
+ * or one that does not hold the message it could not send. That
+ * acknowledgement advances every alias of the runtime to the refreshed
+ * thread's seed, so answering the wait (or sending the message again)
+ * cannot rebuild from that now-stale transcript before the turn's own
+ * refetch lands. Updating the seed from stream progress itself would break
+ * the normal divergence detection above.
  */
 type ChatRuntimeSeedSignal = {
   lastActivityAt: string | null;
@@ -125,19 +133,26 @@ const seedSignalsEqual = (
   left.lastMessageId === right.lastMessageId &&
   left.threadRevision === right.threadRevision;
 
-const getPendingToolApprovalIds = (
+/**
+ * What the stored thread still has open for the member, under the keys a
+ * runtime's own wait reads as: the awaited parts of its latest answer, and
+ * the question its parked turn's resume snapshot holds.
+ */
+const storedMemberWaitKeys = (
   messages: readonly PersistedChatMessage[],
 ): readonly string[] => {
-  const message = messages.at(-1);
-  if (!message || message.role !== "assistant") {
-    return [];
-  }
-
-  return message.parts.flatMap((part) =>
-    part.type === "tool-call" && part.state === "approval-requested"
-      ? [part.id]
-      : [],
+  const resume = v.safeParse(
+    chatResumeSnapshotSchema,
+    messages.at(-1)?.metadata?.resumeSnapshot,
   );
+  const interrupts = resume.success
+    ? resume.output.pendingInterrupts
+    : undefined;
+  return openMemberWaitKeys({
+    localRunQuestion:
+      interrupts === undefined ? null : localRunQuestionPauseOf(interrupts),
+    messages,
+  });
 };
 
 /**
@@ -189,9 +204,9 @@ const showStoredThreadWithUnsentMessage = (
 
 const CHAT_RUNTIME_RECONCILE_DISPOSITION = {
   idle: "idle",
-  replaceStaleApproval: "replace-stale-approval",
+  replaceStaleMemberWait: "replace-stale-member-wait",
   retainInFlight: "retain-in-flight",
-  retainPendingApproval: "retain-pending-approval",
+  retainMemberWait: "retain-member-wait",
   retainUnsentMessage: "retain-unsent-message",
 } as const;
 
@@ -207,11 +222,11 @@ const acknowledgesRefresh = (
   disposition: ChatRuntimeReconcileDisposition,
 ): boolean => {
   switch (disposition) {
-    case CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval:
+    case CHAT_RUNTIME_RECONCILE_DISPOSITION.retainMemberWait:
     case CHAT_RUNTIME_RECONCILE_DISPOSITION.retainUnsentMessage:
       return true;
     case CHAT_RUNTIME_RECONCILE_DISPOSITION.idle:
-    case CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval:
+    case CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleMemberWait:
     case CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight:
       return false;
     default:
@@ -246,6 +261,28 @@ const hasInFlightChatRuntimeWork = (runtime: ChatRuntime): boolean => {
   return snapshot.isLoading || snapshot.sessionGenerating || turnInFlight;
 };
 
+/**
+ * What a thread read does to a runtime that has no work in flight. Two
+ * things on the page exist nowhere else and are kept for:
+ *
+ * - An unsent message (`unsentMessageIdOf`): rebuilding would drop what the
+ *   member wrote and why it was refused.
+ * - Something open for the member (`openMemberWaitKeys`): rebuilding would
+ *   drop what they entered into the open card and read the paused turn from
+ *   the server again. It is kept while the stored thread still holds
+ *   everything it waits on, or has not been read since the wait began; a
+ *   refreshed thread that no longer holds it (answered on another device,
+ *   stopped) replaces the stale wait.
+ *
+ * A runtime holds at most one of the two. A new message supersedes what the
+ * answer before it had open: the awaited answer is the latest message only
+ * while no user message follows it, and the send drops the turn's pending
+ * interrupts (`supersedePendingInterrupts`). So a runtime whose latest
+ * message is unsent has no open keys, and one with open keys has no unsent
+ * message. The unsent message is still checked first: the wait rule can
+ * replace, and what the member wrote must not depend on that exclusion
+ * holding.
+ */
 const getChatRuntimeReconcileDisposition = ({
   data,
   hasAuthoritativeRefresh,
@@ -259,29 +296,24 @@ const getChatRuntimeReconcileDisposition = ({
     return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight;
   }
 
-  // Rebuilding from a thread that does not hold the message would drop what
-  // the member wrote and why it was refused.
   if (unsentMessageIdOf(runtime, data.messages) !== null) {
     return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainUnsentMessage;
   }
 
-  const pendingApprovalIds = getPendingToolApprovalIds(
-    runtime.getSnapshot().messages,
-  );
-  if (pendingApprovalIds.length === 0) {
+  const { localRunQuestion, messages } = runtime.getSnapshot();
+  const openKeys = openMemberWaitKeys({ localRunQuestion, messages });
+  if (openKeys.length === 0) {
     return CHAT_RUNTIME_RECONCILE_DISPOSITION.idle;
   }
 
-  const authoritativeApprovalIds = new Set(
-    getPendingToolApprovalIds(data.messages),
-  );
-  if (pendingApprovalIds.every((id) => authoritativeApprovalIds.has(id))) {
-    return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval;
+  const storedKeys = new Set(storedMemberWaitKeys(data.messages));
+  if (openKeys.every((key) => storedKeys.has(key))) {
+    return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainMemberWait;
   }
 
   return hasAuthoritativeRefresh
-    ? CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval
-    : CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval;
+    ? CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleMemberWait
+    : CHAT_RUNTIME_RECONCILE_DISPOSITION.retainMemberWait;
 };
 
 /**
@@ -624,9 +656,11 @@ export type AcquireChatRuntimeArgs = {
  *      registers the runtime and starts the stream BEFORE navigating, so
  *      the destination page's acquire (identical fingerprint) lands here
  *      and reattaches instead of rebuilding.
- *      A pending approval is retained while the query still carries the
- *      runtime's pre-send seed, or when a refreshed transcript contains every
- *      pending tool-call id. A refreshed mismatch replaces stale local state.
+ *      A runtime the member has something open on (an approval, a
+ *      question; see `openMemberWaitKeys`) is retained while the query still
+ *      carries its pre-send seed, or when a refreshed transcript still holds
+ *      everything it waits on. A refreshed mismatch replaces stale local
+ *      state.
  *      A runtime holding a message the server never stored (its send was
  *      refused) is retained while the thread read does not hold that message:
  *      see `unsentMessageIdOf`.
@@ -658,8 +692,9 @@ export type AcquireChatRuntimeArgs = {
  *      no entry exists. Build from the CURRENT caller's live getters and
  *      fresh sanitized messages (the pre-registry design rebuilt on
  *      every queryFn run; this is the idle-only equivalent). This is
- *      also forced when an authoritative transcript resolves a pending
- *      approval in place without changing the tail message id or timestamp.
+ *      also forced when an authoritative transcript resolves what the
+ *      member had open in place, without changing the tail message id or
+ *      timestamp.
  *      Rebuild is also the moment a busy-reattached foreign runtime — or a
  *      route-handoff runtime — sheds its originating surface's getters
  *      in favour of the mounted caller's. Superseded same-thread entries
@@ -741,7 +776,7 @@ export const acquireChatRuntime = ({
   if (
     existing !== undefined &&
     existingDisposition !==
-      CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval &&
+      CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleMemberWait &&
     seedSignalsEqual(existing.seed, seed)
   ) {
     return existing.runtime;

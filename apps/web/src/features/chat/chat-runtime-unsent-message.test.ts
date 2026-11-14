@@ -3,8 +3,10 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-local-run-question";
 import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
 
+import { openMemberWaitKeys } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
   __resetChatRequestStateForTests,
@@ -398,3 +400,220 @@ test("a kept unsent message follows what another tab stored in the thread meanwh
     { role: "assistant", text: ANSWER },
   ]);
 });
+
+// --- An unsent message and something open for the member ------------------
+
+const WAIT_CALL_ID = "tool-wait";
+const FIRST_ID = "00000000-0000-7000-8000-0000000000e1";
+const FIRST_ANSWER_ID = "00000000-0000-7000-8000-0000000000e2";
+
+type OpenWait = {
+  name: string;
+  toolName: string;
+  interrupt: (runId: unknown) => Record<string, unknown>;
+  /** The keys the paused turn has open for the member. */
+  keys: string[];
+};
+
+const QUESTION_INTERRUPT_ID = "00000000-0000-7000-8000-0000000000a1";
+
+const OPEN_WAITS: OpenWait[] = [
+  {
+    name: "an approval",
+    toolName: "web_search",
+    interrupt: (runId) => ({
+      id: `approval_${WAIT_CALL_ID}`,
+      reason: "tool_call",
+      toolCallId: WAIT_CALL_ID,
+      metadata: {
+        kind: "approval",
+        toolName: "web_search",
+        input: {},
+        "tanstack:interruptBinding": {
+          v: 1,
+          kind: "tool-approval",
+          interruptId: `approval_${WAIT_CALL_ID}`,
+          interruptedRunId: runId,
+          generation: 0,
+          toolName: "web_search",
+          toolCallId: WAIT_CALL_ID,
+          originalArgs: {},
+          inputSchemaHash: "server-owned",
+          approvalSchemaHash: "server-owned",
+          responseSchemaHash: "server-owned",
+        },
+      },
+    }),
+    keys: [`part:${WAIT_CALL_ID}`],
+  },
+  {
+    name: "a coding agent's question",
+    toolName: CHAT_LOCAL_RUN_QUESTION_TOOL,
+    interrupt: () => ({
+      id: QUESTION_INTERRUPT_ID,
+      reason: "user_input",
+      message: "Which law governs the lease?",
+      toolCallId: WAIT_CALL_ID,
+      metadata: {
+        kind: "question",
+        toolName: CHAT_LOCAL_RUN_QUESTION_TOOL,
+        questions: [
+          {
+            id: "law",
+            header: "Governing law",
+            prompt: "Which law governs the lease?",
+            options: [{ label: "Czech", description: "" }],
+            allowsFreeText: false,
+            multiSelect: false,
+            secret: false,
+          },
+        ],
+      },
+    }),
+    keys: [`part:${WAIT_CALL_ID}`, `interrupt:${QUESTION_INTERRUPT_ID}`],
+  },
+];
+
+/** A run that pauses its turn on `wait`. */
+const pausedRun = (wait: OpenWait, runId: unknown) => [
+  { type: "RUN_STARTED", runId, threadId: THREAD_ID },
+  { type: "TEXT_MESSAGE_START", messageId: FIRST_ANSWER_ID, role: "assistant" },
+  {
+    type: "TOOL_CALL_START",
+    parentMessageId: FIRST_ANSWER_ID,
+    toolCallId: WAIT_CALL_ID,
+    toolCallName: wait.toolName,
+    toolName: wait.toolName,
+  },
+  { type: "TOOL_CALL_ARGS", delta: "{}", toolCallId: WAIT_CALL_ID },
+  {
+    type: "TOOL_CALL_END",
+    input: {},
+    toolCallId: WAIT_CALL_ID,
+    toolCallName: wait.toolName,
+    toolName: wait.toolName,
+  },
+  {
+    type: "RUN_FINISHED",
+    runId,
+    threadId: THREAD_ID,
+    finishReason: "tool_calls",
+    outcome: { type: "interrupt", interrupts: [wait.interrupt(runId)] },
+  },
+];
+
+test.each(OPEN_WAITS)(
+  "a message refused while $name was open is kept, though the thread no longer holds that wait",
+  async (wait) => {
+    // The first send pauses on the wait; every later send is refused. The
+    // stored thread is what another device left: the wait answered there.
+    const elsewhere = [
+      storedMessage(FIRST_ID, "user", "Search for it"),
+      storedMessage(FIRST_ANSWER_ID, "assistant", "Answered elsewhere."),
+    ];
+    let posts = 0;
+    let stored: StoredMessage[] = [];
+    globalThis.fetch = Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        if (request.method === "GET") {
+          return Response.json({
+            activeSkill: null,
+            activeTurnId: null,
+            attachedFiles: { fileCount: 0, files: [] },
+            context: null,
+            contextMatterIds: [],
+            forkProvenance: { type: "none" },
+            lastActivityAt: stored.at(-1)?.createdAt ?? null,
+            messages: stored,
+            model: null,
+            olderCursor: null,
+            reasoningEffort: null,
+            threadExists: stored.length > 0,
+            threadRevision: stored.length === 0 ? null : "revision-elsewhere",
+            usedAnonymization: false,
+            webSearchAvailable: false,
+            webSearchEnabled: false,
+          });
+        }
+        posts += 1;
+        if (posts > 1) {
+          return Response.json(
+            { code: CHAT_LOCAL_RUN_REFUSAL.noComputer, message: "Refused" },
+            { status: 409 },
+          );
+        }
+        const body: unknown = await request.json();
+        const runId =
+          typeof body === "object" && body !== null && "runId" in body
+            ? body.runId
+            : undefined;
+        return new Response(
+          pausedRun(wait, runId)
+            .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+            .join(""),
+          { headers: { "Content-Type": "text/event-stream" } },
+        );
+      },
+      { preconnect: previousFetch.preconnect },
+    );
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const acquire = async () =>
+      acquireChatRuntime({
+        activeOrganizationId,
+        context,
+        data: await queryClient.query({
+          ...chatThreadOptions({
+            activeOrganizationId,
+            context,
+            key: threadRef,
+          }),
+          staleTime: 0,
+        }),
+        key: threadRef,
+        queryClient,
+      });
+    const runtime = await acquire();
+    const first = await runtime.startRouteHandoffMessage({
+      content: "Search for it",
+      id: toSafeId<"chatMessage">(FIRST_ID),
+    });
+    await first.stream;
+    const waiting = runtime.getSnapshot();
+    expect(
+      openMemberWaitKeys({
+        localRunQuestion: waiting.localRunQuestion,
+        messages: waiting.messages,
+      }),
+    ).toEqual(wait.keys);
+
+    const second = await runtime.startRouteHandoffMessage({
+      content: TEXT,
+      id: toSafeId<"chatMessage">(MESSAGE_ID),
+    });
+    await Result.tryPromise(async () => await second.stream);
+    const refused = runtime.getSnapshot();
+    expect(refused.status).toBe("error");
+    // The new message superseded the wait: nothing is open any more, so only
+    // the unsent message can keep the runtime.
+    expect(
+      openMemberWaitKeys({
+        localRunQuestion: refused.localRunQuestion,
+        messages: refused.messages,
+      }),
+    ).toEqual([]);
+
+    stored = elsewhere;
+    expect(await acquire()).toBe(runtime);
+    await Promise.resolve();
+
+    expect(runtime.getSnapshot().error).toBe(refused.error);
+    expect(textOf(runtime.getSnapshot().messages)).toEqual([
+      { role: "user", text: "Search for it" },
+      { role: "assistant", text: "Answered elsewhere." },
+      { role: "user", text: TEXT },
+    ]);
+  },
+);
