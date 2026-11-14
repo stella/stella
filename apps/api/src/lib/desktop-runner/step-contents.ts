@@ -1,14 +1,18 @@
+import { EventType } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import {
   CHAT_LOCAL_RUN_AWAITED_STEP_REFUSAL,
   CHAT_LOCAL_RUN_STEP_AWAITED_MS,
   CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET,
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE,
+  CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
   type ChatLocalRunAwaitedStepRefusal,
   type ChatLocalRunStepContentKind,
   type ChatLocalRunStepContentStoredState,
+  chatLocalRunStepsAwaitedSchema,
   type ChatLocalRunStepTextKind,
 } from "@stll/api-contract/chat-local-run-step-content";
 
@@ -582,6 +586,31 @@ export const storeStepImage = async (
     return { type: "settled", state: stored, adopted: true };
   });
 
+const awaitedAnnouncementSchema = v.object({
+  type: v.literal(EventType.CUSTOM),
+  name: v.literal(CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT),
+  value: v.unknown(),
+});
+
+/**
+ * The steps a run's chunk announces the run still has to send; `null` for
+ * any other chunk. A chunk of that name whose value is not an announcement
+ * (more keys than one may carry, anything but keys) awaits nothing.
+ */
+export const announcedAwaitedSteps = (
+  chunk: unknown,
+): readonly string[] | null => {
+  const announcement = v.safeParse(awaitedAnnouncementSchema, chunk);
+  if (!announcement.success) {
+    return null;
+  }
+  const announced = v.safeParse(
+    chatLocalRunStepsAwaitedSchema,
+    announcement.output.value,
+  );
+  return announced.success ? announced.output.stepKeys : [];
+};
+
 type AwaitedStepsOptions = {
   owner: RunOwner;
   runId: string;
@@ -592,12 +621,18 @@ type AwaitedStepsOptions = {
 /**
  * Record the steps a run announced, just before its finish, that it still
  * has to send: each gets a row that awaits its content. A step that already
- * has a row keeps it. The announcement is read from the run's own stored
- * events, which the run wrote while it was going, so the run may be over by
- * now. Returns how many steps are newly awaited.
+ * has a row keeps it, so recording the same announcement again adds nothing.
+ *
+ * The gateway calls this in the transaction that stores the announcing
+ * event, so the two are stored together or not at all: an announcement that
+ * could not be recorded is not acknowledged, and its computer sends it again.
+ *
+ * A run whose chat turn is gone (its message was deleted) records nothing:
+ * there is no answer left to show the steps, and a later write for them is
+ * refused as not awaited. Returns how many steps are newly awaited.
  */
 export const recordAwaitedSteps = async (
-  db: Pick<DesktopRunnerDb, "select" | "insert">,
+  db: Pick<Transaction, "select" | "insert">,
   { owner, runId, stepKeys }: AwaitedStepsOptions,
 ): Promise<number> => {
   const run = (

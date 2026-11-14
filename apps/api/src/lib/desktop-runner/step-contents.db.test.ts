@@ -1,12 +1,16 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
 import {
   CHAT_LOCAL_RUN_STEP_AWAITED_MS,
   CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET,
+  CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
 } from "@stll/api-contract/chat-local-run-step-content";
-import { DESKTOP_RUNNER_PROTOCOL } from "@stll/api-contract/desktop-runner";
+import {
+  DESKTOP_RUNNER_LIMITS,
+  DESKTOP_RUNNER_PROTOCOL,
+} from "@stll/api-contract/desktop-runner";
 import { createTestClock } from "@stll/test-kit";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -15,6 +19,7 @@ import {
   chatMessages,
   chatThreads,
   chatTurns,
+  desktopRunnerEvents,
   desktopRunnerRuns,
   desktopRunners,
   userFiles,
@@ -34,7 +39,11 @@ import {
   storeStepImage,
   storeStepText,
 } from "@/api/lib/desktop-runner/step-contents";
-import type { DesktopRunnerDb, RunOwner } from "@/api/lib/desktop-runner/store";
+import {
+  type DesktopRunnerDb,
+  persistRunMessage,
+  type RunOwner,
+} from "@/api/lib/desktop-runner/store";
 import { createUserFileKey } from "@/api/lib/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { chatLocalRunStepContentScalingScenario } from "@/api/tests/read-scaling/chat-local-run-step-content";
@@ -824,6 +833,139 @@ describe("the stored content of a local run's steps", () => {
         });
       }
       expect(await read(ownerA, run, key)).toMatchObject({ type: "awaited" });
+    });
+
+    /** The event a run announces `keys` with, at the run's next position. */
+    const announcement = (run: SeededRun, keys: string[], seq = 1) =>
+      // SAFETY: a stored run event as a desktop sends it; the gateway reads
+      // only its type, run, position and chunk.
+      asTestRaw<Parameters<typeof persistRunMessage>[1]["message"]>({
+        type: "run.event",
+        runId: run.runId,
+        seq,
+        chunk: {
+          type: "CUSTOM",
+          name: CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
+          value: { stepKeys: keys, more: 0 },
+          timestamp: 0,
+        },
+      });
+
+    const persist = async (
+      store: DesktopRunnerDb,
+      run: SeededRun,
+      message: ReturnType<typeof announcement>,
+    ) =>
+      await persistRunMessage(store, {
+        binding: {
+          userId: ownerA.userId,
+          organizationId: ownerA.organizationId,
+          desktopId: run.desktopId,
+          deviceJkt: run.deviceJkt,
+          keyId: "key",
+        },
+        message,
+        now: new Date(clock.now()),
+        leaseMs: 60_000,
+        limits: DESKTOP_RUNNER_LIMITS,
+      });
+
+    const storedEvents = async (run: SeededRun) =>
+      (
+        await db
+          .select({ seq: desktopRunnerEvents.seq })
+          .from(desktopRunnerEvents)
+          .where(eq(desktopRunnerEvents.runId, run.runId))
+      ).length;
+
+    /** A store whose first write of an awaited step fails, as one away would. */
+    const awayOnce = () => {
+      let failures = 1;
+      // SAFETY: the same store with one write made to fail; every other
+      // member is the test database's own.
+      return asTestRaw<DesktopRunnerDb>(
+        new Proxy(runnerDb(), {
+          get: (store, member) =>
+            member === "transaction"
+              ? async (run: (tx: object) => Promise<unknown>) =>
+                  await store.transaction(
+                    async (tx) =>
+                      await run(
+                        new Proxy(tx, {
+                          get: (inner, name) => {
+                            const value: unknown = Reflect.get(inner, name);
+                            if (name !== "insert") {
+                              return typeof value === "function"
+                                ? value.bind(inner)
+                                : value;
+                            }
+                            return (table: unknown) => {
+                              if (
+                                table === chatLocalRunStepContents &&
+                                failures > 0
+                              ) {
+                                failures -= 1;
+                                return panic("the step content store is away");
+                              }
+                              return Reflect.apply(inner.insert, inner, [
+                                table,
+                              ]);
+                            };
+                          },
+                        }),
+                      ),
+                  )
+              : Reflect.get(store, member),
+        }),
+      );
+    };
+
+    test("the announcement is stored with its event or not at all, and the computer's next try records it", async () => {
+      const run = await seedRun(ownerA);
+      const key = stepKey();
+      const message = announcement(run, [key]);
+      // The awaited write fails: the event is not stored either, so the
+      // computer is not told it arrived and sends it again.
+      const away = awayOnce();
+      expect(
+        (
+          await Result.tryPromise(async () => await persist(away, run, message))
+        ).isErr(),
+      ).toBe(true);
+      expect(await storedEvents(run)).toBe(0);
+      expect(await read(ownerA, run, key)).toEqual({ type: "none" });
+      // The same event again is stored, and its steps are awaited.
+      expect(await persist(away, run, message)).toEqual({
+        type: "persisted",
+        seq: 1,
+      });
+      expect(await storedEvents(run)).toBe(1);
+      expect(await read(ownerA, run, key)).toMatchObject({ type: "awaited" });
+      // A redelivery of what is stored changes nothing.
+      expect(await persist(runnerDb(), run, message)).toMatchObject({
+        type: "duplicate",
+      });
+      await finish(run);
+      expect(await sendLate(run, key, "arrived")).toEqual({
+        type: "settled",
+        state: "stored",
+      });
+    });
+
+    test("an announcement whose turn is gone records nothing, and its steps are refused later", async () => {
+      const run = await seedRun(ownerA);
+      const key = stepKey();
+      // The message the turn answers was deleted, and its turn with it.
+      await db
+        .delete(chatMessages)
+        .where(eq(chatMessages.id, run.userMessageId));
+      expect(await persist(runnerDb(), run, announcement(run, [key]))).toEqual({
+        type: "persisted",
+        seq: 1,
+      });
+      expect(await read(ownerA, run, key)).toEqual({ type: "none" });
+      await finish(run);
+      expect(await sendLate(run, key, "x")).toEqual({ type: "unknown_run" });
     });
 
     test("a fork does not copy a step still awaited, and says it is not copied", async () => {
