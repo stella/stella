@@ -2912,6 +2912,29 @@ export const caseLawSitemapChanges = p.pgTable(
 );
 
 /**
+ * Decisions whose newer `updated_at` is the only sitemap-relevant change of a
+ * write, appended by an owner-run trigger (migration
+ * `20261115100000_case_law_sitemap_touches`). Such a write keeps every
+ * decision in its shard, so the refresh folds it into the shard's last
+ * modification instead of recounting the month. A queue, not a watermark.
+ */
+export const caseLawSitemapTouches = p.pgTable(
+  "case_law_sitemap_touches",
+  {
+    id: p.bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+  },
+  () => [
+    p.pgPolicy("case_law_sitemap_touch_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_touches'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_touches'::regclass)`,
+    }),
+  ],
+);
+
+/**
  * One country's month counts, staged by the sitemap refresh until every
  * public country is counted and `case_law_sitemap_shards` is replaced whole.
  */

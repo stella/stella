@@ -1437,6 +1437,14 @@ export const installPgliteCaseLawSitemapChanges = async (
       ),
     );
   }
+  // A later updated_at alone is queued as a touch, not as a month.
+  for (const fragment of [
+    'CREATE FUNCTION "log_case_law_sitemap_decision_touch"',
+    'CREATE TRIGGER "case_law_decisions_sitemap_touch"',
+  ]) {
+    // db-await-in-loop: the function precedes the trigger that executes it
+    await db.execute(sql.raw(latestMigrationStatementContaining(fragment)));
+  }
 };
 
 /**

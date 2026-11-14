@@ -20,6 +20,7 @@ import {
   caseLawSitemapChanges,
   caseLawSitemapCountryGenerations,
   caseLawSitemapShards,
+  caseLawSitemapTouches,
   caseLawSources,
 } from "@/api/db/schema";
 import {
@@ -43,6 +44,7 @@ import {
   sitemapMonthCountSql,
   sitemapPendingMonthsSql,
   sitemapRefreshBudget,
+  sitemapTouchFoldSql,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
 import {
   decisionBucketSqlFor,
@@ -248,7 +250,7 @@ const fullRecount = async (): Promise<Shard[]> => {
         ${decisionMonthSqlFor(caseLawDecisions)} AS month,
         ${decisionBucketSqlFor(caseLawDecisions)} AS bucket,
         count(*)::int AS total,
-        (extract(epoch FROM max(${caseLawDecisions.updatedAt})) * 1000)::float8 AS last_modified_ms
+        floor(extract(epoch FROM max(${caseLawDecisions.updatedAt})) * 1000)::float8 AS last_modified_ms
       FROM ${caseLawDecisions}
       INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${caseLawDecisions.sourceId}
       WHERE ${publishedCaseLawDecisionFor(caseLawDecisions)}
@@ -567,6 +569,178 @@ test(
       sql`UPDATE ${caseLawDecisions} SET metadata = '{"note": "kept"}'::jsonb WHERE id = ${published}`,
     );
     expect(await loggedMonths()).toEqual([]);
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+const queuedTouches = async () => await db.$count(caseLawSitemapTouches);
+
+/** Whether a recorded run sent a month count. */
+const countedAMonth = (transactions: readonly { sql: string }[][]) =>
+  transactions.some((sent) =>
+    sent.some(({ sql: statement }) =>
+      statement.includes("count(*)::int AS total"),
+    ),
+  );
+
+test(
+  "a later updated_at alone is folded into the shard without counting a month",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const ids = await Promise.all(
+      Array.from({ length: 3 }, async (_, day) =>
+        insertOne({ decisionDate: `1997-11-1${String(day)}` }),
+      ),
+    );
+    await refreshUntilDone(refreshDb);
+    expect(await queuedTouches()).toBe(0);
+
+    // A bookkeeping write that moves only updated_at forward, sub-millisecond
+    // digits included, as an ORM write stamps it.
+    await db.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET updated_at = '2030-05-05T01:02:03.456789Z'::timestamptz
+      WHERE id IN (${ids[0]}, ${ids[1]})
+    `);
+    expect(await loggedMonths()).toEqual([]);
+    expect(await queuedTouches()).toBe(2);
+
+    const recorded = recordingRefreshDb();
+    expect(await refreshCaseLawSitemapShards(recorded.db)).toMatchObject({
+      type: "refreshed",
+      months: 0,
+    });
+    expect(countedAMonth(recorded.transactions)).toBe(false);
+    expect(await queuedTouches()).toBe(0);
+    expect(await snapshot()).toEqual(await fullRecount());
+    const [listed] = await db
+      .select({ lastModifiedAt: caseLawSitemapShards.lastModifiedAt })
+      .from(caseLawSitemapShards)
+      .where(
+        and(
+          eq(caseLawSitemapShards.country, "CZE"),
+          eq(caseLawSitemapShards.year, "1997"),
+          eq(caseLawSitemapShards.month, "11"),
+        ),
+      );
+    expect(listed?.lastModifiedAt.toISOString()).toBe(
+      "2030-05-05T01:02:03.456Z",
+    );
+
+    // Folding the same instant again raises nothing.
+    await db.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET updated_at = '2030-05-05T01:02:03.456999Z'::timestamptz
+      WHERE id = ${ids[2]}
+    `);
+    expect(await queuedTouches()).toBe(1);
+    const before = await snapshot();
+    await refreshUntilDone(refreshDb);
+    expect(await snapshot()).toEqual(before);
+    expect(await queuedTouches()).toBe(0);
+
+    // An earlier updated_at can lower the shard's last modification, so it
+    // is logged for a recount instead.
+    await db.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET updated_at = '2020-01-01T00:00:00Z'::timestamptz
+      WHERE id IN (${ids[0]}, ${ids[1]}, ${ids[2]})
+    `);
+    expect(await loggedMonths()).toEqual(["CZE/1997/11"]);
+    expect(await queuedTouches()).toBe(0);
+    await expectMatchesFullRecount();
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a touched language version raises only the shard listing its document",
+  async () => {
+    const [listedVersion, alternate] = [
+      createSafeId<"caseLawDecision">(),
+      createSafeId<"caseLawDecision">(),
+    ].toSorted();
+    if (!listedVersion || !alternate) {
+      panic("Expected two language versions");
+    }
+    await refreshUntilDone(refreshDb);
+    await db.insert(caseLawDecisions).values([
+      {
+        ...decision({
+          id: listedVersion,
+          languageGroupKey: "sitemap-touch-group",
+          decisionDate: "1998-03-03",
+        }),
+        sourceDocumentId: listedVersion,
+      },
+      {
+        ...decision({
+          id: alternate,
+          language: "en",
+          languageGroupKey: "sitemap-touch-group",
+          decisionDate: "1998-04-04",
+        }),
+        sourceDocumentId: alternate,
+      },
+    ]);
+    try {
+      await refreshUntilDone(refreshDb);
+      /** The production recount's newest last modification of a month. */
+      const recountedLastModified = async (month: string) =>
+        Math.max(
+          0,
+          ...executedRows(
+            await db.execute(
+              sitemapMonthCountSql({ country: "CZE", year: "1998", month }),
+            ),
+          ).map((row) =>
+            isRecord(row) && typeof row["last_modified_ms"] === "number"
+              ? row["last_modified_ms"]
+              : 0,
+          ),
+        );
+      const listedLastModified = async () =>
+        (await snapshot())
+          .filter(({ year }) => year === "1998")
+          .map(({ month, lastModifiedMs }) => ({ month, lastModifiedMs }));
+      const listedBefore = await listedLastModified();
+      expect(listedBefore).toEqual([
+        { month: "03", lastModifiedMs: await recountedLastModified("03") },
+      ]);
+
+      // The alternate is not the listed version: its shard does not move.
+      await db.execute(sql`
+        UPDATE ${caseLawDecisions} SET updated_at = '2031-01-01T00:00:00Z'::timestamptz
+        WHERE id = ${alternate}
+      `);
+      expect(await loggedMonths()).toEqual([]);
+      expect(await queuedTouches()).toBe(1);
+      await refreshUntilDone(refreshDb);
+      expect(await listedLastModified()).toEqual(listedBefore);
+      expect(await recountedLastModified("04")).toBe(0);
+
+      // The listed version moves its shard to exactly what a recount reads.
+      await db.execute(sql`
+        UPDATE ${caseLawDecisions} SET updated_at = '2032-02-02T00:00:00Z'::timestamptz
+        WHERE id = ${listedVersion}
+      `);
+      await refreshUntilDone(refreshDb);
+      expect(await listedLastModified()).toEqual([
+        {
+          month: "03",
+          lastModifiedMs: Date.parse("2032-02-02T00:00:00Z"),
+        },
+      ]);
+      expect(await recountedLastModified("03")).toBe(
+        Date.parse("2032-02-02T00:00:00Z"),
+      );
+      expect(await queuedTouches()).toBe(0);
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, [listedVersion, alternate]));
+      await refreshUntilDone(refreshDb);
+    }
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
@@ -1012,6 +1186,38 @@ for (const target of [
   );
 }
 
+test(
+  "a touch fold reads each touch, decision and shard by key",
+  async () => {
+    const { sql: text, params } = new PgDialect().sqlToQuery(
+      sitemapTouchFoldSql(256),
+    );
+    const plan = await client.transaction(async (tx) => {
+      // Scans are priced by pages touched, as on a corpus of millions.
+      await tx.query("SET LOCAL enable_seqscan = off");
+      await tx.query("SET LOCAL enable_bitmapscan = off");
+      await tx.query("SET LOCAL seq_page_cost = 1000");
+      await tx.query("SET LOCAL random_page_cost = 1000");
+      return planLines(
+        await tx.query(`EXPLAIN (COSTS OFF) ${text}`, [...params]),
+      ).join("\n");
+    });
+    expect(plan).not.toMatch(/Seq Scan/u);
+    expect(plan).toMatch(
+      /Index Scan using case_law_sitemap_touches_pkey on case_law_sitemap_touches/u,
+    );
+    // Each touched decision is found by its id through an index.
+    expect(plan).toMatch(
+      /Index (?:Only )?Scan using \w+ on case_law_decisions \w+\n\s+Index Cond: [^\n]*\bid = ANY /u,
+    );
+    expect(plan).toMatch(
+      /Index Scan using case_law_sitemap_shards_pkey on case_law_sitemap_shards/u,
+    );
+    expect(plan).toMatch(/Tid Scan on case_law_sitemap_shards/u);
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres plans the statement in WASM
+);
+
 // timeout: one refresh plus all 128 bucket reads of two months run on the in-process PGlite engine.
 test(
   "language versions occupy one document across sitemap months and buckets",
@@ -1233,6 +1439,7 @@ type Operation =
   | { kind: "redact"; pick: number }
   | { kind: "listingOnly"; pick: number }
   | { kind: "touch"; pick: number }
+  | { kind: "advance"; pick: number }
   | { kind: "country"; pick: number }
   | { kind: "gate" }
   | { kind: "refresh" };
@@ -1253,6 +1460,7 @@ const operation: fc.Arbitrary<Operation> = fc.oneof(
   fc.record({ kind: fc.constant("redact" as const), pick: fc.nat() }),
   fc.record({ kind: fc.constant("listingOnly" as const), pick: fc.nat() }),
   fc.record({ kind: fc.constant("touch" as const), pick: fc.nat() }),
+  fc.record({ kind: fc.constant("advance" as const), pick: fc.nat() }),
   fc.record({ kind: fc.constant("country" as const), pick: fc.nat() }),
   fc.record({ kind: fc.constant("gate" as const) }),
   fc.record({ kind: fc.constant("refresh" as const) }),
@@ -1346,6 +1554,18 @@ test(
           }
           return;
         }
+        case "advance": {
+          // Only updated_at, and only forward: queued as a touch, not a month.
+          const id = picked(step.pick);
+          if (id !== undefined) {
+            await db.execute(sql`
+              UPDATE ${caseLawDecisions}
+              SET updated_at = updated_at + make_interval(secs => ${stamp} + 0.000321)
+              WHERE id = ${id}
+            `);
+          }
+          return;
+        }
         case "country": {
           const id = picked(step.pick);
           if (id !== undefined) {
@@ -1394,6 +1614,7 @@ test(
           await refreshUntilDone(refreshDb);
           expect(await snapshot()).toEqual(await fullRecount());
           expect(await loggedMonths()).toEqual([]);
+          expect(await queuedTouches()).toBe(0);
         },
       ),
       { numRuns: 25 },

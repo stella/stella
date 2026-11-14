@@ -2561,6 +2561,16 @@
   },
   {
     "schema": "public",
+    "table": "case_law_sitemap_touches",
+    "policy": "case_law_sitemap_touch_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_sitemap_touches'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_sitemap_touches'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "case_law_source_arrivals",
     "policy": "case_law_removal_ingestion_delete",
     "command": "DELETE",

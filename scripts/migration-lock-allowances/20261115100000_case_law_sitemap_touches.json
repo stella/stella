@@ -1,0 +1,5 @@
+{
+  "row-level-security": "Enabling and forcing RLS changes only metadata on the new empty case_law_sitemap_touches table, bounded by the 1s lock_timeout and 30s statement_timeout.",
+  "create-policy": "The owner policy is catalog-only metadata on the new empty case_law_sitemap_touches table, bounded by the 1s lock_timeout and 30s statement_timeout.",
+  "create-trigger": "Recreating the decision-update sitemap trigger and adding its touch sibling are catalog-only changes without a row scan. Each SHARE ROW EXCLUSIVE wait is bounded by the 1s lock_timeout; a timeout rolls back for the migration runner to retry."
+}

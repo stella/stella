@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { and, eq, inArray, max, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import * as v from "valibot";
 
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
@@ -16,6 +16,7 @@ import {
   caseLawSitemapRefreshCursor,
   caseLawSitemapShardCounts,
   caseLawSitemapShards,
+  caseLawSitemapTouches,
   caseLawSources,
 } from "@/api/db/schema";
 import {
@@ -27,6 +28,8 @@ import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisi
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
   decisionBucketSqlFor,
+  decisionMonthSqlFor,
+  decisionYearSqlFor,
   SITEMAP_ALL_BUCKET,
   SITEMAP_MULTILINGUAL_URL_WEIGHT,
   SITEMAP_UNDATED_MONTH,
@@ -197,6 +200,15 @@ const monthRangeSql = ({ year, month }: SitemapMonth): SQL => {
 };
 
 /**
+ * A shard's last modification: the newest `updated_at` of the decisions it
+ * lists, at the millisecond precision the shard row and the sitemap carry.
+ * The month recount and the touch fold both write it, so a fold compares and
+ * stores exactly what a recount of the same rows would.
+ */
+const sitemapLastModifiedSqlFor = (decision: { updatedAt: SQLWrapper }) =>
+  sql`date_trunc('milliseconds', max(${decision.updatedAt}))`;
+
+/**
  * One month's published decisions among the redistributable sources, counted
  * per bucket with their newest `updated_at`. Retirement uses the durable
  * transaction boundary captured before this count; later commits stay queued.
@@ -216,7 +228,7 @@ export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
       count(*)::int AS total,
       sum(CASE WHEN ${sitemapHasLanguageAlternatesFor(caseLawDecisions)}
         THEN ${SITEMAP_MULTILINGUAL_URL_WEIGHT} ELSE 1 END)::int AS weighted_total,
-      (extract(epoch FROM max(${caseLawDecisions.updatedAt})) * 1000)::float8 AS last_modified_ms
+      (extract(epoch FROM ${sitemapLastModifiedSqlFor(caseLawDecisions)}) * 1000)::float8 AS last_modified_ms
     FROM ${caseLawDecisions}
     INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${caseLawDecisions.sourceId}
     WHERE ${publishedCaseLawDecisionFor(caseLawDecisions)}
@@ -412,6 +424,102 @@ const recountMonth = async (
     await tx.insert(caseLawSitemapShards).values(rows);
   }
 };
+
+/** Touches one run folds: each costs a primary-key read and a sibling probe. */
+const DEFAULT_TOUCH_BUDGET = 256;
+const MAX_TOUCHES_PER_RUN = 2048;
+
+/**
+ * Fold the oldest queued touches into the shards that list their decisions,
+ * and delete them, in one statement.
+ *
+ * A touch is queued only for a published decision whose write moved nothing
+ * a shard counts, so the decision's shard and every shard's size are as the
+ * last recount left them; only its last modification can have advanced. The
+ * fold reads each touched decision as it is now (its touch is committed, so
+ * its write is visible) and raises the listing shard's last modification to
+ * the newest representative's `updated_at`, exactly as a recount would. A
+ * decision that has since moved or left is the subject of a logged month,
+ * whose recount writes its shards whole; a shard not listed yet waits for
+ * that recount too. Raising is idempotent, so a touch a recount already saw
+ * changes nothing. The fold never counts a month.
+ */
+export const sitemapTouchFoldSql = (limit: number): SQL => sql`
+  WITH batch AS MATERIALIZED (
+    SELECT ${caseLawSitemapTouches.id} AS id, ${caseLawSitemapTouches.decisionId} AS decision_id
+    FROM ${caseLawSitemapTouches}
+    ORDER BY ${caseLawSitemapTouches.id}
+    LIMIT ${limit}
+  ), touched AS MATERIALIZED (
+    SELECT
+      ${caseLawDecisions.country} AS country,
+      ${decisionYearSqlFor(caseLawDecisions)} AS year,
+      ${decisionMonthSqlFor(caseLawDecisions)} AS month,
+      ${decisionBucketSqlFor(caseLawDecisions)} AS bucket,
+      ${sitemapLastModifiedSqlFor(caseLawDecisions)} AS last_modified_at
+    FROM ${caseLawDecisions}
+    INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${caseLawDecisions.sourceId}
+    WHERE ${caseLawDecisions.id} = ANY(ARRAY(SELECT decision_id FROM batch))
+      AND ${publishedCaseLawDecisionFor(caseLawDecisions)}
+      AND ${redistributableCaseLawSource}
+      AND ${sitemapDocumentRepresentativeFor(caseLawDecisions)}
+    GROUP BY 1, 2, 3, 4
+  ), targets AS MATERIALIZED (
+    -- A month lists either its "all" row or its bucket rows. The limit keeps
+    -- each probe a primary-key descent rather than a join over every shard.
+    SELECT listed.row_id, max(touched.last_modified_at) AS last_modified_at
+    FROM touched
+    CROSS JOIN LATERAL (
+      SELECT shard.ctid AS row_id
+      FROM ${caseLawSitemapShards} AS shard
+      WHERE shard.country = touched.country
+        AND shard.year = touched.year
+        AND shard.month = touched.month
+        AND shard.bucket IN (touched.bucket, ${SITEMAP_ALL_BUCKET})
+        AND shard.last_modified_at < touched.last_modified_at
+      LIMIT 2
+    ) AS listed
+    GROUP BY 1
+  ), raised AS (
+    -- The snapshot fence excludes every other shard writer, so the row ids
+    -- read above still name the rows this statement raises.
+    UPDATE ${caseLawSitemapShards} AS shard
+    SET last_modified_at = (
+      SELECT targets.last_modified_at FROM targets WHERE targets.row_id = shard.ctid
+    )
+    WHERE shard.ctid = ANY(ARRAY(SELECT row_id FROM targets))
+    RETURNING 1
+  ), retired AS (
+    DELETE FROM ${caseLawSitemapTouches}
+    WHERE ${caseLawSitemapTouches.id} = ANY(ARRAY(SELECT id FROM batch))
+    RETURNING 1
+  )
+  SELECT (SELECT count(*)::int FROM retired) AS retired,
+    (SELECT count(*)::int FROM raised) AS raised
+`;
+
+/**
+ * Fold at most `limit` touches in one short transaction under the snapshot
+ * fence a recount and a removal take, so the fold never interleaves with a
+ * shard rewrite. Whether a full batch may have left more queued.
+ */
+const foldTouches = async (
+  { db, budget, signal }: RunContext,
+  limit: number,
+): Promise<{ retired: number; more: boolean }> =>
+  await withAggregateTransaction(db, async (tx) => {
+    await setTransactionBudget(tx, budget);
+    await lockCaseLawSitemapSnapshot(tx);
+    const folded = v.parse(
+      v.object({
+        retired: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
+        raised: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
+      }),
+      executedRows(await tx.execute(sitemapTouchFoldSql(limit))).at(0),
+    );
+    throwIfAborted(signal);
+    return { retired: folded.retired, more: folded.retired === limit };
+  });
 
 const wholeCountryRow = (country: string): SitemapMonth => ({
   country,
@@ -834,6 +942,11 @@ type RunProgress = {
  * A run works a month at most once and stops when its row, target, or time budget is spent
  * (`pending`); the next run continues from the rows still logged.
  *
+ * A write that only advanced a listed decision's `updated_at` is queued as a
+ * touch instead of a month, and each run first folds at most `touchBudget`
+ * touches into the shards' last modification without counting anything; a
+ * run that leaves touches queued continues at once.
+ *
  * The index read refuses a snapshot it cannot serve, so an over-capacity
  * index is logged here rather than withheld.
  */
@@ -844,6 +957,7 @@ export const refreshCaseLawSitemapShards = async (
     runBudgetMs = SITEMAP_REFRESH_RUN_BUDGET_MS,
     changeRowBudget = DEFAULT_CHANGE_ROW_BUDGET,
     discoveryTargetBudget = DEFAULT_DISCOVERY_TARGET_BUDGET,
+    touchBudget = DEFAULT_TOUCH_BUDGET,
     clock = () => performance.now(),
     laneSleep,
     signal,
@@ -855,6 +969,8 @@ export const refreshCaseLawSitemapShards = async (
     changeRowBudget?: number;
     /** Target attempts, including waiting, held, and progress-only targets. */
     discoveryTargetBudget?: number;
+    /** Touches folded into last modifications before the months are worked. */
+    touchBudget?: number;
     /** Monotonic milliseconds; only differences are read. */
     clock?: () => number;
     /** Test seam: how a refused lane try waits before the next. */
@@ -880,11 +996,23 @@ export const refreshCaseLawSitemapShards = async (
       `Sitemap discovery target budget must be between 1 and ${MAX_DISCOVERY_TARGETS_PER_RUN}`,
     );
   }
+  if (
+    !Number.isSafeInteger(touchBudget) ||
+    touchBudget < 1 ||
+    touchBudget > MAX_TOUCHES_PER_RUN
+  ) {
+    return panic(
+      `Sitemap touch budget must be between 1 and ${MAX_TOUCHES_PER_RUN}`,
+    );
+  }
   const startedAt = clock();
   const budget = sitemapRefreshBudget(poolIdleTimeoutS);
   throwIfAborted(signal);
   const laneDb = underCorpusSchemaLane(db, { signal, sleep: laneSleep });
   const run: RunContext = { db: laneDb, budget, signal };
+  // A fold raises last modifications from the decisions' current rows, so it
+  // commutes with every recount; a bounded batch goes first in each run.
+  const touches = await foldTouches(run, touchBudget);
   // A month worked in this run is not worked again in it: changes committed
   // to it meanwhile wait for the next run, so a month written to without
   // pause cannot keep one run going.
@@ -976,8 +1104,12 @@ export const refreshCaseLawSitemapShards = async (
       break;
     }
     if (step !== "progress") {
-      return pendingOutcome(step);
+      // Queued touches wait on no month lock or snapshot.
+      return pendingOutcome(touches.more ? "immediate" : step);
     }
+  }
+  if (touches.more) {
+    return pendingOutcome("immediate");
   }
 
   const extent = await readPublicShardExtent(laneDb, budget);

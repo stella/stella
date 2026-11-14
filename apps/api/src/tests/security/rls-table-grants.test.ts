@@ -224,6 +224,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "case_law_ranking_signal_changes",
   "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
+  "case_law_sitemap_touches",
   // Coverage populations: owner-maintained, read only by the public-law reader.
   "case_law_population_counts",
   "case_law_population_deltas",

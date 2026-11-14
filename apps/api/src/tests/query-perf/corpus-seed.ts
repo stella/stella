@@ -841,10 +841,17 @@ export const seedSitemapReadBudget = async ({
   await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month, xact)
     SELECT 'XQN', '2024', '01', (2000000 + i)::text::xid8
     FROM generate_series(1, ${scenario.rows}) i`);
+  // A touch backlog that grows with the corpus: a run folds one bounded
+  // batch of it and leaves the rest queued.
+  await database.execute(sql`DELETE FROM case_law_sitemap_touches`);
+  await database.execute(sql`INSERT INTO case_law_sitemap_touches (decision_id)
+    SELECT ('01990000-00c1-7000-8000-' || lpad(to_hex(i), 12, '0'))::uuid
+    FROM generate_series(1, ${scenario.rows}) i`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_browse_facet_counts`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_shards`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_changes`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_touches`);
   const acquired = Promise.withResolvers<undefined>();
   const release = Promise.withResolvers<undefined>();
   const holding = withAggregateTransaction(openClient().db, async (tx) => {

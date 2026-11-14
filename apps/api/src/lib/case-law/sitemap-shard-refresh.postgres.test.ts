@@ -20,6 +20,7 @@ import {
   caseLawDecisions,
   caseLawSitemapChanges,
   caseLawSitemapShards,
+  caseLawSitemapTouches,
   caseLawSources,
 } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -214,6 +215,19 @@ if (!databaseUrl || !runPostgresTests) {
             VALUES (${id}::uuid, ${sourceId}::uuid, ${`sitemap-changes-${id}`}, ${COUNTRY}, 'xx', 'Sitemap change log fixture court', ${id}, '1905-01-15', '{}'::jsonb)`;
         });
         expect(await loggedMonths("1905")).toEqual(["1905/01"]);
+        // A later updated_at alone is queued as a touch through the same
+        // owner-run path, without a log row.
+        await session.begin(async (tx) => {
+          await tx`SET LOCAL ROLE stella_ingestion`;
+          await tx`UPDATE case_law_decisions SET updated_at = updated_at + interval '1 day' WHERE id = ${id}::uuid`;
+        });
+        expect(await loggedMonths("1905")).toEqual(["1905/01"]);
+        expect(
+          await db.$count(
+            caseLawSitemapTouches,
+            eq(caseLawSitemapTouches.decisionId, id),
+          ),
+        ).toBe(1);
 
         const refused = async (
           role: string,
@@ -252,12 +266,29 @@ if (!databaseUrl || !runPostgresTests) {
               async (tx) => await tx`DELETE FROM case_law_sitemap_changes`,
             ),
           ).toMatch(/permission denied/u);
+          // db-await-in-loop: nor read, queue or consume a touch directly
+          for (const statement of [
+            "SELECT count(*) FROM case_law_sitemap_touches",
+            "INSERT INTO case_law_sitemap_touches (decision_id) VALUES (gen_random_uuid())",
+            "DELETE FROM case_law_sitemap_touches",
+          ]) {
+            // db-await-in-loop: each statement is probed in its own transaction
+            expect(
+              await refused(role, async (tx) => await tx.unsafe(statement)),
+            ).toMatch(/permission denied/u);
+          }
         }
         expect(await loggedMonths("1905")).toEqual(["1905/01"]);
       });
       await refreshUntilDone();
       expect(await loggedMonths("1905")).toEqual([]);
       expect(await listedMonths("1905")).toEqual(["1905/01:1", "1905/03:1"]);
+      expect(
+        await db.$count(
+          caseLawSitemapTouches,
+          inArray(caseLawSitemapTouches.decisionId, decisionIds),
+        ),
+      ).toBe(0);
     });
 
     test("a language-only update queues the document's sitemap month", async () => {
