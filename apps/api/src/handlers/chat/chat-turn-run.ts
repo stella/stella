@@ -5,6 +5,10 @@ import { panic, Result, TaggedError } from "better-result";
 import type { AIProvider } from "@stll/ai-catalog";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -18,6 +22,7 @@ import type { PersistMessageProps } from "@/api/handlers/chat/chat-message-persi
 import {
   AI_ERROR_FAILURE_CODE,
   AI_ERROR_RETRYABLE,
+  CHAT_METERED_PROVIDER_TIMEOUT_MS,
   isChatTurnNotOwned,
   readChatTurnExecutionStanding,
   renewChatTurnExecutionLease,
@@ -239,6 +244,58 @@ const CONNECTOR_CLOSE_FAILED_SINK = failureSink({
   expected: [],
 });
 
+/**
+ * What ends a run by elapsed time alone, by where its turn runs.
+ *
+ * A turn stella's own model answers makes a metered provider request from
+ * this process, and the deadline bounds that request. A turn a member's
+ * computer answers makes none: the harness there talks to its own provider,
+ * works for as long as its task takes and may wait on the member. Such a run
+ * ends by the member's stop or by its computer's liveness: the runner gateway
+ * ends a run whose computer did not take it, or stayed away, as lost
+ * (`expireAbandonedRuns`), and the turn reading it fails with that reason.
+ */
+type ChatTurnRunBound =
+  | { type: "provider-deadline"; deadlineMs: number }
+  | { type: "computer-liveness" };
+
+/** The bound of a turn that runs on `runsOn`; a new place must name its own. */
+export const chatTurnRunBoundOf = (
+  runsOn: ChatRunTarget["kind"],
+): ChatTurnRunBound => {
+  switch (runsOn) {
+    case CHAT_RUN_TARGET_KIND.cloud:
+      return {
+        type: "provider-deadline",
+        deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
+      };
+    case CHAT_RUN_TARGET_KIND.local:
+      return { type: "computer-liveness" };
+    default:
+      runsOn satisfies never;
+      return panic(`Unhandled run target: ${String(runsOn)}`);
+  }
+};
+
+/**
+ * How long a settled run's source may take to close before its admission is
+ * released anyway. A local run's source only stops reading its run's events.
+ */
+const LOCAL_RUN_SOURCE_CLOSE_TIMEOUT_MS = 60 * 1000;
+
+const sourceCloseTimeoutMs = (bound: ChatTurnRunBound): number => {
+  switch (bound.type) {
+    case "provider-deadline":
+      // Cleanup gets the provider request's own time budget.
+      return bound.deadlineMs;
+    case "computer-liveness":
+      return LOCAL_RUN_SOURCE_CLOSE_TIMEOUT_MS;
+    default:
+      bound satisfies never;
+      return panic("Unhandled chat turn run bound");
+  }
+};
+
 /** The boundary a turn's provider input crosses, by the mode it was sent in. */
 export const CHAT_TURN_BOUNDARY_MODE = {
   anonymized: "anonymized",
@@ -295,11 +352,14 @@ type ChatTurnRunConnectors = { close: () => void | Promise<void> };
 
 /** What cuts a run's producer short. */
 type ChatTurnRunControl = {
-  /** The run's own abort: its deadline, a stop, or ownership loss. */
+  /** The run's own abort: its deadline if it has one, a stop, or ownership loss. */
   abortController: AbortController;
   /** The SDK provider also stops on admission loss without ending the transport. */
   providerAbortController: AbortController;
-  /** The deadline alone, which tells a timeout from the other causes. */
+  /**
+   * The deadline alone, which tells a timeout from the other causes. It never
+   * fires for a run its computer's liveness bounds.
+   */
   deadlineSignal: AbortSignal;
   /** Execution admission cancellation; durable ownership keeps its own fence. */
   admissionSignal?: AbortSignal;
@@ -312,9 +372,11 @@ type ChatTurnRunOptions = {
   /** Closed by the run when it never produces; a producing run's agent
    *  loop closes them when it ends. */
   connectors: ChatTurnRunConnectors | undefined;
-  /** The run's own deadline. It takes no signal, so nothing tied to the
-   *  claiming request can end it. */
-  deadlineMs: number;
+  /** What ends the run by time alone. It takes no signal, so nothing tied to
+   *  the claiming request can end it. */
+  bound: ChatTurnRunBound;
+  /** The clock of a deadline; a test fires its own signal instead of waiting. */
+  createDeadlineSignal?: ((deadlineMs: number) => AbortSignal) | undefined;
   /** Same cleanup deadline in production; injectable clock for settlement tests. */
   waitForUpstream?: typeof withTimeout | undefined;
   heartbeat?: ChatTurnRunHeartbeat | undefined;
@@ -500,7 +562,7 @@ export class ChatTurnRun {
 
   constructor(options: ChatTurnRunOptions) {
     this.options = options;
-    const deadlineSignal = AbortSignal.timeout(options.deadlineMs);
+    const deadlineSignal = this.deadlineSignalOf(options.bound);
     const abortController = abortControllerFromSignal(deadlineSignal);
     this.control = {
       abortController,
@@ -524,6 +586,22 @@ export class ChatTurnRun {
 
   get execution(): ChatTurnExecution {
     return this.options.owner.execution;
+  }
+
+  private deadlineSignalOf(bound: ChatTurnRunBound): AbortSignal {
+    switch (bound.type) {
+      case "provider-deadline":
+        return (
+          this.options.createDeadlineSignal?.(bound.deadlineMs) ??
+          AbortSignal.timeout(bound.deadlineMs)
+        );
+      case "computer-liveness":
+        // No clock of this process ends the run; see `ChatTurnRunBound`.
+        return new AbortController().signal;
+      default:
+        bound satisfies never;
+        return panic("Unhandled chat turn run bound");
+    }
   }
 
   /** Name the provider the run's model resolved to, for its settlement count. */
@@ -982,21 +1060,19 @@ export class ChatTurnRun {
     const completed = this.ownership.followUp(
       Promise.resolve(end).then(async (settled) => {
         // A stuck SDK finalizer must not renew capacity indefinitely after
-        // fenced persistence. Cleanup gets the existing provider time budget.
+        // fenced persistence.
+        const timeoutMs = sourceCloseTimeoutMs(this.options.bound);
         const closed = await Result.tryPromise(
           async () =>
             await (this.options.waitForUpstream ?? withTimeout)(
               async () => await upstreamClosed,
-              {
-                label: "chat-upstream-finalization",
-                timeoutMs: this.options.deadlineMs,
-              },
+              { label: "chat-upstream-finalization", timeoutMs },
             ),
         );
         if (Result.isError(closed)) {
           logger.warn("chat.turn.upstream_finalization_timeout", {
             executionId: this.execution.executionId,
-            timeoutMs: this.options.deadlineMs,
+            timeoutMs,
           });
         }
         await admission.release();

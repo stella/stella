@@ -254,6 +254,61 @@ test("accepts release-date notes and nullable publication timestamps", () =>
     (result) => expect(result.exitCode, stderrText(result)).toBe(0),
   ));
 
+const DESKTOP_SUPPORT_FLOOR =
+  "apps/api/src/lib/mcp-connectors/desktop-support-floor.json";
+
+const writeDesktopSupportFloor = (directory: string, floor: string) => {
+  mkdirSync(path.dirname(path.join(directory, DESKTOP_SUPPORT_FLOOR)), {
+    recursive: true,
+  });
+  writeFileSync(path.join(directory, DESKTOP_SUPPORT_FLOOR), floor);
+  writeFileSync(
+    path.join(directory, "apps/landing/src/data/changelog-release-dates.json"),
+    '{"v1.2.2":"2026-01-01T00:00:00Z","v1.2.3":null}\n',
+  );
+};
+
+test("accepts a desktop support floor at a promoted release", () =>
+  withCandidate(
+    (directory) =>
+      writeDesktopSupportFloor(
+        directory,
+        '{\n  "minimumVersion": "1.2.2",\n  "supportDays": 30\n}\n',
+      ),
+    (result) => expect(result.exitCode, stderrText(result)).toBe(0),
+  ));
+
+test.each([
+  [
+    "a release that never reached production",
+    '{"minimumVersion":"1.2.3","supportDays":30}',
+    "does not record as promoted",
+  ],
+  [
+    "a release the manifest does not have",
+    '{"minimumVersion":"9.9.9","supportDays":30}',
+    "does not record as promoted",
+  ],
+  [
+    "a version that is no stable release",
+    '{"minimumVersion":"1.2.2-rc.1","supportDays":30}',
+    "must hold only minimumVersion and supportDays",
+  ],
+  [
+    "a field the API does not read",
+    '{"minimumVersion":"1.2.2","supportDays":30,"exempt":["0.0.1"]}',
+    "must hold only minimumVersion and supportDays",
+  ],
+])("rejects a desktop support floor with %s", (_name, floor, refusal) =>
+  withCandidate(
+    (directory) => writeDesktopSupportFloor(directory, floor),
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(refusal);
+    },
+  ),
+);
+
 test("rejects changeset README edits and malformed release-date records", () => {
   withCandidate(
     (directory) => {

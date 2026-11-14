@@ -30,7 +30,7 @@ export const readCaseLawCitationsArgsSchema = nullAsAbsent(
     direction: v.pipe(
       v.picklist(CITATION_READ_DIRECTIONS),
       v.description(
-        "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
+        "cites: decisions this decision cites; cited_by: its citers. Citing is not agreeing: both sides carry negative treatments.",
       ),
     ),
     doctrine: v.optional(

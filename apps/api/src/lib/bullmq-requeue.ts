@@ -19,6 +19,22 @@ import { withTimeout } from "@/api/lib/with-timeout";
  * per row, and the next tick retries.
  */
 const QUEUE_OPERATION_TIMEOUT_MS = 2000;
+const QUEUE_REQUEUE_OPERATION = {
+  addJob: "add-job",
+  getJob: "get-job",
+  getState: "get-state",
+  removeJob: "remove-job",
+  retryJob: "retry-job",
+} as const;
+type QueueRequeueOperation =
+  (typeof QUEUE_REQUEUE_OPERATION)[keyof typeof QUEUE_REQUEUE_OPERATION];
+const QUEUE_REQUEUE_TIMEOUT_LABEL = {
+  "add-job": "queue-requeue.add-job",
+  "get-job": "queue-requeue.get-job",
+  "get-state": "queue-requeue.get-state",
+  "remove-job": "queue-requeue.remove-job",
+  "retry-job": "queue-requeue.retry-job",
+} as const satisfies Record<QueueRequeueOperation, string>;
 
 /**
  * What one re-enqueue did. `queue-owned` is a healthy outcome rather than a
@@ -131,17 +147,17 @@ export const requeueDeterministicJob = async <
   JobType
 >): Promise<QueueRequeueOutcome> => {
   const bounded = async <T>(
-    label: string,
+    operation: QueueRequeueOperation,
     command: () => Promise<T>,
   ): Promise<T> =>
     await withTimeout(async () => await command(), {
-      label: `queue-requeue.${label}`,
+      label: QUEUE_REQUEUE_TIMEOUT_LABEL[operation],
       timeoutMs: operationTimeoutMs,
     });
 
   const add = async (jobData: DataType): Promise<QueueRequeueOutcome> => {
     await bounded(
-      "add-job",
+      QUEUE_REQUEUE_OPERATION.addJob,
       async () =>
         await queue.add(name, jobData, {
           jobId,
@@ -152,7 +168,7 @@ export const requeueDeterministicJob = async <
   };
 
   const existing = await bounded(
-    "get-job",
+    QUEUE_REQUEUE_OPERATION.getJob,
     async () => await queue.getJob(jobId),
   );
   if (!existing) {
@@ -160,7 +176,7 @@ export const requeueDeterministicJob = async <
   }
 
   const state = await bounded(
-    "get-state",
+    QUEUE_REQUEUE_OPERATION.getState,
     async () => await existing.getState(),
   );
   const action = EXISTING_JOB_ACTION[state];
@@ -170,17 +186,23 @@ export const requeueDeterministicJob = async <
     }
     case "retry": {
       if (delayMs !== undefined && delayMs > 0) {
-        await bounded("remove-job", async () => await existing.remove());
+        await bounded(
+          QUEUE_REQUEUE_OPERATION.removeJob,
+          async () => await existing.remove(),
+        );
         return await add(data);
       }
       await bounded(
-        "retry-job",
+        QUEUE_REQUEUE_OPERATION.retryJob,
         async () => await existing.retry("failed", FRESH_ATTEMPTS),
       );
       return QUEUE_REQUEUE_OUTCOME.REQUEUED;
     }
     case "reclaim": {
-      await bounded("remove-job", async () => await existing.remove());
+      await bounded(
+        QUEUE_REQUEUE_OPERATION.removeJob,
+        async () => await existing.remove(),
+      );
       return await add(reclaimData ? reclaimData(existing) : data);
     }
     case "add": {

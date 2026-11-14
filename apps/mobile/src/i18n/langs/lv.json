@@ -219,6 +219,10 @@
       },
       "patternInPath": "{pattern} ({path})",
       "commandExited": "{command} (izejas kods {code})",
+      "browserClick": "Noklikšķināt uz „{target}” lapā {url}",
+      "browserPressKey": "Nospiest taustiņu {key} elementā „{target}” lapā {url}",
+      "browserSelect": "Atlasīt „{option}” elementā „{target}” lapā {url}",
+      "browserType": "Ievadīt tekstu elementā „{target}” lapā {url}",
       "opensOnComputer": "Atveriet datorā, kurā tas tika izpildīts",
       "status": {
         "needs_approval": "Gaida apstiprinājumu",

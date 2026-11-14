@@ -2335,6 +2335,10 @@
       "web_search": "Pesquisando na web"
     },
     "toolCall": {
+      "browserClick": "Clicar em “{target}” em {url}",
+      "browserPressKey": "Pressionar a tecla {key} em “{target}” em {url}",
+      "browserSelect": "Selecionar “{option}” em “{target}” em {url}",
+      "browserType": "Inserir texto em “{target}” em {url}",
       "characterCount": "{count, plural, one {# caractere} many {# caracteres} other {# caracteres}}",
       "commandExited": "{command} (código de saída {code})",
       "consoleLogs": "Saída do console",
@@ -6340,6 +6344,7 @@
       "previewBody5": "Antes da conversão, uma venda ou listagem dá ao Investidor direito ao maior valor entre o valor de compra e os recursos pagáveis com base na conversão.",
       "previewBody6": "A Sociedade está devidamente constituída, tem autoridade para celebrar este contrato e obterá todas as aprovações necessárias para cumpri-lo.",
       "previewBody7": "Este contrato contém o acordo integral entre as partes e somente poderá ser alterado por escrito, com o consentimento exigido.",
+      "previewDocument": "Visualização do conjunto de estilos",
       "previewFailed": "Não foi possível gerar a visualização.",
       "previewIntroduction": "Este contrato é celebrado entre a Example Labs Ltd. (a “Sociedade”) e o investidor identificado na página de assinaturas (o “Investidor”).",
       "previewLevel1": "Investimento",
