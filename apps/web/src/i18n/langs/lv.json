@@ -2335,6 +2335,10 @@
       "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {
+      "browserClick": "Noklikšķināt uz „{target}” lapā {url}",
+      "browserPressKey": "Nospiest taustiņu {key} elementā „{target}” lapā {url}",
+      "browserSelect": "Atlasīt „{option}” elementā „{target}” lapā {url}",
+      "browserType": "Ievadīt tekstu elementā „{target}” lapā {url}",
       "characterCount": "{count, plural, zero {# rakstzīmju} one {# rakstzīme} other {# rakstzīmes}}",
       "commandExited": "{command} (izejas kods {code})",
       "consoleLogs": "Konsoles izvade",

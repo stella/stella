@@ -219,6 +219,10 @@
       },
       "patternInPath": "{pattern} في {path}",
       "commandExited": "{command} (رمز الخروج {code})",
+      "browserClick": "النقر على «{target}» في {url}",
+      "browserPressKey": "الضغط على المفتاح {key} في «{target}» في {url}",
+      "browserSelect": "تحديد «{option}» في «{target}» في {url}",
+      "browserType": "إدخال نص في «{target}» في {url}",
       "opensOnComputer": "افتحه على الحاسوب الذي نفّذه",
       "status": {
         "needs_approval": "في انتظار الموافقة",

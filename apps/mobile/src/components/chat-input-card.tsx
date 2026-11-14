@@ -33,7 +33,6 @@ import {
 } from "@stll/api-contract/chat-local-run-question";
 import {
   localRunProposedPlan,
-  localRunToolSubtitleText,
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
@@ -48,6 +47,7 @@ import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
 
+import { useLocalRunSubtitleText } from "@/components/local-run-subtitle";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
@@ -450,6 +450,7 @@ const ApprovalRow = ({
   threadId: string;
 }) => {
   const t = useTranslations("chat");
+  const localRunSubtitleText = useLocalRunSubtitleText();
   const { end } = useSession();
   const [granting, setGranting] = useState<ChatToolGrantScope>();
   const [failure, setFailure] = useState<WriteFailure | null>(null);
@@ -471,11 +472,7 @@ const ApprovalRow = ({
       : (localRunProposedPlan({
           name: approval.toolName,
           input: approval.input,
-        }) ??
-        localRunToolSubtitleText(local.subtitle, {
-          patternInPath: (values) => t("localRun.patternInPath", values),
-          commandExited: (values) => t("localRun.commandExited", values),
-        }));
+        }) ?? localRunSubtitleText(local.subtitle));
   const title = (() => {
     if (local === null) {
       return humanizeIdentifier(approval.toolName);

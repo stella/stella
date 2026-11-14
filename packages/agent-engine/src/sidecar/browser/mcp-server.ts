@@ -2,7 +2,10 @@ import { panic, Result } from "better-result";
 import { timingSafeEqual } from "node:crypto";
 import * as v from "valibot";
 
-import { isChatLocalRunBrowserAction } from "@stll/api-contract/chat-local-run-tool";
+import {
+  CHAT_LOCAL_RUN_BROWSER_ACTIONS,
+  isChatLocalRunBrowserAction,
+} from "@stll/api-contract/chat-local-run-tool";
 import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import { LOCAL_BROWSER_MCP_SERVER_NAME } from "../../harness/tool-parts";
@@ -414,7 +417,7 @@ export const startLocalBrowserMcp = ({
           return rpcError(
             id,
             JSON_RPC_ERROR.invalidParams,
-            "Unknown tool: call open, snapshot, find, click or type.",
+            `Unknown tool: call one of ${CHAT_LOCAL_RUN_BROWSER_ACTIONS.join(", ")}.`,
           );
         }
         const { arguments: input, name } = params.output;
