@@ -23,7 +23,8 @@ import { readKeptStepOutput } from "./step-outputs";
  * One step is sent at a time. A step the API settled, or refused for good,
  * leaves the folder; one that could not be sent (no network, the API away, a
  * token being renewed) stays and is sent with the next. The folder is removed
- * when the run ends, sent or not: a run that is over takes nothing more.
+ * when the run ends, sent or not: a run that is over takes nothing more, so
+ * what a computer could not send by then is not stored.
  */
 
 const PRIVATE_FILE_MODE = 0o600;
@@ -48,9 +49,10 @@ export type StepContentUpload = SpooledStep & {
 
 /**
  * How sending one step ended: `done` once the API settled it or refused it
- * for good (it is not sent again), `retry` when it could not be sent now.
+ * for good (it is not sent again); `retry` when the API answered and could
+ * not take it now; `away` when the API could not be reached at all.
  */
-export type StepUploadOutcome = "done" | "retry";
+export type StepUploadOutcome = "done" | "retry" | "away";
 
 export type UploadStepContent = (
   step: StepContentUpload,
@@ -75,7 +77,8 @@ export const stepContentUploader =
   async ({ stepKey, kind, totalBytes, content }, signal) => {
     const bearer = token();
     if (bearer === null) {
-      return "retry";
+      // The run holds no token: there is nothing to ask the API with.
+      return "away";
     }
     const url = new URL(
       chatLocalRunStepContentUploadPath(runId, stepKey),
@@ -99,7 +102,7 @@ export const stepContentUploader =
         }),
     );
     if (Result.isError(response)) {
-      return "retry";
+      return "away";
     }
     if (!response.value.ok) {
       await response.value.body?.cancel();
@@ -127,14 +130,25 @@ type StepUploadsOptions = {
   log: (line: string) => void;
 };
 
+type DrainOptions = {
+  waitMs: number;
+  retryEveryMs: number;
+  /** Ends the wait early: a run that is stopped does not wait to send. */
+  signal?: AbortSignal;
+};
+
 export type StepUploads = {
   /**
    * Note a kept step as still to send, then send what is waiting, for at
    * most `waitMs`: past it the sending goes on and the caller does not wait.
    */
   send: (step: SpooledStep, waitMs: number) => Promise<void>;
-  /** Send what is waiting, for at most `waitMs`. */
-  drain: (waitMs: number) => Promise<void>;
+  /**
+   * Send what is waiting, asking again every `retryEveryMs` while the API
+   * answers that it cannot take a step now, until nothing waits, the API
+   * cannot be reached, `waitMs` passed or `signal` is aborted.
+   */
+  drain: (options: DrainOptions) => Promise<void>;
   /** End for good: nothing more is sent, and what waited is dropped. */
   close: () => Promise<void>;
 };
@@ -201,21 +215,22 @@ export const createStepUploads = ({
 
   /**
    * One pass over the folder, one step at a time. Answers how many steps
-   * left it, or `null` when one could not be sent: the API is away, and the
-   * rest wait for the next request to send.
+   * left it, or how the step that could not be sent ended: the rest wait
+   * for the next request to send.
    */
-  const pass = async (): Promise<number | null> => {
+  const pass = async (): Promise<number | "retry" | "away"> => {
     await mkdir(pendingDir, { recursive: true, mode: PRIVATE_FOLDER_MODE });
     let sent = 0;
     for await (const entry of await opendir(pendingDir)) {
       if (closed.signal.aborted) {
-        return null;
+        return "away";
       }
       if (!v.is(chatLocalRunStepKeySchema, entry.name)) {
         continue;
       }
-      if ((await sendOne(entry.name)) === "retry") {
-        return null;
+      const outcome = await sendOne(entry.name);
+      if (outcome !== "done") {
+        return outcome;
       }
       await rm(markerOf(entry.name), { force: true });
       sent += 1;
@@ -223,35 +238,87 @@ export const createStepUploads = ({
     return sent;
   };
 
-  /** Pass until a pass finds nothing left and nothing was queued meanwhile. */
-  const sendAll = async () => {
-    let sent: number | null;
+  /**
+   * Pass until a pass finds nothing left and nothing was queued meanwhile.
+   * Answers why steps are left waiting, or `null` when none are.
+   */
+  const sendAll = async (): Promise<"retry" | "away" | null> => {
+    let sent: number | "retry" | "away";
     do {
       takeRequest();
       sent = await pass();
-    } while (sent !== null && (sent > 0 || takeRequest()));
+    } while (typeof sent === "number" && (sent > 0 || takeRequest()));
+    return typeof sent === "number" ? null : sent;
   };
+
+  /** Why the last sending left steps waiting; `null` when it left none. */
+  let blocked: "retry" | "away" | null = null;
 
   const fly = async () => {
     const passed = await Result.tryPromise(sendAll);
     flight = null;
+    blocked = Result.isError(passed) ? "away" : passed.value;
     if (Result.isError(passed)) {
       log("sending a run's step content stopped early");
     }
   };
 
-  const drain = async (waitMs: number) => {
-    if (closed.signal.aborted) {
-      return;
-    }
+  /** Join the sending that runs, or start one. */
+  const sending = async () => {
     requested = true;
     flight ??= fly();
-    const waited = Promise.withResolvers<null>();
+    await flight;
+  };
+
+  /** Resolves after `ms`, with the way to stop waiting for it. */
+  const after = (ms: number) => {
+    const waited = Promise.withResolvers<"waited">();
     const timer = setTimeout(() => {
-      waited.resolve(null);
-    }, waitMs);
-    await Promise.race([flight, waited.promise]);
-    clearTimeout(timer);
+      waited.resolve("waited");
+    }, ms);
+    return {
+      promise: waited.promise,
+      cancel: () => {
+        clearTimeout(timer);
+      },
+    };
+  };
+
+  const drain = async ({ waitMs, retryEveryMs, signal }: DrainOptions) => {
+    const deadline = after(waitMs);
+    const stopped = Promise.withResolvers<"stopped">();
+    const stop = () => {
+      stopped.resolve("stopped");
+    };
+    const stops = AbortSignal.any(
+      signal === undefined ? [closed.signal] : [closed.signal, signal],
+    );
+    stops.addEventListener("abort", stop, { once: true });
+    if (stops.aborted) {
+      stop();
+    }
+    const ends = [deadline.promise, stopped.promise];
+    for (;;) {
+      const sent = await Promise.race([
+        sending().then(() => "sent" as const),
+        ...ends,
+      ]);
+      // An API that cannot be reached is not waited for: the run's own
+      // connection is down with it, and its end would only be held.
+      if (sent !== "sent" || blocked !== "retry") {
+        break;
+      }
+      // The API answered and could not take a step now: ask again after a
+      // pause, while the wait lasts.
+      const pause = after(retryEveryMs);
+      const paused = await Promise.race([pause.promise, ...ends]);
+      pause.cancel();
+      if (paused !== "waited") {
+        break;
+      }
+    }
+    deadline.cancel();
+    stops.removeEventListener("abort", stop);
   };
 
   return {
@@ -267,7 +334,11 @@ export const createStepUploads = ({
         log("a step's content could not be queued for sending");
         return;
       }
-      await drain(waitMs);
+      // One try within the step's wait: a step never waits on an API that
+      // is away.
+      const wait = after(waitMs);
+      await Promise.race([sending(), wait.promise]);
+      wait.cancel();
     },
     drain,
     close: async () => {

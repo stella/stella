@@ -2030,12 +2030,21 @@ describe("harness holder over its socket", () => {
       expect(readdirSync(stepOutputDir)).toEqual([runId]);
     });
 
-    test("an API that is away leaves the run completed and nothing waiting after it", async () => {
+    test("an API that cannot take a step at first is asked again before the run's finish", async () => {
+      let asked = 0;
       const { finished, order, runId, stepOutputDir } = await runWithSteps(
-        () => new Response(null, { status: 503 }),
+        () => {
+          asked += 1;
+          return asked === 1
+            ? new Response(null, { status: 503 })
+            : Response.json({ state: "stored" });
+        },
       );
       expect(finished.outcome).toBe("completed");
       expect(order.at(-1)).toBe("run.finished");
+      // The step refused at first was put again, and nothing is left waiting.
+      const puts = order.filter((entry) => entry.startsWith("put "));
+      expect(puts.length).toBeGreaterThan(new Set(puts).size);
       expect(readdirSync(stepOutputDir)).toEqual([runId]);
     });
   });

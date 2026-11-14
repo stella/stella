@@ -440,6 +440,8 @@ const stoppedBeforeStart = (): AsyncIterable<HarnessEvent> => {
  * or absent one holds no event longer than this.
  */
 const STEP_UPLOAD_WAIT_MS = 3000;
+/** How long a turn's end pauses before it tries again to send what waits. */
+const STEP_UPLOAD_RETRY_MS = 2000;
 /** How long a turn's end waits for what its steps still have to send. */
 const STEP_UPLOAD_END_WAIT_MS = {
   completed: 2 * 60_000,
@@ -500,10 +502,17 @@ const openRunSteps = ({
     },
     /**
      * Send what the steps still have to send, before the event that ends the
-     * turn: a run that finished takes nothing more.
+     * turn: a run that finished takes nothing more. `signal` ends the wait.
      */
-    drain: async (end: keyof typeof STEP_UPLOAD_END_WAIT_MS) => {
-      await uploads.drain(STEP_UPLOAD_END_WAIT_MS[end]);
+    drain: async (
+      end: keyof typeof STEP_UPLOAD_END_WAIT_MS,
+      signal?: AbortSignal,
+    ) => {
+      await uploads.drain({
+        waitMs: STEP_UPLOAD_END_WAIT_MS[end],
+        retryEveryMs: STEP_UPLOAD_RETRY_MS,
+        ...(signal === undefined ? {} : { signal }),
+      });
     },
     /** The run is over: nothing more is sent, and what waited is dropped. */
     close: uploads.close,
@@ -1390,7 +1399,8 @@ export class SidecarHost {
             break;
           case "turn.completed":
             outcome.value = "completed";
-            await steps.drain("completed");
+            // A stop ends the wait: a stopped run does not wait to send.
+            await steps.drain("completed", run.outputSharing.signal);
             await shareRunOutputs();
             yield event;
             break;

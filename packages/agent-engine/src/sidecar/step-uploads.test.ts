@@ -116,7 +116,7 @@ describe("sending what a run's steps produced", () => {
     // Still waiting to be sent while the event has gone on.
     expect(await pending()).toEqual([step.stepKey]);
     release.resolve("done");
-    await uploads.drain(5000);
+    await uploads.drain({ waitMs: 5000, retryEveryMs: 1 });
     expect(order).toEqual(["event", "stored"]);
     expect(await pending()).toEqual([]);
   });
@@ -152,6 +152,63 @@ describe("sending what a run's steps produced", () => {
     expect(mostInFlight).toBe(1);
   });
 
+  test("a turn's end keeps trying while the API is away, and sends once it is back", async () => {
+    let calls = 0;
+    const uploads = uploadsWith(async () => {
+      calls += 1;
+      return await Promise.resolve(calls < 3 ? "retry" : "done");
+    });
+    const step = await keep("call-1", "out");
+    // The step's own wait tries once and goes on.
+    await uploads.send(step, 1000);
+    expect(calls).toBe(1);
+    expect(await pending()).toEqual([step.stepKey]);
+    await uploads.drain({ waitMs: 60_000, retryEveryMs: 1 });
+    expect(calls).toBe(3);
+    expect(await pending()).toEqual([]);
+  });
+
+  test("a turn's end does not wait for an API that cannot be reached", async () => {
+    let calls = 0;
+    const uploads = uploadsWith(async () => {
+      calls += 1;
+      return await Promise.resolve("away");
+    });
+    const step = await keep("call-1", "out");
+    await uploads.send(step, 1000);
+    await uploads.drain({ waitMs: 600_000, retryEveryMs: 600_000 });
+    expect(calls).toBe(2);
+    expect(await pending()).toEqual([step.stepKey]);
+  });
+
+  test("a stop ends a turn's wait for an API that keeps refusing for now", async () => {
+    const stop = new AbortController();
+    let calls = 0;
+    const retried = Promise.withResolvers<null>();
+    const uploads = uploadsWith(async () => {
+      calls += 1;
+      if (calls === 2) {
+        retried.resolve(null);
+      }
+      return await Promise.resolve("retry");
+    });
+    const step = await keep("call-1", "out");
+    await uploads.send(step, 1000);
+    const drained = uploads.drain({
+      waitMs: 600_000,
+      retryEveryMs: 600_000,
+      signal: stop.signal,
+    });
+    // The end's own try was made, and it now pauses before the next.
+    await retried.promise;
+    stop.abort();
+    await drained;
+    // What could not be sent still waits; the run's end drops it.
+    expect(await pending()).toEqual([step.stepKey]);
+    await uploads.close();
+    expect(await pending()).toEqual([]);
+  });
+
   test("a run that is over sends nothing more and leaves no folder", async () => {
     let calls = 0;
     const uploads = uploadsWith(async () => {
@@ -165,7 +222,7 @@ describe("sending what a run's steps produced", () => {
     expect(await pending()).toEqual([]);
     const before = calls;
     await uploads.send(await keep("call-2", "late"), 1000);
-    await uploads.drain(1000);
+    await uploads.drain({ waitMs: 1000, retryEveryMs: 1 });
     expect(calls).toBe(before);
     expect(await pending()).toEqual([]);
   });
@@ -291,7 +348,7 @@ describe("one step's request to the API", () => {
     ]);
   });
 
-  test("a refusal for good is not sent again; an API that is away is", async () => {
+  test("a refusal for good is not sent again; an API that cannot take it now is asked again", async () => {
     const outcomes = new Map<number, StepUploadOutcome>();
     for (const status of [401, 404, 409, 422, 429, 500, 503]) {
       const api = serveApi(() => new Response(null, { status }));
@@ -314,7 +371,7 @@ describe("one step's request to the API", () => {
     });
   });
 
-  test("no token, no answer and an answer that is not the API's all wait", async () => {
+  test("no token and no answer are an API that is away; a foreign answer is asked again", async () => {
     const stranger = serveApi(() => Response.json({ ok: true }));
     const answered = stepContentUploader({
       apiOrigin: stranger.origin,
@@ -327,11 +384,11 @@ describe("one step's request to the API", () => {
       runId: RUN_ID,
       token: () => null,
     });
-    expect(await withoutToken(commandStep("x"), IN_TIME())).toBe("retry");
+    expect(await withoutToken(commandStep("x"), IN_TIME())).toBe("away");
     expect(stranger.received).toHaveLength(1);
     await stranger.stop();
     // The listener is gone: nothing answers.
-    expect(await answered(commandStep("x"), IN_TIME())).toBe("retry");
+    expect(await answered(commandStep("x"), IN_TIME())).toBe("away");
   });
 });
 
@@ -389,7 +446,7 @@ describe("a run of hours", () => {
       // await-in-loop: steps complete one after another, as a turn's do.
       await uploads.send(await keep(`call-${String(index)}`, output), 200);
     }
-    await uploads.drain(60_000);
+    await uploads.drain({ waitMs: 60_000, retryEveryMs: 1 });
     Bun.gc(true);
     const heapGrowth = process.memoryUsage().heapUsed - heapBefore;
     await api.stop();
