@@ -47,6 +47,10 @@ import {
   type CorpusProjectionMaterial,
   readReservedCorpusProjectionMaterialsTx,
 } from "@/api/lib/legal-search/corpus-index-projection-materials";
+import {
+  type CorpusProjectionProofCycleResult,
+  executeCorpusProjectionProofCycle,
+} from "@/api/lib/legal-search/corpus-index-projection-prover";
 import type { CorpusProjectionAppendScopedWorkSelection } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   abandonCorpusProjectionAppendTx,
@@ -222,16 +226,26 @@ export type CorpusProjectionAppendCycleResult = {
   retryScheduled: number;
   blocked: number;
   requestCount: number;
+  /** The proof cycle this append cycle ran before it reserved. */
+  proof: CorpusProjectionProofCycleResult;
   timing: CorpusProjectionAppendCycleTiming;
 };
 
-const emptyResult = (
-  replacementCleanupScheduled: number,
-  timing: CorpusProjectionAppendCycleTiming,
-): CorpusProjectionAppendCycleResult => ({
+type EmptyResultOptions = {
+  replacementCleanupScheduled: number;
+  proof: CorpusProjectionProofCycleResult;
+  timing: CorpusProjectionAppendCycleTiming;
+};
+
+const emptyResult = ({
+  replacementCleanupScheduled,
+  proof,
+  timing,
+}: EmptyResultOptions): CorpusProjectionAppendCycleResult => ({
   status: "idle",
   cycleRetryDelayMs: null,
   replacementCleanupScheduled,
+  proof,
   timing,
   reserved: 0,
   applied: 0,
@@ -1710,6 +1724,16 @@ export const executeCorpusProjectionAppendCycle = async <
     ingestMs: 0,
     storeCommitMs: 0,
   };
+  // Committed revisions whose barrier has passed are proven before anything
+  // is reserved, so one this or an earlier process recorded and never proved
+  // converges here; its entity stays out of reservation until it is settled.
+  const proof = await executeCorpusProjectionProofCycle({
+    runInTransaction,
+    client,
+    family,
+    generation,
+    scope,
+  });
   // A case-law cycle first reconciles a bounded batch of decisions whose
   // ranking signals moved, so a generation that stores them converges on the
   // corpus as it changes; their re-projections are reserved like any other.
@@ -1738,10 +1762,18 @@ export const executeCorpusProjectionAppendCycle = async <
     },
   );
   if (leases.length === 0) {
-    return emptyResult(replacements.length, timing);
+    return emptyResult({
+      replacementCleanupScheduled: replacements.length,
+      proof,
+      timing,
+    });
   }
   const result: CorpusProjectionAppendCycleResult = {
-    ...emptyResult(replacements.length, timing),
+    ...emptyResult({
+      replacementCleanupScheduled: replacements.length,
+      proof,
+      timing,
+    }),
     status: "completed",
     reserved: leases.length,
   };

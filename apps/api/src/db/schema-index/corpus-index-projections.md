@@ -38,41 +38,41 @@ corpus_index_projection_intents.created_at                     timestamptz  defa
 corpus_index_projection_intents.updated_at                     timestamptz  default,not null  corpus-index-projections.ts:89
 ```
 
-## corpus_index_projection_states · `corpusIndexProjectionStates` · corpus-index-projections.ts:415 · rls
+## corpus_index_projection_states · `corpusIndexProjectionStates` · corpus-index-projections.ts:414 · rls
 
 ```text
-corpus_index_projection_states.family                    text         fk,not null       corpus-index-projections.ts:418
-corpus_index_projection_states.generation                varchar      fk,not null       corpus-index-projections.ts:419
-corpus_index_projection_states.entity_id                 uuid         fk,not null       corpus-index-projections.ts:422
-corpus_index_projection_states.desired_action            text         not null          corpus-index-projections.ts:423
-corpus_index_projection_states.desired_epoch             bigint       not null          corpus-index-projections.ts:426
-corpus_index_projection_states.desired_at                timestamptz  default,null      corpus-index-projections.ts:428  When the current desired projection state was established.
-corpus_index_projection_states.desired_fingerprint       varchar      null              corpus-index-projections.ts:429
-corpus_index_projection_states.desired_index_id          varchar      null              corpus-index-projections.ts:430
-corpus_index_projection_states.work_status               text         default,not null  corpus-index-projections.ts:431
-corpus_index_projection_states.append_mode               text         default,not null  corpus-index-projections.ts:435
-corpus_index_projection_states.retry_not_before          timestamptz  null              corpus-index-projections.ts:439
-corpus_index_projection_states.failure_attempts          integer      default,not null  corpus-index-projections.ts:440
-corpus_index_projection_states.last_failure_kind         text         null              corpus-index-projections.ts:441
-corpus_index_projection_states.last_failure_message      varchar      null              corpus-index-projections.ts:444
-corpus_index_projection_states.applied_action            text         null              corpus-index-projections.ts:445
-corpus_index_projection_states.applied_epoch             bigint       fk,null           corpus-index-projections.ts:448
-corpus_index_projection_states.applied_revision          uuid         fk,null           corpus-index-projections.ts:451  Exact successfully applied revision.
-corpus_index_projection_states.applied_revision_settled  boolean      default,not null  corpus-index-projections.ts:459  Whether the applied revision has settled, so the index no longer holds it and a replacement may be appended.
-corpus_index_projection_states.applied_fingerprint       varchar      fk,null           corpus-index-projections.ts:463
-corpus_index_projection_states.applied_index_id          varchar      fk,null           corpus-index-projections.ts:464
-corpus_index_projection_states.applied_at                timestamptz  null              corpus-index-projections.ts:465
-corpus_index_projection_states.created_at                timestamptz  default,not null  corpus-index-projections.ts:466
-corpus_index_projection_states.updated_at                timestamptz  default,not null  corpus-index-projections.ts:467
+corpus_index_projection_states.family                    text         fk,not null       corpus-index-projections.ts:417
+corpus_index_projection_states.generation                varchar      fk,not null       corpus-index-projections.ts:418
+corpus_index_projection_states.entity_id                 uuid         fk,not null       corpus-index-projections.ts:421
+corpus_index_projection_states.desired_action            text         not null          corpus-index-projections.ts:422
+corpus_index_projection_states.desired_epoch             bigint       not null          corpus-index-projections.ts:425
+corpus_index_projection_states.desired_at                timestamptz  default,null      corpus-index-projections.ts:427  When the current desired projection state was established.
+corpus_index_projection_states.desired_fingerprint       varchar      null              corpus-index-projections.ts:428
+corpus_index_projection_states.desired_index_id          varchar      null              corpus-index-projections.ts:429
+corpus_index_projection_states.work_status               text         default,not null  corpus-index-projections.ts:430
+corpus_index_projection_states.append_mode               text         default,not null  corpus-index-projections.ts:434
+corpus_index_projection_states.retry_not_before          timestamptz  null              corpus-index-projections.ts:438
+corpus_index_projection_states.failure_attempts          integer      default,not null  corpus-index-projections.ts:439
+corpus_index_projection_states.last_failure_kind         text         null              corpus-index-projections.ts:440
+corpus_index_projection_states.last_failure_message      varchar      null              corpus-index-projections.ts:443
+corpus_index_projection_states.applied_action            text         null              corpus-index-projections.ts:444
+corpus_index_projection_states.applied_epoch             bigint       fk,null           corpus-index-projections.ts:447
+corpus_index_projection_states.applied_revision          uuid         fk,null           corpus-index-projections.ts:450  Exact successfully applied revision.
+corpus_index_projection_states.applied_revision_settled  boolean      default,not null  corpus-index-projections.ts:458  Whether the applied revision has settled, so the index no longer holds it and a replacement may be appended.
+corpus_index_projection_states.applied_fingerprint       varchar      fk,null           corpus-index-projections.ts:462
+corpus_index_projection_states.applied_index_id          varchar      fk,null           corpus-index-projections.ts:463
+corpus_index_projection_states.applied_at                timestamptz  null              corpus-index-projections.ts:464
+corpus_index_projection_states.created_at                timestamptz  default,not null  corpus-index-projections.ts:465
+corpus_index_projection_states.updated_at                timestamptz  default,not null  corpus-index-projections.ts:466
 ```
 
-## case_law_ranking_signal_changes · `caseLawRankingSignalChanges` · corpus-index-projections.ts:676 · rls
+## case_law_ranking_signal_changes · `caseLawRankingSignalChanges` · corpus-index-projections.ts:675 · rls
 
 Case-law decisions whose ranking signals may have moved since their projection was derived: an authority write that moved the decision's bucket, or a publicati…
 
 ```text
-case_law_ranking_signal_changes.decision_id    uuid         pk,not null       corpus-index-projections.ts:679
-case_law_ranking_signal_changes.change_count   bigint       default,not null  corpus-index-projections.ts:680
-case_law_ranking_signal_changes.enqueued_at    timestamptz  default,not null  corpus-index-projections.ts:684
-case_law_ranking_signal_changes.claimed_until  timestamptz  null              corpus-index-projections.ts:686  A drain's lease on the row; null while no drain holds it.
+case_law_ranking_signal_changes.decision_id    uuid         pk,not null       corpus-index-projections.ts:678
+case_law_ranking_signal_changes.change_count   bigint       default,not null  corpus-index-projections.ts:679
+case_law_ranking_signal_changes.enqueued_at    timestamptz  default,not null  corpus-index-projections.ts:683
+case_law_ranking_signal_changes.claimed_until  timestamptz  null              corpus-index-projections.ts:685  A drain's lease on the row; null while no drain holds it.
 ```

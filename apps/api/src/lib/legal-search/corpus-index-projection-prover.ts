@@ -1,9 +1,6 @@
-import { panic, Result } from "better-result";
-
-import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { panic } from "better-result";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type {
   CorpusIndexClient,
@@ -13,6 +10,7 @@ import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import type { CorpusProjectionAppendWorkScope } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   type AcceptedCorpusProjectionAppendProof,
   type CorpusProjectionProofTiming,
@@ -23,113 +21,69 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
 
 type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
 
+/** Committed revisions one proof cycle censuses: one exact aggregate. */
+export const CORPUS_PROJECTION_PROOF_CYCLE_MAX_REVISIONS =
+  CORPUS_PROJECTION_DELETE_MAX_REVISIONS;
+
 const PROOF_CYCLE_TIMING = {
   type: "after_barrier",
 } as const satisfies CorpusProjectionProofTiming;
 
-type AcceptedProjectionRevision = {
-  revision: SafeId<"corpusIndexProjectionIntent">;
-  /** Documents its accepted append wrote. */
-  documentCount: number;
-};
-
-type ProveAcceptedCorpusProjectionRevisionsOptions = {
-  runInTransaction: ProjectionTransactionRunner;
-  client: Pick<CorpusIndexClient, "aggregate">;
-  indexId: string;
-  accepted: readonly AcceptedProjectionRevision[];
-  testNow?: Date | undefined;
-};
-
-/**
- * Prove committed revisions of one index: one exact census per aggregate-sized
- * chunk, outside any transaction, then one transaction acting on that census.
- * Every write is a compare-and-set on `append_committed`, so a prover that
- * dies between a census and its transaction has written nothing, and the next
- * pass censuses again.
- */
-const proveAcceptedCorpusProjectionRevisions = async ({
-  runInTransaction,
-  client,
-  indexId,
-  accepted,
-  testNow,
-}: ProveAcceptedCorpusProjectionRevisionsOptions): Promise<
-  Result<AcceptedCorpusProjectionAppendProof[], CorpusIndexError>
-> => {
-  const outcomes: AcceptedCorpusProjectionAppendProof[] = [];
-  for (const batch of chunkItems(
-    accepted,
-    CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-  )) {
-    const census = await proveCorpusProjectionRevisionsPresent({
-      client,
-      indexId,
-      expected: batch,
-    });
-    if (census.isErr()) {
-      return Result.err(census.error);
-    }
-    const proven = await runInTransaction(
-      async (tx) =>
-        await proveAcceptedCorpusProjectionAppendsTx(tx, {
-          indexId,
-          census: census.value,
-          timing: PROOF_CYCLE_TIMING,
-          testNow,
-        }),
-    );
-    outcomes.push(...proven);
-  }
-  return Result.ok(outcomes);
-};
-
-type CorpusProjectionProofCycleResult = {
+type CorpusProjectionProofCounts = {
   /** Committed revisions whose barrier had passed, read for this cycle. */
   claimed: number;
   applied: number;
-  alreadyApplied: number;
+  /** Not exactly present at the proof deadline; queued for cleanup. */
+  retired: number;
+  /** Not exactly present yet; a later cycle censuses them again. */
+  waiting: number;
   staleCleanupPending: number;
-  unprovenCleanupPending: number;
   blocked: number;
-  awaitingPublication: number;
-  notAccepted: number;
+  /** Another prover or an erasure acted on them first. */
+  superseded: number;
 };
 
-const countCorpusProjectionProofOutcomes = (
+export type CorpusProjectionProofCycleResult =
+  | { status: "idle" }
+  | ({ status: "proved"; indexId: string } & CorpusProjectionProofCounts)
+  | {
+      status: "census_failed";
+      indexId: string;
+      claimed: number;
+      error: CorpusIndexError;
+    };
+
+const countProofOutcomes = (
   outcomes: readonly AcceptedCorpusProjectionAppendProof[],
-): Omit<CorpusProjectionProofCycleResult, "claimed"> => {
+): Omit<CorpusProjectionProofCounts, "claimed"> => {
   const counts = {
     applied: 0,
-    alreadyApplied: 0,
+    retired: 0,
+    waiting: 0,
     staleCleanupPending: 0,
-    unprovenCleanupPending: 0,
     blocked: 0,
-    awaitingPublication: 0,
-    notAccepted: 0,
+    superseded: 0,
   };
   for (const outcome of outcomes) {
     switch (outcome.status) {
       case "applied":
         counts.applied += 1;
         break;
-      case "already_applied":
-        counts.alreadyApplied += 1;
+      case "unproven_cleanup_pending":
+        counts.retired += 1;
+        break;
+      case "awaiting_publication":
+        counts.waiting += 1;
         break;
       case "stale_cleanup_pending":
         counts.staleCleanupPending += 1;
         break;
-      case "unproven_cleanup_pending":
-        counts.unprovenCleanupPending += 1;
-        break;
       case "blocked":
         counts.blocked += 1;
         break;
-      case "awaiting_publication":
-        counts.awaitingPublication += 1;
-        break;
+      case "already_applied":
       case "not_accepted":
-        counts.notAccepted += 1;
+        counts.superseded += 1;
         break;
       default:
         outcome satisfies never;
@@ -139,56 +93,74 @@ const countCorpusProjectionProofOutcomes = (
   return counts;
 };
 
-type ExecuteCorpusProjectionProofCycleOptions = {
+type ExecuteCorpusProjectionProofCycleOptions<Family extends CorpusFamily> = {
   runInTransaction: ProjectionTransactionRunner;
   client: Pick<CorpusIndexClient, "aggregate">;
-  family: CorpusFamily;
+  family: Family;
   generation: string;
-  indexId: string;
-  /** Accepted revisions this cycle may prove. */
-  limit: number;
+  scope: CorpusProjectionAppendWorkScope<NoInfer<Family>>;
   /** Deterministic database-test clock; production reads PostgreSQL. */
-  testNow?: Date;
+  testNow?: Date | undefined;
 };
 
 /**
- * Execute one bounded proof cycle over one index. It needs no lease: it reads
- * the accepted revisions whose publish barrier has passed, oldest first, and
- * proves them. The operator chooses the index, cadence and limit.
+ * One bounded proof cycle. It holds no lease: it reads the committed
+ * revisions of the index whose oldest barrier has passed, at most one census
+ * of them, and settles them in one transaction. A crash between the census and
+ * that transaction writes nothing, so the next cycle censuses again. The
+ * append cycle runs it before it reserves, so a revision recorded as accepted
+ * converges without another caller.
  */
-export const executeCorpusProjectionProofCycle = async ({
+export const executeCorpusProjectionProofCycle = async <
+  Family extends CorpusFamily,
+>({
   runInTransaction,
   client,
   family,
   generation,
-  indexId,
-  limit,
+  scope,
   testNow,
-}: ExecuteCorpusProjectionProofCycleOptions): Promise<
-  Result<CorpusProjectionProofCycleResult, CorpusIndexError>
-> => {
-  const accepted = await runInTransaction(
+}: ExecuteCorpusProjectionProofCycleOptions<Family>): Promise<CorpusProjectionProofCycleResult> => {
+  const provable = await runInTransaction(
     async (tx) =>
       await readProvableCorpusProjectionAppendsTx(tx, {
         family,
         generation,
-        indexId,
-        limit,
+        scope,
+        limit: CORPUS_PROJECTION_PROOF_CYCLE_MAX_REVISIONS,
         testNow,
       }),
   );
-  const proven = await proveAcceptedCorpusProjectionRevisions({
-    runInTransaction,
+  if (provable === null) {
+    return { status: "idle" };
+  }
+  const { indexId, revisions } = provable;
+  const census = await proveCorpusProjectionRevisionsPresent({
     client,
     indexId,
-    accepted,
-    testNow,
+    expected: revisions,
   });
-  if (proven.isErr()) {
-    return Result.err(proven.error);
+  if (census.isErr()) {
+    return {
+      status: "census_failed",
+      indexId,
+      claimed: revisions.length,
+      error: census.error,
+    };
   }
-  return Result.ok({
-    claimed: accepted.length,
-    ...countCorpusProjectionProofOutcomes(proven.value),
-  });
+  const outcomes = await runInTransaction(
+    async (tx) =>
+      await proveAcceptedCorpusProjectionAppendsTx(tx, {
+        indexId,
+        census: census.value,
+        timing: PROOF_CYCLE_TIMING,
+        testNow,
+      }),
+  );
+  return {
+    status: "proved",
+    indexId,
+    claimed: revisions.length,
+    ...countProofOutcomes(outcomes),
+  };
 };

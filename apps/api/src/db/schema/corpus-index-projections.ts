@@ -247,8 +247,7 @@ export const corpusIndexProjectionIntents = p.pgTable(
     ),
     // An `append_committed` revision either holds its lease and no barrier,
     // inside a writer that applies it in the same transaction, or is
-    // lease-free with the barrier its recorded acceptance stored. The first
-    // form goes once no writer applies in the acceptance's transaction.
+    // lease-free with the barrier its recorded acceptance stored.
     p.check(
       "corpus_index_projection_intents_status_shape",
       sql`CASE ${t.status}

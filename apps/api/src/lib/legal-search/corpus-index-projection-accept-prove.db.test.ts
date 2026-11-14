@@ -31,7 +31,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
-import { executeCorpusProjectionProofCycle } from "@/api/lib/legal-search/corpus-index-projection-prover";
+import {
+  CORPUS_PROJECTION_PROOF_CYCLE_MAX_REVISIONS,
+  executeCorpusProjectionProofCycle,
+} from "@/api/lib/legal-search/corpus-index-projection-prover";
 import {
   type AcceptedCorpusProjectionAppendProof,
   type CorpusProjectionProofTiming,
@@ -413,8 +416,7 @@ const proveCycle = async (run: ModelRun) =>
     runInTransaction: transactionRunner(run.harness),
     client: engineClient(run.harness, PROVER_ENGINE),
     ...TARGET,
-    indexId: run.indexId,
-    limit: 64,
+    scope: { type: "subjects", entityIds: run.entityIds.map(toLegislationId) },
     testNow: await now(run),
   });
 
@@ -1110,15 +1112,201 @@ describe("proving an acceptance", () => {
         runInTransaction: transactionRunner(harness),
         client: engineClient(harness, PROVER_ENGINE),
         ...TARGET,
-        indexId: fixture.indexId,
-        limit: 4,
+        scope: {
+          type: "subjects",
+          entityIds: [toLegislationId(fixture.entityId)],
+        },
         testNow,
       });
     const statusOf = async () => (await intentRow(fixture)).status;
-    expect((await cycle(new Date(barrier.getTime() - 1))).isOk()).toBe(true);
+    expect(await cycle(new Date(barrier.getTime() - 1))).toEqual({
+      status: "idle",
+    });
     expect(await statusOf()).toBe("append_committed");
-    expect((await cycle(barrier)).isOk()).toBe(true);
+    expect(await cycle(barrier)).toMatchObject({
+      status: "proved",
+      claimed: 1,
+      applied: 1,
+    });
     expect(await statusOf()).toBe("applied");
+  });
+});
+
+const appendCycle = async (
+  harness: Harness,
+  entityIds: readonly string[],
+  behavior: IngestBehavior,
+) =>
+  await executeCorpusProjectionAppendCycle({
+    runInTransaction: transactionRunner(harness),
+    client: engineClient(harness, behavior),
+    commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.published,
+    ...TARGET,
+    scope: { type: "subjects", entityIds: entityIds.map(toLegislationId) },
+    limit: Math.min(entityIds.length, ENTITIES_PER_RUN),
+    fillWindowMs: 600_000,
+    payloadReadConcurrency: 2,
+    retryDelayMs: 5000,
+    payloadRetryLimit: 3,
+    payloadReader: async () => Result.ok(PAYLOAD),
+  });
+
+/** Moves a committed revision's acceptance `agoMs` into the past. */
+const acceptedAgo = async (entityIds: readonly string[], agoMs: number) =>
+  await db
+    .update(corpusIndexProjectionIntents)
+    .set({
+      appendStartedAt: sql`clock_timestamp() - ${agoMs} * interval '1 millisecond'`,
+      appendCommittedAt: sql`clock_timestamp() - ${agoMs} * interval '1 millisecond'`,
+      appendPublishBarrierAt: sql`clock_timestamp() - ${agoMs - PUBLISH_DELAY_MS} * interval '1 millisecond'`,
+    })
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.entityId, [...entityIds]),
+        eq(corpusIndexProjectionIntents.status, "append_committed"),
+      ),
+    );
+
+const NO_CRASH = { type: "none" } as const satisfies CrashPoint;
+
+const freshHarness = (crash: CrashPoint = NO_CRASH): Harness => ({
+  engine: createEngine(),
+  crash,
+  transactions: 0,
+});
+
+const statusesOf = async (entityIds: readonly string[]) =>
+  (await readIntents(entityIds)).map(({ status }) => status).toSorted();
+
+describe("the append cycle converges recorded acceptances", () => {
+  test("a revision recorded before a crash is applied by the next append cycle alone", async () => {
+    const entityIds = await seedEntities(1);
+    const harness = freshHarness({ type: "census" });
+    await survive(
+      async () =>
+        await appendCycle(harness, entityIds, {
+          publishOnAccept: true,
+          duplicate: false,
+        }),
+    );
+    expect(await statusesOf(entityIds)).toEqual(["append_committed"]);
+
+    await acceptedAgo(entityIds, PUBLISH_DELAY_MS + 1000);
+    const next = await appendCycle(harness, entityIds, PROVER_ENGINE);
+    expect(next.proof).toMatchObject({
+      status: "proved",
+      claimed: 1,
+      applied: 1,
+    });
+    expect(next.reserved).toBe(0);
+    expect(await statusesOf(entityIds)).toEqual(["applied"]);
+  });
+
+  test("a revision absent past its deadline is retired by the next append cycle, and its entity is reserved again once cleanup settles", async () => {
+    const entityIds = await seedEntities(1);
+    const harness = freshHarness({ type: "census" });
+    await survive(
+      async () =>
+        await appendCycle(harness, entityIds, {
+          publishOnAccept: false,
+          duplicate: false,
+        }),
+    );
+    harness.engine.unpublished.clear();
+    await acceptedAgo(entityIds, 2 * PUBLISH_DELAY_MS + 1000);
+
+    const next = await appendCycle(harness, entityIds, PROVER_ENGINE);
+    expect(next.proof).toMatchObject({
+      status: "proved",
+      claimed: 1,
+      retired: 1,
+    });
+    // Retired in this cycle's proof pass, so not reserved again in it.
+    expect(next.reserved).toBe(0);
+    expect(await statusesOf(entityIds)).toEqual(["cleanup_pending"]);
+
+    await db
+      .update(corpusIndexProjectionIntents)
+      .set({
+        status: "settled",
+        cleanupStartedAt: sql`${corpusIndexProjectionIntents.cleanupNotBefore}`,
+        deleteOpstamp: 1n,
+        deleteTaskCreatedAt: sql`${corpusIndexProjectionIntents.cleanupNotBefore}`,
+        settledAt: sql`${corpusIndexProjectionIntents.cleanupNotBefore}`,
+      })
+      .where(inArray(corpusIndexProjectionIntents.entityId, entityIds));
+    await db
+      .update(corpusIndexProjectionStates)
+      .set({ retryNotBefore: new Date(0) })
+      .where(inArray(corpusIndexProjectionStates.entityId, entityIds));
+    const retried = await appendCycle(harness, entityIds, PROVER_ENGINE);
+    expect(retried.reserved).toBe(1);
+    expect(await statusesOf(entityIds)).toEqual(["applied", "settled"]);
+  });
+
+  test("a revision before its barrier is left untouched and keeps its entity out of reservation", async () => {
+    const entityIds = await seedEntities(1);
+    const harness = freshHarness({ type: "census" });
+    await survive(
+      async () =>
+        await appendCycle(harness, entityIds, {
+          publishOnAccept: true,
+          duplicate: false,
+        }),
+    );
+    const next = await appendCycle(harness, entityIds, PROVER_ENGINE);
+    expect(next.proof).toEqual({ status: "idle" });
+    expect(next.reserved).toBe(0);
+    expect(await statusesOf(entityIds)).toEqual(["append_committed"]);
+  });
+
+  test("one proof pass settles at most one census of revisions", async () => {
+    const entityIds = await seedEntities(
+      CORPUS_PROJECTION_PROOF_CYCLE_MAX_REVISIONS + 1,
+    );
+    const states = await db
+      .select()
+      .from(corpusIndexProjectionStates)
+      .where(inArray(corpusIndexProjectionStates.entityId, entityIds));
+    const harness = freshHarness();
+    const committedAt = sql`clock_timestamp() - ${PUBLISH_DELAY_MS + 1000} * interval '1 millisecond'`;
+    await db.insert(corpusIndexProjectionIntents).values(
+      states.map((state) => {
+        const id = toSafeId<"corpusIndexProjectionIntent">(Bun.randomUUIDv7());
+        harness.engine.published.set(id, 1);
+        return {
+          id,
+          family: state.family,
+          generation: state.generation,
+          entityId: state.entityId,
+          epoch: state.desiredEpoch,
+          fingerprint: state.desiredFingerprint ?? panic("No fingerprint"),
+          indexId: state.desiredIndexId ?? panic("No index"),
+          status: "append_committed" as const,
+          appendStartedAt: committedAt,
+          appendCommittedAt: committedAt,
+          appendPublishBarrierAt: sql`clock_timestamp() - interval '1 second'`,
+          appendRequestRevisionCount: 1,
+          expectedDocumentCount: 1,
+        };
+      }),
+    );
+    const next = await executeCorpusProjectionProofCycle({
+      runInTransaction: transactionRunner(harness),
+      client: engineClient(harness, PROVER_ENGINE),
+      ...TARGET,
+      scope: { type: "subjects", entityIds: entityIds.map(toLegislationId) },
+    });
+    expect(next).toMatchObject({
+      status: "proved",
+      claimed: CORPUS_PROJECTION_PROOF_CYCLE_MAX_REVISIONS,
+      applied: CORPUS_PROJECTION_PROOF_CYCLE_MAX_REVISIONS,
+    });
+    expect(
+      (await statusesOf(entityIds)).filter(
+        (status) => status === "append_committed",
+      ),
+    ).toHaveLength(1);
   });
 });
 

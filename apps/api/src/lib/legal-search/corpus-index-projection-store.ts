@@ -26,7 +26,10 @@ import {
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { unattestedCorpusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  type CorpusIndexManifest,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
   type CorpusIndexIntentStatus,
@@ -1761,57 +1764,86 @@ export const retireAcceptedCorpusProjectionAppendsTx = async (
     testNow,
   });
 
-type ReadProvableCorpusProjectionAppendsOptions = {
-  family: CorpusFamily;
-  generation: string;
+type ReadProvableCorpusProjectionAppendsOptions<Family extends CorpusFamily> =
+  CorpusProjectionAppendScopedWorkOptions<Family> & {
+    generation: string;
+    limit: number;
+    testNow?: Date | undefined;
+  };
+
+type ProvableCorpusProjectionAppends = {
   indexId: string;
-  limit: number;
-  testNow?: Date | undefined;
+  revisions: { revision: ProjectionIntentId; documentCount: number }[];
 };
 
 /**
- * Accepted revisions of one index whose publish barrier has passed, oldest
- * barrier first, with the document count their append wrote. A plain read:
- * the proof transaction re-checks each one under its locks.
+ * The committed revisions of one index whose publish barrier has passed:
+ * the index holding the oldest such barrier in scope, then its revisions,
+ * oldest barrier first, with the document count each append wrote. Plain
+ * reads: the proof transaction re-checks each one under its locks.
  */
-export const readProvableCorpusProjectionAppendsTx = async (
+export const readProvableCorpusProjectionAppendsTx = async <
+  Family extends CorpusFamily,
+>(
   tx: Transaction,
   {
     family,
     generation,
-    indexId,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     limit: requestedLimit,
     testNow,
-  }: ReadProvableCorpusProjectionAppendsOptions,
-) => {
+  }: ReadProvableCorpusProjectionAppendsOptions<Family>,
+): Promise<ProvableCorpusProjectionAppends | null> => {
   const limit = validateBatchSize(requestedLimit);
+  const manifest = requireCorpusIndexManifest(family, generation);
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
+  const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
   const now = testNow ?? sql<Date>`clock_timestamp()`;
+  const provable = (indexId: string | null) =>
+    and(
+      eq(corpusIndexProjectionIntents.family, family),
+      eq(corpusIndexProjectionIntents.generation, generation),
+      indexId === null
+        ? undefined
+        : eq(corpusIndexProjectionIntents.indexId, indexId),
+      scopedEntityIds === null
+        ? undefined
+        : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
+      eq(corpusIndexProjectionIntents.status, "append_committed"),
+      sql`${corpusIndexProjectionIntents.appendPublishBarrierAt} <= ${now}::timestamptz`,
+    );
+  const oldest = (
+    await tx
+      .select({ indexId: corpusIndexProjectionIntents.indexId })
+      .from(corpusIndexProjectionIntents)
+      .where(provable(scopedIndexId))
+      .orderBy(asc(corpusIndexProjectionIntents.appendPublishBarrierAt))
+      .limit(1)
+  ).at(0);
+  if (oldest === undefined) {
+    return null;
+  }
   const rows = await tx
     .select({
       revision: corpusIndexProjectionIntents.id,
       documentCount: corpusIndexProjectionIntents.expectedDocumentCount,
     })
     .from(corpusIndexProjectionIntents)
-    .where(
-      and(
-        eq(corpusIndexProjectionIntents.family, family),
-        eq(corpusIndexProjectionIntents.generation, generation),
-        eq(corpusIndexProjectionIntents.indexId, indexId),
-        eq(corpusIndexProjectionIntents.status, "append_committed"),
-        sql`${corpusIndexProjectionIntents.appendPublishBarrierAt} <= ${now}::timestamptz`,
-      ),
-    )
+    .where(provable(oldest.indexId))
     .orderBy(
       asc(corpusIndexProjectionIntents.appendPublishBarrierAt),
       asc(corpusIndexProjectionIntents.id),
     )
     .limit(limit);
-  return rows.map(({ revision, documentCount }) => ({
-    revision,
-    documentCount:
-      documentCount ??
-      panic(`Accepted projection intent has no document count: ${revision}`),
-  }));
+  return {
+    indexId: oldest.indexId,
+    revisions: rows.map(({ revision, documentCount }) => ({
+      revision,
+      documentCount:
+        documentCount ??
+        panic(`Committed projection intent has no document count: ${revision}`),
+    })),
+  };
 };
 
 type ProofTransition = Exclude<ProofDecision, { type: "settled" }>;
