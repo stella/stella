@@ -940,6 +940,7 @@ const SIDECAR_HOST_FIELDS: Readonly<
     mcp: object({ serverName: OPAQUE, expiresAt: INSTANT, url: SIZE }),
     workspaceDir: SIZE,
     cacheDir: SIZE,
+    unreadablePaths: SIZE,
     stepOutputDir: SIZE,
     instructions: SIZE,
     messages: SIZE,

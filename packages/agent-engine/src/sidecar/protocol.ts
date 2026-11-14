@@ -46,7 +46,10 @@ import {
  *   is reported in `harness.process` before it is asked anything, and is
  *   used only after `harness.process_granted`. The report is sent again
  *   whenever a connection resumes a run whose process still runs.
- * - Unknown fields are ignored (objects strip them). Unknown message types and
+ * - Unknown fields are ignored (objects strip them), except in `run.start`:
+ *   its fields set what a run may read, write and reach, so one this holder
+ *   does not know is refused rather than dropped, and the run never starts
+ *   with fewer limits than the desktop sent. Unknown message types and
  *   closed values are rejected; the sidecar answers each rejected line with a
  *   `rejected` message naming why.
  * - Run ids, approval request ids, decisions, outcomes and policies use the
@@ -163,6 +166,7 @@ const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
 const MAX_RUN_SKILL_FOLDERS = 32;
 const MAX_RUN_TOOL_DIRECTORIES = 8;
+const MAX_RUN_UNREADABLE_PATHS = 64;
 const MAX_LAUNCH_ENTRIES = 32;
 /** Process ids are unsigned 32-bit on every platform the desktop runs on. */
 const MAX_PID = 4_294_967_295;
@@ -313,7 +317,7 @@ export const sidecarHostMessageSchema = v.variant("type", [
     requestId: requestIdSchema,
     ...harnessLaunchEntries,
   }),
-  v.object({
+  v.strictObject({
     type: v.literal(SIDECAR_HOST_MESSAGE.runStart),
     runId: runIdSchema,
     /** The stella thread the run's chunks are stamped with. */
@@ -323,6 +327,15 @@ export const sidecarHostMessageSchema = v.variant("type", [
     workspaceDir: absolutePathSchema,
     /** The chat's own cache folder, writable in every sandbox. */
     cacheDir: absolutePathSchema,
+    /**
+     * What the run's sandboxed commands may not read, apart from the paths
+     * the run itself is handed: every chat's folder, the app's own data and
+     * the member's credential stores.
+     */
+    unreadablePaths: v.pipe(
+      v.array(absolutePathSchema),
+      v.maxLength(MAX_RUN_UNREADABLE_PATHS),
+    ),
     /**
      * Where the run's steps leave what they produced (`step-outputs.ts`):
      * beside the chat's own folder in the desktop's runs folder, whatever

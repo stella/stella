@@ -11,6 +11,7 @@ import {
   isBrowserResolvedChatToolCall,
   isChatPastedTextPart,
 } from "@stll/api-contract/chat";
+import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
 import type { LocalRunToolTitleKind } from "@stll/api-contract/chat-local-run-steps";
 import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import {
@@ -688,10 +689,10 @@ export const isUserAnswerablePart = (part: PersistedChatPart): boolean =>
  * interaction when it accepts it, so the cards stop being answerable at the
  * same moment their answers stop being accepted.
  */
-const findAwaitedAssistantMessageId = (
+const findAwaitedAssistantMessage = (
   messages: readonly PersistedChatMessage[],
   isAwaitedPart: (part: PersistedChatPart) => boolean,
-): string | null => {
+): PersistedChatMessage | null => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages.at(index);
     if (message === undefined || message.role === "user") {
@@ -700,7 +701,7 @@ const findAwaitedAssistantMessageId = (
     if (message.role !== "assistant") {
       continue;
     }
-    return message.parts.some(isAwaitedPart) ? message.id : null;
+    return message.parts.some(isAwaitedPart) ? message : null;
   }
   return null;
 };
@@ -710,14 +711,48 @@ const findAwaitedAssistantMessageId = (
 export const getCurrentApprovalPendingMessageId = (
   messages: readonly PersistedChatMessage[],
 ): string | null =>
-  findAwaitedAssistantMessageId(messages, isApprovalRequestPart);
+  findAwaitedAssistantMessage(messages, isApprovalRequestPart)?.id ?? null;
 
 /** The assistant message the conversation still waits on the user to answer,
  *  through an approval card or a user-input card, or null. */
 export const getAwaitedAssistantMessageId = (
   messages: readonly PersistedChatMessage[],
 ): string | null =>
-  findAwaitedAssistantMessageId(messages, isUserAnswerablePart);
+  findAwaitedAssistantMessage(messages, isUserAnswerablePart)?.id ?? null;
+
+/**
+ * Everything a conversation has open for the member to answer, one key per
+ * item: each part of the awaited assistant message only they can answer (an
+ * approval, a question or another user-input card) and the question a run on
+ * their computer paused the turn on. Empty when the turn waits on nothing.
+ *
+ * This is the one definition of "the member has something open here". The
+ * send queue holds on it and the runtime registry keeps a runtime for it, so
+ * a new kind of wait added here (or a new user-input tool) is held and kept
+ * alike. The same keys read from a runtime and from the stored thread name
+ * the same items.
+ */
+export const openMemberWaitKeys = ({
+  localRunQuestion,
+  messages,
+}: {
+  localRunQuestion: LocalRunQuestionPause | null;
+  messages: readonly PersistedChatMessage[];
+}): readonly string[] => {
+  const awaited = findAwaitedAssistantMessage(messages, isUserAnswerablePart);
+  return [
+    ...(awaited === null
+      ? []
+      : awaited.parts.flatMap((part) =>
+          part.type === "tool-call" && isUserAnswerablePart(part)
+            ? [`part:${part.id}`]
+            : [],
+        )),
+    ...(localRunQuestion === null
+      ? []
+      : [`interrupt:${localRunQuestion.interruptId}`]),
+  ];
+};
 
 /**
  * An unresolved auto-run folio-agents tool-call part (a read tool or

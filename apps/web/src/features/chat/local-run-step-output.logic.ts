@@ -2,7 +2,7 @@ import { panic } from "better-result";
 
 import {
   CHAT_LOCAL_RUN_CONVERSATION_ROLES,
-  CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
+  CHAT_LOCAL_RUN_STEP_MAX_BYTES,
   type ChatLocalRunImageType,
   chatLocalRunImageType,
   parseChatLocalRunConversation,
@@ -84,13 +84,13 @@ export const foldLocalRunStepOutput = (
   }
 };
 
-/** Whether the step produced more than the computer keeps of it. */
+/** Whether a step's text is more than the computer keeps of it. */
 export const isLocalRunStepOutputCut = (totalBytes: number) =>
-  totalBytes > CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES;
+  totalBytes > CHAT_LOCAL_RUN_STEP_MAX_BYTES.text;
 
 /**
  * An image a step viewed, as its row shows it. `too-large`: the image is
- * more than the computer keeps for a step, so none of it is there.
+ * more than the computer keeps of one, so none of it is there.
  * `incomplete`: the read ended before every kept byte arrived, so there is
  * no image to show yet. `not-image`: what the computer handed over does not
  * begin as an image stella shows. `shown`: the image, as the kind its own
@@ -131,12 +131,12 @@ export const localRunStepImageView = ({
   chunks: readonly Uint8Array[];
   totalBytes: number;
 }): LocalRunStepImageView => {
-  if (isLocalRunStepOutputCut(totalBytes)) {
+  if (totalBytes > CHAT_LOCAL_RUN_STEP_MAX_BYTES.image) {
     return { status: "too-large", totalBytes };
   }
   const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
   // The desktop never sends more than the cap; nothing past it is shown.
-  if (length > CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES) {
+  if (length > CHAT_LOCAL_RUN_STEP_MAX_BYTES.image) {
     return { status: "not-image" };
   }
   // Part of an image is not the image: a read cut short shows nothing.

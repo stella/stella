@@ -39,6 +39,7 @@ import {
   harnessSessionId,
 } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
+import { sandboxReads } from "../sandbox-reads";
 import { redactingSkillPaths } from "../skill-redaction";
 import { toolPathEnvironment } from "../tool-path";
 import { buildTurnPrompt } from "../transcript-handoff";
@@ -224,29 +225,69 @@ const NETWORK_ARGS = {
 const SANDBOX_PLATFORMS: ReadonlySet<NodeJS.Platform> = new Set(["darwin"]);
 
 /**
+ * Where, in the CLI's configuration directory, it keeps the shell snapshot
+ * every Bash command sources first.
+ */
+const SHELL_SNAPSHOTS_FOLDER = "shell-snapshots";
+
+/**
+ * What the turn's commands read, besides its own folder and cache, inside
+ * the paths the desktop keeps unreadable: the managed tools, the
+ * CLI's own release (its bundled ripgrep), its shell snapshots and the
+ * turn's skill plugin, whose links lead to the skill folders.
+ */
+const neededReads = (
+  options: ClaudeCodeHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  skills: SkillPlugin | null,
+) => [
+  ...input.toolPath,
+  path.dirname(options.launch.executable),
+  path.join(options.claudeConfigDir, SHELL_SNAPSHOTS_FOLDER),
+  ...(skills === null ? [] : [skills.dir]),
+];
+
+/**
  * Full auto's sandbox, passed with `--settings`. Bash commands run inside the
  * OS sandbox, which confines writes to the working directory, the sandbox's
  * own temp directory (its `TMPDIR`) and the package cache, and they run
  * without asking. A skill folder is never writable, even one inside that temp
- * directory. A command that asks to run outside the sandbox is asked about
- * like any other action, never approved on its own. When the sandbox cannot
- * start the CLI refuses to start instead of running commands unconfined.
+ * directory. Reads of the paths the desktop names are refused, other chats'
+ * folders among them, except for what the turn itself needs inside them
+ * (see `neededReads`). A command that asks to run outside the sandbox is
+ * asked about like any other action, never approved on its own. When the
+ * sandbox cannot start the CLI refuses to start instead of running commands
+ * unconfined.
  */
 const sandboxSettings = (
-  cacheDir: string,
-  skillFolders: readonly string[],
-) => ({
-  sandbox: {
-    enabled: true,
-    failIfUnavailable: true,
-    autoAllowBashIfSandboxed: true,
-    allowUnsandboxedCommands: true,
-    filesystem: {
-      allowWrite: [cacheDir],
-      ...(skillFolders.length > 0 ? { denyWrite: skillFolders } : {}),
+  options: ClaudeCodeHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  skills: SkillPlugin | null,
+) => {
+  const skillFolders = (skills?.folders ?? []).map(
+    ({ path: folder }) => folder,
+  );
+  const reads = sandboxReads({
+    unreadable: input.unreadablePaths,
+    workspace: input.workspaceDir,
+    cache: input.cacheDir,
+    needed: neededReads(options, input, skills),
+  });
+  return {
+    sandbox: {
+      enabled: true,
+      failIfUnavailable: true,
+      autoAllowBashIfSandboxed: true,
+      allowUnsandboxedCommands: true,
+      filesystem: {
+        allowWrite: [input.cacheDir],
+        ...(skillFolders.length > 0 ? { denyWrite: skillFolders } : {}),
+        ...(reads.deny.length > 0 ? { denyRead: reads.deny } : {}),
+        ...(reads.allow.length > 0 ? { allowRead: reads.allow } : {}),
+      },
     },
-  },
-});
+  };
+};
 
 /**
  * The CLI mode a plan-level turn continues in once its plan is approved:
@@ -271,20 +312,17 @@ const approvalModes = (
  * sandbox in full auto and the rules for its skill folders.
  */
 const settingsArgs = (
+  options: ClaudeCodeHarnessAdapterOptions,
   input: HarnessTurnInput,
   skills: SkillPlugin | null,
-  platform: NodeJS.Platform,
 ) => {
   const settings = {
     ...(input.policy.approvals === "full_auto"
-      ? sandboxSettings(
-          input.cacheDir,
-          (skills?.folders ?? []).map(({ path: folder }) => folder),
-        )
+      ? sandboxSettings(options, input, skills)
       : {}),
     ...(skills === null
       ? {}
-      : { permissions: skillPluginPermissions(skills, platform) }),
+      : { permissions: skillPluginPermissions(skills, options.platform) }),
   };
   return Object.keys(settings).length === 0
     ? []
@@ -679,7 +717,7 @@ const turnArgs = (
   "--include-partial-messages",
   "--permission-mode",
   PERMISSION_MODE[input.policy.approvals],
-  ...settingsArgs(input, skills, options.platform),
+  ...settingsArgs(options, input, skills),
   ...(skills === null ? [] : ["--plugin-dir", skills.dir]),
   ...NETWORK_ARGS[input.policy.network],
   // The stella MCP server enforces its own approvals for destructive

@@ -78,6 +78,18 @@ export const isSignedPdf = ({ pdf, source }: PdfSource): boolean =>
   pdf.getForm()?.properties.hasSignatures === true ||
   rawBytesCarrySignature(source);
 
+/**
+ * Whether any revision holds a signature value. Unlike {@link isSignedPdf}
+ * it ignores the form's SigFlags, which ISO 32000 sets for an empty
+ * signature field too: the field a form leaves for its signer.
+ */
+export const carriesSignatureValue = ({ pdf, source }: PdfSource): boolean =>
+  pdf
+    .getForm()
+    ?.getSignatureFields()
+    .some((field) => field.isSigned()) === true ||
+  rawBytesCarrySignature(source);
+
 type PdfRewriteBlocker = "encrypted" | "signed";
 
 /** Why `pdf` must not be rewritten, or null when a full save is safe. */
@@ -113,11 +125,12 @@ export const savePdfRewrite = async ({
 };
 
 /**
- * Appends a signing revision: the incremental update a signature, and the
- * validation data that goes with it, is written as. Nothing already in the
- * file is rewritten, so every earlier signature keeps covering its bytes;
- * this is the one save that is meant for a signed PDF, and the signing
- * pipeline is its only caller.
+ * Appends a signing revision: the incremental update a signature, the
+ * validation data that goes with it, and the field appearances an unsigned
+ * form needs before it (see `sign-pdf.ts`), are written as. Nothing already
+ * in the file is rewritten, so every earlier signature keeps covering its
+ * bytes; this is the one save that is meant for a signed PDF, and the
+ * signing pipeline is its only caller.
  */
 export const appendSigningRevision = async (
   pdf: PDF,

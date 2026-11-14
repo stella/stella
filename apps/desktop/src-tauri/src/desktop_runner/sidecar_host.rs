@@ -140,6 +140,10 @@ pub(crate) struct HostSettings {
   /// Where each chat's folder is made, with its checkpoints and cache beside
   /// it.
   pub(crate) workspaces: PathBuf,
+  /// What a run's commands may not read besides `workspaces`, where no run
+  /// reads but its own folder and cache; the harness re-opens what its turn
+  /// needs.
+  pub(crate) unreadable: Vec<PathBuf>,
   pub(crate) probe_interval: Duration,
 }
 
@@ -351,6 +355,18 @@ impl Shared {
 
   fn workspace(&self, folder_id: Uuid) -> PathBuf {
     self.settings.workspaces.join(folder_id.to_string())
+  }
+}
+
+impl HostSettings {
+  /// What a run may not read: every chat's folder, cache and checkpoints,
+  /// of which the harness re-opens the run's own folder and cache, then the
+  /// paths the app named.
+  fn unreadable_paths(&self) -> Vec<String> {
+    std::iter::once(&self.workspaces)
+      .chain(&self.unreadable)
+      .map(|path| path.to_string_lossy().into_owned())
+      .collect()
   }
 }
 
@@ -1170,6 +1186,7 @@ impl HarnessHost for SidecarHarnessHost {
       launch: credentials.map(|held| held.settings).unwrap_or_default(),
       workspace_dir: workspace.to_string_lossy().into_owned(),
       cache_dir: cache.to_string_lossy().into_owned(),
+      unreadable_paths: self.shared.settings.unreadable_paths(),
       step_output_dir: step_output_dir.to_string_lossy().into_owned(),
       skill_folders: skill_folders_within(
         SKILL_FOLDER_BUDGET,

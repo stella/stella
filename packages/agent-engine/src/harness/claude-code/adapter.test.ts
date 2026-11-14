@@ -226,6 +226,7 @@ const turnInput = (
   skillFolders: [],
   networkHosts: [],
   toolPath: [],
+  unreadablePaths: [],
   ...overrides,
 });
 
@@ -1830,6 +1831,214 @@ describe("Claude Code approval modes", () => {
       );
       expect(existsSync(unsandboxed.logPath)).toBe(false);
     }
+  });
+});
+
+/** The read rules of the CLI's sandbox, as `--settings` hands them over. */
+const SandboxFilesystemSchema = v.object({
+  allowWrite: v.array(v.string()),
+  denyWrite: v.optional(v.array(v.string())),
+  denyRead: v.optional(v.array(v.string())),
+  allowRead: v.optional(v.array(v.string())),
+});
+const SandboxSettingsSchema = v.object({
+  sandbox: v.object({ filesystem: SandboxFilesystemSchema }),
+});
+type SandboxFilesystem = v.InferOutput<typeof SandboxFilesystemSchema>;
+
+/**
+ * Whether a sandboxed command may read `target`, by the rules the pinned CLI
+ * documents: a path under a `denyRead` entry is refused, unless it lies under
+ * an `allowRead` entry, which takes precedence.
+ */
+const commandReads = (filesystem: SandboxFilesystem, target: string) => {
+  const under = (entries: readonly string[] = []) =>
+    entries.some((entry) => target === entry || target.startsWith(`${entry}/`));
+  return !under(filesystem.denyRead) || under(filesystem.allowRead);
+};
+
+describe("Claude Code full auto reads", () => {
+  /**
+   * The desktop's data folder as it lays it out: one folder per chat under
+   * `agent-runs`, with its cache and checkpoints beside it, managed tools
+   * and the CLI's own configuration directory, plus a home folder with a
+   * credential store.
+   */
+  const desktopLayout = () => {
+    const harness = harnessFor("tool_calls");
+    const data = path.dirname(harness.workspaceDir);
+    const runs = path.join(data, "agent-runs");
+    const own = path.join(runs, crypto.randomUUID());
+    const other = path.join(runs, crypto.randomUUID());
+    mkdirSync(own, { recursive: true });
+    mkdirSync(other, { recursive: true });
+    const home = path.join(data, "home");
+    return {
+      harness,
+      data,
+      runs,
+      own,
+      other,
+      cache: `${own}.cache`,
+      tools: path.join(data, "harness", "bun", "1.4.4", "package", "bin"),
+      ssh: path.join(home, ".ssh"),
+    };
+  };
+
+  /** The sandbox's filesystem rules of one full auto turn. */
+  const filesystemOf = async (
+    harness: ReturnType<typeof harnessFor>,
+    input: HarnessTurnInput,
+  ) => {
+    const started = await harness.adapter.startTurn(input);
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    for await (const _event of started.value.events) {
+      // Drained: the turn's arguments are what is checked.
+    }
+    await started.value.dispose();
+    const args = harness.startups()[0]?.args ?? [];
+    const settings = args[args.indexOf("--settings") + 1] ?? "null";
+    return v.parse(SandboxSettingsSchema, JSON.parse(settings)).sandbox
+      .filesystem;
+  };
+
+  const fullAuto = {
+    network: "open",
+    fs: "workspace",
+    approvals: "full_auto",
+  } as const;
+
+  test("a command reads its own chat folder and what the turn needs, and nothing else the desktop names", async () => {
+    const layout = desktopLayout();
+    const { harness } = layout;
+    const filesystem = await filesystemOf(
+      harness,
+      turnInput(layout.own, {
+        policy: fullAuto,
+        cacheDir: layout.cache,
+        toolPath: [layout.tools],
+        unreadablePaths: [layout.runs, layout.data, layout.ssh],
+      }),
+    );
+    expect(filesystem).toEqual({
+      allowWrite: [layout.cache],
+      denyRead: [layout.runs, layout.data, layout.ssh],
+      allowRead: [
+        layout.own,
+        layout.cache,
+        layout.tools,
+        path.join(harness.claudeConfigDir, "shell-snapshots"),
+      ],
+    });
+    const readable = (target: string) => commandReads(filesystem, target);
+    expect(readable(path.join(layout.own, "brief.docx"))).toBe(true);
+    expect(readable(path.join(layout.other, "brief.docx"))).toBe(false);
+    expect(readable(layout.other)).toBe(false);
+    // What the desktop keeps beside each chat's folder: the run's own cache
+    // reads, another chat's cache, checkpoints and record do not.
+    expect(readable(path.join(layout.cache, "bun", "x.tgz"))).toBe(true);
+    expect(readable(path.join(`${layout.other}.cache`, "bun", "x.tgz"))).toBe(
+      false,
+    );
+    expect(readable(path.join(`${layout.other}.checkpoints`, "1"))).toBe(false);
+    expect(readable(path.join(`${layout.own}.checkpoints`, "1"))).toBe(false);
+    expect(readable(`${layout.other}.used`)).toBe(false);
+    expect(readable(path.join(layout.tools, "bun"))).toBe(true);
+    expect(
+      readable(
+        path.join(harness.claudeConfigDir, "shell-snapshots", "snapshot.sh"),
+      ),
+    ).toBe(true);
+    // The CLI's sessions of every chat stay out of reach.
+    expect(
+      readable(path.join(harness.claudeConfigDir, "projects", "t.jsonl")),
+    ).toBe(false);
+    expect(readable(path.join(layout.ssh, "id_ed25519"))).toBe(false);
+    // Outside what the desktop names, reads are as before.
+    expect(readable(path.join(tmpdir(), "elsewhere.txt"))).toBe(true);
+  });
+
+  test("the turn's skill plugin stays readable, so its skills' links resolve", async () => {
+    const layout = desktopLayout();
+    const { harness } = layout;
+    const skillRoot = mkdtempSync(path.join(tmpdir(), "stella-claude-skill-"));
+    cleanups.push(() => rmSync(skillRoot, { recursive: true, force: true }));
+    const skill = path.join(skillRoot, "fixture-skill");
+    mkdirSync(skill);
+    writeFileSync(
+      path.join(skill, "SKILL.md"),
+      "---\nname: fixture-skill\ndescription: Reads leases.\n---\nBody.\n",
+    );
+    const started = await harness.adapter.startTurn(
+      turnInput(layout.own, {
+        policy: fullAuto,
+        cacheDir: layout.cache,
+        skillFolders: [{ name: "fixture-skill", path: skill }],
+        unreadablePaths: [layout.runs, layout.data],
+      }),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const args = harness.startups()[0]?.args ?? [];
+    const plugin = args[args.indexOf("--plugin-dir") + 1] ?? "";
+    const filesystem = v.parse(
+      SandboxSettingsSchema,
+      JSON.parse(args[args.indexOf("--settings") + 1] ?? "null"),
+    ).sandbox.filesystem;
+    for await (const _event of started.value.events) {
+      // Drained so the turn ends and its plugin is removed.
+    }
+    await started.value.dispose();
+    expect(plugin.startsWith(harness.claudeConfigDir)).toBe(true);
+    expect(filesystem.allowRead).toContain(plugin);
+    expect(
+      commandReads(filesystem, path.join(plugin, "skills", "fixture-skill")),
+    ).toBe(true);
+    expect(commandReads(filesystem, path.join(skill, "SKILL.md"))).toBe(true);
+    expect(filesystem.denyWrite).toEqual([skill]);
+  });
+
+  test("no path the turn is handed re-opens another chat's folder, even one that holds them all", async () => {
+    const layout = desktopLayout();
+    const filesystem = await filesystemOf(
+      layout.harness,
+      turnInput(layout.own, {
+        policy: fullAuto,
+        // Misplaced on purpose: a cache and tool directories that hold the
+        // chat folders, and one that is the app's data itself.
+        cacheDir: layout.runs,
+        toolPath: [
+          layout.data,
+          layout.runs,
+          path.join(layout.other, "bin"),
+          `${layout.other}.cache`,
+        ],
+        unreadablePaths: [layout.runs, layout.data],
+      }),
+    );
+    expect(
+      commandReads(filesystem, path.join(`${layout.other}.cache`, "a.tgz")),
+    ).toBe(false);
+    expect(commandReads(filesystem, path.join(layout.own, "a.txt"))).toBe(true);
+    expect(commandReads(filesystem, path.join(layout.other, "a.txt"))).toBe(
+      false,
+    );
+    // A path inside another chat's folder is never re-opened either.
+    expect(
+      commandReads(filesystem, path.join(layout.other, "bin", "tool")),
+    ).toBe(false);
+  });
+
+  test("without paths to keep unreadable the sandbox limits writes only", async () => {
+    const layout = desktopLayout();
+    const filesystem = await filesystemOf(
+      layout.harness,
+      turnInput(layout.own, { policy: fullAuto, unreadablePaths: [] }),
+    );
+    expect(filesystem).toEqual({ allowWrite: [CACHE_DIR] });
   });
 });
 

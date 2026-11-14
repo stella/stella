@@ -209,6 +209,10 @@ pub(crate) struct SidecarRunStart {
   pub(crate) workspace_dir: String,
   /// The chat's own cache folder, writable in every sandbox.
   pub(crate) cache_dir: String,
+  /// What the run's sandboxed commands may not read, apart from the paths
+  /// the run itself is handed: every chat's folder, the app's own data and
+  /// the member's credential stores.
+  pub(crate) unreadable_paths: Vec<String>,
   /// Where the sidecar keeps each step's output (`<runId>/<stepKey>`: a
   /// `{"bytes":<n>}` header line, then the step's kept bytes): beside the
   /// chat's own folder, whatever folder `workspace_dir` names.

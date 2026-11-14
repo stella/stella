@@ -8,9 +8,9 @@ import {
   CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH,
   CHAT_LOCAL_RUN_CONVERSATION_ROLES,
   CHAT_LOCAL_RUN_IMAGE_TYPES,
+  CHAT_LOCAL_RUN_STEP_MAX_BYTES,
   CHAT_LOCAL_RUN_STEP_OUTPUT_GRANT_SECONDS,
   CHAT_LOCAL_RUN_STEP_OUTPUT_HEADERS,
-  CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
   chatLocalRunCallId,
   chatLocalRunConversationText,
   chatLocalRunImageType,
@@ -52,7 +52,7 @@ describe("a local run step's output reference", () => {
     expect(fixtures.grantSeconds).toBe(
       CHAT_LOCAL_RUN_STEP_OUTPUT_GRANT_SECONDS,
     );
-    expect(fixtures.maxBytes).toBe(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES);
+    expect(fixtures.maxBytes).toEqual(CHAT_LOCAL_RUN_STEP_MAX_BYTES);
     expect(fixtures.headers).toEqual(CHAT_LOCAL_RUN_STEP_OUTPUT_HEADERS);
     expect(
       hmacSha256Hex(
