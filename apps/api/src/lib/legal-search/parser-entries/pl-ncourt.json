@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_NCOURT",
   "key": "pl-ncourt",
-  "parserVersion": 37,
+  "parserVersion": 38,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recount a court's printed paragraph numbers with the shared reading: a run that counts up through the whole reasoning is numbered even where many unnumbered paragraphs sit between its numbers; only paragraph numbering in block text changes and it has no feature storage of its own."
+    "reason": "Recount a court's printed paragraph numbers with the shared reading: a run that counts up through the whole reasoning is numbered even where many unnumbered paragraphs sit between its numbers; only paragraph numbering in block text changes and it has no feature storage of its own. Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."
   }
 }

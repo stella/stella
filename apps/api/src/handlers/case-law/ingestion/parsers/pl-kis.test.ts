@@ -226,6 +226,39 @@ describe("source whitespace", () => {
   });
 });
 
+describe("web navigation and footnotes", () => {
+  test("a line that only links back within the document is not the text", () => {
+    const { documentAst } = parse(
+      '<p>Pierwsza część opisu.</p><p><a anchor="powrót do spisu">powrót do spisu</a></p><p>Druga część opisu.</p>',
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Pierwsza część opisu.",
+      "Druga część opisu.",
+    ]);
+  });
+
+  test("a footnote mark inside a sentence stays", () => {
+    const { documentAst } = parse(
+      '<p>Zgodnie z przepisem<a href="#_ftn1">[1]</a> podatnik składa deklarację.</p>',
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Zgodnie z przepisem[1] podatnik składa deklarację.",
+    ]);
+  });
+
+  test("a footnote's line its sentence runs across joins the line above", () => {
+    const { documentAst } = parse(
+      '<p>Tekst pisma.</p><div id="ftn6"><p><a href="#_ftnref6">[6]</a> Rozporządzenie Ministra Finansów i Gospodarki z dnia 7 grudnia 2025 r. zmieniające</p><p>rozporządzenie w sprawie wystawiania faktur (Dz. U. poz. 1742).</p></div><div id="ftn7"><p><a href="#_ftnref7">[7]</a> Art. 106b ust. 3 pkt 1a ustawy o VAT.</p><p>Drugi akapit przypisu.</p></div>',
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Tekst pisma.",
+      "[6] Rozporządzenie Ministra Finansów i Gospodarki z dnia 7 grudnia 2025 r. zmieniające rozporządzenie w sprawie wystawiania faktur (Dz. U. poz. 1742).",
+      "[7] Art. 106b ust. 3 pkt 1a ustawy o VAT.",
+      "Drugi akapit przypisu.",
+    ]);
+  });
+});
+
 describe("ordered lists", () => {
   test("a list styled to print no number gets none", async () => {
     const html = await htmlOf(
