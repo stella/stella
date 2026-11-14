@@ -70,7 +70,7 @@ export const readCorpusProjectionUnservedReportTx = async (
       ...served.value.flipped.map(([, generation]) => generation),
     ]);
     for (const generation of generations) {
-      // db-await-in-loop: two bounded reads per served generation, a handful per family
+      // db-await-in-loop: two bounded reads per served generation; a family serves its serving generation and at most its declared partial ones
       const counts = await readCorpusProjectionUnservedCountsTx(tx, {
         family,
         generation,
