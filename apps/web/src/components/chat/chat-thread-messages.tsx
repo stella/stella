@@ -1836,7 +1836,7 @@ type ChatResendOptions = {
   messageId?: string | undefined;
 };
 
-export type QueuedMessageActions = {
+type QueuedMessageActions = {
   remove: (id: string) => void;
   sendNow: (id: string) => void;
 };
