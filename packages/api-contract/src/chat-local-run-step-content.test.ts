@@ -17,7 +17,7 @@ import { CHAT_LOCAL_RUN_STEP_MAX_BYTES } from "./chat-local-run-step-output";
 
 const encode = (text: string) => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array) =>
-  new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
 
 /** Every window of `bytes` in order, each read from the last one's end. */
 const windowsOf = (bytes: Uint8Array, limit: number) => {

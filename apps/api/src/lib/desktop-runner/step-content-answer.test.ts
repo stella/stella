@@ -66,6 +66,22 @@ describe("one read of a stored step", () => {
     expect(joined).toBe(stored);
   });
 
+  test("a window keeps a byte order mark it starts with", () => {
+    const stored = "\uFEFFfirst\uFEFFsecond";
+    const first = stepContentAnswer(text(stored), { start: 0, limit: 8 });
+    const second = stepContentAnswer(text(stored), { start: 8, limit: 64 });
+    if (
+      first.state !== "stored" ||
+      first.kind === "image" ||
+      second.state !== "stored" ||
+      second.kind === "image"
+    ) {
+      panic("expected stored text");
+    }
+    expect(first.text).toBe("\uFEFFfirst");
+    expect(second.text).toBe("\uFEFFsecond");
+  });
+
   test("an image names its chat file and carries no text", () => {
     const id = toSafeId<"userFile">("0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f");
     expect(

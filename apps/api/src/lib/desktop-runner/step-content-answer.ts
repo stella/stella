@@ -61,7 +61,9 @@ export const stepContentAnswer = (
         totalBytes: content.totalBytes,
         storedBytes: bytes.byteLength,
         start: window.start,
-        text: new TextDecoder().decode(
+        // A window keeps a U+FEFF it starts with: it is the step's own text,
+        // and windows must rejoin to what is stored.
+        text: new TextDecoder("utf-8", { ignoreBOM: true }).decode(
           bytes.subarray(window.start, window.end),
         ),
         nextStart: window.nextStart,
