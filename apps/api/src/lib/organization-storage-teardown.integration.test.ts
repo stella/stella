@@ -43,6 +43,10 @@ import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
+import {
+  deleteAccountExports,
+  seedReadyOrganizationAuditExport,
+} from "@/api/tests/helpers/organization-audit-export";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -585,13 +589,22 @@ beforeAll(async () => {
     userId,
   };
 
-  await testDb.transaction(
+  await seedReadyOrganizationAuditExport({
+    db: testDb,
+    userId,
+    organizationId,
+  });
+  const deletion = await testDb.transaction(
     async (tx) =>
       await completeOrganizationDeletion({
+        deletedBy: userId,
         organizationId,
         tx: asTestRaw<Transaction>(tx),
       }),
   );
+  if (deletion.type !== "deleted") {
+    panic("Organization deletion with a complete audit archive must proceed");
+  }
 });
 
 afterAll(async () => {
@@ -610,9 +623,15 @@ afterAll(async () => {
     );
   // The organization that survives is torn down through the same helper, which
   // is also the only ordering `user_files.thread_id`'s RESTRICT admits.
+  await seedReadyOrganizationAuditExport({
+    db: testDb,
+    userId: fixture.userId,
+    organizationId: fixture.otherOrganizationId,
+  });
   await testDb.transaction(
     async (tx) =>
       await completeOrganizationDeletion({
+        deletedBy: fixture.userId,
         organizationId: fixture.otherOrganizationId,
         tx: asTestRaw<Transaction>(tx),
       }),
@@ -625,6 +644,7 @@ afterAll(async () => {
         fixture.otherOrganizationId,
       ),
     );
+  await deleteAccountExports(testDb, fixture.userId);
   await testDb.delete(user).where(eq(user.id, fixture.userId));
   await releaseTestDb();
 });
@@ -792,10 +812,16 @@ describe("organization deletion storage teardown", () => {
     // deletion, never record a prefix: the pages left unwritten would name
     // objects nothing could ever find again. The organization that survives has
     // storage in more than one page, so one page is not enough for it.
+    await seedReadyOrganizationAuditExport({
+      db: testDb,
+      userId: fixture.userId,
+      organizationId: fixture.otherOrganizationId,
+    });
     const attempt = await testDb
       .transaction(
         async (tx) =>
           await completeOrganizationDeletion({
+            deletedBy: fixture.userId,
             organizationId: fixture.otherOrganizationId,
             pagesMax: 1,
             tx: asTestRaw<Transaction>(tx),

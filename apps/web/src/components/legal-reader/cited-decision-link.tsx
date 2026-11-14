@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -18,13 +17,10 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { PopoverClose } from "@stll/ui/popover";
 import { Skeleton } from "@stll/ui/skeleton";
-import { useIsMobile } from "@stll/ui/use-mobile";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import {
-  createCaseDecisionViewTab,
-  navigateToCaseDecisionMain,
-} from "@/components/inspector/case-decision-view";
+import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import type { CitationOccurrences } from "@/components/legal-reader/citation-occurrences.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -43,8 +39,6 @@ import {
 } from "@/features/case-law/components/case-viewer/citation-passage-preview";
 import { decisionCardSummaryOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
-import { formatDecisionDate } from "@/lib/decision-date";
-import { detached } from "@/lib/detached";
 import { isPublicLawMissError } from "@/lib/public-law-api";
 import { queryView } from "@/lib/query-view.logic";
 
@@ -201,10 +195,7 @@ export const CitedDecisionSourceText = ({
   />
 );
 
-/**
- * The shared decision chip, wired to open the decision beside the text on a
- * wide screen and in the main view on a narrow one.
- */
+/** The shared decision chip, wired to open the decision beside the text. */
 export const CitedDecisionChip = (props: CitedDecisionChipProps) => {
   const { decision, passage, treatment, occurrences } = props;
   const drawing: DecisionCitationDrawing =
@@ -215,9 +206,7 @@ export const CitedDecisionChip = (props: CitedDecisionChipProps) => {
           presentation: props.presentation,
         }
       : { sourceText: props.sourceText };
-  const isMobile = useIsMobile();
   const inspector = useInspectorView();
-  const navigate = useNavigate();
   const params = createCaseLawDecisionRouteParams({
     caseNumber: decision.caseNumber,
     country: decision.country,
@@ -235,26 +224,19 @@ export const CitedDecisionChip = (props: CitedDecisionChipProps) => {
       ? readerPath
       : `${readerPath}?${new URLSearchParams({ q: searchQuery })}`;
 
-  const openDecision = () => {
-    const tab = createCaseDecisionViewTab({
-      caseNumber: decision.caseNumber,
-      country: decision.country,
-      court: decision.court,
-      decisionId: decision.id,
-      language: decision.language,
-      languageAlternates: decision.languageAlternates,
-      slug: decision.slug,
-      searchQuery,
-    });
-    if (isMobile) {
-      // No inspector to dock beside: the decision takes the main view.
-      detached(
-        navigateToCaseDecisionMain(navigate, tab.payload),
-        "case-law.open-cited-decision",
-      );
-      return;
-    }
-    inspector.open(tab);
+  const openInSidePanel = () => {
+    inspector.open(
+      createCaseDecisionViewTab({
+        caseNumber: decision.caseNumber,
+        country: decision.country,
+        court: decision.court,
+        decisionId: decision.id,
+        language: decision.language,
+        languageAlternates: decision.languageAlternates,
+        slug: decision.slug,
+        searchQuery,
+      }),
+    );
   };
 
   return (
@@ -270,7 +252,7 @@ export const CitedDecisionChip = (props: CitedDecisionChipProps) => {
         originalUrl: decision.sourceUrl ?? null,
       }}
       {...drawing}
-      onOpen={openDecision}
+      onOpenInSidePanel={openInSidePanel}
       preview={
         <>
           <CitedDecisionCard decision={decision} treatment={treatment} />
@@ -289,15 +271,18 @@ export const CitedDecisionChip = (props: CitedDecisionChipProps) => {
   );
 };
 
+/**
+ * What the summary read adds to a cited decision's peek: its type, how the
+ * citing text treats it, its legal sentence and how often it is cited.
+ */
 export const CitedDecisionCard = ({
   decision: knownDecision,
   treatment,
 }: {
-  decision: Pick<CitedDecisionTarget, "id" | "court" | "caseNumber">;
+  decision: Pick<CitedDecisionTarget, "id">;
   treatment: CitationTreatment | undefined;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
   const read = useQuery(decisionCardSummaryOptions(knownDecision.id));
   const view = queryView(read);
 
@@ -310,50 +295,32 @@ export const CitedDecisionCard = ({
       </div>
     );
   }
+  // The peek's header already names the court, the case and the date.
   if (view.type !== "items") {
     // A miss is an answer, not a failure: the public corpus holds no such
-    // decision, so the card says what the citation itself established.
-    const missing = view.type === "error" && isPublicLawMissError(view.error);
-    return (
-      <div className="flex flex-col gap-2">
-        <BidiText as="div" className="text-sm font-medium">
-          {knownDecision.court}
-        </BidiText>
-        <BidiText as="div" className="text-sm">
-          {knownDecision.caseNumber}
-        </BidiText>
-        {missing ? (
-          <span className="text-muted-foreground text-xs">
-            {t("caseLaw.citation.notInStella")}
-          </span>
-        ) : (
-          <QueryViewFeedback view={view} />
-        )}
-      </div>
+    // decision, so the card says so under the header's own facts.
+    return view.type === "error" && isPublicLawMissError(view.error) ? (
+      <span className="text-muted-foreground text-xs">
+        {t("caseLaw.citation.notInStella")}
+      </span>
+    ) : (
+      <QueryViewFeedback view={view} />
     );
   }
 
   const decision = view.items;
-  const date = formatDecisionDate(decision.decisionDate, format);
   const headnote =
     decision.headnote.type === "present" ? decision.headnote.text : null;
 
   return (
     <div className="flex flex-col gap-3">
       <QueryViewFeedback view={view} />
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-0.5">
-          <BidiText as="div" className="text-sm font-medium">
-            {decision.court}
-          </BidiText>
-          <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
-            <BidiText as="span">{decision.caseNumber}</BidiText>
-            {date !== null && <span>{date}</span>}
-            {decision.decisionType !== null && (
-              <span className="capitalize">{decision.decisionType}</span>
-            )}
-          </div>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        {decision.decisionType !== null && (
+          <span className="text-muted-foreground text-xs capitalize">
+            {decision.decisionType}
+          </span>
+        )}
         {treatment !== undefined && (
           <span className="bg-muted text-muted-foreground inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium">
             <span
@@ -381,9 +348,13 @@ export const CitedDecisionCard = ({
               />
             )}
           </div>
-          <BidiText as="p" className="line-clamp-6 text-sm leading-relaxed">
+          <TruncatedText
+            className="text-sm leading-relaxed"
+            lines={6}
+            render={<BidiText as="p" />}
+          >
             {headnote}
-          </BidiText>
+          </TruncatedText>
         </div>
       )}
       <div className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">

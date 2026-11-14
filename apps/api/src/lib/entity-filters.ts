@@ -4,7 +4,6 @@ import type { SQL } from "drizzle-orm";
 
 import { ENTITY_FIND_TERM_MIN_LENGTH, isEntityKind } from "@stll/api-contract";
 import type { EntityFind } from "@stll/api-contract";
-import { compareByLocale } from "@stll/collation";
 import {
   type BuiltinField,
   type CompareNode,
@@ -83,36 +82,17 @@ const getFieldValue = (content: FieldContent | undefined): string => {
       return String(content.amountCents);
     case "person":
       return content.name;
+    // Matches `fieldValueExpr`, which projects no scalar for these.
     case "error":
     case "pending":
     case "unsupported":
     case "clip":
+    case "record":
       return "";
     default:
-      return "";
+      content satisfies never;
+      return panic(`Unhandled content: ${String(content)}`);
   }
-};
-
-// Numeric value for sort comparison: int content uses its number; a
-// missing field or a legacy/coerced non-int value parses its string form,
-// returning null when no finite number is available (sorts to the end).
-const numericContentValue = (
-  content: FieldContent | undefined,
-): number | null => {
-  if (content?.type === "int") {
-    return content.value;
-  }
-  // Money sorts on its minor-unit amount, which is exact; comparing across
-  // currencies is the caller's problem, as it is in SQL.
-  if (content?.type === "money") {
-    return content.amountCents;
-  }
-  const raw = getFieldValue(content).trim();
-  if (raw === "" || !NUMERIC_TEXT_RE.test(raw)) {
-    return null;
-  }
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
 };
 
 const findField = (
@@ -130,8 +110,8 @@ const findField = (
  *  - everything else collapses to the same scalar text SQL's
  *    `content->>'value'` (or `->>'fileName'`) produces.
  *
- * Distinct from `getFieldValue`, which the sort comparators need as a plain
- * string; filtering must not flatten multi-select arrays.
+ * Distinct from `getFieldValue`, which flattens every type to a plain string;
+ * filtering must not flatten multi-select arrays.
  */
 const getFilterValue = (content: FieldContent | undefined): ConditionValue => {
   if (content?.type === "multi-select") {
@@ -305,65 +285,6 @@ export const applyFilters = <T extends FilterableEntity>(
       }
       return evaluateCondition(gateMissingCompareFields(node, entity), resolve);
     });
-  });
-};
-
-export const applySorts = <T extends FilterableEntity>(
-  items: T[],
-  sorts: ViewSort[],
-  // Property values are user-entered text (as opposed to e.g. an id), so
-  // sorting them needs the viewer's locale, not codepoint order. Callers must
-  // pass the request locale (extractLangFromRequest) explicitly; there is no
-  // implicit default, since an implicit locale is the bug this module guards
-  // against.
-  locale: string,
-): T[] => {
-  if (sorts.length === 0) {
-    return items;
-  }
-
-  const compareText = compareByLocale(locale);
-
-  return [...items].toSorted((a, b) => {
-    for (const sort of sorts) {
-      const fieldA = findField(a.fields, sort.propertyId);
-      const fieldB = findField(b.fields, sort.propertyId);
-      const dir = sort.desc ? -1 : 1;
-
-      // Numeric ordering whenever the property is numeric on at least one
-      // side. Comparing only when BOTH sides are int dropped to a string
-      // compare the moment a row was missing the field or held a legacy
-      // non-int value, so 10 sorted before 9. Rows without a numeric value
-      // bucket to the end, independent of sort direction.
-      if (fieldA?.content.type === "int" || fieldB?.content.type === "int") {
-        const numA = numericContentValue(fieldA?.content);
-        const numB = numericContentValue(fieldB?.content);
-        if (numA !== null && numB !== null) {
-          const cmp = (numA - numB) * dir;
-          if (cmp !== 0) {
-            return cmp;
-          }
-          continue;
-        }
-        if (numA === null && numB !== null) {
-          return 1;
-        }
-        if (numA !== null && numB === null) {
-          return -1;
-        }
-        continue;
-      }
-
-      const valueA = getFieldValue(fieldA?.content);
-      const valueB = getFieldValue(fieldB?.content);
-      const cmp = compareText(valueA, valueB) * dir;
-
-      if (cmp !== 0) {
-        return cmp;
-      }
-    }
-
-    return 0;
   });
 };
 
@@ -779,6 +700,7 @@ export const FIELD_FIND_SUPPORT = {
   date: "excluded",
   int: "excluded",
   money: "excluded",
+  record: "excluded",
   error: "excluded",
   pending: "excluded",
   unsupported: "excluded",
@@ -976,6 +898,73 @@ const internalSortExpr = (
   }
 };
 
+/** One property's current cell on the row, projected through `value`. */
+const currentCellValue = (propertyId: string, value: SQL): SQL => sql`(
+  SELECT ${value}
+  FROM ${fields}
+  WHERE ${fields.workspaceId} = ${entities.workspaceId}
+    AND ${fields.entityVersionId} = ${entities.currentVersionId}
+    AND ${fields.propertyId} = ${propertyId}
+  LIMIT 1
+)`;
+
+type PropertySortValues = {
+  /** A money cell's currency code; NULL for every other content type. */
+  currency: SQL;
+  /** A money amount in minor units, an int, or numeric text in an int column. */
+  number: SQL;
+  /** The scalar the filters compare against. */
+  text: SQL;
+};
+
+/**
+ * What a property column orders by, in key order: currency, number, text.
+ * Every property sort reads them here, so the table window and the calendar
+ * cannot disagree on how a content type orders.
+ *
+ * Money is ordered within its currency, never across one. Minor units are not
+ * comparable between currencies (they do not even share a scale, JPY having
+ * none), so 100 JPY beside 100 CZK is a comparison with no answer, the same
+ * judgement the calculation reducer makes when it refuses to add them.
+ * Grouping by currency code first gives a total order that is meaningful
+ * inside each currency and merely deterministic between them.
+ *
+ * The number exists because `content->>'value'` is text, so a text ORDER BY
+ * sorts "10" before "9". The text key is the same projection the filters
+ * compare against; a second copy of that COALESCE is how sorting once came to
+ * know about fewer content types than filtering did.
+ */
+export const propertySortValues = (propertyId: string): PropertySortValues => {
+  const propertyIsInt = sql`EXISTS (
+    SELECT 1 FROM ${properties}
+    WHERE ${properties.workspaceId} = ${entities.workspaceId}
+      AND ${properties.id} = ${propertyId}
+      AND ${properties.content}->>'type' = 'int'
+    LIMIT 1
+  )`;
+  return {
+    currency: currentCellValue(
+      propertyId,
+      sql`CASE
+        WHEN ${fields.content}->>'type' = 'money'
+        THEN ${fields.content}->>'currency'
+        ELSE NULL
+      END`,
+    ),
+    number: currentCellValue(
+      propertyId,
+      sql`CASE
+        WHEN ${fields.content}->>'type' = 'money'
+        THEN ${numericTextExpr(sql`${fields.content}->>'amountCents'`)}
+        WHEN ${fields.content}->>'type' = 'int' OR ${propertyIsInt}
+        THEN ${numericFieldValueExpr(fields.content)}
+        ELSE NULL
+      END`,
+    ),
+    text: currentCellValue(propertyId, fieldValueExpr(fields.content)),
+  };
+};
+
 /**
  * Builds ORDER BY expressions from ViewSort[].
  *
@@ -1004,78 +993,21 @@ export const buildSortExpressions = (
       continue;
     }
 
-    const propertyIsInt = sql`EXISTS (
-      SELECT 1 FROM ${properties}
-      WHERE ${properties.workspaceId} = ${entities.workspaceId}
-        AND ${properties.id} = ${sort.propertyId}
-        AND ${properties.content}->>'type' = 'int'
-      LIMIT 1
-    )`;
-
-    // Money is ordered within its currency, never across one. Minor units are
-    // not comparable between currencies — they do not even share a scale, JPY
-    // having none — so 100 JPY beside 100 CZK is a comparison with no answer,
-    // the same judgement the calculation reducer makes when it refuses to add
-    // them. Grouping by currency code first gives a total order that is
-    // meaningful inside each currency and merely deterministic between them.
-    const currencySortKey = sql`(
-      SELECT CASE
-        WHEN ${fields.content}->>'type' = 'money'
-        THEN ${fields.content}->>'currency'
-        ELSE NULL
-      END
-      FROM ${fields}
-      WHERE ${fields.workspaceId} = ${entities.workspaceId}
-        AND ${fields.entityVersionId} = ${entities.currentVersionId}
-        AND ${fields.propertyId} = ${sort.propertyId}
-      LIMIT 1
-    )`;
-
-    // Numeric sort key: `content->>'value'` is text, so a plain ORDER BY sorts
-    // "10" before "9". Use numeric mode for money amounts, for int fields, and
-    // for int properties with legacy text content, then break ties with the
-    // text key.
-    const numericSortKey = sql`(
-      SELECT CASE
-        WHEN ${fields.content}->>'type' = 'money'
-        THEN ${numericTextExpr(sql`${fields.content}->>'amountCents'`)}
-        WHEN ${fields.content}->>'type' = 'int' OR ${propertyIsInt}
-        THEN ${numericFieldValueExpr(fields.content)}
-        ELSE NULL
-      END
-      FROM ${fields}
-      WHERE ${fields.workspaceId} = ${entities.workspaceId}
-        AND ${fields.entityVersionId} = ${entities.currentVersionId}
-        AND ${fields.propertyId} = ${sort.propertyId}
-      LIMIT 1
-    )`;
-    // The same projection the filters compare against. It had been a second
-    // copy of the COALESCE, which is how sorting came to know about fewer
-    // content types than filtering did.
-    const textSortKey = sql`(
-      SELECT ${fieldValueExpr(fields.content)}
-      FROM ${fields}
-      WHERE ${fields.workspaceId} = ${entities.workspaceId}
-        AND ${fields.entityVersionId} = ${entities.currentVersionId}
-        AND ${fields.propertyId} = ${sort.propertyId}
-      LIMIT 1
-    )`;
+    const { currency, number, text } = propertySortValues(sort.propertyId);
 
     // Ahead of the amount, so a money column groups by currency; NULL for every
     // other content type, which leaves their ordering untouched.
     expressions.push(
       sort.desc
-        ? sql`${currencySortKey} DESC NULLS LAST`
-        : sql`${currencySortKey} ASC NULLS LAST`,
+        ? sql`${currency} DESC NULLS LAST`
+        : sql`${currency} ASC NULLS LAST`,
     );
     expressions.push(
       sort.desc
-        ? sql`${numericSortKey} DESC NULLS LAST`
-        : sql`${numericSortKey} ASC NULLS LAST`,
+        ? sql`${number} DESC NULLS LAST`
+        : sql`${number} ASC NULLS LAST`,
     );
-    expressions.push(
-      sort.desc ? sql`${textSortKey} DESC` : sql`${textSortKey} ASC`,
-    );
+    expressions.push(sort.desc ? sql`${text} DESC` : sql`${text} ASC`);
   }
 
   // Tie-breaker for stable ordering

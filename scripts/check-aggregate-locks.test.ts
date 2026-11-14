@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -15,9 +15,23 @@ import {
   parseAggregateLockBaseline,
   parseAggregateLockGitBatch,
   parseAggregateLockNamespaces,
+  parseRowLockGrants,
+  parseSchemaTableNames,
+  ROLE_PRIVILEGE_CENSUS_PATH,
+  rowLockHolderProblems,
+  SCHEMA_INDEX_DIR,
 } from "./check-aggregate-locks.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
+
+test("local Postgres cluster lock has an infrastructure owner", () => {
+  expect(
+    aggregateLockSourceIncluded("packages/scripts/src/dev-postgres-lock.ts"),
+  ).toBe(false);
+  expect(
+    aggregateLockSourceIncluded("packages/scripts/src/shared-test-postgres.ts"),
+  ).toBe(true);
+});
 
 test("the namespace ledger matches what the owner source declares", () => {
   expect(
@@ -171,3 +185,134 @@ for (const primitive of [
     ).not.toHaveLength(0);
   });
 }
+
+const holderFile = "apps/api/src/lib/example.ts";
+const holderTables = parseSchemaTableNames([
+  "## readable_ledger · `readableLedger` · example.ts:1 · rls",
+  "## mutable_rows · `mutableRows` · example.ts:9 · rls",
+]);
+const holderGrants = parseRowLockGrants(
+  JSON.stringify({
+    public: [],
+    roles: [
+      {
+        role: "stella",
+        privileges: [
+          "table:public.readable_ledger:SELECT:EFFECTIVE",
+          "table:public.mutable_rows:SELECT:EFFECTIVE",
+          "column:public.mutable_rows.status:UPDATE:EFFECTIVE",
+        ],
+      },
+      {
+        role: "stella_worker",
+        privileges: ["table:public.readable_ledger:UPDATE:EFFECTIVE"],
+      },
+    ],
+  }),
+);
+const holderProblems = (source: string, holder?: string) => {
+  const sites = aggregateLockSites(holderFile, source);
+  const baseline = aggregateLockBaseline(sites).map((row) => ({
+    ...row,
+    ...(holder === undefined ? {} : { holder }),
+  }));
+  return rowLockHolderProblems({
+    sites,
+    baseline,
+    grants: holderGrants,
+    tables: holderTables,
+  });
+};
+
+test("an application-role row lock needs UPDATE on every table it reaches", () => {
+  const ledgerLock = 'tx.select().from(readableLedger).for("update")';
+  expect(holderProblems(ledgerLock)).toEqual([
+    `${holderFile}:1: locks public.readable_ledger, where role stella has no UPDATE, so PostgreSQL refuses the lock; grant it, lock another row, or declare the baseline row's holder`,
+  ]);
+  // One updatable column is enough, as PostgreSQL decides it.
+  expect(
+    holderProblems('tx.select().from(mutableRows).for("key share")'),
+  ).toEqual([]);
+  expect(
+    holderProblems(
+      'tx.select().from(mutableRows).innerJoin(readableLedger, on).for("update", { of: mutableRows })',
+    ),
+  ).toEqual([]);
+  expect(
+    holderProblems(
+      `sql\`SELECT id FROM \${mutableRows} m JOIN readable_ledger l ON true FOR SHARE\``,
+    ),
+  ).toHaveLength(1);
+});
+
+test("a declared holder is held to its own grants and must be needed", () => {
+  const ledgerLock = 'tx.select().from(readableLedger).for("update")';
+  expect(holderProblems(ledgerLock, "stella_worker")).toEqual([]);
+  expect(holderProblems(ledgerLock, "owner")).toEqual([]);
+  expect(holderProblems(ledgerLock, "stella_reader")).toEqual([
+    `${holderFile}:1: holder "stella_reader" is neither "owner" nor a role in ${ROLE_PRIVILEGE_CENSUS_PATH}`,
+  ]);
+  expect(
+    holderProblems('tx.select().from(mutableRows).for("update")', "owner"),
+  ).toEqual([
+    `${holderFile}:1: declares holder "owner" but role stella can lock what it locks; drop the holder`,
+  ]);
+  expect(
+    holderProblems('tx.select().from(mutableRows).for("update")', "stella"),
+  ).toEqual([`${holderFile}:1: holder "stella" is the default; drop it`]);
+  expect(
+    holderProblems("tx.execute(sql`SELECT pg_advisory_xact_lock(1)`)", "owner"),
+  ).toEqual([
+    expect.stringContaining("Holder on a baseline row that takes no row lock"),
+  ]);
+});
+
+test("a row lock whose table cannot be named needs a declared holder", () => {
+  for (const source of [
+    'await query.for("update")',
+    'tx.select().from(unknownTable).for("update")',
+  ]) {
+    expect(holderProblems(source)).toEqual([
+      expect.stringContaining("cannot tell which table this row lock reaches"),
+    ]);
+    expect(holderProblems(source, "owner")).toEqual([]);
+  }
+});
+
+// The candidate-source read as it stood before acceptance stopped locking it:
+// the application role reads that insert-only table but holds no UPDATE on it.
+test("the census and schema index refuse a lock on candidate sources", () => {
+  const source = [
+    "const liveSources = await tx",
+    "  .select({ id: legalListGenerationCandidateSources.id })",
+    "  .from(legalListGenerationCandidateSources)",
+    "  .where(eq(legalListGenerationCandidateSources.candidateId, candidateId))",
+    '  .for("update");',
+  ].join("\n");
+  const sites = aggregateLockSites(holderFile, source);
+  const census = readFileSync(
+    path.join(REPO_ROOT, ROLE_PRIVILEGE_CENSUS_PATH),
+    "utf-8",
+  );
+  const indexDir = path.join(REPO_ROOT, SCHEMA_INDEX_DIR);
+  const tables = parseSchemaTableNames(
+    readdirSync(indexDir)
+      .filter((name) => name.endsWith(".md"))
+      .map((name) => readFileSync(path.join(indexDir, name), "utf-8")),
+  );
+  expect(tables.get("legalListGenerationCandidateSources")).toBe(
+    "legal_list_generation_candidate_sources",
+  );
+  expect(
+    rowLockHolderProblems({
+      sites,
+      baseline: aggregateLockBaseline(sites),
+      grants: parseRowLockGrants(census),
+      tables,
+    }),
+  ).toEqual([
+    expect.stringContaining(
+      "locks public.legal_list_generation_candidate_sources, where role stella has no UPDATE",
+    ),
+  ]);
+});

@@ -353,6 +353,32 @@ test("a selection permission failure is observed and leaves the ingestion cycle'
   }
 });
 
+test("a selection cut short by the cycle signal holds without observing a failure", async () => {
+  const controller = new AbortController();
+  controller.abort(new DOMException("cycle budget spent", "TimeoutError"));
+  const errorLog = spyOn(logger, "error").mockImplementation(() => {});
+  let admissions = 0;
+  try {
+    expect(
+      await refreshNextSourceStoredTotal({
+        scopedDb: async () => {
+          controller.signal.throwIfAborted();
+          return panic("Aborted selection fixture reached the database");
+        },
+        signal: controller.signal,
+        acquireAdmission: async () => {
+          admissions += 1;
+          return "granted";
+        },
+      }),
+    ).toBe("held");
+    expect(admissions).toBe(0);
+    expect(errorLog).not.toHaveBeenCalled();
+  } finally {
+    errorLog.mockRestore();
+  }
+});
+
 test("the emitted fixed-dimension gauge includes only due held sources on the database clock", async () => {
   // This emission scenario owns its hold census; older fixture rows cannot contribute.
   await db

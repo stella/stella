@@ -19,6 +19,9 @@ import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 
 type ChatComposerActionButtonProps = ChatComposerActionState & {
+  /** A stop was asked for and the turn has not ended yet: the button says
+   *  so and takes no second click. */
+  stopping?: boolean;
   className?: string;
   guideAnchorsEnabled?: boolean;
   iconClassName?: string;
@@ -36,7 +39,9 @@ export const ChatComposerActionButton = (
       case "send":
         return t("chat.sendPrompt");
       case "stop":
-        return t("chat.stopResponse");
+        return props.stopping === true
+          ? t("chat.stopping")
+          : t("chat.stopResponse");
       case "retry":
         return t("common.retry");
       default:
@@ -44,7 +49,10 @@ export const ChatComposerActionButton = (
         return panic(`Unhandled mode: ${String(mode)}`);
     }
   })();
-  const enabled = mode !== "send" || props.canSend;
+  const enabled =
+    mode === "stop"
+      ? props.stopping !== true
+      : mode !== "send" || props.canSend;
 
   const handleClick = () => {
     switch (mode) {
@@ -76,6 +84,7 @@ export const ChatComposerActionButton = (
         GUIDE_ANCHORS.chatSend,
         props.guideAnchorsEnabled ?? false,
       )}
+      aria-busy={mode === "stop" && props.stopping === true ? true : undefined}
       aria-label={label}
       // Canonical composer send/stop/retry look, baked in so every chat
       // surface renders the identical round, foreground-filled button

@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -87,7 +88,7 @@ test("organization deletion removes shared-mailbox history", async () => {
         correspondenceId,
         filedByAllowedSenderId: senderId,
       });
-      await tx.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(tx, [organizationId]);
       expect(
         await tx
           .select()

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { READER_ANNOTATION_MAX_SPANS } from "@stll/api-contract/legal-reader-annotations";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { pageLengthKeepingMarksWhole } from "@/api/lib/legal-search/reader-annotations/page.logic";
 
@@ -13,7 +13,8 @@ describe("pageLengthKeepingMarksWhole", () => {
       fc.integer({ min: 1, max: READER_ANNOTATION_MAX_SPANS }),
       { minLength: 1, maxLength: 30 },
     );
-    fc.assert(
+    assertProperty(
+      "no page boundary falls between two rows of one mark",
       fc.property(marks, fc.integer({ min: 1, max: 60 }), (sizes, limit) => {
         const rows = sizes.flatMap((size, mark) =>
           Array.from({ length: size }, () => ({
@@ -29,7 +30,7 @@ describe("pageLengthKeepingMarksWhole", () => {
           (last === null || last !== next)
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 

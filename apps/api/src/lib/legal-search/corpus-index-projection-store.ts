@@ -5,7 +5,6 @@ import {
   eq,
   inArray,
   isNotNull,
-  lte,
   notInArray,
   or,
   type SQL,
@@ -16,11 +15,11 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { corpusProjectionReservationQueue } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { unattestedCorpusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -51,7 +50,6 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   corpusIndexProjectionIntentIsOutstanding,
-  corpusIndexProjectionNeedsWork,
   corpusIndexProjectionProducesAppend,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 
@@ -131,108 +129,6 @@ const readPostgresClock = async (tx: Transaction): Promise<Date> => {
     return panic("PostgreSQL did not return the projection clock");
   }
   return value;
-};
-
-const pendingDesiredState = corpusIndexProjectionNeedsWork(
-  corpusIndexProjectionStates,
-);
-
-const noOutstandingIntent = sql`NOT EXISTS (
-      SELECT 1
-      FROM ${corpusIndexProjectionIntents} outstanding
-      WHERE outstanding.family = ${corpusIndexProjectionStates.family}
-        AND outstanding.generation = ${corpusIndexProjectionStates.generation}
-        AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
-        AND ${corpusIndexProjectionIntentIsOutstanding(sql`outstanding.status`)}
-    )`;
-
-type CorpusProjectionReservationQueueOptions = {
-  family: CorpusFamily;
-  generation: string;
-  limit: number;
-  eligibilityAt: Date;
-  scopedEntityIds: readonly string[] | null;
-  scopedIndexId: string | null;
-  /** Physical indexes no append may reach yet (`unattestedCorpusIndexIdsTx`). */
-  excludedIndexIds: readonly string[];
-};
-
-/**
- * The reservation queue read. Exported so the plan guard explains the exact
- * statement the append cycle issues rather than a copy of it.
- */
-export const corpusProjectionReservationQueue = (
-  tx: Transaction,
-  {
-    family,
-    generation,
-    limit,
-    eligibilityAt,
-    scopedEntityIds,
-    scopedIndexId,
-    excludedIndexIds,
-  }: CorpusProjectionReservationQueueOptions,
-) => {
-  const runnableAt = sql<Date>`coalesce(
-    ${corpusIndexProjectionStates.retryNotBefore},
-    ${corpusIndexProjectionStates.updatedAt}
-  )`;
-  return tx
-    .select({
-      entityId: corpusIndexProjectionStates.entityId,
-      epoch: corpusIndexProjectionStates.desiredEpoch,
-      fingerprint: corpusIndexProjectionStates.desiredFingerprint,
-      indexId: corpusIndexProjectionStates.desiredIndexId,
-      failureAttempts: corpusIndexProjectionStates.failureAttempts,
-      lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
-      appendMode: corpusIndexProjectionStates.appendMode,
-    })
-    .from(corpusIndexProjectionStates)
-    .innerJoin(
-      corpusIndexGenerations,
-      and(
-        eq(corpusIndexGenerations.family, corpusIndexProjectionStates.family),
-        eq(
-          corpusIndexGenerations.generation,
-          corpusIndexProjectionStates.generation,
-        ),
-      ),
-    )
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.family, family),
-        eq(corpusIndexProjectionStates.generation, generation),
-        scopedEntityIds === null
-          ? undefined
-          : inArray(corpusIndexProjectionStates.entityId, scopedEntityIds),
-        scopedIndexId === null
-          ? undefined
-          : eq(corpusIndexProjectionStates.desiredIndexId, scopedIndexId),
-        // An unattested group's desired state stays eligible and waits here:
-        // it is appended once the group is attested, never before.
-        excludedIndexIds.length === 0
-          ? undefined
-          : notInArray(corpusIndexProjectionStates.desiredIndexId, [
-              ...excludedIndexIds,
-            ]),
-        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
-        inArray(corpusIndexProjectionStates.workStatus, [
-          "eligible",
-          "retry_scheduled",
-          "repair_scheduled",
-        ]),
-        lte(runnableAt, eligibilityAt),
-        inArray(corpusIndexGenerations.status, ["building", "serving"]),
-        pendingDesiredState,
-        noOutstandingIntent,
-      ),
-    )
-    .orderBy(asc(runnableAt), asc(corpusIndexProjectionStates.entityId))
-    .limit(limit)
-    .for("update", {
-      of: corpusIndexProjectionStates,
-      skipLocked: true,
-    });
 };
 
 /**

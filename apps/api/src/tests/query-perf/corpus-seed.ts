@@ -18,6 +18,10 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
+  CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
+  CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER,
+} from "@/api/lib/case-law/population-count-limits";
+import {
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
@@ -28,6 +32,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import { isRecord } from "@/api/lib/type-guards";
 import type {
   GatedTestClientScope,
   GatedTestDb,
@@ -58,6 +63,25 @@ const COMPLETION_SOURCE_ID = toSafeId<"caseLawSource">(
   "01990000-00c2-7000-8000-000000000001",
 );
 const COMPLETION_ROWS = 100_000;
+/**
+ * A source the background replay has caught up with: every decision stored
+ * with its raw input and parsed by the current parser, so the lag probe finds
+ * nothing. That is its worst case: the answer is known only once every row
+ * has been ruled out. Its id sits outside the 00c2 range the coverage
+ * scenario sources take by index, so their cleanup never walks these rows.
+ * The rows are listing-only, outside the published views: a published
+ * decision carries search documents, and these carry none, so published they
+ * would distort every per-country read of the views. The probe reads the
+ * decisions table itself.
+ */
+const REPLAY_SOURCE_ID = toSafeId<"caseLawSource">(
+  "01990000-00c4-7000-8000-000000000001",
+);
+const REPLAY_ROWS = 100_000;
+export const REPLAY_PARSER_VERSION = 3;
+const LISTING_ONLY_METADATA = JSON.stringify({
+  _stellaPartialObservation: { isListingOnly: true },
+});
 
 export type CaseLawScenarioGeneration =
   "case_law_v5" | "case_law_v6" | "case_law_v7" | "case_law_v8" | "case_law_v9";
@@ -349,6 +373,25 @@ const seedLegislationChunk = async (
   );
 };
 
+/**
+ * An unfolded change log the size of a population burst, below the
+ * maintenance high water so decision backfills stay admitted. The size is
+ * fixed, so both backfill sizes read the same backlog, and the rows cancel in
+ * pairs on one key, so a later fold moves no count.
+ */
+const POPULATION_BACKLOG_ROWS = CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER / 2;
+
+const seedPopulationBacklog = async (database: GatedTestDb) => {
+  await database.execute(sql`INSERT INTO case_law_population_deltas
+      (kind, country, source_id, value, delta)
+    SELECT 'court', 'CZE', ${PROVISION_SOURCE_ID}::uuid, 'Fixture court',
+      CASE WHEN n % 2 = 1 THEN 1 ELSE -1 END
+    FROM generate_series(1, 2 * greatest(0, (${POPULATION_BACKLOG_ROWS}::integer
+      - (SELECT count(*)::integer FROM case_law_population_deltas) + 1) / 2)) AS n
+    ORDER BY n`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_deltas`);
+};
+
 /** Grow the source rows read by the bounded provision-state run. */
 export const seedProvisionBackfillRows = async (
   database: GatedTestDb,
@@ -420,6 +463,7 @@ export const seedProvisionBackfillRows = async (
   );
   await database.execute(sql`INSERT INTO case_law_provision_repair_cursors
     (name, completed_at) VALUES ('scope-bootstrap', now())`);
+  await seedPopulationBacklog(database);
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
 };
 
@@ -540,6 +584,54 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
   }
 };
 
+/** The country whose admitted courts the court catalog page reads. */
+export const COURT_CATALOG_COUNTRY = "XCC";
+const COURT_CATALOG_COURTS = 3000;
+const COURT_CATALOG_SOURCE_IDS = [
+  "01990000-00c4-7000-8000-000000000001",
+  "01990000-00c4-7000-8000-000000000002",
+  "01990000-00c4-7000-8000-000000000003",
+] as const;
+
+/**
+ * A country of many courts, each held by every one of three sources, as the
+ * folded population counts hold them: the court catalog reads one page of
+ * them, so the rows past the page are what it must not read.
+ */
+const seedCourtCatalogPopulation = async (database: GatedTestDb) => {
+  for (const [index, sourceId] of COURT_CATALOG_SOURCE_IDS.entries()) {
+    // db-await-in-loop: three fixed sources, each with its own court rows.
+    await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+      VALUES (${sourceId}::uuid, ${`query-perf-court-catalog-${String(index + 1)}`},
+        ${`Court catalog fixture ${String(index + 1)}`}, false)
+      ON CONFLICT (id) DO NOTHING`);
+    // db-await-in-loop: the source's court rows follow the source row they reference.
+    await database.execute(sql`INSERT INTO case_law_population_counts
+      (kind, country, source_id, value, total)
+      SELECT 'court', ${COURT_CATALOG_COUNTRY}, ${sourceId}::uuid,
+        'Catalog court ' || lpad(n::text, 5, '0'), 1 + n % 53
+      FROM generate_series(1, ${COURT_CATALOG_COURTS}) n
+      ON CONFLICT DO NOTHING`);
+  }
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_counts`);
+};
+
+/**
+ * The coverage refresh reads every source's counts, so a fixture for another
+ * read's budget leaves this measurement's clone before it starts.
+ */
+const removeCourtCatalogPopulation = async (database: GatedTestDb) => {
+  await database.execute(
+    sql`DELETE FROM case_law_population_counts WHERE country = ${COURT_CATALOG_COUNTRY}`,
+  );
+  for (const sourceId of COURT_CATALOG_SOURCE_IDS) {
+    // db-await-in-loop: three fixed sources, after the counts that reference them.
+    await database.execute(
+      sql`DELETE FROM case_law_sources WHERE id = ${sourceId}::uuid`,
+    );
+  }
+};
+
 export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
   await withSeededTableMaintenance(database, async () => {
     await database.insert(corpusIndexGenerations).values([
@@ -584,6 +676,36 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
         FROM generate_series(${chunk.first}, ${chunk.last}) AS n`);
       });
     }
+    await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+      VALUES (${REPLAY_SOURCE_ID}, 'query-perf-replay', 'Replay probe fixture', false)`);
+    for (const chunk of chunks(REPLAY_ROWS)) {
+      // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
+      await withoutTriggers(database, async (tx) => {
+        await tx.execute(sql`INSERT INTO case_law_decisions
+          (id, source_id, case_number, country, court, language, parser_version,
+            source_hash, source_hash_version, source_raw_s3_key,
+            parsed_source_hash, parsed_source_hash_version, parsed_source_raw_s3_key,
+            metadata)
+          SELECT md5(${REPLAY_SOURCE_ID}::text || '-' || n::text)::uuid,
+            ${REPLAY_SOURCE_ID}, 'replay-' || n::text, 'POL', 'fixture', 'pl',
+            ${REPLAY_PARSER_VERSION}, 'stored-' || n::text, 1, 'case-law/raw/replay-' || n::text,
+            'stored-' || n::text, 1, 'case-law/raw/replay-' || n::text,
+            ${LISTING_ONLY_METADATA}::text::jsonb
+          FROM generate_series(${chunk.first}, ${chunk.last}) AS n`);
+      });
+    }
+    const [published] = v.parse(
+      v.tuple([v.object({ rows: v.number() })]),
+      executedRows(
+        await database.execute(sql`SELECT count(*)::integer AS rows
+          FROM case_law_published_decisions WHERE source_id = ${REPLAY_SOURCE_ID}`),
+      ),
+    );
+    if (published.rows !== 0) {
+      panic(
+        "The replay fixture's decisions must stay out of the published views",
+      );
+    }
     await database.execute(sql`INSERT INTO eu_completion_receipts
     (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
     SELECT 'finished-' || id::text, source_id, id, 'dry-run', 2, 'dry-run', source_hash, now()
@@ -604,6 +726,7 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
 
     await rebuildIndexes();
     await seedBrowseFacetCounts(database);
+    await seedCourtCatalogPopulation(database);
     const works = Array.from(
       { length: LEGISLATION_CANDIDATE_COUNT },
       // Spread over the works, as hits for a common term are.
@@ -614,7 +737,11 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
         `01990000-00a2-7000-8000-${(work * LEGISLATION_VERSIONS_PER_WORK).toString(16).padStart(12, "0")}`,
       ),
     );
-    return { candidateIds, completionSourceId: COMPLETION_SOURCE_ID };
+    return {
+      candidateIds,
+      completionSourceId: COMPLETION_SOURCE_ID,
+      replaySourceId: REPLAY_SOURCE_ID,
+    };
   });
 
 export type CorpusReadBudgetSeed = Awaited<
@@ -784,6 +911,30 @@ const replaceCoverageRefreshState = async (
 
 const COVERAGE_DECISION_ID_PREFIX = "01990000-00c3-7000-8000-";
 
+/** Read measurements start after fixture writes have reached the persisted owner. */
+const foldFixturePopulation = async (database: GatedTestDb) => {
+  let done = false;
+  while (!done) {
+    // db-await-in-loop: fixture preparation folds bounded batches before the measured read-only refresh.
+    const row = executedRows(
+      await database.execute(sql`
+      SELECT folded, done FROM public.fold_case_law_population_counts(${CASE_LAW_POPULATION_FOLD_BATCH_LIMIT})
+    `),
+    ).find(isRecord);
+    if (
+      !row ||
+      typeof row["folded"] !== "number" ||
+      typeof row["done"] !== "boolean"
+    ) {
+      panic("Invalid fixture population fold result");
+    }
+    if (row["folded"] === 0 && !row["done"]) {
+      panic("Fixture population fold owner is busy");
+    }
+    done = row["done"];
+  }
+};
+
 /**
  * The served sources' published decisions at the scenario's size, spread over
  * their facet courts and years, with the online coverage indexes production
@@ -844,6 +995,10 @@ const seedCoverageDecisions = async ({
   }
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_search_documents`);
+  await foldFixturePopulation(database);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_counts`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_deltas`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_projections`);
 };
 
 /**
@@ -856,6 +1011,7 @@ export const prepareCoverageRefreshMeasurement = async (
   options: SeedSitemapReadBudgetOptions,
 ) => {
   const { database } = options;
+  await removeCourtCatalogPopulation(database);
   await seedCoverageDecisions(options);
   const found = await readCoverageRefreshState(database);
   await replaceCoverageRefreshState(

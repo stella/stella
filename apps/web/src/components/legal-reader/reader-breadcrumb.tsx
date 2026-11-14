@@ -1,22 +1,24 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { AiDisclosureContext } from "@stll/api-contract/ai-disclosure";
+import type { ReaderAiDisclosureContext } from "@stll/api-contract/ai-disclosure";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
   compactReaderPath,
   fitReaderPath,
   fitWidth,
+  readerProvisionNumber,
   splitReaderHeading,
 } from "./reader-breadcrumb.logic";
 import type {
@@ -58,12 +60,15 @@ type ReaderBreadcrumbProps = {
   onJump: (anchorId: string) => void;
 };
 
+/** The Contents row Contents marks as the current location, if shown. */
+const currentContentsRow = (node: ParentNode | null): HTMLElement | null =>
+  node?.querySelector<HTMLElement>("[data-contents-anchor][aria-current]") ??
+  null;
+
 // A stable callback ref: it runs when Contents opens, never again while it
 // stays open, so rows arriving later cannot move the list under the reader.
 const revealCurrentRow = (node: HTMLDivElement | null) => {
-  node
-    ?.querySelector<HTMLElement>("[data-contents-anchor][aria-current]")
-    ?.scrollIntoView({ block: "nearest" });
+  currentContentsRow(node)?.scrollIntoView({ block: "nearest" });
 };
 
 type ReaderContentsListProps = {
@@ -123,7 +128,7 @@ const ReaderContentsList = ({
       {children}
     </Button>
   );
-  const aiLabel = (disclosure: AiDisclosureContext) => (
+  const aiLabel = (disclosure: ReaderAiDisclosureContext) => (
     <span className="text-muted-foreground shrink-0 pe-2 text-xs">
       <ReaderAiLabel context={disclosure} label={t("caseLaw.notesFilter.ai")} />
     </span>
@@ -205,10 +210,20 @@ const ReaderContentsList = ({
   );
 };
 
-/** A crumb's button padding and border, which its measured text leaves out. */
-const CRUMB_PADDING_WIDTH = 16;
+/**
+ * A crumb's button. The hidden measurer renders the same one, as a span so no
+ * control hides on the page, and so a measured width is the width the crumb
+ * needs, whatever its type or padding become.
+ */
+const CRUMB_BUTTON = {
+  className: "h-11 min-w-0 justify-start sm:h-11",
+  size: "xs",
+  variant: "ghost",
+} as const;
 const SEPARATOR_WIDTH = 16;
 const MENU_WIDTH = 44;
+/** The smallest touch target a control may offer. */
+const TOUCH_TARGET_WIDTH = 44;
 /** Under about a dozen characters a title says nothing worth its width. */
 const MINIMUM_TITLE_WIDTH = 80;
 const MAXIMUM_ANCESTOR_LABEL_WIDTH = 160;
@@ -227,11 +242,15 @@ const CrumbText = ({
   const title = withTitle ? parts.title : null;
   return (
     <span className="flex min-w-0 items-center gap-1">
-      <bdi className={cn(title === null ? "min-w-0 truncate" : "shrink-0")}>
-        {parts.label}
-      </bdi>
+      {title === null ? (
+        <TruncatedText render={<bdi />}>{parts.label}</TruncatedText>
+      ) : (
+        <bdi className="shrink-0">{parts.label}</bdi>
+      )}
       {title !== null && (
-        <bdi className="min-w-0 truncate font-normal">{title}</bdi>
+        <TruncatedText className="font-normal" render={<bdi />}>
+          {title}
+        </TruncatedText>
       )}
     </span>
   );
@@ -328,6 +347,7 @@ export const ReaderBreadcrumb = ({
   const { visible, hidden } = compactReaderPath(path);
   const [layout, setLayout] = useState<ReturnType<typeof fitReaderPath>>();
   const [contentsOpen, setContentsOpen] = useState(false);
+  const contentsPopupRef = useRef<HTMLDivElement>(null);
   const current = path.at(-1);
   const ancestors = visible.slice(0, -1);
   const fitOf = (index: number) => layout?.fits[index];
@@ -344,15 +364,20 @@ export const ReaderBreadcrumb = ({
         return;
       }
       const widthOfMeasure = (part: "label" | "full", anchorId: string) =>
-        (node
+        node
           .querySelector<HTMLElement>(
             `[data-breadcrumb-${part}="${CSS.escape(anchorId)}"]`,
           )
-          ?.getBoundingClientRect().width ?? 0) + CRUMB_PADDING_WIDTH;
+          ?.getBoundingClientRect().width ?? 0;
       const crumbs = compactReaderPath(path).visible.map(({ anchorId }) => ({
         label: widthOfMeasure("label", anchorId),
         full: widthOfMeasure("full", anchorId),
       }));
+      // A provision number is the current label, which is never cut.
+      const numberWidth =
+        readerProvisionNumber(path.at(-1)?.title ?? "") === null
+          ? 0
+          : (crumbs.at(-1)?.label ?? 0);
       // The AI mark beside an analysis trail keeps its own width.
       const mark = node.querySelector<HTMLElement>("[data-breadcrumb-ai-mark]");
       const fitted = fitReaderPath({
@@ -364,6 +389,7 @@ export const ReaderBreadcrumb = ({
         menuWidth: MENU_WIDTH,
         minimumTitleWidth: MINIMUM_TITLE_WIDTH,
         maximumAncestorLabelWidth: MAXIMUM_ANCESTOR_LABEL_WIDTH,
+        minimumCurrentWidth: Math.max(TOUCH_TARGET_WIDTH, numberWidth),
       });
       setLayout((previous) =>
         previous?.showMenu === fitted.showMenu &&
@@ -416,14 +442,7 @@ export const ReaderBreadcrumb = ({
             ? t("statutes.outline")
             : `${t("statutes.outline")}: ${nameOf(title)}`
         }
-        render={
-          <Button
-            className="h-11 min-w-0 justify-start sm:h-11"
-            size="xs"
-            style={{ width }}
-            variant="ghost"
-          />
-        }
+        render={<Button {...CRUMB_BUTTON} style={{ width }} />}
         title={title}
       >
         {label}
@@ -434,7 +453,16 @@ export const ReaderBreadcrumb = ({
         align="start"
         aria-label={t("statutes.outline")}
         className="w-80 max-w-[calc(100vw-2rem)]"
+        // Base UI would focus the first row, and that focus scrolls the list
+        // back to its top; open on the row being read instead. A touch keeps
+        // Base UI's focus on the popup, which scrolls nothing.
+        initialFocus={(interaction) =>
+          interaction === "touch"
+            ? contentsPopupRef.current
+            : (currentContentsRow(contentsPopupRef.current) ?? true)
+        }
         padding="sm"
+        ref={contentsPopupRef}
       >
         <ReaderContentsList
           activeAnchorId={activeAnchorId}
@@ -486,18 +514,26 @@ export const ReaderBreadcrumb = ({
       </span>
       <div
         aria-hidden="true"
-        className="pointer-events-none invisible absolute flex w-max text-sm font-medium whitespace-nowrap sm:text-xs"
+        className="pointer-events-none invisible absolute flex w-max"
       >
         {visible.map(({ anchorId, title }) => {
           const parts = splitReaderHeading(title);
           return (
             <Fragment key={anchorId}>
-              <span data-breadcrumb-label={anchorId}>
+              <Button
+                {...CRUMB_BUTTON}
+                data-breadcrumb-label={anchorId}
+                render={<span />}
+              >
                 <CrumbText parts={parts} withTitle={false} />
-              </span>
-              <span data-breadcrumb-full={anchorId}>
+              </Button>
+              <Button
+                {...CRUMB_BUTTON}
+                data-breadcrumb-full={anchorId}
+                render={<span />}
+              >
                 <CrumbText parts={parts} withTitle />
-              </span>
+              </Button>
             </Fragment>
           );
         })}
@@ -513,13 +549,11 @@ export const ReaderBreadcrumb = ({
               <TrailMenu entries={offBar} nameOf={nameOf} onJump={onJump} />
             ) : (
               <Button
+                {...CRUMB_BUTTON}
                 aria-label={nameOf(item.segment.title)}
-                className="h-11 min-w-0 justify-start sm:h-11"
-                size="xs"
                 onClick={() => onJump(item.segment.anchorId)}
                 style={{ width: widthOf(item.index) }}
                 title={item.segment.title}
-                variant="ghost"
               >
                 <CrumbText
                   parts={splitReaderHeading(item.segment.title)}

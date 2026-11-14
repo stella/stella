@@ -1,20 +1,23 @@
 import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
+import type { AIErrorKind } from "@stll/api-contract";
+
+import {
+  buildEmailSummaryMessage,
+  EMAIL_GENERATION_FINISH_POLICY,
+  EMAIL_SUMMARY_SYSTEM_PROMPT,
+  generateEmailText,
+} from "@/api/handlers/ai/email-generation";
 import {
   compactChatMessagesForModel,
   COMPACTION_SUMMARY_MESSAGE_ID,
   compactModelMessagesForModel,
+  MODEL_COMPACTION_CHECKPOINT_NOTE,
   planChatCompaction,
   planModelCompaction,
 } from "@/api/handlers/chat/compaction";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import {
-  capNarrative,
-  generateDesktopTimeEntryNarrative,
-  NARRATIVE_FAILURE_MESSAGE,
-  NARRATIVE_FINISH_POLICY,
-} from "@/api/handlers/desktop-time-entries/narrative-model";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId } from "@/api/lib/branded-types";
 import { compactionGenerationRequest } from "@/api/lib/chat/compaction-tokens";
@@ -156,6 +159,13 @@ const SUMMARY_SEPARATOR = "\n\n";
 const summaryTextOf = (content: string): string => {
   const at = content.indexOf(SUMMARY_SEPARATOR);
   return at === -1 ? content : content.slice(at + SUMMARY_SEPARATOR.length);
+};
+
+/** A model-step checkpoint also carries its untrusted-checkpoint note. */
+const modelSummaryTextOf = (content: string): string => {
+  const text = summaryTextOf(content);
+  const note = `${MODEL_COMPACTION_CHECKPOINT_NOTE}${SUMMARY_SEPARATOR}`;
+  return text.startsWith(note) ? text.slice(note.length) : text;
 };
 
 type HistoryShapeOptions<TMessage> = {
@@ -327,7 +337,7 @@ const modelCompactionDriver = textCallSiteDriver({
       summaryErrors,
       summaryOf: (message) =>
         !modelThread.includes(message) && typeof message.content === "string"
-          ? summaryTextOf(message.content)
+          ? modelSummaryTextOf(message.content)
           : undefined,
     });
   },
@@ -340,34 +350,32 @@ const modelCompactionDriver = textCallSiteDriver({
     ),
 });
 
-// --- Desktop time-entry narrative -------------------------------------------
+// --- Outlook email helpers ----------------------------------------------------
 
-/** What the desktop receives: a narrative, or the failure it answers by
- *  keeping its template. */
-type NarrativeAnswer =
-  | { type: "narrative"; text?: string }
-  | { type: "keep-template"; status: number; message: string; cause: unknown };
+/** What the add-in receives: the text, or the status of the failure it shows. */
+type EmailAnswer =
+  { type: "text"; text?: string } | { type: "failed"; status: number };
 
-const KEEP_TEMPLATE = {
-  type: "keep-template",
-  status: 502,
-  message: NARRATIVE_FAILURE_MESSAGE,
-  cause: undefined,
-} as const satisfies NarrativeAnswer;
+/** The statuses an AI failure answers with other than 502. */
+const EMAIL_FAILURE_STATUS: Partial<Record<AIErrorKind, number>> = {
+  quota_exhausted: 429,
+  provider_billing: 402,
+};
 
-const desktopNarrativeDriver = textCallSiteDriver({
-  name: "generateDesktopTimeEntryNarrative",
-  finishPolicy: NARRATIVE_FINISH_POLICY,
-  run: async (cassette): Promise<NarrativeAnswer> => {
-    const admission = testModelAdmission(
-      organizationId,
-      "desktop-time-entries.narrative",
-    );
-    const result = await generateDesktopTimeEntryNarrative({
+const emailSummaryDriver = textCallSiteDriver({
+  name: "generateEmailText",
+  finishPolicy: EMAIL_GENERATION_FINISH_POLICY,
+  run: async (cassette): Promise<EmailAnswer> => {
+    const admission = testModelAdmission(organizationId, "email.summarize");
+    const result = await generateEmailText({
       request: {
-        titles: ["Smlouva o dílo – návrh.docx", "Katastr nemovitostí"],
-        locale: "cs-CZ",
-        matterName: null,
+        system: EMAIL_SUMMARY_SYSTEM_PROMPT,
+        message: buildEmailSummaryMessage({
+          text: "Please confirm the lease signing on 5 May at 10:00.",
+          language: "en",
+        }),
+        maxOutputTokens: 1024,
+        failureMessage: "Could not summarize the email. Please try again.",
       },
       admission,
       organizationId,
@@ -377,39 +385,49 @@ const desktopNarrativeDriver = textCallSiteDriver({
       caching: { enabled: false, reason: "org-disabled" },
       analytics: createTanStackAIAnalyticsCallbacks({
         dataClass: "customer",
-        feature: "desktop_time_entries.narrative",
+        feature: "email.summarize",
         modelTier: admission.modelTier,
         traceId: "ai-text-replay",
       }),
       abortSignal: new AbortController().signal,
     });
     if (Result.isError(result)) {
-      const { status, message, cause } = result.error;
-      return { type: "keep-template", status, message, cause };
+      return { type: "failed", status: result.error.status };
     }
     const expected = expectedTextOutcome(
       cassette.expect,
-      NARRATIVE_FINISH_POLICY,
+      EMAIL_GENERATION_FINISH_POLICY,
     );
     return expected.type === "success" && expected.text === undefined
-      ? { type: "narrative" }
-      : { type: "narrative", text: result.value };
+      ? { type: "text" }
+      : { type: "text", text: result.value };
   },
-  answerFor: (expected): NarrativeAnswer => {
-    if (expected.type !== "success") {
-      return KEEP_TEMPLATE;
+  answerFor: (expected): EmailAnswer => {
+    switch (expected.type) {
+      case "success": {
+        if (expected.text === undefined) {
+          return { type: "text" };
+        }
+        const text = expected.text.trim();
+        return text === ""
+          ? { type: "failed", status: 502 }
+          : { type: "text", text };
+      }
+      case "failure":
+        return {
+          type: "failed",
+          status: EMAIL_FAILURE_STATUS[expected.kind] ?? 502,
+        };
+      case "incomplete":
+      case "refusal":
+      case "unfinished":
+        return { type: "failed", status: 502 };
+      default:
+        expected satisfies never;
+        return panic("Unhandled email helper outcome");
     }
-    if (expected.text === undefined) {
-      return { type: "narrative" };
-    }
-    const text = expected.text.trim();
-    return text === ""
-      ? KEEP_TEMPLATE
-      : { type: "narrative", text: capNarrative(text) };
   },
 });
-
-// --- The census -------------------------------------------------------------
 
 /**
  * Every call site the replay drives, by file (relative to `apps/api/src`),
@@ -419,8 +437,8 @@ const desktopNarrativeDriver = textCallSiteDriver({
 export const TEXT_CALL_SITE_DRIVERS: Readonly<
   Record<string, readonly TextCallSiteDriver[]>
 > = {
+  "handlers/ai/email-generation.ts": [emailSummaryDriver],
   "handlers/chat/compaction.ts": [chatCompactionDriver, modelCompactionDriver],
-  "handlers/desktop-time-entries/narrative-model.ts": [desktopNarrativeDriver],
 };
 
 /**

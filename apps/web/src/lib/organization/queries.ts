@@ -1,11 +1,13 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { organizationQueryRoot } from "@/lib/resource-query-roots.logic";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 const ORGANIZATION_KEY_ROOT = organizationQueryRoot();
 
@@ -27,35 +29,47 @@ export const organizationKeys = {
  * consumer and blow the per-route network baseline. Consumers narrow to the
  * active organization client-side. */
 export const organizationListOptions = (userId: string) =>
-  queryOptions({
-    queryKey: organizationKeys.list(userId),
-    queryFn: async () => {
-      const result = await authClient.organization.list();
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: organizationKeys.list(userId),
+      queryFn: async () => {
+        const result = await authClient.organization.list();
 
-      if (result.error) {
-        throw toAuthClientError(result.error);
-      }
+        if (result.error) {
+          throw toAuthClientError(result.error);
+        }
 
-      return result.data;
+        return result.data;
+      },
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization" },
     },
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  );
 
 export const organizationOptions = (organizationId: string) =>
-  queryOptions({
-    queryKey: organizationKeys.byOrganization(organizationId),
-    queryFn: async () => {
-      const result = await authClient.organization.getFullOrganization({
-        query: {
-          membersLimit: BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit,
-        },
-      });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: organizationKeys.byOrganization(organizationId),
+      queryFn: async () => {
+        const result = await authClient.organization.getFullOrganization({
+          query: {
+            membersLimit: BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit,
+          },
+        });
 
-      if (result.error) {
-        throw toAuthClientError(result.error);
-      }
+        if (result.error) {
+          throw toAuthClientError(result.error);
+        }
 
-      return result.data;
+        return result.data;
+      },
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization" },
     },
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  );

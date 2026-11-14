@@ -16,11 +16,11 @@ import path from "node:path";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ChatRouteHandoffMessage } from "@/features/chat/chat-runtime";
 import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { browserStorage } from "@/lib/account/browser-storage";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -1069,17 +1069,14 @@ const replay = async (
     const lastEnded = exchanges.at(-1)?.ended;
     const midStream =
       lastEnded !== undefined && staysOpen(lastEnded) && next !== undefined;
-    await waitFor(
-      () => {
-        expect(server.posted.length, requests).toBe(expectedPosts);
-        expect(
-          midStream ? server.stalled() : server.streaming() === 0,
-          requests,
-        ).toBe(true);
-        expect(isSuspended(container)).toBe(false);
-      },
-      { timeout: 5000 },
-    );
+    await waitFor(() => {
+      expect(server.posted.length, requests).toBe(expectedPosts);
+      expect(
+        midStream ? server.stalled() : server.streaming() === 0,
+        requests,
+      ).toBe(true);
+      expect(isSuspended(container)).toBe(false);
+    });
     await flush();
     // Only the recorded requests, and nothing the recording did not serve.
     expect(server.posted.length, requests).toBe(expectedPosts);
@@ -1160,6 +1157,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "allow-in-conversation": recordedAs(approvedAs("allow-in-conversation")),
   "allow-once": recordedAs(approvedAs("allow-once")),
   "always-allow": recordedAs(({ type }) => type === "auto-approve"),
+  "answer-local-question": notRecorded(
+    "The recorder runs cloud turns only; local-run-question-card.dom.test.tsx drives a local run's question through the page.",
+  ),
   "answer-question": recordedAs(({ type }) => type === "answer"),
   "attach-files": notRecorded(
     "The recorder posts text messages only; attachments need stored files.",

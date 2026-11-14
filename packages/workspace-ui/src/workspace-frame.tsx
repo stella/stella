@@ -32,6 +32,7 @@ import {
   useSidebar,
 } from "@stll/ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail, WorkspaceShell } from "@stll/ui/workspace-shell";
@@ -258,7 +259,10 @@ const DescribedWorkspaceFrame = ({
       </SidebarProvider>
     );
 
-  if (inspector?.mobile === undefined) {
+  if (inspector === undefined) {
+    return frame;
+  }
+  if (inspector.mobile === undefined) {
     return frame;
   }
 
@@ -411,7 +415,7 @@ const DescribedSidebar = ({
                     onClick={item.onActivate}
                   >
                     {item.icon}
-                    <span className="truncate">{item.label}</span>
+                    <TruncatedText hint={false}>{item.label}</TruncatedText>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

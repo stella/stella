@@ -1,6 +1,6 @@
 import { panic } from "better-result";
+import * as v from "valibot";
 
-import { normalizeCountry } from "@stll/agent-input";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   type PublicCaseLawCountry,
@@ -21,7 +21,14 @@ import { documentHydrationFor } from "@/api/handlers/case-law/decisions/get-defe
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
-import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
+import {
+  corpusCountryQuotas,
+  type CorpusSubCursors,
+  practisedCorpusCountries,
+  rankCorpusCountries,
+  searchCaseLawCountries,
+  subCursorArgument,
+} from "@/api/lib/legal-search/case-law-multi-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -39,9 +46,12 @@ import {
   defaultSearchLegislationHandler,
   isLegislationSearchSuccess,
   isReadCaseLawDecisionSuccess,
-  isSearchCaseLawSuccess,
   isStatuteDocument,
 } from "@/api/mcp/public-law-handlers";
+import {
+  createToolContinuation,
+  waitForPublicRead,
+} from "@/api/mcp/public-read-continuation";
 import type {
   InternalToolErrorResult,
   McpCompatSearchResult,
@@ -51,7 +61,8 @@ import {
   buildLegislationDocumentAppUrl,
   errorResult,
   legalCitationLinkFields,
-  searchIndexUnavailableResult,
+  searchRefusalResult,
+  toolDataResult,
   toPlainCorpusText,
 } from "@/api/mcp/tool-utils";
 
@@ -69,21 +80,6 @@ import {
  * pair share it unchanged.
  */
 
-/**
- * One corpus source's position, keyed by country. A key absent means that
- * country has not been asked yet (its first page); a key holding `null` means
- * its pages ended on an earlier call and it is not asked again.
- *
- * Keyed by country rather than by position in a list, so neither the order
- * the countries are asked in nor a change to the practice jurisdictions
- * between pages moves any country's place. A cursor minted before every
- * admitted country was asked (while practice jurisdictions still selected
- * countries, or before a country was admitted) resumes each country it names
- * where it stopped and starts the others at their first page: nothing already
- * returned repeats and nothing is skipped.
- */
-export type CorpusSubCursors = Readonly<Record<string, string | null>>;
-
 export type CompatCorpusCursors = {
   decisions: CorpusSubCursors;
   statutes: CorpusSubCursors;
@@ -99,17 +95,10 @@ export type CompatCorpusCountries = {
   legislation: readonly PublicLegislationCountry[];
 };
 
-/** A practice jurisdiction in the corpus's alpha-3 spelling. */
-export type PractisedCountry = { alpha3: string; isPrimary: boolean };
-
-const PRIMARY_RANK = 0;
-const PRACTISED_RANK = 1;
-const UNPRACTISED_RANK = 2;
-
 /**
- * Every admitted country, in the order this pair asks them: the primary
- * practice jurisdiction first, then the other practised ones, then the rest,
- * each group in admitted order.
+ * The corpus countries a query is asked of: every admitted country, ranked by
+ * the organization's practice jurisdictions (the only jurisdiction signal this
+ * pair has).
  *
  * Practice jurisdictions order the countries and never remove one. This pair
  * takes a query and a cursor and nothing else, so a country it left out could
@@ -125,48 +114,11 @@ const UNPRACTISED_RANK = 2;
  * one. The per-country quota floor stays one hit, which the cap assertion
  * below guarantees for every admitted country.
  */
-export const rankCorpusCountries = <TCountry extends string>(
-  admitted: readonly TCountry[],
-  practised: readonly PractisedCountry[],
-): readonly TCountry[] => {
-  const rankByCountry = new Map<string, number>();
-  for (const { alpha3, isPrimary } of practised) {
-    const rank = isPrimary ? PRIMARY_RANK : PRACTISED_RANK;
-    rankByCountry.set(
-      alpha3,
-      Math.min(rank, rankByCountry.get(alpha3) ?? UNPRACTISED_RANK),
-    );
-  }
-  return admitted
-    .map((country, index) => ({
-      country,
-      index,
-      rank: rankByCountry.get(country) ?? UNPRACTISED_RANK,
-    }))
-    .toSorted(
-      (left, right) => left.rank - right.rank || left.index - right.index,
-    )
-    .map(({ country }) => country);
-};
-
-/**
- * The corpus countries a query is asked of: every admitted country, ranked by
- * the organization's practice jurisdictions (the only jurisdiction signal this
- * pair has). See {@link rankCorpusCountries} for why they rank and never
- * select.
- */
 export const resolveCompatCorpusCountries = async (
   context: McpRequestResources,
 ): Promise<CompatCorpusCountries> => {
-  const practised = (await loadPracticeJurisdictions(context)).flatMap(
-    ({ countryCode, isPrimary }) => {
-      // The column stores alpha-2 and the corpus keys on alpha-3; the shared
-      // country reader is what converts between them everywhere else too.
-      const normalized = normalizeCountry(countryCode, { spelling: "alpha-3" });
-      return normalized.ok
-        ? [{ alpha3: normalized.value.alpha3, isPrimary }]
-        : [];
-    },
+  const practised = practisedCorpusCountries(
+    await loadPracticeJurisdictions(context),
   );
 
   return {
@@ -206,30 +158,6 @@ const EMPTY_PAGE: CorpusPage = {
 };
 
 /**
- * A source's page cap split across the countries it is asked for, summing to
- * exactly the cap: a floor share each, plus one extra hit to the first
- * `cap % countries` of them in the order they are asked (practised first).
- *
- * The obvious equal floored share is wrong in both directions. Three countries
- * under a cap of five would each take one, spending three hits of the five;
- * twelve countries would each take the `Math.max(1, ...)` floor and return
- * twelve hits from a cap of five. Truncating the merged page afterwards cannot
- * repair that, because by then every country's cursor has advanced past hits
- * no continuation would ever emit again.
- */
-export const corpusCountryQuotas = <TCountry>(
-  cap: number,
-  countries: readonly TCountry[],
-): readonly { country: TCountry; limit: number }[] => {
-  const share = Math.floor(cap / countries.length);
-  const remainder = cap % countries.length;
-  return countries.map((country, index) => ({
-    country,
-    limit: index < remainder ? share + 1 : share,
-  }));
-};
-
-/**
  * A country whose share floors to zero would have to be carried to a later
  * page, and this pair has no scheme for that: its merged cursor records where
  * each country got to, not which ones never ran. Both admitted lists and both
@@ -261,23 +189,6 @@ assertCapCoversAdmittedCountries(
   PUBLIC_LEGISLATION_COUNTRIES,
 );
 
-/**
- * Three states, as in `search_case_law`: a string continues this country, an
- * absent entry is its first page, and `null` means it ended on an earlier one.
- */
-const subCursorArgument = (
-  cursors: CorpusSubCursors,
-  country: string,
-): { exhausted: true } | { exhausted: false; cursor?: string } => {
-  const cursor = cursors[country];
-  if (cursor === null) {
-    return { exhausted: true };
-  }
-  return cursor === undefined
-    ? { exhausted: false }
-    : { exhausted: false, cursor };
-};
-
 const searchDecisions = async ({
   context,
   countries,
@@ -289,77 +200,35 @@ const searchDecisions = async ({
   cursors: CorpusSubCursors;
   query: string;
 }): Promise<CorpusPageOutcome> => {
-  if (countries.length === 0) {
-    return { type: "page", page: EMPTY_PAGE };
-  }
-  const observer = actionRequestObserver(
-    context.organizationId,
-    ACTION_COST_CALL_KIND.corpusRequest,
-  );
-  const search =
-    context.testDependencies?.searchDecisionsHandler ??
-    defaultSearchDecisionsHandler;
-
-  const outcomes = await mapWithConcurrency({
-    items: [
-      ...corpusCountryQuotas(
-        LIMITS.mcpCompatDecisionPageSizeDefault,
-        countries,
-      ),
-    ],
-    limit: countries.length,
-    operation: async ({
-      country,
-      limit,
-    }: {
-      country: PublicCaseLawCountry;
-      limit: number;
-    }) => {
-      const position = subCursorArgument(cursors, country);
-      if (position.exhausted) {
-        return { country, result: null } as const;
-      }
-      return {
-        country,
-        result: await search({
-          body: {
-            query,
-            limit,
-            country,
-            ...(position.cursor === undefined
-              ? {}
-              : { cursor: position.cursor }),
-          },
-          caseLawDb: caseLawPublicReadDb,
-          observer,
-        }),
-      } as const;
-    },
+  const outcome = await searchCaseLawCountries({
+    query,
+    countries,
+    cursors,
+    cap: LIMITS.mcpCompatDecisionPageSizeDefault,
+    observer: actionRequestObserver(
+      context.organizationId,
+      ACTION_COST_CALL_KIND.corpusRequest,
+    ),
+    search:
+      context.testDependencies?.searchDecisionsHandler ??
+      defaultSearchDecisionsHandler,
   });
+  if (outcome.type === "failed") {
+    return {
+      type: "failed",
+      result:
+        searchRefusalResult(outcome.answer) ??
+        errorResult("Case-law search failed"),
+    };
+  }
 
   const page: CorpusPage = {
     results: [],
-    cursors: {},
-    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    cursors: outcome.cursors,
+    paginationOutcome: outcome.paginationOutcome,
   };
-  for (const { country, result } of outcomes) {
-    if (result === null) {
-      page.cursors[country] = null;
-      continue;
-    }
-    // A country that failed sinks the corpus half rather than reading as "no
-    // law there": those are different answers to the same question.
-    if (isSearchIndexUnavailable(result)) {
-      return { type: "failed", result: searchIndexUnavailableResult(result) };
-    }
-    if (!isSearchCaseLawSuccess(result)) {
-      return { type: "failed", result: errorResult("Case-law search failed") };
-    }
-    page.cursors[country] = result.nextCursor;
-    if (result.paginationOutcome.type === "truncated") {
-      page.paginationOutcome = result.paginationOutcome;
-    }
-    for (const hit of result.hits) {
+  for (const { hits } of outcome.countries) {
+    for (const hit of hits) {
       const links = legalCitationLinkFields({
         url: buildCaseLawDecisionAppUrl({
           caseNumber: hit.caseNumber,
@@ -461,8 +330,9 @@ const searchStatutes = async ({
       page.cursors[jurisdiction] = null;
       continue;
     }
-    if (isSearchIndexUnavailable(result)) {
-      return { type: "failed", result: searchIndexUnavailableResult(result) };
+    const refusal = searchRefusalResult(result);
+    if (refusal !== null) {
+      return { type: "failed", result: refusal };
     }
     if (!isLegislationSearchSuccess(result)) {
       return {
@@ -522,7 +392,7 @@ export type CompatCorpusSearchOutcome =
  * be inventing an order. A question that names an act is answered by its
  * statute hits being present, not by their being first.
  */
-export const searchCompatCorpus = async ({
+const searchCompatCorpus = async ({
   context,
   countries,
   cursors,
@@ -567,6 +437,101 @@ export const searchCompatCorpus = async ({
       statutes: statutes.page.cursors,
     },
   };
+};
+
+/** How long `search` waits on the server for a continued corpus read. */
+const COMPAT_CORPUS_WAIT_MS = 25_000;
+
+const compatSubCursors = v.record(v.string(), v.nullable(v.string()));
+
+const compatCorpusWorkArgs = v.strictObject({
+  countries: v.strictObject({
+    caseLaw: v.array(v.picklist(PUBLIC_CASE_LAW_COUNTRIES)),
+    legislation: v.array(v.picklist(PUBLIC_LEGISLATION_COUNTRIES)),
+  }),
+  cursors: v.strictObject({
+    decisions: compatSubCursors,
+    statutes: compatSubCursors,
+  }),
+  query: v.string(),
+});
+
+type CompatCorpusPage = Omit<
+  Extract<CompatCorpusSearchOutcome, { type: "page" }>,
+  "type"
+>;
+
+export const createCompatCorpusContinuation = (
+  options: Pick<
+    Parameters<typeof createToolContinuation>[1],
+    "store" | "ownerId" | "limits" | "clock"
+  > = {},
+) =>
+  createToolContinuation<typeof compatCorpusWorkArgs, CompatCorpusPage, null>(
+    compatCorpusWorkArgs,
+    { ...options, progress: () => null },
+  );
+
+export type CompatCorpusContinuation = ReturnType<
+  typeof createCompatCorpusContinuation
+>;
+
+let compatCorpusContinuation: CompatCorpusContinuation | undefined;
+
+/** One per process, so concurrent calls on this task can find each other. */
+const getCompatCorpusContinuation = (): CompatCorpusContinuation => {
+  compatCorpusContinuation ??= createCompatCorpusContinuation();
+  return compatCorpusContinuation;
+};
+
+type WaitForCompatCorpusOptions = {
+  context: McpRequestResources;
+  countries: CompatCorpusCountries;
+  cursors: CompatCorpusCursors;
+  query: string;
+};
+
+/** The corpus half of `search`, continued like the other public searches. */
+export const waitForCompatCorpus = async ({
+  context,
+  countries,
+  cursors,
+  query,
+}: WaitForCompatCorpusOptions): Promise<
+  CompatCorpusSearchOutcome | { type: "still_running" }
+> => {
+  const waited = await waitForPublicRead({
+    toolName: "search",
+    continuation:
+      context.testDependencies?.compatCorpusContinuation ??
+      getCompatCorpusContinuation(),
+    args: {
+      countries: {
+        caseLaw: [...countries.caseLaw],
+        legislation: [...countries.legislation],
+      },
+      cursors,
+      query,
+    },
+    context,
+    waitMs: COMPAT_CORPUS_WAIT_MS,
+    execute: async (workArgs) => {
+      const outcome = await searchCompatCorpus({ context, ...workArgs });
+      return outcome.type === "failed"
+        ? outcome.result
+        : toolDataResult({
+            results: [...outcome.results],
+            cursors: outcome.cursors,
+            paginationOutcome: outcome.paginationOutcome,
+          });
+    },
+  });
+  if (waited.type === "still_running") {
+    return waited;
+  }
+  return waited.result.status === "error"
+    ? { type: "failed", result: waited.result }
+    : { type: "page", ...waited.result.data };
 };
 
 /** Whether any corpus source can still answer a further page. */

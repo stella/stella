@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
-import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
+import { GLOBAL_SEARCH_CHAT_COVERAGE } from "@stll/api-contract/search";
+import type { GlobalSearchChatCoverage } from "@stll/api-contract/search";
 
 import type { Transaction } from "@/api/db/root";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { decodeRawThreadArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -21,8 +22,13 @@ import { searchTitleTierSql } from "./search-ranking";
 
 export type ChatSearchCandidateRow = Record<string, unknown> & {
   id: string;
+  generation_provenance: unknown;
   score: number;
   tier: SearchRankingTier;
+};
+export type ChatCandidateRead = {
+  rows: ChatSearchCandidateRow[];
+  coverage: GlobalSearchChatCoverage;
 };
 type ReadChatCandidateBatchesOptions = {
   readBatch: (
@@ -30,33 +36,46 @@ type ReadChatCandidateBatchesOptions = {
   ) => Promise<ChatSearchCandidateRow[]>;
 };
 
-/** Removing source text changes relevance: the public cursor must use the complete admitted ranking input. */
+const hasOverflowingSource = (row: ChatSearchCandidateRow) => {
+  const messages = row["source_messages"];
+  return (
+    Array.isArray(messages) &&
+    messages.some(
+      (message: unknown) => isRecord(message) && message["overflow"] === true,
+    )
+  );
+};
+
+/**
+ * Reads the candidate window ranking may spend work on. A thread past the
+ * source limit ranks on its admitted prefix, and a window past the batch or
+ * byte limit keeps the threads already read: exhausting a chat budget narrows
+ * chat results and never reaches the other result types. Every page of one
+ * query reads this window from its start, so its order stays stable, and
+ * `coverage` says when the ranking did not see all of the matching text.
+ */
 export const readChatCandidateBatches = async ({
   readBatch,
-}: ReadChatCandidateBatchesOptions) => {
+}: ReadChatCandidateBatchesOptions): Promise<ChatCandidateRead> => {
   const rows: ChatSearchCandidateRow[] = [];
   let cursor: GlobalSearchCursor | null = null;
   let bytes = 0;
+  let coverage: GlobalSearchChatCoverage = GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE;
   for (let round = 0; round < LIMITS.searchChatCandidateBatchesMax; round++) {
     const batch = await readBatch(cursor);
     const page = batch.slice(0, LIMITS.searchChatCandidateThreadsMax);
-    bytes += Buffer.byteLength(JSON.stringify(page));
-    const sourceOverflow = page.some((row) => {
-      const messages = row["source_messages"];
-      return (
-        Array.isArray(messages) &&
-        messages.some(
-          (message: unknown) =>
-            isRecord(message) && message["overflow"] === true,
-        )
-      );
-    });
-    if (sourceOverflow || bytes > LIMITS.searchChatCandidateBytesMax) {
-      break;
+    for (const row of page) {
+      bytes += Buffer.byteLength(JSON.stringify(row));
+      if (bytes > LIMITS.searchChatCandidateBytesMax) {
+        return { rows, coverage: GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL };
+      }
+      rows.push(row);
+      if (hasOverflowingSource(row)) {
+        coverage = GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL;
+      }
     }
-    rows.push(...page);
     if (batch.length <= LIMITS.searchChatCandidateThreadsMax) {
-      return Result.ok(rows);
+      return { rows, coverage };
     }
     const last =
       page.at(-1) ?? panic("A full candidate batch must have a final row");
@@ -67,14 +86,7 @@ export const readChatCandidateBatches = async ({
       seen: 0,
     };
   }
-  return Result.err(
-    new HandlerError({
-      code: GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE,
-      status: 422,
-      message:
-        "Refine the search to rank its results within the search work limit",
-    }),
-  );
+  return { rows, coverage: GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL };
 };
 type ProjectChatCandidatesOptions = {
   database: Pick<Transaction, "execute">;
@@ -87,28 +99,36 @@ type ProjectChatCandidatesOptions = {
 /** Ranks and previews only admitted source text from a bounded candidate window. */
 export const projectChatSearchCandidates = async ({
   database,
-  rows,
+  rows: candidates,
   query,
   cursor,
   limit,
 }: ProjectChatCandidatesOptions) => {
-  if (rows.length === 0) {
-    return [];
+  if (candidates.length === 0) {
+    return Result.ok([]);
   }
-  const projection = await readWithdrawnCopyProjection({ values: rows });
-  const admitted = rows.map((row) => {
+  const rows = [];
+  for (const row of candidates) {
+    const provenance = decodeRawThreadArtefactProvenance(row);
+    if (provenance.isErr()) {
+      return Result.err(provenance.error);
+    }
+    rows.push({ row, provenance: provenance.value });
+  }
+  const projection = await readWithdrawnCopyProjection({ values: candidates });
+  const admitted = rows.map(({ row, provenance }) => {
     const subject =
       typeof row["subject_decision_id"] === "string"
         ? row["subject_decision_id"]
         : null;
-    const marker = projection.marker(
-      [row["title"], row["source_messages"]],
-      subject,
-    );
-    const title =
-      marker === null || row["title_source"] === "user"
-        ? String(row["title"])
-        : "";
+    const titleMarker = projection.threadTitleMarker({
+      title: row["title"],
+      titleSource: row["title_source"],
+      subjectDecisionId: subject?.toLowerCase() ?? null,
+      ...provenance,
+      source_messages: row["source_messages"],
+    });
+    const title = titleMarker === null ? String(row["title"]) : "";
     const messages = isUnknownArray(row["source_messages"])
       ? row["source_messages"]
       : [];
@@ -116,7 +136,8 @@ export const projectChatSearchCandidates = async ({
     const segments: string[] = [];
     let parts = [title];
     for (const message of messages) {
-      if (!isRecord(message)) {
+      // Overflow slots carry no source text, so they cannot rank or preview.
+      if (!isRecord(message) || message["overflow"] === true) {
         continue;
       }
       if (
@@ -163,30 +184,32 @@ export const projectChatSearchCandidates = async ({
     LIMIT ${limit}
   `);
   const byId = new Map(ranked.map((row) => [row.id, row]));
-  return rows.flatMap((row) => {
-    const safe = byId.get(row.id);
-    if (safe === undefined) {
-      return [];
-    }
-    const subject =
-      typeof row["subject_decision_id"] === "string"
-        ? row["subject_decision_id"]
-        : null;
-    const label = projection.marker(
-      [row["title"], row["source_messages"]],
-      subject,
-    );
-    return [
-      {
-        ...row,
-        title:
-          row["title_source"] === "user"
-            ? row["title"]
-            : (label ?? row["title"]),
-        score: safe.score,
-        tier: safe.tier,
-        headline: safe.headline,
-      },
-    ];
-  });
+  return Result.ok(
+    rows.flatMap(({ row, provenance }) => {
+      const safe = byId.get(row.id);
+      if (safe === undefined) {
+        return [];
+      }
+      const subject =
+        typeof row["subject_decision_id"] === "string"
+          ? row["subject_decision_id"]
+          : null;
+      const titleMarker = projection.threadTitleMarker({
+        title: row["title"],
+        titleSource: row["title_source"],
+        subjectDecisionId: subject?.toLowerCase() ?? null,
+        ...provenance,
+        source_messages: row["source_messages"],
+      });
+      return [
+        {
+          ...row,
+          title: titleMarker ?? row["title"],
+          score: safe.score,
+          tier: safe.tier,
+          headline: safe.headline,
+        },
+      ];
+    }),
+  );
 };

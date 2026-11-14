@@ -32,7 +32,7 @@ export type TokenBucket = "0_1k" | "1k_5k" | "5k_20k" | "20k_plus";
 export type LatencyBucket = "0_2s" | "2_10s" | "10_30s" | "30s_plus";
 export type CountBucket = "0" | "1" | "2_3" | "4_plus";
 type ModelKeySource = ResolvedTanStackTextModelInfo["keySource"] | "unknown";
-type AIFailureReason =
+export type AIFailureReason =
   | "auth"
   | "byok_quota"
   | "configuration"

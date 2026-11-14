@@ -1,6 +1,10 @@
 import { and, eq, isNull } from "drizzle-orm";
 
 import { BILLING_STATUS } from "@stll/api-contract";
+import {
+  workspaceAcceptsWrites,
+  type WorkspaceStatus,
+} from "@stll/api-contract/workspace-status";
 
 import type { Transaction } from "@/api/db/root";
 import { invoiceLines, timeEntries, workspaces } from "@/api/db/schema";
@@ -10,9 +14,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /** A draft time entry may only move into a matter its editor can use now. */
 export const timeEntryMoveTargetError = (
-  target: { status: string } | null,
+  target: { status: WorkspaceStatus } | null,
 ): HandlerError | null =>
-  target?.status === "active"
+  workspaceAcceptsWrites(target?.status)
     ? null
     : new HandlerError({
         status: 404,

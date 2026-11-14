@@ -39,6 +39,7 @@ type Messages = {
     "flowRunAwaitingApproval": "A workflow is waiting for your approval";
     "flowRunCompleted": "A workflow finished";
     "flowRunFailed": "A workflow failed";
+    "localRunLimitReset": "The coding agent on your computer can continue your chat";
     "mention": "You were mentioned in a comment";
     "taskAssigned": "A task was assigned to you";
   };

@@ -11,8 +11,7 @@ import {
 import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -222,6 +221,10 @@ const renderReader = async () => {
             endOffset: CITING_PARAGRAPH.indexOf(CITED_CASE) + 5,
             id: "topic-over-citation",
             kind: "highlight",
+            quote: CITING_PARAGRAPH.slice(
+              CITING_PARAGRAPH.indexOf("zn."),
+              CITING_PARAGRAPH.indexOf(CITED_CASE) + 5,
+            ),
             startOffset: CITING_PARAGRAPH.indexOf("zn."),
             style: "underline",
           },
@@ -338,8 +341,8 @@ describe("a citation card in the decision text", () => {
       ]);
       await waitFor(() => {
         expect(
-          document.querySelector('[data-slot="popover-popup"]'),
-        ).toBeNull();
+          document.querySelector('[data-slot="popover-popup"]') === null,
+        ).toBe(true);
       });
     } finally {
       scroll.mockRestore();
@@ -381,7 +384,9 @@ describe("a citation card in the decision text", () => {
       fireEvent.keyDown(card, { key: "Escape" });
     });
     await waitFor(() => {
-      expect(document.querySelector('[data-slot="popover-popup"]')).toBeNull();
+      expect(
+        document.querySelector('[data-slot="popover-popup"]') === null,
+      ).toBe(true);
       expect(document.activeElement).toBe(trigger);
     });
     expect(

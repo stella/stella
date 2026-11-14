@@ -4,6 +4,7 @@ import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { typedCharacter } from "@stll/ui/typed-character";
 
 import { timeEntryActionLabel } from "@/components/billing/time-entry-copy.logic";
@@ -59,10 +60,10 @@ export const TimeSuggestionRow = ({
 
   return (
     <li className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2">
-      <button
+      <Button
         aria-keyshortcuts="Enter E Delete Backspace"
         aria-label={timeEntryActionLabel(tCommon("accept"), narrative)}
-        className="focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-3 rounded-md text-start outline-none focus-visible:ring-2 disabled:opacity-50"
+        className="flex min-w-0 flex-1"
         disabled={busy}
         onClick={() => onAccept(suggestion, narrative)}
         onKeyDown={(event) => {
@@ -83,45 +84,51 @@ export const TimeSuggestionRow = ({
             onDismiss(suggestion);
           }
         }}
-        title={t("keyboardHint")}
-        type="button"
+        // The shortcuts this row answers, shown on hover and on focus.
+        tooltip={t("keyboardHint")}
+        variant="plain"
       >
-        <CheckIcon className="text-muted-foreground size-4 shrink-0" />
-        <span className="min-w-0 flex-1">
-          {matterName !== undefined && (
-            <BidiText
-              as="span"
-              className="text-muted-foreground block truncate text-xs"
+        <span className="flex min-w-0 flex-1 items-center gap-3">
+          <CheckIcon className="text-muted-foreground size-4 shrink-0" />
+          <span className="min-w-0 flex-1">
+            {matterName !== undefined && (
+              <TruncatedText
+                className="text-muted-foreground text-xs"
+                render={<BidiText as="span" />}
+              >
+                {matterName}
+              </TruncatedText>
+            )}
+            <TruncatedText
+              className="text-sm font-medium"
+              render={<BidiText as="span" />}
             >
-              {matterName}
-            </BidiText>
-          )}
-          <BidiText as="span" className="block truncate text-sm font-medium">
-            {narrative}
-          </BidiText>
-          <BidiText
-            as="span"
-            className="text-muted-foreground block truncate text-xs"
-          >
-            {format.dateTime(new Date(suggestion.startedAt), {
-              timeStyle: "short",
-            })}
-            {" – "}
-            {format.dateTime(new Date(suggestion.endedAt), {
-              timeStyle: "short",
-            })}
-            {EVIDENCE_SEPARATOR}
-            {evidence}
-          </BidiText>
-          <span className="text-muted-foreground block text-xs tabular-nums">
-            {suggestion.alreadyCovered
-              ? t("alreadyCovered")
-              : t("engagedTime", {
-                  duration: formatMinutes(suggestion.engagedMinutes),
-                })}
+              {narrative}
+            </TruncatedText>
+            <TruncatedText
+              className="text-muted-foreground text-xs"
+              render={<BidiText as="span" />}
+            >
+              {format.dateTime(new Date(suggestion.startedAt), {
+                timeStyle: "short",
+              })}
+              {" – "}
+              {format.dateTime(new Date(suggestion.endedAt), {
+                timeStyle: "short",
+              })}
+              {EVIDENCE_SEPARATOR}
+              {evidence}
+            </TruncatedText>
+            <span className="text-muted-foreground block text-xs tabular-nums">
+              {suggestion.alreadyCovered
+                ? t("alreadyCovered")
+                : t("engagedTime", {
+                    duration: formatMinutes(suggestion.engagedMinutes),
+                  })}
+            </span>
           </span>
         </span>
-      </button>
+      </Button>
       <span className="shrink-0 text-sm font-medium tabular-nums">
         {formatMinutes(suggestion.durationMinutes)}
       </span>

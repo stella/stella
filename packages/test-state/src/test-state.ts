@@ -76,11 +76,11 @@ export const createTestState = <Config extends object>({
   const captureConfig = (key: PropertyKey) => {
     const descriptor = Object.getOwnPropertyDescriptor(config, key);
     const restoreAccessor = (() => {
-      if (descriptor?.get === undefined || descriptor.set === undefined) {
-        return undefined;
+      if (descriptor?.get !== undefined && descriptor.set !== undefined) {
+        const value: unknown = descriptor.get.call(config);
+        return () => descriptor.set?.call(config, value);
       }
-      const value: unknown = descriptor.get.call(config);
-      return () => descriptor.set?.call(config, value);
+      return undefined;
     })();
     capture(typeof key === "symbol" ? key : `config:${String(key)}`, () => {
       const restored =
@@ -118,7 +118,8 @@ export const createTestState = <Config extends object>({
   });
 
   return {
-    beforeAll: (setup: () => void | Promise<void>) => {
+    /** `timeoutMs` bounds a setup slower than the runner's default. */
+    beforeAll: (setup: () => void | Promise<void>, timeoutMs?: number) => {
       assertOpen();
       const restores = new Map<PropertyKey, () => void>();
       beforeAll(async () => {
@@ -131,7 +132,7 @@ export const createTestState = <Config extends object>({
         } finally {
           phase = { type: "test" };
         }
-      });
+      }, timeoutMs);
       afterAll(() => {
         if (phase.type === "closed" || !suiteRestores.has(restores)) {
           return;

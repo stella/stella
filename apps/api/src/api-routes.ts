@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/agent-auth/routes";
 import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
+import { emailAIRoute } from "@/api/handlers/ai/routes";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
@@ -19,18 +20,26 @@ import { bilingualTranslationsRoute } from "@/api/handlers/bilingual-translation
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
+import { chatMcpAppsRoute } from "@/api/handlers/chat/mcp-apps/routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
+import { chatRunOutputsRoute } from "@/api/handlers/chat/run-outputs/routes";
 import {
   clauseCategoriesRoute,
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
+import { conflictChecksRoute } from "@/api/handlers/conflict-checks/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
+import { dataExportsRoute } from "@/api/handlers/data-exports/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
+import { desktopRunnerRoute } from "@/api/handlers/desktop-runner/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
-import { dictationRoute } from "@/api/handlers/dictation/routes";
+import {
+  desktopDictationRoute,
+  dictationRoute,
+} from "@/api/handlers/dictation/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
@@ -88,6 +97,7 @@ import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
+import { softLawRoute } from "@/api/handlers/soft-law/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { syntheticRoute } from "@/api/handlers/synthetic/routes";
 import { myTasksRoute, tasksRoute } from "@/api/handlers/tasks/routes";
@@ -101,6 +111,7 @@ import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-que
 import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
+import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { uploadsRoute } from "@/api/handlers/uploads/routes";
@@ -193,6 +204,8 @@ export const apiRoutes = mount([
   timeApprovalQueueRoute,
   internalTimeEntriesRoute,
   myTimeEntriesRoute,
+  timeEntryReportRoute,
+  conflictChecksRoute,
   memberTimeTargetsRoute,
   timeTimersRoute,
   servedIfLoaded(localDevRoutes?.devPublicRoute),
@@ -254,6 +267,7 @@ export const apiRoutes = mount([
       contactsRoute,
       legislationRoute,
       legislationCorpusRoute,
+      softLawRoute,
       publicLegislationRoute,
       publicSanctionsRoute,
       mobileUpdatesRoute,
@@ -267,7 +281,10 @@ export const apiRoutes = mount([
       legalReaderRoute,
       legalResolveRoute,
       chatRoute,
+      chatMcpAppsRoute,
+      chatRunOutputsRoute,
       dictationRoute,
+      emailAIRoute,
       userFilesRoute,
       skillsRoute,
       usageRoute,
@@ -280,6 +297,7 @@ export const apiRoutes = mount([
       workObligationsRoute,
       myWorkRoute,
       accountExportsRoute,
+      dataExportsRoute,
       meRoute,
       servedIfLoaded(localDevRoutes?.devRoute),
       verifyAuthRoute,
@@ -299,4 +317,6 @@ export const apiRoutes = mount([
   desktopPresenceRoute,
   desktopFeatureAccessRoute,
   desktopTimeEntriesRoute,
+  desktopDictationRoute,
+  desktopRunnerRoute,
 ]);

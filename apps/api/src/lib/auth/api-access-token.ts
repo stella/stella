@@ -13,8 +13,7 @@
  * MCP audience therefore never verifies here, and a token minted for the API
  * never verifies on MCP.
  *
- * This module imports no MCP or session code, since `lib/auth.ts` resolves it
- * and the MCP modules import `lib/auth.ts`.
+ * The lazy provider verifier is shared with the MCP resource boundary.
  */
 
 import { Result, TaggedError } from "better-result";
@@ -28,25 +27,27 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
+import type { AdmittedOAuthCredential } from "@/api/lib/auth/oauth-grant-admission";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
-import { isTokenRejectionError } from "@/api/lib/auth/token-verification-errors";
 import {
   SERVICE_CLIENT_PRINCIPAL,
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
 import { getApiOAuthResourceIdentifier } from "@/api/lib/oauth-resource-policy";
-import { getVerifyBearerToken } from "@/api/mcp/auth";
+import { verifyOAuthToken } from "@/api/mcp/auth";
 import type { VerifyBearerToken } from "@/api/mcp/auth";
+import { McpAuthenticationError } from "@/api/mcp/errors";
 
 /**
  * Every REST route an API access token may open, by route pattern,
  * with the scope it requires and the handler module that serves it.
  * `api-oauth-routes.test.ts` proves each entry: the live route serves that
  * handler, the handler is not account control, and the capability catalog
- * assigns its capability exactly this scope. A realtime or file-delivery
- * handler has no capability; its entry names that reason and the scope its
- * domain carries, and the test holds the handler to that reason instead. Account-control routes
+ * assigns its capability exactly this scope. A realtime, file-delivery or
+ * search-screen handler has no capability; its entry names that reason and the
+ * scope its domain carries, and the test holds the handler to that reason
+ * instead, or to being a member plumbing endpoint. Account-control routes
  * (sign-in methods, keys, connections, deletion) never belong here: a lost
  * phone must not be able to keep itself connected.
  */
@@ -54,6 +55,27 @@ export const API_OAUTH_ROUTES = {
   "POST /v1/dictation/transcribe": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/dictation/transcribe.ts",
+  },
+  // The Outlook add-in's email helpers: a summary of the open email and a
+  // reply draft. Each sends only the email text in its body to the model and
+  // stores nothing; they are add-in buttons, not agent capabilities.
+  "POST /v1/ai/summarize": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/summarize.ts",
+    uncataloged: "native_tool_ui",
+  },
+  "POST /v1/ai/draft-email": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/draft-email.ts",
+    uncataloged: "native_tool_ui",
+  },
+  // A question about the open email. Naming a matter adds that matter's
+  // search results, read under the token's own scopes, so a token without
+  // `stella:read` gets an answer from the email alone.
+  "POST /v1/ai/ask-email": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/ask-email.ts",
+    uncataloged: "native_tool_ui",
   },
   "GET /v1/workspaces/:workspaceId/vocabulary": {
     scope: "stella:read",
@@ -80,6 +102,86 @@ export const API_OAUTH_ROUTES = {
   "PUT /v1/workspaces": {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/workspaces/create.ts",
+  },
+  // A new matter's client and team, as the web's create dialog offers them:
+  // an address-book contact found by name or created on the spot, and the
+  // organization's people to share the matter with.
+  "GET /v1/contacts/search": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/contacts/search.ts",
+  },
+  "PUT /v1/contacts": {
+    scope: "stella:contacts_write",
+    handler: "apps/api/src/handlers/contacts/create.ts",
+  },
+  "GET /v1/workspaces/member-candidates": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/member-candidates/list.ts",
+  },
+  // The organization's matter-number convention, so a number typed for a
+  // matter is checked against it as the web's hint does. Only the pattern and
+  // its padding; the organization's settings stay closed.
+  "GET /v1/workspaces/matter-numbering": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/matter-numbering/get.ts",
+  },
+  // The caller's own role, which a browser reads from its auth session: the
+  // app leaves out what the role cannot do (`@stll/permissions/role-grants`).
+  // Every request is still decided by the server.
+  "GET /v1/me/role": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/role/get.ts",
+    uncataloged: "auth_plumbing",
+  },
+  // A matter's own settings, as the web's matter info keeps them: its name,
+  // number, client and lead, its archive state, a copy of it, and deleting
+  // it, each under the matter permission a browser session needs.
+  "GET /v1/workspaces/:workspaceId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/get.ts",
+  },
+  "POST /v1/workspaces/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/update.ts",
+  },
+  "DELETE /v1/workspaces/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/delete.ts",
+  },
+  "POST /v1/workspaces/:workspaceId/archive": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/archive.ts",
+  },
+  "POST /v1/workspaces/:workspaceId/unarchive": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/unarchive.ts",
+  },
+  "POST /v1/workspaces/:workspaceId/duplicate": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/duplicate.ts",
+  },
+  // Who works on the matter: a matter edit, gated by the same matter update
+  // permission the web's members section needs.
+  "PUT /v1/workspaces/:workspaceId/members": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/members/add.ts",
+  },
+  "DELETE /v1/workspaces/:workspaceId/members/:userId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/members/remove.ts",
+  },
+  // The matter's other parties, each a contact in a role.
+  "GET /v1/workspaces/:workspaceId/contacts": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/contacts/list.ts",
+  },
+  "PUT /v1/workspaces/:workspaceId/contacts": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/contacts/create.ts",
+  },
+  "DELETE /v1/workspaces/:workspaceId/contacts/:workspaceContactId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/contacts/delete.ts",
   },
   "PUT /v1/tasks/:workspaceId": {
     scope: "stella:matters_write",
@@ -123,6 +225,20 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:documents_write",
     handler: "apps/api/src/handlers/entities/versions/upload.ts",
   },
+  // Editing a document, as the web does: open takes the document's edit
+  // lock and hands back a session token; the checkpoints and the finalize
+  // that make the edit a new version authorize themselves with that token,
+  // not with this one. Release gives the lock back when nothing changed.
+  "POST /v1/entities/:workspaceId/desktop-edit-sessions/open": {
+    scope: "stella:documents_write",
+    handler: "apps/api/src/handlers/entities/open-desktop-edit-session.ts",
+    uncataloged: "session_token_exchange",
+  },
+  "POST /v1/entities/:workspaceId/desktop-edit-sessions/release": {
+    scope: "stella:documents_write",
+    handler: "apps/api/src/handlers/entities/release-desktop-edit-lock.ts",
+    uncataloged: "session_token_exchange",
+  },
   // The matter's columns, among them the file column a new document's upload
   // names as its `propertyId`.
   "GET /v1/properties/:workspaceId": {
@@ -150,6 +266,15 @@ export const API_OAUTH_ROUTES = {
   "GET /v1/chat/threads": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/threads/list.ts",
+  },
+  // The reader's own marks on a chat in the chats list.
+  "PATCH /v1/chat/threads/:threadId/read-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/read-state/update.ts",
+  },
+  "PATCH /v1/chat/threads/:threadId/pin-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/pin-state/update.ts",
   },
   "GET /v1/chat/threads/:threadId/messages": {
     scope: "stella:chat",
@@ -186,6 +311,29 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/chat/turns/cancel.ts",
     uncataloged: "realtime_stream",
   },
+  // Which chats are working or waiting on the person, for the chats list.
+  "GET /v1/chat/runs/active": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/runs/list.ts",
+    uncataloged: "chat_thread_ui",
+  },
+  // A standing approval given from an approval in a conversation: "Allow in
+  // this conversation" or "Always allow" for one tool, as the web's
+  // approval card stores it.
+  "POST /v1/chat/tool-grants": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/tool-grants/create.ts",
+    uncataloged: "chat_thread_ui",
+  },
+  // The person's event stream. Its events carry no content (notifications
+  // changed, chat runs changed, a resource set changed); the app re-reads
+  // through the routes above. It carries more than chat, so it takes the
+  // read scope.
+  "GET /v1/notifications/events": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/notifications/events.ts",
+    uncataloged: "plumbing",
+  },
   // The caller's own timers. The organization-wide admin timer routes stay
   // closed to access tokens.
   "GET /v1/time-timers": {
@@ -216,6 +364,24 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:billing_write",
     handler: "apps/api/src/handlers/time-timers/discard.ts",
   },
+  // Search reads only the matters the caller can open, as a browser session's
+  // search does. The AI refine, summary and preview routes stay closed.
+  "POST /v1/search": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/search/results/list.ts",
+  },
+  "POST /v1/search/facets": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/search/facets/list.ts",
+    uncataloged: "search_ui",
+  },
+  // The caller's own recent searches, read only. Recording, clearing and
+  // deleting entries carry `stella:knowledge_write`, which this resource does
+  // not grant, so those routes stay closed.
+  "GET /v1/search-history": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/search-history/list.ts",
+  },
   // The device the app runs on, for push alerts. Registering touches only
   // the person's own device rows and changes nothing they work on, so it
   // needs no write scope; the handlers are internal to agents.
@@ -229,6 +395,18 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/me/push-devices/unregister.ts",
     uncataloged: "native_device",
   },
+  // The phone that shows the person's timer on its Lock Screen: the same
+  // reasoning, for the person's own phone rows.
+  "PUT /v1/me/timer-activity-devices/:deviceId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/timer-activity-devices/register.ts",
+    uncataloged: "native_device",
+  },
+  "DELETE /v1/me/timer-activity-devices/:deviceId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/timer-activity-devices/unregister.ts",
+    uncataloged: "native_device",
+  },
 } as const satisfies Record<
   string,
   {
@@ -236,8 +414,21 @@ export const API_OAUTH_ROUTES = {
     handler: `apps/api/src/handlers/${string}.ts`;
     /** The named export serving the route, when it is not the default. */
     exportName?: string;
-    /** Why the handler has no capability: its `mcp.internal` reason. */
-    uncataloged?: "realtime_stream" | "upload_mechanics" | "native_device";
+    /**
+     * Why the handler has no capability: its `mcp.internal` reason, or
+     * `plumbing` for a `defineEndpoint.member` endpoint (`lib/endpoints.ts`),
+     * which has no handler config to carry one.
+     */
+    uncataloged?:
+      | "auth_plumbing"
+      | "realtime_stream"
+      | "upload_mechanics"
+      | "search_ui"
+      | "native_device"
+      | "native_tool_ui"
+      | "session_token_exchange"
+      | "chat_thread_ui"
+      | "plumbing";
   }
 >;
 
@@ -257,6 +448,7 @@ export class ApiAccessTokenError extends TaggedError("ApiAccessTokenError")<{
 }
 
 export type ApiAccessTokenSession = {
+  readonly credential: AdmittedOAuthCredential;
   readonly userId: string;
   readonly organizationId: string;
   /** The membership the token was issued under; a later membership does not inherit it. */
@@ -300,7 +492,7 @@ const apiAccessTokenClaimsSchema = v.looseObject({
 
 const readClaims = (
   payload: JWTPayload,
-): Result<ApiAccessTokenSession, ApiAccessTokenError> => {
+): Result<Omit<ApiAccessTokenSession, "credential">, ApiAccessTokenError> => {
   if (payload[SERVICE_CLIENT_PRINCIPAL_CLAIM] === SERVICE_CLIENT_PRINCIPAL) {
     return Result.err(
       new ApiAccessTokenError({
@@ -335,42 +527,57 @@ export const authenticateApiAccessToken = async (
   {
     reviewAccount,
     verifyToken,
+    admissionOptions,
   }: {
     readonly reviewAccount: Pick<ReviewAccountConfig, "organizationId">;
     readonly verifyToken?: VerifyBearerToken | undefined;
+    readonly admissionOptions?: Parameters<
+      typeof verifyOAuthToken
+    >[1]["admissionOptions"];
   },
 ): Promise<Result<ApiAccessTokenSession, ApiAccessTokenError>> => {
-  const verify = verifyToken ?? getVerifyBearerToken();
-  const payload = await Result.tryPromise({
-    try: async () =>
-      await verify(token, {
-        jwksUrl: getAuthEndpointUrl("jwks"),
-        verifyOptions: {
-          audience: getApiOAuthResourceIdentifier(),
-          issuer: getAuthIssuerUrl(),
-        },
-      }),
-    catch: (cause) =>
-      isTokenRejectionError(cause)
-        ? new ApiAccessTokenError({
-            message: "Invalid or expired token",
-            reason: "rejected",
-            cause,
-          })
-        : new ApiAccessTokenError({
-            message: "Token verification is temporarily unavailable",
-            reason: "unavailable",
-            cause,
-          }),
+  const verified = await verifyOAuthToken(token, {
+    verificationOptions: {
+      jwksUrl: getAuthEndpointUrl("jwks"),
+      verifyOptions: {
+        audience: getApiOAuthResourceIdentifier(),
+        issuer: getAuthIssuerUrl(),
+      },
+    },
+    verifyToken,
+    admissionOptions,
   });
-  return payload
-    .andThen(readClaims)
-    .map((session) =>
-      narrowReviewOrganizationScopes(
-        { ...session, scopes: [...session.scopes] },
-        reviewAccount,
-      ),
+  if (verified.isErr()) {
+    return Result.err(
+      new ApiAccessTokenError({
+        message: verified.error.message,
+        reason:
+          verified.error instanceof McpAuthenticationError
+            ? "rejected"
+            : "unavailable",
+        cause: verified.error,
+      }),
     );
+  }
+  if (
+    verified.value.type !== "user" ||
+    verified.value.session.credential?.type !== "oauth_client"
+  ) {
+    return Result.err(
+      new ApiAccessTokenError({
+        message: "A user token is required",
+        reason: "rejected",
+      }),
+    );
+  }
+  const credential = verified.value.session.credential;
+  return readClaims(verified.value.payload).map((session) => ({
+    ...narrowReviewOrganizationScopes(
+      { ...session, scopes: [...session.scopes] },
+      reviewAccount,
+    ),
+    credential,
+  }));
 };
 
 export type ApiRouteAdmission =

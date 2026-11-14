@@ -78,6 +78,16 @@ await tx.update(t).set({ a: 1 }).from(sql\`(VALUES \${sql.join(rows.map((r) => s
     ).toEqual([]);
   });
 
+  test("reads a listed table's own primary key as its row identity", async () => {
+    expect(
+      await lint(`const owned = await tx.select().from(workObligations).where(and(eq(workObligations.ownerUserId, id), inArray(workObligations.status, OPEN))).for("update");
+await tx.update(workObligations).set({ s: 1 }).where(and(inArray(workObligations.entityId, owned.map((row) => row.entityId)), eq(workObligations.ownerUserId, id)));
+await tx.update(workObligations).set({ s: 2 }).where(and(inArray(workObligations.workspaceId, owned.map((row) => row.workspaceId)), eq(workObligations.ownerUserId, id)));
+const rows = await tx.select().from(t).where(eq(t.status, "open")).for("update");
+await tx.update(t).set({ s: 1 }).where(inArray(t.entityId, rows.map((row) => row.entityId)));`),
+    ).toEqual([4, 6]);
+  });
+
   test("accepts a write that keeps a key-shaped lock's whole predicate", async () => {
     expect(
       await lint(`const where = and(eq(t.workspaceId, w), inArray(t.id, ids));

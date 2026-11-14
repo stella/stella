@@ -26,13 +26,16 @@ import {
   PopoverTrigger,
 } from "@stll/ui/popover";
 import { PreviewPane } from "@stll/ui/preview-pane";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { ClipboardSourceAppVisual } from "../clipboard/clipboard-types";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
+  failureReason,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import { appTotals, calendarDate, shiftDate } from "./activity-logic";
@@ -43,7 +46,11 @@ import {
   isActivityDaySnapshot,
 } from "./activity-types";
 import type { ActivityDaySnapshot } from "./activity-types";
-import { CaptureDetailsControl } from "./ActivityCaptureDetails";
+import { BrowserQuestion, useBrowserQuestion } from "./ActivityBrowserQuestion";
+import {
+  CaptureDetailsControl,
+  TitlesAccessStrip,
+} from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import "./activity-calendar.css";
 import { ActivityDayCalendar } from "./ActivityDayCalendar";
@@ -53,7 +60,9 @@ import type {
 } from "./ActivityDayCalendar";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import "./welcome-preview.css";
+import type { CaptureModeCommand } from "./capture-modes";
 import previewApps from "./preview-apps.json" with { type: "json" };
+import { titlesNeedAccessibility } from "./title-capture-logic";
 import { useDurationLabel } from "./use-duration-label";
 
 type ActivityView =
@@ -63,6 +72,7 @@ type ActivityView =
 
 type ActivityCommand =
   | CaptureDetailsCommand
+  | CaptureModeCommand["command"]
   | "activity_copy_text"
   | "activity_open_settings"
   | "activity_set_recording_status";
@@ -79,17 +89,20 @@ const reportActivityError = (
     "activityRead" | "activitySubscribe" | "activityUpdate"],
   code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
     "eventSubscriptionFailed" | "invalidResponse" | "invokeFailed"],
+  rejection?: unknown,
 ) => {
   // Fixed codes only: nothing about what was recorded leaves the window.
   reportDesktopError({
     code,
     operation,
+    ...(rejection === undefined ? {} : { reason: failureReason(rejection) }),
     window: DESKTOP_TELEMETRY_WINDOWS.activity,
   });
 };
 
 const ActivityShell = ({ children }: React.PropsWithChildren) => (
   <main className="bg-background text-foreground min-h-dvh">
+    <WindowDragRegion />
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-6 pt-10 pb-8">
       {children}
     </div>
@@ -172,7 +185,9 @@ const ActivityWelcomePreview = ({
                       appIdentifier={segment.appIdentifier}
                       sourceAppVisuals={snapshot.sourceAppVisuals}
                     />
-                    <bdi className="truncate">{segment.appName}</bdi>
+                    <TruncatedText hint={false} render={<bdi />}>
+                      {segment.appName}
+                    </TruncatedText>
                   </span>
                 ),
                 tone: {
@@ -446,6 +461,8 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
 };
 
 type DayContentProps = {
+  /** The day's one-time question about a browser, if any. */
+  browserQuestion: React.ReactNode;
   header: React.ReactNode;
   preferences: ActivityCalendarPreferences;
   onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
@@ -456,6 +473,7 @@ type DayContentProps = {
 };
 
 const DayContent = ({
+  browserQuestion,
   header,
   preferences,
   onPreferencesChange,
@@ -465,10 +483,18 @@ const DayContent = ({
   onReviewStatusChange,
 }: DayContentProps) => {
   const t = useTranslations("activity");
+  // One notice at a time: without Accessibility no title is recorded, so a
+  // question about a browser's titles waits until access is fixed.
+  const notice = titlesNeedAccessibility(snapshot) ? (
+    <TitlesAccessStrip onCommand={onCommand} />
+  ) : (
+    browserQuestion
+  );
   if (snapshot.unreadable && !reviewVisible) {
     return (
       <>
         {header}
+        {notice}
         <p className="text-muted-foreground text-sm">{t("unreadableDay")}</p>
       </>
     );
@@ -477,6 +503,7 @@ const DayContent = ({
     return (
       <>
         {header}
+        {notice}
         <p className="text-muted-foreground text-sm">{t("empty")}</p>
       </>
     );
@@ -486,6 +513,8 @@ const DayContent = ({
       key={snapshot.date}
       onReviewStatusChange={onReviewStatusChange}
       header={header}
+      notice={notice}
+      onCaptureCommand={onCommand}
       snapshot={snapshot}
       preferences={preferences}
       onPreferencesChange={onPreferencesChange}
@@ -529,7 +558,9 @@ const AppTotals = ({
               appIdentifier={app.identifier}
               sourceAppVisuals={sourceAppVisuals}
             />
-            <bdi className="min-w-0 flex-1 truncate text-sm">{app.name}</bdi>
+            <TruncatedText className="flex-1 text-sm" render={<bdi />}>
+              {app.name}
+            </TruncatedText>
             <span className="text-muted-foreground text-sm tabular-nums">
               {sampleDuration?.identifier === app.identifier ? (
                 <span className="inline-grid">
@@ -590,13 +621,14 @@ const useActivityDay = (
           setView({ snapshot: value, type: "ready" });
           return undefined;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (disposed || current !== requestId.current) {
             return;
           }
           reportActivityError(
             DESKTOP_TELEMETRY_OPERATIONS.activityRead,
             DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            error,
           );
           setView((previousView) =>
             previousView.type === "ready" ? previousView : { type: "failed" },
@@ -632,9 +664,9 @@ const ActivityApp = () => {
   const [reviewStatus, setReviewStatus] =
     useState<ActivityReviewStatus>("editing");
   const view = useActivityDay(date, setError);
+  const browserQuestion = useBrowserQuestion();
   const [preferences, setPreferences] = useState<ActivityCalendarPreferences>({
     granularity: 30,
-    narrativeDeclines: 0,
   });
   const errorRead = t("errorRead");
 
@@ -645,11 +677,12 @@ const ActivityApp = () => {
         onSuccess?.();
         return undefined;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         onFailure?.();
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          error,
         );
         setError(
           command === "activity_copy_text" ? t("errorCopy") : t("errorUpdate"),
@@ -726,6 +759,13 @@ const ActivityApp = () => {
         onPreferencesChange={setPreferences}
         reviewVisible={reviewVisible}
         onReviewStatusChange={setReviewStatus}
+        browserQuestion={
+          <BrowserQuestion
+            onCommand={runCommand}
+            snapshot={snapshot}
+            state={browserQuestion}
+          />
+        }
         header={
           <DayHeader
             navigationDisabled={reviewStatus === "submitting"}

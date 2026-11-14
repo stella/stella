@@ -2,11 +2,23 @@ import { Result } from "better-result";
 
 import { CHAT_THREAD_SCOPE_MISMATCH_CODE } from "@stll/api-contract/chat-thread-scope";
 
-import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import {
+  type AccessibleWorkspace,
+  admitsWorkspaceStatus,
+  type WorkspaceStatusAccess,
+} from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type ResolveChatScopeProps = {
+  /**
+   * Required on purpose: every chat handler states whether it only reads the
+   * matter ("active-or-archived") or writes to it ("active"), the same choice
+   * a `:workspaceId` route makes through `authorizeWorkspace`. An archived
+   * matter is read-only, so a write against it answers 404 like any other
+   * matter route.
+   */
+  admitted: WorkspaceStatusAccess;
   getWorkspaceAccess: (
     workspaceId: SafeId<"workspace">,
   ) => Promise<AccessibleWorkspace | null>;
@@ -14,6 +26,7 @@ type ResolveChatScopeProps = {
 };
 
 export const resolveChatScope = async function* ({
+  admitted,
   getWorkspaceAccess,
   workspaceId,
 }: ResolveChatScopeProps) {
@@ -25,7 +38,7 @@ export const resolveChatScope = async function* ({
     Result.tryPromise(async () => await getWorkspaceAccess(workspaceId)),
   );
 
-  if (!workspace || workspace.status === "deleting") {
+  if (!workspace || !admitsWorkspaceStatus(workspace.status, admitted)) {
     return yield* Result.err(
       new HandlerError({
         status: 404,
@@ -40,7 +53,7 @@ export const resolveChatScope = async function* ({
   } as const;
 };
 
-type ChatScope =
+export type ChatScope =
   | { scope: "global" }
   | { scope: "workspace"; workspaceId: SafeId<"workspace"> };
 
@@ -76,11 +89,14 @@ export type ChatWorkspaceAccess = (
 ) => Promise<AccessibleWorkspace | null>;
 
 type HasChatWorkspaceAccessOptions = {
+  /** Same contract as `resolveChatScope`'s `admitted`. */
+  admitted: WorkspaceStatusAccess;
   workspaceId: SafeId<"workspace"> | null;
   getWorkspaceAccess: ChatWorkspaceAccess;
 };
 
 export const hasChatWorkspaceAccess = async ({
+  admitted,
   workspaceId,
   getWorkspaceAccess,
 }: HasChatWorkspaceAccessOptions) => {
@@ -88,7 +104,7 @@ export const hasChatWorkspaceAccess = async ({
     return true;
   }
   const workspace = await getWorkspaceAccess(workspaceId);
-  return workspace !== null && workspace.status !== "deleting";
+  return admitsWorkspaceStatus(workspace?.status, admitted);
 };
 
 type ChatThreadScopeMismatchErrorOptions = {
@@ -101,6 +117,7 @@ export const chatThreadScopeMismatchError = async ({
   getWorkspaceAccess,
 }: ChatThreadScopeMismatchErrorOptions): Promise<HandlerError<400 | 404>> => {
   const canReadWorkspace = await hasChatWorkspaceAccess({
+    admitted: "active-or-archived",
     workspaceId,
     getWorkspaceAccess,
   });

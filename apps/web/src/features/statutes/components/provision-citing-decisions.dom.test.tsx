@@ -5,13 +5,13 @@ import { PROVISION_CITING_SNAPSHOT_LIMIT } from "@stll/api-contract/provision-ci
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 import { sleep } from "@stll/concurrency/sleep";
 import type { UiLocale } from "@stll/locales";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import type { ProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { CitingDecisionRow } from "./provision-citing-decisions";
 
@@ -221,10 +221,10 @@ for (const [locale, messages] of [
         Response.json({ message: "Read unavailable" }, { status: 503 }),
       );
     });
-    await waitFor(() => expect(ui.queryByRole("alert")).not.toBeNull());
+    await waitFor(() => expect(ui.queryByRole("alert") === null).toBe(false));
     fireEvent.click(ui.getByRole("button", { name: messages.common.retry }));
     await waitFor(() =>
-      expect(ui.queryByText(messages.common.noResults)).not.toBeNull(),
+      expect(ui.queryByText(messages.common.noResults) === null).toBe(false),
     );
     expect(attempts).toBe(2);
   });
@@ -246,9 +246,7 @@ for (const [locale, messages] of [
       },
     });
 
-    expect(ui.getAllByRole("button", { name: /1 C 11\/2020/u })).toHaveLength(
-      1,
-    );
+    expect(ui.getAllByRole("link", { name: /1 C 11\/2020/u })).toHaveLength(1);
     fireEvent.change(
       ui.getByRole("searchbox", { name: messages.common.court }),
       {
@@ -267,7 +265,7 @@ for (const [locale, messages] of [
       citingYear: 2020,
       citingSort: "newest",
     });
-    expect(ui.getByRole("button", { name: /1 C 11\/2020/u })).toBeTruthy();
+    expect(ui.getByRole("link", { name: /1 C 11\/2020/u })).toBeTruthy();
 
     fireEvent.click(ui.getByRole("combobox", { name: messages.common.sort }));
     const citationSort = await ui.findByRole("option", {

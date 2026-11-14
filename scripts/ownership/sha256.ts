@@ -6,6 +6,6 @@ export default {
   capability: "Hashing content with SHA-256 across runtimes",
   owner: Object.keys(SHA256_OWNERS),
   summary:
-    "Private runtime helpers and a published-package local owner preserve bytes, update order and digest encodings. no-raw-sha256 confines primitives to registered owners; the enumerating migration ledger only shrinks.",
+    "Private runtime helpers and a published-package local owner preserve bytes, update order and digest encodings. no-raw-sha256 confines primitives to registered owners.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

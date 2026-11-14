@@ -20,9 +20,9 @@
     "blocks": [
       {
         "id": "b1",
-        "anchorId": "p1",
+        "anchorId": "p-1",
         "type": "paragraph",
-        "role": "intro",
+        "role": "opening-formula",
         "inlines": [
           {
             "type": "text",
@@ -1234,5 +1234,5 @@
       }
     ]
   },
-  "parserVersion": 21
+  "parserVersion": 28
 }

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-export const BROWSER_CONTROL_PROTOCOL_VERSION = 5 as const;
+export const BROWSER_CONTROL_PROTOCOL_VERSION = 6 as const;
 export const BROWSER_CONTROL_TOOL_NAME = "use-browser" as const;
 
 /**
@@ -14,8 +14,18 @@ export const PRODUCTION_STELLA_ORIGINS = [
   "https://my.stll.app",
 ] as const;
 
+/** The Chrome Web Store id of the stella extension. */
+export const BROWSER_EXTENSION_ID = "hdjfdkknlahegaifklbelmafmpooakmi" as const;
+
 export const BROWSER_EXTENSION_STORE_URL =
-  "https://chromewebstore.google.com/detail/hdjfdkknlahegaifklbelmafmpooakmi" as const;
+  `https://chromewebstore.google.com/detail/${BROWSER_EXTENSION_ID}` as const;
+
+/**
+ * The name Chrome knows stella desktop's native messaging host by. The
+ * extension reaches a coding agent on the member's computer through it; what
+ * passes there never goes through stella's servers.
+ */
+export const STELLA_DESKTOP_NATIVE_HOST = "app.stll.browser" as const;
 
 export const BROWSER_CONTROL_CONTENT_TRUST = {
   untrustedWebContent: "untrusted-web-content",
@@ -29,6 +39,7 @@ export const BROWSER_CONTROL_ACTION = {
   pressKey: "press-key",
   select: "select",
   snapshot: "snapshot",
+  switchTab: "switch-tab",
 } as const;
 
 export const BROWSER_CONTROL_TARGET_METADATA = {
@@ -65,6 +76,12 @@ export const BROWSER_CONTROL_LIMITS = {
   revisionIdChars: 128,
   requestIdChars: 128,
   selectValueChars: 2000,
+  /**
+   * Tabs chat keeps at once, the controlled one included, and the most a
+   * snapshot lists. A page-opened tab beyond it is closed, and `open` with
+   * `newTab` is refused.
+   */
+  tabs: 8,
   /** Commands other than `snapshot` one extension connection may run. */
   sessionActions: 400,
   /** `open` and `go-back` commands one extension connection may run. */
@@ -197,6 +214,8 @@ const targetSchema = v.strictObject({
 
 const openActionSchema = v.strictObject({
   action: v.literal(BROWSER_CONTROL_ACTION.open),
+  /** Open the page in a new tab chat controls from now on; the current one stays chat's. */
+  newTab: v.optional(v.boolean()),
   url: urlSchema,
 });
 
@@ -247,6 +266,18 @@ const goBackActionSchema = v.strictObject({
   action: v.literal(BROWSER_CONTROL_ACTION.goBack),
 });
 
+/**
+ * Makes another of chat's tabs the controlled tab: one chat controlled
+ * before, or one a page in chat's tabs opened, that the user has not
+ * navigated themselves since. Snapshots list them under `tabs`. `url` is the
+ * address chat knows the tab by; the tab must still be on its origin.
+ */
+const switchTabActionSchema = v.strictObject({
+  action: v.literal(BROWSER_CONTROL_ACTION.switchTab),
+  tabId: tabIdSchema,
+  url: urlSchema,
+});
+
 export const browserControlCommandSchema = v.variant("action", [
   openActionSchema,
   snapshotActionSchema,
@@ -255,6 +286,7 @@ export const browserControlCommandSchema = v.variant("action", [
   selectActionSchema,
   pressKeyActionSchema,
   goBackActionSchema,
+  switchTabActionSchema,
 ]);
 
 export type BrowserControlCommand = v.InferOutput<
@@ -284,6 +316,19 @@ export type BrowserControlElement = v.InferOutput<
   typeof browserControlElementSchema
 >;
 
+/**
+ * One of chat's tabs; `active` marks the one the snapshot was read from.
+ * No title: Chrome reports other tabs' titles without the page's redaction
+ * of secret values, and the URL tells the tabs apart.
+ */
+const browserControlTabSchema = v.strictObject({
+  active: v.boolean(),
+  tabId: tabIdSchema,
+  url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
+});
+
+export type BrowserControlTab = v.InferOutput<typeof browserControlTabSchema>;
+
 const browserControlSnapshotSchema = v.strictObject({
   contentTrust: v.literal(BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent),
   elements: v.pipe(
@@ -298,6 +343,11 @@ const browserControlSnapshotSchema = v.strictObject({
   textTotalChars: v.pipe(v.number(), v.integer(), v.minValue(0)),
   /** The Chrome tab the snapshot was read from. */
   tabId: tabIdSchema,
+  /** Chat's tabs, the active one first; `switch-tab` moves control to another. */
+  tabs: v.pipe(
+    v.array(browserControlTabSchema),
+    v.maxLength(BROWSER_CONTROL_LIMITS.tabs),
+  ),
   title: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.titleChars)),
   url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
 });
@@ -317,6 +367,15 @@ export const BROWSER_CONTROL_ERROR_CODE = {
   executionFailed: "execution-failed",
   invalidCommand: "invalid-command",
   navigationFailed: "navigation-failed",
+  /**
+   * The page asks for a sign-in (a password or one-time-code field, or an
+   * identity provider's page). The member signs in themselves; nothing on
+   * that page was read, typed or clicked. After a click or fill it names
+   * the page the action led to: the action itself ran. Only commands from
+   * stella desktop get it so far; a web connection reads such a page with
+   * its secret fields withheld.
+   */
+  needsMember: "needs-member",
   noControlledTab: "no-controlled-tab",
   /**
    * The command reached the page but its outcome was not observed (timeout,
@@ -334,6 +393,8 @@ export const BROWSER_CONTROL_ERROR_CODE = {
   /** The controlled tab changed since the page was last read; take a snapshot first. */
   tabChanged: "tab-changed",
   tabClosed: "tab-closed",
+  /** `open` with `newTab` while chat already has the most tabs it may keep. */
+  tabLimitReached: "tab-limit-reached",
   timedOut: "timed-out",
   unsupportedPage: "unsupported-page",
 } as const;
@@ -366,7 +427,76 @@ export type BrowserControlResult = v.InferOutput<
   typeof browserControlResultSchema
 >;
 
+/**
+ * Read in place of a page snapshot a later one replaced: the snapshot's text
+ * and refs are gone and its refs are stale.
+ */
+export const SUPERSEDED_BROWSER_SNAPSHOT_NOTE =
+  "Superseded by a later page read: this page's text and element refs are no longer in context and its refs are stale. Call `snapshot` (on its tab) to read it again.";
+
+/**
+ * A successful result whose page snapshot a later result replaced, as chat
+ * keeps it: the page it was on, without its text or elements. Chat stores,
+ * streams and shows the model this in place of every page but the newest
+ * (see `chat-tool-result-retention`).
+ */
+const browserControlSupersededSchema = v.strictObject({
+  note: v.pipe(v.string(), v.maxLength(1000)),
+  page: v.strictObject({
+    contentTrust: v.literal(BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent),
+    tabId: tabIdSchema,
+    textTotalChars: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    title: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.titleChars)),
+    url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
+  }),
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  status: v.literal("superseded"),
+});
+
+/**
+ * Every output chat keeps for a `use-browser` call: what the extension
+ * returned, or its superseded projection. The extension never returns the
+ * projection; `parseBrowserControlResult` rejects it.
+ */
+export const browserControlRetainedResultSchema = v.variant("status", [
+  browserControlSuccessSchema,
+  browserControlErrorSchema,
+  browserControlSupersededSchema,
+]);
+
+export type BrowserControlRetainedResult = v.InferOutput<
+  typeof browserControlRetainedResultSchema
+>;
+
+/**
+ * The projection of a result a later page read replaced, or `null` for one
+ * that carries no page (an error, or a result already projected).
+ */
+export const supersedeBrowserControlResult = (
+  output: unknown,
+): BrowserControlRetainedResult | null => {
+  const result = v.safeParse(browserControlSuccessSchema, output);
+  if (!result.success) {
+    return null;
+  }
+  const { snapshot } = result.output;
+  return {
+    note: SUPERSEDED_BROWSER_SNAPSHOT_NOTE,
+    page: {
+      contentTrust: snapshot.contentTrust,
+      tabId: snapshot.tabId,
+      textTotalChars: snapshot.textTotalChars,
+      title: snapshot.title,
+      url: snapshot.url,
+    },
+    protocolVersion: result.output.protocolVersion,
+    status: "superseded",
+  };
+};
+
 export const BROWSER_EXTENSION_MESSAGE_SOURCE = {
+  /** stella desktop, through the native messaging host. */
+  desktop: "stella-desktop",
   extension: "stella-browser-extension",
   web: "stella-web",
 } as const;
@@ -464,7 +594,14 @@ export const BROWSER_EXTENSION_STATUS = {
   needsSiteAccess: "needs-site-access",
   notInstalled: "not-installed",
   notPaired: "not-paired",
+  /** The installed extension speaks an older protocol; Chrome updates it from the store. */
+  extensionOutdated: "extension-outdated",
+  /** The installed extension speaks a newer protocol than this stella tab; a reload catches up. */
+  stellaOutdated: "stella-outdated",
+  /** A computer whose browser cannot run the extension (Safari, Firefox). */
   unsupportedBrowser: "unsupported-browser",
+  /** A phone or tablet, or a client that is not a browser at all. */
+  unsupportedDevice: "unsupported-device",
 } as const;
 
 export type BrowserExtensionStatus =
@@ -485,7 +622,9 @@ export const isReadOnlyBrowserCommand = (
       return true;
     // History can hold pages the user never approved, and `popstate`
     // handlers can change page state, so going back is a navigation.
+    // Switching tabs moves chat to a page the user approves first.
     case BROWSER_CONTROL_ACTION.goBack:
+    case BROWSER_CONTROL_ACTION.switchTab:
     case BROWSER_CONTROL_ACTION.click:
     case BROWSER_CONTROL_ACTION.fill:
     case BROWSER_CONTROL_ACTION.open:
@@ -533,8 +672,117 @@ export const parseBrowserExtensionRequest = (input: unknown) => {
   return result.output;
 };
 
+/**
+ * Only the source and version of an extension message, for one whose full
+ * shape belongs to another protocol version: every version keeps these two
+ * fields, so an extension on either side of an upgrade is still recognised.
+ */
+const browserExtensionPeerSchema = v.object({
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
+});
+
+/** The protocol version an extension message names, whatever its shape. */
+export const parseBrowserExtensionPeerVersion = (
+  input: unknown,
+): number | null => {
+  const result = v.safeParse(browserExtensionPeerSchema, input);
+  return result.success ? result.output.protocolVersion : null;
+};
+
 export const parseBrowserExtensionResponse = (input: unknown) => {
   const result = v.safeParse(browserExtensionResponseSchema, input);
+  if (!result.success) {
+    return null;
+  }
+  if (
+    result.output.type === "command-result" &&
+    parseBrowserControlResult(result.output.result) === null
+  ) {
+    return null;
+  }
+  return result.output;
+};
+
+/**
+ * A command from a coding agent on the member's computer, relayed by stella
+ * desktop's native messaging host. `controllerId` names the chat the agent
+ * runs in; the extension keeps it apart from every web connection's id.
+ */
+const desktopCommandRequestSchema = v.strictObject({
+  command: browserControlCommandSchema,
+  controllerId: controllerIdSchema,
+  observedTab: v.nullable(observedTabSchema),
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  requestId: requestIdSchema,
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.desktop),
+  toolCallId: toolCallIdSchema,
+  /** The agent's run; per-turn budgets count by it. */
+  turnId: boundedIdSchema,
+  type: v.literal("command"),
+});
+
+/** Stops the queued or running command of one run, as a web cancel does. */
+const desktopCancelRequestSchema = v.strictObject({
+  controllerId: controllerIdSchema,
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.desktop),
+  turnId: boundedIdSchema,
+  type: v.literal("cancel"),
+});
+
+/**
+ * stella desktop's first message once it reaches the extension; the
+ * extension answers with its own `hello`. Either side may speak another
+ * protocol version, so the version is read whatever it is.
+ */
+const desktopHelloRequestSchema = v.strictObject({
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.desktop),
+  type: v.literal("hello"),
+});
+
+const browserDesktopRequestSchema = v.variant("type", [
+  desktopHelloRequestSchema,
+  desktopCommandRequestSchema,
+  desktopCancelRequestSchema,
+]);
+
+export type BrowserDesktopRequest = v.InferOutput<
+  typeof browserDesktopRequestSchema
+>;
+
+export const parseBrowserDesktopRequest = (
+  input: unknown,
+): BrowserDesktopRequest | null => {
+  const result = v.safeParse(browserDesktopRequestSchema, input);
+  return result.success ? result.output : null;
+};
+
+/**
+ * The extension's answer to stella desktop's `hello`: the protocol it
+ * speaks, so stella desktop can tell an outdated extension apart from one
+ * that never answers.
+ */
+const desktopHelloResponseSchema = v.strictObject({
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
+  type: v.literal("hello"),
+});
+
+const browserDesktopResponseSchema = v.variant("type", [
+  desktopHelloResponseSchema,
+  browserExtensionCommandResponseSchema,
+]);
+
+export type BrowserDesktopResponse = v.InferOutput<
+  typeof browserDesktopResponseSchema
+>;
+
+export const parseBrowserDesktopResponse = (
+  input: unknown,
+): BrowserDesktopResponse | null => {
+  const result = v.safeParse(browserDesktopResponseSchema, input);
   if (!result.success) {
     return null;
   }

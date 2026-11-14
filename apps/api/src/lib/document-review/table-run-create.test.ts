@@ -145,6 +145,7 @@ const playbook: PinnedPlaybook = {
   definitionSnapshot: {
     name: "Approved playbook",
     positions: { version: 3, items: positions },
+    scope: null,
   },
 };
 

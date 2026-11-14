@@ -28,6 +28,7 @@ import {
 import { RUST_TEST_DISCOVERY_INPUTS } from "./check-rust-test-determinism";
 import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
+import { lintCommand } from "./lint-command";
 import { isChangedLintPath } from "./lint-paths";
 import { matches } from "./oxlint-config-scopes";
 import { lintModuleClosure } from "./oxlint-module-closure";
@@ -106,12 +107,11 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/ownership-loader.ts",
   "$TURBO_ROOT$/scripts/ownership-types.ts",
   "$TURBO_ROOT$/scripts/sha256-owners.ts",
-  "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
   "$TURBO_ROOT$/scripts/status-write-shapes.ts",
   "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
   "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
   "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
-  "$TURBO_ROOT$/scripts/guard-rollouts/*.json",
+  "$TURBO_ROOT$/scripts/guard-rollouts/**",
   "$TURBO_ROOT$/scripts/guard-rollouts.ts",
   "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
   "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
@@ -129,6 +129,9 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
   "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
   "$TURBO_ROOT$/scripts/test-state-baseline.json",
+  "$TURBO_ROOT$/scripts/test-ambient-time-baseline.json",
+  "$TURBO_ROOT$/scripts/test-real-timers-baseline.json",
+  "$TURBO_ROOT$/scripts/test-wallclock-assertion-baseline.json",
   "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
   "$TURBO_ROOT$/scripts/baseline-paths.ts",
   "$TURBO_ROOT$/scripts/ledger-membership.ts",
@@ -149,12 +152,21 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
   "$TURBO_ROOT$/scripts/generated-artifacts.ts",
   "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+  "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
   "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
   "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
   "$TURBO_ROOT$/scripts/test-timing-ledger.json",
 ] as const;
+// scripts/lint.ts starts every lint run with the command
+// scripts/lint-command.ts builds, so a change to either can change what any
+// workspace lint reports.
+export const LINT_ENTRY_INPUTS = [
+  "$TURBO_ROOT$/scripts/lint.ts",
+  "$TURBO_ROOT$/scripts/lint-command.ts",
+] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/tsconfig.tooling.json",
 ] as const;
 export const PLUGIN_FIXTURE_INPUTS = [
@@ -169,6 +181,7 @@ export const PLUGIN_FIXTURE_INPUTS = [
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
   "$TURBO_ROOT$/scripts/oxlint-safe-fixers.test.ts",
   "$TURBO_ROOT$/scripts/oxlint-additional-guards.test.ts",
@@ -196,6 +209,7 @@ export const ROOT_SCRIPT_LINT_INPUTS = [
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/scripts/lint-root-scripts.sh",
   "$TURBO_ROOT$/scripts/lint-root-scripts.ts",
   "$TURBO_ROOT$/scripts/root-script-lint.ts",
@@ -460,17 +474,92 @@ export const codeCheckExclusions = (
     .toSorted()
     .map((workspace) => `--filter=!./${workspace}`);
 
+const FULL_COMMIT = /^[0-9a-f]{40}$/u;
+
+/** Where a check of main starts, and why a missing green base checks everything. */
+export type GreenBaseScope =
+  | { type: "affected"; base: string }
+  | { type: "all"; reason: "malformed" | "not-ancestor" }
+  /** The ancestry probe failed; its message is kept so it never reads as absence. */
+  | { type: "all"; reason: "probe-failed"; detail: string };
+
+/**
+ * The scope for a check of main: the change since the last commit known
+ * green, or every file when that commit is malformed, not an ancestor of the
+ * checked tree, or the ancestry probe fails. Comparing main with itself would
+ * check nothing, so the scope fails closed to the full check.
+ */
+export const greenBaseScope = (
+  greenBase: string,
+  root: string,
+): GreenBaseScope => {
+  if (!FULL_COMMIT.test(greenBase)) {
+    return { type: "all", reason: "malformed" };
+  }
+  const ancestor = Bun.spawnSync(
+    ["git", "merge-base", "--is-ancestor", greenBase, "HEAD"],
+    { cwd: root, stdout: "ignore", stderr: "pipe" },
+  );
+  switch (ancestor.exitCode) {
+    case 0:
+      return { type: "affected", base: greenBase };
+    case 1:
+      return { type: "all", reason: "not-ancestor" };
+    default:
+      return {
+        type: "all",
+        reason: "probe-failed",
+        detail:
+          ancestor.stderr.toString().trim() ||
+          `merge-base exited ${String(ancestor.exitCode)}`,
+      };
+  }
+};
+
+/** The log line that says which scope a green base produced. */
+export const greenBaseScopeMessage = (scope: GreenBaseScope): string => {
+  if (scope.type === "affected") {
+    return `code-check: checking changes since green main ${scope.base}`;
+  }
+  switch (scope.reason) {
+    case "malformed":
+      return "code-check: green main is not a full commit id; checking every file";
+    case "not-ancestor":
+      return "code-check: no reachable green main commit; checking every file";
+    case "probe-failed":
+      return `code-check: green main ancestry probe failed (${scope.detail}); checking every file`;
+    default:
+      scope satisfies never;
+      return panic("Unhandled green base scope");
+  }
+};
+
 type Options = {
   leg?: CodeCheckLeg;
   scope: CheckScope;
+  /** A main commit known green; replaces `scope` once resolved. */
+  greenBase?: string;
   dryRun: boolean;
   /** Pre-push leaves a change that needs the full check to CI. */
   skipFullFallback: boolean;
 };
 
-const parseArgs = (args: readonly string[]): Options => {
+// A missing value or the next flag is never an option's value.
+const optionValue = (
+  argv: Iterator<string, undefined>,
+  flag: string,
+): string => {
+  const { value } = argv.next();
+  if (value === undefined || value.startsWith("--")) {
+    return panic(`${flag} requires a value`);
+  }
+  return value;
+};
+
+export const parseArgs = (args: readonly string[]): Options => {
   let leg: CodeCheckLeg | undefined;
   let base: string | null = null;
+  let greenBase: string | undefined;
   let all = false;
   let dryRun = false;
   let skipFullFallback = false;
@@ -498,11 +587,12 @@ const parseArgs = (args: readonly string[]): Options => {
       continue;
     }
     if (argument === "--base") {
-      const value = argv.next().value;
-      if (value === undefined) {
-        panic("--base requires a git ref");
-      }
-      base = value;
+      base = optionValue(argv, argument);
+      continue;
+    }
+    if (argument === "--green-base") {
+      // An empty value is a valid request: no green commit is known.
+      greenBase = optionValue(argv, argument);
       continue;
     }
     panic(`Unknown argument: ${argument}`);
@@ -511,8 +601,12 @@ const parseArgs = (args: readonly string[]): Options => {
   if (all && base !== null) {
     panic("--all checks every tracked file and takes no --base");
   }
+  if (greenBase !== undefined && (all || base !== null)) {
+    panic("--green-base chooses the scope and takes no --all or --base");
+  }
   return {
     ...(leg === undefined ? {} : { leg }),
+    ...(greenBase === undefined ? {} : { greenBase }),
     scope: all
       ? { type: "all" }
       : { type: "affected", base: base ?? DEFAULT_BASE },
@@ -770,9 +864,19 @@ type ExecuteCheckCommandsOptions = {
   ) => Result<void, CodeCheckError> | Promise<Result<void, CodeCheckError>>;
   write?: (output: string) => void;
   dryRun?: boolean;
+  /** Run every command after a failure, to report them all in one pass. */
+  keepGoing?: boolean;
   budgetDeadlineMs?: number;
   now?: () => number;
 };
+
+/**
+ * A pull request learns every finding in one run. A merge group keeps stopping
+ * at the first failure: it cannot merge anyway, and its runners are wanted by
+ * the groups behind it.
+ */
+const keepsGoingByDefault = () =>
+  process.env["GITHUB_EVENT_NAME"] === "pull_request";
 
 export const executeCheckCommands = async ({
   commands,
@@ -781,6 +885,7 @@ export const executeCheckCommands = async ({
     process.stdout.write(output);
   },
   dryRun = false,
+  keepGoing = keepsGoingByDefault(),
   now = Date.now,
   budgetDeadlineMs = now() + CODE_CHECK_EXECUTION_BUDGET_MS,
 }: ExecuteCheckCommandsOptions): Promise<number> => {
@@ -803,7 +908,9 @@ export const executeCheckCommands = async ({
       : runner(command, timeoutMs));
     if (result.isErr()) {
       failures.push(result.error);
-      break;
+      if (!keepGoing) {
+        break;
+      }
     }
   }
   if (failures.length === 0) {
@@ -1189,29 +1296,60 @@ const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
     : scope.targets.map((target) => `--filter=./${target}`)),
 ];
 
-export const prioritizeWebLint = (commands: string[][]): string[][] =>
+/**
+ * The largest type-aware program of a code-quality leg, run in a command of
+ * its own before the leg's other workspaces.
+ */
+type LeadProgram = {
+  readonly workspace: string;
+  readonly name: string;
+  /**
+   * Whether its typecheck may run beside its lint. The API's lint holds
+   * about 10 GiB on a 16 GiB runner, so its typecheck waits for the rest.
+   */
+  readonly typecheckBesideLint: boolean;
+};
+
+const LEAD_PROGRAMS = {
+  web: { workspace: "apps/web", name: "@stll/web", typecheckBesideLint: true },
+  api: { workspace: "apps/api", name: "@stll/api", typecheckBesideLint: false },
+} as const satisfies Record<string, LeadProgram>;
+
+export const prioritizeLeadLint = (
+  commands: string[][],
+  lead: LeadProgram,
+): string[][] =>
   commands.flatMap((command) => {
+    const own = `--filter=./${lead.workspace}`;
     if (
       command[2] !== "turbo" ||
       !command.includes("lint") ||
-      command.includes("--filter=!./apps/web") ||
+      command.includes(`--filter=!./${lead.workspace}`) ||
       (command.some((argument) => argument.startsWith("--filter=./")) &&
-        !command.includes("--filter=./apps/web"))
+        !command.includes(own))
     ) {
       return [command];
     }
-    // Explicit task IDs start the critical web program before the smaller
-    // workspaces. Its generated prerequisites still run through Turbo.
-    const web = [
-      ...turboCommand(
-        command.includes("typecheck")
-          ? ["@stll/web#lint", "@stll/web#typecheck"]
-          : ["@stll/web#lint"],
-        { type: "all" },
-      ),
-    ];
-    return [web, [...command, "--filter=!./apps/web"]];
+    // Explicit task IDs start the critical program before the smaller
+    // workspaces, and nothing else type-aware shares the runner's memory with
+    // it. Its generated prerequisites still run through Turbo.
+    const typecheck = command.includes("typecheck");
+    const leadTasks =
+      typecheck && lead.typecheckBesideLint
+        ? [`${lead.name}#lint`, `${lead.name}#typecheck`]
+        : [`${lead.name}#lint`];
+    const rest = [...command, `--filter=!./${lead.workspace}`];
+    return typecheck && !lead.typecheckBesideLint
+      ? [
+          turboCommand(leadTasks, { type: "all" }),
+          rest,
+          turboCommand([`${lead.name}#typecheck`], { type: "all" }),
+        ]
+      : [turboCommand(leadTasks, { type: "all" }), rest];
   });
+
+export const prioritizeWebLint = (commands: string[][]): string[][] =>
+  prioritizeLeadLint(commands, LEAD_PROGRAMS.web);
 
 const sameScope = (left: TaskScope, right: TaskScope): boolean => {
   if (left.type !== right.type) {
@@ -1241,15 +1379,10 @@ export const resultBoundaryLintCommand = (
   if (paths.length === 0) {
     return null;
   }
-  return [
-    "bun",
-    "--bun",
-    "oxlint",
-    "-c",
-    "oxlint.result-boundary.config.ts",
+  return lintCommand({ config: "result-boundary" }, [
     "--deny-warnings",
     ...paths,
-  ];
+  ]);
 };
 
 type PlanResultBoundaryLintOptions = {
@@ -1312,8 +1445,8 @@ export const scopedCommands = (
           )
         : command,
     );
-    return partition.leg === "web"
-      ? prioritizeWebLint(partitioned)
+    return partition.leg === "web" || partition.leg === "api"
+      ? prioritizeLeadLint(partitioned, LEAD_PROGRAMS[partition.leg])
       : partitioned;
   }
   const commands: string[][] = [];
@@ -1503,7 +1636,15 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   if (toolchain.isErr()) {
     return toolchain;
   }
-  const scoped = await planScope(options.scope, options.leg);
+  const resolvedGreenBase =
+    options.greenBase === undefined
+      ? undefined
+      : greenBaseScope(options.greenBase, process.cwd());
+  if (resolvedGreenBase !== undefined) {
+    console.log(greenBaseScopeMessage(resolvedGreenBase));
+  }
+  const checkScope: CheckScope = resolvedGreenBase ?? options.scope;
+  const scoped = await planScope(checkScope, options.leg);
   if (scoped.isErr()) {
     return scoped;
   }

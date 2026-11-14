@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 
-import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
+import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
 
 const fixture = async (): Promise<string> =>
   await Bun.file(

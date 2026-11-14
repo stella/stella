@@ -56,6 +56,7 @@ import {
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
 import { collapseSpacedLetters } from "@stll/text-normalize";
+import { restoreHungarianLetters } from "@stll/text-normalize/hungarian-letters";
 import { parsePlainDate } from "@stll/time";
 
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
@@ -186,7 +187,11 @@ const runsOf = (paragraph: FolioParagraph): DocRun[] => {
   };
 
   visit(paragraph.content);
-  return runs;
+  // Every line, note and cell is read from these runs, in either format.
+  return runs.map((run) => ({
+    ...run,
+    text: restoreHungarianLetters(run.text),
+  }));
 };
 
 const lineOf = (paragraph: FolioParagraph): DocLineData => {
@@ -425,6 +430,51 @@ const sectionHeadingIn = (key: string): SectionHeading | null =>
   ) ?? null;
 
 /**
+ * A title the court prints inside its reasons, whatever its wording.
+ *
+ * Courts title the parts of their reasons in their own words (`Kereset`,
+ * `Az alperes döntése`, `A törvényszék döntése és jogi indokai`, `Záró rész,
+ * perköltség, illeték`), and the DOCX states no style that marks them, so no
+ * list of wordings can be complete. What a title has and a reasons paragraph
+ * lacks is its shape: it is short, opens with a capital, cites no number or
+ * section, and ends without the punctuation every sentence and every
+ * introduction to a list ends with. Read only under the reasons heading,
+ * where every paragraph the court numbers is `[N]`; the summary and
+ * applied-legislation sections list acts by name and are left alone.
+ *
+ * Shape alone also fits the opening words of a sentence the next paragraph
+ * finishes (`A bíróság a keresetet` / `elutasította.`), so a title must also
+ * be followed by what a title heads and no broken sentence runs on into: the
+ * court's next numbered paragraph, or the decision's closing place and date.
+ */
+const PRINTED_SUBHEADING_FORBIDDEN = /[\p{N}§\n]/u;
+const PRINTED_SUBHEADING_START = /^\p{Lu}/u;
+const PRINTED_SUBHEADING_UNFINISHED_END = /[.:;,!?…"'”»)\]-]$/u;
+
+const isPrintedSubheading = (text: string): boolean => {
+  const line = text.trim();
+  return (
+    line.length > 0 &&
+    line.length <= HEADING_LINE_MAX &&
+    PRINTED_SUBHEADING_START.test(line) &&
+    !PRINTED_SUBHEADING_FORBIDDEN.test(line) &&
+    !PRINTED_SUBHEADING_UNFINISHED_END.test(line)
+  );
+};
+
+/**
+ * How a finished reasons paragraph ends. A paragraph that ends otherwise ("…
+ * jogszabálysértő, mert") runs on into the next one, so a short capitalised
+ * line after it (`Magyarország Alaptörvénye`) is the rest of that sentence,
+ * not a title, unless the court sets it apart in bold. A colon or semicolon introduces what follows, so it does not
+ * finish the paragraph either.
+ */
+const SENTENCE_FINISHED_END = /[.!?…"'”»)\]]$/u;
+
+/** The level-1 section under which the court titles its own parts. */
+const REASONS_HEADING_KEY = "indokolás";
+
+/**
  * The operative part's own introduction, which courts set as a centred, spaced
  * line rather than as a heading: `Í T É L E T E T :`, `v é g z é s t :`.
  *
@@ -434,7 +484,13 @@ const sectionHeadingIn = (key: string): SectionHeading | null =>
  * In the current era the operative part opens with `Rendelkező rész`, which is
  * a section heading.
  */
-const OPERATIVE_INTRODUCTIONS = new Set(["ítéletet", "végzést", "határozatot"]);
+const OPERATIVE_INTRODUCTIONS = new Set([
+  "ítéletet",
+  "részítéletet",
+  "közbenső ítéletet",
+  "végzést",
+  "határozatot",
+]);
 
 /** The republic's formula, printed above the operative part in the legacy era. */
 const REPUBLIC_FORMULAE = new Set([
@@ -551,13 +607,31 @@ type HeaderLabelMatch = {
 };
 
 /**
+ * Whether a line opens with a label: the form, perhaps a few more words of a
+ * longer label (`A másodfokú bíróság neve és a jogerős határozat száma:`), and
+ * its colon; or the form alone with its value on the next line. A sentence
+ * that opens with the same words (`A felperes másodfokú eljárásban…`) is the
+ * decision's own text.
+ */
+const LABEL_TAIL = /^[^:.;]{0,80}:/u;
+
+const isLabelOpening = (key: string, form: string): boolean =>
+  key.startsWith(form) &&
+  (key.length === form.length || LABEL_TAIL.test(key.slice(form.length)));
+
+/**
  * The header label a line opens with, or `null`.
  *
  * Longest form wins, so a plural line is read as the label it is rather than
  * as the shorter one it happens to contain.
  */
 const huBhgyHeaderLabelIn = (text: string): HeaderLabelMatch | null => {
-  const key = headingKey(text);
+  // The heading key without its trailing-mark trim: a label's colon is what
+  // tells it from a sentence that opens with the same words.
+  const key = collapseSpacedLetters(text)
+    .replaceAll(/[\s ]+/gu, " ")
+    .trim()
+    .toLocaleLowerCase("hu-HU");
   let best: {
     label: HuBhgyHeaderLabel;
     role: ParagraphRole;
@@ -566,7 +640,7 @@ const huBhgyHeaderLabelIn = (text: string): HeaderLabelMatch | null => {
   for (const { label, role, forms } of HEADER_LABELS) {
     for (const form of forms) {
       if (
-        key.startsWith(form) &&
+        isLabelOpening(key, form) &&
         (best === null || form.length > best.length)
       ) {
         best = { label, role, length: form.length };
@@ -803,6 +877,8 @@ const HU_DECISION_TYPES = [
   "kollégiumi állásfoglalás",
   "kollégiumi vélemény",
   "elvi határozat",
+  "részítélet",
+  "közbenső ítélet",
   "ítélet",
   "végzés",
   "határozat",
@@ -838,6 +914,20 @@ export const huDecisionTypeFrom = (
   }
   return undefined;
 };
+
+/**
+ * Whether a short line introduces the operative part: its accusative
+ * introduction (`Í T É L E T E T :`), or, below a header, the kind printed
+ * alone (`V é g z é s`). Above a header the same word is the title block's.
+ */
+const opensOperativePart = (
+  key: string,
+  text: string,
+  belowHeader: boolean,
+): boolean =>
+  text.length <= 40 &&
+  (OPERATIVE_INTRODUCTIONS.has(key) ||
+    (belowHeader && HU_DECISION_TYPES.some((type) => type === key)));
 
 /** `Az ügy száma:      Gfv.VI.30.091/2025/4.` */
 const DOCKET_LABEL = "az ügy száma:";
@@ -942,19 +1032,25 @@ const PLACEHOLDER_STEMS = [
   "telefonszám",
 ] as const;
 
-/** `név1`, `Terhelt1`, `Gyanúsított 1.`, `cég12` */
+/**
+ * `név1`, `Terhelt1`, `Gyanúsított 1.`, `cég12`. The token's number ends the
+ * token: a number that runs on into a larger one ("a felperes 2007. évi",
+ * "Felperes 5.300.000.-forint", "felperes 925.-Ft/db") is the court's own text
+ * about that party, and so is a stem inside a longer word.
+ */
 const NUMBERED_PLACEHOLDER = new RegExp(
-  String.raw`\b(?:${PLACEHOLDER_STEMS.join("|")})\s?\d{1,3}\.?`,
+  String.raw`(?<![\p{L}\p{N}])(?:${PLACEHOLDER_STEMS.join("|")})\s?\d{1,3}(?![\p{L}\p{N}]|[.,]\p{N}|\.-)\.?`,
   "giu",
 );
 
 /**
  * `alperes neve (címe)`, `I.rendű felperes neve`, `város neve`,
  * `terhelt születési helye`: the legacy era spells the field out in the
- * possessive instead of numbering it.
+ * possessive instead of numbering it. The field word ends the token, so
+ * "a felperes nevezett Rt." stays text.
  */
 const SPELLED_PLACEHOLDER =
-  /\b(?:[IVX]+\.\s?rendű\s+)?(?:felperes|alperes|terhelt|vádlott|gyanúsított|kérelmező|kérelmezett|tanú|sértett|város|község|utca|munkáltató|védő)\s+(?:születési\s+)?(?:neve|címe|helye|ideje|lakcíme|székhelye|anyja\s+neve)/giu;
+  /(?<![\p{L}\p{N}])(?:[IVX]+\.\s?rendű\s+)?(?:felperes|alperes|terhelt|vádlott|gyanúsított|kérelmező|kérelmezett|tanú|sértett|város|község|utca|munkáltató|védő)\s+(?:születési\s+)?(?:neve|címe|helye|ideje|lakcíme|székhelye|anyja\s+neve)(?![\p{L}\p{N}])/giu;
 
 type AnonSpan = { readonly start: number; readonly end: number };
 
@@ -1015,6 +1111,107 @@ const inlinesOf = (runs: readonly DocRun[]): Inline[] =>
 
 /** `[1]`, `[42]`: the number the court itself cites its paragraphs by. */
 const COURT_PARAGRAPH_NUMBER = /^\[(?<number>\d{1,4})\]\s*/u;
+
+/**
+ * What the next line of the body is, as evidence for the line before it: a
+ * title heads the court's next numbered paragraph, or the closing part when
+ * the court titles that too (`Záró rész` before the place and date).
+ */
+type NextBodyLine = "numbered-paragraph" | "closing" | "other";
+
+/**
+ * The next body line after `index`, past the notes and blank lines between.
+ * A table is not a numbered paragraph, nor is the end of the document.
+ */
+const nextBodyLineAfter = (
+  items: readonly DocItem[],
+  index: number,
+): NextBodyLine => {
+  for (let next = index + 1; next < items.length; next += 1) {
+    const item = items[next];
+    if (item === undefined || item.type === "table") {
+      return "other";
+    }
+    if (item.line.kind === "note") {
+      continue;
+    }
+    const text = item.line.value.text.trim();
+    if (text.length === 0) {
+      continue;
+    }
+    if (COURT_PARAGRAPH_NUMBER.test(text)) {
+      return "numbered-paragraph";
+    }
+    return closingDateFrom(text) === undefined ? "other" : "closing";
+  }
+  return "other";
+};
+
+type RunWeight = "bold" | "regular";
+
+/** Bold when every visible character of the line is set in bold. */
+const weightOf = (runs: readonly DocRun[]): RunWeight => {
+  const visible = runs.filter(({ text }) => text.trim().length > 0);
+  return visible.length > 0 && visible.every(({ bold }) => bold)
+    ? "bold"
+    : "regular";
+};
+
+/**
+ * How the last body paragraph ended. One that runs on may continue in the
+ * next line, so only a line its weight sets apart can be a title after it.
+ */
+type PreviousParagraph =
+  | { readonly type: "finished" }
+  | { readonly type: "runs-on"; readonly weight: RunWeight };
+
+const FINISHED_PARAGRAPH: PreviousParagraph = { type: "finished" };
+
+type TitleBeforeSoftBreak = {
+  readonly title: readonly DocRun[];
+  readonly rest: readonly DocRun[];
+};
+
+/**
+ * A title the court sets on the first line of a paragraph and then, after a
+ * soft break, the numbered paragraph it heads (`Kereset` + `w:br` + `[2] …`).
+ * Splits the runs there, so each part keeps its own formatting; null when the
+ * line after the first break does not open a numbered paragraph.
+ */
+const titleBeforeSoftBreak = (
+  runs: readonly DocRun[],
+): TitleBeforeSoftBreak | null => {
+  const text = runs.map((run) => run.text).join("");
+  const breakAt = text.indexOf("\n");
+  if (
+    breakAt <= 0 ||
+    !COURT_PARAGRAPH_NUMBER.test(text.slice(breakAt + 1).trimStart())
+  ) {
+    return null;
+  }
+  const title: DocRun[] = [];
+  const rest: DocRun[] = [];
+  let start = 0;
+  for (const run of runs) {
+    const end = start + run.text.length;
+    if (end <= breakAt) {
+      title.push(run);
+    } else if (start > breakAt) {
+      rest.push(run);
+    } else {
+      const head = run.text.slice(0, breakAt - start);
+      const tail = run.text.slice(breakAt - start + 1);
+      if (head.length > 0) {
+        title.push({ ...run, text: head });
+      }
+      if (tail.length > 0) {
+        rest.push({ ...run, text: tail });
+      }
+    }
+    start = end;
+  }
+  return { title, rest };
+};
 
 // ── Parse ────────────────────────────────────────────────
 
@@ -1144,6 +1341,14 @@ export const parseHuBhgyDecision = (
   /** The header label the lines below a labelled one still belong to. */
   let continuedRole: ParagraphRole | null = null;
   let region: Region = "front";
+  /** Whether the last level-1 heading was the reasons' own (`Indokolás`). */
+  let underReasonsHeading = false;
+  let previousParagraph: PreviousParagraph = FINISHED_PARAGRAPH;
+  /**
+   * Read through a call: the line handlers move `region`, and a direct
+   * comparison after them would still see the value narrowed before them.
+   */
+  const inFrontMatter = (): boolean => region === "front";
   let decisionDate: string | undefined;
   let dateBeforeSignature: string | undefined;
   /**
@@ -1156,7 +1361,97 @@ export const parseHuBhgyDecision = (
   /** Lines before the first section heading, where the kind is printed. */
   const titleLines: string[] = [];
 
-  const classifyBodyLine = (body: BodyDocumentLine<DocLineData>): void => {
+  /**
+   * Whether a line of the reasons is a title the court prints there. Besides
+   * its shape, a title heads the court's next numbered paragraph or the
+   * closing part; after a paragraph that runs on, it must also be set apart
+   * in bold, since a plain line there may finish that paragraph's sentence.
+   */
+  const opensTitle = (runs: readonly DocRun[], next: NextBodyLine): boolean => {
+    if (
+      region !== "reasoning" ||
+      !underReasonsHeading ||
+      next === "other" ||
+      !isPrintedSubheading(normalizeInlineLine(inlinesOf(runs)).plainText)
+    ) {
+      return false;
+    }
+    switch (previousParagraph.type) {
+      case "finished":
+        return true;
+      case "runs-on":
+        return (
+          previousParagraph.weight === "regular" && weightOf(runs) === "bold"
+        );
+      default:
+        previousParagraph satisfies never;
+        return panic("Unhandled paragraph ending");
+    }
+  };
+
+  const emitTitle = (runs: readonly DocRun[]): void => {
+    const normalized = normalizeInlineLine(inlinesOf(runs));
+    previousParagraph = FINISHED_PARAGRAPH;
+    builder.heading({
+      type: "heading",
+      level: 2,
+      role: HEADING_ROLE_BY_LEVEL[2],
+      inlines: normalized.inlines,
+      plainText: normalized.plainText,
+    });
+  };
+
+  /**
+   * A body line of the decision's own text: a court-numbered paragraph, an
+   * unnumbered one, or a title the court prints inside its reasons, on a line
+   * of its own or before a soft break.
+   */
+  const emitBodyText = (runs: readonly DocRun[], next: NextBodyLine): void => {
+    const split = titleBeforeSoftBreak(runs);
+    if (split !== null && opensTitle(split.title, "numbered-paragraph")) {
+      emitTitle(split.title);
+      emitBodyText(split.rest, next);
+      return;
+    }
+    const normalized = normalizeInlineLine(inlinesOf(runs));
+    const { match: numbered, line: unnumbered } = stripInlineLinePrefix(
+      normalized,
+      COURT_PARAGRAPH_NUMBER,
+    );
+    const number = numbered?.groups?.["number"];
+    const role: ParagraphRole = BODY_ROLE[region];
+    if (number === undefined && opensTitle(runs, next)) {
+      emitTitle(runs);
+      return;
+    }
+    previousParagraph = SENTENCE_FINISHED_END.test(normalized.plainText.trim())
+      ? FINISHED_PARAGRAPH
+      : { type: "runs-on", weight: weightOf(runs) };
+    if (number === undefined) {
+      builder.paragraph({
+        type: "paragraph",
+        role,
+        inlines: normalized.inlines,
+        plainText: normalized.plainText,
+      });
+      return;
+    }
+    // The bracketed number is the citable paragraph number, so it is kept as
+    // structure: a citation names `[31]`, and a prefix inside the text would
+    // make every search for the paragraph's words find the number too.
+    builder.paragraph({
+      type: "paragraph",
+      role,
+      number: Number(number),
+      inlines: unnumbered.inlines,
+      plainText: unnumbered.plainText,
+    });
+  };
+
+  const classifyBodyLine = (
+    body: BodyDocumentLine<DocLineData>,
+    next: NextBodyLine,
+  ): void => {
     const line = body.value;
     const key = headingKey(line.text);
     const precedingDate = dateBeforeSignature;
@@ -1201,6 +1496,10 @@ export const parseHuBhgyDecision = (
     const heading = sectionHeadingIn(key);
     if (heading !== null) {
       region = heading.region ?? region;
+      if (heading.level === 1) {
+        underReasonsHeading = heading.key === REASONS_HEADING_KEY;
+      }
+      previousParagraph = FINISHED_PARAGRAPH;
       builder.heading({
         type: "heading",
         level: heading.level,
@@ -1212,8 +1511,15 @@ export const parseHuBhgyDecision = (
     }
 
     // ── The operative part's own introduction ──
-    if (OPERATIVE_INTRODUCTIONS.has(key) && line.text.length <= 40) {
+    if (
+      opensOperativePart(
+        key,
+        line.text,
+        region === "front" && statedLabels.size > 0,
+      )
+    ) {
       region = "operative";
+      underReasonsHeading = false;
       builder.heading({
         type: "heading",
         level: 1,
@@ -1310,42 +1616,17 @@ export const parseHuBhgyDecision = (
     // A footnote returned above, so a note's date-shaped line never dates the
     // decision; nor does the kiadmány's, which opens the closing region first.
     softBreakDate ??= closingDateAfterSoftBreak(line.text);
-    const normalized = normalizeInlineLine(inlinesOf(line.runs));
-    const { match: numbered, line: unnumbered } = stripInlineLinePrefix(
-      normalized,
-      COURT_PARAGRAPH_NUMBER,
-    );
-    const number = numbered?.groups?.["number"];
-    const role: ParagraphRole = BODY_ROLE[region];
-    if (number === undefined) {
-      builder.paragraph({
-        type: "paragraph",
-        role,
-        inlines: normalized.inlines,
-        plainText: normalized.plainText,
-      });
-      return;
-    }
-    // The bracketed number is the citable paragraph number, so it is kept as
-    // structure: a citation names `[31]`, and a prefix inside the text would
-    // make every search for the paragraph's words find the number too.
-    builder.paragraph({
-      type: "paragraph",
-      role,
-      number: Number(number),
-      inlines: unnumbered.inlines,
-      plainText: unnumbered.plainText,
-    });
+    emitBodyText(line.runs, next);
   };
 
-  const emitLine = (line: DocLine): void => {
+  const emitLine = (line: DocLine, next: NextBodyLine): void => {
     const value = line.kind === "body" ? line.value : line.note.value;
     if (value.text.trim().length === 0) {
       return;
     }
     lineTexts.push(value.text);
     if (line.kind === "body") {
-      classifyBodyLine(line);
+      classifyBodyLine(line, next);
       // Certification can begin after a soft break and continue in later
       // paragraphs; keep the date found before it, but read no date past it.
       if (
@@ -1367,9 +1648,9 @@ export const parseHuBhgyDecision = (
     });
   };
 
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     if (item.type === "line") {
-      emitLine(item.line);
+      emitLine(item.line, nextBodyLineAfter(items, index));
       continue;
     }
     dateBeforeSignature = undefined;
@@ -1386,6 +1667,18 @@ export const parseHuBhgyDecision = (
       continue;
     }
     lineTexts.push(plainText);
+    // A sentence does not run on through a table into a line after it.
+    previousParagraph = FINISHED_PARAGRAPH;
+    if (inFrontMatter()) {
+      for (const row of item.table.rows) {
+        const labelled = huBhgyHeaderLabelIn(
+          row.map(({ value }) => value.text).join("\t"),
+        );
+        if (labelled !== null) {
+          statedLabels.add(labelled.label);
+        }
+      }
+    }
     builder.table({ type: "table", rows, plainText });
   }
 

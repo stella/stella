@@ -5,6 +5,7 @@ import type { JWTPayload } from "jose";
 import { MOBILE_SCOPES } from "@stll/api-contract/mobile-client";
 import { assertProperty } from "@stll/property-testing";
 
+import type { rootDb } from "@/api/db/root";
 import {
   admitApiAccessTokenRoute,
   API_OAUTH_ROUTES,
@@ -12,10 +13,23 @@ import {
   readAccessTokenBearer,
 } from "@/api/lib/auth/api-access-token";
 import { getApiOAuthResourceIdentifier } from "@/api/lib/oauth-resource-policy";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const admissionQuery = {
+  from: () => admissionQuery,
+  leftJoin: () => admissionQuery,
+  limit: async () => [],
+};
+const admissionOptions = {
+  db: asTestRaw<Pick<typeof rootDb, "select">>({
+    select: () => admissionQuery,
+  }),
+};
 
 const NO_REVIEW_ACCOUNT = { organizationId: undefined };
 
 const USER_CLAIMS = {
+  iat: 1_700_000_000,
   sub: "user-1",
   org_id: "org-1",
   member_id: "member-1",
@@ -33,6 +47,7 @@ const verifierReturning =
 const authenticate = async (payload: JWTPayload) => {
   const result = await authenticateApiAccessToken("a.b.c", {
     reviewAccount: NO_REVIEW_ACCOUNT,
+    admissionOptions,
     verifyToken: verifierReturning(payload),
   });
   return result.isOk() ? result.value : { refused: result.error.reason };
@@ -53,7 +68,7 @@ describe("which bearer takes the access-token path", () => {
 
 describe("API access token claims", () => {
   test("a user grant for an app opens the session it was issued under", async () => {
-    expect(await authenticate(USER_CLAIMS)).toEqual({
+    expect(await authenticate(USER_CLAIMS)).toMatchObject({
       userId: "user-1",
       organizationId: "org-1",
       memberId: "member-1",
@@ -66,6 +81,7 @@ describe("API access token claims", () => {
     let audience: unknown;
     await authenticateApiAccessToken("a.b.c", {
       reviewAccount: NO_REVIEW_ACCOUNT,
+      admissionOptions,
       verifyToken: async (_token, options) => {
         audience = options.verifyOptions.audience;
         return await Promise.resolve(USER_CLAIMS);
@@ -75,7 +91,13 @@ describe("API access token claims", () => {
   });
 
   test("a token without its membership, app or user is refused", async () => {
-    for (const claim of ["member_id", "org_id", "sub", "client_id"] as const) {
+    for (const claim of [
+      "member_id",
+      "org_id",
+      "sub",
+      "client_id",
+      "iat",
+    ] as const) {
       const { [claim]: _dropped, ...claims } = USER_CLAIMS;
       expect(await authenticate(claims)).toEqual({ refused: "rejected" });
     }
@@ -93,6 +115,7 @@ describe("API access token claims", () => {
   test("a verifier outage is not reported as a bad token", async () => {
     const result = await authenticateApiAccessToken("a.b.c", {
       reviewAccount: NO_REVIEW_ACCOUNT,
+      admissionOptions,
       verifyToken: async () => {
         throw new TypeError("JWKS fetch failed");
       },
@@ -151,6 +174,14 @@ describe("which routes an API access token opens", () => {
     ).toEqual([]);
   });
 
+  test("the mobile app asks for no administrative consent", () => {
+    expect(
+      MOBILE_SCOPES.filter((scope) =>
+        ["stella:admin_read", "stella:admin_write"].includes(scope),
+      ),
+    ).toEqual([]);
+  });
+
   test("a new document version needs the documents write scope", () => {
     const route = "/v1/entities/:workspaceId/upload-version";
     expect(
@@ -167,6 +198,129 @@ describe("which routes an API access token opens", () => {
         scopes: ["stella:documents_write"],
       }),
     ).toEqual({ admitted: true });
+  });
+
+  test("a new matter's client is created with the contacts scope, not the matters one", () => {
+    const create = { method: "PUT", route: "/v1/contacts" } as const;
+    expect(
+      admitApiAccessTokenRoute({
+        ...create,
+        scopes: ["stella:read", "stella:matters_write"],
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    expect(
+      admitApiAccessTokenRoute({
+        ...create,
+        scopes: ["stella:contacts_write"],
+      }),
+    ).toEqual({ admitted: true });
+    for (const route of [
+      "/v1/contacts/search",
+      "/v1/workspaces/member-candidates",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "GET",
+          route,
+          scopes: ["stella:read"],
+        }),
+      ).toEqual({ admitted: true });
+    }
+    // The rest of the address book stays closed: editing, deleting,
+    // importing and exporting contacts.
+    for (const [method, route] of [
+      ["GET", "/v1/contacts"],
+      ["DELETE", "/v1/contacts"],
+      ["POST", "/v1/contacts/:contactId"],
+      ["DELETE", "/v1/contacts/:contactId"],
+      ["PUT", "/v1/contacts/import"],
+      ["GET", "/v1/contacts/export"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({
+          method,
+          route,
+          scopes: ["stella:read", "stella:contacts_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
+  test("a matter's settings and members change with the matters scope", () => {
+    const admit = (method: string, route: string, scopes: string[]) =>
+      admitApiAccessTokenRoute({ method, route, scopes });
+    for (const route of [
+      "/v1/workspaces/:workspaceId",
+      "/v1/workspaces/:workspaceId/contacts",
+    ]) {
+      expect(admit("GET", route, ["stella:read"])).toEqual({
+        admitted: true,
+      });
+    }
+    for (const [method, route] of [
+      ["POST", "/v1/workspaces/:workspaceId"],
+      ["DELETE", "/v1/workspaces/:workspaceId"],
+      ["POST", "/v1/workspaces/:workspaceId/archive"],
+      ["POST", "/v1/workspaces/:workspaceId/unarchive"],
+      ["POST", "/v1/workspaces/:workspaceId/duplicate"],
+      ["PUT", "/v1/workspaces/:workspaceId/contacts"],
+      ["DELETE", "/v1/workspaces/:workspaceId/contacts/:workspaceContactId"],
+      // Who works on the matter is a matter edit, not an admin one.
+      ["PUT", "/v1/workspaces/:workspaceId/members"],
+      ["DELETE", "/v1/workspaces/:workspaceId/members/:userId"],
+    ] as const) {
+      expect(admit(method, route, ["stella:read"])).toEqual({
+        admitted: false,
+        reason: "scope",
+      });
+      expect(admit(method, route, ["stella:admin_write"])).toEqual({
+        admitted: false,
+        reason: "scope",
+      });
+      expect(admit(method, route, ["stella:matters_write"])).toEqual({
+        admitted: true,
+      });
+    }
+    // The matter's other settings stay closed: its correspondence address,
+    // anonymization terms and workflow runs.
+    for (const [method, route] of [
+      ["POST", "/v1/workspaces/:workspaceId/correspondence/address"],
+      ["PUT", "/v1/workspaces/:workspaceId/anonymization-terms"],
+      ["POST", "/v1/workspaces/:workspaceId/workflow/start"],
+    ] as const) {
+      expect(
+        admit(method, route, [
+          "stella:read",
+          "stella:matters_write",
+          "stella:admin_write",
+        ]),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
+  test("the caller's role and the matter-number convention open at the read scope, the organization's settings never", () => {
+    for (const route of ["/v1/me/role", "/v1/workspaces/matter-numbering"]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "GET",
+          route,
+          scopes: ["stella:read"],
+        }),
+      ).toEqual({ admitted: true });
+    }
+    for (const [method, route] of [
+      ["GET", "/v1/organization-settings"],
+      ["POST", "/v1/organization-settings"],
+      ["POST", "/v1/organization-settings/preview"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({
+          method,
+          route,
+          scopes: ["stella:read", "stella:admin_read", "stella:admin_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
   });
 
   test("an upload opens at its domain scope, its folder steps never", () => {
@@ -246,13 +400,162 @@ describe("which routes an API access token opens", () => {
       Object.keys(API_OAUTH_ROUTES).filter((key) => key.includes(" /v1/chat")),
     ).toEqual([
       "GET /v1/chat/threads",
+      "PATCH /v1/chat/threads/:threadId/read-state",
+      "PATCH /v1/chat/threads/:threadId/pin-state",
       "GET /v1/chat/threads/:threadId/messages",
       "GET /v1/chat/threads/:threadId/messages/older",
       "POST /v1/chat",
       "GET /v1/chat/threads/:threadId/turns/:turnId/resume",
       "GET /v1/chat/threads/:threadId/turns/:turnId/join",
       "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
+      "GET /v1/chat/runs/active",
+      "POST /v1/chat/tool-grants",
     ]);
+  });
+
+  test("a standing approval given in a conversation is stored at the chat scope", () => {
+    const grant = { method: "POST", route: "/v1/chat/tool-grants" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...grant, scopes: ["stella:chat"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...grant,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    // Listing and removing grants stay with signed-in browsers.
+    for (const [method, route] of [
+      ["GET", "/v1/chat/tool-grants"],
+      ["DELETE", "/v1/chat/tool-grants/:grantId"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: MOBILE_SCOPES }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
+  test("the chats list's active runs open at the chat scope", () => {
+    const runs = { method: "GET", route: "/v1/chat/runs/active" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...runs, scopes: ["stella:chat"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...runs,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("the reader's read and pin marks on a chat open at the chat scope", () => {
+    for (const route of [
+      "/v1/chat/threads/:threadId/read-state",
+      "/v1/chat/threads/:threadId/pin-state",
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "PATCH",
+          route,
+          scopes: ["stella:chat"],
+        }),
+      ).toEqual({ admitted: true });
+      expect(
+        admitApiAccessTokenRoute({
+          method: "PATCH",
+          route,
+          scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+    }
+  });
+
+  test("the person's event stream opens at the read scope, its siblings never", () => {
+    const events = {
+      method: "GET",
+      route: "/v1/notifications/events",
+    } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...events, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...events,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    for (const [method, route] of [
+      ["GET", "/v1/notifications"],
+      ["POST", "/v1/notifications/read-all"],
+      ["POST", "/v1/notifications/announcements"],
+      ["PATCH", "/v1/notifications/:notificationId/read"],
+      ["GET", "/workspaces/:workspaceId/events"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: MOBILE_SCOPES }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
+  test("search results open at the read scope", () => {
+    const search = { method: "POST", route: "/v1/search" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...search, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...search,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("search filter values open at the read scope", () => {
+    const facets = { method: "POST", route: "/v1/search/facets" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...facets, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...facets,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("the caller's recent searches open at the read scope", () => {
+    const history = { method: "GET", route: "/v1/search-history" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...history, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...history,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("the other search routes stay closed", () => {
+    for (const [method, route] of [
+      ["POST", "/v1/search/preview"],
+      ["POST", "/v1/search/refine"],
+      ["POST", "/v1/search/summary"],
+      ["POST", "/v1/search/summary/chat"],
+      ["GET", "/v1/saved-searches"],
+      ["POST", "/v1/saved-searches"],
+      ["PATCH", "/v1/saved-searches/:savedSearchId"],
+      ["DELETE", "/v1/saved-searches/:savedSearchId"],
+      ["POST", "/v1/search-history"],
+      ["DELETE", "/v1/search-history"],
+      ["DELETE", "/v1/search-history/:entryId"],
+      ["GET", "/v1/search-history/import-clock"],
+      ["POST", "/v1/search-history/import"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: MOBILE_SCOPES }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
   });
 
   test("a request no route matched is refused", () => {

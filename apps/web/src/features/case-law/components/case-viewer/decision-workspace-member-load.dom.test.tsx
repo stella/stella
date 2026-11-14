@@ -3,8 +3,9 @@ import { panic } from "better-result";
 import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const DECISION_PATH = "/law/cze/cases/synthetic/synthetic-dock-decision";
 
@@ -38,7 +39,12 @@ globalThis.fetch = Object.assign(
       return Response.json({ message: "Not found" }, { status: 404 });
     }
     if (path.endsWith("/workspaces/navigation")) {
-      return Response.json({ items: [], nextCursor: null, workspaces: [] });
+      return Response.json({
+        items: [],
+        nextCursor: null,
+        workspaces: [],
+        features: { timeBilling: false },
+      });
     }
     if (
       path.endsWith("/reader/answers") ||

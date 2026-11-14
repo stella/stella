@@ -81,6 +81,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   // A roster row of a court, addressed only as the subject of a portrait.
   caseLawJudge: { type: "non_resource", reason: "subresource" },
   caseLawMatterLink: { type: "non_resource", reason: "association" },
+  legislationMatterLink: { type: "non_resource", reason: "association" },
   caseLawPolarityRule: { type: "non_resource", reason: "policy" },
   caseLawProvisionCitation: { type: "non_resource", reason: "association" },
   caseLawReconciliationItem: { type: "non_resource", reason: "workflow" },
@@ -112,6 +113,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   },
   // A stored approval grant: the caller's own standing tool-approval policy.
   chatToolGrant: { type: "non_resource", reason: "policy" },
+  // A stored browser site approval: the caller's own standing policy.
+  chatBrowserSiteGrant: { type: "non_resource", reason: "policy" },
   fileChatThread: { type: "non_resource", reason: "association" },
   templateChatThread: { type: "non_resource", reason: "association" },
   templateDeletionCleanupRequest: { type: "non_resource", reason: "job" },
@@ -129,6 +132,9 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.CLAUSE_VERSION,
   },
+  // A firm's compliance record of one check, and its link to a matter.
+  conflictCheck: { type: "non_resource", reason: "workflow" },
+  conflictCheckMatter: { type: "non_resource", reason: "association" },
   contact: { type: "resource", resourceType: RESOURCE_TYPE.CONTACT },
   // Correspondence is matter-scoped; it has no portable ResourceRef kind.
   correspondence: { type: "non_resource", reason: "subresource" },
@@ -230,9 +236,13 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     reason: "association",
   },
   legalListGenerationRun: { type: "non_resource", reason: "job" },
-  legalListVerificationRun: { type: "non_resource", reason: "job" },
+  legalListVerificationRun: {
+    type: "resource",
+    resourceType: RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+  },
   legalListClaim: { type: "non_resource", reason: "subresource" },
   legalListClaimReviewEvent: { type: "non_resource", reason: "subresource" },
+  legalGraphEdge: { type: "non_resource", reason: "subresource" },
   legalListGenerationSource: {
     type: "non_resource",
     reason: "association",
@@ -301,6 +311,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.NUMBER_SERIES,
   },
   schedulerJobRun: { type: "non_resource", reason: "job" },
+  dataExport: { type: "non_resource", reason: "job" },
   systemScriptRun: { type: "non_resource", reason: "job" },
   sanctionsScreeningEvent: { type: "non_resource", reason: "event" },
   sanctionsEdition: { type: "non_resource", reason: "projection" },

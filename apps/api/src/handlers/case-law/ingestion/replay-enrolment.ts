@@ -1,8 +1,9 @@
 // parser-output-unchanged: replay enrolment chooses which stored rows are re-parsed, never how a row is parsed.
 import { panic } from "better-result";
 
-import { defaultConfig, type HealthConfig } from "@stll/db-load-gate/health";
+import type { HealthConfig } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { readReplayTickEnvironment } from "@/api/env-replay";
 import {
   ADAPTER_KEYS,
@@ -12,10 +13,13 @@ import {
 import { MAX_REPLAY_ROW_READMISSIONS } from "./replay-failure";
 
 // A load hold resumes only once the ordinary admission floor is recovered.
-export const REPLAY_HEALTH_CONFIG = {
-  ...defaultConfig,
-  resumeFloor: defaultConfig.startFloor,
-} satisfies HealthConfig;
+export const replayHealthConfig = (
+  health: HealthConfig = loadGateHealthConfig(),
+) =>
+  ({
+    ...health,
+    resumeFloor: health.startFloor,
+  }) satisfies HealthConfig;
 
 export type ReplayEnrolment =
   | { mode: "off" }
@@ -24,10 +28,10 @@ export type ReplayEnrolment =
 
 // Enrolment is a reviewed code change, never an environment override.
 export const REPLAY_ENROLMENT = {
-  [ADAPTER_KEYS.CZ_REGIONAL]: { mode: "dry-run", dailyBudget: 10_000 },
-  [ADAPTER_KEYS.CZ_NS]: { mode: "dry-run", dailyBudget: 10_000 },
-  [ADAPTER_KEYS.CZ_NSS]: { mode: "dry-run", dailyBudget: 10_000 },
-  [ADAPTER_KEYS.CZ_US]: { mode: "dry-run", dailyBudget: 10_000 },
+  [ADAPTER_KEYS.CZ_REGIONAL]: { mode: "dry-run", dailyBudget: 50_000 },
+  [ADAPTER_KEYS.CZ_NS]: { mode: "dry-run", dailyBudget: 30_000 },
+  [ADAPTER_KEYS.CZ_NSS]: { mode: "dry-run", dailyBudget: 30_000 },
+  [ADAPTER_KEYS.CZ_US]: { mode: "dry-run", dailyBudget: 30_000 },
   [ADAPTER_KEYS.SK_COURTS]: { mode: "dry-run", dailyBudget: 10_000 },
   [ADAPTER_KEYS.SK_US]: { mode: "dry-run", dailyBudget: 10_000 },
   [ADAPTER_KEYS.PL_COURTS]: { mode: "off" },
@@ -58,10 +62,12 @@ export const REPLAY_ENROLMENT = {
 } as const satisfies Record<AdapterKey, ReplayEnrolment>;
 
 export const BACKGROUND_REPLAY_LIMITS = {
-  maxRows: 100,
+  // A tick still stops at maxDurationMs and on a load hold; the row cap only
+  // bounds one source's share of a tick.
+  maxRows: 500,
   maxDurationMs: 4 * 60_000,
   hardDurationMs: 5 * 60_000,
-  maxDailyBudget: 10_000,
+  maxDailyBudget: 50_000,
   storedRawReadTimeoutMs: 30_000,
   maxRowAttempts: 5,
   maxRowReadmissions: MAX_REPLAY_ROW_READMISSIONS,

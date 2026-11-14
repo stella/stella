@@ -1444,9 +1444,14 @@ describe("runIngestionPipeline — document observer failures", () => {
     ];
 
     for (const { name, observe } of failures) {
-      const startedAt = performance.now();
-      const actual = await run({ observe });
-      expect(performance.now() - startedAt, name).toBeLessThan(2500);
+      let observerCalls = 0;
+      const actual = await run({
+        observe: async (observation) => {
+          observerCalls += 1;
+          await observe(observation);
+        },
+      });
+      expect(observerCalls, name).toBe(1);
       expect(actual.result, name).toEqual(baseline.result);
       expect(actual.cursorWrites, name).toEqual(baseline.cursorWrites);
       expect(actual.finalCursor, name).toBe(baseline.finalCursor);
@@ -1642,6 +1647,157 @@ describe("runIngestionPipeline — cycle deadline", () => {
     }
   });
 
+  test.each(["page", "cycle"] as const)(
+    "keeps a publisher failure that settled before the %s signal fired",
+    async (ending) => {
+      const source = caseLawSourceRow({ name: "Publisher-first source" });
+      const drain = new AbortController();
+      const originalPageTimeout = czNsAdapter.pageTimeoutMs;
+      if (ending === "page") {
+        czNsAdapter.pageTimeoutMs = 20;
+      }
+      let pageSignal: AbortSignal | undefined;
+      czNsAdapter.fetchPage = async (_cursor, _config, signal) => {
+        pageSignal = signal;
+        expect(signal?.aborted).toBe(false);
+        // The publisher's own request timeout, not ours.
+        return Result.err(
+          new AdapterFetchError({
+            message: "Publisher request timed out",
+            adapterKey: "cz-ns",
+            cursor: source.syncCursor,
+            cause: new DOMException("The operation timed out.", "TimeoutError"),
+          }),
+        );
+      };
+      // The lease renewal after the request waits on the database until our
+      // own page or cycle signal has fired.
+      const lease: CaseLawSourceIngestionLease = {
+        ...testSourceLease(source),
+        beforeRemoteEffect: async (effect) => {
+          const settled = await effect();
+          if (ending === "cycle") {
+            drain.abort();
+          }
+          const signal = pageSignal;
+          if (signal !== undefined && !signal.aborted) {
+            await new Promise<void>((resolve) => {
+              signal.addEventListener("abort", () => resolve(), { once: true });
+            });
+          }
+          return settled;
+        },
+      };
+      let persistedCursor: string | null | undefined;
+      try {
+        const result = await runIngestionPipeline({
+          source,
+          sourceLease: lease,
+          acquireStoredTotalAdmission: async () => "held",
+          scopedDb: cursorOnlyDb((cursor) => {
+            persistedCursor = cursor;
+          }),
+          cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+        });
+        expect(pageSignal?.aborted).toBe(true);
+        expect(result.stopKind).toBe(INGESTION_STOP_KIND.SOURCE_UNREACHABLE);
+        expect(result.pagesProcessed).toBe(0);
+        expect(result.nextCursor).toBe(source.syncCursor);
+        expect(persistedCursor).toBe(source.syncCursor);
+      } finally {
+        czNsAdapter.pageTimeoutMs = originalPageTimeout;
+      }
+    },
+  );
+
+  test.each(["page", "cycle"] as const)(
+    "a fetch that settles after the %s signal fired is a deadline",
+    async (ending) => {
+      const source = caseLawSourceRow({ name: "Deadline-only source" });
+      const drain = new AbortController();
+      const originalPageTimeout = czNsAdapter.pageTimeoutMs;
+      if (ending === "page") {
+        czNsAdapter.pageTimeoutMs = 20;
+      }
+      czNsAdapter.fetchPage = async (_cursor, _config, signal) => {
+        if (ending === "cycle") {
+          drain.abort(
+            new DOMException("The operation timed out.", "TimeoutError"),
+          );
+        }
+        if (signal !== undefined && !signal.aborted) {
+          await new Promise<void>((resolve) => {
+            signal.addEventListener("abort", () => resolve(), { once: true });
+          });
+        }
+        // Our own abort reason reads as a request timeout on its own; only
+        // the order of events says it was our deadline.
+        const error = new AdapterFetchError({
+          message: "Request aborted",
+          adapterKey: "cz-ns",
+          cursor: source.syncCursor,
+          cause: signal?.reason,
+        });
+        expect(error.stopKind).toBe(INGESTION_STOP_KIND.SOURCE_UNREACHABLE);
+        return Result.err(error);
+      };
+      try {
+        const result = await runIngestionPipeline({
+          source,
+          sourceLease: testSourceLease(source),
+          acquireStoredTotalAdmission: async () => "held",
+          scopedDb: cursorOnlyDb(() => undefined),
+          cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+        });
+        expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+        expect(result.pagesProcessed).toBe(0);
+        expect(result.nextCursor).toBe(source.syncCursor);
+      } finally {
+        czNsAdapter.pageTimeoutMs = originalPageTimeout;
+      }
+    },
+  );
+
+  test("a page the database brake holds until the cycle ends is a deadline", async () => {
+    const source = caseLawSourceRow({ name: "Brake-held source" });
+    const drain = new AbortController();
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [baseResult(EMPTY_AST)],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
+    let releases = 0;
+    const dbSlot = {
+      acquire: async (signal?: AbortSignal) => {
+        // The brake holds the slot; the cycle ends while the page waits.
+        drain.abort();
+        expect(signal?.aborted).toBe(true);
+        throw new DOMException("aborted", "AbortError");
+      },
+      release: () => {
+        releases++;
+      },
+    };
+    let persistedCursor: string | null | undefined;
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      acquireStoredTotalAdmission: async () => "held",
+      scopedDb: cursorOnlyDb((cursor) => {
+        persistedCursor = cursor;
+      }),
+      dbSlot,
+      cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+    });
+    expect(releases).toBe(0);
+    expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.nextCursor).toBe(source.syncCursor);
+    expect(persistedCursor).toBe(source.syncCursor);
+  });
+
   test("stops before a page the remaining budget cannot cover", async () => {
     const source = caseLawSourceRow({ name: "Short-budget source" });
 
@@ -1720,6 +1876,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
     expect(fetches).toBe(0);
     expect(result.pagesProcessed).toBe(0);
     expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
     expect(persistedCursor).toBe("cursor-1");
   });
 

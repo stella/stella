@@ -31,10 +31,13 @@ import {
   executeCheckCommands,
   failureExitCode,
   formatCheckFailure,
+  greenBaseScope,
+  greenBaseScopeMessage,
   LINT_ONLY_CACHE_INPUTS,
   lintAllTrace,
   matchedLintAllInputs,
   memoryLimitBytes,
+  parseArgs,
   planCheck,
   planFullCheck,
   planningCommandTimeout,
@@ -42,6 +45,7 @@ import {
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
   pluginFixtureModules,
+  prioritizeLeadLint,
   prioritizeWebLint,
   resultBoundaryLintCommand,
   ROOT_SCRIPT_LINT_INPUTS,
@@ -52,6 +56,10 @@ import {
   WORKSPACE_TYPECHECK_CACHE_INPUTS,
 } from "./code-check-affected";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
+import {
+  lintCommand as repositoryLintCommand,
+  parseLintArguments,
+} from "./lint-command";
 import { isChangedLintPath } from "./lint-paths";
 import { rootScriptLintPaths } from "./root-script-lint";
 
@@ -1054,10 +1062,24 @@ process.exit(childExitStatus(result));
 
   // The full check and every affected run reach workspaces through the same
   // `lint` and `typecheck` tasks, so the workspace scripts are the pass list.
+  // Each script lints through scripts/lint.ts; the command it starts is the
+  // one that has to carry the type-aware rules and the type check.
   test("every workspace lint runs the type-checking Oxlint pass", () => {
+    const startedLint = (script: string): string[] => {
+      const call = /bun scripts\/lint\.ts((?: [^\s&|;]+)*)/u.exec(script);
+      if (call === null) {
+        return [];
+      }
+      const parsed = parseLintArguments(
+        (call[1] ?? "").split(" ").filter((part) => part !== ""),
+      );
+      return "error" in parsed
+        ? []
+        : repositoryLintCommand(parsed.options, parsed.args);
+    };
     const missing = workspaceManifests()
       .filter(({ scripts }) => {
-        const lint = scripts["lint"] ?? "";
+        const lint = startedLint(scripts["lint"] ?? "");
         return !lint.includes("--type-aware") || !lint.includes("--type-check");
       })
       .map(({ workspace }) => workspace);
@@ -1224,9 +1246,13 @@ process.exit(childExitStatus(result));
         }
         continue;
       }
-      expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual([
-        "typecheck",
-      ]);
+      // A workspace the Tailwind rules lint also waits for its Tailwind cache
+      // node (scripts/generate-tailwind-classes.test.ts owns that set).
+      expect(
+        taskField(tasks, `${name}#lint`, "dependsOn").filter(
+          (dependency) => dependency !== "tailwind-cache",
+        ),
+      ).toEqual(["typecheck"]);
       expect(taskInputs(tasks, `${name}#lint`)).toEqual(
         expect.arrayContaining(taskInputs(tasks, "lint")),
       );
@@ -1460,6 +1486,40 @@ describe("parallel code-quality legs", () => {
     }
     expect(codeCheckConcurrency(8 * 1024 ** 3)).toBe(2);
     expect(codeCheckConcurrency(12 * 1024 ** 3)).toBe(3);
+  });
+
+  test("the API lint runs alone, then the other workspaces, then the API typecheck", () => {
+    const command = [
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "typecheck",
+      "--summarize",
+      "--filter=!./apps/web",
+    ];
+    const api = {
+      workspace: "apps/api",
+      name: "@stll/api",
+      typecheckBesideLint: false,
+    };
+    const [lint, rest, typecheck, ...extra] = prioritizeLeadLint(
+      [command],
+      api,
+    );
+    expect(extra).toEqual([]);
+    expect(lint).toContain("@stll/api#lint");
+    expect(lint).not.toContain("@stll/api#typecheck");
+    expect(lint).not.toContain("lint");
+    expect(rest).toEqual([...command, "--filter=!./apps/api"]);
+    expect(typecheck).toContain("@stll/api#typecheck");
+    expect(typecheck).not.toContain("@stll/api#lint");
+    expect(
+      prioritizeLeadLint([[...command.slice(0, 5), "--summarize"]], api).map(
+        (entry) => entry.filter((argument) => argument.includes("@stll/api")),
+      ),
+    ).toEqual([["@stll/api#lint"], []]);
   });
 
   test("a container memory limit below the machine's is the limit the checks get", () => {
@@ -1909,7 +1969,10 @@ describe("check failure reporting", () => {
       expect(output).toContain("elapsed=");
       expect(output).toContain("Command process tree at SIGTERM");
       expect(output).toContain("Command process tree at SIGKILL");
-      expect(output).toContain("PID PPID PGID STATE COMMAND");
+      expect(output).toContain("PID PPID PGID STATE RSS_KB COMMAND");
+      expect(output).toMatch(
+        /Machine: memory_free_mib=\d+ memory_total_mib=\d+ disk_free_mib=\d+ load=/u,
+      );
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -1979,12 +2042,42 @@ describe("check failure reporting", () => {
       "execution warning budget exceeded; continuing checks",
     );
   });
+  test("a pull request run reports every failed command in one pass", async () => {
+    const executed: (readonly string[])[] = [];
+    const output: string[] = [];
+    expect(
+      await executeCheckCommands({
+        commands,
+        keepGoing: true,
+        runner: async (command) => {
+          executed.push(command);
+          return Result.err(
+            new CommandFailedError({
+              message: "Check failed",
+              command,
+              exitCode: 1,
+              output: "check error",
+            }),
+          );
+        },
+        write: (line) => {
+          output.push(line);
+        },
+      }),
+    ).toBe(1);
+    expect(executed).toEqual([...commands]);
+    expect(output.join("")).toContain(
+      `code-check: ${String(commands.length)} failed command(s)`,
+    );
+  });
+
   test("stops at the first failed command without retrying", async () => {
     const executed: (readonly string[])[] = [];
     const output: string[] = [];
     expect(
       await executeCheckCommands({
         commands,
+        keepGoing: false,
         runner: async (command) => {
           expect(output).toEqual([]);
           executed.push(command);
@@ -2128,6 +2221,7 @@ test("the CLI stops after failure, reports it, and propagates its exit code", ()
     "code-quality-task-budgets.json",
     "generated-files.ts",
     "ledger-membership.ts",
+    "lint-command.ts",
     "lint-paths.ts",
     "oxlint-config-scopes.ts",
     "oxlint-module-closure.ts",
@@ -2211,6 +2305,8 @@ esac
           env: {
             ...process.env,
             ...LARGE_MACHINE,
+            // The stop-at-first behaviour, whichever event runs this test.
+            GITHUB_EVENT_NAME: "merge_group",
             PATH: `${directory}:${pathValue}`,
             CHECK_COMMAND_LOG: log,
             CHECK_REAL_BUN: process.execPath,
@@ -2407,5 +2503,115 @@ describe("check failure summary", () => {
       "code-check: failed (exit 1): bun scripts/check-oxlint-plugin-registry.ts",
     );
     expectNoStackFrames(formatted);
+  });
+});
+
+describe("main's code check compares with the last green commit", () => {
+  const repository = (root: string, ...args: string[]) => {
+    const result = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.name=Code Check Test",
+        "-c",
+        "user.email=code-check-test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    return result.stdout.toString().trim();
+  };
+
+  test("a base option never takes the next flag as its value", () => {
+    for (const flag of ["--base", "--green-base"]) {
+      expect(() => parseArgs([flag, "--dry-run"])).toThrow(
+        `${flag} requires a value`,
+      );
+      expect(() => parseArgs([flag])).toThrow(`${flag} requires a value`);
+    }
+    expect(parseArgs(["--green-base", "", "--dry-run"])).toMatchObject({
+      greenBase: "",
+      dryRun: true,
+    });
+  });
+
+  test("a green ancestor scopes the check; anything else checks every file", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "green-base-"));
+    try {
+      repository(root, "init", "--quiet");
+      repository(root, "commit", "--quiet", "--allow-empty", "-m", "green");
+      const green = repository(root, "rev-parse", "HEAD");
+      repository(root, "switch", "--quiet", "-c", "side");
+      repository(root, "commit", "--quiet", "--allow-empty", "-m", "side");
+      const side = repository(root, "rev-parse", "HEAD");
+      repository(root, "switch", "--quiet", "-");
+      repository(root, "commit", "--quiet", "--allow-empty", "-m", "main");
+
+      expect(greenBaseScope(green, root)).toEqual({
+        type: "affected",
+        base: green,
+      });
+      // Not an ancestor of the checked tree, or malformed.
+      expect(greenBaseScope(side, root)).toEqual({
+        type: "all",
+        reason: "not-ancestor",
+      });
+      expect(greenBaseScope("", root)).toEqual({
+        type: "all",
+        reason: "malformed",
+      });
+      expect(greenBaseScope("HEAD~1", root)).toEqual({
+        type: "all",
+        reason: "malformed",
+      });
+      // An unknown commit fails the probe; its message is kept, not read as
+      // a missing green commit.
+      const unknown = greenBaseScope("f".repeat(40), root);
+      expect(unknown).toMatchObject({ type: "all", reason: "probe-failed" });
+      expect(greenBaseScopeMessage(unknown)).toContain(
+        "green main ancestry probe failed",
+      );
+      expect(greenBaseScopeMessage(greenBaseScope(side, root))).toBe(
+        "code-check: no reachable green main commit; checking every file",
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  test("a failed ancestry probe keeps its message and still checks every file", () => {
+    const outside = mkdtempSync(path.join(tmpdir(), "green-base-outside-"));
+    try {
+      const scope = greenBaseScope("a".repeat(40), outside);
+      if (scope.type !== "all" || scope.reason !== "probe-failed") {
+        throw new Error(
+          `expected a failed probe, got ${JSON.stringify(scope)}`,
+        );
+      }
+      expect(scope.detail).toContain("not a git repository");
+      expect(greenBaseScopeMessage(scope)).toBe(
+        `code-check: green main ancestry probe failed (${scope.detail}); checking every file`,
+      );
+    } finally {
+      rmSync(outside, { force: true, recursive: true });
+    }
+  });
+
+  test("every Code quality step uses the green base outside a pull request or merge group", () => {
+    const sources = [
+      readFileSync(".github/workflows/ci.yml", "utf-8"),
+      readFileSync(".github/ci-checks/code-quality-web-rest.yml", "utf-8"),
+    ].join("\n");
+    for (const leg of CODE_CHECK_LEGS) {
+      expect(sources).toContain(
+        `bun run code-check:affected -- --leg ${leg} --green-base "$GREEN_BASE"`,
+      );
+    }
+    expect(
+      sources.match(/GREEN_BASE: \$\{\{ inputs\.green_base \|\| '' \}\}/gu),
+    ).toHaveLength(CODE_CHECK_LEGS.length);
   });
 });

@@ -8,20 +8,24 @@ import type {
   ReaderAnswerCitation,
 } from "@stll/api-contract/reader-answers";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import type { AnchoredNote } from "@/components/legal-reader/margin-notes.logic";
 import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
 const { cleanup, render, renderHook, fireEvent, act, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { ReaderAnswerCard } = await import("./reader-answer-card");
-const { CopyActionButton } = await import("@/components/copy-action-button");
+// Load the real lazy renderer before assertions use its parsed Markdown.
+await import("@/components/ai-elements/message-response");
+const { CopyControl } = await import("@/components/copy-control");
 const { resolveReaderAnswerCitation } =
   await import("./reader-answer-citation.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
@@ -200,7 +204,9 @@ const mount = (
       timeZone="UTC"
     >
       <FormattingProvider locale={locale} timeZone="UTC">
-        <ReaderAnswerCard {...updated} />
+        <WebReaderPresentationProvider>
+          <ReaderAnswerCard {...updated} />
+        </WebReaderPresentationProvider>
       </FormattingProvider>
     </IntlProvider>
   );
@@ -218,17 +224,17 @@ test("citations preserve both decision and paragraph identity and each action ca
     expect(container.querySelector("p")?.textContent).toBe("An explanation."),
   );
   fireEvent.click(getByRole("button", { name: "Paragraph 5" }));
-  const decisionChip = getByRole("button", {
+  const decisionChip = getByRole("link", {
     name: "Synthetic Supreme Court, SYN 12/2026, Jan 12, 2026, paragraph 6",
   });
   expect(decisionChip.getAttribute("href")).toBe(
     `${citedDecision.readerUrl}#p-6`,
   );
   await act(async () => {
-    fireEvent.click(decisionChip);
+    fireEvent.focus(decisionChip);
   });
   fireEvent.click(
-    await findByRole("link", { name: messages.common.openInStella }),
+    await findByRole("button", { name: messages.common.openInSidePanel }),
   );
   const message = answer.messages.at(0);
   if (message === undefined) {
@@ -595,7 +601,7 @@ test("copy uses the quiet card action variant and size", () => {
     if (!isValidElement(node)) {
       return;
     }
-    if (node.type === CopyActionButton) {
+    if (node.type === CopyControl) {
       copies.push(node.props);
     }
     if (
@@ -631,7 +637,7 @@ test("skeleton lines give way to identical streamed and reloaded markdown withou
     view.tree({ ...view.props, answer: withContent("streaming", content) }),
   );
   await waitFor(() =>
-    expect(view.container.querySelectorAll("li")).toHaveLength(2),
+    expect(view.container.querySelectorAll("li").length).toBe(2),
   );
   expect(view.queryByRole("status")).toBeNull();
   await waitFor(() =>
@@ -654,7 +660,7 @@ test("skeleton lines give way to identical streamed and reloaded markdown withou
   view.unmount();
   const reloaded = mount({ answer: withContent("complete", content) });
   await waitFor(() =>
-    expect(reloaded.container.querySelectorAll("li")).toHaveLength(2),
+    expect(reloaded.container.querySelectorAll("li").length).toBe(2),
   );
   expect(reloaded.container.querySelector("ul")?.outerHTML).toBe(streamed);
   expect(reloaded.container.querySelector("h2")?.parentElement?.innerHTML).toBe(

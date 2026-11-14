@@ -14,6 +14,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
   "apps/api/src/mcp/**/*.{ts,tsx}",
   "apps/web/src/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.{ts,tsx}",
+  "apps/skill-runner/src/**/*.{ts,tsx}",
   "packages/*/src/**/*.{ts,tsx}",
 ] as const;
 
@@ -27,6 +28,10 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "packages/deadlines/src/**/*.ts",
+  "packages/html/src/**/*.{ts,tsx}",
+  "apps/api/src/lib/data-sources/**/*.ts",
+  "apps/api/src/db/online-migration-entries/**/*.ts",
   "packages/playwright-tools/src/**/*.ts",
   "packages/render-probe/src/**/*.{ts,tsx}",
   "apps/web/src/features/law-search-history/**/*.ts",
@@ -42,30 +47,41 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/mobile/src/app/task/**/*.{ts,tsx}",
   "apps/mobile/src/app/timers/**/*.{ts,tsx}",
   "apps/mobile/src/app/scan/**/*.{ts,tsx}",
+  "apps/mobile/src/app/share/**/*.{ts,tsx}",
   "apps/mobile/src/components/ui/**/*.{ts,tsx}",
   "apps/mobile/src/native/**/*.{ts,tsx}",
   "apps/mobile/src/widgets/**/*.{ts,tsx}",
   "apps/mobile/src/app/document/**/*.{ts,tsx}",
   "apps/mobile/src/components/document-viewer/**/*.{ts,tsx}",
+  "apps/outlook/src/components/**/*.{ts,tsx}",
+  "apps/outlook/src/i18n/**/*.{ts,tsx}",
+  "apps/outlook/src/lib/oauth/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.ts",
+  "apps/skill-runner/src/**/*.ts",
   "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts",
   "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts",
   "apps/api/src/lib/auth/**/*.ts",
+  "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
+  "apps/api/src/handlers/ai/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
   "apps/api/src/handlers/audit-logs/**/*.ts",
   "apps/api/src/handlers/auth/**/*.ts",
   "apps/api/src/handlers/bilingual-translations/**/*.ts",
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
+  "apps/api/src/handlers/conflict-checks/**/*.ts",
+  "apps/api/src/lib/conflict-check/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
   "apps/api/src/handlers/client-invoices/**/*.ts",
   "apps/api/src/handlers/desktop-feature-access/**/*.ts",
   "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
+  "apps/api/src/handlers/desktop-runner/**/*.ts",
+  "apps/api/src/lib/desktop-runner/**/*.ts",
   "apps/api/src/handlers/desktop-time-entries/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
   "apps/api/src/handlers/dictation/**/*.ts",
@@ -91,6 +107,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/organization-settings/**/*.ts",
   "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
+  "apps/api/src/handlers/data-exports/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",
   "apps/api/src/handlers/saved-time-narratives/**/*.ts",
   "apps/api/src/handlers/saved-searches/**/*.ts",
@@ -109,10 +126,13 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/verify/**/*.ts",
   "apps/api/src/handlers/work-obligations/**/*.ts",
   "apps/api/src/lib/account-export/**/*.ts",
+  "apps/api/src/lib/ai-generation/**/*.ts",
+  "apps/api/src/lib/chat/artefact-provenance.ts",
   "apps/api/src/lib/bbox/**/*.ts",
   "apps/api/src/lib/billing/**/*.ts",
   "apps/api/src/lib/clauses/**/*.ts",
   "apps/api/src/lib/conditions/**/*.ts",
+  "apps/api/src/lib/data-export/**/*.ts",
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
@@ -173,16 +193,17 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
   "apps/web/src/components/references/**/*.{ts,tsx}",
   "apps/web/src/components/route-provider-scope/**/*.{ts,tsx}",
-  "apps/web/src/components/settings-shell/**/*.{ts,tsx}",
   "apps/web/src/components/sidebar/**/*.{ts,tsx}",
   "apps/web/src/components/viewer/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
+  "apps/web/src/features/organization/**/*.{ts,tsx}",
   "apps/web/src/features/desktop/**/*.{ts,tsx}",
   "apps/web/src/features/guides/**/*.{ts,tsx}",
   "apps/web/src/features/inbox/**/*.{ts,tsx}",
   "apps/web/src/features/knowledge/**/*.{ts,tsx}",
   "apps/web/src/features/my-week/**/*.{ts,tsx}",
+  "apps/web/src/features/sharepoint/**/*.{ts,tsx}",
   "apps/web/src/features/time-review/**/*.{ts,tsx}",
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
@@ -201,8 +222,13 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/queries/**/*.{ts,tsx}",
   "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
   "apps/web/src/routes/_protected.admin/**/*.{ts,tsx}",
+  "apps/web/src/routes/_protected.settings/-components/settings-shell/**/*.{ts,tsx}",
+  "apps/web/src/routes/_protected.settings/organization*.{ts,tsx}",
+  "apps/web/src/routes/_protected.settings/organization/**/*.{ts,tsx}",
+  "apps/web/src/routes/_protected.time_.report/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
+  "apps/web/src/security/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
   "apps/web/src/testing/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
@@ -211,6 +237,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/analytics-config/src/**/*.ts",
   "packages/api-client/src/**/*.ts",
   "packages/auth-model/src/**/*.ts",
+  "packages/brand/src/**/*.ts",
   "packages/calculations/src/**/*.ts",
   "packages/catalogue/src/**/*.ts",
   "packages/chat-limits/src/**/*.ts",
@@ -266,6 +293,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",
+  // TanStack Router consumes a loader's notFound() and failures through
+  // Promise rejection; this adapter translates the typed route-resource Result.
+  "apps/web/src/lib/errors/route-resource.ts",
   // TanStack Start's SSR callback consumes Response/rejection, not Result.
   // This server entry translates renderer errors into framework failures.
   "apps/web/src/server.ts",
@@ -282,6 +312,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // The OAuth provider consumes a client discovery's refusal as a rejected
   // APIError, which the stale-if-error wrapper passes through unchanged.
   "apps/api/src/lib/auth/cimd-stale-if-error.ts",
+  // Better Auth maps a rejected code exchange to its callback error, so the
+  // retry wrapper hands the provider's rejection back unchanged.
+  "apps/api/src/lib/auth/social-token-exchange.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
@@ -290,6 +323,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/account-deletion-cleanup-queue.ts",
   // The ZIP async iterator and Node pipeline propagate failures to the worker.
   "apps/api/src/lib/account-export/archive.ts",
+  "apps/api/src/lib/account-export/organization-audit-archive.ts",
   "apps/api/src/lib/account-export/queue.ts",
   "apps/api/src/lib/bilingual/run-queue.ts",
   "apps/api/src/lib/document-processing-queue.ts",
@@ -299,6 +333,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/file-derivative-queue.ts",
   // BullMQ retries an attempt only when its processor rejects.
   "apps/api/src/lib/push/push-delivery-worker.ts",
+  "apps/api/src/lib/push/timer-activity-worker.ts",
   "apps/api/src/lib/flows/flow-run-worker.ts",
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
@@ -321,18 +356,28 @@ export const RESULT_BOUNDARY_GLOBS = [
   // append/read/close failure only from a rejection, and the throw is what
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
+  // Wraps that StreamDurability adapter for a chat turn: the SDK still reads a
+  // delivery failure only from a rejection, now carrying its AI error kind.
+  "apps/api/src/handlers/chat/chat-delivery-failure.ts",
   // Drizzle rolls back transaction callbacks through rejection; returning a
   // Result would commit their writes instead of preserving the original refusal.
   "apps/api/src/lib/db/transaction-abort.ts",
   "apps/api/src/lib/workflow-queue.ts",
+  // Queue worker entry point: BullMQ consumes the job's rejection, and the
+  // run turns every failure into the export row's state.
+  "apps/api/src/handlers/data-exports/data-export-worker.ts",
+  // An async generator: its consumer learns that a streamed entry ended at
+  // the wrong length only from the iteration rejecting.
+  "apps/api/src/handlers/data-exports/zip-writer.ts",
   // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
   // reservation callbacks whose rejection rolls back the kickoff transaction.
   "apps/api/src/lib/rate-limit/queued-action-admission.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
   "apps/api/src/handlers/visual-sandbox/**",
-  // Lambda invokes this entry point and reports a failure through rejection.
+  // Lambda invokes these entry points and reports a failure through rejection.
   "apps/visual-preview/src/handler.ts",
+  "apps/skill-runner/src/handler.ts",
   // Web worker entry modules. The browser, not our code, invokes the message
   // handler, and a failure has to travel back over `postMessage` instead of
   // returning to a caller that could read a `Result`.
@@ -369,6 +414,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // a checkout without installed packages gets one actionable line; it cannot
   // import the Result library, which is one of the packages that may be missing.
   "packages/cli/src/cli.ts",
+  // Protected CLI startup must reject before check work when its network-denying preload is absent.
+  "packages/scripts/src/offline-check-startup.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",
@@ -520,6 +567,21 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "apps/mobile/src/app" },
   { reason: "unreviewed", unit: "apps/mobile/src/app/(tabs)" },
   { reason: "unreviewed", unit: "apps/mobile/src/components" },
+  {
+    reason:
+      "Outlook add-in adapters and entry scripts: api.ts and outlook.ts reject with typed errors that the hooks consume through Result.tryPromise, and the entry scripts catch Office.js startup failures. Enrol once those adapters return Result.",
+    unit: "apps/outlook/src",
+  },
+  {
+    reason:
+      "Outlook hooks turn adapter rejections into task pane state through Result.tryPromise, and a stale mail item rejects inside that wrapper. Enrol together with apps/outlook/src.",
+    unit: "apps/outlook/src/hooks",
+  },
+  {
+    reason:
+      "Office.js and API client adapters: office.ts reads callback APIs that fail by throwing, and outlook-api-client.ts rejects with typed errors its callers wrap in Result.tryPromise. Enrol together with apps/outlook/src.",
+    unit: "apps/outlook/src/lib",
+  },
   { reason: "unreviewed", unit: "apps/playground/src" },
   { reason: "unreviewed", unit: "apps/web/src" },
   { reason: "unreviewed", unit: "apps/web/src/components" },

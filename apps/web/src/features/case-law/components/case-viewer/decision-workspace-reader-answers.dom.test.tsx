@@ -336,7 +336,12 @@ const fakeReaderServer = (initialAnswers: ReaderAnswer[] = [answer]) => {
         return Response.json({ message: "Not found" }, { status: 404 });
       }
       if (path.endsWith("/workspaces/navigation")) {
-        return Response.json({ items: [], nextCursor: null, workspaces: [] });
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          workspaces: [],
+          features: { timeBilling: false },
+        });
       }
       if (path.endsWith("/organization-settings/ai-availability")) {
         return Response.json(aiAvailableResponse());
@@ -610,8 +615,8 @@ for (const activation of ["create", "regenerate", "follow-up"]) {
     const view = await renderWorkspace(client, "enabled");
     await waitFor(() =>
       expect(
-        view.container.querySelectorAll('[data-margin-note="card"]'),
-      ).toHaveLength(3),
+        view.container.querySelectorAll('[data-margin-note="card"]').length,
+      ).toBe(3),
     );
     if (activation === "create") {
       const paragraph = view.container.querySelector('[data-anchor="p-2"]');

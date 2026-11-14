@@ -788,6 +788,10 @@ impl ClipboardStore {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
   use crate::clipboard::{

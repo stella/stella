@@ -56,6 +56,8 @@
     "appearance.calendar",
     "auth.continueWithEmail",
     "avt.claimTypes.opinion.label",
+    "avt.mode.review",
+    "avt.review.status.reviewed",
     "avt.verification.documentView.original",
     "billing.codes.activity",
     "billing.codes.codeLabelField",
@@ -166,6 +168,7 @@
     "knowledge.playbooks.review.fixAccepted",
     "knowledge.playbooks.review.playbookLabel",
     "knowledge.playbooks.review.reject",
+    "knowledge.playbooks.review.run",
     "knowledge.playbooks.versions.restoredToast",
     "knowledge.playbooks.versions.versionHistory",
     "knowledge.sections.skills.title",
@@ -246,6 +249,7 @@
     "templates.saveFailed",
     "templates.studio.conditionSourceRule",
     "templates.studio.insertFormatDefault",
+    "templates.studio.namePlaceholder",
     "templates.studio.slashEmpty",
     "templates.tags",
     "translate.settings.apiKeyLabel",
@@ -261,7 +265,9 @@
     "workspaces.overview.activity.actorActions.cancelled",
     "workspaces.overview.activity.actorActions.created",
     "workspaces.overview.activity.actorActions.deleted",
+    "workspaces.overview.activity.actorActions.reviewed",
     "workspaces.overview.activity.actorActions.updated",
+    "workspaces.overview.activity.fields.name",
     "workspaces.overview.activity.fields.property",
     "workspaces.parties.partyRoles.expert_witness",
     "workspaces.parties.partyRoles.other",
@@ -317,8 +323,8 @@
     "auth.emailPlaceholder": [
       "ar"
     ],
-    "avt.claimDetail.sourceCount": [
-      "fr"
+    "avt.mode.graph": [
+      "de"
     ],
     "avt.verification.documentView.original": [
       "de",
@@ -380,6 +386,12 @@
     "chat.pastedText.fromPromptFallback": [
       "de"
     ],
+    "chat.runOn.cloud": [
+      "cs",
+      "de",
+      "fr",
+      "sk"
+    ],
     "chat.suggestionSeverity.style": [
       "fr"
     ],
@@ -429,6 +441,9 @@
     "common.filter": [
       "et"
     ],
+    "common.folder": [
+      "pl"
+    ],
     "common.formula": [
       "lv"
     ],
@@ -469,9 +484,6 @@
     ],
     "common.type": [
       "fr"
-    ],
-    "common.urlIdentifierPlaceholder": [
-      "ar"
     ],
     "common.version": [
       "de",
@@ -561,9 +573,6 @@
     ],
     "inspector.metadata.documentProperties.keys.slides": [
       "pt-BR"
-    ],
-    "inspector.review.passagesCount": [
-      "fr"
     ],
     "inspector.review.passagesToggle": [
       "fr"
@@ -688,6 +697,9 @@
     "navigation.contacts": [
       "fr"
     ],
+    "navigation.knowledge": [
+      "fr"
+    ],
     "navigation.shortcutCategories.navigation": [
       "de",
       "fr"
@@ -768,9 +780,6 @@
     "search.kinds.contact": [
       "fr"
     ],
-    "search.kinds.folder": [
-      "pl"
-    ],
     "search.kinds.link": [
       "de",
       "et",
@@ -814,9 +823,6 @@
       "de",
       "pl",
       "pt-BR"
-    ],
-    "templates.conditionCount": [
-      "fr"
     ],
     "templates.conditionDecidedNo": [
       "es"
@@ -918,6 +924,13 @@
     "workspaces.lead": [
       "de"
     ],
+    "workspaces.overview.activity.fields.status": [
+      "pl",
+      "pt-BR"
+    ],
+    "workspaces.overview.activity.fields.type": [
+      "fr"
+    ],
     "workspaces.overview.activity.targets.folder": [
       "pl"
     ],
@@ -938,6 +951,9 @@
     ],
     "workspaces.parties.personalLabel": [
       "es"
+    ],
+    "workspaces.pdf.evidence": [
+      "fr"
     ],
     "workspaces.pdf.selection.pageLocator": [
       "es",
@@ -1085,34 +1101,6 @@
     "lawHome.tryIdentifier",
     "legalReader.annotations.sharedBadge",
     "navigation.myTodos",
-    "organization.aiConfig.apiKeyUpdatePlaceholder",
-    "organization.aiConfig.baseUrl",
-    "organization.aiConfig.chooseModelsSubtitle",
-    "organization.aiConfig.chooseModelsTitle",
-    "organization.aiConfig.customModelBadge",
-    "organization.aiConfig.customModelDescription",
-    "organization.aiConfig.customModelHint",
-    "organization.aiConfig.defaultModel",
-    "organization.aiConfig.defaultModelOption",
-    "organization.aiConfig.deploymentNamePlaceholder",
-    "organization.aiConfig.editProviders",
-    "organization.aiConfig.endpoint",
-    "organization.aiConfig.endpointDescription",
-    "organization.aiConfig.overrideRoles",
-    "organization.aiConfig.overrideRolesDescription",
-    "organization.aiConfig.prices.azureManaged",
-    "organization.aiConfig.prices.empty",
-    "organization.aiConfig.prices.emptyHint",
-    "organization.aiConfig.prices.inMtok",
-    "organization.aiConfig.prices.model",
-    "organization.aiConfig.prices.outMtok",
-    "organization.aiConfig.prices.perCall",
-    "organization.aiConfig.prices.selectedHeading",
-    "organization.aiConfig.prices.source",
-    "organization.aiConfig.prices.title",
-    "organization.aiConfig.prices.typicalCallHint",
-    "organization.aiConfig.selectAtLeastOneRole",
-    "organization.aiConfig.selectedProvider",
     "organization.matterNumber.description",
     "organization.matterNumber.patternInvalidTokens",
     "organization.matterNumber.patternMustContainSeq",
@@ -1126,7 +1114,6 @@
     "workspaces.deleteSelectedRowsDescription",
     "workspaces.deleteSelection",
     "workspaces.exportToCsv",
-    "workspaces.fields.formatNotSupported",
     "workspaces.files.desktopEdit.forceRelease",
     "workspaces.files.desktopEdit.opening",
     "workspaces.files.desktopEdit.takeoverNoResponse",

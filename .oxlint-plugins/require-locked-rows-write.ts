@@ -85,6 +85,12 @@ const RESULT_CARRIERS = new Set([
 // Collection writes that make the receiver carry the argument.
 const COLLECTING_METHODS = new Set(["push", "unshift", "add", "set"]);
 const ID_PINS = new Set(["eq", "inArray"]);
+// Tables whose primary key is not `id`: a pin on this column names one row
+// just as `table.id` does elsewhere. Only a column that is the table's whole
+// primary key belongs here.
+const PRIMARY_KEY_COLUMNS = new Map<string, string>([
+  ["workObligations", "entityId"],
+]);
 // Bound on following local declarations, which can refer to each other.
 const MAX_EXPANSION_DEPTH = 4;
 
@@ -440,8 +446,9 @@ const conjunctsOf = (
   return [node];
 };
 
-// `eq(table.id, x)` / `inArray(table.id, xs)`, keyed by operator and the
-// source text of the value.
+// `eq(table.id, x)` / `inArray(table.id, xs)` (or the table's own primary-key
+// column from PRIMARY_KEY_COLUMNS), keyed by operator and the source text of
+// the value.
 const idPin = (
   node: AstNode,
   table: string,
@@ -455,7 +462,8 @@ const idPin = (
     return null;
   }
   const [column, value] = argumentsOf(node);
-  return columnOf(column, table) === "id" && isAstNode(value)
+  return columnOf(column, table) === (PRIMARY_KEY_COLUMNS.get(table) ?? "id") &&
+    isAstNode(value)
     ? {
         operator: node.callee.name,
         value,

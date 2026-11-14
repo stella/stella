@@ -144,6 +144,17 @@ export const ANALYSIS_FAILURE_CODE_BY_KIND = {
   provider_credentials_rejected: "provider_refused",
   model_unavailable: "provider_refused",
   provider_unavailable: "provider_unavailable",
+  // Analysis never runs on a computer; read as the provider reasons they are.
+  local_runner_needs_login: "provider_refused",
+  local_runner_limit_reached: "provider_refused",
+  local_runner_unavailable: "provider_unavailable",
+  local_runner_turn_too_large: "provider_refused",
+  // Output grown past what one delivered run holds is an incomplete answer.
+  turn_too_large: "answer_incomplete",
+  local_runner_not_reached: "provider_unavailable",
+  local_runner_relinked: "provider_unavailable",
+  local_runner_restoring: "provider_unavailable",
+  local_runner_folder_unavailable: "provider_unavailable",
   unknown: "failed",
 } as const satisfies Record<AIErrorKind, AnalysisFailureCode>;
 
@@ -161,6 +172,15 @@ const ANALYSIS_INCOMPLETE_REASON_BY_KIND = {
   provider_credentials_rejected: null,
   model_unavailable: null,
   provider_unavailable: null,
+  local_runner_needs_login: null,
+  local_runner_limit_reached: null,
+  local_runner_unavailable: null,
+  local_runner_turn_too_large: null,
+  turn_too_large: "incomplete_output",
+  local_runner_not_reached: null,
+  local_runner_relinked: null,
+  local_runner_restoring: null,
+  local_runner_folder_unavailable: null,
   unknown: null,
 } as const satisfies Record<
   AIErrorKind,
@@ -775,17 +795,18 @@ export const generateAnalysis = async ({
       // moved costs one indexed query.
       if (derivedAi && promptCachingEnabled !== null) {
         detached(
-          refreshSignificance({
-            admitModelAction,
-            analysis: stored.analysis,
-            contentHash: decision.contentHash,
-            derivedAi,
-            decisionId,
-            orgAIConfig,
-            orgAIConfigStatus,
-            organizationId,
-            promptCachingEnabled,
-          }),
+          async () =>
+            refreshSignificance({
+              admitModelAction,
+              analysis: stored.analysis,
+              contentHash: decision.contentHash,
+              derivedAi,
+              decisionId,
+              orgAIConfig,
+              orgAIConfigStatus,
+              organizationId,
+              promptCachingEnabled,
+            }),
           "analysis-generate.refresh-significance",
         );
       }

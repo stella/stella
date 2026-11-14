@@ -1,36 +1,38 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
+import {
+  compareStatuteBlocks,
+  groupCompareRows,
+  splitDiffSides,
+} from "@stll/legal-ast/statute-compare";
+import type { StatuteCompareRow } from "@stll/legal-ast/statute-compare";
+import type { StatuteWordDiffSegment } from "@stll/legal-ast/statute-comparison-adapter";
+import type { StatuteCompareSide } from "@stll/legal-ast/statute-diff-marks";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   actCompareSide,
-  compareStatuteBlocks,
   comparisonAfterPick,
-  groupCompareRows,
   locateCompareRows,
   pairCompareSides,
   provisionCompareSide,
   provisionWordingSide,
   resolveCompareVersions,
-  splitDiffSides,
   visibleCompareGroups,
 } from "@/features/statutes/statute-compare";
-import type {
-  CompareSideState,
-  StatuteCompareRow,
-} from "@/features/statutes/statute-compare";
+import type { CompareSideState } from "@/features/statutes/statute-compare";
 import { STATUTE_COMPARE_SHOW } from "@/features/statutes/statute-compare-search";
-import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
+import { statuteComparisonAdapter } from "@/features/statutes/statute-comparison-adapter";
 
 const textOf = (side: StatuteCompareSide | null): string | null =>
   side === null ? null : side.segments.map((segment) => segment.text).join("");
 
 const segmentTypes = (
   side: StatuteCompareSide | null | undefined,
-): WordDiffSegment["type"][] =>
+): StatuteWordDiffSegment["type"][] =>
   side?.segments.map((segment) => segment.type) ?? [];
 
 const heading = (value: string): Block => ({
@@ -53,7 +55,11 @@ const rowsOf = (
   older: readonly Block[],
   newer: readonly Block[],
 ): StatuteCompareRow[] => {
-  const result = compareStatuteBlocks({ newer, older });
+  const result = compareStatuteBlocks({
+    newer,
+    older,
+    adapter: statuteComparisonAdapter,
+  });
 
   if (result.isErr()) {
     throw result.error;
@@ -80,6 +86,7 @@ describe("compared sides", () => {
       const result = compareStatuteBlocks({
         newer: [text(after)],
         older: [text(before)],
+        adapter: statuteComparisonAdapter,
       });
 
       if (result.isErr()) {
@@ -345,9 +352,13 @@ describe("a consolidation without a usable AST", () => {
     expect(actCompareSide({ blocks: [], statuteTitle: "Act" })).toEqual(
       unstructured,
     );
-    expect(provisionCompareSide({ blocks: null, provision: "par_1" })).toEqual(
-      unstructured,
-    );
+    expect(
+      provisionCompareSide({
+        blocks: null,
+        provision: "par_1",
+        scheme: E_SBIRKA_ANCHORS,
+      }),
+    ).toEqual(unstructured);
   });
 
   test("settles the comparison whatever the other side answers", () => {
@@ -412,7 +423,11 @@ describe("one provision compared", () => {
   // side built from the blocks alone misses an amended caption.
   test("an amendment to the caption alone is a change", () => {
     const rows = rowsBetween(
-      provisionCompareSide({ blocks: onScreen, provision: "par_5" }),
+      provisionCompareSide({
+        blocks: onScreen,
+        provision: "par_5",
+        scheme: E_SBIRKA_ANCHORS,
+      }),
       readSide("Delivery and acceptance"),
     );
 
@@ -425,7 +440,11 @@ describe("one provision compared", () => {
   test("the side on screen reads as the provision read does", () => {
     expect(
       rowsBetween(
-        provisionCompareSide({ blocks: onScreen, provision: "par_5" }),
+        provisionCompareSide({
+          blocks: onScreen,
+          provision: "par_5",
+          scheme: E_SBIRKA_ANCHORS,
+        }),
         readSide("Delivery"),
       ).every((row) => row.status === "unchanged"),
     ).toBe(true);
@@ -679,7 +698,8 @@ const numberedWithDrops = fc
 
 describe("aligning a renumbered or extended subdivision", () => {
   test("new letters anywhere in a list read as inserted, the rest as the same wording relabelled", () => {
-    fc.assert(
+    assertProperty(
+      "new letters anywhere in a list read as inserted, the rest as the same wording relabelled",
       fc.property(listInsertion, (edit) => {
         const { inserted, newer, older } = insertItems(edit);
         const rows = rowsOf(older, newer);
@@ -702,12 +722,13 @@ describe("aligning a renumbered or extended subdivision", () => {
           );
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+      { seed: propertySeed(), numRuns: 200 },
     );
   });
 
   test("a sentence added to or dropped from a paragraph marks exactly that sentence", () => {
-    fc.assert(
+    assertProperty(
+      "a sentence added to or dropped from a paragraph marks exactly that sentence",
       fc.property(sentences, fc.nat(), (wording, pick) => {
         const at = pick % wording.length;
         const shorter = wording.filter((_, index) => index !== at);
@@ -734,7 +755,7 @@ describe("aligning a renumbered or extended subdivision", () => {
           );
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+      { seed: propertySeed(), numRuns: 200 },
     );
   });
 
@@ -849,7 +870,8 @@ describe("aligning a renumbered or extended subdivision", () => {
         ...bodies.map((body, item) => text(`${letter(item)}) ${body}`)),
       ]);
 
-    fc.assert(
+    assertProperty(
+      "unchanged neighbouring provisions, even ones sharing its wording, never change how an amended provision pairs",
       fc.property(
         amendment,
         neighbours,
@@ -868,12 +890,13 @@ describe("aligning a renumbered or extended subdivision", () => {
           ).toEqual(alone);
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+      { seed: propertySeed(), numRuns: 200 },
     );
   });
 
   test("paragraphs dropped or added among repeated wording keep every other paragraph paired with its own label", () => {
-    fc.assert(
+    assertProperty(
+      "paragraphs dropped or added among repeated wording keep every other paragraph paired with its own label",
       fc.property(numberedWithDrops, ({ bodies, dropped }) => {
         const all = bodies.map((body, index) =>
           text(`(${String(index + 1)}) ${body}`),
@@ -904,24 +927,26 @@ describe("aligning a renumbered or extended subdivision", () => {
           );
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+      { seed: propertySeed(), numRuns: 200 },
     );
   });
 
   test("identical consolidations have no changed row", () => {
-    fc.assert(
+    assertProperty(
+      "identical consolidations have no changed row",
       fc.property(listInsertion, (edit) => {
         const { newer } = insertItems(edit);
         expect(
           rowsOf(newer, newer).filter((row) => row.status === "changed"),
         ).toEqual([]);
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 100 }),
+      { seed: propertySeed(), numRuns: 100 },
     );
   });
 
   test("swapping the consolidations swaps insertions for deletions", () => {
-    fc.assert(
+    assertProperty(
+      "swapping the consolidations swaps insertions for deletions",
       fc.property(listInsertion, (edit) => {
         const { newer, older } = insertItems(edit);
         const forward = rowsOf(older, newer);
@@ -944,7 +969,7 @@ describe("aligning a renumbered or extended subdivision", () => {
           forward.map(rowShape).filter((s) => s === "inserted").length,
         );
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+      { seed: propertySeed(), numRuns: 200 },
     );
   });
 

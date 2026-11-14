@@ -42,10 +42,14 @@ import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
+  testFetchState.restore();
   mock.restore();
 });
 
@@ -768,6 +772,56 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
     });
 
+    test("adopts a legacy row at the document's own URL under a reissued docket and ECLI", async () => {
+      // A court adding a sibling to a docket suffixes the first document's
+      // number and reissues its ECLI: only the URL still names it.
+      const caseNumber = "22 Cdo 120/2026";
+      const url = "https://publisher.test/WebSearch/renamed-unid";
+      const legacy = plainTextIngestionResult({
+        ...decisionAt(`Renamed ${caseNumber}`, undefined),
+        caseNumber,
+        ecli: "ECLI:CZ:NS:2026:22.CDO.120.2026.1",
+        sourceUrl: url,
+      });
+      (
+        await processDecision({
+          input: legacy,
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
+      const [legacyRow] = await docketRows(caseNumber);
+      if (legacyRow === undefined) {
+        throw new Error("expected legacy row");
+      }
+
+      const renamedCaseNumber = `${caseNumber}- I.`;
+      (
+        await processDecision({
+          input: plainTextIngestionResult({
+            ...legacy,
+            caseNumber: renamedCaseNumber,
+            ecli: "ECLI:CZ:NS:2026:22.CDO.120.2026.2",
+            sourceDocumentId: "renamed-unid",
+            legacyCaseNumber: caseNumber,
+            legacySourceUrls: [url],
+            rawHash: "hash-renamed-docket",
+          }),
+          observationOrder: 2n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        })
+      ).unwrap();
+
+      expect(await docketRows(caseNumber)).toEqual([
+        { id: legacyRow.id, sourceDocumentId: "renamed-unid" },
+      ]);
+      expect(await docketRows(renamedCaseNumber)).toEqual([]);
+    });
+
     test("adopts a legacy row stored under the docket an earlier release derived", async () => {
       // An earlier release read the docket off the CELEX and gave a case
       // numbered before 1989 a court letter; the publisher states it without.
@@ -1221,7 +1275,7 @@ if (!databaseUrl || !runPostgresTests) {
           </td></tr>
         </table>Výsledky 1 - 1 z celkem 1</body></html>`;
         const sleepSpy = spyOn(Bun, "sleep").mockResolvedValue(undefined);
-        const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+        const fetchSpy = mock(
           asFetchMock(async (input, init) => {
             const url = new URL(
               input instanceof Request ? input.url : String(input),
@@ -1248,6 +1302,7 @@ if (!databaseUrl || !runPostgresTests) {
             return new Response("missing", { status: 404 });
           }),
         );
+        testFetchState.set(asFetchMock(fetchSpy));
         const page = await Result.tryPromise(
           async () =>
             await czUsAdapter.fetchPage(
@@ -1255,7 +1310,7 @@ if (!databaseUrl || !runPostgresTests) {
               {},
             ),
         );
-        fetchSpy.mockRestore();
+        testFetchState.restore();
         sleepSpy.mockRestore();
         if (Result.isError(page)) {
           panic(page.error.message);

@@ -22,6 +22,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
+  lockBatchTimeEntryCandidates,
   lockRowsForWrite,
   lockUnbillableRateCandidates,
 } from "@/api/lib/db/aggregate-lock";
@@ -270,9 +271,7 @@ const batchUpdate = createSafeHandler(
                       returnComment: null,
                       updatedAt: now,
                     })
-                    .where(
-                      locked.where(eq(timeEntries.workspaceId, workspaceId)),
-                    )
+                    .where(locked.where(and(condition, approvable)))
                     .returning({ id: timeEntries.id });
             // The rows were locked when read, so each one's status then is
             // the status the approval moved it from.
@@ -336,24 +335,11 @@ const batchUpdate = createSafeHandler(
             if (runningError) {
               return { type: "policy" as const, error: runningError, rows: [] };
             }
-            const locked = await lockRowsForWrite({
-              table: timeEntries,
-              query: tx
-                .select({
-                  id: timeEntries.id,
-                  dateWorked: timeEntries.dateWorked,
-                  narrative: timeEntries.narrative,
-                  timezoneId: timeEntries.timezoneId,
-                })
-                .from(timeEntries)
-                .where(
-                  and(
-                    condition,
-                    eq(timeEntries.status, BILLING_STATUS.APPROVED),
-                  ),
-                )
-                .limit(ids.length),
-            });
+            const locked = await lockBatchTimeEntryCandidates(
+              tx,
+              and(condition, eq(timeEntries.status, BILLING_STATUS.APPROVED)),
+              ids.length,
+            );
             const violation = getBatchPolicyViolation({
               candidates: locked.rows,
               policy,
@@ -375,7 +361,12 @@ const batchUpdate = createSafeHandler(
                       updatedAt: now,
                     })
                     .where(
-                      locked.where(eq(timeEntries.workspaceId, workspaceId)),
+                      locked.where(
+                        and(
+                          condition,
+                          eq(timeEntries.status, BILLING_STATUS.APPROVED),
+                        ),
+                      ),
                     )
                     .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
@@ -528,7 +519,14 @@ const batchUpdate = createSafeHandler(
                       updatedAt: new Date(),
                     })
                     .where(
-                      locked.where(eq(timeEntries.workspaceId, workspaceId)),
+                      locked.where(
+                        and(
+                          condition,
+                          eq(timeEntries.billable, false),
+                          ne(timeEntries.status, BILLING_STATUS.BILLED),
+                          ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+                        ),
+                      ),
                     )
                     .returning({ id: timeEntries.id });
             await recordAuditEvent(
@@ -568,26 +566,16 @@ const batchUpdate = createSafeHandler(
             if (runningError) {
               return { type: "policy" as const, error: runningError, rows: [] };
             }
-            const locked = await lockRowsForWrite({
-              table: timeEntries,
-              query: tx
-                .select({
-                  id: timeEntries.id,
-                  dateWorked: timeEntries.dateWorked,
-                  narrative: timeEntries.narrative,
-                  timezoneId: timeEntries.timezoneId,
-                })
-                .from(timeEntries)
-                .where(
-                  and(
-                    condition,
-                    eq(timeEntries.billable, true),
-                    ne(timeEntries.status, BILLING_STATUS.BILLED),
-                    ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
-                  ),
-                )
-                .limit(ids.length),
-            });
+            const locked = await lockBatchTimeEntryCandidates(
+              tx,
+              and(
+                condition,
+                eq(timeEntries.billable, true),
+                ne(timeEntries.status, BILLING_STATUS.BILLED),
+                ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+              ),
+              ids.length,
+            );
             const violation = getBatchPolicyViolation({
               candidates: locked.rows,
               policy,
@@ -604,7 +592,14 @@ const batchUpdate = createSafeHandler(
                     .update(timeEntries)
                     .set({ billable: false, updatedAt: new Date() })
                     .where(
-                      locked.where(eq(timeEntries.workspaceId, workspaceId)),
+                      locked.where(
+                        and(
+                          condition,
+                          eq(timeEntries.billable, true),
+                          ne(timeEntries.status, BILLING_STATUS.BILLED),
+                          ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+                        ),
+                      ),
                     )
                     .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));

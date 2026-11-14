@@ -134,8 +134,9 @@ fn ensure_default_store() -> Result<(), String> {
   }
 
   set_default_store()?;
-  let _ = KEYRING_INIT.set(());
-  Ok(())
+  KEYRING_INIT
+    .set(())
+    .map_err(|()| "keychain store was initialized twice".to_string())
 }
 
 fn set_default_store() -> Result<(), String> {
@@ -229,15 +230,10 @@ pub async fn get_token_with_timeout(
 
 /// Delete a session token from the OS keychain.
 /// Silently succeeds if the entry does not exist.
-pub fn delete_token(session_id: &str) {
-  if let Ok(e) = entry(session_id) {
-    match e.delete_credential() {
-      Ok(()) => {}
-      Err(Error::NoEntry) => {}
-      Err(e) => {
-        tracing::warn!(session_id, error = %e, "keychain delete failed");
-      }
-    }
+pub fn delete_token(session_id: &str) -> Result<(), String> {
+  match entry(session_id)?.delete_credential() {
+    Ok(()) | Err(Error::NoEntry) => Ok(()),
+    Err(error) => Err(format!("keychain delete failed: {error}")),
   }
 }
 
@@ -247,6 +243,8 @@ pub fn delete_token(session_id: &str) {
 pub enum LocalDataKey<'a> {
   ClipboardHistory,
   ActivityTimeline(&'a str),
+  /// The desktop runner journal of one account.
+  DesktopRunner(&'a str),
 }
 
 impl<'a> LocalDataKey<'a> {
@@ -255,6 +253,9 @@ impl<'a> LocalDataKey<'a> {
       Self::ClipboardHistory => "clipboard:history:v1".into(),
       Self::ActivityTimeline(namespace) => {
         format!("activity:timeline:v2:{namespace}").into()
+      }
+      Self::DesktopRunner(namespace) => {
+        format!("desktop-runner:journal:v1:{namespace}").into()
       }
     }
   }
@@ -477,6 +478,10 @@ mod tests {
     assert_eq!(
       LocalDataKey::ActivityTimeline("fixture").account(),
       "activity:timeline:v2:fixture"
+    );
+    assert_eq!(
+      LocalDataKey::DesktopRunner("fixture").account(),
+      "desktop-runner:journal:v1:fixture"
     );
   }
 

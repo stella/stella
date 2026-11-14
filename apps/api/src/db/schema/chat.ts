@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
 import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
+import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 
 import { chatContentJsonb } from "@/api/db/columns";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -13,6 +14,7 @@ import {
   CHAT_TURN_INTERACTION_TYPES,
   CHAT_TURN_INTERRUPTION_REASONS,
 } from "@/api/handlers/chat/chat-turn-state";
+import type { StoredArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
 import type { ChatRunReferenceState } from "@/api/lib/chat/run-log-reference-state";
 import {
   CHAT_THREAD_NAME_KIND,
@@ -131,6 +133,10 @@ export const chatThreads = p.pgTable(
         NonNullable<ChatSendRequest["activeSkill"]>
       >(),
     title: p.varchar({ length: CHAT_THREAD_TITLE_MAX_LENGTH }).notNull(),
+    /** Per-value generated or authored origin; null and missing slots are legacy. */
+    generationProvenance: p
+      .jsonb("generation_provenance")
+      .$type<StoredArtefactProvenance>(),
     // Provenance of `title`; gates whether background AI titling may replace it.
     // See ChatTitleSource in ./common. New threads start "default"; a rename
     // stamps "user"; the generator only replaces "default" and stamps "ai".
@@ -199,6 +205,19 @@ export const chatThreads = p.pgTable(
     chatReasoningEffort: p.text("chat_reasoning_effort", {
       enum: REASONING_EFFORTS,
     }),
+    /**
+     * Superseded by `chat_local_run_target` and no longer read or written;
+     * dropped in a later release, once no running API task selects it.
+     */
+    chatRunTarget: p.varchar("chat_run_target", { length: 256 }),
+    /**
+     * Where the thread's turns run: the coding-agent harness on the member's
+     * computer, its model and permission mode, shaped and read back by the
+     * contract's `chatLocalRunTargetSchema`. Null keeps stella's own models.
+     */
+    chatLocalRunTarget: p
+      .jsonb("chat_local_run_target")
+      .$type<ChatLocalRunTarget>(),
     /**
      * Cached "where you left off" recap, shown as subtle grey text
      * below the last message when the user reopens this thread after
@@ -274,6 +293,17 @@ export const chatThreads = p.pgTable(
      * content would be accepted and its cursor advanced past the corrected row.
      */
     compactionEpoch: p.integer("compaction_epoch").notNull().default(0),
+    /**
+     * When the thread's reader last had it open. The chat reads unread while
+     * its latest answer settled after this instant; null means the reader
+     * marked it unread, so it reads unread until they open it again. New and
+     * pre-existing threads start at their insert (or the column's addition),
+     * so no answer older than that turns unread. Writes leave `updated_at`
+     * alone: reading a chat does not reorder the history.
+     */
+    lastReadAt: timestamptz("last_read_at").defaultNow(),
+    /** When the reader pinned the chat to the top of their list; null when it is not pinned. */
+    pinnedAt: timestamptz("pinned_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -281,6 +311,12 @@ export const chatThreads = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // The reader's pinned chats, newest activity first, without walking the
+    // rest of their history. Built online (indexes-chat-threads-org-user-pinned-idx).
+    p
+      .index("chat_threads_org_user_pinned_idx")
+      .on(table.organizationId, table.userId, table.updatedAt, table.id)
+      .where(isNotNull(table.pinnedAt)),
     // RESTRICT mirrors the single-column workspace reference: a global thread
     // (workspace_id NULL) is exempt under MATCH SIMPLE, and matter deletion
     // removes threads explicitly before it removes the workspace.
@@ -324,6 +360,22 @@ export const chatThreads = p.pgTable(
         table.id,
       )
       .where(sql`${table.compactionScheduledAt} IS NOT NULL`),
+    p.check(
+      "chat_threads_generation_provenance_valid",
+      sql`${table.generationProvenance} IS NULL OR ${table.generationProvenance} = 'null'::jsonb OR coalesce(
+  jsonb_typeof(${table.generationProvenance}) = 'object'
+  AND ${table.generationProvenance} - ARRAY['version', 'slots']::text[] = '{}'::jsonb
+  AND ${table.generationProvenance}->'version' = '1'::jsonb
+  AND jsonb_typeof(${table.generationProvenance}->'slots') = 'object'
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.keyvalue() ? (@.key == "")')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, 'strict $.slots.* ? (@.type() != "object")', '{}'::jsonb, true)
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type() != "object" || !exists(@.type) || @.type.type() != "string" || (@.type != "authored" && @.type != "generated"))')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type == "authored").keyvalue() ? (@.key != "type")')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type == "generated").keyvalue() ? (@.key != "type" && @.key != "generator" && @.key != "decisionIds" && @.key != "coverage")')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type == "generated" && (!exists(@.generator) || @.generator.type() != "string" || @.generator == "" || !exists(@.decisionIds) || @.decisionIds.type() != "array" || @.decisionIds.size() > 1024 || !exists(@.coverage) || @.coverage.type() != "string" || (@.coverage != "complete" && @.coverage != "legacy-input")))')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, 'strict $.slots.* ? (@.type == "generated").decisionIds[*] ? (@.type() != "string" || !(@ like_regex "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"))', '{}'::jsonb, true),
+  false)`,
+    ),
     p.check(
       "chat_threads_reasoning_effort_selection_check",
       sql`${table.chatReasoningEffort} IS NULL OR (${table.chatModel} IS NOT NULL AND ${table.chatReasoningEffort} IN (${sql.join(REASONING_EFFORT_SQL_VALUES, sql`, `)}))`,
@@ -722,6 +774,12 @@ export const chatTurns = p.pgTable(
         table.createdAt,
         table.id,
       ),
+    // A member's unfinished runs, without walking their settled history.
+    // Built online (indexes-chat-turns-org-user-active-idx).
+    p
+      .index("chat_turns_org_user_active_idx")
+      .on(table.organizationId, table.userId)
+      .where(sql`${table.status} IN ('accepted', 'running', 'awaiting-user')`),
     p
       .index("chat_turns_org_user_message_created_idx")
       .on(table.organizationId, table.userMessageId, table.createdAt, table.id),

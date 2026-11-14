@@ -20,6 +20,7 @@ import type { Transaction } from "@/api/db/root";
 import type { legalListClaims } from "@/api/db/schema";
 import { fields, legalListVerificationRuns } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
+import { detached } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
@@ -33,32 +34,38 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import { resolveListVerificationAccess } from "@/api/lib/lists/verification/access-context";
+import {
+  assertedDateColumns,
+  claimAssertedDate,
+} from "@/api/lib/lists/verification/claim-date";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
 import type { ExtractedClaim } from "@/api/lib/lists/verification/claim-extract";
+import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
 import {
-  gradeClaims,
   gradedClaimType,
-} from "@/api/lib/lists/verification/claim-grade";
-import type { ClaimGrade } from "@/api/lib/lists/verification/claim-grade";
-import {
   VERIFICATION_LIMITS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
 } from "@/api/lib/lists/verification/contract";
 import type {
+  ClaimAssertedDate,
+  ClaimGrade,
   VerificationEvidence,
   VerificationRunErrorCode,
+  VerificationScope,
 } from "@/api/lib/lists/verification/contract";
 import { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
+import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import {
   ListVerificationAccessRevokedError,
   VERIFICATION_MODEL_TASK,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
-import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
 import {
-  checkVerificationDispatchBudget,
-  ListVerificationRunCapError,
-} from "@/api/lib/lists/verification/run-caps";
+  claimParagraphNumbers,
+  passageContext,
+  scopePassages,
+} from "@/api/lib/lists/verification/paragraph-scope";
+import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
 import {
   completeVerificationRun,
   failVerificationRun,
@@ -87,6 +94,17 @@ import {
   formatModelRef,
   getTanStackTextModelInfoForTask,
 } from "@/api/lib/tanstack-ai-models";
+import {
+  checkModelRunCaps,
+  ModelRunCapError,
+} from "@/api/lib/usage/model-run-caps/caps";
+
+/** A verification's model calls re-check the list counter it was charged to. */
+const VERIFICATION_DISPATCH_CAPS = {
+  kind: "list-run",
+  operation: "lists.verifications.create",
+  phase: "dispatch",
+} as const;
 
 const QUEUE_NAME = "legal-list-verification-runs";
 
@@ -415,6 +433,7 @@ type ClaimedRun = {
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
   contentSha256: string;
+  scope: VerificationScope;
 };
 
 /** Conditional `queued -> running`: the loser of a double delivery updates
@@ -446,6 +465,7 @@ const claimRun = async ({
       fileFieldId: legalListVerificationRuns.fileFieldId,
       entityVersionId: legalListVerificationRuns.entityVersionId,
       contentSha256: legalListVerificationRuns.contentSha256,
+      scope: legalListVerificationRuns.scope,
     });
   return rows.at(0) ?? null;
 };
@@ -549,13 +569,23 @@ const resolvePinnedFile = async (
 
 type ClaimRow = typeof legalListClaims.$inferInsert;
 
-/** One row per claim in reading order; a set-aside claim is never graded. */
+type GradedClaims = {
+  grades: ReadonlyMap<string, ClaimGrade>;
+  assertedDates: ReadonlyMap<string, ClaimAssertedDate>;
+};
+
+/** One row per claim in reading order; a set-aside claim is never graded,
+ *  so its date is read from its words alone. Each claim keeps the printed
+ *  number of the paragraph it sits in, read from the whole document, so a
+ *  range run numbers it as the document does. */
 const claimRows = (
   actor: RunActor,
   claims: readonly ExtractedClaim[],
-  grades: ReadonlyMap<string, ClaimGrade>,
-): ClaimRow[] =>
-  claims.map((claim, position): ClaimRow => {
+  { grades, assertedDates }: GradedClaims,
+  documentBlocks: readonly VerificationBlock[],
+): ClaimRow[] => {
+  const paragraphOf = claimParagraphNumbers(documentBlocks);
+  return claims.map((claim, position): ClaimRow => {
     const base = {
       id: createSafeId<"legalListClaim">(),
       workspaceId: actor.workspaceId,
@@ -565,6 +595,11 @@ const claimRows = (
       framing: claim.framing,
       text: claim.text,
       anchor: claim.anchor,
+      ...assertedDateColumns(
+        assertedDates.get(String(position)) ??
+          claimAssertedDate(claim.text, null),
+      ),
+      paragraphNumber: paragraphOf(claim.anchor),
     };
     if (claim.type !== "fact") {
       return {
@@ -573,6 +608,7 @@ const claimRows = (
         score: null,
         refs: [],
         recordConflict: null,
+        qualifiers: [],
       };
     }
     const grade =
@@ -584,8 +620,10 @@ const claimRows = (
       score: grade.score,
       refs: grade.refs,
       recordConflict: grade.recordConflict,
+      qualifiers: grade.qualifiers,
     };
   });
+};
 
 const resolveRunningActorAccess = async (
   actor: RunActor,
@@ -605,6 +643,21 @@ const resolveRunningActorAccess = async (
         grants,
       }),
   );
+
+/** The text a run reads, or null when it may read none: more blocks than
+ *  a run stores, or a stored range that no longer lands in the document (a
+ *  range never widens to the whole document). Only the blocks the range
+ *  reads are stored, so a range of a long document fits. */
+const runPassages = (
+  blocks: readonly VerificationBlock[],
+  scope: VerificationScope,
+) => {
+  const passages = scopePassages(blocks, scope);
+  return passages === null ||
+    passages.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX
+    ? null
+    : passages;
+};
 
 /** Trusted process-local I/O boundaries; never sourced from queued data. */
 type VerificationExecutionBoundaries = {
@@ -652,7 +705,8 @@ const executeRun = async ({
   if (document.type === "no-text") {
     return "no_text";
   }
-  if (document.blocks.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX) {
+  const passages = runPassages(document.blocks, run.scope);
+  if (passages === null || passages.length === 0) {
     return "extraction_failed";
   }
 
@@ -713,9 +767,10 @@ const executeRun = async ({
     checkRunBudget: async () =>
       await actor.writeDb(
         async (tx) =>
-          await checkVerificationDispatchBudget({
+          await checkModelRunCaps({
             tx,
             organizationId: actor.organizationId,
+            ...VERIFICATION_DISPATCH_CAPS,
           }),
       ),
     ...(execution.generateObjectForTask === undefined
@@ -746,9 +801,9 @@ const executeRun = async ({
     abortSignal,
   };
 
-  const extracted = await extractClaims({ blocks: document.blocks, deps });
+  const extracted = await extractClaims({ passages, deps });
   if (Result.isError(extracted)) {
-    if (extracted.error.cause instanceof ListVerificationRunCapError) {
+    if (extracted.error.cause instanceof ModelRunCapError) {
       return "run_limit_reached";
     }
     return extracted.error.cause instanceof ListVerificationAccessRevokedError
@@ -763,14 +818,13 @@ const executeRun = async ({
             {
               key: String(position),
               text: claim.text,
-              context: {
-                text:
-                  document.blocks.at(claim.blockIndex)?.text ??
-                  panic(
-                    "An extracted claim names a block outside the document",
-                  ),
-                anchor: claim.anchor,
-              },
+              context: passageContext(
+                passages.at(claim.blockIndex) ??
+                  panic("An extracted claim names a block outside the run"),
+                claim.anchor,
+              ),
+              // A new run's claims have no reviewer yet.
+              linkedFactIds: [],
             },
           ]
         : [],
@@ -779,7 +833,7 @@ const executeRun = async ({
     deps,
   });
   if (Result.isError(graded)) {
-    if (graded.error.cause instanceof ListVerificationRunCapError) {
+    if (graded.error.cause instanceof ModelRunCapError) {
       return "run_limit_reached";
     }
     return graded.error.cause instanceof ListVerificationAccessRevokedError
@@ -790,7 +844,7 @@ const executeRun = async ({
     return "grading_failed";
   }
 
-  const rows = claimRows(actor, claims, graded.value.grades);
+  const rows = claimRows(actor, claims, graded.value, document.blocks);
   await actor.writeDb(async (tx) => {
     const access = await resolveListVerificationRunAccess({
       tx,
@@ -820,7 +874,7 @@ const executeRun = async ({
       tx,
       runId: actor.runId,
       workspaceId: actor.workspaceId,
-      blocks: document.blocks,
+      blocks: passages.map((passage) => passage.block),
       claims: rows,
     });
   });
@@ -968,15 +1022,19 @@ export const initListVerificationRunWorker = () => {
 
   worker.on("failed", (job, error) => {
     if (job) {
-      setRunFailed({
-        actor: brandActor(job.data),
-        errorCode: "internal",
-      }).catch((markError: unknown) => {
-        observeFailure(markError, {
-          sink: MARK_FAILED_SINK,
-          ctx: { runId: job.data.runId, workspaceId: job.data.workspaceId },
-        });
-      });
+      detached(
+        async () =>
+          setRunFailed({
+            actor: brandActor(job.data),
+            errorCode: "internal",
+          }).catch((markError: unknown) => {
+            observeFailure(markError, {
+              sink: MARK_FAILED_SINK,
+              ctx: { runId: job.data.runId, workspaceId: job.data.workspaceId },
+            });
+          }),
+        "list-verification.set-run-failed",
+      );
     }
     observeFailure(error, {
       sink: RUN_FAILED_SINK,

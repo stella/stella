@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { INVOICE_DUE_DAY_PRESETS, INVOICE_LANGUAGES } from "@stll/api-contract";
 import type { InvoiceLanguage } from "@stll/api-contract";
+import type { InvoiceIssueBlocker } from "@stll/api-contract/billing";
 import type { InvoiceTotals, VatTreatment } from "@stll/invoicing";
 import { displayLanguageName } from "@stll/locales";
 import { Button } from "@stll/ui/button";
@@ -45,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
@@ -62,10 +64,13 @@ import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { INVOICE_ISSUE_BLOCKER_FIXES } from "@/lib/errors/invoice-issue";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import {
   clientInvoicesKeys,
   invoiceByIdOptions,
@@ -324,6 +329,7 @@ export const InvoiceComposer = ({
 
   const send = (issue: boolean) =>
     submit.mutate({
+      workspaceId,
       issue,
       body: {
         invoiceDate,
@@ -400,6 +406,7 @@ export const InvoiceComposer = ({
         )}
         {step === "issue" && (
           <IssueStep
+            blockers={prefill.issueBlockers}
             buyerName={prefill.buyer.buyerName}
             currency={currency}
             dueDate={dueDate}
@@ -411,6 +418,7 @@ export const InvoiceComposer = ({
       <ComposerFooter
         currency={currency}
         canSave={hasItems && vat.reason !== "no_vat_rate"}
+        canIssue={prefill.issueBlockers.length === 0}
         hasItems={hasItems}
         onSave={send}
         onStep={setStep}
@@ -441,121 +449,133 @@ export const useComposerSubmit = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const submit = useIdempotentSubmit();
-  return useMutation({
-    mutationFn: async ({
+  const createInvoiceRequest = async ({
+    issue,
+    body,
+  }: {
+    workspaceId: string;
+    issue: boolean;
+    body: CreateInvoiceBody;
+  }): Promise<IssuedInvoice> =>
+    await submitComposedInvoice({
       issue,
-      body,
-    }: {
-      issue: boolean;
-      body: CreateInvoiceBody;
-    }): Promise<IssuedInvoice> => {
-      const invoices = api.invoices({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      });
-      return await submitComposedInvoice({
-        issue,
-        create: async () => {
-          if (client === undefined) {
-            return unwrapApiResponse(
-              await submit.run({
-                operation: `invoices.${workspaceId}.create`,
-                body,
-                send: async (payload) =>
-                  await invokeCapability("invoices.create", async (request) =>
-                    invoices.put(payload, request),
-                  ),
-              }),
-            );
-          }
+      create: async () => {
+        if (client === undefined) {
           return unwrapApiResponse(
             await submit.run({
-              operation: `client-invoices.${client.clientId}.create`,
-              body: {
-                ...clientInvoiceDetails(body),
-                matters: client.matters.flatMap((matter) => {
-                  const timeEntryIds = matter.prefill.timeEntries
-                    .filter((entry) =>
-                      body.timeEntryIds.includes(
-                        toSafeId<"timeEntry">(entry.id),
-                      ),
-                    )
-                    .map((entry) => toSafeId<"timeEntry">(entry.id));
-                  const expenseIds = matter.prefill.expenses
-                    .filter((expense) =>
-                      body.expenseIds?.includes(
-                        toSafeId<"expense">(expense.id),
-                      ),
-                    )
-                    .map((expense) => toSafeId<"expense">(expense.id));
-                  return timeEntryIds.length + expenseIds.length === 0
-                    ? []
-                    : [
-                        {
-                          workspaceId: toSafeId<"workspace">(
-                            matter.workspaceId,
-                          ),
-                          timeEntryIds,
-                          expenseIds,
-                        },
-                      ];
-                }),
-              },
-              send: async (payload, replayRequest) =>
-                await invokeCapability(
-                  "client-invoices.create",
-                  async (request) =>
-                    api["client-invoices"]({
-                      clientId: toSafeId<"contact">(client.clientId),
-                    }).put(payload, {
-                      ...request,
-                      headers: {
-                        "Idempotency-Key":
-                          replayRequest.headers["Idempotency-Key"],
-                        ...request.headers,
-                      },
-                    }),
+              operation: `invoices.${workspaceId}.create`,
+              body,
+              send: async (payload) =>
+                await invokeCapability("invoices.create", async (request) =>
+                  api
+                    .invoices({
+                      workspaceId: toSafeId<"workspace">(workspaceId),
+                    })
+                    .put(payload, request),
                 ),
             }),
           );
-        },
-        finalize: async (id) => {
-          const finalized = await invokeCapability(
-            "invoices.transition",
-            async (request) =>
-              invoices({
+        }
+        return unwrapApiResponse(
+          await submit.run({
+            operation: `client-invoices.${client.clientId}.create`,
+            body: {
+              ...clientInvoiceDetails(body),
+              matters: client.matters.flatMap((matter) => {
+                const timeEntryIds = matter.prefill.timeEntries
+                  .filter((entry) =>
+                    body.timeEntryIds.includes(toSafeId<"timeEntry">(entry.id)),
+                  )
+                  .map((entry) => toSafeId<"timeEntry">(entry.id));
+                const expenseIds = matter.prefill.expenses
+                  .filter((expense) =>
+                    body.expenseIds?.includes(toSafeId<"expense">(expense.id)),
+                  )
+                  .map((expense) => toSafeId<"expense">(expense.id));
+                return timeEntryIds.length + expenseIds.length === 0
+                  ? []
+                  : [
+                      {
+                        workspaceId: toSafeId<"workspace">(matter.workspaceId),
+                        timeEntryIds,
+                        expenseIds,
+                      },
+                    ];
+              }),
+            },
+            send: async (payload, replayRequest) =>
+              await invokeCapability(
+                "client-invoices.create",
+                async (request) =>
+                  api["client-invoices"]({
+                    clientId: toSafeId<"contact">(client.clientId),
+                  }).put(payload, {
+                    ...request,
+                    headers: {
+                      "Idempotency-Key":
+                        replayRequest.headers["Idempotency-Key"],
+                      ...request.headers,
+                    },
+                  }),
+              ),
+          }),
+        );
+      },
+      finalize: async (id) => {
+        const finalized = await invokeCapability(
+          "invoices.transition",
+          async (request) =>
+            api
+              .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
                 invoiceId: toSafeId<"invoice">(id),
-              }).transition.post({ action: "finalize" }, request),
-          );
-          unwrapApiResponse(finalized);
-        },
-        read: async (id): Promise<IssuedInvoice> => {
-          const invoice = await queryClient.query(
-            invoiceByIdOptions(workspaceId, id),
-          );
-          return {
-            id: invoice.id,
-            workspaceId,
-            invoiceNumber: invoice.invoiceNumber,
-            issued: invoice.status !== "draft",
-            totalAmount: invoice.totalAmount,
-            currency: invoice.currency,
-            dueDate: invoice.dueDate,
-          };
-        },
-        savedDraft: (created, error) => {
-          notifyUserError(error, t("billing.invoiceComposer.issueFailed"));
-          return {
-            id: created.id,
-            workspaceId,
-            invoiceNumber: null,
-            issued: false,
-            totalAmount: created.totalAmount,
-            currency: body.currency,
-            dueDate: body.dueDate ?? null,
-          };
-        },
-      });
-    },
+              })
+              .transition.post({ action: "finalize" }, request),
+        );
+        unwrapApiResponse(finalized);
+      },
+      read: async (id): Promise<IssuedInvoice> => {
+        const invoice = await queryClient.query(
+          invoiceByIdOptions(workspaceId, id),
+        );
+        return {
+          id: invoice.id,
+          workspaceId,
+          invoiceNumber: invoice.invoiceNumber,
+          issued: invoice.status !== "draft",
+          totalAmount: invoice.totalAmount,
+          currency: invoice.currency,
+          dueDate: invoice.dueDate,
+        };
+      },
+      savedDraft: (created, error) => {
+        const issueFailed = t("billing.invoiceComposer.issueFailed");
+        // A refusal that names its reason leads with it; the person still
+        // learns that the draft they composed was kept.
+        notifyUserError(
+          error,
+          issueFailed,
+          userErrorFromThrown(error, issueFailed) === issueFailed
+            ? {}
+            : { description: issueFailed },
+        );
+        return {
+          id: created.id,
+          workspaceId,
+          invoiceNumber: null,
+          issued: false,
+          totalAmount: created.totalAmount,
+          currency: body.currency,
+          dueDate: body.dueDate ?? null,
+        };
+      },
+    });
+  const createInvoiceMutation = resourceMutation({
+    mutation: "createInvoice",
+    queryClient,
+    mutationFn: createInvoiceRequest,
+  });
+  return useMutation({
+    mutationFn: createInvoiceMutation,
     onSuccess: (invoice) => {
       for (const queryKey of [
         ...(
@@ -891,8 +911,10 @@ const TimeEntriesTable = ({
                 </RowText>
               </TableCell>
               <TableCell className="min-w-0">
-                <RowText className="line-clamp-2" excluded={excluded}>
-                  {entry.invoiceNarrative ?? entry.narrative}
+                <RowText excluded={excluded}>
+                  <TruncatedText lines={2}>
+                    {entry.invoiceNarrative ?? entry.narrative}
+                  </TruncatedText>
                 </RowText>
                 {entry.timekeeperName !== null && (
                   <span className="text-muted-foreground block text-xs">
@@ -991,8 +1013,10 @@ const ExpensesTable = ({
                 </RowText>
               </TableCell>
               <TableCell className="min-w-0">
-                <RowText className="line-clamp-2" excluded={!included}>
-                  {expense.invoiceDescription ?? expense.description}
+                <RowText excluded={!included}>
+                  <TruncatedText lines={2}>
+                    {expense.invoiceDescription ?? expense.description}
+                  </TruncatedText>
                 </RowText>
               </TableCell>
               <TableCell className="text-end whitespace-nowrap">
@@ -1064,7 +1088,7 @@ const DetailsStep = ({
               {seller === null ? (
                 <Link
                   className="underline underline-offset-4"
-                  to="/admin/billing"
+                  to="/settings/organization/billing"
                 >
                   {t("billing.invoiceComposer.addSellerProfile")}
                 </Link>
@@ -1217,6 +1241,8 @@ const DetailsStep = ({
 };
 
 type IssueStepProps = {
+  /** Why issuing would be refused; empty when it can succeed. */
+  blockers: readonly InvoiceIssueBlocker[];
   buyerName: string | null;
   currency: string;
   dueDate: string | null;
@@ -1225,6 +1251,7 @@ type IssueStepProps = {
 };
 
 const IssueStep = ({
+  blockers,
   buyerName,
   currency,
   dueDate,
@@ -1235,12 +1262,40 @@ const IssueStep = ({
   const format = useFormatter();
   return (
     <Frame>
-      <FrameHeader>
-        <FrameTitle>{t("billing.invoiceComposer.readyTitle")}</FrameTitle>
-        <FrameDescription>
-          {t("billing.invoiceComposer.readyDescription")}
-        </FrameDescription>
-      </FrameHeader>
+      {blockers.length === 0 ? (
+        <FrameHeader>
+          <FrameTitle>{t("billing.invoiceComposer.readyTitle")}</FrameTitle>
+          <FrameDescription>
+            {t("billing.invoiceComposer.readyDescription")}
+          </FrameDescription>
+        </FrameHeader>
+      ) : (
+        <FrameHeader>
+          <FrameTitle>{t("billing.invoiceComposer.notReadyTitle")}</FrameTitle>
+          <FrameDescription>
+            {t("billing.invoiceComposer.notReadyDescription")}
+          </FrameDescription>
+          <ul className="flex flex-col gap-2 text-sm">
+            {blockers.map((blocker) => {
+              const fix = INVOICE_ISSUE_BLOCKER_FIXES[blocker];
+              return (
+                <li className="flex items-start gap-2" key={blocker}>
+                  <InfoIcon
+                    aria-hidden
+                    className="text-muted-foreground mt-0.5 size-4 shrink-0"
+                  />
+                  <span className="flex flex-col gap-0.5">
+                    <span>{t(fix.messageKey)}</span>
+                    <Link className="underline underline-offset-4" to={fix.to}>
+                      {t(fix.settingsLabelKey)}
+                    </Link>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </FrameHeader>
+      )}
       <FramePanel>
         <DetailsGrid>
           <DetailsItem label={t("billing.invoiceComposer.buyer")}>
@@ -1274,6 +1329,8 @@ type ComposerFooterProps = {
   hasItems: boolean;
   /** False while nothing is billable or no VAT rate is in force. */
   canSave: boolean;
+  /** False while a precondition of issuing is missing; a draft still saves. */
+  canIssue: boolean;
   pending: boolean;
   onStep: (step: ComposerStep) => void;
   onSave: (issue: boolean) => void;
@@ -1285,6 +1342,7 @@ const ComposerFooter = ({
   currency,
   hasItems,
   canSave,
+  canIssue,
   pending,
   onStep,
   onSave,
@@ -1323,7 +1381,10 @@ const ComposerFooter = ({
           >
             {t("billing.invoiceComposer.saveDraft")}
           </Button>
-          <Button disabled={!canSave || pending} onClick={() => onSave(true)}>
+          <Button
+            disabled={!canSave || !canIssue || pending}
+            onClick={() => onSave(true)}
+          >
             {t("billing.invoiceComposer.issueInvoice")}
           </Button>
         </>

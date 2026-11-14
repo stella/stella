@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
+import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
+  chatRunsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
+  parseResourceMutationId,
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
@@ -13,6 +18,8 @@ import {
   resourceSetUpdatedRealtimeEvent,
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
+  USER_EVENT_READ,
+  USER_EVENT_READS,
   type WorkspaceRealtimeEvent,
 } from "./realtime-events";
 import { RESOURCE_TYPE, resourceRef } from "./resource-ref";
@@ -61,6 +68,62 @@ const WORKSPACE_EVENT_FIXTURES = [
 ] satisfies WorkspaceRealtimeEvent[];
 
 describe("realtime event contracts", () => {
+  test("mutation digests follow the SHA-256 UUID contract", async () => {
+    expect(
+      await resourceMutationDigest("019e7000-0000-7000-8000-0000000000b1"),
+    ).toBe("cba7588c0ca99cac5bb1f0818971c997a51b19e0327a2a04a41359c3ca6b5b25");
+    expect(
+      await resourceMutationDigest("019e7000-0000-7000-8000-0000000000b2"),
+    ).not.toBe(
+      await resourceMutationDigest("019e7000-0000-7000-8000-0000000000b1"),
+    );
+    expect(
+      await rejectionOf(resourceMutationDigest("invalid-id")),
+    ).toHaveProperty("name", "ValiError");
+  });
+
+  test("resource facts retain valid mutation correlation and reject malformed digests", async () => {
+    const mutationId = "019e7000-0000-7000-8000-0000000000b1";
+    const mutationDigest = await resourceMutationDigest(mutationId);
+    const events = [
+      RESOURCE_UPDATED_EVENT,
+      RESOURCE_DELETED_EVENT,
+      RESOURCES_CHANGED_EVENT,
+      RESOURCE_SET_UPDATED_EVENT,
+    ];
+    for (const event of events) {
+      expect(parseWorkspaceRealtimeEvent({ ...event, mutationDigest })).toEqual(
+        {
+          ...event,
+          mutationDigest,
+        },
+      );
+      for (const invalid of [
+        "",
+        "unrelated",
+        "x".repeat(1000),
+        mutationId,
+        mutationDigest.toUpperCase(),
+        "a".repeat(63),
+        "a".repeat(65),
+      ]) {
+        expect(
+          parseWorkspaceRealtimeEvent({ ...event, mutationDigest: invalid }),
+        ).toBeNull();
+      }
+    }
+    expect(parseResourceMutationId(mutationId)).toBe(mutationId);
+    expect(parseResourceMutationId(null)).toBeUndefined();
+    for (const invalid of ["", "unrelated", "x".repeat(1000)]) {
+      expect(parseResourceMutationId(invalid)).toBeUndefined();
+    }
+    expect(
+      parseOrganizationRealtimeEvent(
+        resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY, mutationDigest),
+      ),
+    ).toEqual({ ...RESOURCE_SET_UPDATED_EVENT, mutationDigest });
+  });
+
   test("accepts every workspace event kind", () => {
     expect(
       WORKSPACE_EVENT_FIXTURES.map((event) =>
@@ -183,6 +246,30 @@ describe("user realtime events", () => {
     ).toBeNull();
     expect(parseUserRealtimeEvent(newNotificationRealtimeEvent())).toEqual(
       newNotificationRealtimeEvent(),
+    );
+  });
+
+  test("the chat runs event carries no run", () => {
+    const event = chatRunsChangedRealtimeEvent();
+
+    expect(event).toEqual({
+      type: REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED,
+      data: null,
+    });
+    expect(Object.keys(event)).toEqual(["type", "data"]);
+    expect(parseUserRealtimeEvent(event)).toEqual(event);
+    expect(
+      parseUserRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED,
+        data: { threadId: "thread-1" },
+      }),
+    ).toBeNull();
+    expect(parseWorkspaceRealtimeEvent(event)).toBeNull();
+  });
+
+  test("a runs change reads the chats again, since an ended run makes its chat unread", () => {
+    expect(USER_EVENT_READS[REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED]).toContain(
+      USER_EVENT_READ.CHAT_THREADS,
     );
   });
 

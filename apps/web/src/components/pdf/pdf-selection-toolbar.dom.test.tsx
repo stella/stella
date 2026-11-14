@@ -4,8 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, beforeEach, expect, test } from "bun:test";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { createWebTestEnvironment } from "../../../tests/environment.test-fixtures";
 
@@ -286,4 +285,55 @@ test("a viewer without the document's chat offers copy but no AI action", async 
   expect(await view.findByRole("button", { name: "Copy" })).toBeTruthy();
   expect(view.queryByRole("button", { name: "Ask AI" })).toBeNull();
   expect(view.queryByRole("button", { name: "Explain" })).toBeNull();
+});
+
+const nativeCopy = async () => {
+  await act(async () => {
+    document.dispatchEvent(new Event("copy", { bubbles: true }));
+  });
+};
+
+test("the reader's own copy of the selected words confirms Copy", async () => {
+  const view = mountViewer(PDF_SELECTION_CHAT.fileChat);
+  await select(textNode(view, LINE_ONE), textNode(view, LINE_TWO));
+  await view.findByRole("button", { name: "Copy" });
+
+  await nativeCopy();
+
+  expect(view.getByRole("button", { name: "Copied" })).toBeTruthy();
+});
+
+test("a native copy of words outside the document leaves Copy unconfirmed", async () => {
+  const view = mountViewer(PDF_SELECTION_CHAT.fileChat);
+  await select(textNode(view, LINE_ONE), textNode(view, LINE_TWO));
+  await view.findByRole("button", { name: "Copy" });
+  const outside = document.createElement("p");
+  outside.textContent = "Matter notes";
+  document.body.append(outside);
+  const range = document.createRange();
+  range.selectNodeContents(outside);
+  document.getSelection()?.removeAllRanges();
+  document.getSelection()?.addRange(range);
+
+  await nativeCopy();
+  outside.remove();
+  expect(view.queryByRole("button", { name: "Copied" })).toBeNull();
+
+  // Back on the document's words, the bar carries no confirmation over.
+  await select(textNode(view, LINE_ONE), textNode(view, LINE_TWO));
+
+  expect(await view.findByRole("button", { name: "Copy" })).toBeTruthy();
+  expect(view.queryByRole("button", { name: "Copied" })).toBeNull();
+});
+
+test("a new selection clears a native copy's confirmation", async () => {
+  const view = mountViewer(PDF_SELECTION_CHAT.fileChat);
+  await select(textNode(view, LINE_ONE), textNode(view, LINE_TWO));
+  await nativeCopy();
+  expect(view.getByRole("button", { name: "Copied" })).toBeTruthy();
+
+  await select(textNode(view, LINE_TWO), textNode(view, LINE_TWO));
+
+  expect(view.getByRole("button", { name: "Copy" })).toBeTruthy();
+  expect(view.queryByRole("button", { name: "Copied" })).toBeNull();
 });

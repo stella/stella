@@ -10,9 +10,14 @@ export const compactReaderPath = (path: readonly ReaderBreadcrumbSegment[]) => {
   return { visible: [first, ...path.slice(-2)], hidden: path.slice(1, -2) };
 };
 
+// The number runs on through every digit and letter, so what follows it on
+// its line is never more of a number: "§ 50" never reads as "§ 5".
+const provisionNumberOf = (line: string): string | undefined =>
+  /^(§\s*\d+\p{L}*)/u.exec(line.trimStart())?.at(1);
+
 export const readerProvisionNumber = (title: string): string | null => {
   for (const line of title.split("\n")) {
-    const number = /^(§\s*\d+\p{L}*)/u.exec(line.trimStart())?.at(1);
+    const number = provisionNumberOf(line);
     if (number !== undefined) {
       return number;
     }
@@ -36,15 +41,19 @@ export const splitReaderHeading = (heading: string): ReaderHeadingParts => {
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "");
-  const number = readerProvisionNumber(heading);
-  if (number !== null) {
-    const rest = lines
-      .map((line) =>
-        line.startsWith(number) ? line.slice(number.length).trim() : line,
-      )
-      .filter((line) => line !== "")
-      .join(" ");
-    return { label: number, title: rest === "" ? null : rest };
+  // The number leaves only the line it opens; a later line that cites a
+  // provision keeps its words.
+  for (const [index, line] of lines.entries()) {
+    const number = provisionNumberOf(line);
+    if (number !== undefined) {
+      const rest = lines
+        .map((entry, entryIndex) =>
+          entryIndex === index ? entry.slice(number.length).trim() : entry,
+        )
+        .filter((entry) => entry !== "")
+        .join(" ");
+      return { label: number, title: rest === "" ? null : rest };
+    }
   }
   const [label = "", ...rest] = lines;
   return { label, title: rest.length === 0 ? null : rest.join(" ") };
@@ -77,6 +86,13 @@ type FitReaderPathOptions = {
   minimumTitleWidth: number;
   /** The widest an outer level's label is printed, cut beyond it. */
   maximumAncestorLabelWidth: number;
+  /**
+   * The narrowest the current heading is printed. It is the contents control,
+   * the one way to every level once the menu has left the bar, so it keeps a
+   * full touch target and its provision number whole; past that the bar clips
+   * its text rather than shrink the control.
+   */
+  minimumCurrentWidth: number;
 };
 
 /** The width a crumb takes on the bar; a folded one takes none. */
@@ -89,7 +105,8 @@ export const fitWidth = (fit: ReaderCrumbFit | undefined): number =>
  * outermost first, then the current title down to a readable minimum, then
  * outer levels fold into the menu, outermost first, then the current heading
  * loses its title, then the menu leaves the bar (the contents control still
- * reaches every level), and only last of all does the current label get cut.
+ * reaches every level), and only last of all does the current label get cut,
+ * never below `minimumCurrentWidth`.
  */
 export const fitReaderPath = ({
   available,
@@ -99,6 +116,7 @@ export const fitReaderPath = ({
   menuWidth,
   minimumTitleWidth,
   maximumAncestorLabelWidth,
+  minimumCurrentWidth,
 }: FitReaderPathOptions): {
   fits: ReaderCrumbFit[];
   showMenu: boolean;
@@ -106,11 +124,15 @@ export const fitReaderPath = ({
   const lastIndex = crumbs.length - 1;
   const labelWidth = (index: number, crumb: ReaderCrumbWidths) =>
     index === lastIndex
-      ? crumb.label
+      ? Math.max(crumb.label, minimumCurrentWidth)
       : Math.min(crumb.label, maximumAncestorLabelWidth);
+  const fullWidth = (index: number, crumb: ReaderCrumbWidths) =>
+    index === lastIndex
+      ? Math.max(crumb.full, minimumCurrentWidth)
+      : crumb.full;
   const fits: ReaderCrumbFit[] = crumbs.map((crumb, index) =>
     crumb.full > crumb.label
-      ? { type: "full", width: crumb.full }
+      ? { type: "full", width: fullWidth(index, crumb) }
       : { type: "label", width: labelWidth(index, crumb) },
   );
   let menuOnBar = true;
@@ -157,7 +179,7 @@ export const fitReaderPath = ({
   if (current !== undefined && shrunk?.type === "full" && excess() < 0) {
     fits[lastIndex] = {
       type: "full",
-      width: Math.min(current.full, shrunk.width - excess()),
+      width: Math.min(fullWidth(lastIndex, current), shrunk.width - excess()),
     };
   }
   if (current !== undefined && excess() > 0) {
@@ -170,7 +192,7 @@ export const fitReaderPath = ({
   if (last !== undefined && last.type !== "folded" && excess() > 0) {
     fits[lastIndex] = {
       type: "label",
-      width: Math.max(0, last.width - excess()),
+      width: Math.max(minimumCurrentWidth, last.width - excess()),
     };
   }
   return { fits, showMenu: showMenu() };

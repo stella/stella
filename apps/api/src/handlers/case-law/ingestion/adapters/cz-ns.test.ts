@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import {
   buildCzNsDecision,
@@ -6,17 +6,25 @@ import {
   type CzNsListingRow,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import { recaptureDecisionFromListing } from "@/api/handlers/case-law/ingestion/recapture";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   decodeSourceRawEnvelope,
+  type IngestionResult,
   type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
+const testFetchState = createTestFetch();
+
 describe("Domino listings distinguish publisher refusal from an empty view", () => {
-  afterEach(() => mock.restore());
+  afterEach(() => {
+    testFetchState.restore();
+    mock.restore();
+  });
 
   for (const body of [
     "<html><form><input type='password'></form></html>",
@@ -27,8 +35,8 @@ describe("Domino listings distinguish publisher refusal from an empty view", () 
     "",
   ]) {
     test(`rejects an unreadable page ${JSON.stringify(body)}`, async () => {
-      spyOn(globalThis, "fetch").mockImplementation(
-        asFetchMock(async () => new Response(body)),
+      testFetchState.set(
+        asFetchMock(mock(asFetchMock(async () => new Response(body)))),
       );
       const page = await czNsAdapter.fetchPage("1", {});
       expect(page.isErr()).toBe(true);
@@ -45,27 +53,34 @@ describe("Domino listings distinguish publisher refusal from an empty view", () 
     { entrydata: [{ text: 42 }] },
   ]) {
     test(`isolates malformed member ${JSON.stringify(member)} from the listing envelope`, async () => {
-      spyOn(globalThis, "fetch").mockImplementation(
+      testFetchState.set(
         asFetchMock(
-          async (url: string | URL | Request) =>
-            new Response(
-              (url instanceof Request ? url.url : url.toString()).includes(
-                "ReadViewEntries",
-              )
-                ? JSON.stringify({
-                    "@toplevelentries": "2",
-                    viewentry: [
-                      member,
-                      {
-                        "@unid": "0123456789abcdef0123456789abcdef",
-                        entrydata: [
-                          { "@name": "znacka", text: { "0": "1 Cdo 1/2026" } },
+          mock(
+            asFetchMock(
+              async (url: string | URL | Request) =>
+                new Response(
+                  (url instanceof Request ? url.url : url.toString()).includes(
+                    "ReadViewEntries",
+                  )
+                    ? JSON.stringify({
+                        "@toplevelentries": "2",
+                        viewentry: [
+                          member,
+                          {
+                            "@unid": "0123456789abcdef0123456789abcdef",
+                            entrydata: [
+                              {
+                                "@name": "znacka",
+                                text: { "0": "1 Cdo 1/2026" },
+                              },
+                            ],
+                          },
                         ],
-                      },
-                    ],
-                  })
-                : "<html><body><p>Rozhodnutí soudu.</p></body></html>",
+                      })
+                    : "<html><body><p>Rozhodnutí soudu.</p></body></html>",
+                ),
             ),
+          ),
         ),
       );
       const page = (await czNsAdapter.fetchPage("1", {})).unwrap();
@@ -82,8 +97,10 @@ describe("Domino listings distinguish publisher refusal from an empty view", () 
   }
 
   test("accepts the publisher's explicit small empty view", async () => {
-    spyOn(globalThis, "fetch").mockImplementation(
-      asFetchMock(async () => new Response('{"@toplevelentries":"0"}')),
+    testFetchState.set(
+      asFetchMock(
+        mock(asFetchMock(async () => new Response('{"@toplevelentries":"0"}'))),
+      ),
     );
     const page = await czNsAdapter.fetchPage("1", {});
     expect(page.isOk()).toBe(true);
@@ -95,7 +112,10 @@ describe("Domino listings distinguish publisher refusal from an empty view", () 
 });
 
 describe("decision pages the publisher did not serve", () => {
-  afterEach(() => mock.restore());
+  afterEach(() => {
+    testFetchState.restore();
+    mock.restore();
+  });
 
   const UNID = "0123456789abcdef0123456789abcdef";
   const ROW = { unid: UNID, caseNumber: "1 Cdo 1/2026" };
@@ -116,28 +136,32 @@ describe("decision pages the publisher did not serve", () => {
    * URL contains `failing` with `answer`.
    */
   const serveWith = (failing: string, answer: () => Response) => {
-    spyOn(globalThis, "fetch").mockImplementation(
-      asFetchMock(async (input: string | URL | Request) => {
-        const url = input instanceof Request ? input.url : input.toString();
-        if (url.includes(failing)) {
-          return await Promise.resolve().then(answer);
-        }
-        return new Response(
-          url.includes("ReadViewEntries")
-            ? JSON.stringify({
-                "@toplevelentries": "1",
-                viewentry: [
-                  {
-                    "@unid": UNID,
-                    entrydata: [
-                      { "@name": "znacka", text: { "0": ROW.caseNumber } },
+    testFetchState.set(
+      asFetchMock(
+        mock(
+          asFetchMock(async (input: string | URL | Request) => {
+            const url = input instanceof Request ? input.url : input.toString();
+            if (url.includes(failing)) {
+              return await Promise.resolve().then(answer);
+            }
+            return new Response(
+              url.includes("ReadViewEntries")
+                ? JSON.stringify({
+                    "@toplevelentries": "1",
+                    viewentry: [
+                      {
+                        "@unid": UNID,
+                        entrydata: [
+                          { "@name": "znacka", text: { "0": ROW.caseNumber } },
+                        ],
+                      },
                     ],
-                  },
-                ],
-              })
-            : PAGE,
-        );
-      }),
+                  })
+                : PAGE,
+            );
+          }),
+        ),
+      ),
     );
   };
 
@@ -255,16 +279,24 @@ describe("decision pages the publisher did not serve", () => {
 });
 
 describe("the source hash fingerprints every stored part", () => {
-  afterEach(() => mock.restore());
+  afterEach(() => {
+    testFetchState.restore();
+    mock.restore();
+  });
 
   const UNID = "fedcba9876543210fedcba9876543210";
   const PAGE = "<html><body><p>Rozhodnutí soudu.</p></body></html>";
 
   const built = async (row: CzNsListingRow) => {
-    spyOn(globalThis, "fetch").mockImplementation(
-      asFetchMock(async () => await Promise.resolve(new Response(PAGE))),
+    testFetchState.set(
+      asFetchMock(
+        mock(
+          asFetchMock(async () => await Promise.resolve(new Response(PAGE))),
+        ),
+      ),
     );
     const result = await buildCzNsDecision(row);
+    testFetchState.restore();
     mock.restore();
     if (result.type !== "built") {
       throw new TypeError("Expected the served pages to build a decision");
@@ -318,10 +350,16 @@ describe("the source hash fingerprints every stored part", () => {
     if (reparse === undefined) {
       throw new TypeError("Expected cz-ns to implement stored-raw replay");
     }
-    spyOn(globalThis, "fetch").mockImplementation(
-      asFetchMock(() => {
-        throw new TypeError("Stored-raw replay must not contact the publisher");
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(
+          asFetchMock(() => {
+            throw new TypeError(
+              "Stored-raw replay must not contact the publisher",
+            );
+          }),
+        ),
+      ),
     );
 
     const replayed = await reparse({
@@ -344,5 +382,272 @@ describe("the source hash fingerprints every stored part", () => {
       return;
     }
     expect(replayed.result.rawHash).toBe(decision.rawHash);
+  });
+});
+
+describe("the judge a decision is signed by", () => {
+  afterEach(() => testFetchState.restore());
+
+  test("is the name, without the layout spaces and the signature mark the print prints", async () => {
+    const print = new TextDecoder().decode(
+      Bun.gunzipSync(
+        await Bun.file(
+          new URL(
+            "../parsers/__fixtures__/cz-ns-29-odo-231-2002.print.html.gz",
+            import.meta.url,
+          ),
+        ).bytes(),
+      ),
+    );
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        return await Promise.resolve(
+          new Response(
+            url.includes("/WebPrint/")
+              ? print
+              : "<html><body><p>Rozhodnutí soudu.</p></body></html>",
+          ),
+        );
+      }),
+    );
+
+    const built = await buildCzNsDecision({
+      unid: "0123456789abcdef0123456789abcdef",
+      caseNumber: "29 Odo 231/2002",
+    });
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.metadata).toMatchObject({
+      judge: "JUDr. Zdeněk Krčmář",
+    });
+  });
+});
+
+describe("a row the court lists without its stored identity is recaptured by docket", () => {
+  afterEach(() => testFetchState.restore());
+
+  const DOCKET = "29 Odo 231/2002";
+  const LISTED_ROW: CzNsListingRow = {
+    unid: "D4CD5035BC65D179C1257A4E0066A9A2",
+    caseNumber: DOCKET,
+  };
+  const fixture = async (path: string): Promise<string> =>
+    new TextDecoder().decode(
+      Bun.gunzipSync(await Bun.file(new URL(path, import.meta.url)).bytes()),
+    );
+  const pages = async () => ({
+    web: await fixture("__fixtures__/cz-ns-29-odo-231-2002.web.html.gz"),
+    print: await fixture(
+      "../parsers/__fixtures__/cz-ns-29-odo-231-2002.print.html.gz",
+    ),
+    docket: await fixture("__fixtures__/cz-ns-docket-29-odo-231-2002.html.gz"),
+  });
+  type Pages = Awaited<ReturnType<typeof pages>>;
+
+  /** The recorded publisher: the docket search, the detail and the print page. */
+  const servePublisher = async (): Promise<Pages> => {
+    const served = await pages();
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        if (url.includes("WebSearch1")) {
+          return await Promise.resolve(new Response(served.docket));
+        }
+        return await Promise.resolve(
+          new Response(url.includes("/WebPrint/") ? served.print : served.web),
+        );
+      }),
+    );
+    return served;
+  };
+
+  const recapture = czNsAdapter.reconciliation.recapture;
+
+  /** The decision a crawl of the listed row stores. */
+  const crawled = async (): Promise<IngestionResult> => {
+    const built = await buildCzNsDecision(LISTED_ROW);
+    if (built.type !== "built") {
+      throw new TypeError("Expected the recorded pages to build a decision");
+    }
+    return built.decision;
+  };
+
+  /** A row stored the old way: both pages, under the old media type. */
+  const legacyRow = (
+    decision: IngestionResult,
+    served: Pages,
+    overrides: Partial<StoredRawReparseInput>,
+  ): StoredRawReparseInput => ({
+    raw: new TextEncoder().encode(
+      JSON.stringify({ webHtml: served.web, printHtml: served.print }),
+    ),
+    contentType: "text/html",
+    caseNumber: decision.caseNumber,
+    sourceDocumentId: decision.sourceDocumentId ?? null,
+    language: decision.language,
+    court: decision.court,
+    ecli: decision.ecli ?? null,
+    decisionDate: decision.decisionDate ?? null,
+    decisionType: decision.decisionType ?? null,
+    sourceUrl: decision.sourceUrl ?? null,
+    documentUrl: decision.documentUrl ?? null,
+    metadata: {},
+    ...overrides,
+  });
+
+  test("the docket search lists the decision's own row", async () => {
+    await servePublisher();
+
+    const listed = await recapture.listLookup({ slice: DOCKET, page: 0 });
+
+    expect(listed.items.map(({ payload }) => payload)).toEqual([LISTED_ROW]);
+  });
+
+  for (const [name, overrides] of [
+    ["stored without its universal id", { sourceDocumentId: null }],
+    [
+      "stored with a malformed docket list",
+      { metadata: { additionalCaseNumbers: DOCKET } },
+    ],
+  ] as const) {
+    test(`a row ${name} replays to the crawled decision once recaptured`, async () => {
+      const served = await servePublisher();
+      const decision = await crawled();
+      const stored = legacyRow(decision, served, overrides);
+
+      expect(await czNsAdapter.reparseStoredRaw?.(stored)).toMatchObject({
+        type: "rejected",
+        rejection: "incomplete-metadata",
+      });
+      const outcome = await recaptureDecisionFromListing({
+        adapter: czNsAdapter,
+        stored,
+      });
+
+      expect(outcome).toMatchObject({ type: "recaptured", lookup: DOCKET });
+      expect(outcome.type === "recaptured" ? outcome.result : null).toEqual(
+        decision,
+      );
+    });
+  }
+
+  test("a row holding another universal id is not the listed one", async () => {
+    const served = await servePublisher();
+    const decision = await crawled();
+
+    expect(
+      await recaptureDecisionFromListing({
+        adapter: czNsAdapter,
+        stored: legacyRow(decision, served, {
+          sourceDocumentId: "0123456789abcdef0123456789abcdef",
+        }),
+      }),
+    ).toEqual({ type: "not-listed", lookup: DOCKET });
+  });
+
+  test("a row without its id column is still the document its URLs name", async () => {
+    const served = await servePublisher();
+    const decision = await crawled();
+    const other = "0123456789abcdef0123456789abcdef";
+    const urlOf = (url: string | undefined) =>
+      (url ?? "").replace(LISTED_ROW.unid, () => other);
+    const elsewhere = legacyRow(decision, served, {
+      sourceDocumentId: null,
+      sourceUrl: urlOf(decision.sourceUrl),
+      documentUrl: urlOf(decision.documentUrl),
+    });
+    expect(elsewhere.sourceUrl).toContain(other);
+
+    // The docket matches, but the row's URLs name another document.
+    expect(
+      await recaptureDecisionFromListing({
+        adapter: czNsAdapter,
+        stored: elsewhere,
+      }),
+    ).toEqual({ type: "not-listed", lookup: DOCKET });
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: LISTED_ROW,
+        stored: elsewhere,
+      }),
+    ).toMatchObject({ type: "identity-mismatch" });
+    // A row whose column and URLs disagree names no single document.
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: LISTED_ROW,
+        stored: { ...elsewhere, sourceDocumentId: LISTED_ROW.unid },
+      }),
+    ).toMatchObject({ type: "identity-mismatch" });
+  });
+
+  test("a row spelling its id in another case is reported, not rebuilt", async () => {
+    const served = await servePublisher();
+    const decision = await crawled();
+
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: LISTED_ROW,
+        stored: legacyRow(decision, served, {
+          sourceDocumentId: LISTED_ROW.unid.toLowerCase(),
+        }),
+      }),
+    ).toMatchObject({
+      type: "identity-mismatch",
+      detail: expect.stringContaining("the same id in another case"),
+    });
+  });
+
+  test("a row naming no id anywhere is found by its docket alone", async () => {
+    const served = await servePublisher();
+    const decision = await crawled();
+
+    const outcome = await recaptureDecisionFromListing({
+      adapter: czNsAdapter,
+      stored: legacyRow(decision, served, {
+        sourceDocumentId: null,
+        sourceUrl: null,
+        documentUrl: null,
+      }),
+    });
+
+    expect(outcome).toMatchObject({ type: "recaptured", lookup: DOCKET });
+  });
+
+  test("a listing row stating another docket is reported, not merged", async () => {
+    const served = await servePublisher();
+    const decision = await crawled();
+
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: { unid: LISTED_ROW.unid, caseNumber: "30 Cdo 1/2020" },
+        stored: legacyRow(decision, served, { sourceDocumentId: null }),
+      }),
+    ).toMatchObject({ type: "identity-mismatch" });
+  });
+
+  test("an enveloped row replays from its own listing row, columns or not", async () => {
+    await servePublisher();
+    const decision = await crawled();
+
+    const replayed = await czNsAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: decision.sourceRawContentType ?? null,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: null,
+      language: decision.language,
+      court: decision.court,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+      metadata: {},
+    });
+
+    expect(replayed).toEqual({ type: "parsed", result: decision });
   });
 });

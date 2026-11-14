@@ -1,15 +1,19 @@
 //! Commands over the managed agent CLIs. Every command first requires the
-//! server-gated local agents feature, and no window capability grants them
-//! yet, so no page can reach them.
+//! server-gated local agents feature. The settings window may read the
+//! status, start an install and cancel it; no window may remove a release.
+//! The change event carries no payload: windows read the status again.
 
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::feature_gate::{DesktopFeature, FeatureGates};
+use crate::harness_auto_install::HarnessAutoInstall;
 use crate::harness_installation::{
   HarnessError, HarnessInstallState, HarnessInstallation,
 };
 use crate::harness_release::ManagedHarness;
+
+pub const CHANGED_EVENT: &str = "harness-install-changed";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -93,15 +97,41 @@ pub async fn harness_remove(
   Ok(installation.remove(harness).await?)
 }
 
-/// Turning the feature off stops any install in progress; installed
-/// releases stay until removed.
-pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
-  if enabled {
+/// Builds the automatic installer and tells windows about every install
+/// state change. Nothing installs until the feature turns on.
+pub fn manage(app: &AppHandle) {
+  let Some(installation) = app
+    .try_state::<HarnessInstallation>()
+    .map(|installation| installation.inner().clone())
+  else {
     return;
+  };
+  app.manage(HarnessAutoInstall::new(installation.clone()));
+  for harness in ManagedHarness::ALL {
+    let mut changes = installation.subscribe(harness);
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+      while changes.changed().await.is_ok() {
+        crate::logging::best_effort(
+          app.emit(CHANGED_EVENT, ()),
+          "harness change was not announced",
+        );
+      }
+    });
   }
-  if let Some(installation) = app.try_state::<HarnessInstallation>() {
-    installation.cancel_all();
+}
+
+/// Turning the feature on installs every harness not on its pinned release;
+/// turning it off stops any install in progress. Installed releases stay
+/// until removed.
+pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
+  if let Some(auto) = app.try_state::<HarnessAutoInstall>() {
+    auto.set_enabled(enabled);
   }
+  crate::logging::best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "harness change was not announced",
+  );
 }
 
 #[cfg(test)]

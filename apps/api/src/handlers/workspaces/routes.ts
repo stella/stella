@@ -11,6 +11,7 @@ import archiveWorkspace from "@/api/handlers/workspaces/archive";
 import cellRetry from "@/api/handlers/workspaces/cells/retry";
 import createWorkspaceContact from "@/api/handlers/workspaces/contacts/create";
 import deleteWorkspaceContact from "@/api/handlers/workspaces/contacts/delete";
+import readWorkspaceContacts from "@/api/handlers/workspaces/contacts/list";
 import createMatterInboundAddress from "@/api/handlers/workspaces/correspondence/address/create";
 import deleteMatterInboundAddress from "@/api/handlers/workspaces/correspondence/address/delete";
 import getMatterInboundAddress from "@/api/handlers/workspaces/correspondence/address/get";
@@ -23,12 +24,14 @@ import deleteWorkspace from "@/api/handlers/workspaces/delete";
 import duplicateWorkspace from "@/api/handlers/workspaces/duplicate";
 import exportOverviewActivity from "@/api/handlers/workspaces/export-overview-activity";
 import generateBoundingBoxes from "@/api/handlers/workspaces/generate-bounding-boxes";
-import { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
+import readWorkspace from "@/api/handlers/workspaces/get";
 import infosoudCourts from "@/api/handlers/workspaces/infosoud-courts";
 import infosoudImportAgenda from "@/api/handlers/workspaces/infosoud-import-agenda";
 import infosoudLookup from "@/api/handlers/workspaces/infosoud-lookup";
 import readJustifications from "@/api/handlers/workspaces/justifications/list";
 import readWorkspaces from "@/api/handlers/workspaces/list";
+import readMatterNumbering from "@/api/handlers/workspaces/matter-numbering/get";
+import listWorkspaceMemberCandidates from "@/api/handlers/workspaces/member-candidates/list";
 import listWorkspaceMemberPreviews from "@/api/handlers/workspaces/member-previews/list";
 import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
 import readWorkspaceMembers from "@/api/handlers/workspaces/members/list";
@@ -47,33 +50,9 @@ import readVocabulary from "@/api/handlers/workspaces/vocabulary/get";
 import readWorkflow from "@/api/handlers/workspaces/workflow/get";
 import workflowStart from "@/api/handlers/workspaces/workflow/start";
 import workflowTargetCount from "@/api/handlers/workspaces/workflow/targets/count";
-import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import { mount, routes } from "@/api/http/route";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-
-const readWorkspace = createSafeHandler(
-  {
-    contract: "patch",
-    permissions: { workspace: ["read"] },
-    accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "covered", by: "list_matters" },
-  } satisfies WorkspaceHandlerConfig,
-  async function* ({ scopedDb, session, workspaceId }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readWorkspaceHandler({
-            workspaceId,
-            organizationId: session.activeOrganizationId,
-            scopedDb,
-          }),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
 
 const readOverview = createSafeHandler(
   {
@@ -95,26 +74,12 @@ const readOverview = createSafeHandler(
   },
 );
 
-const readWorkspaceContacts = createSafeHandler(
-  {
-    contract: "patch",
-    permissions: { workspace: ["read"] },
-    accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "covered", by: "list_matters" },
-  } satisfies WorkspaceHandlerConfig,
-  async function* ({ scopedDb, workspaceId }) {
-    const response = yield* Result.await(
-      readWorkspaceContactsHandler({ workspaceId, scopedDb }),
-    );
-
-    return Result.ok(response);
-  },
-);
-
 export const workspacesRoute = mount(
   [
     routes({
       "/": { GET: readWorkspaces, PUT: createWorkspaces },
+      "/matter-numbering": { GET: readMatterNumbering },
+      "/member-candidates": { GET: listWorkspaceMemberCandidates },
       "/member-previews": { GET: listWorkspaceMemberPreviews },
       "/navigation": { GET: readWorkspaceNavigation },
       "/active": { GET: readActiveWorkspace },

@@ -255,6 +255,13 @@ const DATABASE_POOLS = [
     admission: "pooled",
   },
   {
+    file: "scripts/shared-test-postgres.ts",
+    constructor: 1,
+    maximum: { type: "fixed", value: 1 },
+    processes: ["postgresTestRunner"],
+    admission: "pooled",
+  },
+  {
     file: "scripts/seed-reset.ts",
     constructor: 1,
     maximum: { type: "fixed", value: 1 },

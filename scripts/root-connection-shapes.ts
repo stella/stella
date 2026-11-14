@@ -116,10 +116,6 @@ export const ROOT_OPERATION_RESULTS = {
     file: "apps/api/src/lib/confirmation-otp.ts",
     reason: "Burns the code on its own connection and returns the verdict.",
   },
-  ensureDefaultDocumentTypes: {
-    file: "apps/api/src/lib/auth.ts",
-    reason: "Seeds a new organization's document types; returns nothing.",
-  },
   readOrganizationMachineApiKeyPage: {
     file: "apps/api/src/lib/machine-api-key-queries.ts",
     reason: "Returns one page of an organization's machine key rows.",
