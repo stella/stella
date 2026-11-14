@@ -29,6 +29,7 @@ import {
   UPLOAD_DOCUMENT_MAX_BYTES,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
+import { SSE_HEARTBEAT_INTERVAL_MS } from "@stll/api-contract/sse-heartbeat";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
@@ -314,10 +315,9 @@ export const LIMITS = {
     return MCP_RATE_LIMITS.gateway.max;
   },
   /** Silence an event stream may carry before it writes a comment frame. The
-   *  CDN and the load balancer in front of this service both cut a connection
-   *  after 60 s without a byte, so the interval leaves room for three writes
-   *  inside one of their windows. */
-  sseHeartbeatMs: 15_000,
+   *  contract owns the value: readers derive from it how long a stream may
+   *  stay silent before they hold it to be lost. */
+  sseHeartbeatMs: SSE_HEARTBEAT_INTERVAL_MS,
   /** How long an event stream may outlive the credential that opened it: the
    *  interval of the sweep that ends every stream whose session or other
    *  credential no longer holds. */
