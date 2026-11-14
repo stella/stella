@@ -94,6 +94,11 @@ const STORED_KEYS_ORGANIZATION_SCOPE_MIGRATION_PATH = nodePath.join(
   "20261020000100_stored_keys_organization_scope",
   "migration.sql",
 );
+const CHAT_TURN_ORDINALS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261114200000_chat_turn_ordinals",
+  "migration.sql",
+);
 const SEARCH_HISTORY_COUNTRY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261111230200_search_history_country_expand",
@@ -207,6 +212,21 @@ export const installPgliteSearchHistoryClearFence = async (
         "CREATE FUNCTION public.search_history_entries_clear_cutoff_fence",
       ) ||
       source.startsWith("CREATE TRIGGER search_history_entries_clear_cutoff_")
+    ) {
+      await db.execute(sql.raw(statement));
+    }
+  }
+};
+
+/** Install the trigger that gives every inserted chat turn its position. */
+export const installPgliteChatTurnOrdinal = async (db: PgliteSchemaDb) => {
+  for (const statement of readMigrationStatements(
+    CHAT_TURN_ORDINALS_MIGRATION_PATH,
+  )) {
+    const source = executableSql(statement);
+    if (
+      source.startsWith("CREATE FUNCTION public.assign_chat_turn_ordinal") ||
+      source.startsWith("CREATE TRIGGER chat_turns_assign_ordinal")
     ) {
       await db.execute(sql.raw(statement));
     }
