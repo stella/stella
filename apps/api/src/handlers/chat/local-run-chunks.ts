@@ -295,12 +295,15 @@ type RejectReason = Extract<
 const LOCAL_RUN_REJECTION = {
   harness_needs_login: AI_FAILURE_CODES.local_runner_needs_login,
   harness_limited: AI_FAILURE_CODES.local_runner_limit_reached,
-  harness_not_installed: AI_FAILURE_CODES.local_runner_unavailable,
-  harness_unsupported: AI_FAILURE_CODES.local_runner_unavailable,
-  harness_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
-  harness_version_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
-  model_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
-  policy_unsupported: AI_FAILURE_CODES.local_runner_unavailable,
+  // The same causes the pick and the run's insert find read the same.
+  harness_not_installed: AI_FAILURE_CODES.local_runner_harness_unavailable,
+  harness_unsupported: AI_FAILURE_CODES.local_runner_harness_unavailable,
+  harness_unavailable: AI_FAILURE_CODES.local_runner_harness_unavailable,
+  harness_version_unavailable:
+    AI_FAILURE_CODES.local_runner_harness_unavailable,
+  model_unavailable: AI_FAILURE_CODES.local_runner_model_unavailable,
+  // The harness cannot run in the turn's approval mode on this computer.
+  policy_unsupported: AI_FAILURE_CODES.local_runner_approvals_unavailable,
   at_capacity: AI_FAILURE_CODES.local_runner_unavailable,
   run_too_large: AI_FAILURE_CODES.local_runner_turn_too_large,
   unknown_run: AI_FAILURE_CODES.local_runner_unavailable,

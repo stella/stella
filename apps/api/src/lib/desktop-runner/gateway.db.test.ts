@@ -4717,7 +4717,10 @@ describe("chat turns on a computer", () => {
     const { desktop } = shared();
     for (const [reason, kind] of [
       ["harness_needs_login", "local_runner_needs_login"],
-      ["harness_unavailable", "local_runner_unavailable"],
+      // The pick and the run's insert give these causes the same reasons.
+      ["harness_unavailable", "local_runner_harness_unavailable"],
+      ["model_unavailable", "local_runner_model_unavailable"],
+      ["policy_unsupported", "local_runner_approvals_unavailable"],
       ["run_too_large", "local_runner_turn_too_large"],
       // An undo of the chat's files still runs on the computer: send again.
       ["folder_busy", "local_runner_restoring"],
