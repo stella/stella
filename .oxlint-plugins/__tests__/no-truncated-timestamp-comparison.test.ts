@@ -207,6 +207,17 @@ sql\`(\${events.createdAt}, \${events.id}) < (\${new Date(after)}::timestamptz, 
   ).toEqual([3, 4]);
 });
 
+test("rejects a row's Date grouped with a column under one local owner", async () => {
+  expect(
+    await lintDateUnderCast(
+      `import {sql} from "drizzle-orm";
+import {events} from "./schema";
+const operands = {storedAt: events.createdAt, cursorAt: cursor.createdAt};
+sql\`\${operands.storedAt} > \${operands.cursorAt}::timestamptz\`;`,
+    ),
+  ).toEqual([4]);
+});
+
 test("allows in-database boundaries, text tokens, cutoffs and columns under a cast", async () => {
   expect(
     await lintDateUnderCast(

@@ -796,7 +796,7 @@ const isTimestampComparisonSlot = (
 //   sql`${t.createdAt} > ${token}::timestamptz`        // a text token
 //   sql`${t.createdAt} <= ${cutoff.toISOString()}::timestamptz` // a cutoff
 //   sql`${t.settledAt} >= ${t.createdAt}::timestamptz` // column to column:
-//        one owner on both sides, or an imported or pgTable owner
+//        one parameter on both sides, or an imported or pgTable owner
 //
 // A full-precision text token held in a field named like its column
 // (`cursor.createdAt`) reads the same as a `Date` and is flagged with it: pass
@@ -1709,6 +1709,10 @@ export default eslintCompatPlugin({
           );
         };
 
+        const isParameter = (owner: AstNode): boolean =>
+          variableOf(owner)?.defs.some((def) => def.type === "Parameter") ===
+          true;
+
         const constInitializer = (node: AstNode): unknown => {
           const variable = variableOf(node);
           const [def] = variable?.defs ?? [];
@@ -1796,16 +1800,17 @@ export default eslintCompatPlugin({
               const leftIndex = tuple
                 ? leftTupleFirstIndex(quasis, index)
                 : index - 1;
-              // One owner on both sides is a table compared with itself,
-              // however the table reached this scope: a row is never
-              // compared with its own fields.
+              // One parameter on both sides is a table handed to this
+              // function and compared with itself. A local object does not
+              // count: it can group a column with a row's Date.
               const leftOwner =
                 leftIndex === undefined
                   ? undefined
                   : timestampColumnOwner(expressions[leftIndex]);
               if (
                 leftOwner !== undefined &&
-                leftOwner.name === timestampColumnOwner(expression)?.name
+                leftOwner.name === timestampColumnOwner(expression)?.name &&
+                isParameter(leftOwner)
               ) {
                 continue;
               }
