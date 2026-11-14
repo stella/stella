@@ -153,11 +153,12 @@ test("presence is proven only when every revision counts exactly what it wrote",
     indexId: "case_law_v5_cs_sk",
     expected,
   });
-  if (proven.isErr() || proven.value.status !== "proven") {
-    return panic("Expected an exact census to prove presence");
-  }
+  const proofs =
+    proven.isOk() && proven.value.status === "proven"
+      ? proven.value.proofs
+      : panic("Expected an exact census to prove presence");
   expect(
-    proven.value.proofs.map(({ indexId, revision, documentCount }) => ({
+    proofs.map(({ indexId, revision, documentCount }) => ({
       indexId,
       revision,
       documentCount,
