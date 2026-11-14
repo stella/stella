@@ -9,16 +9,24 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { guardEnforcesLine } from "../../../../../scripts/guard-rollouts.ts";
+
 const API_SOURCE = path.resolve(import.meta.dir, "../..");
 const OWNER = "lib/review/carry-over.ts";
+// Registered in scripts/guard-rollouts: enforced on changed lines first.
+const PREVIOUS_RUN_GUARD = "previous-completed-run-owner";
 
 const EXCLUDED = /\.(?:test|spec|type-test)\.tsx?$|\/__fixtures__\//u;
 const SELF_EXCLUSION = /\bne\(\s*([A-Za-z_$][\w$]*)\.id\s*,/gu;
 
 /** The tables a source both filters to completed runs and excludes one run
- *  of by id: the shape of a "previous completed run" lookup. */
-const previousCompletedRunTables = (source: string): string[] =>
-  [...source.matchAll(SELF_EXCLUSION)].flatMap(([, table]) => {
+ *  of by id (with the line of the exclusion): the shape of a "previous
+ *  completed run" lookup. */
+const previousCompletedRunSites = (
+  source: string,
+): { table: string; line: number }[] =>
+  [...source.matchAll(SELF_EXCLUSION)].flatMap((match) => {
+    const [, table] = match;
     if (table === undefined) {
       return [];
     }
@@ -26,8 +34,12 @@ const previousCompletedRunTables = (source: string): string[] =>
       String.raw`\beq\(\s*${table}\.status\s*,\s*"completed"\s*\)`,
       "u",
     );
-    return completed.test(source) ? [table] : [];
+    const line = source.slice(0, match.index).split("\n").length;
+    return completed.test(source) ? [{ table, line }] : [];
   });
+
+const previousCompletedRunTables = (source: string): string[] =>
+  previousCompletedRunSites(source).map(({ table }) => table);
 
 describe("previous completed run lookup", () => {
   test("the detector recognises a hand-written lookup", () => {
@@ -58,11 +70,19 @@ describe("previous completed run lookup", () => {
       if (file === OWNER || EXCLUDED.test(file)) {
         continue;
       }
-      const tables = previousCompletedRunTables(
+      const sites = previousCompletedRunSites(
         await Bun.file(path.join(API_SOURCE, file)).text(),
+      ).filter(({ line }) =>
+        guardEnforcesLine({
+          guard: PREVIOUS_RUN_GUARD,
+          file: `apps/api/src/${file}`,
+          line,
+        }),
       );
-      if (tables.length > 0) {
-        offenders.push(`${file}: ${tables.join(", ")}`);
+      if (sites.length > 0) {
+        offenders.push(
+          `${file}: ${sites.map(({ table, line }) => `${table} (line ${String(line)})`).join(", ")}`,
+        );
       }
     }
     expect(offenders).toEqual([]);
