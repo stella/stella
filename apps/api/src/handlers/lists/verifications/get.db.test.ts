@@ -353,7 +353,7 @@ const seed = async (db: GatedTestDb) => {
         if (property === "exitCode") {
           return exitCode;
         }
-        return Reflect.get(target, property, receiver);
+        return Reflect.get(target, property, receiver) as unknown;
       },
       set(target, property, value, receiver) {
         if (property !== "exitCode") {

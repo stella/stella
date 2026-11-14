@@ -73,7 +73,7 @@ const legislationDb: LegislationReadDb = async (read) =>
     // The production driver answers `execute` with the rows themselves;
     // PGlite wraps them in a result object.
     const tx = new Proxy(roleTx, {
-      get: (target, property, receiver) => {
+      get: (target, property, receiver): unknown => {
         if (property !== "execute") {
           return Reflect.get(target, property, receiver);
         }

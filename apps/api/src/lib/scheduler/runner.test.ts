@@ -376,8 +376,10 @@ const abortSignalWhenRunInserted = (
       }
       // Bind delegated methods to the real handle so drizzle's query builders
       // run with `this` pointing at the underlying db, not the proxy.
-      const value = Reflect.get(target, prop);
-      return typeof value === "function" ? value.bind(target) : value;
+      const value: unknown = Reflect.get(target, prop);
+      return typeof value === "function"
+        ? (...args: unknown[]): unknown => Reflect.apply(value, target, args)
+        : value;
     },
   });
 

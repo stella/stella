@@ -17,6 +17,12 @@ const asking = (
   url: "https://fixture-library.test/form",
 });
 
+/** The approval a stream step asks for, or "" when the step asks none. */
+const requestIdOf = (step: IteratorResult<HarnessEvent>) =>
+  step.done !== true && step.value.type === "approval.requested"
+    ? step.value.request.requestId
+    : "";
+
 test("asks in the run's stream and reports the step once it ran", async () => {
   const approvals = createActionApprovals();
   const harness = createEventQueue<HarnessEvent>();
@@ -33,10 +39,7 @@ test("asks in the run's stream and reports the step once it ran", async () => {
       options: [{ decision: "approve" }, { decision: "deny" }],
     },
   });
-  const requestId =
-    asked.value?.type === "approval.requested"
-      ? asked.value.request.requestId
-      : "";
+  const requestId = requestIdOf(asked);
   expect(approvals.answer("another-request", "deny")).toBe(false);
   expect(approvals.answer(requestId, "approve_for_session")).toBe(true);
   const ticket = await decided;
@@ -66,10 +69,7 @@ test("a denied step is reported declined at once", async () => {
 
   const decided = approvals.request(asking());
   const asked = await stream.next();
-  const requestId =
-    asked.value?.type === "approval.requested"
-      ? asked.value.request.requestId
-      : "";
+  const requestId = requestIdOf(asked);
   approvals.answer(requestId, "deny");
   expect((await decided).decision).toBe(APPROVAL_DECISION.deny);
   await stream.next();
@@ -88,10 +88,7 @@ test("the question is withdrawn when the agent's call ends", async () => {
 
   const decided = approvals.request(asking(call.signal));
   const asked = await stream.next();
-  const requestId =
-    asked.value?.type === "approval.requested"
-      ? asked.value.request.requestId
-      : "";
+  const requestId = requestIdOf(asked);
   call.abort();
   expect((await decided).decision).toBe(APPROVAL_DECISION.deny);
   expect(approvals.answer(requestId, "approve")).toBe(false);
@@ -117,10 +114,7 @@ test("a run that ends with a question open reports it withdrawn before the strea
 
   const decided = approvals.request(asking());
   const asked = await stream.next();
-  const requestId =
-    asked.value?.type === "approval.requested"
-      ? asked.value.request.requestId
-      : "";
+  const requestId = requestIdOf(asked);
   harness.close();
   expect((await stream.next()).value).toEqual({
     type: "interaction.resolved",

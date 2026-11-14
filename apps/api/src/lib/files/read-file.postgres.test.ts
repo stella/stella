@@ -100,8 +100,9 @@ if (!databaseUrl || !enabled) {
               pdfFileId: null,
             },
           });
-          const [writerSession] =
-            await writer.sql`SELECT pg_backend_pid() AS pid`;
+          const [writerSession] = await writer.sql<
+            { pid: unknown }[]
+          >`SELECT pg_backend_pid() AS pid`;
           const writerPid: unknown = writerSession?.pid;
           if (typeof writerPid !== "number") {
             throw new TypeError("Expected a PostgreSQL backend pid");
@@ -138,7 +139,7 @@ if (!databaseUrl || !enabled) {
                 if (tombstoneCommitted) {
                   return true;
                 }
-                const [row] = await observer.sql`
+                const [row] = await observer.sql<{ blocked: unknown }[]>`
                   SELECT cardinality(pg_blocking_pids(${writerPid}::int)) > 0 AS blocked`;
                 return row?.blocked === true;
               },

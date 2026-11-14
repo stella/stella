@@ -68,7 +68,9 @@ describe.skipIf(!runPostgresTests)("forced PostgreSQL scope cleanup", () => {
         const observer = openClient().sql;
         const { pid: holdingPid } = v.parse(
           sessionSchema,
-          (await holder`SELECT pg_backend_pid() AS pid`).at(0),
+          (await holder<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`).at(
+            0,
+          ),
         );
         let blockedClient: SQL | undefined;
         try {
@@ -81,7 +83,11 @@ describe.skipIf(!runPostgresTests)("forced PostgreSQL scope cleanup", () => {
                   blockedClient = client;
                   const { pid: waitingPid } = v.parse(
                     sessionSchema,
-                    (await client`SELECT pg_backend_pid() AS pid`).at(0),
+                    (
+                      await client<
+                        { pid: number }[]
+                      >`SELECT pg_backend_pid() AS pid`
+                    ).at(0),
                   );
                   await holder`SELECT pg_advisory_lock(${holdingPid}, ${waitingPid})`;
                   const query =
@@ -110,7 +116,9 @@ describe.skipIf(!runPostgresTests)("forced PostgreSQL scope cleanup", () => {
             v.parse(
               v.object({ held: v.boolean() }),
               (
-                await holder`SELECT pg_advisory_unlock(${holdingPid}, ${result.waitingPid}) AS held`
+                await holder<
+                  { held: boolean }[]
+                >`SELECT pg_advisory_unlock(${holdingPid}, ${result.waitingPid}) AS held`
               ).at(0),
             ).held,
           ).toBe(true);
@@ -137,11 +145,15 @@ describe.skipIf(!runPostgresTests)("forced PostgreSQL scope cleanup", () => {
         const reserved = await pool.reserve();
         const { pid: holdingPid } = v.parse(
           sessionSchema,
-          (await holder`SELECT pg_backend_pid() AS pid`).at(0),
+          (await holder<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`).at(
+            0,
+          ),
         );
         const { pid: waitingPid } = v.parse(
           sessionSchema,
-          (await reserved`SELECT pg_backend_pid() AS pid`).at(0),
+          (
+            await reserved<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
+          ).at(0),
         );
         try {
           await holder`SELECT pg_advisory_lock(${holdingPid}, ${waitingPid})`;
@@ -169,7 +181,9 @@ describe.skipIf(!runPostgresTests)("forced PostgreSQL scope cleanup", () => {
             v.parse(
               v.object({ held: v.boolean() }),
               (
-                await holder`SELECT pg_advisory_unlock(${holdingPid}, ${waitingPid}) AS held`
+                await holder<
+                  { held: boolean }[]
+                >`SELECT pg_advisory_unlock(${holdingPid}, ${waitingPid}) AS held`
               ).at(0),
             ).held,
           ).toBe(true);

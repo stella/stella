@@ -148,7 +148,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(listed).toHaveLength(2);
           expect(listed).toEqual(
             expect.arrayContaining(
-              fixture.accountIds.map((id, index) =>
+              fixture.accountIds.map((id, index): unknown =>
                 expect.objectContaining({
                   id,
                   providerId: index === 0 ? "google" : "microsoft",

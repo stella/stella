@@ -311,7 +311,7 @@ const pageOutputs = (parts: readonly unknown[]): unknown[] =>
       "content" in part &&
       typeof part.content === "string"
     ) {
-      return [JSON.parse(part.content)];
+      return [JSON.parse(part.content) as unknown];
     }
     return [];
   });

@@ -18,6 +18,18 @@ import { installBrowserClock } from "@stll/ui/browser-clock";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
+// Loose view of the JSON-RPC messages the app posts to the fixture host; each
+// method only reads the params fields it owns.
+type FixtureHostMessage = {
+  method: string;
+  id?: number | string;
+  params: {
+    height: number;
+    name: string;
+    arguments: { url?: unknown };
+    url: string;
+  };
+};
 type AppFixtureHost = {
   appCalls: unknown[];
   courtCalls: unknown[];
@@ -114,14 +126,15 @@ const mountApp = async ({
         structuredContent: data,
       });
       const searchInput = { queries: hostQueries, country: "CZE", limit: 10 };
-      window.addEventListener("message", ({ source, data }) => {
+      window.addEventListener("message", ({ source, data: rawData }) => {
         if (
           source !== iframe.contentWindow ||
-          typeof data !== "object" ||
-          data === null
+          typeof rawData !== "object" ||
+          rawData === null
         ) {
           return;
         }
+        const data = rawData as FixtureHostMessage;
         const method = data.method;
         if (
           method !== "ui/initialize" &&

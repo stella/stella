@@ -129,7 +129,9 @@ const releaseCandidates = async (page: Page) => {
     .toBe(true);
   await page.evaluate((key) => {
     const release: unknown = Reflect.get(window, key);
-    if (typeof release !== "function") {
+    const isRelease = (value: unknown): value is () => void =>
+      typeof value === "function";
+    if (!isRelease(release)) {
       throw new TypeError("No matters read is held");
     }
     release();
@@ -146,7 +148,7 @@ const heldDrafts = async (page: Page) =>
 const releaseDraft = async (page: Page) => {
   await expect.poll(async () => heldDrafts(page)).toBeGreaterThan(0);
   await page.evaluate((key) => {
-    const held: unknown = Reflect.get(window, key);
+    const held: (() => void)[] | undefined = Reflect.get(window, key);
     if (!Array.isArray(held)) {
       throw new TypeError("No drafting request is held");
     }
@@ -998,8 +1000,14 @@ test("unresolved draft creation offers no deletion and retains its batch key", a
     page.getByRole("button", { name: enMessages.activity.previousDay }),
   ).toBeDisabled();
   await page.evaluate(() => {
-    const changed = Reflect.get(window, "__STELLA_TEST_ACTIVITY_CHANGED__");
-    const reject = Reflect.get(window, "__STELLA_TEST_REJECT_BATCH__");
+    const changed: (() => void) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_ACTIVITY_CHANGED__",
+    );
+    const reject: (() => void) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_REJECT_BATCH__",
+    );
     if (typeof changed !== "function" || typeof reject !== "function") {
       throw new TypeError("Native recovery controls are missing");
     }
@@ -1174,7 +1182,10 @@ test("stored pending drafts stay immutable after a rejected retry until cancella
   const accept = page.getByRole("button", { name: acceptName(enMessages) });
   await expect(accept).toBeDisabled();
   await page.evaluate((next) => {
-    const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+    const update: ((snapshot: typeof next) => void) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_SET_SNAPSHOT__",
+    );
     if (typeof update !== "function") {
       throw new TypeError("Snapshot control is missing");
     }
@@ -1746,7 +1757,10 @@ test("an open erase dialog disappears safely when saved history becomes incompat
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.evaluate(
     (next) => {
-      const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+      const update: ((snapshot: typeof next) => void) | undefined = Reflect.get(
+        window,
+        "__STELLA_TEST_SET_SNAPSHOT__",
+      );
       if (typeof update !== "function") {
         throw new TypeError("Snapshot control is missing");
       }
@@ -2287,10 +2301,8 @@ test("the browser question waits for detail recording", async ({ page }) => {
   });
   await expect(page.locator("[data-activity-browser-question]")).toHaveCount(0);
   await page.evaluate((next) => {
-    const setSnapshot: unknown = Reflect.get(
-      window,
-      "__STELLA_TEST_SET_SNAPSHOT__",
-    );
+    const setSnapshot: ((snapshot: typeof next) => void) | undefined =
+      Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
     if (typeof setSnapshot === "function") {
       setSnapshot(next);
     }
@@ -3035,7 +3047,7 @@ test("the day's blocks wait for its matters and are drawn once", async ({
     /^Example matter · Example Editor/u,
   );
   const drawn: unknown = await page.evaluate(
-    (key) => Reflect.get(window, key),
+    (key): unknown => Reflect.get(window, key),
     DRAWN_BLOCKS,
   );
   expect(drawn).toEqual([expect.stringMatching(/^Example matter · /u)]);

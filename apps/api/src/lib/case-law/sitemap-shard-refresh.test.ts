@@ -785,7 +785,7 @@ const recordingRefreshDb = (
                       onExecute(statement) ?? (await target.execute(query))
                     );
                   }
-                : Reflect.get(target, property, receiver),
+                : (Reflect.get(target, property, receiver) as unknown),
           }),
         );
       }),

@@ -75,17 +75,21 @@ const holdDocumentTypeCheck = (
   new Proxy(tx, {
     get(target, key, receiver) {
       if (key !== "query") {
-        return Reflect.get(target, key, receiver);
+        return Reflect.get(target, key, receiver) as unknown;
       }
       return new Proxy(target.query, {
         get(queryTarget, tableKey, queryReceiver) {
           if (tableKey !== "documentTypes") {
-            return Reflect.get(queryTarget, tableKey, queryReceiver);
+            return Reflect.get(queryTarget, tableKey, queryReceiver) as unknown;
           }
           return new Proxy(queryTarget.documentTypes, {
             get(tableTarget, method, tableReceiver) {
               if (method !== "findFirst") {
-                return Reflect.get(tableTarget, method, tableReceiver);
+                return Reflect.get(
+                  tableTarget,
+                  method,
+                  tableReceiver,
+                ) as unknown;
               }
               return (config: Parameters<typeof tableTarget.findFirst>[0]) => {
                 const query = tableTarget.findFirst(config);
@@ -114,14 +118,18 @@ const holdDeleteReferenceCheck = (
   new Proxy(tx, {
     get(target, key, receiver) {
       if (key !== "select") {
-        return Reflect.get(target, key, receiver);
+        return Reflect.get(target, key, receiver) as unknown;
       }
       return (fields: Parameters<typeof target.select>[0]) => {
         const builder = target.select(fields);
         return new Proxy(builder, {
           get(builderTarget, method, builderReceiver) {
             if (method !== "from") {
-              return Reflect.get(builderTarget, method, builderReceiver);
+              return Reflect.get(
+                builderTarget,
+                method,
+                builderReceiver,
+              ) as unknown;
             }
             return (table: Parameters<typeof builderTarget.from>[0]) => {
               const query = builderTarget.from(table);

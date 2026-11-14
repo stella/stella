@@ -83,7 +83,7 @@ const stubRankingScores = (
         if (typeof requestBody !== "string") {
           throw new TypeError("Expected a JSON request body");
         }
-        const body = JSON.parse(requestBody);
+        const body: { from: number; size: number } = JSON.parse(requestBody);
         const hits = scores.map((score, rank) => ({
           _source: {
             document_id: `doc-${Math.floor(rank / passagesPerDocument)}`,
@@ -301,7 +301,7 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
         if (typeof requestBody !== "string") {
           throw new TypeError("Expected a JSON request body");
         }
-        const body = JSON.parse(requestBody);
+        const body: { from: number; size: number } = JSON.parse(requestBody);
         requests.push({ from: body.from, size: body.size });
         const hits = Array.from({ length: 7100 }, (_, rank) => ({
           _source: {
@@ -544,7 +544,8 @@ test("with ranking OFF no client cursor can enter the BM25 path", async () => {
               if (typeof body !== "string") {
                 throw new TypeError("Expected a JSON request body");
               }
-              sizes.push(JSON.parse(body).size);
+              const parsed: { size: number } = JSON.parse(body);
+              sizes.push(parsed.size);
               return new Response(
                 JSON.stringify({ hits: { total: { value: 0 }, hits: [] } }),
               );

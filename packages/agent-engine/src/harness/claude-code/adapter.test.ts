@@ -2209,7 +2209,10 @@ describe("Claude Code skill folders", () => {
     const { args, finished } = await startedWith([
       { name: skill.name, path: odd },
     ]);
-    const rules = JSON.parse(valueOf(args, "--settings") ?? "null").permissions;
+    const settings: { permissions: { allow: string[] } } = JSON.parse(
+      valueOf(args, "--settings") ?? "null",
+    );
+    const rules = settings.permissions;
     expect(rules.allow[1]).toEndWith(String.raw` \(copy\) \[1\]/**)`);
     await finished();
   });

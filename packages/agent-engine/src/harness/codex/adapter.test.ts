@@ -132,22 +132,33 @@ const harnessFor = (
       backgroundErrors.push(error);
     },
   });
-  /** Messages the fake server received, in order. */
-  const received = (): {
+  type ReceivedMessage = {
     method?: string;
     id?: unknown;
     params?: unknown;
     result?: unknown;
     error?: unknown;
-  }[] =>
+  };
+  /** Messages the fake server received, in order. */
+  const received = (): ReceivedMessage[] =>
     readFileSync(logPath, "utf-8")
       .split("\n")
       .filter((line) => line !== "")
-      .map((line) => JSON.parse(line))
-      .filter((entry) => entry.received !== undefined)
-      .map((entry) => entry.received);
-  const startup = () =>
-    JSON.parse(readFileSync(logPath, "utf-8").split("\n")[0] ?? "{}").startup;
+      .flatMap((line) => {
+        const entry: { received?: ReceivedMessage } = JSON.parse(line);
+        return entry.received === undefined ? [] : [entry.received];
+      });
+  const startup = () => {
+    const first: {
+      startup: {
+        codexHome?: unknown;
+        cwd?: unknown;
+        packageCache?: unknown;
+        path?: unknown;
+      };
+    } = JSON.parse(readFileSync(logPath, "utf-8").split("\n")[0] ?? "{}");
+    return first.startup;
+  };
   return { adapter, codexHome, workspaceDir, logPath, received, startup };
 };
 

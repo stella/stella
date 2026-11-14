@@ -119,7 +119,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   if (grant === undefined) {
                     panic("Ingestion role grant is missing");
                   }
-                  const apply = async () => await connection.unsafe(grant);
+                  const apply = async () =>
+                    await connection.unsafe<unknown>(grant);
                   await apply();
                   expect((await membership()).at(0)).toEqual({
                     member: true,

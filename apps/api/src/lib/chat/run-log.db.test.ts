@@ -257,7 +257,7 @@ describe("chat run log database contract", () => {
       });
       processor.processChunk(first.value.chunk);
       const metadata = processor.getMessages().at(0)?.metadata;
-      const timing = metadata?.["turnTiming"];
+      const timing: unknown = metadata?.["turnTiming"];
       if (
         typeof timing !== "object" ||
         timing === null ||
@@ -776,7 +776,7 @@ describe("chat run log database contract", () => {
     const delivered = (await replay)
       .split("\n")
       .filter((line) => line.startsWith("data: "))
-      .map((line) => JSON.parse(line.slice(6)));
+      .map((line): unknown => JSON.parse(line.slice(6)));
     expect(delivered).toEqual([entry]);
   });
 
@@ -926,7 +926,7 @@ describe("chat run log database contract", () => {
           const delivered = (prefix + tail)
             .split("\n")
             .filter((line) => line.startsWith("data: "))
-            .map((line) => JSON.parse(line.slice(6)));
+            .map((line): unknown => JSON.parse(line.slice(6)));
           // The SDK's acceptance marker is delivery metadata, not provider output.
           expect(delivered.slice(1)).toEqual(values);
           expect(providerCalls).toBe(1);

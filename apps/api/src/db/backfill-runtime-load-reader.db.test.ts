@@ -208,12 +208,16 @@ describe.skipIf(!enabled)(
           await holder`BEGIN`;
           await holder.unsafe(`SELECT * FROM ${target}`);
           const holderState = (
-            await holder`SELECT current_user AS role, pg_backend_pid() AS pid`
+            await holder<
+              { role: string; pid: number }[]
+            >`SELECT current_user AS role, pg_backend_pid() AS pid`
           ).at(0);
-          expect(holderState?.["role"]).not.toBe("stella_ingestion");
+          expect(holderState?.role).not.toBe("stella_ingestion");
           const holderAge = (
-            await holder`SELECT (extract(epoch FROM clock_timestamp() - transaction_timestamp()) * 1000)::float8 AS age`
-          ).at(0)?.["age"];
+            await holder<
+              { age: unknown }[]
+            >`SELECT (extract(epoch FROM clock_timestamp() - transaction_timestamp()) * 1000)::float8 AS age`
+          ).at(0)?.age;
           if (typeof holderAge !== "number") {
             panic("Missing holder transaction age");
           }
@@ -234,17 +238,20 @@ describe.skipIf(!enabled)(
           // Observe the direct query from an independent backend.
           const observer = openClient().sql;
           const visible = (
-            await observer.unsafe(LONG_TRANSACTION_SQL, ["table", target])
+            await observer.unsafe<{ ageMs: unknown }[]>(LONG_TRANSACTION_SQL, [
+              "table",
+              target,
+            ])
           ).at(0);
-          expect(visible?.["ageMs"]).toBeGreaterThan(0);
+          expect(visible?.ageMs).toBeGreaterThan(0);
           const aggregate = (
-            await observer.unsafe(
+            await observer.unsafe<{ transaction_age_ms: unknown }[]>(
               "SELECT * FROM public.stella_database_load_indicators($1::regclass)",
               [target],
             )
           ).at(0);
-          const age = visible?.["ageMs"];
-          const aggregateAge = aggregate?.["transaction_age_ms"];
+          const age = visible?.ageMs;
+          const aggregateAge = aggregate?.transaction_age_ms;
           if (typeof age !== "number" || typeof aggregateAge !== "number") {
             panic("Missing scoped transaction ages");
           }
@@ -414,16 +421,19 @@ describe.skipIf(!enabled)(
           await holder`BEGIN`;
           await holder.unsafe(`SELECT * FROM ${schema}.pg_database`);
           const direct = (
-            await observer.unsafe(LONG_TRANSACTION_SQL, ["table", target])
+            await observer.unsafe<{ ageMs: number }[]>(LONG_TRANSACTION_SQL, [
+              "table",
+              target,
+            ])
           ).at(0);
           const aggregate = (
-            await observer.unsafe(
+            await observer.unsafe<{ transaction_age_ms: number }[]>(
               "SELECT * FROM public.stella_database_load_indicators($1::regclass)",
               [target],
             )
           ).at(0);
-          expect(direct?.["ageMs"]).toBe(0);
-          expect(aggregate?.["transaction_age_ms"]).toBe(0);
+          expect(direct?.ageMs).toBe(0);
+          expect(aggregate?.transaction_age_ms).toBe(0);
         } finally {
           await holder`ROLLBACK`;
           await holder.release();
@@ -449,15 +459,15 @@ describe.skipIf(!enabled)(
         try {
           await worker`SET vacuum_cost_delay = 50`;
           await worker`SET vacuum_cost_limit = 1`;
-          const pid = (await worker`SELECT pg_backend_pid() AS pid`).at(0)?.[
-            "pid"
-          ];
+          const pid = (
+            await worker<{ pid: unknown }[]>`SELECT pg_backend_pid() AS pid`
+          ).at(0)?.pid;
           if (typeof pid !== "number") {
             panic("Missing vacuum backend pid");
           }
           vacuum = Result.tryPromise(
             async () =>
-              await worker.unsafe(
+              await worker.unsafe<unknown>(
                 `VACUUM (FREEZE, DISABLE_PAGE_SKIPPING) ${target}`,
               ),
           );
@@ -466,9 +476,11 @@ describe.skipIf(!enabled)(
           // Synchronize on actual progress, rather than timing worker startup.
           while (!running && performance.now() < deadline) {
             const progress = (
-              await observer`SELECT EXISTS (SELECT 1 FROM pg_stat_progress_vacuum WHERE pid = ${pid} AND relid = ${target}::regclass) AS running`
+              await observer<
+                { running: boolean }[]
+              >`SELECT EXISTS (SELECT 1 FROM pg_stat_progress_vacuum WHERE pid = ${pid} AND relid = ${target}::regclass) AS running`
             ).at(0);
-            running = progress?.["running"] === true;
+            running = progress?.running === true;
             if (!running) {
               await Bun.sleep(10);
             }
@@ -484,10 +496,12 @@ describe.skipIf(!enabled)(
           );
           expect(signal?.kind).toBe("normal");
           expect(signal?.value).toBe(0);
-          const direct = (await observer.unsafe(AUTOVACUUM_SQL, [target])).at(
-            0,
-          );
-          expect(direct?.["active"]).toBe(false);
+          const direct = (
+            await observer.unsafe<{ active: boolean }[]>(AUTOVACUUM_SQL, [
+              target,
+            ])
+          ).at(0);
+          expect(direct?.active).toBe(false);
           await db.transaction(async (tx) => {
             await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
             const other = (
@@ -498,9 +512,11 @@ describe.skipIf(!enabled)(
             expect(other?.["vacuum_active"]).toBe(false);
           });
           expect(
-            (await observer`SELECT pg_cancel_backend(${pid}) AS canceled`).at(
-              0,
-            )?.["canceled"],
+            (
+              await observer<
+                { canceled: boolean }[]
+              >`SELECT pg_cancel_backend(${pid}) AS canceled`
+            ).at(0)?.canceled,
           ).toBe(true);
           const outcome = await vacuum;
           expect(Result.isError(outcome)).toBe(true);
@@ -513,8 +529,10 @@ describe.skipIf(!enabled)(
         } finally {
           if (vacuum !== undefined) {
             const pid = (
-              await observer`SELECT pid FROM pg_stat_progress_vacuum WHERE relid = ${target}::regclass`
-            ).at(0)?.["pid"];
+              await observer<
+                { pid: unknown }[]
+              >`SELECT pid FROM pg_stat_progress_vacuum WHERE relid = ${target}::regclass`
+            ).at(0)?.pid;
             if (typeof pid === "number") {
               await observer`SELECT pg_cancel_backend(${pid})`;
             }
@@ -544,17 +562,17 @@ describe.skipIf(!enabled)(
         url,
         async ({ client, db, migration, unrelatedRole }) => {
           const definition = (
-            await client`
+            await client<{ prosrc: string; owner: string; visible: boolean }[]>`
         SELECT prosrc, owner.rolname AS owner,
           pg_has_role(owner.oid, 'pg_read_all_stats', 'USAGE') OR owner.rolsuper AS visible
         FROM pg_proc AS procedure JOIN pg_roles AS owner ON owner.oid = procedure.proowner
         WHERE procedure.oid = 'public.stella_database_load_indicators(regclass)'::regprocedure
       `
           ).at(0);
-          expect(definition?.["prosrc"]).toBe(
+          expect(definition?.prosrc).toBe(
             migration.split("AS $$").at(1)?.split("$$;").at(0),
           );
-          expect(definition?.["visible"]).toBe(true);
+          expect(definition?.visible).toBe(true);
           const grants = await client`
         SELECT COALESCE(role.rolname, 'PUBLIC') AS grantee, acl.privilege_type, acl.is_grantable
         FROM pg_proc AS procedure
@@ -566,7 +584,7 @@ describe.skipIf(!enabled)(
           expect(Array.from(grants)).toEqual(
             [
               {
-                grantee: definition?.["owner"],
+                grantee: definition?.owner,
                 privilege_type: "EXECUTE",
                 is_grantable: false,
               },
@@ -585,13 +603,13 @@ describe.skipIf(!enabled)(
             }),
           );
           const permissions = (
-            await client`
+            await client<{ unrelated: boolean; ingestion: boolean }[]>`
         SELECT has_function_privilege(${unrelatedRole}, 'public.stella_database_load_indicators(regclass)', 'EXECUTE') AS unrelated,
           has_function_privilege('stella_ingestion', 'public.stella_database_load_indicators(regclass)', 'EXECUTE') AS ingestion
       `
           ).at(0);
-          expect(permissions?.["unrelated"]).toBe(false);
-          expect(permissions?.["ingestion"]).toBe(true);
+          expect(permissions?.unrelated).toBe(false);
+          expect(permissions?.ingestion).toBe(true);
           await client.unsafe(`CREATE TABLE public.target_a (id integer, payload text) WITH (
         autovacuum_enabled = true, autovacuum_vacuum_threshold = 0,
         autovacuum_vacuum_scale_factor = 0, autovacuum_vacuum_insert_threshold = 0,
@@ -640,7 +658,7 @@ describe.skipIf(!enabled)(
             description: "autovacuum and autoanalyze run on public.target_a",
             timeoutMs: 110_000,
             read: async () => {
-              const progress = await client`
+              const progress = await client<{ phase: unknown; pid: number }[]>`
           SELECT 'vacuum' AS phase, progress.pid FROM pg_stat_progress_vacuum AS progress
           JOIN pg_stat_activity AS worker USING (pid)
           WHERE progress.relid = 'public.target_a'::regclass AND worker.backend_type = 'autovacuum worker'
@@ -652,24 +670,26 @@ describe.skipIf(!enabled)(
             AND progress.datid = (SELECT oid FROM pg_database WHERE datname = current_database())
         `;
               for (const row of progress) {
-                const phase = row["phase"];
+                const phase = row.phase;
                 if (typeof phase !== "string" || seen.has(phase)) {
                   continue;
                 }
                 const direct = (
-                  await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_a'::regclass)`
+                  await client<
+                    { vacuum_active: boolean }[]
+                  >`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_a'::regclass)`
                 ).at(0);
                 const verdict = await readA();
                 const stillActive = (
-                  await client`
-            SELECT EXISTS (SELECT 1 FROM pg_stat_progress_vacuum WHERE pid = ${row["pid"]} AND ${phase} = 'vacuum'
-              UNION ALL SELECT 1 FROM pg_stat_progress_analyze WHERE pid = ${row["pid"]} AND ${phase} = 'analyze') AS active
+                  await client<{ active: boolean }[]>`
+            SELECT EXISTS (SELECT 1 FROM pg_stat_progress_vacuum WHERE pid = ${row.pid} AND ${phase} = 'vacuum'
+              UNION ALL SELECT 1 FROM pg_stat_progress_analyze WHERE pid = ${row.pid} AND ${phase} = 'analyze') AS active
           `
                 ).at(0);
-                if (stillActive?.["active"] !== true) {
+                if (stillActive?.active !== true) {
                   continue;
                 }
-                expect(direct?.["vacuum_active"]).toBe(true);
+                expect(direct?.vacuum_active).toBe(true);
                 expect(verdict.kind).toBe("degraded");
                 expect(
                   verdict.signals.find(
@@ -677,9 +697,11 @@ describe.skipIf(!enabled)(
                   ),
                 ).toMatchObject({ kind: "degraded", value: 1 });
                 const other = (
-                  await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_b'::regclass)`
+                  await client<
+                    { vacuum_active: boolean }[]
+                  >`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_b'::regclass)`
                 ).at(0);
-                expect(other?.["vacuum_active"]).toBe(false);
+                expect(other?.vacuum_active).toBe(false);
                 expect((await readB()).kind).toBe("normal");
                 seen.add(phase);
               }

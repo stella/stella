@@ -148,9 +148,8 @@ const readRevisionFixture = async ({
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
       const text = snippet?.["text"];
-      return Array.isArray(text) && typeof text.at(0) === "string"
-        ? text.at(0)
-        : null;
+      const first: unknown = Array.isArray(text) ? text.at(0) : undefined;
+      return typeof first === "string" ? first : null;
     },
     unseenScoreUpperBound: () => 0,
     rankCandidates: async (probes, { selectAppliedCandidates }) => {

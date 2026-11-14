@@ -518,18 +518,18 @@ describePostgres("database role privilege census", () => {
             "search_path_probe_write() -> insert fires search_path_probe_log_row()",
         },
       ]);
-      expect(
-        await database.savepoint(async (tx) => {
+      expect([
+        ...(await database.savepoint(async (tx) => {
           await tx.unsafe(
             "CREATE TEMP TABLE search_path_probe_log (id integer) ON COMMIT DROP",
           );
           await tx.unsafe("SELECT public.search_path_probe_write()");
-          return tx.unsafe(`
+          return tx.unsafe<{ shadowed: number; stored: number }[]>(`
             SELECT (SELECT count(*)::int FROM pg_temp.search_path_probe_log) AS shadowed,
               (SELECT count(*)::int FROM public.search_path_probe_log) AS stored
           `);
-        }),
-      ).toEqual([{ shadowed: 1, stored: 0 }]);
+        })),
+      ]).toEqual([{ shadowed: 1, stored: 0 }]);
     });
   }, 120_000);
 

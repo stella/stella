@@ -232,9 +232,14 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
               new Proxy(tx, {
                 get: (target, property) => {
                   if (property !== "execute") {
-                    const value = Reflect.get(target, property, target);
+                    const value: unknown = Reflect.get(
+                      target,
+                      property,
+                      target,
+                    );
                     return typeof value === "function"
-                      ? value.bind(target)
+                      ? (...args: unknown[]): unknown =>
+                          Reflect.apply(value, target, args)
                       : value;
                   }
                   return async (query: Parameters<typeof tx.execute>[0]) => {

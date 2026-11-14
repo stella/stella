@@ -58,7 +58,7 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
         }
         const reservedSlug = await Result.tryPromise(
           async () =>
-            client`INSERT INTO organization (id, name, slug, created_at) VALUES ('other-org', 'Other Organization', ${SYNTHETIC_PRINCIPAL.org.slug}, now())`,
+            client<unknown>`INSERT INTO organization (id, name, slug, created_at) VALUES ('other-org', 'Other Organization', ${SYNTHETIC_PRINCIPAL.org.slug}, now())`,
         );
         expect(reservedSlug.isErr()).toBe(true);
         if (reservedSlug.isErr()) {
@@ -81,7 +81,7 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
         await client`INSERT INTO session (id, user_id) VALUES ('synthetic-session-valid', ${SYNTHETIC_PRINCIPAL.user.id})`;
         const invalidSession = await Result.tryPromise(
           async () =>
-            client`INSERT INTO session (id, user_id) VALUES ('synthetic-session-other', 'ordinary-user')`,
+            client<unknown>`INSERT INTO session (id, user_id) VALUES ('synthetic-session-other', 'ordinary-user')`,
         );
         expect(invalidSession.isErr()).toBe(true);
         if (invalidSession.isErr()) {
@@ -95,7 +95,7 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
         }
         const smokeSession = await Result.tryPromise(
           async () =>
-            client`INSERT INTO session (id, user_id) VALUES ('smoke-session-other', 'ordinary-user')`,
+            client<unknown>`INSERT INTO session (id, user_id) VALUES ('smoke-session-other', 'ordinary-user')`,
         );
         expect(smokeSession.isErr()).toBe(true);
         if (smokeSession.isErr()) {
@@ -110,7 +110,7 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
         await client`INSERT INTO member (id, user_id, organization_id) VALUES (${SYNTHETIC_PRINCIPAL.memberId}, ${SYNTHETIC_PRINCIPAL.user.id}, ${SYNTHETIC_PRINCIPAL.org.id})`;
         const invalidMembership = await Result.tryPromise(
           async () =>
-            client`INSERT INTO member (id, user_id, organization_id) VALUES ('other-membership', ${SYNTHETIC_PRINCIPAL.user.id}, 'other-org')`,
+            client<unknown>`INSERT INTO member (id, user_id, organization_id) VALUES ('other-membership', ${SYNTHETIC_PRINCIPAL.user.id}, 'other-org')`,
         );
         expect(invalidMembership.isErr()).toBe(true);
         if (invalidMembership.isErr()) {
@@ -124,7 +124,7 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
         }
         const changedMembership = await Result.tryPromise(
           async () =>
-            client`UPDATE member SET organization_id = 'other-org' WHERE id = ${SYNTHETIC_PRINCIPAL.memberId}`,
+            client<unknown>`UPDATE member SET organization_id = 'other-org' WHERE id = ${SYNTHETIC_PRINCIPAL.memberId}`,
         );
         expect(changedMembership.isErr()).toBe(true);
         if (changedMembership.isErr()) {
@@ -141,8 +141,9 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
         expect(controls).toEqual([
           expect.objectContaining({ status: "enabled" }),
         ]);
-        const policies =
-          await client`SELECT polname FROM pg_policy WHERE polrelid = 'synthetic_session_control'::regclass`;
+        const policies = await client<
+          { polname: string }[]
+        >`SELECT polname FROM pg_policy WHERE polrelid = 'synthetic_session_control'::regclass`;
         expect(
           new Set(policies.map((row: { polname: string }) => row.polname)),
         ).toEqual(
@@ -272,8 +273,9 @@ describe.skipIf(!enabled)("monitoring session lifecycle", () => {
             organization_id: SYNTHETIC_PRINCIPAL.org.id,
           }),
         ]);
-        const audits =
-          await client`SELECT performer_type, trigger_type, metadata FROM audit_logs WHERE action = 'synthetic.session_minted'`;
+        const audits = await client<
+          { performer_type: string; trigger_type: string; metadata: unknown }[]
+        >`SELECT performer_type, trigger_type, metadata FROM audit_logs WHERE action = 'synthetic.session_minted'`;
         expect(audits).toHaveLength(2);
         expect(audits.at(0)).toMatchObject({
           performer_type: "service",

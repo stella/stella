@@ -24,7 +24,7 @@ const readAttributeValue = (
   source: string,
   start: number,
 ): string | undefined => {
-  const opener = source[start];
+  const opener = source.charAt(start);
   if (QUOTES.has(opener)) {
     const end = source.indexOf(opener, start + 1);
     return end === -1 ? undefined : source.slice(start, end + 1);
@@ -37,7 +37,7 @@ const readAttributeValue = (
   let depth = 0;
   let quote: string | undefined;
   for (let index = start; index < source.length; index++) {
-    const char = source[index];
+    const char = source.charAt(index);
     if (quote !== undefined) {
       if (char === "\\") {
         index += 1;

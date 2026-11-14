@@ -516,12 +516,13 @@ const readSseUntil = async (response: Response, lastId: bigint) => {
   const reader = body.getReader();
   try {
     while (!((eventIds.at(-1) ?? -1n) >= lastId)) {
-      const { done, value } = await reader.read();
-      if (done) {
+      const read = await reader.read();
+      if (read.done) {
         break;
       }
-      bytes += value.byteLength;
-      buffered += decoder.decode(value, { stream: true });
+      const chunk: Uint8Array = read.value;
+      bytes += chunk.byteLength;
+      buffered += decoder.decode(chunk, { stream: true });
       const blocks = buffered.split("\n\n");
       buffered = blocks.pop() ?? "";
       for (const lines of blocks.map((block) => block.split("\n"))) {

@@ -35,12 +35,13 @@ const storedSeparators = (): Record<string, string> => {
   const body = definitions.at(-1)?.split(LINEAGE_FUNCTION).at(-1) ?? "";
   const cases = [...body.matchAll(SEPARATOR_CASE)];
   expect(cases.length).toBe(1);
-  return Object.fromEntries(
+  const separators: Record<string, string> = Object.fromEntries(
     [...(cases.at(0)?.[1] ?? "").matchAll(SEPARATOR_WHEN)].map(({ groups }) => [
       groups?.["jurisdiction"],
       groups?.["separator"],
     ]),
   );
+  return separators;
 };
 
 describe("provision anchor lineage", () => {

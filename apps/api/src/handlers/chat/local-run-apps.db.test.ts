@@ -241,7 +241,7 @@ const readTurn = async ({
 const appParts = (chunks: readonly PublicStreamChunk[]) =>
   chunks.flatMap((chunk) =>
     chunk.type === EventType.CUSTOM && chunk.name === "ui-resource"
-      ? [chunk.value]
+      ? [chunk.value as unknown]
       : [],
   );
 
@@ -303,9 +303,9 @@ describe("an app shown for a local run's call", () => {
     expect(decision.type).toBe("persist");
     if (decision.type === "persist") {
       const stored = toPersistedChatMessageContentV3({ data: [decision.part] });
-      expect(normalizePersistedChatMessageContent(stored).parts).toEqual([
-        part,
-      ]);
+      const storedParts: unknown =
+        normalizePersistedChatMessageContent(stored).parts;
+      expect(storedParts).toEqual([part]);
     }
   });
 

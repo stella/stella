@@ -512,7 +512,7 @@ const providerRequestProbes: ProviderRequestProbe[] = [
       return groups.flatMap((group) => {
         const record = requireRecord(group, "Gemini tool group");
         return Array.isArray(record["functionDeclarations"])
-          ? record["functionDeclarations"]
+          ? (record["functionDeclarations"] as unknown[])
           : [record];
       });
     },

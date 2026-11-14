@@ -133,7 +133,7 @@ const withFixture = async (
             await ownerSql.unsafe(query, [...params]);
           },
           query: async (query, params = []) => [
-            ...(await ownerSql.unsafe(query, [...params])),
+            ...(await ownerSql.unsafe<unknown[]>(query, [...params])),
           ],
           release: () => {},
         },

@@ -239,7 +239,7 @@ describe("stella CLI: offline registry projection", () => {
   test("stdout stays machine-readable under --json", () => {
     const result = spawnDrifted(["matter", "list", "--schema", "--json"]);
     expect(result.stdout.toString()).not.toContain("server registry");
-    expect(() => JSON.parse(result.stdout.toString())).not.toThrow();
+    expect(() => JSON.parse(result.stdout.toString()) as unknown).not.toThrow();
   });
 
   test("legacy caller omissions do not disable baked commands offline", () => {

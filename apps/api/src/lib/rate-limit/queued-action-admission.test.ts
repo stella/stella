@@ -242,7 +242,7 @@ describe("queued action admission", () => {
       job: { moveToDelayed: async () => undefined },
       signal: new AbortController().signal,
       admission,
-      run: async (_signal, modelAdmission) => {
+      run: async (_signal, modelAdmission): Promise<unknown> => {
         started.resolve(modelAdmission.signal);
         await modelCall.promise;
         return modelAdmission.signal.reason;

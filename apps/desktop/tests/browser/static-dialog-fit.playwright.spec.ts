@@ -61,8 +61,11 @@ for (const file of locales) {
         unhandled: "resolveUndefined",
         arg: null,
         handlers: () => ({
-          fit_static_dialog: (size) =>
-            Reflect.get(window, "resizeDialog")(size),
+          fit_static_dialog: (size) => {
+            const resizeDialog: (size: Record<string, unknown>) => unknown =
+              Reflect.get(window, "resizeDialog");
+            return resizeDialog(size);
+          },
         }),
       });
       const params = new URLSearchParams({

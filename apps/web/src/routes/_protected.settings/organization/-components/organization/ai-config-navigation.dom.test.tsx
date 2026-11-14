@@ -32,6 +32,8 @@ const requests: {
   body: string;
   headers: Headers;
 }[] = [];
+/** The saved AI-config body; the assertions only read the model overrides. */
+type SettingsWrite = { overrideModels: unknown };
 let settingsFailure: { code: string; message: string } | undefined;
 let reflectProviderOrder = false;
 let previewBarrier: Promise<void> | undefined;
@@ -778,7 +780,8 @@ test("Advanced shows catalog defaults, saves only explicit overrides and resets 
   expect(JSON.parse(write?.body ?? "null")).toMatchObject({
     overrideModels: { chat: { provider: "google", modelId: overrideId } },
   });
-  expect(JSON.parse(write?.body ?? "null").overrideModels).toEqual({
+  const written: SettingsWrite = JSON.parse(write?.body ?? "null");
+  expect(written.overrideModels).toEqual({
     chat: { provider: "google", modelId: overrideId },
   });
   fireEvent.click(advanced);
@@ -1110,7 +1113,8 @@ test("replacing the first saved key preserves provider order and every default r
       { provider: "anthropic" },
     ],
   });
-  expect(JSON.parse(write?.body ?? "null").overrideModels).toBeNull();
+  const written: SettingsWrite = JSON.parse(write?.body ?? "null");
+  expect(written.overrideModels).toBeNull();
   expect(hasUnsavedWork()).toBe(false);
 });
 
@@ -1632,7 +1636,7 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   expect(
     writes()
       .filter(({ url }) => url.endsWith("/web-search-key"))
-      .map(({ body }) => JSON.parse(body)),
+      .map(({ body }) => JSON.parse(body) as unknown),
   ).toEqual([
     { kind: "search", apiKey: "fixture-search-key" },
     { kind: "fetch", apiKey: "fixture-reader-key" },
@@ -1640,7 +1644,7 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   expect(
     writes()
       .filter(({ url }) => url.endsWith("/organization-settings"))
-      .map(({ body }) => JSON.parse(body)),
+      .map(({ body }) => JSON.parse(body) as unknown),
   ).toEqual([
     { promptCachingEnabled: true },
     { documentProcessingMode: "searchable-text" },

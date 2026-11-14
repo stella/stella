@@ -11,7 +11,7 @@ import { defaultLocale, isLocale } from "../i18n/config";
 // transparently over the page top (the homepage hero gradient runs to the
 // viewport edge behind it) and solidifies it on first scroll; the default is
 // the always-solid sticky bar used by every other page.
-type Props = { current?: string; overlay?: boolean };
+type Props = { current?: string | undefined; overlay?: boolean };
 const { current, overlay = false } = Astro.props;
 
 const rawLocale = Astro.currentLocale ?? defaultLocale;

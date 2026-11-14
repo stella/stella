@@ -209,7 +209,7 @@ const replaceSlot = (
     return text;
   }
   if (Array.isArray(value) && typeof key === "number") {
-    return value.map((item, index) =>
+    return value.map((item: unknown, index) =>
       index === key ? replaceSlot(item, rest, text) : item,
     );
   }

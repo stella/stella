@@ -28,7 +28,7 @@ const waitUntilBlocked = async (observer: SQL, pid: number) => {
     description: `backend ${String(pid)} waits on a lock`,
     timeoutMs: 3000,
     read: async () => {
-      const [row] = await observer`
+      const [row] = await observer<{ blocked: boolean }[]>`
         SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked`;
       return row?.blocked === true;
     },
@@ -36,7 +36,7 @@ const waitUntilBlocked = async (observer: SQL, pid: number) => {
 };
 
 const backendPid = async (client: SQL): Promise<number> => {
-  const [row] = await client`SELECT pg_backend_pid() AS pid`;
+  const [row] = await client<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
   const pid: unknown = row?.pid;
   if (typeof pid !== "number") {
     panic("Expected a PostgreSQL backend pid");
@@ -133,6 +133,8 @@ const inAppScope = async <T>(
     return await run(tx);
   });
 
+type GateRows = { gate: string }[];
+
 const gateOf = async (
   client: SQL,
   relation:
@@ -141,13 +143,13 @@ const gateOf = async (
 ) => {
   switch (relation) {
     case "entity_versions":
-      return await client`SELECT entity_feature_gate AS gate FROM entity_versions WHERE id = ${id}`;
+      return await client<GateRows>`SELECT entity_feature_gate AS gate FROM entity_versions WHERE id = ${id}`;
     case "fields":
-      return await client`SELECT entity_feature_gate AS gate FROM fields WHERE id = ${id}`;
+      return await client<GateRows>`SELECT entity_feature_gate AS gate FROM fields WHERE id = ${id}`;
     case "extracted_content":
-      return await client`SELECT entity_feature_gate AS gate FROM extracted_content WHERE entity_id = ${id}`;
+      return await client<GateRows>`SELECT entity_feature_gate AS gate FROM extracted_content WHERE entity_id = ${id}`;
     case "search_documents":
-      return await client`SELECT entity_feature_gate AS gate FROM search_documents WHERE entity_id = ${id}`;
+      return await client<GateRows>`SELECT entity_feature_gate AS gate FROM search_documents WHERE entity_id = ${id}`;
     default:
       return panic("Unsupported entity feature gate relation");
   }
@@ -162,7 +164,9 @@ describe.skipIf(!runPostgresTests)(
       }
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const client = openClient().sql;
-        const routines = await client`SELECT DISTINCT p.proname, p.proconfig
+        const routines = await client<
+          { proname: string; proconfig: string[] | null }[]
+        >`SELECT DISTINCT p.proname, p.proconfig
           FROM pg_catalog.pg_trigger t
           JOIN pg_catalog.pg_proc p ON p.oid = t.tgfoid
           JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
@@ -470,7 +474,7 @@ describe.skipIf(!runPostgresTests)(
               featureIds: [LEGAL_LISTS_FEATURE_ID],
             },
             async (tx) =>
-              await tx`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
+              await tx<unknown>`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
           VALUES (${claimId}, ${fixture.workspaceB}, ${runId}, 0, 'fact', 'nocover', 'Pinned claim',
             '{"type":"docx-block"}'::jsonb)`,
           );
@@ -482,7 +486,9 @@ describe.skipIf(!runPostgresTests)(
               featureIds: [LEGAL_LISTS_FEATURE_ID],
             },
             async (tx) =>
-              await tx`SELECT entity_feature_gate AS gate,
+              await tx<
+                { gate: string; only_parent_organization: boolean }[]
+              >`SELECT entity_feature_gate AS gate,
           entity_feature_organization_ids = ARRAY[${fixture.organizationId}::text] AS only_parent_organization
           FROM legal_list_claims WHERE id = ${claimId}`,
           );
@@ -534,7 +540,7 @@ describe.skipIf(!runPostgresTests)(
               featureIds: [LEGAL_LISTS_FEATURE_ID],
             },
             async (tx) =>
-              await tx`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
+              await tx<unknown>`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
             VALUES (${claimId}, ${fixture.workspaceB}, ${runId}, 0, 'fact', 'nocover', 'Pinned claim',
               '{"type":"docx-block"}'::jsonb)`,
           );
@@ -546,14 +552,18 @@ describe.skipIf(!runPostgresTests)(
               featureIds: [LEGAL_LISTS_FEATURE_ID],
             },
             async (tx) =>
-              await tx`SELECT xmin::text AS revision, entity_feature_gate AS gate
+              await tx<
+                { revision: string; gate: string }[]
+              >`SELECT xmin::text AS revision, entity_feature_gate AS gate
             FROM legal_list_claims WHERE id = ${claimId}`,
           );
           expect(before?.gate).toBe("legal-lists");
           await client`UPDATE entities SET name = 'Renamed without a gate change' WHERE id = ${fixture.factB}`;
           expect(
             (
-              await client`SELECT name FROM entities WHERE id = ${fixture.factB}`
+              await client<
+                { name: string }[]
+              >`SELECT name FROM entities WHERE id = ${fixture.factB}`
             ).at(0)?.name,
           ).toBe("Renamed without a gate change");
           const [after] = await inAppScope(
@@ -564,7 +574,9 @@ describe.skipIf(!runPostgresTests)(
               featureIds: [LEGAL_LISTS_FEATURE_ID],
             },
             async (tx) =>
-              await tx`SELECT xmin::text AS revision, entity_feature_gate AS gate
+              await tx<
+                { revision: string; gate: string }[]
+              >`SELECT xmin::text AS revision, entity_feature_gate AS gate
             FROM legal_list_claims WHERE id = ${claimId}`,
           );
           expect(after).toEqual(before);
@@ -599,7 +611,7 @@ describe.skipIf(!runPostgresTests)(
           const nonexistentParentId = createSafeId<"entity">();
           const missingParentError = await rejectionOf(
             (async () =>
-              await observer`UPDATE flow_run_steps
+              await observer<unknown>`UPDATE flow_run_steps
                 SET review_task_entity_id = ${nonexistentParentId}
                 WHERE id = ${missingStepId}`)(),
           );
@@ -622,7 +634,7 @@ describe.skipIf(!runPostgresTests)(
           VALUES (${deleteStepId}, ${fixture.workspaceA}, ${deleteRunId}, 0, 'review-gate', ${fixture.factA})`;
           expect(
             (
-              await observer`SELECT entity_feature_gate AS gate FROM flow_run_steps WHERE id = ${deleteStepId}`
+              await observer<GateRows>`SELECT entity_feature_gate AS gate FROM flow_run_steps WHERE id = ${deleteStepId}`
             ).at(0)?.gate,
           ).toBe("legal-lists");
           await observer`DELETE FROM entities WHERE id = ${fixture.factA}`;
@@ -673,7 +685,7 @@ describe.skipIf(!runPostgresTests)(
             await insertParent;
             await repairChildWriter.begin(
               async (tx) =>
-                await tx`INSERT INTO flow_run_steps (id, workspace_id, run_id, index, kind, review_task_entity_id)
+                await tx<unknown>`INSERT INTO flow_run_steps (id, workspace_id, run_id, index, kind, review_task_entity_id)
                 VALUES (${repairStepId}, ${fixture.workspaceA}, ${repairRunId}, 0, 'review-gate', ${repairEntityId})`,
             );
           } finally {
@@ -685,7 +697,7 @@ describe.skipIf(!runPostgresTests)(
           }
           expect(
             (
-              await observer`SELECT entity_feature_gate AS gate FROM flow_run_steps WHERE id = ${repairStepId}`
+              await observer<GateRows>`SELECT entity_feature_gate AS gate FROM flow_run_steps WHERE id = ${repairStepId}`
             ).at(0)?.gate,
           ).toBe("legal-lists");
           const childWriter = openClient({ max: 1 }).sql;
@@ -712,7 +724,7 @@ describe.skipIf(!runPostgresTests)(
             const pid = await backendPid(parentWriter);
             updateParent = parentWriter.begin(
               async (tx) =>
-                await tx`UPDATE entities SET list_item_type = 'fact' WHERE id = ${fixture.taskA}`,
+                await tx<unknown>`UPDATE entities SET list_item_type = 'fact' WHERE id = ${fixture.taskA}`,
             );
             await waitUntilBlocked(observer, pid);
             release.resolve(undefined);

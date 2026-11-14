@@ -3031,7 +3031,11 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
         await request(async () => await iterator.next()),
         await request(async () => await iterator.next()),
       ];
-      expect(delivered.map(({ value }) => value?.chunk)).toEqual([
+      expect(
+        delivered.map((entry) =>
+          entry.done === true ? undefined : entry.value.chunk,
+        ),
+      ).toEqual([
         {
           type: EventType.TEXT_MESSAGE_CONTENT,
           messageId: assistant,
@@ -3152,7 +3156,11 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           await writer.append([chunk]);
           delivered.push(await pending);
         }
-        expect(delivered.map((entry) => entry.value?.chunk)).toEqual(chunks);
+        expect(
+          delivered.map((entry) =>
+            entry.done === true ? undefined : entry.value.chunk,
+          ),
+        ).toEqual(chunks);
         const state = await referenceSummary();
         expect(state?.type).toBe("rescan-required");
         expect(Buffer.byteLength(JSON.stringify(state))).toBeLessThan(1024);

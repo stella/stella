@@ -905,7 +905,7 @@ type CliScenario = {
 // Every transcript shows real CLI surface: the commands mirror the MCP
 // tool registry the CLI is generated from. Do not script capabilities the
 // CLI does not have (there is no natural-language "ask" command).
-const SCENARIOS: readonly CliScenario[] = [
+const SCENARIOS: readonly [CliScenario, ...CliScenario[]] = [
   {
     id: "search",
     type: "cli",
@@ -998,7 +998,7 @@ const DISCOVER_WINDOW_SLUGS = {
 type WindowBodyLinkProps = {
   children: ReactNode;
   className?: string;
-  discover?: { href: string; label: string };
+  discover?: { href: string; label: string } | undefined;
   onBlur: () => void;
   onFocus: (event: FocusEvent<HTMLElement>) => void;
   style?: CSSProperties;
@@ -1040,7 +1040,7 @@ const WindowBodyLink = ({
 };
 
 type DiscoverTagProps = {
-  dragOffset?: { x: number; y: number };
+  dragOffset?: { x: number; y: number } | undefined;
   href: string;
   label: string;
   onPointerEnter: () => void;

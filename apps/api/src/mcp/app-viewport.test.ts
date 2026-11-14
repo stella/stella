@@ -15,7 +15,7 @@ test("every registered app uses the shared bounded viewport", async () => {
   const files = [...new Bun.Glob("**/*.{ts,tsx}").scanSync(appRoot)].filter(
     (file) => !file.endsWith(".test.ts") && !file.endsWith(".test.tsx"),
   );
-  const sources = Object.fromEntries(
+  const sources: Record<string, string> = Object.fromEntries(
     await Promise.all(
       files.map(async (file) => [
         file,

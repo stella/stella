@@ -446,7 +446,7 @@ type MockSearchHit = {
 };
 const searchProviderSearchMock = mock(
   async (input: { limit: number; query: string }): Promise<SearchResult> => {
-    const result = await searchAcrossMattersExecute(
+    const result: unknown = await searchAcrossMattersExecute(
       {
         limit: input.limit,
         query: input.query,
@@ -1449,7 +1449,10 @@ describe("OpenAI-compatible MCP tools", () => {
     // set up per test by resolving the gate to null.
     readGatedDecisionMock.mockImplementation(
       async ({ locator, ...rest }: { locator: { kind: "id"; id: string } }) =>
-        await readDecisionHandlerMock({ subject: { id: locator.id }, ...rest }),
+        (await readDecisionHandlerMock({
+          subject: { id: locator.id },
+          ...rest,
+        })) as unknown,
     );
     withRedistributableSubjectMock.mockReset();
     withRedistributableSubjectMock.mockImplementation(
@@ -4597,10 +4600,10 @@ describe("OpenAI-compatible MCP tools", () => {
       );
 
       const cursorByQuery = new Map(
-        searchDecisionsHandlerMock.mock.calls.map(([args]) => [
-          args.body.query,
-          args.body.cursor,
-        ]),
+        searchDecisionsHandlerMock.mock.calls.map(([args]) => {
+          const { body }: { body: { query: unknown; cursor: unknown } } = args;
+          return [body.query, body.cursor] as const;
+        }),
       );
       expect(cursorByQuery.get("fast")).toBe("engine-fast-2");
       // Absent, not the marker: a first page carries no engine cursor.
@@ -5452,7 +5455,11 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "read_case_law_citations",
     });
 
-    const [options] = readGatedDecisionCitationsMock.mock.lastCall ?? [];
+    const options:
+      | {
+          passageFilter?: (paragraph: string, language: string) => boolean;
+        }
+      | undefined = readGatedDecisionCitationsMock.mock.lastCall?.[0];
     expect(
       options?.passageFilter?.("Kamerové záznamy byly smazány.", "cs"),
     ).toBe(true);
@@ -7040,18 +7047,22 @@ describe("OpenAI-compatible MCP tools", () => {
         .filter((text) => text.startsWith("Input read:"))
         .join(" ");
 
+    type SearchWarning = { code: string; message: string; hint: string };
+
     const searchWarnings = (
       result: Awaited<ReturnType<typeof handleMcpToolCall>>,
-    ): { code: string; message: string; hint: string }[] => {
+    ): SearchWarning[] => {
       const payload = parseToolPayload(result);
       if (!isRecord(payload) || !Array.isArray(payload["searches"])) {
         throw new Error("expected a search payload");
       }
-      return payload["searches"].flatMap((search: unknown) =>
-        isRecord(search) && Array.isArray(search["warnings"])
-          ? search["warnings"]
-          : [],
-      );
+      return payload["searches"].flatMap((search: unknown) => {
+        if (!isRecord(search) || !Array.isArray(search["warnings"])) {
+          return [];
+        }
+        const warnings: SearchWarning[] = search["warnings"];
+        return warnings;
+      });
     };
 
     beforeEach(() => {
@@ -7158,7 +7169,8 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(2);
         for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
           // Exact: a level the caller left out is absent, so it matches any.
-          expect(body.provision).toEqual(expected);
+          const searched: { provision?: unknown } = body;
+          expect(searched.provision).toEqual(expected);
         }
       },
     );
@@ -7257,7 +7269,8 @@ describe("OpenAI-compatible MCP tools", () => {
       // Read once for the call, handed to every phrasing's search.
       expect(readCaseLawProvisionScopeMock).toHaveBeenCalledTimes(1);
       for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
-        expect(body.provisionScope).toEqual({
+        const searched: { provisionScope?: unknown } = body;
+        expect(searched.provisionScope).toEqual({
           type: "broad",
         });
       }
@@ -9362,12 +9375,12 @@ describe("OpenAI-compatible MCP tools", () => {
         caseLawDb: unknown;
         locator: { kind: "id"; id: string };
       }) =>
-        await withRedistributableSubjectMock(
+        (await withRedistributableSubjectMock(
           caseLawDb,
           locator,
           async (subject: { id: string }) =>
-            await readDecisionHandlerMock({ subject }),
-        ),
+            (await readDecisionHandlerMock({ subject })) as unknown,
+        )) as unknown,
     );
     withRedistributableSubjectMock.mockResolvedValue(null);
 
@@ -10612,7 +10625,8 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ],
     });
-    const anonymizeInput = anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
+    const anonymizeInput: { catalogs?: unknown } | undefined =
+      anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
     expect(anonymizeInput).toMatchObject({
       fields: ["John Smith SPA"],
       organizationId: toSafeId<"organization">("org_1"),
@@ -11133,14 +11147,16 @@ describe("OpenAI-compatible MCP tools", () => {
     }
 
     expect(payloads).toEqual(
-      Array.from({ length: 4 }, () =>
-        expect.objectContaining({
-          contentState: {
-            status: "unsupported",
-            sourceVersionId: "entity_version_1",
-            reason: "Encrypted document content cannot be extracted.",
-          },
-        }),
+      Array.from(
+        { length: 4 },
+        () =>
+          expect.objectContaining({
+            contentState: {
+              status: "unsupported",
+              sourceVersionId: "entity_version_1",
+              reason: "Encrypted document content cannot be extracted.",
+            },
+          }) as unknown,
       ),
     );
   });

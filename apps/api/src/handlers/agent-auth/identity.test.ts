@@ -113,7 +113,10 @@ const decodeJwt = (jwt: string): Json => {
   if (!segment) {
     throw new Error("malformed jwt");
   }
-  return JSON.parse(Buffer.from(segment, "base64url").toString());
+  const payload: Json = JSON.parse(
+    Buffer.from(segment, "base64url").toString(),
+  );
+  return payload;
 };
 
 beforeAll(async () => {

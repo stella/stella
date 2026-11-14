@@ -14,6 +14,8 @@ import { bindWorkspaceRecorder, errorResult } from "@/api/mcp/tool-utils";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+type AnnounceOptions = Parameters<typeof announceResourceSetUpdates>[0];
+
 const ORGANIZATION_ID = toSafeId<"organization">("org_1");
 const WORKSPACE_ID = toSafeId<"workspace">("ws_1");
 const OTHER_WORKSPACE_ID = toSafeId<"workspace">("ws_2");
@@ -59,11 +61,13 @@ describe("runToolWithRealtime", () => {
     expect(recordAuditEvent).toHaveBeenCalledTimes(1);
     expect(announce.mock.calls.map(([options]) => options)).toEqual(
       WRITE_TOOL_REALTIME.save_document.map((realtime) =>
-        expect.objectContaining({
-          organizationId: ORGANIZATION_ID,
-          realtime,
-          workspaceId: WORKSPACE_ID,
-        }),
+        asTestRaw<AnnounceOptions>(
+          expect.objectContaining({
+            organizationId: ORGANIZATION_ID,
+            realtime,
+            workspaceId: WORKSPACE_ID,
+          }),
+        ),
       ),
     );
   });

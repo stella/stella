@@ -773,7 +773,7 @@ describe("ÚOHS JSON-LD", () => {
       "document",
       "document-1",
     ]);
-    const provenance = JSON.parse(
+    const provenance: { documents: Record<string, unknown> } = JSON.parse(
       decodeSourceRawEnvelope(decision.sourceRaw ?? "")?.["provenance"] ??
         "null",
     );
@@ -885,7 +885,7 @@ describe("ÚOHS JSON-LD", () => {
     if (first.nextCursor === null) {
       return;
     }
-    const cursor = JSON.parse(first.nextCursor);
+    const cursor: { snapshotId: string } = JSON.parse(first.nextCursor);
     cursor.snapshotId = "not-cached";
     const second = (
       await czUohsAdapter.fetchPage(JSON.stringify(cursor), {}, undefined)

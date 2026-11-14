@@ -65,7 +65,8 @@ const registryEnumOf = (
     "enum" in registry &&
     Array.isArray(registry.enum)
   ) {
-    return [...registry.enum];
+    const values: string[] = registry.enum;
+    return [...values];
   }
   return [];
 };

@@ -321,7 +321,7 @@ test("a coverage refresh yields to a schema upgrade holding the lane", async () 
                       ? [{ granted: false }]
                       : await target.execute(query);
                   }
-                : Reflect.get(target, property, receiver),
+                : (Reflect.get(target, property, receiver) as unknown),
           }),
         );
       }),

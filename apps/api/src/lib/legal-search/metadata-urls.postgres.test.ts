@@ -51,11 +51,13 @@ describe.skipIf(!enabled)(
           await tx`INSERT INTO metadata_url_roundtrip (id, source_id, case_number, court, country, language, metadata)
           VALUES (${Bun.randomUUIDv7()}, ${Bun.randomUUIDv7()}, 'JSONB fixture', 'Court', 'SVK', 'sk', ${JSON.stringify(metadata)}::text::jsonb)`;
           const row = (
-            await tx`SELECT metadata FROM metadata_url_roundtrip`
+            await tx<
+              { metadata: unknown }[]
+            >`SELECT metadata FROM metadata_url_roundtrip`
           ).at(0);
-          expect(row?.["metadata"]).toEqual(metadata);
+          expect(row?.metadata).toEqual(metadata);
           const replayed = rehydrateMetadataUrls(
-            row?.["metadata"],
+            row?.metadata,
             SK_COURTS_METADATA_URL_SCHEMA,
           );
           expect(replayed).toEqual(metadata);

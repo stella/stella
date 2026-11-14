@@ -18,10 +18,12 @@ const english = createTranslator({ locale: "en", messages: englishMessages });
 const LANGS_DIR = path.join(import.meta.dirname, "../../i18n/langs");
 const otherLocales = readdirSync(LANGS_DIR)
   .filter((file) => file.endsWith(".json") && file !== "en.json")
-  .map((file) => ({
-    file,
-    messages: JSON.parse(readFileSync(path.join(LANGS_DIR, file), "utf-8")),
-  }));
+  .map((file) => {
+    const messages: {
+      catalogue: { toolDescriptions: Record<string, string | undefined> };
+    } = JSON.parse(readFileSync(path.join(LANGS_DIR, file), "utf-8"));
+    return { file, messages };
+  });
 
 const lastSegment = (key: string) => key.split(".").at(-1) ?? "";
 

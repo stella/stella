@@ -956,8 +956,10 @@ describe(`settled chat turns: ${String(turns.included.length)} combinations the 
   test("every wire scenario, finish reason and error kind names a shape, and every shape is named by one", () => {
     const named = new Set<ResponseShape>(
       [WIRE_SCENARIO_SHAPES, FINISH_REASON_SHAPES, AI_ERROR_KIND_SHAPES]
-        .flatMap((record) => Object.values(record))
-        .flatMap((entry) => (Array.isArray(entry) ? entry : [])),
+        .flatMap((record) => Object.values<unknown>(record))
+        .flatMap((entry) =>
+          Array.isArray(entry) ? (entry as readonly ResponseShape[]) : [],
+        ),
     );
     expect(
       RESPONSE_SHAPE_NAMES.filter(

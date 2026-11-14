@@ -84,7 +84,7 @@ beforeEach(() => {
       body: v.parse(
         v.pipe(
           v.string(),
-          v.transform((body: string) => JSON.parse(body)),
+          v.transform((body: string): unknown => JSON.parse(body)),
           v.record(v.string(), v.unknown()),
         ),
         init?.body,

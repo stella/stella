@@ -792,7 +792,7 @@ true satisfies Record<never, never> extends RootReplayDependencies
 true satisfies undefined extends RootReplayDependencies ? false : true;
 
 test("root replay requires an authorization callback at construction", () => {
-  expect(() =>
+  expect((): unknown =>
     Reflect.apply(createSafeRootHandler, undefined, [
       replayConfig,
       async function* () {

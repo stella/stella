@@ -5,6 +5,7 @@ import {
   courtAbbreviation,
 } from "./case-law-court-abbreviations";
 import { ECLI_COURT_REGISTRY } from "./case-law-courts";
+import type { RegisteredCourt } from "./case-law-courts";
 import { SK_COURT_TIERS } from "./sk-court-tiers";
 
 const COUNTRY_BY_ECLI_JURISDICTION = new Map([
@@ -20,7 +21,7 @@ test("every registered ECLI court has one shared short code with and without its
     if (country === undefined) {
       throw new Error(`Missing test country for ${jurisdiction}`);
     }
-    for (const [code, court] of Object.entries(courts)) {
+    for (const [code, court] of Object.entries<RegisteredCourt>(courts)) {
       expect(court.shortCode, code).not.toBe("");
       expect(
         courtAbbreviation({

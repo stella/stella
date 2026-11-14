@@ -207,7 +207,7 @@ describe("document file upload surface", () => {
               status: 200,
             }),
           ),
-          invoke: mock(async ({ args }) => {
+          invoke: mock(async ({ args }: { args: Record<string, unknown> }) => {
             invocations.push(args);
             return args["capability"] === "uploads.create"
               ? ({
@@ -329,7 +329,7 @@ describe("document file upload surface", () => {
             status: 200,
           }),
         ),
-        invoke: mock(async ({ args }) => {
+        invoke: mock(async ({ args }: { args: Record<string, unknown> }) => {
           capabilities.push(String(args["capability"]));
           return {
             status: "ok",

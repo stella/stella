@@ -41,7 +41,7 @@ export const initializeThemeImages = () => {
   for (const image of document.querySelectorAll<HTMLImageElement>(
     `${THEME_IMAGE_SELECTOR}[data-theme-image-media]`,
   )) {
-    const media = image.dataset.themeImageMedia;
+    const media = image.dataset["themeImageMedia"];
     if (media === undefined) {
       continue;
     }
@@ -97,8 +97,8 @@ const syncThemeImages = (root: ParentNode, includeDeferred: boolean) => {
 
 const loadThemeImage = (image: HTMLImageElement) => {
   const source = document.documentElement.classList.contains("dark")
-    ? image.dataset.themeDarkSrc
-    : image.dataset.themeLightSrc;
+    ? image.dataset["themeDarkSrc"]
+    : image.dataset["themeLightSrc"];
   if (source === undefined) {
     return;
   }
@@ -106,5 +106,5 @@ const loadThemeImage = (image: HTMLImageElement) => {
   if (image.getAttribute("src") !== source) {
     image.src = source;
   }
-  image.dataset.themeImageLoaded = "";
+  image.dataset["themeImageLoaded"] = "";
 };

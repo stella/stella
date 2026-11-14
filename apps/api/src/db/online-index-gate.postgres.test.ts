@@ -627,7 +627,8 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       await fixture.blocker`BEGIN ISOLATION LEVEL REPEATABLE READ`;
       await fixture.blocker`SELECT 1 FROM pg_class LIMIT 1`;
       const build = Result.tryPromise({
-        try: async () => await fixture.builder.unsafe(fixture.index.createSql),
+        try: async () =>
+          await fixture.builder.unsafe<unknown>(fixture.index.createSql),
         catch: (cause: unknown) => cause,
       });
       await waitForPhase(
@@ -649,7 +650,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       const assertDuplicateRejected = async () => {
         const insert = await Result.tryPromise({
           try: async () =>
-            await fixture.owner.unsafe(
+            await fixture.owner.unsafe<unknown>(
               `INSERT INTO public.${fixture.table} VALUES (1, 3)`,
             ),
           catch: (cause: unknown) => cause,

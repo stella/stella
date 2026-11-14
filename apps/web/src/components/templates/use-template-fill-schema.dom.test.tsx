@@ -60,7 +60,7 @@ const fakeFetch = async (input: string | URL | Request, init?: RequestInit) => {
     if (!(body instanceof FormData) && typeof body !== "string") {
       throw new TypeError("expected a FormData or JSON request body");
     }
-    const payload =
+    const payload: { templateId?: unknown; file?: unknown } =
       body instanceof FormData
         ? { templateId: body.get("templateId"), file: body.get("file") }
         : JSON.parse(body);

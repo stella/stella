@@ -310,7 +310,7 @@ const missFirstEntitlementLookup = (tx: Transaction) => {
   const wrapQuery = (query: object, readsEntitlements = false): object =>
     new Proxy(query, {
       get(target, property) {
-        const value = Reflect.get(target, property);
+        const value: unknown = Reflect.get(target, property);
         if (typeof value !== "function") {
           return value;
         }
@@ -322,7 +322,7 @@ const missFirstEntitlementLookup = (tx: Transaction) => {
             missed = true;
             return Promise.resolve([]);
           }
-          const result = Reflect.apply(value, target, args);
+          const result: unknown = Reflect.apply(value, target, args);
           return typeof result === "object" && result !== null
             ? wrapQuery(result, entitlementQuery)
             : result;
@@ -331,12 +331,12 @@ const missFirstEntitlementLookup = (tx: Transaction) => {
     });
   const interceptedTx = new Proxy(tx, {
     get(target, property) {
-      const value = Reflect.get(target, property);
+      const value: unknown = Reflect.get(target, property);
       if (typeof value !== "function") {
         return value;
       }
       return (...args: unknown[]) => {
-        const result = Reflect.apply(value, target, args);
+        const result: unknown = Reflect.apply(value, target, args);
         return property === "select" &&
           typeof result === "object" &&
           result !== null

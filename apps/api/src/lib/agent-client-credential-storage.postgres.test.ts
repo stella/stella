@@ -73,7 +73,7 @@ const withStoredValues = async (
           if (property === "transaction") {
             return transactionOverride;
           }
-          return Reflect.get(target, property, receiver);
+          return Reflect.get(target, property, receiver) as unknown;
         },
       });
       await work(isolated);

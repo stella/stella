@@ -31,7 +31,11 @@ let ids: TestIds;
 const clock = createTestClock();
 
 /** The fixture gives each person an address under their own id. */
-const emailOf = (userId: string) => expect.stringContaining(`${userId}@`);
+const emailOf = (userId: string) => {
+  // An asymmetric matcher stands in for the address it matches.
+  const email: string = expect.stringContaining(`${userId}@`);
+  return email;
+};
 
 const departedUserId = mintAuthProviderIdValue();
 

@@ -81,10 +81,11 @@ describe("withdrawn decision copies", () => {
   test("every registry quote column for annotation is masked and other fields stay unchanged", () => {
     const quoteFields = Object.values(WITHDRAWN_COPY_REGISTRY).flatMap(
       ({ fields }) =>
-        Object.entries(fields).flatMap(([field, policy]) =>
-          policy.kind === "quote" && policy.projection === "annotation"
-            ? [field]
-            : [],
+        Object.entries<{ kind: string; projection: string }>(fields).flatMap(
+          ([field, policy]) =>
+            policy.kind === "quote" && policy.projection === "annotation"
+              ? [field]
+              : [],
         ),
     );
     expect(quoteFields).toContain("quote");

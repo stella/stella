@@ -338,7 +338,7 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
             ? { where: async () => [] }
             : target.delete(table);
       }
-      return Reflect.get(target, property, receiver);
+      return Reflect.get(target, property, receiver) as unknown;
     },
   });
   await removeOrganizationMemberInTransaction(asTestRaw(transaction), {

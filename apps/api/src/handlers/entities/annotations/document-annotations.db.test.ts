@@ -376,7 +376,8 @@ const listed = (result: unknown): ListedMark[] => {
   ) {
     return panic(`A mark page was expected: ${JSON.stringify(result)}`);
   }
-  return result.items;
+  const items: ListedMark[] = result.items;
+  return items;
 };
 
 const createdId = (result: unknown): SafeId<"legalReaderAnnotation"> => {

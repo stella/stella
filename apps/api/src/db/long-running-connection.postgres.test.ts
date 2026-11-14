@@ -21,10 +21,12 @@ describe.skipIf(!enabled)("dedicated SQL counting with PostgreSQL", () => {
         async ({ db, connection }) => {
           // Backend identity and the authenticated-login posture query both ran.
           expect(counter.count).toBe(2);
-          const raw = connection.unsafe("SELECT 17::int AS value");
+          const raw = connection.unsafe<{ value: number }[]>(
+            "SELECT 17::int AS value",
+          );
           expect(counter.count).toBe(2);
           expect(raw.execute()).toBe(raw);
-          expect(await raw).toEqual([{ value: 17 }]);
+          expect([...(await raw)]).toEqual([{ value: 17 }]);
           expect(counter.count).toBe(3);
           expect(await db.execute(sql`SELECT 18::int AS value`)).toEqual([
             { value: 18 },
@@ -58,7 +60,7 @@ describe.skipIf(!enabled)("dedicated SQL counting with PostgreSQL", () => {
           ).toEqual([{ value: 22 }]);
           expect(counter.count).toBe(9);
           const rows = await raw.then((result) => result);
-          expect(rows).toEqual([{ value: 17 }]);
+          expect([...rows]).toEqual([{ value: 17 }]);
           expect(counter.count).toBe(9);
         },
       );

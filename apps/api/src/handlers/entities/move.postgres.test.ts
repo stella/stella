@@ -128,7 +128,7 @@ const withStatementBarrier = (tx: Transaction, barrier: StatementBarrier) =>
   new Proxy(tx, {
     get(target, key, receiver) {
       if (key !== "execute") {
-        return Reflect.get(target, key, receiver);
+        return Reflect.get(target, key, receiver) as unknown;
       }
       return (query: SQLWrapper | string) => {
         const compiled =

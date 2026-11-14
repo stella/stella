@@ -482,8 +482,9 @@ if (!databaseUrl || !runPostgresTests) {
                 await client`SET LOCAL statement_timeout = '5s'`;
                 // Both contenders must take the refreshed anchor's advisory lock;
                 // test the lock itself so a scheduler delay cannot prove overlap.
-                const probe =
-                  await client`SELECT NOT pg_try_advisory_xact_lock(19053, (hashtextextended('decision-citation-stats:' || ${refreshed}::text, 0) & 127)::integer) AS blocked`;
+                const probe = await client<
+                  { blocked: boolean }[]
+                >`SELECT NOT pg_try_advisory_xact_lock(19053, (hashtextextended('decision-citation-stats:' || ${refreshed}::text, 0) & 127)::integer) AS blocked`;
                 secondBlocked.resolve(probe.at(0)?.blocked === true);
                 await (firstOperation === "refresh"
                   ? competitor(client)
@@ -844,15 +845,17 @@ if (!databaseUrl || !runPostgresTests) {
             await client.begin(async (tx) => {
               await tx`SET LOCAL lock_timeout = '2s'`;
               await tx`SET LOCAL statement_timeout = '30s'`;
-              const before =
-                await tx`SELECT count(*)::integer AS count FROM pg_locks
+              const before = await tx<
+                { count: number }[]
+              >`SELECT count(*)::integer AS count FROM pg_locks
                 WHERE pid = pg_backend_pid() AND locktype = 'advisory' AND classid = 19053`;
               expect(before.at(0)?.count).toBe(0);
               const started = performance.now();
               await tx`UPDATE case_law_decisions SET metadata = ${JSON.stringify(visibility === "listing" ? { _stellaPartialObservation: { isListingOnly: true } } : {})}::text::jsonb WHERE id = ${target}::uuid`;
               const durationMs = performance.now() - started;
-              const locks =
-                await tx`SELECT count(*)::integer AS count FROM pg_locks
+              const locks = await tx<
+                { count: number }[]
+              >`SELECT count(*)::integer AS count FROM pg_locks
                 WHERE pid = pg_backend_pid() AND locktype = 'advisory' AND classid = 19053`;
               const advisoryLockCount =
                 locks.at(0)?.count ??

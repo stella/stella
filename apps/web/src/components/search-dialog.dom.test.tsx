@@ -179,7 +179,7 @@ globalThis.fetch = Object.assign(
       return Response.json({ hits: [supplementalHit], nextCursor: null });
     }
     if (url.pathname.endsWith("/search")) {
-      const body = await request.json();
+      const body: { types?: string[] } = await request.json();
       searchRequestBodies.push(body);
       await searchResponseGate;
       return Response.json({

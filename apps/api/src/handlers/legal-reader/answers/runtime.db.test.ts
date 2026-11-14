@@ -817,7 +817,7 @@ describe("reader answer turn lifecycle", () => {
     const events: unknown[] = text
       .split("\n")
       .filter((line) => line.startsWith("data: "))
-      .map((line) => JSON.parse(line.slice(6)));
+      .map((line) => JSON.parse(line.slice(6)) as unknown);
     expect(
       events.find(
         (event) =>
@@ -897,7 +897,7 @@ describe("reader answer turn lifecycle", () => {
     const events: unknown[] = text
       .split("\n\n")
       .filter((entry) => entry.startsWith("data: "))
-      .map((entry) => JSON.parse(entry.slice(6)));
+      .map((entry) => JSON.parse(entry.slice(6)) as unknown);
     const failed = events.find(
       (event) =>
         typeof event === "object" &&

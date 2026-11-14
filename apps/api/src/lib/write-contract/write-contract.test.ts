@@ -268,7 +268,7 @@ test("malformed runtime contract declarations report readable registration failu
     },
   ];
   for (const { config, rule } of declarations) {
-    expect(() =>
+    expect((): unknown =>
       Reflect.apply(recordWriteContract, undefined, [
         invalidRegistration,
         config,

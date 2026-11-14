@@ -221,11 +221,11 @@ describe("active timing through the real SDK message processor", () => {
         const encodedEvent = JSON.stringify(chunk);
         capture.processor.processChunk(JSON.parse(encodedEvent));
         if (
-          capture.processor
-            .getMessages()
-            .some(
-              ({ metadata }) => metadata?.["turnTiming"]?.status === "running",
-            )
+          capture.processor.getMessages().some(({ metadata }) => {
+            const turnTiming: { status?: unknown } | undefined =
+              metadata?.["turnTiming"];
+            return turnTiming?.status === "running";
+          })
         ) {
           sawRunning = true;
         }
@@ -835,7 +835,7 @@ for (const exit of ["drained", "thrown"] as const) {
       ]);
       const persistedTimings = stored
         .filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_END)
-        .map((chunk) => chunk.metadata?.["turnTiming"]);
+        .map((chunk) => chunk.metadata?.["turnTiming"] as unknown);
       expect(deliveredTimings).toEqual(persistedTimings);
     });
   }
@@ -955,9 +955,9 @@ test.each(["throw after terminal"] as const)(
     expect(settlements).toBe(1);
     expect(body).not.toContain("RUN_ERROR");
     const messages = processor.getMessages();
-    expect(messages.map((message) => message.metadata?.["turnTiming"])).toEqual(
-      [finished],
-    );
+    expect(
+      messages.map((message) => message.metadata?.["turnTiming"] as unknown),
+    ).toEqual([finished]);
     expect(messages.flatMap((message) => message.parts)).toEqual([
       { type: "text", content: "First" },
     ]);
