@@ -53,10 +53,6 @@ import {
   decisionFallbackState,
   decisionStorageLockKeys,
 } from "@/api/lib/case-law/fallback-decision-identity";
-import {
-  FALLBACK_DECISION_CONTENT_INDEX,
-  FALLBACK_DECISION_IDENTITY_INDEX,
-} from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { lockCaseLawFallbackIdentities } from "@/api/lib/db/aggregate-lock";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -576,22 +572,17 @@ export const writeDecisionRowWithSlug = async (
   return rowWrite;
 };
 
-/** Whether a row write lost a race to insert the same publisher identity. */
+/**
+ * Whether a row write lost a race to insert the same publisher identity.
+ * The fallback identity indexes this release builds online join the list
+ * once a later release can rely on them; until then the source lease keeps
+ * one writer per source.
+ */
 export const isConcurrentIdentityInsert = (error: unknown): boolean =>
   isPgConstraintError(
     error,
     PG_ERROR.UNIQUE_VIOLATION,
-    FALLBACK_DECISION_CONTENT_INDEX,
-  ) ||
-  isPgConstraintError(
-    error,
-    PG_ERROR.UNIQUE_VIOLATION,
     CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
-  ) ||
-  isPgConstraintError(
-    error,
-    PG_ERROR.UNIQUE_VIOLATION,
-    FALLBACK_DECISION_IDENTITY_INDEX,
   ) ||
   isPgConstraintError(
     error,

@@ -1,6 +1,8 @@
-import { FALLBACK_DECISION_INDEXES } from "../../lib/case-law/fallback-decision-identity-index";
 import type { OnlineMigrationEntry } from "../online-migration-entry";
-import { ONLINE_UNIQUE_INDEX_NAMES } from "../online-unique-indexes";
+import {
+  FALLBACK_DECISION_UNIQUE_INDEXES,
+  ONLINE_UNIQUE_INDEX_NAMES,
+} from "../online-unique-indexes";
 
 export default {
   id: "replacements-case-law-decisions-source-case-lang-idx",
@@ -12,9 +14,7 @@ export default {
       legacyName: "case_law_decisions_source_case_lang_idx",
       replacementNames: [
         ONLINE_UNIQUE_INDEX_NAMES.CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
-        ...FALLBACK_DECISION_INDEXES.filter(({ isUnique }) => isUnique).map(
-          ({ name }) => name,
-        ),
+        ...FALLBACK_DECISION_UNIQUE_INDEXES.map(({ name }) => name),
       ],
     },
   ],

@@ -4,10 +4,6 @@ import { describe, expect, expectTypeOf, test } from "bun:test";
 import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import {
-  FALLBACK_DECISION_IDENTITY_INDEX,
-  PREVIOUS_FALLBACK_DECISION_INDEX,
-} from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
 
 import { readOnlineIndexConfig } from "../env-online-index";
@@ -55,6 +51,8 @@ import {
 import {
   EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
   type ExecutableOnlineUniqueIndexName,
+  FALLBACK_DECISION_UNIQUE_INDEXES,
+  ONLINE_UNIQUE_INDEX_NAMES,
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
@@ -162,6 +160,10 @@ const REPORT_EXPORT_INDEX = "report_exports_workspace_requester_created_idx";
 const CREDENTIAL_INDEX = "account_credential_singleton_uidx";
 const CHAT_RUN_INDEX = "chat_turns_org_run_id_uidx";
 const SOURCE_DOCUMENT_INDEX = "case_law_decisions_source_document_idx";
+const [{ name: FALLBACK_IDENTITY_INDEX_NAME }] =
+  FALLBACK_DECISION_UNIQUE_INDEXES;
+const PREVIOUS_FALLBACK_DECISION_INDEX =
+  ONLINE_UNIQUE_INDEX_NAMES.CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX;
 const LEGACY_SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_idx";
 const DOCUMENT_DATE_INDEX = "case_law_decisions_document_outstanding_date_idx";
 const LEGACY_DOCUMENT_DATE_INDEX =
@@ -1474,7 +1476,7 @@ describe("online migrations", () => {
       indexOfStatement(harness.statements, SOURCE_DOCUMENT_INDEX),
     );
     expect(dropOffset).toBeGreaterThan(
-      indexOfStatement(harness.statements, FALLBACK_DECISION_IDENTITY_INDEX),
+      indexOfStatement(harness.statements, FALLBACK_IDENTITY_INDEX_NAME),
     );
   });
 
@@ -1569,7 +1571,7 @@ describe("online migrations", () => {
     // phase instead and never reach the gate this test is about.
     const harness = createHarness({
       retiredIndexes: [],
-      indexStates: { [FALLBACK_DECISION_IDENTITY_INDEX]: [true, false] },
+      indexStates: { [FALLBACK_IDENTITY_INDEX_NAME]: [true, false] },
     });
 
     const rejection: unknown = await runOnlineMigrations(harness.pool, {
@@ -1579,7 +1581,7 @@ describe("online migrations", () => {
       (error: unknown) => error,
     );
     expect(rejection).toMatchObject({
-      message: `Required migration index ${FALLBACK_DECISION_IDENTITY_INDEX} is not ready`,
+      message: `Required migration index ${FALLBACK_IDENTITY_INDEX_NAME} is not ready`,
     });
     // The phase found both replacements valid, so it neither rebuilt nor
     // reindexed either one.
