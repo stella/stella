@@ -124,6 +124,21 @@ pub fn run_codex_token_helper() -> Option<i32> {
   codex_managed_token_broker::run_token_helper(&args)
 }
 
+/// Runs the development stand-in computer (`examples/runner_stand_in.rs`)
+/// until it is stopped, and returns its exit code; 2 off Unix, where it
+/// does not run.
+#[cfg(feature = "dev-runner-stand-in")]
+pub fn run_runner_stand_in() -> i32 {
+  #[cfg(unix)]
+  {
+    desktop_runner::stand_in::main()
+  }
+  #[cfg(not(unix))]
+  {
+    2
+  }
+}
+
 /// Runs the speech worker when the process was started as one, and returns
 /// its exit code; `None` for an ordinary launch.
 pub fn run_dictation_worker() -> Option<i32> {
