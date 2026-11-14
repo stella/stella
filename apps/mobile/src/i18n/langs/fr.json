@@ -223,7 +223,6 @@
       "browserPressKey": "Appuyer sur la touche {key} dans « {target} » sur {url}",
       "browserSelect": "Sélectionner « {option} » dans « {target} » sur {url}",
       "browserType": "Saisir du texte dans « {target} » sur {url}",
-      "opensOnComputer": "Ouvrez-le sur l’ordinateur qui l’a exécuté",
       "status": {
         "needs_approval": "En attente d’approbation",
         "running": "En cours",

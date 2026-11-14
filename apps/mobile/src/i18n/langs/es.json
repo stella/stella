@@ -223,7 +223,6 @@
       "browserPressKey": "Pulsar la tecla {key} en «{target}» en {url}",
       "browserSelect": "Seleccionar «{option}» en «{target}» en {url}",
       "browserType": "Introducir texto en «{target}» en {url}",
-      "opensOnComputer": "Ábrelo en el ordenador que lo ejecutó",
       "status": {
         "needs_approval": "Esperando aprobación",
         "running": "En curso",
