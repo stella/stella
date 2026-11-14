@@ -323,6 +323,9 @@ pub fn run() {
             }
             feature_gate::DesktopFeature::Dictation => {
               dictation::apply_feature_gate(app, enabled);
+              if enabled {
+                onboarding::feature_enabled(app, feature);
+              }
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
