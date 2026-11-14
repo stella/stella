@@ -795,12 +795,15 @@ export const createForkThread = ({
                   threadId: newThreadId,
                   tx,
                 });
-          return collectPrefixSteps(
-            (rows ?? []).map((row) => ({
-              message: chatMessageFromPersisted(row),
-              newMessageId: row.id,
-            })),
-          );
+          // A fork that holds no message shows no step.
+          return rows === null
+            ? []
+            : collectPrefixSteps(
+                rows.map((row) => ({
+                  message: chatMessageFromPersisted(row),
+                  newMessageId: row.id,
+                })),
+              );
         });
         if (Result.isError(forkSteps)) {
           return Result.err(forkSteps.error);

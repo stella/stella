@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { DESKTOP_RUNNER_PROTOCOL } from "@stll/api-contract/desktop-runner";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -1548,20 +1549,25 @@ const showSteps = async (
   await testDb
     .update(chatMessages)
     .set({
-      content: toPersistedChatMessageContentV3({
-        data: [
-          { content: "Done", type: "text" as const },
-          ...callIds.map((id) => ({
-            arguments: "{}",
-            id,
-            input: {},
-            name: "command_execution",
-            output: { status: "completed" },
-            state: "complete" as const,
-            type: "tool-call" as const,
-          })),
-        ],
-      }),
+      content: toPersistedChatMessageContentV3(
+        // SAFETY: a stored tool call as a turn on a computer writes it; the
+        // builder checks every part it is given before it stores one.
+        asTestRaw<Parameters<typeof toPersistedChatMessageContentV3>[0]>({
+          data: [
+            { content: "Done", type: "text" },
+            ...callIds.map((id) => ({
+              arguments: "{}",
+              id,
+              input: {},
+              name: "command_execution",
+              output: { status: "completed" },
+              state: "complete",
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+              type: "tool-call",
+            })),
+          ],
+        }),
+      ),
     })
     .where(eq(chatMessages.id, messageId));
 };

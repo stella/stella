@@ -124,24 +124,24 @@ chat_local_run_step_contents.user_file_id    uuid         fk,null           desk
 chat_local_run_step_contents.created_at      timestamptz  default,not null  desktop-runner.ts:512
 ```
 
-## desktop_runner_folder_restores · `desktopRunnerFolderRestores` · desktop-runner.ts:598 · rls
+## desktop_runner_folder_restores · `desktopRunnerFolderRestores` · desktop-runner.ts:595 · rls
 
 A member's request to undo the file changes of a chat turn run on their computer: the chat's folder goes back to the checkpoint the run took before it started.
 
 ```text
-desktop_runner_folder_restores.id               uuid                not null          desktop-runner.ts:601
-desktop_runner_folder_restores.user_id          text                fk,not null       desktop-runner.ts:602
-desktop_runner_folder_restores.organization_id  safeOrganizationId  fk,not null       desktop-runner.ts:603
-desktop_runner_folder_restores.chat_thread_id   uuid                fk,not null       desktop-runner.ts:604
-desktop_runner_folder_restores.chat_turn_id     uuid                fk,not null       desktop-runner.ts:605
-desktop_runner_folder_restores.run_id           uuid                fk,not null       desktop-runner.ts:607  The run whose checkpoint the folder goes back to.
-desktop_runner_folder_restores.desktop_id       uuid                fk,not null       desktop-runner.ts:609  The run's computer and device key; only that socket is sent it.
-desktop_runner_folder_restores.device_jkt       text                fk,not null       desktop-runner.ts:610
-desktop_runner_folder_restores.state            text                not null          desktop-runner.ts:611
-desktop_runner_folder_restores.reason           text                null              desktop-runner.ts:613  Set with `refused`: why the computer refused it.
-desktop_runner_folder_restores.created_at       timestamptz         default,not null  desktop-runner.ts:614
-desktop_runner_folder_restores.expires_at       timestamptz         not null          desktop-runner.ts:616  A `queued` request not sent by then is never sent.
-desktop_runner_folder_restores.settled_at       timestamptz         null              desktop-runner.ts:618  When it was restored, refused or expired.
-desktop_runner_folder_restores.noted_run_id     uuid                fk,null           desktop-runner.ts:623  The latest run whose request carried the note that the folder went back; it is told once the computer accepts that run.
-desktop_runner_folder_restores.noted_at         timestamptz         null              desktop-runner.ts:625  When an accepted run of the chat was told the folder went back.
+desktop_runner_folder_restores.id               uuid                not null          desktop-runner.ts:598
+desktop_runner_folder_restores.user_id          text                fk,not null       desktop-runner.ts:599
+desktop_runner_folder_restores.organization_id  safeOrganizationId  fk,not null       desktop-runner.ts:600
+desktop_runner_folder_restores.chat_thread_id   uuid                fk,not null       desktop-runner.ts:601
+desktop_runner_folder_restores.chat_turn_id     uuid                fk,not null       desktop-runner.ts:602
+desktop_runner_folder_restores.run_id           uuid                fk,not null       desktop-runner.ts:604  The run whose checkpoint the folder goes back to.
+desktop_runner_folder_restores.desktop_id       uuid                fk,not null       desktop-runner.ts:606  The run's computer and device key; only that socket is sent it.
+desktop_runner_folder_restores.device_jkt       text                fk,not null       desktop-runner.ts:607
+desktop_runner_folder_restores.state            text                not null          desktop-runner.ts:608
+desktop_runner_folder_restores.reason           text                null              desktop-runner.ts:610  Set with `refused`: why the computer refused it.
+desktop_runner_folder_restores.created_at       timestamptz         default,not null  desktop-runner.ts:611
+desktop_runner_folder_restores.expires_at       timestamptz         not null          desktop-runner.ts:613  A `queued` request not sent by then is never sent.
+desktop_runner_folder_restores.settled_at       timestamptz         null              desktop-runner.ts:615  When it was restored, refused or expired.
+desktop_runner_folder_restores.noted_run_id     uuid                fk,null           desktop-runner.ts:620  The latest run whose request carried the note that the folder went back; it is told once the computer accepts that run.
+desktop_runner_folder_restores.noted_at         timestamptz         null              desktop-runner.ts:622  When an accepted run of the chat was told the folder went back.
 ```

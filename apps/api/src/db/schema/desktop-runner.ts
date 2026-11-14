@@ -544,13 +544,10 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
         foreignColumns: [userFiles.id],
       })
       .onDelete("cascade"),
-    // Each serves its reference's cascade, so deleting a turn, a message or
-    // a file never reads the whole table.
+    // Each serves its reference's cascade, so deleting a turn or a file
+    // never reads the whole table. A message's cascade names the thread too
+    // and reads that thread's rows through the primary key.
     p.index("chat_local_run_step_contents_turn_idx").on(table.turnId),
-    p
-      .index("chat_local_run_step_contents_message_idx")
-      .on(table.messageId)
-      .where(sql`${table.messageId} IS NOT NULL`),
     p
       .index("chat_local_run_step_contents_user_file_idx")
       .on(table.userFileId)
