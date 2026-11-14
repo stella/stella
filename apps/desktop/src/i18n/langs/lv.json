@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Paziņo, kad dokuments ir gatavs vai sinhronizācijai nepieciešama uzmanība.",
     "permissionAccessibility": "Pieejamība",
     "permissionAccessibilityDescription": "Ļauj aktivitāšu laika joslai ierakstīt logu nosaukumus.",
+    "permissionMicrophone": "Mikrofons",
+    "permissionMicrophoneDescription": "Ļauj diktēšanai jūs dzirdēt, kamēr turat tās īsinājumtaustiņu.",
     "permissionAllowed": "Atļauts",
     "permissionAllow": "Atļaut",
     "permissionOpenSettings": "Atvērt iestatījumus",
@@ -294,6 +296,7 @@
     "errorReadHistory": "Starpliktuves vēsturi neizdevās ielādēt.",
     "errorUpdateHistory": "Starpliktuves vēsturi neizdevās atjaunināt.",
     "formattedText": "Formatēts teksts",
+    "dictation": "Diktāts",
     "image": "Attēls",
     "imageCleanupPending": "Dažus dzēstos attēlu datus neizdevās noņemt. Tīrīšana tiks automātiski atkārtota.",
     "imageDimensions": "{width} × {height} px",
@@ -582,9 +585,32 @@
   "dictation": {
     "title": "Diktēšana",
     "description": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runa tiek pārveidota šajā datorā un netiek saglabāta. Ja MI labošana ir ieslēgta, pārvērstais teksts (ne audio) caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, lai izlabotu kļūdas un formatējumu; stella to nesaglabā.",
+    "descriptionCloud": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runu tekstā pārvērš stella AI, un stella to nesaglabā.",
     "cleanup": {
       "title": "Labot ar MI",
-      "description": "Runa joprojām tiek pārvērsta tekstā šajā datorā, un audio to nekad nepamet. Ja labošana ir ieslēgta, pārvērstais teksts caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, kas izlabo atpazīšanas kļūdas un piemēro diktētās pieturzīmes un formatējumu, piemēram, “jauna rinda” vai “treknraksts”. stella to nesaglabā."
+      "description": "Runa joprojām tiek pārvērsta tekstā šajā datorā, un audio to nekad nepamet. Ja labošana ir ieslēgta, pārvērstais teksts caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, kas izlabo atpazīšanas kļūdas un piemēro diktētās pieturzīmes un formatējumu, piemēram, “jauna rinda” vai “treknraksts”. stella to nesaglabā. Labošanai tiek nodots arī lietotnes veids, kurā diktējat, piemēram, e-pasts vai tērzēšana, lai teksts tai atbilstu.",
+      "descriptionCloud": "Ja labošana ir ieslēgta, stella AI arī izlabo atpazīšanas kļūdas pārvērstajā tekstā un piemēro diktētās pieturzīmes un formatējumu, piemēram, “jauna rinda” vai “treknraksts”. Labošanai tiek nodots arī lietotnes veids, kurā diktējat, piemēram, e-pasts vai tērzēšana, lai teksts tai atbilstu."
+    },
+    "context": {
+      "windowTitle": {
+        "title": "Kopīgot loga nosaukumu ar MI labošanu",
+        "description": "Labošanai tiek nodots arī tā loga nosaukums, kurā diktējat, lai varētu atšķirt, piemēram, līgumu no iekšējas piezīmes. Logu nosaukumos var būt klientu vārdi vai lietu nosaukumi. Nosaukums caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, un stella to nesaglabā."
+      },
+      "textBeforeCursor": {
+        "title": "Kopīgot tekstu pirms kursora ar MI labošanu",
+        "description": "Labošanai tiek nodotas arī līdz {limit, number} rakstzīmēm pirms kursora, lai diktētais teksts turpinātu rakstīto. Tā daļa dokumenta, kurā strādājat, caur stella tiek nosūtīta jūsu organizācijas MI pakalpojumu sniedzējam, un stella to nesaglabā."
+      }
+    },
+    "keptInHistory": "Katrs diktāts tiek saglabāts arī šī datora starpliktuves vēsturē.",
+    "destination": {
+      "title": "Pārvērst ar",
+      "local": "Šo datoru",
+      "cloud": "stella AI",
+      "cloudDescription": "Audio pamet šo datoru: pārvēršanai tekstā tas tiek nosūtīts uz stella un caur stella MI pakalpojumu sniedzēju izvēlētā modeļa nodrošinātājam. stella to nesaglabā.",
+      "unavailableRegion": "stella AI jūsu organizācijas reģionā vēl nepiedāvā runas pārvēršanu tekstā.",
+      "unavailableProvider": "Jūsu organizācijas MI pakalpojumu sniedzējs nepiedāvā runas pārvēršanu tekstā.",
+      "unavailable": "Pārvēršana ar stella AI pašlaik nav pieejama.",
+      "model": "Pārvēršanas modelis"
     },
     "language": {
       "title": "Diktēšanas valoda",
@@ -606,8 +632,10 @@
       "transcription": "Pārveide neizdevās. Mēģiniet vēlreiz.",
       "focusChanged": "Jūs pārslēdzāties uz citu lietotni, pirms teksts bija gatavs, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
       "focusUnconfirmed": "stella nevarēja pārliecināties, kurā lietotnē ir fokuss, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
-      "shortcutHeld": "Atlaidiet īsinājumtaustiņus, lai varētu ievadīt tekstu. Nekas netika ievadīts; mēģiniet vēlreiz."
-    }
+      "shortcutHeld": "Atlaidiet īsinājumtaustiņus, lai varētu ievadīt tekstu. Nekas netika ievadīts; mēģiniet vēlreiz.",
+      "cloudTranscription": "stella AI neizdevās pārvērst šo diktātu tekstā, un runas modeļa šajā datorā nav. Mēģiniet vēlreiz vai pie “Pārvērst ar” izvēlieties “Šo datoru” un lejupielādējiet modeli."
+    },
+    "failureKeptInHistory": "Teksts ir starpliktuves vēsturē."
   },
   "shortcut": {
     "title": "Starpliktuves īsinājumtaustiņš",
@@ -724,6 +752,18 @@
     "introduceActivityTitle": "Jaunums: aktivitāšu laika josla",
     "introduceActivityBody": "Aktivitāte tagad ir pieejama jūsu kontā. Nekas netiek ierakstīts, līdz to palaižat aktivitāšu logā.",
     "openActivity": "Atvērt aktivitāti",
+    "dictationModel": "Runas modelis ({size} MB) tiek lejupielādēts vienreiz un darbojas šajā datorā.",
+    "dictationTurnOn": "Ieslēgt un lejupielādēt",
+    "dictationDownloadContinues": "Varat turpināt. Lejupielāde turpinās fonā.",
+    "dictationReady": "Diktēšana ir ieslēgta un gatava.",
+    "dictationTryLabel": "Diktējiet šeit",
+    "dictationTryPlaceholder": "Noklikšķiniet šeit, turiet {shortcut} un pasakiet teikumu.",
+    "dictationListening": "Klausos…",
+    "dictationTranscribing": "Pierakstu teikto…",
+    "dictationMicrophone": "Tā stella jūs dzird, kamēr turat īsinājumtaustiņu.",
+    "dictationAccessibility": "Tā stella ieraksta teikto lietotnē, kuru pašlaik izmantojat.",
+    "dictationFailed": "stella desktop neizdevās ieslēgt diktēšanu. Mēģiniet vēlreiz.",
+    "introduceDictationTitle": "Jaunums: diktēšana",
     "guideWaiting": "Ieslēdziet stella desktop sarakstā augstāk, lai atļautu pieejamību.",
     "guideAllowed": "stella desktop ir atļauts",
     "never": {
