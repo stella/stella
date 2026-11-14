@@ -413,8 +413,17 @@ export const resendLatestChatMessage = async (
   runtime: ChatRuntime,
   options?: ChatSendMessageOptions,
 ): Promise<void> => {
+  const latestUserMessageId = () =>
+    runtime.getSnapshot().messages.findLast(({ role }) => role === "user")?.id;
+  const resent = latestUserMessageId();
   const read = storedThreadReaders.get(runtime);
   const stored = read === undefined ? undefined : await Result.tryPromise(read);
+  // The resend is of the message that was latest when it was asked for. A
+  // message sent while the thread was read owns the turn now: resending
+  // would regenerate it, or post it twice.
+  if (latestUserMessageId() !== resent || hasInFlightChatRuntimeWork(runtime)) {
+    return;
+  }
   if (
     stored !== undefined &&
     Result.isOk(stored) &&

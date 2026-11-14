@@ -95,6 +95,8 @@ type Server = {
   revision: number;
   /** Whether reads of the thread fail. */
   readsFail: boolean;
+  /** Holds every read of the thread until it settles. */
+  readsWait: Promise<undefined> | null;
   posted: Record<string, unknown>[];
 };
 
@@ -104,6 +106,7 @@ const serve = (initial: Refusal | null) => {
     stored: [],
     revision: 0,
     readsFail: false,
+    readsWait: null,
     posted: [],
   };
   const page = () => ({
@@ -130,6 +133,7 @@ const serve = (initial: Refusal | null) => {
       const request = new Request(input, init);
       const { pathname } = new URL(request.url);
       if (request.method === "GET" && pathname.endsWith("/messages")) {
+        await state.readsWait;
         return state.readsFail
           ? Response.json({ message: "Unavailable" }, { status: 503 })
           : Response.json(page());
@@ -399,6 +403,32 @@ test("a kept unsent message follows what another tab stored in the thread meanwh
     { role: "user", text: TEXT },
     { role: "assistant", text: ANSWER },
   ]);
+});
+
+test("a resend leaves the turn to a message sent while the thread was read", async () => {
+  const { runtime, server } = await sendOnce(
+    serve({
+      type: "refused",
+      status: 409,
+      code: CHAT_LOCAL_RUN_REFUSAL.noComputer,
+    }),
+  );
+  server.refusal = null;
+  const read = Promise.withResolvers<undefined>();
+  server.readsWait = read.promise;
+
+  const resend = resendLatestChatMessage(runtime);
+  const newer = await runtime.startRouteHandoffMessage({
+    content: "Never mind, list them all.",
+    id: toSafeId<"chatMessage">("00000000-0000-7000-8000-0000000000f1"),
+  });
+  await newer.stream;
+  read.resolve(undefined);
+  await resend;
+
+  // Only the refused send and the newer message were posted.
+  expect(server.posted).toHaveLength(2);
+  expect(intentOf(server.posted.at(1))).toBeUndefined();
 });
 
 // --- An unsent message and something open for the member ------------------
