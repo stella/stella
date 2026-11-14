@@ -14,11 +14,11 @@ use serde_json::Value;
 
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessCapability, JsonObject, McpBinding,
-  RunAnswer, RunApproval, RunAttachment, RunOutcome, RunPolicy, RunRef,
-  RunTokenRefresh,
+  ReasoningEffort, RunAnswer, RunApproval, RunAttachment, RunOutcome, RunPolicy,
+  RunRef, RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 4;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 6;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.
@@ -207,9 +207,18 @@ pub(crate) struct SidecarRunStart {
   pub(crate) config_dir: String,
   pub(crate) launch: HarnessLaunchSettings,
   pub(crate) workspace_dir: String,
-  /// The computer's package-manager cache, writable in every sandbox.
+  /// The chat's own cache folder, writable in every sandbox.
   pub(crate) cache_dir: String,
+  /// What the run's sandboxed commands may not read, apart from the paths
+  /// the run itself is handed: every chat's folder, the app's own data and
+  /// the member's credential stores.
+  pub(crate) unreadable_paths: Vec<String>,
+  /// Where the sidecar keeps each step's output (`<runId>/<stepKey>`: a
+  /// `{"bytes":<n>}` header line, then the step's kept bytes): beside the
+  /// chat's own folder, whatever folder `workspace_dir` names.
+  pub(crate) step_output_dir: String,
   pub(crate) model: String,
+  pub(crate) reasoning_effort: Option<ReasoningEffort>,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
   pub(crate) harness_session_id: Option<String>,
@@ -269,7 +278,6 @@ pub(crate) enum HostMessage {
 }
 
 impl HostMessage {
-  #[cfg(test)]
   pub(crate) const TAGS: &[&str] = &[
     "hello",
     "harness.probe",
@@ -286,6 +294,19 @@ impl HostMessage {
     "drain",
     "shutdown",
   ];
+
+  /// The type a holder's rejection names, as the log shows it: one of
+  /// `TAGS`, or `other` for anything else the refused line called its type.
+  pub(crate) fn logged_tag(tag: Option<&str>) -> &'static str {
+    match tag {
+      None => "",
+      Some(tag) => Self::TAGS
+        .iter()
+        .copied()
+        .find(|known| *known == tag)
+        .unwrap_or("other"),
+    }
+  }
 }
 
 /// A run the holder holds: running, or finished and not yet acked.
@@ -313,6 +334,7 @@ pub(crate) struct ProbedModel {
   pub(crate) id: String,
   pub(crate) label: String,
   pub(crate) is_default: bool,
+  pub(crate) reasoning_efforts: Vec<ReasoningEffort>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -407,6 +429,16 @@ pub(crate) struct FolderRestored {
   pub(crate) outcome: RestoreOutcome,
 }
 
+/// How many tasks the harness process a finished run's completed turn kept
+/// runs in the background, while its chat waits for the next turn; 0 once
+/// there are none. The latest count per run is what holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BackgroundTasks {
+  pub(crate) run_id: String,
+  pub(crate) count: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Rejected {
@@ -433,6 +465,8 @@ pub(crate) enum SidecarMessage {
   RunFinished(SidecarRunFinished),
   #[serde(rename = "folder.restored")]
   FolderRestored(FolderRestored),
+  #[serde(rename = "background.tasks")]
+  BackgroundTasks(BackgroundTasks),
   #[serde(rename = "rejected")]
   Rejected(Rejected),
 }
@@ -447,6 +481,7 @@ impl SidecarMessage {
     "run.approval_request",
     "run.finished",
     "folder.restored",
+    "background.tasks",
     "rejected",
   ];
 }
@@ -604,5 +639,17 @@ mod tests {
     ] {
       assert_eq!(HolderSecret::parse(&refused), None, "{refused}");
     }
+  }
+
+  #[test]
+  fn a_rejection_is_logged_with_a_known_message_type_only() {
+    for &tag in HostMessage::TAGS {
+      assert_eq!(HostMessage::logged_tag(Some(tag)), tag);
+    }
+    assert_eq!(
+      HostMessage::logged_tag(Some("Summarise the lease")),
+      "other"
+    );
+    assert_eq!(HostMessage::logged_tag(None), "");
   }
 }

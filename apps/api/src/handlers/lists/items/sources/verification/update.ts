@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { REVIEW_STATUS_DECISION } from "@stll/api-contract/review-decision";
+
 import {
   LEGAL_LIST_SOURCE_VERIFICATION_STATUSES,
   legalListItemSourceDecisions,
@@ -15,7 +17,6 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
-import { LIST_ITEM_SOURCE_REVIEW_DECISION } from "@/api/lib/lists/review-decision-maps";
 import {
   previousSourceDecision,
   sourceDecisionRows,
@@ -97,7 +98,8 @@ const verifyItemSource = createSafeHandler(
               workspaceId,
               sourceId: body.id,
               previous,
-              decision: LIST_ITEM_SOURCE_REVIEW_DECISION[verificationStatus],
+              decision:
+                REVIEW_STATUS_DECISION.listItemSource[verificationStatus],
               actorId: user.id,
               hasHistory: await sourceHasDecisionHistory(tx, body.id),
             }),

@@ -8,7 +8,6 @@ import {
   mkdir,
   open,
   readdir,
-  readFile,
   readlink,
   rename,
   rm,
@@ -55,8 +54,9 @@ import { SIDECAR_CHECKPOINT_STORE_SUFFIX } from "./protocol";
  * sandbox, so nothing here follows a link: a link is saved and restored as a
  * link, a file is read through a descriptor opened without following one, and
  * every folder on the way to an entry is checked to be a plain folder. Skill
- * folders, the package cache and the CLI's home are outside the folder and
- * are never read or written; a folder that holds one of them is not saved.
+ * folders, the package cache, the step output store and the CLI's home are
+ * outside the folder and are never read or written; a folder that holds one
+ * of them is not saved.
  *
  * Windows: a link in the folder makes it unsaved (`unsupported`), as do names
  * the platform reserves; modes are neither saved nor restored. Paths are
@@ -627,12 +627,41 @@ const lockSchema = v.object({
 
 type Lock = v.InferOutput<typeof lockSchema>;
 
-/** The lock file's holder; `null` when there is none or it cannot be told. */
-const lockAt = async (file: string) => {
-  if (entryAt(file) === undefined) {
-    return null;
+/**
+ * The lock file's holder; `null` when there is none or it cannot be told.
+ * The name is opened once and read through that handle: a holder that gives
+ * the lock up while it is read leaves either the lock it held or no file,
+ * never a failed read.
+ */
+export const lockAt = async (
+  file: string,
+  /** Test seam: runs once the name is open, before the lock is read. */
+  opened: () => Promise<void> = async () => await Promise.resolve(),
+): Promise<Result<Lock | null, CheckpointRefused>> => {
+  const read = await Result.tryPromise({
+    try: async () => {
+      const handle = await open(file, READ_FLAGS);
+      try {
+        await opened();
+        return await handle.readFile("utf-8");
+      } finally {
+        await handle.close();
+      }
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(read)) {
+    return Result.ok(parsedAs(lockSchema, read.value));
   }
-  return parsedAs(lockSchema, await readFile(file, "utf-8"));
+  // ENOENT: no lock holds the name, or its holder just gave it up.
+  return errorCode(read.error) === "ENOENT"
+    ? Result.ok(null)
+    : Result.err(
+        refused(
+          "failed",
+          "The checkpoint store's lock could not be read.",
+        )(read.error),
+      );
 };
 
 /** A lock, draft or reclaim mutex left alone for this long is stale. */
@@ -647,24 +676,31 @@ const ageOf = (stat: Stats) =>
  * refreshing the lock for several heartbeats (its process id may have been
  * reused). A lock that cannot be read is judged by its age alone.
  */
-const isStaleLock = async (lock: string, limits: CheckpointLimits) => {
+const isStaleLock = async (
+  lock: string,
+  limits: CheckpointLimits,
+): Promise<Result<boolean, CheckpointRefused>> => {
   const stat = entryAt(lock);
   if (stat === undefined) {
-    return false;
+    return Result.ok(false);
   }
   if (ageOf(stat) > staleAfterMs(limits)) {
-    return true;
+    return Result.ok(true);
   }
   const holder = await lockAt(lock);
-  if (holder === null) {
-    return false;
+  if (Result.isError(holder)) {
+    return holder;
   }
+  if (holder.value === null) {
+    return Result.ok(false);
+  }
+  const { pid } = holder.value;
   const alive = Result.try({
-    try: () => process.kill(holder.pid, 0),
+    try: () => process.kill(pid, 0),
     catch: (cause) => cause,
   });
   // EPERM: alive, under another user.
-  return Result.isError(alive) && errorCode(alive.error) === "ESRCH";
+  return Result.ok(Result.isError(alive) && errorCode(alive.error) === "ESRCH");
 };
 
 /**
@@ -712,10 +748,23 @@ const reclaimLock = async (
   }
   try {
     const current = await lockAt(lock);
+    if (Result.isError(current)) {
+      return "failed";
+    }
     const same =
-      judged === null ? current === null : current?.token === judged.token;
-    if (same && (await isStaleLock(lock, limits))) {
-      await unlink(lock);
+      judged === null
+        ? current.value === null
+        : current.value?.token === judged.token;
+    if (!same) {
+      return "kept";
+    }
+    const stale = await isStaleLock(lock, limits);
+    if (Result.isError(stale)) {
+      return "failed";
+    }
+    if (stale.value) {
+      // Forced: a lock its holder gave up meanwhile is gone just the same.
+      await rm(lock, { force: true });
       return "gone";
     }
     return "kept";
@@ -802,10 +851,17 @@ const takeLock = async (
       return "failed";
     }
     const judged = await lockAt(lock);
-    if (!(await isStaleLock(lock, limits))) {
+    if (Result.isError(judged)) {
+      return "failed";
+    }
+    const stale = await isStaleLock(lock, limits);
+    if (Result.isError(stale)) {
+      return "failed";
+    }
+    if (!stale.value) {
       return "wait";
     }
-    const reclaimed = await reclaimLock(store, judged, limits);
+    const reclaimed = await reclaimLock(store, judged.value, limits);
     switch (reclaimed) {
       case "gone":
         return "retry";
@@ -837,12 +893,13 @@ const takeLock = async (
       if (signal?.aborted === true) {
         return Result.err(refused("failed", "The capture was stopped.")());
       }
-      if (performance.now() >= deadline) {
-        return Result.err(
-          refused("failed", "Another process holds the checkpoint store.")(),
-        );
-      }
       if (taken.value === "wait") {
+        // A retry follows a lock just freed, so only a wait ends at the deadline.
+        if (performance.now() >= deadline) {
+          return Result.err(
+            refused("failed", "Another process holds the checkpoint store.")(),
+          );
+        }
         // real-time: another process holds the lock; it is polled until free.
         // await-in-loop: one wait between attempts.
         await Bun.sleep(LOCK_POLL_MS);
@@ -863,7 +920,13 @@ const keepLock = (
   const lock = path.join(store, LOCK_FILE);
   const beat = async () => {
     const holder = await lockAt(lock);
-    if (holder?.token === mine.token) {
+    if (Result.isError(holder)) {
+      log(
+        `the checkpoint store's lock was not refreshed: ${holder.error.message}`,
+      );
+      return;
+    }
+    if (holder.value?.token === mine.token) {
       const now = new Date();
       await utimes(lock, now, now);
     }
@@ -882,14 +945,18 @@ const keepLock = (
 
 /** Give the lock up, unless it is no longer ours. */
 const releaseLock = async (store: string, mine: Lock) =>
-  await Result.tryPromise({
-    try: async () => {
-      const lock = path.join(store, LOCK_FILE);
-      if ((await lockAt(lock))?.token === mine.token) {
+  await Result.gen(async function* () {
+    const lock = path.join(store, LOCK_FILE);
+    const holder = yield* Result.await(lockAt(lock));
+    if (holder?.token !== mine.token) {
+      return Result.ok();
+    }
+    return await Result.tryPromise({
+      try: async () => {
         await rm(lock, { force: true });
-      }
-    },
-    catch: refused("failed", "The checkpoint store could not be unlocked."),
+      },
+      catch: refused("failed", "The checkpoint store could not be unlocked."),
+    });
   });
 
 /** Work on one store, in this process queued after the work before it. */
@@ -1864,6 +1931,11 @@ const restoreHeld = async (
   if (target === undefined) {
     return { outcome: "no_checkpoint", detail: null };
   }
+  // Asked again after it was done (an answer that never arrived): the folder
+  // is not touched, and the answer is the same.
+  if (target.undone) {
+    return { outcome: "restored", detail: null };
+  }
   const newest = manifests.findLast(({ undone }) => !undone);
   if (newest?.runId !== runId) {
     return { outcome: "not_newest", detail: null };
@@ -2027,7 +2099,8 @@ type CaptureOptions = {
   memberFiles: readonly string[];
   /**
    * Folders the run uses and never owns: skill folders, the package cache,
-   * the CLI's home. A run folder holding one, or inside one, is not saved.
+   * the step output store, the CLI's home. A run folder holding one, or
+   * inside one, is not saved.
    */
   protectedPaths: readonly string[];
   /** Ends a capture in progress when the run is stopped. */
@@ -2107,9 +2180,15 @@ export const captureCheckpoint = async ({
     }
     return saved;
   });
-  return Result.isOk(taken)
-    ? { status: "taken" }
-    : { status: "unavailable", reason: taken.error.reason };
+  if (Result.isOk(taken)) {
+    return { status: "taken" };
+  }
+  // A folder past a bound is expected and reported in the run's event; only
+  // a capture that failed is worth a line in the log.
+  if (taken.error.reason === "failed") {
+    log(`no checkpoint was taken: ${taken.error.message}`);
+  }
+  return { status: "unavailable", reason: taken.error.reason };
 };
 
 /** A capture's report as the chunk it travels in on the run's stream. */

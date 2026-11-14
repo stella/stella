@@ -40,6 +40,7 @@ async fn spawn_test_bridge() -> TestBridge {
     )),
     static_allowed_origins: HashSet::from([ALLOWED_ORIGIN.to_string()]),
     bridge_port: address.port(),
+    run_folders: None,
   });
   let task = tokio::spawn(async move {
     axum::serve(listener, router).await.unwrap();

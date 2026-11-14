@@ -1404,7 +1404,7 @@ const organizationManagementRoleValues = sql.raw(
 );
 
 /** The session user holds a management role in the session organization. */
-const organizationManagerCheck = sql`EXISTS (
+export const organizationManagerCheck = sql`EXISTS (
   SELECT 1
   FROM member m
   WHERE m.organization_id = (SELECT current_setting(

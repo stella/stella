@@ -193,8 +193,10 @@ const buildToolDefinition = (
   buildSubagentToolset: (
     sink: SubagentProposalSink,
   ) => ChatToolMap = (): ChatToolMap => ({}),
+  organizationAIInstructions = "",
 ) =>
   createSpawnSubagentsTool({
+    organizationAIInstructions,
     buildSubagentToolset,
     organizationId,
     modelAdmission: testModelAdmission(organizationId),
@@ -214,8 +216,12 @@ const buildToolDefinition = (
 
 const buildTool = (
   buildSubagentToolset?: (sink: SubagentProposalSink) => ChatToolMap,
+  organizationAIInstructions = "",
 ) => {
-  const tools = buildToolDefinition(buildSubagentToolset);
+  const tools = buildToolDefinition(
+    buildSubagentToolset,
+    organizationAIInstructions,
+  );
   const execute = tools.spawn_subagents.execute;
   if (execute === undefined) {
     return panic("The subagent tool is missing its executor");
@@ -422,10 +428,16 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
 });
 
 describe("createSpawnSubagentsTool — subagent system prompt", () => {
-  const runWithToolset = async (
-    toolset: ChatToolMap,
-    subagent?: Parameters<ReturnType<typeof buildTool>>[0]["subagents"][number],
-  ) => {
+  type RunWithToolsetOptions = {
+    toolset: ChatToolMap;
+    subagent?: Parameters<ReturnType<typeof buildTool>>[0]["subagents"][number];
+    organizationAIInstructions?: string;
+  };
+  const runWithToolset = async ({
+    toolset,
+    subagent,
+    organizationAIInstructions = "",
+  }: RunWithToolsetOptions) => {
     const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
     const previousProvider = env.AI_PROVIDER;
     const previousAnthropicKey = env.ANTHROPIC_API_KEY;
@@ -439,7 +451,7 @@ describe("createSpawnSubagentsTool — subagent system prompt", () => {
       usage: undefined,
     });
     try {
-      await buildTool(() => toolset)(
+      await buildTool(() => toolset, organizationAIInstructions)(
         { subagents: [subagent ?? { title: "Matter inventory", task: "a" }] },
         {},
       );
@@ -469,28 +481,47 @@ describe("createSpawnSubagentsTool — subagent system prompt", () => {
     }).server(async () => "ok");
 
     const { systemSafe, systemUntrusted } = await runWithToolset({
-      [CODE_MODE_EXECUTE_TOOL_NAME]: executeTypescript,
+      toolset: { [CODE_MODE_EXECUTE_TOOL_NAME]: executeTypescript },
     });
     expect(systemSafe).toContain(CHAT_CODE_MODE_SYSTEM_PROMPT);
     expect(systemUntrusted).toBe("");
   });
 
+  test("delegated work inherits organization instructions on the untrusted prompt half", async () => {
+    const { systemSafe, systemUntrusted } = await runWithToolset({
+      toolset: {},
+      subagent: {
+        title: "Matter inventory",
+        task: "a",
+        expectedOutput: "a table of matters",
+      },
+      organizationAIInstructions: "Refer to the client as Acme Platform.",
+    });
+    expect(systemSafe).not.toContain("Acme Platform");
+    expect(systemUntrusted).toContain("Refer to the client as Acme Platform.");
+    expect(systemUntrusted).toContain(
+      "ahead of conflicting personal preferences",
+    );
+    expect(systemUntrusted).toContain("do not override stella's safety");
+    expect(systemUntrusted).toContain("a table of matters");
+  });
+
   test("omits the code-mode catalog when the toolset has no execute_typescript", async () => {
-    const { systemSafe } = await runWithToolset({});
+    const { systemSafe } = await runWithToolset({ toolset: {} });
     expect(systemSafe).not.toContain(CHAT_CODE_MODE_SYSTEM_PROMPT);
   });
 
   // The shape hint is the parent model's own text, so it must cross the
   // third-party boundary rather than ride verbatim with the framing.
   test("puts the parent model's expected-output brief on the untrusted half", async () => {
-    const { systemSafe, systemUntrusted } = await runWithToolset(
-      {},
-      {
+    const { systemSafe, systemUntrusted } = await runWithToolset({
+      toolset: {},
+      subagent: {
         title: "Matter inventory",
         task: "a",
         expectedOutput: "a table of matters",
       },
-    );
+    });
     expect(systemUntrusted).toContain("a table of matters");
     expect(systemSafe).not.toContain("a table of matters");
   });

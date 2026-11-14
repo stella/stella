@@ -27,6 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import type { CreateTaskFactDetails } from "@/api/lib/tasks/create-task-entity";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
@@ -517,8 +518,12 @@ const finalizeAcceptance = async ({
         eq(legalListGenerationCandidateSources.listId, body.listId),
         eq(legalListGenerationCandidateSources.workspaceId, workspaceId),
       ),
-    )
-    .for("update");
+    );
+  // No row lock here: the application role holds no UPDATE on candidate
+  // sources, which every row-locking clause needs. None is needed either:
+  // the rows are insert-only, the run and candidate locks above hold off a
+  // cascade from either, and a cited document deleted meanwhile fails the
+  // item-source insert's foreign key check, so no copy outlives it.
   const claimedSourceIds = new Set(claimedSources.map((source) => source.id));
   if (
     liveSources.length === 0 ||
@@ -527,9 +532,13 @@ const finalizeAcceptance = async ({
   ) {
     return { status: "source-missing" as const };
   }
+  const itemSources = liveSources.map((source) => ({
+    id: createSafeId<"legalListItemSource">(),
+    source,
+  }));
   await tx.insert(legalListItemSources).values(
-    liveSources.map((source) => ({
-      id: createSafeId<"legalListItemSource">(),
+    itemSources.map(({ id, source }) => ({
+      id,
       workspaceId,
       listId: body.listId,
       itemEntityId: entityId,
@@ -619,6 +628,13 @@ const finalizeAcceptance = async ({
       message: "Candidate claim was lost",
     });
   }
+  // After the candidate reads as accepted, so each edge names the
+  // extraction run that proposed its passage.
+  await writeFactSourceEdges(tx, workspaceId, {
+    type: "fact-sources",
+    sourceIds: itemSources.map(({ id }) => id),
+    producer: { type: "extraction", runId: body.runId },
+  });
 
   await commitSettledRun(tx, {
     runId: body.runId,

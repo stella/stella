@@ -18,7 +18,7 @@ import {
   getProviderValues,
   hasUsableOpenAIKey,
 } from "@/components/ai-config-role-models.logic";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { detached } from "@/lib/detached";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
@@ -36,6 +36,7 @@ import { AISettingsSectionFeedback } from "./ai-settings-section";
 import { DeepLKeyCard } from "./deepl-key-card";
 import { DocumentProcessingCard } from "./document-processing-card";
 import { MemoryExtractionCard } from "./memory-extraction-card";
+import { OrganizationInstructionsCard } from "./organization-instructions-card";
 import { PromptCachingCard } from "./prompt-caching-card";
 import { useAIConfigForm } from "./use-ai-config-form";
 import type { AIConfigReadState } from "./use-ai-config-form";
@@ -163,7 +164,7 @@ const SettingsError = ({ error }: SettingsErrorProps) => {
           </p>
         )}
       </div>
-      <CopyActionButton text={error.message} />
+      <CopyControl text={error.message} />
     </div>
   );
 };
@@ -306,6 +307,7 @@ export const AIConfigForm = ({
       {form.feedback.status !== "error" && (
         <AISettingsSectionFeedback feedback={form.feedback} />
       )}
+      <OrganizationInstructionsCard />
       <AuxiliaryCards form={form} />
       <LeaveGuard blocker={form.blocker} />
     </div>

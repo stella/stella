@@ -59,7 +59,8 @@ const render = (queryClient: QueryClient, children: ReactNode) =>
 
 /** The pill's content (glyph and label), without the element that differs
  * between a clickable and a static chip. A clickable chip is a plain Button
- * around the pill, so its content sits one span deeper. */
+ * around the pill, so its content sits one span deeper. The label's hint id
+ * comes from its place in the rendered tree, so it is left out. */
 const chipContent = (html: string): string => {
   const match =
     /^<(?<tag>span|button)[^>]*data-reference-type="entity"[^>]*>(?<inner>.*)<\/\k<tag>>$/su.exec(
@@ -70,7 +71,7 @@ const chipContent = (html: string): string => {
     throw new Error(`Not a reference chip: ${html}`);
   }
   if (match?.groups?.["tag"] !== "button") {
-    return inner;
+    return withoutGeneratedIds(inner);
   }
   const pill = /^<span[^>]*>(?<body>.*)<\/span>$/su.exec(inner)?.groups?.[
     "body"
@@ -78,8 +79,11 @@ const chipContent = (html: string): string => {
   if (pill === undefined) {
     throw new Error(`Not a pill inside a chip button: ${inner}`);
   }
-  return pill;
+  return withoutGeneratedIds(pill);
 };
+
+const withoutGeneratedIds = (html: string): string =>
+  html.replaceAll(/ id="base-ui-[^"]*"/gu, "");
 
 const sessionClient = () => {
   const queryClient = new QueryClient();

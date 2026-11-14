@@ -2,6 +2,7 @@
 export const MODEL_OPERATION_MODULES = [
   "apps/api/src/handlers/desktop-time-entries/drafting-model.ts",
   "apps/api/src/handlers/ai-autocomplete/stream.ts",
+  "apps/api/src/handlers/ai/email-generation.ts",
   "apps/api/src/handlers/case-law/analysis/generate.ts",
   "apps/api/src/handlers/case-law/analysis/significance-run.ts",
   "apps/api/src/handlers/case-law/decisions/search-expand.ts",
@@ -21,6 +22,7 @@ export const MODEL_OPERATION_MODULES = [
   "apps/api/src/handlers/chat/thread-title-prompt.ts",
   "apps/api/src/handlers/clauses/rewrite.ts",
   "apps/api/src/handlers/contacts/extract-procuracao.ts",
+  "apps/api/src/handlers/dictation/cleanup.ts",
   "apps/api/src/handlers/document-reviews/reference-positions.ts",
   "apps/api/src/handlers/entities/placements/suggest.ts",
   "apps/api/src/handlers/playbooks/derive-ask.ts",

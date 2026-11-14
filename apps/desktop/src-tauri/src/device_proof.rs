@@ -175,6 +175,46 @@ pub(crate) async fn prepare(has_link: bool) -> Result<DeviceKey, String> {
   prepare_with(&mut KeychainStorage, has_link).await
 }
 
+/// A device key for switching to another account. Each account lifecycle has
+/// its own key, so a switch signs with a new one and keeps it in memory until
+/// the member confirms and the current link, with its key, has ended.
+#[derive(Clone)]
+pub(crate) struct FreshDeviceKey {
+  key: DeviceKey,
+  pkcs8: zeroize::Zeroizing<Vec<u8>>,
+}
+
+impl FreshDeviceKey {
+  pub(crate) fn generate() -> Result<Self, String> {
+    let pkcs8 = DeviceKey::generate()?;
+    Ok(Self {
+      key: DeviceKey::from_pkcs8(&pkcs8)?,
+      pkcs8,
+    })
+  }
+
+  pub(crate) fn key(&self) -> &DeviceKey {
+    &self.key
+  }
+
+  /// Stores the key as this device's key. The caller has ended the previous
+  /// link and holds the account request lease.
+  pub(crate) async fn adopt(&self) -> Result<(), String> {
+    adopt_with(&mut KeychainStorage, self).await
+  }
+}
+
+async fn adopt_with(
+  storage: &mut impl DeviceKeyStorage,
+  fresh: &FreshDeviceKey,
+) -> Result<(), String> {
+  storage
+    .save(zeroize::Zeroizing::new(
+      URL_SAFE_NO_PAD.encode(&*fresh.pkcs8),
+    ))
+    .await
+}
+
 async fn unlink_with(
   storage: &mut impl DeviceKeyStorage,
   clear_account: impl std::future::Future<Output = Result<(), String>>,
@@ -254,6 +294,29 @@ pub(crate) mod tests {
     let replacement = prepare_with(&mut storage, false).await.unwrap();
     assert_ne!(replacement.thumbprint().unwrap(), original);
     assert_eq!(storage.writes, 2);
+  }
+
+  #[tokio::test]
+  async fn a_switch_key_becomes_the_device_key_only_once_adopted() {
+    let mut storage = MemoryStorage::default();
+    let current = prepare_with(&mut storage, false)
+      .await
+      .unwrap()
+      .thumbprint()
+      .unwrap();
+    let fresh = FreshDeviceKey::generate().unwrap();
+    let switched = fresh.key().thumbprint().unwrap();
+    assert_ne!(switched, current);
+    assert_eq!(
+      required_from(&storage).await.unwrap().thumbprint().unwrap(),
+      current,
+      "a switch key in memory leaves the stored key in place"
+    );
+    adopt_with(&mut storage, &fresh).await.unwrap();
+    assert_eq!(
+      required_from(&storage).await.unwrap().thumbprint().unwrap(),
+      switched
+    );
   }
 
   #[tokio::test]

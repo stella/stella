@@ -1,4 +1,10 @@
 import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import {
+  CHAT_LOCAL_FILES_UNDO_COMPUTER_REFUSALS,
+  CHAT_LOCAL_FILES_UNDO_LIVE_STATES,
+  CHAT_LOCAL_FILES_UNDO_SETTLED_STATES,
+  CHAT_LOCAL_FILES_UNDO_STATES,
+} from "@stll/api-contract/chat-local-files-undo";
 
 import { denyStellaAccessPolicies } from "@/api/db/rls";
 import {
@@ -6,6 +12,7 @@ import {
   DESKTOP_RUNNER_CONNECTIONS,
   DESKTOP_RUNNER_EVENT_TYPES,
   DESKTOP_RUNNER_LEASED_RUN_STATES,
+  DESKTOP_RUNNER_LOST_REASONS,
   DESKTOP_RUNNER_RUN_STATES,
   DESKTOP_RUNNER_STORED_OUTCOMES,
   DESKTOP_RUNNER_STORED_REJECT_REASONS,
@@ -13,6 +20,7 @@ import {
 
 import { chatThreads, chatTurns } from "./chat";
 import {
+  bytea,
   jsonb,
   organization,
   p,
@@ -79,6 +87,28 @@ export const desktopRunners = p.pgTable.withRLS(
     sidecarVersion: p.varchar("sidecar_version", { length: 64 }).notNull(),
     /** Each harness's latest report, as the protocol defines it. */
     harnesses: jsonb("harnesses").notNull(),
+    /**
+     * The folders the member linked on the computer, by id, name and state as
+     * it last reported them; their paths never leave the computer.
+     */
+    linkedFolders: jsonb("linked_folders").notNull().default([]),
+    /**
+     * Linked folders the member let runs work in. A run in a folder not
+     * listed here is refused, so the first run in a newly linked folder asks.
+     */
+    approvedFolderIds: p
+      .uuid("approved_folder_ids")
+      .array()
+      .notNull()
+      .default([]),
+    /**
+     * How many tasks the harness process each run left behind keeps running
+     * in the background, by run id, as the computer reported them over its
+     * current socket (`run.background`), while the run's chat waits for its
+     * next turn. A run with none has no entry; a socket's claim starts from
+     * none, and the computer reports the live ones again after `welcome`.
+     */
+    backgroundTasks: jsonb("background_tasks").notNull().default({}),
     connectedAt: timestamptz("connected_at").notNull(),
     /** Renewed by the socket's heartbeat; routing ignores a stale runner. */
     lastSeenAt: timestamptz("last_seen_at").notNull(),
@@ -124,6 +154,11 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     harnessVersion: p.varchar("harness_version", { length: 64 }).notNull(),
     /** Workspaces the run's MCP token may reach, authorized when assigned. */
     workspaceIds: p.text("workspace_ids").array().notNull(),
+    /**
+     * The folder linked on the computer the run works in; null for the
+     * chat's own. An undo of the run's files restores that folder.
+     */
+    linkedFolderId: p.uuid("linked_folder_id"),
     state: p.text({ enum: DESKTOP_RUNNER_RUN_STATES }).notNull(),
     /** Set with `finished`: how the run ended, as the desktop reported. */
     outcome: p.text({ enum: DESKTOP_RUNNER_STORED_OUTCOMES }),
@@ -131,8 +166,27 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     rejectReason: p.text("reject_reason", {
       enum: DESKTOP_RUNNER_STORED_REJECT_REASONS,
     }),
+    /** Set with `lost` where the API knows why (`DESKTOP_RUNNER_LOST_REASONS`). */
+    lostReason: p.text("lost_reason", { enum: DESKTOP_RUNNER_LOST_REASONS }),
     /** The harness session a later run on this desktop may resume. */
     harnessSessionId: p.varchar("harness_session_id", { length: 256 }),
+    /**
+     * The run's output key, encrypted for its organization: random per run,
+     * sent to the computer in `run.start`, and what every grant to read the
+     * run's step outputs there is signed with. Absent only for a run
+     * assigned before runs kept one: it gets no grant, and its `run.start`
+     * is cancelled rather than sent again.
+     */
+    outputKeyEncrypted: bytea("output_key_encrypted"),
+    /** The IV of `output_key_encrypted`; set with it. */
+    outputKeyIv: bytea("output_key_iv"),
+    /**
+     * When `run.start` was first written to one of the computer's sockets;
+     * absent while it never was. A run never written ends after the short
+     * unaccepted window, one that was keeps the recovery window, since its
+     * computer may be running it.
+     */
+    deliveredAt: timestamptz("delivered_at"),
     /** When the desktop accepted `run.start`; absent while it never has. */
     acceptedAt: timestamptz("accepted_at"),
     /** Highest position of the run's desktop messages persisted without a gap. */
@@ -231,6 +285,10 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     p.check(
       "desktop_runner_runs_reject_reason_check",
       sql`(${table.state} = 'rejected') = (${table.rejectReason} IS NOT NULL) AND (${table.rejectReason} IS NULL OR ${table.rejectReason} IN (${sqlValues(DESKTOP_RUNNER_STORED_REJECT_REASONS)}))`,
+    ),
+    p.check(
+      "desktop_runner_runs_lost_reason_check",
+      sql`(${table.lostReason} IS NULL OR ${table.state} = 'lost') AND (${table.lostReason} IS NULL OR ${table.lostReason} IN (${sqlValues(DESKTOP_RUNNER_LOST_REASONS)}))`,
     ),
     p.check(
       "desktop_runner_runs_ack_seq_check",
@@ -390,5 +448,139 @@ export const desktopRunnerAppCalls = p.pgTable.withRLS(
       sql`jsonb_typeof(${table.result}) = 'object'`,
     ),
     ...ownerOnlyPolicies("desktop_runner_app_calls"),
+  ],
+);
+
+/**
+ * A member's request to undo the file changes of a chat turn run on their
+ * computer: the chat's folder goes back to the checkpoint the run took before
+ * it started. Not a run command: it goes to the run's computer whether or not
+ * a run is open there. A queued request expires unsent after a short while,
+ * so a computer that is away never restores days later; a sent one waits for
+ * its answer, also past that time, and is sent again on the computer's next
+ * socket. A turn has at most one restore that is queued, sent or done; a
+ * refused or expired one can be asked again.
+ */
+export const desktopRunnerFolderRestores = p.pgTable.withRLS(
+  "desktop_runner_folder_restores",
+  {
+    id: p.uuid("id").notNull(),
+    userId: p.text("user_id").notNull(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    chatThreadId: p.uuid("chat_thread_id").notNull(),
+    chatTurnId: p.uuid("chat_turn_id").notNull(),
+    /** The run whose checkpoint the folder goes back to. */
+    runId: p.uuid("run_id").notNull(),
+    /** The run's computer and device key; only that socket is sent it. */
+    desktopId: p.uuid("desktop_id").notNull(),
+    deviceJkt: p.text("device_jkt").notNull(),
+    state: p.text({ enum: CHAT_LOCAL_FILES_UNDO_STATES }).notNull(),
+    /** Set with `refused`: why the computer refused it. */
+    reason: p.text({ enum: CHAT_LOCAL_FILES_UNDO_COMPUTER_REFUSALS }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    /** A `queued` request not sent by then is never sent. */
+    expiresAt: timestamptz("expires_at").notNull(),
+    /** When it was restored, refused or expired. */
+    settledAt: timestamptz("settled_at"),
+    /**
+     * The latest run whose request carried the note that the folder went
+     * back; it is told once the computer accepts that run.
+     */
+    notedRunId: p.uuid("noted_run_id"),
+    /** When an accepted run of the chat was told the folder went back. */
+    notedAt: timestamptz("noted_at"),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "desktop_runner_folder_restores_pkey",
+      columns: [table.id],
+    }),
+    p
+      .foreignKey({
+        name: "desktop_runner_folder_restores_chat_thread_fk",
+        columns: [table.chatThreadId],
+        foreignColumns: [chatThreads.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "desktop_runner_folder_restores_chat_turn_fk",
+        columns: [table.chatTurnId],
+        foreignColumns: [chatTurns.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "desktop_runner_folder_restores_run_fk",
+        columns: [table.runId],
+        foreignColumns: [desktopRunnerRuns.runId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "desktop_runner_folder_restores_runner_fk",
+        columns: [
+          table.userId,
+          table.organizationId,
+          table.desktopId,
+          table.deviceJkt,
+        ],
+        foreignColumns: [
+          desktopRunners.userId,
+          desktopRunners.organizationId,
+          desktopRunners.desktopId,
+          desktopRunners.deviceJkt,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "desktop_runner_folder_restores_noted_run_fk",
+        columns: [table.notedRunId],
+        foreignColumns: [desktopRunnerRuns.runId],
+      })
+      .onDelete("set null"),
+    p
+      .uniqueIndex("desktop_runner_folder_restores_live_run_idx")
+      .on(table.runId)
+      .where(
+        sql`${table.state} IN (${sqlValues(CHAT_LOCAL_FILES_UNDO_LIVE_STATES)})`,
+      ),
+    p
+      .index("desktop_runner_folder_restores_runner_state_idx")
+      .on(
+        table.userId,
+        table.organizationId,
+        table.desktopId,
+        table.deviceJkt,
+        table.state,
+      ),
+    p
+      .index("desktop_runner_folder_restores_chat_thread_idx")
+      .on(table.chatThreadId, table.state),
+    p
+      .index("desktop_runner_folder_restores_chat_turn_idx")
+      .on(table.chatTurnId, table.createdAt, table.id),
+    p
+      .index("desktop_runner_folder_restores_noted_run_idx")
+      .on(table.notedRunId)
+      .where(sql`${table.notedAt} IS NULL`),
+    p.check(
+      "desktop_runner_folder_restores_state_check",
+      sql`${table.state} IN (${sqlValues(CHAT_LOCAL_FILES_UNDO_STATES)})`,
+    ),
+    p.check(
+      "desktop_runner_folder_restores_reason_check",
+      sql`(${table.state} = 'refused') = (${table.reason} IS NOT NULL) AND (${table.reason} IS NULL OR ${table.reason} IN (${sqlValues(CHAT_LOCAL_FILES_UNDO_COMPUTER_REFUSALS)}))`,
+    ),
+    p.check(
+      "desktop_runner_folder_restores_settled_check",
+      sql`(${table.state} IN (${sqlValues(CHAT_LOCAL_FILES_UNDO_SETTLED_STATES)})) = (${table.settledAt} IS NOT NULL)`,
+    ),
+    p.check(
+      "desktop_runner_folder_restores_noted_check",
+      sql`(${table.notedAt} IS NULL AND ${table.notedRunId} IS NULL) OR ${table.state} = 'restored'`,
+    ),
+    ...ownerOnlyPolicies("desktop_runner_folder_restores"),
   ],
 );

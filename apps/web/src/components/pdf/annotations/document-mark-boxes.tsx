@@ -1,6 +1,7 @@
 import { BidiText } from "@stll/ui/bidi-text";
 import { textMarkBoxClass } from "@stll/ui/text-mark";
 import type { TextMarkOptions } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -111,15 +112,19 @@ export const DocumentMarkBoxes = ({
               key={`${mark.id}:comment`}
               style={{ left: first.left, top: first.top + first.height + 4 }}
             >
-              <BidiText
-                as="p"
-                className="text-muted-foreground mb-0.5 truncate"
+              <TruncatedText
+                className="text-muted-foreground mb-0.5"
+                render={<BidiText as="p" />}
               >
                 {mark.authorName}
-              </BidiText>
-              <BidiText as="p" className="line-clamp-3 whitespace-pre-wrap">
+              </TruncatedText>
+              <TruncatedText
+                className="whitespace-pre-wrap"
+                lines={3}
+                render={<BidiText as="p" />}
+              >
                 {comment}
-              </BidiText>
+              </TruncatedText>
             </div>
           ) : null,
         ];

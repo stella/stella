@@ -49,7 +49,11 @@ export const DesktopConnectionCard = () => {
   const t = useTranslations();
   const user = useAuthenticatedUser();
   const platform = useHydrationSafeDesktopPlatform();
-  const { connect, state: connection } = useDesktopAccountConnection();
+  const {
+    connect,
+    state: connection,
+    switchAccount,
+  } = useDesktopAccountConnection();
   const presenceQuery = useQuery(
     desktopPresenceOptions({
       userId: user.id,
@@ -69,10 +73,12 @@ export const DesktopConnectionCard = () => {
     // A failed or unproven approval keeps a challenge that is still valid;
     // an expired or consumed one falls back to the install-or-connect offer.
     setChallengeWaiting(hasDesktopAccountChallenge());
+    // A refusal names its own next step in the status below the card.
     if (
       outcome.status === "started" ||
       outcome.status === "approval-required" ||
-      outcome.status === "update-required"
+      outcome.status === "update-required" ||
+      outcome.status === "refused"
     ) {
       return;
     }
@@ -193,9 +199,14 @@ export const DesktopConnectionCard = () => {
           </div>
         ) : null}
         {connection.status === "error" ||
-        connection.status === "update-required" ? (
+        connection.status === "update-required" ||
+        connection.status === "refused" ? (
           <div className="mt-3">
-            <DesktopConnectionStatus onRetry={onConnect} state={connection} />
+            <DesktopConnectionStatus
+              onRetry={onConnect}
+              onSwitchAccount={switchAccount}
+              state={connection}
+            />
           </div>
         ) : null}
       </FramePanel>

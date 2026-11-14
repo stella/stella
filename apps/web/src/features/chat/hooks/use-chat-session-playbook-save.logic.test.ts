@@ -4,11 +4,17 @@ import { describe, expect, test } from "bun:test";
 import {
   consumePlaybookSaveToolCalls,
   type PlaybookSaveMessage,
+  type PlaybookSaveTarget,
 } from "@/components/chat/chat-ui-tools";
 import {
   followReconciledPlaybookSave,
   playbookPaneReaction,
+  playbookPaneState,
   reconcilePlaybookSaveToolCalls,
+} from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
+import type {
+  PlaybookPaneMode,
+  PlaybookPaneState,
 } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 
@@ -91,7 +97,7 @@ const reconcile = async ({
     return null;
   }
   await reconciliation.refetched;
-  return reconciliation.playbookId;
+  return reconciliation.target?.playbookId ?? null;
 };
 
 describe("playbook save cache reconciliation", () => {
@@ -217,51 +223,100 @@ describe("playbook save cache reconciliation", () => {
   });
 });
 
+const SOURCES: PlaybookSaveTarget["source"][] = ["live", "history"];
+
 describe("the playbook pane after a save", () => {
-  const closed = {
-    isMobile: false,
-    openedThisSession: false,
-    shownPlaybookId: null,
-    savedPlaybookId: "playbook-a",
+  const MODES: PlaybookPaneMode[] = ["auto-open", "on-request"];
+  const FLAGS = [false, true] as const;
+  const PANES = [
+    { type: "closed" },
+    { type: "pending" },
+    { type: "playbook", playbookId: "playbook-a" },
+    { type: "playbook", playbookId: "playbook-b" },
+  ] as const satisfies readonly PlaybookPaneState[];
+
+  const cases = MODES.flatMap((mode) =>
+    SOURCES.flatMap((source) =>
+      FLAGS.flatMap((isMobile) =>
+        FLAGS.flatMap((openedThisSession) =>
+          PANES.map((pane) => ({
+            mode,
+            isMobile,
+            openedThisSession,
+            pane,
+            saved: { playbookId: "playbook-a", source },
+          })),
+        ),
+      ),
+    ),
+  );
+  const reactionsWhere = (
+    matches: (args: (typeof cases)[number]) => boolean,
+  ) => {
+    const matching = cases.filter(matches);
+    expect(matching.length).toBeGreaterThan(0);
+    return new Set(matching.map((args) => playbookPaneReaction(args)));
   };
 
-  test("a main-area chat opens it once", () => {
-    expect(playbookPaneReaction({ mode: "auto-open", ...closed })).toBe("open");
-    // Closed by the user after it opened: it stays closed.
-    expect(
-      playbookPaneReaction({
-        mode: "auto-open",
-        ...closed,
-        openedThisSession: true,
-      }),
-    ).toBe("none");
+  test("a pending pane becomes the saved playbook on every surface and from every save", () => {
+    expect(reactionsWhere(({ pane }) => pane.type === "pending")).toEqual(
+      new Set(["update"]),
+    );
   });
 
-  test("other surfaces and a phone screen never open it by themselves", () => {
-    expect(playbookPaneReaction({ mode: "on-request", ...closed })).toBe(
-      "none",
-    );
+  test("a historical save never opens a closed pane or moves one showing a playbook", () => {
     expect(
-      playbookPaneReaction({ mode: "auto-open", ...closed, isMobile: true }),
-    ).toBe("none");
+      reactionsWhere(
+        ({ pane, saved }) =>
+          pane.type !== "pending" && saved.source === "history",
+      ),
+    ).toEqual(new Set(["none"]));
   });
 
   test("an open pane moves only when the thread saves another playbook", () => {
-    const open = { mode: "on-request", ...closed } as const;
-    expect(
-      playbookPaneReaction({ ...open, shownPlaybookId: "playbook-b" }),
-    ).toBe("update");
+    const live = (playbookId: string) =>
+      reactionsWhere(
+        ({ pane, saved }) =>
+          saved.source === "live" &&
+          pane.type === "playbook" &&
+          pane.playbookId === playbookId,
+      );
+    expect(live("playbook-b")).toEqual(new Set(["update"]));
     // Already showing the saved playbook: its tab label and payload stay.
+    expect(live("playbook-a")).toEqual(new Set(["none"]));
+  });
+
+  test("a closed pane opens once, only beside a main-area chat on a wide screen", () => {
+    const closedLive = (args: (typeof cases)[number]) =>
+      args.pane.type === "closed" && args.saved.source === "live";
+    const opens = (args: (typeof cases)[number]) =>
+      args.mode === "auto-open" && !args.isMobile && !args.openedThisSession;
+    expect(reactionsWhere((args) => closedLive(args) && opens(args))).toEqual(
+      new Set(["open"]),
+    );
+    expect(reactionsWhere((args) => closedLive(args) && !opens(args))).toEqual(
+      new Set(["none"]),
+    );
+  });
+
+  test("the pane state follows the tab's payload", () => {
+    expect(playbookPaneState(null)).toEqual({ type: "closed" });
+    expect(playbookPaneState({ type: "pending" })).toEqual({
+      type: "pending",
+    });
     expect(
-      playbookPaneReaction({ ...open, shownPlaybookId: "playbook-a" }),
-    ).toBe("none");
+      playbookPaneState({ type: "playbook", playbookId: "playbook-a" }),
+    ).toEqual({ type: "playbook", playbookId: "playbook-a" });
   });
 });
 
 describe("following a reconciled playbook save", () => {
-  test.each([null, "already-open-playbook"])(
-    "loading an older save refreshes caches without changing pane %s, while a concurrent live save remains eligible",
-    async (shownPlaybookId) => {
+  test.each([
+    { type: "closed" },
+    { type: "playbook", playbookId: "already-open-playbook" },
+  ] as const)(
+    "loading an older save refreshes caches without changing pane %j, while a concurrent live save remains eligible",
+    async (pane) => {
       const queryClient = seededQueryClient();
       const handledToolCallIds = new Set<string>();
       const historicalToolCallIds = new Set<string>();
@@ -293,16 +348,17 @@ describe("following a reconciled playbook save", () => {
       });
       expect(historicalToolCallIds.has("tool-call-1")).toBe(true);
       const reactions: string[] = [];
-      const follow = (playbookId: string) => {
-        reactions.push(
-          playbookPaneReaction({
-            mode: "auto-open",
-            isMobile: false,
-            openedThisSession: false,
-            shownPlaybookId,
-            savedPlaybookId: playbookId,
-          }),
-        );
+      const follow = (saved: PlaybookSaveTarget) => {
+        const reaction = playbookPaneReaction({
+          mode: "auto-open",
+          isMobile: false,
+          openedThisSession: false,
+          pane,
+          saved,
+        });
+        if (reaction !== "none") {
+          reactions.push(reaction);
+        }
       };
       // Without provenance this exact saved playbook would open or retarget.
       expect(
@@ -310,10 +366,10 @@ describe("following a reconciled playbook save", () => {
           mode: "auto-open",
           isMobile: false,
           openedThisSession: false,
-          shownPlaybookId,
-          savedPlaybookId: PLAYBOOK_ID,
+          pane,
+          saved: { playbookId: PLAYBOOK_ID, source: "live" },
         }),
-      ).toBe(shownPlaybookId === null ? "open" : "update");
+      ).toBe(pane.type === "closed" ? "open" : "update");
       const historical = reconcileMessages([...olderPage, ...initialPage]);
       if (historical === null) {
         throw new Error("Expected historical save cache reconciliation");
@@ -355,7 +411,7 @@ describe("following a reconciled playbook save", () => {
       expect(historicalToolCallIds.has("tool-call-2")).toBe(false);
       expect(handledToolCallIds.has("tool-call-3")).toBe(true);
       expect(refetches).toBe(2);
-      expect(reactions).toEqual([shownPlaybookId === null ? "open" : "update"]);
+      expect(reactions).toEqual([pane.type === "closed" ? "open" : "update"]);
       unsubscribe();
     },
   );
@@ -395,7 +451,7 @@ describe("following a reconciled playbook save", () => {
       await followReconciledPlaybookSave({
         reconciliation,
         isCurrent: () => true,
-        follow: (playbookId) => {
+        follow: ({ playbookId }) => {
           followed.push(playbookId);
         },
       });
@@ -411,36 +467,67 @@ describe("following a reconciled playbook save", () => {
     expect(handledToolCallIds.has("tool-call-1")).toBe(true);
   });
 
-  test("a historical save refreshes caches without opening the pane", async () => {
-    const queryClient = seededQueryClient();
-    const reconciliation = reconcilePlaybookSaveToolCalls({
-      handledToolCallIds: new Set(),
-      messages: saveMessages({ output: { playbookId: PLAYBOOK_ID } }),
-      organizationId: ORGANIZATION_ID,
-      playbookKeys: knowledgeKeys.playbooks,
-      queryClient,
-      source: "history",
-    });
-    expect(reconciliation).not.toBeNull();
-    if (reconciliation === null) {
-      throw new Error("Expected a completed save reconciliation");
-    }
-    const opened: string[] = [];
-    await followReconciledPlaybookSave({
-      reconciliation,
-      isCurrent: () => true,
-      follow: (playbookId) => {
-        opened.push(playbookId);
-      },
-    });
-    expect(opened).toEqual([]);
-    expect(
-      isInvalidated(
+  test.each(SOURCES)(
+    "a save loaded as %s refreshes caches and fills only a pending pane",
+    async (source) => {
+      const queryClient = seededQueryClient();
+      const historicalToolCallIds = new Set<string>();
+      const messages = saveMessages({ output: { playbookId: PLAYBOOK_ID } });
+      if (source === "live") {
+        // Paged in behind a live transcript: marked before it is published.
+        consumePlaybookSaveToolCalls({
+          handledToolCallIds: historicalToolCallIds,
+          messages,
+        });
+      }
+      const reconciliation = reconcilePlaybookSaveToolCalls({
+        handledToolCallIds: new Set(),
+        historicalToolCallIds,
+        messages,
+        organizationId: ORGANIZATION_ID,
+        playbookKeys: knowledgeKeys.playbooks,
         queryClient,
-        knowledgeKeys.playbooks.list(ORGANIZATION_ID, { limit: 50 }),
-      ),
-    ).toBe(true);
-  });
+        source,
+      });
+      if (reconciliation === null) {
+        throw new Error("Expected a completed save reconciliation");
+      }
+      expect(reconciliation.target).toEqual({
+        playbookId: PLAYBOOK_ID,
+        source: "history",
+      });
+      const reactionFor = async (pane: PlaybookPaneState) => {
+        const reactions: string[] = [];
+        await followReconciledPlaybookSave({
+          reconciliation,
+          isCurrent: () => true,
+          follow: (saved) => {
+            reactions.push(
+              playbookPaneReaction({
+                mode: "auto-open",
+                isMobile: false,
+                openedThisSession: false,
+                pane,
+                saved,
+              }),
+            );
+          },
+        });
+        return reactions;
+      };
+      expect(await reactionFor({ type: "closed" })).toEqual(["none"]);
+      expect(
+        await reactionFor({ type: "playbook", playbookId: "playbook-b" }),
+      ).toEqual(["none"]);
+      expect(await reactionFor({ type: "pending" })).toEqual(["update"]);
+      expect(
+        isInvalidated(
+          queryClient,
+          knowledgeKeys.playbooks.list(ORGANIZATION_ID, { limit: 50 }),
+        ),
+      ).toBe(true);
+    },
+  );
 
   test.each(["thread switch", "newer save"])(
     "a deferred save refetch cannot move the pane after a %s",
@@ -472,7 +559,7 @@ describe("following a reconciled playbook save", () => {
         reconciliation,
         isCurrent: () =>
           currentRuntime === requestedRuntime && currentSequence === 1,
-        follow: (playbookId) => {
+        follow: ({ playbookId }) => {
           followed.push(playbookId);
         },
       });

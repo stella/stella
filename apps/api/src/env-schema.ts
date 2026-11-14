@@ -2,6 +2,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+import { normalizeOutlookTaskPaneOrigin } from "@stll/api-contract/outlook-client";
 import {
   NODE_ENV,
   type NodeEnvLabel,
@@ -34,7 +35,6 @@ import {
   DEFAULT_POLAR_API_VERSION,
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
-import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
 import {
   caseLawCanariesEnvSchema,
   caseLawDailyBandsEnvSchema,
@@ -46,6 +46,7 @@ import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
+import { modelRunCapEnvSchema } from "@/api/lib/usage/model-run-caps/config";
 
 type EmailProviderInput = {
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
@@ -108,7 +109,7 @@ const originVerifyValue = v.pipe(
 export const envApiServerSchema = {
   DEPLOY_ENVIRONMENT: envBaseServerSchema.DEPLOY_ENVIRONMENT,
   ...rateLimitBudgetEnvSchema,
-  ...verificationRunCapEnvSchema,
+  ...modelRunCapEnvSchema,
   // Data invariants: each adapter's expected published decisions per day, and
   // case-law queries the corpus must answer. Unset skips that invariant.
   DATA_INVARIANT_CASE_LAW_DAILY_BANDS: caseLawDailyBandsEnvSchema,
@@ -392,6 +393,21 @@ export const envApiServerSchema = {
   PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
   ...converterSettingsSchema,
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
+  /**
+   * The https origin serving the Outlook add-in's task pane, e.g.
+   * `https://outlook.example.com`. Set, the API publishes the add-in's OAuth
+   * client document, accepts its one redirect on this origin and answers its
+   * browser requests. Unset, the add-in cannot sign in to this deployment.
+   */
+  OUTLOOK_ADDIN_ORIGIN: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        (value) => normalizeOutlookTaskPaneOrigin(value) === value,
+        "OUTLOOK_ADDIN_ORIGIN must be an https origin without a path, e.g. https://outlook.example.com",
+      ),
+    ),
+  ),
   /**
    * RFC 3161 timestamp authorities for PDF signing, in preference order,
    * separated by commas or whitespace. Signing falls back to the next one
@@ -770,6 +786,8 @@ export const envApiServerSchema = {
   // opts in only after its Microsoft app registration is granted the
   // read-only delegated scopes (see handlers/sharepoint/graph-oauth.ts).
   FEATURE_SHAREPOINT: featureFlagSchema,
+  /** Dark-launch internal conflict-of-interest checks until intake review. */
+  FEATURE_CONFLICT_CHECK: featureFlagSchema,
 
   /**
    * Dark-launch gate for the auth.md `identity_assertion` (ID-JAG)

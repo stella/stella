@@ -40,7 +40,10 @@ const HELPER_MODULE_SUFFIX = "/files/pdf-signatures";
 const RESTRICTED_HELPERS: ReadonlyMap<string, readonly string[]> = new Map([
   [
     "appendSigningRevision",
-    ["apps/api/src/lib/files/pdf-signing/validation-data.ts"],
+    [
+      "apps/api/src/lib/files/pdf-signing/sign-pdf.ts",
+      "apps/api/src/lib/files/pdf-signing/validation-data.ts",
+    ],
   ],
   ["appendAnnotationRevision", ["apps/api/src/lib/files/marked-pdf.ts"]],
   [

@@ -170,6 +170,11 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  // A check's title can name a prospective client, so the log never shows it.
+  [AUDIT_RESOURCE_TYPE.CONFLICT_CHECK]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
   [AUDIT_RESOURCE_TYPE.ANNOUNCEMENT]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
@@ -210,6 +215,10 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  [AUDIT_RESOURCE_TYPE.DATA_EXPORT]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
@@ -222,6 +231,10 @@ const AUDIT_RESOURCE_RESOLVERS = {
   [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
+  },
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: {
+    type: "unresolvable",
+    reason: "The folder's name stays on the member's computer",
   },
   [AUDIT_RESOURCE_TYPE.CLAUSE]: {
     type: "unresolvable",

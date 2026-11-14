@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import type { ReviewDecision } from "@stll/api-contract/review-decision";
+import type { ReadsExactly } from "@stll/api-contract/review-decision";
 import type {
   FolioAIEditApplyMode,
   FolioAIEditSeverity,
@@ -42,11 +42,9 @@ export const DOCX_SUGGESTION_STATUSES = [
 ] as const;
 export type DocxSuggestionStatus = (typeof DOCX_SUGGESTION_STATUSES)[number];
 
-export const DOCX_SUGGESTION_REVIEW_DECISION = {
-  pending: null,
-  accepted: "accepted",
-  rejected: "rejected",
-} as const satisfies Record<DocxSuggestionStatus, ReviewDecision | null>;
+/** What each status means in the shared vocabulary is the owner's
+ *  (`REVIEW_STATUS_DECISION.docxSuggestion`). */
+true satisfies ReadsExactly<"docxSuggestion", DocxSuggestionStatus>;
 
 /**
  * Severity the AI assigned, plus `unspecified` for the review store's
