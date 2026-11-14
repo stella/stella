@@ -16,10 +16,10 @@
     {
       "name": "case_law_coverage",
       "nameChars": 17,
-      "descriptionChars": 288,
-      "inputSchemaChars": 463,
-      "totalChars": 768,
-      "estimatedTokens": 295
+      "descriptionChars": 269,
+      "inputSchemaChars": 457,
+      "totalChars": 743,
+      "estimatedTokens": 286
     },
     {
       "name": "check_counterparty",
@@ -296,10 +296,10 @@
     {
       "name": "open_case_law_decision",
       "nameChars": 22,
-      "descriptionChars": 234,
+      "descriptionChars": 201,
       "inputSchemaChars": 470,
-      "totalChars": 726,
-      "estimatedTokens": 282
+      "totalChars": 693,
+      "estimatedTokens": 271
     },
     {
       "name": "open_document_version_upload",
@@ -368,18 +368,18 @@
     {
       "name": "read_case_law_citations",
       "nameChars": 23,
-      "descriptionChars": 809,
-      "inputSchemaChars": 1597,
-      "totalChars": 2429,
-      "estimatedTokens": 943
+      "descriptionChars": 734,
+      "inputSchemaChars": 1525,
+      "totalChars": 2282,
+      "estimatedTokens": 888
     },
     {
       "name": "read_case_law_decision",
       "nameChars": 22,
-      "descriptionChars": 594,
-      "inputSchemaChars": 3441,
-      "totalChars": 4057,
-      "estimatedTokens": 1640
+      "descriptionChars": 535,
+      "inputSchemaChars": 3040,
+      "totalChars": 3597,
+      "estimatedTokens": 1453
     },
     {
       "name": "read_case_law_decision_blocks",
@@ -456,10 +456,10 @@
     {
       "name": "resolve_case_law_decision",
       "nameChars": 25,
-      "descriptionChars": 530,
-      "inputSchemaChars": 681,
-      "totalChars": 1236,
-      "estimatedTokens": 469
+      "descriptionChars": 471,
+      "inputSchemaChars": 609,
+      "totalChars": 1105,
+      "estimatedTokens": 420
     },
     {
       "name": "resolve_law_citation",
@@ -576,10 +576,10 @@
     {
       "name": "search_case_law",
       "nameChars": 15,
-      "descriptionChars": 721,
-      "inputSchemaChars": 6579,
-      "totalChars": 7315,
-      "estimatedTokens": 2987
+      "descriptionChars": 700,
+      "inputSchemaChars": 6249,
+      "totalChars": 6964,
+      "estimatedTokens": 2843
     },
     {
       "name": "search_guidance",
@@ -646,6 +646,14 @@
       "estimatedTokens": 417
     },
     {
+      "name": "verify_quote",
+      "nameChars": 12,
+      "descriptionChars": 675,
+      "inputSchemaChars": 423,
+      "totalChars": 1110,
+      "estimatedTokens": 406
+    },
+    {
       "name": "write_capability",
       "nameChars": 16,
       "descriptionChars": 444,
@@ -655,7 +663,7 @@
     }
   ],
   "totals": {
-    "characters": 140374,
-    "estimatedTokens": 55804
+    "characters": 140337,
+    "estimatedTokens": 55755
   }
 }

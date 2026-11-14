@@ -176,6 +176,7 @@ const PUBLIC_CASE_LAW_ROUTES = [
   "GET /case/provisions/citing-decisions",
   "GET /case/sitemap/decisions/shard",
   "GET /case/sitemap/shards",
+  "POST /case/decisions/quotes/verify",
   "POST /case/decisions/search",
 ] as const;
 
