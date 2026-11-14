@@ -60,8 +60,17 @@ const STEP_HEADER_MAX_BYTES: usize = 64;
 /// The largest share of a step that is kept, whatever its kind.
 const STEP_KEPT_MAX_BYTES: u64 = 10 * 1024 * 1024;
 /// The kinds a marker may name; `image` is the one kept whole or not at all.
+/// This and the request's spelling below follow the API contract's
+/// `chat-local-run-step-content.fixtures.json`, which a test here reads.
 const STEP_KINDS: [&str; 4] = ["command", "diff", "conversation", IMAGE_KIND];
 const IMAGE_KIND: &str = "image";
+/// The query parameters naming a step's kind and how many bytes it produced.
+const KIND_QUERY: &str = "kind";
+const TOTAL_BYTES_QUERY: &str = "totalBytes";
+/// The multipart part holding a step's kept bytes.
+const CONTENT_PART: &str = "content";
+/// The states the API answers once it settled a step.
+const SETTLED_STATES: [&str; 3] = ["stored", "too_large", "run_budget_reached"];
 /// One step's request; a kept image on a slow line needs this long.
 const SEND_TIMEOUT: Duration = Duration::from_secs(60);
 /// The API's answer to a step is one short object.
@@ -388,8 +397,13 @@ pub(super) fn read_step(run: &AwaitedRun, step_key: &str) -> StepRead {
 pub(super) fn answer_of(status: u16, body: &[u8]) -> Answer {
   match status {
     200..=299 => {
-      let stored = serde_json::from_slice::<serde_json::Value>(body)
-        .is_ok_and(|answer| answer.get("state").is_some_and(|state| state.is_string()));
+      let stored =
+        serde_json::from_slice::<serde_json::Value>(body).is_ok_and(|answer| {
+          answer
+            .get("state")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|state| SETTLED_STATES.contains(&state))
+        });
       if stored {
         Answer::Settled
       } else {
@@ -687,8 +701,8 @@ async fn send_step(
   let mut form = reqwest::multipart::Form::new();
   if let Some(content) = step.content {
     form = form.part(
-      "content",
-      reqwest::multipart::Part::bytes(content).file_name("content"),
+      CONTENT_PART,
+      reqwest::multipart::Part::bytes(content).file_name(CONTENT_PART),
     );
   }
   let request = client
@@ -698,8 +712,8 @@ async fn send_step(
       target.step_key,
     ))
     .query(&[
-      ("kind", step.kind.to_owned()),
-      ("totalBytes", step.total_bytes.to_string()),
+      (KIND_QUERY, step.kind.to_owned()),
+      (TOTAL_BYTES_QUERY, step.total_bytes.to_string()),
     ])
     .header(DESKTOP_ID_HEADER, target.desktop_id.to_string())
     .multipart(form);
@@ -1111,6 +1125,7 @@ mod tests {
     assert_eq!(answer_of(200, b"<html>Sign in</html>"), Answer::Later);
     assert_eq!(answer_of(200, b""), Answer::Later);
     assert_eq!(answer_of(200, br#"{"state":1}"#), Answer::Later);
+    assert_eq!(answer_of(200, br#"{"state":"arriving"}"#), Answer::Later);
     // Refused for good: not awaited, its time passed, another computer,
     // other content, a request the API cannot read.
     for status in [400, 409, 413, 422] {
@@ -1128,6 +1143,70 @@ mod tests {
     for status in [301, 307, 308, 401, 408, 410, 418, 429, 500, 502, 503, 504] {
       assert_eq!(answer_of(status, b""), Answer::Later, "status {status}");
     }
+  }
+
+  const CONTENT_FIXTURES: &str = include_str!(
+    "../../../../../packages/api-contract/src/chat-local-run-step-content.fixtures.json"
+  );
+
+  fn strings(value: &serde_json::Value) -> Vec<&str> {
+    value
+      .as_array()
+      .unwrap()
+      .iter()
+      .map(|item| item.as_str().unwrap())
+      .collect()
+  }
+
+  #[test]
+  fn a_step_is_sent_and_its_answer_read_as_the_api_contract_says() {
+    let fixtures: serde_json::Value = serde_json::from_str(CONTENT_FIXTURES).unwrap();
+    assert_eq!(strings(&fixtures["kinds"]), STEP_KINDS);
+    assert_eq!(fixtures["imageKind"], IMAGE_KIND);
+    let caps = fixtures["maxBytes"].as_object().unwrap();
+    assert_eq!(
+      caps.values().map(|cap| cap.as_u64().unwrap()).max(),
+      Some(STEP_KEPT_MAX_BYTES)
+    );
+    assert_eq!(
+      fixtures["awaitedMax"].as_u64(),
+      u64::try_from(MAX_STEPS_PER_LISTING).ok()
+    );
+    let awaited = Duration::from_millis(fixtures["awaitedMs"].as_u64().unwrap());
+    assert!(LEFT_FOR > awaited);
+
+    let late = &fixtures["late"];
+    let run_id = Uuid::parse_str(late["runId"].as_str().unwrap()).unwrap();
+    let step_key = late["stepKey"].as_str().unwrap();
+    assert!(is_hex_key(step_key));
+    assert_eq!(
+      step_url("https://api.example.test/", run_id, step_key),
+      format!("https://api.example.test{}", late["path"].as_str().unwrap())
+    );
+    assert_eq!(late["query"]["kind"], KIND_QUERY);
+    assert_eq!(late["query"]["totalBytes"], TOTAL_BYTES_QUERY);
+    assert_eq!(late["contentPart"], CONTENT_PART);
+
+    let settled: Vec<&str> = answers(late, "stored")
+      .iter()
+      .map(|answer| answer["body"]["state"].as_str().unwrap())
+      .collect();
+    assert_eq!(settled, SETTLED_STATES);
+    for (name, expected) in [
+      ("stored", Answer::Settled),
+      ("refused", Answer::Settled),
+      ("notThisAccount", Answer::NotThisAccount),
+    ] {
+      for answer in answers(late, name) {
+        let status = u16::try_from(answer["status"].as_u64().unwrap()).unwrap();
+        let body = serde_json::to_vec(&answer["body"]).unwrap();
+        assert_eq!(answer_of(status, &body), expected, "{answer}");
+      }
+    }
+  }
+
+  fn answers<'a>(late: &'a serde_json::Value, name: &str) -> &'a [serde_json::Value] {
+    late[name].as_array().unwrap()
   }
 
   #[tokio::test]
