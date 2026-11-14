@@ -81,6 +81,24 @@ const publishBarrier = (manifest: CorpusIndexManifest): SQL =>
   );
 
 /**
+ * When a committed revision that is still not exactly present counts as
+ * unpublished: its stored barrier plus one more publish delay. A census that
+ * finds it absent, partial or in excess before then retries on a later pass,
+ * so an engine that publishes up to one window late is proven, not cleaned
+ * up. Derived here and never stored.
+ */
+export const corpusProjectionAcceptedAppendProofDeadline = (
+  appendPublishBarrierAt: Date,
+  manifest: CorpusIndexManifest,
+): Date => {
+  const barrierMs = appendPublishBarrierAt.getTime();
+  if (!Number.isFinite(barrierMs)) {
+    return panic("Corpus projection proof deadline contract is invalid");
+  }
+  return new Date(barrierMs + corpusIndexAppendPublishDelayMs(manifest));
+};
+
+/**
  * Whether the engine has certainly published an accepted append. Only a
  * published revision may be observed: an earlier census reads a queued
  * append's absence as drift and repairs a revision that is merely late.
@@ -116,9 +134,9 @@ export const corpusProjectionAcceptedAppendCleanupFence = (
   cleanupFence(publishBarrier(manifest), transitionAt);
 
 /**
- * The same fence for the one path that retires an acceptance it is still
- * holding, before `append_committed_at` is on the row. The transition is
- * later than the acceptance it stands in for, so the barrier stays sound.
+ * The same fence for the statement that records an acceptance, which cannot
+ * read the `append_committed_at` it is writing. The transition is later than
+ * the acceptance it stands in for, so the barrier stays sound.
  */
 export const corpusProjectionUnrecordedAppendCleanupFence = (
   manifest: CorpusIndexManifest,

@@ -240,18 +240,36 @@ export const resolveDownloadOwner = (
 };
 
 /**
+ * A tab's frames. Chrome answers null for a tab id that is no longer valid,
+ * so a tab closed between being listed and being asked (any tab the user
+ * closes while a download starts) has no frames left to trace to. Null when
+ * Chrome could not list the frames of a tab that is still open, since a
+ * missing answer is not an empty one.
+ */
+const framesOfTab = async (
+  tabId: number,
+): Promise<chrome.webNavigation.GetAllFrameResultDetails[] | null> => {
+  const frames = await chrome.webNavigation
+    .getAllFrames({ tabId })
+    .catch(() => null);
+  if (frames !== null) {
+    return frames;
+  }
+  const open = await chrome.tabs.get(tabId).then(
+    () => true,
+    () => false,
+  );
+  return open ? null : [];
+};
+
+/**
  * Origins of every frame in the given tabs; null when Chrome could not list
- * a tab's frames, since a missing answer is not an empty one.
+ * an open tab's frames.
  */
 const frameOrigins = async (
   tabIds: readonly number[],
 ): Promise<Set<string> | null> => {
-  const frames = await Promise.all(
-    tabIds.map(
-      async (tabId) =>
-        await chrome.webNavigation.getAllFrames({ tabId }).catch(() => null),
-    ),
-  );
+  const frames = await Promise.all(tabIds.map(framesOfTab));
   if (frames.some((tabFrames) => tabFrames === null)) {
     return null;
   }

@@ -333,8 +333,20 @@ jobs:
               return;
             }
             core.notice(`${workflow_id} (${environment}): run ${id}`);
+            // A freshly dispatched run can read as Not Found for a few
+            // seconds; wait for it to appear before following it.
+            const readRun = async () => {
+              for (let attempt = 0; ; attempt += 1) {
+                try {
+                  return (await github.rest.actions.getWorkflowRun({ owner, repo, run_id: id })).data;
+                } catch (error) {
+                  if (error?.status !== 404 || attempt >= 6) throw error;
+                  await sleep(5_000);
+                }
+              }
+            };
             for (let poll = 0; ; poll += 1) {
-              const { data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: id });
+              const run = await readRun();
               if (run.status === 'completed') {
                 if (run.conclusion !== 'success') {
                   core.setFailed(`The ${environment} deploy ended ${run.conclusion}: ${run.html_url}`);

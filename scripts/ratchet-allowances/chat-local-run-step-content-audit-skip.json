@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 4,
+  "reason": "Storing what a local run's steps produced writes one content row per step and the run's own storage counters, on the gateway's owner connection like the run's events and app calls: it is a turn's own output, audited by the turn the member ran, and an image's file is audited by its own create event."
+}

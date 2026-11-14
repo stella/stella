@@ -16,6 +16,7 @@ type DictationModel =
 /** The native failures setup has a text for. */
 const DICTATION_FAILURES = [
   "accessibility",
+  "cloudTranscription",
   "focusChanged",
   "focusUnconfirmed",
   "microphone",
