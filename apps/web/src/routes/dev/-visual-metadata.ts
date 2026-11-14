@@ -49,6 +49,7 @@ export const menuCommitBenches = {
   primitive: "the menu primitive alone",
   plain: "the shared menu",
   tooltip: "a tooltip on the trigger",
+  "tooltip-quiet-on-focus": "a tooltip on the trigger that focus does not open",
   radio: "radio rows",
   many: "twenty-four rows",
 } as const;

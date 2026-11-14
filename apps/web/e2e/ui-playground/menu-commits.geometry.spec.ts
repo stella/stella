@@ -20,19 +20,47 @@ const readCommits = async (page: Page) =>
     return typeof counted === "number" ? counted : 0;
   }, RENDER_COMMIT_COUNT_GLOBAL);
 
+type Bench = keyof typeof menuCommitBenches;
 const BENCHES = Object.keys(menuCommitBenches).filter(
-  (bench): bench is keyof typeof menuCommitBenches =>
-    bench in menuCommitBenches,
+  (bench): bench is Bench => bench in menuCommitBenches,
 );
 
+/**
+ * The commits each menu takes today, the same in every project of the suite,
+ * so they are the budget as they stand: a menu that commits more fails. The
+ * primitive is the floor, which the shared menu adds nothing to. Closing is
+ * always by Escape, which returns focus to the trigger.
+ */
+const COMMIT_BUDGET = {
+  pointer: {
+    primitive: { open: 11, close: 6 },
+    plain: { open: 11, close: 6 },
+    tooltip: { open: 12, close: 15 },
+    "tooltip-quiet-on-focus": { open: 12, close: 15 },
+    radio: { open: 14, close: 8 },
+    many: { open: 12, close: 6 },
+  },
+  keyboard: {
+    primitive: { open: 10, close: 6 },
+    plain: { open: 10, close: 6 },
+    tooltip: { open: 21, close: 15 },
+    "tooltip-quiet-on-focus": { open: 21, close: 15 },
+    radio: { open: 14, close: 6 },
+    many: { open: 10, close: 6 },
+  },
+} as const satisfies Record<
+  "pointer" | "keyboard",
+  Record<Bench, { open: number; close: number }>
+>;
+
 for (const how of ["pointer", "keyboard"] as const) {
-  test(`a menu opened by ${how} reports its commits to open and to close`, async ({
+  test(`a menu opened by ${how} stays within its commits to open and to close`, async ({
     page,
   }) => {
     await page.goto("/dev?visual=menu-commits", {
       waitUntil: "domcontentloaded",
     });
-    const measured: { bench: string; open: number; close: number }[] = [];
+    const measured: { bench: Bench; open: number; close: number }[] = [];
     for (const bench of BENCHES) {
       const trigger = page
         .locator(`[data-playground-section="menu-commits:${bench}"]`)
@@ -61,6 +89,11 @@ for (const how of ["pointer", "keyboard"] as const) {
     process.stdout.write(
       `menu commits (${how}, ${test.info().project.name}): ${JSON.stringify(measured)}\n`,
     );
+    for (const { bench, open, close } of measured) {
+      const budget = COMMIT_BUDGET[how][bench];
+      expect(open, `${bench} to open`).toBeLessThanOrEqual(budget.open);
+      expect(close, `${bench} to close`).toBeLessThanOrEqual(budget.close);
+    }
     expect(measured).toHaveLength(BENCHES.length);
   });
 }
