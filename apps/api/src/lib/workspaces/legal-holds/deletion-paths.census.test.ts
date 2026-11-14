@@ -450,6 +450,19 @@ const handlesLegalHoldActiveError = (source: string): boolean => {
   return handled;
 };
 
+/**
+ * Whether a module's text can hold a deletion the census records: a
+ * `.delete(` call, raw `DELETE FROM` SQL, or a storage deletion by name.
+ * Every recorded site contains one of these, so a module without any is
+ * skipped before it is parsed.
+ */
+const mayDelete = (source: string): boolean =>
+  source.includes(".delete(") ||
+  /\bDELETE\s+FROM\b/iu.test(source) ||
+  [...STORAGE_DELETIONS, "DeleteObjectCommand", "DeleteObjectsCommand"].some(
+    (name) => source.includes(name),
+  );
+
 const uncoveredModule = (path: string, source: string): string[] => {
   const { deletions } = censusSource(source);
   return EXCEPTIONS.has(path)
@@ -600,6 +613,9 @@ describe("legal hold deletion path census", () => {
         }
         const path = root === "src" ? relativePath : `${root}/${relativePath}`;
         const source = await Bun.file(`${directory}/${relativePath}`).text();
+        if (!mayDelete(source)) {
+          continue;
+        }
         const census = censusSource(source);
         if (census.deletions.length > 0 && EXCEPTIONS.has(path)) {
           exercisedExceptions.add(path);
