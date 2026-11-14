@@ -17,6 +17,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { buildServedSnapshot } from "@/api/tests/helpers/chat-fixtures";
 import { diffLiveAgainstReload } from "@/api/tests/helpers/chat-live-reload-invariants";
 import {
   browsingChild,
@@ -156,15 +157,15 @@ describe("sub-agent parts in the chat message table", () => {
     ]);
 
     // Served page parts ride on the AG-UI assistant message.
-    const answer = { content: "", id, parts, role: "assistant" as const };
-    const snapshot = clientVisibleStreamChunk({
-      messages: [answer],
-      type: EventType.MESSAGES_SNAPSHOT,
-    });
+    const snapshot = clientVisibleStreamChunk(
+      buildServedSnapshot([{ id, parts, role: "assistant" }]),
+    );
     if (snapshot.type !== EventType.MESSAGES_SNAPSHOT) {
       return panic("Expected a messages snapshot");
     }
-    const live = asTestRaw<UIMessage>(snapshot.messages.at(0));
+    const live = asTestRaw<UIMessage>(
+      snapshot.messages.find((message) => message.id === id),
+    );
     expect(withParsedResults(reloaded.parts)).toEqual(
       withParsedResults(live.parts),
     );

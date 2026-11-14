@@ -96,8 +96,10 @@ const mapParts = (
     return content;
   }
   const data: unknown[] = content["data"];
+  // `map` first: writing back unwraps a carried sub-agent part, whose child
+  // content then still holds carried parts of its own.
   const mapped = data.map((part) =>
-    map(mapChildContents(part, (child) => mapParts(child, map))),
+    mapChildContents(map(part), (child) => mapParts(child, map)),
   );
   return sameItems(mapped, data) ? content : { ...content, data: mapped };
 };

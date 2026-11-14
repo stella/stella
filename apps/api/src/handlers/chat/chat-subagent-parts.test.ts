@@ -1,4 +1,4 @@
-import { EventType, StreamProcessor, uiMessagesToWire } from "@tanstack/ai";
+import { EventType, StreamProcessor } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
@@ -32,6 +32,10 @@ import type {
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  buildServedSnapshot,
+  buildWireSnapshot,
+} from "@/api/tests/helpers/chat-fixtures";
 import { diffLiveAgainstReload } from "@/api/tests/helpers/chat-live-reload-invariants";
 import {
   browsingChild,
@@ -107,20 +111,15 @@ describe("a sub-agent part stores and reloads as the browser shows it", () => {
       browsingChild("suspended", 2),
     ];
     // Served page parts ride on the AG-UI assistant message.
-    const answer = {
-      content: "",
-      id: MESSAGE_ID,
-      parts,
-      role: "assistant" as const,
-    };
-    const chunk = clientVisibleStreamChunk({
-      messages: [answer],
-      type: EventType.MESSAGES_SNAPSHOT,
-    });
+    const chunk = clientVisibleStreamChunk(
+      buildServedSnapshot([{ id: MESSAGE_ID, parts, role: "assistant" }]),
+    );
     if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
       return panic("Expected a messages snapshot");
     }
-    const streamed = asTestRaw<UIMessage>(chunk.messages.at(0));
+    const streamed = asTestRaw<UIMessage>(
+      chunk.messages.find((message) => message.id === MESSAGE_ID),
+    );
 
     const reloaded = storeAndReload(parts);
 
@@ -133,15 +132,62 @@ describe("a sub-agent part stores and reloads as the browser shows it", () => {
     ).toEqual([]);
   });
 
+  test("a stream snapshot keeps a nested run's pages as the message stores them", () => {
+    const nested = browsingChild("finished", 2);
+    // The fixture reaches the fault: the nested run carries whole pages.
+    expect(rawPageIds(nested)).toHaveLength(4);
+    const parts: ChatPart[] = [
+      {
+        subagent: {
+          id: "child-plan",
+          messages: [
+            {
+              id: "child-plan-answer",
+              parts: [nested, { content: "Hotovo.", type: "text" }],
+              role: "assistant",
+            },
+          ],
+          name: "plan",
+          parentToolCallId: PARENT_CALL_ID,
+          status: "running",
+        },
+        type: "subagent",
+      },
+    ];
+    const chunk = clientVisibleStreamChunk(
+      buildServedSnapshot([{ id: MESSAGE_ID, parts, role: "assistant" }]),
+    );
+    if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+      return panic("Expected a messages snapshot");
+    }
+    const streamed = asTestRaw<UIMessage>(
+      chunk.messages.find((message) => message.id === MESSAGE_ID),
+    );
+    const nestedOf = (part: ChatPart | undefined) =>
+      part?.type === "subagent"
+        ? asTestRaw<ChatPart | undefined>(
+            part.subagent.messages.at(0)?.parts.at(0),
+          )
+        : undefined;
+
+    const reloaded = storeAndReload(parts);
+
+    expect(
+      rawPageIds(nestedOf(asTestRaw<ChatPart>(streamed.parts.at(0)))),
+    ).toEqual([]);
+    expect(streamed.parts).toEqual(reloaded.parts);
+  });
+
   test("the SDK's wire snapshot of a sub-agent part shows what the message reloads", () => {
     const parts: ChatPart[] = [
       { content: "Hledám.", type: "text" },
       browsingChild("finished", 3),
       browsingChild("suspended", 3),
     ];
-    const wire = uiMessagesToWire([
+    const snapshot = buildWireSnapshot([
       { id: MESSAGE_ID, parts, role: "assistant" },
     ]);
+    const wire = snapshot.messages;
     const childRows = (messages: readonly object[]) =>
       messages.filter(
         (message) => typeof Reflect.get(message, "subagentRunId") === "string",
@@ -152,10 +198,7 @@ describe("a sub-agent part stores and reloads as the browser shows it", () => {
       `Stránka ${childPageId("finished", 0)}`,
     );
 
-    const chunk = clientVisibleStreamChunk({
-      messages: wire,
-      type: EventType.MESSAGES_SNAPSHOT,
-    });
+    const chunk = clientVisibleStreamChunk(snapshot);
     if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
       return panic("Expected a messages snapshot");
     }

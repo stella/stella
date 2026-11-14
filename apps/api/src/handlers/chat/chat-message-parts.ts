@@ -684,6 +684,32 @@ const persistedV3PartToChatPart = ({
   return known;
 };
 
+/** The fields of a stored child message, and of its content, this release
+ *  reads. A decoded child keeps no others, so a child a newer release
+ *  extended is not decoded: its whole part is carried and written back as
+ *  stored. */
+const STORED_CHILD_MESSAGE_FIELDS = {
+  content: true,
+  id: true,
+  role: true,
+} as const satisfies Record<
+  keyof PersistedSubagentPart["subagent"]["messages"][number],
+  true
+>;
+const STORED_CHILD_CONTENT_FIELDS = {
+  data: true,
+  metadata: true,
+  version: true,
+} as const satisfies Record<
+  Exclude<keyof PersistedChatMessageContentV3, symbol>,
+  true
+>;
+
+const hasOnlyFields = (
+  value: Readonly<Record<string, unknown>>,
+  fields: Readonly<Record<string, true>>,
+): boolean => Object.keys(value).every((field) => Object.hasOwn(fields, field));
+
 /**
  * A stored sub-agent part read back: each child message's parts decoded from
  * its own stored content, so a child part this release cannot read is
@@ -700,6 +726,14 @@ const storedSubagentToChatPart = (part: PersistedSubagentPart): ChatPart => {
       messages: subagent.messages.map((message) => {
         if (!isRecord(message) || !isRecord(message.content)) {
           return panic("Stored subagent message is invalid");
+        }
+        const content: Readonly<Record<string, unknown>> = message.content;
+        if (
+          !hasOnlyFields(message, STORED_CHILD_MESSAGE_FIELDS) ||
+          content["version"] !== 3 ||
+          !hasOnlyFields(content, STORED_CHILD_CONTENT_FIELDS)
+        ) {
+          return panic("Stored subagent message is from a newer release");
         }
         return {
           id: message.id,
@@ -1651,8 +1685,9 @@ export const SUBAGENT_RESULT_RETENTION = {
 
 /**
  * A sub-agent part with its child's tool results kept as its status allows,
- * across all of the child's messages. Returns `part` itself when nothing
- * changes. A stored child part keeps its provenance.
+ * across all of the child's messages, and each nested run's as its own
+ * status allows. Returns `part` itself when nothing changes. A stored child
+ * part keeps its provenance.
  */
 export const retainSubagentResults = (
   part: ChatSubagentPart,
@@ -1663,7 +1698,17 @@ export const retainSubagentResults = (
     parts,
     SUBAGENT_RESULT_RETENTION[status],
     continueStoredChatPart,
-  );
+  ).map((child) => {
+    // A nested run keeps its results as its own status allows.
+    const nested = child.map((inner) =>
+      inner.type === "subagent"
+        ? continueStoredChatPart(inner, retainSubagentResults(inner))
+        : inner,
+    );
+    return nested.every((inner, index) => inner === child.at(index))
+      ? child
+      : nested;
+  });
   if (retained.every((child, index) => child === parts.at(index))) {
     return part;
   }

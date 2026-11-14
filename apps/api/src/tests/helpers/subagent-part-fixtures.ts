@@ -123,7 +123,8 @@ export const childOutputs = (
   return part.subagent.messages.flatMap((message) =>
     message.parts.flatMap((child) => {
       if (child.type === "tool-call" && child.output !== undefined) {
-        return [{ id: child.id, output: child.output }];
+        const output: unknown = child.output;
+        return [{ id: child.id, output }];
       }
       if (child.type === "tool-result" && typeof child.content === "string") {
         const output: unknown = JSON.parse(child.content);
