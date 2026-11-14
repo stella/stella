@@ -28,12 +28,13 @@ const platformFlag = (name: "O_NOFOLLOW" | "O_NONBLOCK") =>
   name in constants ? constants[name] : 0;
 
 /**
- * Read-only is the zero flag, so this is read-only without following a link.
- * Non-blocking too: a pipe swapped in for the file would otherwise hold the
+ * Read-only is the zero flag, so this is read-only without following a link
+ * at the last segment. Non-blocking too: a pipe swapped in for the file would otherwise hold the
  * read open for as long as no one writes to it. Distinct bits, so their sum
  * is their union.
  */
-const OPEN_FLAGS = platformFlag("O_NOFOLLOW") + platformFlag("O_NONBLOCK");
+export const NO_FOLLOW_READ_FLAGS =
+  platformFlag("O_NOFOLLOW") + platformFlag("O_NONBLOCK");
 
 /** Each folder below `workspaceDir` on the way to the file is a plain folder. */
 const parentsRefusal = (
@@ -79,7 +80,8 @@ export const readWorkspaceFile = async (
     return refused(parents);
   }
   const opened = await Result.tryPromise(
-    async () => await open(path.join(workspaceDir, relativePath), OPEN_FLAGS),
+    async () =>
+      await open(path.join(workspaceDir, relativePath), NO_FOLLOW_READ_FLAGS),
   );
   if (Result.isError(opened)) {
     return refused(isLinkRefusal(opened.error.cause) ? "link" : "unreadable");

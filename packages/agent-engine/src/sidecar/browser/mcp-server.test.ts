@@ -7,6 +7,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -15,11 +16,12 @@ import * as v from "valibot";
 import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_DOWNLOAD_STAGING_FOLDER,
   BROWSER_EXTENSION_ID,
   STELLA_DESKTOP_NATIVE_HOST,
 } from "@stll/api-contract/browser-control";
 
-import type { BrowserBridge } from "./bridge";
+import type { BrowserBridge, BrowserBridgeDownload } from "./bridge";
 import { localBrowserResult } from "./local-result";
 import { startLocalBrowserMcp } from "./mcp-server";
 import { installNativeHost } from "./native-host-manifest";
@@ -31,6 +33,8 @@ const approve = async () => ({
 });
 
 const NEVER_STOPPED = new AbortController().signal;
+/** A run folder no test here downloads into. */
+const UNUSED_FOLDER = "/unused-run-folder";
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -45,6 +49,9 @@ type Requested = Parameters<BrowserBridge["request"]>[0];
 const fakeBridge = () => {
   const requests: Requested[] = [];
   const cancels: { controllerId: string; turnId: string }[] = [];
+  const downloadListener: {
+    current: (report: BrowserBridgeDownload) => void;
+  } = { current: () => undefined };
   const bridge: BrowserBridge = {
     endpoint: "/unused.sock",
     secretFile: "/unused.secret",
@@ -64,9 +71,16 @@ const fakeBridge = () => {
     cancel: (run) => {
       cancels.push(run);
     },
+    onDownload: (listener) => {
+      downloadListener.current = listener;
+    },
     stop: async () => undefined,
   };
-  return { bridge, cancels, requests };
+  /** The extension reporting a download, as the bridge hands it on. */
+  const reportDownload = (report: BrowserBridgeDownload) => {
+    downloadListener.current(report);
+  };
+  return { bridge, cancels, reportDownload, requests };
 };
 
 const start = (fake = fakeBridge()) => {
@@ -102,6 +116,7 @@ describe("the local browser MCP endpoint", () => {
       stopped: NEVER_STOPPED,
       runId: "run-1",
       threadId: "thread-1",
+      workspaceDir: UNUSED_FOLDER,
     });
     expect(binding.serverName).toBe("stella_browser");
     expect(binding.url.startsWith(`${mcp.origin}/browser/`)).toBe(true);
@@ -176,6 +191,7 @@ describe("the local browser MCP endpoint", () => {
       stopped: NEVER_STOPPED,
       runId: "run-1",
       threadId: "thread-1",
+      workspaceDir: UNUSED_FOLDER,
     });
     const second = mcp.register({
       approvals: "auto",
@@ -183,6 +199,7 @@ describe("the local browser MCP endpoint", () => {
       stopped: NEVER_STOPPED,
       runId: "run-2",
       threadId: "thread-2",
+      workspaceDir: UNUSED_FOLDER,
     });
     const ping = { id: 1, jsonrpc: "2.0", method: "ping" };
 
@@ -206,6 +223,7 @@ describe("the local browser MCP endpoint", () => {
       approve,
       stopped: NEVER_STOPPED,
       threadId: "thread-1",
+      workspaceDir: UNUSED_FOLDER,
     } as const;
     const first = mcp.register({ ...run, runId: "run-1" });
     const ping = { id: 1, jsonrpc: "2.0", method: "ping" };
@@ -267,6 +285,93 @@ const holdingBridge = () => {
   };
 };
 
+describe("downloads of a chat's tab", () => {
+  const SNAPSHOT = {
+    id: 9,
+    jsonrpc: "2.0",
+    method: "tools/call",
+    params: { arguments: {}, name: "snapshot" },
+  } as const;
+
+  const toolText = async (response: Response): Promise<unknown> => {
+    const { result } = v.parse(
+      v.object({
+        result: v.object({
+          content: v.tuple([v.object({ text: v.string() })]),
+        }),
+      }),
+      await response.json(),
+    );
+    return JSON.parse(result.content[0].text);
+  };
+
+  test("a PDF reported while the chat's run is held lands in that run's folder and in its next result", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-browser-mcp-dl-"));
+    cleanups.push(() => {
+      rmSync(root, { force: true, recursive: true });
+    });
+    const workspaceDir = path.join(root, "chat");
+    const staging = path.join(
+      root,
+      "Downloads",
+      BROWSER_DOWNLOAD_STAGING_FOLDER,
+    );
+    mkdirSync(workspaceDir);
+    mkdirSync(staging, { recursive: true });
+    const staged = path.join(staging, `${crypto.randomUUID()}.pdf`);
+    writeFileSync(staged, "%PDF-1.7\nfixture\n%%EOF\n");
+
+    const { mcp, reportDownload } = start();
+    const binding = mcp.register({
+      approvals: "auto",
+      approve,
+      runId: "run-1",
+      stopped: NEVER_STOPPED,
+      threadId: "thread-1",
+      workspaceDir,
+    });
+    reportDownload({
+      controllerId: "thread-1",
+      download: {
+        bytes: 23,
+        mime: "application/pdf",
+        outcome: "saved",
+        path: staged,
+        sourceUrl: "https://fixture-library.test/doc/1/file",
+        suggestedName: "Decision 1.pdf",
+      },
+    });
+    // Another chat's download never reaches this one.
+    reportDownload({
+      controllerId: "thread-2",
+      download: {
+        outcome: "stopped",
+        reason: "not-pdf",
+        sourceUrl: "https://fixture-library.test/other",
+        suggestedName: "other.bin",
+      },
+    });
+
+    expect(await toolText(await rpc(binding, SNAPSHOT))).toMatchObject({
+      downloads: [
+        {
+          bytes: 23,
+          path: "Downloads/Decision 1.pdf",
+          sourceUrl: "https://fixture-library.test/doc/1/file",
+          status: "saved",
+        },
+      ],
+    });
+    const saved = path.join(workspaceDir, "Downloads", "Decision 1.pdf");
+    expect(readFileSync(saved, "utf-8")).toBe("%PDF-1.7\nfixture\n%%EOF\n");
+    expect(existsSync(staged)).toBe(false);
+    // Reported once.
+    expect(await toolText(await rpc(binding, SNAPSHOT))).not.toHaveProperty(
+      "downloads",
+    );
+  });
+});
+
 describe("a browser call in flight", () => {
   const OPEN = {
     id: 7,
@@ -309,6 +414,7 @@ describe("a browser call in flight", () => {
       runId: "run-1",
       stopped: stop.signal,
       threadId: "thread-1",
+      workspaceDir: UNUSED_FOLDER,
     });
     const answered = rpc(binding, OPEN);
     await holding.sent;
@@ -327,6 +433,7 @@ describe("a browser call in flight", () => {
       runId: "run-1",
       stopped: stop.signal,
       threadId: "thread-1",
+      workspaceDir: UNUSED_FOLDER,
     });
     const answered = rpc(binding, OPEN);
     await holding.sent;
