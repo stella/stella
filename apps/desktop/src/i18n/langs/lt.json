@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Praneša, kai dokumentas paruoštas arba sinchronizavimui reikia dėmesio.",
     "permissionAccessibility": "Pritaikymas neįgaliesiems",
     "permissionAccessibilityDescription": "Leidžia veiklos laiko juostai įrašyti langų pavadinimus.",
+    "permissionMicrophone": "Mikrofonas",
+    "permissionMicrophoneDescription": "Leidžia diktavimui jus girdėti, kol laikote jo spartųjį klavišą.",
     "permissionAllowed": "Leidžiama",
     "permissionAllow": "Leisti",
     "permissionOpenSettings": "Atidaryti nustatymus",
@@ -724,6 +726,18 @@
     "introduceActivityTitle": "Nauja: veiklos laiko juosta",
     "introduceActivityBody": "Veikla dabar pasiekiama jūsų paskyroje. Niekas neįrašoma, kol jos nepaleisite veiklos lange.",
     "openActivity": "Atidaryti veiklą",
+    "dictationModel": "Kalbos modelis ({size} MB) atsisiunčiamas vieną kartą ir veikia šiame kompiuteryje.",
+    "dictationTurnOn": "Įjungti ir atsisiųsti",
+    "dictationDownloadContinues": "Galite tęsti. Atsisiuntimas vyks fone.",
+    "dictationReady": "Diktavimas įjungtas ir paruoštas.",
+    "dictationTryLabel": "Diktuokite čia",
+    "dictationTryPlaceholder": "Spustelėkite čia, laikykite {shortcut} ir pasakykite sakinį.",
+    "dictationListening": "Klausausi…",
+    "dictationTranscribing": "Užrašau, ką pasakėte…",
+    "dictationMicrophone": "Taip stella jus girdi, kol laikote spartųjį klavišą.",
+    "dictationAccessibility": "Taip stella įrašo, ką pasakėte, į programą, kurią naudojate.",
+    "dictationFailed": "stella desktop nepavyko įjungti diktavimo. Bandykite dar kartą.",
+    "introduceDictationTitle": "Nauja: diktavimas",
     "guideWaiting": "Įjunkite stella desktop sąraše aukščiau, kad leistumėte pritaikymą neįgaliesiems.",
     "guideAllowed": "stella desktop leidžiama",
     "never": {
@@ -830,6 +844,27 @@
       "runs_can_write": "Vietiniai vykdymai gali rašyti į šį aplanką, todėl jame negali būti įgūdžio.",
       "network_folder": "Šis aplankas yra tinklo bendrinimo vietoje. Įgūdžiai turi būti šio kompiuterio diske.",
       "path_changed": "Pasikeitė aukštesnis aplankas. Pašalinkite šį aplanką ir pridėkite jį iš naujo."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Susieti aplankai",
+    "description": "Šio kompiuterio aplankai, kuriuose gali dirbti pokalbio agentas. Pokalbis mato tik aplanko pavadinimą; jo kelias lieka šiame kompiuteryje.",
+    "add": "Susieti aplanką",
+    "remove": "Atsieti",
+    "removeFolder": "Atsieti {name}",
+    "state": {
+      "offline": "Diskas, kuriame yra šis aplankas, neprijungtas.",
+      "moved": "Šis aplankas buvo perkeltas, pervadintas arba ištrintas. Atsiekite jį ir susiekite iš naujo.",
+      "protected": "Šiame aplanke yra pačios stella duomenys arba įgūdžių aplankas, todėl agentas jame dirbti negali.",
+      "unreadable": "Nepavyko perskaityti šio aplanko."
+    },
+    "notice": {
+      "action_failed": "Nepavyko. Bandykite dar kartą.",
+      "too_many": "Šiame kompiuteryje jau yra tiek susietų aplankų, kiek jis gali laikyti. Pirmiausia atsiekite vieną.",
+      "not_a_folder": "Pasirinkite aplanką.",
+      "network_folder": "Šis aplankas yra tinklo bendrinimo vietoje. Susiekite aplanką iš šio kompiuterio disko.",
+      "protected": "Šiame aplanke yra pačios stella duomenys arba įgūdžių aplankas, todėl agentas jame dirbti negali.",
+      "unreadable": "Nepavyko perskaityti šio aplanko."
     }
   }
 }

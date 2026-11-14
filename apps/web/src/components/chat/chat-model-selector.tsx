@@ -34,10 +34,12 @@ import {
   localRunModelLabel,
   localRunTargetState,
 } from "@/components/chat/chat-run-target-menu.logic";
+import { LocalFolderApproval } from "@/components/chat/local-folder-approval";
 import {
   localRunnersOptions,
   modelOptionsOptions,
 } from "@/features/chat/queries";
+import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { queryView } from "@/lib/query-view.logic";
 
 type ChatModelSelectorProps = {
@@ -84,8 +86,10 @@ type ChatRunOnChipProps = {
 };
 
 /**
- * Where the chat runs: [Cloud], or [Your computer · Codex], with why the
- * computer cannot take a turn now when it says so (offline, signed out). Its
+ * Where the chat runs: [Cloud], or [Your computer · Codex], with the linked
+ * folder's name when the chat works in one, and why the computer or folder
+ * cannot take a turn now when it says so (offline, signed out, or stella
+ * desktop opening). Its
  * name for assistive technology says the place in full ("Runs on: Your
  * computer, Codex").
  */
@@ -97,6 +101,7 @@ const ChatRunOnChip = ({
 }: ChatRunOnChipProps) => {
   const t = useTranslations();
   const stateLabel = useLocalRunTargetStateLabel();
+  const desktop = useDesktopLaunch(activeOrganizationId);
   const [open, setOpen] = useState(false);
   const runnersView = queryView(
     useQuery(localRunnersOptions(activeOrganizationId)),
@@ -126,18 +131,38 @@ const ChatRunOnChip = ({
     const targetState =
       readiness === undefined ? null : localRunTargetState(readiness, selected);
     // A failed read claims nothing about the agent; the model's own state
-    // is the model chip's to say.
+    // is the model chip's to say. An offline computer whose desktop is
+    // opening says so instead.
     const placeState = () => {
       if (readFailed) {
         return t("chat.runOn.checkFailed");
       }
-      return targetState === null || targetState.type === "model_unavailable"
-        ? null
-        : stateLabel(targetState);
+      if (targetState === null || targetState.type === "model_unavailable") {
+        return null;
+      }
+      if (
+        desktop.state.type === "opening" &&
+        targetState.type === "harness" &&
+        targetState.option.state === "offline"
+      ) {
+        return t("settings.account.desktopCardOpeningTitle");
+      }
+      return stateLabel(targetState);
     };
     const state = placeState();
-    const selection = t("chat.runOn.localSelection", { harness });
-    const place = t("chat.runOn.localPlace", { harness });
+    // A linked folder is named, never its path: the API knows only the name.
+    const { folder } = selected;
+    const selection =
+      folder === undefined
+        ? t("chat.runOn.localSelection", { harness })
+        : t("chat.runOn.localFolderSelection", {
+            harness,
+            folder: folder.name,
+          });
+    const place =
+      folder === undefined
+        ? t("chat.runOn.localPlace", { harness })
+        : t("chat.runOn.localFolderPlace", { harness, folder: folder.name });
     return {
       label:
         state === null
@@ -208,46 +233,54 @@ export const ChatModelSelector = ({
   const trigger = localTrigger ?? cloudTrigger;
 
   return (
-    <Menu onOpenChange={setOpen} open={open}>
-      <MenuTrigger
-        render={
-          <Button
-            aria-label={trigger.label}
-            className={cn(
-              trigger.chosen
-                ? "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5"
-                : "text-muted-foreground hover:text-foreground gap-1.5",
-            )}
-            data-composer-chip="model"
-            // Until the stored choice is known, nothing can be picked on it.
-            disabled={disabled || models.state === "loading"}
-            onFocus={() => setDetailsRequested(true)}
-            onMouseEnter={() => setDetailsRequested(true)}
-            size="xs"
-            variant="ghost"
+    <>
+      <Menu onOpenChange={setOpen} open={open}>
+        <MenuTrigger
+          render={
+            <Button
+              aria-label={trigger.label}
+              className={cn(
+                trigger.chosen
+                  ? "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5"
+                  : "text-muted-foreground hover:text-foreground gap-1.5",
+              )}
+              data-composer-chip="model"
+              // Until the stored choice is known, nothing can be picked on it.
+              disabled={disabled || models.state === "loading"}
+              onFocus={() => setDetailsRequested(true)}
+              onMouseEnter={() => setDetailsRequested(true)}
+              size="xs"
+              variant="ghost"
+            />
+          }
+          tooltip={trigger.label}
+        >
+          {trigger.icon}
+          <TruncatedText className="max-w-36" render={<BidiText as="span" />}>
+            {trigger.label}
+          </TruncatedText>
+        </MenuTrigger>
+        <MenuPopup
+          align="start"
+          className={CHAT_MODEL_MENU_POPUP_CLASS_NAME}
+          side="top"
+          sideOffset={6}
+        >
+          <ChatModelOptionsMenu
+            enabled={open}
+            key={open ? "open" : "closed"}
+            models={models}
+            open={open}
           />
-        }
-        tooltip={trigger.label}
-      >
-        {trigger.icon}
-        <TruncatedText className="max-w-36" render={<BidiText as="span" />}>
-          {trigger.label}
-        </TruncatedText>
-      </MenuTrigger>
-      <MenuPopup
-        align="start"
-        className={CHAT_MODEL_MENU_POPUP_CLASS_NAME}
-        side="top"
-        sideOffset={6}
-      >
-        <ChatModelOptionsMenu
-          enabled={open}
-          key={open ? "open" : "closed"}
-          models={models}
-          open={open}
+        </MenuPopup>
+      </Menu>
+      {selectedTarget.kind === "local" && (
+        <LocalFolderApproval
+          activeOrganizationId={models.activeOrganizationId}
+          target={selectedTarget}
         />
-      </MenuPopup>
-    </Menu>
+      )}
+    </>
   );
 };
 

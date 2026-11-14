@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Informiert Sie, wenn ein Dokument bereit ist oder eine Synchronisierung Aufmerksamkeit braucht.",
     "permissionAccessibility": "Bedienungshilfen",
     "permissionAccessibilityDescription": "Erlaubt der Aktivitätsübersicht, Fenstertitel aufzuzeichnen.",
+    "permissionMicrophone": "Mikrofon",
+    "permissionMicrophoneDescription": "Damit hört Sie das Diktieren, solange Sie sein Tastenkürzel halten.",
     "permissionAllowed": "Erlaubt",
     "permissionAllow": "Erlauben",
     "permissionOpenSettings": "Einstellungen öffnen",
@@ -724,6 +726,18 @@
     "introduceActivityTitle": "Neu: Aktivitätsübersicht",
     "introduceActivityBody": "Aktivität ist jetzt für Ihr Konto verfügbar. Nichts wird aufgezeichnet, bis Sie sie im Aktivitätsfenster starten.",
     "openActivity": "Aktivität öffnen",
+    "dictationModel": "Das Sprachmodell ({size} MB) wird einmal geladen und läuft auf diesem Computer.",
+    "dictationTurnOn": "Einschalten und laden",
+    "dictationDownloadContinues": "Sie können weitermachen. Der Download läuft im Hintergrund weiter.",
+    "dictationReady": "Diktieren ist eingeschaltet und bereit.",
+    "dictationTryLabel": "Hier diktieren",
+    "dictationTryPlaceholder": "Hier klicken, {shortcut} gedrückt halten und einen Satz sagen.",
+    "dictationListening": "Hört zu…",
+    "dictationTranscribing": "Schreibt auf, was Sie gesagt haben…",
+    "dictationMicrophone": "Damit hört stella Sie, solange Sie das Tastenkürzel halten.",
+    "dictationAccessibility": "Damit schreibt stella das Gesagte in die App, die Sie gerade verwenden.",
+    "dictationFailed": "stella desktop konnte das Diktieren nicht einschalten. Versuchen Sie es erneut.",
+    "introduceDictationTitle": "Neu: Diktieren",
     "guideWaiting": "Schalten Sie stella desktop in der Liste oben ein, um Bedienungshilfen zu erlauben.",
     "guideAllowed": "stella desktop ist erlaubt",
     "never": {
@@ -830,6 +844,27 @@
       "runs_can_write": "Lokale Ausführungen können in diesen Ordner schreiben, daher kann er keinen Skill enthalten.",
       "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Skills müssen auf dem eigenen Laufwerk dieses Computers liegen.",
       "path_changed": "Ein übergeordneter Ordner hat sich geändert. Entfernen Sie diesen Ordner und fügen Sie ihn erneut hinzu."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Verknüpfte Ordner",
+    "description": "Ordner auf diesem Computer, in denen der Coding-Agent eines Chats arbeiten kann. Ein Chat sieht nur den Namen eines Ordners; sein Pfad bleibt auf diesem Computer.",
+    "add": "Ordner verknüpfen",
+    "remove": "Trennen",
+    "removeFolder": "{name} trennen",
+    "state": {
+      "offline": "Das Laufwerk mit diesem Ordner ist nicht verbunden.",
+      "moved": "Dieser Ordner wurde verschoben, umbenannt oder gelöscht. Trennen Sie ihn und verknüpfen Sie ihn erneut.",
+      "protected": "Dieser Ordner enthält die eigenen Daten von stella oder einen Skill-Ordner, daher kann der Agent darin nicht arbeiten.",
+      "unreadable": "Dieser Ordner konnte nicht gelesen werden."
+    },
+    "notice": {
+      "action_failed": "Das hat nicht funktioniert. Versuchen Sie es erneut.",
+      "too_many": "Dieser Computer hat bereits so viele verknüpfte Ordner, wie er speichern kann. Trennen Sie zuerst einen.",
+      "not_a_folder": "Wählen Sie einen Ordner.",
+      "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Verknüpfen Sie einen Ordner auf dem eigenen Laufwerk dieses Computers.",
+      "protected": "Dieser Ordner enthält die eigenen Daten von stella oder einen Skill-Ordner, daher kann der Agent darin nicht arbeiten.",
+      "unreadable": "Dieser Ordner konnte nicht gelesen werden."
     }
   }
 }

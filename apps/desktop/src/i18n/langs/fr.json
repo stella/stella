@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Vous prévient lorsqu'un document est prêt ou qu'une synchronisation demande votre attention.",
     "permissionAccessibility": "Accessibilité",
     "permissionAccessibilityDescription": "Permet à la chronologie d'activité d'enregistrer les titres de fenêtres.",
+    "permissionMicrophone": "Microphone",
+    "permissionMicrophoneDescription": "Permet à la dictée de vous entendre tant que vous maintenez son raccourci.",
     "permissionAllowed": "Autorisé",
     "permissionAllow": "Autoriser",
     "permissionOpenSettings": "Ouvrir les réglages",
@@ -724,6 +726,18 @@
     "introduceActivityTitle": "Nouveau : chronologie d'activité",
     "introduceActivityBody": "L'activité est maintenant disponible pour votre compte. Rien n'est enregistré tant que vous ne la lancez pas dans la fenêtre d'activité.",
     "openActivity": "Ouvrir l'activité",
+    "dictationModel": "Le modèle vocal ({size} Mo) est téléchargé une fois et fonctionne sur cet ordinateur.",
+    "dictationTurnOn": "Activer et télécharger",
+    "dictationDownloadContinues": "Vous pouvez continuer. Le téléchargement se poursuit en arrière-plan.",
+    "dictationReady": "La dictée est activée et prête.",
+    "dictationTryLabel": "Dictez ici",
+    "dictationTryPlaceholder": "Cliquez ici, maintenez {shortcut} et dites une phrase.",
+    "dictationListening": "À l'écoute…",
+    "dictationTranscribing": "Transcription de vos paroles…",
+    "dictationMicrophone": "Permet à stella de vous entendre tant que vous maintenez le raccourci.",
+    "dictationAccessibility": "Permet à stella de saisir vos paroles dans l'application que vous utilisez.",
+    "dictationFailed": "stella desktop n'a pas pu activer la dictée. Réessayez.",
+    "introduceDictationTitle": "Nouveau : dictée",
     "guideWaiting": "Activez stella desktop dans la liste ci-dessus pour autoriser l'Accessibilité.",
     "guideAllowed": "stella desktop est autorisé",
     "never": {
@@ -830,6 +844,27 @@
       "runs_can_write": "Les exécutions locales peuvent écrire dans ce dossier, il ne peut donc pas contenir de compétence.",
       "network_folder": "Ce dossier se trouve sur un partage réseau. Les compétences doivent être sur le disque de cet ordinateur.",
       "path_changed": "Un dossier parent a changé. Retirez ce dossier et ajoutez-le de nouveau."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Dossiers liés",
+    "description": "Dossiers de cet ordinateur dans lesquels l'agent d'une conversation peut travailler. La conversation ne voit que le nom du dossier ; son chemin reste sur cet ordinateur.",
+    "add": "Lier un dossier",
+    "remove": "Délier",
+    "removeFolder": "Délier {name}",
+    "state": {
+      "offline": "Le disque qui contient ce dossier n'est pas connecté.",
+      "moved": "Ce dossier a été déplacé, renommé ou supprimé. Déliez-le puis liez-le à nouveau.",
+      "protected": "Ce dossier contient les données de stella ou un dossier de compétences : l'agent ne peut donc pas y travailler.",
+      "unreadable": "Ce dossier n'a pas pu être lu."
+    },
+    "notice": {
+      "action_failed": "Cela n'a pas fonctionné. Réessayez.",
+      "too_many": "Cet ordinateur a déjà autant de dossiers liés qu'il peut en garder. Déliez-en un d'abord.",
+      "not_a_folder": "Choisissez un dossier.",
+      "network_folder": "Ce dossier se trouve sur un partage réseau. Liez un dossier du disque de cet ordinateur.",
+      "protected": "Ce dossier contient les données de stella ou un dossier de compétences : l'agent ne peut donc pas y travailler.",
+      "unreadable": "Ce dossier n'a pas pu être lu."
     }
   }
 }

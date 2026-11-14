@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Upozorní vás, keď je dokument pripravený alebo synchronizácia vyžaduje pozornosť.",
     "permissionAccessibility": "Prístupnosť",
     "permissionAccessibilityDescription": "Umožní prehľadu aktivity zaznamenávať názvy okien.",
+    "permissionMicrophone": "Mikrofón",
+    "permissionMicrophoneDescription": "Umožní diktovaniu počuť vás, kým držíte skratku.",
     "permissionAllowed": "Povolené",
     "permissionAllow": "Povoliť",
     "permissionOpenSettings": "Otvoriť nastavenia",
@@ -724,6 +726,18 @@
     "introduceActivityTitle": "Novinka: prehľad aktivity",
     "introduceActivityBody": "Aktivita je teraz pre váš účet dostupná. Nič sa nezaznamenáva, kým ju nespustíte v okne aktivity.",
     "openActivity": "Otvoriť aktivitu",
+    "dictationModel": "Rečový model ({size} MB) sa stiahne len raz a beží na tomto počítači.",
+    "dictationTurnOn": "Zapnúť a stiahnuť",
+    "dictationDownloadContinues": "Môžete pokračovať. Sťahovanie pobeží na pozadí.",
+    "dictationReady": "Diktovanie je zapnuté a pripravené.",
+    "dictationTryLabel": "Diktujte sem",
+    "dictationTryPlaceholder": "Kliknite sem, podržte {shortcut} a povedzte nejakú vetu.",
+    "dictationListening": "Počúvam…",
+    "dictationTranscribing": "Prepisujem, čo ste povedali…",
+    "dictationMicrophone": "stella vás bude počuť, kým držíte skratku.",
+    "dictationAccessibility": "stella napíše, čo ste povedali, do aplikácie, ktorú práve používate.",
+    "dictationFailed": "stella desktop nemohol zapnúť diktovanie. Skúste to znova.",
+    "introduceDictationTitle": "Novinka: diktovanie",
     "guideWaiting": "Zapnite stella desktop v zozname vyššie a povoľte tak Prístupnosť.",
     "guideAllowed": "stella desktop má povolenie",
     "never": {
@@ -830,6 +844,27 @@
       "runs_can_write": "Do tohto priečinka môžu miestne behy zapisovať, preto v ňom zručnosť byť nemôže.",
       "network_folder": "Tento priečinok je na sieťovom úložisku. Zručnosti musia byť na vlastnom disku tohto počítača.",
       "path_changed": "Niektorý nadradený priečinok sa zmenil. Odstráňte ho a pridajte znova."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Prepojené priečinky",
+    "description": "Priečinky v tomto počítači, v ktorých môže pracovať agent chatu. Chat vidí len názov priečinka; jeho cesta zostáva v tomto počítači.",
+    "add": "Prepojiť priečinok",
+    "remove": "Odpojiť",
+    "removeFolder": "Odpojiť {name}",
+    "state": {
+      "offline": "Disk, na ktorom je tento priečinok, nie je pripojený.",
+      "moved": "Tento priečinok bol presunutý, premenovaný alebo odstránený. Odpojte ho a prepojte znova.",
+      "protected": "Tento priečinok obsahuje vlastné údaje stelly alebo priečinok so zručnosťami, takže v ňom agent nemôže pracovať.",
+      "unreadable": "Tento priečinok sa nepodarilo prečítať."
+    },
+    "notice": {
+      "action_failed": "Nepodarilo sa to. Skúste to znova.",
+      "too_many": "Tento počítač už má toľko prepojených priečinkov, koľko ich udrží. Najprv jeden odpojte.",
+      "not_a_folder": "Vyberte priečinok.",
+      "network_folder": "Tento priečinok je na sieťovom úložisku. Prepojte priečinok na vlastnom disku tohto počítača.",
+      "protected": "Tento priečinok obsahuje vlastné údaje stelly alebo priečinok so zručnosťami, takže v ňom agent nemôže pracovať.",
+      "unreadable": "Tento priečinok sa nepodarilo prečítať."
     }
   }
 }

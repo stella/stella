@@ -16,7 +16,9 @@ import {
   ACCOUNT,
   ACTIVITY_SETTINGS,
   APP_STATE,
+  DICTATION_READY,
   PERMISSIONS,
+  SETUP_PERMISSIONS,
   SHORTCUT,
 } from "./fixtures/desktop-window-snapshots";
 import {
@@ -63,6 +65,8 @@ export const WINDOW_VARIANTS = [
 const tour = (step: OnboardingSnapshot["step"]): OnboardingSnapshot => ({
   activityAvailable: true,
   activityPermissions: ["accessibility"],
+  dictationAvailable: true,
+  dictationPermissions: ["microphone", "accessibility"],
   documentApp: { iconDataUrl: null, name: "Microsoft Word" },
   linked: false,
   mode: { type: "tour" },
@@ -92,9 +96,16 @@ export const ONBOARDING_SCREENS = [
       mode: { feature: "activityTimeline", type: "introduce" },
     },
   },
+  {
+    name: "introduce-dictation",
+    snapshot: {
+      ...tour("welcome"),
+      mode: { feature: "dictation", type: "introduce" },
+    },
+  },
   // A taskbar along the bottom, with the icon near the clock.
   {
-    name: "07-done-taskbar",
+    name: "08-done-taskbar",
     snapshot: {
       ...tour("done"),
       trayLocation: { along: 0.94, edge: "bottom" },
@@ -102,7 +113,7 @@ export const ONBOARDING_SCREENS = [
   },
   // An icon the OS cannot place, such as one in a hidden overflow area.
   {
-    name: "07-done-unplaced",
+    name: "08-done-unplaced",
     snapshot: { ...tour("done"), trayLocation: null },
   },
 ] as const satisfies readonly { name: string; snapshot: OnboardingSnapshot }[];
@@ -112,6 +123,8 @@ type WindowFixture = {
   activity: ActivitySettingsSnapshot | null;
   account: DesktopAccountSnapshot;
   appState: AppSnapshot;
+  /** The dictation snapshot; settings reads it as off. */
+  dictation: unknown;
   language: string;
   onboarding: OnboardingSnapshot | null;
   permissions: PermissionsSnapshot;
@@ -156,6 +169,7 @@ const openWindow = async (
       // No install status either, read the same as the refusal with local agents off.
       harness_get_status: () => null,
       local_skill_folders_get: () => null,
+      local_linked_folders_get: () => null,
       desktop_report_error: () => null,
       desktop_report_timing: () => null,
       get_desktop_language: () => data.language,
@@ -175,7 +189,7 @@ const openWindow = async (
       },
       set_desktop_language: () => null,
       shortcut_get_snapshot: () => data.shortcut,
-      dictation_get_snapshot: () => ({ available: false }),
+      dictation_get_snapshot: () => data.dictation,
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
       // Consent given, so Settings lays out its stella AI drafting rows too.
@@ -204,9 +218,10 @@ export const openOnboardingWindow = async (
       account: { server: ACCOUNT.server, status: "disconnected" },
       activity: null,
       appState: APP_STATE,
+      dictation: DICTATION_READY,
       language: options.language,
       onboarding: snapshot,
-      permissions: PERMISSIONS,
+      permissions: SETUP_PERMISSIONS,
       requestOutcome: options.requestOutcome ?? "granted",
       shortcut: SHORTCUT,
     },
@@ -241,6 +256,7 @@ export const openSettingsWindow = async (
       // On for every tab, so each one is checked with the Activity tab shown.
       activity: ACTIVITY_SETTINGS,
       appState: APP_STATE,
+      dictation: { available: false },
       language: options.language,
       onboarding: null,
       permissions: PERMISSIONS,

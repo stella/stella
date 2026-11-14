@@ -55,6 +55,16 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  // Setting a limit reminder again is a no-op and cancelling one removes
+  // whatever is set, so a repeat answers the current state.
+  "DELETE /v1/chat/threads/:threadId/limit-reminder": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/chat/threads/:threadId/limit-reminder": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/clause-categories/:categoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -1054,6 +1064,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "replay",
   },
   "PUT /v1/case/research/columns/order": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/chat/local-runners/:desktopId/folders/:linkId/approval": {
     type: "non-replay",
     reason: "current-state",
   },

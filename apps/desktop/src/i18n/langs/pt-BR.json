@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Avisa quando um documento está pronto ou uma sincronização precisa de atenção.",
     "permissionAccessibility": "Acessibilidade",
     "permissionAccessibilityDescription": "Permite que a linha do tempo de atividade registre títulos de janelas.",
+    "permissionMicrophone": "Microfone",
+    "permissionMicrophoneDescription": "Permite que o ditado ouça você enquanto segura o atalho dele.",
     "permissionAllowed": "Permitido",
     "permissionAllow": "Permitir",
     "permissionOpenSettings": "Abrir configurações",
@@ -724,6 +726,18 @@
     "introduceActivityTitle": "Novo: linha do tempo de atividade",
     "introduceActivityBody": "A atividade agora está disponível para sua conta. Nada é registrado até você iniciá-la na janela de atividade.",
     "openActivity": "Abrir atividade",
+    "dictationModel": "O modelo de voz ({size} MB) é baixado uma vez e funciona neste computador.",
+    "dictationTurnOn": "Ativar e baixar",
+    "dictationDownloadContinues": "Você pode continuar. O download segue em segundo plano.",
+    "dictationReady": "O ditado está ativado e pronto.",
+    "dictationTryLabel": "Dite aqui",
+    "dictationTryPlaceholder": "Clique aqui, segure {shortcut} e diga uma frase.",
+    "dictationListening": "Ouvindo…",
+    "dictationTranscribing": "Escrevendo o que você disse…",
+    "dictationMicrophone": "Permite que a stella ouça você enquanto segura o atalho.",
+    "dictationAccessibility": "Permite que a stella digite o que você disse no app que está usando.",
+    "dictationFailed": "O stella desktop não conseguiu ativar o ditado. Tente novamente.",
+    "introduceDictationTitle": "Novo: ditado",
     "guideWaiting": "Ative o stella desktop na lista acima para permitir Acessibilidade.",
     "guideAllowed": "O stella desktop tem permissão",
     "never": {
@@ -830,6 +844,27 @@
       "runs_can_write": "As execuções locais podem gravar nesta pasta, então ela não pode conter uma habilidade.",
       "network_folder": "Esta pasta está em um compartilhamento de rede. As habilidades precisam estar no disco deste computador.",
       "path_changed": "Uma pasta superior mudou. Remova esta pasta e adicione-a de novo."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Pastas vinculadas",
+    "description": "Pastas deste computador em que o agente de um chat pode trabalhar. O chat vê só o nome da pasta; o caminho dela fica neste computador.",
+    "add": "Vincular pasta",
+    "remove": "Desvincular",
+    "removeFolder": "Desvincular {name}",
+    "state": {
+      "offline": "A unidade em que esta pasta está não está conectada.",
+      "moved": "Esta pasta foi movida, renomeada ou excluída. Desvincule-a e vincule-a de novo.",
+      "protected": "Esta pasta contém dados do próprio stella ou uma pasta de habilidades, então o agente não pode trabalhar nela.",
+      "unreadable": "Não foi possível ler esta pasta."
+    },
+    "notice": {
+      "action_failed": "Não funcionou. Tente de novo.",
+      "too_many": "Este computador já tem todas as pastas vinculadas que consegue guardar. Desvincule uma primeiro.",
+      "not_a_folder": "Escolha uma pasta.",
+      "network_folder": "Esta pasta está em um compartilhamento de rede. Vincule uma pasta do disco deste computador.",
+      "protected": "Esta pasta contém dados do próprio stella ou uma pasta de habilidades, então o agente não pode trabalhar nela.",
+      "unreadable": "Não foi possível ler esta pasta."
     }
   }
 }

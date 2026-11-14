@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import path from "node:path";
 import * as v from "valibot";
 
+import { CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS } from "@stll/api-contract/chat-run-target";
+
 import {
   type HarnessRunPolicy,
   HarnessStartError,
@@ -35,6 +37,23 @@ const NETWORK_ACCESS: Readonly<Record<HarnessRunPolicy["network"], boolean>> = {
   open: true,
 };
 /**
+ * The approval modes Codex runs in, named one by one so a new mode is never
+ * offered by default. Not plan: the pinned app-server has plan mode only as
+ * an experimental turn parameter.
+ */
+export const CODEX_APPROVAL_MODES = [
+  "ask",
+  "auto",
+  "full_auto",
+] as const satisfies readonly HarnessRunPolicy["approvals"][];
+type CodexApprovalMode = (typeof CODEX_APPROVAL_MODES)[number];
+
+export const isCodexApprovalMode = (
+  mode: HarnessRunPolicy["approvals"],
+): mode is CodexApprovalMode =>
+  CODEX_APPROVAL_MODES.some((supported) => supported === mode);
+
+/**
  * Codex's settings per approval mode, strictly ordered: each level allows
  * everything the one below it does and more, so a ceiling at a level never
  * yields a higher level's settings. Commands always run inside the workspace
@@ -57,11 +76,25 @@ const CODEX_LEVEL = {
   auto: { approvalPolicy: "untrusted", networkAccess: true },
   full_auto: { approvalPolicy: "on-request", networkAccess: true },
 } as const satisfies Record<
-  HarnessRunPolicy["approvals"],
+  CodexApprovalMode,
   { approvalPolicy: "untrusted" | "on-request"; networkAccess: boolean }
+>;
+/**
+ * Codex's `web_search` setting for each way its search runs: live search of
+ * the web, or none. Codex cannot pause a search for approval, so the
+ * contract's table never asks it to.
+ */
+const WEB_SEARCH_MODE = {
+  unasked: "live",
+  off: "disabled",
+} as const satisfies Record<
+  (typeof CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS)["codex"][HarnessRunPolicy["approvals"]],
+  string
 >;
 /** A dotted config key carries the name, so it must stay a bare TOML key. */
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
+/** How long a browser tool call may wait, the member's approval included. */
+const BROWSER_TOOL_TIMEOUT_SECONDS = 3600;
 
 /** The skills Codex installs with itself; none comes from a member's files. */
 const SYSTEM_SKILL_SCOPE = "system";
@@ -157,24 +190,41 @@ const threadParams = (
   input: HarnessTurnInput,
   disabledSkills: readonly string[],
 ) => {
-  if (!MCP_SERVER_NAME.test(input.mcp.serverName)) {
+  if (
+    !MCP_SERVER_NAME.test(input.mcp.serverName) ||
+    (input.browser !== null && !MCP_SERVER_NAME.test(input.browser.serverName))
+  ) {
     panic("Codex adapter: the MCP server name must be a bare TOML key");
   }
   if (!path.isAbsolute(input.cacheDir)) {
     panic("Codex adapter: the cache directory must be an absolute path");
   }
+  const { approvals } = input.policy;
+  // `startTurn` refuses any other mode before a thread is asked for.
+  const level = isCodexApprovalMode(approvals)
+    ? CODEX_LEVEL[approvals]
+    : panic("Codex adapter: the turn's approval mode is not a Codex one");
   return {
     model: input.model,
     cwd: input.workspaceDir,
-    approvalPolicy: CODEX_LEVEL[input.policy.approvals].approvalPolicy,
+    approvalPolicy: level.approvalPolicy,
     sandbox: SANDBOX_MODE[input.policy.fs],
     developerInstructions: input.instructions,
     config: {
+      // Codex's own web search follows the permission level: live rather
+      // than from its cached index where the level runs it without asking,
+      // and off where a search would need the member's approval.
+      web_search:
+        WEB_SEARCH_MODE[
+          CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS.codex[input.policy.approvals]
+        ],
       "sandbox_workspace_write.network_access":
-        NETWORK_ACCESS[input.policy.network] &&
-        CODEX_LEVEL[input.policy.approvals].networkAccess,
+        NETWORK_ACCESS[input.policy.network] && level.networkAccess,
       // Package caches live outside the workspace; the temp directory and
       // `/tmp` stay writable, as tools that make scratch files expect.
+      // The turn's `unreadablePaths` are not applied: this sandbox mode
+      // lets commands read the whole disk, and Codex's permission profiles,
+      // which can deny reads, replace the mode instead of adding to it.
       "sandbox_workspace_write.writable_roots": [input.cacheDir],
       "sandbox_workspace_write.exclude_tmpdir_env_var": false,
       "sandbox_workspace_write.exclude_slash_tmp": false,
@@ -194,6 +244,19 @@ const threadParams = (
         // The stella MCP server enforces its own approvals for writes.
         default_tools_approval_mode: "approve",
       },
+      // The extension holds the browser to its own policy: the origin
+      // policy, containment, budgets and the sign-in handoff.
+      ...(input.browser === null
+        ? {}
+        : {
+            [`mcp_servers.${input.browser.serverName}`]: {
+              url: input.browser.url,
+              http_headers: { Authorization: `Bearer ${input.browser.token}` },
+              default_tools_approval_mode: "approve",
+              // A step the member must allow waits for the member's answer.
+              tool_timeout_sec: BROWSER_TOOL_TIMEOUT_SECONDS,
+            },
+          }),
     },
   };
 };
@@ -237,7 +300,7 @@ export const openThread = async (
     return disabledSkills;
   }
   const params = threadParams(input, disabledSkills.value);
-  if (input.continuation.type === "fresh") {
+  if (input.continuation.type !== "resume") {
     return startThread(client, params, { type: "fresh" });
   }
   const threadId = input.continuation.sessionId;

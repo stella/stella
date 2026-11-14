@@ -241,6 +241,12 @@
       "showSources": "Show sources",
       "title": "Anchor facts"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# claim rests on this fact} other {# claims rest on this fact}}",
+      "empty": "This list has no facts yet.",
+      "moreClaims": "{count, plural, one {# more claim} other {# more claims}}",
+      "undated": "Undated"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Anchor facts disagree",
@@ -405,6 +411,42 @@
       "showNextSteps": "Show next steps",
       "unlink": "Unlink {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# claim} other {# claims}}",
+      "claimTitle": "Claim",
+      "columns": {
+        "claims": "Claims",
+        "sources": "Source documents",
+        "statements": "Statements"
+      },
+      "empty": "This list has no facts or verified documents yet.",
+      "factCount": "{count, plural, one {# fact} other {# facts}}",
+      "factOverflow": "Showing the first {count} facts of this list.",
+      "filters": {
+        "allSources": "All sources",
+        "allVerdicts": "All verdicts",
+        "conflicts": "Conflicts",
+        "heldFacts": "Held facts",
+        "source": "Filter by source",
+        "verdict": "Filter by verdict"
+      },
+      "held": "Held",
+      "linkedFacts": "{count, plural, one {# linked fact} other {# linked facts}}",
+      "listLabel": "Graph as a list",
+      "loadMore": "Load more documents",
+      "noMatch": "Nothing matches these filters.",
+      "noStatements": "No document has been verified against this list yet.",
+      "offList": "No longer on the list",
+      "relation": {
+        "conflicts": "Conflicts",
+        "governs": "Governs",
+        "record": "On the record",
+        "recordConflict": "Conflicting record",
+        "supports": "Supports"
+      },
+      "unlinked": "Facts no claim rests on",
+      "verifyInReview": "Verify a document"
+    },
     "guidance": {
       "escalate": "Escalate",
       "manualJudgement": "Manual judgement",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# match} other {# matches}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronology",
+      "graph": "Graph",
+      "label": "Show the list as",
+      "review": "Review"
     },
     "qualifiers": {
       "heading": "Caveats",
@@ -1853,6 +1901,8 @@
       "restored": "File changes undone"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# background task running} other {# background tasks running}}",
+      "errorFolderUnavailable": "The folder linked to this chat is not available on your computer. Check it in stella desktop, then send this again.",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
       "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
@@ -1861,24 +1911,41 @@
       "errorRestoring": "Your computer is still undoing file changes. Send this again in a moment.",
       "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
       "filesNotShared": "Files that could not be shared stay on your computer: {fileNames}",
+      "folderApprovalDescription": "Let {harness} work in “{folder}” on your computer. It can read, change and delete files there, and files you attach are copied into it.",
+      "folderApprove": "Allow in {folder}",
+      "folderHint": "Link folders of your computer in stella desktop's settings.",
+      "folderOwn": "This chat's own folder",
+      "folderStateMoved": "Moved or deleted",
+      "folderStateOffline": "Drive not connected",
+      "folderStatePending": "Waiting for your OK",
+      "folderStateProtected": "Holds stella's own data",
+      "folderStateUnlinked": "No longer linked",
+      "folderStateUnreadable": "Cannot be read",
+      "limitReminderNotify": "Notify me when it resets",
+      "limitReminderScheduled": "We will notify you after {time}.",
       "permissionAboveLimit": "Not allowed by your organization",
       "permissionAskDescription": "Edits files in the chat's folder on its own; asks before anything else.",
       "permissionAutoDescription": "Does what it judges safe on its own; asks about the rest.",
       "permissionFullAuto": "Full auto",
       "permissionFullAutoDescription": "Never asks for anything inside the chat's folder; always asks before changing your computer.",
+      "permissionPlan": "Plan",
+      "permissionPlanDescription": "Reads and plans first; asks before any change until you approve the plan.",
       "permissionSandboxed": "Runs in a sandbox; asks before changing your computer.",
       "permissionUnavailable": "Not available on this computer",
       "permissions": "Permissions",
       "refusalConflictingRunMode": "This request asks to run both with the cloud agent and on your computer. Choose one under Run on.",
+      "refusalFolderNotApproved": "Allow the coding agent to work in the folder linked to this chat first.",
+      "refusalFolderUnavailable": "The folder linked to this chat is not available. Check it under Run on or in stella desktop.",
       "refusalHarnessUnavailable": "The coding agent on your computer cannot take this request right now. Check it in stella desktop.",
       "refusalModelUnavailable": "The coding agent on your computer no longer offers this model. Choose another one under Run on.",
-      "refusalNoComputer": "None of your computers is connected. Open stella desktop, then send again.",
+      "refusalNoComputer": "None of your computers is connected.",
       "refusalPermissionAboveLimit": "Your organization does not allow these permissions for the coding agent on your computer. Choose another option under Permissions.",
       "refusalPermissionUnavailable": "The coding agent on your computer cannot run with these permissions. Choose another option under Permissions.",
       "refusalReasoningEffortUnavailable": "The coding agent on your computer does not offer this reasoning effort for the model. Choose another one under Reasoning effort.",
       "refusalTooLarge": "This conversation is too long to hand to your computer. Start a new chat to run it there.",
       "refusalUnavailable": "Running chats on your computer is not available for your account.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat.",
       "stateLimitUntil": "Limit reached until {time}",
       "stateModelUnavailable": "Model no longer available",
       "stateNeedsLogin": "Sign-in needed",
@@ -2051,6 +2118,8 @@
       "hintOffline": "Open stella desktop on your computer",
       "hintSignIn": "Sign in from stella desktop",
       "hintUpdate": "Update it from stella desktop",
+      "localFolderPlace": "Your computer, {harness}, {folder}",
+      "localFolderSelection": "Your computer · {harness} · {folder}",
       "localPlace": "Your computer, {harness}",
       "localSelection": "Your computer · {harness}",
       "modelDefault": "Default (recommended)",
@@ -2089,6 +2158,7 @@
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.",
     "sendErrorTimedOut": "The chat service did not respond in time. Try again.",
     "sendErrorToolsUnsupported": "This model cannot use tools, so it cannot answer questions about your matter. Switch to a model that supports tools.",
+    "sendErrorTurnTooLarge": "This reply grew too large to deliver in full. Send a new message to continue.",
     "sendPrompt": "Send message",
     "sendQueuedMessageNow": "Send now",
     "sendWithoutAnonymization": "Send without anonymization",
@@ -2252,15 +2322,32 @@
       "field": "Field",
       "input": "Input",
       "interrupted": "Interrupted before finishing",
+      "localOutput": {
+        "conversation": "Subagent conversation",
+        "conversationPrompt": "Task given",
+        "conversationReport": "Report",
+        "cut": "Showing the first {kept} of {total}",
+        "diff": "File changes",
+        "elsewhere": "Open on the computer that ran it",
+        "empty": "No output",
+        "failed": "The stella desktop app on this computer could not show this.",
+        "imageTooLarge": "This image is {total}. Images over {kept} are not kept on this computer, so it cannot be shown here.",
+        "notKept": "Nothing from this step is kept on this computer",
+        "reading": "Reading from this computer"
+      },
       "output": "Output",
       "patternInPath": "{pattern} in {path}",
+      "proposedPlan": "Proposing a plan",
       "readFile": "Reading a file",
       "searchFiles": "Searching files",
+      "signInToContinue": "Sign in to continue",
       "sourceCode": "Source code",
       "statusWaiting": "Waiting",
+      "subagent": "Running a subagent",
       "toggleDetails": "Toggle details",
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}",
-      "updatePlan": "Updating the plan"
+      "updatePlan": "Updating the plan",
+      "viewImage": "Viewing an image"
     },
     "turnNotification": {
       "failedBody": "A chat reply in stella did not finish.",
@@ -2271,6 +2358,8 @@
       "replyReadyTitle": "Reply ready"
     },
     "turnStatus": {
+      "answerFailed": "The answer could not be finished",
+      "answerReady": "Answer ready",
       "waitingForApproval": "Waiting for approval",
       "waitingForInput": "Waiting for input",
       "writing": "Writing"
@@ -2550,6 +2639,7 @@
     "filter": "Filter",
     "filters": "Filters",
     "find": "Find",
+    "folder": "Folder",
     "formula": "Formula",
     "goBack": "Go back",
     "goBackToEditing": "Go back to editing",
@@ -5020,6 +5110,7 @@
       "flowRunAwaitingApproval": "Workflow <bdi>{flowName}</bdi> is waiting for your approval",
       "flowRunCompleted": "Workflow <bdi>{flowName}</bdi> finished",
       "flowRunFailed": "Workflow <bdi>{flowName}</bdi> failed",
+      "localRunLimitReset": "The coding agent on your computer can continue your chat",
       "mention": "<bdi>{actorName}</bdi> mentioned you in a comment",
       "reportExportFailed": "Your report export failed",
       "reportExportSucceeded": "Your report is ready",
@@ -5466,7 +5557,6 @@
       "caseLaw": "Case law",
       "chat": "Chat",
       "contact": "Contact",
-      "folder": "Folder",
       "link": "Link",
       "matter": "Matter",
       "message": "Message",
@@ -5797,6 +5887,7 @@
         "case_law_research_column": "case law research column",
         "chat_browser_site_grant": "chat website approval",
         "chat_file": "chat file",
+        "chat_local_folder_approval": "local folder approval",
         "chat_message": "chat message",
         "chat_thread": "chat thread",
         "chat_tool_execution": "chat tool execution",

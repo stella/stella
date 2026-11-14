@@ -241,6 +241,12 @@
       "showSources": "Rādīt avotus",
       "title": "Enkurfakti"
     },
+    "chronology": {
+      "claims": "{count, plural, zero {# apgalvojumi balstās uz šo faktu} one {# apgalvojums balstās uz šo faktu} other {# apgalvojumi balstās uz šo faktu}}",
+      "empty": "Šajā sarakstā vēl nav faktu.",
+      "moreClaims": "{count, plural, zero {vēl # apgalvojumi} one {vēl # apgalvojums} other {vēl # apgalvojumi}}",
+      "undated": "Bez datuma"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Enkurfakti ir pretrunā",
@@ -405,6 +411,42 @@
       "showNextSteps": "Rādīt nākamos soļus",
       "unlink": "Atsaistīt: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, zero {# apgalvojumi} one {# apgalvojums} other {# apgalvojumi}}",
+      "claimTitle": "Apgalvojums",
+      "columns": {
+        "claims": "Apgalvojumi",
+        "sources": "Avota dokumenti",
+        "statements": "Paziņojumi"
+      },
+      "empty": "Šajā sarakstā vēl nav faktu vai pārbaudītu dokumentu.",
+      "factCount": "{count, plural, zero {# fakti} one {# fakts} other {# fakti}}",
+      "factOverflow": "Rāda pirmos {count} šī saraksta faktus.",
+      "filters": {
+        "allSources": "Visi avoti",
+        "allVerdicts": "Visi slēdzieni",
+        "conflicts": "Pretrunas",
+        "heldFacts": "Aizturētie fakti",
+        "source": "Filtrēt pēc avota",
+        "verdict": "Filtrēt pēc slēdziena"
+      },
+      "held": "Aizturēts",
+      "linkedFacts": "{count, plural, zero {# sasaistīti fakti} one {# sasaistīts fakts} other {# sasaistīti fakti}}",
+      "listLabel": "Grafs kā saraksts",
+      "loadMore": "Ielādēt vairāk dokumentu",
+      "noMatch": "Šiem filtriem nekas neatbilst.",
+      "noStatements": "Pret šo sarakstu vēl nav pārbaudīts neviens dokuments.",
+      "offList": "Vairs nav sarakstā",
+      "relation": {
+        "conflicts": "Ir pretrunā",
+        "governs": "Noteicošais",
+        "record": "Reģistrā",
+        "recordConflict": "Pretrunīgs ieraksts",
+        "supports": "Pamato"
+      },
+      "unlinked": "Fakti, uz kuriem nebalstās neviens apgalvojums",
+      "verifyInReview": "Pārbaudīt dokumentu"
+    },
     "guidance": {
       "escalate": "Nodot tālāk",
       "manualJudgement": "Cilvēka lēmums",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, zero {# atbilstību} one {# atbilstība} other {# atbilstības}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Hronoloģija",
+      "graph": "Grafs",
+      "label": "Rādīt sarakstu kā",
+      "review": "Pārskatīšana"
     },
     "qualifiers": {
       "heading": "Atrunas",
@@ -1853,6 +1901,8 @@
       "restored": "Failu izmaiņas atsauktas"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, zero {Fonā darbojas # uzdevumu} one {Fonā darbojas # uzdevums} other {Fonā darbojas # uzdevumi}}",
+      "errorFolderUnavailable": "Ar šo tērzēšanu saistītā mape jūsu datorā nav pieejama. Pārbaudiet to stella desktop un pēc tam nosūtiet vēlreiz.",
       "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",
       "errorLimitResetsAt": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Vēlreiz mēģināt varēsiet pēc {time}.",
       "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
@@ -1861,24 +1911,41 @@
       "errorRestoring": "Jūsu dators vēl atsauc failu izmaiņas. Pēc brīža nosūtiet to vēlreiz.",
       "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
       "filesNotShared": "Faili, kurus neizdevās kopīgot, paliek jūsu datorā: {fileNames}",
+      "folderApprovalDescription": "Atļaujiet {harness} strādāt jūsu datora mapē “{folder}”. Tas tajā var lasīt, mainīt un dzēst failus, un pievienotie faili tiek tajā kopēti.",
+      "folderApprove": "Atļaut mapē {folder}",
+      "folderHint": "Sava datora mapes varat saistīt stella desktop iestatījumos.",
+      "folderOwn": "Tērzēšanas pašas mape",
+      "folderStateMoved": "Pārvietota vai izdzēsta",
+      "folderStateOffline": "Disks nav pievienots",
+      "folderStatePending": "Gaida jūsu piekrišanu",
+      "folderStateProtected": "Satur pašas stella datus",
+      "folderStateUnlinked": "Vairs nav saistīta",
+      "folderStateUnreadable": "Nevar nolasīt",
+      "limitReminderNotify": "Paziņot, kad tiks atjaunots",
+      "limitReminderScheduled": "Mēs jums paziņosim pēc {time}.",
       "permissionAboveLimit": "Jūsu organizācija to neatļauj",
       "permissionAskDescription": "Tērzēšanas mapes failus rediģē pats; par visu citu jautā.",
       "permissionAutoDescription": "To, ko uzskata par drošu, dara pats; par pārējo jautā.",
       "permissionFullAuto": "Pilnībā automātiski",
       "permissionFullAutoDescription": "Par neko tērzēšanas mapē nejautā; pirms kaut ko maina jūsu datorā, vienmēr pajautā.",
+      "permissionPlan": "Plāns",
+      "permissionPlanDescription": "Vispirms lasa un plāno; pirms katras izmaiņas jautā, kamēr neapstiprināsiet plānu.",
       "permissionSandboxed": "Darbojas izolētā vidē; pirms kaut ko maina jūsu datorā, pajautā.",
       "permissionUnavailable": "Šajā datorā nav pieejams",
       "permissions": "Atļaujas",
       "refusalConflictingRunMode": "Šis pieprasījums vienlaikus prasa darboties ar mākoņa aģentu un jūsu datorā. Izvēlieties vienu izvēlnē Palaist.",
+      "refusalFolderNotApproved": "Vispirms atļaujiet programmēšanas aģentam strādāt ar šo tērzēšanu saistītajā mapē.",
+      "refusalFolderUnavailable": "Ar šo tērzēšanu saistītā mape nav pieejama. Pārbaudiet to izvēlnē Palaist vai lietotnē stella desktop.",
       "refusalHarnessUnavailable": "Programmēšanas aģents jūsu datorā šobrīd nevar pieņemt šo pieprasījumu. Pārbaudiet to lietotnē stella desktop.",
       "refusalModelUnavailable": "Programmēšanas aģents jūsu datorā vairs nepiedāvā šo modeli. Izvēlieties citu izvēlnē Palaist.",
-      "refusalNoComputer": "Neviens no jūsu datoriem nav savienots. Atveriet stella desktop un nosūtiet vēlreiz.",
+      "refusalNoComputer": "Neviens no jūsu datoriem nav savienots.",
       "refusalPermissionAboveLimit": "Jūsu organizācija neļauj programmēšanas aģentam jūsu datorā darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
       "refusalPermissionUnavailable": "Programmēšanas aģents jūsu datorā nevar darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
       "refusalReasoningEffortUnavailable": "Programmēšanas aģents jūsu datorā šim modelim nepiedāvā šo spriešanas līmeni. Izvēlieties citu izvēlnē Spriešanas līmenis.",
       "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
       "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām.",
       "stateLimitUntil": "Limits sasniegts līdz {time}",
       "stateModelUnavailable": "Modelis vairs nav pieejams",
       "stateNeedsLogin": "Jāpiesakās",
@@ -2051,6 +2118,8 @@
       "hintOffline": "Atveriet stella desktop savā datorā",
       "hintSignIn": "Piesakieties stella desktop",
       "hintUpdate": "Atjauniniet to no stella desktop",
+      "localFolderPlace": "Jūsu dators, {harness}, {folder}",
+      "localFolderSelection": "Jūsu dators · {harness} · {folder}",
       "localPlace": "Jūsu dators, {harness}",
       "localSelection": "Jūsu dators · {harness}",
       "modelDefault": "Noklusējuma (ieteicams)",
@@ -2089,6 +2158,7 @@
     "sendErrorStreamIncomplete": "AI atbilde tika pārtraukta, pirms tā bija pabeigta. Mēģiniet vēlreiz.",
     "sendErrorTimedOut": "Tērzēšanas pakalpojums neatbildēja laikus. Mēģiniet vēlreiz.",
     "sendErrorToolsUnsupported": "Šis modelis nevar izmantot rīkus, tāpēc nevar atbildēt uz jautājumiem par jūsu lietu. Pārslēdzieties uz modeli, kas atbalsta rīkus.",
+    "sendErrorTurnTooLarge": "Šī atbilde kļuva pārāk liela, lai to piegādātu pilnībā. Lai turpinātu, nosūtiet jaunu ziņu.",
     "sendPrompt": "Sūtīt ziņojumu",
     "sendQueuedMessageNow": "Sūtīt tūlīt",
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
@@ -2252,15 +2322,32 @@
       "field": "Lauks",
       "input": "Ievade",
       "interrupted": "Pārtraukts pirms pabeigšanas",
+      "localOutput": {
+        "conversation": "Apakšaģenta saruna",
+        "conversationPrompt": "Uzdevums",
+        "conversationReport": "Ziņojums",
+        "cut": "Rāda pirmos {kept} no {total}",
+        "diff": "Failu izmaiņas",
+        "elsewhere": "Atveriet datorā, kurā tas tika izpildīts",
+        "empty": "Nav izvades",
+        "failed": "stella darbvirsmas lietotne šajā datorā to nevarēja parādīt.",
+        "imageTooLarge": "Šī attēla izmērs ir {total}. Attēli, kas lielāki par {kept}, šajā datorā netiek saglabāti, tāpēc to šeit nevar parādīt.",
+        "notKept": "No šī soļa šajā datorā nekas nav saglabāts",
+        "reading": "Notiek lasīšana no šī datora"
+      },
       "output": "Izvade",
       "patternInPath": "{pattern} ({path})",
+      "proposedPlan": "Plāna priekšlikums",
       "readFile": "Faila lasīšana",
       "searchFiles": "Meklēšana failos",
+      "signInToContinue": "Lai turpinātu, pieslēdzieties",
       "sourceCode": "Pirmkods",
       "statusWaiting": "Gaida",
+      "subagent": "Apakšaģenta palaišana",
       "toggleDetails": "Pārslēgt detaļas",
       "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}",
-      "updatePlan": "Plāna atjaunināšana"
+      "updatePlan": "Plāna atjaunināšana",
+      "viewImage": "Attēla skatīšana"
     },
     "turnNotification": {
       "failedBody": "stellas tērzēšanas atbilde netika pabeigta.",
@@ -2271,6 +2358,8 @@
       "replyReadyTitle": "Atbilde gatava"
     },
     "turnStatus": {
+      "answerFailed": "Atbildi neizdevās pabeigt",
+      "answerReady": "Atbilde ir gatava",
       "waitingForApproval": "Gaida apstiprinājumu",
       "waitingForInput": "Gaida ievadi",
       "writing": "Raksta"
@@ -2550,6 +2639,7 @@
     "filter": "Filtrs",
     "filters": "Filtri",
     "find": "Meklēt",
+    "folder": "Mape",
     "formula": "Formula",
     "goBack": "Atpakaļ",
     "goBackToEditing": "Atpakaļ pie rediģēšanas",
@@ -5020,6 +5110,7 @@
       "flowRunAwaitingApproval": "Darbplūsma <bdi>{flowName}</bdi> gaida jūsu apstiprinājumu",
       "flowRunCompleted": "Darbplūsma <bdi>{flowName}</bdi> ir pabeigta",
       "flowRunFailed": "Darbplūsma <bdi>{flowName}</bdi> neizdevās",
+      "localRunLimitReset": "Programmēšanas aģents jūsu datorā var turpināt jūsu tērzēšanu",
       "mention": "<bdi>{actorName}</bdi> pieminēja jūs komentārā",
       "reportExportFailed": "Neizdevās eksportēt pārskatu",
       "reportExportSucceeded": "Jūsu pārskats ir gatavs",
@@ -5466,7 +5557,6 @@
       "caseLaw": "Judikatūra",
       "chat": "Tērzēšana",
       "contact": "Kontakts",
-      "folder": "Mape",
       "link": "Saite",
       "matter": "Lieta",
       "message": "Ziņa",
@@ -5797,6 +5887,7 @@
         "case_law_research_column": "judikatūras izpētes kolonna",
         "chat_browser_site_grant": "tērzēšanas vietnes atļauja",
         "chat_file": "sarunas fails",
+        "chat_local_folder_approval": "lokālās mapes atļauja",
         "chat_message": "sarunas ziņojums",
         "chat_thread": "sarunas pavediens",
         "chat_tool_execution": "sarunas rīka izpilde",

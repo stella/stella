@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "ينبّهك عندما يصبح المستند جاهزاً أو عندما تحتاج المزامنة إلى انتباهك.",
     "permissionAccessibility": "تسهيلات الاستخدام",
     "permissionAccessibilityDescription": "يتيح للخط الزمني للنشاط تسجيل عناوين النوافذ.",
+    "permissionMicrophone": "الميكروفون",
+    "permissionMicrophoneDescription": "يتيح للإملاء سماعك ما دمت تضغط على اختصاره.",
     "permissionAllowed": "مسموح",
     "permissionAllow": "السماح",
     "permissionOpenSettings": "فتح الإعدادات",
@@ -724,6 +726,18 @@
     "introduceActivityTitle": "جديد: الخط الزمني للنشاط",
     "introduceActivityBody": "أصبح النشاط متاحاً لحسابك. لا يُسجَّل أي شيء حتى تبدأه في نافذة النشاط.",
     "openActivity": "فتح النشاط",
+    "dictationModel": "يُنزَّل نموذج الكلام ({size} ميغابايت) مرة واحدة ويعمل على هذا الكمبيوتر.",
+    "dictationTurnOn": "التشغيل والتنزيل",
+    "dictationDownloadContinues": "يمكنك المتابعة. يستمر التنزيل في الخلفية.",
+    "dictationReady": "الإملاء مشغَّل وجاهز.",
+    "dictationTryLabel": "أملِ هنا",
+    "dictationTryPlaceholder": "انقر هنا، واضغط مع الاستمرار على {shortcut} وقل جملة.",
+    "dictationListening": "جارٍ الاستماع…",
+    "dictationTranscribing": "جارٍ كتابة ما قلته…",
+    "dictationMicrophone": "يتيح لـ stella سماعك ما دمت تضغط على الاختصار.",
+    "dictationAccessibility": "يتيح لـ stella كتابة ما قلته في التطبيق الذي تستخدمه.",
+    "dictationFailed": "تعذّر على stella desktop تشغيل الإملاء. حاول مرة أخرى.",
+    "introduceDictationTitle": "جديد: الإملاء",
     "guideWaiting": "شغّل stella desktop في القائمة أعلاه للسماح بتسهيلات الاستخدام.",
     "guideAllowed": "stella desktop مسموح له",
     "never": {
@@ -830,6 +844,27 @@
       "runs_can_write": "يمكن لعمليات التشغيل المحلية الكتابة في هذا المجلد، لذا لا يمكن أن يحتوي على مهارة.",
       "network_folder": "يوجد هذا المجلد على مشاركة شبكة. يجب أن تكون المهارات على قرص هذا الكمبيوتر.",
       "path_changed": "تغيّر مجلد أعلى. أزل هذا المجلد ثم أضفه مرة أخرى."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "المجلدات المرتبطة",
+    "description": "مجلدات على هذا الكمبيوتر يمكن لوكيل الدردشة العمل فيها. لا ترى الدردشة إلا اسم المجلد، ويبقى مساره على هذا الكمبيوتر.",
+    "add": "ربط مجلد",
+    "remove": "إلغاء الربط",
+    "removeFolder": "إلغاء ربط {name}",
+    "state": {
+      "offline": "القرص الذي يوجد عليه هذا المجلد غير متصل.",
+      "moved": "نُقل هذا المجلد أو أُعيدت تسميته أو حُذف. ألغِ ربطه ثم اربطه مرة أخرى.",
+      "protected": "يحتوي هذا المجلد على بيانات stella نفسها أو على مجلد مهارات، لذا لا يمكن للوكيل العمل فيه.",
+      "unreadable": "تعذرت قراءة هذا المجلد."
+    },
+    "notice": {
+      "action_failed": "لم ينجح ذلك. حاول مرة أخرى.",
+      "too_many": "يحتوي هذا الكمبيوتر بالفعل على أكبر عدد ممكن من المجلدات المرتبطة. ألغِ ربط أحدها أولاً.",
+      "not_a_folder": "اختر مجلدًا.",
+      "network_folder": "يوجد هذا المجلد على مشاركة شبكة. اربط مجلدًا على قرص هذا الكمبيوتر.",
+      "protected": "يحتوي هذا المجلد على بيانات stella نفسها أو على مجلد مهارات، لذا لا يمكن للوكيل العمل فيه.",
+      "unreadable": "تعذرت قراءة هذا المجلد."
     }
   }
 }

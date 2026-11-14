@@ -241,6 +241,12 @@
       "showSources": "Afficher les sources",
       "title": "Faits d’ancrage"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# affirmation repose sur ce fait} many {# affirmations reposent sur ce fait} other {# affirmations reposent sur ce fait}}",
+      "empty": "Cette liste ne contient encore aucun fait.",
+      "moreClaims": "{count, plural, one {# autre affirmation} many {# autres affirmations} other {# autres affirmations}}",
+      "undated": "Non daté"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
@@ -405,6 +411,42 @@
       "showNextSteps": "Afficher les prochaines étapes",
       "unlink": "Dissocier {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# affirmation} many {# affirmations} other {# affirmations}}",
+      "claimTitle": "Affirmation",
+      "columns": {
+        "claims": "Affirmations",
+        "sources": "Documents sources",
+        "statements": "Déclarations"
+      },
+      "empty": "Cette liste ne contient encore aucun fait ni document vérifié.",
+      "factCount": "{count, plural, one {# fait} many {# faits} other {# faits}}",
+      "factOverflow": "Affichage des {count} premiers faits de cette liste.",
+      "filters": {
+        "allSources": "Toutes les sources",
+        "allVerdicts": "Tous les verdicts",
+        "conflicts": "Conflits",
+        "heldFacts": "Faits en attente de relecture",
+        "source": "Filtrer par source",
+        "verdict": "Filtrer par verdict"
+      },
+      "held": "En attente de relecture",
+      "linkedFacts": "{count, plural, one {# fait lié} many {# faits liés} other {# faits liés}}",
+      "listLabel": "Graphe sous forme de liste",
+      "loadMore": "Charger plus de documents",
+      "noMatch": "Aucun élément ne correspond à ces filtres.",
+      "noStatements": "Aucun document n’a encore été vérifié par rapport à cette liste.",
+      "offList": "N’est plus dans la liste",
+      "relation": {
+        "conflicts": "Contredit",
+        "governs": "Fait foi",
+        "record": "Au dossier",
+        "recordConflict": "Enregistrement contradictoire",
+        "supports": "Étaye"
+      },
+      "unlinked": "Faits sur lesquels ne repose aucune affirmation",
+      "verifyInReview": "Vérifier un document"
+    },
     "guidance": {
       "escalate": "Faire remonter",
       "manualJudgement": "Jugement manuel",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# correspondance} other {# correspondances} many {# correspondances}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologie",
+      "graph": "Graphe",
+      "label": "Afficher la liste en",
+      "review": "Examen"
     },
     "qualifiers": {
       "heading": "Réserves",
@@ -1853,6 +1901,8 @@
       "restored": "Modifications de fichiers annulées"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# tâche en arrière-plan en cours} other {# tâches en arrière-plan en cours} many {# tâches en arrière-plan en cours}}",
+      "errorFolderUnavailable": "Le dossier lié à cette conversation n’est pas disponible sur votre ordinateur. Vérifiez-le dans stella desktop, puis renvoyez ceci.",
       "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
       "errorLimitResetsAt": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Vous pourrez réessayer à partir du {time}.",
       "errorNeedsLogin": "L’agent de code de votre ordinateur vous demande de vous reconnecter. Connectez-vous depuis stella desktop, puis réessayez.",
@@ -1861,24 +1911,41 @@
       "errorRestoring": "Votre ordinateur annule encore des modifications de fichiers. Renvoyez ceci dans un instant.",
       "errorUnavailable": "Votre ordinateur a cessé de traiter cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
       "filesNotShared": "Les fichiers qui n'ont pas pu être partagés restent sur votre ordinateur : {fileNames}",
+      "folderApprovalDescription": "Autorisez {harness} à travailler dans le dossier « {folder} » de votre ordinateur. L’agent peut y lire, modifier et supprimer des fichiers, et les fichiers joints y sont copiés.",
+      "folderApprove": "Autoriser dans {folder}",
+      "folderHint": "Liez des dossiers de votre ordinateur dans les réglages de stella desktop.",
+      "folderOwn": "Dossier propre à la conversation",
+      "folderStateMoved": "Déplacé ou supprimé",
+      "folderStateOffline": "Disque non connecté",
+      "folderStatePending": "En attente de votre accord",
+      "folderStateProtected": "Contient les données de stella",
+      "folderStateUnlinked": "N’est plus lié",
+      "folderStateUnreadable": "Illisible",
+      "limitReminderNotify": "Me prévenir une fois réinitialisée",
+      "limitReminderScheduled": "Nous vous préviendrons à partir du {time}.",
       "permissionAboveLimit": "Non autorisé par votre organisation",
       "permissionAskDescription": "Modifie seul les fichiers du dossier de la conversation ; demande avant tout le reste.",
       "permissionAutoDescription": "Fait seul ce qu’il juge sûr ; demande pour le reste.",
       "permissionFullAuto": "Entièrement automatique",
       "permissionFullAutoDescription": "Ne demande jamais rien dans le dossier de la conversation ; demande toujours avant de modifier votre ordinateur.",
+      "permissionPlan": "Planifier",
+      "permissionPlanDescription": "Lit et planifie d’abord ; demande avant chaque modification tant que vous n’avez pas approuvé le plan.",
       "permissionSandboxed": "S’exécute dans un bac à sable ; demande avant de modifier votre ordinateur.",
       "permissionUnavailable": "Indisponible sur cet ordinateur",
       "permissions": "Autorisations",
       "refusalConflictingRunMode": "Cette demande doit s’exécuter à la fois avec l’agent cloud et sur votre ordinateur. Choisissez-en un sous Exécuter sur.",
+      "refusalFolderNotApproved": "Autorisez d’abord l’agent de code à travailler dans le dossier lié à cette conversation.",
+      "refusalFolderUnavailable": "Le dossier lié à cette conversation n’est pas disponible. Vérifiez-le sous Exécuter sur ou dans stella desktop.",
       "refusalHarnessUnavailable": "L’agent de code de votre ordinateur ne peut pas traiter cette demande pour le moment. Vérifiez-le dans stella desktop.",
       "refusalModelUnavailable": "L’agent de code de votre ordinateur ne propose plus ce modèle. Choisissez-en un autre sous Exécuter sur.",
-      "refusalNoComputer": "Aucun de vos ordinateurs n’est connecté. Ouvrez stella desktop, puis renvoyez le message.",
+      "refusalNoComputer": "Aucun de vos ordinateurs n’est connecté.",
       "refusalPermissionAboveLimit": "Votre organisation n’accorde pas ces autorisations à l’agent de code de votre ordinateur. Choisissez une autre option sous Autorisations.",
       "refusalPermissionUnavailable": "L’agent de code de votre ordinateur ne peut pas s’exécuter avec ces autorisations. Choisissez une autre option sous Autorisations.",
       "refusalReasoningEffortUnavailable": "L’agent de code de votre ordinateur ne propose pas ce niveau de raisonnement pour le modèle. Choisissez-en un autre sous Niveau de raisonnement.",
       "refusalTooLarge": "Cette conversation est trop longue pour être transmise à votre ordinateur. Commencez une nouvelle conversation pour l’y exécuter.",
       "refusalUnavailable": "L’exécution des conversations sur votre ordinateur n’est pas disponible pour votre compte.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation.",
       "stateLimitUntil": "Limite atteinte jusqu’à {time}",
       "stateModelUnavailable": "Modèle plus disponible",
       "stateNeedsLogin": "Connexion requise",
@@ -2051,6 +2118,8 @@
       "hintOffline": "Ouvrez stella desktop sur votre ordinateur",
       "hintSignIn": "Connectez-vous dans stella desktop",
       "hintUpdate": "Mettez-le à jour depuis stella desktop",
+      "localFolderPlace": "Votre ordinateur, {harness}, {folder}",
+      "localFolderSelection": "Votre ordinateur · {harness} · {folder}",
       "localPlace": "Votre ordinateur, {harness}",
       "localSelection": "Votre ordinateur · {harness}",
       "modelDefault": "Par défaut (recommandé)",
@@ -2089,6 +2158,7 @@
     "sendErrorStreamIncomplete": "La réponse de l’IA a été interrompue avant la fin. Réessayez.",
     "sendErrorTimedOut": "Le service de conversation n’a pas répondu à temps. Réessayez.",
     "sendErrorToolsUnsupported": "Ce modèle ne peut pas utiliser d’outils et ne peut donc pas répondre aux questions sur votre dossier. Passez à un modèle qui prend en charge les outils.",
+    "sendErrorTurnTooLarge": "Cette réponse est devenue trop volumineuse pour être transmise en entier. Envoyez un nouveau message pour continuer.",
     "sendPrompt": "Envoyer le message",
     "sendQueuedMessageNow": "Envoyer maintenant",
     "sendWithoutAnonymization": "Envoyer sans anonymisation",
@@ -2252,15 +2322,32 @@
       "field": "Champ",
       "input": "Entrée",
       "interrupted": "Interrompu avant la fin",
+      "localOutput": {
+        "conversation": "Conversation du sous-agent",
+        "conversationPrompt": "Tâche",
+        "conversationReport": "Rapport",
+        "cut": "Affichage des {kept} premiers sur {total}",
+        "diff": "Modifications des fichiers",
+        "elsewhere": "Ouvrez-le sur l’ordinateur qui l’a exécuté",
+        "empty": "Aucun résultat",
+        "failed": "L’application de bureau stella sur cet ordinateur n’a pas pu l’afficher.",
+        "imageTooLarge": "Cette image fait {total}. Les images de plus de {kept} ne sont pas conservées sur cet ordinateur ; elle ne peut donc pas être affichée ici.",
+        "notKept": "Rien de cette étape n’est conservé sur cet ordinateur",
+        "reading": "Lecture depuis cet ordinateur"
+      },
       "output": "Résultat",
       "patternInPath": "{pattern} dans {path}",
+      "proposedPlan": "Proposition d’un plan",
       "readFile": "Lecture d’un fichier",
       "searchFiles": "Recherche dans les fichiers",
+      "signInToContinue": "Connectez-vous pour continuer",
       "sourceCode": "Code source",
       "statusWaiting": "En attente",
+      "subagent": "Exécution d’un sous-agent",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis} many {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}",
-      "updatePlan": "Mise à jour du plan"
+      "updatePlan": "Mise à jour du plan",
+      "viewImage": "Consultation d’une image"
     },
     "turnNotification": {
       "failedBody": "Une réponse dans une conversation stella n’a pas abouti.",
@@ -2271,6 +2358,8 @@
       "replyReadyTitle": "Réponse prête"
     },
     "turnStatus": {
+      "answerFailed": "La réponse n’a pas pu être terminée",
+      "answerReady": "Réponse prête",
       "waitingForApproval": "En attente d’approbation",
       "waitingForInput": "En attente de saisie",
       "writing": "Rédaction"
@@ -2550,6 +2639,7 @@
     "filter": "Filtrer",
     "filters": "Filtres",
     "find": "Rechercher",
+    "folder": "Dossier",
     "formula": "Formule",
     "goBack": "Retour",
     "goBackToEditing": "Revenir à l’édition",
@@ -5020,6 +5110,7 @@
       "flowRunAwaitingApproval": "Le flux de travail <bdi>{flowName}</bdi> attend votre approbation",
       "flowRunCompleted": "Le flux de travail <bdi>{flowName}</bdi> est terminé",
       "flowRunFailed": "Le flux de travail <bdi>{flowName}</bdi> a échoué",
+      "localRunLimitReset": "L’agent de code de votre ordinateur peut reprendre votre discussion",
       "mention": "<bdi>{actorName}</bdi> vous a mentionné dans un commentaire",
       "reportExportFailed": "Échec de l’export de votre rapport",
       "reportExportSucceeded": "Votre rapport est prêt",
@@ -5466,7 +5557,6 @@
       "caseLaw": "Jurisprudence",
       "chat": "Conversation",
       "contact": "Contact",
-      "folder": "Dossier",
       "link": "Lien",
       "matter": "Dossier",
       "message": "Message",
@@ -5797,6 +5887,7 @@
         "case_law_research_column": "colonne de recherche jurisprudentielle",
         "chat_browser_site_grant": "autorisation de site web dans la discussion",
         "chat_file": "fichier de discussion",
+        "chat_local_folder_approval": "autorisation de dossier local",
         "chat_message": "message de discussion",
         "chat_thread": "fil de discussion",
         "chat_tool_execution": "exécution d’outil de discussion",

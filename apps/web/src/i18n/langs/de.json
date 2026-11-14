@@ -241,6 +241,12 @@
       "showSources": "Quellen anzeigen",
       "title": "Ankerfakten"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# Behauptung beruht auf diesem Fakt} other {# Behauptungen beruhen auf diesem Fakt}}",
+      "empty": "Diese Liste enthält noch keine Fakten.",
+      "moreClaims": "{count, plural, one {# weitere Behauptung} other {# weitere Behauptungen}}",
+      "undated": "Ohne Datum"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Ankerfakten widersprechen sich",
@@ -405,6 +411,42 @@
       "showNextSteps": "Nächste Schritte anzeigen",
       "unlink": "Verknüpfung mit {fact} aufheben"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# Behauptung} other {# Behauptungen}}",
+      "claimTitle": "Behauptung",
+      "columns": {
+        "claims": "Behauptungen",
+        "sources": "Quelldokumente",
+        "statements": "Erklärungen"
+      },
+      "empty": "Diese Liste enthält noch keine Fakten oder geprüften Dokumente.",
+      "factCount": "{count, plural, one {# Fakt} other {# Fakten}}",
+      "factOverflow": "Die ersten {count} Fakten dieser Liste werden angezeigt.",
+      "filters": {
+        "allSources": "Alle Quellen",
+        "allVerdicts": "Alle Ergebnisse",
+        "conflicts": "Widersprüche",
+        "heldFacts": "Zurückgestellte Fakten",
+        "source": "Nach Quelle filtern",
+        "verdict": "Nach Ergebnis filtern"
+      },
+      "held": "Zurückgestellt",
+      "linkedFacts": "{count, plural, one {# verknüpfter Fakt} other {# verknüpfte Fakten}}",
+      "listLabel": "Graph als Liste",
+      "loadMore": "Weitere Dokumente laden",
+      "noMatch": "Nichts entspricht diesen Filtern.",
+      "noStatements": "Bisher wurde kein Dokument anhand dieser Liste geprüft.",
+      "offList": "Nicht mehr auf der Liste",
+      "relation": {
+        "conflicts": "Widerspricht",
+        "governs": "Maßgeblich",
+        "record": "Im Bestand",
+        "recordConflict": "Widersprüchlicher Eintrag",
+        "supports": "Stützt"
+      },
+      "unlinked": "Fakten, auf denen keine Behauptung beruht",
+      "verifyInReview": "Dokument prüfen"
+    },
     "guidance": {
       "escalate": "Eskalieren",
       "manualJudgement": "Manuelle Entscheidung",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# Treffer} other {# Treffer}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologie",
+      "graph": "Graph",
+      "label": "Liste anzeigen als",
+      "review": "Prüfung"
     },
     "qualifiers": {
       "heading": "Vorbehalte",
@@ -1853,6 +1901,8 @@
       "restored": "Dateiänderungen rückgängig gemacht"
     },
     "localRun": {
+      "backgroundTasks": "{count, plural, one {# Hintergrundaufgabe läuft} other {# Hintergrundaufgaben laufen}}",
+      "errorFolderUnavailable": "Der mit diesem Chat verknüpfte Ordner ist auf Ihrem Computer nicht verfügbar. Prüfen Sie ihn in stella desktop und senden Sie dies dann erneut.",
       "errorLimitReached": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Versuchen Sie es erneut, sobald das Limit zurückgesetzt ist.",
       "errorLimitResetsAt": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Sie können es ab {time} erneut versuchen.",
       "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
@@ -1861,24 +1911,41 @@
       "errorRestoring": "Ihr Computer macht noch Dateiänderungen rückgängig. Senden Sie dies gleich noch einmal.",
       "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "filesNotShared": "Dateien, die nicht geteilt werden konnten, bleiben auf Ihrem Computer: {fileNames}",
+      "folderApprovalDescription": "Erlauben Sie {harness}, im Ordner „{folder}“ auf Ihrem Computer zu arbeiten. Der Agent kann dort Dateien lesen, ändern und löschen, und angehängte Dateien werden dorthin kopiert.",
+      "folderApprove": "In {folder} erlauben",
+      "folderHint": "Ordner Ihres Computers verknüpfen Sie in den Einstellungen von stella desktop.",
+      "folderOwn": "Eigener Ordner des Chats",
+      "folderStateMoved": "Verschoben oder gelöscht",
+      "folderStateOffline": "Laufwerk nicht verbunden",
+      "folderStatePending": "Wartet auf Ihre Zustimmung",
+      "folderStateProtected": "Enthält stellas eigene Daten",
+      "folderStateUnlinked": "Nicht mehr verknüpft",
+      "folderStateUnreadable": "Nicht lesbar",
+      "limitReminderNotify": "Benachrichtigen, sobald es zurückgesetzt ist",
+      "limitReminderScheduled": "Wir benachrichtigen Sie ab {time}.",
       "permissionAboveLimit": "Von Ihrer Organisation nicht erlaubt",
       "permissionAskDescription": "Bearbeitet Dateien im Ordner des Chats selbst; fragt vor allem anderen nach.",
       "permissionAutoDescription": "Erledigt selbst, was es für sicher hält; fragt beim Rest nach.",
       "permissionFullAuto": "Vollautomatisch",
       "permissionFullAutoDescription": "Fragt bei nichts innerhalb des Ordners des Chats nach; fragt immer, bevor es etwas an Ihrem Computer ändert.",
+      "permissionPlan": "Planen",
+      "permissionPlanDescription": "Liest und plant zuerst; fragt vor jeder Änderung, bis Sie den Plan genehmigen.",
       "permissionSandboxed": "Läuft in einer Sandbox; fragt, bevor es etwas an Ihrem Computer ändert.",
       "permissionUnavailable": "Auf diesem Computer nicht verfügbar",
       "permissions": "Berechtigungen",
       "refusalConflictingRunMode": "Diese Anfrage soll zugleich mit dem Cloud-Agenten und auf Ihrem Computer laufen. Wählen Sie unter „Ausführen auf“ eines aus.",
+      "refusalFolderNotApproved": "Erlauben Sie dem Coding-Agent zuerst, im mit diesem Chat verknüpften Ordner zu arbeiten.",
+      "refusalFolderUnavailable": "Der mit diesem Chat verknüpfte Ordner ist nicht verfügbar. Prüfen Sie ihn unter Ausführen auf oder in stella desktop.",
       "refusalHarnessUnavailable": "Der Coding-Agent auf Ihrem Computer kann diese Anfrage gerade nicht übernehmen. Prüfen Sie ihn in stella desktop.",
       "refusalModelUnavailable": "Der Coding-Agent auf Ihrem Computer bietet dieses Modell nicht mehr an. Wählen Sie unter „Ausführen auf“ ein anderes.",
-      "refusalNoComputer": "Keiner Ihrer Computer ist verbunden. Öffnen Sie stella desktop und senden Sie erneut.",
+      "refusalNoComputer": "Keiner Ihrer Computer ist verbunden.",
       "refusalPermissionAboveLimit": "Ihre Organisation erlaubt diese Berechtigungen für den Coding-Agenten auf Ihrem Computer nicht. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalPermissionUnavailable": "Der Coding-Agent auf Ihrem Computer kann mit diesen Berechtigungen nicht laufen. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalReasoningEffortUnavailable": "Der Coding-Agent auf Ihrem Computer bietet diesen Denkaufwand für das Modell nicht an. Wählen Sie unter „Denkaufwand“ einen anderen.",
       "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
       "stateLimitUntil": "Limit erreicht bis {time}",
       "stateModelUnavailable": "Modell nicht mehr verfügbar",
       "stateNeedsLogin": "Anmeldung erforderlich",
@@ -2051,6 +2118,8 @@
       "hintOffline": "Öffnen Sie stella desktop auf Ihrem Computer",
       "hintSignIn": "Melden Sie sich in stella desktop an",
       "hintUpdate": "Aktualisieren Sie es in stella desktop",
+      "localFolderPlace": "Ihr Computer, {harness}, {folder}",
+      "localFolderSelection": "Ihr Computer · {harness} · {folder}",
       "localPlace": "Ihr Computer, {harness}",
       "localSelection": "Ihr Computer · {harness}",
       "modelDefault": "Standard (empfohlen)",
@@ -2089,6 +2158,7 @@
     "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
     "sendErrorTimedOut": "Der Chat hat nicht rechtzeitig geantwortet. Versuchen Sie es erneut.",
     "sendErrorToolsUnsupported": "Dieses Modell kann keine Tools verwenden und daher keine Fragen zu Ihrer Akte beantworten. Wechseln Sie zu einem Modell, das Tools unterstützt.",
+    "sendErrorTurnTooLarge": "Diese Antwort ist zu umfangreich geworden, um vollständig übermittelt zu werden. Senden Sie eine neue Nachricht, um fortzufahren.",
     "sendPrompt": "Nachricht senden",
     "sendQueuedMessageNow": "Jetzt senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
@@ -2252,15 +2322,32 @@
       "field": "Feld",
       "input": "Eingabe",
       "interrupted": "Vor Abschluss unterbrochen",
+      "localOutput": {
+        "conversation": "Unterhaltung des Subagenten",
+        "conversationPrompt": "Aufgabe",
+        "conversationReport": "Bericht",
+        "cut": "Die ersten {kept} von {total} werden angezeigt",
+        "diff": "Dateiänderungen",
+        "elsewhere": "Auf dem Computer öffnen, auf dem der Schritt lief",
+        "empty": "Keine Ausgabe",
+        "failed": "Die stella-Desktop-App auf diesem Computer konnte dies nicht anzeigen.",
+        "imageTooLarge": "Dieses Bild ist {total} groß. Bilder über {kept} werden auf diesem Computer nicht gespeichert, daher kann es hier nicht angezeigt werden.",
+        "notKept": "Von diesem Schritt ist auf diesem Computer nichts gespeichert",
+        "reading": "Wird von diesem Computer gelesen"
+      },
       "output": "Ausgabe",
       "patternInPath": "{pattern} unter {path}",
+      "proposedPlan": "Plan wird vorgeschlagen",
       "readFile": "Datei wird gelesen",
       "searchFiles": "Dateien werden durchsucht",
+      "signInToContinue": "Zum Fortfahren anmelden",
       "sourceCode": "Quellcode",
       "statusWaiting": "Wartet",
+      "subagent": "Subagent wird ausgeführt",
       "toggleDetails": "Details ein-/ausblenden",
       "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}",
-      "updatePlan": "Plan wird aktualisiert"
+      "updatePlan": "Plan wird aktualisiert",
+      "viewImage": "Bild wird angesehen"
     },
     "turnNotification": {
       "failedBody": "Eine Chat-Antwort in stella wurde nicht abgeschlossen.",
@@ -2271,6 +2358,8 @@
       "replyReadyTitle": "Antwort fertig"
     },
     "turnStatus": {
+      "answerFailed": "Die Antwort konnte nicht fertiggestellt werden",
+      "answerReady": "Antwort fertig",
       "waitingForApproval": "Warten auf Genehmigung",
       "waitingForInput": "Warten auf Eingabe",
       "writing": "Antwort wird verfasst"
@@ -2550,6 +2639,7 @@
     "filter": "Filtern",
     "filters": "Filter",
     "find": "Suchen",
+    "folder": "Ordner",
     "formula": "Formel",
     "goBack": "Zurück",
     "goBackToEditing": "Zurück zur Bearbeitung",
@@ -5020,6 +5110,7 @@
       "flowRunAwaitingApproval": "Workflow <bdi>{flowName}</bdi> wartet auf Ihre Freigabe",
       "flowRunCompleted": "Workflow <bdi>{flowName}</bdi> abgeschlossen",
       "flowRunFailed": "Workflow <bdi>{flowName}</bdi> fehlgeschlagen",
+      "localRunLimitReset": "Der Coding-Agent auf Ihrem Computer kann Ihren Chat fortsetzen",
       "mention": "<bdi>{actorName}</bdi> hat Sie in einem Kommentar erwähnt",
       "reportExportFailed": "Ihr Berichtsexport ist fehlgeschlagen",
       "reportExportSucceeded": "Ihr Bericht ist bereit",
@@ -5466,7 +5557,6 @@
       "caseLaw": "Rechtsprechung",
       "chat": "Chat",
       "contact": "Kontakt",
-      "folder": "Ordner",
       "link": "Link",
       "matter": "Akte",
       "message": "Nachricht",
@@ -5797,6 +5887,7 @@
         "case_law_research_column": "Rechtsprechungsrecherchespalte",
         "chat_browser_site_grant": "Chat-Website-Freigabe",
         "chat_file": "Chatdatei",
+        "chat_local_folder_approval": "Freigabe eines lokalen Ordners",
         "chat_message": "Chatnachricht",
         "chat_thread": "Chatverlauf",
         "chat_tool_execution": "Chatwerkzeugausführung",

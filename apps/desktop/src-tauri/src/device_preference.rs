@@ -38,6 +38,27 @@ impl DevicePreference {
     (!value.is_empty()).then(|| value.to_string())
   }
 
+  /// What is stored, telling nothing stored (`Ok(None)`: no file, or an
+  /// empty one) from a stored value that cannot be read (`Err`), so a caller
+  /// that rewrites the value never replaces one it could not read.
+  pub fn read_stored(&self) -> Result<Option<String>, String> {
+    let path = self
+      .path
+      .as_deref()
+      .ok_or_else(|| "app data directory is unavailable".to_string())?;
+    match fs::symlink_metadata(path) {
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+      Err(error) => return Err(error.to_string()),
+      Ok(meta) if !meta.file_type().is_file() => {
+        return Err("preference path is not a regular file".to_string());
+      }
+      Ok(_) => {}
+    }
+    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let value = raw.trim();
+    Ok((!value.is_empty()).then(|| value.to_string()))
+  }
+
   /// Writes only on a change, so start-up reconciliation never touches the
   /// disk when nothing changed.
   pub fn write(&self, value: &str) -> Result<(), String> {

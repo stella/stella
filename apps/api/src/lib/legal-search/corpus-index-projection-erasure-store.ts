@@ -11,8 +11,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { lockRegisteredCorpusProjectionManifestForMutation } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus-index-projection-engine";
-import { corpusProjectionAcceptedAppendCleanupFence } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import {
+  corpusProjectionAcceptedAppendCleanupFence,
+  corpusProjectionAppendPublishBarrier,
+} from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   type CorpusProjectionScopedWorkOptions,
@@ -230,7 +232,10 @@ export const advanceCorpusProjectionErasuresTx = async <
       }
       return {
         id,
-        barrier: corpusIndexUnknownAppendBarrierAt(appendStartedAt, manifest),
+        barrier: corpusProjectionAppendPublishBarrier(
+          { type: "unknown", appendStartedAt },
+          manifest,
+        ),
       };
     });
     const barrierSql = sqlCaseFragment({

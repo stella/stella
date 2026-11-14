@@ -20,6 +20,10 @@ import {
   type ProtocolLog,
   protocolTap,
 } from "../protocol-log";
+import {
+  type HolderBrowserOptions,
+  startHolderBrowser,
+} from "./browser/holder-browser";
 import type { ProtocolLogSettingRead } from "./env";
 import { Holder, type HolderOptions, type HolderPeer } from "./holder";
 import { SIDECAR_MAX_LINE_BYTES } from "./protocol";
@@ -66,8 +70,10 @@ export type HolderStartError =
 
 export type HolderServerOptions = Omit<
   HolderOptions,
-  "secret" | "log" | "exit" | "protocolLog"
+  "secret" | "log" | "exit" | "protocolLog" | "browser"
 > & {
+  /** The member's Chrome, through the extension; `null` starts no bridge. */
+  browser: HolderBrowserOptions | null;
   /** The version's folder, `<app data>/agent-holder/<version>`. */
   dir: string;
   /** The socket path, or the named pipe on Windows, as the desktop chose. */
@@ -288,6 +294,7 @@ export const startHolderServer = async (
   options: HolderServerOptions,
 ): Promise<Result<HolderServer, HolderStartError>> => {
   const {
+    browser: browserOptions,
     dir,
     endpoint,
     protocolLog: protocolLogSetting,
@@ -324,16 +331,36 @@ export const startHolderServer = async (
     });
   };
   const protocolLog = openProtocolLog(protocolLogSetting, log);
+  const started =
+    browserOptions === null
+      ? null
+      : await startHolderBrowser({
+          ...browserOptions,
+          dir,
+          endpoint,
+          log,
+          version: holderOptions.sidecarVersion,
+        });
+  if (started?.type === "unavailable") {
+    log(`no browser bridge: ${started.reason}`);
+  }
+  const browser = started?.type === "started" ? started.browser : null;
   let connections = 0;
   const holder = new Holder({
     ...holderOptions,
     secret,
     log,
     protocolLog,
+    browser: browser?.mcp ?? null,
     exit: () => {
       for (const socket of sockets) {
         end(socket);
       }
+      browser?.stop().catch((error: unknown) => {
+        log(
+          `the browser bridge did not stop cleanly: ${error instanceof Error ? error.name : "unknown"}`,
+        );
+      });
       server.close(() => {
         rmSync(path.join(dir, HOLDER_SECRET_FILE), { force: true });
         rmSync(path.join(dir, HOLDER_ENDPOINT_FILE), { force: true });

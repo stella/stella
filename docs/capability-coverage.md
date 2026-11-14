@@ -357,6 +357,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.verifications.claim-reviews.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-list` |
 | `lists.verifications.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-create` |
 | `lists.verifications.get` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-get` |
+| `lists.verifications.graph.get` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-graph-get` |
 | `lists.verifications.latest.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-latest-list` |
 | `lists.verifications.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-list` |
 
@@ -384,6 +385,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.justifications.list` | read | stella:read | — | generic invoke → `stella capability matters justifications-list` |
 | `matters.list` | read | stella:read | — | curated tool `list_matters` |
+| `matters.matter-numbering.get` | read | stella:read | — | generic invoke → `stella capability matters matter-numbering-get` |
 | `matters.member-candidates.list` | read | stella:read | — | generic invoke → `stella capability matters member-candidates-list` |
 | `matters.members.add` | write | stella:matters_write | — | curated tool `add_matter_member` |
 | `matters.members.list` | read | stella:read | — | covered by `list_matters` |
@@ -812,13 +814,13 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
-| assistant_chat | 16 |
-| auth_plumbing | 40 |
+| assistant_chat | 17 |
+| auth_plumbing | 41 |
 | billing_ui | 1 |
-| chat_thread_ui | 26 |
+| chat_thread_ui | 31 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
-| document_processing | 26 |
+| document_processing | 27 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |

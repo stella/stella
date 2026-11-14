@@ -123,10 +123,39 @@ export const readClaimReviews = async ({
   claimIds,
 }: ReadClaimReviewsArgs): Promise<
   Map<SafeId<"legalListClaim">, ClaimReviewRecord>
+> =>
+  await readClaimReviewsOfRuns({
+    tx,
+    workspaceId,
+    runIds: [runId],
+    ...(claimIds === undefined ? {} : { claimIds }),
+  });
+
+type ReadClaimReviewsOfRunsArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  runIds: readonly SafeId<"legalListVerificationRun">[];
+  /** Narrow to these claims; omitted reads every claim of the runs. */
+  claimIds?: readonly SafeId<"legalListClaim">[];
+};
+
+/** Current review per claim id across several runs, in one ordered read.
+ *  A claim with no events has no entry. */
+export const readClaimReviewsOfRuns = async ({
+  tx,
+  workspaceId,
+  runIds,
+  claimIds,
+}: ReadClaimReviewsOfRunsArgs): Promise<
+  Map<SafeId<"legalListClaim">, ClaimReviewRecord>
 > => {
+  if (runIds.length === 0 || claimIds?.length === 0) {
+    return new Map();
+  }
   // Bounded by the caps the writers enforce: claims per run and actions per
   // claim.
-  const claimCount = claimIds?.length ?? VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX;
+  const claimCount =
+    claimIds?.length ?? runIds.length * VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX;
   const events = await tx
     .select({
       claimId: legalListClaimReviewEvents.claimId,
@@ -138,7 +167,12 @@ export const readClaimReviews = async ({
     .where(
       and(
         eq(legalListClaimReviewEvents.workspaceId, workspaceId),
-        eq(legalListClaimReviewEvents.runId, runId),
+        runIds.length === 1
+          ? eq(
+              legalListClaimReviewEvents.runId,
+              runIds[0] ?? panic("A review read names no run"),
+            )
+          : inArray(legalListClaimReviewEvents.runId, [...runIds]),
         claimIds === undefined
           ? undefined
           : inArray(legalListClaimReviewEvents.claimId, [...claimIds]),
@@ -259,7 +293,7 @@ type QualifiedClaimRow = ClaimVerdictColumns & {
 /** Every qualifier of a stored claim, read with its current grade
  *  (`gradeOf`): the grader's, and the ones the facts its verdict rests on
  *  give it as they stand now. */
-const qualifiersOfClaim = (
+export const qualifiersOfClaim = (
   claim: QualifiedClaimRow,
   review: ClaimReview | null,
   standings: FactStandings,
@@ -283,7 +317,7 @@ const qualifiersOfClaim = (
  * facts its claims' latest re-checks read that the run did not (or read
  * differently, the later reading kept).
  */
-const factsWithRechecks = (
+export const factsWithRechecks = (
   evidence: VerificationEvidence,
   reviews: ReadonlyMap<SafeId<"legalListClaim">, ClaimReviewRecord>,
 ): VerificationEvidence => {
@@ -411,7 +445,7 @@ type ReadFactStandingsArgs = {
  * the run pinned: included, with the sources the run read, each of the kind
  * its document has on the list now.
  */
-const readFactStandings = async ({
+export const readFactStandings = async ({
   tx,
   workspaceId,
   evidence,
@@ -476,6 +510,46 @@ const readFactStandings = async ({
   }
   return standings;
 };
+
+type ReadRunsWithEvidenceArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  runIds: readonly SafeId<"legalListVerificationRun">[];
+};
+
+/** Several runs with the evidence each pinned and its document's name, in
+ *  one read, for a reader that draws many runs at once (a list's
+ *  verification graph). A run the workspace does not hold is absent. */
+export const readRunsWithEvidence = async ({
+  tx,
+  workspaceId,
+  runIds,
+}: ReadRunsWithEvidenceArgs) =>
+  runIds.length === 0
+    ? []
+    : await tx
+        .select({
+          id: legalListVerificationRuns.id,
+          entityVersionId: legalListVerificationRuns.entityVersionId,
+          evidence: legalListVerificationRuns.evidence,
+          finishedAt: legalListVerificationRuns.finishedAt,
+          documentName: entities.name,
+        })
+        .from(legalListVerificationRuns)
+        .innerJoin(
+          entities,
+          and(
+            eq(entities.id, legalListVerificationRuns.entityId),
+            eq(entities.workspaceId, legalListVerificationRuns.workspaceId),
+          ),
+        )
+        .where(
+          and(
+            eq(legalListVerificationRuns.workspaceId, workspaceId),
+            inArray(legalListVerificationRuns.id, [...runIds]),
+          ),
+        )
+        .limit(runIds.length);
 
 /** How every fact a run's claims can rest on stands now (the run's pinned
  *  facts and its re-checks' facts), keyed by fact. `null` when the
@@ -679,6 +753,9 @@ const presentClaim = ({
     text: claim.text,
     assertedOn: assertedDateOfClaim(claim, review),
     anchor: claim.anchor,
+    // The printed number of the paragraph the claim sits in, as the run
+    // stored it; null when it sits outside any numbered paragraph.
+    paragraph: claim.paragraphNumber,
     refs: graded.refs,
     review: record === null ? null : serializeClaimReview(record),
     recheck:

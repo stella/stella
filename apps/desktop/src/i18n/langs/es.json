@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Le avisa cuando un documento está listo o una sincronización requiere atención.",
     "permissionAccessibility": "Accesibilidad",
     "permissionAccessibilityDescription": "Permite que la cronología de actividad registre títulos de ventanas.",
+    "permissionMicrophone": "Micrófono",
+    "permissionMicrophoneDescription": "Permite que el dictado le oiga mientras mantiene su atajo.",
     "permissionAllowed": "Permitido",
     "permissionAllow": "Permitir",
     "permissionOpenSettings": "Abrir ajustes",
@@ -724,6 +726,18 @@
     "introduceActivityTitle": "Novedad: cronología de actividad",
     "introduceActivityBody": "La actividad ya está disponible para su cuenta. No se registra nada hasta que la inicie en la ventana de actividad.",
     "openActivity": "Abrir actividad",
+    "dictationModel": "El modelo de voz ({size} MB) se descarga una vez y funciona en este ordenador.",
+    "dictationTurnOn": "Activar y descargar",
+    "dictationDownloadContinues": "Puede continuar. La descarga sigue en segundo plano.",
+    "dictationReady": "El dictado está activado y listo.",
+    "dictationTryLabel": "Dicte aquí",
+    "dictationTryPlaceholder": "Haga clic aquí, mantenga {shortcut} y diga una frase.",
+    "dictationListening": "Escuchando…",
+    "dictationTranscribing": "Escribiendo lo que ha dicho…",
+    "dictationMicrophone": "Permite que stella le oiga mientras mantiene el atajo.",
+    "dictationAccessibility": "Permite que stella escriba lo que ha dicho en la app que está usando.",
+    "dictationFailed": "stella desktop no pudo activar el dictado. Inténtelo de nuevo.",
+    "introduceDictationTitle": "Novedad: dictado",
     "guideWaiting": "Active stella desktop en la lista de arriba para permitir Accesibilidad.",
     "guideAllowed": "stella desktop tiene permiso",
     "never": {
@@ -830,6 +844,27 @@
       "runs_can_write": "Las ejecuciones locales pueden escribir en esta carpeta, así que no puede contener una habilidad.",
       "network_folder": "Esta carpeta está en una unidad de red. Las habilidades deben estar en el disco de este ordenador.",
       "path_changed": "Ha cambiado una carpeta superior. Quite esta carpeta y añádala de nuevo."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Carpetas vinculadas",
+    "description": "Carpetas de este ordenador en las que puede trabajar el agente de un chat. El chat solo ve el nombre de la carpeta; su ruta se queda en este ordenador.",
+    "add": "Vincular carpeta",
+    "remove": "Desvincular",
+    "removeFolder": "Desvincular {name}",
+    "state": {
+      "offline": "La unidad en la que está esta carpeta no está conectada.",
+      "moved": "Esta carpeta se ha movido, renombrado o eliminado. Desvincúlela y vuelva a vincularla.",
+      "protected": "Esta carpeta contiene datos propios de stella o una carpeta de habilidades, así que el agente no puede trabajar en ella.",
+      "unreadable": "No se ha podido leer esta carpeta."
+    },
+    "notice": {
+      "action_failed": "No ha funcionado. Inténtelo de nuevo.",
+      "too_many": "Este ordenador ya tiene todas las carpetas vinculadas que puede guardar. Desvincule una primero.",
+      "not_a_folder": "Elija una carpeta.",
+      "network_folder": "Esta carpeta está en una unidad de red. Vincule una carpeta del disco de este ordenador.",
+      "protected": "Esta carpeta contiene datos propios de stella o una carpeta de habilidades, así que el agente no puede trabajar en ella.",
+      "unreadable": "No se ha podido leer esta carpeta."
     }
   }
 }

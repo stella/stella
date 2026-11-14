@@ -54,7 +54,7 @@ export const documentSourceSchema = v.variant("kind", [
     baseVersionId: v.pipe(v.string(), v.uuid()),
     certificateSha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
     signingTime: apiDateTimeSchema,
-    level: v.picklist(["B-B", "B-T", "B-LT"]),
+    level: v.picklist(["B-B", "B-T", "B-LT", "B-LTA"]),
     /** The authority whose trusted time the signature carries. */
     timestampAuthorityUrl: v.nullable(v.pipe(v.string(), v.url())),
     /** Why `level` is what it is when it fell short of the configuration. */
