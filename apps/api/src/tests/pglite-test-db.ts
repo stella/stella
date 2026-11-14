@@ -41,6 +41,7 @@ import {
   installPgliteChatRunLogRls,
   installPgliteChatSecretRls,
   installPgliteChatStoredContentEgress,
+  installPgliteChatTurnOrdinal,
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
   installPgliteConflictCheckRoutines,
@@ -919,6 +920,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPgliteSearchHistoryClearFence(db);
+  await installPgliteChatTurnOrdinal(db);
   await installPglitePlaybookDocumentTypeKey(db);
   await installPgliteFindingDecisionHistory(db);
   await db.transaction(async (tx) => {
