@@ -1915,6 +1915,7 @@ describe("harness holder over its socket", () => {
     const runWithSteps = async (
       answer: () => Response,
       reach: "reachable" | "away" = "reachable",
+      announcement: "taken" | "refused" = "taken",
     ) => {
       const root = mkdtempSync(path.join(tmpdir(), "stella-sidecar-steps-"));
       const configDir = path.join(root, "codex-home");
@@ -1956,7 +1957,7 @@ describe("harness holder over its socket", () => {
           ) {
             awaited.push(message.chunk["value"]);
             order.push("awaited");
-            return true;
+            return announcement === "taken";
           }
           order.push(
             message.type === "run.event" &&
@@ -2093,6 +2094,19 @@ describe("harness holder over its socket", () => {
       expect(readdirSync(path.join(stepOutputDir, runId))).toEqual(
         expect.arrayContaining(left),
       );
+    });
+
+    test("whose announcement the holder did not take are not left to be sent after the run", async () => {
+      const { finished, awaited, runId, stepOutputDir } = await runWithSteps(
+        () => new Response(null),
+        "away",
+        "refused",
+      );
+      // A message that could not be written fails the run.
+      expect(finished.outcome).toBe("failed");
+      expect(awaited).toHaveLength(1);
+      // Nothing awaits the steps, so no folder is handed over.
+      expect(readdirSync(stepOutputDir)).toEqual([runId]);
     });
 
     test("an API that cannot take a step at first is asked again before the run's finish", async () => {

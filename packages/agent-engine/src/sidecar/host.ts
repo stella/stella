@@ -467,8 +467,11 @@ type RunStepsOptions = {
   message: { stepOutputDir: string; workspaceDir: string };
   runId: string;
   log: SidecarHostOptions["log"];
-  /** Sends one of the run's messages to the desktop app. */
-  send: (message: SidecarHostOutput) => void;
+  /**
+   * Hands one of the run's messages to the holder, which keeps it for the
+   * desktop app; `false` when the holder did not take it.
+   */
+  send: (message: SidecarHostOutput) => boolean;
 };
 
 /**
@@ -540,7 +543,11 @@ const openRunSteps = ({
       if (left.value.stepKeys.length === 0 && left.value.more === 0) {
         return;
       }
-      send({
+      // The folder is handed over before it is announced, so no stop of
+      // this process leaves announced steps where nobody sends them from: a
+      // folder handed over and never announced is refused by the API and
+      // removed. An announcement the holder did not take awaits nothing.
+      const announced = send({
         type: "run.event",
         runId,
         chunk: {
@@ -550,6 +557,9 @@ const openRunSteps = ({
           timestamp: Temporal.Now.instant().epochMilliseconds,
         },
       });
+      if (!announced) {
+        await uploads.withdraw();
+      }
     },
     /** The run is over: what waited and was not announced is dropped. */
     close: uploads.close,
@@ -1340,14 +1350,14 @@ export class SidecarHost {
      */
     const delivery = { broken: false };
     const send = (runMessage: SidecarHostOutput) => {
-      if (delivery.broken || this.options.send(runMessage)) {
-        return;
+      if (!delivery.broken && !this.options.send(runMessage)) {
+        delivery.broken = true;
+        this.options.log(
+          `a run's ${runMessage.type} message could not be written; stopping the run`,
+        );
+        this.stop(run, RUN_STOP.interrupt);
       }
-      delivery.broken = true;
-      this.options.log(
-        `a run's ${runMessage.type} message could not be written; stopping the run`,
-      );
-      this.stop(run, RUN_STOP.interrupt);
+      return !delivery.broken;
     };
     const relabel = (nativeId: string) => {
       const requestId = crypto.randomUUID();

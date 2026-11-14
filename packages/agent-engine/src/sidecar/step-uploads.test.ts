@@ -380,7 +380,7 @@ describe("sending what a run's steps produced", () => {
     // The named markers are handed over, and with their kept files outlive
     // the run; the run's own folder is gone.
     expect(await awaited()).toEqual(sorted(left.stepKeys));
-    expect(await readdir(root)).toEqual([RUN_ID, `${RUN_ID}.awaited`]);
+    expect(await namesIn(root)).toEqual(sorted([RUN_ID, `${RUN_ID}.awaited`]));
     const keptDir = stepOutputRunDir(root, RUN_ID);
     expect(await readdir(keptDir)).toEqual(
       expect.arrayContaining([first.stepKey, second.stepKey]),
@@ -451,6 +451,44 @@ describe("sending what a run's steps produced", () => {
     await sent;
     expect(left).toEqual({ stepKeys: [step.stepKey], more: 0 });
     expect(await awaited()).toEqual([step.stepKey]);
+  });
+
+  test("a process that stops before the hand-over leaves nothing where steps are sent from after a run", async () => {
+    const uploads = uploadsWith(async () => await Promise.resolve("away"));
+    const step = await keep("call-1", "out");
+    await uploads.send(step, 1000);
+    // The process stops here: nothing was announced, and nothing was handed
+    // over. What waited stays the run's own, which nobody sends from.
+    expect(await pending()).toEqual([step.stepKey]);
+    expect(await awaited()).toEqual([]);
+    expect(await namesIn(root)).toEqual(sorted([RUN_ID, `${RUN_ID}.pending`]));
+  });
+
+  test("a process that stops after the hand-over leaves exactly the steps it would have announced", async () => {
+    const uploads = uploadsWith(async () => await Promise.resolve("away"));
+    const step = await keep("call-1", "out");
+    await uploads.send(step, 1000);
+    const left = (await uploads.leave(10)).unwrap();
+    // The process stops here, before or after its announcement was taken.
+    // Announced, these are the steps awaited; not announced, the API
+    // refuses each and whoever sends from the folder removes it.
+    expect(await awaited()).toEqual(left.stepKeys);
+    expect(await pending()).toEqual([]);
+    // Nothing of the run's own is left to mistake for it: a later start
+    // over the same folders finds nothing to send and touches nothing.
+    const again = uploadsWith(async () => await Promise.resolve("done"));
+    await again.drain({ waitMs: 1000, retryEveryMs: 1 });
+    await again.close();
+    expect(await awaited()).toEqual(left.stepKeys);
+  });
+
+  test("an announcement that was not taken withdraws the hand-over", async () => {
+    const uploads = uploadsWith(async () => await Promise.resolve("away"));
+    await uploads.send(await keep("call-1", "out"), 1000);
+    await uploads.leave(10);
+    await uploads.withdraw();
+    await uploads.close();
+    expect(await readdir(root)).toEqual([RUN_ID]);
   });
 
   test("a marker that names no kept step is dropped, never sent", async () => {

@@ -198,6 +198,11 @@ export type StepUploads = {
   leave: (
     max: number,
   ) => Promise<Result<ChatLocalRunStepsAwaited, UnhandledException>>;
+  /**
+   * Take back what `leave` handed over: its announcement was not taken, so
+   * nothing awaits those steps and nobody is to send them.
+   */
+  withdraw: () => Promise<void>;
   /** End for good: nothing more is sent, and what still waited is dropped. */
   close: () => Promise<void>;
 };
@@ -426,6 +431,9 @@ export const createStepUploads = ({
       closed.abort();
       await flight;
       return await Result.tryPromise(async () => await leftIn(max));
+    },
+    withdraw: async () => {
+      await rm(awaitedDir, { recursive: true, force: true });
     },
     close: async () => {
       closed.abort();
