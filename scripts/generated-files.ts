@@ -370,6 +370,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/markdown/sanitize-html.ts",
     "apps/api/src/lib/mcp-connectors/app-urls.ts",
     "apps/api/src/lib/mcp-connectors/catalog-metadata.ts",
+    "apps/api/src/lib/mcp-connectors/desktop-support-floor.json",
     "apps/api/src/lib/mcp-connectors/local-client-support.ts",
     "apps/api/src/lib/observability/*",
     "apps/api/src/lib/observability/data-invariants/config-schema.ts",
