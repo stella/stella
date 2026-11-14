@@ -14,8 +14,11 @@
  * and stella's own store writer instead.
  *
  * The step is best effort. The signature it extends is already complete,
- * so every failure, including running out of time, leaves the B-LT bytes as
- * they were and only says why in a warning.
+ * so a failure before the timestamp is placed, including running out of
+ * time, leaves the B-LT bytes as they were. A timestamp that was placed but
+ * whose chain or revocation data falls short is kept: it still proves the
+ * document existed at its time, and the result is reported as B-LT. Either
+ * way a warning says why.
  */
 
 import { PDF } from "@libpdf/core";

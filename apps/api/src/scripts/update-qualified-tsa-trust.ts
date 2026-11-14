@@ -21,9 +21,10 @@
  * fetched over HTTPS from the addresses the LOTL names, and the generated
  * diff is reviewed before it is committed.
  *
- * A trusted list that cannot be fetched fails the run, so a bundle never
- * silently loses a territory; `--allow-missing=PT,CY` accepts named
- * failures and records them in the files' headers.
+ * A trusted list that cannot be fetched, or that is not a complete
+ * trusted-list document, fails the run, so a bundle never silently loses a
+ * territory; `--allow-missing=PT,CY` accepts named failures and records
+ * them in the files' headers.
  *
  * Usage:  bun run src/scripts/update-qualified-tsa-trust.ts [--allow-missing=XX,YY]
  */
@@ -150,13 +151,34 @@ const download = async (
   return Result.err(`more than ${MAX_REDIRECTS} redirects`);
 };
 
+/**
+ * Whether `xml` is a whole trusted list: a `TrustServiceStatusList` whose
+ * scheme information is there and whose closing tag ends the document. A
+ * maintenance page or a truncated body that came with a success status
+ * fails this, so it counts as a list that could not be read instead of a
+ * list without timestamp services.
+ */
+const isCompleteTrustedList = (xml: string) => {
+  const document = withoutComments(xml).trim();
+  return (
+    /<(?:[\w.-]+:)?TrustServiceStatusList[\s>]/u.test(document) &&
+    /<\/(?:[\w.-]+:)?TrustServiceStatusList>$/u.test(document) &&
+    elements(document, "SchemeInformation").length > 0
+  );
+};
+
+/** GET a trusted list, retrying a failed or incomplete download. */
 const downloadWithRetry = async (
   permit: ThirdPartyOutboundPermit,
   url: string,
 ): Promise<Result<string, string>> => {
   let last: Result<string, string> = Result.err("not attempted");
   for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
-    last = await download(permit, url);
+    const downloaded = await download(permit, url);
+    last =
+      Result.isOk(downloaded) && !isCompleteTrustedList(downloaded.value)
+        ? Result.err("not a complete trusted list")
+        : downloaded;
     if (Result.isOk(last)) {
       return last;
     }

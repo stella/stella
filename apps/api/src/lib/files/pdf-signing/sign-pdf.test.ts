@@ -83,19 +83,29 @@ const anchorTrust = (anchors: readonly Uint8Array[]) => ({
   pinnedUnits: new Set<string>(),
 });
 
+type ScriptedAuthorityOptions = {
+  /** Answers the first request, the signature's timestamp. */
+  signature: TimestampAuthority;
+  /** Answers every later request, the archival document timestamp. */
+  archival: TimestampAuthority;
+};
+
 /**
- * An authority that answers the signature's timestamp from `first` and every
- * later request, the archival document timestamp, from `later`.
+ * An authority that answers the signature's timestamp and the archival
+ * document timestamp from different authorities.
  */
-const scriptedAuthority = (
-  first: TimestampAuthority,
-  later: TimestampAuthority,
-): TimestampAuthority => {
+const scriptedAuthority = ({
+  signature,
+  archival,
+}: ScriptedAuthorityOptions): TimestampAuthority => {
   let calls = 0;
   return {
     timestamp: async (digest, algorithm) => {
       calls += 1;
-      return await (calls === 1 ? first : later).timestamp(digest, algorithm);
+      return await (calls === 1 ? signature : archival).timestamp(
+        digest,
+        algorithm,
+      );
     },
   };
 };
@@ -429,7 +439,10 @@ describe("two-phase PDF signing", () => {
                 authority:
                   archivalAuthority === undefined
                     ? tsa
-                    : scriptedAuthority(tsa, archivalAuthority),
+                    : scriptedAuthority({
+                        signature: tsa,
+                        archival: archivalAuthority,
+                      }),
                 url: "https://tsa.example/",
               },
             ],
