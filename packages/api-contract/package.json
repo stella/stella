@@ -214,6 +214,7 @@
     "./chat-local-run-tool": "./src/chat-local-run-tool.ts",
     "./chat-local-run-steps": "./src/chat-local-run-steps.ts",
     "./chat-local-run-steps.fixtures": "./src/chat-local-run-steps.fixtures.json",
+    "./chat-local-run-step-content": "./src/chat-local-run-step-content.ts",
     "./chat-local-run-step-output": "./src/chat-local-run-step-output.ts",
     "./chat-local-run-step-output.fixtures": "./src/chat-local-run-step-output.fixtures.json",
     "./agent-harness": "./src/agent-harness.ts",

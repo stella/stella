@@ -263,6 +263,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "desktop_runner_events",
   "desktop_runner_app_calls",
   "desktop_runner_folder_restores",
+  // What local runs' steps produced: written with the run's budget and read
+  // for its owner on the same owner connection as the run itself.
+  "chat_local_run_step_contents",
   // Better Auth OAuth control-plane state. Request-role access would expose
   // resource policy or let tenant traffic change token authorization rules.
   "oauth_resource",

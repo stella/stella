@@ -38,6 +38,13 @@ import {
   sealRunAnswer,
 } from "@/api/lib/desktop-runner/sealed-answers";
 import {
+  openStepImage,
+  readStepContent,
+  recordStepTooLarge,
+  storeStepImage,
+  storeStepText,
+} from "@/api/lib/desktop-runner/step-contents";
+import {
   type AnsweredRequest,
   approveLinkedFolder,
   type ChatRunBinding,
@@ -218,6 +225,42 @@ type ControlDeps = {
 
 const toDatabaseError = (cause: unknown) =>
   new DatabaseError({ message: "Desktop runner store is unavailable", cause });
+
+/** What a run's steps produced: stored for a run, read for its thread's owner. */
+const stepContentControl = (db: DesktopRunnerDb) => ({
+  /** Store a step's text for the owner's run that is still going. */
+  storeStepText: async (options: Parameters<typeof storeStepText>[1]) =>
+    await Result.tryPromise({
+      try: async () => await storeStepText(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Record a step whose content was too large to send. */
+  recordStepTooLarge: async (
+    options: Parameters<typeof recordStepTooLarge>[1],
+  ) =>
+    await Result.tryPromise({
+      try: async () => await recordStepTooLarge(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Whether a step of the owner's run takes an image. */
+  openStepImage: async (options: Parameters<typeof openStepImage>[1]) =>
+    await Result.tryPromise({
+      try: async () => await openStepImage(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Name a stored chat file as a step's image. */
+  storeStepImage: async (options: Parameters<typeof storeStepImage>[1]) =>
+    await Result.tryPromise({
+      try: async () => await storeStepImage(db, options),
+      catch: toDatabaseError,
+    }),
+  /** One step's stored content, for the member who owns its thread. */
+  readStepContent: async (options: Parameters<typeof readStepContent>[1]) =>
+    await Result.tryPromise({
+      try: async () => await readStepContent(db, options),
+      catch: toDatabaseError,
+    }),
+});
 
 const invalid = (
   kind: DesktopRunnerServerMessage["type"],
@@ -753,6 +796,7 @@ export const createDesktopRunnerControl = ({
         try: async () => await readRunOutputFile(db, options),
         catch: toDatabaseError,
       }),
+    ...stepContentControl(db),
     /** Record what the server answered the run for a tool an app presents. */
     recordAppCall: async (options: Parameters<typeof recordAppCall>[1]) =>
       await Result.tryPromise({

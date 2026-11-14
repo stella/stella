@@ -582,6 +582,32 @@ export const emitChatRunLogMetric = (metric: ChatRunLogMetric): void => {
   }
 };
 
+const LOCAL_RUN_STEP_CONTENT_METRIC = {
+  storedBytes: "LocalRunStepContentStoredBytes",
+  budgetReached: "LocalRunStepContentBudgetReached",
+  tooLarge: "LocalRunStepContentTooLarge",
+} as const;
+
+type LocalRunStepContentMetric = {
+  /** How the step's content settled. */
+  state: "stored" | "too_large" | "run_budget_reached";
+  /** Bytes this write stored. */
+  storedBytes: number;
+};
+
+/** One settled write of a local run's step content, by how it settled. */
+export const emitLocalRunStepContentMetric = ({
+  state,
+  storedBytes,
+}: LocalRunStepContentMetric): void => {
+  writeMetricLine({
+    [LOCAL_RUN_STEP_CONTENT_METRIC.storedBytes]: storedBytes,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.budgetReached]:
+      state === "run_budget_reached" ? 1 : 0,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.tooLarge]: state === "too_large" ? 1 : 0,
+  });
+};
+
 const PROMPT_CACHE_METRIC = {
   cachedInputTokens: "PromptCachedInputTokens",
   hitRate: "PromptCacheHitRate",

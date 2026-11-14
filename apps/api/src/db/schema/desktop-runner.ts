@@ -5,6 +5,10 @@ import {
   CHAT_LOCAL_FILES_UNDO_SETTLED_STATES,
   CHAT_LOCAL_FILES_UNDO_STATES,
 } from "@stll/api-contract/chat-local-files-undo";
+import {
+  CHAT_LOCAL_RUN_STEP_CONTENT_KINDS,
+  CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES,
+} from "@stll/api-contract/chat-local-run-step-content";
 
 import { denyStellaAccessPolicies } from "@/api/db/rls";
 import {
@@ -29,6 +33,7 @@ import {
   timestamptz,
   user,
 } from "./common";
+import { userFiles } from "./files-views";
 
 // The gateway serves sockets and sweeps leases across every organization, so
 // these tables are reached only through the table owner; tenant roles see none.
@@ -197,6 +202,13 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
       .notNull()
       .default(0),
     leaseExpiresAt: timestamptz("lease_expires_at").notNull(),
+    /** UTF-8 bytes of step text the run has stored, bounded per run. */
+    stepContentTextBytes: p
+      .bigint("step_content_text_bytes", { mode: "number" })
+      .notNull()
+      .default(0),
+    /** Images the run's steps have stored, bounded per run. */
+    stepContentImages: p.integer("step_content_images").notNull().default(0),
     /**
      * The chat thread whose turn started the run; null for runs started
      * outside chat. The run and its messages go with the thread.
@@ -448,6 +460,102 @@ export const desktopRunnerAppCalls = p.pgTable.withRLS(
       sql`jsonb_typeof(${table.result}) = 'object'`,
     ),
     ...ownerOnlyPolicies("desktop_runner_app_calls"),
+  ],
+);
+
+/**
+ * What the steps of a chat's local runs produced (a command's output, a
+ * change's diff, a subagent's conversation, an image a step viewed), one row
+ * per step of a thread, stored beside the step's call and never in it. Text
+ * is held encrypted for the thread's organization; an image is a chat file
+ * the row names.
+ *
+ * A row lives as long as the answer that shows its step: it goes with the
+ * turn that produced it, and so with that turn's messages and its thread. It
+ * is keyed by thread, since a forked thread keeps its source's call ids, and
+ * names its run without depending on it, since an ended run is pruned long
+ * before its conversation.
+ */
+export const chatLocalRunStepContents = p.pgTable.withRLS(
+  "chat_local_run_step_contents",
+  {
+    threadId: p.uuid("thread_id").notNull(),
+    /** SHA-256 hex of the step's chat call id, which names its run. */
+    stepKey: p.varchar("step_key", { length: 64 }).notNull(),
+    /** The run whose step this is; its row may be gone. */
+    runId: p.uuid("run_id").notNull(),
+    /** The turn that produced the step. */
+    turnId: p.uuid("turn_id").notNull(),
+    kind: p.text().notNull(),
+    state: p.text().notNull(),
+    /** How many bytes the step produced, stored or not. */
+    totalBytes: p.bigint("total_bytes", { mode: "number" }).notNull(),
+    /** How many bytes are stored: a text's kept start, or the whole image. */
+    storedBytes: p.integer("stored_bytes").notNull(),
+    /** The stored text, encrypted for the thread's organization. */
+    textEncrypted: bytea("text_encrypted"),
+    /** The IV of `text_encrypted`; set with it. */
+    textIv: bytea("text_iv"),
+    /** The chat file a stored image is. */
+    userFileId: p.uuid("user_file_id"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "chat_local_run_step_contents_pkey",
+      columns: [table.threadId, table.stepKey],
+    }),
+    p
+      .foreignKey({
+        name: "chat_local_run_step_contents_thread_fk",
+        columns: [table.threadId],
+        foreignColumns: [chatThreads.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "chat_local_run_step_contents_turn_fk",
+        columns: [table.turnId],
+        foreignColumns: [chatTurns.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "chat_local_run_step_contents_user_file_fk",
+        columns: [table.userFileId],
+        foreignColumns: [userFiles.id],
+      })
+      .onDelete("cascade"),
+    // Each serves its reference's cascade, so deleting a turn or a file
+    // never reads the whole table.
+    p.index("chat_local_run_step_contents_turn_idx").on(table.turnId),
+    p
+      .index("chat_local_run_step_contents_user_file_idx")
+      .on(table.userFileId)
+      .where(sql`${table.userFileId} IS NOT NULL`),
+    p.check(
+      "chat_local_run_step_contents_step_key_check",
+      sql`${table.stepKey} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "chat_local_run_step_contents_kind_check",
+      sql`${table.kind} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_KINDS)})`,
+    ),
+    p.check(
+      "chat_local_run_step_contents_state_check",
+      sql`${table.state} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES)})`,
+    ),
+    p.check(
+      "chat_local_run_step_contents_bytes_check",
+      sql`${table.totalBytes} >= 0 AND ${table.storedBytes} >= 0 AND ${table.storedBytes} <= ${table.totalBytes}`,
+    ),
+    // A stored text holds its ciphertext and IV, a stored image its file,
+    // and a step that stored nothing holds neither.
+    p.check(
+      "chat_local_run_step_contents_content_check",
+      sql`(${table.textEncrypted} IS NULL) = (${table.textIv} IS NULL) AND (${table.textEncrypted} IS NOT NULL) = (${table.state} = 'stored' AND ${table.kind} <> 'image') AND (${table.userFileId} IS NOT NULL) = (${table.state} = 'stored' AND ${table.kind} = 'image') AND (${table.state} = 'stored' OR ${table.storedBytes} = 0)`,
+    ),
+    ...ownerOnlyPolicies("chat_local_run_step_contents"),
   ],
 );
 

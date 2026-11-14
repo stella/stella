@@ -221,6 +221,10 @@ const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
     // read on the owner connection by account and organization;
     // gateway.db.test.ts covers that a grant reads only the owner's one run.
     "local-run-step-output-grant": WAIVER_REASON.isolatedOutsideRlsHarness,
+    // What a step of one of the caller's own local runs produced, read on the
+    // owner connection by thread, account and organization;
+    // step-contents.db.test.ts covers that only the thread's owner reads it.
+    "local-run-step-content": WAIVER_REASON.isolatedOutsideRlsHarness,
     // Rewrites the prompt text in the request body; reads no stored record.
     "improve-prompt": WAIVER_REASON.noTenantReadSurface,
     // Plans a chart from the table in the request body; reads no stored record.

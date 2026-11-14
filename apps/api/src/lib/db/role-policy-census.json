@@ -2891,6 +2891,26 @@
   },
   {
     "schema": "public",
+    "table": "chat_local_run_step_contents",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "chat_local_run_step_contents",
+    "policy": "chat_local_run_step_contents_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('chat_local_run_step_contents'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('chat_local_run_step_contents'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "chat_message_revisions",
     "policy": "chat_message_revision_insert",
     "command": "INSERT",
