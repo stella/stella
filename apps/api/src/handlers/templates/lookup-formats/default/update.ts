@@ -62,6 +62,7 @@ const setDefaultLookupFormat = createSafeRootHandler(
             );
           }
         }
+        // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- clears whichever format is the registry default; the organization and registry advisory lock above serializes default changes
         const previous = await tx
           .update(templateLookupFormats)
           .set({ preference: LOOKUP_FORMAT_PREFERENCE.SAVED })

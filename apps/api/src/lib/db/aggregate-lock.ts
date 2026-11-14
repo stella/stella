@@ -3416,44 +3416,146 @@ export const lockOwnedContactsForBulkDelete = async ({
 /**
  * The time entries a batch action locks before it checks and updates them;
  * the caller holds the matter/timer guards. The action then updates these
- * rows by id, so it never changes a row it did not lock and check.
+ * rows through `where()`, so it never changes a row it did not lock and check.
  */
 export const lockBatchTimeEntryCandidates = async (
   tx: Transaction,
   condition: SQL | undefined,
   limit: number,
 ) =>
-  await tx
-    .select({
-      id: timeEntries.id,
-      dateWorked: timeEntries.dateWorked,
-      narrative: timeEntries.narrative,
-      timezoneId: timeEntries.timezoneId,
-    })
-    .from(timeEntries)
-    .where(condition)
-    .limit(limit)
-    .for("update");
+  await lockRowsForWrite({
+    table: timeEntries,
+    query: tx
+      .select({
+        id: timeEntries.id,
+        dateWorked: timeEntries.dateWorked,
+        narrative: timeEntries.narrative,
+        timezoneId: timeEntries.timezoneId,
+      })
+      .from(timeEntries)
+      .where(condition)
+      .limit(limit),
+  });
 
 /** Caller holds the matter/timer guards before changing nonbillable work. */
 export const lockUnbillableRateCandidates = async (
   tx: Transaction,
   condition: SQL | undefined,
 ) =>
-  await tx
-    .select({
-      currency: timeEntries.currency,
-      dateWorked: timeEntries.dateWorked,
-      activityCode: timeEntries.activityCode,
-      narrative: timeEntries.narrative,
-      timezoneId: timeEntries.timezoneId,
-      id: timeEntries.id,
-      rateAtEntry: timeEntries.rateAtEntry,
-      userId: timeEntries.userId,
-    })
-    .from(timeEntries)
-    .where(condition)
-    .for("update");
+  await lockRowsForWrite({
+    table: timeEntries,
+    query: tx
+      .select({
+        currency: timeEntries.currency,
+        dateWorked: timeEntries.dateWorked,
+        activityCode: timeEntries.activityCode,
+        narrative: timeEntries.narrative,
+        timezoneId: timeEntries.timezoneId,
+        id: timeEntries.id,
+        rateAtEntry: timeEntries.rateAtEntry,
+        userId: timeEntries.userId,
+      })
+      .from(timeEntries)
+      .where(condition),
+  });
+
+/** A table whose rows a lock can name by primary key. */
+type IdentifiedTable = PgTable & { id: PgColumn };
+
+/** The SELECT a caller builds for `lockRowsForWrite`, before its lock clause. */
+type LockableSelect<Row> = {
+  for: (strength: LockStrength, config?: LockConfig) => PromiseLike<Row[]>;
+  toSQL: () => { sql: string };
+  as: (alias: string) => Subquery;
+};
+
+type LockRowsForWriteOptions<Table extends IdentifiedTable, Row> = {
+  /** The table the rows are read from and later written. */
+  table: Table;
+  /** A SELECT from `table` that projects `id`, without a lock clause. */
+  query: LockableSelect<Row>;
+  /** `no key update` when the write leaves keys alone and must not block foreign-key checks. */
+  mode?: "update" | "no key update";
+};
+
+/**
+ * Lock the rows a decision reads and write exactly those rows.
+ *
+ * A `SELECT ... FOR UPDATE` followed by an UPDATE or DELETE that repeats the
+ * SELECT's WHERE also writes every row that started to match after the lock
+ * was taken: a concurrent transaction can commit a change that moves a row into
+ * the filter, and the second statement reads it although the decision never
+ * saw it. `where` is the WHERE an UPDATE or DELETE of the locked table uses
+ * instead: the ids the lock returned, with an optional `narrow` predicate
+ * ANDed on top that can only shrink that set.
+ *
+ *   const locked = await lockRowsForWrite({ table: t, query });
+ *   decide(locked.rows);
+ *   await tx.update(t).set(values).where(locked.where());
+ *
+ * The caller spells the statement in its own function so the lifecycle-write
+ * census, the audit, running-entry and cap-crossing rules, and the WHERE rules
+ * keep seeing it there. `require-locked-rows-write` reports a later write to
+ * `t` in that function whose WHERE is anything but `locked.where(...)`.
+ *
+ * Only the target table's rows are locked (`FOR UPDATE OF table`), so the
+ * query may join other tables for the decision without locking them; its
+ * `id` must still be the locked table's own. Each call outside this file is
+ * an acquisition of its own (`locked-rows-write`) in
+ * `scripts/aggregate-lock-baseline.json`, reviewed like an inline lock.
+ *
+ * Race test: `withLockThenWriteRace` in
+ * `apps/api/src/tests/helpers/lock-then-write-race.ts` runs tx A and tx B on
+ * two real connections in the order that exposes this: A locks and calls
+ * `pause()`, B commits a change that makes another row match A's predicate,
+ * then A writes. `pauseBeforeWrite` stops an unmodified handler right before
+ * its first write, so the race drives the real code path.
+ * `apps/api/src/handlers/time-entries/batch/update.postgres.test.ts` is the
+ * worked example; add one beside every lock-then-write fix.
+ */
+export const lockRowsForWrite = async <
+  Table extends IdentifiedTable,
+  Row extends { id: Table["id"]["_"]["data"] },
+>({
+  table,
+  query,
+  mode = "update",
+}: LockRowsForWriteOptions<Table, Row>) => {
+  const tableName = getTableName(table);
+  if (aggregateSelectTarget(query.toSQL().sql).table !== tableName) {
+    panic("Locked rows must be read from the table they are written to");
+  }
+  // `where()` names rows by `table.id`, so the projected `id` must be that
+  // column, not a joined table's id under the same name. The builder's own
+  // selection keeps each column's table; a subquery view of it would rename
+  // every column's table to the subquery's alias.
+  const builder: unknown = Reflect.get(query, "_");
+  const selection: unknown = isRecord(builder)
+    ? builder["selectedFields"]
+    : undefined;
+  const projectedId: unknown = isRecord(selection)
+    ? selection["id"]
+    : undefined;
+  if (
+    !is(projectedId, PgColumn) ||
+    projectedId.name !== table.id.name ||
+    getTableName(getColumnTable(projectedId)) !== tableName
+  ) {
+    panic("Locked rows must project the locked table's own id column");
+  }
+  const rows: readonly Row[] = await query.for(mode, { of: table });
+  const ids: readonly Row["id"][] = rows.map(({ id }) => id);
+  return {
+    /** The rows the lock returned. */
+    rows,
+    /** The primary keys of `rows`, the only rows `where` matches. */
+    ids,
+    /** The locked rows, and only those also matching `narrow` when given. */
+    where: (narrow?: SQL): SQL =>
+      and(inArray(table.id, ids), narrow) ??
+      panic("Locked rows predicate is empty"),
+  };
+};
 
 const caseLawProjectionCanonicalColumns = (
   decisions: typeof caseLawDecisions,
