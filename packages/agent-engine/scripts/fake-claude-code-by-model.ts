@@ -1,3 +1,5 @@
+import { Temporal } from "temporal-polyfill/full";
+
 import {
   FAKE_SCENARIOS,
   type FakeStep,
@@ -13,6 +15,8 @@ import { fakeHarnessLog } from "./fake-harness-peer";
  * without one (a probe) reports the scenarios as the CLI's models. The local
  * stack's stand-in computer installs it as Claude Code
  * (`bun run agent:up -- --local-runner`).
+ *
+ * `usage_limit` resets after the turn, not at the shared fixture's fixed times.
  *
  * Usage: `bun scripts/fake-claude-code-by-model.ts [CLI arguments]`.
  */
@@ -50,6 +54,41 @@ const listingScenarios = (steps: readonly FakeStep[]): FakeStep[] =>
       : step,
   );
 
+/** How long after the turn each limit `usage_limit` rejects resets. */
+const LIMIT_RESETS_IN = new Map([
+  ["five_hour", Temporal.Duration.from({ hours: 5 })],
+  ["seven_day_opus", Temporal.Duration.from({ hours: 24 * 7 })],
+]);
+
+/** `steps` with each rejected limit resetting `LIMIT_RESETS_IN` from now. */
+const futureResets = (steps: readonly FakeStep[]): FakeStep[] => {
+  const now = Temporal.Now.instant();
+  return steps.map((step) => {
+    if (!("emit" in step) || !("rate_limit_info" in step.emit)) {
+      return step;
+    }
+    const info = step.emit.rate_limit_info;
+    const resetsIn =
+      typeof info === "object" &&
+      info !== null &&
+      "rateLimitType" in info &&
+      typeof info.rateLimitType === "string"
+        ? LIMIT_RESETS_IN.get(info.rateLimitType)
+        : undefined;
+    return resetsIn === undefined
+      ? step
+      : {
+          emit: {
+            ...step.emit,
+            rate_limit_info: {
+              ...info,
+              resetsAt: Math.floor(now.add(resetsIn).epochMilliseconds / 1000),
+            },
+          },
+        };
+  });
+};
+
 /**
  * The scenario a turn's `--model` names, the first for a model it does not
  * list; a probe, which opens no session, lists them.
@@ -70,6 +109,10 @@ if (import.meta.main) {
   const log = fakeHarnessLog();
   const scenario = scenarioForArgs(args);
   log({ startup: { args, pid: process.pid }, scenario });
-  await run(listingScenarios(stepsFor(FAKE_SCENARIOS[scenario], args)), log);
+  const steps = stepsFor(FAKE_SCENARIOS[scenario], args);
+  await run(
+    listingScenarios(scenario === "usage_limit" ? futureResets(steps) : steps),
+    log,
+  );
   process.exit(0);
 }

@@ -89,6 +89,8 @@ const AGENT_KEY_NAME = "local-agent";
 const UP_TIMEOUT_MS = 20 * 60_000;
 const DOWN_TIMEOUT_MS = 60_000;
 const DOWN_FORCE_TIMEOUT_MS = 2000;
+// One request of the stand-in computer to the stack, body included.
+const MEMBER_REQUEST_TIMEOUT_MS = 15_000;
 const POLL_INTERVAL_MS = 1000;
 const HEARTBEAT_MS = 30_000;
 const LOG_TAIL_LINES = 40;
@@ -431,24 +433,31 @@ type MemberSession = { apiUrl: string; webUrl: string; cookie: string };
 const memberRequest =
   ({ apiUrl, webUrl, cookie }: MemberSession): StackRequest =>
   async (pathname, method = "GET") => {
-    const response = await Result.tryPromise(
-      async () =>
-        await fetch(`${apiUrl}${pathname}`, {
-          headers: { cookie, origin: webUrl },
-          method,
-        }),
-    );
-    if (Result.isError(response)) {
-      return Result.err(`${method} ${pathname}: ${response.error.message}`);
+    // Bounds the response and its body, so a stalled API cannot outlast the
+    // stand-in's readiness timeout.
+    const answered = await Result.tryPromise(async () => {
+      const response = await fetch(`${apiUrl}${pathname}`, {
+        headers: { cookie, origin: webUrl },
+        method,
+        signal: AbortSignal.timeout(MEMBER_REQUEST_TIMEOUT_MS),
+      });
+      return { response, text: await response.text() };
+    });
+    if (Result.isError(answered)) {
+      return Result.err(`${method} ${pathname}: ${answered.error.message}`);
     }
-    const text = await response.value.text();
-    if (!response.value.ok) {
+    const { response, text } = answered.value;
+    if (!response.ok) {
       return Result.err(
-        `${method} ${pathname} -> ${String(response.value.status)}: ${text}`,
+        `${method} ${pathname} -> ${String(response.status)}: ${text}`,
       );
     }
-    const body: unknown = text === "" ? null : JSON.parse(text);
-    return Result.ok(body);
+    const body = Result.try((): unknown =>
+      text === "" ? null : JSON.parse(text),
+    );
+    return Result.isError(body)
+      ? Result.err(`${method} ${pathname} answered no JSON`)
+      : Result.ok(body.value);
   };
 
 const listsKey = (payload: unknown, id: string) =>
@@ -606,7 +615,8 @@ const up = async (root: string, args: readonly string[]) => {
   );
   console.log(reused === null ? "Stack ready." : "Reusing the running stack.");
   printStatus(root, runtime);
-  if (args.includes(LOCAL_RUNNER_FLAG) && runningLocalRunner(root) === null) {
+  // A running stand-in is reused, but still checked: it may be offline.
+  if (args.includes(LOCAL_RUNNER_FLAG)) {
     const session = {
       apiUrl,
       webUrl: runtime.webUrl ?? fail("The running stack has no web server"),

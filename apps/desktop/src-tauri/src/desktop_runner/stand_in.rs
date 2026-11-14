@@ -54,8 +54,8 @@ const LOG_TARGET: &str = "desktop_runner::stand_in";
 /// supports.
 const CODEX_VERSION: &str = "0.166.0";
 const CLAUDE_CODE_VERSION: &str = "2.1.309";
-/// The journal's namespace and key: a stand-in's journal holds only scripted
-/// runs on a development stack.
+/// The journal namespace's prefix (one journal per linked computer) and the
+/// key: a stand-in's journal holds only scripted runs on a development stack.
 const NAMESPACE: &str = "stand-in";
 const JOURNAL_KEY: [u8; 32] = [7; 32];
 const OFFLINE_FILE: &str = "offline";
@@ -96,7 +96,10 @@ pub(crate) fn loopback_origin(url: &str) -> Result<String, String> {
     && parsed.query().is_none()
     && parsed.fragment().is_none()
     && parsed.path() == "/";
-  if parsed.scheme() != "http" || !crate::config::is_loopback_host(&parsed) || !bare {
+  // `host_str` keeps an IPv6 literal's brackets.
+  let loopback =
+    crate::config::is_loopback_host(&parsed) || parsed.host_str() == Some("[::1]");
+  if parsed.scheme() != "http" || !loopback || !bare {
     return Err(format!(
       "{url} is not a local stack; the stand-in links only to http://localhost"
     ));
@@ -270,7 +273,9 @@ impl RunnerAuth for StandInAuth {
         api_base_url: self.0.link.api.clone(),
         bearer: zeroize::Zeroizing::new(self.0.link.key.clone()),
         device_key: self.0.device.clone(),
-        namespace: NAMESPACE.to_owned(),
+        // One journal per linked computer: a relink never sees the runs an
+        // earlier link held.
+        namespace: format!("{NAMESPACE}-{}", self.0.link.desktop_id),
         lease: None,
       }))
     })
@@ -484,7 +489,9 @@ pub(crate) fn main() -> i32 {
   let _logging = tracing_subscriber::fmt()
     .with_env_filter(
       tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        tracing_subscriber::EnvFilter::new("stella_desktop_lib=info,warn")
+        tracing_subscriber::EnvFilter::new(
+          "stella_desktop_lib=info,desktop_runner=info,warn",
+        )
       }),
     )
     .try_init();
@@ -527,6 +534,10 @@ mod tests {
     assert_eq!(
       loopback_origin("http://127.0.0.1:3097/").as_deref(),
       Ok("http://127.0.0.1:3097")
+    );
+    assert_eq!(
+      loopback_origin("http://[::1]:3097").as_deref(),
+      Ok("http://[::1]:3097")
     );
     for refused in [
       "https://api.stll.app",

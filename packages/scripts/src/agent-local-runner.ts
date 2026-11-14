@@ -27,6 +27,7 @@ import {
 import path from "node:path";
 import * as v from "valibot";
 
+import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { DEV_STATE_DIR, devStatePath } from "./dev-runtime";
@@ -167,6 +168,9 @@ const build = async (root: string): Promise<Result<string, string>> => {
   return Result.ok(executable);
 };
 
+/** `value` as one single-quoted shell word. */
+const shellWord = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+
 /**
  * A shell script the host runs as the installed CLI. The harness launch
  * passes on only the environment it chooses, so the stand-in's settings are
@@ -179,7 +183,7 @@ const writeWrapper = (options: {
 }) => {
   const pace = process.env["FAKE_CODEX_PACE_MS"];
   const settings = [
-    `FAKE_HARNESS_LOG='${options.log}'`,
+    `FAKE_HARNESS_LOG=${shellWord(options.log)}`,
     ...(pace !== undefined && /^\d+$/u.test(pace)
       ? [`FAKE_CODEX_PACE_MS=${pace}`]
       : []),
@@ -189,7 +193,7 @@ const writeWrapper = (options: {
     [
       "#!/bin/sh",
       "# Written by agent:up --local-runner; the stand-in for an installed CLI.",
-      `${settings.join(" ")} exec '${process.execPath}' '${options.script}' "$@"`,
+      `${settings.join(" ")} exec ${shellWord(process.execPath)} ${shellWord(options.script)} "$@"`,
       "",
     ].join("\n"),
   );
@@ -234,6 +238,21 @@ const readinessSchema = v.variant("status", [
 ]);
 
 const linkSchema = v.object({ desktopId: v.string() });
+
+/** The stand-in's link, or null while it has none or is still writing it. */
+const readLink = (linkPath: string) => {
+  if (!existsSync(linkPath)) {
+    return null;
+  }
+  const json = Result.try((): unknown =>
+    JSON.parse(readFileSync(linkPath, "utf-8")),
+  );
+  if (Result.isError(json)) {
+    return null;
+  }
+  const parsed = v.safeParse(linkSchema, json.value);
+  return parsed.success ? parsed.output : null;
+};
 
 /**
  * The stand-in's harnesses as the chat sees them once its computer is
@@ -362,22 +381,19 @@ export const startLocalRunner = async ({
         `The stand-in computer exited:\n${tail(devStatePath(root, LOG_FILE))}`,
       );
     }
-    const linkPath = path.join(state, LINK_FILE);
-    const link = existsSync(linkPath)
-      ? v.safeParse(linkSchema, JSON.parse(readFileSync(linkPath, "utf-8")))
-      : null;
+    const link = readLink(path.join(state, LINK_FILE));
     const checked =
-      link?.success === true
-        ? await readyComputer(request, link.output.desktopId)
-        : Result.ok(null);
+      link === null
+        ? Result.ok(null)
+        : await readyComputer(request, link.desktopId);
     if (Result.isError(checked)) {
       lastError = checked.error;
     }
     const ready = Result.isOk(checked) ? checked.value : null;
-    if (ready !== null && link?.success === true) {
+    if (ready !== null && link !== null) {
       console.log(`    ready in ${elapsed(startedAt)}`);
       printLocalRunner(root, record, {
-        desktopId: link.output.desktopId,
+        desktopId: link.desktopId,
         harnesses: ready.map(({ id, state: harnessState, models }) =>
           harnessState === "ready"
             ? `${id}: ${(models ?? []).map((model) => model.id).join(", ")}`
@@ -415,11 +431,26 @@ export const printLocalRunner = (
   );
 };
 
+/**
+ * Signal `pid`; false when it has already exited, so a stand-in that stops on
+ * its own between the check and the signal does not abort `down`.
+ */
+const signal = (pid: number, name: NodeJS.Signals) => {
+  const sent = Result.try(() => process.kill(pid, name));
+  if (Result.isOk(sent)) {
+    return true;
+  }
+  const { cause } = sent.error;
+  if (cause instanceof Error && "code" in cause && cause.code === "ESRCH") {
+    return false;
+  }
+  throw sent.error;
+};
+
 /** Stop the stand-in computer; it stops its runs and its holder first. */
 export const stopLocalRunner = async (root: string) => {
   const record = runningLocalRunner(root);
-  if (record !== null) {
-    process.kill(record.pid, "SIGTERM");
+  if (record !== null && signal(record.pid, "SIGTERM")) {
     const deadline = Temporal.Now.instant().epochMilliseconds + STOP_TIMEOUT_MS;
     while (
       isStandIn(record) &&
@@ -427,8 +458,7 @@ export const stopLocalRunner = async (root: string) => {
     ) {
       await Bun.sleep(POLL_MS / 4);
     }
-    if (isStandIn(record)) {
-      process.kill(record.pid, "SIGKILL");
+    if (isStandIn(record) && signal(record.pid, "SIGKILL")) {
       console.error(
         `The stand-in computer (pid ${String(record.pid)}) did not stop in time; killed it. Its holder may still run.`,
       );
@@ -449,9 +479,12 @@ export const forgetLocalRunner = (root: string) => {
   const state = localRunnerDir(root);
   const dataFile = path.join(state, DATA_FOLDER_FILE);
   const data = existsSync(dataFile) ? readFileSync(dataFile, "utf-8") : "";
-  // Only the folder the stand-in named for itself, never another path.
+  // Only the folder the stand-in named for this checkout (`data_folder` in
+  // `stand_in.rs`), never another path or a copied checkout's folder.
+  const checkout = sha256Hex(state).slice(0, 16);
   if (
     path.isAbsolute(data) &&
+    path.basename(data) === checkout &&
     path.basename(path.dirname(data)) === DATA_FOLDER_PARENT
   ) {
     rmSync(data, { recursive: true, force: true });
