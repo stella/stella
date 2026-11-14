@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/chat-local-run-step-output";
 import { numberFromString } from "@stll/api-contract/http-input";
 import { sha256Hex } from "@stll/sha256/bun";
+import { Temporal } from "@stll/time";
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -16,7 +17,10 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { stepContentAnswer } from "@/api/lib/desktop-runner/step-content-answer";
-import { readVisibleStepContent } from "@/api/lib/desktop-runner/step-contents";
+import {
+  isStepStillAwaited,
+  readVisibleStepContent,
+} from "@/api/lib/desktop-runner/step-contents";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const byteCount = (maximum: number) =>
@@ -99,6 +103,20 @@ export const createLocalRunStepContent = (
             code: "not_found",
             message: "Chat thread not found",
           }),
+        );
+      }
+      if (visible.type === "awaited") {
+        // Its run is over and said it still had to send the step: arriving
+        // while such a step has time, not stored after.
+        const stillAwaited = isStepStillAwaited(
+          visible.since,
+          new Date(Temporal.Now.instant().epochMilliseconds),
+        );
+        return Result.ok(
+          stepContentAnswer(
+            { type: stillAwaited ? "arriving" : "not_stored" },
+            { start, limit },
+          ),
         );
       }
       if (visible.type !== "none") {

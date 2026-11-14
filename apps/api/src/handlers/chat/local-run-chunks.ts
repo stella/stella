@@ -89,6 +89,7 @@ import type {
   QueueCommandOutcome,
 } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
+import { announcedAwaitedSteps } from "@/api/lib/desktop-runner/step-contents";
 import type {
   ChatRunForRequest,
   DesktopRunnerRunView,
@@ -1534,6 +1535,11 @@ async function* readRunChunks({
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent: {
             if (!isPublicStreamChunk(message.chunk)) {
               panic("A stored desktop runner chunk no longer folds");
+            }
+            // The run's word on the steps it still has to send was recorded
+            // when the event was stored; it is no part of the answer.
+            if (announcedAwaitedSteps(message.chunk) !== null) {
+              continue;
             }
             const output = runOutputReportOf(message.chunk);
             if (output !== null) {

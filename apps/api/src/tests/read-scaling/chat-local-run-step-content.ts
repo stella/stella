@@ -33,7 +33,9 @@ export const chatLocalRunStepContentScalingScenario = {
         await readVisibleStepContent(safeDb, { owner, threadId, stepKey })
       ).unwrap();
       const answer =
-        content === null || content.type === "none"
+        content === null ||
+        content.type === "none" ||
+        content.type === "awaited"
           ? null
           : stepContentAnswer(content, { start: 0, limit: 1024 });
       return {
