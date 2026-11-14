@@ -22,6 +22,7 @@ import {
   CHRONOLOGY_COLUMNS,
   readVerificationChronology,
 } from "@/api/lib/lists/verification/chronology-export";
+import type { ChronologyRow } from "@/api/lib/lists/verification/chronology-export";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import { recordVerificationReads } from "@/api/lib/lists/verification/read-audit";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -30,6 +31,7 @@ import {
   buildCsvExport,
   buildDocxExport,
   sanitizeSpreadsheetCell,
+  SPREADSHEET_EXPORT_LIMITS,
 } from "@/api/lib/views/table-export";
 import type { ExportTableInput } from "@/api/lib/views/table-export";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -43,6 +45,16 @@ const CONTENT_TYPE = {
 } as const satisfies Record<ChronologyFormat, string>;
 
 const FILE_SUFFIX = " - chronology";
+
+/** Whether a cell is longer than a table cell holds: the writers would cut
+ *  it, and the export is refused rather than cut. */
+const overflowsCell = (rows: readonly ChronologyRow[]) =>
+  rows.some((row) =>
+    CHRONOLOGY_COLUMNS.some(
+      ({ key }) =>
+        Array.from(row[key]).length > SPREADSHEET_EXPORT_LIMITS.cellTextChars,
+    ),
+  );
 
 const config = {
   contract: "patch",
@@ -104,6 +116,9 @@ const exportVerificationChronology = createSafeHandler(
         if (read.type !== "read") {
           return read;
         }
+        if (overflowsCell(read.rows)) {
+          return { type: "cell-too-large" } as const;
+        }
         // The file delivers the claims of these runs, as the graph does, so
         // each is audited as read; the download itself is audited too.
         await recordVerificationReads({
@@ -147,6 +162,15 @@ const exportVerificationChronology = createSafeHandler(
               outcome.bound === "facts"
                 ? `The list holds more than ${String(VERIFICATION_LIMITS.GRAPH_FACTS_MAX)} facts, more than one chronology export reads.`
                 : `The list's verified documents number more than ${String(VERIFICATION_LIMITS.CHRONOLOGY_EXPORT_DOCUMENTS_MAX)} or hold more than ${String(VERIFICATION_LIMITS.CHRONOLOGY_EXPORT_CLAIMS_MAX)} claims, more than one chronology export reads.`,
+          }),
+        );
+      }
+      case "cell-too-large": {
+        return Result.err(
+          new HandlerError({
+            status: 413,
+            code: "chronology_too_large",
+            message: `A fact's row is longer than the ${String(SPREADSHEET_EXPORT_LIMITS.cellTextChars)} characters one table cell holds, usually because many long claims cite it.`,
           }),
         );
       }

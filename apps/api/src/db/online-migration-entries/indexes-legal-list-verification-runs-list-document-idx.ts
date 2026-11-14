@@ -6,7 +6,7 @@ export default {
   type: "indexes",
   values: [
     {
-      introducedBy: "20261112204000_legal_list_verification_runs_list_index",
+      introducedBy: "20261114103000_legal_list_verification_runs_list_index",
       createSql: `CREATE INDEX CONCURRENTLY "legal_list_verification_runs_list_document_idx" ON public."legal_list_verification_runs" USING btree ("workspace_id", ("evidence" ->> 'listId'), "entity_id", "file_field_id", "created_at" DESC, "id" DESC) WHERE "status" = 'completed'`,
       definitionBody:
         "ON public.legal_list_verification_runs USING btree (workspace_id, ((evidence ->> 'listId'::text)), entity_id, file_field_id, created_at DESC, id DESC) WHERE (status = 'completed'::text)",

@@ -38,7 +38,7 @@ import {
   provenanceEdgeKey,
 } from "@/features/avt/graph/graph-model.logic";
 import { RECORD_CONFLICT_VAR, stateHue } from "@/features/avt/state-chip";
-import { REVIEW_STATUS_META } from "@/features/avt/types";
+import { isSettledStatus } from "@/features/avt/verdict";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 
@@ -341,9 +341,7 @@ export const GraphCanvas = ({
         if (box === undefined || !visible(box)) {
           return null;
         }
-        const settled =
-          claim.reviewStatus !== null &&
-          REVIEW_STATUS_META[claim.reviewStatus].settles;
+        const settled = isSettledStatus(claim.reviewStatus);
         return (
           <GraphNode
             box={box}
