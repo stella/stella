@@ -1,11 +1,12 @@
 import { panic } from "better-result";
-import { desc, inArray, lte, sql } from "drizzle-orm";
+import { inArray, lte, sql } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
 import type { Transaction } from "@/api/db/root";
 import { chatLimitReminders, chatThreads, chatTurns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import { withSkipLockedBatch } from "@/api/lib/db/aggregate-lock";
 import {
   createNotificationsInTransaction,
@@ -63,7 +64,7 @@ const fileDueReminders = async (
         due.map(({ threadId }) => threadId),
       ),
     )
-    .orderBy(chatTurns.threadId, desc(chatTurns.createdAt), desc(chatTurns.id))
+    .orderBy(chatTurns.threadId, ...NEWEST_CHAT_TURN_FIRST)
     .limit(due.length);
   const latestTurnOf = new Map(
     latest.map(({ threadId, turnId }) => [threadId, turnId]),

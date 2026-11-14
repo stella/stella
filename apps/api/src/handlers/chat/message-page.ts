@@ -22,6 +22,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { LIMITS } from "@/api/lib/limits";
@@ -140,8 +141,8 @@ export const readNewestChatTurnOnTx = async ({
       assistantMessageId: chatTurns.assistantMessageId,
     })
     .from(chatTurns)
-    // Leads with the member's turns of the thread, newest first
-    // (`chat_turns_org_user_thread_created_idx`), so one index row answers.
+    // The thread's turns, newest first (`chat_turns_thread_ordinal_uidx`),
+    // so one index row answers.
     .where(
       and(
         eq(chatTurns.organizationId, organizationId),
@@ -149,7 +150,7 @@ export const readNewestChatTurnOnTx = async ({
         eq(chatTurns.threadId, threadId),
       ),
     )
-    .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+    .orderBy(...NEWEST_CHAT_TURN_FIRST)
     .limit(1);
   return turn ?? null;
 };

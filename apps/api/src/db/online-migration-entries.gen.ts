@@ -84,6 +84,7 @@ export { default as indexes_chat_thread_compactions_memory_unmined_org_idx } fro
 export { default as indexes_chat_threads_org_user_pinned_idx } from "./online-migration-entries/indexes-chat-threads-org-user-pinned-idx";
 export { default as indexes_chat_turns_org_run_id_uidx } from "./online-migration-entries/indexes-chat-turns-org-run-id-uidx";
 export { default as indexes_chat_turns_org_user_active_idx } from "./online-migration-entries/indexes-chat-turns-org-user-active-idx";
+export { default as indexes_chat_turns_thread_ordinal_uidx } from "./online-migration-entries/indexes-chat-turns-thread-ordinal-uidx";
 export { default as indexes_client_invoice_unique_indexes } from "./online-migration-entries/indexes-client-invoice-unique-indexes";
 export { default as indexes_contacts_data_box_ids_idx } from "./online-migration-entries/indexes-contacts-data-box-ids-idx";
 export { default as indexes_contacts_org_id_unique } from "./online-migration-entries/indexes-contacts-org-id-unique";
@@ -149,6 +150,7 @@ export { default as repairs_case_law_sitemap_packing_enrollment } from "./online
 export { default as repairs_case_law_source_config_object_repair } from "./online-migration-entries/repairs-case-law-source-config-object-repair";
 export { default as repairs_chat_content_v3_repair } from "./online-migration-entries/repairs-chat-content-v3-repair";
 export { default as repairs_chat_run_text_boundaries } from "./online-migration-entries/repairs-chat-run-text-boundaries";
+export { default as repairs_chat_turn_ordinal_backfill } from "./online-migration-entries/repairs-chat-turn-ordinal-backfill";
 export { default as repairs_client_invoice_backfill } from "./online-migration-entries/repairs-client-invoice-backfill";
 export { default as repairs_client_invoice_constraint_validations } from "./online-migration-entries/repairs-client-invoice-constraint-validations";
 export { default as repairs_client_invoice_tenant_key } from "./online-migration-entries/repairs-client-invoice-tenant-key";

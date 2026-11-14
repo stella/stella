@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
 import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
@@ -9,6 +9,7 @@ import type { Transaction } from "@/api/db/root";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import type { ChatScope } from "@/api/handlers/chat/chat-scope";
 import type { SafeId } from "@/api/lib/branded-types";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -89,7 +90,7 @@ export const readLimitedLatestTurn = async ({
     })
     .from(chatTurns)
     .where(eq(chatTurns.threadId, threadId))
-    .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+    .orderBy(...NEWEST_CHAT_TURN_FIRST)
     .limit(1);
   const refused = Result.err(
     new HandlerError({

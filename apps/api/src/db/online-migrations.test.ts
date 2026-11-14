@@ -2534,7 +2534,9 @@ const createHarness = ({
             query.startsWith("SELECT 1 FROM public.search_history_entries") ||
             query.startsWith("SELECT 1 FROM public.chat_run_log_entries") ||
             // No claim written before asserted dates is left to read.
-            query.startsWith("SELECT 1 FROM public.legal_list_claims")
+            query.startsWith("SELECT 1 FROM public.legal_list_claims") ||
+            // No chat turn stored before positions is left to number.
+            query.startsWith("SELECT 1 FROM public.chat_turns")
           ) {
             return [];
           }

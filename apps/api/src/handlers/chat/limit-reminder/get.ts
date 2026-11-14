@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { ChatLimitReminderResponse } from "@stll/api-contract/chat-limit-reminder";
 
@@ -13,6 +13,7 @@ import {
 } from "@/api/handlers/chat/limit-reminder/shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 
 const config = {
@@ -76,7 +77,7 @@ const getChatLimitReminder = createSafeRootHandler(
           .select({ id: chatTurns.id })
           .from(chatTurns)
           .where(eq(chatTurns.threadId, threadId))
-          .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+          .orderBy(...NEWEST_CHAT_TURN_FIRST)
           .limit(1);
         return {
           reminder: latest?.id === reminder.turnId ? reminder : undefined,
