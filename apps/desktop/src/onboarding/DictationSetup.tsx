@@ -14,6 +14,7 @@ import {
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
 import { DESKTOP_TELEMETRY_WINDOWS } from "../telemetry/desktop-telemetry";
+import { namedDictationFailure } from "./use-dictation";
 import type { DictationControls, DictationSnapshot } from "./use-dictation";
 
 const BYTES_PER_MEGABYTE = 1_000_000;
@@ -40,10 +41,18 @@ export const DictationSetup = ({
   const layout = useKeyboardLayout();
   const { snapshot } = controls;
 
-  if (snapshot === null || !snapshot.available) {
+  if (snapshot === null) {
+    return controls.unread ? (
+      <div className="mt-4">
+        <Unread onReload={controls.reload} />
+      </div>
+    ) : null;
+  }
+  if (!snapshot.available) {
     return null;
   }
 
+  const failure = namedDictationFailure(snapshot.failure);
   const keys = { keys: snapshot.keys, layout, locale };
   const shortcut = formatShortcut({ ...keys, platform: DESKTOP_PLATFORM });
   const ready = snapshot.enabled && snapshot.model.status === "ready";
@@ -110,9 +119,9 @@ export const DictationSetup = ({
             {dictationT("shortcutTaken", { shortcut })}
           </p>
         ) : null}
-        {snapshot.failure === null ? null : (
+        {failure === null ? null : (
           <p className="text-destructive-foreground text-sm" role="status">
-            {dictationT(`failure.${snapshot.failure}`)}
+            {dictationT(`failure.${failure}`)}
           </p>
         )}
         {controls.failed ? (
@@ -120,8 +129,24 @@ export const DictationSetup = ({
             {t("dictationFailed")}
           </p>
         ) : null}
+        {controls.unread ? <Unread onReload={controls.reload} /> : null}
       </div>
     </>
+  );
+};
+
+/** The dictation state could not be read: says so and offers to read again. */
+const Unread = ({ onReload }: { onReload: () => void }) => {
+  const t = useTranslations("onboarding");
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <p className="text-destructive-foreground min-w-0 text-sm" role="alert">
+        {t("errorLoad")}
+      </p>
+      <Button className="shrink-0" onClick={onReload} variant="outline">
+        {t("tryAgain")}
+      </Button>
+    </div>
   );
 };
 

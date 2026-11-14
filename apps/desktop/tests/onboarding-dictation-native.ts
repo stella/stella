@@ -46,6 +46,8 @@ const PERMISSION_ROWS = {
 export type NativeSide = {
   /** The dictation snapshot, or what a native side without it answers. */
   dictation: DictationSnapshot | { available: false };
+  /** While set, reading the dictation snapshot fails. */
+  dictationUnreadable: boolean;
   onboarding: OnboardingSnapshot;
   calls: { args: unknown; command: string }[];
 };
@@ -55,6 +57,7 @@ export const nativeSide = (
 ): NativeSide => ({
   calls: [],
   dictation: DICTATION_OFF,
+  dictationUnreadable: false,
   onboarding: DICTATION_STEP,
   ...overrides,
 });
@@ -77,6 +80,9 @@ export const installNativeSide = (native: NativeSide) => {
         case "permissions_get_snapshot":
           return PERMISSION_ROWS;
         case "dictation_get_snapshot":
+          if (native.dictationUnreadable) {
+            panic("the dictation state cannot be read");
+          }
           return dictation;
         case "dictation_set_enabled":
           if (!("enabled" in dictation)) {

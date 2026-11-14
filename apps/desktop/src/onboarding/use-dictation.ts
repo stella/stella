@@ -13,19 +13,32 @@ type DictationModel =
   | { status: "missing" | "failed" | "ready" }
   | { received: number; status: "downloading"; total: number };
 
+/** The native failures setup has a text for. */
 const DICTATION_FAILURES = [
   "accessibility",
+  "focusChanged",
+  "focusUnconfirmed",
   "microphone",
   "modelMissing",
+  "shortcutHeld",
   "transcription",
 ] as const;
 
 type DictationFailure = (typeof DICTATION_FAILURES)[number];
 
+/**
+ * The failure as setup can name it. The native side may report one this
+ * window has no text for; setup then stays as it is and says nothing.
+ */
+export const namedDictationFailure = (
+  failure: string | null,
+): DictationFailure | null =>
+  DICTATION_FAILURES.find((named) => named === failure) ?? null;
+
 export type DictationSnapshot = {
   available: boolean;
   enabled: boolean;
-  failure: DictationFailure | null;
+  failure: string | null;
   keys: ShortcutKeys;
   model: DictationModel;
   modelBytes: number;
@@ -63,9 +76,7 @@ const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   isRecord(value) &&
   typeof value["available"] === "boolean" &&
   typeof value["enabled"] === "boolean" &&
-  (value["failure"] === null ||
-    (typeof value["failure"] === "string" &&
-      (DICTATION_FAILURES as readonly string[]).includes(value["failure"]))) &&
+  (value["failure"] === null || typeof value["failure"] === "string") &&
   isShortcutKeys(value["keys"]) &&
   isModel(value["model"]) &&
   typeof value["modelBytes"] === "number" &&
@@ -79,10 +90,17 @@ const needsDownload = (model: DictationModel) =>
   model.status === "missing" || model.status === "failed";
 
 export type DictationControls = {
-  /** `null` until the first read lands, or when the native side has none. */
+  /** `null` until a read lands. */
   snapshot: DictationSnapshot | null;
   /** The last turn-on or download did not reach the native side. */
   failed: boolean;
+  /**
+   * The last read did not land; `snapshot` is still the one before it, so
+   * setup keeps what it showed.
+   */
+  unread: boolean;
+  /** Reads the state again. */
+  reload: () => void;
   /** Turns dictation on and starts the speech model download. */
   turnOn: () => Promise<void>;
   download: () => Promise<void>;
@@ -96,9 +114,12 @@ export type DictationControls = {
 export const useDictation = (): DictationControls => {
   const [snapshot, setSnapshot] = useState<DictationSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
+  const [unread, setUnread] = useState(false);
   // Event reads and action results land in any order; only the most
   // recently issued one may set the snapshot.
   const latest = useRef(0);
+  // The read the effect below owns, for a reload on request.
+  const reread = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     let disposed = false;
@@ -111,11 +132,13 @@ export const useDictation = (): DictationControls => {
       if (disposed || read !== latest.current) {
         return;
       }
-      setSnapshot(
-        Result.isOk(result) && isDictationSnapshot(result.value)
-          ? result.value
-          : null,
-      );
+      if (Result.isError(result) || !isDictationSnapshot(result.value)) {
+        reportOnboardingFailure();
+        setUnread(true);
+        return;
+      }
+      setUnread(false);
+      setSnapshot(result.value);
     };
     const stopListening = subscribeDesktopEvent({
       event: DICTATION_CHANGED_EVENT,
@@ -124,6 +147,9 @@ export const useDictation = (): DictationControls => {
       },
       onError: reportOnboardingFailure,
     });
+    reread.current = () => {
+      void refresh();
+    };
     void refresh();
     return () => {
       disposed = true;
@@ -141,6 +167,7 @@ export const useDictation = (): DictationControls => {
       return null;
     }
     setFailed(false);
+    setUnread(false);
     setSnapshot(result.value);
     return result.value;
   };
@@ -158,5 +185,9 @@ export const useDictation = (): DictationControls => {
     }
   };
 
-  return { download, failed, snapshot, turnOn };
+  const reload = () => {
+    reread.current();
+  };
+
+  return { download, failed, reload, snapshot, turnOn, unread };
 };

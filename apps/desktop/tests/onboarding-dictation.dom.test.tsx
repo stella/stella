@@ -147,6 +147,71 @@ test("once ready it asks for the microphone and offers a field to dictate into",
   await findByText(onboarding.dictationAccessibility);
 });
 
+test("a dictation state that cannot be read says so and reads again on request", async () => {
+  const native = nativeSide({ dictationUnreadable: true });
+  const { findByRole, findByText, queryByRole, queryByText } =
+    await renderSetup(native);
+
+  await findByText(onboarding.errorLoad);
+  expect(
+    queryByRole("button", { name: onboarding.dictationTurnOn }),
+  ).toBeNull();
+
+  native.dictationUnreadable = false;
+  fireEvent.click(await findByRole("button", { name: onboarding.tryAgain }));
+
+  await findByRole("button", { name: onboarding.dictationTurnOn });
+  expect(queryByText(onboarding.errorLoad)).toBeNull();
+});
+
+test("a later read that fails keeps the setup and says so", async () => {
+  const native = nativeSide();
+  const { findByRole, findByText, getByRole } = await renderSetup(native);
+  await findByRole("button", { name: onboarding.dictationTurnOn });
+
+  native.dictationUnreadable = true;
+  await act(async () => {
+    await emit("dictation-changed");
+  });
+
+  await findByText(onboarding.errorLoad);
+  expect(
+    getByRole("button", { name: onboarding.dictationTurnOn }),
+  ).toBeTruthy();
+  expect(getByRole("button", { name: onboarding.tryAgain })).toBeTruthy();
+});
+
+test("a dictation that typed nothing says why, and the setup stays", async () => {
+  const native = nativeSide({
+    dictation: {
+      ...DICTATION_OFF,
+      enabled: true,
+      failure: "shortcutHeld",
+      model: { status: "ready" },
+    },
+  });
+  const { findByRole, findByText } = await renderSetup(native);
+
+  await findByText(dictation.failure.shortcutHeld);
+  await findByRole("textbox", { name: onboarding.dictationTryLabel });
+});
+
+test("a failure setup has no text for leaves the setup as it is", async () => {
+  const native = nativeSide({
+    dictation: {
+      ...DICTATION_OFF,
+      enabled: true,
+      failure: "notNamedHere",
+      model: { status: "ready" },
+    },
+  });
+  const { findByRole, queryByRole, queryByText } = await renderSetup(native);
+
+  await findByRole("textbox", { name: onboarding.dictationTryLabel });
+  expect(queryByRole("status")).toBeNull();
+  expect(queryByText(onboarding.errorLoad)).toBeNull();
+});
+
 test("skipping moves the tour on without turning dictation on", async () => {
   const native = nativeSide();
   const { findByRole } = await renderSetup(native);
