@@ -21,6 +21,10 @@ import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
 } from "@stll/api-contract/chat";
 import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
+import {
+  CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
+  chatLocalRunStepsAwaitedSchema,
+} from "@stll/api-contract/chat-local-run-step-content";
 import { chatLocalRunCallId } from "@stll/api-contract/chat-local-run-step-output";
 import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
@@ -126,6 +130,7 @@ type LocalRunControl = Pick<
   | "readEvents"
   | "readRun"
   | "readRunOutputFile"
+  | "recordAwaitedSteps"
   | "recordChatReadSeq"
   | "startRun"
 >;
@@ -1017,6 +1022,48 @@ const LOCAL_RUN_OUTPUT_REFUSED_SINK = failureSink({
   expected: [],
 });
 
+/**
+ * The steps a stored chunk announces its run still has to send, if that is
+ * what it is: the run's own word, written while it was going, on which steps
+ * may arrive after its end. A chunk of that name that is not an announcement
+ * awaits nothing.
+ */
+const awaitedStepsOf = (chunk: PublicStreamChunk): readonly string[] | null => {
+  if (
+    chunk.type !== EventType.CUSTOM ||
+    chunk.name !== CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT
+  ) {
+    return null;
+  }
+  const announced = v.safeParse(chatLocalRunStepsAwaitedSchema, chunk.value);
+  return announced.success ? announced.output.stepKeys : [];
+};
+
+/**
+ * Record the steps a chunk announces as awaited; `false` for any other
+ * chunk. A store that is away loses the announcement: those steps then read
+ * as not stored, which is what they are without it.
+ */
+const recordAnnouncedSteps = async (
+  context: LocalRunContext,
+  { runnerRunId }: Pick<RewriteContext, "runnerRunId">,
+  chunk: PublicStreamChunk,
+): Promise<boolean> => {
+  const awaited = awaitedStepsOf(chunk);
+  if (awaited === null) {
+    return false;
+  }
+  const recorded = await context.control.recordAwaitedSteps({
+    owner: context.owner,
+    runId: runnerRunId,
+    stepKeys: awaited,
+  });
+  if (recorded.isErr()) {
+    observeFailure(recorded.error, { sink: LOCAL_RUN_STORE_SINK });
+  }
+  return true;
+};
+
 /** What a stored chunk reports about one output file, if that is what it is. */
 const runOutputReportOf = (
   chunk: PublicStreamChunk,
@@ -1534,6 +1581,9 @@ async function* readRunChunks({
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent: {
             if (!isPublicStreamChunk(message.chunk)) {
               panic("A stored desktop runner chunk no longer folds");
+            }
+            if (await recordAnnouncedSteps(context, rewrite, message.chunk)) {
+              continue;
             }
             const output = runOutputReportOf(message.chunk);
             if (output !== null) {

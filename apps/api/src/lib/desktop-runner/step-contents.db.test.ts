@@ -1,7 +1,11 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
-import { CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET } from "@stll/api-contract/chat-local-run-step-content";
+import {
+  CHAT_LOCAL_RUN_STEP_AWAITED_MS,
+  CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET,
+} from "@stll/api-contract/chat-local-run-step-content";
 import { DESKTOP_RUNNER_PROTOCOL } from "@stll/api-contract/desktop-runner";
 import { createTestClock } from "@stll/test-kit";
 
@@ -22,8 +26,10 @@ import { queryCountLogger } from "@/api/lib/db-query-counter";
 import {
   copyStepContents,
   isStepRunOpen,
+  isStepStillAwaited,
   openStepImage,
   readVisibleStepContent,
+  recordAwaitedSteps,
   recordStepTooLarge,
   storeStepImage,
   storeStepText,
@@ -64,6 +70,9 @@ type SeededRun = {
   threadId: SafeId<"chatThread">;
   turnId: SafeId<"chatTurn">;
   userMessageId: SafeId<"chatMessage">;
+  /** The installation and device key the run runs on. */
+  desktopId: string;
+  deviceJkt: string;
 };
 
 /**
@@ -110,7 +119,7 @@ const seedRunIn = async (
     chatThreadId: threadId,
     chatTurnId: turnId,
   });
-  return { runId };
+  return { runId, desktopId, deviceJkt };
 };
 
 /** A running local run of `owner`, bound to a turn of a thread of theirs. */
@@ -148,8 +157,8 @@ const seedRun = async (
     // After the row's own creation time, which the database stamps.
     leaseExpiresAt: new Date("2099-01-01T00:00:00.000Z"),
   });
-  const { runId } = await seedRunIn(owner, threadId, turnId);
-  return { runId, threadId, turnId, userMessageId };
+  const computer = await seedRunIn(owner, threadId, turnId);
+  return { ...computer, threadId, turnId, userMessageId };
 };
 
 let stepSeq = 0;
@@ -166,8 +175,7 @@ const storeText = async (
   text: string,
 ) =>
   await storeStepText(runnerDb(), {
-    owner,
-    runId: run.runId,
+    writer: { type: "run", owner, runId: run.runId },
     stepKey: key,
     kind: "command",
     totalBytes: Buffer.byteLength(text),
@@ -382,8 +390,7 @@ describe("the stored content of a local run's steps", () => {
     ).toEqual(refused);
     expect(
       await recordStepTooLarge(runnerDb(), {
-        owner: ownerA,
-        runId: later.runId,
+        writer: { type: "run", owner: ownerA, runId: later.runId },
         stepKey: key,
         kind: "image",
         totalBytes: 20_000_000,
@@ -391,8 +398,7 @@ describe("the stored content of a local run's steps", () => {
     ).toEqual(refused);
     expect(
       await openStepImage(runnerDb(), {
-        owner: ownerA,
-        runId: later.runId,
+        writer: { type: "run", owner: ownerA, runId: later.runId },
         stepKey: key,
         sha256Hex: IMAGE_SHA,
         totalBytes: 10,
@@ -443,14 +449,13 @@ describe("the stored content of a local run's steps", () => {
     const run = await seedRun(ownerA);
     const key = stepKey();
     const step = {
-      owner: ownerA,
-      runId: run.runId,
+      writer: { type: "run", owner: ownerA, runId: run.runId },
       stepKey: key,
       sha256Hex: IMAGE_SHA,
     };
     expect(
       await openStepImage(runnerDb(), { ...step, totalBytes: 10 }),
-    ).toEqual({ type: "room" });
+    ).toEqual({ type: "room", threadId: run.threadId });
     const first = await seedImageFile(ownerA, run);
     expect(
       await storeStepImage(runnerDb(), {
@@ -508,8 +513,7 @@ describe("the stored content of a local run's steps", () => {
     const foreign = await seedImageFile(ownerA, elsewhere);
     expect(
       await storeStepImage(runnerDb(), {
-        owner: ownerA,
-        runId: run.runId,
+        writer: { type: "run", owner: ownerA, runId: run.runId },
         stepKey: stepKey(),
         sha256Hex: IMAGE_SHA,
         userFileId: foreign,
@@ -530,8 +534,7 @@ describe("the stored content of a local run's steps", () => {
     const key = stepKey();
     expect(
       await openStepImage(runnerDb(), {
-        owner: ownerA,
-        runId: run.runId,
+        writer: { type: "run", owner: ownerA, runId: run.runId },
         stepKey: key,
         sha256Hex: IMAGE_SHA,
         totalBytes: 10,
@@ -550,8 +553,7 @@ describe("the stored content of a local run's steps", () => {
     const key = stepKey();
     expect(
       await recordStepTooLarge(runnerDb(), {
-        owner: ownerA,
-        runId: run.runId,
+        writer: { type: "run", owner: ownerA, runId: run.runId },
         stepKey: key,
         kind: "image",
         totalBytes: 20_000_000,
@@ -661,8 +663,7 @@ describe("the stored content of a local run's steps", () => {
     const key = stepKey();
     const file = await seedImageFile(ownerA, run);
     await storeStepImage(runnerDb(), {
-      owner: ownerA,
-      runId: run.runId,
+      writer: { type: "run", owner: ownerA, runId: run.runId },
       stepKey: key,
       sha256Hex: IMAGE_SHA,
       userFileId: file,
@@ -671,5 +672,183 @@ describe("the stored content of a local run's steps", () => {
     await db.delete(userFiles).where(eq(userFiles.id, file));
     expect(await fileExists(file)).toBe(false);
     expect(await read(ownerA, run, key)).toEqual({ type: "none" });
+  });
+
+  describe("steps a run still had to send at its end", () => {
+    const finish = async (run: SeededRun) => {
+      await db
+        .update(desktopRunnerRuns)
+        .set({ state: "finished", outcome: "completed" })
+        .where(eq(desktopRunnerRuns.runId, run.runId));
+    };
+
+    const announce = async (run: SeededRun, stepKeys: string[]) =>
+      await recordAwaitedSteps(runnerDb(), {
+        owner: ownerA,
+        runId: run.runId,
+        stepKeys,
+      });
+
+    /** The run's own computer, sending `text` for `key` at `now`. */
+    const sendLate = async (
+      run: SeededRun,
+      key: string,
+      text: string,
+      computer: Partial<{
+        owner: RunOwner;
+        desktopId: string;
+        deviceJkt: string;
+        now: Date;
+      }> = {},
+    ) =>
+      await storeStepText(runnerDb(), {
+        writer: {
+          type: "computer",
+          owner: ownerA,
+          runId: run.runId,
+          desktopId: run.desktopId,
+          deviceJkt: run.deviceJkt,
+          now: new Date(clock.now()),
+          ...computer,
+        },
+        stepKey: key,
+        kind: "command",
+        totalBytes: Buffer.byteLength(text),
+        text,
+        storedBytes: Buffer.byteLength(text),
+      });
+
+    test("a step announced before the end arrives after it, from the run's own computer, once", async () => {
+      const run = await seedRun(ownerA);
+      const key = stepKey();
+      // The announcement is read from the run's stored events, after its end.
+      await finish(run);
+      expect(await announce(run, [key])).toBe(1);
+      expect(await announce(run, [key])).toBe(0);
+      const awaited = await read(ownerA, run, key);
+      expect(awaited).toMatchObject({ type: "awaited" });
+      // The run itself is over and writes nothing.
+      expect(await storeText(ownerA, run, key, "by the run")).toEqual({
+        type: "unknown_run",
+      });
+      expect(await sendLate(run, key, "sent later")).toEqual({
+        type: "settled",
+        state: "stored",
+      });
+      expect(await read(ownerA, run, key)).toMatchObject({
+        type: "text",
+        kind: "command",
+        text: "sent later",
+      });
+      expect(await countersOf(run.runId)).toMatchObject({
+        textBytes: Buffer.byteLength("sent later"),
+      });
+      // It arrived: it is awaited no more, whatever is sent for it.
+      const refused = { type: "refused", reason: "step_not_awaited" } as const;
+      expect(await sendLate(run, key, "sent later")).toEqual(refused);
+      expect(await sendLate(run, key, "rewritten")).toEqual(refused);
+      expect(await read(ownerA, run, key)).toMatchObject({
+        text: "sent later",
+      });
+    });
+
+    test("a step the run did not announce is refused after its end", async () => {
+      const run = await seedRun(ownerA);
+      const stored = stepKey();
+      await storeText(ownerA, run, stored, "stored while it ran");
+      await finish(run);
+      await announce(run, [stepKey()]);
+      const refused = { type: "refused", reason: "step_not_awaited" } as const;
+      expect(await sendLate(run, stepKey(), "never announced")).toEqual(
+        refused,
+      );
+      // Nor does an announcement open a step that was already stored.
+      expect(await announce(run, [stored])).toBe(0);
+      expect(await sendLate(run, stored, "rewritten")).toEqual(refused);
+      expect(await read(ownerA, run, stored)).toMatchObject({
+        text: "stored while it ran",
+      });
+    });
+
+    test("an awaited step has its time, and is refused once it has passed", async () => {
+      const run = await seedRun(ownerA);
+      const key = stepKey();
+      await finish(run);
+      await announce(run, [key]);
+      const awaited = await read(ownerA, run, key);
+      if (awaited?.type !== "awaited") {
+        panic("the announced step is awaited");
+      }
+      const closes = awaited.since.getTime() + CHAT_LOCAL_RUN_STEP_AWAITED_MS;
+      expect(isStepStillAwaited(awaited.since, new Date(closes))).toBe(true);
+      expect(isStepStillAwaited(awaited.since, new Date(closes + 1))).toBe(
+        false,
+      );
+      expect(
+        await sendLate(run, key, "too late", { now: new Date(closes + 1) }),
+      ).toEqual({ type: "refused", reason: "step_window_closed" });
+      expect(await read(ownerA, run, key)).toMatchObject({ type: "awaited" });
+      expect(
+        await sendLate(run, key, "in time", { now: new Date(closes) }),
+      ).toEqual({ type: "settled", state: "stored" });
+    });
+
+    test("only the computer the run ran on sends for it: not another installation, key, or member", async () => {
+      const run = await seedRun(ownerA);
+      // Another computer of the same member, with a run of its own.
+      const elsewhere = await seedRun(ownerA);
+      const key = stepKey();
+      await finish(run);
+      await announce(run, [key]);
+      const otherComputer = {
+        type: "refused",
+        reason: "run_on_another_computer",
+      } as const;
+      expect(
+        await sendLate(run, key, "x", {
+          desktopId: elsewhere.desktopId,
+          deviceJkt: elsewhere.deviceJkt,
+        }),
+      ).toEqual(otherComputer);
+      // The same installation linked again holds another key.
+      expect(
+        await sendLate(run, key, "x", { deviceJkt: "jkt-relinked" }),
+      ).toEqual(otherComputer);
+      expect(
+        await sendLate(run, key, "x", { desktopId: elsewhere.desktopId }),
+      ).toEqual(otherComputer);
+      // Another member, and another organization, find no such run.
+      for (const owner of [ownerSameOrg, ownerOtherOrg]) {
+        expect(await sendLate(run, key, "x", { owner })).toEqual({
+          type: "unknown_run",
+        });
+      }
+      expect(await read(ownerA, run, key)).toMatchObject({ type: "awaited" });
+    });
+
+    test("a fork does not copy a step still awaited, and says it is not copied", async () => {
+      const source = await seedRun(ownerA);
+      const key = stepKey();
+      await finish(source);
+      await announce(source, [key]);
+      const fork = await seedRun(ownerA);
+      await db
+        .update(chatThreads)
+        .set({ parentThreadId: source.threadId })
+        .where(eq(chatThreads.id, fork.threadId));
+      const copy = async () =>
+        await copyStepContents(runnerDb(), {
+          owner: ownerA,
+          sourceThreadId: source.threadId,
+          targetThreadId: fork.threadId,
+          steps: [{ stepKey: key, messageId: fork.userMessageId }],
+        });
+      expect(await copy()).toBe(0);
+      expect(await read(ownerA, fork, key)).toEqual({ type: "not_copied" });
+      // Once it has arrived, the same copy takes it.
+      await sendLate(source, key, "arrived");
+      expect(await copy()).toBe(1);
+      expect(await read(ownerA, fork, key)).toMatchObject({ text: "arrived" });
+    });
   });
 });

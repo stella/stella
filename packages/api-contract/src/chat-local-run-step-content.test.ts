@@ -5,15 +5,19 @@ import * as v from "valibot";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  CHAT_LOCAL_RUN_STEP_AWAITED_MS,
   CHAT_LOCAL_RUN_STEP_CONTENT_KINDS,
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE,
   CHAT_LOCAL_RUN_STEP_CONTENT_WINDOW,
+  CHAT_LOCAL_RUN_STEPS_AWAITED_MAX,
   chatLocalRunStepContentCap,
   chatLocalRunStepContentSchema,
   chatLocalRunStepContentUploadPath,
   chatLocalRunStepContentWindow,
+  chatLocalRunStepsAwaitedSchema,
 } from "./chat-local-run-step-content";
 import { CHAT_LOCAL_RUN_STEP_MAX_BYTES } from "./chat-local-run-step-output";
+import { DESKTOP_RUNNER_LIMITS } from "./desktop-runner";
 
 const encode = (text: string) => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array) =>
@@ -30,6 +34,36 @@ const windowsOf = (bytes: Uint8Array, limit: number) => {
   }
   return windows;
 };
+
+describe("steps a run still has to send at its end", () => {
+  test("an awaited step may arrive for as long as a run waits for its computer", () => {
+    expect(CHAT_LOCAL_RUN_STEP_AWAITED_MS).toBe(
+      DESKTOP_RUNNER_LIMITS.abandonedRunMs,
+    );
+  });
+
+  test("the announcement carries step keys and a count, and nothing else", () => {
+    const key = "ab".repeat(32);
+    expect(
+      v.parse(chatLocalRunStepsAwaitedSchema, { stepKeys: [key], more: 3 }),
+    ).toEqual({ stepKeys: [key], more: 3 });
+    for (const extra of [
+      { stepKeys: [key], more: 0, text: "output" },
+      { stepKeys: ["call-1"], more: 0 },
+      {
+        stepKeys: Array.from(
+          { length: CHAT_LOCAL_RUN_STEPS_AWAITED_MAX + 1 },
+          () => key,
+        ),
+        more: 0,
+      },
+    ]) {
+      expect(v.safeParse(chatLocalRunStepsAwaitedSchema, extra).success).toBe(
+        false,
+      );
+    }
+  });
+});
 
 describe("a stored step's content", () => {
   test("windows read in order are whole characters that rejoin to the text", () => {

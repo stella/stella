@@ -41,6 +41,7 @@ import {
   copyStepContents,
   isStepRunOpen,
   openStepImage,
+  recordAwaitedSteps,
   recordStepTooLarge,
   storeStepImage,
   storeStepText,
@@ -259,6 +260,14 @@ const stepContentControl = (db: DesktopRunnerDb) => ({
   copyStepContents: async (options: Parameters<typeof copyStepContents>[1]) =>
     await Result.tryPromise({
       try: async () => await copyStepContents(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Record the steps a run announced it still has to send. */
+  recordAwaitedSteps: async (
+    options: Parameters<typeof recordAwaitedSteps>[1],
+  ) =>
+    await Result.tryPromise({
+      try: async () => await recordAwaitedSteps(db, options),
       catch: toDatabaseError,
     }),
   /** Whether the owner's run is still going in this thread. */

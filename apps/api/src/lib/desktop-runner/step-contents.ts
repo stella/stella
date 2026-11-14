@@ -1,9 +1,12 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
 import {
+  CHAT_LOCAL_RUN_AWAITED_STEP_REFUSAL,
+  CHAT_LOCAL_RUN_STEP_AWAITED_MS,
   CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET,
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE,
+  type ChatLocalRunAwaitedStepRefusal,
   type ChatLocalRunStepContentKind,
   type ChatLocalRunStepContentStoredState,
   type ChatLocalRunStepTextKind,
@@ -44,19 +47,40 @@ const runs = desktopRunnerRuns;
 const { stored, tooLarge, runBudgetReached } =
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE;
 
+/**
+ * Who writes a step.
+ *
+ * - `run`: the run itself, by its agent token, while it is going.
+ * - `computer`: the computer a run ran on, after the run's end, for a step
+ *   the run announced it still had to send (`awaited`). Proven by the
+ *   computer's own credential and device key, checked against the run's row.
+ */
+export type StepWriter =
+  | { type: "run"; owner: RunOwner; runId: string }
+  | {
+      type: "computer";
+      owner: RunOwner;
+      runId: string;
+      desktopId: string;
+      deviceJkt: string;
+      /** The moment the write is judged at; an awaited step has its time. */
+      now: Date;
+    };
+
 type StepOptions = {
-  owner: RunOwner;
-  runId: string;
+  writer: StepWriter;
   /** SHA-256 hex of the step's chat call id. */
   stepKey: string;
 };
 
 /**
- * Why a write is refused although its run is going: the step was stored by
- * another run of the thread, or it already settled with other content. A
- * step settles once; nothing rewrites it.
+ * Why a write is refused although its run is known: the step was stored by
+ * another run of the thread, or it already settled with other content (a
+ * step settles once; nothing rewrites it); or, after the run's end, one of
+ * the reasons of `CHAT_LOCAL_RUN_AWAITED_STEP_REFUSAL`.
  */
-type StepContentRefusal = "other_run" | "different_content";
+type StepContentRefusal =
+  "other_run" | "different_content" | ChatLocalRunAwaitedStepRefusal;
 
 /** How a step's content settled; `unknown_run` for a run that takes none. */
 export type StepContentSettlement =
@@ -64,7 +88,12 @@ export type StepContentSettlement =
   | { type: "refused"; reason: StepContentRefusal }
   | { type: "settled"; state: ChatLocalRunStepContentStoredState };
 
+type Refused = Extract<StepContentSettlement, { type: "refused" }>;
+
+const AWAITED = "awaited";
+
 type HeldRun = {
+  runId: string;
   threadId: string;
   turnId: string;
   textBytes: number;
@@ -72,15 +101,16 @@ type HeldRun = {
 };
 
 /**
- * Take the owner's run for one step's write: its row is locked until the
+ * Take the writer's run for one step's write: its row is locked until the
  * transaction ends, so what the run has stored is read and changed by one
- * writer at a time. `null` for a run of someone else, one that ended, or one
- * whose chat turn is gone.
+ * writer at a time. A run writes only while it is going; its computer writes
+ * for it once it is over, and only the computer the run's row names.
  */
 const holdRun = async (
   tx: Transaction,
-  { owner, runId }: Pick<StepOptions, "owner" | "runId">,
-): Promise<HeldRun | null> => {
+  writer: StepWriter,
+): Promise<HeldRun | Refused | null> => {
+  const { owner, runId } = writer;
   // audit: skip - takes the run's row for the write below; changes nothing
   const held = (
     await tx
@@ -91,7 +121,9 @@ const holdRun = async (
           eq(runs.runId, runId),
           eq(runs.userId, owner.userId),
           eq(runs.organizationId, owner.organizationId),
-          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+          writer.type === "run"
+            ? inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES)
+            : undefined,
         ),
       )
       .returning({
@@ -99,15 +131,26 @@ const holdRun = async (
         turnId: runs.chatTurnId,
         textBytes: runs.stepContentTextBytes,
         images: runs.stepContentImages,
+        desktopId: runs.desktopId,
+        deviceJkt: runs.deviceJkt,
       })
   ).at(0);
   if (held === undefined) {
     return null;
   }
+  if (
+    writer.type === "computer" &&
+    (held.desktopId !== writer.desktopId || held.deviceJkt !== writer.deviceJkt)
+  ) {
+    return {
+      type: "refused",
+      reason: CHAT_LOCAL_RUN_AWAITED_STEP_REFUSAL.otherComputer,
+    };
+  }
   const { threadId, turnId, textBytes, images } = held;
   return threadId === null || turnId === null
     ? null
-    : { threadId, turnId, textBytes, images };
+    : { runId, threadId, turnId, textBytes, images };
 };
 
 const readStored = async (tx: Transaction, run: HeldRun, stepKey: string) =>
@@ -117,6 +160,7 @@ const readStored = async (tx: Transaction, run: HeldRun, stepKey: string) =>
         runId: contents.runId,
         kind: contents.kind,
         state: contents.outcome,
+        createdAt: contents.createdAt,
         textEncrypted: contents.textEncrypted,
         textIv: contents.textIv,
         fileSha256Hex: userFiles.sha256Hex,
@@ -145,35 +189,55 @@ const storedStateOf = (state: string): ChatLocalRunStepContentStoredState => {
   }
 };
 
-type RepeatedStep = {
-  previous: StoredStep;
-  runId: string;
+type Repeat = {
   kind: ChatLocalRunStepContentKind;
   /** Whether what is sent now is what the step stored. */
   sameContent: (previous: StoredStep) => boolean | Promise<boolean>;
 };
 
 /**
- * How a step that already has a row answers a write. Only the run that
- * wrote the row is answered at all; it gets how the step settled when it
- * sends the same thing again (a retry), and a refusal when it sends
- * anything else. A step that stored nothing keeps that outcome.
+ * Whether the writer may write the step now: `null` when it may, else how
+ * its write is answered without writing.
+ *
+ * A run writes a step that has no row. For a step that has one, only the run
+ * that wrote it is answered at all: with how the step settled when it sends
+ * the same thing again (a retry), and a refusal when it sends anything else.
+ *
+ * A computer writes, after its run's end, only a step that run announced and
+ * that is still awaited, inside the time an awaited step has.
  */
-const settleRepeat = async ({
-  previous,
-  runId,
-  kind,
-  sameContent,
-}: RepeatedStep): Promise<
-  Exclude<StepContentSettlement, { type: "unknown_run" }>
-> => {
-  if (previous.runId !== runId) {
+const gateWrite = async (
+  writer: StepWriter,
+  run: HeldRun,
+  previous: StoredStep | null,
+  { kind, sameContent }: Repeat,
+): Promise<Exclude<StepContentSettlement, { type: "unknown_run" }> | null> => {
+  const awaited = previous?.state === AWAITED && previous.runId === run.runId;
+  if (writer.type === "computer") {
+    if (!awaited) {
+      return {
+        type: "refused",
+        reason: CHAT_LOCAL_RUN_AWAITED_STEP_REFUSAL.notAwaited,
+      };
+    }
+    return writer.now.getTime() - previous.createdAt.getTime() >
+      CHAT_LOCAL_RUN_STEP_AWAITED_MS
+      ? {
+          type: "refused",
+          reason: CHAT_LOCAL_RUN_AWAITED_STEP_REFUSAL.windowClosed,
+        }
+      : null;
+  }
+  if (previous === null || awaited) {
+    return null;
+  }
+  if (previous.runId !== run.runId) {
     return { type: "refused", reason: "other_run" };
   }
-  const state = storedStateOf(previous.state);
-  if (previous.kind !== kind) {
+  if (previous.state === AWAITED || previous.kind !== kind) {
     return { type: "refused", reason: "different_content" };
   }
+  const state = storedStateOf(previous.state);
   if (state !== stored || (await sameContent(previous))) {
     return { type: "settled", state };
   }
@@ -186,22 +250,53 @@ const RACED_BY_ANOTHER_RUN = {
   reason: "other_run",
 } as const satisfies StepContentSettlement;
 
+type StepRow = Omit<
+  typeof contents.$inferInsert,
+  "threadId" | "stepKey" | "runId" | "turnId" | "messageId"
+>;
+
 /**
- * Insert a step's row; `false` when the step has one. A run's own writes
- * are serialized on its row, so only another run of the thread can have
- * written the step since this transaction read it.
+ * Write a step's row: a new one, or in place of the row that awaited it.
+ * `false` when the step has a settled row. A run's own writes are serialized
+ * on its row, so only another run of the thread can have settled the step
+ * since this transaction read it.
  */
-const insertStep = async (
+const writeStep = async (
   tx: Transaction,
-  values: typeof contents.$inferInsert,
+  run: HeldRun,
+  stepKey: string,
+  row: StepRow,
 ): Promise<boolean> => {
   // audit: skip - a turn's own output, stored with the turn the member ran; an image's file records its own create event
-  const inserted = await tx
+  const written = await tx
     .insert(contents)
-    .values(values)
-    .onConflictDoNothing({ target: [contents.threadId, contents.stepKey] })
+    .values({
+      threadId: run.threadId,
+      stepKey,
+      runId: run.runId,
+      turnId: run.turnId,
+      ...row,
+    })
+    .onConflictDoUpdate({
+      target: [contents.threadId, contents.stepKey],
+      set: row,
+      setWhere: and(
+        eq(contents.outcome, AWAITED),
+        eq(contents.runId, run.runId),
+      ),
+    })
     .returning({ stepKey: contents.stepKey });
-  return inserted.length === 1;
+  return written.length === 1;
+};
+
+/** The run a write is for, or how the write is answered without one. */
+const heldOr = (
+  held: HeldRun | Refused | null,
+): { run: HeldRun } | { answer: Refused | { type: "unknown_run" } } => {
+  if (held === null) {
+    return { answer: { type: "unknown_run" } };
+  }
+  return "type" in held ? { answer: held } : { run: held };
 };
 
 type StoreStepTextOptions = StepOptions & {
@@ -222,8 +317,7 @@ type StoreStepTextOptions = StepOptions & {
 export const storeStepText = async (
   db: DesktopRunnerDb,
   {
-    owner,
-    runId,
+    writer,
     stepKey,
     kind,
     totalBytes,
@@ -231,27 +325,29 @@ export const storeStepText = async (
     storedBytes,
   }: StoreStepTextOptions,
 ): Promise<StepContentSettlement> => {
-  const sealed = await encryptContent(owner.organizationId, text);
+  const { organizationId } = writer.owner;
+  const sealed = await encryptContent(organizationId, text);
   return await withAggregateTransaction(db, async (tx) => {
-    const run = await holdRun(tx, { owner, runId });
-    if (run === null) {
-      return { type: "unknown_run" };
+    const held = heldOr(await holdRun(tx, writer));
+    if ("answer" in held) {
+      return held.answer;
     }
-    const previous = await readStored(tx, run, stepKey);
-    if (previous !== null) {
-      return await settleRepeat({
-        previous,
-        runId,
+    const { run } = held;
+    const gate = await gateWrite(
+      writer,
+      run,
+      await readStored(tx, run, stepKey),
+      {
         kind,
         sameContent: async ({ textEncrypted, textIv }) =>
           textEncrypted !== null &&
           textIv !== null &&
-          (await decryptContent(
-            owner.organizationId,
-            textEncrypted,
-            textIv,
-          )) === text,
-      });
+          (await decryptContent(organizationId, textEncrypted, textIv)) ===
+            text,
+      },
+    );
+    if (gate !== null) {
+      return gate;
     }
     const fits =
       run.textBytes + storedBytes <=
@@ -266,14 +362,7 @@ export const storeStepText = async (
           textIv: sealed.iv,
         }
       : { kind, outcome: runBudgetReached, totalBytes, storedBytes: 0 };
-    const inserted = await insertStep(tx, {
-      threadId: run.threadId,
-      stepKey,
-      runId,
-      turnId: run.turnId,
-      ...row,
-    });
-    if (!inserted) {
+    if (!(await writeStep(tx, run, stepKey, row))) {
       return RACED_BY_ANOTHER_RUN;
     }
     if (fits) {
@@ -281,7 +370,7 @@ export const storeStepText = async (
       await tx
         .update(runs)
         .set({ stepContentTextBytes: run.textBytes + storedBytes })
-        .where(eq(runs.runId, runId));
+        .where(eq(runs.runId, run.runId));
     }
     return { type: "settled", state: row.outcome };
   });
@@ -298,37 +387,36 @@ type UnstoredStepOptions = StepOptions & {
  */
 export const recordStepTooLarge = async (
   db: DesktopRunnerDb,
-  { owner, runId, stepKey, kind, totalBytes }: UnstoredStepOptions,
+  { writer, stepKey, kind, totalBytes }: UnstoredStepOptions,
 ): Promise<StepContentSettlement> =>
   await withAggregateTransaction(db, async (tx) => {
-    const run = await holdRun(tx, { owner, runId });
-    if (run === null) {
-      return { type: "unknown_run" };
+    const held = heldOr(await holdRun(tx, writer));
+    if ("answer" in held) {
+      return held.answer;
     }
-    const previous = await readStored(tx, run, stepKey);
-    if (previous !== null) {
-      // Content is never what a size-only report sends again.
-      return await settleRepeat({
-        previous,
-        runId,
+    const { run } = held;
+    const gate = await gateWrite(
+      writer,
+      run,
+      await readStored(tx, run, stepKey),
+      {
         kind,
+        // Content is never what a size-only report sends again.
         sameContent: () => false,
-      });
+      },
+    );
+    if (gate !== null) {
+      return gate;
     }
-    const inserted = await insertStep(tx, {
-      threadId: run.threadId,
-      stepKey,
-      runId,
-      turnId: run.turnId,
+    const written = await writeStep(tx, run, stepKey, {
       kind,
       outcome: tooLarge,
       totalBytes,
       storedBytes: 0,
     });
-    if (!inserted) {
-      return RACED_BY_ANOTHER_RUN;
-    }
-    return { type: "settled", state: tooLarge };
+    return written
+      ? { type: "settled", state: tooLarge }
+      : RACED_BY_ANOTHER_RUN;
   });
 
 type StepImageOptions = StepOptions & {
@@ -345,54 +433,56 @@ const sameImage =
 export type StepImageRoom =
   | Exclude<StepContentSettlement, { type: "settled" }>
   | { type: "settled"; state: ChatLocalRunStepContentStoredState }
-  | { type: "room" };
+  | { type: "room"; threadId: SafeId<"chatThread"> };
 
 /**
  * Decide, before an image's bytes are stored as a file, whether its step
  * takes one: not when the step already settled, and not past the run's
- * images, which the step then says.
+ * images, which the step then says. `room` names the run's thread, where the
+ * file belongs.
  */
 export const openStepImage = async (
   db: DesktopRunnerDb,
   {
-    owner,
-    runId,
+    writer,
     stepKey,
     sha256Hex,
     totalBytes,
   }: StepImageOptions & { totalBytes: number },
 ): Promise<StepImageRoom> =>
   await withAggregateTransaction(db, async (tx) => {
-    const run = await holdRun(tx, { owner, runId });
-    if (run === null) {
-      return { type: "unknown_run" };
+    const held = heldOr(await holdRun(tx, writer));
+    if ("answer" in held) {
+      return held.answer;
     }
-    const previous = await readStored(tx, run, stepKey);
-    if (previous !== null) {
-      return await settleRepeat({
-        previous,
-        runId,
+    const { run } = held;
+    const gate = await gateWrite(
+      writer,
+      run,
+      await readStored(tx, run, stepKey),
+      {
         kind: "image",
         sameContent: sameImage(sha256Hex),
-      });
+      },
+    );
+    if (gate !== null) {
+      return gate;
     }
     if (run.images < CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET.images) {
-      return { type: "room" };
+      return {
+        type: "room",
+        threadId: brandPersistedChatThreadId(run.threadId),
+      };
     }
-    const inserted = await insertStep(tx, {
-      threadId: run.threadId,
-      stepKey,
-      runId,
-      turnId: run.turnId,
+    const written = await writeStep(tx, run, stepKey, {
       kind: "image",
       outcome: runBudgetReached,
       totalBytes,
       storedBytes: 0,
     });
-    if (!inserted) {
-      return RACED_BY_ANOTHER_RUN;
-    }
-    return { type: "settled", state: runBudgetReached };
+    return written
+      ? { type: "settled", state: runBudgetReached }
+      : RACED_BY_ANOTHER_RUN;
   });
 
 type StoreStepImageOptions = StepImageOptions & {
@@ -419,31 +509,27 @@ export type StepImageSettlement =
  */
 export const storeStepImage = async (
   db: DesktopRunnerDb,
-  {
-    owner,
-    runId,
-    stepKey,
-    sha256Hex,
-    userFileId,
-    sizeBytes,
-  }: StoreStepImageOptions,
+  { writer, stepKey, sha256Hex, userFileId, sizeBytes }: StoreStepImageOptions,
 ): Promise<StepImageSettlement> =>
   await withAggregateTransaction(db, async (tx) => {
-    const run = await holdRun(tx, { owner, runId });
-    if (run === null) {
-      return { type: "unknown_run" };
+    const held = heldOr(await holdRun(tx, writer));
+    if ("answer" in held) {
+      return held.answer;
     }
-    const previous = await readStored(tx, run, stepKey);
-    if (previous !== null) {
-      const repeat = await settleRepeat({
-        previous,
-        runId,
+    const { run } = held;
+    const gate = await gateWrite(
+      writer,
+      run,
+      await readStored(tx, run, stepKey),
+      {
         kind: "image",
         sameContent: sameImage(sha256Hex),
-      });
-      return repeat.type === "settled"
-        ? { type: "settled", state: repeat.state, adopted: false }
-        : repeat;
+      },
+    );
+    if (gate !== null) {
+      return gate.type === "settled"
+        ? { type: "settled", state: gate.state, adopted: false }
+        : gate;
     }
     const file = (
       await tx
@@ -453,7 +539,7 @@ export const storeStepImage = async (
           and(
             eq(userFiles.id, userFileId),
             eq(userFiles.threadId, brandPersistedChatThreadId(run.threadId)),
-            eq(userFiles.userId, owner.userId),
+            eq(userFiles.userId, writer.owner.userId),
           ),
         )
         .limit(1)
@@ -463,22 +549,26 @@ export const storeStepImage = async (
       return { type: "unknown_run" };
     }
     const fits = run.images < CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET.images;
-    const inserted = await insertStep(tx, {
-      threadId: run.threadId,
+    const written = await writeStep(
+      tx,
+      run,
       stepKey,
-      runId,
-      turnId: run.turnId,
-      kind: "image",
-      ...(fits
+      fits
         ? {
+            kind: "image",
             outcome: stored,
             totalBytes: sizeBytes,
             storedBytes: sizeBytes,
             userFileId,
           }
-        : { outcome: runBudgetReached, totalBytes: sizeBytes, storedBytes: 0 }),
-    });
-    if (!inserted) {
+        : {
+            kind: "image",
+            outcome: runBudgetReached,
+            totalBytes: sizeBytes,
+            storedBytes: 0,
+          },
+    );
+    if (!written) {
       return RACED_BY_ANOTHER_RUN;
     }
     if (!fits) {
@@ -488,9 +578,64 @@ export const storeStepImage = async (
     await tx
       .update(runs)
       .set({ stepContentImages: sql`${runs.stepContentImages} + 1` })
-      .where(eq(runs.runId, runId));
+      .where(eq(runs.runId, run.runId));
     return { type: "settled", state: stored, adopted: true };
   });
+
+type AwaitedStepsOptions = {
+  owner: RunOwner;
+  runId: string;
+  /** The keys the run announced it still has to send. */
+  stepKeys: readonly string[];
+};
+
+/**
+ * Record the steps a run announced, just before its finish, that it still
+ * has to send: each gets a row that awaits its content. A step that already
+ * has a row keeps it. The announcement is read from the run's own stored
+ * events, which the run wrote while it was going, so the run may be over by
+ * now. Returns how many steps are newly awaited.
+ */
+export const recordAwaitedSteps = async (
+  db: Pick<DesktopRunnerDb, "select" | "insert">,
+  { owner, runId, stepKeys }: AwaitedStepsOptions,
+): Promise<number> => {
+  const run = (
+    await db
+      .select({ threadId: runs.chatThreadId, turnId: runs.chatTurnId })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.runId, runId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  const threadId = run?.threadId ?? null;
+  const turnId = run?.turnId ?? null;
+  if (threadId === null || turnId === null || stepKeys.length === 0) {
+    return 0;
+  }
+  // audit: skip - a turn's own bookkeeping: which of its steps have still to arrive
+  const awaited = await db
+    .insert(contents)
+    .values(
+      [...new Set(stepKeys)].map((stepKey) => ({
+        threadId,
+        stepKey,
+        runId,
+        turnId,
+        outcome: AWAITED,
+        totalBytes: 0,
+        storedBytes: 0,
+      })),
+    )
+    .onConflictDoNothing()
+    .returning({ stepKey: contents.stepKey });
+  return awaited.length;
+};
 
 type StepOfThread = {
   owner: RunOwner;
@@ -503,6 +648,8 @@ export type VisibleStepContent =
   | { type: "none" }
   /** A fork holds nothing for a step its source thread still stores. */
   | { type: "not_copied" }
+  /** The step's run is over and announced it still had to send the step. */
+  | { type: "awaited"; since: Date }
   | {
       type: "unstored";
       state: Exclude<ChatLocalRunStepContentStoredState, "stored">;
@@ -529,7 +676,7 @@ export type VisibleStepContent =
 
 /** A step's content as one read tells it apart, with nothing stored named. */
 export type StoredStepContent =
-  | Exclude<VisibleStepContent, { type: "none" }>
+  | Exclude<VisibleStepContent, { type: "none" | "awaited" }>
   | { type: "arriving" }
   | { type: "not_stored" };
 
@@ -551,6 +698,7 @@ export const readVisibleStepContent = async (
         .select({
           kind: contents.kind,
           outcome: contents.outcome,
+          createdAt: contents.createdAt,
           totalBytes: contents.totalBytes,
           storedBytes: contents.storedBytes,
           textEncrypted: contents.textEncrypted,
@@ -590,12 +738,19 @@ export const readVisibleStepContent = async (
     return Result.ok(null);
   }
   if (
-    row.kind === null ||
     row.outcome === null ||
+    row.createdAt === null ||
     row.totalBytes === null ||
     row.storedBytes === null
   ) {
     return Result.ok({ type: row.sourceStores ? "not_copied" : "none" });
+  }
+  if (row.outcome === AWAITED) {
+    return Result.ok({ type: "awaited", since: row.createdAt });
+  }
+  if (row.kind === null) {
+    // The table's check gives every settled row its kind.
+    return panic("A settled step content row holds no kind");
   }
   const state = storedStateOf(row.outcome);
   if (state !== stored) {
@@ -729,6 +884,8 @@ export const copyStepContents = async (
       .where(
         and(
           eq(contents.threadId, sourceThreadId),
+          // A step its run has still to send has nothing to copy yet.
+          ne(contents.outcome, AWAITED),
           inArray(
             contents.stepKey,
             batch.map((step) => step.stepKey),
@@ -748,3 +905,10 @@ export const copyStepContents = async (
   }
   return copied;
 };
+
+/**
+ * Whether a step awaited since `since` may still arrive at `now`: inside
+ * its time a reader is told it is arriving, after it that nothing was stored.
+ */
+export const isStepStillAwaited = (since: Date, now: Date): boolean =>
+  now.getTime() - since.getTime() <= CHAT_LOCAL_RUN_STEP_AWAITED_MS;
