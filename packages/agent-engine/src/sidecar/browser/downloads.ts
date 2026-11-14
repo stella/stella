@@ -379,32 +379,24 @@ const fillTarget = async (
     await Result.tryPromise(async () => await target.handle.close());
     return Result.err("unwritable");
   }
-  const filled = await Result.tryPromise(async () => {
-    let copied: Copied;
-    try {
-      copied = await copyBounded(source, target.handle);
-    } catch (error) {
-      // Whatever was written goes, through the file's own descriptor.
-      await target.handle.truncate(0);
-      throw error;
-    }
-    if (copied.type === "too_large") {
-      await target.handle.truncate(0);
-    }
-    return copied;
-  });
+  const filled = await Result.tryPromise(
+    async () => await copyBounded(source, target.handle),
+  );
+  const complete = Result.isOk(filled) && filled.value.type === "copied";
+  // Whatever an unfinished copy wrote goes, through the file's own descriptor.
+  const emptied = complete
+    ? Result.ok(undefined)
+    : await Result.tryPromise(async () => {
+        await target.handle.truncate(0);
+      });
   const closed = await Result.tryPromise(
     async () => await target.handle.close(),
   );
-  if (
-    Result.isOk(filled) &&
-    Result.isOk(closed) &&
-    filled.value.type === "copied"
-  ) {
+  if (complete && Result.isOk(filled) && Result.isOk(closed)) {
     return Result.ok(filled.value);
   }
   await removeWorkspaceFile(workspaceDir, target.relativePath, identity.value);
-  return Result.isOk(filled) && Result.isOk(closed)
+  return Result.isOk(filled) && Result.isOk(emptied) && Result.isOk(closed)
     ? Result.ok(filled.value)
     : Result.err("unwritable");
 };
