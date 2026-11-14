@@ -595,7 +595,8 @@
       "startFailed": "Não foi possível iniciar a verificação",
       "status": {
         "running": "Verificando"
-      }
+      },
+      "unreadParts": "{count, plural, one {Não foi possível ler # parte do documento, então as alegações dela não foram verificadas.} other {Não foi possível ler # partes do documento, então as alegações delas não foram verificadas.} many {Não foi possível ler # partes do documento, então as alegações delas não foram verificadas.}}"
     },
     "save": {
       "failed": "Não salvo",
@@ -1673,6 +1674,8 @@
         "actions": {
           "click": "Clicar",
           "fill": "Inserir texto",
+          "find": "Localizar na página",
+          "findHeadings": "Listar os títulos da página",
           "open": "Abrir site",
           "openNewTab": "Abrir site em nova aba",
           "pressKey": "Pressionar tecla",
@@ -1962,6 +1965,24 @@
       "dismiss": "Descartar e parar",
       "secretAnswer": "Resposta oculta",
       "secretPlaceholder": "Sua resposta fica oculta"
+    },
+    "makeSkill": {
+      "command": "Criar uma habilidade a partir desta conversa",
+      "drafted": "O rascunho da habilidade está pronto. Revise-o e depois ative-o.",
+      "drafting": "Preparando um rascunho de habilidade a partir desta conversa…",
+      "emptyThread": "Envie uma mensagem primeiro; depois será possível criar uma habilidade a partir da conversa.",
+      "failed": "Não foi possível criar uma habilidade a partir desta conversa",
+      "review": {
+        "description": "O rascunho da habilidade contém estes nomes. Qualquer pessoa com acesso a esta habilidade poderá vê-los.",
+        "replaceHint": "Desmarque um nome para substituí-lo por um marcador genérico.",
+        "role": {
+          "organization": "nome da organização",
+          "person": "nome da pessoa"
+        },
+        "saveAll": "Manter todos e salvar",
+        "saveReplacing": "Substituir os desmarcados e salvar",
+        "title": "Salvar estes nomes na habilidade?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat aguarda você} other {# chats aguardam você} many {# chats aguardam você}}",
@@ -3410,6 +3431,11 @@
       "sharepointNotFound": "Este site, biblioteca ou arquivo não existe mais ou não está compartilhado com você.",
       "sharepointReconnectRequired": "Seu login da Microsoft expirou. Reconecte o SharePoint e o OneDrive.",
       "sharepointThrottled": "A Microsoft está limitando as solicitações. Tente novamente em instantes.",
+      "skillFromChatAnonymizedThread": "Ainda não é possível criar uma habilidade a partir de uma conversa anonimizada.",
+      "skillFromChatEmptyThread": "Esta conversa ainda não tem nada a partir do qual criar uma habilidade.",
+      "skillFromChatLocalRunThread": "Esta conversa é executada no seu computador, então não é criada uma habilidade a partir dela na nuvem.",
+      "skillFromChatThreadNotFound": "Não foi possível encontrar esta conversa.",
+      "skillFromChatWithdrawn": "O conteúdo desta conversa foi retirado, então não é possível criar uma habilidade a partir dela.",
       "skillSourceUnreachable": "Não foi possível carregar a origem da habilidade. Verifique se o link aponta para um repositório público do GitHub ou tente novamente mais tarde.",
       "thirdPartyBoundaryRefusal": "A solicitação tentou usar conteúdo fora do contexto permitido do espaço de trabalho.",
       "usageLimitExceeded": "Limite de uso atingido.",

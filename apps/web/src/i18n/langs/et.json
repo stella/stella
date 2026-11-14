@@ -595,7 +595,8 @@
       "startFailed": "Kontrolli ei õnnestunud käivitada",
       "status": {
         "running": "Kontrollimine"
-      }
+      },
+      "unreadParts": "{count, plural, one {Dokumendi # osa ei õnnestunud lugeda, seega selle väiteid ei kontrollitud.} other {Dokumendi # osa ei õnnestunud lugeda, seega nende väiteid ei kontrollitud.}}"
     },
     "save": {
       "failed": "Salvestamata",
@@ -1673,6 +1674,8 @@
         "actions": {
           "click": "Klõpsa",
           "fill": "Sisesta tekst",
+          "find": "Otsi lehelt",
+          "findHeadings": "Loetle lehe pealkirjad",
           "open": "Ava veebisait",
           "openNewTab": "Ava veebisait uuel vahekaardil",
           "pressKey": "Vajuta klahvi",
@@ -1962,6 +1965,24 @@
       "dismiss": "Jäta kõrvale ja peata",
       "secretAnswer": "Vastus on peidetud",
       "secretPlaceholder": "Teie vastus jääb peidetuks"
+    },
+    "makeSkill": {
+      "command": "Loo sellest vestlusest oskus",
+      "drafted": "Oskuse mustand on valmis. Vaata see üle ja lülita siis sisse.",
+      "drafting": "Koostan sellest vestlusest oskuse mustandit…",
+      "emptyThread": "Saada esmalt sõnum, seejärel saab vestlusest oskuse luua.",
+      "failed": "Sellest vestlusest ei õnnestunud oskust luua",
+      "review": {
+        "description": "Oskuse mustand sisaldab neid nimesid. Neid võib näha igaüks, kellel on sellele oskusele juurdepääs.",
+        "replaceHint": "Eemalda nimelt linnuke, et asendada see üldise kohatäitjaga.",
+        "role": {
+          "organization": "organisatsiooni nimi",
+          "person": "isiku nimi"
+        },
+        "saveAll": "Jäta kõik alles ja salvesta",
+        "saveReplacing": "Asenda märkimata ja salvesta",
+        "title": "Kas salvestada need nimed oskusesse?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# vestlus ootab teid} other {# vestlust ootab teid}}",
@@ -3410,6 +3431,11 @@
       "sharepointNotFound": "See sait, teek või fail ei ole enam olemas või seda ei ole teiega jagatud.",
       "sharepointReconnectRequired": "Teie Microsofti sisselogimine on aegunud. Ühendage SharePoint ja OneDrive uuesti.",
       "sharepointThrottled": "Microsoft piirab päringuid. Proovige varsti uuesti.",
+      "skillFromChatAnonymizedThread": "Anonüümitud vestlusest ei saa veel oskust luua.",
+      "skillFromChatEmptyThread": "Selles vestluses pole veel midagi, millest oskust luua.",
+      "skillFromChatLocalRunThread": "See vestlus töötab sinu arvutis, seega ei looda sellest pilves oskust.",
+      "skillFromChatThreadNotFound": "Seda vestlust ei leitud.",
+      "skillFromChatWithdrawn": "Selle vestluse sisu on tagasi võetud, seega ei saa sellest oskust luua.",
       "skillSourceUnreachable": "Oskuse allikat ei saanud laadida. Kontrollige, kas link viitab avalikule GitHubi hoidlale, või proovige hiljem uuesti.",
       "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
       "usageLimitExceeded": "Kasutuslimiit on täis.",

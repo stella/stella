@@ -178,31 +178,45 @@ export const startFakeExtension = ({
       );
     }
     tab.revision = crypto.randomUUID();
+    const numbers = { controls: 0, links: 0 };
     return {
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
       snapshot: {
         contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
-        elements: page.elements.map((element, index) => ({
-          context: ABSENT,
-          href:
-            element.href === undefined
-              ? ABSENT
-              : {
-                  type: BROWSER_CONTROL_TARGET_METADATA.present,
-                  value: new URL(element.href, url).href,
-                },
-          name: element.name,
-          ref: refOf(index),
-          role: element.role,
-        })),
+        elements: page.elements.map((element, index) => {
+          const isLink = element.href !== undefined;
+          if (isLink) {
+            numbers.links += 1;
+          } else {
+            numbers.controls += 1;
+          }
+          return {
+            context: ABSENT,
+            href:
+              element.href === undefined
+                ? ABSENT
+                : {
+                    type: BROWSER_CONTROL_TARGET_METADATA.present,
+                    value: new URL(element.href, url).href,
+                  },
+            id: isLink
+              ? `L${String(numbers.links)}`
+              : `E${String(numbers.controls)}`,
+            name: element.name,
+            ref: refOf(index),
+            role: element.role,
+          };
+        }),
+        elementsLeftOut: false,
+        facts: { meta: [] },
         revision: tab.revision,
         tabId: TAB_ID,
         tabs: [],
         text: page.text,
-        textOffset: 0,
-        textTotalChars: page.text.length,
         title: page.title,
         url,
+        // One window holds the whole fixture page.
+        window: { cursor: "r1.fixture", fromPercent: 0, toPercent: 100 },
       },
       status: "success",
     };
@@ -257,6 +271,7 @@ export const startFakeExtension = ({
           new URL(`/search?q=${encodeURIComponent(query)}`, tab.url).href,
         );
       }
+      case "find":
       case "go-back":
       case "press-key":
       case "select":

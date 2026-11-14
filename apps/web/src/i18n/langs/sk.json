@@ -595,7 +595,8 @@
       "startFailed": "Overenie sa nepodarilo spustiť",
       "status": {
         "running": "Overovanie"
-      }
+      },
+      "unreadParts": "{count, plural, one {# časť dokumentu sa nepodarilo prečítať, jej tvrdenia preto neboli overené.} few {# časti dokumentu sa nepodarilo prečítať, ich tvrdenia preto neboli overené.} many {# časti dokumentu sa nepodarilo prečítať, ich tvrdenia preto neboli overené.} other {# častí dokumentu sa nepodarilo prečítať, ich tvrdenia preto neboli overené.}}"
     },
     "save": {
       "failed": "Neuložené",
@@ -1673,6 +1674,8 @@
         "actions": {
           "click": "Kliknúť",
           "fill": "Zadať text",
+          "find": "Nájsť na stránke",
+          "findHeadings": "Zobraziť nadpisy stránky",
           "open": "Otvoriť web",
           "openNewTab": "Otvoriť web na novej karte",
           "pressKey": "Stlačiť kláves",
@@ -1962,6 +1965,24 @@
       "dismiss": "Zamietnuť a zastaviť",
       "secretAnswer": "Odpoveď je skrytá",
       "secretPlaceholder": "Vaša odpoveď zostane skrytá"
+    },
+    "makeSkill": {
+      "command": "Vytvoriť zručnosť z tejto konverzácie",
+      "drafted": "Návrh zručnosti je pripravený. Skontrolujte ho a potom ho zapnite.",
+      "drafting": "Pripravujem návrh zručnosti z tejto konverzácie…",
+      "emptyThread": "Najprv odošlite správu, potom bude možné z konverzácie vytvoriť zručnosť.",
+      "failed": "Z tejto konverzácie sa nepodarilo vytvoriť zručnosť",
+      "review": {
+        "description": "Návrh zručnosti obsahuje tieto mená. Môže ich vidieť ktokoľvek, kto má k tejto zručnosti prístup.",
+        "replaceHint": "Zrušte označenie mena a nahradí sa všeobecným zástupným textom.",
+        "role": {
+          "organization": "názov organizácie",
+          "person": "meno osoby"
+        },
+        "saveAll": "Ponechať všetko a uložiť",
+        "saveReplacing": "Nahradiť neoznačené a uložiť",
+        "title": "Uložiť tieto mená v zručnosti?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {Na vás čaká # chat} few {Na vás čakajú # chaty} many {Na vás čaká # chatu} other {Na vás čaká # chatov}}",
@@ -3410,6 +3431,11 @@
       "sharepointNotFound": "Táto lokalita, knižnica alebo súbor už neexistuje alebo nie je s vami zdieľaný.",
       "sharepointReconnectRequired": "Platnosť vášho prihlásenia do Microsoftu vypršala. Pripojte SharePoint a OneDrive znova.",
       "sharepointThrottled": "Microsoft obmedzuje počet požiadaviek. Skúste to čoskoro znova.",
+      "skillFromChatAnonymizedThread": "Z anonymizovanej konverzácie zatiaľ nemožno vytvoriť zručnosť.",
+      "skillFromChatEmptyThread": "Táto konverzácia zatiaľ neobsahuje nič, z čoho by sa dala vytvoriť zručnosť.",
+      "skillFromChatLocalRunThread": "Táto konverzácia beží na vašom počítači, preto sa z nej zručnosť v cloude nevytvára.",
+      "skillFromChatThreadNotFound": "Túto konverzáciu sa nepodarilo nájsť.",
+      "skillFromChatWithdrawn": "Obsah tejto konverzácie bol stiahnutý, preto z nej nemožno vytvoriť zručnosť.",
       "skillSourceUnreachable": "Zdroj zručnosti sa nepodarilo načítať. Skontrolujte, či odkaz vedie na verejný repozitár GitHub, alebo to skúste neskôr.",
       "thirdPartyBoundaryRefusal": "Požiadavka sa pokúsila použiť obsah mimo povoleného kontextu pracovného priestoru.",
       "usageLimitExceeded": "Bol dosiahnutý limit používania.",

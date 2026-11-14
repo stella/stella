@@ -154,7 +154,7 @@ const colourExemptions = [
       // An awareness placeholder the collaboration server replaces; never drawn.
       "apps/web/src/components/docx/use-folio-collaboration-room.ts",
       // A third-party page's computed colours, compared to find hidden text.
-      "apps/extension/src/lib/tab-executor.ts",
+      "apps/extension/src/lib/page-script.ts",
     ],
   },
   {
