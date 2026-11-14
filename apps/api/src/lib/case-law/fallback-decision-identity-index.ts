@@ -3,16 +3,15 @@ import { isNotNull, sql } from "drizzle-orm";
 import { index, uniqueIndex } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
-import { FALLBACK_DECISION_UNIQUE_INDEXES } from "@/api/db/online-unique-indexes";
-import {
-  FALLBACK_DECISION_CONTENT_INDEX,
-  FALLBACK_DECISION_IDENTITY_INDEX,
-  FALLBACK_DECISION_IDENTITY_MIGRATION,
-} from "@/api/lib/case-law/fallback-decision-identity-constants";
+import { FALLBACK_DECISION_IDENTITY_MIGRATION } from "@/api/lib/case-law/fallback-decision-identity-constants";
 import type { IntroducedMigrationIndex } from "@/api/lib/db/migration-history";
 
-export const FALLBACK_DECISION_INDEXES = [
-  ...FALLBACK_DECISION_UNIQUE_INDEXES,
+/**
+ * The nonunique fallback indexes; the unique ones are declared with the
+ * online unique indexes (`FALLBACK_DECISION_UNIQUE_INDEXES`), which the
+ * schema does not import.
+ */
+export const FALLBACK_DECISION_NONUNIQUE_INDEXES = [
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "case_law_decisions_source_fallback_cohort_idx" ON public."case_law_decisions" USING btree ("source_id", "fallback_cohort_key") WHERE "fallback_cohort_key" IS NOT NULL',
@@ -67,12 +66,12 @@ export const fallbackDecisionIdentityIndexes = (
     columns.language,
     columns.caseNumber,
   ),
-  uniqueIndex(FALLBACK_DECISION_IDENTITY_INDEX)
+  uniqueIndex("case_law_decisions_source_fallback_identity_idx")
     .on(columns.sourceId, columns.fallbackIdentityKey)
     .where(
       sql`${columns.sourceDocumentId} IS NULL AND ${columns.fallbackIdentityKey} IS NOT NULL`,
     ),
-  uniqueIndex(FALLBACK_DECISION_CONTENT_INDEX)
+  uniqueIndex("case_law_decisions_source_fallback_content_idx")
     .on(columns.sourceId, columns.fallbackContentHash)
     .where(
       sql`${columns.sourceDocumentId} IS NULL AND ${columns.fallbackContentHash} IS NOT NULL`,

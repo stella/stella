@@ -6,6 +6,7 @@ import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-
 import {
   CASE_LAW_DECISIONS_SLUG_UIDX,
   CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
+  FALLBACK_DECISION_UNIQUE_INDEXES,
   onlineUniqueIndexTarget,
 } from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
@@ -53,10 +54,6 @@ import {
   decisionFallbackState,
   decisionStorageLockKeys,
 } from "@/api/lib/case-law/fallback-decision-identity";
-import {
-  FALLBACK_DECISION_CONTENT_INDEX,
-  FALLBACK_DECISION_IDENTITY_INDEX,
-} from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { lockCaseLawFallbackIdentities } from "@/api/lib/db/aggregate-lock";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -576,25 +573,16 @@ export const writeDecisionRowWithSlug = async (
   return rowWrite;
 };
 
-/** Whether a row write lost a race to insert the same publisher identity. */
+/**
+ * Whether a row write lost a race to insert the same publisher identity,
+ * fallback identity or fallback content. The contract release relies on the
+ * fallback unique indexes the expansion validated online.
+ */
 export const isConcurrentIdentityInsert = (error: unknown): boolean =>
-  isPgConstraintError(
-    error,
-    PG_ERROR.UNIQUE_VIOLATION,
-    FALLBACK_DECISION_CONTENT_INDEX,
-  ) ||
-  isPgConstraintError(
-    error,
-    PG_ERROR.UNIQUE_VIOLATION,
+  [
     CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
-  ) ||
-  isPgConstraintError(
-    error,
-    PG_ERROR.UNIQUE_VIOLATION,
-    FALLBACK_DECISION_IDENTITY_INDEX,
-  ) ||
-  isPgConstraintError(
-    error,
-    PG_ERROR.UNIQUE_VIOLATION,
     "case_law_decisions_pkey",
+    ...FALLBACK_DECISION_UNIQUE_INDEXES.map(({ name }) => name),
+  ].some((constraint) =>
+    isPgConstraintError(error, PG_ERROR.UNIQUE_VIOLATION, constraint),
   );

@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { FALLBACK_DECISION_UNIQUE_INDEXES } from "@/api/db/online-unique-indexes";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
@@ -9,14 +10,15 @@ import {
   decisionFallbackState,
   decisionStorageIdentity,
 } from "@/api/lib/case-law/fallback-decision-identity";
-import { FALLBACK_DECISION_IDENTITY_INDEX } from "@/api/lib/case-law/fallback-decision-identity-constants";
-import { FALLBACK_DECISION_INDEXES } from "@/api/lib/case-law/fallback-decision-identity-index";
+import { FALLBACK_DECISION_NONUNIQUE_INDEXES } from "@/api/lib/case-law/fallback-decision-identity-index";
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const [{ name: FALLBACK_IDENTITY_INDEX_NAME }] =
+  FALLBACK_DECISION_UNIQUE_INDEXES;
 
 describe.skipIf(!enabled)("fallback decision identity (postgres)", () => {
   test("fallback contract preserves rows and permits distinct court and content identities", async () => {
@@ -73,7 +75,10 @@ describe.skipIf(!enabled)("fallback decision identity (postgres)", () => {
             ),
           ).toEqual(baseColumns);
         }
-        for (const definition of FALLBACK_DECISION_INDEXES) {
+        for (const definition of [
+          ...FALLBACK_DECISION_UNIQUE_INDEXES,
+          ...FALLBACK_DECISION_NONUNIQUE_INDEXES,
+        ]) {
           // db-await-in-loop: online indexes are built sequentially outside a transaction.
           await client.unsafe(
             definition.createSql.replace("public.", () => `"${schema}".`),
@@ -88,7 +93,7 @@ describe.skipIf(!enabled)("fallback decision identity (postgres)", () => {
           (
             await client.unsafe(
               "SELECT 1 FROM pg_indexes WHERE schemaname=$1 AND indexname=$2",
-              [schema, FALLBACK_DECISION_IDENTITY_INDEX],
+              [schema, FALLBACK_IDENTITY_INDEX_NAME],
             )
           ).length,
         ).toBe(1);
