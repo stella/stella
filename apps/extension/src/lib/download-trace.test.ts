@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { downloadAction } from "./download-guard";
+import { downloadAction, NO_DOWNLOAD_RECEIVER } from "./download-guard";
 import {
   type DownloadEvidence,
   type DownloadOwner,
@@ -289,10 +289,19 @@ describe("what happens to each owner while stella controls a tab", () => {
     }
   });
 
+  const desktopTakes = {
+    chatId: "thread-1",
+    type: "desktop",
+    verdict: { type: "deliver" },
+  } as const;
+
   test("what may be the user's goes through", () => {
     for (const owner of [owners.ambiguous, owners.user]) {
       for (const state of ["in_progress", "interrupted", "complete"] as const) {
-        expect(downloadAction(owner, state)).toBe("allow");
+        expect(downloadAction(owner, state, NO_DOWNLOAD_RECEIVER)).toBe(
+          "allow",
+        );
+        expect(downloadAction(owner, state, desktopTakes)).toBe("allow");
       }
     }
   });
@@ -303,9 +312,34 @@ describe("what happens to each owner while stella controls a tab", () => {
       owners.unexplained,
       owners.untraceable,
     ]) {
-      expect(downloadAction(owner, "in_progress")).toBe("cancel");
-      expect(downloadAction(owner, "interrupted")).toBe("cancel");
-      expect(downloadAction(owner, "complete")).toBe("keep-and-flag");
+      expect(downloadAction(owner, "in_progress", NO_DOWNLOAD_RECEIVER)).toBe(
+        "cancel",
+      );
+      expect(downloadAction(owner, "interrupted", NO_DOWNLOAD_RECEIVER)).toBe(
+        "cancel",
+      );
+      expect(downloadAction(owner, "complete", NO_DOWNLOAD_RECEIVER)).toBe(
+        "keep-and-flag",
+      );
+    }
+  });
+
+  test("only a download traced to chat's tabs reaches a desktop chat", () => {
+    expect(downloadAction(owners.contained, "in_progress", desktopTakes)).toBe(
+      "deliver",
+    );
+    expect(
+      downloadAction(owners.contained, "in_progress", {
+        ...desktopTakes,
+        verdict: { reason: "not-pdf", type: "stop" },
+      }),
+    ).toBe("refuse");
+    // Chrome skipped the hold: the file is already where Chrome put it.
+    expect(downloadAction(owners.contained, "complete", desktopTakes)).toBe(
+      "keep-and-flag",
+    );
+    for (const owner of [owners.unexplained, owners.untraceable]) {
+      expect(downloadAction(owner, "in_progress", desktopTakes)).toBe("cancel");
     }
   });
 });

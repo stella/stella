@@ -40,6 +40,7 @@ export type GraphEdgeKind = (typeof GRAPH_EDGE_KINDS)[number];
  * conflicting; it is kept so no citation a grade made is lost.
  */
 export const GRAPH_EDGE_STANCES = CLAIM_FACT_RELATIONS;
+export type GraphEdgeStance = (typeof GRAPH_EDGE_STANCES)[number];
 
 /**
  * Why an edge carries no Spot of its own. `claim-anchor`: the edge is a
@@ -77,7 +78,11 @@ export const RECORDED_GRAPH_EDGE_PRODUCER_KINDS = [
   "reviewer",
 ] as const satisfies readonly GraphEdgeProducerKind[];
 
-const GRAPH_EDGE_DECISIONS = ["proposed", "accepted", "rejected"] as const;
+export const GRAPH_EDGE_DECISIONS = [
+  "proposed",
+  "accepted",
+  "rejected",
+] as const;
 export type GraphEdgeDecision = (typeof GRAPH_EDGE_DECISIONS)[number];
 
 type GraphEdgeProvenanceRule =
