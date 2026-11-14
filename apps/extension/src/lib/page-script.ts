@@ -128,6 +128,8 @@ export type PageOperation =
       signInPolicies: typeof SIGN_IN_POLICY;
     }
   | { kind: "locate" }
+  /** The document's type as Chrome loaded it, and its address. */
+  | { kind: "document-type" }
   | (ReadOnlyOperationBase & {
       /** The page's canonical link, language and citation meta entries. */
       facts: boolean;
@@ -150,6 +152,9 @@ export type PageOperation =
 export const pageScript = (pageOperation: PageOperation) => {
   if (pageOperation.kind === "locate") {
     return { origin: window.origin, url: window.location.href };
+  }
+  if (pageOperation.kind === "document-type") {
+    return { contentType: document.contentType, url: window.location.href };
   }
   if (
     pageOperation.kind !== "action" &&

@@ -13,6 +13,7 @@ import {
   loadDownloadScope,
   MAX_RUNNING_DELIVERIES,
   reportDeliveredDownload,
+  saveShownPdf,
   setDownloadReporter,
   setDownloadScope,
 } from "./download-guard";
@@ -25,7 +26,7 @@ const DOWNLOADS = "/Volumes/Work/Downloads";
 const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
 
 afterEach(() => {
-  setDownloadReporter(() => undefined);
+  setDownloadReporter({ settled: () => undefined, started: () => undefined });
   if (originalChrome) {
     Object.defineProperty(globalThis, "chrome", originalChrome);
   } else {
@@ -42,9 +43,25 @@ type Holder =
  * navigated to `FILE_URL` a second ago, so a download of it traces to tab 3.
  * `holder` is who holds the browser, as the control record stores it.
  */
+/** Chrome never reuses a download id; the guard keeps its judgements by id. */
+let lastDownloadId = 5000;
+
 const installFakeChrome = (holder: Holder) => {
   const events: string[] = [];
   const items = new Map<number, chrome.downloads.DownloadItem>();
+  /** The ids Chrome gave the extension's own downloads, in order. */
+  const startedIds: number[] = [];
+  // What Chrome does when the extension asks it to download: by default it
+  // answers with a new download id.
+  const chromeDownloads = {
+    start: async (
+      _options: chrome.downloads.DownloadOptions,
+    ): Promise<number> => {
+      lastDownloadId += 1;
+      startedIds.push(lastDownloadId);
+      return lastDownloadId;
+    },
+  };
   const session: Record<string, unknown> = {
     browserContainedTabs: {
       controlledTabId: 3,
@@ -70,10 +87,15 @@ const installFakeChrome = (holder: Holder) => {
         setTitle: async () => undefined,
       },
       downloads: {
+        download: async (options: chrome.downloads.DownloadOptions) => {
+          events.push(`download:${options.url}`);
+          return await chromeDownloads.start(options);
+        },
         cancel: async (id: number) => {
           events.push(`cancel:${id}`);
+          // Chrome stops only a download still running.
           const item = items.get(id);
-          if (item !== undefined) {
+          if (item !== undefined && item.state !== "complete") {
             items.set(id, { ...item, state: "interrupted" });
           }
         },
@@ -110,10 +132,30 @@ const installFakeChrome = (holder: Holder) => {
     },
   });
   const reports: { chatId: string; download: BrowserDownload }[] = [];
-  setDownloadReporter((chatId, download) => {
-    reports.push({ chatId, download });
+  /** Each report's delivery id, started or settled, in order. */
+  const deliveries: { deliveryId: string; report: "settled" | "started" }[] =
+    [];
+  /** Each settled report's shown document, in order. */
+  const shownDocuments: (string | null)[] = [];
+  setDownloadReporter({
+    settled: ({ chatId, deliveryId, download, shownDocument }) => {
+      reports.push({ chatId, download });
+      deliveries.push({ deliveryId, report: "settled" });
+      shownDocuments.push(shownDocument);
+    },
+    started: (_chatId, deliveryId) => {
+      deliveries.push({ deliveryId, report: "started" });
+    },
   });
-  return { events, items, reports };
+  return {
+    chromeDownloads,
+    deliveries,
+    events,
+    items,
+    reports,
+    shownDocuments,
+    startedIds,
+  };
 };
 
 /** A download of `FILE_URL` as Chrome reports it while naming the file. */
@@ -155,7 +197,7 @@ const named = async (
 
 describe("a download from chat's tab", () => {
   test("a desktop chat takes a PDF: Chrome saves it in the staging folder and the chat hears where", async () => {
-    const { events, items, reports } = installFakeChrome({
+    const { deliveries, events, items, reports } = installFakeChrome({
       chatId: "thread-7",
       link: "connected",
       type: "desktop",
@@ -206,6 +248,14 @@ describe("a download from chat's tab", () => {
         },
       },
     ]);
+    // Announced when Chrome started it, under the id its report carries.
+    expect(deliveries.map(({ report }) => report)).toEqual([
+      "started",
+      "settled",
+    ]);
+    expect(new Set(deliveries.map(({ deliveryId }) => deliveryId)).size).toBe(
+      1,
+    );
   });
 
   test("under the web connection the same PDF is stopped and nobody is told", async () => {
@@ -319,6 +369,12 @@ describe("a download from chat's tab", () => {
     });
     items.set(next.id, next);
     expect(await named(next)).toMatchObject({ conflictAction: "uniquify" });
+    // Settled, so the next test starts with no download running.
+    items.set(next.id, { ...next, state: "interrupted" });
+    await reportDeliveredDownload({
+      id: next.id,
+      state: { current: "interrupted", previous: "in_progress" },
+    });
   });
 
   test("a PDF Chrome could not finish is reported as interrupted", async () => {
@@ -349,6 +405,370 @@ describe("a download from chat's tab", () => {
         suggestedName: "Judgment 42.pdf",
       },
     ]);
+  });
+});
+
+describe("a PDF chat's tab shows", () => {
+  const PDF_URL = "https://fixture-library.test/decisions/42/file";
+  const DESKTOP_CHAT = {
+    chatId: "thread-7",
+    link: "connected",
+    type: "desktop",
+  } as const;
+  const shownPdf = (overrides: { turnId?: string; url?: string } = {}) => ({
+    controllerId: "desktop:thread-7",
+    tabId: 3,
+    title: "Judgment 42",
+    turnId: overrides.turnId ?? "run-1",
+    url: overrides.url ?? `${PDF_URL}#page=2`,
+  });
+
+  /** The download Chrome makes of the extension's request for `url`. */
+  const ownDownload = (
+    id: number,
+    url: string,
+  ): chrome.downloads.DownloadItem => ({
+    ...fileDownload(id, { filename: "file", mime: "application/pdf" }),
+    byExtensionId: "stella-extension",
+    finalUrl: url,
+    url,
+  });
+
+  /** Chrome finishes download `id` where it was told to save it. */
+  const finish = async (
+    items: Map<number, chrome.downloads.DownloadItem>,
+    id: number,
+    filename: string,
+  ) => {
+    const item = items.get(id);
+    if (item === undefined) {
+      throw new TypeError(`No download ${String(id)}`);
+    }
+    items.set(id, {
+      ...item,
+      bytesReceived: 2048,
+      fileSize: 2048,
+      filename,
+      state: "complete",
+    });
+    await reportDeliveredDownload({
+      id,
+      state: { current: "complete", previous: "in_progress" },
+    });
+  };
+
+  test("a desktop chat has it saved like a download, by the tab's own address", async () => {
+    const { chromeDownloads, deliveries, events, items, reports } =
+      installFakeChrome(DESKTOP_CHAT);
+    const asked: chrome.downloads.DownloadOptions[] = [];
+    chromeDownloads.start = async (options) => {
+      asked.push(options);
+      return 1101;
+    };
+
+    await saveShownPdf(shownPdf());
+
+    // Asked of Chrome without the fragment, into the staging folder, never
+    // with a prompt.
+    expect(events).toEqual([`download:${PDF_URL}`]);
+    expect(asked).toEqual([
+      expect.objectContaining({ saveAs: false, url: PDF_URL }),
+    ]);
+    const stagedPath = asked[0]?.filename ?? "";
+    const [folder, name] = stagedPath.split("/");
+    expect(folder).toBe(BROWSER_DOWNLOAD_STAGING_FOLDER);
+    expect(BROWSER_DOWNLOAD_STAGED_NAME_PATTERN.test(name ?? "")).toBe(true);
+    expect(deliveries.map(({ report }) => report)).toEqual(["started"]);
+
+    // Chrome names the download: it is the save, not a download to trace.
+    const download = ownDownload(1101, PDF_URL);
+    items.set(download.id, download);
+    expect(await named(download)).toEqual({
+      conflictAction: "uniquify",
+      filename: stagedPath,
+    });
+    await finish(items, download.id, `${DOWNLOADS}/${stagedPath}`);
+
+    expect(reports).toEqual([
+      {
+        chatId: "thread-7",
+        download: {
+          bytes: 2048,
+          mime: "application/pdf",
+          outcome: "saved",
+          path: `${DOWNLOADS}/${stagedPath}`,
+          sourceUrl: PDF_URL,
+          suggestedName: "Judgment 42",
+        },
+      },
+    ]);
+    expect(new Set(deliveries.map(({ deliveryId }) => deliveryId)).size).toBe(
+      1,
+    );
+  });
+
+  test("Chrome may name the save before it answers the request", async () => {
+    const { chromeDownloads, items, reports } = installFakeChrome(DESKTOP_CHAT);
+    const suggestions: (chrome.downloads.FilenameSuggestion | undefined)[] = [];
+    chromeDownloads.start = async (options) => {
+      const download = ownDownload(1102, options.url);
+      items.set(download.id, download);
+      suggestions.push(await named(download));
+      return download.id;
+    };
+
+    await saveShownPdf(shownPdf());
+    await finish(items, 1102, `${DOWNLOADS}/staged.pdf`);
+
+    expect(suggestions).toEqual([
+      expect.objectContaining({ conflictAction: "uniquify" }),
+    ]);
+    expect(reports.map(({ download }) => download.outcome)).toEqual(["saved"]);
+  });
+
+  test("once per address in a run: showing it again saves nothing more", async () => {
+    const { events, items, startedIds } = installFakeChrome(DESKTOP_CHAT);
+
+    await saveShownPdf(shownPdf());
+    await saveShownPdf(shownPdf({ url: `${PDF_URL}#page=9` }));
+    expect(events).toEqual([`download:${PDF_URL}`]);
+
+    // Another run of the chat saves its own copy.
+    await saveShownPdf(shownPdf({ turnId: "run-2" }));
+    expect(events).toEqual([`download:${PDF_URL}`, `download:${PDF_URL}`]);
+
+    for (const id of startedIds) {
+      items.set(id, ownDownload(id, PDF_URL));
+      // await-in-loop: each settles in turn, as Chrome reports them.
+      await finish(items, id, `${DOWNLOADS}/staged-${String(id)}.pdf`);
+    }
+  });
+
+  test("under the web connection, or for another chat, nothing is saved", async () => {
+    const web = installFakeChrome({ type: "web" });
+    await saveShownPdf(shownPdf());
+    expect(web.events).toEqual([]);
+    expect(web.deliveries).toEqual([]);
+
+    const offline = installFakeChrome({ ...DESKTOP_CHAT, link: "offline" });
+    await saveShownPdf(shownPdf());
+    expect(offline.events).toEqual([]);
+
+    const other = installFakeChrome(DESKTOP_CHAT);
+    await saveShownPdf({ ...shownPdf(), controllerId: "desktop:thread-8" });
+    await saveShownPdf({ ...shownPdf(), controllerId: "web-connection" });
+    expect(other.events).toEqual([]);
+    expect(other.deliveries).toEqual([]);
+  });
+
+  test("a request Chrome refuses, as for an address served once, is reported interrupted", async () => {
+    const { chromeDownloads, deliveries, reports } =
+      installFakeChrome(DESKTOP_CHAT);
+    chromeDownloads.start = async () => {
+      throw new TypeError("Invalid URL");
+    };
+
+    await saveShownPdf(shownPdf());
+
+    expect(reports).toEqual([
+      {
+        chatId: "thread-7",
+        download: {
+          outcome: "stopped",
+          reason: "interrupted",
+          sourceUrl: PDF_URL,
+          suggestedName: "Judgment 42",
+        },
+      },
+    ]);
+    expect(deliveries.map(({ report }) => report)).toEqual([
+      "started",
+      "settled",
+    ]);
+  });
+
+  test("a save counts against the running limit, and a PDF stopped for it is tried again", async () => {
+    const { events, items, reports, startedIds } =
+      installFakeChrome(DESKTOP_CHAT);
+    const addresses = Array.from(
+      { length: MAX_RUNNING_DELIVERIES + 1 },
+      (_, index) => `${PDF_URL}/${String(index)}`,
+    );
+    for (const url of addresses) {
+      // await-in-loop: each read finds its PDF in turn.
+      await saveShownPdf(shownPdf({ url }));
+    }
+    expect(events).toHaveLength(MAX_RUNNING_DELIVERIES);
+    expect(reports.map(({ download }) => download)).toEqual([
+      expect.objectContaining({ outcome: "stopped", reason: "too-many" }),
+    ]);
+
+    // One settles; the stopped PDF, shown again, is saved now.
+    const firstId = startedIds[0] ?? 0;
+    items.set(firstId, ownDownload(firstId, addresses[0] ?? ""));
+    await finish(items, firstId, `${DOWNLOADS}/staged-first.pdf`);
+    await saveShownPdf(shownPdf({ url: addresses.at(-1) ?? PDF_URL }));
+    expect(events).toHaveLength(MAX_RUNNING_DELIVERIES + 1);
+
+    for (const id of startedIds.slice(1)) {
+      items.set(id, ownDownload(id, PDF_URL));
+      // await-in-loop: each settles in turn, as Chrome reports them.
+      await finish(items, id, `${DOWNLOADS}/staged-${String(id)}.pdf`);
+    }
+  });
+
+  test("a save Chrome says is too large is stopped and the chat hears why", async () => {
+    const { events, items, reports, startedIds } =
+      installFakeChrome(DESKTOP_CHAT);
+    await saveShownPdf(shownPdf());
+    const download = {
+      ...ownDownload(startedIds[0] ?? 0, PDF_URL),
+      totalBytes: BROWSER_CONTROL_LIMITS.downloadBytes + 1,
+    };
+    items.set(download.id, download);
+
+    expect(await named(download)).toBeUndefined();
+    expect(events).toContain(`cancel:${String(download.id)}`);
+    expect(reports.map(({ download: reported }) => reported)).toEqual([
+      expect.objectContaining({ outcome: "stopped", reason: "too-large" }),
+    ]);
+  });
+
+  /** The save of `PDF_URL`, as Chrome names it after following redirects to `finalUrl`. */
+  const redirectedSave = (id: number, finalUrl: string) => ({
+    ...ownDownload(id, PDF_URL),
+    finalUrl,
+  });
+
+  test.each([
+    ["a private host", "https://192.168.1.20/files/42.pdf"],
+    ["a host without a domain", "https://intranet/files/42.pdf"],
+    ["another site", "https://cdn.elsewhere.test/files/42.pdf"],
+    ["plain HTTP on the same host", "http://fixture-library.test/files/42.pdf"],
+  ])(
+    "a save redirected to %s is refused before Chrome names it, and nothing is delivered",
+    async (_name, finalUrl) => {
+      const { events, items, reports, shownDocuments, startedIds } =
+        installFakeChrome(DESKTOP_CHAT);
+      await saveShownPdf(shownPdf());
+      const download = redirectedSave(startedIds[0] ?? 0, finalUrl);
+      items.set(download.id, download);
+
+      // No staged name: Chrome keeps nothing of it.
+      expect(await named(download)).toBeUndefined();
+      expect(events).toContain(`cancel:${String(download.id)}`);
+      // Told truthfully where the fetch ended.
+      expect(reports.map(({ download: reported }) => reported)).toEqual([
+        {
+          outcome: "stopped",
+          reason: "redirected",
+          sourceUrl: finalUrl,
+          suggestedName: "Judgment 42",
+        },
+      ]);
+      expect(shownDocuments).toEqual([PDF_URL]);
+      // Settling later delivers nothing more.
+      await reportDeliveredDownload({
+        id: download.id,
+        state: { current: "interrupted", previous: "in_progress" },
+      });
+      expect(reports).toHaveLength(1);
+    },
+  );
+
+  test("a save redirected within the shown site is saved, under the address fetched", async () => {
+    const { items, reports, shownDocuments, startedIds } =
+      installFakeChrome(DESKTOP_CHAT);
+    const fetched = "https://fixture-library.test/files/42.pdf?token=1";
+    await saveShownPdf(shownPdf());
+    const download = redirectedSave(startedIds[0] ?? 0, fetched);
+    items.set(download.id, download);
+
+    expect(await named(download)).toMatchObject({
+      conflictAction: "uniquify",
+    });
+    await finish(items, download.id, `${DOWNLOADS}/staged.pdf`);
+
+    expect(reports.map(({ download: reported }) => reported)).toEqual([
+      expect.objectContaining({ outcome: "saved", sourceUrl: fetched }),
+    ]);
+    expect(shownDocuments).toEqual([PDF_URL]);
+  });
+
+  test("a redirect Chrome reports late is refused, and a file it finished is removed", async () => {
+    const { events, items, reports, startedIds } =
+      installFakeChrome(DESKTOP_CHAT);
+    await saveShownPdf(shownPdf());
+    await saveShownPdf(shownPdf({ url: `${PDF_URL}/annex` }));
+    const first = ownDownload(startedIds[0] ?? 0, PDF_URL);
+    const second = ownDownload(startedIds[1] ?? 0, `${PDF_URL}/annex`);
+    items.set(first.id, first);
+    items.set(second.id, second);
+    await named(first);
+    await named(second);
+
+    // Chrome reports a new final address while the first still runs.
+    await reportDeliveredDownload({
+      finalUrl: { current: "https://10.0.0.8/42.pdf", previous: PDF_URL },
+      id: first.id,
+    });
+    // The second finishes, and only then names where it ended.
+    items.set(second.id, {
+      ...second,
+      filename: `${DOWNLOADS}/staged-second.pdf`,
+      finalUrl: "https://10.0.0.8/annex.pdf",
+      state: "complete",
+    });
+    await reportDeliveredDownload({
+      id: second.id,
+      state: { current: "complete", previous: "in_progress" },
+    });
+
+    expect(events).toContain(`cancel:${String(first.id)}`);
+    expect(events).toContain(`remove:${String(second.id)}`);
+    expect(events).not.toContain(`remove:${String(first.id)}`);
+    expect(
+      reports.map(({ download }) =>
+        download.outcome === "stopped" ? download.reason : download.outcome,
+      ),
+    ).toEqual(["redirected", "redirected"]);
+  });
+
+  test("a PDF saved already in this run is never refused for the limit when shown again", async () => {
+    const { events, items, reports, startedIds } =
+      installFakeChrome(DESKTOP_CHAT);
+    await saveShownPdf(shownPdf());
+    const savedId = startedIds[0] ?? 0;
+    items.set(savedId, ownDownload(savedId, PDF_URL));
+    await finish(items, savedId, `${DOWNLOADS}/staged.pdf`);
+    // Every slot is taken by other PDFs.
+    for (let index = 0; index < MAX_RUNNING_DELIVERIES; index += 1) {
+      // await-in-loop: each read finds its PDF in turn.
+      await saveShownPdf(shownPdf({ url: `${PDF_URL}/${String(index)}` }));
+    }
+    const before = reports.length;
+
+    await saveShownPdf(shownPdf());
+
+    expect(reports).toHaveLength(before);
+    expect(events.filter((event) => event === `download:${PDF_URL}`)).toEqual([
+      `download:${PDF_URL}`,
+    ]);
+    for (const id of startedIds.slice(1)) {
+      items.set(id, ownDownload(id, PDF_URL));
+      // await-in-loop: each settles in turn, as Chrome reports them.
+      await finish(items, id, `${DOWNLOADS}/staged-${String(id)}.pdf`);
+    }
+  });
+
+  test("a download of the extension's that no save explains is stopped", async () => {
+    const { events, items, reports } = installFakeChrome(DESKTOP_CHAT);
+    const stray = ownDownload(1201, "https://fixture-library.test/other.pdf");
+    items.set(stray.id, stray);
+
+    expect(await named(stray)).toBeUndefined();
+    expect(events).toContain("cancel:1201");
+    expect(reports).toEqual([]);
   });
 });
 

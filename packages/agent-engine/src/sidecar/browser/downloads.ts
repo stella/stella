@@ -62,6 +62,8 @@ const BROWSER_DOWNLOAD_REFUSAL = {
   tooMany: "too_many",
   /** Chrome did not finish it. */
   interrupted: "interrupted",
+  /** A shown PDF's address sent the save off its site or off the public web. */
+  redirected: "redirected",
   /** Nothing is where Chrome said it saved the file. */
   vanished: "vanished",
   /** Chrome saved it somewhere other than a staging folder it may use. */
@@ -103,6 +105,8 @@ const REFUSAL_MESSAGES = {
     "Too many downloads ran at once; this one was stopped. Try it again once the others are saved.",
   [BROWSER_DOWNLOAD_REFUSAL.interrupted]:
     "Chrome could not finish the download.",
+  [BROWSER_DOWNLOAD_REFUSAL.redirected]:
+    "The PDF's address sent the download to another site or a private address, so nothing was saved. sourceUrl is where it was sent.",
   [BROWSER_DOWNLOAD_REFUSAL.vanished]:
     "The downloaded file was gone before it could be saved.",
   [BROWSER_DOWNLOAD_REFUSAL.notStaged]:
@@ -138,6 +142,8 @@ const stoppedRefusal = (
       return BROWSER_DOWNLOAD_REFUSAL.tooMany;
     case BROWSER_DOWNLOAD_STOP_REASON.interrupted:
       return BROWSER_DOWNLOAD_REFUSAL.interrupted;
+    case BROWSER_DOWNLOAD_STOP_REASON.redirected:
+      return BROWSER_DOWNLOAD_REFUSAL.redirected;
     default:
       reason satisfies never;
       return panic("Unhandled download stop reason");

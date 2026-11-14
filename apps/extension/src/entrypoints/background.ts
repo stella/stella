@@ -49,6 +49,7 @@ import {
   loadDownloadScope,
   noteNavigation,
   reportDeliveredDownload,
+  saveShownPdf,
   setDownloadReporter,
   setDownloadScope,
   type SuggestFilename,
@@ -277,6 +278,13 @@ const runControlledCommand = async ({
           await executeBrowserCommand(controllerId, command, {
             budget: storedCommandBudget({ command, controllerId, turnId }),
             observedTab,
+            // Only a desktop chat holding the browser has it saved; the
+            // read stands whatever the save does.
+            onPdfShown: async (shown) => {
+              await saveShownPdf({ ...shown, controllerId, turnId }).catch(
+                () => undefined,
+              );
+            },
             signal,
             signIn,
             takeOver: admission.takeOver,
@@ -560,7 +568,7 @@ const handlePopupRequest = async (
 
 export default defineBackground(() => {
   onContainedTabsChanged(setDownloadScope);
-  setDownloadReporter(desktopLink.reportDownload);
+  setDownloadReporter(desktopLink.downloadReporter);
   loadDownloadScope().catch(() => undefined);
   registerOptionalListeners();
   chrome.permissions.onAdded.addListener(registerOptionalListeners);
